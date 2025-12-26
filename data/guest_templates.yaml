@@ -1,0 +1,134 @@
+# 门客模板配置
+# 门客英雄数据已拆分到 data/guests/ 目录下
+# - gulong.yaml: 古龙作品
+# - liangyshen.yaml: 梁羽生作品
+# - wenruian.yaml: 温瑞安作品
+# - huangyi.yaml: 黄易作品
+# - suitang.yaml: 隋唐演义
+# - jinyong.yaml: 金庸作品
+# - hermits.yaml: 隐士门客（特殊）
+# - base.yaml: 基础模板
+# - original.yaml: 原创门客
+# - special.yaml: 特殊/隐藏BOSS
+
+attribute_profiles:
+  black:
+    military:
+      force: 29
+      intellect: 8
+      defense: 24
+      agility: 20
+      luck: 25
+    civil:
+      force: 20
+      intellect: 22
+      defense: 11
+      agility: 23
+      luck: 60
+  gray:
+    military:
+      force: 34
+      intellect: 10
+      defense: 29
+      agility: 24
+      luck: 35
+    civil:
+      force: 24
+      intellect: 27
+      defense: 13
+      agility: 28
+      luck: 75
+  green:
+    military:
+      force: 41
+      intellect: 12
+      defense: 35
+      agility: 29
+      luck: 43
+    civil:
+      force: 29
+      intellect: 32
+      defense: 15
+      agility: 33
+      luck: 85
+  red:
+    military:
+      force: 46
+      intellect: 13
+      defense: 39
+      agility: 33
+      luck: 47
+    civil:
+      force: 32
+      intellect: 36
+      defense: 17
+      agility: 37
+      luck: 92
+  blue:
+    military:
+      force: 51
+      intellect: 15
+      defense: 44
+      agility: 37
+      luck: 50
+    civil:
+      force: 36
+      intellect: 40
+      defense: 19
+      agility: 42
+      luck: 100
+  purple:
+    military:
+      force: 59
+      intellect: 17
+      defense: 51
+      agility: 42
+      luck: 57
+    civil:
+      force: 42
+      intellect: 46
+      defense: 22
+      agility: 48
+      luck: 115
+  orange:
+    military:
+      force: 64
+      intellect: 18
+      defense: 55
+      agility: 46
+      luck: 65
+    civil:
+      force: 45
+      intellect: 50
+      defense: 24
+      agility: 52
+      luck: 125
+pools:
+- key: tongshi
+  name: 童试
+  tier: tongshi
+  description: 在地方由县、府等学官对童生进行的入学考试，通过者成为生员（秀才）。
+  cost:
+    silver: 120
+  draw_count: 1
+- key: xiangshi
+  name: 乡试
+  tier: xiangshi
+  description: 各省贡院三年一科的大型考试，通过者称举人。
+  cost:
+    silver: 450
+  draw_count: 5
+- key: huishi
+  name: 会试
+  tier: huishi
+  description: 在京城由礼部主持的统考举人考试，通过者称贡士。
+  cost:
+    silver: 900
+  draw_count: 8
+- key: dianshi
+  name: 殿试
+  tier: dianshi
+  description: 皇帝在宫殿亲自主持的最高等级考试，对会试贡士排定名次，取进士。
+  cost:
+    silver: 0
+  draw_count: 10

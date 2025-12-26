@@ -1,0 +1,84 @@
+# 黑色特殊门客（隐士）
+
+heroes:
+  black:
+  - key: hero_tianji_laoren
+    name: 孙白发
+    archetype: military
+    flavor: （隐士）外号“天机老人”，百晓生兵器谱排名第一，孙小红的爷爷。他白发苍苍，智比天高，武功深不可测，常以老烟袋为兵器。他看透世情，大智若愚，是江湖中真正的隐士高人。出自古龙小说《多情剑客无情剑》
+    default_gender: male
+    default_morality: 90
+    recruitable: false
+    is_hermit: true
+    growth_range:
+    - 6
+    - 11
+    attribute_weights:
+      force: 30
+      intellect: 40
+      defense: 20
+      agility: 10
+  - key: hero_xie_xiaofeng
+    name: 谢晓峰
+    archetype: military
+    flavor: （隐士）剑气纵横三万里，一剑光寒十九州。他是神剑山庄的三少爷，天纵奇才剑术无双。然而无敌的背后是无尽的孤独，他厌倦了杀戮与名利，化身底层苦役阿吉。在卑微中他寻找真实，在尘埃里他重拾初心。谢晓峰与阿吉，名剑与孤坟，他在宿命与超脱间完成了生命的升华。出自古龙小说《三少爷的剑》
+    default_gender: male
+    default_morality: 80
+    recruitable: false
+    is_hermit: true
+    growth_range:
+    - 7
+    - 11
+    attribute_weights:
+      force: 45
+      intellect: 5
+      defense: 15
+      agility: 35
+  - key: hero_niuroutang
+    name: 牛肉汤
+    archetype: military
+    flavor: （隐士）神秘少女，宫九的表妹。她名字虽怪，长相却甜美可爱，性格刁蛮任性。作为宫九最亲近的人，她深知这位“太平王世子”的秘密。在岛上的日子里，她对陆小凤软硬兼施，是这场惊天阴谋中一抹看不透的亮色。出自古龙小说《陆小凤系列》
+    default_gender: female
+    default_morality: 55
+    recruitable: false
+    is_hermit: true
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 15
+      intellect: 40
+      defense: 10
+      agility: 35
+  - key: hero_nie_xin
+    name: 聂信
+    archetype: military
+    flavor: （隐士）闯王李自成麾下旧部，烽火里见过生死，也在乱世里学会沉默。其人寡言少诺却重情重义，不喜显名，不入门派；更愿在暗处替人解围，像一把收在鞘里的刀。出自金庸小说《碧血剑》
+    default_gender: male
+    default_morality: 70
+    recruitable: false
+    is_hermit: true
+    growth_range:
+    - 6
+    - 10
+    attribute_weights:
+      force: 35
+      intellect: 10
+      defense: 30
+      agility: 25
+  - key: hero_jinyong_0365
+    name: 吴六奇
+    archetype: military
+    flavor: （隐士）广东提督，实为天地会红旗香主，曾是丐帮中人，外号“铁丐”。他豪气干云，虽身在曹营心在汉。与韦小宝一见如故结为兄弟，后因被归辛树夫妇误认为是汉奸而惨遭杀害，是书中极具悲剧色彩的英雄人物。出自金庸小说《鹿鼎记》
+    default_gender: male
+    default_morality: 44
+    recruitable: false
+    is_hermit: true
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 35
+      intellect: 10
+      defense: 35
+      agility: 20
