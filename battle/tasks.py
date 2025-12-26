@@ -1,0 +1,141 @@
+from __future__ import annotations
+
+import logging
+
+from celery import shared_task
+
+from gameplay.models import Manor, MissionTemplate
+from guests.models import Guest
+
+from .services import simulate_report
+
+logger = logging.getLogger(__name__)
+
+
+@shared_task(
+    name="battle.generate_report",
+    bind=True,
+    max_retries=3,
+    default_retry_delay=60,
+    soft_time_limit=120,
+    time_limit=180,
+)
+def generate_report_task(
+    self,
+    manor_id: int,
+    mission_id: int | None,
+    run_id: int | None,
+    guest_ids: list[int],
+    troop_loadout: dict,
+    battle_type: str,
+    fill_default_troops: bool = True,
+    opponent_name: str | None = None,
+    defender_setup: dict | None = None,
+    drop_table: dict | None = None,
+    travel_seconds: int | None = None,
+    seed: int | None = None,
+):
+    """
+    Generate a BattleReport asynchronously and attach it to MissionRun if provided.
+
+    Features:
+    - Automatic retry on failure (max 3 attempts)
+    - Soft time limit (120s) and hard limit (180s)
+    - Comprehensive error handling and logging
+    """
+    try:
+        if run_id:
+            from gameplay.models import MissionRun
+
+            row = MissionRun.objects.filter(pk=run_id).values("battle_report_id").first()
+            if row is None:
+                logger.warning("MissionRun %s not found; skipping battle report generation", run_id)
+                return None
+            existing_report_id = row.get("battle_report_id")
+            if existing_report_id:
+                logger.info(
+                    "MissionRun %s already has battle_report %s; skipping generation",
+                    run_id,
+                    existing_report_id,
+                )
+                return int(existing_report_id)
+
+        # Fetch manor with error handling
+        try:
+            manor = Manor.objects.select_related("user").get(pk=manor_id)
+        except Manor.DoesNotExist:
+            logger.error(f"Manor {manor_id} not found for battle report generation")
+            # Don't retry if manor doesn't exist
+            return None
+
+        mission = MissionTemplate.objects.filter(pk=mission_id).first() if mission_id else None
+        guests = list(Guest.objects.filter(id__in=guest_ids).select_related("template").prefetch_related("skills"))
+
+        if mission and mission.is_defense:
+            from battle.combatants import build_named_ai_guests
+            from gameplay.services.technology import resolve_enemy_tech_levels, get_guest_stat_bonuses
+
+            tech_conf = mission.enemy_technology or {}
+            attacker_guest_level = int(tech_conf.get("guest_level", 50)) if tech_conf else 50
+            attacker_guests = build_named_ai_guests(mission.enemy_guests or [], level=attacker_guest_level)
+            attacker_tech_levels = resolve_enemy_tech_levels(tech_conf) if tech_conf else {}
+            attacker_guest_bonuses = get_guest_stat_bonuses(tech_conf) if tech_conf else {}
+            attacker_guest_skills = tech_conf.get("guest_skills") or None
+
+            report = simulate_report(
+                manor=manor,
+                battle_type=battle_type,
+                seed=seed,
+                troop_loadout=mission.enemy_troops or {},
+                fill_default_troops=False,
+                attacker_guests=attacker_guests,
+                defender_setup={"troop_loadout": troop_loadout},
+                defender_guests=guests,
+                defender_max_squad=len(guests) if guests else None,
+                drop_table={},
+                opponent_name=opponent_name or mission.name,
+                travel_seconds=travel_seconds,
+                send_message=False,
+                auto_reward=False,
+                drop_handler=None,
+                max_squad=len(attacker_guests) if attacker_guests else None,
+                apply_damage=False,
+                attacker_tech_levels=attacker_tech_levels,
+                attacker_guest_bonuses=attacker_guest_bonuses or None,
+                attacker_guest_skills=attacker_guest_skills,
+                attacker_manor=None,
+            )
+        else:
+            report = simulate_report(
+                manor=manor,
+                battle_type=battle_type,
+                seed=seed,
+                troop_loadout=troop_loadout,
+                fill_default_troops=fill_default_troops,
+                attacker_guests=guests,
+                defender_setup=defender_setup,
+                drop_table=drop_table,
+                opponent_name=opponent_name or (mission.name if mission else None),
+                travel_seconds=travel_seconds,
+                send_message=False,
+                auto_reward=False,
+                drop_handler=None,
+                max_squad=getattr(manor, "max_squad_size", None),
+                apply_damage=False,
+            )
+
+        if run_id:
+            from gameplay.models import MissionRun
+            # 保留原始出征时间，仅写入战报
+            MissionRun.objects.filter(pk=run_id, battle_report__isnull=True).update(battle_report=report)
+
+        logger.info(f"Battle report {report.pk} generated successfully for manor {manor_id}")
+        return report.pk
+
+    except Exception as exc:
+        logger.exception(
+            f"Battle report generation failed for manor {manor_id}: {exc}",
+            extra={"manor_id": manor_id, "run_id": run_id, "mission_id": mission_id}
+        )
+        # Retry on unexpected errors
+        raise self.retry(exc=exc)

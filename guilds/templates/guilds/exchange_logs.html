@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}兑换记录 - {{ guild.name }}{% endblock %}
+
+{% block content %}
+<section class="dashboard">
+    <div class="section-header">
+        <div>
+            <h1>兑换记录</h1>
+            <p>{{ guild.name }}</p>
+        </div>
+        <div class="nav-links">
+            <a href="{% url 'guilds:warehouse' %}" class="btn-secondary">返回仓库</a>
+            <a href="{% url 'guilds:detail' guild.id %}" class="btn-secondary">返回帮会</a>
+        </div>
+    </div>
+
+    <section class="card">
+        <h2>最近兑换</h2>
+        {% if logs %}
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>成员</th>
+                        <th>物品</th>
+                        <th>数量</th>
+                        <th>消耗贡献</th>
+                        <th>兑换时间</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr {% if log.member.user == user %}class="guild-table-highlight"{% endif %}>
+                        <td>
+                            {{ log.member.user.manor.display_name }}
+                            {% if log.member.user == user %}
+                                <span class="badge">我</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ log.item_key }}</td>
+                        <td>{{ log.quantity }}</td>
+                        <td class="guild-cost-value">{{ log.contribution_cost|floatformat:0 }}</td>
+                        <td>
+                            <span class="muted-text">{{ log.exchanged_at|date:"Y-m-d H:i" }}</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="muted-text">暂无兑换记录</p>
+        {% endif %}
+    </section>
+</section>
+{% endblock %}

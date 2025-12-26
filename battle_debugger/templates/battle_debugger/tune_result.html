@@ -1,0 +1,492 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}调优结果 - 战斗调试器{% endblock %}
+
+{% block extra_head %}
+<style>
+/* 调优结果页面样式 */
+.debugger-container {
+    padding: 1.5rem;
+}
+
+.debugger-header {
+    margin-bottom: 1.5rem;
+}
+
+.debugger-header h1 {
+    font-size: 1.8rem;
+    color: var(--text-primary);
+    border-bottom: 3px double var(--border-primary);
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+/* 面包屑导航 */
+.breadcrumb {
+    display: flex;
+    gap: 0.5rem;
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1.5rem 0;
+    font-size: 0.9rem;
+}
+
+.breadcrumb li {
+    color: var(--text-muted);
+}
+
+.breadcrumb li a {
+    color: var(--accent-gold);
+    text-decoration: none;
+}
+
+.breadcrumb li a:hover {
+    text-decoration: underline;
+}
+
+.breadcrumb li::after {
+    content: "›";
+    margin-left: 0.5rem;
+    color: var(--text-muted);
+}
+
+.breadcrumb li:last-child::after {
+    content: "";
+}
+
+/* 配置信息 */
+.config-info {
+    background: linear-gradient(135deg, #e8f4fd, #d0e8fa);
+    border: 2px solid #3498db;
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+}
+
+.config-info-item {
+    font-size: 0.95rem;
+}
+
+.config-info-item strong {
+    color: #2c3e50;
+}
+
+/* 结果表格面板 */
+.results-panel {
+    background: var(--bg-panel);
+    border: 2px solid var(--border-primary);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+}
+
+.results-panel-header {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: #FFF8E7;
+    padding: 0.8rem 1rem;
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+.results-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.results-table th,
+.results-table td {
+    padding: 0.8rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.results-table th {
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.results-table tbody tr:hover {
+    background: var(--bg-hover);
+}
+
+/* 进度条 */
+.progress-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+}
+
+.progress-bar-container {
+    flex-grow: 1;
+    height: 24px;
+    background: var(--bg-hover);
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid var(--border-light);
+}
+
+.progress-bar {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    transition: width 0.3s;
+}
+
+.progress-bar.attacker {
+    background: linear-gradient(135deg, #059669, #047857);
+    color: #FFF8E7;
+}
+
+.progress-bar.defender {
+    background: linear-gradient(135deg, var(--accent-gold), #B8860B);
+    color: var(--text-primary);
+}
+
+.progress-count {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+/* 图表面板 */
+.charts-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+@media (max-width: 992px) {
+    .charts-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.chart-panel {
+    background: var(--bg-panel);
+    border: 2px solid var(--border-primary);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.chart-panel-header {
+    background: linear-gradient(180deg, #D4A574 0%, #C9985E 100%);
+    padding: 0.8rem 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.chart-panel-body {
+    padding: 1rem;
+}
+
+/* 操作按钮 */
+.action-buttons {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.btn-success {
+    background: linear-gradient(180deg, #059669 0%, #047857 100%);
+    border: 2px solid #046854;
+    color: #FFF8E7;
+    padding: 0.6rem 1.2rem;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    transition: all 0.2s;
+}
+
+.btn-success:hover {
+    background: linear-gradient(180deg, #047857 0%, #035b46 100%);
+}
+
+.btn-secondary {
+    background: var(--bg-hover);
+    border: 2px solid var(--border-primary);
+    color: var(--text-secondary);
+    padding: 0.6rem 1.2rem;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+    background: var(--bg-panel);
+    color: var(--text-primary);
+}
+
+/* 战斗详情 */
+.detail-text {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="debugger-container">
+    <div class="debugger-header">
+        <h1>调优结果</h1>
+    </div>
+
+    <nav>
+        <ol class="breadcrumb">
+            <li><a href="{% url 'battle_debugger:index' %}">调试器</a></li>
+            <li><a href="{% url 'battle_debugger:tune' %}">参数调优</a></li>
+            <li>结果</li>
+        </ol>
+    </nav>
+
+    <!-- 配置信息 -->
+    <div class="config-info">
+        <div class="config-info-item">
+            <strong>参数:</strong> {{ param_name }}
+        </div>
+        <div class="config-info-item">
+            <strong>每个值测试:</strong> {{ repeat }} 次
+        </div>
+        <div class="config-info-item">
+            <strong>预设:</strong> {{ preset_name }}
+        </div>
+    </div>
+
+    <!-- 结果表格 -->
+    <div class="results-panel">
+        <div class="results-panel-header">
+            📋 对比结果
+        </div>
+        <table class="results-table">
+            <thead>
+                <tr>
+                    <th>参数值</th>
+                    <th>攻方胜率</th>
+                    <th>守方胜率</th>
+                    <th>平均回合</th>
+                    <th>战斗详情</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for result in results %}
+                <tr>
+                    <td><strong>{{ result.value }}</strong></td>
+                    <td>
+                        <div class="progress-wrapper">
+                            <div class="progress-bar-container">
+                                <div class="progress-bar attacker"
+                                     style="width: {{ result.win_rate }}%">
+                                    {% if result.win_rate > 15 %}{{ result.win_rate|floatformat:1 }}%{% endif %}
+                                </div>
+                            </div>
+                            <span class="progress-count">{{ result.attacker_wins }}/{{ repeat }}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="progress-wrapper">
+                            <div class="progress-bar-container">
+                                <div class="progress-bar defender"
+                                     style="width: {% widthratio result.defender_wins repeat 100 %}%">
+                                    {% if result.defender_wins > 0 %}{% widthratio result.defender_wins repeat 100 %}%{% endif %}
+                                </div>
+                            </div>
+                            <span class="progress-count">{{ result.defender_wins }}/{{ repeat }}</span>
+                        </div>
+                    </td>
+                    <td>{{ result.avg_rounds|floatformat:1 }}</td>
+                    <td>
+                        <span class="detail-text">
+                            攻胜{{ result.attacker_wins }}次, 守胜{{ result.defender_wins }}次
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 可视化图表 -->
+    <div class="charts-grid">
+        <div class="chart-panel">
+            <div class="chart-panel-header">
+                📈 胜率变化
+            </div>
+            <div class="chart-panel-body">
+                <canvas id="winRateChart" height="200"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-panel">
+            <div class="chart-panel-header">
+                📊 平均回合数
+            </div>
+            <div class="chart-panel-body">
+                <canvas id="roundsChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div class="action-buttons">
+        <a href="{% url 'battle_debugger:tune' %}" class="btn-success">
+            🔄 再次调优
+        </a>
+        <a href="{% url 'battle_debugger:index' %}" class="btn-secondary">
+            🏠 返回首页
+        </a>
+    </div>
+</div>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script>
+// 准备数据
+const labels = [{% for r in results %}"{{ r.value }}"{% if not forloop.last %}, {% endif %}{% endfor %}];
+const winRates = [{% for r in results %}{{ r.win_rate }}{% if not forloop.last %}, {% endif %}{% endfor %}];
+const avgRounds = [{% for r in results %}{{ r.avg_rounds }}{% if not forloop.last %}, {% endif %}{% endfor %}];
+
+// 古风配色
+const chartColors = {
+    green: 'rgb(5, 150, 105)',
+    greenLight: 'rgba(5, 150, 105, 0.2)',
+    gold: 'rgb(218, 165, 32)',
+    goldLight: 'rgba(218, 165, 32, 0.3)',
+    brown: 'rgb(139, 69, 19)',
+    brownLight: 'rgba(139, 69, 19, 0.2)',
+};
+
+// 胜率图表
+const winRateCtx = document.getElementById('winRateChart').getContext('2d');
+new Chart(winRateCtx, {
+    type: 'line',
+    data: {
+        labels: labels,
+        datasets: [{
+            label: '攻方胜率 (%)',
+            data: winRates,
+            borderColor: chartColors.green,
+            backgroundColor: chartColors.greenLight,
+            tension: 0.1,
+            fill: true
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                labels: {
+                    color: '#4A2612'
+                }
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                max: 100,
+                title: {
+                    display: true,
+                    text: '胜率 (%)',
+                    color: '#4A2612'
+                },
+                ticks: {
+                    color: '#6B5344'
+                },
+                grid: {
+                    color: 'rgba(139, 69, 19, 0.1)'
+                }
+            },
+            x: {
+                title: {
+                    display: true,
+                    text: '{{ param_name }}',
+                    color: '#4A2612'
+                },
+                ticks: {
+                    color: '#6B5344'
+                },
+                grid: {
+                    color: 'rgba(139, 69, 19, 0.1)'
+                }
+            }
+        }
+    }
+});
+
+// 回合数图表
+const roundsCtx = document.getElementById('roundsChart').getContext('2d');
+new Chart(roundsCtx, {
+    type: 'bar',
+    data: {
+        labels: labels,
+        datasets: [{
+            label: '平均回合数',
+            data: avgRounds,
+            backgroundColor: chartColors.goldLight,
+            borderColor: chartColors.gold,
+            borderWidth: 2
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                labels: {
+                    color: '#4A2612'
+                }
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                title: {
+                    display: true,
+                    text: '回合数',
+                    color: '#4A2612'
+                },
+                ticks: {
+                    color: '#6B5344'
+                },
+                grid: {
+                    color: 'rgba(139, 69, 19, 0.1)'
+                }
+            },
+            x: {
+                title: {
+                    display: true,
+                    text: '{{ param_name }}',
+                    color: '#4A2612'
+                },
+                ticks: {
+                    color: '#6B5344'
+                },
+                grid: {
+                    color: 'rgba(139, 69, 19, 0.1)'
+                }
+            }
+        }
+    }
+});
+</script>
+{% endblock %}

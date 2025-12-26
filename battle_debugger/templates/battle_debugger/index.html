@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}战斗调试器{% endblock %}
+
+{% block extra_head %}
+<style>
+/* 战斗调试器 - 古风主题扩展 */
+.debugger-container {
+    padding: 1.5rem;
+}
+
+.debugger-header {
+    margin-bottom: 2rem;
+}
+
+.debugger-header h1 {
+    font-size: 2rem;
+    color: var(--text-primary);
+    border-bottom: 3px double var(--border-primary);
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.debugger-header p {
+    color: var(--text-secondary);
+    font-size: 1rem;
+}
+
+/* 功能卡片网格 */
+.feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.feature-card {
+    background: var(--bg-card);
+    border: 2px solid var(--border-primary);
+    border-radius: 10px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 12px rgba(74, 38, 18, 0.15);
+    transition: transform 0.2s, box-shadow 0.2s;
+    display: flex;
+    flex-direction: column;
+}
+
+.feature-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(74, 38, 18, 0.25);
+}
+
+.feature-card .card-icon {
+    font-size: 2.5rem;
+    color: var(--accent-gold);
+    margin-bottom: 1rem;
+}
+
+.feature-card h3 {
+    font-size: 1.25rem;
+    color: var(--text-primary);
+    margin: 0 0 0.5rem 0;
+}
+
+.feature-card p {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    margin: 0 0 1rem 0;
+    flex-grow: 1;
+}
+
+/* 预设配置部分 */
+.presets-section {
+    margin-top: 2rem;
+}
+
+.presets-section h2 {
+    font-size: 1.5rem;
+    color: var(--text-primary);
+    border-bottom: 2px solid var(--border-primary);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.preset-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.2rem;
+}
+
+.preset-card {
+    background: var(--bg-panel);
+    border: 2px solid var(--border-light);
+    border-radius: 8px;
+    padding: 1.2rem;
+    transition: border-color 0.2s, transform 0.2s;
+}
+
+.preset-card:hover {
+    border-color: var(--accent-gold);
+    transform: translateY(-2px);
+}
+
+.preset-card h4 {
+    color: var(--text-primary);
+    font-size: 1.1rem;
+    margin: 0 0 0.5rem 0;
+}
+
+.preset-card p {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin: 0 0 1rem 0;
+    min-height: 2.5rem;
+}
+
+.preset-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.btn-outline {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 2px solid var(--border-primary);
+    border-radius: 6px;
+    padding: 0.4rem 0.8rem;
+    font-weight: 600;
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+}
+
+.btn-outline:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-muted);
+    background: var(--bg-panel);
+    border: 2px dashed var(--border-light);
+    border-radius: 10px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="debugger-container">
+    <div class="debugger-header">
+        <h1>战斗调试器</h1>
+        <p>测试和调优战斗系统参数，分析战斗平衡性</p>
+    </div>
+
+    <div class="feature-grid">
+        <div class="feature-card">
+            <div class="card-icon">⚔️</div>
+            <h3>战斗模拟</h3>
+            <p>使用预设配置运行战斗模拟，快速测试战斗结果</p>
+            <a href="{% url 'battle_debugger:simulate' %}" class="btn-primary">
+                开始模拟
+            </a>
+        </div>
+
+        <div class="feature-card">
+            <div class="card-icon">⚙️</div>
+            <h3>自定义配置</h3>
+            <p>完全自定义门客、护院和战斗参数，精确控制战斗条件</p>
+            <a href="{% url 'battle_debugger:custom_config' %}" class="btn-primary">
+                自定义配置
+            </a>
+        </div>
+
+        <div class="feature-card">
+            <div class="card-icon">📊</div>
+            <h3>参数调优</h3>
+            <p>对比不同参数值的影响，找出最佳战斗平衡点</p>
+            <a href="{% url 'battle_debugger:tune' %}" class="btn-secondary">
+                参数调优
+            </a>
+        </div>
+    </div>
+
+    <div class="presets-section">
+        <h2>预设配置</h2>
+        {% if presets %}
+        <div class="preset-grid">
+            {% for preset in presets %}
+            <div class="preset-card">
+                <h4>{{ preset.title }}</h4>
+                <p>{{ preset.description }}</p>
+                <div class="preset-actions">
+                    <a href="{% url 'battle_debugger:preset_detail' preset.name %}" class="btn-outline">
+                        查看详情
+                    </a>
+                    <a href="{% url 'battle_debugger:simulate' %}?preset={{ preset.name }}" class="btn-primary btn-small">
+                        使用配置
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p>未找到预设配置</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

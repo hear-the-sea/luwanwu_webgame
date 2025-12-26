@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}注册{% endblock %}
+
+{% block content %}
+<section class="auth-card">
+    <h2>创建新账号</h2>
+    <p>加入指挥中心，开始构建你的春秋霸业。</p>
+
+    {% if form.errors %}
+        <div class="form-errors">
+            请修正表单中的错误后再提交。
+        </div>
+    {% endif %}
+
+    <form method="post">
+        {% csrf_token %}
+        {% for field in form %}
+            <div class="form-field">
+                {{ field.label_tag }}
+                {{ field }}
+                {% if field.help_text %}
+                    <small>{{ field.help_text }}</small>
+                {% endif %}
+                {{ field.errors }}
+            </div>
+        {% endfor %}
+        <button type="submit" class="btn-primary">注册并登录</button>
+    </form>
+    <p>已有账号？<a href="{% url 'accounts:login' %}">点击登录</a></p>
+</section>
+{% endblock %}

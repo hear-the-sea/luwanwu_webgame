@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}贡献排行 - {{ guild.name }}{% endblock %}
+
+{% block content %}
+<section class="dashboard">
+    <div class="section-header">
+        <div>
+            <h1>贡献排行榜</h1>
+            <p>{{ guild.name }}</p>
+        </div>
+        <div class="nav-links">
+            <a href="{% url 'guilds:contribution_ranking' %}?type=total" class="btn-{% if ranking_type == 'total' %}primary{% else %}secondary{% endif %}">
+                总贡献
+            </a>
+            <a href="{% url 'guilds:contribution_ranking' %}?type=weekly" class="btn-{% if ranking_type == 'weekly' %}primary{% else %}secondary{% endif %}">
+                本周贡献
+            </a>
+            <a href="{% url 'guilds:detail' guild.id %}" class="btn-secondary">返回帮会</a>
+        </div>
+    </div>
+
+    <!-- 我的排名 -->
+    <section class="card guild-my-rank">
+        <h2>我的排名</h2>
+        <div class="guild-stats-grid">
+            <div class="guild-stat-item">
+                <h4>排名</h4>
+                <p class="guild-stat-value">
+                    {% if my_rank.rank %}
+                        #{{ my_rank.rank }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </p>
+            </div>
+            <div class="guild-stat-item">
+                <h4>{% if ranking_type == 'total' %}总贡献{% else %}本周贡献{% endif %}</h4>
+                <p class="guild-stat-value">
+                    {% if my_rank.contribution %}
+                        {{ my_rank.contribution|floatformat:0 }}
+                    {% else %}
+                        0
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- 排行榜 -->
+    <section class="card" style="margin-top: 1.5rem;">
+        <h2>
+            {% if ranking_type == 'total' %}
+                总贡献排行榜
+            {% else %}
+                本周贡献排行榜
+            {% endif %}
+        </h2>
+        {% if rankings %}
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th style="width: 80px;">排名</th>
+                        <th>成员</th>
+                        <th>职位</th>
+                        {% if ranking_type == 'total' %}
+                            <th>总贡献</th>
+                        {% else %}
+                            <th>本周贡献</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in rankings %}
+                    <tr {% if item.user == user %}class="guild-table-highlight"{% endif %}>
+                        <td style="text-align: center;">
+                            {% with rank_number=rankings.start_index|add:forloop.counter0 %}
+                            {% if rank_number == 1 %}
+                                <span class="guild-rank-number guild-rank-1">#1</span>
+                            {% elif rank_number == 2 %}
+                                <span class="guild-rank-number guild-rank-2">#2</span>
+                            {% elif rank_number == 3 %}
+                                <span class="guild-rank-number guild-rank-3">#3</span>
+                            {% else %}
+                                <span class="guild-rank-number guild-rank-other">#{{ rank_number }}</span>
+                            {% endif %}
+                            {% endwith %}
+                        </td>
+                        <td>
+                            <strong>{{ item.user.manor.display_name }}</strong>
+                            {% if item.user == user %}
+                                <span class="badge">我</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.is_leader %}
+                                <span class="guild-position-leader">帮主</span>
+                            {% elif item.is_admin %}
+                                <span class="guild-position-admin">管理员</span>
+                            {% else %}
+                                <span class="guild-position-member">成员</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <strong class="positive">
+                                {% if ranking_type == 'weekly' %}
+                                    {{ item.weekly_contribution|floatformat:0 }}
+                                {% else %}
+                                    {{ item.total_contribution|floatformat:0 }}
+                                {% endif %}
+                            </strong>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <!-- 分页导航 -->
+            {% if rankings.has_other_pages %}
+            <div class="pagination">
+                {% if rankings.has_previous %}
+                    <a href="?type={{ ranking_type }}&page=1" class="btn-secondary btn-small">首页</a>
+                    <a href="?type={{ ranking_type }}&page={{ rankings.previous_page_number }}" class="btn-secondary btn-small">上一页</a>
+                {% else %}
+                    <button class="btn-secondary btn-small" disabled>首页</button>
+                    <button class="btn-secondary btn-small" disabled>上一页</button>
+                {% endif %}
+
+                <span class="page-info">
+                    第 <strong>{{ rankings.number }}</strong> 页 / 共 <strong>{{ rankings.paginator.num_pages }}</strong> 页
+                    （共 {{ rankings.paginator.count }} 人）
+                </span>
+
+                {% if rankings.has_next %}
+                    <a href="?type={{ ranking_type }}&page={{ rankings.next_page_number }}" class="btn-secondary btn-small">下一页</a>
+                    <a href="?type={{ ranking_type }}&page={{ rankings.paginator.num_pages }}" class="btn-secondary btn-small">末页</a>
+                {% else %}
+                    <button class="btn-secondary btn-small" disabled>下一页</button>
+                    <button class="btn-secondary btn-small" disabled>末页</button>
+                {% endif %}
+            </div>
+            {% endif %}
+        {% else %}
+            <p class="muted-text">暂无数据</p>
+        {% endif %}
+    </section>
+</section>
+{% endblock %}

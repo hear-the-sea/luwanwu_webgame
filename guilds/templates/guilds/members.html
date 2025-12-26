@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}成员列表 - {{ guild.name }}{% endblock %}
+
+{% block content %}
+<section class="dashboard">
+    <div class="section-header">
+        <div>
+            <h1>成员列表</h1>
+            <p>{{ guild.name }} · 成员数：{{ guild.current_member_count }} / {{ guild.member_capacity }}</p>
+        </div>
+        <div class="nav-links">
+            {% if member.can_manage %}
+                <a href="{% url 'guilds:applications' %}" class="btn-primary">审批申请</a>
+            {% endif %}
+            <a href="{% url 'guilds:detail' guild.id %}" class="btn-secondary">返回帮会</a>
+        </div>
+    </div>
+
+    <section class="card">
+        <h2>成员管理</h2>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>玩家</th>
+                    <th>职位</th>
+                    <th>总贡献</th>
+                    <th>当前贡献</th>
+                    <th>加入时间</th>
+                    <th>最后活跃</th>
+                    {% if member.can_manage %}
+                        <th>操作</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in members %}
+                <tr {% if m.user == user %}class="guild-table-highlight"{% endif %}>
+                    <td>
+                        <strong>{{ m.user.manor.display_name }}</strong>
+                        {% if m.user == user %}
+                            <span class="badge">我</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if m.is_leader %}
+                            <span class="guild-position-leader">帮主</span>
+                        {% elif m.is_admin %}
+                            <span class="guild-position-admin">管理员</span>
+                        {% else %}
+                            <span class="guild-position-member">成员</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ m.total_contribution|floatformat:0 }}</td>
+                    <td>{{ m.current_contribution|floatformat:0 }}</td>
+                    <td>{{ m.joined_at|date:"Y-m-d" }}</td>
+                    <td>
+                        <span class="muted-text">{{ m.last_active_at|date:"m-d H:i" }}</span>
+                    </td>
+                    {% if member.can_manage %}
+                    <td>
+                        {% if m.user != user %}
+                            <div class="guild-member-actions">
+                            {% if member.is_leader %}
+                                <!-- 帮主可以对所有人操作 -->
+                                {% if not m.is_leader %}
+                                    {% if m.is_admin %}
+                                        <form method="post" action="{% url 'guilds:demote_admin' m.id %}">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn-secondary btn-small">罢免管理</button>
+                                        </form>
+                                    {% else %}
+                                        <form method="post" action="{% url 'guilds:appoint_admin' m.id %}">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn-secondary btn-small">任命管理</button>
+                                        </form>
+                                    {% endif %}
+                                    <form method="post" action="{% url 'guilds:transfer_leadership' m.id %}" class="transfer-form" data-name="{{ m.user.manor.display_name }}">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn-secondary btn-small">转让帮主</button>
+                                    </form>
+                                    <form method="post" action="{% url 'guilds:kick_member' m.id %}" class="kick-form" data-name="{{ m.user.manor.display_name }}">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn-danger btn-small">辞退</button>
+                                    </form>
+                                {% endif %}
+                            {% elif member.is_admin and not m.is_leader and not m.is_admin %}
+                                <!-- 管理员只能辞退普通成员 -->
+                                <form method="post" action="{% url 'guilds:kick_member' m.id %}" class="kick-form" data-name="{{ m.user.manor.display_name }}">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn-danger btn-small">辞退</button>
+                                </form>
+                            {% endif %}
+                            </div>
+                        {% else %}
+                            <span class="muted-text">-</span>
+                        {% endif %}
+                    </td>
+                    {% endif %}
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="{% if member.can_manage %}7{% else %}6{% endif %}" style="text-align: center;">
+                        <span class="muted-text">暂无成员</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+
+    <section class="card" style="margin-top: 1.5rem;">
+        <h2>成员统计</h2>
+        <div class="guild-stats-grid">
+            <div class="guild-stat-item">
+                <h4>总成员数</h4>
+                <p class="guild-stat-value stat-total">{{ guild.current_member_count }}</p>
+                <p class="guild-stat-hint">容量：{{ guild.member_capacity }}</p>
+            </div>
+            <div class="guild-stat-item">
+                <h4>帮主</h4>
+                <p class="guild-stat-value stat-leader">1</p>
+                <p class="guild-stat-hint">{{ guild.get_leader.user.manor.display_name }}</p>
+            </div>
+            <div class="guild-stat-item">
+                <h4>管理员</h4>
+                <p class="guild-stat-value stat-admin">{{ guild.get_admins.count }}</p>
+                <p class="guild-stat-hint">最多2人</p>
+            </div>
+            <div class="guild-stat-item">
+                <h4>普通成员</h4>
+                <p class="guild-stat-value">{{ guild.current_member_count|add:"-1"|add:guild.get_admins.count|default:"0" }}</p>
+                <p class="guild-stat-hint">-</p>
+            </div>
+        </div>
+    </section>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// 转让帮主确认
+document.querySelectorAll('.transfer-form').forEach(form => {
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = form.dataset.name;
+        const confirmed = await gameDialog.danger(`确认将帮主之位传给 ${name} 吗？`, { title: '转让帮主' });
+        if (confirmed) form.submit();
+    });
+});
+// 辞退成员确认
+document.querySelectorAll('.kick-form').forEach(form => {
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = form.dataset.name;
+        const confirmed = await gameDialog.danger(`确认辞退 ${name} 吗？`, { title: '辞退成员' });
+        if (confirmed) form.submit();
+    });
+});
+</script>
+{% endblock %}

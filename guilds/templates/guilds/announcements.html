@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}帮会公告 - {{ guild.name }}{% endblock %}
+
+{% block content %}
+<section class="dashboard">
+    <div class="section-header">
+        <div>
+            <h1>帮会公告</h1>
+            <p>{{ guild.name }}</p>
+        </div>
+        <div class="nav-links">
+            {% if member.is_leader %}
+                <button type="button" class="btn-primary" onclick="document.getElementById('create-modal').classList.add('visible')">
+                    发布公告
+                </button>
+            {% endif %}
+            <a href="{% url 'guilds:detail' guild.id %}" class="btn-secondary">返回帮会</a>
+        </div>
+    </div>
+
+    <section class="card">
+        <h2>公告列表（最近30条）</h2>
+        {% if announcements %}
+            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                {% for announcement in announcements %}
+                <div class="guild-announcement {% if announcement.type == 'leader' %}announcement-leader{% elif announcement.type == 'system' %}announcement-system{% endif %}">
+                    <div class="guild-announcement-header">
+                        <div>
+                            <h3 class="guild-announcement-title">
+                                {% if announcement.type == 'leader' %}
+                                    帮主公告
+                                {% elif announcement.type == 'system' %}
+                                    系统公告
+                                {% else %}
+                                    普通公告
+                                {% endif %}
+                            </h3>
+                            <p class="muted-text" style="margin: 0;">{{ announcement.created_at|date:"Y-m-d H:i:s" }}</p>
+                        </div>
+                        {% if announcement.author %}
+                            <div style="text-align: right;">
+                                <p class="muted-text" style="margin: 0;">发布者</p>
+                                <p style="margin: 0; font-weight: bold;">{{ announcement.author.username }}</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="guild-announcement-content">{{ announcement.content }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="muted-text">暂无公告</p>
+        {% endif %}
+    </section>
+
+    <section class="card" style="margin-top: 1.5rem;">
+        <h2>公告说明</h2>
+        <dl class="guild-dl">
+            <div>
+                <dt>帮主公告</dt>
+                <dd>由帮主发布的重要公告</dd>
+            </div>
+            <div>
+                <dt>系统公告</dt>
+                <dd>系统自动生成的事件通知</dd>
+            </div>
+            <div>
+                <dt>普通公告</dt>
+                <dd>一般性通知信息</dd>
+            </div>
+            <div>
+                <dt>发布权限</dt>
+                <dd>只有帮主可以发布帮主公告</dd>
+            </div>
+            <div>
+                <dt>公告保留</dt>
+                <dd>保留最近30条，旧公告会自动删除</dd>
+            </div>
+        </dl>
+    </section>
+</section>
+
+<!-- 发布公告模态框 -->
+{% if member.is_leader %}
+<div class="modal-backdrop" id="create-modal" aria-hidden="true">
+    <div class="modal">
+        <header class="modal-header">
+            <h3>发布公告</h3>
+            <button type="button" class="btn-secondary btn-small" onclick="document.getElementById('create-modal').classList.remove('visible')">
+                取消
+            </button>
+        </header>
+        <div class="modal-body">
+            <form method="post" action="{% url 'guilds:create_announcement' %}">
+                {% csrf_token %}
+                <div class="form-field">
+                    <label for="content">公告内容 *</label>
+                    <textarea id="content" name="content" rows="6" maxlength="500" required placeholder="请输入公告内容..."></textarea>
+                    <small class="muted-text">最多500字</small>
+                </div>
+
+                <div class="guild-cost-card" style="margin-top: 1rem;">
+                    <h3>提示</h3>
+                    <ul style="margin: 0; padding-left: 1.5rem; line-height: 1.8;">
+                        <li>公告将以帮主身份发布</li>
+                        <li>所有成员都能看到</li>
+                        <li>请确保内容准确无误</li>
+                    </ul>
+                </div>
+
+                <div class="form-actions" style="margin-top: 1rem;">
+                    <button type="submit" class="btn-primary">发布</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    const modal = document.getElementById('create-modal');
+    if (modal) {
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                modal.classList.remove('visible');
+            }
+        });
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,93 @@
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  db:
+    image: mysql:8.4
+    command: ["--default-authentication-plugin=mysql_native_password"]
+    environment:
+      MYSQL_DATABASE: webgame
+      MYSQL_USER: webgame
+      MYSQL_PASSWORD: webgame
+      MYSQL_ROOT_PASSWORD: root
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  web:
+    build: .
+    env_file: .env.docker
+    environment:
+      DJANGO_RUN_MIGRATIONS: "1"
+    command: ["bash", "/app/docker/entrypoint.sh", "python", "manage.py", "runserver", "0.0.0.0:8000"]
+    volumes:
+      - .:/app
+      - media:/app/media
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=2).read()"
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  worker:
+    build: .
+    env_file: .env.docker
+    command: ["bash", "/app/docker/entrypoint.sh", "celery", "-A", "config", "worker", "-l", "info"]
+    volumes:
+      - .:/app
+      - media:/app/media
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+
+  beat:
+    build: .
+    env_file: .env.docker
+    command:
+      - bash
+      - /app/docker/entrypoint.sh
+      - celery
+      - -A
+      - config
+      - beat
+      - -l
+      - info
+      - --schedule
+      - /var/run/celerybeat-schedule
+    volumes:
+      - .:/app
+      - media:/app/media
+      - celerybeat_data:/var/run
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  redis_data:
+  media:
+  celerybeat_data:

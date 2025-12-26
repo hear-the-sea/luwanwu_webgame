@@ -1,0 +1,285 @@
+# 商铺商品配置
+# item_key: 对应 ItemTemplate.key
+# price: 售价（可选，不填则使用 ItemTemplate.price）
+# stock: 库存数量，-1 表示无限
+# daily_refresh: 是否每日刷新库存（可选，默认 false）
+
+items:
+  # ============ 资源类 ============
+  - item_key: gold_bar
+    price: 1000000
+    stock: -1
+
+  - item_key: grain
+    price: 1
+    stock: -1
+
+  - item_key: tong
+    price: 50
+    stock: -1
+
+  - item_key: xi
+    price: 150
+    stock: -1
+
+  - item_key: tie
+    price: 500
+    stock: -1
+
+  # ============ 畜牧类 ============
+  - item_key: ji
+    price: 100
+    stock: -1
+
+  - item_key: ya
+    price: 200
+    stock: -1
+
+  - item_key: e
+    price: 400
+    stock: -1
+
+  - item_key: zhu
+    price: 800
+    stock: -1
+
+  - item_key: niu
+    price: 1500
+    stock: -1
+
+  # ============ 功能道具 ============
+  - item_key: manor_rename_card
+    price: 5000
+    stock: -1
+
+  - item_key: fangdajing
+    price: 200
+    stock: 10
+    daily_refresh: true
+
+  - item_key: experience_peach
+    price: 500
+    stock: 5
+    daily_refresh: true
+
+  # ============ 药品类 ============
+  - item_key: buxuedan
+    price: 100
+    stock: 20
+    daily_refresh: true
+
+  - item_key: zhixuesan
+    price: 100
+    stock: -1
+
+  - item_key: jinchuangyao
+    price: 200
+    stock: -1
+
+  - item_key: baijiwan
+    price: 400
+    stock: -1
+
+  - item_key: baicaodan
+    price: 800
+    stock: -1
+
+  - item_key: dingxiangdan
+    price: 1500
+    stock: -1
+
+  - item_key: tianxiangyuluwan
+    price: 3000
+    stock: -1
+
+  # ============ 技能书 ============
+  - item_key: book_dragon_roar
+    price: 10000
+    stock: 1
+    daily_refresh: true
+
+  # ============ 装备 - 头盔 ============
+  - item_key: equip_caomao
+    price: 200
+    stock: -1
+
+  - item_key: equip_bumao
+    price: 100
+    stock: -1
+
+  - item_key: equip_niupimao
+    price: 300
+    stock: -1
+
+  - item_key: equip_tieyekui
+    price: 800
+    stock: -1
+
+  - item_key: equip_yulindin
+    price: 1500
+    stock: -1
+
+  - item_key: equip_baihongkui
+    price: 3000
+    stock: -1
+
+  # ============ 装备 - 护甲 ============
+  - item_key: equip_buyi
+    price: 200
+    stock: -1
+
+  - item_key: equip_bupao
+    price: 100
+    stock: -1
+
+  - item_key: equip_shengpijia
+    price: 300
+    stock: -1
+
+  - item_key: equip_housipao
+    price: 800
+    stock: -1
+
+  - item_key: equip_shapijia
+    price: 1500
+    stock: -1
+
+  # ============ 装备 - 鞋子 ============
+  - item_key: equip_caoxie
+    price: 200
+    stock: -1
+
+  - item_key: equip_buxie
+    price: 100
+    stock: -1
+
+  - item_key: equip_yangpixue
+    price: 300
+    stock: -1
+
+  - item_key: equip_gangpianxue
+    price: 800
+    stock: -1
+
+  - item_key: equip_yanyuxue
+    price: 1500
+    stock: -1
+
+  # ============ 装备 - 武器(剑) ============
+  - item_key: equip_tiejian
+    price: 300
+    stock: -1
+
+  - item_key: equip_duanjian
+    price: 100
+    stock: -1
+
+  - item_key: equip_changjian
+    price: 300
+    stock: -1
+
+  - item_key: equip_qingmangjian
+    price: 800
+    stock: -1
+
+  - item_key: equip_duanmajian
+    price: 1500
+    stock: -1
+
+  # ============ 装备 - 武器(刀) ============
+  - item_key: equip_duandao
+    price: 100
+    stock: -1
+
+  - item_key: equip_dakandao
+    price: 300
+    stock: -1
+
+  - item_key: equip_tongchangdao
+    price: 800
+    stock: -1
+
+  - item_key: equip_jingtiedao
+    price: 1500
+    stock: -1
+
+  # ============ 装备 - 武器(枪) ============
+  - item_key: equip_changqiang
+    price: 100
+    stock: -1
+
+  - item_key: equip_baoweiqiang
+    price: 300
+    stock: -1
+
+  - item_key: equip_hutoumao
+    price: 800
+    stock: -1
+
+  - item_key: equip_pansheqiang
+    price: 1500
+    stock: -1
+
+  # ============ 装备 - 武器(弓) ============
+  - item_key: equip_changgong
+    price: 100
+    stock: -1
+
+  - item_key: equip_fanqugong
+    price: 300
+    stock: -1
+
+  - item_key: equip_tietaigong
+    price: 800
+    stock: -1
+
+  - item_key: equip_shenbigong
+    price: 1500
+    stock: -1
+
+  # ============ 装备 - 武器(鞭) ============
+  - item_key: equip_changbian
+    price: 100
+    stock: -1
+
+  - item_key: equip_niupibian
+    price: 300
+    stock: -1
+
+  - item_key: equip_jicibian
+    price: 800
+    stock: -1
+
+  - item_key: equip_jiulonggangbian
+    price: 1500
+    stock: -1
+
+  - item_key: equip_mingshejiebian
+    price: 3000
+    stock: -1
+
+  # ============ 装备 - 坐骑 ============
+  - item_key: equip_zaohongma
+    price: 1000
+    stock: 3
+    daily_refresh: true
+
+  - item_key: equip_huangbiaoma
+    price: 975
+    stock: -1
+
+  - item_key: equip_dawanma
+    price: 1500
+    stock: -1
+
+  # ============ 装备 - 饰品(限量) ============
+  - item_key: equip_zhuyuye
+    price: 3000
+    stock: 2
+    daily_refresh: true
+
+  # ============ 装备 - 器械(限量) ============
+  - item_key: equip_taotieding
+    price: 20000
+    stock: 1
+    daily_refresh: true

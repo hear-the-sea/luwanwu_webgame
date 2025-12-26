@@ -1,0 +1,1367 @@
+{% extends "base.html" %}
+
+
+
+{% block title %}{% if current_tab == 'treasury' %}藏宝阁{% else %}仓库{% endif %}{% endblock %}
+
+
+
+{% block content %}
+
+<section class="dashboard">
+
+    <!-- Tab 导航 -->
+
+    <nav class="storage-tabs">
+
+        <a href="?tab=warehouse" class="storage-tab {% if current_tab == 'warehouse' %}active{% endif %}">
+
+            仓库
+
+        </a>
+
+        <a href="?tab=treasury" class="storage-tab {% if current_tab == 'treasury' %}active{% endif %}">
+
+            藏宝阁
+
+        </a>
+
+    </nav>
+
+    <section class="trade-card warehouse-card">
+
+        {% if current_tab == 'treasury' %}
+
+        <div class="treasury-capacity-bar">
+
+            {% if treasury_capacity > 0 %}
+
+            <div class="capacity-info-row">
+
+                <span class="capacity-label">藏宝阁容量</span>
+
+                <span class="capacity-values">
+
+                    <span class="capacity-used">已使用：{{ treasury_used }}</span>
+
+                    <span class="capacity-separator">/</span>
+
+                    <span class="capacity-total">总容量：{{ treasury_capacity }}</span>
+
+                    {% widthratio treasury_used treasury_capacity 100 as usage_percent %}
+
+                    <span class="capacity-remaining {% if usage_percent >= 90 %}capacity-text-critical{% elif usage_percent >= 70 %}capacity-text-warning{% endif %}">
+
+                        (剩余 {{ treasury_remaining }})
+
+                    </span>
+
+                </span>
+
+            </div>
+
+            <div class="capacity-progress">
+
+                {% widthratio treasury_used treasury_capacity 100 as usage_percent %}
+
+                <div class="capacity-progress-bar {% if usage_percent >= 90 %}capacity-critical{% elif usage_percent >= 70 %}capacity-warning{% endif %}"
+
+                     style="width: {{ usage_percent }}%;"></div>
+
+            </div>
+
+            {% else %}
+
+            <div class="capacity-not-built">
+
+                <span>藏宝阁尚未建造</span>
+
+            </div>
+
+            {% endif %}
+
+        </div>
+
+        {% endif %}
+
+        <div class="shop-table-wrapper">
+        <table class="warehouse-table">
+
+            <thead>
+
+                <tr>
+
+                    <th>物品</th>
+
+                    <th>种类</th>
+
+                    <th>数量</th>
+
+                    <th>操作</th>
+
+                    <th class="filter-th">
+                        <form method="get" class="filter-form-inline">
+                            <input type="hidden" name="tab" value="{{ current_tab }}">
+                            <label for="category" class="filter-label-inline">筛选</label>
+                            <select id="category" name="category" class="filter-select-inline" onchange="this.form.submit()">
+                                <option value="all" {% if selected_category == 'all' %}selected{% endif %}>全部</option>
+                                {% for cat in categories %}
+                                <option value="{{ cat.key }}" {% if selected_category == cat.key %}selected{% endif %}>{{ cat.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </form>
+                    </th>
+
+                </tr>
+
+            </thead>
+
+            <tbody>
+
+                {% for entry in inventory_items %}
+
+                    <tr>
+
+                        <td>
+
+                            <div class="item-cell">
+
+                                <div class="item-icon rarity-{{ entry.template.rarity|default:'black' }}">
+
+                                    {% if entry.template.image %}
+
+                                        <img src="{{ entry.template.image.url }}" alt="{{ entry.template.name }}">
+
+                                    {% else %}
+
+                                        <span class="icon-placeholder">{{ entry.template.name|slice:":1" }}</span>
+
+                                    {% endif %}
+
+                                </div>
+
+                                <span class="item-name rarity-{{ entry.template.rarity|default:'black' }}">{{ entry.template.name }}</span>
+
+                                <div class="item-tooltip">
+
+                                    <div class="tooltip-header rarity-{{ entry.template.rarity|default:'black' }}">{{ entry.template.name }}</div>
+
+                                    <div class="tooltip-category">{{ entry.category_display }}</div>
+
+                                    {% if entry.template.description %}
+
+                                    <div class="tooltip-desc">{{ entry.template.description }}</div>
+
+                                    {% endif %}
+
+                                    {% with payload=entry.template.effect_payload %}
+
+                                    {% if payload %}
+
+                                    <div class="tooltip-attrs">
+
+                                        {% if payload.hp %}<div class="attr-row"><span class="attr-label">生命</span><span class="attr-value">+{{ payload.hp }}</span></div>{% endif %}
+
+                                        {% if payload.defense %}<div class="attr-row"><span class="attr-label">防御</span><span class="attr-value">+{{ payload.defense }}</span></div>{% endif %}
+
+                                        {% if payload.force %}<div class="attr-row"><span class="attr-label">武力</span><span class="attr-value">+{{ payload.force }}</span></div>{% endif %}
+
+                                        {% if payload.agility %}<div class="attr-row"><span class="attr-label">敏捷</span><span class="attr-value">+{{ payload.agility }}</span></div>{% endif %}
+
+                                        {% if payload.luck %}<div class="attr-row"><span class="attr-label">幸运</span><span class="attr-value">+{{ payload.luck }}</span></div>{% endif %}
+
+                                        {% if payload.intellect %}<div class="attr-row"><span class="attr-label">智力</span><span class="attr-value">+{{ payload.intellect }}</span></div>{% endif %}
+
+                                        {% if payload.troop_capacity %}<div class="attr-row"><span class="attr-label">可携带护院人数</span><span class="attr-value">+{{ payload.troop_capacity }}</span></div>{% endif %}
+
+                                        {% if payload.time %}<div class="attr-row"><span class="attr-label">减少时间</span><span class="attr-value">{{ payload.time }}秒</span></div>{% endif %}
+
+                                    </div>
+
+                                    {% if payload.set_key %}
+
+                                    <div class="tooltip-set">
+
+                                        <div class="set-name">套装：{{ payload.set_description }}</div>
+
+                                        {% if payload.set_bonus %}
+
+                                        <div class="set-bonus">
+
+                                            <span class="set-pieces">{{ payload.set_bonus.pieces }}件套效果：</span>
+
+                                            {% if payload.set_bonus.bonus.hp %}生命+{{ payload.set_bonus.bonus.hp }} {% endif %}
+
+                                            {% if payload.set_bonus.bonus.defense %}防御+{{ payload.set_bonus.bonus.defense }} {% endif %}
+
+                                            {% if payload.set_bonus.bonus.force %}武力+{{ payload.set_bonus.bonus.force }} {% endif %}
+
+                                            {% if payload.set_bonus.bonus.agility %}敏捷+{{ payload.set_bonus.bonus.agility }} {% endif %}
+
+                                            {% if payload.set_bonus.bonus.luck %}幸运+{{ payload.set_bonus.bonus.luck }} {% endif %}
+
+                                            {% if payload.set_bonus.bonus.intellect %}智力+{{ payload.set_bonus.bonus.intellect }} {% endif %}
+
+                                            {% if payload.set_bonus.bonus.troop_capacity %}可携带护院人数+{{ payload.set_bonus.bonus.troop_capacity }} {% endif %}
+
+                                        </div>
+
+                                        {% endif %}
+
+                                    </div>
+
+                                    {% endif %}
+
+                                    {% endif %}
+
+                                    {% endwith %}
+
+                                </div>
+
+                            </div>
+
+                        </td>
+
+                        <td><span class="category-tag">{{ entry.category_display }}</span></td>
+
+                        <td>{{ entry.display_quantity }}</td>
+
+                        <td class="warehouse-actions">
+
+                            {% if current_tab == 'warehouse' %}
+
+                                <div class="action-row">
+
+                                    <div class="action-use">
+
+                                        {% if entry.can_use_in_warehouse %}
+
+                                            <form method="post" action="{% url 'gameplay:use_item' entry.id %}">
+
+                                                {% csrf_token %}
+
+                                                <button type="submit" class="btn-primary btn-small" {% if entry.quantity <= 0 %}disabled{% endif %}>使用</button>
+
+                                            </form>
+
+                                        {% else %}
+
+                                            <span class="muted-text">{{ entry.warehouse_use_hint }}</span>
+
+                                        {% endif %}
+
+                                    </div>
+
+                                    <div class="action-treasury">
+
+                                        <form method="post" action="{% url 'gameplay:move_to_treasury' entry.id %}">
+
+                                            {% csrf_token %}
+
+                                            <input type="number" name="quantity" value="1" min="1" max="{{ entry.quantity }}" class="quantity-input" {% if entry.quantity <= 0 %}disabled{% endif %}>
+
+                                            <button type="submit" class="btn-secondary btn-small" {% if entry.quantity <= 0 %}disabled{% endif %}>放入藏宝阁</button>
+
+                                        </form>
+
+                                    </div>
+
+                                </div>
+
+                            {% else %}
+
+                                <form method="post" action="{% url 'gameplay:move_to_warehouse' entry.id %}">
+
+                                    {% csrf_token %}
+
+                                    <input type="number" name="quantity" value="1" min="1" max="{{ entry.quantity }}" class="quantity-input" {% if entry.quantity <= 0 %}disabled{% endif %}>
+
+                                    <button type="submit" class="btn-secondary btn-small" {% if entry.quantity <= 0 %}disabled{% endif %}>移回仓库</button>
+
+                                </form>
+
+                            {% endif %}
+
+                        </td>
+
+                        <td></td>
+
+                    </tr>
+
+                {% empty %}
+
+                    <tr>
+
+                        <td colspan="5" class="empty-state">{% if current_tab == 'treasury' %}藏宝阁为空{% else %}仓库为空，先通过战斗或任务获取物品吧。{% endif %}</td>
+
+                    </tr>
+
+                {% endfor %}
+
+            </tbody>
+
+        </table>
+        </div>
+
+    </section>
+
+</section>
+
+{% endblock %}
+
+
+
+{% block extra_head %}
+
+<style>
+
+/* 卡片样式 - 与商店保持一致 */
+.trade-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-primary);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 400px);
+}
+
+/* 表格滚动容器 - 与商店保持一致 */
+.shop-table-wrapper {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 300px;
+    margin-top: 0.5rem;
+}
+
+/* Tab 导航 */
+
+.storage-tabs {
+
+    display: flex;
+
+    gap: 0.5rem;
+
+    margin-bottom: 1.5rem;
+
+    padding-bottom: 0.5rem;
+
+    border-bottom: 3px double var(--border-primary);
+
+}
+
+
+
+/* 仓库卡片容器 - 移除多余样式，由 trade-card 和 shop-table-wrapper 控制 */
+
+.warehouse-card {
+
+}
+
+
+
+.storage-tab {
+
+    padding: 0.6rem 1.2rem;
+
+    text-decoration: none;
+
+    color: var(--text-secondary);
+
+    font-weight: 600;
+
+    border: 2px solid transparent;
+
+    border-radius: 6px 6px 0 0;
+
+    transition: all 0.2s;
+
+    background: var(--bg-secondary);
+
+}
+
+
+
+.storage-tab:hover {
+
+    color: var(--text-primary);
+
+    background: var(--bg-hover);
+
+}
+
+
+
+.storage-tab.active {
+
+    color: var(--text-primary);
+
+    background: var(--bg-card);
+
+    border-color: var(--border-primary);
+
+    border-bottom-color: var(--bg-card);
+
+    margin-bottom: -3px;
+
+    padding-bottom: calc(0.6rem + 3px);
+
+}
+
+
+
+/* 藏宝阁容量信息栏 */
+
+.treasury-capacity-bar {
+
+    background: var(--bg-secondary);
+
+    border-radius: 8px;
+
+    padding: 1rem;
+
+    margin-bottom: 1rem;
+
+}
+
+
+
+.capacity-info-row {
+
+    display: flex;
+
+    justify-content: space-between;
+
+    align-items: center;
+
+    margin-bottom: 0.75rem;
+
+}
+
+
+
+.capacity-label {
+
+    font-weight: 600;
+
+    color: var(--text-primary);
+
+    font-size: 1rem;
+
+}
+
+
+
+.capacity-values {
+
+    display: flex;
+
+    gap: 0.5rem;
+
+    align-items: center;
+
+    font-size: 0.875rem;
+
+}
+
+
+
+.capacity-used {
+
+    color: var(--text-secondary);
+
+}
+
+
+
+.capacity-separator {
+
+    color: var(--text-muted);
+
+}
+
+
+
+.capacity-total {
+
+    color: var(--text-secondary);
+
+}
+
+
+
+.capacity-remaining {
+
+    color: #10b981;
+
+    font-weight: 600;
+
+}
+
+
+
+.capacity-text-warning {
+
+    color: #f59e0b !important;
+
+}
+
+
+
+.capacity-text-critical {
+
+    color: #ef4444 !important;
+
+}
+
+
+
+.capacity-progress {
+
+    width: 100%;
+
+    height: 8px;
+
+    background: var(--border-primary);
+
+    border-radius: 4px;
+
+    overflow: hidden;
+
+}
+
+
+
+.capacity-progress-bar {
+
+    height: 100%;
+
+    background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+
+    transition: width 0.3s ease;
+
+}
+
+
+
+.capacity-progress-bar.capacity-warning {
+
+    background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);
+
+}
+
+
+
+.capacity-progress-bar.capacity-critical {
+
+    background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+
+}
+
+
+
+.capacity-not-built {
+
+    text-align: center;
+
+    padding: 0.5rem;
+
+    color: #ef4444;
+
+    font-weight: 500;
+
+}
+
+
+
+/* 数量输入框 */
+
+.quantity-input {
+
+    width: 60px;
+
+    padding: 0.25rem 0.5rem;
+
+    border: 1px solid #d1d5db;
+
+    border-radius: 4px;
+
+    font-size: 0.875rem;
+
+    text-align: center;
+
+}
+
+
+
+.quantity-input:focus {
+
+    outline: none;
+
+    border-color: #2563eb;
+
+}
+
+
+
+/* 操作栏布局 */
+
+.warehouse-actions {
+
+    padding: 0.5rem;
+
+}
+
+
+
+/* 操作行布局 - 左右两端对齐 */
+
+.action-row {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;  /* 两端对齐 */
+
+    min-width: 320px;  /* 确保有足够空间 */
+
+}
+
+
+
+/* 使用按钮区域 - 左侧对齐，固定宽度 */
+
+.action-use {
+
+    flex: 0 0 100px;  /* 固定宽度 */
+
+    display: flex;
+
+    justify-content: flex-start;
+
+    align-items: center;
+
+}
+
+
+
+/* 藏宝阁操作区域 - 右侧对齐 */
+
+.action-treasury {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 0.5rem;
+
+    justify-content: flex-end;  /* 内容右对齐 */
+
+}
+
+
+
+.action-treasury form {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 0.5rem;
+
+}
+
+
+
+/* 表格样式 - 与商店保持一致 */
+
+.warehouse-table {
+
+    width: 100%;
+
+    border-collapse: collapse;
+
+    overflow: visible !important;
+
+}
+
+
+
+.warehouse-table th,
+
+.warehouse-table td {
+
+    padding: 0.75rem;
+
+    text-align: left;
+
+    border-bottom: 1px solid var(--border-primary);
+
+}
+
+
+
+.warehouse-table th {
+    background: var(--bg-secondary);
+    font-weight: 600;
+    color: var(--text-secondary);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.warehouse-table tr:hover {
+    background: var(--bg-hover);
+}
+
+.warehouse-table tbody,
+
+.warehouse-table tbody tr,
+
+.warehouse-table tbody td {
+
+    overflow: visible;
+
+}
+
+
+
+/* 物品单元格 */
+
+.item-cell {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 0.75rem;
+
+    position: relative;
+
+    cursor: pointer;
+
+}
+
+
+
+.item-icon {
+
+    width: 40px;
+
+    height: 40px;
+
+    border-radius: 6px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    overflow: hidden;
+
+    border: 2px solid var(--border-primary);
+
+    background: var(--bg-secondary);
+
+    flex-shrink: 0;
+
+}
+
+
+
+.item-icon img {
+
+    width: 100%;
+
+    height: 100%;
+
+    object-fit: cover;
+
+}
+
+
+
+.icon-placeholder {
+
+    font-size: 1.2rem;
+
+    font-weight: 700;
+
+    color: var(--text-muted);
+
+}
+
+
+
+.item-name {
+
+    font-weight: 600;
+
+}
+
+
+
+/* 稀有度边框颜色（图标用） */
+
+.item-icon.rarity-black { border-color: #666; }
+
+.item-icon.rarity-gray { border-color: #999; }
+
+.item-icon.rarity-green { border-color: #2E8B57; }
+
+.item-icon.rarity-blue { border-color: #4169E1; }
+
+.item-icon.rarity-red { border-color: #DC143C; }
+
+.item-icon.rarity-purple { border-color: #9932CC; }
+
+.item-icon.rarity-orange { border-color: #FF8C00; }
+
+
+
+/* 稀有度文字颜色（名称用）- 只改变文字颜色，背景透明 */
+
+.item-name.rarity-black { color: #333; background: transparent; }
+
+.item-name.rarity-gray { color: #999; background: transparent; }
+
+.item-name.rarity-green { color: #3CB371; background: transparent; }
+
+.item-name.rarity-blue { color: #6495ED; background: transparent; }
+
+.item-name.rarity-red { color: #FF6B6B; background: transparent; }
+
+.item-name.rarity-purple { color: #BA55D3; background: transparent; }
+
+.item-name.rarity-orange { color: #FFA500; background: transparent; }
+
+
+
+/* 种类标签 */
+
+.category-tag {
+
+    display: inline-block;
+
+    padding: 0.2rem 0.5rem;
+
+    background: var(--bg-secondary);
+
+    border: 1px solid var(--border-primary);
+
+    border-radius: 4px;
+
+    font-size: 0.85rem;
+
+    color: var(--text-secondary);
+
+}
+
+
+
+/* Tooltip 样式 */
+
+.item-tooltip {
+
+    display: none;
+
+    position: fixed;
+
+    min-width: 220px;
+
+    max-width: 280px;
+
+    padding: 0.875rem;
+
+    background: rgba(40, 25, 15, 0.95); /* 深色背景 */
+
+    border: 1px solid var(--border-light);
+
+    border-radius: 6px;
+
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+
+    z-index: 1000;
+
+    pointer-events: none;
+
+    color: var(--text-light);
+
+}
+
+
+
+.item-cell:hover .item-tooltip {
+
+    display: block;
+
+}
+
+
+
+.tooltip-header {
+
+    font-weight: 700;
+
+    font-size: 1rem;
+
+    margin-bottom: 0.25rem;
+
+    background: transparent;
+
+}
+
+
+
+/* Tooltip 标题稀有度颜色 - 针对深色背景优化 */
+
+.tooltip-header.rarity-black { color: #E0E0E0; background: transparent; }
+
+.tooltip-header.rarity-gray { color: #A0A0A0; background: transparent; }
+
+.tooltip-header.rarity-green { color: #4ADE80; background: transparent; }
+
+.tooltip-header.rarity-blue { color: #60A5FA; background: transparent; }
+
+.tooltip-header.rarity-red { color: #F87171; background: transparent; }
+
+.tooltip-header.rarity-purple { color: #C084FC; background: transparent; }
+
+.tooltip-header.rarity-orange { color: #FBBF24; background: transparent; }
+
+
+
+.tooltip-category {
+
+    font-size: 0.8rem;
+
+    color: #D1D5DB;
+
+    margin-bottom: 0.5rem;
+
+}
+
+
+
+.tooltip-desc {
+
+    font-size: 0.85rem;
+
+    color: #F3F4F6;
+
+    margin-bottom: 0.5rem;
+
+    line-height: 1.4;
+
+}
+
+
+
+/* 装备属性 */
+
+.tooltip-attrs {
+
+    margin: 0.5rem 0;
+
+}
+
+
+
+.attr-row {
+
+    display: flex;
+
+    justify-content: space-between;
+
+    padding: 0.15rem 0;
+
+    font-size: 0.85rem;
+
+}
+
+
+
+.attr-label {
+
+    color: #9CA3AF;
+
+}
+
+
+
+.attr-value {
+
+    color: #4ADE80;
+
+    font-weight: 600;
+
+}
+
+
+
+/* 套装信息 */
+
+.tooltip-set {
+
+    margin-top: 0.5rem;
+
+}
+
+
+
+.set-name {
+
+    font-size: 0.85rem;
+
+    color: #BA55D3;
+
+    font-weight: 600;
+
+    margin-bottom: 0.25rem;
+
+}
+
+
+
+.set-bonus {
+
+    font-size: 0.8rem;
+
+    color: #BA55D3;
+
+    line-height: 1.5;
+
+}
+
+
+
+.set-pieces {
+
+    color: #BA55D3;
+
+}
+
+
+
+
+
+/* 表头筛选列 */
+
+.filter-th {
+
+    text-align: right;
+
+    white-space: nowrap;
+
+    min-width: 200px;
+
+    padding-right: 1rem !important;
+
+}
+
+
+
+.warehouse-table tbody td:last-child {
+
+    width: 1%;
+
+    padding: 0.25rem 0.5rem;
+
+}
+
+
+
+.filter-form-inline {
+
+    display: flex;
+
+    gap: 0.5rem;
+
+    align-items: center;
+
+    justify-content: flex-end;
+
+}
+
+
+
+.filter-label-inline {
+
+    color: var(--text-secondary);
+
+    font-weight: 600;
+
+    font-size: 0.85rem;
+
+}
+
+
+
+.filter-select-inline {
+
+    padding: 0.35rem 0.6rem;
+
+    border: 1px solid var(--border-primary);
+
+    border-radius: 4px;
+
+    background: var(--bg-card);
+
+    color: var(--text-primary);
+
+    min-width: 120px;
+
+    font-size: 0.85rem;
+
+    cursor: pointer;
+
+}
+
+
+
+.filter-select-inline:hover {
+
+    border-color: var(--text-secondary);
+
+}
+
+
+
+.filter-select-inline:focus {
+
+    outline: none;
+
+    border-color: var(--accent-gold);
+
+    box-shadow: 0 0 0 2px rgba(218,165,32,0.2);
+
+}
+
+/* 滚动条样式优化 - 与商店保持一致 */
+.shop-table-wrapper::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.shop-table-wrapper::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+    border-radius: 4px;
+}
+
+.shop-table-wrapper::-webkit-scrollbar-thumb {
+    background: var(--border-primary);
+    border-radius: 4px;
+}
+
+.shop-table-wrapper::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
+</style>
+
+
+
+<script>
+
+document.addEventListener('DOMContentLoaded', function() {
+
+    // AJAX 表单提交（防止页面跳动）
+    document.querySelectorAll('.warehouse-actions form').forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            const url = this.action;
+            const btn = this.querySelector('button[type="submit"]');
+            const originalText = btn.textContent;
+
+            // 记录当前滚动位置
+            const scrollTop = window.scrollY || document.documentElement.scrollTop;
+            const tableWrapper = document.querySelector('.shop-table-wrapper');
+            const tableScrollTop = tableWrapper ? tableWrapper.scrollTop : 0;
+
+            btn.disabled = true;
+            btn.textContent = '处理中...';
+
+            fetch(url, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // 保存滚动位置到 sessionStorage，刷新后恢复
+                    sessionStorage.setItem('warehouseScrollTop', scrollTop);
+                    sessionStorage.setItem('warehouseTableScrollTop', tableScrollTop);
+                    // 显示成功消息，用户确认后刷新页面
+                    if (data.message) {
+                        gameDialog.success(data.message).then(() => {
+                            location.reload();
+                        });
+                    } else {
+                        location.reload();
+                    }
+                } else {
+                    gameDialog.error(data.error || '操作失败', { title: '错误' });
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                }
+            })
+            .catch(err => {
+                // 如果不是 JSON 响应（旧接口），回退到普通刷新
+                sessionStorage.setItem('warehouseScrollTop', scrollTop);
+                sessionStorage.setItem('warehouseTableScrollTop', tableScrollTop);
+                location.reload();
+            });
+        });
+    });
+
+    // 恢复滚动位置
+    const savedScrollTop = sessionStorage.getItem('warehouseScrollTop');
+    const savedTableScrollTop = sessionStorage.getItem('warehouseTableScrollTop');
+    if (savedScrollTop !== null) {
+        window.scrollTo(0, parseInt(savedScrollTop));
+        sessionStorage.removeItem('warehouseScrollTop');
+    }
+    if (savedTableScrollTop !== null) {
+        const tableWrapper = document.querySelector('.shop-table-wrapper');
+        if (tableWrapper) {
+            tableWrapper.scrollTop = parseInt(savedTableScrollTop);
+        }
+        sessionStorage.removeItem('warehouseTableScrollTop');
+    }
+
+    // Tooltip 位置动态调整
+
+    const itemCells = document.querySelectorAll('.item-cell');
+
+    itemCells.forEach(cell => {
+
+        cell.addEventListener('mouseenter', function() {
+
+            const tooltip = this.querySelector('.item-tooltip');
+
+            if (!tooltip) return;
+
+
+
+            // 获取单元格位置
+
+            const cellRect = this.getBoundingClientRect();
+
+            const viewportHeight = window.innerHeight;
+
+            const viewportWidth = window.innerWidth;
+
+
+
+            // 默认位置：元素下方
+
+            let top = cellRect.bottom + 8;
+
+            let left = cellRect.left;
+
+
+
+            // 等待tooltip显示后再计算位置
+
+            setTimeout(() => {
+
+                const tooltipRect = tooltip.getBoundingClientRect();
+
+
+
+                // 如果右侧超出视口，向左对齐
+
+                if (left + tooltipRect.width > viewportWidth - 20) {
+
+                    left = viewportWidth - tooltipRect.width - 20;
+
+                }
+
+
+
+                // 如果底部超出视口，显示在元素上方
+
+                if (top + tooltipRect.height > viewportHeight - 20) {
+
+                    top = cellRect.top - tooltipRect.height - 8;
+
+                }
+
+
+
+                // 应用位置
+
+                tooltip.style.top = top + 'px';
+
+                tooltip.style.left = left + 'px';
+
+            }, 10);
+
+        });
+
+
+
+        // 鼠标移动时更新位置（用于滚动场景）
+
+        cell.addEventListener('mousemove', function() {
+
+            const tooltip = this.querySelector('.item-tooltip');
+
+            if (!tooltip || tooltip.style.display === 'none') return;
+
+
+
+            const cellRect = this.getBoundingClientRect();
+
+            const viewportHeight = window.innerHeight;
+
+            const viewportWidth = window.innerWidth;
+
+            const tooltipRect = tooltip.getBoundingClientRect();
+
+
+
+            let top = cellRect.bottom + 8;
+
+            let left = cellRect.left;
+
+
+
+            if (left + tooltipRect.width > viewportWidth - 20) {
+
+                left = viewportWidth - tooltipRect.width - 20;
+
+            }
+
+
+
+            if (top + tooltipRect.height > viewportHeight - 20) {
+
+                top = cellRect.top - tooltipRect.height - 8;
+
+            }
+
+
+
+            tooltip.style.top = top + 'px';
+
+            tooltip.style.left = left + 'px';
+
+        });
+
+    });
+
+});
+
+</script>
+
+{% endblock %}
+

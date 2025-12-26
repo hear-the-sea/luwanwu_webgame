@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% load gameplay_extras static %}
+
+{% block title %}{{ category_label }} - 庄园建筑{% endblock %}
+
+{% block content %}
+<section class="dashboard">
+    <nav class="category-tabs">
+        {% for cat_key, cat_label in categories %}
+        <a href="{% url 'gameplay:buildings_category' cat_key %}"
+           class="tab-item {% if cat_key == current_category %}active{% endif %}">
+            {{ cat_label }}
+        </a>
+        {% endfor %}
+    </nav>
+
+    <section class="building-section">
+        <div class="building-grid">
+        {% for building in buildings %}
+            <article class="building-card">
+                <header>
+                    <div>
+                        <h3>{{ building.building_type.name }}</h3>
+                        <p class="building-desc">{{ building.building_type.key|building_desc }}</p>
+                    </div>
+                    <span class="badge">Lv {{ building.level }}</span>
+                </header>
+                <dl>
+                    <div>
+                        <dt>当前产能</dt>
+                        <dd>{{ building.hourly_rate|floatformat:0 }} / 小时</dd>
+                    </div>
+                    {% if building.is_upgrading %}
+                        <div>
+                            <dt>升级完成</dt>
+                            <dd>
+                                <span class="countdown" data-countdown="{{ building.upgrade_complete_at|date:'c' }}">
+                                    {{ building.upgrade_complete_at|date:"H:i:s" }}
+                                </span>
+                            </dd>
+                        </div>
+                    {% else %}
+                        {% with cost=building.next_level_cost %}
+                        <div>
+                            <dt>下级所需</dt>
+                            <dd>
+                                {% for key,val in cost.items %}
+                                    <span>{{ resource_labels|get_label:key }} {{ val }}</span>
+                                {% endfor %}
+                            </dd>
+                        </div>
+                        {% endwith %}
+                    {% endif %}
+                </dl>
+                <div class="card-actions">
+                    {% if building.building_type.key == 'juxianzhuang' %}
+                        <p>门客容量：{{ manor.guests.count }} / {{ manor.guest_capacity }}</p>
+                    {% endif %}
+                    <div class="btn-row">
+                        <form method="post" action="{% url 'gameplay:upgrade_building' building.pk %}">
+                            {% csrf_token %}
+                            {% if building.is_upgrading %}
+                                <button type="button" class="btn-primary" disabled>升级进行中</button>
+                            {% else %}
+                                <button type="submit" class="btn-primary">升级</button>
+                            {% endif %}
+                        </form>
+                        {% if building.building_type.key == 'juxianzhuang' %}
+                            <a class="btn-primary" href="{% url 'gameplay:recruitment_hall' %}">招募门客</a>
+                        {% elif building.building_type.key == 'stable' %}
+                            <a class="btn-primary" href="{% url 'gameplay:stable' %}">生产马匹</a>
+                        {% elif building.building_type.key == 'ranch' %}
+                            <a class="btn-primary" href="{% url 'gameplay:ranch' %}">养殖家畜</a>
+                        {% elif building.building_type.key == 'smithy' %}
+                            <a class="btn-primary" href="{% url 'gameplay:smithy' %}">冶炼金属</a>
+                        {% elif building.building_type.key == 'forge' %}
+                            <a class="btn-primary" href="{% url 'gameplay:forge' %}">锻造装备</a>
+                        {% elif building.building_type.key == 'lianggongchang' %}
+                            <a class="btn-primary" href="{% url 'gameplay:troop_recruitment' %}">护院招募</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </article>
+        {% empty %}
+            <p class="empty-hint">该分类下暂无建筑</p>
+        {% endfor %}
+        </div>
+    </section>
+</section>
+
+<style>
+.category-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+.tab-item {
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    background: var(--bg-secondary, #f5f5f5);
+    color: var(--text-primary, #333);
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+}
+.tab-item:hover {
+    background: var(--bg-tertiary, #e5e5e5);
+}
+.tab-item.active {
+    background: var(--accent-primary, #4a2612);
+    color: var(--text-on-accent, #fff);
+}
+.empty-hint {
+    color: var(--text-muted, #666);
+    padding: 2rem;
+    text-align: center;
+}
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/dashboard.js' %}"></script>
+{% endblock %}

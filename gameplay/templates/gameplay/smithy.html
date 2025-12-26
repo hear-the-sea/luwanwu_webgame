@@ -1,0 +1,323 @@
+{% extends "base.html" %}
+
+{% block title %}冶炼坊{% endblock %}
+
+{% block content %}
+<section class="dashboard">
+    <div class="section-header">
+        <div>
+            <h1>冶炼坊</h1>
+            <p class="caption">冶炼金属，当前银两：<strong>{{ manor.silver }}</strong>{% if speed_bonus_percent > 0 %}，冶炼坊加成：<span class="bonus-text">-{{ speed_bonus_percent }}%</span> 冶炼时间{% endif %}</p>
+            <p class="caption">冶炼技等级：{{ smelting_level }}，单次最大冶炼数量：<strong>{{ max_smelting_quantity }}</strong> 个</p>
+        </div>
+        <a class="btn-secondary" href="{% url 'gameplay:smithy' %}">刷新</a>
+    </div>
+
+    {% if active_productions %}
+    <section class="card">
+        <h2>冶炼中</h2>
+        <div class="task-list">
+            {% for production in active_productions %}
+            <article class="task-card">
+                <header>
+                    <h3>{{ production.metal_name }} x{{ production.quantity }}</h3>
+                </header>
+                <div class="task-meta">
+                    {% if production.time_remaining > 0 %}
+                        <span class="chip soft">剩余时间：{{ production.time_remaining }} 秒</span>
+                    {% else %}
+                        <span class="chip success">已完成！</span>
+                    {% endif %}
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <section class="card">
+        <h2>可冶炼金属</h2>
+        <p class="hint" style="margin-bottom: 1rem;">
+            冶炼链：1银两→1铜，5铜→1锡，3锡→1铁
+            {% if is_producing %}<br><span class="warning-text">当前有金属正在冶炼中，同时只能冶炼一种金属</span>{% endif %}
+        </p>
+
+        <div class="building-grid">
+            {% for metal in metal_options %}
+            <article class="building-card {% if not metal.is_unlocked %}locked{% elif is_producing %}disabled{% endif %}">
+                <header>
+                    <div>
+                        <h3>{{ metal.name }}</h3>
+                        {% if not metal.is_unlocked %}
+                        <p class="locked-hint">需要冶炼技 {{ metal.required_smelting }} 级</p>
+                        {% endif %}
+                    </div>
+                </header>
+                <dl>
+                    <div>
+                        <dt>消耗材料</dt>
+                        <dd class="cost-text">{{ metal.cost_amount }} {{ metal.cost_type_name }}</dd>
+                    </div>
+                    <div>
+                        <dt>当前持有</dt>
+                        <dd>{{ metal.current_amount }}</dd>
+                    </div>
+                    <div>
+                        <dt>实际时间</dt>
+                        <dd class="bonus-text">{{ metal.actual_duration }} 秒</dd>
+                    </div>
+                </dl>
+
+                <form method="post" action="{% url 'gameplay:start_smelting_production' %}" class="production-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="metal_key" value="{{ metal.key }}">
+                    {% if not metal.is_unlocked %}
+                        <button type="button" class="btn-locked btn-small" disabled>未解锁</button>
+                    {% elif is_producing %}
+                        <button type="button" class="btn-disabled btn-small" disabled>冶炼中</button>
+                    {% elif metal.is_unlocked %}
+                        <div class="quantity-row">
+                            <label for="quantity-{{ metal.key }}">数量：</label>
+                            <input type="number" name="quantity" id="quantity-{{ metal.key }}"
+                                   value="1" min="1" max="{{ metal.max_quantity }}"
+                                   class="quantity-input"
+                                   data-unit-cost="{{ metal.cost_amount }}"
+                                   data-cost-type-name="{{ metal.cost_type_name }}"
+                                   onchange="updateTotalCost(this)">
+                            <span class="total-cost" id="total-{{ metal.key }}">总计：{{ metal.cost_amount }} {{ metal.cost_type_name }}</span>
+                        </div>
+                        {% if metal.can_afford %}
+                            <button type="submit" class="btn-primary btn-small">冶炼</button>
+                        {% else %}
+                            <button type="button" class="btn-disabled btn-small" disabled>{{ metal.cost_type_name }}不足</button>
+                        {% endif %}
+                    {% endif %}
+                </form>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+</section>
+
+<style>
+.building-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1rem;
+}
+
+.building-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 1.5rem;
+    background: white;
+    transition: box-shadow 0.2s;
+}
+
+.building-card:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.building-card.locked {
+    background: #f9fafb;
+    opacity: 0.7;
+}
+
+.building-card.disabled {
+    background: #f9fafb;
+    opacity: 0.6;
+}
+
+.building-card header {
+    margin-bottom: 1rem;
+}
+
+.building-card h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #111827;
+    margin-bottom: 0.5rem;
+}
+
+.building-card header p {
+    font-size: 0.875rem;
+    color: #6b7280;
+    line-height: 1.5;
+}
+
+.locked-hint {
+    color: #dc2626 !important;
+    font-weight: 500;
+}
+
+.warning-text {
+    color: #dc2626;
+    font-weight: 500;
+}
+
+.building-card dl {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: #f9fafb;
+    border-radius: 4px;
+}
+
+.building-card dl div {
+    text-align: center;
+}
+
+.building-card dt {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-bottom: 0.25rem;
+}
+
+.building-card dd {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #111827;
+}
+
+.cost-text {
+    color: #dc2626;
+}
+
+.bonus-text {
+    color: #16a34a;
+}
+
+.hint {
+    color: #6b7280;
+    font-size: 0.875rem;
+}
+
+.production-form {
+    margin-top: 1rem;
+    text-align: center;
+}
+
+.quantity-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.quantity-row label {
+    font-size: 0.875rem;
+    color: #374151;
+}
+
+.quantity-input {
+    width: 80px;
+    padding: 0.375rem 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    text-align: center;
+}
+
+.quantity-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.total-cost {
+    font-size: 0.75rem;
+    color: #dc2626;
+    font-weight: 500;
+}
+
+.btn-disabled {
+    background: #d1d5db;
+    color: #9ca3af;
+    cursor: not-allowed;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
+.btn-locked {
+    background: #fecaca;
+    color: #991b1b;
+    cursor: not-allowed;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
+.task-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.task-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 1rem;
+    background: white;
+}
+
+.task-card header {
+    margin-bottom: 0.75rem;
+}
+
+.task-card h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #111827;
+    margin-bottom: 0.25rem;
+}
+
+.task-card header p {
+    font-size: 0.875rem;
+    color: #6b7280;
+}
+
+.task-meta {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.chip {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.chip.soft {
+    background: #f3f4f6;
+    color: #4b5563;
+}
+
+.chip.success {
+    background: #dcfce7;
+    color: #16a34a;
+}
+</style>
+
+<script>
+function updateTotalCost(input) {
+    const unitCost = parseInt(input.dataset.unitCost, 10);
+    const costTypeName = input.dataset.costTypeName;
+    const quantity = parseInt(input.value, 10) || 1;
+    const metalKey = input.id.replace('quantity-', '');
+    const totalSpan = document.getElementById('total-' + metalKey);
+    const totalCost = unitCost * quantity;
+    totalSpan.textContent = '总计：' + totalCost.toLocaleString() + ' ' + costTypeName;
+}
+</script>
+{% endblock %}

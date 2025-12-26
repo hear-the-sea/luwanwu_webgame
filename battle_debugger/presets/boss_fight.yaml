@@ -1,0 +1,68 @@
+# BOSS战测试
+# 3个门客 vs 1个超强BOSS + 护卫
+
+name: "BOSS战"
+description: "3个Lv100门客 + 1000小兵 vs 超强BOSS + 3000护卫，测试高难度PVE"
+
+attacker:
+  guests:
+    - template: special_hero_dugu_qiubai
+      level: 100
+      force: 500
+      intellect: 300
+      defense: 300
+      agility: 200
+      luck: 100
+      skills:
+        - dragon_roar
+        - stratagem_burst
+
+    - template: hero_zhang_sanfeng
+      level: 100
+      force: 450
+      intellect: 400
+      defense: 320
+      agility: 180
+      luck: 120
+      skills:
+        - stratagem_burst
+
+    - template: hero_xiao_feng
+      level: 100
+      force: 480
+      intellect: 280
+      defense: 310
+      agility: 190
+      luck: 90
+      skills:
+        - dragon_roar
+
+  troops:
+    dao_sheng: 400
+    arrow_god: 600
+
+  technology_level: 10
+
+defender:
+  guests:
+    # BOSS - 超高属性
+    - template: special_hero_dongfang_bubai
+      level: 100
+      force: 800    # +60%
+      intellect: 480
+      defense: 450
+      agility: 300
+      luck: 150
+      skills:
+        - dragon_roar
+        - stratagem_burst
+
+  troops:
+    qiang_wang: 3000  # 大量护卫
+
+  technology_level: 10
+
+tunable_params:
+  slaughter_multiplier: 30
+  troop_attack_divisor_vs_guest: 4.0
+  counter_multiplier: 1.5

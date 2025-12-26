@@ -1,0 +1,286 @@
+# 门客技能配置
+# skills/skill_books 由 load_guest_templates 导入。
+
+skills:
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                              武系伤害技能
+  # ══════════════════════════════════════════════════════════════════════════════
+  - key: stratagem_burst
+    name: 奇策突袭
+    rarity: purple
+    description: 随机对敌人造成高额伤害并可能眩晕。
+    base_power: 220
+    base_probability: 0.8
+    kind: active
+    status_effect: stunned
+    status_probability: 0.8
+    status_duration: 1
+    damage_formula:
+      base: 220
+      ally:
+        force: 0.5
+        intellect: 0.3
+        agility: 0.2
+      enemy:
+        defense: 0.35
+        intellect: 0.15
+    required_level: 10
+    required_intellect: 100
+    targets: 1
+
+  - key: dragon_roar
+    name: 龙吟破阵
+    rarity: orange
+    description: 对随机三名敌人造成范围伤害，运势越高触发率越高。
+    base_power: 260
+    base_probability: 0.8
+    damage_formula:
+      base: 260
+      ally:
+        force: 0.4
+        intellect: 0.2
+        agility: 0.2
+        luck: 0.2
+      enemy:
+        defense: 0.3
+        intellect: 0.2
+    required_level: 15
+    required_force: 150
+    targets: 3
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                              文系伤害技能（法术系）
+  # ══════════════════════════════════════════════════════════════════════════════
+  # 稀有度分布：绿色×7、蓝色×3、紫色×2
+  # 文系技能特点：纯伤害技能，智力权重高
+
+  # ---------- 绿色品质（入门法术）----------
+  - key: ice_curse
+    name: 寒冰咒
+    rarity: green
+    description: 念诵玄冰咒语，召唤寒气侵袭敌人，冰寒刺骨。
+    base_probability: 0.75
+    kind: active
+    damage_formula:
+      base: 300
+      ally:
+        force: 0.2
+        intellect: 1.2
+      enemy:
+        defense: 0.2
+        intellect: 0.1
+    required_level: 5
+    required_intellect: 60
+    targets: 1
+
+  - key: thunder_control
+    name: 驭雷术
+    rarity: green
+    description: 引动天雷之力劈向敌人，雷光闪烁，迅如疾风。
+    base_probability: 0.75
+    kind: active
+    damage_formula:
+      base: 320
+      ally:
+        force: 0.15
+        intellect: 1.1
+        agility: 0.3
+      enemy:
+        defense: 0.25
+        intellect: 0.1
+    required_level: 5
+    required_intellect: 65
+    targets: 1
+
+  - key: dragon_break_curse
+    name: 破龙咒
+    rarity: green
+    description: 以咒力震慑龙气，专破护甲坚固之敌，忽视大部分防御。
+    base_probability: 0.7
+    kind: active
+    damage_formula:
+      base: 380
+      ally:
+        force: 0.1
+        intellect: 1.3
+        luck: 0.2
+      enemy:
+        defense: 0.05
+        intellect: 0.05
+    required_level: 8
+    required_intellect: 70
+    targets: 1
+
+  - key: endless_chatter
+    name: 唧唧歪歪
+    rarity: green
+    description: 滔滔不绝地絮叨，言辞如刀，令敌人心烦意乱。
+    base_probability: 0.8
+    kind: active
+    damage_formula:
+      base: 250
+      ally:
+        force: 0.1
+        intellect: 1.0
+        luck: 0.4
+      enemy:
+        defense: 0.15
+        intellect: 0.15
+    required_level: 3
+    required_intellect: 50
+    targets: 1
+
+  - key: taiyi_wind
+    name: 太乙生风
+    rarity: green
+    description: 运转太乙真气，化为狂风席卷战场，摧枯拉朽。
+    base_probability: 0.75
+    kind: active
+    damage_formula:
+      base: 800
+      ally:
+        force: 0.3
+        intellect: 2.5
+        agility: 0.5
+      enemy:
+        defense: 0.3
+        intellect: 0.15
+    required_level: 12
+    required_intellect: 90
+    targets: 1
+
+  - key: flower_rain
+    name: 天花乱坠
+    rarity: green
+    description: 口吐莲花，舌灿生辉，言辞如天花飘落，杀人于无形。
+    base_probability: 0.75
+    kind: active
+    damage_formula:
+      base: 700
+      ally:
+        force: 0.2
+        intellect: 2.3
+        luck: 0.6
+      enemy:
+        defense: 0.25
+        intellect: 0.15
+    required_level: 10
+    required_intellect: 85
+    targets: 1
+
+  - key: soul_erode
+    name: 销魂蚀骨
+    rarity: green
+    description: 阴毒法术侵蚀敌人精魄，直击灵魂深处。
+    base_probability: 0.7
+    kind: active
+    damage_formula:
+      base: 900
+      ally:
+        force: 0.15
+        intellect: 2.8
+        luck: 0.4
+      enemy:
+        defense: 0.1
+        intellect: 0.2
+    required_level: 15
+    required_intellect: 100
+    targets: 1
+
+  # ---------- 蓝色品质（进阶法术）----------
+  - key: red_lotus_dance
+    name: 红莲之舞
+    rarity: blue
+    description: 召唤业火红莲绽放，火焰如舞者般席卷敌阵。
+    base_probability: 0.75
+    kind: active
+    damage_formula:
+      base: 850
+      ally:
+        force: 0.3
+        intellect: 2.6
+        agility: 0.4
+      enemy:
+        defense: 0.25
+        intellect: 0.15
+    required_level: 12
+    required_intellect: 95
+    targets: 1
+
+  - key: thunder_nine_heavens
+    name: 雷动九天
+    rarity: blue
+    description: 引动九天神雷轰击敌阵，雷霆万钧，势不可挡。
+    base_probability: 0.8
+    kind: active
+    damage_formula:
+      base: 1500
+      ally:
+        force: 0.5
+        intellect: 4.5
+        agility: 0.8
+      enemy:
+        defense: 0.35
+        intellect: 0.2
+    required_level: 20
+    required_intellect: 130
+    targets: 1
+
+  - key: tangseng_sermon
+    name: 唐僧说禅
+    rarity: blue
+    description: 如唐三藏般念诵经文，绵绵不绝，言辞凌厉如刀剑万千。
+    base_probability: 0.8
+    kind: active
+    damage_formula:
+      base: 1300
+      ally:
+        force: 0.2
+        intellect: 4.2
+        luck: 1.0
+      enemy:
+        defense: 0.2
+        intellect: 0.25
+    required_level: 18
+    required_intellect: 120
+    targets: 1
+
+  # ---------- 紫色品质（高阶法术）----------
+  - key: five_thunder_descent
+    name: 五雷降世
+    rarity: purple
+    description: 召唤金木水火土五行雷霆同时降临，毁天灭地。
+    base_probability: 0.75
+    kind: active
+    damage_formula:
+      base: 1700
+      ally:
+        force: 0.4
+        intellect: 4.8
+        luck: 0.8
+      enemy:
+        defense: 0.3
+        intellect: 0.25
+    required_level: 25
+    required_intellect: 140
+    targets: 1
+
+  - key: brahma_true_fire
+    name: 梵天真火
+    rarity: purple
+    description: 引动梵天圣火焚尽万物，烈焰滔天，神佛难挡。
+    base_probability: 0.75
+    kind: active
+    damage_formula:
+      base: 2400
+      ally:
+        force: 0.7
+        intellect: 6.5
+        agility: 0.9
+      enemy:
+        defense: 0.35
+        intellect: 0.25
+    required_level: 25
+    required_intellect: 150
+    targets: 1
+

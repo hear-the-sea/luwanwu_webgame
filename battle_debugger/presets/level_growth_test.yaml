@@ -1,0 +1,51 @@
+# 等级成长测试
+# 测试等级对门客属性的影响（不使用显式属性覆盖）
+
+name: "等级成长测试"
+description: "对比不同等级门客的属性差异，验证等级成长系统"
+
+attacker:
+  guests:
+    # 高等级门客组
+    - template: special_hero_dugu_qiubai
+      level: 100
+      skills:
+        - dragon_roar
+
+    - template: hero_zhang_sanfeng
+      level: 100
+      skills:
+        - stratagem_burst
+
+    - template: hero_xiao_feng
+      level: 80
+
+    - template: hero_zhao_yun
+      level: 60
+
+    - template: special_hero_sao_di_seng
+      level: 40
+      archetype: civil
+
+defender:
+  guests:
+    # 低等级门客组
+    - template: special_hero_dugu_qiubai
+      level: 50
+
+    - template: hero_zhang_sanfeng
+      level: 50
+
+    - template: hero_xiao_feng
+      level: 50
+
+    - template: hero_zhao_yun
+      level: 50
+
+    - template: special_hero_sao_di_seng
+      level: 50
+      archetype: civil
+
+tunable_params:
+  counter_multiplier: 1.5
+  crit_chance: 0.05

@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}参数调优 - 战斗调试器{% endblock %}
+
+{% block extra_head %}
+<style>
+/* 调优页面样式 */
+.debugger-container {
+    padding: 1.5rem;
+}
+
+.debugger-header {
+    margin-bottom: 1.5rem;
+}
+
+.debugger-header h1 {
+    font-size: 1.8rem;
+    color: var(--text-primary);
+    border-bottom: 3px double var(--border-primary);
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+/* 面包屑导航 */
+.breadcrumb {
+    display: flex;
+    gap: 0.5rem;
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1.5rem 0;
+    font-size: 0.9rem;
+}
+
+.breadcrumb li {
+    color: var(--text-muted);
+}
+
+.breadcrumb li a {
+    color: var(--accent-gold);
+    text-decoration: none;
+}
+
+.breadcrumb li a:hover {
+    text-decoration: underline;
+}
+
+.breadcrumb li::after {
+    content: "›";
+    margin-left: 0.5rem;
+    color: var(--text-muted);
+}
+
+.breadcrumb li:last-child::after {
+    content: "";
+}
+
+/* 调优面板 */
+.tune-panel {
+    background: var(--bg-panel);
+    border: 2px solid var(--border-primary);
+    border-radius: 10px;
+    overflow: hidden;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.tune-panel-header {
+    background: linear-gradient(135deg, #059669, #047857);
+    color: #FFF8E7;
+    padding: 0.8rem 1rem;
+    font-weight: 700;
+    font-size: 1.1rem;
+}
+
+.tune-panel-body {
+    padding: 1.5rem;
+}
+
+.tune-intro {
+    color: var(--text-muted);
+    margin-bottom: 1.5rem;
+    padding: 0.8rem;
+    background: var(--bg-hover);
+    border-radius: 6px;
+}
+
+/* 表单组 */
+.form-group {
+    margin-bottom: 1.2rem;
+}
+
+.form-group label {
+    display: block;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 0.4rem;
+    font-size: 0.95rem;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    border: 2px solid var(--border-primary);
+    border-radius: 6px;
+    padding: 0.6rem 0.8rem;
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.95rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: var(--accent-gold);
+    box-shadow: 0 0 0 3px rgba(218, 165, 32, 0.2);
+}
+
+.form-group input::placeholder {
+    color: var(--text-muted);
+}
+
+.form-hint {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-top: 0.3rem;
+}
+
+/* 操作按钮 */
+.action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    margin-top: 1.5rem;
+}
+
+.btn-success {
+    background: linear-gradient(180deg, #059669 0%, #047857 100%);
+    border: 2px solid #046854;
+    color: #FFF8E7;
+    padding: 0.8rem 1.5rem;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25);
+}
+
+.btn-success:hover {
+    background: linear-gradient(180deg, #047857 0%, #035b46 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(5, 150, 105, 0.35);
+}
+
+.btn-secondary {
+    background: var(--bg-hover);
+    border: 2px solid var(--border-primary);
+    color: var(--text-secondary);
+    padding: 0.8rem 1.5rem;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+    background: var(--bg-panel);
+    color: var(--text-primary);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="debugger-container">
+    <div class="debugger-header">
+        <h1>参数调优</h1>
+    </div>
+
+    <nav>
+        <ol class="breadcrumb">
+            <li><a href="{% url 'battle_debugger:index' %}">调试器</a></li>
+            <li>参数调优</li>
+        </ol>
+    </nav>
+
+    <div class="tune-panel">
+        <div class="tune-panel-header">
+            📊 调优配置
+        </div>
+        <div class="tune-panel-body">
+            <div class="tune-intro">
+                测试单个参数的不同值，对比战斗结果，找到最优配置
+            </div>
+
+            <form method="post">
+                {% csrf_token %}
+
+                <div class="form-group">
+                    <label for="preset">预设配置</label>
+                    <select id="preset" name="preset" required>
+                        <option value="">-- 选择预设 --</option>
+                        {% for preset in presets %}
+                        <option value="{{ preset.name }}">{{ preset.title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="param">要调优的参数</label>
+                    <select id="param" name="param" required>
+                        <option value="">-- 选择参数 --</option>
+                        {% for param in tunable_params %}
+                        <option value="{{ param.key }}">{{ param.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="values">参数值列表</label>
+                    <input type="text"
+                           id="values"
+                           name="values"
+                           placeholder="例如: 10,20,30,40,50"
+                           required>
+                    <div class="form-hint">使用逗号分隔多个值</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="repeat">每个值重复次数</label>
+                    <input type="number"
+                           id="repeat"
+                           name="repeat"
+                           value="10"
+                           min="1"
+                           max="100"
+                           required>
+                    <div class="form-hint">重复次数越多，统计结果越准确，但运行时间越长</div>
+                </div>
+
+                <div class="action-buttons">
+                    <button type="submit" class="btn-success">
+                        🚀 开始调优
+                    </button>
+                    <a href="{% url 'battle_debugger:index' %}" class="btn-secondary">
+                        ← 返回
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

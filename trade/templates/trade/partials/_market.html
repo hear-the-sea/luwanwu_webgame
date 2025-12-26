@@ -1,0 +1,446 @@
+{% load static trade_filters %}
+
+<!-- 交易行内容 -->
+<div class="market-container">
+    <!-- 子导航 -->
+    <div class="shop-mode-switch" style="margin-bottom: 1rem;">
+        <button type="button"
+                class="mode-btn {% if market_view == 'buy' or not market_view %}active{% endif %}"
+                onclick="location.href='?tab=market&view=buy'">
+            浏览购买
+        </button>
+        <button type="button"
+                class="mode-btn {% if market_view == 'sell' %}active{% endif %}"
+                onclick="location.href='?tab=market&view=sell'">
+            上架出售
+        </button>
+        <button type="button"
+                class="mode-btn {% if market_view == 'my_listings' %}active{% endif %}"
+                onclick="location.href='?tab=market&view=my_listings'">
+            我的挂单
+        </button>
+    </div>
+
+    {% if market_view == 'buy' or not market_view %}
+    <!-- 购买区 -->
+    <div id="market-buy-section" class="trade-card">
+        <!-- 筛选区域 -->
+        <div class="filter-bar">
+            <form method="get" class="filter-form">
+                <input type="hidden" name="tab" value="market">
+                <input type="hidden" name="view" value="buy">
+
+                <label class="filter-label">类别：</label>
+                <select name="category" class="filter-select" onchange="this.form.submit()">
+                    {% for cat in categories %}
+                    <option value="{{ cat.key }}" {% if selected_category == cat.key %}selected{% endif %}>
+                        {{ cat.label }}
+                    </option>
+                    {% endfor %}
+                </select>
+
+                <label class="filter-label">稀有度：</label>
+                <select name="rarity" class="filter-select" onchange="this.form.submit()">
+                    <option value="all">全部</option>
+                    <option value="orange" {% if selected_rarity == 'orange' %}selected{% endif %}>橙色</option>
+                    <option value="purple" {% if selected_rarity == 'purple' %}selected{% endif %}>紫色</option>
+                    <option value="blue" {% if selected_rarity == 'blue' %}selected{% endif %}>蓝色</option>
+                    <option value="green" {% if selected_rarity == 'green' %}selected{% endif %}>绿色</option>
+                    <option value="gray" {% if selected_rarity == 'gray' %}selected{% endif %}>灰色</option>
+                </select>
+
+                <label class="filter-label">排序：</label>
+                <select name="order_by" class="filter-select" onchange="this.form.submit()">
+                    <option value="-listed_at" {% if selected_order == '-listed_at' %}selected{% endif %}>最新上架</option>
+                    <option value="unit_price" {% if selected_order == 'unit_price' %}selected{% endif %}>价格↑</option>
+                    <option value="-unit_price" {% if selected_order == '-unit_price' %}selected{% endif %}>价格↓</option>
+                    <option value="expires_at" {% if selected_order == 'expires_at' %}selected{% endif %}>即将过期</option>
+                </select>
+            </form>
+        </div>
+
+        <!-- 商品列表 -->
+        {% if listings %}
+        <div class="shop-table-wrapper">
+            <table class="shop-table">
+                <thead>
+                    <tr>
+                        <th>物品</th>
+                        <th>数量</th>
+                        <th>单价</th>
+                        <th>总价</th>
+                        <th>卖家</th>
+                        <th>剩余时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for listing in listings %}
+                    <tr>
+                        <td>
+                            <div class="item-cell" data-tooltip>
+                                <div class="item-icon rarity-{{ listing.item_template.rarity }}">
+                                    {% if listing.item_template.image %}
+                                    <img src="{{ listing.item_template.image.url }}"
+                                         alt="{{ listing.item_template.name }}">
+                                    {% else %}
+                                    <span class="icon-placeholder">
+                                        {{ listing.item_template.name|slice:":1" }}
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                <span class="item-name rarity-{{ listing.item_template.rarity }}">
+                                    {{ listing.item_template.name }}
+                                </span>
+                                <div class="item-tooltip">
+                                    <div class="tooltip-header rarity-{{ listing.item_template.rarity }}">
+                                        {{ listing.item_template.name }}
+                                    </div>
+                                    <div class="tooltip-category">{{ listing.item_template.category_display }}</div>
+                                    {% if listing.item_template.description %}
+                                    <div class="tooltip-desc">{{ listing.item_template.description }}</div>
+                                    {% endif %}
+                                    <div class="tooltip-price">参考价：{{ listing.item_template.price }} 银两</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>{{ listing.quantity }}</td>
+                        <td class="price">{{ listing.unit_price|floatformat:0 }}</td>
+                        <td class="price">{{ listing.total_price|floatformat:0 }}</td>
+                        <td>{{ listing.seller.display_name }}</td>
+                        <td>
+                            <span class="market-time-countdown"
+                                  data-expires="{{ listing.expires_at.isoformat }}">
+                                {{ listing.time_remaining|format_countdown }}
+                            </span>
+                        </td>
+                        <td>
+                            <form method="post" action="{% url 'trade:market_purchase' listing.id %}">
+                                {% csrf_token %}
+                                <button type="submit"
+                                        class="btn-buy"
+                                        {% if listing.seller == manor %}
+                                        disabled title="不能购买自己的商品"
+                                        {% elif manor.silver < listing.total_price %}
+                                        disabled title="银两不足"
+                                        {% endif %}>
+                                    {% if listing.seller == manor %}
+                                    无法购买
+                                    {% else %}
+                                    购买
+                                    {% endif %}
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 分页 -->
+        {% if page_obj.has_other_pages %}
+        <div class="pagination">
+            {% if page_obj.has_previous %}
+            <a href="?tab=market&view=buy&category={{ selected_category }}&rarity={{ selected_rarity }}&order_by={{ selected_order }}&page=1" class="page-link">首页</a>
+            <a href="?tab=market&view=buy&category={{ selected_category }}&rarity={{ selected_rarity }}&order_by={{ selected_order }}&page={{ page_obj.previous_page_number }}" class="page-link">上一页</a>
+            {% endif %}
+            <span class="page-current">第 {{ page_obj.number }} / {{ page_obj.paginator.num_pages }} 页</span>
+            {% if page_obj.has_next %}
+            <a href="?tab=market&view=buy&category={{ selected_category }}&rarity={{ selected_rarity }}&order_by={{ selected_order }}&page={{ page_obj.next_page_number }}" class="page-link">下一页</a>
+            <a href="?tab=market&view=buy&category={{ selected_category }}&rarity={{ selected_rarity }}&order_by={{ selected_order }}&page={{ page_obj.paginator.num_pages }}" class="page-link">末页</a>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% else %}
+        <div class="empty-state">
+            <p>暂无在售商品</p>
+        </div>
+        {% endif %}
+    </div>
+
+    {% elif market_view == 'sell' %}
+    <!-- 出售区 -->
+    <div id="market-sell-section" class="trade-card">
+        <h3>上架物品</h3>
+
+        <!-- 分类筛选 -->
+        <div class="filter-bar">
+            <form method="get" class="filter-form">
+                <input type="hidden" name="tab" value="market">
+                <input type="hidden" name="view" value="sell">
+
+                <label class="filter-label">类别：</label>
+                <select name="category" class="filter-select" onchange="this.form.submit()">
+                    {% for cat in categories %}
+                    <option value="{{ cat.key }}" {% if selected_category == cat.key %}selected{% endif %}>
+                        {{ cat.label }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+
+        {% if tradeable_items %}
+        <div class="shop-table-wrapper">
+            <table class="shop-table">
+                <thead>
+                    <tr>
+                        <th>物品</th>
+                        <th>拥有数量</th>
+                        <th>参考价</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in tradeable_items %}
+                    <tr>
+                        <td>
+                            <div class="item-cell">
+                                <div class="item-icon rarity-{{ item.template.rarity }}">
+                                    {% if item.template.image %}
+                                    <img src="{{ item.template.image.url }}"
+                                         alt="{{ item.template.name }}">
+                                    {% else %}
+                                    <span class="icon-placeholder">
+                                        {{ item.template.name|slice:":1" }}
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                <span class="item-name rarity-{{ item.template.rarity }}">
+                                    {{ item.template.name }}
+                                </span>
+                            </div>
+                        </td>
+                        <td>{{ item.quantity }}</td>
+                        <td class="price">{{ item.template.price|floatformat:0 }}</td>
+                        <td>
+                            <button type="button"
+                                    class="btn-buy"
+                                    onclick="openListingModal('{{ item.template.key|escapejs }}', '{{ item.template.name|escapejs }}', {{ item.quantity }}, {{ item.template.price }})">
+                                上架
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 分页 -->
+        {% if page_obj.has_other_pages %}
+        <div class="pagination">
+            {% if page_obj.has_previous %}
+            <a href="?tab=market&view=sell&category={{ selected_category }}&page=1" class="page-link">首页</a>
+            <a href="?tab=market&view=sell&category={{ selected_category }}&page={{ page_obj.previous_page_number }}" class="page-link">上一页</a>
+            {% endif %}
+            <span class="page-current">第 {{ page_obj.number }} / {{ page_obj.paginator.num_pages }} 页</span>
+            {% if page_obj.has_next %}
+            <a href="?tab=market&view=sell&category={{ selected_category }}&page={{ page_obj.next_page_number }}" class="page-link">下一页</a>
+            <a href="?tab=market&view=sell&category={{ selected_category }}&page={{ page_obj.paginator.num_pages }}" class="page-link">末页</a>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% else %}
+        <div class="empty-state">
+            <p>暂无可交易的物品</p>
+            <p style="font-size: 0.9rem;">只有标记为可交易的物品才能上架</p>
+        </div>
+        {% endif %}
+    </div>
+
+    {% elif market_view == 'my_listings' %}
+    <!-- 我的挂单 -->
+    <div id="market-my-section" class="trade-card">
+        <h3>我的挂单</h3>
+
+        <!-- 状态筛选 -->
+        <div class="shop-mode-switch" style="margin-bottom: 1rem;">
+            <button type="button"
+                    class="mode-btn {% if selected_status == 'all' or not selected_status %}active{% endif %}"
+                    onclick="location.href='?tab=market&view=my_listings&status=all'">
+                全部
+            </button>
+            <button type="button"
+                    class="mode-btn {% if selected_status == 'active' %}active{% endif %}"
+                    onclick="location.href='?tab=market&view=my_listings&status=active'">
+                在售中
+            </button>
+            <button type="button"
+                    class="mode-btn {% if selected_status == 'sold' %}active{% endif %}"
+                    onclick="location.href='?tab=market&view=my_listings&status=sold'">
+                已售出
+            </button>
+        </div>
+
+        {% if my_listings %}
+        <div class="shop-table-wrapper">
+            <table class="shop-table">
+                <thead>
+                    <tr>
+                        <th>物品</th>
+                        <th>数量</th>
+                        <th>单价</th>
+                        <th>总价</th>
+                        <th>状态</th>
+                        <th>上架时间</th>
+                        <th>剩余时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for listing in my_listings %}
+                    <tr>
+                        <td>
+                            <div class="item-cell">
+                                <div class="item-icon rarity-{{ listing.item_template.rarity }}">
+                                    {% if listing.item_template.image %}
+                                    <img src="{{ listing.item_template.image.url }}"
+                                         alt="{{ listing.item_template.name }}">
+                                    {% endif %}
+                                </div>
+                                <span class="item-name rarity-{{ listing.item_template.rarity }}">
+                                    {{ listing.item_template.name }}
+                                </span>
+                            </div>
+                        </td>
+                        <td>{{ listing.quantity }}</td>
+                        <td class="price">{{ listing.unit_price|floatformat:0 }}</td>
+                        <td class="price">{{ listing.total_price|floatformat:0 }}</td>
+                        <td>
+                            <span class="market-status-{{ listing.status }}">
+                                {{ listing.get_status_display }}
+                            </span>
+                        </td>
+                        <td>{{ listing.listed_at|date:"m-d H:i" }}</td>
+                        <td>
+                            {% if listing.status == 'active' %}
+                            <span class="market-time-countdown"
+                                  data-expires="{{ listing.expires_at.isoformat }}">
+                                {{ listing.time_remaining|format_countdown }}
+                            </span>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if listing.status == 'active' %}
+                            <form method="post"
+                                  action="{% url 'trade:market_cancel' listing.id %}"
+                                  class="market-cancel-form">
+                                {% csrf_token %}
+                                <button type="submit" class="btn-sell">取消</button>
+                            </form>
+                            {% elif listing.status == 'sold' %}
+                            <span style="color: var(--text-muted); font-size: 0.85rem;">
+                                买家：{{ listing.buyer.display_name }}
+                            </span>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 分页 -->
+        {% if page_obj.has_other_pages %}
+        <div class="pagination">
+            {% if page_obj.has_previous %}
+            <a href="?tab=market&view=my_listings&status={{ selected_status }}&page=1" class="page-link">首页</a>
+            <a href="?tab=market&view=my_listings&status={{ selected_status }}&page={{ page_obj.previous_page_number }}" class="page-link">上一页</a>
+            {% endif %}
+            <span class="page-current">第 {{ page_obj.number }} / {{ page_obj.paginator.num_pages }} 页</span>
+            {% if page_obj.has_next %}
+            <a href="?tab=market&view=my_listings&status={{ selected_status }}&page={{ page_obj.next_page_number }}" class="page-link">下一页</a>
+            <a href="?tab=market&view=my_listings&status={{ selected_status }}&page={{ page_obj.paginator.num_pages }}" class="page-link">末页</a>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% else %}
+        <div class="empty-state">
+            <p>暂无挂单记录</p>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<!-- 上架弹窗 -->
+<div id="listingModal" class="market-modal">
+    <div class="market-modal-content">
+        <span class="market-modal-close" onclick="closeListingModal()">&times;</span>
+        <h3 class="market-modal-title">上架物品</h3>
+
+        <form method="post" action="{% url 'trade:market_create_listing' %}">
+            {% csrf_token %}
+            <input type="hidden" name="item_key" id="modal-item-key">
+
+            <div class="market-form-group">
+                <label>物品名称</label>
+                <p id="modal-item-name" class="market-form-value"></p>
+            </div>
+
+            <div class="market-form-group">
+                <label for="modal-quantity">上架数量</label>
+                <input type="number"
+                       name="quantity"
+                       id="modal-quantity"
+                       min="1"
+                       required>
+                <p class="market-form-hint">可用：<span id="modal-available"></span></p>
+            </div>
+
+            <div class="market-form-group">
+                <label for="modal-unit-price">单价（银两）</label>
+                <input type="number"
+                       name="unit_price"
+                       id="modal-unit-price"
+                       min="0"
+                       max="10000000"
+                       required>
+                <p class="market-form-hint">
+                    最低：<span id="modal-min-price"></span> 银两，最高：10,000,000 银两
+                </p>
+                <p class="market-form-hint">
+                    总价：<span id="modal-total-price" class="market-highlight-value">0</span> 银两
+                </p>
+            </div>
+
+            <div class="market-form-group">
+                <label>上架时长</label>
+                <div class="market-duration-options">
+                    <label class="market-radio-option">
+                        <input type="radio" name="duration" value="7200" checked onchange="updateFee()">
+                        <span>2小时（手续费 5,000 银两）</span>
+                    </label>
+                    <label class="market-radio-option">
+                        <input type="radio" name="duration" value="28800" onchange="updateFee()">
+                        <span>8小时（手续费 10,000 银两）</span>
+                    </label>
+                    <label class="market-radio-option">
+                        <input type="radio" name="duration" value="86400" onchange="updateFee()">
+                        <span>24小时（手续费 20,000 银两）</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="market-form-summary">
+                <p>手续费：<span id="modal-fee" class="market-highlight-value">5,000</span> 银两</p>
+                <p class="market-form-note">
+                    注意：成交后卖家需支付10%税费，超期未售出手续费不退还
+                </p>
+            </div>
+
+            <div class="market-form-actions">
+                <button type="button" class="btn-sell" onclick="closeListingModal()">取消</button>
+                <button type="submit" class="btn-buy">确认上架</button>
+            </div>
+        </form>
+    </div>
+</div>

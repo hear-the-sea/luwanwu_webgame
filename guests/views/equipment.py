@@ -1,0 +1,164 @@
+"""
+门客装备视图：装备、卸下装备
+"""
+
+from __future__ import annotations
+
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.core.cache import cache
+from django.db.models import Count, Min
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404, redirect
+from django.views.decorators.http import require_GET, require_POST
+
+from core.exceptions import GameError
+from core.utils import safe_redirect_url, sanitize_error_message
+from gameplay.services import ensure_manor
+from gameplay.services.cache import CACHE_TIMEOUT_SHORT
+
+from ..forms import EquipForm
+from ..models import GearSlot, GearTemplate
+from ..templatetags.guest_extras import gear_summary, rarity_class, rarity_label
+
+
+@login_required
+@require_POST
+def equip_view(request):
+    manor = ensure_manor(request.user)
+    from ..services import ensure_inventory_gears
+
+    slot = request.POST.get("slot") or ""
+    ensure_inventory_gears(manor, slot=slot or None)
+    form = EquipForm(request.POST, manor=manor)
+    default_url = "gameplay:recruitment_hall"
+    next_url = safe_redirect_url(request, request.POST.get("next"), default_url)
+    if not form.is_valid():
+        messages.error(request, "请选择门客与可用装备")
+        return redirect(next_url)
+    gear = form.cleaned_data["gear"]
+    guest = form.cleaned_data["guest"]
+    from ..services import equip_guest as equip_guest_service
+
+    try:
+        equip_guest_service(gear, guest)
+        messages.success(request, f"{guest.display_name} 已装备 {gear.template.name}")
+        _clear_gear_options_cache(manor.id, slots={gear.template.slot})
+    except (GameError, ValueError) as exc:
+        messages.error(request, sanitize_error_message(exc))
+    return redirect(next_url)
+
+
+@login_required
+@require_POST
+def unequip_view(request):
+    manor = ensure_manor(request.user)
+    guest_id = request.POST.get("guest")
+    gear_ids = request.POST.getlist("gear")
+    default_url = "guests:roster"
+    next_url = safe_redirect_url(request, request.POST.get("next"), default_url)
+    if next_url == default_url:
+        next_url = safe_redirect_url(request, request.META.get("HTTP_REFERER"), default_url)
+    guest = get_object_or_404(manor.guests.select_related("template"), pk=guest_id)
+    if not gear_ids:
+        messages.warning(request, "请先勾选需要卸下的装备")
+        return redirect(next_url)
+    gears = list(manor.gears.select_related("template", "guest").filter(pk__in=gear_ids))
+    if not gears:
+        messages.error(request, "未找到需要卸下的装备")
+        return redirect(next_url)
+    invalid = [g for g in gears if g.guest_id != guest.id]
+    if invalid:
+        messages.error(request, "存在不属于该门客的装备，无法卸下")
+        return redirect(next_url)
+    from ..services import unequip_guest_item
+
+    try:
+        removed = 0
+        changed_slots = set()
+        for gear in gears:
+            unequip_guest_item(gear, guest)
+            changed_slots.add(gear.template.slot)
+            removed += 1
+        if removed:
+            messages.success(request, f"{guest.display_name} 卸下 {removed} 件装备")
+            _clear_gear_options_cache(manor.id, slots=changed_slots)
+        else:
+            messages.info(request, "没有可卸下的装备")
+    except (GameError, ValueError) as exc:
+        messages.error(request, sanitize_error_message(exc))
+    return redirect(next_url)
+
+
+@login_required
+@require_GET
+def gear_options_view(request):
+    manor = ensure_manor(request.user)
+    slot = request.GET.get("slot")
+    slot_label_map = dict(GearSlot.choices)
+    if not slot or slot not in slot_label_map:
+        return JsonResponse({"error": "invalid_slot"}, status=400)
+
+    cache_key = _gear_options_cache_key(manor.id, slot)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return JsonResponse(cached)
+
+    from ..services import ensure_inventory_gears
+
+    ensure_inventory_gears(manor, slot=slot)
+    rows = (
+        manor.gears.filter(guest__isnull=True, template__slot=slot)
+        .values("template_id", "template__name", "template__rarity")
+        .annotate(count=Count("id"), gear_id=Min("id"))
+        .order_by("template__name")
+    )
+    template_ids = [row["template_id"] for row in rows]
+    templates = {
+        tpl.id: tpl
+        for tpl in GearTemplate.objects.filter(id__in=template_ids).only(
+            "id",
+            "name",
+            "rarity",
+            "set_key",
+            "set_description",
+            "set_bonus",
+            "attack_bonus",
+            "defense_bonus",
+            "extra_stats",
+        )
+    }
+    options = []
+    for row in rows:
+        template = templates.get(row["template_id"])
+        if not template:
+            continue
+        rarity = row["template__rarity"]
+        options.append(
+            {
+                "id": row["gear_id"],
+                "name": row["template__name"],
+                "rarity": rarity,
+                "rarity_label": rarity_label(rarity),
+                "rarity_class": rarity_class(rarity),
+                "count": row["count"],
+                "title": gear_summary(template),
+        }
+    )
+    payload = {
+        "slot": slot,
+        "slot_label": slot_label_map.get(slot, ""),
+        "options": options,
+    }
+    cache.set(cache_key, payload, timeout=CACHE_TIMEOUT_SHORT)
+    return JsonResponse(payload)
+
+
+def _gear_options_cache_key(manor_id: int, slot: str) -> str:
+    return f"gear_options:{manor_id}:{slot}"
+
+
+def _clear_gear_options_cache(manor_id: int, slots: set[str] | None = None) -> None:
+    slot_values = slots or {choice.value for choice in GearSlot}
+    keys = [_gear_options_cache_key(manor_id, value) for value in slot_values]
+    cache.delete_many(keys)

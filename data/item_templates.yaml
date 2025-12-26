@@ -1,0 +1,4044 @@
+# 物品模板配置
+# image 字段（可选）：指定物品图片相对路径，相对于 data/images/items/ 目录
+#
+# 物品分类说明：
+# - 资源类：grain(粮食)、tong(铜)、xi(锡)、tie(铁)、gold_bar(金条)
+# - 畜牧类：ji(鸡)、ya(鸭)、e(鹅)、zhu(猪)、niu(牛)
+# - 药品类：止血散、金创药、白芨丸、白草丹、丁香丹、天香玉露丸、补血丹
+# - 经验道具：经验桃子、经验果
+# - 功能道具：放大镜、庄园命名卡、免战牌
+# - 技能书：龙吟破阵秘术等
+# - 装备-头盔：斗笠、布帽、牛皮帽、铁叶盔、鱼鳞顶、白虹盔
+# - 装备-护甲：蓑衣、布袍、生皮甲、厚丝袍、鲨皮甲
+# - 装备-鞋子：草鞋、布鞋、羊皮靴、钢片靴、燕羽靴
+# - 装备-武器(剑)：竹杖、短剑、长剑、青芒剑、断马剑
+# - 装备-武器(刀)：短刀、大砍刀、铜长刀、精铁刀
+# - 装备-武器(枪)：长枪、豹尾枪、虎头矛、盘蛇枪
+# - 装备-武器(弓)：长弓、反曲弓、铁胎弓、神臂弓
+# - 装备-武器(鞭)：长鞭、牛皮鞭、棘刺鞭、九龙钢鞭、冥蛇节鞭
+# - 装备-饰品：茱萸叶
+# - 装备-器械：饕餮鼎
+# - 装备-坐骑：枣红马、黄膘马、大宛马
+#
+# 稀有度说明：black(白色/普通) < green(绿色/优秀) < blue(蓝色/稀有) < purple(紫色/史诗)
+
+items:
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                              资源类物品
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  - key: grain
+    name: 粮食
+    description: 粮食是庄园发展的基本物资，充足的粮食能保证庄园的正常运作，出售粮食能得发展资金。如果粮食不足护客会相继逃离。
+    effect_type: resource
+    rarity: black
+    tradeable: true
+    price: 1
+    storage_space: 1
+    is_usable: false
+
+  - key: tong
+    name: 铜
+    description: 铜是所有装备需求最基础资源。
+    effect_type: resource
+    rarity: black
+    tradeable: true
+    price: 50
+    storage_space: 1
+    is_usable: false
+
+  - key: xi
+    name: 锡
+    description: 铜可以换取锡，锡是各种装备锻造的原材料。
+    effect_type: resource
+    rarity: black
+    tradeable: true
+    price: 150
+    storage_space: 1
+    is_usable: false
+
+  - key: tie
+    name: 铁
+    description: 锡可以换取铁，铁是锻造高级装备的重要原材料。
+    effect_type: resource
+    rarity: black
+    tradeable: true
+    price: 500
+    storage_space: 1
+    is_usable: false
+
+  - key: gold_bar
+    name: 金条
+    description: 纯金炼制的金条，价值连城。
+    effect_type: resource
+    tradeable: true
+    price: 1000000
+    image: golden.png
+    rarity: green
+    storage_space: 20
+    is_usable: false
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                              畜牧类物品
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  - key: ji
+    name: 鸡
+    description: 家养土鸡，在市面上非常受欢迎。
+    effect_type: resource
+    rarity: black
+    tradeable: true
+    price: 100
+    storage_space: 10
+    is_usable: false
+
+  - key: ya
+    name: 鸭
+    description: 番门肉鸭，生长迅速、饲养简单，肉质味美。
+    effect_type: resource
+    rarity: black
+    tradeable: true
+    price: 200
+    storage_space: 10
+    is_usable: false
+
+  - key: e
+    name: 鹅
+    description: 江山白鹅，羽毛洁白，肉质细嫩，还能做为护院宠物。
+    effect_type: resource
+    rarity: black
+    tradeable: true
+    price: 400
+    storage_space: 10
+    is_usable: false
+
+  - key: zhu
+    name: 猪
+    description: 高佬庄大肥猪，要至富，先养猪。
+    effect_type: resource
+    rarity: black
+    tradeable: true
+    price: 800
+    storage_space: 10
+    is_usable: false
+
+  - key: niu
+    name: 牛
+    description: 老子山大青牛，身躯庞大，角似镰刀，快如奔马。
+    effect_type: resource
+    rarity: green
+    tradeable: true
+    price: 1500
+    storage_space: 10
+    is_usable: false
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                              药品类物品
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  - key: zhixuesan
+    name: 止血散
+    description: 廉价的疗伤药物，效果也很一般。
+    effect_type: medicine
+    rarity: black
+    tradeable: true
+    price: 100
+    storage_space: 1
+    effect_payload:
+      hp: 50
+
+  - key: jinchuangyao
+    name: 金创药
+    description: 常见的疗伤药，口袋不鼓时的最佳选择。
+    effect_type: medicine
+    rarity: black
+    tradeable: true
+    price: 200
+    storage_space: 1
+    effect_payload:
+      hp: 100
+
+  - key: baijiwan
+    name: 白芨丸
+    description: 昂贵的止血药，平民是不敢问津的。
+    effect_type: medicine
+    rarity: black
+    tradeable: true
+    price: 400
+    storage_space: 1
+    effect_payload:
+      hp: 200
+
+  - key: baicaodan
+    name: 白草丹
+    description: 百草炼冶而成，非常珍贵。
+    effect_type: medicine
+    rarity: black
+    tradeable: true
+    price: 800
+    storage_space: 1
+    effect_payload:
+      hp: 400
+
+  - key: buxuedan
+    name: 补血丹
+    description: 多种草药制作而成的伤药。
+    effect_type: medicine
+    effect_payload:
+      hp: 500
+    rarity: black
+    tradeable: true
+    price: 500
+
+  - key: dingxiangdan
+    name: 丁香丹
+    description: 提炼极其复杂，香味厚重，是珍贵的疗伤珍品。
+    effect_type: medicine
+    rarity: green
+    tradeable: true
+    price: 1500
+    storage_space: 2
+    effect_payload:
+      hp: 800
+
+  - key: tianxiangyuluwan
+    name: 天香玉露丸
+    description: 药入手清凉，泌人心肺，如霜似王，功效非凡。
+    effect_type: medicine
+    rarity: green
+    tradeable: true
+    price: 3000
+    storage_space: 2
+    effect_payload:
+      hp: 1500
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                              经验道具
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  - key: experience_fruit
+    name: 经验果
+    description: 使用后可减少指定门客1分钟的升级时间。
+    effect_type: experience_items
+    rarity: green
+    tradeable: true
+    price: 50
+    storage_space: 1
+    is_usable: true
+    effect_payload:
+      time: 60  # 减少60秒
+
+  - key: experience_peach
+    name: 经验桃子
+    description: 减少门客升级时间2小时。
+    effect_type: experience_items
+    rarity: green
+    effect_payload:
+      time: 7200
+    tradeable: true
+    price: 1000
+
+  - key: experience_pineapple
+    name: 经验菠萝
+    description: 减少门客升级时间6小时。
+    effect_type: experience_items
+    rarity: blue
+    effect_payload:
+      time: 21600
+    tradeable: true
+    price: 3000
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                              功能道具
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  - key: fangdajing
+    name: 放大镜
+    description: 用于查看招募门客的稀有度。
+    effect_type: tool
+    rarity: green
+    tradeable: true
+    price: 2000
+    # image: magnifier.png  # 可选：物品图片文件名
+
+  - key: manor_rename_card
+    name: 庄园命名卡
+    description: 使用后可为庄园更换名称，名称需唯一且符合规范。
+    effect_type: tool
+    rarity: blue
+    tradeable: true
+    price: 5000
+    is_usable: false
+
+  - key: pubayi_guest_card
+    name: 蒲巴乙门客卡
+    description: 使用后有10%概率招募到蓝色门客「蒲巴乙」，90%概率招募到绿色门客「蒲巴乙」（门客名称相同）。
+    effect_type: tool
+    rarity: blue
+    tradeable: true
+    price: 20000
+    storage_space: 1
+    is_usable: true
+    effect_payload:
+      action: summon_guest
+      choices:
+        - template_key: pubayi_blue
+          weight: 10
+        - template_key: pubayi_green
+          weight: 90
+
+  - key: small_trumpet
+    name: 小喇叭
+    description: 在世界频道发言时消耗，让你的声音传遍江湖。
+    effect_type: tool
+    rarity: green
+    tradeable: true
+    price: 100
+    storage_space: 1
+    is_usable: false
+
+  # ---------- 免战牌系列 ----------
+
+  - key: peace_shield_small
+    name: 免战牌·小
+    description: 使用后获得8小时保护，期间无法被侦察和踢馆，也无法侦察和踢馆他人。
+    effect_type: tool
+    rarity: green
+    tradeable: true
+    price: 500
+    storage_space: 1
+    is_usable: true
+    effect_payload:
+      duration: 28800  # 8小时（秒）
+
+  - key: peace_shield_medium
+    name: 免战牌·中
+    description: 使用后获得24小时保护，期间无法被侦察和踢馆，也无法侦察和踢馆他人。
+    effect_type: tool
+    rarity: blue
+    tradeable: true
+    price: 1500
+    storage_space: 1
+    is_usable: true
+    effect_payload:
+      duration: 86400  # 24小时（秒）
+
+  - key: peace_shield_large
+    name: 免战牌·大
+    description: 使用后获得3天保护，期间无法被侦察和踢馆，也无法侦察和踢馆他人。
+    effect_type: tool
+    rarity: purple
+    tradeable: true
+    price: 4000
+    storage_space: 1
+    is_usable: true
+    effect_payload:
+      duration: 259200  # 3天（秒）
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                              技能书
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  # ---------- 武系技能书 ----------
+  - key: book_dragon_roar
+    name: 《龙吟破阵》秘术
+    description: 以龙吟之势震慑敌军的绝学。
+    effect_type: skill_book
+    rarity: orange
+    effect_payload:
+      skill_key: dragon_roar
+      skill_name: 龙吟破阵
+    tradeable: true
+    price: 1000000
+
+  - key: book_stratagem_burst
+    name: 《奇策突袭》秘术
+    description: 随机对敌人造成高额伤害并可能眩晕的武学秘籍。
+    effect_type: skill_book
+    rarity: purple
+    effect_payload:
+      skill_key: stratagem_burst
+      skill_name: 奇策突袭
+    tradeable: true
+    price: 800000
+
+  # ---------- 文系技能书（绿色品质）----------
+  - key: book_ice_curse
+    name: 《寒冰咒》秘术
+    description: 记载玄冰咒语的古籍，习得后可召唤寒气侵袭敌人。
+    effect_type: skill_book
+    rarity: green
+    effect_payload:
+      skill_key: ice_curse
+      skill_name: 寒冰咒
+    tradeable: true
+    price: 50000
+
+  - key: book_thunder_control
+    name: 《驭雷术》秘术
+    description: 道家秘传的引雷之法，可借天雷之力攻敌。
+    effect_type: skill_book
+    rarity: green
+    effect_payload:
+      skill_key: thunder_control
+      skill_name: 驭雷术
+    tradeable: true
+    price: 55000
+
+  - key: book_dragon_break_curse
+    name: 《破龙咒》秘术
+    description: 专破护甲坚固之敌的咒法秘籍。
+    effect_type: skill_book
+    rarity: green
+    effect_payload:
+      skill_key: dragon_break_curse
+      skill_name: 破龙咒
+    tradeable: true
+    price: 60000
+
+  - key: book_endless_chatter
+    name: 《唧唧歪歪》秘术
+    description: 以言语扰乱敌心的奇门心法，令人又爱又恨。
+    effect_type: skill_book
+    rarity: green
+    effect_payload:
+      skill_key: endless_chatter
+      skill_name: 唧唧歪歪
+    tradeable: true
+    price: 45000
+
+  # ---------- 文系技能书（蓝色品质）----------
+  - key: book_taiyi_wind
+    name: 《太乙生风》秘术
+    description: 太乙门不传之秘，可化真气为狂风席卷战场。
+    effect_type: skill_book
+    rarity: blue
+    effect_payload:
+      skill_key: taiyi_wind
+      skill_name: 太乙生风
+    tradeable: true
+    price: 200000
+
+  - key: book_flower_rain
+    name: 《天花乱坠》秘术
+    description: 佛门辩经绝学，口吐莲花，舌灿生辉。
+    effect_type: skill_book
+    rarity: blue
+    effect_payload:
+      skill_key: flower_rain
+      skill_name: 天花乱坠
+    tradeable: true
+    price: 180000
+
+  - key: book_soul_erode
+    name: 《销魂蚀骨》秘术
+    description: 阴毒法术秘籍，可侵蚀敌人精魄。
+    effect_type: skill_book
+    rarity: blue
+    effect_payload:
+      skill_key: soul_erode
+      skill_name: 销魂蚀骨
+    tradeable: true
+    price: 220000
+
+  - key: book_red_lotus_dance
+    name: 《红莲之舞》秘术
+    description: 记载业火红莲召唤之法的珍贵典籍。
+    effect_type: skill_book
+    rarity: blue
+    effect_payload:
+      skill_key: red_lotus_dance
+      skill_name: 红莲之舞
+    tradeable: true
+    price: 210000
+
+  # ---------- 文系技能书（紫色品质）----------
+  - key: book_thunder_nine_heavens
+    name: 《雷动九天》秘术
+    description: 九天神雷的召唤秘法，威力惊天动地。
+    effect_type: skill_book
+    rarity: purple
+    effect_payload:
+      skill_key: thunder_nine_heavens
+      skill_name: 雷动九天
+    tradeable: true
+    price: 600000
+
+  - key: book_tangseng_sermon
+    name: 《唐僧说禅》秘术
+    description: 据说是唐三藏亲传的念经心法，令听者昏昏欲睡。
+    effect_type: skill_book
+    rarity: purple
+    effect_payload:
+      skill_key: tangseng_sermon
+      skill_name: 唐僧说禅
+    tradeable: true
+    price: 550000
+
+  - key: book_five_thunder_descent
+    name: 《五雷降世》秘术
+    description: 道家至高雷法，召唤五行雷霆同时降临。
+    effect_type: skill_book
+    rarity: purple
+    effect_payload:
+      skill_key: five_thunder_descent
+      skill_name: 五雷降世
+    tradeable: true
+    price: 700000
+
+  - key: book_brahma_true_fire
+    name: 《梵天真火》秘术
+    description: 传说中的梵天圣火召唤之法，烈焰滔天。
+    effect_type: skill_book
+    rarity: purple
+    effect_payload:
+      skill_key: brahma_true_fire
+      skill_name: 梵天真火
+    tradeable: true
+    price: 750000
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                         装备类 - 新手套装（一蓑烟雨）
+  # ══════════════════════════════════════════════════════════════════════════════
+  # 套装效果：集齐4件获得 luck+20, force+20, hp+200
+
+  - key: equip_caomao
+    name: 斗笠
+    description: 由棕叶编织而成的宽边帽，可以简单遮蔽风雨。
+    effect_type: equip_helmet
+    rarity: black
+    effect_payload:
+      hp: 200
+      defense: 15
+      set_key: starter_cloth_set
+      set_description: 一蓑烟雨
+      set_bonus:
+        pieces: 4
+        bonus:
+          luck: 20
+          force: 20
+          hp: 200
+          troop_capacity: 25
+    tradeable: false
+    price: 0
+
+  - key: equip_suoyi
+    name: 蓑衣
+    description: 以莎草编织而成，劳动人民遮风避雨的必需品。
+    effect_type: equip_armor
+    rarity: black
+    effect_payload:
+      hp: 200
+      defense: 15
+      set_key: starter_cloth_set
+      set_description: 一蓑烟雨
+      set_bonus:
+        pieces: 4
+        bonus:
+          luck: 20
+          force: 20
+          hp: 200
+          troop_capacity: 25
+    tradeable: false
+    price: 0
+    image: buyi.png
+
+  - key: equip_caoxie
+    name: 草鞋
+    description: 由稻草编织而成的鞋子，透水但也透气。
+    effect_type: equip_shoes
+    rarity: black
+    effect_payload:
+      hp: 200
+      defense: 15
+      agility: 10
+      set_key: starter_cloth_set
+      set_description: 一蓑烟雨
+      set_bonus:
+        pieces: 4
+        bonus:
+          luck: 20
+          force: 20
+          hp: 200
+          troop_capacity: 25
+    tradeable: false
+    price: 0
+
+  - key: equip_tiejian
+    name: 竹杖
+    description: 一根简单的竹棍。
+    effect_type: equip_weapon
+    rarity: black
+    effect_payload:
+      force: 20
+      set_key: starter_cloth_set
+      set_description: 一蓑烟雨
+      set_bonus:
+        pieces: 4
+        bonus:
+          luck: 20
+          force: 20
+          hp: 200
+          troop_capacity: 25
+    tradeable: false
+    price: 0
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                         装备类 - 头盔
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  - key: equip_bumao
+    name: 布帽
+    description: 一般老百姓戴的帽子，遮风遮日用。
+    effect_type: equip_helmet
+    rarity: black
+    tradeable: true
+    price: 100
+    storage_space: 100
+    effect_payload:
+      hp: 20
+      defense: 2
+
+  - key: equip_niupimao
+    name: 牛皮帽
+    description: 既能御寒，又能稍微保护脑袋。
+    effect_type: equip_helmet
+    rarity: black
+    tradeable: true
+    price: 300
+    storage_space: 100
+    effect_payload:
+      hp: 40
+      defense: 5
+
+  - key: equip_tieyekui
+    name: 铁叶盔
+    description: 有不错的保护效果，但是太过沉重，压着脑袋很难受。
+    effect_type: equip_helmet
+    rarity: green
+    tradeable: true
+    price: 800
+    storage_space: 100
+    effect_payload:
+      hp: 80
+      defense: 10
+
+  - key: equip_yulindin
+    name: 鱼鳞顶
+    description: 鱼鳞状的铜片编成，轻便而坚固。
+    effect_type: equip_helmet
+    rarity: green
+    tradeable: true
+    price: 1500
+    storage_space: 100
+    effect_payload:
+      hp: 120
+      defense: 15
+
+  - key: equip_baihongkui
+    name: 白虹盔
+    description: 精钢铸就，盔顶白缨飘飘，威武不凡。
+    effect_type: equip_helmet
+    rarity: green
+    tradeable: true
+    price: 3000
+    storage_space: 100
+    effect_payload:
+      hp: 180
+      defense: 22
+
+  - key: equip_zhubiankui
+    name: 竹编盔
+    description: 终南山道士所编，取材自千年古竹林，轻巧透气。
+    effect_type: equip_helmet
+    rarity: black
+    tradeable: true
+    price: 200
+    storage_space: 100
+    effect_payload:
+      hp: 60
+      defense: 6
+
+  # ---------- 头盔 - 绿色品质（成长期）----------
+
+  - key: equip_yemantoukie
+    name: 野蛮头盔
+    description: 北方蛮族的战利品，以兽皮与铁铆拼制，带有异域风格。
+    effect_type: equip_helmet
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 100
+    effect_payload:
+      hp: 150
+      defense: 18
+      set_key: yeman_set
+      set_description: 野蛮套装
+      set_bonus:
+        pieces: 2
+        bonus:
+          force: 30
+          hp: 300
+
+  - key: equip_huwenkui
+    name: 虎纹盔
+    description: 据说是某位虎将的遗物，虎纹威猛，煞气逼人。
+    effect_type: equip_helmet
+    rarity: green
+    tradeable: true
+    price: 2500
+    storage_space: 100
+    effect_payload:
+      hp: 200
+      defense: 25
+      force: 10
+
+  - key: equip_baoutoukui
+    name: 豹头盔
+    description: 豹首造型的头盔，相传为豹子头林冲年轻时所佩。
+    effect_type: equip_helmet
+    rarity: green
+    tradeable: true
+    price: 2800
+    storage_space: 100
+    effect_payload:
+      hp: 220
+      defense: 28
+      agility: 8
+
+  - key: equip_yanlingmao
+    name: 雁翎帽
+    description: 以雁翎装饰的轻帽，是江湖侠客间广为流传的款式。
+    effect_type: equip_helmet
+    rarity: green
+    tradeable: true
+    price: 2200
+    storage_space: 100
+    effect_payload:
+      hp: 160
+      defense: 18
+      agility: 12
+
+  - key: equip_qingtengguan
+    name: 青藤冠
+    description: 以藤蔓与玉扣编织而成，据说出自某位隐居山林的高人之手。
+    effect_type: equip_helmet
+    rarity: green
+    tradeable: true
+    price: 2600
+    storage_space: 100
+    effect_payload:
+      hp: 190
+      defense: 20
+      intellect: 12
+      luck: 10
+
+  # ---------- 头盔 - 蓝色品质（发展期）----------
+
+  - key: equip_xiaoweitoukie
+    name: 校尉头盔
+    description: 军中校尉制式头盔，上有龙纹标识，象征军阶与荣誉。
+    effect_type: equip_helmet
+    rarity: blue
+    tradeable: true
+    price: 5000
+    storage_space: 100
+    effect_payload:
+      hp: 300
+      defense: 25
+      set_key: xiaowei_set
+      set_description: 校尉套装
+      set_bonus:
+        pieces: 4
+        bonus:
+          force: 50
+          defense: 30
+          hp: 500
+          troop_capacity: 60
+
+  - key: equip_xuantiekui
+    name: 玄铁盔
+    description: 以罕见玄铁锻成，据传耗费了三位铁匠十年心血。
+    effect_type: equip_helmet
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      hp: 350
+      defense: 30
+      force: 15
+
+  - key: equip_qinglongkui
+    name: 青龙盔
+    description: 青龙纹路盘绕其上，相传是东方青龙庙镇殿之物。
+    effect_type: equip_helmet
+    rarity: blue
+    tradeable: true
+    price: 5500
+    storage_space: 100
+    effect_payload:
+      hp: 320
+      defense: 28
+      intellect: 20
+      set_key: sixiang_set
+      set_description: 四象套装
+      set_bonus:
+        pieces: 4
+        bonus:
+          intellect: 50
+          force: 25
+          agility: 25
+          hp: 600
+
+  - key: equip_hantiekui
+    name: 寒铁盔
+    description: 以极北寒铁铸就，触之冰凉入骨，常年不受寒侵。
+    effect_type: equip_helmet
+    rarity: blue
+    tradeable: true
+    price: 6500
+    storage_space: 100
+    effect_payload:
+      hp: 380
+      defense: 35
+
+  - key: equip_langyakui
+    name: 狼牙盔
+    description: 草原狼王的头骨所制，盔缘嵌有狼牙，凶悍异常。
+    effect_type: equip_helmet
+    rarity: blue
+    tradeable: true
+    price: 5800
+    storage_space: 100
+    effect_payload:
+      hp: 340
+      defense: 32
+      force: 18
+      agility: 10
+
+  - key: equip_feiyukui
+    name: 飞羽盔
+    description: 以百鸟之羽装饰的轻盔，据说曾是某位神箭手的心爱之物。
+    effect_type: equip_helmet
+    rarity: blue
+    tradeable: true
+    price: 5600
+    storage_space: 100
+    effect_payload:
+      hp: 330
+      defense: 26
+      agility: 22
+      hp_bonus: 100
+
+  - key: equip_yunwenkui
+    name: 云纹盔
+    description: 盔面云纹如行云流水，出自名匠"云中子"之手。
+    effect_type: equip_helmet
+    rarity: blue
+    tradeable: true
+    price: 6200
+    storage_space: 100
+    effect_payload:
+      hp: 360
+      defense: 30
+      intellect: 25
+      luck: 15
+
+  # ---------- 头盔 - 紫色品质（成熟期）----------
+
+  - key: equip_qilinkui
+    name: 麒麟盔
+    description: 仿麒麟头颅锻造，相传是某位开国将军的传家之宝。
+    effect_type: equip_helmet
+    rarity: purple
+    tradeable: true
+    price: 15000
+    storage_space: 100
+    effect_payload:
+      hp: 500
+      defense: 45
+      force: 25
+      set_key: qilin_set
+      set_description: 麒麟套装
+      set_bonus:
+        pieces: 4
+        bonus:
+          force: 80
+          hp: 1000
+          agility: 30
+
+  - key: equip_fenglingguan
+    name: 凤翎冠
+    description: 以凤凰翎羽点缀的华冠，曾是后宫贵妃所赐之物。
+    effect_type: equip_helmet
+    rarity: purple
+    tradeable: true
+    price: 14000
+    storage_space: 100
+    effect_payload:
+      hp: 450
+      defense: 40
+      intellect: 35
+      luck: 20
+      set_key: fengling_set
+      set_description: 凤翎套装
+      set_bonus:
+        pieces: 3
+        bonus:
+          intellect: 100
+          luck: 80
+
+  - key: equip_bawangkui
+    name: 霸王盔
+    description: 相传为西楚霸王项羽的遗物，气势撼人，威压四方。
+    effect_type: equip_helmet
+    rarity: purple
+    tradeable: true
+    price: 18000
+    storage_space: 100
+    effect_payload:
+      hp: 550
+      defense: 50
+      force: 30
+
+  - key: equip_xuanwukui
+    name: 玄武盔
+    description: 仿玄武之形锻造，背负龟壳纹样，象征长寿与坚固。
+    effect_type: equip_helmet
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      hp: 600
+      defense: 60
+      set_key: xuanwu_set
+      set_description: 玄武套装
+      set_bonus:
+        pieces: 4
+        bonus:
+          defense: 100
+          hp: 1500
+          force: 40
+
+  - key: equip_pojunkui
+    name: 破军盔
+    description: 破军星位所铸，据传戴者必成一方悍将。
+    effect_type: equip_helmet
+    rarity: purple
+    tradeable: true
+    price: 15500
+    storage_space: 100
+    effect_payload:
+      hp: 520
+      defense: 46
+      force: 28
+      agility: 15
+
+  - key: equip_tianjiguan
+    name: 天机冠
+    description: 以天机门秘法打造，冠中暗藏机括，可察天象变化。
+    effect_type: equip_helmet
+    rarity: purple
+    tradeable: true
+    price: 14500
+    storage_space: 100
+    effect_payload:
+      hp: 480
+      defense: 38
+      intellect: 50
+      luck: 30
+
+  # ---------- 头盔 - 橙色品质（巅峰期）----------
+
+  - key: equip_longhuangguan
+    name: 龙皇冠
+    description: 相传为远古龙皇遗落人间的宝物，冠身隐有龙吟。
+    effect_type: equip_helmet
+    rarity: orange
+    tradeable: true
+    price: 50000
+    storage_space: 100
+    effect_payload:
+      hp: 800
+      defense: 70
+      force: 35
+      troop_capacity: 120
+
+  - key: equip_diwangkui
+    name: 帝王盔
+    description: 历代帝王御用的铠甲头盔，象征至高无上的权威。
+    effect_type: equip_helmet
+    rarity: orange
+    tradeable: true
+    price: 48000
+    storage_space: 100
+    effect_payload:
+      hp: 750
+      defense: 65
+      force: 40
+      intellect: 40
+
+  - key: equip_taixudiguan
+    name: 太虚帝冠
+    description: 传说为太虚剑宗创派祖师所佩，内藏太虚真意。
+    effect_type: equip_helmet
+    rarity: orange
+    tradeable: true
+    price: 55000
+    storage_space: 100
+    effect_payload:
+      hp: 820
+      defense: 72
+      intellect: 45
+      luck: 30
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                         装备类 - 护甲
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  - key: equip_bupao
+    name: 布袍
+    description: 普通老百姓穿的衣服，所谓布衣。
+    effect_type: equip_armor
+    rarity: black
+    tradeable: true
+    price: 100
+    storage_space: 100
+    effect_payload:
+      hp: 30
+      defense: 3
+
+  - key: equip_shengpijia
+    name: 生皮甲
+    description: 没经过硝制的动物皮做成的护甲，防御力很弱。
+    effect_type: equip_armor
+    rarity: black
+    tradeable: true
+    price: 300
+    storage_space: 100
+    effect_payload:
+      hp: 60
+      defense: 6
+
+  - key: equip_housipao
+    name: 厚丝袍
+    description: 用油浸泡过的粗丝织成，又软又轻，但却能抵挡普通刀剑。
+    effect_type: equip_armor
+    rarity: green
+    tradeable: true
+    price: 800
+    storage_space: 100
+    effect_payload:
+      hp: 100
+      defense: 12
+
+  - key: equip_shapijia
+    name: 鲨皮甲
+    description: 鲨鱼皮做成的铠甲，是轻便铠甲中最坚固的。
+    effect_type: equip_armor
+    rarity: green
+    tradeable: true
+    price: 1500
+    storage_space: 100
+    effect_payload:
+      hp: 150
+      defense: 18
+
+  - key: equip_cubujia
+    name: 粗布甲
+    description: 多层粗布压缝而成，出自军中后勤的批量制作。
+    effect_type: equip_armor
+    rarity: black
+    tradeable: true
+    price: 200
+    storage_space: 100
+    effect_payload:
+      hp: 80
+      defense: 8
+
+  # ---------- 护甲 - 绿色品质（成长期）----------
+
+  - key: equip_suozijia
+    name: 锁子甲
+    description: 西域工匠的杰作，环环相扣，传入中原已逾百年。
+    effect_type: equip_armor
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 100
+    effect_payload:
+      hp: 180
+      defense: 22
+
+  - key: equip_xuantiejia
+    name: 玄铁甲
+    description: 以稀有玄铁锻造的重甲，据传出自"铁胆神侯"之手。
+    effect_type: equip_armor
+    rarity: green
+    tradeable: true
+    price: 2500
+    storage_space: 100
+    effect_payload:
+      hp: 200
+      defense: 25
+
+  - key: equip_shanwenjia
+    name: 山纹甲
+    description: 甲面刻有五岳山纹，相传是五岳派镇派之物。
+    effect_type: equip_armor
+    rarity: green
+    tradeable: true
+    price: 2800
+    storage_space: 100
+    effect_payload:
+      hp: 220
+      defense: 28
+      force: 8
+
+  - key: equip_qingzhujia
+    name: 青竹甲
+    description: 以蜀中翠竹片编织而成，是巴蜀匠人的独门手艺。
+    effect_type: equip_armor
+    rarity: green
+    tradeable: true
+    price: 2200
+    storage_space: 100
+    effect_payload:
+      hp: 190
+      defense: 20
+      agility: 10
+
+  - key: equip_tiexianjia
+    name: 铁线甲
+    description: 以铁线缠织加固的战甲，源自北方军中的改良工艺。
+    effect_type: equip_armor
+    rarity: green
+    tradeable: true
+    price: 3000
+    storage_space: 100
+    effect_payload:
+      hp: 240
+      defense: 30
+      force: 10
+
+  # ---------- 护甲 - 蓝色品质（发展期）----------
+
+  - key: equip_xiaoweikaijia
+    name: 校尉铠甲
+    description: 军中校尉的制式铠甲，胸口铸有军阶徽记。
+    effect_type: equip_armor
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      hp: 400
+      defense: 35
+      set_key: xiaowei_set
+      set_description: 校尉套装
+      set_bonus:
+        pieces: 4
+        bonus:
+          force: 50
+          defense: 30
+          hp: 500
+          troop_capacity: 60
+
+  - key: equip_qinglongjia
+    name: 青龙甲
+    description: 甲身绘有青龙图腾，相传曾是青龙堂护法所穿。
+    effect_type: equip_armor
+    rarity: blue
+    tradeable: true
+    price: 6500
+    storage_space: 100
+    effect_payload:
+      hp: 420
+      defense: 38
+      intellect: 25
+      set_key: sixiang_set
+      set_description: 四象套装
+      set_bonus:
+        pieces: 4
+        bonus:
+          intellect: 50
+          force: 25
+          agility: 25
+          hp: 600
+
+  - key: equip_wujinjia
+    name: 乌金甲
+    description: 以乌金铸就的战甲，出自西域某个神秘的铸甲世家。
+    effect_type: equip_armor
+    rarity: blue
+    tradeable: true
+    price: 7000
+    storage_space: 100
+    effect_payload:
+      hp: 450
+      defense: 42
+
+  - key: equip_linwenzhanjia
+    name: 鳞纹战甲
+    description: 仿龙鳞锻造的战甲，据传灵感来自某位铸甲师的梦境。
+    effect_type: equip_armor
+    rarity: blue
+    tradeable: true
+    price: 7500
+    storage_space: 100
+    effect_payload:
+      hp: 480
+      defense: 45
+      force: 15
+
+  - key: equip_yunwenfayi
+    name: 云纹法衣
+    description: 道门高功法师的礼服，袍面云纹暗合天地之道。
+    effect_type: equip_armor
+    rarity: blue
+    tradeable: true
+    price: 6200
+    storage_space: 100
+    effect_payload:
+      hp: 380
+      defense: 30
+      intellect: 40
+      luck: 20
+
+  - key: equip_xuanjiazhanbao
+    name: 玄甲战袍
+    description: 外观如袍内藏甲片，是江湖刺客常用的隐蔽战衣。
+    effect_type: equip_armor
+    rarity: blue
+    tradeable: true
+    price: 8000
+    storage_space: 100
+    effect_payload:
+      hp: 520
+      defense: 48
+      force: 18
+
+  # ---------- 护甲 - 紫色品质（成熟期）----------
+
+  - key: equip_huxianpao
+    name: 狐仙袍
+    description: 相传为涂山狐族遗物，袍上隐有狐狸图纹。
+    effect_type: equip_armor
+    rarity: purple
+    tradeable: true
+    price: 15000
+    storage_space: 100
+    effect_payload:
+      hp: 600
+      defense: 40
+      intellect: 30
+      set_key: huxian_set
+      set_description: 狐仙套装
+      set_bonus:
+        pieces: 3
+        bonus:
+          intellect: 80
+          luck: 50
+          hp: 800
+
+  - key: equip_qilinjia
+    name: 麒麟甲
+    description: 仿麒麟鳞甲锻造，相传曾是某位麒麟卫统领的战甲。
+    effect_type: equip_armor
+    rarity: purple
+    tradeable: true
+    price: 18000
+    storage_space: 100
+    effect_payload:
+      hp: 650
+      defense: 55
+      force: 20
+      set_key: qilin_set
+      set_description: 麒麟套装
+      set_bonus:
+        pieces: 4
+        bonus:
+          force: 80
+          hp: 1000
+          agility: 30
+
+  - key: equip_xuanwujia
+    name: 玄武甲
+    description: 以玄武为形铸造，龟纹蛇鳞交织，出自玄武山庄。
+    effect_type: equip_armor
+    rarity: purple
+    tradeable: true
+    price: 20000
+    storage_space: 100
+    effect_payload:
+      hp: 750
+      defense: 70
+      set_key: xuanwu_set
+      set_description: 玄武套装
+      set_bonus:
+        pieces: 4
+        bonus:
+          defense: 100
+          hp: 1500
+          force: 40
+
+  - key: equip_tiancanbaoyi
+    name: 天蚕宝衣
+    description: 以雪域天蚕丝织就，轻若无物却刀枪不入。
+    effect_type: equip_armor
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      hp: 580
+      defense: 45
+      agility: 30
+      hp_bonus: 200
+
+  - key: equip_pojunzhanjia
+    name: 破军战甲
+    description: 破军星君法相所铸，据传曾助某位将军连破七城。
+    effect_type: equip_armor
+    rarity: purple
+    tradeable: true
+    price: 19000
+    storage_space: 100
+    effect_payload:
+      hp: 720
+      defense: 60
+      force: 30
+      hp_bonus: 150
+
+  - key: equip_tianjidaopao
+    name: 天机道袍
+    description: 天机门祖师的旧物，袍内暗藏机关纹路。
+    effect_type: equip_armor
+    rarity: purple
+    tradeable: true
+    price: 17000
+    storage_space: 100
+    effect_payload:
+      hp: 620
+      defense: 46
+      intellect: 60
+      luck: 35
+
+  # ---------- 护甲 - 橙色品质（巅峰期）----------
+
+  - key: equip_longlinzhanjia
+    name: 龙鳞战甲
+    description: 以真龙脱落之鳞锻造，极为稀有，世间仅存数件。
+    effect_type: equip_armor
+    rarity: orange
+    tradeable: true
+    price: 60000
+    storage_space: 100
+    effect_payload:
+      hp: 1000
+      defense: 85
+      force: 35
+
+  - key: equip_jinsirujia
+    name: 金丝软甲
+    description: 以金丝编织的软甲，相传出自波斯国的神秘工坊。
+    effect_type: equip_armor
+    rarity: orange
+    tradeable: true
+    price: 55000
+    storage_space: 100
+    effect_payload:
+      hp: 850
+      defense: 75
+      agility: 35
+      luck: 25
+
+  - key: equip_hundunlongpao
+    name: 混沌龙袍
+    description: 以混沌之气淬炼的龙袍，来历成谜，据说出自上古。
+    effect_type: equip_armor
+    rarity: orange
+    tradeable: true
+    price: 65000
+    storage_space: 100
+    effect_payload:
+      hp: 950
+      defense: 78
+      intellect: 40
+      luck: 35
+
+  - key: equip_ruanweijia
+    name: 软猬甲
+    description: 以千年老刺猬皮制成，来自五毒教的邪门手艺。
+    effect_type: equip_armor
+    rarity: orange
+    tradeable: true
+    price: 58000
+    storage_space: 100
+    effect_payload:
+      hp: 900
+      defense: 90
+      agility: 20
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                         装备类 - 鞋子
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  - key: equip_buxie
+    name: 布鞋
+    description: 手工缝制的布鞋，价格和质量一样低劣。
+    effect_type: equip_shoes
+    rarity: black
+    tradeable: true
+    price: 100
+    storage_space: 100
+    effect_payload:
+      hp: 15
+      defense: 1
+      agility: 2
+
+  - key: equip_yangpixue
+    name: 羊皮靴
+    description: 羔皮做的短靴，看来相当结实。
+    effect_type: equip_shoes
+    rarity: black
+    tradeable: true
+    price: 300
+    storage_space: 100
+    effect_payload:
+      hp: 30
+      defense: 3
+      agility: 4
+
+  - key: equip_gangpianxue
+    name: 钢片靴
+    description: 缀有薄钢片的短靴，虽然笨重些，却牢固了不少。
+    effect_type: equip_shoes
+    rarity: green
+    tradeable: true
+    price: 800
+    storage_space: 100
+    effect_payload:
+      hp: 50
+      defense: 6
+      agility: 6
+
+  - key: equip_yanyuxue
+    name: 燕羽靴
+    description: 非常轻快的薄底靴，有燕子样轻灵的感觉。
+    effect_type: equip_shoes
+    rarity: green
+    tradeable: true
+    price: 1500
+    storage_space: 100
+    effect_payload:
+      hp: 60
+      defense: 5
+      agility: 12
+
+  - key: equip_mabuxue
+    name: 麻布靴
+    description: 军中士卒的标配鞋履，耐穿且易于大量制作。
+    effect_type: equip_shoes
+    rarity: black
+    tradeable: true
+    price: 200
+    storage_space: 100
+    effect_payload:
+      hp: 40
+      defense: 4
+      agility: 5
+
+  # ---------- 鞋子 - 绿色品质（成长期）----------
+
+  - key: equip_hupixue
+    name: 虎皮靴
+    description: 以猛虎皮革制成，相传是某位打虎英雄的战利品。
+    effect_type: equip_shoes
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 100
+    effect_payload:
+      hp: 80
+      defense: 8
+      agility: 10
+      force: 5
+
+  - key: equip_tayunxue
+    name: 踏云靴
+    description: 道门弟子修行所穿，相传踏云子祖师曾穿此靴登仙。
+    effect_type: equip_shoes
+    rarity: green
+    tradeable: true
+    price: 2200
+    storage_space: 100
+    effect_payload:
+      hp: 70
+      defense: 6
+      agility: 15
+
+  - key: equip_jifengxue
+    name: 疾风靴
+    description: 神行太保戴宗的弟子所制，暗藏甲马神行之术。
+    effect_type: equip_shoes
+    rarity: green
+    tradeable: true
+    price: 2500
+    storage_space: 100
+    effect_payload:
+      hp: 90
+      defense: 10
+      agility: 18
+
+  - key: equip_youxiaxue
+    name: 游侠靴
+    description: 江湖侠客们偏爱的款式，在各地驿站都能见到。
+    effect_type: equip_shoes
+    rarity: green
+    tradeable: true
+    price: 2300
+    storage_space: 100
+    effect_payload:
+      hp: 75
+      defense: 7
+      agility: 22
+
+  - key: equip_zhuyelu
+    name: 竹叶履
+    description: 以翠竹叶片装饰的轻履，是竹林隐士的标志之物。
+    effect_type: equip_shoes
+    rarity: green
+    tradeable: true
+    price: 2100
+    storage_space: 100
+    effect_payload:
+      hp: 65
+      defense: 6
+      agility: 20
+      luck: 8
+
+  # ---------- 鞋子 - 蓝色品质（发展期）----------
+
+  - key: equip_xiaoweichangxue
+    name: 校尉长靴
+    description: 军中校尉的制式长靴，靴筒刻有军阶标识。
+    effect_type: equip_shoes
+    rarity: blue
+    tradeable: true
+    price: 5000
+    storage_space: 100
+    effect_payload:
+      hp: 200
+      defense: 20
+      agility: 15
+      set_key: xiaowei_set
+      set_description: 校尉套装
+      set_bonus:
+        pieces: 4
+        bonus:
+          force: 50
+          defense: 30
+          hp: 500
+          troop_capacity: 60
+
+  - key: equip_qinglongxue
+    name: 青龙靴
+    description: 绣有青龙纹样的战靴，相传曾是青龙门弟子所穿。
+    effect_type: equip_shoes
+    rarity: blue
+    tradeable: true
+    price: 5500
+    storage_space: 100
+    effect_payload:
+      hp: 220
+      defense: 22
+      agility: 18
+      intellect: 12
+      set_key: sixiang_set
+      set_description: 四象套装
+      set_bonus:
+        pieces: 4
+        bonus:
+          intellect: 50
+          force: 25
+          agility: 25
+          hp: 600
+
+  - key: equip_lingboxie
+    name: 凌波鞋
+    description: 据传是凌波微步的配套之物，出自逍遥派遗藏。
+    effect_type: equip_shoes
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      hp: 250
+      defense: 15
+      agility: 30
+      luck: 15
+
+  - key: equip_zhuifengxue
+    name: 追风靴
+    description: 相传某位追风少年穿此靴日行千里，名动江湖。
+    effect_type: equip_shoes
+    rarity: blue
+    tradeable: true
+    price: 5200
+    storage_space: 100
+    effect_payload:
+      hp: 180
+      defense: 18
+      agility: 35
+
+  - key: equip_pojunxue
+    name: 破军靴
+    description: 破军星位所铸，是一套破军战甲的配套之一。
+    effect_type: equip_shoes
+    rarity: blue
+    tradeable: true
+    price: 5800
+    storage_space: 100
+    effect_payload:
+      hp: 280
+      defense: 25
+      agility: 20
+      force: 12
+
+  - key: equip_yingxingxue
+    name: 影行靴
+    description: 刺客组织"影楼"的秘制战靴，穿上后行走无声。
+    effect_type: equip_shoes
+    rarity: blue
+    tradeable: true
+    price: 5600
+    storage_space: 100
+    effect_payload:
+      hp: 210
+      defense: 18
+      agility: 45
+      luck: 12
+
+  - key: equip_jinlinxue
+    name: 金鳞靴
+    description: 以金色鳞片装饰的战靴，出自龙门镖局的镖头遗物。
+    effect_type: equip_shoes
+    rarity: blue
+    tradeable: true
+    price: 6200
+    storage_space: 100
+    effect_payload:
+      hp: 260
+      defense: 28
+      agility: 22
+      force: 10
+
+  # ---------- 鞋子 - 紫色品质（成熟期）----------
+
+  - key: equip_huxianxie
+    name: 狐仙鞋
+    description: 涂山狐族遗留人间的宝物，轻巧灵动如狐步。
+    effect_type: equip_shoes
+    rarity: purple
+    tradeable: true
+    price: 14000
+    storage_space: 100
+    effect_payload:
+      hp: 300
+      agility: 25
+      intellect: 20
+      set_key: huxian_set
+      set_description: 狐仙套装
+      set_bonus:
+        pieces: 3
+        bonus:
+          intellect: 80
+          luck: 50
+          hp: 800
+
+  - key: equip_qilinxue
+    name: 麒麟靴
+    description: 仿麒麟蹄形锻造，相传是麒麟卫的标志装备。
+    effect_type: equip_shoes
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      hp: 350
+      defense: 30
+      agility: 25
+      force: 15
+      set_key: qilin_set
+      set_description: 麒麟套装
+      set_bonus:
+        pieces: 4
+        bonus:
+          force: 80
+          hp: 1000
+          agility: 30
+
+  - key: equip_xuanwuxue
+    name: 玄武靴
+    description: 玄武山庄的传承之物，靴底刻有玄武阵图。
+    effect_type: equip_shoes
+    rarity: purple
+    tradeable: true
+    price: 17000
+    storage_space: 100
+    effect_payload:
+      hp: 400
+      defense: 40
+      agility: 20
+      set_key: xuanwu_set
+      set_description: 玄武套装
+      set_bonus:
+        pieces: 4
+        bonus:
+          defense: 100
+          hp: 1500
+          force: 40
+
+  - key: equip_zhurixue
+    name: 逐日靴
+    description: 相传夸父逐日时所穿，后来落入人间被重新锻造。
+    effect_type: equip_shoes
+    rarity: purple
+    tradeable: true
+    price: 15000
+    storage_space: 100
+    effect_payload:
+      hp: 320
+      defense: 25
+      agility: 40
+
+  - key: equip_tianjilu
+    name: 天机履
+    description: 天机门的秘传之物，履底暗藏机关可助行。
+    effect_type: equip_shoes
+    rarity: purple
+    tradeable: true
+    price: 15500
+    storage_space: 100
+    effect_payload:
+      hp: 340
+      defense: 26
+      agility: 45
+      intellect: 25
+
+  - key: equip_liekongxue
+    name: 裂空靴
+    description: 据传穿上可踏破虚空，是某位飞行高手的遗物。
+    effect_type: equip_shoes
+    rarity: purple
+    tradeable: true
+    price: 16500
+    storage_space: 100
+    effect_payload:
+      hp: 360
+      defense: 32
+      agility: 55
+      force: 18
+
+  # ---------- 鞋子 - 橙色品质（巅峰期）----------
+
+  - key: equip_tatianxue
+    name: 踏天靴
+    description: 相传可踏天而行，是凌霄宫遗落凡间的神物。
+    effect_type: equip_shoes
+    rarity: orange
+    tradeable: true
+    price: 50000
+    storage_space: 100
+    effect_payload:
+      hp: 500
+      defense: 45
+      agility: 60
+
+  - key: equip_shenxingxue
+    name: 神行靴
+    description: 神行太保戴宗的亲传之物，内藏神行甲马。
+    effect_type: equip_shoes
+    rarity: orange
+    tradeable: true
+    price: 48000
+    storage_space: 100
+    effect_payload:
+      hp: 450
+      defense: 40
+      agility: 80
+
+  - key: equip_wujixingxue
+    name: 无极行靴
+    description: 无极门祖师的遗物，暗合太极阴阳之理。
+    effect_type: equip_shoes
+    rarity: orange
+    tradeable: true
+    price: 55000
+    storage_space: 100
+    effect_payload:
+      hp: 480
+      defense: 42
+      agility: 90
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                         装备类 - 武器（剑）
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  - key: equip_duanjian
+    name: 短剑
+    description: 粗钢打造的剑，勉强够防身用。
+    effect_type: equip_weapon
+    rarity: black
+    tradeable: true
+    price: 100
+    storage_space: 100
+    effect_payload:
+      force: 5
+
+  - key: equip_changjian
+    name: 长剑
+    description: 兵器铺必备的东西，行走江湖时可用来防身和装潇洒。
+    effect_type: equip_weapon
+    rarity: black
+    tradeable: true
+    price: 300
+    storage_space: 100
+    effect_payload:
+      force: 10
+
+  - key: equip_qingmangjian
+    name: 青芒剑
+    description: 当代名师铸的宝剑，剑锋有青光透出。
+    effect_type: equip_weapon
+    rarity: green
+    tradeable: true
+    price: 800
+    storage_space: 100
+    effect_payload:
+      force: 18
+
+  - key: equip_duanmajian
+    name: 断马剑
+    description: 特长特厚的刀刃，一击甚至可以将马斩断。
+    effect_type: equip_weapon
+    rarity: green
+    tradeable: true
+    price: 1500
+    storage_space: 100
+    effect_payload:
+      force: 28
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                         装备类 - 武器（刀）
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  - key: equip_duandao
+    name: 短刀
+    description: 粗钢打造的刀，勉强够防身用。
+    effect_type: equip_weapon
+    rarity: black
+    tradeable: true
+    price: 100
+    storage_space: 100
+    effect_payload:
+      force: 5
+
+  - key: equip_dakandao
+    name: 大砍刀
+    description: 江湖豪客常用的刀，相当好使。
+    effect_type: equip_weapon
+    rarity: black
+    tradeable: true
+    price: 300
+    storage_space: 100
+    effect_payload:
+      force: 10
+
+  - key: equip_tongchangdao
+    name: 铜长刀
+    description: 使用铜和钢混合打造，看起来闪闪发亮。
+    effect_type: equip_weapon
+    rarity: green
+    tradeable: true
+    price: 800
+    storage_space: 100
+    effect_payload:
+      force: 18
+
+  - key: equip_jingtiedao
+    name: 精铁刀
+    description: 上好精铁打造而成，锋利无比。
+    effect_type: equip_weapon
+    rarity: green
+    tradeable: true
+    price: 1500
+    storage_space: 100
+    effect_payload:
+      force: 28
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                         装备类 - 武器（枪）
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  - key: equip_changqiang
+    name: 长枪
+    description: 普通的红缨点钢枪，士兵常使的武器。
+    effect_type: equip_weapon
+    rarity: black
+    tradeable: true
+    price: 100
+    storage_space: 100
+    effect_payload:
+      force: 5
+
+  - key: equip_baoweiqiang
+    name: 豹尾枪
+    description: 头有兽尾为饰，看来稍微华贵些。
+    effect_type: equip_weapon
+    rarity: black
+    tradeable: true
+    price: 300
+    storage_space: 100
+    effect_payload:
+      force: 10
+
+  - key: equip_hutoumao
+    name: 虎头矛
+    description: 矛头上刻有虎头吞刃，让人望而生畏。
+    effect_type: equip_weapon
+    rarity: green
+    tradeable: true
+    price: 800
+    storage_space: 100
+    effect_payload:
+      force: 18
+
+  - key: equip_pansheqiang
+    name: 盘蛇枪
+    description: 枪身柔性十足，在高手手中如出洞毒蛇般狠辣。
+    effect_type: equip_weapon
+    rarity: green
+    tradeable: true
+    price: 1500
+    storage_space: 100
+    effect_payload:
+      force: 28
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                         装备类 - 武器（弓）
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  - key: equip_changgong
+    name: 长弓
+    description: 白木制的弓，随处可见的东西。
+    effect_type: equip_weapon
+    rarity: black
+    tradeable: true
+    price: 100
+    storage_space: 100
+    effect_payload:
+      force: 5
+
+  - key: equip_fanqugong
+    name: 反曲弓
+    description: 以干角筋胶丝漆六材制成的弓，相当精致。
+    effect_type: equip_weapon
+    rarity: black
+    tradeable: true
+    price: 300
+    storage_space: 100
+    effect_payload:
+      force: 10
+
+  - key: equip_tietaigong
+    name: 铁胎弓
+    description: 弓身以钢片加固，得有相当的臂力才能拉开。
+    effect_type: equip_weapon
+    rarity: green
+    tradeable: true
+    price: 800
+    storage_space: 100
+    effect_payload:
+      force: 18
+
+  - key: equip_shenbigong
+    name: 神臂弓
+    description: 机括击发的弩机，力可穿透铁甲。
+    effect_type: equip_weapon
+    rarity: green
+    tradeable: true
+    price: 1500
+    storage_space: 100
+    effect_payload:
+      force: 28
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                         装备类 - 武器（鞭）
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  - key: equip_changbian
+    name: 长鞭
+    description: 细藤搓成的鞭子，通常只能用来赶羊。
+    effect_type: equip_weapon
+    rarity: black
+    tradeable: true
+    price: 100
+    storage_space: 100
+    effect_payload:
+      force: 5
+
+  - key: equip_niupibian
+    name: 牛皮鞭
+    description: 生牛皮编制的长鞭，相当难用。
+    effect_type: equip_weapon
+    rarity: black
+    tradeable: true
+    price: 300
+    storage_space: 100
+    effect_payload:
+      force: 10
+
+  - key: equip_jicibian
+    name: 棘刺鞭
+    description: 鞭身带有荆棘倒刺，抽人可不是一般的痛。
+    effect_type: equip_weapon
+    rarity: green
+    tradeable: true
+    price: 800
+    storage_space: 100
+    effect_payload:
+      force: 18
+
+  - key: equip_jiulonggangbian
+    name: 九龙钢鞭
+    description: 钢鞭分九节，铸有九龙盘身，精光耀眼。
+    effect_type: equip_weapon
+    rarity: green
+    tradeable: true
+    price: 1500
+    storage_space: 100
+    effect_payload:
+      force: 28
+
+  - key: equip_mingshejiebian
+    name: 冥蛇节鞭
+    description: 鞭身乌黑，做蛇形蠕动噬人。
+    effect_type: equip_weapon
+    rarity: green
+    tradeable: true
+    price: 3000
+    storage_space: 100
+    effect_payload:
+      force: 40
+
+  # ---------- 武器 - 扩展（成长期及以后）----------
+
+  # ---------- 武器 - 绿色品质（成长期）----------
+
+  - key: equip_yemankandao
+    name: 野蛮砍刀
+    description: 北方蛮族的战利品，刀身带有异域纹饰，做工粗犷。
+    effect_type: equip_weapon
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 100
+    effect_payload:
+      force: 35
+      set_key: yeman_set
+      set_description: 野蛮套装
+      set_bonus:
+        pieces: 2
+        bonus:
+          force: 30
+          hp: 300
+
+  - key: equip_tiegugun
+    name: 铁骨棍
+    description: 以精铁为芯、硬木为皮的哨棍，是少林护法僧的常用兵器。
+    effect_type: equip_weapon
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 100
+    effect_payload:
+      force: 22
+      defense: 8
+
+  - key: equip_tongshanchui
+    name: 铜山锤
+    description: 仿照铜山形状铸造的重锤，据说是某位力士的心爱之物。
+    effect_type: equip_weapon
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 100
+    effect_payload:
+      force: 26
+      hp: 80
+
+  - key: equip_pofengji
+    name: 破风戟
+    description: 戟刃锋利可破风声，相传是仿照吕布方天画戟所铸。
+    effect_type: equip_weapon
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 100
+    effect_payload:
+      force: 30
+      agility: 8
+
+  - key: equip_shushengzhesan
+    name: 书生折扇
+    description: 看似文人雅物，扇骨却以精钢铸成，是文人侠客的专属。
+    effect_type: equip_weapon
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 100
+    effect_payload:
+      force: 16
+      intellect: 18
+      luck: 10
+
+  # ---------- 武器 - 蓝色品质（发展期）----------
+
+  - key: equip_xiaoweichangjian
+    name: 校尉长剑
+    description: 军中校尉的制式配剑，剑柄刻有军阶徽记。
+    effect_type: equip_weapon
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      force: 45
+      set_key: xiaowei_set
+      set_description: 校尉套装
+      set_bonus:
+        pieces: 4
+        bonus:
+          force: 50
+          defense: 30
+          hp: 500
+          troop_capacity: 60
+
+  - key: equip_junzijian
+    name: 君子剑
+    description: 传说是某位儒门宗师以仁义为剑名所铸，剑身刻有《论语》句。
+    effect_type: equip_weapon
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      force: 50
+      intellect: 25
+      agility: 15
+
+  - key: equip_qinglongdao
+    name: 青龙刀
+    description: 刀身雕有青龙图腾，相传是青龙堂镇堂之宝的仿品。
+    effect_type: equip_weapon
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      force: 48
+      intellect: 18
+      set_key: sixiang_set
+      set_description: 四象套装
+      set_bonus:
+        pieces: 4
+        bonus:
+          intellect: 50
+          force: 25
+          agility: 25
+          hp: 600
+
+  - key: equip_pozhenqiang
+    name: 破阵枪
+    description: 岳家军破阵用的制式长枪，枪头带有倒钩设计。
+    effect_type: equip_weapon
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      force: 52
+      hp: 200
+
+  - key: equip_chuanyungong
+    name: 穿云弓
+    description: 传说某位神箭手以此弓射穿云雾中的飞鹰，因而得名。
+    effect_type: equip_weapon
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      force: 45
+      agility: 15
+
+  - key: equip_hanyuejian
+    name: 寒月剑
+    description: 剑身泛着寒光如月，相传是某位刺客组织头目的佩剑。
+    effect_type: equip_weapon
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      force: 48
+      agility: 12
+
+  - key: equip_lieyandao
+    name: 烈焰刀
+    description: 刀身铸入火焰纹路，据传以地底熔岩为淬火之水。
+    effect_type: equip_weapon
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      force: 55
+      hp: 150
+
+  - key: equip_duanhunbian
+    name: 断魂鞭
+    description: 江湖暗杀组织"断魂谷"的标志性兵器，来历神秘。
+    effect_type: equip_weapon
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      force: 50
+      agility: 18
+      luck: 12
+
+  - key: equip_zhenyuechui
+    name: 镇岳锤
+    description: 仿五岳之形铸造的重锤，据传曾镇压过山中精怪。
+    effect_type: equip_weapon
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      force: 58
+      hp: 250
+      defense: 12
+
+  - key: equip_xuanbinggong
+    name: 玄冰弓
+    description: 以北极寒冰封存的弓身，传说出自极北雪域的神秘部落。
+    effect_type: equip_weapon
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      force: 48
+      agility: 25
+      luck: 15
+
+  - key: equip_xingluoshan
+    name: 星罗扇
+    description: 扇面绘有星罗棋布图案，是钦天监术士的法器。
+    effect_type: equip_weapon
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      force: 40
+      intellect: 40
+      luck: 20
+
+  # ---------- 武器 - 紫色品质（成熟期）----------
+
+  - key: equip_huxianjian
+    name: 狐仙剑
+    description: 相传是涂山狐族遗落人间的宝剑，剑身隐有狐影流转。
+    effect_type: equip_weapon
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      force: 60
+      intellect: 40
+      set_key: huxian_set
+      set_description: 狐仙套装
+      set_bonus:
+        pieces: 3
+        bonus:
+          intellect: 80
+          luck: 50
+          hp: 800
+
+  - key: equip_bawangqiang
+    name: 霸王枪
+    description: 仿西楚霸王项羽的虎头鲛皮枪所铸，气势雄浑。
+    effect_type: equip_weapon
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      force: 80
+      hp: 500
+      agility: 20
+      troop_capacity: 100
+
+  - key: equip_qilindao
+    name: 麒麟刀
+    description: 刀柄雕有麒麟头颅，是麒麟卫统领的佩刀。
+    effect_type: equip_weapon
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      force: 88
+      hp: 300
+      set_key: qilin_set
+      set_description: 麒麟套装
+      set_bonus:
+        pieces: 4
+        bonus:
+          force: 80
+          hp: 1000
+          agility: 30
+
+  - key: equip_xuanwuchui
+    name: 玄武锤
+    description: 锤头铸成玄武形状，是玄武山庄的传承之物。
+    effect_type: equip_weapon
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      force: 65
+      hp: 400
+      defense: 25
+      set_key: xuanwu_set
+      set_description: 玄武套装
+      set_bonus:
+        pieces: 4
+        bonus:
+          defense: 100
+          hp: 1500
+          force: 40
+
+  - key: equip_fenglingshan
+    name: 凤翎扇
+    description: 以凤凰翎羽装饰的雅扇，传说是某位宫廷术士的遗物。
+    effect_type: equip_weapon
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      force: 55
+      intellect: 50
+      luck: 25
+      set_key: fengling_set
+      set_description: 凤翎套装
+      set_bonus:
+        pieces: 3
+        bonus:
+          intellect: 100
+          luck: 80
+
+  - key: equip_qixingjian
+    name: 七星剑
+    description: 剑身铸有北斗七星纹路，是道门镇压邪祟的法器。
+    effect_type: equip_weapon
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      force: 75
+      intellect: 30
+      agility: 25
+
+  - key: equip_tulongdao
+    name: 屠龙刀
+    description: 传说中斩龙的神兵，刀身隐隐有龙吟之声回荡。
+    effect_type: equip_weapon
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      force: 85
+      hp: 350
+
+  - key: equip_tianjizhang
+    name: 天机杖
+    description: 天机门掌门的法杖，杖身刻有天干地支与八卦符文。
+    effect_type: equip_weapon
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      force: 68
+      intellect: 35
+      hp: 350
+      luck: 25
+
+  - key: equip_pojunji
+    name: 破军戟
+    description: 以破军星位锻造的神戟，据传戴者必成一方悍将。
+    effect_type: equip_weapon
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      force: 92
+      hp: 450
+      agility: 20
+      troop_capacity: 80
+
+  - key: equip_shuanghuagong
+    name: 霜华弓
+    description: 弓身覆有永不消融的霜华，据传出自上古冰神遗藏。
+    effect_type: equip_weapon
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      force: 78
+      agility: 35
+      luck: 25
+
+  - key: equip_jinshejian
+    name: 金蛇剑
+    description: 剑身如蛇般柔韧，传说是以千年金蛇筋骨铸成。
+    effect_type: equip_weapon
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      force: 82
+      agility: 30
+      luck: 28
+
+  - key: equip_duomingfeidao
+    name: 夺命飞刀
+    description: 江湖传说中的夺命暗器，据说出自"飞刀门"的独门铸造。
+    effect_type: equip_weapon
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      force: 70
+      agility: 45
+      luck: 30
+
+  - key: equip_ziweiruanjian
+    name: 紫薇软剑
+    description: 剑身长约三尺紫光闪烁，极其柔软发出一片如烟如雾的紫气。断金如泥，锐不可当，剑柄上用金丝盘着两个篆文乃是“紫薇”两字。
+    effect_type: equip_weapon
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      force: 78
+      agility: 35
+      luck: 22
+
+  - key: equip_yuxiao
+    name: 玉箫
+    description: 以昆仑玉雕刻的乐器，相传是某位琴魔的心爱之物。
+    effect_type: equip_weapon
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      force: 62
+      intellect: 55
+      luck: 35
+      hp: 200
+
+  - key: equip_jinlun
+    name: 金轮
+    description: 以黄金铸成的法轮，据传源自西域密宗高僧的法器。
+    effect_type: equip_weapon
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      force: 105
+      hp: 450
+      defense: 20
+
+  - key: equip_xuedao
+    name: 血刀
+    description: 刀身暗红如染血，传说以九十九人之血淬炼而成。
+    effect_type: equip_weapon
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      force: 95
+      hp: 300
+      agility: 25
+
+  - key: equip_yuanyangdao
+    name: 鸳鸯刀
+    description: 成双成对的鸳鸯刀，相传是某对侠侣的定情之物。
+    effect_type: equip_weapon
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      force: 88
+      agility: 28
+      luck: 22
+
+  - key: equip_jinshezui
+    name: 金蛇锥
+    description: 锥身如蛇盘绕，是西域某刺客组织的标志性暗器。
+    effect_type: equip_weapon
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      force: 74
+      agility: 50
+      luck: 25
+
+  - key: equip_wuqiaojian
+    name: 乌鞘剑
+    description: 剑入乌木鞘中，剑身雪亮如霜，来历不详。
+    effect_type: equip_weapon
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      force: 92
+      agility: 25
+      luck: 20
+
+  - key: equip_biyudao
+    name: 碧玉刀
+    description: 刀柄以碧玉雕成，据传是某位富家公子的佩刀。
+    effect_type: equip_weapon
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      force: 86
+      agility: 32
+      luck: 25
+
+  - key: equip_libiegou
+    name: 离别钩
+    description: 钩刃形如弯月，传说是某位浪子临别时所铸，寄托离情。
+    effect_type: equip_weapon
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      force: 90
+      agility: 25
+      luck: 22
+
+  - key: equip_duoqinghuan
+    name: 多情环
+    description: 环环相扣的奇门兵器，据传是某位痴情剑客的遗物。
+    effect_type: equip_weapon
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      force: 70
+      intellect: 45
+      luck: 40
+      hp: 200
+
+  - key: equip_xiuhuazhen
+    name: 绣花针
+    description: 细如绣针的暗器，传说是某位女侠的独门兵刃。
+    effect_type: equip_weapon
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      force: 66
+      agility: 58
+      luck: 25
+
+  # ---------- 武器 - 橙色品质（巅峰期）----------
+
+  - key: equip_yitianjian
+    name: 倚天剑
+    description: 传说中的神兵之一，与屠龙刀齐名，"倚天不出，谁与争锋"。
+    effect_type: equip_weapon
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      force: 100
+      intellect: 50
+      agility: 30
+      luck: 20
+
+  - key: equip_fangtianhuaji
+    name: 方天画戟
+    description: 仿吕布方天画戟所铸的神兵，戟身绘有繁复图案。
+    effect_type: equip_weapon
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      force: 120
+      hp: 600
+      troop_capacity: 150
+
+  - key: equip_xuanyuanjian
+    name: 轩辕剑
+    description: 相传为黄帝轩辕所铸的圣剑，是华夏始祖的象征之物。
+    effect_type: equip_weapon
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      force: 95
+      intellect: 60
+      luck: 40
+
+  - key: equip_panlonggun
+    name: 盘龙棍
+    description: 棍身盘龙雕刻栩栩如生，据传是丐帮某代帮主的法杖。
+    effect_type: equip_weapon
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      force: 90
+      defense: 40
+      hp: 800
+
+  - key: equip_zhuxianjian
+    name: 诛仙剑
+    description: 传说中诛杀万仙的神剑，出自上古剑仙的遗藏。
+    effect_type: equip_weapon
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      force: 110
+      intellect: 70
+      agility: 25
+
+  - key: equip_qiankunshengong
+    name: 乾坤神弓
+    description: 以乾坤二气铸成的神弓，据传可射日月星辰。
+    effect_type: equip_weapon
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      force: 105
+      agility: 60
+      luck: 35
+
+  - key: equip_xuantiechongjian
+    name: 玄铁重剑
+    description: 以玄铁铸成的重剑，剑身无锋，"重剑无锋，大巧不工"。
+    effect_type: equip_weapon
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      force: 135
+      hp: 700
+      defense: 35
+
+  - key: equip_dagoubang
+    name: 打狗棒
+    description: 丐帮历代帮主的信物，以翠竹削成，其貌不扬却地位尊崇。
+    effect_type: equip_weapon
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      force: 115
+      agility: 40
+      luck: 30
+
+  - key: equip_xiaolifeidao
+    name: 小李飞刀
+    description: 传说中"例无虚发"的神奇飞刀，出自飞刀世家李氏。
+    effect_type: equip_weapon
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      force: 108
+      agility: 70
+      luck: 40
+
+  - key: equip_kongquelin
+    name: 孔雀翎
+    description: 暗器之王，据传以孔雀尾羽铸成，华美而致命。
+    effect_type: equip_weapon
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      force: 112
+      agility: 68
+      luck: 35
+
+  - key: equip_tianyamingyuedao
+    name: 天涯明月刀
+    description: 刀名取自"天涯明月"，相传是某位孤独刀客的佩刀。
+    effect_type: equip_weapon
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      force: 130
+      hp: 550
+      agility: 30
+
+  - key: equip_yuanyuewandao
+    name: 圆月弯刀
+    description: 刀身弯如圆月，上面刻着七个字：小楼昨夜听春雨。
+    effect_type: equip_weapon
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      force: 128
+      agility: 55
+      luck: 35
+
+  - key: equip_changshengjian
+    name: 长生剑
+    description: 剑名长生，传说是某位追求长生的剑仙所铸。
+    effect_type: equip_weapon
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      force: 118
+      intellect: 55
+      luck: 30
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                         装备类 - 饰品
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  - key: equip_zhuyuye
+    name: 茱萸叶
+    description: 佩戴茱萸叶，象征着防止灾祸和祈求健康平安。
+    effect_type: equip_ornament
+    rarity: purple
+    effect_payload:
+      hp: 1000
+      defense: 15
+      force: 20
+      luck: 25
+    tradeable: false
+    price: 0
+
+  # ---------- 饰品 - 扩展 ----------
+
+  # ---------- 饰品 - 绿色品质 ----------
+
+  - key: equip_tongling
+    name: 铜铃
+    description: 道观门前悬挂的风铃，铃音清脆可驱邪避厄。
+    effect_type: equip_ornament
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 100
+    effect_payload:
+      luck: 15
+      agility: 8
+
+  - key: equip_yupei
+    name: 玉佩
+    description: 温润的随身玉佩，是江南大户人家子弟的常见饰物。
+    effect_type: equip_ornament
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 100
+    effect_payload:
+      hp: 100
+      luck: 20
+
+  - key: equip_hushenfu
+    name: 护身符
+    description: 寺庙高僧开光的平安符，以黄纸朱砂绘制。
+    effect_type: equip_ornament
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 100
+    effect_payload:
+      hp: 150
+      defense: 10
+
+  - key: equip_taomupai
+    name: 桃木牌
+    description: 以桃木雕刻的辟邪牌，据传源自茅山道士的法器。
+    effect_type: equip_ornament
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 100
+    effect_payload:
+      intellect: 15
+      luck: 18
+
+  - key: equip_fudai
+    name: 福袋
+    description: 绣有"福"字的红布袋，装着平安符与铜钱，是民间习俗之物。
+    effect_type: equip_ornament
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 100
+    effect_payload:
+      luck: 25
+      hp: 80
+
+  - key: equip_tiehufu
+    name: 铁护符
+    description: 以精铁铸成的护身符，是军中将士的护身之物。
+    effect_type: equip_ornament
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 100
+    effect_payload:
+      hp: 180
+      defense: 12
+
+  - key: equip_tanmunianzhu
+    name: 檀木念珠
+    description: 以檀香木制成的佛珠，是僧人日常修持之物。
+    effect_type: equip_ornament
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 100
+    effect_payload:
+      intellect: 18
+      luck: 22
+
+  - key: equip_yiqiyaopai
+    name: 义气腰牌
+    description: 江湖义气堂的信物，佩戴者可在各地驿站通行。
+    effect_type: equip_ornament
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 100
+    effect_payload:
+      hp: 120
+      force: 12
+      luck: 15
+
+  # ---------- 饰品 - 蓝色品质 ----------
+
+  - key: equip_longwenyupei
+    name: 龙纹玉佩
+    description: 雕有龙纹的上等玉佩，据传是某位王爷的旧物。
+    effect_type: equip_ornament
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      hp: 250
+      force: 15
+      luck: 25
+
+  - key: equip_fengyuzan
+    name: 凤羽簪
+    description: 以凤凰羽毛装饰的发簪，是宫廷贵妃的饰物。
+    effect_type: equip_ornament
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      hp: 200
+      intellect: 25
+      luck: 30
+
+  - key: equip_huyaxianglian
+    name: 虎牙项链
+    description: 以猛虎獠牙串成的项链，是猎虎人的战利品。
+    effect_type: equip_ornament
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      hp: 300
+      force: 20
+      agility: 12
+
+  - key: equip_linghuzhui
+    name: 灵狐坠
+    description: 以狐狸形玉石雕成的坠饰，传说出自涂山狐族。
+    effect_type: equip_ornament
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      hp: 220
+      intellect: 30
+      agility: 15
+
+  - key: equip_xingshashouchuan
+    name: 星砂手串
+    description: 以沙漠流星石串成的手链，是西域商人带来的奇物。
+    effect_type: equip_ornament
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      hp: 240
+      intellect: 20
+      luck: 28
+
+  - key: equip_xueyuzhuo
+    name: 血玉镯
+    description: 以血玉雕成的手镯，据传玉中封存着某位将军的精血。
+    effect_type: equip_ornament
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      hp: 320
+      force: 18
+      agility: 15
+
+  - key: equip_xuantiejie
+    name: 玄铁戒
+    description: 以玄铁铸成的戒指，是某位隐世铁匠的心血之作。
+    effect_type: equip_ornament
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      hp: 260
+      defense: 18
+      force: 12
+
+  - key: equip_liuyunpei
+    name: 流云佩
+    description: 雕有流云纹路的玉佩，是逍遥派弟子的标志饰物。
+    effect_type: equip_ornament
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      hp: 230
+      agility: 25
+      luck: 22
+      intellect: 10
+
+  # ---------- 饰品 - 紫色品质 ----------
+
+  - key: equip_qilinzui
+    name: 麒麟坠
+    description: 以麒麟形玉石雕成的坠饰，是麒麟卫的身份标识。
+    effect_type: equip_ornament
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      hp: 400
+      force: 25
+      luck: 35
+      set_key: qilin_set
+      set_description: 麒麟套装
+      set_bonus:
+        pieces: 4
+        bonus:
+          force: 80
+          hp: 1000
+          agility: 30
+
+  - key: equip_fenghuangyu
+    name: 凤凰羽
+    description: 传说中凤凰脱落的羽毛，通体金红，价值连城。
+    effect_type: equip_ornament
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      hp: 350
+      intellect: 40
+      luck: 40
+      set_key: fengling_set
+      set_description: 凤翎套装
+      set_bonus:
+        pieces: 3
+        bonus:
+          intellect: 100
+          luck: 80
+
+  - key: equip_longjingzhu
+    name: 龙睛珠
+    description: 据传是真龙眼中凝结的宝珠，内有流光转动。
+    effect_type: equip_ornament
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      hp: 500
+      force: 20
+      agility: 30
+      luck: 15
+
+  - key: equip_xuanwuyufu
+    name: 玄武玉符
+    description: 以玄武形雕刻的玉符，是玄武山庄弟子的信物。
+    effect_type: equip_ornament
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      hp: 520
+      defense: 25
+      force: 18
+
+  - key: equip_tianjiyupei
+    name: 天机玉佩
+    description: 刻有八卦图案的玉佩，是天机门传承之物。
+    effect_type: equip_ornament
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      hp: 420
+      intellect: 45
+      luck: 45
+
+  - key: equip_pojunhufu
+    name: 破军虎符
+    description: 仿古代虎符铸造的令牌，据传曾是某位将军的兵符。
+    effect_type: equip_ornament
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      hp: 460
+      force: 35
+      agility: 20
+
+  - key: equip_guiyuanzhu
+    name: 归元珠
+    description: 传说可使真气归元的宝珠，是道门至宝。
+    effect_type: equip_ornament
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      hp: 480
+      intellect: 20
+      luck: 35
+
+  - key: equip_shenghuoling
+    name: 圣火令
+    description: 明教的至高圣物，据传可召唤圣火降世。
+    effect_type: equip_ornament
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      hp: 520
+      force: 20
+      intellect: 25
+      luck: 35
+
+  # ---------- 饰品 - 橙色品质 ----------
+
+  - key: equip_heshibi
+    name: 和氏璧
+    description: 相传为卞和所献的绝世美玉，历经多朝流传至今。
+    effect_type: equip_ornament
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      hp: 600
+      force: 25
+      intellect: 25
+      luck: 50
+
+  - key: equip_chuanguoyuxi
+    name: 传国玉玺
+    description: 仿秦始皇传国玉玺所铸，象征至高权威。
+    effect_type: equip_ornament
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      hp: 800
+      troop_capacity: 200
+      force: 20
+      intellect: 20
+
+  - key: equip_qiankunzhu
+    name: 乾坤珠
+    description: 据传内藏乾坤二气的宝珠，是上古仙人的遗物。
+    effect_type: equip_ornament
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      hp: 650
+      force: 35
+      agility: 35
+      luck: 60
+
+  - key: equip_businiaoyu
+    name: 不死鸟羽
+    description: 传说中不死鸟脱落的羽毛，据说可使人涅槃重生。
+    effect_type: equip_ornament
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      hp: 700
+      intellect: 55
+      luck: 40
+
+  - key: equip_jianghuling
+    name: 江湖令
+    description: 武林盟主的信物，持此令者可号令江湖。
+    effect_type: equip_ornament
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      hp: 750
+      force: 20
+      agility: 20
+      luck: 80
+
+  - key: equip_shangshanfaeling
+    name: 赏善罚恶令
+    description: 六扇门的执法令牌，见令如见官，可赏善罚恶。
+    effect_type: equip_ornament
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      hp: 850
+      force: 30
+      intellect: 20
+      luck: 60
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                         装备类 - 器械
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  - key: equip_taotieding
+    name: 饕餮鼎
+    description: 鼎身上的饕餮图案而得名，象征着权力和财富，常用于祭祀或重要场合。
+    effect_type: equip_device
+    rarity: purple
+    effect_payload:
+      hp: 2000
+      defense: 20
+      force: 60
+      luck: 80
+      intellect: 80
+    tradeable: false
+    price: 0
+    image: taotieding.png
+
+  # ---------- 器械 - 扩展 ----------
+
+  # ---------- 器械 - 绿色品质 ----------
+
+  - key: equip_taomujian
+    name: 桃木剑
+    description: 以桃木制成的辟邪法器，常为文士与道门弟子所用。
+    effect_type: equip_ornament
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 100
+    effect_payload:
+      intellect: 20
+      luck: 10
+
+  - key: equip_tongjing
+    name: 铜镜
+    description: 常见的铜镜器物，可用以照面亦可镇邪。
+    effect_type: equip_ornament
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 100
+    effect_payload:
+      intellect: 25
+      hp: 80
+
+  - key: equip_luopan
+    name: 罗盘
+    description: 用于辨别方位与风水格局的器物，是术数之士的随身之物。
+    effect_type: equip_ornament
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 100
+    effect_payload:
+      intellect: 22
+      agility: 12
+
+  - key: equip_zhujian
+    name: 竹简
+    description: 记载典籍的竹简，墨迹犹新，似仍留有旧主的气息。
+    effect_type: equip_ornament
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 100
+    effect_payload:
+      intellect: 18
+      luck: 15
+
+  - key: equip_moyuyan
+    name: 墨玉砚
+    description: 以墨玉雕成的砚台，质地温润，是文士案头的雅物。
+    effect_type: equip_ornament
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 100
+    effect_payload:
+      intellect: 28
+      hp: 100
+
+  - key: equip_qingtongsuanchou
+    name: 青铜算筹
+    description: 青铜制的算筹，适合推演算术与机关术，是匠门入门之物。
+    effect_type: equip_ornament
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 100
+    effect_payload:
+      intellect: 24
+      luck: 18
+
+  - key: equip_xiaoxingjiguanshu
+    name: 小型机关鼠
+    description: 鲁班传人所制的入门之作，以铜丝为须，机簧为心，可自行奔走。
+    effect_type: equip_device
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 100
+    effect_payload:
+      intellect: 20
+      agility: 15
+
+  - key: equip_tongchanjiguan
+    name: 铜蝉机关
+    description: 战国时期的墨家遗物，薄翼振动时发出蝉鸣，可传声数里之外。
+    effect_type: equip_device
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 100
+    effect_payload:
+      intellect: 22
+      luck: 12
+      hp: 60
+
+  # ---------- 器械 - 蓝色品质 ----------
+
+  - key: equip_zhaoyaojing
+    name: 照妖镜
+    description: 据说可照出妖邪真形的宝镜，镜面寒光摄人。
+    effect_type: equip_ornament
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      intellect: 45
+      hp: 200
+      luck: 18
+
+  - key: equip_qiankunquan
+    name: 乾坤圈
+    description: 乾坤之力凝成的法器圆环，攻守兼备。
+    effect_type: equip_ornament
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      intellect: 42
+      defense: 15
+      agility: 18
+
+  - key: equip_tianjiluopan
+    name: 天机罗盘
+    description: 天机门秘制罗盘，可推演天机，指针转动间暗合星象。
+    effect_type: equip_ornament
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      intellect: 50
+      luck: 25
+      agility: 15
+
+  - key: equip_lingwenyubi
+    name: 灵纹玉笔
+    description: 雕刻灵纹的玉笔，可书符画阵，是文修与术士的趁手器物。
+    effect_type: equip_ornament
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      intellect: 52
+      hp: 220
+      luck: 15
+
+  - key: equip_guanxingdeng
+    name: 观星灯
+    description: 点燃后可观星推演的法灯，灯火不灭，光晕如星。
+    effect_type: equip_ornament
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      intellect: 48
+      luck: 30
+      hp: 150
+
+  - key: equip_jixiemao
+    name: 机械猫
+    description: 相传为鲁班暮年所制，以精铜为骨，绢丝为毛，栩栩如生，能自行走动觅食。
+    effect_type: equip_device
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      intellect: 45
+      agility: 25
+      luck: 20
+
+  - key: equip_jiguanchuniao
+    name: 机关雏鸟
+    description: 墨家弟子仿飞禽所造，翅以薄铜片制成，可借风力滑翔数里。
+    effect_type: equip_device
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      intellect: 48
+      agility: 30
+      hp: 180
+
+  - key: equip_kuileimuren
+    name: 傀儡木人
+    description: 以桐木雕刻的简易木偶，内含简单机括，是练习傀儡术的常用器物。
+    effect_type: equip_device
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      intellect: 50
+      hp: 250
+      defense: 12
+
+  - key: equip_qingji
+    name: 庆忌
+    description: 《山海经》中记载的神虫，形如蜂蝉，栖于青铜之上，见之者大吉。
+    effect_type: equip_device
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      intellect: 55
+      luck: 35
+      agility: 20
+
+  # ---------- 器械 - 紫色品质 ----------
+
+  - key: equip_baguajing
+    name: 八卦镜
+    description: 按先天八卦方位铸造的铜镜，背刻河图洛书，是道门镇宅之宝。
+    effect_type: equip_ornament
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      intellect: 70
+      hp: 400
+      luck: 35
+
+  - key: equip_hunyuansan
+    name: 混元伞
+    description: 混元宝伞，可护身御敌，伞骨隐有符纹流转。
+    effect_type: equip_ornament
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      intellect: 65
+      defense: 30
+      hp: 380
+
+  - key: equip_zijinhulu
+    name: 紫金葫芦
+    description: 传说是太上老君炼丹所用的葫芦，内里自成天地。
+    effect_type: equip_ornament
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      intellect: 60
+      hp: 500
+      luck: 40
+
+  - key: equip_tianyinguqin
+    name: 天音古琴
+    description: 伏羲以梧桐木斫制的古琴，琴弦为凤凰尾羽所化。
+    effect_type: equip_ornament
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      intellect: 78
+      hp: 520
+      luck: 45
+
+  - key: equip_xuanmingdeng
+    name: 玄冥灯
+    description: 传说是冥府判官的引魂灯，灯火永不熄灭。
+    effect_type: equip_ornament
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      intellect: 68
+      hp: 450
+      defense: 25
+
+  - key: equip_jiguanxiong
+    name: 机关熊
+    description: 蜀中工匠依照山中黑熊制作，内藏齿轮发条，力大无穷。
+    effect_type: equip_device
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      intellect: 65
+      hp: 600
+      defense: 35
+      force: 25
+
+  - key: equip_muniuliuma
+    name: 木牛流马
+    description: 诸葛武侯北伐时所创，不食草料而能行走，曾运粮于蜀道险峻之处。
+    effect_type: equip_device
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      intellect: 72
+      hp: 550
+      agility: 30
+      luck: 35
+
+  - key: equip_kuileiren
+    name: 傀儡人
+    description: 机关傀儡人，内藏机括与符纹，可攻可守，行止如生。
+    effect_type: equip_device
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      intellect: 68
+      hp: 480
+      defense: 28
+      agility: 20
+
+  - key: equip_xuanwujigui
+    name: 玄武机龟
+    description: 以玄武为形的机关造物，龟壳刻有北方星宿图，据说可镇一方水土。
+    effect_type: equip_device
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 100
+    effect_payload:
+      intellect: 62
+      hp: 700
+      defense: 45
+      luck: 30
+
+  # ---------- 器械 - 橙色品质 ----------
+
+  - key: equip_fengshenbang
+    name: 封神榜
+    description: 姜子牙封神时所用的天书，记载三百六十五位正神之名。
+    effect_type: equip_ornament
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      intellect: 100
+      luck: 60
+      hp: 600
+
+  - key: equip_shanheshejitu
+    name: 山河社稷图
+    description: 女娲娘娘的至宝，图中自成一界，山川河流一应俱全。
+    effect_type: equip_ornament
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      intellect: 90
+      force: 20
+      luck: 25
+      hp: 800
+
+  - key: equip_zhoutianxingpan
+    name: 周天星盘
+    description: 周天星象凝聚的星盘，可推演命数与气运走向。
+    effect_type: equip_ornament
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      intellect: 110
+      agility: 25
+      luck: 45
+
+  - key: equip_taiqingyuce
+    name: 太清玉册
+    description: 太上老君亲书的道藏精要，以白玉为简，金粉为墨。
+    effect_type: equip_ornament
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      intellect: 105
+      luck: 70
+      hp: 700
+
+  - key: equip_feiyuan
+    name: 飞鸢
+    description: 墨子削竹木为鸢，三年而成，飞三日不下，是机关术的开山之作。
+    effect_type: equip_device
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      intellect: 95
+      agility: 60
+      hp: 650
+
+  - key: equip_chixiaojifeng
+    name: 赤霄机凤
+    description: 仿南方朱雀所制的机关神兽，以赤铜为羽，展翅时灿若朝霞。
+    effect_type: equip_device
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      intellect: 108
+      hp: 750
+      agility: 30
+      luck: 20
+
+  - key: equip_mojiajiguanren
+    name: 墨家机关人
+    description: 墨家巨子亲手打造的绝世之作，内藏百道机关，可攻可守，几近通灵。
+    effect_type: equip_device
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 100
+    effect_payload:
+      intellect: 98
+      hp: 850
+      defense: 50
+      force: 35
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                         装备类 - 坐骑
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  - key: equip_zaohongma
+    name: 枣红马
+    description: 原马系统，体形高大,背脊宽厚,紫红鬃毛,四蹄粗壮，速度快且极能负重。
+    effect_type: equip_mount
+    rarity: black
+    tradeable: true
+    price: 620
+    storage_space: 200
+    effect_payload:
+      hp: 50
+      defense: 5
+      agility: 5
+
+  - key: equip_huangbiaoma
+    name: 黄膘马
+    description: 蒙古马系列，体形并非太高大，但四肢却有力，骨骼结实，经过调训后，在战场上临危不惧，是理想的战马。
+    effect_type: equip_mount
+    rarity: black
+    tradeable: true
+    price: 975
+    storage_space: 200
+    effect_payload:
+      hp: 100
+      defense: 10
+      agility: 10
+
+  - key: equip_dawanma
+    name: 大宛马
+    description: 产自中亚费尔干纳盆地的稀有马种，其纯血种也称为汗血马，耐力奇佳，但育种饲养难度极大。
+    effect_type: equip_mount
+    rarity: green
+    tradeable: true
+    price: 1500
+    storage_space: 200
+    effect_payload:
+      hp: 150
+      defense: 15
+      agility: 20
+
+  # ---------- 坐骑 - 扩展 ----------
+
+  # ---------- 坐骑 - 白色品质（新手期）----------
+
+  - key: equip_qingcongma
+    name: 青骢马
+    description: 毛色青白相间的良驹，常见于江南水乡的驿站马厩。
+    effect_type: equip_mount
+    rarity: black
+    tradeable: true
+    price: 800
+    storage_space: 200
+    effect_payload:
+      hp: 80
+      defense: 8
+      agility: 12
+
+  - key: equip_xiaomaolv
+    name: 小毛驴
+    description: 农家常见的代步牲口，性情温顺，脚程稳健。
+    effect_type: equip_mount
+    rarity: black
+    tradeable: true
+    price: 600
+    storage_space: 200
+    effect_payload:
+      hp: 60
+      defense: 4
+      agility: 6
+
+  # ---------- 坐骑 - 绿色品质（成长期）----------
+
+  - key: equip_xiliangma
+    name: 西凉马
+    description: 产自西凉边塞的战马，历经风沙磨砺，耐力惊人。
+    effect_type: equip_mount
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 200
+    effect_payload:
+      hp: 180
+      defense: 18
+      agility: 22
+
+  - key: equip_mengguma
+    name: 蒙古马
+    description: 草原民族世代相传的马种，矮小精悍，耐寒耐饥。
+    effect_type: equip_mount
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 200
+    effect_payload:
+      hp: 200
+      defense: 20
+      agility: 18
+      force: 8
+
+  - key: equip_taxuema
+    name: 踏雪马
+    description: 毛色雪白的骏马，据传可在雪地上飞奔如履平地。
+    effect_type: equip_mount
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 200
+    effect_payload:
+      hp: 170
+      defense: 15
+      agility: 28
+
+  - key: equip_qingzongma
+    name: 青鬃马
+    description: 鬃毛青亮如丝的骏马，是官府驿站的上等马匹。
+    effect_type: equip_mount
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 200
+    effect_payload:
+      hp: 190
+      defense: 18
+      agility: 26
+
+  - key: equip_chibiao
+    name: 赤骠
+    description: 通体枣红的战马，据传是某位将军征战沙场的坐骑。
+    effect_type: equip_mount
+    rarity: green
+    tradeable: true
+    price: 2000
+    storage_space: 200
+    effect_payload:
+      hp: 210
+      defense: 20
+      agility: 24
+      force: 10
+
+  # ---------- 坐骑 - 蓝色品质（发展期）----------
+
+  - key: equip_feiyunzui
+    name: 飞云锥
+    description: 奔跑时如云飞逝的骏马，是镖局押运的首选坐骑。
+    effect_type: equip_mount
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 200
+    effect_payload:
+      hp: 250
+      defense: 20
+      agility: 35
+
+  - key: equip_zhaoyeyushizi
+    name: 照夜玉狮子
+    description: 通体雪白如狮子般威武的骏马，据传是赵云的坐骑遗种。
+    effect_type: equip_mount
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 200
+    effect_payload:
+      hp: 280
+      defense: 25
+      agility: 30
+      force: 12
+
+  - key: equip_juanmaochitu
+    name: 卷毛赤兔
+    description: 鬃毛卷曲的赤红骏马，据传与赤兔马同出一源。
+    effect_type: equip_mount
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 200
+    effect_payload:
+      hp: 300
+      defense: 22
+      agility: 38
+
+  - key: equip_qianliju
+    name: 千里驹
+    description: 日行千里的骏马，是古代驿站八百里加急的专用马匹。
+    effect_type: equip_mount
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 200
+    effect_payload:
+      hp: 260
+      defense: 18
+      agility: 45
+
+  - key: equip_zhuidian
+    name: 追电
+    description: 奔跑时快如闪电的骏马，据传曾是某位刺客的坐骑。
+    effect_type: equip_mount
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 200
+    effect_payload:
+      hp: 270
+      defense: 20
+      agility: 42
+      luck: 12
+
+  - key: equip_bailongju
+    name: 白龙驹
+    description: 通体雪白的神骏，据传是白龙马的后代。
+    effect_type: equip_mount
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 200
+    effect_payload:
+      hp: 290
+      defense: 24
+      agility: 34
+      luck: 18
+
+  # ---------- 坐骑 - 紫色品质（成熟期）----------
+
+  - key: equip_wuzhuima
+    name: 乌骓马
+    description: 西楚霸王项羽的坐骑遗种，通体乌黑，性烈难驯。
+    effect_type: equip_mount
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 200
+    effect_payload:
+      hp: 400
+      defense: 30
+      agility: 50
+      force: 20
+
+  - key: equip_jueying
+    name: 绝影
+    description: 曹操的名驹后代，据传奔跑时连影子都追不上。
+    effect_type: equip_mount
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 200
+    effect_payload:
+      hp: 380
+      defense: 28
+      agility: 60
+      luck: 20
+
+  - key: equip_zhaohuangfeidian
+    name: 爪黄飞电
+    description: 蹄如金爪的神骏，据传是曹操赐予曹洪的坐骑遗种。
+    effect_type: equip_mount
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 200
+    effect_payload:
+      hp: 420
+      defense: 35
+      agility: 45
+      force: 25
+
+  - key: equip_dilu
+    name: 的卢
+    description: 刘备的救命神驹后代，额上有白斑如流星。
+    effect_type: equip_mount
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 200
+    effect_payload:
+      hp: 450
+      defense: 40
+      agility: 55
+      luck: 20
+
+  - key: equip_qingshuanglu
+    name: 青霜鹿
+    description: 通体如霜的灵鹿，据传来自仙山之中，性情温驯。
+    effect_type: equip_mount
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 200
+    effect_payload:
+      hp: 410
+      defense: 32
+      agility: 58
+      luck: 22
+
+  - key: equip_xuanjiazhanju
+    name: 玄甲战驹
+    description: 披有玄铁甲胄的战马，是玄甲军的专属坐骑。
+    effect_type: equip_mount
+    rarity: purple
+    tradeable: true
+    price: 16000
+    storage_space: 200
+    effect_payload:
+      hp: 480
+      defense: 38
+      agility: 48
+      force: 28
+
+  # ---------- 坐骑 - 橙色品质（巅峰期）----------
+
+  - key: equip_chituma
+    name: 赤兔马
+    description: 传说中的千里神驹，曾为吕布、关羽所乘，名震天下。
+    effect_type: equip_mount
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 200
+    effect_payload:
+      hp: 600
+      defense: 40
+      agility: 80
+      force: 40
+
+  - key: equip_hanxuebaoma
+    name: 汗血宝马
+    description: 大宛国进贡的神骏，奔跑时汗出如血，故而得名。
+    effect_type: equip_mount
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 200
+    effect_payload:
+      hp: 550
+      defense: 45
+      agility: 100
+
+  - key: equip_qilin
+    name: 麒麟
+    description: 传说中的瑞兽，龙头马身，见之者必有祥瑞降临。
+    effect_type: equip_mount
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 200
+    effect_payload:
+      hp: 700
+      defense: 50
+      agility: 70
+      force: 25
+      intellect: 15
+
+  - key: equip_qingluan
+    name: 青鸾
+    description: 传说中的神鸟，与凤凰齐名，通体青色，翱翔九天。
+    effect_type: equip_mount
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 200
+    effect_payload:
+      hp: 520
+      defense: 40
+      agility: 85
+      intellect: 50
+
+  - key: equip_shendiao
+    name: 神雕
+    description: 传说中通人性的巨雕，曾栖于终南山古墓之旁。
+    effect_type: equip_mount
+    rarity: orange
+    tradeable: true
+    price: 52000
+    storage_space: 200
+    effect_payload:
+      hp: 650
+      defense: 45
+      agility: 90
+      luck: 20

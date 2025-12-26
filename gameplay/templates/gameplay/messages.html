@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+
+{% block title %}消息{% endblock %}
+
+{% block content %}
+<section class="dashboard message-dashboard">
+    <div class="section-header">
+        <div>
+            <h1>消息中心</h1>
+            <p>消息保留 7 天，当前有 <strong id="unread-count" data-unread="{{ unread_count }}">{{ unread_count }}</strong> 条未读通知。</p>
+        </div>
+        <div class="section-actions">
+            <form method="post" action="{% url 'gameplay:mark_all_messages_read' %}">
+                {% csrf_token %}
+                <button type="submit" class="btn-secondary">全部标记已读</button>
+            </form>
+            <form method="post" action="{% url 'gameplay:delete_all_messages' %}" id="delete-all-form">
+                {% csrf_token %}
+                <button type="submit" class="btn-secondary">一键清空</button>
+            </form>
+        </div>
+    </div>
+
+    <section class="card message-center">
+        <form method="post" action="{% url 'gameplay:delete_messages' %}" id="message-form">
+            {% csrf_token %}
+            <div class="message-list">
+                {% for message in message_list %}
+                    <article class="message-card {% if not message.is_read %}unread{% endif %}">
+                        <label class="message-select">
+                            <input type="checkbox" name="message_ids" value="{{ message.id }}" class="message-checkbox" form="message-form">
+                            <span class="checkbox-custom"></span>
+                        </label>
+                        <div class="message-content">
+                            <header>
+                                <div class="message-header-left">
+                                    <span class="message-kind {{ message.kind }}">{{ message.get_kind_display }}</span>
+                                    <a
+                                        class="message-title js-message-link"
+                                        data-message-id="{{ message.id }}"
+                                        data-is-read="{% if message.is_read %}true{% else %}false{% endif %}"
+                                        href="{% url 'gameplay:view_message' message.id %}"
+                                    >{{ message.title }}</a>
+                                    {% if not message.is_read %}
+                                        <span class="message-status-dot">未读</span>
+                                    {% endif %}
+                                    {% if message.has_attachments %}
+                                        <span class="message-attachment-badge">📦 附件</span>
+                                    {% endif %}
+                                </div>
+                                <span class="message-time">{{ message.created_at|date:"Y-m-d H:i" }}</span>
+                            </header>
+                            {% if message.body %}
+                                <p class="message-body">{{ message.body }}</p>
+                            {% endif %}
+                            {% if message.has_attachments %}
+                                <div class="message-attachment-info">
+                                    <span class="attachment-summary">{{ message.get_attachment_summary }}</span>
+                                    {% if message.is_claimed %}
+                                        <span class="attachment-claimed">✓ 已领取</span>
+                                    {% else %}
+                                        <button type="button" class="btn-primary btn-sm" onclick="claimAttachment({{ message.id }}, '{% url 'gameplay:claim_attachment' message.id %}')">领取附件</button>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </article>
+                {% empty %}
+                    <p class="empty-state">暂无消息。</p>
+                {% endfor %}
+            </div>
+            <div class="message-actions">
+                <button type="submit" formaction="{% url 'gameplay:mark_messages_read' %}" class="btn-secondary">标记已读</button>
+                <button type="submit" formaction="{% url 'gameplay:delete_messages' %}" class="btn-danger">删除已选</button>
+            </div>
+        </form>
+
+        {% if page_obj.paginator.num_pages > 1 %}
+        <nav class="pagination">
+            {% if page_obj.has_previous %}
+                <a href="?page=1" class="btn-secondary btn-sm">&laquo; 首页</a>
+                <a href="?page={{ page_obj.previous_page_number }}" class="btn-secondary btn-sm">上一页</a>
+            {% endif %}
+            <span class="page-info">第 {{ page_obj.number }} / {{ page_obj.paginator.num_pages }} 页</span>
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}" class="btn-secondary btn-sm">下一页</a>
+                <a href="?page={{ page_obj.paginator.num_pages }}" class="btn-secondary btn-sm">末页 &raquo;</a>
+            {% endif %}
+        </nav>
+        {% endif %}
+    </section>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// 一键清空确认
+document.getElementById('delete-all-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const confirmed = await gameDialog.danger('确认清空所有消息？', { title: '清空消息' });
+    if (confirmed) e.target.submit();
+});
+
+function claimAttachment(messageId, url) {
+    // Create a temporary form to submit the claim request
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = url;
+
+    // Add CSRF token
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrfmiddlewaretoken';
+    csrfInput.value = csrfToken;
+    form.appendChild(csrfInput);
+
+    // Submit the form
+    document.body.appendChild(form);
+    form.submit();
+}
+
+/**
+ * 消息点击拦截功能
+ *
+ * 当用户点击未读消息时，先发送AJAX请求标记为已读，
+ * 然后同步更新页面上的未读消息计数，最后跳转到消息详情页。
+ *
+ * 功能特性：
+ * - 已读消息：直接跳转，不额外处理
+ * - 修饰键点击（Ctrl/Cmd/Shift等）：保持浏览器默认行为（新标签页等）
+ * - 超时保护：4秒超时后自动跳转，避免阻塞用户
+ * - 错误降级：请求失败时自动跳转，用户体验不受影响
+ * - 防重复处理：通过标志位防止重复点击
+ */
+(function initMessageClickHandler() {
+    // 获取DOM元素
+    const unreadCountElement = document.getElementById('unread-count');
+    const csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
+    const csrfToken = csrfInput ? csrfInput.value : '';
+    const messageLinks = document.querySelectorAll('.js-message-link');
+
+    if (!messageLinks.length) {
+        return; // 没有消息链接，无需初始化
+    }
+
+    /**
+     * 获取当前未读消息数
+     * @returns {number} 未读消息数
+     */
+    function getCurrentUnreadCount() {
+        if (!unreadCountElement) return 0;
+        const dataValue = unreadCountElement.dataset.unread;
+        const textValue = unreadCountElement.textContent.trim();
+        const value = dataValue || textValue || '0';
+        const parsed = parseInt(value, 10);
+        return isNaN(parsed) ? 0 : Math.max(0, parsed);
+    }
+
+    /**
+     * 更新未读消息计数显示
+     * @param {number} newCount - 新的未读消息数
+     */
+    function updateUnreadCount(newCount) {
+        if (!unreadCountElement) return;
+        const safeCount = Math.max(0, parseInt(newCount, 10) || 0);
+        unreadCountElement.dataset.unread = safeCount;
+        unreadCountElement.textContent = safeCount;
+    }
+
+    /**
+     * 标记消息卡片为已读（视觉效果）
+     * @param {HTMLElement} link - 消息链接元素
+     */
+    function markMessageCardAsRead(link) {
+        // 更新链接的data属性
+        link.dataset.isRead = 'true';
+
+        // 移除消息卡片的未读样式
+        const messageCard = link.closest('.message-card');
+        if (messageCard) {
+            messageCard.classList.remove('unread');
+        }
+
+        // 移除"未读"标记点
+        const statusDot = link.parentElement?.querySelector('.message-status-dot');
+        if (statusDot) {
+            statusDot.remove();
+        }
+    }
+
+    /**
+     * 检查是否应该绕过拦截（保持浏览器默认行为）
+     * @param {MouseEvent} event - 点击事件对象
+     * @returns {boolean} 是否应该绕过拦截
+     */
+    function shouldBypassInterception(event) {
+        return (
+            event.defaultPrevented ||     // 已被其他处理器阻止
+            event.button !== 0 ||         // 不是左键点击
+            event.metaKey ||              // Mac Cmd键
+            event.ctrlKey ||              // Ctrl键（新标签页）
+            event.shiftKey ||             // Shift键（新窗口）
+            event.altKey                  // Alt键
+        );
+    }
+
+    /**
+     * 标记消息为已读并更新计数
+     * @param {string} messageUrl - 消息详情URL
+     * @param {AbortSignal} signal - 用于取消请求的信号
+     * @returns {Promise<Object>} 包含未读计数的响应数据
+     */
+    function markMessageAsReadAsync(messageUrl, signal) {
+        return fetch(messageUrl, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': csrfToken,
+            },
+            credentials: 'same-origin',
+            signal: signal, // 传递abort信号
+        }).then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return response.json();
+        });
+    }
+
+    // 为每个消息链接添加点击事件监听器
+    messageLinks.forEach(link => {
+        link.addEventListener('click', function handleMessageClick(event) {
+            // 检查是否应该绕过拦截
+            if (shouldBypassInterception(event)) {
+                return; // 保持浏览器默认行为
+            }
+
+            // 防止重复处理
+            if (link.dataset.processing === 'true') {
+                event.preventDefault();
+                return;
+            }
+
+            // 检查消息是否已读
+            const isAlreadyRead = link.dataset.isRead === 'true';
+            if (isAlreadyRead) {
+                return; // 已读消息直接跳转，不需要额外处理
+            }
+
+            // 阻止默认跳转行为
+            event.preventDefault();
+
+            // 标记为处理中，防止重复点击
+            link.dataset.processing = 'true';
+
+            const targetUrl = link.getAttribute('href');
+
+            // 创建AbortController用于超时控制（4秒后自动中止请求）
+            const controller = new AbortController();
+            const timeoutMs = 4000;
+
+            const timeoutId = setTimeout(() => {
+                controller.abort(); // 中止请求
+            }, timeoutMs);
+
+            // 执行AJAX请求标记消息为已读
+            markMessageAsReadAsync(targetUrl, controller.signal)
+                .then(data => {
+                    // 请求成功，更新未读计数
+                    if (data && typeof data.unread_count === 'number') {
+                        // 使用服务器返回的精确计数
+                        updateUnreadCount(data.unread_count);
+                    } else {
+                        // 降级方案：手动减一
+                        const currentCount = getCurrentUnreadCount();
+                        updateUnreadCount(currentCount - 1);
+                    }
+                })
+                .catch(error => {
+                    // 请求失败或超时，仍然乐观地更新计数
+                    // 用户跳转到消息详情页后，服务器会标记为已读，下次刷新时计数会正确
+                    const currentCount = getCurrentUnreadCount();
+                    updateUnreadCount(currentCount - 1);
+
+                    if (error.name === 'AbortError') {
+                        console.warn('Mark message as read timed out:', error.message);
+                    } else {
+                        console.warn('Mark message as read failed:', error.message);
+                    }
+                })
+                .finally(() => {
+                    // 清理超时定时器
+                    clearTimeout(timeoutId);
+
+                    // 无论成功或失败，都标记消息卡片为已读（视觉效果）
+                    markMessageCardAsRead(link);
+
+                    // 跳转到消息详情页
+                    window.location.href = targetUrl;
+                });
+        });
+    });
+})();
+</script>
+{% endblock %}

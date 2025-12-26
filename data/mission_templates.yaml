@@ -1,0 +1,430 @@
+# ============================================================
+# 任务模板配置文件
+# ============================================================
+# 本文件用于配置游戏中的任务（副本），包括敌方阵容、难度、掉落奖励等
+#
+# 配置字段说明：
+# ============================================================
+
+# missions: 任务列表
+#   每个任务包含以下字段：
+#
+# 【基础信息】
+#   - key: 任务唯一标识符（必填，字符串）
+#   - name: 任务显示名称（必填，字符串）
+#   - description: 任务描述文本（可选，字符串）
+#   - battle_type: 战斗类型（可选，默认"task"）
+#   - is_defense: 防守任务（可选，默认false，敌方来袭）
+#   - daily_limit: 每日挑战次数限制（可选，默认3次，整数）
+#   - base_travel_time: 往返基础耗时，单位：秒（可选，默认1200秒=20分钟，整数）
+#
+# 【敌方阵容配置】
+#   - enemy_guests: 敌方门客列表（可选，支持两种格式）
+#       * 格式1（字符串）：直接填入门客模板key（向后兼容）
+#         示例：
+#           enemy_guests:
+#             - special_hero_dugu_qiubai
+#             - special_hero_dongfang_bubai
+#
+#       * 格式2（对象）：可为每个门客单独配置技能
+#         示例：
+#           enemy_guests:
+#             - key: special_hero_sao_di_seng
+#               skills:               # 单独配置此门客的技能
+#                 - dragon_roar
+#             - key: special_hero_dugu_qiubai
+#               skills:
+#                 - stratagem_burst
+#             - special_hero_dongfang_bubai  # 不配置skills则使用模板默认技能
+#
+#       * 最多3个门客（由 MAX_SQUAD 常量决定）
+#       * 不填则无敌方门客
+#       * 技能优先级：单独配置 > enemy_technology.guest_skills > 模板初始技能
+#
+#   - enemy_troops: 敌方护院（小兵）配置（可选，字典）
+#       * 格式：{兵种key: 数量}
+#       * 可用兵种：dao_ke, dao_jie, dao_sheng (刀系)
+#                   qiang_bing, qiang_jiang, qiang_shuai (枪系)
+#                   jian_shi, jian_hao, jian_sheng (剑系)
+#                   quan_tu, quan_shi, quan_zong (拳系)
+#                   gong_shou, archer, gong_sheng (弓系)
+#       * 示例：dao_ke: 500 表示 500 个刀客
+#
+# 【敌方强度配置】
+#   - enemy_technology: 敌方科技和加成配置（可选，字典）
+#       * 该配置仅影响敌方，不影响玩家
+#
+#       【护院（小兵）科技配置】
+#       - level: 统一科技等级（0-10，整数）
+#           * 0级：无科技加成
+#           * 每级：+10% 攻防血敏 + 特殊效果
+#           * 10级：+100% 攻防血敏 + 满级特殊效果
+#           * 特殊效果包括：
+#             - 刀系：双倍打击几率（狂狼必杀）
+#             - 枪系：反击几率（反戈一击）
+#             - 剑系：伤害反弹（护身剑罡）、先攻伤害（驭剑之术）
+#             - 拳系：远程防御（万宗归流）、战斗回血（五气朝元）
+#             - 弓系：额外先攻伤害（凤舞九天）、近战加成（短刃杀法）
+#
+#       - levels: 精细化科技配置（可选，字典）
+#           * 格式：{科技key: 等级}
+#           * 用于单独调整某些科技的等级
+#           * 会覆盖 level 的统一配置
+#           * 示例：dao_attack: 8  # 刀系攻击科技8级
+#
+#       【门客强度配置】
+#       - guest_level: 敌方门客等级（1-100，整数，可选，默认50）
+#           * 仅影响敌方门客，不影响玩家门客
+#           * 等级影响门客的基础属性和生命值
+#           * 70级以上门客带兵上限为250（普通为200）
+#           * 推荐配置：
+#             - 新手任务：20-40级
+#             - 日常任务：40-60级
+#             - 主线任务：60-75级
+#             - 精英任务：75-90级
+#             - 噩梦副本：90-100级
+#
+#       - guest_bonus: 敌方门客属性加成（0.0-1.0，浮点数，可选）
+#           * 仅影响敌方门客，不影响玩家门客
+#           * 表示百分比加成，如 0.3 = +30%
+#           * 应用于：攻击、防御、生命（100%）、敏捷（50%）
+#           * 推荐配置：
+#             - 简单任务：0.0 - 0.1 (无加成或+10%)
+#             - 普通任务：0.1 - 0.2 (+10% - +20%)
+#             - 困难任务：0.2 - 0.4 (+20% - +40%)
+#             - 噩梦副本：0.5 - 1.0 (+50% - +100%)
+#
+#       - guest_skills: 敌方门客临时技能（字符串数组，可选）
+#           * ⚠️ 重要：会覆盖门客模板中定义的初始技能
+#           * 为所有敌方门客统一赋予指定技能
+#           * 可用于：
+#             - 为没有技能的门客临时赋予技能
+#             - 统一所有BOSS的技能配置
+#             - 创造特殊的战斗玩法
+#           * 示例：
+#             guest_skills:
+#               - dragon_roar      # 龙吟破阵（对3个敌人造成伤害）
+#               - stratagem_burst  # 奇策突袭（对1个敌人造成伤害并眩晕）
+#           * 可用技能列表（定义在 guest_skills.yaml）：
+#             - dragon_roar: 龙吟破阵 - 威力260, 对3个敌人
+#             - stratagem_burst: 奇策突袭 - 威力220, 对1个敌人, 可眩晕
+#           * 注意：如果不配置此字段，门客将使用模板中的初始技能
+#
+# 【掉落奖励配置】
+#   - drop_table: 固定掉落或概率掉落（可选，字典）
+#       * 格式：{物品key: 数量/概率/配置}
+#       * 数量为整数：表示固定掉落
+#         示例：silver: 10000  # 固定掉落 10000 银两
+#       * 数量为小数（0.0-1.0）：表示概率掉落
+#         示例：book_dragon_roar: 0.5  # 50%概率掉落技能书
+#         示例：equip_tiejian: 0.1  # 10%概率掉落铁剑
+#       * 字典格式：{chance: 概率, count: 数量} 支持概率+数量组合
+#         示例：experience_pineapple: {chance: 0.3, count: 5}
+#       * 可用物品类型：
+#         - 资源：silver (银两)
+#         - 道具：experience_peach (经验桃), buxuedan (补血丹), fangdajing (放大镜)
+#         - 技能书：book_dragon_roar (龙吟), book_phoenix_dance (凤舞) 等
+#         - 装备：equip_caomao (草帽), equip_buyi (布衣), equip_tiejian (铁剑) 等
+#
+# ============================================================
+# 配置示例
+# ============================================================
+
+missions:
+  # ========================================
+  # 示例1：高难度任务 - 华山论剑
+  # ========================================
+  - key: huashan_lunjian
+    name: 华山论剑
+    description: 江湖豪杰齐聚华山，以武会友。击败对手可获重赏。
+    battle_type: task1
+
+    # 敌方门客：3个传说级高手
+    enemy_guests:
+      - special_hero_sao_di_seng      # 扫地僧
+      - special_hero_dugu_qiubai      # 独孤求败
+      - special_hero_dongfang_bubai   # 东方不败
+
+    # 敌方护院：1000 弓箭手
+    enemy_troops:
+      arrow_god: 2000
+
+    # 敌方强度配置
+    enemy_technology:
+      # 护院科技等级
+      level: 10              # 6级科技 = 护院攻防血敏 +60%
+
+      # 门客强度配置
+      guest_level: 100       # 80级门客（高等级，属性强）
+      guest_bonus: 0.1      # +30%属性加成（使敌方门客更强）
+
+    # 掉落奖励
+    drop_table:
+      silver: 20000                   # 固定掉落 20000 银两
+      book_dragon_roar: 0.5           # 50% 概率掉落龙吟技能书
+      experience_peach: 10            # 固定掉落 10 个经验桃
+      equip_caomao: 10                # 固定掉落 10 个草帽
+      equip_buyi: 10                  # 固定掉落 10 件布衣
+      equip_caoxie: 10                # 固定掉落 10 双草鞋
+      equip_tiejian: 10               # 固定掉落 10 把铁剑
+      equip_zaohongma: 10             # 固定掉落 10 匹枣红马
+      equip_zhuyuye: 10               # 固定掉落 10 个竹叶
+      equip_taotieding: 10            # 固定掉落 10 个饕餮鼎
+      buxuedan: 10                    # 固定掉落 10 个补血丹
+      fangdajing: 100                 # 固定掉落 100 个放大镜
+
+    # 其他配置
+    base_travel_time: 20    # 往返耗时 60 秒（1分钟）
+    daily_limit: 99         # 每日可挑战 99 次
+
+
+  # ========================================
+  # 测试任务：临时技能覆盖测试
+  # ========================================
+  - key: test_temporary_skills
+    name: 临时技能测试
+    description: 测试任务中的临时技能覆盖功能，所有BOSS使用统一技能。
+    battle_type: task
+
+    # 敌方门客：2个高手
+    enemy_guests:
+      - special_hero_dugu_qiubai      # 独孤求败（原有技能）
+      - base_black_civil              # 黑阶学士（无技能）
+
+    # 敌方护院：少量刀客
+    enemy_troops:
+      dao_ke: 300
+
+    # 敌方强度配置（包含临时技能）
+    enemy_technology:
+      level: 3               # 3级科技
+      guest_level: 50        # 50级门客
+      guest_bonus: 0.1       # +10%属性加成
+      # 临时技能：为所有敌方门客统一赋予以下技能（会覆盖原有技能）
+      guest_skills:
+        - dragon_roar        # 龙吟破阵
+        - stratagem_burst    # 奇策突袭
+
+    # 掉落奖励
+    drop_table:
+      silver: 5000           # 5000 银两
+      experience_peach: 5    # 5 个经验桃
+
+    base_travel_time: 300    # 5 分钟
+    daily_limit: 10          # 每日 10 次
+
+
+  # ========================================
+  # 防守任务：瓦岗寨的逆袭
+  # ========================================
+  - key: wagangzhai_nixi
+    name: 瓦岗寨的逆袭
+    description: >
+      在上一次广大庄园主联手扫荡瓦岗寨时，正值瓦岗五虎出门执行任务，翟让和程咬金输的并不服气，
+      为了证明瓦岗寨的实力，翟让率领瓦岗五虎"秦叔宝"、"单雄信"、"王伯当"、"罗成"、"程咬金"
+      携山寨喽啰兵600人亲自上各庄园寻衅……这一次的战场变成了您的庄园，请加强防御设施，
+      让您的门客和护院准备好迎接战斗洗礼。
+    battle_type: task1
+    is_defense: true
+
+    enemy_guests:
+      - key: hero_zhai_rang
+        skills:
+          - tangseng_sermon
+      - key: hero_qin_shubao
+        skills:
+          - brahma_true_fire
+      - hero_dan_xiongxin
+      - hero_wang_bodang
+      - hero_luo_cheng
+      - hero_cheng_yaojin
+      
+    enemy_technology:
+      level: 3               # 3级科技
+      guest_level: 50        # 50级门客
+      guest_bonus: 0.1       # +10%属性加成
+
+    enemy_troops:
+      arrow_god: 200
+      quan_sheng: 200
+      qiang_wang: 200
+
+    drop_table:
+      silver: 40000
+      book_ice_curse: 0.2
+      experience_pineapple:
+        chance: 0.3
+        count: 5
+      equip_feiyunzui: 0.1
+
+    base_travel_time: 20
+    daily_limit: 99
+
+
+  # ========================================
+  # 示例2：简单新手任务（已注释，可取消注释使用）
+  # ========================================
+  # - key: beginner_trial
+  #   name: 新手试炼
+  #   description: 初入江湖，小试身手。
+  #   battle_type: task
+  #
+  #   # 敌方门客：1个普通守卫
+  #   enemy_guests:
+  #     - template_guard_1
+  #
+  #   # 敌方护院：300 刀客
+  #   enemy_troops:
+  #     dao_ke: 300
+  #
+  #   # 敌方强度配置（低难度）
+  #   enemy_technology:
+  #     level: 0              # 无科技加成
+  #     guest_level: 30       # 30级门客
+  #     guest_bonus: 0.0      # 无属性加成
+  #
+  #   # 掉落奖励（少量）
+  #   drop_table:
+  #     silver: 1000          # 1000 银两
+  #     experience_peach: 1   # 1 个经验桃
+  #
+  #   base_travel_time: 300   # 5 分钟
+  #   daily_limit: 10         # 每日 10 次
+
+
+  # ========================================
+  # 示例3：普通日常任务（已注释，可取消注释使用）
+  # ========================================
+  # - key: daily_bandit_hunt
+  #   name: 剿匪行动
+  #   description: 山寨土匪作乱，需要前去剿灭。
+  #   battle_type: task
+  #
+  #   # 敌方门客：1个土匪头目
+  #   enemy_guests:
+  #     - bandit_leader
+  #
+  #   # 敌方护院：混合兵种
+  #   enemy_troops:
+  #     dao_jie: 400          # 400 刀杰
+  #     qiang_bing: 300       # 300 枪兵
+  #
+  #   # 敌方强度配置（中等难度）
+  #   enemy_technology:
+  #     level: 4              # 4级科技 = +40%
+  #     guest_level: 50       # 50级门客
+  #     guest_bonus: 0.15     # +15%属性加成
+  #
+  #   # 掉落奖励
+  #   drop_table:
+  #     silver: 5000          # 5000 银两
+  #     experience_peach: 3   # 3 个经验桃
+  #     equip_tiejian: 0.2    # 20% 概率掉落铁剑
+  #
+  #   base_travel_time: 600   # 10 分钟
+  #   daily_limit: 5          # 每日 5 次
+
+
+  # ========================================
+  # 示例4：困难精英任务（已注释，可取消注释使用）
+  # ========================================
+  # - key: elite_boss_fight
+  #   name: 武林盟主挑战
+  #   description: 挑战武林盟主，证明自己的实力。
+  #   battle_type: task1
+  #
+  #   # 敌方门客：3个精英高手
+  #   enemy_guests:
+  #     - elite_master
+  #     - elite_guard_left
+  #     - elite_guard_right
+  #
+  #   # 敌方护院：强力混合部队
+  #   enemy_troops:
+  #     jian_hao: 600         # 600 剑豪
+  #     gong_shou: 400        # 400 弓手
+  #
+  #   # 敌方强度配置（高难度）
+  #   enemy_technology:
+  #     level: 8              # 8级科技 = +80%
+  #     guest_level: 85       # 85级门客
+  #     guest_bonus: 0.4      # +40%属性加成
+  #
+  #     # 精细化科技配置（可选）
+  #     levels:
+  #       jian_attack: 10     # 剑系攻击满级
+  #       jian_preempt: 10    # 剑系先攻满级
+  #       gong_extra_range: 9 # 弓系远程9级
+  #
+  #   # 掉落奖励（丰厚）
+  #   drop_table:
+  #     silver: 30000         # 30000 银两
+  #     book_dragon_roar: 0.8 # 80% 概率掉落龙吟
+  #     experience_peach: 20  # 20 个经验桃
+  #     equip_zaohongma: 0.5  # 50% 概率掉落枣红马
+  #     buxuedan: 20          # 20 个补血丹
+  #
+  #   base_travel_time: 120   # 2 分钟
+  #   daily_limit: 3          # 每日 3 次
+
+
+  # ========================================
+  # 示例5：噩梦副本（已注释，可取消注释使用）
+  # ========================================
+  # - key: nightmare_demon_lord
+  #   name: 魔王降临
+  #   description: 魔王现世，武林危在旦夕！集结最强战力前去讨伐！
+  #   battle_type: task1
+  #
+  #   # 敌方门客：魔王 + 2个暗黑守卫
+  #   enemy_guests:
+  #     - demon_lord
+  #     - dark_guardian_1
+  #     - dark_guardian_2
+  #
+  #   # 敌方护院：顶级部队
+  #   enemy_troops:
+  #     quan_zong: 1000       # 1000 拳宗
+  #     jian_sheng: 800       # 800 剑圣
+  #     gong_sheng: 600       # 600 弓圣
+  #
+  #   # 敌方强度配置（噩梦难度）
+  #   enemy_technology:
+  #     level: 10             # 满级科技 = +100%
+  #     guest_level: 100      # 满级门客
+  #     guest_bonus: 1.0      # +100%属性加成（双倍！）
+  #
+  #   # 掉落奖励（顶级）
+  #   drop_table:
+  #     silver: 100000        # 100000 银两
+  #     book_dragon_roar: 1.0 # 必掉龙吟技能书
+  #     book_phoenix_dance: 0.5  # 50% 概率掉落凤舞
+  #     experience_peach: 50  # 50 个经验桃
+  #     equip_taotieding: 1.0 # 必掉饕餮鼎
+  #     buxuedan: 50          # 50 个补血丹
+  #     fangdajing: 500       # 500 个放大镜
+  #
+  #   base_travel_time: 180   # 3 分钟
+  #   daily_limit: 1          # 每日仅 1 次
+
+
+# ============================================================
+# 注意事项
+# ============================================================
+# 1. 修改此文件后，需要运行命令重新加载：
+#    python manage.py load_mission_templates
+#
+# 2. 门客模板的 key 必须在数据库中存在（GuestTemplate）
+#
+# 3. 兵种的 key 必须在 troop_templates.yaml 中定义
+#
+# 4. 物品的 key 必须在 item_templates.yaml 中定义
+#
+# 5. 科技等级配置仅影响敌方，不会影响玩家
+#
+# 6. 门客等级和属性加成配置仅影响敌方门客，不会影响玩家门客
+#
+# 7. 掉落概率为 0.0-1.0 之间的小数，1.0 表示必定掉落
+#
+# 8. 建议先在测试服调试任务难度，再发布到正式服
+# ============================================================

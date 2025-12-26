@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+
+{% block title %}声望排行榜{% endblock %}
+
+{% block content %}
+<section class="dashboard">
+    <div class="section-header">
+        <div>
+            <h1>声望排行榜</h1>
+            <p class="caption">
+                我的声望：<strong>{{ prestige_info.prestige }}</strong>
+                {% if player_rank %}
+                    | 当前排名：<strong>第 {{ player_rank }} 名</strong>
+                {% endif %}
+                | 共 {{ total_players }} 人上榜
+            </p>
+        </div>
+        <a class="btn-secondary" href="{% url 'gameplay:ranking' %}">刷新</a>
+    </div>
+
+    <section class="card">
+        <h2>声望进度</h2>
+        <div class="prestige-progress">
+            <p>累计花费银两：{{ prestige_info.silver_spent }}</p>
+            <div class="progress-bar-container">
+                <div class="progress-bar" style="width: {{ prestige_info.progress|divisibleby:10 }}%"></div>
+            </div>
+            <p class="progress-text">下一点声望进度：{{ prestige_info.progress }} / {{ prestige_info.threshold }}</p>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2>排行榜</h2>
+        {% if ranking %}
+        <table class="ranking-table">
+            <thead>
+                <tr>
+                    <th class="rank-col">排名</th>
+                    <th class="name-col">庄园</th>
+                    <th class="prestige-col">声望</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in ranking %}
+                <tr class="{% if entry.manor_id == manor.id %}current-player{% endif %} {% if entry.rank <= 3 %}top-rank top-{{ entry.rank }}{% endif %}">
+                    <td class="rank-col">
+                        {% if entry.rank == 1 %}
+                            <span class="rank-badge gold">1</span>
+                        {% elif entry.rank == 2 %}
+                            <span class="rank-badge silver">2</span>
+                        {% elif entry.rank == 3 %}
+                            <span class="rank-badge bronze">3</span>
+                        {% else %}
+                            {{ entry.rank }}
+                        {% endif %}
+                    </td>
+                    <td class="name-col">
+                        {{ entry.manor_name }}
+                        {% if entry.manor_id == manor.id %}<span class="self-badge">我</span>{% endif %}
+                    </td>
+                    <td class="prestige-col">{{ entry.prestige }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if not player_in_ranking and player_rank %}
+        <div class="player-rank-footer">
+            <p>...</p>
+            <table class="ranking-table">
+                <tbody>
+                    <tr class="current-player">
+                        <td class="rank-col">{{ player_rank }}</td>
+                        <td class="name-col">{{ manor.display_name }} <span class="self-badge">我</span></td>
+                        <td class="prestige-col">{{ prestige_info.prestige }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+        {% else %}
+        <p class="empty-hint">暂无玩家上榜，成为第一个获得声望的玩家吧！</p>
+        {% endif %}
+    </section>
+</section>
+
+<style>
+.prestige-progress {
+    padding: 1rem;
+    background: #f9fafb;
+    border-radius: 8px;
+}
+
+.progress-bar-container {
+    width: 100%;
+    height: 20px;
+    background: #e5e7eb;
+    border-radius: 10px;
+    margin: 0.75rem 0;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+    border-radius: 10px;
+    transition: width 0.3s ease;
+    min-width: 2%;
+}
+
+.progress-text {
+    font-size: 0.875rem;
+    color: #6b7280;
+    text-align: center;
+}
+
+.ranking-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+
+.ranking-table th,
+.ranking-table td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.ranking-table th {
+    background: #f9fafb;
+    font-weight: 600;
+    color: #374151;
+    font-size: 0.875rem;
+}
+
+.rank-col {
+    width: 80px;
+    text-align: center !important;
+}
+
+.prestige-col {
+    width: 100px;
+    text-align: right !important;
+    font-weight: 600;
+    color: #8b5cf6;
+}
+
+.name-col {
+    font-weight: 500;
+}
+
+.current-player {
+    background: #eff6ff !important;
+}
+
+.current-player td {
+    border-color: #bfdbfe;
+}
+
+.top-rank {
+    font-weight: 600;
+}
+
+.rank-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    font-weight: bold;
+    font-size: 0.875rem;
+}
+
+.rank-badge.gold {
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    color: white;
+    box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
+}
+
+.rank-badge.silver {
+    background: linear-gradient(135deg, #9ca3af, #6b7280);
+    color: white;
+    box-shadow: 0 2px 4px rgba(107, 114, 128, 0.3);
+}
+
+.rank-badge.bronze {
+    background: linear-gradient(135deg, #d97706, #b45309);
+    color: white;
+    box-shadow: 0 2px 4px rgba(180, 83, 9, 0.3);
+}
+
+.self-badge {
+    display: inline-block;
+    padding: 0.125rem 0.5rem;
+    background: #3b82f6;
+    color: white;
+    font-size: 0.75rem;
+    border-radius: 4px;
+    margin-left: 0.5rem;
+}
+
+.player-rank-footer {
+    margin-top: 1rem;
+    text-align: center;
+    color: #9ca3af;
+}
+
+.player-rank-footer p {
+    margin-bottom: 0.5rem;
+}
+
+.empty-hint {
+    text-align: center;
+    color: #9ca3af;
+    padding: 2rem;
+}
+</style>
+{% endblock %}

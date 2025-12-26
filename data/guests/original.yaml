@@ -1,0 +1,33 @@
+# 原创门客
+
+heroes:
+  green:
+  - key: pubayi_green
+    name: 蒲巴乙
+    archetype: military
+    flavor: 蒲巴乙是一个希望参加“村有好男儿”比赛的胡人青年，他是一个混血儿（胡汉），长得十分帅气，在比赛前练歌时被抓到军营里强征入伍。随军出征中得知胡人要入侵中原后，不忍中原生灵涂炭，因此逃离军营，把胡人即将入侵的消息带到了中原。
+    default_gender: male
+    default_morality: 60
+    recruitable: false
+    custom_stats:
+      force: 50
+      intellect: 19
+      defense: 48
+      agility: 40
+      luck: 45
+    avatar: pubayi.png
+  blue:
+  - key: pubayi_blue
+    name: 蒲巴乙
+    archetype: civil
+    flavor: 蒲巴乙是一个希望参加“村有好男儿”比赛的胡人青年，他是一个混血儿（胡汉），长得十分帅气，在比赛前练歌时被抓到军营里强征入伍。随军出征中得知胡人要入侵中原后，不忍中原生灵涂炭，因此逃离军营，把胡人即将入侵的消息带到了中原。
+    default_gender: male
+    default_morality: 70
+    recruitable: false
+    custom_stats:
+      force: 58
+      intellect: 21
+      defense: 66
+      agility: 49
+      luck: 55
+    avatar: pubayi.png

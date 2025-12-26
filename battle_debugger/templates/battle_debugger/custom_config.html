@@ -1,0 +1,738 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}自定义配置 - 战斗调试器{% endblock %}
+
+{% block extra_head %}
+<style>
+/* 自定义配置页面样式 */
+.debugger-container {
+    padding: 1.5rem;
+}
+
+.debugger-header {
+    margin-bottom: 1.5rem;
+}
+
+.debugger-header h1 {
+    font-size: 1.8rem;
+    color: var(--text-primary);
+    border-bottom: 3px double var(--border-primary);
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+/* 面包屑导航 */
+.breadcrumb {
+    display: flex;
+    gap: 0.5rem;
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1.5rem 0;
+    font-size: 0.9rem;
+}
+
+.breadcrumb li {
+    color: var(--text-muted);
+}
+
+.breadcrumb li a {
+    color: var(--accent-gold);
+    text-decoration: none;
+}
+
+.breadcrumb li a:hover {
+    text-decoration: underline;
+}
+
+.breadcrumb li::after {
+    content: "›";
+    margin-left: 0.5rem;
+    color: var(--text-muted);
+}
+
+.breadcrumb li:last-child::after {
+    content: "";
+}
+
+/* 配置区块 */
+.config-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+@media (max-width: 992px) {
+    .config-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.config-section {
+    background: var(--bg-panel);
+    border: 2px solid var(--border-primary);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.config-section.attacker {
+    border-color: var(--accent-green);
+}
+
+.config-section.defender {
+    border-color: var(--accent-gold);
+}
+
+.config-section-header {
+    padding: 0.8rem 1rem;
+    font-weight: 700;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.config-section.attacker .config-section-header {
+    background: linear-gradient(135deg, #059669, #047857);
+    color: #FFF8E7;
+}
+
+.config-section.defender .config-section-header {
+    background: linear-gradient(135deg, var(--accent-gold), #B8860B);
+    color: var(--text-primary);
+}
+
+.config-section-body {
+    padding: 1rem;
+}
+
+/* 子部分标题 */
+.subsection {
+    margin-bottom: 1.5rem;
+}
+
+.subsection-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.8rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.subsection-header h4 {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--text-primary);
+}
+
+/* 门客卡片 */
+.unit-card {
+    background: var(--bg-card);
+    border: 2px solid var(--border-light);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+.unit-card-header {
+    background: linear-gradient(180deg, #D4A574 0%, #C9985E 100%);
+    padding: 0.5rem 0.8rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.unit-card-header strong {
+    color: var(--text-primary);
+    font-size: 0.95rem;
+}
+
+.unit-card-body {
+    padding: 1rem;
+}
+
+.btn-remove {
+    background: linear-gradient(180deg, #8B2500 0%, #6B1D00 100%);
+    border: 1px solid #5A1800;
+    color: #FFF8E7;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.btn-remove:hover {
+    background: linear-gradient(180deg, #7A2000 0%, #5A1600 100%);
+}
+
+/* 表单网格 */
+.form-row {
+    display: grid;
+    gap: 1rem;
+    margin-bottom: 0.8rem;
+}
+
+.form-row.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.form-row.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.form-row.cols-5 { grid-template-columns: repeat(5, 1fr); }
+
+@media (max-width: 768px) {
+    .form-row.cols-3, .form-row.cols-5 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-group label {
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 0.3rem;
+    font-size: 0.9rem;
+}
+
+.form-group input,
+.form-group select {
+    border: 2px solid var(--border-primary);
+    border-radius: 6px;
+    padding: 0.5rem;
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.9rem;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: var(--accent-gold);
+    box-shadow: 0 0 0 3px rgba(218, 165, 32, 0.2);
+}
+
+/* 复选框样式 */
+.form-check {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.form-check input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+}
+
+.form-check label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+/* 技能选择 */
+.skill-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.skill-badge {
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+    padding: 0.3rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    border: 2px solid var(--border-light);
+    transition: all 0.2s;
+    font-weight: 600;
+}
+
+.skill-badge:hover {
+    border-color: var(--accent-gold);
+}
+
+.skill-badge.selected {
+    background: var(--accent-gold);
+    color: var(--text-primary);
+    border-color: var(--border-decorative);
+}
+
+/* 稀有度标签 */
+.rarity-badge {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.rarity-white { background: #f8f9fa; color: #6c757d; }
+.rarity-green { background: #d4edda; color: #155724; }
+.rarity-blue { background: #d1ecf1; color: #0c5460; }
+.rarity-purple { background: #e2d9f3; color: #5a4b8c; }
+.rarity-orange { background: #ffe5cc; color: #cc5200; }
+.rarity-red { background: #f8d7da; color: #721c24; }
+
+/* 参数配置面板 */
+.params-panel {
+    background: var(--bg-panel);
+    border: 2px solid var(--border-primary);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+}
+
+.params-panel-header {
+    background: linear-gradient(135deg, #8B4513, #6B3410);
+    color: #FFF8E7;
+    padding: 0.8rem 1rem;
+    font-weight: 700;
+    font-size: 1.1rem;
+}
+
+.params-panel-body {
+    padding: 1rem;
+}
+
+.params-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+/* 模拟设置面板 */
+.settings-panel {
+    background: var(--bg-card);
+    border: 2px solid var(--border-light);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    max-width: 400px;
+}
+
+.settings-panel h3 {
+    margin: 0 0 1rem 0;
+    font-size: 1rem;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-light);
+    padding-bottom: 0.5rem;
+}
+
+/* 操作按钮 */
+.action-buttons {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.btn-add {
+    background: linear-gradient(180deg, #059669 0%, #047857 100%);
+    border: 2px solid #046854;
+    color: #FFF8E7;
+    padding: 0.3rem 0.8rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.btn-add:hover {
+    background: linear-gradient(180deg, #047857 0%, #035b46 100%);
+}
+
+.btn-add.warning {
+    background: linear-gradient(180deg, var(--accent-gold) 0%, #B8860B 100%);
+    border-color: var(--border-decorative);
+    color: var(--text-primary);
+}
+
+.btn-add.warning:hover {
+    background: linear-gradient(180deg, #B8860B 0%, #9a7209 100%);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="debugger-container">
+    <div class="debugger-header">
+        <h1>自定义配置</h1>
+    </div>
+
+    <nav>
+        <ol class="breadcrumb">
+            <li><a href="{% url 'battle_debugger:index' %}">调试器</a></li>
+            <li>自定义配置</li>
+        </ol>
+    </nav>
+
+    <form method="post" id="customConfigForm">
+        {% csrf_token %}
+
+        <div class="config-grid">
+            <!-- 攻方配置 -->
+            <div class="config-section attacker">
+                <div class="config-section-header">
+                    <span>⚔️</span> 攻方配置
+                </div>
+                <div class="config-section-body">
+                    <!-- 门客配置 -->
+                    <div class="subsection">
+                        <div class="subsection-header">
+                            <h4>门客</h4>
+                            <button type="button" class="btn-add" onclick="addGuest('attacker')">
+                                + 添加门客
+                            </button>
+                        </div>
+                        <div id="attacker_guests"></div>
+                        <input type="hidden" name="attacker_guest_count" id="attacker_guest_count" value="0">
+                    </div>
+
+                    <!-- 小兵配置 -->
+                    <div class="subsection">
+                        <div class="subsection-header">
+                            <h4>护院</h4>
+                            <button type="button" class="btn-add" onclick="addTroop('attacker')">
+                                + 添加护院
+                            </button>
+                        </div>
+                        <div id="attacker_troops"></div>
+                    </div>
+
+                    <!-- 科技等级 -->
+                    <div class="form-group">
+                        <label>科技等级</label>
+                        <input type="number" name="attacker_tech_level" value="10" min="0" max="10">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 守方配置 -->
+            <div class="config-section defender">
+                <div class="config-section-header">
+                    <span>🛡️</span> 守方配置
+                </div>
+                <div class="config-section-body">
+                    <!-- 门客配置 -->
+                    <div class="subsection">
+                        <div class="subsection-header">
+                            <h4>门客</h4>
+                            <button type="button" class="btn-add warning" onclick="addGuest('defender')">
+                                + 添加门客
+                            </button>
+                        </div>
+                        <div id="defender_guests"></div>
+                        <input type="hidden" name="defender_guest_count" id="defender_guest_count" value="0">
+                    </div>
+
+                    <!-- 小兵配置 -->
+                    <div class="subsection">
+                        <div class="subsection-header">
+                            <h4>护院</h4>
+                            <button type="button" class="btn-add warning" onclick="addTroop('defender')">
+                                + 添加护院
+                            </button>
+                        </div>
+                        <div id="defender_troops"></div>
+                    </div>
+
+                    <!-- 科技等级 -->
+                    <div class="form-group">
+                        <label>科技等级</label>
+                        <input type="number" name="defender_tech_level" value="10" min="0" max="10">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 战斗参数 -->
+        <div class="params-panel">
+            <div class="params-panel-header">
+                📊 战斗参数
+            </div>
+            <div class="params-panel-body">
+                <div class="params-grid">
+                    {% for param in tunable_params %}
+                    <div class="form-group">
+                        <label for="param_{{ param.key }}">{{ param.label }}</label>
+                        <input type="number"
+                               id="param_{{ param.key }}"
+                               name="param_{{ param.key }}"
+                               value="{{ param.default }}"
+                               min="{{ param.min|default:0 }}"
+                               max="{{ param.max|default:100 }}"
+                               step="{{ param.step|default:1 }}">
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 模拟设置 -->
+        <div class="settings-panel">
+            <h3>⚙️ 模拟设置</h3>
+            <div class="form-group" style="margin-bottom: 1rem;">
+                <label for="seed">随机种子（可选）</label>
+                <input type="number" id="seed" name="seed" placeholder="留空则随机">
+            </div>
+            <div class="form-group">
+                <label for="repeat">重复次数</label>
+                <input type="number" id="repeat" name="repeat" value="1" min="1" max="100">
+            </div>
+        </div>
+
+        <!-- 提交按钮 -->
+        <div class="action-buttons">
+            <button type="submit" class="btn-primary">
+                🚀 开始模拟
+            </button>
+            <a href="{% url 'battle_debugger:index' %}" class="btn-secondary">
+                ← 返回
+            </a>
+        </div>
+    </form>
+</div>
+
+<script>
+// 数据缓存
+let guestsData = [];
+let skillsData = [];
+let troopsData = [];
+
+// 加载数据
+async function loadData() {
+    const [guests, skills, troops] = await Promise.all([
+        fetch('{% url "battle_debugger:api_guests" %}').then(r => r.json()),
+        fetch('{% url "battle_debugger:api_skills" %}').then(r => r.json()),
+        fetch('{% url "battle_debugger:api_troops" %}').then(r => r.json()),
+    ]);
+    guestsData = guests;
+    skillsData = skills;
+    troopsData = troops;
+}
+
+// 添加门客
+let guestCounters = { attacker: 0, defender: 0 };
+
+function addGuest(side) {
+    const idx = guestCounters[side]++;
+    const container = document.getElementById(`${side}_guests`);
+
+    const card = document.createElement('div');
+    card.className = 'unit-card';
+    card.id = `${side}_guest_${idx}`;
+    card.innerHTML = `
+        <div class="unit-card-header">
+            <strong>门客 #${idx + 1}</strong>
+            <button type="button" class="btn-remove" onclick="removeGuest('${side}', ${idx})">
+                ✕ 删除
+            </button>
+        </div>
+        <div class="unit-card-body">
+            <div class="form-row cols-3">
+                <div class="form-group" style="grid-column: span 2;">
+                    <label>选择门客</label>
+                    <select name="${side}_guest_${idx}_template" onchange="loadGuestData('${side}', ${idx})" required>
+                        <option value="">-- 选择门客 --</option>
+                        ${guestsData.map(g => `
+                            <option value="${g.key}" data-rarity="${g.rarity}" data-archetype="${g.archetype}"
+                                    data-force="${g.base_force}" data-intellect="${g.base_intellect}"
+                                    data-defense="${g.base_defense}" data-agility="${g.base_agility}"
+                                    data-luck="${g.base_luck}" data-hp="${g.base_hp}">
+                                [${getRarityLabel(g.rarity)}] ${g.name} (${g.archetype === 'civil' ? '文' : '武'})
+                            </option>
+                        `).join('')}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>等级</label>
+                    <input type="number" name="${side}_guest_${idx}_level" value="100" min="1" max="100">
+                </div>
+            </div>
+            <div class="form-check" style="margin-bottom: 0.8rem;">
+                <input type="checkbox" id="${side}_guest_${idx}_use_level_growth" onchange="toggleLevelGrowth('${side}', ${idx})" checked>
+                <label for="${side}_guest_${idx}_use_level_growth">使用等级成长</label>
+            </div>
+            <div class="form-row cols-5" id="${side}_guest_${idx}_attrs_row" style="display: none;">
+                <div class="form-group">
+                    <label>武力</label>
+                    <input type="number" name="${side}_guest_${idx}_force" placeholder="默认" id="${side}_guest_${idx}_force">
+                </div>
+                <div class="form-group">
+                    <label>智力</label>
+                    <input type="number" name="${side}_guest_${idx}_intellect" placeholder="默认" id="${side}_guest_${idx}_intellect">
+                </div>
+                <div class="form-group">
+                    <label>防御</label>
+                    <input type="number" name="${side}_guest_${idx}_defense" placeholder="默认" id="${side}_guest_${idx}_defense">
+                </div>
+                <div class="form-group">
+                    <label>敏捷</label>
+                    <input type="number" name="${side}_guest_${idx}_agility" placeholder="默认" id="${side}_guest_${idx}_agility">
+                </div>
+                <div class="form-group">
+                    <label>幸运</label>
+                    <input type="number" name="${side}_guest_${idx}_luck" placeholder="默认" id="${side}_guest_${idx}_luck">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>技能（点击选择）</label>
+                <div class="skill-badges" id="${side}_guest_${idx}_skills_display">
+                    ${skillsData.map(s => `
+                        <span class="skill-badge" onclick="toggleSkill('${side}', ${idx}, '${s.key}', this)">
+                            ${s.name}
+                        </span>
+                    `).join('')}
+                </div>
+                <input type="hidden" name="${side}_guest_${idx}_skills" id="${side}_guest_${idx}_skills_input">
+            </div>
+        </div>
+    `;
+
+    container.appendChild(card);
+    document.getElementById(`${side}_guest_count`).value = guestCounters[side];
+}
+
+function removeGuest(side, idx) {
+    const card = document.getElementById(`${side}_guest_${idx}`);
+    if (card) card.remove();
+}
+
+function toggleLevelGrowth(side, idx) {
+    const checkbox = document.getElementById(`${side}_guest_${idx}_use_level_growth`);
+    const attrsRow = document.getElementById(`${side}_guest_${idx}_attrs_row`);
+    const attrs = ['force', 'intellect', 'defense', 'agility', 'luck'];
+
+    if (checkbox.checked) {
+        attrsRow.style.display = 'none';
+        attrs.forEach(attr => {
+            document.getElementById(`${side}_guest_${idx}_${attr}`).value = '';
+        });
+    } else {
+        attrsRow.style.display = 'grid';
+        const select = document.querySelector(`select[name="${side}_guest_${idx}_template"]`);
+        const option = select.selectedOptions[0];
+        if (option && option.value) {
+            attrs.forEach(attr => {
+                document.getElementById(`${side}_guest_${idx}_${attr}`).value = option.dataset[attr];
+            });
+        }
+    }
+}
+
+function loadGuestData(side, idx) {
+    const checkbox = document.getElementById(`${side}_guest_${idx}_use_level_growth`);
+
+    if (!checkbox.checked) {
+        const select = document.querySelector(`select[name="${side}_guest_${idx}_template"]`);
+        const option = select.selectedOptions[0];
+        if (!option || !option.value) return;
+
+        document.getElementById(`${side}_guest_${idx}_force`).value = option.dataset.force;
+        document.getElementById(`${side}_guest_${idx}_intellect`).value = option.dataset.intellect;
+        document.getElementById(`${side}_guest_${idx}_defense`).value = option.dataset.defense;
+        document.getElementById(`${side}_guest_${idx}_agility`).value = option.dataset.agility;
+        document.getElementById(`${side}_guest_${idx}_luck`).value = option.dataset.luck;
+    }
+}
+
+function toggleSkill(side, idx, skillKey, element) {
+    element.classList.toggle('selected');
+
+    const input = document.getElementById(`${side}_guest_${idx}_skills_input`);
+    let skills = input.value ? input.value.split(',') : [];
+
+    if (element.classList.contains('selected')) {
+        skills.push(skillKey);
+    } else {
+        skills = skills.filter(s => s !== skillKey);
+    }
+
+    input.value = skills.join(',');
+}
+
+function getRarityLabel(rarity) {
+    const labels = {
+        'white': '白',
+        'green': '绿',
+        'blue': '蓝',
+        'purple': '紫',
+        'orange': '橙',
+        'red': '红'
+    };
+    return labels[rarity] || '?';
+}
+
+// 添加小兵
+function addTroop(side) {
+    const container = document.getElementById(`${side}_troops`);
+
+    const card = document.createElement('div');
+    card.className = 'unit-card';
+    card.innerHTML = `
+        <div class="unit-card-header">
+            <strong>护院</strong>
+            <button type="button" class="btn-remove" onclick="this.parentElement.parentElement.remove()">
+                ✕ 删除
+            </button>
+        </div>
+        <div class="unit-card-body">
+            <div class="form-row cols-2">
+                <div class="form-group">
+                    <label>兵种</label>
+                    <select class="troop-select" data-side="${side}" required>
+                        <option value="">-- 选择兵种 --</option>
+                        ${troopsData.map(t => `
+                            <option value="${t.key}">
+                                ${t.name} (攻:${t.base_attack} 防:${t.base_defense} HP:${t.base_hp})
+                            </option>
+                        `).join('')}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>数量</label>
+                    <input type="number" class="troop-count" min="1" value="100" required>
+                </div>
+            </div>
+        </div>
+    `;
+
+    container.appendChild(card);
+}
+
+// 表单提交前处理小兵数据
+document.getElementById('customConfigForm').addEventListener('submit', function(e) {
+    ['attacker', 'defender'].forEach(side => {
+        const troopSelects = document.querySelectorAll(`#${side}_troops .troop-select`);
+
+        troopSelects.forEach((select, idx) => {
+            const troopType = select.value;
+            if (troopType) {
+                const count = select.closest('.unit-card-body').querySelector('.troop-count').value;
+
+                const typeInput = document.createElement('input');
+                typeInput.type = 'hidden';
+                typeInput.name = `${side}_troop_types`;
+                typeInput.value = troopType;
+                this.appendChild(typeInput);
+
+                const countInput = document.createElement('input');
+                countInput.type = 'hidden';
+                countInput.name = `${side}_troop_${troopType}`;
+                countInput.value = count;
+                this.appendChild(countInput);
+            }
+        });
+    });
+});
+
+// 页面加载时初始化
+document.addEventListener('DOMContentLoaded', loadData);
+</script>
+{% endblock %}

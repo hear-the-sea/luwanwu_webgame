@@ -1,0 +1,396 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ title }} - 战斗调试器{% endblock %}
+
+{% block extra_head %}
+<style>
+/* 预设详情页面样式 */
+.debugger-container {
+    padding: 1.5rem;
+}
+
+.debugger-header {
+    margin-bottom: 1.5rem;
+}
+
+.debugger-header h1 {
+    font-size: 1.8rem;
+    color: var(--text-primary);
+    border-bottom: 3px double var(--border-primary);
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+/* 面包屑导航 */
+.breadcrumb {
+    display: flex;
+    gap: 0.5rem;
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1.5rem 0;
+    font-size: 0.9rem;
+}
+
+.breadcrumb li {
+    color: var(--text-muted);
+}
+
+.breadcrumb li a {
+    color: var(--accent-gold);
+    text-decoration: none;
+}
+
+.breadcrumb li a:hover {
+    text-decoration: underline;
+}
+
+.breadcrumb li::after {
+    content: "›";
+    margin-left: 0.5rem;
+    color: var(--text-muted);
+}
+
+.breadcrumb li:last-child::after {
+    content: "";
+}
+
+/* 描述提示框 */
+.description-box {
+    background: linear-gradient(135deg, #e8f4fd, #d0e8fa);
+    border: 2px solid #3498db;
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    margin-bottom: 1.5rem;
+    color: #2c3e50;
+}
+
+/* 配置网格 */
+.config-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+@media (max-width: 992px) {
+    .config-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* 配置面板 */
+.config-panel {
+    background: var(--bg-panel);
+    border: 2px solid var(--border-primary);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.config-panel.attacker {
+    border-color: var(--accent-green);
+}
+
+.config-panel.defender {
+    border-color: var(--accent-gold);
+}
+
+.config-panel-header {
+    padding: 0.8rem 1rem;
+    font-weight: 700;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.config-panel.attacker .config-panel-header {
+    background: linear-gradient(135deg, #059669, #047857);
+    color: #FFF8E7;
+}
+
+.config-panel.defender .config-panel-header {
+    background: linear-gradient(135deg, var(--accent-gold), #B8860B);
+    color: var(--text-primary);
+}
+
+.config-panel-body {
+    padding: 1rem;
+}
+
+/* 子标题 */
+.subsection-title {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+/* 单位列表 */
+.unit-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1rem 0;
+}
+
+.unit-list li {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    padding: 0.6rem 0.8rem;
+    margin-bottom: 0.5rem;
+}
+
+.unit-list li:last-child {
+    margin-bottom: 0;
+}
+
+.unit-list li strong {
+    color: var(--text-primary);
+}
+
+.unit-list li small {
+    color: var(--text-muted);
+    display: block;
+    margin-top: 0.2rem;
+}
+
+/* 兵种数量 */
+.troop-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.troop-badge {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: #FFF8E7;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+/* 科技信息 */
+.tech-info {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin-top: 0.8rem;
+    padding-top: 0.8rem;
+    border-top: 1px solid var(--border-light);
+}
+
+/* 参数面板 */
+.params-panel {
+    background: var(--bg-panel);
+    border: 2px solid var(--border-primary);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+}
+
+.params-panel-header {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: #FFF8E7;
+    padding: 0.8rem 1rem;
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+.params-panel-body {
+    padding: 1rem;
+}
+
+.params-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.8rem;
+}
+
+.param-item {
+    background: var(--bg-hover);
+    padding: 0.5rem 0.8rem;
+    border-radius: 6px;
+}
+
+.param-item code {
+    color: var(--accent-gold);
+    font-weight: 600;
+}
+
+/* 操作按钮 */
+.action-buttons {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.btn-primary {
+    background: linear-gradient(180deg, #8B4513 0%, #6B3410 100%);
+    border: 2px solid #5A2E0D;
+    color: #FFF8E7;
+    padding: 0.6rem 1.2rem;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    transition: all 0.2s;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(180deg, #7A3B10 0%, #5A2E0D 100%);
+}
+
+.btn-secondary {
+    background: var(--bg-hover);
+    border: 2px solid var(--border-primary);
+    color: var(--text-secondary);
+    padding: 0.6rem 1.2rem;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+    background: var(--bg-panel);
+    color: var(--text-primary);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="debugger-container">
+    <div class="debugger-header">
+        <h1>{{ title }}</h1>
+    </div>
+
+    <nav>
+        <ol class="breadcrumb">
+            <li><a href="{% url 'battle_debugger:index' %}">调试器</a></li>
+            <li>{{ title }}</li>
+        </ol>
+    </nav>
+
+    {% if description %}
+    <div class="description-box">
+        {{ description }}
+    </div>
+    {% endif %}
+
+    <div class="config-grid">
+        <!-- 攻方配置 -->
+        <div class="config-panel attacker">
+            <div class="config-panel-header">
+                <span>⚔️</span> 攻方配置
+            </div>
+            <div class="config-panel-body">
+                {% if config.attacker.guests %}
+                <div class="subsection-title">门客</div>
+                <ul class="unit-list">
+                    {% for guest in config.attacker.guests %}
+                    <li>
+                        <strong>{{ guest.template }}</strong> (Lv{{ guest.level }})
+                        {% if guest.skills %}
+                        <small>技能: {{ guest.skills|join:", " }}</small>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+
+                {% if config.attacker.troops %}
+                <div class="subsection-title">护院</div>
+                <ul class="unit-list">
+                    {% for troop, count in config.attacker.troops.items %}
+                    <li class="troop-item">
+                        <span>{{ troop }}</span>
+                        <span class="troop-badge">{{ count }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+
+                <div class="tech-info">
+                    ⚙️ 科技等级: {{ config.attacker.technology_level }}
+                </div>
+            </div>
+        </div>
+
+        <!-- 守方配置 -->
+        <div class="config-panel defender">
+            <div class="config-panel-header">
+                <span>🛡️</span> 守方配置
+            </div>
+            <div class="config-panel-body">
+                {% if config.defender.guests %}
+                <div class="subsection-title">门客</div>
+                <ul class="unit-list">
+                    {% for guest in config.defender.guests %}
+                    <li>
+                        <strong>{{ guest.template }}</strong> (Lv{{ guest.level }})
+                        {% if guest.skills %}
+                        <small>技能: {{ guest.skills|join:", " }}</small>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+
+                {% if config.defender.troops %}
+                <div class="subsection-title">护院</div>
+                <ul class="unit-list">
+                    {% for troop, count in config.defender.troops.items %}
+                    <li class="troop-item">
+                        <span>{{ troop }}</span>
+                        <span class="troop-badge">{{ count }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+
+                <div class="tech-info">
+                    ⚙️ 科技等级: {{ config.defender.technology_level }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 调优参数 -->
+    {% if config.tunable_params %}
+    <div class="params-panel">
+        <div class="params-panel-header">
+            📊 调优参数
+        </div>
+        <div class="params-panel-body">
+            <div class="params-grid">
+                {% for key, value in config.tunable_params.items %}
+                <div class="param-item">
+                    <code>{{ key }}</code>: <strong>{{ value }}</strong>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 操作按钮 -->
+    <div class="action-buttons">
+        <a href="{% url 'battle_debugger:simulate' %}?preset={{ preset_name }}" class="btn-primary">
+            🚀 使用此配置
+        </a>
+        <a href="{% url 'battle_debugger:index' %}" class="btn-secondary">
+            ← 返回
+        </a>
+    </div>
+</div>
+{% endblock %}

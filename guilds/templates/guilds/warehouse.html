@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}帮会仓库 - {{ guild.name }}{% endblock %}
+
+{% block content %}
+<section class="dashboard">
+    <div class="section-header">
+        <div>
+            <h1>帮会仓库</h1>
+            <p>{{ guild.name }} · 我的贡献度：{{ member.current_contribution|floatformat:0 }}</p>
+        </div>
+        <div class="nav-links">
+            <a href="{% url 'guilds:exchange_logs' %}" class="btn-secondary">兑换记录</a>
+            <a href="{% url 'guilds:detail' guild.id %}" class="btn-secondary">返回帮会</a>
+        </div>
+    </div>
+
+    <section class="card">
+        <h2>可兑换物品</h2>
+        {% if warehouse_items %}
+            <div class="building-grid">
+                {% for item in warehouse_items %}
+                <article class="building-card">
+                    <header>
+                        <div>
+                            <h3>{{ item.item_key }}</h3>
+                            <p class="muted-text">帮会科技每日产出</p>
+                        </div>
+                        <span class="badge">{{ item.quantity }}</span>
+                    </header>
+                    <dl class="guild-dl">
+                        <div>
+                            <dt>库存数量</dt>
+                            <dd>{{ item.quantity }}</dd>
+                        </div>
+                        <div>
+                            <dt>兑换成本</dt>
+                            <dd class="guild-cost-value">{{ item.contribution_cost }} 贡献</dd>
+                        </div>
+                        <div>
+                            <dt>历史产出</dt>
+                            <dd>{{ item.total_produced }}</dd>
+                        </div>
+                        <div>
+                            <dt>历史兑换</dt>
+                            <dd>{{ item.total_exchanged }}</dd>
+                        </div>
+                    </dl>
+                    {% if item.is_usable %}
+                        <button
+                            type="button"
+                            class="btn-primary"
+                            onclick="openExchangeModal('{{ item.item_key }}', {{ item.contribution_cost }}, {{ item.quantity }})"
+                            {% if item.quantity <= 0 %}disabled title="库存不足"{% endif %}
+                        >
+                            兑换
+                        </button>
+                    {% else %}
+                        <button
+                            type="button"
+                            class="btn-secondary"
+                            disabled
+                            title="此物品不可在仓库使用"
+                        >
+                            不可使用
+                        </button>
+                    {% endif %}
+                </article>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="muted-text">仓库暂无物品，请等待帮会科技每日产出</p>
+        {% endif %}
+    </section>
+</section>
+
+<!-- 兑换确认模态框 -->
+<div class="modal-backdrop" id="exchange-modal" aria-hidden="true">
+    <div class="modal">
+        <header class="modal-header">
+            <h3>兑换物品</h3>
+            <button type="button" class="btn-secondary btn-small" onclick="closeExchangeModal()">取消</button>
+        </header>
+        <div class="modal-body">
+            <form method="post" id="exchange-form" action="">
+                {% csrf_token %}
+                <div class="guild-cost-card">
+                    <h4 id="exchange-item-name"></h4>
+                    <p>
+                        <strong>兑换成本：</strong><span id="exchange-cost" class="guild-cost-value"></span> 贡献度
+                    </p>
+                    <p>
+                        <strong>当前拥有：</strong><span class="guild-resource-value resource-blue">{{ member.current_contribution|floatformat:0 }}</span> 贡献度
+                    </p>
+                </div>
+
+                <div class="form-field">
+                    <label for="quantity">兑换数量</label>
+                    <input type="number" id="quantity" name="quantity" min="1" value="1" required>
+                    <small class="muted-text">库存：<span id="exchange-stock"></span></small>
+                </div>
+
+                <div id="exchange-warning" class="guild-warning" style="display: none;">
+                    <p></p>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary" id="exchange-submit">确认兑换</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    const exchangeModal = document.getElementById('exchange-modal');
+    const exchangeForm = document.getElementById('exchange-form');
+    const exchangeItemName = document.getElementById('exchange-item-name');
+    const exchangeCost = document.getElementById('exchange-cost');
+    const exchangeStock = document.getElementById('exchange-stock');
+    const exchangeWarning = document.getElementById('exchange-warning');
+    const quantityInput = document.getElementById('quantity');
+    const submitButton = document.getElementById('exchange-submit');
+
+    const currentContribution = {{ member.current_contribution }};
+
+    function openExchangeModal(itemKey, cost, stock) {
+        exchangeForm.action = `/guilds/warehouse/${itemKey}/exchange/`;
+        exchangeItemName.textContent = itemKey;
+        exchangeCost.textContent = cost;
+        exchangeStock.textContent = stock;
+        quantityInput.max = stock;
+        quantityInput.value = 1;
+
+        checkExchangeValidity(cost, stock, 1);
+
+        exchangeModal.classList.add('visible');
+        exchangeModal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeExchangeModal() {
+        exchangeModal.classList.remove('visible');
+        exchangeModal.setAttribute('aria-hidden', 'true');
+    }
+
+    function checkExchangeValidity(unitCost, stock, quantity) {
+        const totalCost = unitCost * quantity;
+        const warningText = exchangeWarning.querySelector('p');
+
+        if (quantity > stock) {
+            exchangeWarning.style.display = 'block';
+            warningText.textContent = `库存不足，最多只能兑换 ${stock} 个`;
+            submitButton.disabled = true;
+        } else if (totalCost > currentContribution) {
+            exchangeWarning.style.display = 'block';
+            warningText.textContent = `贡献度不足，需要 ${totalCost} 贡献度`;
+            submitButton.disabled = true;
+        } else {
+            exchangeWarning.style.display = 'none';
+            submitButton.disabled = false;
+        }
+    }
+
+    quantityInput?.addEventListener('input', function() {
+        const cost = parseInt(exchangeCost.textContent);
+        const stock = parseInt(exchangeStock.textContent);
+        const quantity = parseInt(this.value) || 1;
+        checkExchangeValidity(cost, stock, quantity);
+    });
+
+    exchangeModal?.addEventListener('click', (event) => {
+        if (event.target === exchangeModal) {
+            closeExchangeModal();
+        }
+    });
+</script>
+{% endblock %}

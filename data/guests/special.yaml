@@ -1,0 +1,55 @@
+# 特殊/隐藏BOSS门客
+
+heroes:
+  orange:
+  - key: special_hero_sao_di_seng
+    name: 扫地僧
+    archetype: civil
+    flavor: 少林寺扫地僧，武功深不可测。 出自《天龙八部》。
+    default_gender: male
+    default_morality: 95
+    recruitable: false
+    skills:
+    - dragon_roar
+    custom_stats:
+      force: 250
+      intellect: 145
+      defense: 195
+      agility: 140
+      luck: 110
+      base_hp: 28000
+    avatar: monkey_mistry.png
+  - key: special_hero_dugu_qiubai
+    name: 独孤求败
+    archetype: military
+    flavor: 独孤求败，武功深不可测。 出自《神雕侠侣》。
+    default_gender: male
+    default_morality: 95
+    recruitable: false
+    skills:
+    - stratagem_burst
+    custom_stats:
+      force: 250
+      intellect: 145
+      defense: 195
+      agility: 140
+      luck: 110
+      base_hp: 28000
+    avatar: monkey_mistry.png
+  - key: special_hero_dongfang_bubai
+    name: 东方不败
+    archetype: military
+    flavor: 东方不败，武功深不可测。 出自《笑傲江湖》。
+    default_gender: male
+    default_morality: 95
+    recruitable: false
+    skills:
+    - dragon_roar
+    custom_stats:
+      force: 250
+      intellect: 145
+      defense: 195
+      agility: 140
+      luck: 110
+      base_hp: 28000
+    avatar: monkey_mistry.png

@@ -1,0 +1,106 @@
+# 纯门客战斗测试
+# 5个高级门客 vs 5个高级门客
+
+name: "纯门客战斗"
+description: "5个Lv100门客 vs 5个Lv100门客，测试门客互殴平衡性"
+
+attacker:
+  guests:
+    - template: special_hero_dugu_qiubai
+      level: 100
+      force: 500
+      intellect: 300
+      defense: 300
+      agility: 200
+      luck: 100
+      skills:
+        - dragon_roar
+        - stratagem_burst
+
+    - template: hero_zhang_sanfeng
+      level: 100
+      force: 450
+      intellect: 400
+      defense: 320
+      agility: 180
+      luck: 120
+      skills:
+        - stratagem_burst
+
+    - template: hero_xiao_feng
+      level: 100
+      force: 480
+      intellect: 280
+      defense: 310
+      agility: 190
+      luck: 90
+      skills:
+        - dragon_roar
+
+    - template: special_hero_sao_di_seng
+      level: 100
+      archetype: civil
+      force: 300
+      intellect: 500
+      defense: 280
+      agility: 170
+      luck: 130
+      skills:
+        - stratagem_burst
+
+    - template: hero_zhao_yun
+      level: 100
+      force: 470
+      intellect: 290
+      defense: 300
+      agility: 220
+      luck: 85
+      skills:
+        - dragon_roar
+
+defender:
+  guests:
+    - template: hero_yang_guo
+      level: 100
+      force: 460
+      intellect: 380
+      defense: 310
+      agility: 195
+      luck: 110
+
+    - template: hero_xu_zhu
+      level: 100
+      archetype: civil
+      force: 320
+      intellect: 520
+      defense: 290
+      agility: 160
+      luck: 140
+
+    - template: special_hero_dongfang_bubai
+      level: 100
+      force: 500
+      intellect: 300
+      defense: 300
+      agility: 200
+      luck: 100
+
+    - template: hero_feng_qingyang
+      level: 100
+      force: 440
+      intellect: 360
+      defense: 295
+      agility: 210
+      luck: 105
+
+    - template: hero_wang_chongyang
+      level: 100
+      force: 455
+      intellect: 370
+      defense: 305
+      agility: 185
+      luck: 115
+
+tunable_params:
+  counter_multiplier: 1.5
+  crit_chance: 0.05

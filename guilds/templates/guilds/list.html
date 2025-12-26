@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}帮会列表{% endblock %}
+
+{% block content %}
+<section class="dashboard">
+    <div class="section-header">
+        <div>
+            <h1>帮会列表</h1>
+            <p>浏览所有活跃帮会</p>
+        </div>
+        <div class="nav-links">
+            <a href="{% url 'guilds:create' %}" class="btn-primary">创建帮会</a>
+            <a href="{% url 'guilds:hall' %}" class="btn-secondary">返回大厅</a>
+        </div>
+    </div>
+
+    <!-- 搜索和排序 -->
+    <section class="card">
+        <h2>搜索与筛选</h2>
+        <form method="get" class="guild-search-form">
+            <div class="form-field guild-search-input">
+                <label for="search">搜索帮会名称</label>
+                <input type="text" id="search" name="search" value="{{ search }}" placeholder="输入帮会名称...">
+            </div>
+            <div class="form-field guild-search-select">
+                <label for="ordering">排序方式</label>
+                <select id="ordering" name="ordering">
+                    <option value="-level" {% if ordering == '-level' %}selected{% endif %}>等级（高到低）</option>
+                    <option value="level" {% if ordering == 'level' %}selected{% endif %}>等级（低到高）</option>
+                    <option value="-created_at" {% if ordering == '-created_at' %}selected{% endif %}>最新创建</option>
+                    <option value="created_at" {% if ordering == 'created_at' %}selected{% endif %}>最早创建</option>
+                </select>
+            </div>
+            <button type="submit" class="btn-primary guild-search-btn">搜索</button>
+        </form>
+    </section>
+
+    <!-- 帮会列表 -->
+    <section class="card guild-section-spacing">
+        <h2>帮会（{{ guilds.count }}）</h2>
+        {% if guilds %}
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>帮会名称</th>
+                        <th>帮主</th>
+                        <th>等级</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for guild in guilds %}
+                    <tr class="guild-table-row-clickable" onclick="window.location.href='{% url 'guilds:detail' guild.id %}'">
+                        <td>
+                            <a href="{% url 'guilds:detail' guild.id %}" class="guild-name-link">{{ guild.name }}</a>
+                        </td>
+                        <td>{{ guild.get_leader.user.manor.display_name }}</td>
+                        <td><span class="badge">Lv {{ guild.level }} / 10</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="muted-text">未找到符合条件的帮会</p>
+        {% endif %}
+    </section>
+</section>
+{% endblock %}

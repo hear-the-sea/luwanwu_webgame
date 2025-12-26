@@ -1,0 +1,164 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <title>{% block title %}春秋乱世庄园主{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    {% if user.is_authenticated %}
+    <link rel="stylesheet" href="{% static 'css/chat_widget.css' %}">
+    {% endif %}
+    {% block extra_head %}{% endblock %}
+</head>
+
+<body>
+    <div class="game-container">
+        <header class="game-header">
+            <div class="logo">乱舞春秋.改</div>
+        </header>
+
+        <nav class="game-nav">
+            {% if user.is_authenticated %}
+            <a href="{% url 'home' %}"
+                class="nav-tab {% if request.resolver_match.url_name == 'home' %}active{% endif %}">首页</a>
+            <a href="{% url 'gameplay:dashboard' %}"
+                class="nav-tab {% if 'dashboard' in request.path %}active{% endif %}">庄园</a>
+            <a href="{% url 'guests:roster' %}"
+                class="nav-tab {% if 'guests' in request.path %}active{% endif %}">门客</a>
+            <a href="{% url 'gameplay:warehouse' %}"
+                class="nav-tab {% if 'warehouse' in request.path %}active{% endif %}">物品</a>
+            <a href="{% url 'gameplay:technology' %}"
+                class="nav-tab {% if 'technology' in request.path %}active{% endif %}">技术</a>
+            <a href="{% url 'trade:trade' %}" class="nav-tab {% if 'trade' in request.path %}active{% endif %}">交易</a>
+            <a href="{% url 'guilds:hall' %}" class="nav-tab {% if 'guilds' in request.path %}active{% endif %}">帮会</a>
+            <a href="{% url 'gameplay:map' %}" class="nav-tab {% if 'map' in request.path %}active{% endif %}">地图</a>
+            <a href="{% url 'gameplay:work' %}" class="nav-tab {% if 'work' in request.path %}active{% endif %}">打工</a>
+            <a href="{% url 'gameplay:tasks' %}" class="nav-tab {% if 'tasks' in request.path %}active{% endif %}">任务</a>
+            <a href="{% url 'gameplay:messages' %}" class="nav-tab {% if 'messages' in request.path %}active{% endif %}" id="nav-messages-link-top" style="position: relative;" data-unread="{{ message_unread_count|default:0 }}">
+                消息
+                {% if message_unread_count > 0 %}
+                <span style="position: absolute; top: -4px; right: -4px; background: var(--accent-red, #DC143C); color: white; font-size: 10px; padding: 2px 5px; border-radius: 10px; font-weight: bold;">{{ message_unread_count }}</span>
+                {% endif %}
+            </a>
+            {% else %}
+            <a href="{% url 'accounts:login' %}" class="nav-tab">登录</a>
+            <a href="{% url 'accounts:register' %}" class="nav-tab">注册</a>
+            {% endif %}
+        </nav>
+
+        {% if user.is_authenticated %}
+        <div class="info-bar">
+            <span>服务器时间: {% now "Y-m-d H:i:s" %}</span>
+            <span>
+                当前在线: <span id="online-user-count">{{ online_user_count }}</span> 人
+                用户总数: <span id="total-user-count">{{ total_user_count }}</span>
+                您的状态: 受保护(截止日期 2025-12-31)
+            </span>
+        </div>
+        {% endif %}
+
+        {% with url_name=request.resolver_match.url_name %}
+        <div class="{% if user.is_authenticated and url_name == 'home' %}main-layout{% elif user.is_authenticated %}full-layout{% else %}simple-layout{% endif %}">
+            {% if user.is_authenticated and url_name == 'home' %}
+            <aside class="sidebar">
+                <!-- 庄园状态面板 -->
+                <div class="panel">
+                    <div class="panel-header">庄园状态</div>
+                    <div class="panel-content">
+                        <ul class="user-info-list">
+                            <li><label>庄园名称:</label> <span>{{ user.manor.display_name }}</span></li>
+                            <li><label>所属地区:</label> <span>北京(1148:17)</span></li>
+                            <li><label>您的官职:</label> <span>{{ user.title|default:"平民" }}</span></li>
+                            <li><label>您的声望:</label> <span>{{ sidebar_prestige|default:0 }}</span></li>
+                            <li><label>行动力值:</label> <span>1000/1000</span></li>
+                            <li><label>庄园排名:</label> <span>{% if sidebar_rank %}{{ sidebar_rank }}{% else %}未上榜{% endif %}</span></li>
+                            <li><label>粮食储量:</label> <span>{{ user.manor.grain }}/{{ user.manor.grain_capacity }}</span></li>
+                            <li><label>白银储量:</label> <span>{{ user.manor.silver }}/{{ user.manor.silver_capacity }}</span></li>
+                            <li><label>家丁人数:</label> <span>{{ user.manor.retainer_count }}/{{ user.manor.retainer_capacity }} 人</span></li>
+                            <li><label>贡献积分:</label> <span>0</span></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 功能菜单面板 -->
+                <div class="panel">
+                    <div class="panel-header">功能菜单</div>
+                    <div class="panel-content menu-grid">
+                        <a href="#" class="btn-menu">系统</a>
+                        <a href="#" class="btn-menu">排名</a>
+                        <a href="#" class="btn-menu">笔记</a>
+                        <a href="#" class="btn-menu">论坛</a>
+                        <a href="#" class="btn-menu">黑名单</a>
+                        <a href="#" class="btn-menu">好友</a>
+                        <a href="{% url 'gameplay:messages' %}" class="btn-menu" id="nav-messages-link" data-unread="{{ message_unread_count|default:0 }}">
+                            消息
+                            {% if message_unread_count > 0 %}({{ message_unread_count }}){% endif %}
+                        </a>
+                        <a href="{% url 'gameplay:settings' %}" class="btn-menu">设置</a>
+                        <a href="#" class="btn-menu">帮助</a>
+                        <form method="post" action="{% url 'accounts:logout' %}" style="display: contents;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-menu"
+                                style="width: 100%; border: 1px solid #5A2D0C; cursor: pointer;">退出</button>
+                        </form>
+                    </div>
+                </div>
+            </aside>
+            {% endif %}
+
+            <main class="content-area" {% if not user.is_authenticated %}style="padding: 20px; min-height: 400px; display: flex; align-items: center; justify-content: center;"{% endif %}>
+                {% if messages %}
+                <ul class="flash-messages">
+                    {% for message in messages %}
+                    <li class="flash {% if message.tags == 'info' %}success{% else %}{{ message.tags }}{% endif %}">{{ message }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+        {% endwith %}
+    </div>
+
+    {% if user.is_authenticated %}
+    <div id="chat-widget" class="chat-widget" data-user-id="{{ user.id }}" data-ws-path="/ws/chat/world/">
+            <button type="button" id="chat-fab" class="chat-fab" aria-label="打开世界聊天" aria-haspopup="dialog" aria-controls="chat-panel">
+            <span class="chat-fab-icon" aria-hidden="true">聊</span>
+            <span class="chat-fab-badge" id="chat-fab-badge" hidden></span>
+        </button>
+
+        <section id="chat-panel" class="chat-panel" aria-label="世界聊天" aria-hidden="true" role="dialog">
+            <header class="chat-header">
+                <div class="chat-header-left">
+                    <span class="chat-title">世界频道</span>
+                    <span class="chat-status" id="chat-status" title="连接状态">连接中</span>
+                </div>
+                <div class="chat-header-actions">
+                    <button type="button" id="chat-clear" class="chat-icon-btn" aria-label="清屏">清</button>
+                    <button type="button" id="chat-close" class="chat-icon-btn" aria-label="关闭聊天">×</button>
+                </div>
+            </header>
+            <div class="chat-messages" id="chat-messages" role="log" aria-live="polite" aria-relevant="additions"></div>
+            <footer class="chat-compose">
+                <textarea id="chat-input" class="chat-input" rows="2" maxlength="200" placeholder="输入消息…（Enter 发送，Shift+Enter 换行）"></textarea>
+                <button type="button" id="chat-send" class="chat-send">发送</button>
+            </footer>
+        </section>
+    </div>
+    {% endif %}
+
+    <div id="toast-container" class="toast-container"></div>
+    <script src="{% static 'js/dialog.js' %}"></script>
+    <script src="{% static 'js/notifications.js' %}"></script>
+    {% if user.is_authenticated %}
+    <script src="{% static 'js/online_stats.js' %}"></script>
+    <script src="{% static 'js/chat_widget.js' %}"></script>
+    {% endif %}
+    {% block extra_scripts %}{% endblock %}
+</body>
+
+</html>

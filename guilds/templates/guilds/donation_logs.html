@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}捐赠记录 - {{ guild.name }}{% endblock %}
+
+{% block content %}
+<section class="dashboard">
+    <div class="section-header">
+        <div>
+            <h1>捐赠记录</h1>
+            <p>{{ guild.name }}</p>
+        </div>
+        <div class="nav-links">
+            <a href="{% url 'guilds:donate' %}" class="btn-secondary">捐赠资源</a>
+            <a href="{% url 'guilds:detail' guild.id %}" class="btn-secondary">返回帮会</a>
+        </div>
+    </div>
+
+    <section class="card">
+        <h2>最近捐赠（50条）</h2>
+        {% if logs %}
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>成员</th>
+                        <th>资源类型</th>
+                        <th>捐赠数量</th>
+                        <th>获得贡献</th>
+                        <th>捐赠时间</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr {% if log.member.user == user %}class="guild-table-highlight"{% endif %}>
+                        <td>
+                            {{ log.member.user.manor.display_name }}
+                            {% if log.member.user == user %}
+                                <span class="badge">我</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if log.resource_type == 'silver' %}
+                                <span>银两</span>
+                            {% elif log.resource_type == 'grain' %}
+                                <span>粮食</span>
+                            {% elif log.resource_type == 'gold_bar' %}
+                                <span>金条</span>
+                            {% else %}
+                                {{ log.resource_type }}
+                            {% endif %}
+                        </td>
+                        <td>{{ log.amount|floatformat:0 }}</td>
+                        <td class="guild-resource-value resource-blue">+{{ log.contribution_gained|floatformat:0 }}</td>
+                        <td>
+                            <span class="muted-text">{{ log.donated_at|date:"Y-m-d H:i" }}</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="muted-text">暂无捐赠记录</p>
+        {% endif %}
+    </section>
+</section>
+{% endblock %}

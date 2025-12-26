@@ -1,0 +1,858 @@
+{% extends "base.html" %}
+{% load guest_extras static %}
+
+{% block title %}{{ guest.display_name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+.guest-detail {
+  --bg-card: linear-gradient(135deg, #f5e6d3 0%, #e8d4b8 100%);
+}
+
+.guest-detail .detail-board {
+  display: grid;
+  grid-template-columns: 0.9fr 0.85fr 1.3fr 1.5fr;
+  gap: 1rem;
+}
+
+.guest-detail .board-card {
+  border: 1px solid #d4a574;
+  border-radius: 16px;
+  padding: 1rem;
+  background: var(--bg-card);
+  box-shadow: 0 10px 25px rgba(139, 90, 43, 0.12);
+}
+
+
+.guest-detail .avatar-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding-top: 2rem;
+}
+
+.guest-detail .stats-card {
+  background: var(--bg-card);
+}
+
+.guest-detail .archetype-badge {
+  position: absolute;
+  top: 1rem;
+  right: 0.5rem;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border: 2px solid #fff;
+}
+
+.guest-detail .archetype-badge.military {
+  background: linear-gradient(135deg, #dc2626, #ef4444);
+  color: #fff;
+}
+
+.guest-detail .archetype-badge.civil {
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
+  color: #fff;
+}
+
+.guest-detail .avatar-bubble {
+  width: 160px;
+  height: 160px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #fef3e2, #f5dfc0);
+  display: grid;
+  place-items: center;
+  font-size: 2.4rem;
+  font-weight: 700;
+  color: #0f172a;
+  border: 3px solid #c89858;
+  box-shadow: 0 4px 12px rgba(200, 152, 88, 0.3), inset 0 2px 6px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.guest-detail .avatar-bubble img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 17px;
+}
+
+.guest-detail .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #fef3e2, #f5dfc0);
+  color: #6b4423;
+  font-weight: 600;
+  font-size: 0.875rem;
+  box-shadow: 0 2px 6px rgba(139, 90, 43, 0.2);
+  border: 1px solid #d4a574;
+  min-width: 120px;
+  justify-content: center;
+}
+
+.guest-detail .stats-card h3,
+.guest-detail .equip-card h3 {
+  margin: 0 0 0.6rem;
+}
+
+.guest-detail .equip-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.guest-detail .equip-card .equip-unequip-form {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.guest-detail .stat-rows {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.55rem;
+}
+
+.guest-detail .stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #d4a574;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fef8f0, #f5e6d3);
+  transition: all 0.2s ease;
+}
+
+.guest-detail .stat-row:has(.stat-left) {
+  justify-content: flex-start;
+}
+
+.guest-detail .stat-row:hover {
+  border-color: #b8935e;
+  box-shadow: 0 2px 8px rgba(139, 90, 43, 0.15);
+}
+
+.guest-detail .stat-row strong {
+  font-weight: 700;
+}
+
+.guest-detail .stat-row .muted-text {
+  margin-left: 0.4rem;
+}
+
+.guest-detail .stat-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+  min-width: 80px;
+}
+
+.guest-detail .add-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 10px;
+  border: 1px solid #caa66c;
+  background: #fdf6e3;
+  color: #4c2b12;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.guest-detail .add-btn:disabled {
+  background: #e5d6b3;
+  color: #9a7b50;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.guest-detail .add-btn-placeholder {
+  width: 26px;
+  height: 26px;
+  display: inline-block;
+}
+
+.guest-detail .stat-row form {
+  margin: 0;
+}
+
+.guest-detail .equip-card .slot {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.guest-detail .slot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 700;
+}
+
+.guest-detail .equipped-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.guest-detail .equip-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+}
+
+.guest-detail .equip-form {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.guest-detail .equip-form select {
+  flex: 1;
+  border-radius: 12px;
+  border: 1px solid #cbd5f5;
+  padding: 0.4rem 0.6rem;
+}
+
+.guest-detail .intro-card,
+.guest-detail .skills-card {
+  grid-column: 1 / -1;
+}
+
+.guest-detail .intro-card h2,
+.guest-detail .skills-card h2 {
+  margin: 0 0 0.5rem;
+}
+
+.guest-detail .equip-lines {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem 1rem;
+}
+
+.guest-detail .equip-lines .wide {
+  grid-column: 1 / -1;
+}
+
+.guest-detail .equip-line-title {
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.guest-detail .equip-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  background: var(--bg-card);
+  border: 1px dashed #cbd5f5;
+  border-radius: 12px;
+  padding: 0.45rem 0.6rem;
+  min-height: 42px;
+}
+
+.guest-detail .equip-line:not(.wide) {
+  flex-wrap: nowrap;
+}
+
+.guest-detail .equip-placeholder {
+  color: #94a3b8;
+}
+
+.guest-detail .equip-actions {
+  margin-top: 0.6rem;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.guest-detail .equip-actions button {
+  min-width: 120px;
+}
+
+.guest-detail .equip-open {
+  padding: 0.15rem 0.5rem;
+  font-size: 0.85rem;
+  line-height: 1.1;
+  min-width: auto;
+}
+
+.guest-detail .tooltip {
+  position: relative;
+  cursor: help;
+}
+
+.guest-detail .tooltip::after {
+  display: none;
+}
+
+.guest-detail .tooltip .tooltip-bubble {
+  position: absolute;
+  left: 0;
+  top: 100%;
+  margin-top: 6px;
+  padding: 0.5rem 0.65rem;
+  min-width: 240px;
+  max-width: 320px;
+  border-radius: 10px;
+  background: #f6e6d0;
+  color: #5c3b1e;
+  box-shadow: 0 10px 30px rgba(92, 59, 30, 0.25);
+  line-height: 1.35;
+  font-size: 0.9rem;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  transform: translateY(-4px);
+  z-index: 40;
+}
+
+.guest-detail .tooltip:hover .tooltip-bubble {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.guest-detail .tooltip .tooltip-bubble div + div {
+  margin-top: 0.2rem;
+}
+
+.tooltip .set-member.equipped {
+  color: #15803d;
+}
+
+.tooltip .set-member.unequipped {
+  color: #5c3b1e;
+}
+.guest-detail .intro-card p {
+  margin: 0;
+  color: #475569;
+}
+
+.guest-detail .skill-list {
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 1024px) {
+  .guest-detail .detail-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .guest-detail .detail-board {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="dashboard guest-detail">
+    <div class="section-header">
+        <div>
+            <h1>门客详情</h1>
+        </div>
+        <a class="btn-secondary" href="{% url 'guests:roster' %}">返回列表</a>
+    </div>
+
+    <div class="detail-board">
+        <div class="board-card avatar-card">
+            <div class="archetype-badge {% if guest.archetype == 'military' %}military{% else %}civil{% endif %}" title="{% if guest.archetype == 'military' %}武将{% else %}文官{% endif %}">
+                {% if guest.archetype == 'military' %}武{% else %}文{% endif %}
+            </div>
+            <div class="avatar-bubble" aria-hidden="true">
+                {% if guest.template.avatar %}
+                    <img src="{{ guest.template.avatar.url }}" alt="{{ guest.display_name }}">
+                {% else %}
+                    {{ guest.display_name|first|default:"?" }}
+                {% endif %}
+            </div>
+            <div class="pill">状态：{{ guest.get_status_display }}</div>
+            <div class="pill">稀有度：{{ guest.rarity|rarity_label }}</div>
+        </div>
+
+        <div class="board-card stats-card">
+            <h3>基础</h3>
+            <div class="stat-rows">
+                <div class="stat-row"><span>姓名</span><strong>{{ guest.display_name }}</strong></div>
+                <div class="stat-row"><span>性别</span><strong>{{ guest.get_gender_display }}</strong></div>
+                <div class="stat-row"><span>等级</span><strong>Lv {{ guest.level }}</strong></div>
+                <div class="stat-row"><span>生命值</span><strong>{{ guest.current_hp }}/{{ guest.max_hp }}</strong></div>
+                <div class="stat-row"><span>忠诚度</span><strong>{{ guest.loyalty }}</strong></div>
+                <div class="stat-row"><span>品性</span><strong>{{ guest.morality }}</strong></div>
+            </div>
+        </div>
+
+        <div class="board-card stats-card">
+            <h3>属性（属性点 {{ guest.attribute_points }}）</h3>
+            <div class="stat-rows">
+                <div class="stat-row">
+                    <div class="stat-left">
+                        <form method="post" action="{% url 'guests:allocate_points' guest.id %}">
+                            {% csrf_token %}
+                            {{ skill_point_form.guest }}
+                            <input type="hidden" name="attribute" value="force">
+                            <input type="hidden" name="points" value="1">
+                            <input type="hidden" name="next" value="{% url 'guests:detail' guest.id %}">
+                            <button type="submit" class="add-btn" title="武力加点" {% if guest.attribute_points <= 0 %}disabled{% endif %}>+</button>
+                        </form>
+                        <span>武力</span>
+                    </div>
+                    <strong>{{ guest.force|attribute_icons }}</strong>
+                </div>
+                <div class="stat-row">
+                    <div class="stat-left">
+                        <form method="post" action="{% url 'guests:allocate_points' guest.id %}">
+                            {% csrf_token %}
+                            {{ skill_point_form.guest }}
+                            <input type="hidden" name="attribute" value="intellect">
+                            <input type="hidden" name="points" value="1">
+                            <input type="hidden" name="next" value="{% url 'guests:detail' guest.id %}">
+                            <button type="submit" class="add-btn" title="智力加点" {% if guest.attribute_points <= 0 %}disabled{% endif %}>+</button>
+                        </form>
+                        <span>智力</span>
+                    </div>
+                    <strong>{{ guest.intellect|attribute_icons }}</strong>
+                </div>
+                <div class="stat-row">
+                    <div class="stat-left">
+                        <form method="post" action="{% url 'guests:allocate_points' guest.id %}">
+                            {% csrf_token %}
+                            {{ skill_point_form.guest }}
+                            <input type="hidden" name="attribute" value="defense">
+                            <input type="hidden" name="points" value="1">
+                            <input type="hidden" name="next" value="{% url 'guests:detail' guest.id %}">
+                            <button type="submit" class="add-btn" title="防御加点" {% if guest.attribute_points <= 0 %}disabled{% endif %}>+</button>
+                        </form>
+                        <span>防御</span>
+                    </div>
+                    <strong>{{ guest.defense_stat|attribute_icons }}</strong>
+                </div>
+                <div class="stat-row">
+                    <div class="stat-left">
+                        <form method="post" action="{% url 'guests:allocate_points' guest.id %}">
+                            {% csrf_token %}
+                            {{ skill_point_form.guest }}
+                            <input type="hidden" name="attribute" value="agility">
+                            <input type="hidden" name="points" value="1">
+                            <input type="hidden" name="next" value="{% url 'guests:detail' guest.id %}">
+                            <button type="submit" class="add-btn" title="敏捷加点" {% if guest.attribute_points <= 0 %}disabled{% endif %}>+</button>
+                        </form>
+                        <span>敏捷</span>
+                    </div>
+                    <strong>{{ guest.agility|attribute_icons }}</strong>
+                </div>
+                <div class="stat-row">
+                    <div class="stat-left">
+                        <span class="add-btn-placeholder"></span>
+                        <span>运势</span>
+                    </div>
+                    <strong>{{ guest.luck|attribute_icons }}</strong>
+                </div>
+                <div class="stat-row">
+                    <span>操作</span>
+                    <div>
+                        <form method="post" action="{% url 'guests:dismiss' guest.id %}" class="dismiss-form" data-guest-name="{{ guest.display_name }}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-secondary btn-small">辞退门客</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="board-card equip-card">
+            <h3>装备</h3>
+            <form method="post" action="{% url 'guests:unequip' %}" class="equip-unequip-form">
+                {% csrf_token %}
+                <input type="hidden" name="guest" value="{{ guest.id }}">
+                <input type="hidden" name="next" value="{% url 'guests:detail' guest.id %}">
+                <div class="equip-lines">
+                    {% with panel=slot_panels_map.helmet %}
+                    <div class="equip-line">
+                        <span class="equip-line-title">头盔：</span>
+                        {% if panel.equipped %}
+                            {% for item in panel.equipped %}
+                                <label class="equip-chip rarity-text {{ item.template.rarity|rarity_class }} tooltip">
+                                    <input type="checkbox" name="gear" value="{{ item.id }}"> {{ item.template.name }}
+                                    <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map|safe }}</span>
+                                </label>
+                            {% endfor %}
+                        {% else %}
+                            <button type="button" class="btn-secondary btn-small equip-open" data-slot="helmet">装备</button>
+                        {% endif %}
+                    </div>
+                    {% endwith %}
+
+                    {% with panel=slot_panels_map.armor %}
+                    <div class="equip-line">
+                        <span class="equip-line-title">衣甲：</span>
+                        {% if panel.equipped %}
+                            {% for item in panel.equipped %}
+                                <label class="equip-chip rarity-text {{ item.template.rarity|rarity_class }} tooltip">
+                                    <input type="checkbox" name="gear" value="{{ item.id }}"> {{ item.template.name }}
+                                    <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map|safe }}</span>
+                                </label>
+                            {% endfor %}
+                        {% else %}
+                            <button type="button" class="btn-secondary btn-small equip-open" data-slot="armor">装备</button>
+                        {% endif %}
+                    </div>
+                    {% endwith %}
+
+                    {% with panel=slot_panels_map.weapon %}
+                    <div class="equip-line">
+                        <span class="equip-line-title">武器：</span>
+                        {% if panel.equipped %}
+                            {% for item in panel.equipped %}
+                                <label class="equip-chip rarity-text {{ item.template.rarity|rarity_class }} tooltip">
+                                    <input type="checkbox" name="gear" value="{{ item.id }}"> {{ item.template.name }}
+                                    <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map|safe }}</span>
+                                </label>
+                            {% endfor %}
+                        {% else %}
+                            <button type="button" class="btn-secondary btn-small equip-open" data-slot="weapon">装备</button>
+                        {% endif %}
+                    </div>
+                    {% endwith %}
+
+                    {% with panel=slot_panels_map.shoes %}
+                    <div class="equip-line">
+                        <span class="equip-line-title">鞋子：</span>
+                        {% if panel.equipped %}
+                            {% for item in panel.equipped %}
+                                <label class="equip-chip rarity-text {{ item.template.rarity|rarity_class }} tooltip">
+                                    <input type="checkbox" name="gear" value="{{ item.id }}"> {{ item.template.name }}
+                                    <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map|safe }}</span>
+                                </label>
+                            {% endfor %}
+                        {% else %}
+                            <button type="button" class="btn-secondary btn-small equip-open" data-slot="shoes">装备</button>
+                        {% endif %}
+                    </div>
+                    {% endwith %}
+
+                    {% with panel=slot_panels_map.ornament %}
+                    <div class="equip-line wide">
+                        <span class="equip-line-title">饰品：</span>
+                            {% for item in panel.positions %}
+                            {% if item %}
+                                <label class="equip-chip rarity-text {{ item.template.rarity|rarity_class }} tooltip">
+                                    <input type="checkbox" name="gear" value="{{ item.id }}"> {{ item.template.name }}
+                                    <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map|safe }}</span>
+                                </label>
+                            {% else %}
+                                <button type="button" class="btn-secondary btn-small equip-open" data-slot="ornament">装备</button>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endwith %}
+
+                    {% with panel=slot_panels_map.device %}
+                    <div class="equip-line wide">
+                        <span class="equip-line-title">器械：</span>
+                            {% for item in panel.positions %}
+                            {% if item %}
+                                <label class="equip-chip rarity-text {{ item.template.rarity|rarity_class }} tooltip">
+                                    <input type="checkbox" name="gear" value="{{ item.id }}"> {{ item.template.name }}
+                                    <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map|safe }}</span>
+                                </label>
+                            {% else %}
+                                <button type="button" class="btn-secondary btn-small equip-open" data-slot="device">装备</button>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endwith %}
+
+                    {% with panel=slot_panels_map.mount %}
+                    <div class="equip-line wide">
+                        <span class="equip-line-title">坐骑：</span>
+                        {% if panel.equipped %}
+                            {% for item in panel.equipped %}
+                                <label class="equip-chip rarity-text {{ item.template.rarity|rarity_class }} tooltip">
+                                    <input type="checkbox" name="gear" value="{{ item.id }}"> {{ item.template.name }}
+                                    <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map|safe }}</span>
+                                </label>
+                            {% endfor %}
+                        {% else %}
+                            <button type="button" class="btn-secondary btn-small equip-open" data-slot="mount">装备</button>
+                        {% endif %}
+                    </div>
+                    {% endwith %}
+                </div>
+                <div class="equip-actions">
+                    <button type="submit" class="btn-secondary btn-small">卸下选中装备</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <section class="card intro-card">
+        <h2>门客简介</h2>
+        <p>{{ guest.template.flavor|default:"暂无人物故事。" }}</p>
+    </section>
+
+    <section class="card skills-card">
+        <h2>门客技能（{{ skill_count }}/{{ skill_capacity }}）</h2>
+        <ul class="skill-list">
+            {% for slot in skill_slots %}
+                <li class="skill-slot">
+                    <div>
+                        <strong>技能位 {{ slot.index }}：</strong>
+                        {% if slot.record %}
+                            <span>{{ slot.skill.name }} — {{ slot.skill.description }}</span>
+                        {% else %}
+                            <span>空闲，可通过技能书学习。</span>
+                        {% endif %}
+                    </div>
+                    <div class="skill-slot-actions">
+                        {% if slot.record %}
+                            <form method="post" action="{% url 'guests:forget_skill' guest.id %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="guest_skill_id" value="{{ slot.record.id }}">
+                                <input type="hidden" name="next" value="{% url 'guests:detail' guest.id %}">
+                                <button type="submit" class="btn-secondary">遗忘技能</button>
+                            </form>
+                        {% else %}
+                            <button type="button" class="btn-primary btn-small open-skill-modal" data-slot="{{ slot.index }}" {% if not skill_books %}disabled{% endif %}>
+                                学习技能
+                            </button>
+                        {% endif %}
+                    </div>
+                </li>
+            {% endfor %}
+        </ul>
+        {% if not skill_books %}
+            <p class="muted-text">仓库暂无技能书，可前往战斗或活动获取。</p>
+        {% endif %}
+    </section>
+</section>
+
+<div class="modal-backdrop" id="skill-book-modal" aria-hidden="true">
+    <div class="modal">
+        <header class="modal-header">
+            <h3>选择技能书</h3>
+            <button type="button" class="btn-secondary btn-small close-skill-modal">关闭</button>
+        </header>
+        <div class="modal-body">
+            {% if skill_books %}
+                <table class="warehouse-table">
+                    <thead>
+                        <tr>
+                            <th>技能书</th>
+                            <th>技能</th>
+                            <th>数量</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for book in skill_books %}
+                            <tr>
+                                <td>{{ book.inventory.template.name }}</td>
+                                <td>
+                                    {% if book.skill %}
+                                        {{ book.skill.name }} — {{ book.skill.description }}
+                                    {% else %}
+                                        {{ book.skill_key|default:"未知技能" }}
+                                    {% endif %}
+                                </td>
+                                <td>{{ book.inventory.quantity }}</td>
+                                <td class="warehouse-actions">
+                                    <form method="post" action="{% url 'guests:learn_skill' guest.id %}">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="item_id" value="{{ book.inventory.id }}">
+                                        <input type="hidden" name="next" value="{% url 'guests:detail' guest.id %}">
+                                        <button type="submit" class="btn-primary" {% if book.inventory.quantity <= 0 %}disabled{% endif %}>
+                                            使用
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p class="empty-state">仓库暂无技能书</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="modal-backdrop" id="equip-modal" aria-hidden="true" data-options-url="{% url 'guests:gear_options' %}" data-guest-id="{{ guest.id }}">
+    <div class="modal">
+        <header class="modal-header">
+            <h3 data-slot-label>选择装备</h3>
+            <button type="button" class="btn-secondary btn-small close-equip-modal">关闭</button>
+        </header>
+        <div class="modal-body">
+            <form method="post" action="{% url 'guests:equip' %}">
+                {% csrf_token %}
+                <input type="hidden" name="guest" value="{{ guest.id }}">
+                <input type="hidden" name="next" value="{% url 'guests:detail' guest.id %}">
+                <input type="hidden" name="slot" value="">
+                <div class="form-field">
+                    <label>可用装备</label>
+                    <select name="gear"></select>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">装备</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/dashboard.js' %}"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const modal = document.getElementById("skill-book-modal");
+    const openButtons = document.querySelectorAll(".open-skill-modal");
+    const closeButtons = document.querySelectorAll(".close-skill-modal");
+    const toggleModal = (show) => {
+      if (!modal) return;
+      if (show) {
+        modal.classList.add("visible");
+        modal.setAttribute("aria-hidden", "false");
+      } else {
+        modal.classList.remove("visible");
+        modal.setAttribute("aria-hidden", "true");
+      }
+    };
+    openButtons.forEach((btn) => btn.addEventListener("click", () => toggleModal(true)));
+    closeButtons.forEach((btn) => btn.addEventListener("click", () => toggleModal(false)));
+    modal?.addEventListener("click", (event) => {
+      if (event.target === modal) {
+        toggleModal(false);
+      }
+    });
+
+    const equipModal = document.getElementById("equip-modal");
+    const equipSelect = equipModal?.querySelector("select[name='gear']");
+    const equipSlotLabel = equipModal?.querySelector("[data-slot-label]");
+    const equipForm = equipModal?.querySelector("form");
+    const openEquipButtons = document.querySelectorAll(".equip-open");
+    const equipSubmit = equipForm?.querySelector("button[type='submit']");
+    const gearOptionsUrl = equipModal?.getAttribute("data-options-url");
+    const guestId = equipModal?.getAttribute("data-guest-id");
+
+    const loadEquipOptions = async (slot) => {
+      if (!gearOptionsUrl) return { options: [], slot_label: "" };
+      const url = new URL(gearOptionsUrl, window.location.origin);
+      url.searchParams.set("slot", slot);
+      if (guestId) url.searchParams.set("guest", guestId);
+      const response = await fetch(url.toString(), { credentials: "same-origin" });
+      if (!response.ok) {
+        throw new Error("load_failed");
+      }
+      return response.json();
+    };
+
+    const renderEquipOptions = (payload) => {
+      if (!equipSelect) return;
+      const options = payload?.options || [];
+      equipSelect.innerHTML = "";
+      if (!options.length) {
+        equipSelect.innerHTML = '<option value="">暂无可用装备</option>';
+      } else {
+        options.forEach((entry) => {
+          const option = document.createElement("option");
+          option.value = entry.id;
+          option.textContent = `[${entry.rarity_label}] ${entry.name}（x${entry.count}）`;
+          option.className = `rarity-text ${entry.rarity_class || ""}`.trim();
+          if (entry.title) option.title = entry.title;
+          equipSelect.appendChild(option);
+        });
+      }
+      const hasOptions = options.length > 0;
+      equipSelect.disabled = !hasOptions;
+      if (equipSubmit) equipSubmit.disabled = !hasOptions;
+      if (equipSlotLabel) {
+        equipSlotLabel.textContent = payload?.slot_label || "";
+      }
+    };
+
+    const openEquipModal = async (slot) => {
+      if (!equipModal || !equipSelect || !equipForm) return;
+      equipSelect.innerHTML = '<option value="">加载中...</option>';
+      equipSelect.disabled = true;
+      if (equipSubmit) equipSubmit.disabled = true;
+      equipForm.querySelector("input[name='slot']").value = slot || "";
+      equipModal.classList.add("visible");
+      equipModal.setAttribute("aria-hidden", "false");
+      if (equipSlotLabel) {
+        equipSlotLabel.textContent = slot || "";
+      }
+      try {
+        const payload = await loadEquipOptions(slot);
+        renderEquipOptions(payload);
+      } catch (error) {
+        equipSelect.innerHTML = '<option value="">加载失败</option>';
+        equipSelect.disabled = true;
+        if (equipSubmit) equipSubmit.disabled = true;
+      }
+    };
+
+    const closeEquipModal = () => {
+      if (!equipModal) return;
+      equipModal.classList.remove("visible");
+      equipModal.setAttribute("aria-hidden", "true");
+    };
+
+    openEquipButtons.forEach((btn) =>
+      btn.addEventListener("click", () => {
+        const slot = btn.getAttribute("data-slot");
+        openEquipModal(slot);
+      })
+    );
+
+    equipModal?.addEventListener("click", (event) => {
+      if (event.target === equipModal) {
+        closeEquipModal();
+      }
+    });
+    equipModal?.querySelector(".close-equip-modal")?.addEventListener("click", closeEquipModal);
+    // 辞退确认：使用统一对话框组件
+    document.querySelectorAll(".dismiss-form").forEach((form) => {
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const name = form.getAttribute("data-guest-name") || "该门客";
+        const confirmed = await gameDialog.danger(
+          `${name} 将被永久辞退，已穿戴装备会自动归还仓库。确认继续吗？`,
+          { title: "辞退门客" }
+        );
+        if (confirmed) {
+          form.submit();
+        }
+      });
+    });
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,36 @@
+# 基础门客模板
+
+heroes:
+  black:
+  - key: base_black_civil
+    name: 黑阶学士
+    archetype: civil
+    flavor: 默默无闻的寒门学子。
+    default_gender: unknown
+    default_morality: 60
+  - key: base_black_military
+    name: 黑阶武徒
+    archetype: military
+    flavor: 赶考途中暂居庄园的游侠。
+    default_gender: unknown
+    default_morality: 45
+  gray:
+  - key: base_gray_civil
+    name: 灰阶谋士
+    archetype: civil
+    flavor: 熟读兵书，擅长后勤调度。
+    default_gender: unknown
+    default_morality: 65
+  - key: base_gray_military
+    name: 灰阶兵长
+    archetype: military
+    flavor: 身经百战的基层军官。
+    default_gender: unknown
+    default_morality: 50
+  red:
+  - key: base_red_military
+    name: 占位
+    archetype: military
+    flavor: 身经百战的基层军官。
+    default_gender: unknown
+    default_morality: 50

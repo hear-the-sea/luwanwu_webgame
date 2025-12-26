@@ -1,0 +1,461 @@
+# 技术系统配置
+# 分类: basic(基本技术), martial(武艺技术), production(生产技术)
+
+categories:
+  - key: basic
+    name: 基本技术
+    description: 庄园运营的基本功，不学的话连门都出不了
+  - key: martial
+    name: 武艺技术
+    description: 让你的兵哥哥们打架更猛的秘籍
+  - key: production
+    name: 生产技术
+    description: 搞钱搞粮搞装备，发家致富全靠它
+
+technologies:
+  # ==================== 基本技术 ====================
+  - key: scout_art
+    name: 侦查术
+    category: basic
+    description: 探子眼神更毒辣，敌人想偷窥你？门都没有！升级提升侦察和反侦察能力
+    effect_type: scout_bonus
+    effect_per_level: 0.05
+    max_level: 20
+    base_cost: 8000
+
+  - key: march_art
+    name: 行军术
+    category: basic
+    description: 腿脚利索点，别让敌人跑了，也别让自己跑不掉。升级提升部队移动速度
+    effect_type: march_speed
+    effect_per_level: 0.10
+    max_level: 10
+    base_cost: 8000
+
+  - key: architecture
+    name: 建筑学
+    category: basic
+    description: 学会砍价和偷工减料的艺术，盖房子更省钱。升级降低建筑成本
+    effect_type: building_cost_reduction
+    effect_per_level: 0.05
+    max_level: 10
+    base_cost: 8000
+
+  - key: horsemanship
+    name: 驯马术
+    category: production
+    description: 从野马变乖宝宝，骑出去倍儿有面子。升级提升产量上限并解锁高级马匹
+    effect_type: horse_production_limit
+    effect_per_level: 100
+    max_level: 10
+    base_cost: 8000
+
+  - key: animal_husbandry
+    name: 养殖术
+    category: production
+    description: 从养鸡开始的畜牧人生，终极目标是养牛当大户。升级提升产量上限并解锁高级家畜
+    effect_type: livestock_production_limit
+    effect_per_level: 50
+    max_level: 10
+    base_cost: 8000
+
+  - key: smelting
+    name: 冶炼技
+    category: production
+    description: 玩火的艺术，把石头变成闪闪发光的金属块。升级提升产量上限并解锁高级金属
+    effect_type: smelting_production_limit
+    effect_per_level: 100
+    max_level: 10
+    base_cost: 8000
+
+  - key: forging
+    name: 锻造技
+    category: production
+    description: 叮叮当当打铁匠，等级越高打的装备越唬人。升级提升产量上限并解锁高级装备
+    effect_type: forging_unlock
+    effect_per_level: 50
+    max_level: 10
+    base_cost: 8000
+
+  # ==================== 武艺技术 - 刀类 ====================
+  - key: dao_attack
+    name: 力劈华山
+    category: martial
+    troop_class: dao
+    description: 刀砍得更狠，一刀下去山都能劈开（夸张了点）。升级提升攻击力
+    effect_type: troop_attack
+    effect_per_level: 0.10
+    max_level: 10
+    base_cost: 8000
+
+  - key: dao_defense
+    name: 横炼铁杉
+    category: martial
+    troop_class: dao
+    description: 皮糙肉厚，挨打不疼，敌人砍你跟挠痒痒似的。升级提升防御力
+    effect_type: troop_defense
+    effect_per_level: 0.10
+    max_level: 10
+    base_cost: 8000
+
+  - key: dao_agility
+    name: 疾风碎步
+    category: martial
+    troop_class: dao
+    description: 脚底抹油，跑得飞快，追人逃命两不误。升级提升敏捷
+    effect_type: troop_agility
+    effect_per_level: 0.10
+    max_level: 10
+    base_cost: 8000
+
+  - key: dao_hp
+    name: 蓄日回元
+    category: martial
+    troop_class: dao
+    description: 血条变长，能多挨几下，死前还能多喊两句。升级提升生命值
+    effect_type: troop_hp
+    effect_per_level: 0.10
+    max_level: 10
+    base_cost: 8000
+
+  - key: dao_double_strike
+    name: 狂狼必杀
+    category: martial
+    troop_class: dao
+    description: 砍一刀送一刀，买一送一大酬宾。升级提升双击概率
+    effect_type: double_strike_chance
+    effect_per_level: 0.10
+    max_level: 5
+    base_cost: 20000
+
+  # ==================== 武艺技术 - 枪类 ====================
+  - key: qiang_attack
+    name: 破日枪法
+    category: martial
+    troop_class: qiang
+    description: 一枪戳穿天，太阳都得躲着走。升级提升攻击力
+    effect_type: troop_attack
+    effect_per_level: 0.10
+    max_level: 10
+    base_cost: 8000
+
+  - key: qiang_defense
+    name: 金钟罡气
+    category: martial
+    troop_class: qiang
+    description: 浑身金光护体，刀枪不入（大概）。升级提升防御力
+    effect_type: troop_defense
+    effect_per_level: 0.10
+    max_level: 10
+    base_cost: 8000
+
+  - key: qiang_agility
+    name: 乾坤挪移
+    category: martial
+    troop_class: qiang
+    description: 身法飘逸，敌人都不知道你从哪冒出来的。升级提升敏捷
+    effect_type: troop_agility
+    effect_per_level: 0.10
+    max_level: 10
+    base_cost: 8000
+
+  - key: qiang_hp
+    name: 体血倍增
+    category: martial
+    troop_class: qiang
+    description: 血牛本牛，打不死的小强精神。升级提升生命值
+    effect_type: troop_hp
+    effect_per_level: 0.10
+    max_level: 10
+    base_cost: 8000
+
+  - key: qiang_siege
+    name: 攻坚破城
+    category: martial
+    troop_class: qiang
+    description: 专业拆迁队，城墙见了都发抖。升级提升攻城伤害
+    effect_type: siege_damage
+    effect_per_level: 0.10
+    max_level: 10
+    base_cost: 20000
+
+  - key: qiang_counter
+    name: 反戈一击
+    category: martial
+    troop_class: qiang
+    description: 你敢打我？我还手！礼尚往来懂不懂。升级提升反击概率
+    effect_type: counter_attack_chance
+    base_damage: 0.30
+    effect_per_level: 0.10
+    max_level: 5
+    base_cost: 20000
+
+  # ==================== 武艺技术 - 剑类 ====================
+  - key: jian_attack
+    name: 长虹贯日
+    category: martial
+    troop_class: jian
+    description: 剑气冲天，帅到没朋友，顺便伤害也高。升级提升攻击力
+    effect_type: troop_attack
+    effect_per_level: 0.10
+    max_level: 10
+    base_cost: 8000
+
+  - key: jian_defense
+    name: 纯阳护体
+    category: martial
+    troop_class: jian
+    description: 正气凛然，邪魔外道近不了身。升级提升防御力
+    effect_type: troop_defense
+    effect_per_level: 0.10
+    max_level: 10
+    base_cost: 8000
+
+  - key: jian_agility
+    name: 飘絮身法
+    category: martial
+    troop_class: jian
+    description: 轻功了得，飘来飘去像个仙儿。升级提升敏捷
+    effect_type: troop_agility
+    effect_per_level: 0.10
+    max_level: 10
+    base_cost: 8000
+
+  - key: jian_hp
+    name: 回春转气
+    category: martial
+    troop_class: jian
+    description: 内功深厚，气血充盈，越打越精神。升级提升生命值
+    effect_type: troop_hp
+    effect_per_level: 0.10
+    max_level: 10
+    base_cost: 8000
+
+  - key: jian_reflect
+    name: 护身剑罡
+    category: martial
+    troop_class: jian
+    description: 自带刺甲，打我一下你也疼，公平交易。升级提升反伤比例
+    effect_type: damage_reflect
+    base_damage: 0.10
+    effect_per_level: 0.05
+    max_level: 5
+    base_cost: 20000
+
+  - key: jian_preempt
+    name: 驭剑之术
+    category: martial
+    troop_class: jian
+    description: 剑比人快，还没开打剑就飞出去了。升级提升先手伤害
+    effect_type: preemptive_strike
+    base_damage: 0.50
+    effect_per_level: 0.10
+    max_level: 5
+    base_cost: 20000
+
+  # ==================== 武艺技术 - 拳类 ====================
+  - key: quan_attack
+    name: 通背神拳
+    category: martial
+    troop_class: quan
+    description: 拳头硬邦邦，一拳一个小朋友。升级提升攻击力
+    effect_type: troop_attack
+    effect_per_level: 0.10
+    max_level: 10
+    base_cost: 8000
+
+  - key: quan_defense
+    name: 金钟罩体
+    category: martial
+    troop_class: quan
+    description: 铜皮铁骨，打我就是打铁。升级提升防御力
+    effect_type: troop_defense
+    effect_per_level: 0.10
+    max_level: 10
+    base_cost: 8000
+
+  - key: quan_agility
+    name: 凌波渡虚
+    category: martial
+    troop_class: quan
+    description: 踩着空气跑，物理学家看了直摇头。升级提升敏捷
+    effect_type: troop_agility
+    effect_per_level: 0.10
+    max_level: 10
+    base_cost: 8000
+
+  - key: quan_hp
+    name: 炼气回元
+    category: martial
+    troop_class: quan
+    description: 气血两旺，能吃能打能扛揍。升级提升生命值
+    effect_type: troop_hp
+    effect_per_level: 0.10
+    max_level: 10
+    base_cost: 8000
+
+  - key: quan_vs_ranged
+    name: 万宗归流
+    category: martial
+    troop_class: quan
+    description: 箭射过来？用手接住扔回去！升级提升远程防御
+    effect_type: ranged_defense
+    effect_per_level: 0.10
+    max_level: 10
+    base_cost: 20000
+
+  - key: quan_heal
+    name: 五气朝元
+    category: martial
+    troop_class: quan
+    description: 打着打着血就回来了，神奇不神奇。升级提升回血概率（进攻恢复当前生命10%，防守恢复13%）
+    effect_type: battle_heal_chance
+    base_heal: 0.10
+    effect_per_level: 0.10
+    max_level: 5
+    base_cost: 20000
+
+  # ==================== 武艺技术 - 弓箭类 ====================
+  - key: gong_attack
+    name: 百步穿杨
+    category: martial
+    troop_class: gong
+    description: 射得准，射得狠，蚊子都能一箭钉墙上。升级提升攻击力
+    effect_type: troop_attack
+    effect_per_level: 0.10
+    max_level: 10
+    base_cost: 8000
+
+  - key: gong_defense
+    name: 天地反转
+    category: martial
+    troop_class: gong
+    description: 弓箭手也能挨打了，不再是一碰就碎的脆皮。升级提升防御力
+    effect_type: troop_defense
+    effect_per_level: 0.10
+    max_level: 10
+    base_cost: 8000
+
+  - key: gong_agility
+    name: 御风追月
+    category: martial
+    troop_class: gong
+    description: 跑得快，站位骚，打完就跑真奇妙。升级提升敏捷
+    effect_type: troop_agility
+    effect_per_level: 0.10
+    max_level: 10
+    base_cost: 8000
+
+  - key: gong_hp
+    name: 云流转气
+    category: martial
+    troop_class: gong
+    description: 多喝枸杞养生茶，血量蹭蹭往上涨。升级提升生命值
+    effect_type: troop_hp
+    effect_per_level: 0.10
+    max_level: 10
+    base_cost: 8000
+
+  - key: gong_range
+    name: 凤舞九天
+    category: martial
+    troop_class: gong
+    description: 射程拉满，敌人还没看清你在哪就中箭了。升级提升远程伤害
+    effect_type: extra_range
+    base_damage: 0.35
+    effect_per_level: 0.10
+    max_level: 5
+    base_cost: 20000
+
+  - key: gong_melee
+    name: 短刃杀法
+    category: martial
+    troop_class: gong
+    description: 被近身了也不慌，掏出小刀就是干。升级提升近战攻击
+    effect_type: melee_attack
+    effect_per_level: 0.10
+    max_level: 10
+    base_cost: 20000
+
+  # ==================== 生产技术 ====================
+  - key: farming
+    name: 农耕术
+    category: production
+    description: 种地的学问，让庄稼长得比隔壁老王家的好。升级提升粮食产量
+    effect_type: resource_production
+    resource_type: grain
+    building_key: farm
+    effect_per_level: 0.05
+    max_level: 30
+    base_cost: 6400
+
+  - key: dao_recruit
+    name: 造兵术-刀
+    category: martial
+    troop_class: dao
+    description: 批量生产刀客，人多力量大，砍人更带劲。升级解锁高级护院并提升单次招募上限
+    effect_type: recruit_limit
+    effect_per_level: 50
+    max_level: 7
+    base_cost: 8000
+
+  - key: qiang_recruit
+    name: 造兵术-枪
+    category: martial
+    troop_class: qiang
+    description: 枪兵流水线，戳人小能手量产中。升级解锁高级护院并提升单次招募上限
+    effect_type: recruit_limit
+    effect_per_level: 50
+    max_level: 7
+    base_cost: 8000
+
+  - key: jian_recruit
+    name: 造兵术-剑
+    category: martial
+    troop_class: jian
+    description: 剑客批发部，帅哥美女管够。升级解锁高级护院并提升单次招募上限
+    effect_type: recruit_limit
+    effect_per_level: 50
+    max_level: 7
+    base_cost: 8000
+
+  - key: quan_recruit
+    name: 造兵术-拳
+    category: martial
+    troop_class: quan
+    description: 拳师培训班扩招，能打的越来越多。升级解锁高级护院并提升单次招募上限
+    effect_type: recruit_limit
+    effect_per_level: 50
+    max_level: 7
+    base_cost: 8000
+
+  - key: gong_recruit
+    name: 造兵术-弓
+    category: martial
+    troop_class: gong
+    description: 弓箭手速成班，射箭不用瞄也能中。升级解锁高级护院并提升单次招募上限
+    effect_type: recruit_limit
+    effect_per_level: 50
+    max_level: 7
+    base_cost: 8000
+
+# 兵种分类映射
+troop_classes:
+  dao:
+    name: 刀类
+    troops: [dao_ke, dao_jie, dao_ba, dao_sheng]
+  qiang:
+    name: 枪类
+    troops: [qiang_ke, qiang_hao, qiang_ba, qiang_wang]
+  jian:
+    name: 剑类
+    troops: [jian_shi, jian_xia, jian_hao, jian_sheng]
+  quan:
+    name: 拳类
+    troops: [quan_shi, quan_ba, quan_wang, quan_sheng]
+  gong:
+    name: 弓箭类
+    troops: [archer, fast_archer, divine_archer, arrow_god]
+  scout:
+    name: 探子
+    troops: [scout]

@@ -1,0 +1,524 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Dict
+
+from django.core.exceptions import ValidationError
+from django.db import models
+from django.utils import timezone
+
+from gameplay.models import Manor
+
+if TYPE_CHECKING:
+    from .managers import GuestManager as GuestManagerType
+
+GENDER_CHOICES = [
+    ("male", "男"),
+    ("female", "女"),
+    ("unknown", "未知"),
+]
+
+MAX_GUEST_SKILL_SLOTS = 3
+MAX_GUEST_LEVEL = 100
+
+# ============ 门客属性常量 ============
+
+# 防御属性转换HP的倍率
+# 每点防御提供50点额外血量上限
+DEFENSE_TO_HP_MULTIPLIER = 50
+
+# 最低HP下限（保底值）
+MIN_HP_FLOOR = 200
+
+# 带兵相关常量
+BASE_TROOP_CAPACITY = 200       # 基础带兵数量
+BONUS_TROOP_CAPACITY = 50       # 满级门客额外带兵数
+TROOP_CAPACITY_LEVEL_THRESHOLD = 70  # 获得额外带兵的等级门槛
+
+# 战斗属性计算：文武门客攻击力权重
+CIVIL_FORCE_WEIGHT = 0.8        # 文官武力权重
+CIVIL_INTELLECT_WEIGHT = 0.3    # 文官智力权重
+MILITARY_FORCE_WEIGHT = 1.0     # 武将武力权重
+MILITARY_INTELLECT_WEIGHT = 0.2 # 武将智力权重
+
+
+class GuestRarity(models.TextChoices):
+    """稀有度枚举（从低到高排列）"""
+    BLACK = "black", "黑"
+    GRAY = "gray", "灰"
+    GREEN = "green", "绿"
+    RED = "red", "红"
+    BLUE = "blue", "蓝"
+    PURPLE = "purple", "紫"
+    ORANGE = "orange", "橙"
+
+
+class GuestArchetype(models.TextChoices):
+    CIVIL = "civil", "文"
+    MILITARY = "military", "武"
+
+
+class GuestStatus(models.TextChoices):
+    IDLE = "idle", "空闲"
+    WORKING = "working", "打工中"
+    DEPLOYED = "deployed", "出征中"
+    INJURED = "injured", "重伤"
+
+
+RARITY_HP_PROFILES = {
+    # 每个稀有度的基础HP配置
+    # HP计算公式：HP = base_hp + defense × 50
+    # 基础血量大幅下调，让防御属性成为HP的主要来源
+    GuestRarity.BLACK: {"base": 100},
+    GuestRarity.GRAY: {"base": 250},
+    GuestRarity.GREEN: {"base": 400},
+    GuestRarity.RED: {"base": 450},
+    GuestRarity.BLUE: {"base": 600},
+    GuestRarity.PURPLE: {"base": 800},
+    GuestRarity.ORANGE: {"base": 1000},
+}
+
+RARITY_SKILL_POINT_GAINS = {
+    # 每级固定+1自由点，所有稀有度一致
+    # 自由点可由玩家自由分配到任意属性，提供自定义成长的灵活性
+    GuestRarity.BLACK: 1,
+    GuestRarity.GRAY: 1,
+    GuestRarity.GREEN: 1,
+    GuestRarity.BLUE: 1,
+    GuestRarity.RED: 1,
+    GuestRarity.PURPLE: 1,
+    GuestRarity.ORANGE: 1,
+}
+
+# 成长率配置已移除，改用直接数值成长
+# 属性分配逻辑见 guests/utils/attribute_growth.py
+
+
+class GuestTemplate(models.Model):
+    key = models.SlugField(unique=True)
+    name = models.CharField(max_length=64)
+    archetype = models.CharField(max_length=16, choices=GuestArchetype.choices)
+    rarity = models.CharField(max_length=16, choices=GuestRarity.choices)
+    base_attack = models.PositiveIntegerField(default=100)
+    base_intellect = models.PositiveIntegerField(default=100)
+    base_defense = models.PositiveIntegerField(default=100)
+    base_agility = models.PositiveIntegerField(default=80)
+    base_luck = models.PositiveIntegerField(default=50)
+    base_hp = models.PositiveIntegerField(default=1200)
+    avatar = models.ImageField(upload_to='guests/', blank=True, null=True, verbose_name="门客头像")
+    flavor = models.CharField(max_length=128, blank=True)
+    default_gender = models.CharField(max_length=16, choices=GENDER_CHOICES, default="unknown")
+    default_morality = models.PositiveIntegerField(default=50)
+    initial_skills = models.ManyToManyField("Skill", blank=True, related_name="template_initials")
+    recruitable = models.BooleanField(default=True)
+    # 是否为隐士（隐藏在民间的高手，虽为黑色但不可重复招募）
+    is_hermit = models.BooleanField(default=False, verbose_name="隐士")
+    # 自定义成长点数区间 [min, max]，为空则使用稀有度默认值
+    growth_range = models.JSONField(default=list, blank=True, verbose_name="成长点数区间")
+    # 自定义属性分配权重 {force: X, intellect: Y, defense: Z, agility: W}
+    attribute_weights = models.JSONField(default=dict, blank=True, verbose_name="属性分配权重")
+
+    class Meta:
+        verbose_name = "门客模板"
+        verbose_name_plural = "门客模板"
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class RecruitmentPool(models.Model):
+    class Tier(models.TextChoices):
+        TONGSHI = "tongshi", "童试"
+        XIANGSHI = "xiangshi", "乡试"
+        HUISHI = "huishi", "会试"
+        DIANSHI = "dianshi", "殿试"
+
+    key = models.SlugField(unique=True)
+    name = models.CharField(max_length=64)
+    description = models.TextField(blank=True)
+    cost = models.JSONField(default=dict)
+    cooldown_seconds = models.PositiveIntegerField(default=0)
+    tier = models.CharField(max_length=16, choices=Tier.choices, default=Tier.TONGSHI)
+    draw_count = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        verbose_name = "招募卡池"
+        verbose_name_plural = "招募卡池"
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class RecruitmentPoolEntry(models.Model):
+    pool = models.ForeignKey(RecruitmentPool, on_delete=models.CASCADE, related_name="entries")
+    template = models.ForeignKey(GuestTemplate, on_delete=models.CASCADE, null=True, blank=True)
+    rarity = models.CharField(max_length=16, choices=GuestRarity.choices, blank=True, null=True)
+    archetype = models.CharField(max_length=16, choices=GuestArchetype.choices, blank=True, null=True)
+    weight = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        verbose_name = "卡池配置"
+        verbose_name_plural = "卡池配置"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(template__isnull=False) | models.Q(rarity__isnull=False),
+                name="pool_entry_template_or_category",
+            )
+        ]
+
+
+class SkillKind(models.TextChoices):
+    ACTIVE = "active", "主动"
+    PASSIVE = "passive", "被动"
+
+
+class Skill(models.Model):
+    key = models.SlugField(unique=True)
+    name = models.CharField(max_length=64)
+    rarity = models.CharField(max_length=16, choices=GuestRarity.choices, default=GuestRarity.GRAY)
+    description = models.TextField(blank=True)
+    base_power = models.PositiveIntegerField(default=100)
+    base_probability = models.FloatField(default=0.1)
+    kind = models.CharField(max_length=16, choices=SkillKind.choices, default=SkillKind.ACTIVE)
+    status_effect = models.CharField(max_length=32, blank=True)
+    status_probability = models.FloatField(default=0.0)
+    status_duration = models.PositiveIntegerField(default=1)
+    damage_formula = models.JSONField(default=dict, blank=True)
+    required_level = models.PositiveIntegerField(default=0)
+    required_force = models.PositiveIntegerField(default=0)
+    required_intellect = models.PositiveIntegerField(default=0)
+    required_defense = models.PositiveIntegerField(default=0)
+    required_agility = models.PositiveIntegerField(default=0)
+    targets = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        verbose_name = "门客技能"
+        verbose_name_plural = "门客技能"
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class SkillBook(models.Model):
+    key = models.SlugField(unique=True)
+    name = models.CharField(max_length=64)
+    skill = models.ForeignKey(Skill, on_delete=models.CASCADE, related_name="books")
+    description = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = "技能书"
+        verbose_name_plural = "技能书"
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class Guest(models.Model):
+    # 使用自定义 Manager 提供便捷查询方法
+    from .managers import GuestManager
+
+    manor = models.ForeignKey(Manor, on_delete=models.CASCADE, related_name="guests")
+    template = models.ForeignKey(GuestTemplate, on_delete=models.CASCADE)
+    level = models.PositiveIntegerField(default=1)
+    experience = models.PositiveIntegerField(default=0)
+    attack_bonus = models.IntegerField(default=0)
+    defense_bonus = models.IntegerField(default=0)
+    custom_name = models.CharField("自定义称号", max_length=64, blank=True)
+    force = models.PositiveIntegerField("武力", default=80)
+    intellect = models.PositiveIntegerField("智力", default=80)
+    defense_stat = models.PositiveIntegerField("防御", default=80)
+    agility = models.PositiveIntegerField("敏捷", default=80)
+    luck = models.PositiveIntegerField("运势", default=50)
+    loyalty = models.PositiveIntegerField("忠诚度", default=80)
+    hp_bonus = models.IntegerField(default=0)
+    current_hp = models.PositiveIntegerField(default=0)
+    last_hp_recovery_at = models.DateTimeField(default=timezone.now)
+    gear_set_bonus = models.JSONField(default=dict, blank=True)
+    attribute_points = models.PositiveIntegerField("属性点", default=0)
+    gender = models.CharField(max_length=16, choices=GENDER_CHOICES, default="unknown")
+    morality = models.PositiveIntegerField("品性", default=50)
+    status = models.CharField(max_length=16, choices=GuestStatus.choices, default=GuestStatus.IDLE)
+    skills = models.ManyToManyField(Skill, through="GuestSkill", blank=True)
+    training_target_level = models.PositiveIntegerField(default=0)
+    training_complete_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects: "GuestManagerType" = GuestManager()
+
+    class Meta:
+        verbose_name = "门客"
+        verbose_name_plural = "门客"
+        indexes = [
+            models.Index(fields=["manor", "status"], name="guest_manor_status_idx"),
+            models.Index(fields=["manor", "-created_at"], name="guest_manor_created_idx"),
+            models.Index(fields=["training_complete_at"], name="guest_training_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.display_name} Lv{self.level}"
+
+    @property
+    def display_name(self) -> str:
+        return self.custom_name or self.template.name
+
+    @property
+    def rarity(self) -> str:
+        return self.template.rarity
+
+    @property
+    def archetype(self) -> str:
+        return self.template.archetype
+
+    @property
+    def is_idle(self) -> bool:
+        return self.status == GuestStatus.IDLE
+
+    @property
+    def max_hp(self) -> int:
+        """
+        血量计算：基础HP + 防御加成
+
+        取消升级HP成长，血量完全由防御属性决定。
+        每点防御提供DEFENSE_TO_HP_MULTIPLIER点额外血量上限。
+
+        设计理念：
+        - 强制玩家在攻击和防御间权衡
+        - 全加攻击 → 高输出但脆皮
+        - 全加防御 → 超级坦克但低伤
+        - 平衡分配 → 攻防兼备
+
+        示例（100级紫色武门客，防御264）：
+        - 全加武力：HP = 2400 + 264×50 = 15,600
+        - 全加防御：HP = 2400 + 363×50 = 20,550
+        """
+        base_hp = self.template.base_hp + self.hp_bonus
+        defense_hp = self.defense_stat * DEFENSE_TO_HP_MULTIPLIER
+        total = max(MIN_HP_FLOOR, base_hp + defense_hp)
+        return int(total)
+
+    def restore_full_hp(self) -> None:
+        self.current_hp = self.max_hp
+        update_fields = ["current_hp"]
+        # 恢复满血时解除重伤状态
+        if self.status == GuestStatus.INJURED:
+            self.status = GuestStatus.IDLE
+            update_fields.append("status")
+        self.save(update_fields=update_fields)
+
+    # 成长倍率相关方法已移除，改用直接数值成长
+    # 升级时直接增加门客的实际属性值
+
+    def stat_block(self) -> Dict[str, int]:
+        """
+        战斗属性计算（直接使用真实属性，不再乘倍率）
+
+        - 攻击力：文武门客使用不同公式
+          * 文官（civil）：武力80% + 智力30%
+          * 武将（military）：武力100% + 智力20%
+        - 防御力：由防御属性决定
+        - 智力：在技能伤害公式中生效
+        """
+        # 直接使用门客的真实属性，不再乘成长倍率
+        if self.archetype == GuestArchetype.CIVIL:
+            # 文官：更依赖智力
+            raw_attack = self.force * CIVIL_FORCE_WEIGHT + self.intellect * CIVIL_INTELLECT_WEIGHT
+        else:
+            # 武将：更依赖武力
+            raw_attack = self.force * MILITARY_FORCE_WEIGHT + self.intellect * MILITARY_INTELLECT_WEIGHT
+
+        return {
+            "attack": int(raw_attack),
+            "defense": self.defense_stat,
+            "intellect": self.intellect,
+            "hp": self.max_hp,
+        }
+
+    @property
+    def troop_capacity(self) -> int:
+        """
+        计算门客的带兵数量上限
+
+        规则：
+        - 基础带兵数量：BASE_TROOP_CAPACITY
+        - 满级额外增加：BONUS_TROOP_CAPACITY
+        - 总计：达到等级门槛的门客可带更多兵
+        """
+        if self.level >= TROOP_CAPACITY_LEVEL_THRESHOLD:
+            return BASE_TROOP_CAPACITY + BONUS_TROOP_CAPACITY
+        return BASE_TROOP_CAPACITY
+
+
+class GearSlot(models.TextChoices):
+    HELMET = "helmet", "头盔"
+    ARMOR = "armor", "衣甲"
+    WEAPON = "weapon", "武器"
+    SHOES = "shoes", "鞋子"
+    DEVICE = "device", "器械"
+    MOUNT = "mount", "坐骑"
+    ORNAMENT = "ornament", "饰品"
+
+
+class GearTemplate(models.Model):
+    key = models.SlugField(unique=True)
+    name = models.CharField(max_length=64)
+    slot = models.CharField(max_length=16, choices=GearSlot.choices)
+    rarity = models.CharField(max_length=16, choices=GuestRarity.choices, default=GuestRarity.GRAY)
+    set_key = models.CharField(max_length=64, blank=True, default="")
+    set_description = models.CharField(max_length=128, blank=True, default="")
+    set_bonus = models.JSONField(default=dict, blank=True)
+    attack_bonus = models.IntegerField(default=0)
+    defense_bonus = models.IntegerField(default=0)
+    extra_stats = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        verbose_name = "装备模板"
+        verbose_name_plural = "装备模板"
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class GearItem(models.Model):
+    manor = models.ForeignKey(Manor, on_delete=models.CASCADE, related_name="gears")
+    template = models.ForeignKey(GearTemplate, on_delete=models.CASCADE)
+    guest = models.ForeignKey(Guest, on_delete=models.SET_NULL, null=True, blank=True, related_name="gear_items")
+    level = models.PositiveIntegerField(default=1)
+    acquired_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "装备实例"
+        verbose_name_plural = "装备实例"
+        indexes = [
+            models.Index(fields=["manor", "guest"], name="gearitem_manor_guest_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.template.name} Lv{self.level}"
+
+
+class RecruitmentRecord(models.Model):
+    manor = models.ForeignKey(Manor, on_delete=models.CASCADE, related_name="recruit_records")
+    pool = models.ForeignKey(RecruitmentPool, on_delete=models.SET_NULL, null=True)
+    guest = models.ForeignKey(Guest, on_delete=models.CASCADE)
+    rarity = models.CharField(max_length=16, choices=GuestRarity.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "招募记录"
+        verbose_name_plural = "招募记录"
+        ordering = ("-created_at",)
+
+
+class TrainingLog(models.Model):
+    manor = models.ForeignKey(Manor, on_delete=models.CASCADE)
+    guest = models.ForeignKey(Guest, on_delete=models.CASCADE)
+    delta_level = models.PositiveIntegerField()
+    resource_cost = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "培养记录"
+        verbose_name_plural = "培养记录"
+        ordering = ("-created_at",)
+
+
+class GuestSkill(models.Model):
+    class Source(models.TextChoices):
+        TEMPLATE = "template", "模板"
+        BOOK = "book", "技能书"
+
+    guest = models.ForeignKey(Guest, on_delete=models.CASCADE, related_name="guest_skills")
+    skill = models.ForeignKey(Skill, on_delete=models.CASCADE)
+    source = models.CharField(max_length=16, choices=Source.choices, default=Source.TEMPLATE)
+    learned_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        verbose_name = "门客技能"
+        verbose_name_plural = "门客技能"
+        unique_together = ("guest", "skill")
+
+    def clean(self):
+        super().clean()
+        self._ensure_capacity()
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def _ensure_capacity(self):
+        if not self.guest_id:
+            return
+        current = (
+            GuestSkill.objects.filter(guest_id=self.guest_id)
+            .exclude(pk=self.pk)
+            .count()
+        )
+        if current >= MAX_GUEST_SKILL_SLOTS:
+            raise ValidationError("技能位已满，无法继续学习新的技能。")
+
+
+class RecruitmentCandidate(models.Model):
+    manor = models.ForeignKey(Manor, on_delete=models.CASCADE, related_name="candidates")
+    pool = models.ForeignKey(RecruitmentPool, on_delete=models.CASCADE)
+    template = models.ForeignKey(GuestTemplate, on_delete=models.CASCADE)
+    display_name = models.CharField(max_length=64)
+    rarity = models.CharField(max_length=16, choices=GuestRarity.choices)
+    archetype = models.CharField(max_length=16, choices=GuestArchetype.choices)
+    rarity_revealed = models.BooleanField(default=False, verbose_name="稀有度已显示")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "招募候选"
+        verbose_name_plural = "招募候选"
+        ordering = ("created_at",)
+
+
+# 稀有度工资配置
+RARITY_SALARY = {
+    GuestRarity.BLACK: 500,
+    GuestRarity.GRAY: 1000,
+    GuestRarity.GREEN: 2000,
+    GuestRarity.RED: 3000,
+    GuestRarity.BLUE: 4000,
+    GuestRarity.PURPLE: 15000,
+    GuestRarity.ORANGE: 30000,
+}
+
+
+class SalaryPayment(models.Model):
+    """工资支付记录"""
+    manor = models.ForeignKey(Manor, on_delete=models.CASCADE, related_name="salary_payments")
+    guest = models.ForeignKey(Guest, on_delete=models.CASCADE, related_name="salary_payments")
+    amount = models.PositiveIntegerField("工资金额")
+    paid_at = models.DateTimeField(auto_now_add=True, verbose_name="支付时间")
+    for_date = models.DateField("支付日期", help_text="为哪一天支付的工资")
+
+    class Meta:
+        verbose_name = "工资支付记录"
+        verbose_name_plural = "工资支付记录"
+        ordering = ("-paid_at",)
+        indexes = [
+            models.Index(fields=["guest", "for_date"]),
+            models.Index(fields=["manor", "for_date"]),
+        ]
+        unique_together = ("guest", "for_date")
+
+    def __str__(self) -> str:
+        return f"{self.guest.display_name} - {self.for_date} - {self.amount}银两"
+
+
+class GuestDefection(models.Model):
+    """门客叛逃记录"""
+    manor = models.ForeignKey(Manor, on_delete=models.CASCADE, related_name="guest_defections")
+    guest_name = models.CharField(max_length=64, verbose_name="门客名称")
+    guest_level = models.PositiveIntegerField("门客等级")
+    guest_rarity = models.CharField(max_length=16, choices=GuestRarity.choices, verbose_name="稀有度")
+    loyalty_at_defection = models.PositiveIntegerField("叛逃时忠诚度")
+    defected_at = models.DateTimeField(auto_now_add=True, verbose_name="叛逃时间")
+
+    class Meta:
+        verbose_name = "门客叛逃记录"
+        verbose_name_plural = "门客叛逃记录"
+        ordering = ("-defected_at",)
+
+    def __str__(self) -> str:
+        return f"{self.guest_name} (Lv{self.guest_level}) 叛逃"

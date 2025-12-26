@@ -1,0 +1,683 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}出征配置 - {{ target_manor.display_name }}{% endblock %}
+
+{% block content %}
+<section class="dashboard">
+    <div class="section-header">
+        <div>
+            <h1>出征配置</h1>
+            <p class="caption">目标：{{ target_manor.display_name }}</p>
+        </div>
+        <a href="{% url 'gameplay:map' %}" class="btn-secondary">返回地图</a>
+    </div>
+
+    <!-- 目标庄园信息 -->
+    <section class="card target-info-card">
+        <h2>目标庄园</h2>
+        <div class="target-details">
+            <div class="target-main">
+                <div class="target-name">{{ target_manor.display_name }}</div>
+                <div class="target-location">{{ target_info.region_display }} ({{ target_manor.coordinate_x }}, {{ target_manor.coordinate_y }})</div>
+            </div>
+            <div class="target-stats">
+                <div class="stat-item">
+                    <span class="stat-label">声望</span>
+                    <span class="stat-value {% if target_info.prestige_comparison == 'higher' %}text-danger{% elif target_info.prestige_comparison == 'lower' %}text-success{% endif %}">
+                        {{ target_info.prestige }}
+                    </span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">距离</span>
+                    <span class="stat-value">{{ target_info.distance|floatformat:1 }}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">预计行军时间</span>
+                    <span class="stat-value">{{ target_info.travel_time }}秒</span>
+                </div>
+                {% if target_info.is_protected %}
+                <div class="stat-item">
+                    <span class="stat-label">状态</span>
+                    <span class="stat-value protection-badge">保护中</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if not can_attack %}
+        <div class="alert alert-danger">
+            <strong>无法进攻：</strong>{{ attack_reason }}
+        </div>
+        {% endif %}
+    </section>
+
+    {% if can_attack %}
+    <!-- 出征配置表单 -->
+    <form id="raid-form" class="raid-form">
+        <!-- 门客选择 -->
+        <section class="card">
+            <h2>选择出征门客 <span class="caption">(最多 {{ max_squad_size }} 人)</span></h2>
+            <p class="help-text">选择要派遣出征的门客，他们将参与战斗。</p>
+
+            {% if available_guests %}
+            <div class="guest-selection">
+                {% for guest in available_guests %}
+                <label class="guest-checkbox">
+                    <input type="checkbox" name="guest_ids" value="{{ guest.id }}" class="guest-input">
+                    <div class="guest-card">
+                        <div class="guest-avatar">
+                            {% if guest.template.avatar %}
+                            <img src="{{ guest.template.avatar.url }}" alt="{{ guest.display_name }}">
+                            {% else %}
+                            <div class="avatar-placeholder">{{ guest.display_name|slice:":1" }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="guest-details">
+                            <div class="guest-info">
+                                <span class="guest-name">{{ guest.display_name }}</span>
+                                <span class="guest-level">Lv.{{ guest.level }}</span>
+                            </div>
+                            <div class="guest-stats">
+                                <span title="生命">HP {{ guest.current_hp }}/{{ guest.max_hp }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-hint">
+                <p>暂无可出征的门客</p>
+                <p class="caption">请确保有闲置状态的门客</p>
+            </div>
+            {% endif %}
+
+            <div class="selection-summary">
+                已选择 <strong id="selected-count">0</strong> / {{ max_squad_size }} 人
+            </div>
+        </section>
+
+        <!-- 护院配置 -->
+        <section class="card">
+            <h2>携带护院</h2>
+            <p class="help-text">选择要携带的护院数量，护院可以增强战斗力。</p>
+
+            {% if player_troops %}
+            <div class="troop-selection">
+                {% for troop in player_troops %}
+                <div class="troop-row">
+                    <div class="troop-info">
+                        <div class="troop-avatar">
+                            {% if troop.avatar %}
+                            <img src="{{ troop.avatar }}" alt="{{ troop.name }}">
+                            {% else %}
+                            <div class="avatar-placeholder">{{ troop.name|slice:":1" }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="troop-details">
+                            <span class="troop-name">{{ troop.name }}</span>
+                            <span class="troop-count">可用: {{ troop.count }}</span>
+                        </div>
+                    </div>
+                    <div class="troop-input-group">
+                        <button type="button" class="btn-adjust" data-adjust="-10" data-troop="{{ troop.key }}">-10</button>
+                        <button type="button" class="btn-adjust" data-adjust="-1" data-troop="{{ troop.key }}">-</button>
+                        <input type="number" name="troop_{{ troop.key }}" class="troop-input"
+                               value="0" min="0" max="{{ troop.count }}" data-troop-key="{{ troop.key }}" data-max="{{ troop.count }}">
+                        <button type="button" class="btn-adjust" data-adjust="1" data-troop="{{ troop.key }}">+</button>
+                        <button type="button" class="btn-adjust" data-adjust="10" data-troop="{{ troop.key }}">+10</button>
+                        <button type="button" class="btn-max" data-troop="{{ troop.key }}">全部</button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-hint">
+                <p>暂无可用护院</p>
+                <p class="caption">请先在练功场招募护院</p>
+            </div>
+            {% endif %}
+        </section>
+
+        <!-- 提交按钮 -->
+        <section class="card action-card">
+            <div class="action-summary">
+                <div class="summary-item">
+                    <span class="summary-label">出征门客</span>
+                    <span class="summary-value" id="summary-guests">0 人</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">携带护院</span>
+                    <span class="summary-value" id="summary-troops">0</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">预计到达</span>
+                    <span class="summary-value">{{ target_info.travel_time }} 秒后</span>
+                </div>
+            </div>
+
+            <div class="action-buttons">
+                <a href="{% url 'gameplay:map' %}" class="btn-secondary">取消</a>
+                <button type="submit" class="btn-primary btn-large" id="submit-btn" disabled>
+                    发起进攻
+                </button>
+            </div>
+        </section>
+    </form>
+    {% else %}
+    <!-- 无法进攻时显示返回按钮 -->
+    <section class="card action-card">
+        <div class="action-buttons">
+            <a href="{% url 'gameplay:map' %}" class="btn-primary">返回地图</a>
+        </div>
+    </section>
+    {% endif %}
+</section>
+
+<style>
+/* 出征配置页面样式 */
+.target-info-card {
+    padding: 1.5rem;
+}
+
+.target-info-card h2 {
+    margin-bottom: 1rem;
+}
+
+.target-details {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+}
+
+.target-main {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.target-name {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--text-primary);
+}
+
+.target-location {
+    color: var(--text-muted);
+}
+
+.target-stats {
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.stat-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.text-danger {
+    color: #dc2626;
+}
+
+.text-success {
+    color: #16a34a;
+}
+
+.protection-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: #fef3c7;
+    color: #d97706;
+    font-size: 0.85rem;
+    border-radius: 4px;
+}
+
+.alert {
+    padding: 1rem;
+    border-radius: 6px;
+    margin-top: 1rem;
+}
+
+.alert-danger {
+    background: #fee2e2;
+    border: 1px solid #fca5a5;
+    color: #b91c1c;
+}
+
+/* 门客选择 */
+.help-text {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+}
+
+.guest-selection {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.guest-checkbox {
+    cursor: pointer;
+}
+
+.guest-checkbox input {
+    display: none;
+}
+
+.guest-card {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--bg-hover);
+    border: 2px solid var(--border-light);
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.guest-checkbox input:checked + .guest-card {
+    background: #FDF6E3;
+    border-color: var(--accent-gold);
+    box-shadow: 0 0 0 1px var(--accent-gold);
+}
+
+.guest-card:hover {
+    border-color: var(--border-primary);
+}
+
+.guest-avatar, .troop-avatar {
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--bg-secondary);
+}
+
+.guest-avatar img, .troop-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.avatar-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    font-weight: bold;
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+}
+
+.guest-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.guest-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+}
+
+.guest-name {
+    font-weight: 600;
+}
+
+.guest-level {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+    padding: 0.125rem 0.5rem;
+    border-radius: 4px;
+}
+
+.guest-stats {
+    display: flex;
+    gap: 0.75rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.selection-summary {
+    padding: 0.75rem;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    text-align: center;
+    font-size: 0.9rem;
+}
+
+/* 护院选择 */
+.troop-selection {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.troop-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: var(--bg-hover);
+    border-radius: 6px;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.troop-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.troop-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.troop-name {
+    font-weight: 600;
+}
+
+.troop-count {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.troop-input-group {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.btn-adjust {
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--border-light);
+    background: var(--bg-panel);
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.2s;
+}
+
+.btn-adjust:hover {
+    background: var(--bg-secondary);
+    border-color: var(--border-primary);
+}
+
+.troop-input {
+    width: 60px;
+    height: 32px;
+    text-align: center;
+    border: 1px solid var(--border-light);
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.btn-max {
+    padding: 0.375rem 0.75rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-light);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+}
+
+.btn-max:hover {
+    background: var(--border-light);
+}
+
+/* 操作区 */
+.action-card {
+    padding: 1.5rem;
+}
+
+.action-summary {
+    display: flex;
+    justify-content: center;
+    gap: 3rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border-light);
+    flex-wrap: wrap;
+}
+
+.summary-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.summary-label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.summary-value {
+    font-size: 1.25rem;
+    font-weight: bold;
+    color: var(--text-primary);
+}
+
+.action-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+}
+
+.btn-large {
+    padding: 0.75rem 2rem;
+    font-size: 1.1rem;
+}
+
+.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.empty-hint {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-muted);
+}
+
+.empty-hint p {
+    margin: 0.5rem 0;
+}
+
+@media (max-width: 768px) {
+    .target-details {
+        flex-direction: column;
+    }
+
+    .target-stats {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .troop-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .troop-input-group {
+        justify-content: center;
+    }
+
+    .action-summary {
+        gap: 1.5rem;
+    }
+}
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function() {
+    const raidApiUrl = '{% url "gameplay:start_raid_api" %}';
+    const targetId = {{ target_manor.id }};
+    const maxSquadSize = {{ max_squad_size }};
+    const csrfToken = '{{ csrf_token }}';
+
+    const form = document.getElementById('raid-form');
+    if (!form) return;
+
+    const guestInputs = document.querySelectorAll('.guest-input');
+    const troopInputs = document.querySelectorAll('.troop-input');
+    const selectedCount = document.getElementById('selected-count');
+    const summaryGuests = document.getElementById('summary-guests');
+    const summaryTroops = document.getElementById('summary-troops');
+    const submitBtn = document.getElementById('submit-btn');
+
+    // Update summary
+    function updateSummary() {
+        const selectedGuests = document.querySelectorAll('.guest-input:checked').length;
+        selectedCount.textContent = selectedGuests;
+        summaryGuests.textContent = selectedGuests + ' 人';
+
+        let totalTroops = 0;
+        troopInputs.forEach(function(input) {
+            totalTroops += parseInt(input.value) || 0;
+        });
+        summaryTroops.textContent = totalTroops;
+
+        // Enable submit button only if at least one guest is selected
+        submitBtn.disabled = selectedGuests === 0;
+    }
+
+    // Guest selection
+    guestInputs.forEach(function(input) {
+        input.addEventListener('change', function() {
+            const selectedGuests = document.querySelectorAll('.guest-input:checked').length;
+            if (selectedGuests > maxSquadSize) {
+                this.checked = false;
+                gameAlert('最多只能选择 ' + maxSquadSize + ' 名门客出征', { title: '选择限制' });
+                return;
+            }
+            updateSummary();
+        });
+    });
+
+    // Troop adjustment buttons
+    document.querySelectorAll('.btn-adjust').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const troopKey = this.dataset.troop;
+            const adjust = parseInt(this.dataset.adjust);
+            const input = document.querySelector('[data-troop-key="' + troopKey + '"]');
+            const max = parseInt(input.dataset.max);
+            let newValue = (parseInt(input.value) || 0) + adjust;
+            newValue = Math.max(0, Math.min(max, newValue));
+            input.value = newValue;
+            updateSummary();
+        });
+    });
+
+    // Max buttons
+    document.querySelectorAll('.btn-max').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const troopKey = this.dataset.troop;
+            const input = document.querySelector('[data-troop-key="' + troopKey + '"]');
+            input.value = input.dataset.max;
+            updateSummary();
+        });
+    });
+
+    // Troop input change
+    troopInputs.forEach(function(input) {
+        input.addEventListener('change', function() {
+            const max = parseInt(this.dataset.max);
+            let value = parseInt(this.value) || 0;
+            value = Math.max(0, Math.min(max, value));
+            this.value = value;
+            updateSummary();
+        });
+    });
+
+    // Form submission
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const selectedGuestIds = [];
+        document.querySelectorAll('.guest-input:checked').forEach(function(input) {
+            selectedGuestIds.push(parseInt(input.value));
+        });
+
+        if (selectedGuestIds.length === 0) {
+            gameAlert('请至少选择一名门客出征', { title: '提示' });
+            return;
+        }
+
+        const troopLoadout = {};
+        troopInputs.forEach(function(input) {
+            const count = parseInt(input.value) || 0;
+            if (count > 0) {
+                troopLoadout[input.dataset.troopKey] = count;
+            }
+        });
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = '发起进攻中...';
+
+        fetch(raidApiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                target_id: targetId,
+                guest_ids: selectedGuestIds,
+                troop_loadout: troopLoadout
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                gameDialog.success(data.message, { title: '出征成功' }).then(() => {
+                    window.location.href = '{% url "gameplay:map" %}';
+                });
+            } else {
+                gameDialog.error('出征失败: ' + data.error, { title: '出征失败' });
+                submitBtn.disabled = false;
+                submitBtn.textContent = '发起进攻';
+            }
+        })
+        .catch(err => {
+            gameDialog.error('请求失败，请稍后重试', { title: '错误' });
+            submitBtn.disabled = false;
+            submitBtn.textContent = '发起进攻';
+        });
+    });
+
+    // Initial update
+    updateSummary();
+})();
+</script>
+{% endblock %}

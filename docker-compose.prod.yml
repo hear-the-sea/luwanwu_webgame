@@ -1,0 +1,94 @@
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  db:
+    image: mysql:8.4
+    command: ["--default-authentication-plugin=mysql_native_password"]
+    environment:
+      MYSQL_DATABASE: webgame
+      MYSQL_USER: webgame
+      MYSQL_PASSWORD: webgame
+      MYSQL_ROOT_PASSWORD: root
+    volumes:
+      - db_data:/var/lib/mysql
+    restart: unless-stopped
+
+  web:
+    build: .
+    env_file: .env.docker
+    command:
+      [
+        "bash",
+        "/app/docker/entrypoint.sh",
+        "daphne",
+        "-b",
+        "0.0.0.0",
+        "-p",
+        "8000",
+        "config.asgi:application",
+      ]
+    volumes:
+      - media:/app/media
+      - staticfiles:/app/staticfiles
+    depends_on:
+      - db
+      - redis
+    expose:
+      - "8000"
+    restart: unless-stopped
+
+  worker:
+    build: .
+    env_file: .env.docker
+    command: ["bash", "/app/docker/entrypoint.sh", "celery", "-A", "config", "worker", "-l", "info"]
+    volumes:
+      - media:/app/media
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+
+  beat:
+    build: .
+    env_file: .env.docker
+    command:
+      - bash
+      - /app/docker/entrypoint.sh
+      - celery
+      - -A
+      - config
+      - beat
+      - -l
+      - info
+      - --schedule
+      - /var/run/celerybeat-schedule
+    volumes:
+      - celerybeat_data:/var/run
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - staticfiles:/staticfiles:ro
+      - media:/media:ro
+    depends_on:
+      - web
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  redis_data:
+  media:
+  staticfiles:
+  celerybeat_data:

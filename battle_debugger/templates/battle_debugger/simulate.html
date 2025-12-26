@@ -1,0 +1,346 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}战斗模拟 - 战斗调试器{% endblock %}
+
+{% block extra_head %}
+<style>
+/* 模拟页面样式 */
+.debugger-container {
+    padding: 1.5rem;
+}
+
+.debugger-header {
+    margin-bottom: 1.5rem;
+}
+
+.debugger-header h1 {
+    font-size: 1.8rem;
+    color: var(--text-primary);
+    border-bottom: 3px double var(--border-primary);
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+/* 面包屑导航 */
+.breadcrumb {
+    display: flex;
+    gap: 0.5rem;
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1.5rem 0;
+    font-size: 0.9rem;
+}
+
+.breadcrumb li {
+    color: var(--text-muted);
+}
+
+.breadcrumb li a {
+    color: var(--accent-gold);
+    text-decoration: none;
+}
+
+.breadcrumb li a:hover {
+    text-decoration: underline;
+}
+
+.breadcrumb li::after {
+    content: "›";
+    margin-left: 0.5rem;
+    color: var(--text-muted);
+}
+
+.breadcrumb li:last-child::after {
+    content: "";
+}
+
+/* 配置网格 */
+.config-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+@media (max-width: 992px) {
+    .config-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* 配置面板 */
+.config-panel {
+    background: var(--bg-panel);
+    border: 2px solid var(--border-primary);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.config-panel-header {
+    padding: 0.8rem 1rem;
+    font-weight: 700;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.config-panel-header.primary {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: #FFF8E7;
+}
+
+.config-panel-header.success {
+    background: linear-gradient(135deg, #059669, #047857);
+    color: #FFF8E7;
+}
+
+.config-panel-body {
+    padding: 1rem;
+}
+
+/* 表单组 */
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-group:last-child {
+    margin-bottom: 0;
+}
+
+.form-group label {
+    display: block;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 0.4rem;
+    font-size: 0.95rem;
+}
+
+.form-group label small {
+    font-weight: normal;
+    color: var(--text-muted);
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    border: 2px solid var(--border-primary);
+    border-radius: 6px;
+    padding: 0.6rem 0.8rem;
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.95rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: var(--accent-gold);
+    box-shadow: 0 0 0 3px rgba(218, 165, 32, 0.2);
+}
+
+.form-group input::placeholder {
+    color: var(--text-muted);
+}
+
+.form-hint {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-top: 0.3rem;
+}
+
+/* 参数列表 */
+.params-note {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    padding: 0.6rem 0.8rem;
+    background: var(--bg-hover);
+    border-radius: 6px;
+    margin-bottom: 1rem;
+}
+
+.params-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+}
+
+.params-grid .form-group {
+    margin-bottom: 0;
+}
+
+/* 操作按钮 */
+.action-buttons {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.btn-primary {
+    background: linear-gradient(180deg, #8B4513 0%, #6B3410 100%);
+    border: 2px solid #5A2E0D;
+    color: #FFF8E7;
+    padding: 0.8rem 1.5rem;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(74, 38, 18, 0.25);
+}
+
+.btn-primary:hover {
+    background: linear-gradient(180deg, #7A3B10 0%, #5A2E0D 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(74, 38, 18, 0.35);
+}
+
+.btn-primary:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.btn-secondary {
+    background: var(--bg-hover);
+    border: 2px solid var(--border-primary);
+    color: var(--text-secondary);
+    padding: 0.8rem 1.5rem;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+    background: var(--bg-panel);
+    color: var(--text-primary);
+}
+
+/* 加载动画 */
+.spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #FFF8E7;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="debugger-container">
+    <div class="debugger-header">
+        <h1>战斗模拟</h1>
+    </div>
+
+    <nav>
+        <ol class="breadcrumb">
+            <li><a href="{% url 'battle_debugger:index' %}">调试器</a></li>
+            <li>战斗模拟</li>
+        </ol>
+    </nav>
+
+    <form method="post" id="simulateForm">
+        {% csrf_token %}
+
+        <div class="config-row">
+            <!-- 左侧：基础配置 -->
+            <div class="config-panel">
+                <div class="config-panel-header primary">
+                    <span>⚙️</span> 基础配置
+                </div>
+                <div class="config-panel-body">
+                    <div class="form-group">
+                        <label for="preset">预设配置</label>
+                        <select id="preset" name="preset" required>
+                            <option value="">-- 选择预设 --</option>
+                            {% for preset in presets %}
+                            <option value="{{ preset.name }}"
+                                    {% if request.GET.preset == preset.name %}selected{% endif %}>
+                                {{ preset.title }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="seed">
+                            随机种子
+                            <small>(可选，用于复现)</small>
+                        </label>
+                        <input type="number" id="seed" name="seed" placeholder="留空则随机生成">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="repeat">重复次数</label>
+                        <input type="number" id="repeat" name="repeat" value="1" min="1" max="100" required>
+                        <div class="form-hint">运行多次可以查看统计数据</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧：参数覆盖 -->
+            <div class="config-panel">
+                <div class="config-panel-header success">
+                    <span>📊</span> 参数覆盖
+                </div>
+                <div class="config-panel-body">
+                    <div class="params-note">
+                        留空则使用预设配置中的默认值
+                    </div>
+                    <div class="params-grid">
+                        {% for param in tunable_params %}
+                        <div class="form-group">
+                            <label for="param_{{ param.key }}">{{ param.label }}</label>
+                            <input type="number"
+                                   id="param_{{ param.key }}"
+                                   name="param_{{ param.key }}"
+                                   placeholder="{{ param.default }}"
+                                   min="{{ param.min|default:0 }}"
+                                   max="{{ param.max|default:100 }}"
+                                   step="{{ param.step|default:1 }}">
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="action-buttons">
+            <button type="submit" class="btn-primary" id="submitBtn">
+                🚀 开始模拟
+            </button>
+            <a href="{% url 'battle_debugger:index' %}" class="btn-secondary">
+                ← 返回
+            </a>
+        </div>
+    </form>
+</div>
+
+<script>
+document.getElementById('simulateForm').addEventListener('submit', function() {
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> 模拟中...';
+});
+</script>
+{% endblock %}

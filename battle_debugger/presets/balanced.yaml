@@ -1,0 +1,63 @@
+# 平衡配置测试
+# 3个门客 + 500小兵 vs 2000小兵
+
+name: "平衡配置测试"
+description: "3个门客(Lv80-100) + 500混合小兵 vs 2000枪王，测试基础战斗平衡性"
+
+attacker:
+  guests:
+    # 独孤求败 - 橙色武将，主攻手
+    - template: special_hero_dugu_qiubai
+      level: 100
+      force: 500
+      intellect: 300
+      defense: 300
+      agility: 200
+      luck: 100
+      skills:
+        - dragon_roar
+        - stratagem_burst
+
+    # 扫地僧 - 橙色文官，辅助输出
+    - template: special_hero_sao_di_seng
+      level: 90
+      archetype: civil
+      force: 300
+      intellect: 450
+      defense: 280
+      agility: 180
+      luck: 120
+      skills:
+        - stratagem_burst
+
+    # 赵云 - 绿色武将，均衡型
+    - template: hero_zhao_yun
+      level: 80
+      force: 400
+      intellect: 250
+      defense: 250
+      agility: 220
+      luck: 80
+      skills:
+        - dragon_roar
+
+  troops:
+    dao_sheng: 200   # 刀圣
+    arrow_god: 300   # 箭神
+
+  technology_level: 8  # 统一8级科技
+
+defender:
+  troops:
+    qiang_wang: 2000  # 枪王×2000
+
+  technology_level: 10  # 满级科技
+
+# 默认参数（当前游戏配置）
+tunable_params:
+  slaughter_multiplier: 30
+  troop_attack_divisor_vs_guest: 4.0
+  troop_attack_divisor_vs_troop: 1.0
+  troop_defense_divisor: 2.0
+  counter_multiplier: 1.5
+  crit_chance: 0.05

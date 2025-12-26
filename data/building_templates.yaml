@@ -1,0 +1,267 @@
+# 建筑配置文件
+# 分类: resource(资源生产), storage(仓储设施), production(生产加工), personnel(人员管理), special(特殊建筑)
+
+categories:
+  - key: resource
+    name: 资源生产
+    description: 产出粮食和银两的基础建筑
+  - key: storage
+    name: 仓储设施
+    description: 存储资源和物品的建筑
+  - key: production
+    name: 生产加工
+    description: 加工制造各类物资的建筑
+  - key: personnel
+    name: 人员管理
+    description: 管理门客和家丁的建筑
+  - key: special
+    name: 特殊建筑
+    description: 具有特殊功能的建筑
+
+buildings:
+  # ==================== 资源生产 ====================
+  - key: farm
+    name: 农田
+    category: resource
+    description: 兵马未动，粮草先行。江湖中人行走四方，腹中无粮可走不远。升级提升粮食产量
+    resource_type: grain
+    base_rate_per_hour: 150
+    rate_growth: 0.14
+    base_upgrade_time: 180
+    time_growth: 1.22
+    base_cost:
+      silver: 170
+    cost_growth: 1.33
+    icon: ""
+
+  - key: tax_office
+    name: 税务司
+    category: resource
+    description: 有道是"钱能通神"，行走江湖哪能没有银两傍身？此处便是生财之道。升级提升银两产量
+    resource_type: silver
+    base_rate_per_hour: 90
+    rate_growth: 0.17
+    base_upgrade_time: 210
+    time_growth: 1.25
+    base_cost:
+      silver: 450
+    cost_growth: 1.36
+    icon: tax
+
+  - key: bathhouse
+    name: 澡堂
+    category: resource
+    description: 刀光剑影之后，且来此处洗去一身风尘。热汤沐浴，疲惫尽消，内力恢复更快。升级提升银两产量和门客恢复速度
+    resource_type: silver
+    base_rate_per_hour: 345
+    rate_growth: 0.1
+    base_upgrade_time: 300
+    time_growth: 1.25
+    base_cost:
+      silver: 850
+    cost_growth: 1.35
+    icon: bathhouse
+
+  - key: latrine
+    name: 茅厕
+    category: resource
+    description: 英雄也有三急时。此处虽不雅，却能化腐朽为神奇，肥水不流外人田。升级提升粮食和银两产量
+    resource_type: grain
+    base_rate_per_hour: 345
+    rate_growth: 0.1
+    base_upgrade_time: 300
+    time_growth: 1.25
+    base_cost:
+      silver: 550
+    cost_growth: 1.35
+    icon: latrine
+
+  # ==================== 仓储设施 ====================
+  - key: granary
+    name: 粮仓
+    category: storage
+    description: 积谷防饥，乃立身之本。粮仓充盈，方能养得起三千门客。升级提升粮食存储上限
+    resource_type: grain
+    base_rate_per_hour: 0
+    rate_growth: 0.0
+    base_upgrade_time: 300
+    time_growth: 1.2
+    base_cost:
+      silver: 950
+    cost_growth: 1.35
+    icon: granary
+
+  - key: silver_vault
+    name: 银库
+    category: storage
+    description: 千金散尽还复来，但总得有个地方存着不是？此库固若金汤，宵小莫近。升级提升银两存储上限
+    resource_type: silver
+    base_rate_per_hour: 0
+    rate_growth: 0.0
+    base_upgrade_time: 300
+    time_growth: 1.2
+    base_cost:
+      silver: 1100
+    cost_growth: 1.35
+    icon: silver_vault
+
+  - key: treasury
+    name: 藏宝阁
+    category: storage
+    description: 江湖奇珍，武林秘宝，尽藏于此。机关重重，纵是飞贼也难窥其中奥秘。升级提升物品存储上限
+    resource_type: silver
+    base_rate_per_hour: 0
+    rate_growth: 0.0
+    base_upgrade_time: 600
+    time_growth: 1.3
+    base_cost:
+      silver: 7500
+    cost_growth: 1.4
+    icon: treasury
+
+  # ==================== 生产加工 ====================
+  - key: ranch
+    name: 畜牧场
+    category: production
+    description: 六畜兴旺，庄园之福。鸡鸣犬吠，牛羊成群，好一派田园气象。升级提升制造速度
+    resource_type: grain
+    base_rate_per_hour: 0
+    rate_growth: 0.0
+    base_upgrade_time: 300
+    time_growth: 1.25
+    base_cost:
+      silver: 800
+    cost_growth: 1.35
+    icon: ranch
+
+  - key: smithy
+    name: 冶炼坊
+    category: production
+    description: 炉火纯青，百炼成钢。好铁需经千锤百炼，方能铸就神兵利器。升级提升冶炼速度
+    resource_type: silver
+    base_rate_per_hour: 0
+    rate_growth: 0.0
+    base_upgrade_time: 300
+    time_growth: 1.25
+    base_cost:
+      silver: 1000
+    cost_growth: 1.35
+    icon: smithy
+
+  - key: stable
+    name: 马房
+    category: production
+    description: 宝马配英雄，良驹值千金。此处所养皆是千里良驹，日行八百不在话下。升级提升驯马速度
+    resource_type: grain
+    base_rate_per_hour: 0
+    rate_growth: 0.0
+    base_upgrade_time: 300
+    time_growth: 1.25
+    base_cost:
+      silver: 980
+    cost_growth: 1.35
+    icon: stable
+
+  - key: forge
+    name: 铁匠铺
+    category: production
+    description: 工欲善其事，必先利其器。名师出高徒，此处铸造的兵刃，削铁如泥。升级提升锻造速度
+    resource_type: silver
+    base_rate_per_hour: 0
+    rate_growth: 0.0
+    base_upgrade_time: 300
+    time_growth: 1.25
+    base_cost:
+      grain: 500
+      silver: 500
+    cost_growth: 1.35
+    icon: forge
+
+  # ==================== 人员管理 ====================
+  - key: juxianzhuang
+    name: 聚贤庄
+    category: personnel
+    description: 天下英雄，入我彀中。广纳贤才，礼贤下士，方能成就一番霸业。升级提升门客容纳上限（14→15级需要1700W银两+340W粮食，成本略低于悠嘻宝塔）
+    resource_type: silver
+    base_rate_per_hour: 0
+    rate_growth: 0.0
+    base_upgrade_time: 3107
+    time_growth: 1.5
+    base_cost:
+      grain: 3432
+      silver: 17164
+    cost_growth: 1.7
+    icon: guest
+
+  - key: jiadingfang
+    name: 家丁房
+    category: personnel
+    description: 养兵千日，用兵一时。家丁虽非高手，却是庄园根基，不可或缺。升级提升家丁容纳上限
+    resource_type: grain
+    base_rate_per_hour: 0
+    rate_growth: 0.0
+    base_upgrade_time: 300
+    time_growth: 1.2
+    base_cost:
+      silver: 420
+    cost_growth: 1.3
+    icon: retainer
+
+  - key: lianggongchang
+    name: 练功场
+    category: personnel
+    description: 台上一分钟，台下十年功。此处挥汗如雨，只为他日扬名立万。升级提升训练速度
+    resource_type: grain
+    base_rate_per_hour: 0
+    rate_growth: 0.0
+    base_upgrade_time: 300
+    time_growth: 1.2
+    base_cost:
+      silver: 550
+    cost_growth: 1.3
+    icon: training
+
+  - key: tavern
+    name: 酒馆
+    category: personnel
+    description: 江湖儿女，把酒言欢。三杯两盏淡酒，道尽天下英雄事。消息灵通，人脉广博。升级提升银两收入和招募候选人数
+    resource_type: silver
+    base_rate_per_hour: 345
+    rate_growth: 0.211
+    base_upgrade_time: 300
+    time_growth: 1.25
+    base_cost:
+      silver: 1150
+    cost_growth: 1.35
+    icon: tavern
+
+  # ==================== 特殊建筑 ====================
+  - key: citang
+    name: 祠堂
+    category: special
+    description: 慎终追远，不忘先祖。祠堂香火鼎盛，庇佑子孙，庄园气运加持。升级减少建筑时间并提升招募速度
+    resource_type: silver
+    base_rate_per_hour: 0
+    rate_growth: 0.0
+    base_upgrade_time: 3600
+    time_growth: 2.0
+    base_cost:
+      grain: 5000
+      silver: 10000
+    cost_growth: 2.0
+    icon: citang
+
+  - key: youxibaota
+    name: 悠嘻宝塔
+    category: special
+    description: 登高望远，运筹帷幄。立于塔顶，可观四方风云，调兵遣将，决胜千里。升级提升同时出征门客上限（0级3人，每级+1人，满级15级18人）
+    resource_type: grain
+    base_rate_per_hour: 0
+    rate_growth: 0.0
+    base_upgrade_time: 3107
+    time_growth: 1.5
+    base_cost:
+      grain: 4038
+      silver: 20193
+    cost_growth: 1.7
+    icon: ""

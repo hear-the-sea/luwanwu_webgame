@@ -1,0 +1,130 @@
+"""
+排行榜服务模块
+
+提供庄园声望排名功能。
+"""
+from __future__ import annotations
+
+from typing import List, Dict, Any, Optional
+
+from django.core.cache import cache
+
+from ..models import Manor
+from .cache import (
+    CacheKeys,
+    CACHE_TIMEOUT_RANKING,
+    CACHE_TIMEOUT_MEDIUM,
+    get_or_set,
+)
+
+
+def get_prestige_ranking(limit: int = 50) -> List[Dict[str, Any]]:
+    """
+    获取声望排行榜（带缓存）。
+
+    Args:
+        limit: 返回的排名数量，默认50
+
+    Returns:
+        排行榜列表，每项包含：
+        - rank: 排名
+        - manor_id: 庄园ID
+        - manor_name: 庄园名称
+        - username: 用户名
+        - prestige: 声望值
+    """
+    cache_key = f"{CacheKeys.RANKING_PRESTIGE}:{limit}"
+
+    def compute_ranking():
+        manors = (
+            Manor.objects.select_related("user")
+            .filter(prestige__gt=0)
+            .order_by("-prestige", "created_at")[:limit]
+        )
+
+        ranking = []
+        for idx, manor in enumerate(manors, start=1):
+            ranking.append({
+                "rank": idx,
+                "manor_id": manor.id,
+                "manor_name": manor.display_name,
+                "username": manor.user.username,
+                "prestige": manor.prestige,
+            })
+        return ranking
+
+    return get_or_set(cache_key, compute_ranking, timeout=CACHE_TIMEOUT_RANKING)
+
+
+def get_player_rank(manor: Manor) -> Optional[int]:
+    """
+    获取玩家的声望排名（使用30秒缓存优化）。
+
+    Args:
+        manor: 庄园实例
+
+    Returns:
+        排名（从1开始），如果没有声望则返回None
+    """
+    if manor.prestige <= 0:
+        return None
+
+    # 使用缓存减少数据库查询
+    cache_key = CacheKeys.player_rank(manor.id, manor.prestige)
+    cached_rank = cache.get(cache_key)
+    if cached_rank is not None:
+        return cached_rank
+
+    # 计算比当前玩家声望高的玩家数量
+    higher_count = Manor.objects.filter(prestige__gt=manor.prestige).count()
+
+    # 同声望的玩家按创建时间排序，计算同分但更早的玩家
+    same_but_earlier = Manor.objects.filter(
+        prestige=manor.prestige,
+        created_at__lt=manor.created_at
+    ).count()
+
+    rank = higher_count + same_but_earlier + 1
+    # 缓存30秒，声望变化时 cache_key 会变化自动失效
+    cache.set(cache_key, rank, timeout=CACHE_TIMEOUT_MEDIUM)
+    return rank
+
+
+def get_ranking_with_player_context(manor: Manor, limit: int = 50) -> Dict[str, Any]:
+    """
+    获取排行榜以及当前玩家的排名信息。
+
+    Args:
+        manor: 当前玩家的庄园
+        limit: 排行榜显示数量
+
+    Returns:
+        {
+            "ranking": 排行榜列表,
+            "player_rank": 玩家排名（如果不在榜内）,
+            "player_in_ranking": 玩家是否在排行榜内,
+            "total_players": 有声望的玩家总数,
+        }
+    """
+    ranking = get_prestige_ranking(limit)
+    player_rank = get_player_rank(manor)
+
+    # 缓存有声望玩家总数（60秒）
+    def compute_total():
+        return Manor.objects.filter(prestige__gt=0).count()
+
+    total_players = get_or_set(
+        CacheKeys.RANKING_TOTAL_PLAYERS,
+        compute_total,
+        timeout=CACHE_TIMEOUT_RANKING
+    )
+
+    # 检查玩家是否在排行榜内
+    player_in_ranking = any(r["manor_id"] == manor.id for r in ranking)
+
+    return {
+        "ranking": ranking,
+        "player_rank": player_rank,
+        "player_in_ranking": player_in_ranking,
+        "total_players": total_players,
+    }

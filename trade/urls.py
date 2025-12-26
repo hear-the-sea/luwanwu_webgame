@@ -1,0 +1,18 @@
+from django.urls import path
+
+from . import views
+
+app_name = "trade"
+
+urlpatterns = [
+    path("", views.TradeView.as_view(), name="trade"),
+    path("shop/buy/", views.shop_buy_view, name="shop_buy"),
+    path("shop/sell/", views.shop_sell_view, name="shop_sell"),
+    path("bank/exchange-gold-bar/", views.exchange_gold_bar_view, name="exchange_gold_bar"),
+    # 交易行路由
+    path("market/create/", views.market_create_listing_view, name="market_create_listing"),
+    path("market/purchase/<int:listing_id>/", views.market_purchase_view, name="market_purchase"),
+    path("market/cancel/<int:listing_id>/", views.market_cancel_view, name="market_cancel"),
+    # 拍卖行路由
+    path("auction/bid/<int:slot_id>/", views.auction_bid_view, name="auction_bid"),
+]

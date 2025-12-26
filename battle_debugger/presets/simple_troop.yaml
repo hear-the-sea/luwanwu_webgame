@@ -1,0 +1,23 @@
+# 简单的小兵测试
+# 用于快速测试基础功能
+
+name: "简单小兵测试"
+description: "1000刀圣 vs 2000枪王，测试基础战斗和参数覆盖"
+
+attacker:
+  troops:
+    dao_sheng: 1000
+
+  technology_level: 8
+
+defender:
+  troops:
+    qiang_wang: 2000
+
+  technology_level: 10
+
+tunable_params:
+  slaughter_multiplier: 30
+  troop_attack_divisor_vs_troop: 1.0
+  troop_defense_divisor: 2.0
+  counter_multiplier: 1.5

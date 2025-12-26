@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}登录{% endblock %}
+
+{% block content %}
+<section class="auth-card">
+    <h2>登录控制台</h2>
+    <p>输入账号即可管理庄园与门客。</p>
+
+    {% if form.errors %}
+        <div class="form-errors">
+            请检查输入是否正确。
+        </div>
+    {% endif %}
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="form-field">
+            {{ form.username.label_tag }}
+            {{ form.username }}
+            {{ form.username.errors }}
+        </div>
+        <div class="form-field">
+            {{ form.password.label_tag }}
+            {{ form.password }}
+            {{ form.password.errors }}
+        </div>
+        <button type="submit" class="btn-primary">登录</button>
+    </form>
+    <p>还没有账号？<a href="{% url 'accounts:register' %}">立即注册</a></p>
+</section>
+{% endblock %}
+

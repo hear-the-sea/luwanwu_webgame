@@ -1,0 +1,191 @@
+{% comment %}Shop with category filter{% endcomment %}
+<div class="shop-section">
+    <!-- 购买区域 -->
+    <div id="shop-buy-section" class="trade-card">
+        {% if shop_items %}
+        <div class="shop-table-wrapper">
+        <table class="shop-table">
+            <thead>
+                <tr>
+                    <th>物品</th>
+                    <th>类别</th>
+                    <th>价格</th>
+                    <th>库存</th>
+                    <th>操作</th>
+                    <th class="filter-th">
+                        <form method="get" class="filter-form-inline">
+                            <input type="hidden" name="tab" value="shop">
+                            <label for="shop-category" class="filter-label-inline">筛选</label>
+                            <select id="shop-category" name="category" class="filter-select-inline" onchange="this.form.submit()">
+                                {% for opt in categories %}
+                                <option value="{{ opt.key }}" {% if selected_category == opt.key %}selected{% endif %}>{{ opt.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </form>
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in shop_items %}
+                <tr>
+                    <td>
+                        <div class="item-cell" data-tooltip>
+                            <div class="item-icon rarity-{{ item.rarity }}">
+                                {% if item.image_url %}
+                                <img src="{{ item.image_url }}" alt="{{ item.name }}">
+                                {% else %}
+                                <span class="icon-placeholder">{{ item.name|slice:":1" }}</span>
+                                {% endif %}
+                            </div>
+                            <span class="item-name rarity-{{ item.rarity }}">{{ item.name }}</span>
+                            <div class="item-tooltip">
+                                <div class="tooltip-header rarity-{{ item.rarity }}">{{ item.name }}</div>
+                                <div class="tooltip-category">{{ item.category }}</div>
+                                {% if item.description %}
+                                <div class="tooltip-desc">{{ item.description }}</div>
+                                {% endif %}
+                                {% if item.effect_payload %}
+                                <div class="tooltip-attrs">
+                                    {% if item.effect_payload.hp %}<div class="attr-row"><span class="attr-label">气血</span><span class="attr-value">+{{ item.effect_payload.hp }}</span></div>{% endif %}
+                                    {% if item.effect_payload.defense %}<div class="attr-row"><span class="attr-label">防御</span><span class="attr-value">+{{ item.effect_payload.defense }}</span></div>{% endif %}
+                                    {% if item.effect_payload.force %}<div class="attr-row"><span class="attr-label">武力</span><span class="attr-value">+{{ item.effect_payload.force }}</span></div>{% endif %}
+                                    {% if item.effect_payload.agility %}<div class="attr-row"><span class="attr-label">敏捷</span><span class="attr-value">+{{ item.effect_payload.agility }}</span></div>{% endif %}
+                                    {% if item.effect_payload.luck %}<div class="attr-row"><span class="attr-label">运势</span><span class="attr-value">+{{ item.effect_payload.luck }}</span></div>{% endif %}
+                                    {% if item.effect_payload.intellect %}<div class="attr-row"><span class="attr-label">智力</span><span class="attr-value">+{{ item.effect_payload.intellect }}</span></div>{% endif %}
+                                </div>
+                                {% if item.effect_payload.set_key %}
+                                <div class="tooltip-set">
+                                    <div class="set-name">套装｜{{ item.effect_payload.set_description }}</div>
+                                    {% if item.effect_payload.set_bonus %}
+                                    <div class="set-bonus">
+                                        <span class="set-pieces">{{ item.effect_payload.set_bonus.pieces }} 件套</span>
+                                        {% if item.effect_payload.set_bonus.bonus.hp %} 生命+{{ item.effect_payload.set_bonus.bonus.hp }} {% endif %}
+                                        {% if item.effect_payload.set_bonus.bonus.defense %} 防御+{{ item.effect_payload.set_bonus.bonus.defense }} {% endif %}
+                                        {% if item.effect_payload.set_bonus.bonus.force %} 武力+{{ item.effect_payload.set_bonus.bonus.force }} {% endif %}
+                                        {% if item.effect_payload.set_bonus.bonus.agility %} 敏捷+{{ item.effect_payload.set_bonus.bonus.agility }} {% endif %}
+                                        {% if item.effect_payload.set_bonus.bonus.luck %} 运势+{{ item.effect_payload.set_bonus.bonus.luck }} {% endif %}
+                                        {% if item.effect_payload.set_bonus.bonus.intellect %} 智力+{{ item.effect_payload.set_bonus.bonus.intellect }} {% endif %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                                {% endif %}
+                                <div class="tooltip-price">售价：{{ item.price }} 银两</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td><span class="category-tag">{{ item.category }}</span></td>
+                    <td class="price">{{ item.price }} 银两</td>
+                    <td class="{% if not item.available %}out-of-stock{% endif %}">
+                        {{ item.stock_display }}
+                    </td>
+                    <td>
+                        {% if item.available %}
+                        <form method="post" action="{% url 'trade:shop_buy' %}" style="display: flex; gap: 0.5rem; align-items: center;">
+                            {% csrf_token %}
+                            <input type="hidden" name="item_key" value="{{ item.key }}">
+                            <input type="number" name="quantity" value="1" min="1" class="quantity-input">
+                            <button type="submit" class="btn-buy" {% if manor.silver < item.price %}disabled title="银两不足"{% endif %}>购买</button>
+                        </form>
+                        {% else %}
+                        <span class="out-of-stock">售罄</span>
+                        {% endif %}
+                    </td>
+                    <td></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p>暂无可购商品</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- 出售区域 -->
+    <div id="shop-sell-section" class="trade-card shop-section-hidden">
+        {% if inventory %}
+        <div class="shop-table-wrapper">
+        <table class="shop-table">
+            <thead>
+                <tr>
+                    <th>物品</th>
+                    <th>拥有数量</th>
+                    <th>回收价格</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in inventory %}
+                <tr>
+                    <td>
+                        <div class="item-cell" data-tooltip>
+                            <div class="item-icon rarity-{{ item.inventory_item.template.rarity }}">
+                                {% if item.inventory_item.template.image %}
+                                <img src="{{ item.inventory_item.template.image.url }}" alt="{{ item.inventory_item.template.name }}">
+                                {% else %}
+                                <span class="icon-placeholder">{{ item.inventory_item.template.name|slice:":1" }}</span>
+                                {% endif %}
+                            </div>
+                            <span class="item-name rarity-{{ item.inventory_item.template.rarity }}">{{ item.inventory_item.template.name }}</span>
+                            <div class="item-tooltip">
+                                <div class="tooltip-header rarity-{{ item.inventory_item.template.rarity }}">{{ item.inventory_item.template.name }}</div>
+                                {% if item.inventory_item.template.description %}
+                                <div class="tooltip-desc">{{ item.inventory_item.template.description }}</div>
+                                {% endif %}
+                                {% with payload=item.inventory_item.template.effect_payload %}
+                                {% if payload %}
+                                <div class="tooltip-attrs">
+                                    {% if payload.hp %}<div class="attr-row"><span class="attr-label">气血</span><span class="attr-value">+{{ payload.hp }}</span></div>{% endif %}
+                                    {% if payload.defense %}<div class="attr-row"><span class="attr-label">防御</span><span class="attr-value">+{{ payload.defense }}</span></div>{% endif %}
+                                    {% if payload.force %}<div class="attr-row"><span class="attr-label">武力</span><span class="attr-value">+{{ payload.force }}</span></div>{% endif %}
+                                    {% if payload.agility %}<div class="attr-row"><span class="attr-label">敏捷</span><span class="attr-value">+{{ payload.agility }}</span></div>{% endif %}
+                                    {% if payload.luck %}<div class="attr-row"><span class="attr-label">运势</span><span class="attr-value">+{{ payload.luck }}</span></div>{% endif %}
+                                    {% if payload.intellect %}<div class="attr-row"><span class="attr-label">智力</span><span class="attr-value">+{{ payload.intellect }}</span></div>{% endif %}
+                                </div>
+                                {% if payload.set_key %}
+                                <div class="tooltip-set">
+                                    <div class="set-name">套装｜{{ payload.set_description }}</div>
+                                    {% if payload.set_bonus %}
+                                    <div class="set-bonus">
+                                        <span class="set-pieces">{{ payload.set_bonus.pieces }} 件套</span>
+                                        {% if payload.set_bonus.bonus.hp %} 生命+{{ payload.set_bonus.bonus.hp }} {% endif %}
+                                        {% if payload.set_bonus.bonus.defense %} 防御+{{ payload.set_bonus.bonus.defense }} {% endif %}
+                                        {% if payload.set_bonus.bonus.force %} 武力+{{ payload.set_bonus.bonus.force }} {% endif %}
+                                        {% if payload.set_bonus.bonus.agility %} 敏捷+{{ payload.set_bonus.bonus.agility }} {% endif %}
+                                        {% if payload.set_bonus.bonus.luck %} 运势+{{ payload.set_bonus.bonus.luck }} {% endif %}
+                                        {% if payload.set_bonus.bonus.intellect %} 智力+{{ payload.set_bonus.bonus.intellect }} {% endif %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                                {% endif %}
+                                {% endwith %}
+                                <div class="tooltip-price">回收价：{{ item.sell_price }} 银两</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>{{ item.inventory_item.quantity }}</td>
+                    <td class="price">{{ item.sell_price }} 银两</td>
+                    <td>
+                        <form method="post" action="{% url 'trade:shop_sell' %}" style="display: flex; gap: 0.5rem; align-items: center;">
+                            {% csrf_token %}
+                            <input type="hidden" name="item_key" value="{{ item.inventory_item.template.key }}">
+                            <input type="number" name="quantity" value="1" min="1" max="{{ item.inventory_item.quantity }}" class="quantity-input">
+                            <button type="submit" class="btn-sell">出售</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p>暂无可出售的物品</p>
+        </div>
+        {% endif %}
+    </div>
+</div>

@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}成员申请 - {{ guild.name }}{% endblock %}
+
+{% block content %}
+<section class="dashboard">
+    <div class="section-header">
+        <div>
+            <h1>成员申请</h1>
+            <p>{{ guild.name }} · 待审批：{{ applications.count }}</p>
+        </div>
+        <div class="nav-links">
+            <a href="{% url 'guilds:members' %}" class="btn-secondary">成员列表</a>
+            <a href="{% url 'guilds:detail' guild.id %}" class="btn-secondary">返回帮会</a>
+        </div>
+    </div>
+
+    <section class="card">
+        <h2>待审批申请</h2>
+        {% if applications %}
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
+                {% for app in applications %}
+                <div class="guild-application-card">
+                    <div class="guild-application-header">
+                        <div>
+                            <h3 style="margin: 0 0 0.5rem 0; font-size: 1.2rem;">{{ app.applicant.username }}</h3>
+                            <p class="muted-text" style="margin: 0;">申请时间：{{ app.created_at|date:"Y-m-d H:i" }}</p>
+                        </div>
+                        <div class="guild-application-actions">
+                            <form method="post" action="{% url 'guilds:approve_application' app.id %}">
+                                {% csrf_token %}
+                                <button type="submit" class="btn-primary" {% if guild.current_member_count >= guild.member_capacity %}disabled title="成员已满"{% endif %}>
+                                    通过
+                                </button>
+                            </form>
+                            <button type="button" class="btn-secondary" onclick="showRejectModal({{ app.id }}, '{{ app.applicant.username }}')">
+                                拒绝
+                            </button>
+                        </div>
+                    </div>
+                    {% if app.message %}
+                        <div class="guild-application-message">
+                            "{{ app.message }}"
+                        </div>
+                    {% else %}
+                        <p class="muted-text" style="margin: 0;">未留言</p>
+                    {% endif %}
+                    {% if guild.current_member_count >= guild.member_capacity %}
+                        <div class="guild-warning">
+                            <p>成员已满，无法通过新申请。请先升级帮会或辞退成员。</p>
+                        </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="muted-text">暂无待审批的申请</p>
+        {% endif %}
+    </section>
+</section>
+
+<!-- 拒绝申请模态框 -->
+<div class="modal-backdrop" id="reject-modal" aria-hidden="true">
+    <div class="modal">
+        <header class="modal-header">
+            <h3>拒绝申请</h3>
+            <button type="button" class="btn-secondary btn-small" onclick="closeRejectModal()">取消</button>
+        </header>
+        <div class="modal-body">
+            <form method="post" id="reject-form" action="">
+                {% csrf_token %}
+                <p id="reject-target" style="margin-bottom: 1rem; font-weight: 600;"></p>
+                <div class="form-field">
+                    <label for="note">拒绝原因（选填）</label>
+                    <textarea id="note" name="note" rows="3" placeholder="可以告诉申请者拒绝的原因..."></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">确认拒绝</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    const rejectModal = document.getElementById('reject-modal');
+    const rejectForm = document.getElementById('reject-form');
+    const rejectTarget = document.getElementById('reject-target');
+
+    function showRejectModal(appId, username) {
+        rejectForm.action = `/guilds/applications/${appId}/reject/`;
+        rejectTarget.textContent = `确认拒绝 ${username} 的申请吗？`;
+        rejectModal.classList.add('visible');
+        rejectModal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeRejectModal() {
+        rejectModal.classList.remove('visible');
+        rejectModal.setAttribute('aria-hidden', 'true');
+    }
+
+    rejectModal?.addEventListener('click', (event) => {
+        if (event.target === rejectModal) {
+            closeRejectModal();
+        }
+    });
+</script>
+{% endblock %}

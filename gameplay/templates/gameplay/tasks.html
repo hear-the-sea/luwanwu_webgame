@@ -1,0 +1,559 @@
+{% extends "base.html" %}
+{% load gameplay_extras %}
+
+{% block title %}任务{% endblock %}
+
+{% block content %}
+<section class="dashboard">
+    <div class="section-header">
+        <div>
+            <h1>任务列表</h1>
+            <p class="muted-text">选择任务派遣门客与士兵，胜利后获取掉落。每日每个任务最多完成 3 次。</p>
+        </div>
+        <a class="btn-secondary" href="{% url 'gameplay:tasks' %}">刷新</a>
+    </div>
+
+    <section class="card">
+        <h2>可用任务</h2>
+        <div class="task-list">
+            {% for item in mission_data %}
+                {% with mission=item.mission %}
+                <article class="task-card">
+                    <header>
+                        <h3>{{ mission.name }}</h3>
+                        <p class="muted-text">{{ mission.description }}</p>
+                    </header>
+                    <div style="margin-top: 0.5rem;">
+                        <span class="chip">今日剩余：{{ item.remaining }} / {{ mission.daily_limit }}</span>
+                    </div>
+                    <div style="margin-top: 1rem;">
+                        {% if item.remaining > 0 %}
+                            <a class="btn-primary" href="?mission={{ mission.key }}">查看详情</a>
+                        {% else %}
+                            <button class="btn-secondary" disabled>今日次数已满</button>
+                        {% endif %}
+                    </div>
+                </article>
+                {% endwith %}
+            {% empty %}
+                <p class="muted-text">暂无任务配置。</p>
+            {% endfor %}
+        </div>
+    </section>
+</section>
+
+{% if selected_mission %}
+<div class="modal-backdrop visible" aria-hidden="false">
+    <div class="modal" style="max-width: 900px;">
+        <header class="modal-header">
+            <div>
+                <p class="muted-text" style="margin: 0 0 0.5rem 0;">任务情报</p>
+                <h3 style="margin: 0;">{{ selected_mission.name }}</h3>
+            </div>
+            <a href="{% url 'gameplay:tasks' %}" class="btn-secondary btn-small">关闭</a>
+        </header>
+        <div class="modal-body">
+            <div class="task-modal-meta" style="margin-bottom: 1.5rem;">
+                <span class="chip">今日剩余 {{ selected_remaining }} / {{ selected_mission.daily_limit }}</span>
+                {% if selected_mission.is_defense %}
+                    <span class="chip">自动使用空闲门客</span>
+                {% else %}
+                    <span class="chip">队伍上限 {{ max_squad }}</span>
+                {% endif %}
+            </div>
+            <div class="modal-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+                <div class="modal-section task-info">
+                    <p class="muted-text" style="margin-bottom: 1rem;">{{ selected_mission.description }}</p>
+                    <div class="tag-row" style="margin-bottom: 1rem;">
+                        <h5 style="margin: 0 0 0.5rem 0; color: var(--text-primary); font-size: 1.1rem;">敌人情报</h5>
+                        <div style="display: block; width: 100%;">
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                                {% for entry in selected_mission.enemy_guests %}
+                                    {% with key=entry|guest_key %}
+                                    {% with template=guest_templates|get_item:key %}
+                                    {% if template and template.avatar %}
+                                        <img src="{{ template.avatar.url }}" alt="{{ guest_labels|get_label:key }}" title="{{ guest_labels|get_label:key }}" style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover; border: 2px solid var(--border-primary); cursor: pointer;">
+                                    {% else %}
+                                        <span class="badge" style="font-size: 0.85rem;">{{ guest_labels|get_label:key }}</span>
+                                    {% endif %}
+                                    {% endwith %}
+                                    {% endwith %}
+                                {% empty %}
+                                    <span class="badge">随机乱军</span>
+                                {% endfor %}
+                                {% for troop_key,count in selected_mission.enemy_troops.items %}
+                                    {% with troop=troop_templates_objs|get_item:troop_key %}
+                                    <div style="position: relative; display: inline-block;" title="{{ troop_labels|get_label:troop_key }}">
+                                        {% if troop and troop.avatar %}
+                                            <img src="{{ troop.avatar.url }}" alt="{{ troop_labels|get_label:troop_key }}" style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover; border: 2px solid var(--border-primary); cursor: pointer;">
+                                            <span style="position: absolute; bottom: -2px; right: -2px; background: rgba(74, 38, 18, 0.9); color: #FFF8E7; font-size: 0.7rem; padding: 1px 4px; border-radius: 3px; font-weight: 600;">×{{ count }}</span>
+                                        {% else %}
+                                            <span class="badge" style="font-size: 0.85rem;">{{ troop_labels|get_label:troop_key }} x{{ count }}</span>
+                                        {% endif %}
+                                    </div>
+                                    {% endwith %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="tag-row" style="margin-bottom: 1rem;">
+                        <h5 style="margin: 0 0 0.5rem 0; color: var(--text-primary); font-size: 1.1rem;">掉落预览</h5>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                            {% if selected_drop_items %}
+                                {% for drop in selected_drop_items %}
+                                    <span class="pill rarity-pill rarity-{{ drop.rarity|default:'default' }}">{{ drop.label }}</span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="pill">未配置</span>
+                            {% endif %}
+                        </div>
+                        {% if selected_probability_drop_items %}
+                        <div style="margin-top: 0.75rem;">
+                            <div style="color: var(--text-secondary); font-size: 0.95rem; margin-bottom: 0.5rem;">概率掉落：</div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                                {% for drop in selected_probability_drop_items %}
+                                    <span class="pill rarity-pill rarity-{{ drop.rarity|default:'default' }}">{{ drop.label }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% if selected_mission.is_defense %}
+                        <p class="hint muted-text" style="font-size: 0.9rem;">敌军来袭时间固定，等待战报回传。</p>
+                    {% else %}
+                        <p class="hint muted-text" style="font-size: 0.9rem;">双程时间按行军速度动态计算，最低 300 秒。</p>
+                    {% endif %}
+                </div>
+                <div class="modal-section">
+                    <h4 style="margin: 0 0 1rem 0;">{% if selected_mission.is_defense %}防守配置{% else %}出征配置{% endif %}</h4>
+                    {% if selected_mission.is_defense %}
+                        <p class="hint muted-text" style="margin-bottom: 1rem;">将自动使用庄园内所有空闲门客与护院</p>
+                        {% if not available_guests %}
+                            <p class="muted-text" style="margin-bottom: 1rem;">暂无空闲门客</p>
+                        {% endif %}
+                    {% else %}
+                        <p class="hint muted-text" style="margin-bottom: 1rem;">最多可派遣 {{ max_squad }} 名门客</p>
+                    {% endif %}
+                    <form method="post" action="{% url 'gameplay:accept_mission' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="mission_key" value="{{ selected_mission.key }}">
+                        {% if not selected_mission.is_defense %}
+                            <div class="form-field">
+                                <label style="font-weight: bold; margin-bottom: 0.5rem; display: block;">选择门客（空闲）</label>
+                                <div class="guest-selection">
+                                    {% for guest in available_guests %}
+                                        <label class="guest-checkbox">
+                                            <input type="checkbox" name="guest_ids" value="{{ guest.id }}" class="guest-input">
+                                            <div class="guest-card">
+                                                <div class="guest-avatar">
+                                                    {% if guest.template.avatar %}
+                                                    <img src="{{ guest.template.avatar.url }}" alt="{{ guest.display_name }}">
+                                                    {% else %}
+                                                    <div class="avatar-placeholder">{{ guest.display_name|slice:":1" }}</div>
+                                                    {% endif %}
+                                                </div>
+                                                <div class="guest-details">
+                                                    <div class="guest-info">
+                                                        <span class="guest-name rarity-text rarity-{{ guest.template.rarity|lower }}">{{ guest.display_name }}</span>
+                                                        <span class="guest-level">Lv.{{ guest.level }}</span>
+                                                    </div>
+                                                    <div class="guest-stats">
+                                                        <span title="生命">HP {{ guest.current_hp }}/{{ guest.max_hp }}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </label>
+                                    {% empty %}
+                                        <p class="muted-text">暂无空闲门客</p>
+                                    {% endfor %}
+                                </div>
+                                <div class="selection-summary">
+                                    已选择 <strong id="selected-guest-count">0</strong> / {{ max_squad }} 人
+                                </div>
+                            </div>
+                            <div class="form-field" style="margin-top: 1.5rem;">
+                                <label style="font-weight: bold; margin-bottom: 0.5rem; display: block;">配置护院</label>
+                                {% if player_troops %}
+                                <div class="troop-selection">
+                                    {% for troop in player_troops %}
+                                    <div class="troop-row">
+                                        <div class="troop-info">
+                                            <div class="troop-avatar">
+                                                {% if troop.avatar %}
+                                                <img src="{{ troop.avatar }}" alt="{{ troop.name }}">
+                                                {% else %}
+                                                <div class="avatar-placeholder">{{ troop.name|slice:":1" }}</div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="troop-details">
+                                                <span class="troop-name">{{ troop.name }}</span>
+                                                <span class="troop-count">可用: {{ troop.count }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="troop-slider-group">
+                                            <input type="range" class="troop-slider" style="padding: 0;"
+                                                   value="0" min="0" max="{{ troop.count }}"
+                                                   data-troop-key="{{ troop.key }}" data-max="{{ troop.count }}">
+                                            <input type="number" class="troop-num-input" style="padding: 0;"
+                                                   value="0" min="0" max="{{ troop.count }}"
+                                                   data-troop-key="{{ troop.key }}" data-max="{{ troop.count }}"
+                                                   name="troop_{{ troop.key }}">
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                {% else %}
+                                <div class="empty-hint">
+                                    <p class="muted-text">暂无可用护院</p>
+                                    <p class="caption muted-text">请先在练功场招募护院</p>
+                                </div>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                        <div class="modal-actions" style="display: flex; gap: 1rem; margin-top: 2rem;">
+                            {% if selected_attempts >= selected_mission.daily_limit %}
+                                <button type="submit" class="btn-secondary" disabled>
+                                    {% if selected_mission.is_defense %}无法接受{% else %}无法出征{% endif %}
+                                </button>
+                            {% elif not available_guests and not selected_mission.is_defense %}
+                                <button type="submit" class="btn-secondary" disabled>
+                                    无法出征
+                                </button>
+                            {% else %}
+                                <button type="submit" class="btn-primary">
+                                    {% if selected_mission.is_defense %}接受任务{% else %}派遣出征{% endif %}
+                                </button>
+                            {% endif %}
+                            <a href="{% url 'gameplay:tasks' %}" class="btn-secondary">取消</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_head %}
+<style>
+/* 门客选择样式 - 一行两个 */
+.guest-selection {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.guest-checkbox {
+    cursor: pointer;
+}
+
+/* 隐藏原生checkbox */
+.guest-checkbox input {
+    display: none;
+}
+
+.guest-card {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    background: var(--bg-hover);
+    border: 2px solid var(--border-light);
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.guest-checkbox input:checked + .guest-card {
+    background: #FDF6E3;
+    border-color: var(--accent-gold);
+    box-shadow: 0 0 0 1px var(--accent-gold);
+}
+
+.guest-card:hover {
+    border-color: var(--border-primary);
+}
+
+.guest-avatar {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--bg-secondary);
+}
+
+.guest-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.avatar-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    font-weight: bold;
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+}
+
+.guest-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.guest-info {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-bottom: 0.125rem;
+}
+
+.guest-name {
+    font-weight: 600;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.guest-level {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+    padding: 0.0625rem 0.375rem;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.guest-stats {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.selection-summary {
+    padding: 0.5rem;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    text-align: center;
+    font-size: 0.85rem;
+}
+
+/* 护院选择样式 - 滑动条 */
+.troop-selection {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.troop-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.4rem 0.6rem;
+    background: var(--bg-hover);
+    border-radius: 6px;
+    gap: 0.75rem;
+}
+
+.troop-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.troop-avatar {
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--bg-secondary);
+}
+
+.troop-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.troop-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+.troop-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.troop-count {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.troop-slider-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+}
+
+.troop-slider {
+    flex: 1;
+    min-width: 60px;
+    height: 6px;
+    padding: 0;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--border-light);
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+}
+
+.troop-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: var(--accent-gold);
+    border: 2px solid var(--border-primary);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.15s;
+}
+
+.troop-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+}
+
+.troop-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: var(--accent-gold);
+    border: 2px solid var(--border-primary);
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.troop-num-input {
+    max-width: 60px;
+    padding: 0;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-light);
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-align: center;
+    color: var(--text-primary);
+    flex-shrink: 0;
+}
+
+.troop-num-input:focus {
+    outline: none;
+    border-color: var(--accent-gold);
+}
+
+/* 隐藏数字输入框的上下箭头 */
+.troop-num-input::-webkit-outer-spin-button,
+.troop-num-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.troop-num-input[type=number] {
+    -moz-appearance: textfield;
+}
+
+.empty-hint {
+    text-align: center;
+    padding: 1rem;
+    color: var(--text-muted);
+}
+
+.empty-hint p {
+    margin: 0.25rem 0;
+}
+
+@media (max-width: 500px) {
+    .guest-selection {
+        grid-template-columns: 1fr;
+    }
+
+    .troop-row {
+        flex-wrap: wrap;
+    }
+}
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function() {
+    const maxSquadSize = {{ max_squad|default:5 }};
+    const guestInputs = document.querySelectorAll('.guest-input');
+    const selectedCountEl = document.getElementById('selected-guest-count');
+
+    // Update guest selection count
+    function updateGuestCount() {
+        if (!selectedCountEl) return;
+        const count = document.querySelectorAll('.guest-input:checked').length;
+        selectedCountEl.textContent = count;
+    }
+
+    // Guest selection with limit
+    guestInputs.forEach(function(input) {
+        input.addEventListener('change', function() {
+            const selectedGuests = document.querySelectorAll('.guest-input:checked').length;
+            if (selectedGuests > maxSquadSize) {
+                this.checked = false;
+                if (typeof gameAlert === 'function') {
+                    gameAlert('最多只能选择 ' + maxSquadSize + ' 名门客出征', { title: '选择限制' });
+                } else {
+                    alert('最多只能选择 ' + maxSquadSize + ' 名门客出征');
+                }
+                return;
+            }
+            updateGuestCount();
+        });
+    });
+
+    // Troop slider -> input sync
+    document.querySelectorAll('.troop-slider').forEach(function(slider) {
+        slider.addEventListener('input', function() {
+            const troopKey = this.dataset.troopKey;
+            const numInput = document.querySelector('.troop-num-input[data-troop-key="' + troopKey + '"]');
+            if (numInput) numInput.value = this.value;
+        });
+    });
+
+    // Troop input -> slider sync
+    document.querySelectorAll('.troop-num-input').forEach(function(input) {
+        input.addEventListener('input', function() {
+            const troopKey = this.dataset.troopKey;
+            const max = parseInt(this.dataset.max) || 0;
+            let value = parseInt(this.value) || 0;
+            value = Math.max(0, Math.min(max, value));
+            const slider = document.querySelector('.troop-slider[data-troop-key="' + troopKey + '"]');
+            if (slider) slider.value = value;
+        });
+        input.addEventListener('blur', function() {
+            const max = parseInt(this.dataset.max) || 0;
+            let value = parseInt(this.value) || 0;
+            value = Math.max(0, Math.min(max, value));
+            this.value = value;
+        });
+    });
+
+    // Initial update
+    updateGuestCount();
+})();
+</script>
+{% endblock %}

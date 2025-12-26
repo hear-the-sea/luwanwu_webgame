@@ -1,0 +1,302 @@
+# 拍卖行配置 - 维克里拍卖（Vickrey Auction）
+#
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │ 维克里拍卖规则说明                                                          │
+# ├─────────────────────────────────────────────────────────────────────────────┤
+# │ 1. 每个拍卖位有 N 个中标名额（quantity_per_slot = N）                       │
+# │ 2. 出价最高的前 N 名玩家各获得 1 个物品                                     │
+# │ 3. 所有中标者支付统一价格（第 N 名的出价，即最低中标价）                    │
+# │ 4. 只有被挤出前 N 名时才退还冻结的金条                                      │
+# │ 5. 玩家只能看到：最低中标价、中标名额数、出价人数、自己是否安全              │
+# │ 6. 玩家看不到：具体排名、其他人的出价金额                                    │
+# └─────────────────────────────────────────────────────────────────────────────┘
+#
+# 每3天自动刷新一轮拍卖，系统上架珍稀道具供全服玩家竞拍
+# 交易货币为金条，出价时冻结金条，被挤出中标范围时立即退还
+
+# 全局配置
+settings:
+  cycle_days: 3                  # 拍卖周期（天）
+  min_increment_ratio: 0.1       # 最小加价幅度比例（起拍价的10%）- 暂未使用
+  default_min_increment: 1       # 默认最小加价幅度（金条）- 暂未使用
+
+# 拍卖商品列表
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │ 字段说明：                                                                  │
+# │   slots: 拆分成多少个独立拍卖位（同种物品可拆成多个拍卖位独立竞拍）         │
+# │   quantity_per_slot: 每个拍卖位的中标名额数（前N名各获得1个物品）           │
+# │   starting_price: 起拍价（金条）                                            │
+# │   min_increment: 最小加价幅度（金条）- 暂未强制使用                         │
+# │   enabled: 是否启用                                                         │
+# └─────────────────────────────────────────────────────────────────────────────┘
+#
+# 示例：quantity_per_slot: 3 表示前3名出价者各中标获得1个物品，
+#       所有中标者支付第3名的出价（最低中标价）
+
+items:
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                              技能书 - 橙色品质
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  - item_key: book_dragon_roar
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 10
+    min_increment: 1
+    enabled: true
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                              技能书 - 紫色品质
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  - item_key: book_stratagem_burst
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 8
+    min_increment: 1
+    enabled: true
+
+  - item_key: book_thunder_nine_heavens
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 6
+    min_increment: 1
+    enabled: true
+
+  - item_key: book_five_thunder_descent
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 7
+    min_increment: 1
+    enabled: true
+
+  - item_key: book_brahma_true_fire
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 7
+    min_increment: 1
+    enabled: true
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                              武器 - 橙色品质
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  - item_key: equip_yitianjian
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 8
+    min_increment: 1
+    enabled: true
+
+  - item_key: equip_xuanyuanjian
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 8
+    min_increment: 1
+    enabled: true
+
+  - item_key: equip_fangtianhuaji
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 8
+    min_increment: 1
+    enabled: true
+
+  - item_key: equip_zhuxianjian
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 8
+    min_increment: 1
+    enabled: true
+
+  - item_key: equip_xiaolifeidao
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 8
+    min_increment: 1
+    enabled: true
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                              装备 - 紫色品质套装
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  # 麒麟套装
+  - item_key: equip_qilinkui
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 5
+    min_increment: 1
+    enabled: true
+
+  - item_key: equip_qilinjia
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 6
+    min_increment: 1
+    enabled: true
+
+  - item_key: equip_qilinxue
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 5
+    min_increment: 1
+    enabled: true
+
+  - item_key: equip_qilindao
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 5
+    min_increment: 1
+    enabled: true
+
+  # 玄武套装
+  - item_key: equip_xuanwukui
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 5
+    min_increment: 1
+    enabled: true
+
+  - item_key: equip_xuanwujia
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 6
+    min_increment: 1
+    enabled: true
+
+  - item_key: equip_xuanwuxue
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 5
+    min_increment: 1
+    enabled: true
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                              饰品 - 橙色品质
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  - item_key: equip_heshibi
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 8
+    min_increment: 1
+    enabled: true
+
+  - item_key: equip_chuanguoyuxi
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 10
+    min_increment: 1
+    enabled: true
+
+  - item_key: equip_qiankunzhu
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 8
+    min_increment: 1
+    enabled: true
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                              坐骑 - 橙色品质
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  - item_key: equip_chituma
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 10
+    min_increment: 2
+    enabled: true
+
+  - item_key: equip_hanxuebaoma
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 10
+    min_increment: 2
+    enabled: true
+
+  - item_key: equip_qilin
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 12
+    min_increment: 2
+    enabled: true
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                              护甲 - 橙色品质
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  - item_key: equip_longlinzhanjia
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 8
+    min_increment: 1
+    enabled: true
+
+  - item_key: equip_jinsirujia
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 8
+    min_increment: 1
+    enabled: true
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                              头盔 - 橙色品质
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  - item_key: equip_longhuangguan
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 8
+    min_increment: 1
+    enabled: true
+
+  - item_key: equip_diwangkui
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 8
+    min_increment: 1
+    enabled: true
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                              鞋子 - 橙色品质
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  - item_key: equip_tatianxue
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 8
+    min_increment: 1
+    enabled: true
+
+  - item_key: equip_shenxingxue
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 8
+    min_increment: 1
+    enabled: true
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  #                              器械 - 橙色品质
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  - item_key: equip_fengshenbang
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 10
+    min_increment: 2
+    enabled: true
+
+  - item_key: equip_shanheshejitu
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 10
+    min_increment: 2
+    enabled: true
+
+  - item_key: equip_mojiajiguanren
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 8
+    min_increment: 1
+    enabled: true

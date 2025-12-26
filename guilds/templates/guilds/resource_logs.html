@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}资源流水 - {{ guild.name }}{% endblock %}
+
+{% block content %}
+<section class="dashboard">
+    <div class="section-header">
+        <div>
+            <h1>资源流水</h1>
+            <p>{{ guild.name }}</p>
+        </div>
+        <div class="nav-links">
+            <a href="{% url 'guilds:resources' %}" class="btn-secondary">资源状态</a>
+            <a href="{% url 'guilds:detail' guild.id %}" class="btn-secondary">返回帮会</a>
+        </div>
+    </div>
+
+    <section class="card">
+        <h2>资源变动记录（最近50条）</h2>
+        {% if logs %}
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>操作类型</th>
+                        <th>银两变动</th>
+                        <th>粮食变动</th>
+                        <th>金条变动</th>
+                        <th>相关用户</th>
+                        <th>备注</th>
+                        <th>时间</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr {% if log.related_user == user %}class="guild-table-highlight"{% endif %}>
+                        <td>
+                            {% if log.action == 'donation' %}
+                                <span class="guild-action-donation">📥 捐赠</span>
+                            {% elif log.action == 'upgrade_guild' %}
+                                <span class="guild-action-upgrade">⬆️ 升级</span>
+                            {% elif log.action == 'upgrade_tech' %}
+                                <span class="guild-action-tech">🔬 科技</span>
+                            {% elif log.action == 'production' %}
+                                <span class="guild-action-production">🏭 生产</span>
+                            {% elif log.action == 'exchange' %}
+                                <span class="guild-action-exchange">📤 兑换</span>
+                            {% else %}
+                                {{ log.action }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if log.silver_change > 0 %}
+                                <span class="positive">+{{ log.silver_change|floatformat:0 }}</span>
+                            {% elif log.silver_change < 0 %}
+                                <span class="negative">{{ log.silver_change|floatformat:0 }}</span>
+                            {% else %}
+                                <span class="muted-text">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if log.grain_change > 0 %}
+                                <span class="positive">+{{ log.grain_change|floatformat:0 }}</span>
+                            {% elif log.grain_change < 0 %}
+                                <span class="negative">{{ log.grain_change|floatformat:0 }}</span>
+                            {% else %}
+                                <span class="muted-text">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if log.gold_bar_change > 0 %}
+                                <span class="positive">+{{ log.gold_bar_change }}</span>
+                            {% elif log.gold_bar_change < 0 %}
+                                <span class="negative">{{ log.gold_bar_change }}</span>
+                            {% else %}
+                                <span class="muted-text">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if log.related_user %}
+                                {{ log.related_user.username }}
+                                {% if log.related_user == user %}
+                                    <span class="badge">我</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="muted-text">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="muted-text">{{ log.note|default:"-" }}</span>
+                        </td>
+                        <td>
+                            <span class="muted-text">{{ log.created_at|date:"m-d H:i" }}</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="muted-text">暂无资源流水记录</p>
+        {% endif %}
+    </section>
+
+    <section class="card guild-section-spacing">
+        <h2>记录说明</h2>
+        <div class="guild-log-help">
+            <h4>操作类型</h4>
+            <ul class="guild-info-list">
+                <li><strong>📥 捐赠：</strong>成员捐赠资源</li>
+                <li><strong>⬆️ 升级：</strong>升级帮会等级消耗资源</li>
+                <li><strong>🔬 科技：</strong>升级帮会科技消耗资源</li>
+                <li><strong>🏭 生产：</strong>科技每日产出（暂未影响资源）</li>
+                <li><strong>📤 兑换：</strong>成员兑换物品（暂未影响资源）</li>
+            </ul>
+
+            <div class="guild-info-card guild-log-tip">
+                <strong>💡 提示：</strong>资源流水记录保留最近30天，超过30天的记录会自动清理。
+            </div>
+        </div>
+    </section>
+</section>
+{% endblock %}

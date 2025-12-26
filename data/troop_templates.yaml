@@ -1,0 +1,364 @@
+troops:
+  # 探子 - 侦察型，高速度，低攻防
+  - key: scout
+    name: 探子
+    description: 轻装侦察，行动迅捷，适合刺探敌情。
+    base_attack: 1
+    base_defense: 1
+    base_hp: 10
+    speed_bonus: 1
+    priority: 0
+    default_count: 50
+    avatar: tanzi.png
+    # 招募配置
+    recruit:
+      tech_key: null  # 无科技要求
+      tech_level: 0
+      retainer_cost: 1
+      equipment: [equip_zaohongma]
+      base_duration: 60
+
+  # 刀类 - 攻击型，高攻击，中等防御
+  - key: dao_ke
+    name: 刀客
+    description: 江湖刀客，刀法粗犷，攻势凌厉。
+    base_attack: 6
+    base_defense: 3
+    base_hp: 18
+    speed_bonus: 3
+    priority: 0
+    default_count: 180
+    avatar: daoke.png
+    recruit:
+      tech_key: dao_recruit
+      tech_level: 1
+      retainer_cost: 1
+      equipment: [equip_duandao, equip_buxie, equip_bupao]
+      base_duration: 120
+
+  - key: dao_jie
+    name: 刀杰
+    description: 刀法精进，出刀更快更狠。
+    base_attack: 9
+    base_defense: 4
+    base_hp: 27
+    speed_bonus: 4
+    priority: 0
+    default_count: 120
+    avatar: daojie.png
+    recruit:
+      tech_key: dao_recruit
+      tech_level: 3
+      retainer_cost: 1
+      equipment: [equip_dakandao, equip_yangpixue, equip_shengpijia, equip_tieyekui, equip_zaohongma]
+      base_duration: 180
+
+  - key: dao_ba
+    name: 刀霸
+    description: 刀中豪杰，霸道刀意震慑敌胆。
+    base_attack: 15
+    base_defense: 6
+    base_hp: 41
+    speed_bonus: 6
+    priority: 0
+    default_count: 70
+    avatar: daoba.png
+    recruit:
+      tech_key: dao_recruit
+      tech_level: 5
+      retainer_cost: 1
+      equipment: [equip_tongchangdao, equip_gangpianxue, equip_housipao, equip_yulindin, equip_huangbiaoma]
+      base_duration: 300
+
+  - key: dao_sheng
+    name: 刀圣
+    description: 刀法通神，一刀可断江河。
+    base_attack: 20
+    base_defense: 9
+    base_hp: 60
+    speed_bonus: 9
+    priority: 0
+    default_count: 35
+    avatar: daosheng.png
+    recruit:
+      tech_key: dao_recruit
+      tech_level: 7
+      retainer_cost: 1
+      equipment: [equip_jingtiedao, equip_yanyuxue, equip_shapijia, equip_baihongkui, equip_dawanma]
+      base_duration: 600
+
+  # 枪类 - 防御型，高防御，高HP
+  - key: qiang_ke
+    name: 枪客
+    description: 长枪在手，护卫阵线。
+    base_attack: 7
+    base_defense: 3
+    base_hp: 21
+    speed_bonus: 2
+    priority: 0
+    default_count: 200
+    avatar: qiangke.png
+    recruit:
+      tech_key: qiang_recruit
+      tech_level: 1
+      retainer_cost: 1
+      equipment: [equip_changqiang, equip_buxie, equip_bupao]
+      base_duration: 120
+
+  - key: qiang_hao
+    name: 枪豪
+    description: 枪法娴熟，进退有度。
+    base_attack: 10
+    base_defense: 5
+    base_hp: 32
+    speed_bonus: 3
+    priority: 0
+    default_count: 130
+    avatar: qianghao.png
+    recruit:
+      tech_key: qiang_recruit
+      tech_level: 3
+      retainer_cost: 1
+      equipment: [equip_baoweiqiang, equip_yangpixue, equip_shengpijia, equip_tieyekui, equip_zaohongma]
+      base_duration: 180
+
+  - key: qiang_ba
+    name: 枪霸
+    description: 枪出如龙，攻守兼备。
+    base_attack: 17
+    base_defense: 7
+    base_hp: 48
+    speed_bonus: 5
+    priority: 0
+    default_count: 80
+    avatar: qiangba.png
+    recruit:
+      tech_key: qiang_recruit
+      tech_level: 5
+      retainer_cost: 1
+      equipment: [equip_hutoumao, equip_gangpianxue, equip_housipao, equip_yulindin, equip_huangbiaoma]
+      base_duration: 300
+
+  - key: qiang_wang
+    name: 枪王
+    description: 枪法称王，万军之中取上将首级。
+    base_attack: 22
+    base_defense: 10
+    base_hp: 72
+    speed_bonus: 8
+    priority: 0
+    default_count: 40
+    avatar: qiangwang.png
+    recruit:
+      tech_key: qiang_recruit
+      tech_level: 7
+      retainer_cost: 1
+      equipment: [equip_pansheqiang, equip_yanyuxue, equip_shapijia, equip_baihongkui, equip_dawanma]
+      base_duration: 600
+
+  # 剑类 - 均衡敏捷型，攻防均衡，速度快
+  - key: jian_shi
+    name: 剑士
+    description: 仗剑江湖，剑招轻灵。
+    base_attack: 6
+    base_defense: 2
+    base_hp: 17
+    speed_bonus: 5
+    priority: 0
+    default_count: 160
+    avatar: jianshi.png
+    recruit:
+      tech_key: jian_recruit
+      tech_level: 1
+      retainer_cost: 1
+      equipment: [equip_duanjian, equip_buxie, equip_bupao]
+      base_duration: 120
+
+  - key: jian_xia
+    name: 剑侠
+    description: 剑气纵横，侠义为先。
+    base_attack: 8
+    base_defense: 3
+    base_hp: 26
+    speed_bonus: 7
+    priority: 0
+    default_count: 110
+    avatar: jianxia.png
+    recruit:
+      tech_key: jian_recruit
+      tech_level: 3
+      retainer_cost: 1
+      equipment: [equip_changjian, equip_yangpixue, equip_shengpijia, equip_tieyekui, equip_zaohongma]
+      base_duration: 180
+
+  - key: jian_hao
+    name: 剑豪
+    description: 剑意凛然，剑锋所指披靡无敌。
+    base_attack: 12
+    base_defense: 5
+    base_hp: 38
+    speed_bonus: 9
+    priority: 0
+    default_count: 65
+    avatar: jianhao.png
+    recruit:
+      tech_key: jian_recruit
+      tech_level: 5
+      retainer_cost: 1
+      equipment: [equip_qingmangjian, equip_gangpianxue, equip_housipao, equip_yulindin, equip_huangbiaoma]
+      base_duration: 300
+
+  - key: jian_sheng
+    name: 剑圣
+    description: 人剑合一，剑道通天。
+    base_attack: 18
+    base_defense: 7
+    base_hp: 57
+    speed_bonus: 16
+    priority: 0
+    default_count: 30
+    avatar: jiansheng.png
+    recruit:
+      tech_key: jian_recruit
+      tech_level: 7
+      retainer_cost: 1
+      equipment: [equip_duanmajian, equip_yanyuxue, equip_shapijia, equip_baihongkui, equip_dawanma]
+      base_duration: 600
+
+  # 拳类 - 近战爆发型，高攻击，高HP，低防御
+  - key: quan_shi
+    name: 拳师
+    description: 拳脚功夫扎实，近身肉搏。
+    base_attack: 5
+    base_defense: 2
+    base_hp: 15
+    speed_bonus: 7
+    priority: 0
+    default_count: 170
+    avatar: quanshi.png
+    recruit:
+      tech_key: quan_recruit
+      tech_level: 1
+      retainer_cost: 1
+      equipment: [equip_niupibian, equip_buxie, equip_bupao]
+      base_duration: 120
+
+  - key: quan_ba
+    name: 拳霸
+    description: 铁拳无敌，一拳破甲。
+    base_attack: 7
+    base_defense: 3
+    base_hp: 23
+    speed_bonus: 9
+    priority: 0
+    default_count: 110
+    avatar: quanba.png
+    recruit:
+      tech_key: quan_recruit
+      tech_level: 3
+      retainer_cost: 1
+      equipment: [equip_jicibian, equip_yangpixue, equip_shengpijia, equip_tieyekui, equip_zaohongma]
+      base_duration: 180
+
+  - key: quan_wang
+    name: 拳王
+    description: 拳风呼啸，气势如虹。
+    base_attack: 11
+    base_defense: 5
+    base_hp: 35
+    speed_bonus: 13
+    priority: 0
+    default_count: 60
+    avatar: quanwang.png
+    recruit:
+      tech_key: quan_recruit
+      tech_level: 5
+      retainer_cost: 1
+      equipment: [equip_jiulonggangbian, equip_gangpianxue, equip_housipao, equip_yulindin, equip_huangbiaoma]
+      base_duration: 300
+
+  - key: quan_sheng
+    name: 拳圣
+    description: 拳意通玄，一拳开天。
+    base_attack: 16
+    base_defense: 7
+    base_hp: 52
+    speed_bonus: 19
+    priority: 0
+    default_count: 30
+    avatar: quansheng.png
+    recruit:
+      tech_key: quan_recruit
+      tech_level: 7
+      retainer_cost: 1
+      equipment: [equip_mingshejiebian, equip_yanyuxue, equip_shapijia, equip_baihongkui, equip_dawanma]
+      base_duration: 600
+
+  # 弓箭类 - 远程攻击型，高攻击，低防御，优先攻击
+  - key: archer
+    name: 弓箭手
+    description: 远程齐射，擅长压制敌军前排。
+    base_attack: 5
+    base_defense: 1
+    base_hp: 13
+    speed_bonus: 3
+    priority: -1
+    default_count: 150
+    avatar: gongjianshou.png
+    recruit:
+      tech_key: gong_recruit
+      tech_level: 1
+      retainer_cost: 1
+      equipment: [equip_changgong, equip_buxie, equip_bupao]
+      base_duration: 120
+
+  - key: fast_archer
+    name: 快箭手
+    description: 箭如连珠，射速惊人。
+    base_attack: 7
+    base_defense: 2
+    base_hp: 20
+    speed_bonus: 4
+    priority: -1
+    default_count: 100
+    avatar: kuaijianshou.png
+    recruit:
+      tech_key: gong_recruit
+      tech_level: 3
+      retainer_cost: 1
+      equipment: [equip_fanqugong, equip_yangpixue, equip_shengpijia, equip_tieyekui, equip_zaohongma]
+      base_duration: 180
+
+  - key: divine_archer
+    name: 神箭手
+    description: 百步穿杨，箭无虚发。
+    base_attack: 10
+    base_defense: 4
+    base_hp: 30
+    speed_bonus: 6
+    priority: -1
+    default_count: 55
+    avatar: shenjianshou.png
+    recruit:
+      tech_key: gong_recruit
+      tech_level: 5
+      retainer_cost: 1
+      equipment: [equip_tietaigong, equip_gangpianxue, equip_housipao, equip_yulindin, equip_huangbiaoma]
+      base_duration: 300
+
+  - key: arrow_god
+    name: 箭神
+    description: 箭道通神，一箭定乾坤。
+    base_attack: 15
+    base_defense: 6
+    base_hp: 45
+    speed_bonus: 9
+    priority: -1
+    default_count: 25
+    avatar: jianshen.png
+    recruit:
+      tech_key: gong_recruit
+      tech_level: 7
+      retainer_cost: 1
+      equipment: [equip_shenbigong, equip_yanyuxue, equip_shapijia, equip_baihongkui, equip_dawanma]
+      base_duration: 600

@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>角色属性面板 - 仿制</title>
+    <style>
+        /* 全局设置 */
+        :root {
+            --border-color: #a67c52; /* 边框棕色 */
+            --text-brown: #5e2e08;    /* 深棕色字体 */
+            --text-red: #8b0000;      /* 红色图标背景 */
+            --header-bg: #e6cba6;     /* 表头背景 */
+            --bg-base: #f4dcb3;       /* 背景底色 */
+            --bg-pattern: #ebd2a5;    /* 纹理颜色 */
+        }
+        
+        body {
+            margin: 0;
+            padding: 40px;
+            font-family: "SimSun", "宋体", serif; /* 使用宋体以贴近复古感 */
+            background-color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        /* 核心容器 */
+        .game-panel {
+            width: 800px;
+            border: 2px solid var(--border-color);
+            /* 纯CSS绘制鱼鳞/云纹背景 */
+            background-color: var(--bg-base);
+            background-image: 
+                radial-gradient(circle at 100% 150%, var(--bg-base) 24%, var(--bg-pattern) 25%, var(--bg-pattern) 28%, var(--bg-base) 29%, var(--bg-base) 36%, var(--bg-pattern) 37%, var(--bg-pattern) 40%, var(--bg-base) 41%, var(--bg-base) 48%, var(--bg-pattern) 49%, var(--bg-pattern) 52%, var(--bg-base) 53%),
+                radial-gradient(circle at 0% 150%, var(--bg-base) 24%, var(--bg-pattern) 25%, var(--bg-pattern) 28%, var(--bg-base) 29%, var(--bg-base) 36%, var(--bg-pattern) 37%, var(--bg-pattern) 40%, var(--bg-base) 41%, var(--bg-base) 48%, var(--bg-pattern) 49%, var(--bg-pattern) 52%, var(--bg-base) 53%);
+            background-size: 40px 20px;
+            background-position: 0 0, 20px 0;
+            color: var(--text-brown);
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+
+        /* 顶部主要区域 */
+        .panel-main {
+            display: flex;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        /* 通用列样式 */
+        .col {
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+        }
+        .col:last-child {
+            border-right: none;
+        }
+
+        /* 表头样式 */
+        .col-header {
+            background-color: var(--header-bg);
+            text-align: center;
+            padding: 6px 0;
+            font-weight: bold;
+            border-bottom: 1px solid var(--border-color);
+            color: #8b3a13;
+        }
+
+        /* --- 左侧：形象 --- */
+        .col-avatar {
+            width: 20%;
+            align-items: center;
+            background: transparent;
+        }
+        .avatar-box {
+            width: 120px;
+            height: 120px;
+            background-color: #fffcf5;
+            border: 1px solid #8b4513;
+            border-radius: 4px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            box-shadow: inset 0 0 5px rgba(139,69,19,0.2);
+        }
+        /* 装饰性的四角 (模拟图中的红角) */
+        .avatar-box::after, .avatar-box::before {
+            content: "";
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            border: 2px solid transparent;
+        }
+        .avatar-img {
+            width: 90%;
+            height: 90%;
+            object-fit: contain;
+        }
+
+        /* --- 中间：属性 --- */
+        .col-stats {
+            width: 40%;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1.5fr; /* 两列布局 */
+            padding: 10px;
+            gap: 8px;
+            font-size: 14px;
+        }
+        .stat-row {
+            display: flex;
+            align-items: center;
+        }
+        .label {
+            font-weight: bold;
+            margin-right: 5px;
+        }
+        .value-blue {
+            color: blue;
+            font-weight: bold;
+        }
+        /* 模拟那个红色的图标 */
+        .icon-sq {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            background-color: #5e2218;
+            color: #e6cba6;
+            text-align: center;
+            line-height: 16px;
+            font-size: 12px;
+            margin-right: 4px;
+            border: 1px solid #333;
+            border-radius: 2px;
+        }
+        /* 星星月亮符号 */
+        .stars {
+            color: #333;
+            letter-spacing: -2px;
+            margin-left: 5px;
+        }
+        .star-red { color: #a52a2a; }
+        
+        /* 按钮样式 */
+        .btn-box {
+            grid-column: span 2;
+            text-align: center;
+            margin-top: 5px;
+        }
+        .retro-btn {
+            background: linear-gradient(to bottom, #e6d5b8, #cba87a);
+            border: 1px solid #5e2e08;
+            color: #5e2e08;
+            padding: 2px 15px;
+            font-family: "SimSun";
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 1px 1px 0px rgba(0,0,0,0.3);
+        }
+        .retro-btn:active {
+            background: #cba87a;
+            transform: translate(1px, 1px);
+        }
+
+        /* --- 右侧：装备 --- */
+        .col-equip {
+            width: 40%;
+        }
+        .equip-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            padding: 10px;
+            gap: 8px 2px;
+            font-size: 14px;
+        }
+        .equip-item {
+            display: flex;
+            align-items: center;
+        }
+        /* 模拟那个白色的复选框 */
+        .checkbox-sq {
+            width: 12px;
+            height: 12px;
+            background-color: #fff;
+            border: 1px solid #8b4513;
+            margin: 0 4px;
+            display: inline-block;
+            box-shadow: inset 1px 1px 2px rgba(0,0,0,0.2);
+        }
+
+        /* 底部简介 */
+        .footer {
+            display: flex;
+            min-height: 60px;
+            border-top: 1px solid var(--border-color);
+        }
+        .footer-label-box {
+            width: 24px;
+            background-color: #8b5a2b; /* 侧边深色条 */
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            writing-mode: vertical-lr;
+            padding: 5px 0;
+            font-size: 12px;
+            border-right: 1px solid #5e2e08;
+        }
+        .footer-text {
+            padding: 10px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="game-panel">
+    <div class="panel-main">
+        
+        <div class="col col-avatar">
+            <div class="col-header" style="width:100%; margin-bottom:10px;">形象</div>
+            <div class="avatar-box">
+                <img src="https://api.iconify.design/noto:monkey-face.svg" alt="Avatar" class="avatar-img">
+            </div>
+        </div>
+
+        <div class="col col-stats">
+            <div class="col-header">属性(剩余点数: 1)</div>
+            <div class="stats-grid">
+                <div class="stat-row"><span class="label">姓名:</span> <span class="value-blue">曾点</span></div>
+                <div class="stat-row">
+                    <span class="icon-sq">◎</span> 武力: <span class="stars"><span class="star-red">♛</span>★</span>
+                </div>
+
+                <div class="stat-row"><span class="label">性别:</span> 男</div>
+                <div class="stat-row">
+                    <span class="icon-sq">◎</span> 智力: <span class="stars"><span class="star-red">♛</span>☽☽★</span>
+                </div>
+
+                <div class="stat-row"><span class="label">等级:</span> 19</div>
+                <div class="stat-row">
+                    <span class="icon-sq">◎</span> 防御: <span class="stars">☼☽☽★★</span>
+                </div>
+
+                <div class="stat-row"><span class="label">生命值:</span> 1472</div>
+                <div class="stat-row">
+                    <span class="icon-sq">◎</span> 敏捷: <span class="stars"><span class="star-red">♛</span>☼☽★★★</span>
+                </div>
+
+                <div class="stat-row"><span class="label">忠诚度:</span> 93</div>
+                <div class="stat-row">
+                    <span class="label" style="margin-left:24px;">运势:</span> <span class="stars"><span class="star-red">♛</span>☼☼☽</span>
+                </div>
+
+                <div class="stat-row"><span class="label">品性:</span> 100</div>
+                <div class="stat-row" style="justify-content: flex-end;">
+                   <span class="label">操作:</span> <button class="retro-btn">放弃辞退</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="col col-equip">
+            <div class="col-header">装备</div>
+            <div class="equip-grid">
+                <div class="equip-item">头盔: <div class="checkbox-sq"></div> 装备头盔</div>
+                <div class="equip-item">衣甲: <div class="checkbox-sq"></div> 装备衣甲</div>
+                
+                <div class="equip-item">武器: <div class="checkbox-sq"></div> 装备武器</div>
+                <div class="equip-item">鞋子: <div class="checkbox-sq"></div> 装备鞋子</div>
+                
+                <div class="equip-item" style="grid-column: span 2;">
+                    饰品: <div class="checkbox-sq"></div> 装备饰品 <div class="checkbox-sq"></div> 装备饰品 <div class="checkbox-sq"></div> 装备饰品
+                </div>
+                
+                <div class="equip-item" style="grid-column: span 2;">
+                    器械: <div class="checkbox-sq"></div> 装备器械 <div class="checkbox-sq"></div> 装备器械 <div class="checkbox-sq"></div> 装备器械
+                </div>
+                
+                <div class="equip-item" style="grid-column: span 2;">
+                    坐骑: <div class="checkbox-sq"></div> 装备坐骑
+                </div>
+
+                <div class="equip-item" style="grid-column: span 2; justify-content: flex-end; margin-top: 10px;">
+                    <button class="retro-btn">卸下</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="footer">
+        <div class="footer-label-box">
+            简<br>介
+        </div>
+        <div class="footer-text">
+            曾点，字子皙，曾参的父亲，孔子弟子。
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

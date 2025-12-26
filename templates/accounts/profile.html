@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}账号资料{% endblock %}
+
+{% block content %}
+<section class="auth-card">
+    <h2>账号资料</h2>
+    <ul>
+        <li>用户名：{{ request.user.username }}</li>
+        <li>邮箱：{{ request.user.email|default:"未填写" }}</li>
+        <li>头衔：{{ request.user.title|default:"未设定" }}</li>
+        <li>加入时间：{{ request.user.date_joined|date:"Y-m-d H:i" }}</li>
+    </ul>
+</section>
+{% endblock %}
+

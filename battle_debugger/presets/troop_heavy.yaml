@@ -1,0 +1,30 @@
+# 小兵海战测试
+# 大量小兵 vs 大量小兵
+
+name: "小兵海战"
+description: "5000混合小兵 vs 5000混合小兵，测试小兵互殴和五行相克"
+
+attacker:
+  troops:
+    dao_sheng: 1000   # 刀圣
+    qiang_wang: 1000  # 枪王
+    jian_sheng: 1000  # 剑圣
+    quan_sheng: 500   # 拳圣
+    arrow_god: 1500   # 箭神
+
+  technology_level: 10
+
+defender:
+  troops:
+    dao_sheng: 1500
+    qiang_wang: 1000
+    jian_sheng: 1000
+    quan_sheng: 500
+    arrow_god: 1000
+
+  technology_level: 10
+
+tunable_params:
+  troop_attack_divisor_vs_troop: 1.0
+  troop_defense_divisor: 2.0
+  counter_multiplier: 1.5

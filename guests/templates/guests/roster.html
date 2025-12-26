@@ -1,0 +1,476 @@
+{% extends "base.html" %}
+{% load guest_extras static %}
+
+{% block title %}门客与战斗准备{% endblock %}
+
+{% block content %}
+<section class="dashboard">
+    <div class="section-header">
+        <div>
+            <p>当前门客数量：{{ guests|length }}</p>
+        </div>
+        <div class="nav-links">
+            {% if unpaid_count > 0 %}
+            <form method="post" action="{% url 'guests:pay_all_salaries' %}" style="display: inline;" id="pay-all-salary-form"
+                data-amount="{{ total_unpaid_salary }}">
+                {% csrf_token %}
+                <button type="submit" class="btn-primary" {% if manor.silver < total_unpaid_salary %}disabled
+                    title="银两不足" {% endif %}>
+                    一键支付工资 ({{ unpaid_count }}人 / {{ total_unpaid_salary }}银两)
+                </button>
+            </form>
+            {% endif %}
+            <a class="btn-secondary" href="{% url 'gameplay:recruitment_hall' %}">前往聚贤庄</a>
+            <a class="btn-secondary" href="{% url 'guests:roster' %}">刷新</a>
+        </div>
+    </div>
+
+    <section class="card guest-roster-card">
+        {% if guests %}
+        <div class="guest-table-wrapper">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>门客</th>
+                        <th>形象</th>
+                        <th>等级/状态</th>
+                        <th>忠诚度</th>
+                        <th>今日工资</th>
+                        <th>生命</th>
+                        <th>升级</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in guests_with_salary %}
+                    {% with guest=item.guest %}
+                    <tr data-guest-id="{{ guest.id }}">
+                        <td>
+                            <a href="{% url 'guests:detail' guest.id %}"
+                                class="rarity-text {{ guest.rarity|rarity_class }}">
+                                {{ guest.display_name }}
+                            </a>
+                        </td>
+                        <td>
+                            <div class="guest-avatar" title="{{ guest.display_name }}">
+                                {% if guest.template.avatar %}
+                                <img src="{{ guest.template.avatar.url }}" alt="{{ guest.display_name }}">
+                                {% else %}
+                                {{ guest.display_name|first|default:"?" }}
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="guest-level">Lv {{ guest.level }}</div>
+                            <div class="muted-text">{{ guest.get_status_display }}</div>
+                        </td>
+                        <td>
+                            <div
+                                style="{% if guest.loyalty < 30 %}color: #FF6B6B;{% elif guest.loyalty < 60 %}color: #FFA500;{% else %}color: #4ADE80;{% endif %}">
+                                {{ guest.loyalty }}
+                            </div>
+                        </td>
+                        <td>
+                            {% if item.paid_today %}
+                            <span style="color: #4ADE80;">✓ 已支付</span>
+                            {% else %}
+                            <div style="color: #FFA500;">{{ item.salary }} 银两</div>
+                            <form method="post" action="{% url 'guests:pay_salary' guest.id %}"
+                                style="margin-top: 0.25rem;">
+                                {% csrf_token %}
+                                <button type="submit" class="btn-primary btn-small" {% if manor.silver < item.salary %}disabled title="银两不足"{% endif %}>
+                                    支付
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div>HP {{ guest.current_hp }}/{{ guest.max_hp }}</div>
+                        </td>
+                        <td>
+                            {% if guest.training_complete_at %}
+                            <span class="countdown" data-countdown="{{ guest.training_complete_at|date:'c' }}"
+                                data-format="zh" data-check-url="{% url 'guests:check_training' guest.id %}"
+                                title="完成时间 {{ guest.training_complete_at|date:'Y-m-d H:i:s' }}">计算中</span>
+                            {% else %}
+                            <span class="muted-text">自动升级</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button type="button" class="btn-secondary btn-small open-exp-modal"
+                                data-guest="{{ guest.id }}" data-guest-name="{{ guest.display_name }}"
+                                data-url="{% url 'guests:use_exp_item' guest.id %}" {% if not exp_items %}disabled{% endif %}>
+                                使用经验道具
+                            </button>
+                            <button type="button" class="btn-secondary btn-small open-medicine-modal"
+                                data-guest="{{ guest.id }}" data-guest-name="{{ guest.display_name }}"
+                                data-url="{% url 'guests:use_medicine_item' guest.id %}">
+                                疗伤
+                            </button>
+                        </td>
+                    </tr>
+                    {% endwith %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="muted-text">暂无门客，先进行一次招募。</p>
+        {% endif %}
+    </section>
+
+</section>
+
+<div class="modal-backdrop" id="exp-item-modal" aria-hidden="true">
+    <div class="modal">
+        <header class="modal-header">
+            <h3>选择经验道具</h3>
+            <button type="button" class="btn-secondary btn-small close-exp-modal">关闭</button>
+        </header>
+        <div class="modal-body">
+            <p class="muted-text" id="exp-modal-target"></p>
+            {% if exp_items %}
+            <form method="post" id="exp-item-form" action="">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{% url 'guests:roster' %}">
+                <div class="form-field">
+                    <label>选择道具</label>
+                    <select name="item_id">
+                        {% for item in exp_items %}
+                        <option value="{{ item.id }}">{{ item.template.name }}（x{{ item.quantity }}）</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">使用</button>
+                </div>
+            </form>
+            {% else %}
+            <p class="muted-text">仓库暂无经验道具。</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="modal-backdrop" id="medicine-modal" aria-hidden="true">
+    <div class="modal">
+        <header class="modal-header">
+            <h3>选择药品</h3>
+            <button type="button" class="btn-secondary btn-small close-medicine-modal">关闭</button>
+        </header>
+        <div class="modal-body">
+            <p class="muted-text" id="medicine-modal-target"></p>
+            {% if medicine_items %}
+            <form method="post" id="medicine-form" action="">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{% url 'guests:roster' %}">
+                <div class="form-field">
+                    <label>选择药品</label>
+                    <select name="item_id">
+                        {% for item in medicine_items %}
+                        <option value="{{ item.id }}">{{ item.template.name }}（x{{ item.quantity }}）</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">使用</button>
+                </div>
+            </form>
+            {% else %}
+            <p class="muted-text">仓库暂无药品。</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* 门客列表卡片样式 - 与仓库保持一致 */
+    .guest-roster-card {
+        display: flex;
+        max-height: calc(100vh - 300px);
+    }
+
+    /* 表格滚动容器 - 与仓库保持一致 */
+    .guest-table-wrapper {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        min-height: 300px;
+        margin-top: 0.5rem;
+    }
+
+    .guest-roster-card .table {
+        overflow: visible !important;
+    }
+
+    .guest-roster-card .table th {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: var(--bg-secondary);
+    }
+
+    .guest-roster-card .table tbody,
+    .guest-roster-card .table tbody tr,
+    .guest-roster-card .table tbody td {
+        overflow: visible;
+    }
+
+    /* 门客行分隔线 - 增强视觉层次感 */
+    .guest-roster-card .table tbody tr:not(:last-child) td {
+        border-bottom: 1px solid var(--border-light);
+    }
+
+    /* 滚动条样式优化 - 与仓库保持一致 */
+    .guest-table-wrapper::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    .guest-table-wrapper::-webkit-scrollbar-track {
+        background: var(--bg-secondary);
+        border-radius: 4px;
+    }
+
+    .guest-table-wrapper::-webkit-scrollbar-thumb {
+        background: var(--border-primary);
+        border-radius: 4px;
+    }
+
+    .guest-table-wrapper::-webkit-scrollbar-thumb:hover {
+        background: var(--text-muted);
+    }
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/dashboard.js' %}"></script>
+<script>
+    (function () {
+        // 一键支付工资确认
+        const payAllForm = document.getElementById('pay-all-salary-form');
+        if (payAllForm) {
+            payAllForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const amount = payAllForm.dataset.amount;
+                const confirmed = await gameConfirm(`确认支付所有门客工资共计 ${amount} 银两？`, { title: '支付工资' });
+                if (confirmed) payAllForm.submit();
+            });
+        }
+
+        // 显示错误提示消息（与 Django messages 样式一致，只保留一条）
+        function showError(message) {
+            // 查找或创建消息容器
+            let container = document.querySelector('.flash-messages');
+            if (!container) {
+                container = document.createElement('ul');
+                container.className = 'flash-messages';
+                const main = document.querySelector('main');
+                if (main) {
+                    main.insertBefore(container, main.firstChild);
+                } else {
+                    document.body.insertBefore(container, document.body.firstChild);
+                }
+            }
+            // 清除已有的 AJAX 错误消息，只保留一条
+            container.querySelectorAll('.flash.ajax-error').forEach(el => el.remove());
+            // 创建消息元素
+            const msg = document.createElement('li');
+            msg.className = 'flash error ajax-error';
+            msg.textContent = message;
+            container.appendChild(msg);
+            // 5秒后自动移除
+            setTimeout(() => {
+                msg.remove();
+                if (container.children.length === 0) {
+                    container.remove();
+                }
+            }, 5000);
+        }
+
+        // 更新下拉框中的道具数量
+        function updateItemQuantity(selectElem, itemId, newQuantity) {
+            const option = selectElem.querySelector(`option[value="${itemId}"]`);
+            if (!option) return;
+            if (newQuantity <= 0) {
+                option.remove();
+                if (selectElem.options.length === 0) {
+                    const submitBtn = selectElem.closest('form')?.querySelector('button[type="submit"]');
+                    if (submitBtn) submitBtn.disabled = true;
+                }
+            } else {
+                const text = option.textContent;
+                option.textContent = text.replace(/（x\d+）/, `（x${newQuantity}）`);
+            }
+        }
+
+        // 更新门客行的等级、HP和训练倒计时
+        function updateGuestRow(guestId, newLevel, trainingEta, currentHp, maxHp) {
+            const row = document.querySelector(`tr[data-guest-id="${guestId}"]`);
+            if (!row) return;
+            // 更新等级
+            const levelDiv = row.querySelector('.guest-level');
+            if (levelDiv) {
+                levelDiv.textContent = `Lv ${newLevel}`;
+            }
+            // 更新 HP
+            if (currentHp !== undefined && maxHp !== undefined) {
+                const hpCell = row.querySelectorAll('td')[5]; // 第6列是"生命"列
+                if (hpCell) {
+                    const hpDiv = hpCell.querySelector('div');
+                    if (hpDiv) {
+                        hpDiv.textContent = `HP ${currentHp}/${maxHp}`;
+                    }
+                }
+            }
+            // 更新训练倒计时（dashboard.js 的 tick() 每秒自动检测 [data-countdown] 属性）
+            const countdownSpan = row.querySelector('.countdown');
+            const upgradeCell = row.querySelectorAll('td')[6]; // 第7列是"升级"列
+            if (trainingEta) {
+                if (countdownSpan) {
+                    countdownSpan.setAttribute('data-countdown', trainingEta);
+                    countdownSpan.classList.remove('countdown-finished');
+                } else if (upgradeCell) {
+                    // 原来是"自动升级"状态，需要创建倒计时元素
+                    const checkUrl = `/guests/${guestId}/check-training/`;
+                    upgradeCell.innerHTML = `<span class="countdown" data-countdown="${trainingEta}" data-format="zh" data-check-url="${checkUrl}">计算中</span>`;
+                }
+            } else if (upgradeCell && countdownSpan) {
+                // 已完成升级，显示"自动升级"
+                upgradeCell.innerHTML = '<span class="muted-text">自动升级</span>';
+            }
+        }
+
+        // 经验道具模态框
+        const modal = document.getElementById("exp-item-modal");
+        const form = document.getElementById("exp-item-form");
+        const targetLabel = document.getElementById("exp-modal-target");
+        const openButtons = document.querySelectorAll(".open-exp-modal");
+        const closeButtons = document.querySelectorAll(".close-exp-modal");
+        const toggleModal = (show) => {
+            if (!modal) return;
+            if (show) {
+                modal.classList.add("visible");
+                modal.setAttribute("aria-hidden", "false");
+            } else {
+                modal.classList.remove("visible");
+                modal.setAttribute("aria-hidden", "true");
+            }
+        };
+        openButtons.forEach((btn) => {
+            btn.addEventListener("click", () => {
+                const guestId = btn.dataset.guest;
+                const guestName = btn.dataset.guestName || "";
+                const url = btn.dataset.url || "";
+                if (form && guestId) {
+                    form.action = url;
+                }
+                if (targetLabel) {
+                    targetLabel.textContent = guestName ? `目标：${guestName}` : "";
+                }
+                toggleModal(true);
+            });
+        });
+        closeButtons.forEach((btn) => btn.addEventListener("click", () => toggleModal(false)));
+        modal?.addEventListener("click", (event) => {
+            if (event.target === modal) toggleModal(false);
+        });
+
+        // 经验道具表单 AJAX 提交
+        if (form) {
+            form.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                const formData = new FormData(form);
+                const submitBtn = form.querySelector('button[type="submit"]');
+                if (submitBtn) submitBtn.disabled = true;
+                try {
+                    const resp = await fetch(form.action, {
+                        method: 'POST',
+                        body: formData,
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+                    const data = await resp.json();
+                    if (!data.success) {
+                        showError(data.message);
+                    } else {
+                        const select = form.querySelector('select[name="item_id"]');
+                        if (select) updateItemQuantity(select, data.item_id, data.new_quantity);
+                        // 更新门客等级、HP和训练状态
+                        if (data.guest_id && data.new_level !== undefined) {
+                            updateGuestRow(data.guest_id, data.new_level, data.training_eta, data.current_hp, data.max_hp);
+                        }
+                    }
+                } catch (err) {
+                    showError('请求失败，请重试');
+                } finally {
+                    if (submitBtn) submitBtn.disabled = false;
+                }
+            });
+        }
+
+        // 疗伤道具模态框
+        const medModal = document.getElementById("medicine-modal");
+        const medForm = document.getElementById("medicine-form");
+        const medTarget = document.getElementById("medicine-modal-target");
+        const openMedButtons = document.querySelectorAll(".open-medicine-modal");
+        const closeMedButtons = document.querySelectorAll(".close-medicine-modal");
+        const toggleMedModal = (show) => {
+            if (!medModal) return;
+            if (show) {
+                medModal.classList.add("visible");
+                medModal.setAttribute("aria-hidden", "false");
+            } else {
+                medModal.classList.remove("visible");
+                medModal.setAttribute("aria-hidden", "true");
+            }
+        };
+        openMedButtons.forEach((btn) => {
+            btn.addEventListener("click", () => {
+                const guestName = btn.dataset.guestName || "";
+                const url = btn.dataset.url || "";
+                if (medForm) {
+                    medForm.action = url;
+                }
+                if (medTarget) {
+                    medTarget.textContent = guestName ? `目标：${guestName}` : "";
+                }
+                toggleMedModal(true);
+            });
+        });
+        closeMedButtons.forEach((btn) => btn.addEventListener("click", () => toggleMedModal(false)));
+        medModal?.addEventListener("click", (event) => {
+            if (event.target === medModal) toggleMedModal(false);
+        });
+
+        // 疗伤道具表单 AJAX 提交
+        if (medForm) {
+            medForm.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                const formData = new FormData(medForm);
+                const submitBtn = medForm.querySelector('button[type="submit"]');
+                if (submitBtn) submitBtn.disabled = true;
+                try {
+                    const resp = await fetch(medForm.action, {
+                        method: 'POST',
+                        body: formData,
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+                    const data = await resp.json();
+                    if (!data.success) {
+                        showError(data.message);
+                    } else {
+                        const select = medForm.querySelector('select[name="item_id"]');
+                        if (select) updateItemQuantity(select, data.item_id, data.new_quantity);
+                    }
+                } catch (err) {
+                    showError('请求失败，请重试');
+                } finally {
+                    if (submitBtn) submitBtn.disabled = false;
+                }
+            });
+        }
+    })();
+</script>
+{% endblock %}

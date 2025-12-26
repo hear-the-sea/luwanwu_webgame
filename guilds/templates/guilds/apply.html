@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}申请加入 - {{ guild.name }}{% endblock %}
+
+{% block content %}
+<section class="dashboard">
+    <div class="section-header">
+        <div>
+            <h1>申请加入帮会</h1>
+            <p>{{ guild.name }}</p>
+        </div>
+        <div class="nav-links">
+            <a href="{% url 'guilds:detail' guild.id %}" class="btn-secondary">返回帮会</a>
+        </div>
+    </div>
+
+    <section class="card">
+        <h2>帮会信息</h2>
+        <dl class="guild-dl">
+            <div>
+                <dt>帮会名称</dt>
+                <dd>{{ guild.name }}</dd>
+            </div>
+            <div>
+                <dt>帮会等级</dt>
+                <dd><span class="badge">Lv {{ guild.level }} / 10</span></dd>
+            </div>
+            <div>
+                <dt>帮主</dt>
+                <dd>{{ guild.get_leader.user.manor.display_name }}</dd>
+            </div>
+            <div>
+                <dt>成员</dt>
+                <dd>{{ guild.current_member_count }} / {{ guild.member_capacity }}</dd>
+            </div>
+            <div>
+                <dt>简介</dt>
+                <dd>{{ guild.description|default:"暂无简介" }}</dd>
+            </div>
+            <div>
+                <dt>审批方式</dt>
+                <dd>
+                    {% if guild.auto_accept %}
+                        <span class="positive">✓ 自动通过</span>
+                    {% else %}
+                        <span class="guild-cost-value">⏳ 需审批</span>
+                    {% endif %}
+                </dd>
+            </div>
+        </dl>
+    </section>
+
+    {% if guild.current_member_count >= guild.member_capacity %}
+        <section class="card guild-section-spacing guild-error-card">
+            <h2 class="guild-error-title">⚠️ 成员已满</h2>
+            <p>该帮会当前成员数已达上限，暂时无法接受新成员申请。</p>
+            <a href="{% url 'guilds:hall' %}" class="btn-secondary">返回帮会大厅</a>
+        </section>
+    {% else %}
+        <section class="card guild-section-spacing">
+            <h2>提交申请</h2>
+            <form method="post">
+                {% csrf_token %}
+                <div class="form-field">
+                    <label for="message">申请留言（选填）</label>
+                    <textarea id="message" name="message" rows="4" maxlength="200" placeholder="向帮主介绍一下自己吧..."></textarea>
+                    <small class="muted-text">最多200字</small>
+                </div>
+
+                <div class="guild-info-card">
+                    <h3>申请说明</h3>
+                    <ul class="guild-info-list">
+                        {% if guild.auto_accept %}
+                            <li>该帮会已开启自动通过，提交后将立即加入</li>
+                        {% else %}
+                            <li>提交申请后，需要等待帮主或管理员审批</li>
+                            <li>您可以在帮会详情页查看申请状态</li>
+                        {% endif %}
+                        <li>加入帮会后，您将享受帮会科技加成和福利</li>
+                        <li>通过捐赠资源获得贡献度，可兑换珍稀装备</li>
+                    </ul>
+                </div>
+
+                <div class="form-actions guild-section-spacing">
+                    <button type="submit" class="btn-primary">提交申请</button>
+                    <a href="{% url 'guilds:detail' guild.id %}" class="btn-secondary">取消</a>
+                </div>
+            </form>
+        </section>
+    {% endif %}
+</section>
+{% endblock %}

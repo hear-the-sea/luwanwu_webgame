@@ -1,0 +1,435 @@
+{% extends "base.html" %}
+{% load gameplay_extras %}
+
+{% block title %}铁匠铺{% endblock %}
+
+{% block content %}
+<section class="dashboard">
+    <div class="section-header">
+        <div>
+            <h1>铁匠铺</h1>
+            <p class="caption">锻造装备武器{% if speed_bonus_percent > 0 %}，铁匠铺加成：<span class="bonus-text">-{{ speed_bonus_percent }}%</span> 锻造时间{% endif %}</p>
+            <p class="caption">锻造技等级：{{ forging_level }}，单次最大锻造数量：<strong>{{ max_forging_quantity }}</strong> 件</p>
+        </div>
+        <a class="btn-secondary" href="{% url 'gameplay:forge' %}?category={{ current_category }}">刷新</a>
+    </div>
+
+    {% if active_forgings %}
+    <section class="card">
+        <h2>锻造中</h2>
+        <div class="task-list">
+            {% for production in active_forgings %}
+            <article class="task-card">
+                <header>
+                    <h3>{{ production.equipment_name }} x{{ production.quantity }}</h3>
+                    <p>材料已消耗</p>
+                </header>
+                <div class="task-meta">
+                    {% if production.time_remaining > 0 %}
+                        <span class="chip soft">剩余时间：{{ production.time_remaining }} 秒</span>
+                    {% else %}
+                        <span class="chip success">已完成！</span>
+                    {% endif %}
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <section class="card">
+        <h2>装备类别</h2>
+        <div class="category-tabs">
+            {% for cat_key, cat_name in equipment_categories.items %}
+            <a href="{% url 'gameplay:forge' %}?category={{ cat_key }}"
+               class="category-tab {% if cat_key == current_category %}active{% endif %}">
+                {{ cat_name }}
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="card">
+        <h2>{% if current_category == 'all' %}全部{% else %}{{ equipment_categories|get_item:current_category }}{% endif %} - 可锻造装备</h2>
+        <p class="hint" style="margin-bottom: 1rem;">
+            提升锻造技等级可解锁更高级的装备和增加单次锻造上限
+            {% if is_forging %}<br><span class="warning-text">当前有装备正在锻造中，同时只能锻造一种装备</span>{% endif %}
+        </p>
+
+        <div class="building-grid">
+            {% for item in equipment_list %}
+            <article class="building-card {% if not item.is_unlocked %}locked{% elif is_forging %}disabled{% endif %}">
+                <header>
+                    <div>
+                        <h3>{{ item.name }}</h3>
+                        {% if current_category == 'all' %}
+                        <p class="category-hint">{{ item.category_name }}</p>
+                        {% endif %}
+                        {% if not item.is_unlocked %}
+                        <p class="locked-hint">需要锻造技 {{ item.required_forging }} 级</p>
+                        {% endif %}
+                    </div>
+                </header>
+
+                <dl class="materials-info">
+                    <div class="materials-header">
+                        <dt>所需材料</dt>
+                        <dd>
+                            {% for mat in item.materials %}
+                            <span class="{% if mat.current < mat.required %}insufficient{% endif %}">
+                                {{ mat.name }}×{{ mat.required }}({{ mat.current }})
+                            </span>
+                            {% endfor %}
+                        </dd>
+                    </div>
+                </dl>
+
+                <dl class="time-info">
+                    <div>
+                        <dt>基础时间</dt>
+                        <dd>{{ item.base_duration }} 秒</dd>
+                    </div>
+                    <div>
+                        <dt>实际时间</dt>
+                        <dd class="bonus-text">{{ item.actual_duration }} 秒</dd>
+                    </div>
+                </dl>
+
+                <form method="post" action="{% url 'gameplay:start_equipment_forging' %}" class="production-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="equipment_key" value="{{ item.key }}">
+                    <input type="hidden" name="category" value="{{ current_category }}">
+                    {% if not item.is_unlocked %}
+                        <button type="button" class="btn-locked btn-small" disabled>未解锁</button>
+                    {% elif is_forging %}
+                        <button type="button" class="btn-disabled btn-small" disabled>锻造中</button>
+                    {% elif item.is_unlocked %}
+                        <div class="quantity-row">
+                            <label for="quantity-{{ item.key }}">数量：</label>
+                            <input type="number" name="quantity" id="quantity-{{ item.key }}"
+                                   value="1" min="1" max="{{ item.max_quantity }}"
+                                   class="quantity-input">
+                        </div>
+                        {% if item.can_afford %}
+                            <button type="submit" class="btn-primary btn-small">锻造</button>
+                        {% else %}
+                            <button type="button" class="btn-disabled btn-small" disabled>材料不足</button>
+                        {% endif %}
+                    {% endif %}
+                </form>
+            </article>
+            {% empty %}
+            <p>该类别暂无可锻造装备</p>
+            {% endfor %}
+        </div>
+
+        {% if page_obj.has_other_pages %}
+        <nav class="pagination">
+            {% if page_obj.has_previous %}
+            <a href="{% url 'gameplay:forge' %}?category={{ current_category }}&page={{ page_obj.previous_page_number }}" class="page-link">上一页</a>
+            {% endif %}
+
+            <span class="page-info">第 {{ page_obj.number }} / {{ page_obj.paginator.num_pages }} 页</span>
+
+            {% if page_obj.has_next %}
+            <a href="{% url 'gameplay:forge' %}?category={{ current_category }}&page={{ page_obj.next_page_number }}" class="page-link">下一页</a>
+            {% endif %}
+        </nav>
+        {% endif %}
+    </section>
+</section>
+
+<style>
+.category-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.category-tab {
+    padding: 0.5rem 1rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    text-decoration: none;
+    color: #374151;
+    font-size: 0.875rem;
+    transition: all 0.2s;
+}
+
+.category-tab:hover {
+    border-color: #3b82f6;
+    color: #3b82f6;
+}
+
+.category-tab.active {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
+}
+
+.building-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1rem;
+}
+
+.building-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 1.5rem;
+    background: white;
+    transition: box-shadow 0.2s;
+}
+
+.building-card:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.building-card.locked {
+    background: #f9fafb;
+    opacity: 0.7;
+}
+
+.building-card.disabled {
+    background: #f9fafb;
+    opacity: 0.6;
+}
+
+.building-card header {
+    margin-bottom: 1rem;
+}
+
+.building-card h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #111827;
+    margin-bottom: 0.25rem;
+}
+
+.building-card header p {
+    font-size: 0.875rem;
+    color: #6b7280;
+    line-height: 1.5;
+}
+
+.category-hint {
+    color: #3b82f6 !important;
+    font-size: 0.75rem !important;
+    margin-bottom: 0.25rem;
+}
+
+.locked-hint {
+    color: #dc2626 !important;
+    font-weight: 500;
+}
+
+.warning-text {
+    color: #dc2626;
+    font-weight: 500;
+}
+
+.materials-info {
+    margin-bottom: 0.75rem;
+    padding: 0.75rem;
+    background: #fef3c7;
+    border-radius: 4px;
+}
+
+.materials-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.materials-info dt {
+    font-size: 0.75rem;
+    color: #92400e;
+    font-weight: 500;
+}
+
+.materials-info dd {
+    font-size: 0.875rem;
+    color: #78350f;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.materials-info dd span.insufficient {
+    color: #dc2626;
+    font-weight: 600;
+}
+
+.time-info {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: #f9fafb;
+    border-radius: 4px;
+}
+
+.time-info div {
+    text-align: center;
+}
+
+.time-info dt {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-bottom: 0.25rem;
+}
+
+.time-info dd {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #111827;
+}
+
+.bonus-text {
+    color: #16a34a;
+}
+
+.hint {
+    color: #6b7280;
+    font-size: 0.875rem;
+}
+
+.production-form {
+    margin-top: 1rem;
+    text-align: center;
+}
+
+.quantity-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.quantity-row label {
+    font-size: 0.875rem;
+    color: #374151;
+}
+
+.quantity-input {
+    width: 80px;
+    padding: 0.375rem 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    text-align: center;
+}
+
+.quantity-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.btn-disabled {
+    background: #d1d5db;
+    color: #9ca3af;
+    cursor: not-allowed;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
+.btn-locked {
+    background: #fecaca;
+    color: #991b1b;
+    cursor: not-allowed;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
+.task-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.task-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 1rem;
+    background: white;
+}
+
+.task-card header {
+    margin-bottom: 0.75rem;
+}
+
+.task-card h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #111827;
+    margin-bottom: 0.25rem;
+}
+
+.task-card header p {
+    font-size: 0.875rem;
+    color: #6b7280;
+}
+
+.task-meta {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.chip {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.chip.soft {
+    background: #f3f4f6;
+    color: #4b5563;
+}
+
+.chip.success {
+    background: #dcfce7;
+    color: #16a34a;
+}
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e5e7eb;
+}
+
+.page-link {
+    padding: 0.5rem 1rem;
+    background: #3b82f6;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    transition: background 0.2s;
+}
+
+.page-link:hover {
+    background: #2563eb;
+}
+
+.page-info {
+    font-size: 0.875rem;
+    color: #6b7280;
+}
+</style>
+{% endblock %}

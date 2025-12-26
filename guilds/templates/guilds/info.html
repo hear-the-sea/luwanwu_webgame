@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}帮会设置 - {{ guild.name }}{% endblock %}
+
+{% block content %}
+<section class="dashboard">
+    <div class="section-header">
+        <div>
+            <h1>帮会设置</h1>
+            <p>{{ guild.name }}</p>
+        </div>
+        <div class="nav-links">
+            <a href="{% url 'guilds:detail' guild.id %}" class="btn-secondary">返回帮会</a>
+        </div>
+    </div>
+
+    <section class="card">
+        <h2>基本设置</h2>
+        <form method="post">
+            {% csrf_token %}
+            <div class="form-field">
+                <label for="description">帮会简介</label>
+                <textarea id="description" name="description" rows="4" maxlength="200">{{ guild.description }}</textarea>
+                <small class="muted-text">最多200字，将显示在帮会详情页面</small>
+            </div>
+
+            <div class="form-field">
+                <label>
+                    <input type="checkbox" name="auto_accept" {% if guild.auto_accept %}checked{% endif %}>
+                    自动通过申请
+                </label>
+                <small class="muted-text">开启后，所有申请将自动通过（成员未满时）</small>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn-primary">保存设置</button>
+                <a href="{% url 'guilds:detail' guild.id %}" class="btn-secondary">取消</a>
+            </div>
+        </form>
+    </section>
+
+    <section class="card guild-section-spacing">
+        <h2>帮会信息</h2>
+        <dl class="guild-dl">
+            <div>
+                <dt>帮会名称</dt>
+                <dd>{{ guild.name }}</dd>
+            </div>
+            <div>
+                <dt>帮会等级</dt>
+                <dd><span class="badge">Lv {{ guild.level }} / 10</span></dd>
+            </div>
+            <div>
+                <dt>成员容量</dt>
+                <dd>{{ guild.current_member_count }} / {{ guild.member_capacity }}</dd>
+            </div>
+            <div>
+                <dt>创建时间</dt>
+                <dd>{{ guild.created_at|date:"Y-m-d H:i:s" }}</dd>
+            </div>
+        </dl>
+    </section>
+
+    <section class="card guild-section-spacing">
+        <h2>资源状况</h2>
+        <dl class="guild-dl">
+            <div>
+                <dt>银两</dt>
+                <dd>{{ guild.silver|floatformat:0 }}</dd>
+            </div>
+            <div>
+                <dt>粮食</dt>
+                <dd>{{ guild.grain|floatformat:0 }}</dd>
+            </div>
+            <div>
+                <dt>金条</dt>
+                <dd>{{ guild.gold_bar }}</dd>
+            </div>
+        </dl>
+    </section>
+
+    <section class="card guild-section-spacing guild-error-card">
+        <h2 class="guild-error-title">危险操作</h2>
+        <p>以下操作将对帮会造成重大影响，请谨慎操作。</p>
+        <div class="guild-danger-actions">
+            <button type="button" class="btn-danger" onclick="document.getElementById('disband-modal').classList.add('visible')">
+                解散帮会
+            </button>
+        </div>
+    </section>
+</section>
+
+<!-- 解散帮会确认模态框 -->
+<div class="modal-backdrop" id="disband-modal" aria-hidden="true">
+    <div class="modal">
+        <header class="modal-header">
+            <h3>解散帮会</h3>
+            <button type="button" class="btn-secondary btn-small" onclick="document.getElementById('disband-modal').classList.remove('visible')">取消</button>
+        </header>
+        <div class="modal-body">
+            <div class="guild-warning guild-warning-severe">
+                <p class="guild-warning-title">⚠️ 警告：此操作不可撤销</p>
+                <p>解散帮会后，所有成员将被移除，帮会资源将被清空，帮会数据将被永久删除。</p>
+            </div>
+            <form method="post" action="{% url 'guilds:disband' %}">
+                {% csrf_token %}
+                <div class="form-field">
+                    <label for="confirm_name">请输入帮会名称以确认：</label>
+                    <input type="text" id="confirm_name" name="confirm_name" required placeholder="{{ guild.name }}">
+                    <small class="muted-text">必须完全匹配帮会名称才能解散</small>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-danger">确认解散</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    const modal = document.getElementById('disband-modal');
+    if (modal) {
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                modal.classList.remove('visible');
+            }
+        });
+    }
+</script>
+{% endblock %}
