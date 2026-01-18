@@ -184,7 +184,16 @@ def _return_surviving_troops_batch(
 
     # 批量归还
     if surviving_troops:
+        logger.info(
+            f"归还护院: manor_id={manor.id}, surviving_troops={surviving_troops}",
+            extra={"manor_id": manor.id, "surviving_troops": surviving_troops}
+        )
         _add_troops_batch(manor, surviving_troops)
+    else:
+        logger.warning(
+            f"没有存活护院需要归还: manor_id={manor.id}, loadout={loadout}, troops_lost={troops_lost}",
+            extra={"manor_id": manor.id, "loadout": loadout, "troops_lost": troops_lost}
+        )
 
 
 def _add_troops_batch(manor: "Manor", troops_to_add: Dict[str, int]) -> None:
@@ -194,6 +203,8 @@ def _add_troops_batch(manor: "Manor", troops_to_add: Dict[str, int]) -> None:
     Args:
         manor: 庄园对象
         troops_to_add: 要添加的护院配置 {troop_key: count}
+
+    注意：此函数假设调用者已经持有适当的事务锁
     """
     from battle.models import TroopTemplate
     from ..models import PlayerTroop
@@ -212,7 +223,7 @@ def _add_troops_batch(manor: "Manor", troops_to_add: Dict[str, int]) -> None:
     if not templates:
         return
 
-    # 预加载现有护院
+    # 预加载现有护院（使用 select_for_update 锁定）
     existing = {
         pt.troop_template.key: pt
         for pt in PlayerTroop.objects.select_for_update()
@@ -230,9 +241,14 @@ def _add_troops_batch(manor: "Manor", troops_to_add: Dict[str, int]) -> None:
             continue
 
         if key in existing:
-            existing[key].count += count
-            existing[key].updated_at = now
-            to_update.append(existing[key])
+            # 关键修复：直接从数据库读取最新值，避免并发冲突
+            # 使用 F() 表达式进行原子更新
+            PlayerTroop.objects.filter(
+                pk=existing[key].pk
+            ).update(
+                count=F("count") + count,
+                updated_at=now
+            )
         else:
             to_create.append(
                 PlayerTroop(
@@ -242,8 +258,6 @@ def _add_troops_batch(manor: "Manor", troops_to_add: Dict[str, int]) -> None:
                 )
             )
 
-    if to_update:
-        PlayerTroop.objects.bulk_update(to_update, ["count", "updated_at"])
     if to_create:
         try:
             PlayerTroop.objects.bulk_create(to_create, ignore_conflicts=True)
