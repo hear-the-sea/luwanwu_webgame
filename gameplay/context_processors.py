@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -47,7 +48,13 @@ def notifications(request):
         # Cache miss - 从Redis读取
         try:
             redis = get_redis_connection("default")
-            online_count = int(redis.scard("online_users_set") or 0)
+            # 与 OnlineStatsConsumer 保持一致：使用 ZSET + last-seen 时间戳（epoch seconds）
+            online_users_key = "online_users_zset"
+            online_users_ttl = 1800  # 30 minutes
+            cutoff = float(time.time()) - float(online_users_ttl)
+            # best-effort cleanup，避免过期用户导致计数漂移
+            redis.zremrangebyscore(online_users_key, "-inf", cutoff)
+            online_count = int(redis.zcard(online_users_key) or 0)
             # 缓存5秒以减少高频请求时的Redis读取
             cache.set(cache_key_online, online_count, timeout=5)
             context["online_user_count"] = online_count

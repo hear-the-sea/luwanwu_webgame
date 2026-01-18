@@ -1,7 +1,7 @@
 from django.db import models
 from django.utils import timezone
 
-from gameplay.models import ItemTemplate, Manor
+
 
 
 class ShopStock(models.Model):
@@ -21,9 +21,7 @@ class ShopStock(models.Model):
 class ShopPurchaseLog(models.Model):
     """商铺购买记录"""
 
-    manor = models.ForeignKey(
-        Manor, on_delete=models.CASCADE, related_name="shop_purchases"
-    )
+    manor = models.ForeignKey("gameplay.Manor", on_delete=models.CASCADE, related_name="shop_purchases")
     item_key = models.CharField(max_length=64)
     quantity = models.PositiveIntegerField()
     unit_price = models.PositiveIntegerField()
@@ -41,9 +39,7 @@ class ShopPurchaseLog(models.Model):
 class ShopSellLog(models.Model):
     """商铺出售记录"""
 
-    manor = models.ForeignKey(
-        Manor, on_delete=models.CASCADE, related_name="shop_sells"
-    )
+    manor = models.ForeignKey("gameplay.Manor", on_delete=models.CASCADE, related_name="shop_sells")
     item_key = models.CharField(max_length=64)
     quantity = models.PositiveIntegerField()
     unit_price = models.PositiveIntegerField()
@@ -61,9 +57,7 @@ class ShopSellLog(models.Model):
 class GoldBarExchangeLog(models.Model):
     """金条兑换记录"""
 
-    manor = models.ForeignKey(
-        Manor, on_delete=models.CASCADE, related_name="gold_bar_exchanges"
-    )
+    manor = models.ForeignKey("gameplay.Manor", on_delete=models.CASCADE, related_name="gold_bar_exchanges")
     quantity = models.PositiveIntegerField(verbose_name="兑换数量")
     silver_cost = models.PositiveIntegerField(verbose_name="消耗银两")
     exchange_date = models.DateField(auto_now_add=True, verbose_name="兑换日期")
@@ -96,13 +90,13 @@ class MarketListing(models.Model):
 
     # 基本信息
     seller = models.ForeignKey(
-        Manor,
+        "gameplay.Manor",
         on_delete=models.CASCADE,
         related_name="market_listings",
         verbose_name="卖家",
     )
     item_template = models.ForeignKey(
-        ItemTemplate, on_delete=models.CASCADE, verbose_name="物品模板"
+        "gameplay.ItemTemplate", on_delete=models.CASCADE, verbose_name="物品模板"
     )
     quantity = models.PositiveIntegerField(verbose_name="数量")
 
@@ -128,7 +122,7 @@ class MarketListing(models.Model):
         verbose_name="状态",
     )
     buyer = models.ForeignKey(
-        Manor,
+        "gameplay.Manor",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -176,7 +170,7 @@ class MarketTransaction(models.Model):
         verbose_name="挂单",
     )
     buyer = models.ForeignKey(
-        Manor,
+        "gameplay.Manor",
         on_delete=models.CASCADE,
         related_name="market_transactions",
         verbose_name="买家",
@@ -270,7 +264,7 @@ class AuctionSlot(models.Model):
         verbose_name="拍卖轮次",
     )
     item_template = models.ForeignKey(
-        ItemTemplate,
+        "gameplay.ItemTemplate",
         on_delete=models.CASCADE,
         related_name="auction_slots",
         verbose_name="物品模板",
@@ -282,7 +276,7 @@ class AuctionSlot(models.Model):
 
     # 当前最高出价者
     highest_bidder = models.ForeignKey(
-        Manor,
+        "gameplay.Manor",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -335,7 +329,7 @@ class AuctionBid(models.Model):
         verbose_name="拍卖位",
     )
     manor = models.ForeignKey(
-        Manor,
+        "gameplay.Manor",
         on_delete=models.CASCADE,
         related_name="auction_bids",
         verbose_name="出价者",
@@ -376,7 +370,7 @@ class FrozenGoldBar(models.Model):
         AUCTION_BID = "auction_bid", "拍卖出价"
 
     manor = models.ForeignKey(
-        Manor,
+        "gameplay.Manor",
         on_delete=models.CASCADE,
         related_name="frozen_gold_bars",
         verbose_name="庄园",

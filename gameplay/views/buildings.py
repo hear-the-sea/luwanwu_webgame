@@ -13,8 +13,10 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
-from ..models import Building
-from ..services import (
+from core.exceptions import GameError
+from core.utils import sanitize_error_message
+from gameplay.models import Building
+from gameplay.services import (
     refresh_manor_state,
     start_upgrade,
 )
@@ -38,6 +40,6 @@ class UpgradeBuildingView(LoginRequiredMixin, TemplateView):
             start_upgrade(building)
             eta = building.upgrade_complete_at.strftime("%H:%M:%S") if building.upgrade_complete_at else ""
             messages.success(request, f"{building.building_type.name} 开始升级，完成时间 {eta}")
-        except ValueError as exc:
-            messages.error(request, str(exc))
+        except (GameError, ValueError) as exc:
+            messages.error(request, sanitize_error_message(exc))
         return redirect("gameplay:dashboard")

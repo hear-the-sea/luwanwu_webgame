@@ -265,3 +265,33 @@ buildings:
       silver: 20193
     cost_growth: 1.7
     icon: ""
+
+  - key: jail
+    name: 监牢
+    category: special
+    description: 牢门一闭，江湖恩怨自有去处。踢馆胜利后有概率俘获对方出战门客（单场最多1名）。升级提升可关押人数上限（满级5人）
+    resource_type: silver
+    base_rate_per_hour: 0
+    rate_growth: 0.0
+    base_upgrade_time: 600
+    time_growth: 1.35
+    base_cost:
+      grain: 800
+      silver: 1200
+    cost_growth: 1.4
+    icon: ""
+
+  - key: oath_grove
+    name: 结义林
+    category: special
+    description: 桃园结义，义薄云天。最多可与5名门客结义，结义门客不可被俘获。升级提升结义人数上限（满级5人）
+    resource_type: silver
+    base_rate_per_hour: 0
+    rate_growth: 0.0
+    base_upgrade_time: 600
+    time_growth: 1.35
+    base_cost:
+      grain: 800
+      silver: 1200
+    cost_growth: 1.4
+    icon: ""

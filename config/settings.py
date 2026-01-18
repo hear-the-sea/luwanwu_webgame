@@ -71,6 +71,8 @@ if not DEBUG and not ALLOWED_HOSTS:
 if DEBUG and not ALLOWED_HOSTS:
     ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 
+ENABLE_BATTLE_DEBUGGER = DEBUG and env("DJANGO_ENABLE_DEBUGGER", "1") == "1"
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -86,8 +88,10 @@ INSTALLED_APPS = [
     "battle",
     "trade",
     "guilds",
-    "battle_debugger",  # 战斗调试工具
+    # 战斗调试工具（开发环境可开，生产默认禁用）
+    "battle_debugger" if ENABLE_BATTLE_DEBUGGER else None,
 ]
+INSTALLED_APPS = [app for app in INSTALLED_APPS if app]
 
 MIDDLEWARE = [
     "core.middleware.RequestIDMiddleware",  # 请求追踪
@@ -325,6 +329,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "gameplay.cleanup_old_data",
         "schedule": crontab(hour=4, minute=0),  # 每天04:00执行
     },
+    # 监牢系统任务
+    "decay-prisoner-loyalty": {
+        "task": "gameplay.decay_prisoner_loyalty",
+        "schedule": crontab(hour=0, minute=0),  # 每天00:00执行忠诚度衰减
+    },
     # 拍卖行定时任务
     "settle-auction-round": {
         "task": "trade.settle_auction_round",
@@ -337,6 +346,27 @@ CELERY_BEAT_SCHEDULE = {
 }
 
 ACCESS_LOG_ENABLED = env("DJANGO_ACCESS_LOG", "1") == "1"
+# Only trust X-Forwarded-For when behind a trusted proxy/load balancer.
+ACCESS_LOG_TRUST_PROXY = env("DJANGO_ACCESS_LOG_TRUST_PROXY", "0") == "1"
+
+# Minimum interval (seconds) between resource sync attempts in request paths.
+# Helps avoid frequent row locks under high traffic.
+RESOURCE_SYNC_MIN_INTERVAL_SECONDS = int(
+    env("DJANGO_RESOURCE_SYNC_MIN_INTERVAL_SECONDS", "1" if DEBUG else "5")
+)
+
+# Minimum interval (seconds) between manor/tech refresh attempts in request paths.
+# Keeps request traffic from repeatedly hitting time-based completion queries.
+MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS = int(
+    env("DJANGO_MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS", "1" if DEBUG else "5")
+)
+
+# Cache TTL (seconds) for lightweight home/dashboard stats.
+HOME_STATS_CACHE_TTL_SECONDS = int(env("DJANGO_HOME_STATS_CACHE_TTL_SECONDS", "5"))
+
+# High-value thresholds (best-effort logging/monitoring).
+TRADE_HIGH_VALUE_SILVER_THRESHOLD = int(env("DJANGO_TRADE_HIGH_VALUE_SILVER_THRESHOLD", "1000000"))
+AUCTION_HIGH_BID_THRESHOLD = int(env("DJANGO_AUCTION_HIGH_BID_THRESHOLD", "200"))
 
 LOGGING = {
     "version": 1,

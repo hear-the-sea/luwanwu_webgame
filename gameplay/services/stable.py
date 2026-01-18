@@ -15,6 +15,7 @@ from core.utils.time_scale import scale_duration
 
 from ..constants import BuildingKeys
 from ..models import HorseProduction, Manor
+from .notifications import notify_user
 
 
 # 马匹配置
@@ -162,10 +163,6 @@ def start_horse_production(manor: Manor, horse_key: str, quantity: int = 1) -> H
     if horse_key not in HORSE_CONFIG:
         raise ValueError("无效的马匹类型")
 
-    # 检查是否已有生产进行中
-    if has_active_production(manor):
-        raise ValueError("已有马匹正在生产中，同时只能生产一种马匹")
-
     config = HORSE_CONFIG[horse_key]
     required_level = config.get("required_horsemanship", 1)
 
@@ -185,16 +182,22 @@ def start_horse_production(manor: Manor, horse_key: str, quantity: int = 1) -> H
     # 计算总消耗
     total_grain_cost = config["grain_cost"] * quantity
 
-    if manor.grain < total_grain_cost:
-        raise ValueError(f"粮食不足，需要{total_grain_cost}点粮食")
-
     with transaction.atomic():
-        from .resources import spend_resources
+        from gameplay.models import Manor as ManorModel
+        from .resources import spend_resources_locked
         from ..models import ResourceEvent
 
+        locked_manor = ManorModel.objects.select_for_update().get(pk=manor.pk)
+
+        # 锁内再次检查，避免并发下绕过限制
+        if has_active_production(locked_manor):
+            raise ValueError("已有马匹正在生产中，同时只能生产一种马匹")
+        if locked_manor.grain < total_grain_cost:
+            raise ValueError(f"粮食不足，需要{total_grain_cost}点粮食")
+
         # 扣除粮食
-        spend_resources(
-            manor,
+        spend_resources_locked(
+            locked_manor,
             {"grain": total_grain_cost},
             note=f"生产{config['name']}x{quantity}",
             reason=ResourceEvent.Reason.UPGRADE_COST,
@@ -205,7 +208,7 @@ def start_horse_production(manor: Manor, horse_key: str, quantity: int = 1) -> H
 
         # 创建生产记录
         production = HorseProduction.objects.create(
-            manor=manor,
+            manor=locked_manor,
             horse_key=horse_key,
             horse_name=config["name"],
             quantity=quantity,
@@ -257,12 +260,8 @@ def finalize_horse_production(production: HorseProduction, send_notification: bo
     Returns:
         是否成功完成
     """
-    import logging
-    from asgiref.sync import async_to_sync
-    from channels.layers import get_channel_layer
     from ..models import Message
-
-    logger = logging.getLogger(__name__)
+    from .notifications import notify_user
 
     if production.status != HorseProduction.Status.PRODUCING:
         return False
@@ -272,9 +271,9 @@ def finalize_horse_production(production: HorseProduction, send_notification: bo
 
     with transaction.atomic():
         # 添加马匹到仓库（按数量添加）
-        from .inventory import add_item_to_inventory
+        from .inventory import add_item_to_inventory_locked
 
-        add_item_to_inventory(production.manor, production.horse_key, production.quantity)
+        add_item_to_inventory_locked(production.manor, production.horse_key, production.quantity)
 
         # 更新生产状态
         production.status = HorseProduction.Status.COMPLETED
@@ -292,21 +291,16 @@ def finalize_horse_production(production: HorseProduction, send_notification: bo
             body=f"您的{production.horse_name}{quantity_text}已生产完成，请到仓库查收。",
         )
 
-        channel_layer = get_channel_layer()
-        if channel_layer:
-            payload = {
+        notify_user(
+            production.manor.user_id,
+            {
                 "kind": "system",
                 "title": f"{production.horse_name}{quantity_text}生产完成",
                 "horse_key": production.horse_key,
                 "quantity": production.quantity,
-            }
-            try:
-                async_to_sync(channel_layer.group_send)(
-                    f"user_{production.manor.user_id}",
-                    {"type": "notify.message", "payload": payload},
-                )
-            except Exception:
-                logger.warning("Failed to send horse production notification via channels", exc_info=True)
+            },
+            log_context="horse production notification",
+        )
 
     return True
 

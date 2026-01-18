@@ -28,7 +28,7 @@ def gold_bar_template(db):
 def user_with_gold_bars(django_user_model, gold_bar_template):
     """创建一个拥有金条的用户"""
     user = django_user_model.objects.create_user(username="guild_test_user", password="pass12345")
-    from gameplay.services import ensure_manor
+    from gameplay.services.manor import ensure_manor
     manor = ensure_manor(user)
 
     # 添加金条到仓库
@@ -45,7 +45,7 @@ def user_with_gold_bars(django_user_model, gold_bar_template):
 def second_user(django_user_model):
     """创建第二个用户用于测试申请加入"""
     user = django_user_model.objects.create_user(username="guild_test_user2", password="pass12345")
-    from gameplay.services import ensure_manor
+    from gameplay.services.manor import ensure_manor
     ensure_manor(user)
     return user
 
@@ -85,7 +85,7 @@ class TestGuildCreation:
 
         # 创建第二个用户
         user2 = django_user_model.objects.create_user(username="user2", password="pass12345")
-        from gameplay.services import ensure_manor
+        from gameplay.services.manor import ensure_manor
         manor2 = ensure_manor(user2)
 
         # 给第二个用户金条
@@ -124,7 +124,7 @@ class TestGuildCreation:
     def test_create_guild_insufficient_gold(self, django_user_model, gold_bar_template):
         """测试金条不足"""
         user = django_user_model.objects.create_user(username="poor_user", password="pass12345")
-        from gameplay.services import ensure_manor
+        from gameplay.services.manor import ensure_manor
         ensure_manor(user)
 
         with pytest.raises(ValueError, match="金条不足"):
@@ -176,7 +176,7 @@ class TestGuildMembership:
                 username=f"filler_{i}",
                 password="pass12345"
             )
-            from gameplay.services import ensure_manor
+            from gameplay.services.manor import ensure_manor
             ensure_manor(user)
             GuildMember.objects.create(guild=guild, user=user, position='member')
 

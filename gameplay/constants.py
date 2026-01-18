@@ -2,6 +2,8 @@
 游戏玩法相关常量
 """
 
+from common.constants.resources import ResourceType, ResourceTypes  # noqa: F401
+from common.constants.time import TimeConstants  # noqa: F401
 
 # 建筑类型键值
 class BuildingKeys:
@@ -23,6 +25,8 @@ class BuildingKeys:
     TAVERN = "tavern"  # 酒馆
     FORGE = "forge"  # 铁匠铺
     CITANG = "citang"  # 祠堂
+    JAIL = "jail"  # 监牢
+    OATH_GROVE = "oath_grove"  # 结义林
 
 
 # 建筑最高等级限制（未配置则无限制）
@@ -31,6 +35,8 @@ BUILDING_MAX_LEVELS = {
     BuildingKeys.CITANG: 5,           # 祠堂：避免缩时达到100%
     BuildingKeys.YOUXIA_BAOTA: 15,    # 悠嘻宝塔：出战上限在15级封顶（SQUAD_SIZE_MAX=18）
     BuildingKeys.TREASURY: 20,        # 藏宝阁：容量函数按20级封顶（平衡时间消耗）
+    BuildingKeys.JAIL: 5,             # 监牢：满级5人
+    BuildingKeys.OATH_GROVE: 5,       # 结义林：满级5人
 
     # 仓储设施
     BuildingKeys.SILVER_VAULT: 30,    # 银库：满级4000万两
@@ -60,28 +66,6 @@ MAX_CONCURRENT_TECH_UPGRADES = 2
 
 
 # 资源类型
-class ResourceTypes:
-    """资源类型常量"""
-
-    GRAIN = "grain"
-    SILVER = "silver"
-
-
-# 时间常量（秒）
-class TimeConstants:
-    """时间相关常量"""
-
-    MINUTE = 60
-    HOUR = 3600
-    DAY = 86400
-
-    # 资源更新间隔
-    RESOURCE_UPDATE_INTERVAL = 60  # 1分钟
-
-    # 任务相关
-    TASK_CHECK_INTERVAL = 60  # 任务检查间隔
-
-
 # 游戏平衡参数
 class GameBalance:
     """游戏平衡参数"""
@@ -178,6 +162,12 @@ class PVPConstants:
     RAID_TRAVEL_TIME_PER_DISTANCE = 3  # 每单位距离3秒
     RAID_CROSS_REGION_MULTIPLIER = 1.5  # 跨区系数
     RAID_MAX_DAILY_ATTACKS_RECEIVED = 8  # 每个庄园每24小时最多被攻击次数（防小号集群）
+
+    # 俘获/监牢
+    RAID_CAPTURE_GUEST_RATE = 0.5  # 单场胜利后俘获失败方出战门客的概率（单场最多1名）【临时测试：50%】
+    JAIL_LOYALTY_DAILY_DECAY = 5  # 被俘期间每日忠诚度衰减值
+    JAIL_RECRUIT_LOYALTY_THRESHOLD = 30  # 忠诚度<=该值可招募
+    JAIL_RECRUIT_GOLD_BAR_COST = 1  # 招募俘虏消耗金条数量（gold_bar）
 
     # 战利品
     LOOT_RESOURCE_MIN_PERCENT = 0.10  # 最低掠夺10%

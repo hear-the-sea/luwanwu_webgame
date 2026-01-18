@@ -8,6 +8,8 @@ from django.contrib import messages
 from django.db.models import Q
 
 from core.utils import safe_int, safe_ordering
+from ..constants import GUILD_CREATION_COST
+from ..decorators import require_guild_leader
 from ..models import Guild
 from ..services import guild as guild_service
 from gameplay.models import Manor
@@ -109,7 +111,7 @@ def create_guild(request):
         gold_bar_item = InventoryItem.objects.filter(
             manor=manor,
             template=gold_bar_template,
-            storage_location='warehouse'
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
         ).first()
         gold_bar_count = gold_bar_item.quantity if gold_bar_item else 0
     except ItemTemplate.DoesNotExist:
@@ -118,7 +120,7 @@ def create_guild(request):
     context = {
         'manor': manor,
         'gold_bar_count': gold_bar_count,
-        'creation_cost': guild_service.GUILD_CREATION_COST,
+        'creation_cost': GUILD_CREATION_COST,
     }
 
     return render(request, 'guilds/create.html', context)
@@ -141,8 +143,8 @@ def guild_detail(request, guild_id):
     # 获取帮会信息
     leader = guild.get_leader()
     admins = guild.get_admins()
-    members = guild.members.filter(is_active=True).select_related('user')[:20]
-    announcements = guild.announcements.all()[:5]
+    members = guild.members.filter(is_active=True).select_related('user__manor')[:20]
+    announcements = guild.announcements.select_related("author__manor").all()[:5]
 
     # 获取科技信息
     technologies = None
@@ -164,26 +166,16 @@ def guild_detail(request, guild_id):
 
 
 @login_required
+@require_guild_leader
 def guild_info(request, guild_id):
     """帮会信息设置"""
     guild = get_object_or_404(Guild, id=guild_id, is_active=True)
-    user = request.user
-
-    # 验证权限
-    if not hasattr(user, 'guild_membership') or not user.guild_membership.is_active:
-        messages.error(request, '您不在帮会中')
-        return redirect('guilds:hall')
-
-    member = user.guild_membership
+    member = request.guild_member
 
     # 验证是否为本帮会成员（防止跨帮会越权）
     if member.guild_id != guild.id:
         messages.error(request, '您不是该帮会成员')
         return redirect('guilds:detail', guild_id=member.guild_id)
-
-    if not member.is_leader:
-        messages.error(request, '只有帮主可以修改帮会信息')
-        return redirect('guilds:detail', guild_id=guild.id)
 
     if request.method == 'POST':
         description = request.POST.get('description', '').strip()

@@ -4,7 +4,8 @@ import pytest
 from django.utils import timezone
 
 from gameplay.models import MissionTemplate
-from gameplay.services import ensure_manor, launch_mission, refresh_manor_state, refresh_mission_runs, start_upgrade
+from gameplay.services.manor import ensure_manor, refresh_manor_state, start_upgrade
+from gameplay.services.missions import launch_mission, refresh_mission_runs
 from guests.models import GuestStatus
 from guests.services import finalize_candidate, recruit_guest
 

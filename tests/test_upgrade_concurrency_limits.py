@@ -1,7 +1,8 @@
 import pytest
 
 from core.exceptions import TechnologyConcurrentUpgradeLimitError
-from gameplay.services import ensure_manor, start_upgrade, upgrade_technology
+from gameplay.services.manor import ensure_manor, start_upgrade
+from gameplay.services.technology import upgrade_technology
 
 
 @pytest.mark.django_db

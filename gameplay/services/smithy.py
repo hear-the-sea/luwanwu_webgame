@@ -15,6 +15,7 @@ from core.utils.time_scale import scale_duration
 
 from ..constants import BuildingKeys
 from ..models import SmeltingProduction, Manor
+from .notifications import notify_user
 
 
 # 金属配置
@@ -189,10 +190,6 @@ def start_smelting_production(manor: Manor, metal_key: str, quantity: int = 1) -
     if metal_key not in METAL_CONFIG:
         raise ValueError("无效的金属类型")
 
-    # 检查是否已有冶炼进行中
-    if has_active_smelting_production(manor):
-        raise ValueError("已有金属正在冶炼中，同时只能冶炼一种金属")
-
     config = METAL_CONFIG[metal_key]
     required_level = config.get("required_smelting", 1)
 
@@ -223,46 +220,50 @@ def start_smelting_production(manor: Manor, metal_key: str, quantity: int = 1) -
     }
     cost_name = cost_type_names.get(cost_type, cost_type)
 
-    # 检查材料是否充足
-    if cost_type == "silver":
-        if manor.silver < total_cost:
-            raise ValueError(f"{cost_name}不足，需要{total_cost}{cost_name}")
-    else:
-        from .inventory import get_item_quantity
-        current_amount = get_item_quantity(manor, cost_type)
-        if current_amount < total_cost:
-            raise ValueError(f"{cost_name}不足，需要{total_cost}个{cost_name}，当前只有{current_amount}个")
-
     with transaction.atomic():
-        from .resources import spend_resources
-        from .inventory import consume_inventory_item
+        from gameplay.models import Manor as ManorModel
+        from .resources import spend_resources_locked
+        from .inventory import consume_inventory_item_locked
         from ..models import ResourceEvent, InventoryItem
+
+        locked_manor = ManorModel.objects.select_for_update().get(pk=manor.pk)
+
+        # 锁内再次检查，避免并发下绕过限制
+        if has_active_smelting_production(locked_manor):
+            raise ValueError("已有金属正在冶炼中，同时只能冶炼一种金属")
 
         # 扣除材料
         if cost_type == "silver":
-            spend_resources(
-                manor,
+            if locked_manor.silver < total_cost:
+                raise ValueError(f"{cost_name}不足，需要{total_cost}{cost_name}")
+            spend_resources_locked(
+                locked_manor,
                 {"silver": total_cost},
                 note=f"冶炼{config['name']}x{quantity}",
                 reason=ResourceEvent.Reason.UPGRADE_COST,
             )
         else:
             # 扣除物品（铜、锡等）
-            item = InventoryItem.objects.filter(
-                manor=manor,
-                template__key=cost_type,
-                storage_location=InventoryItem.StorageLocation.WAREHOUSE
-            ).first()
+            item = (
+                InventoryItem.objects.select_for_update()
+                .select_related("template", "manor")
+                .filter(
+                    manor=locked_manor,
+                    template__key=cost_type,
+                    storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+                )
+                .first()
+            )
             if not item or item.quantity < total_cost:
                 raise ValueError(f"{cost_name}不足")
-            consume_inventory_item(item, total_cost)
+            consume_inventory_item_locked(item, total_cost)
 
         # 计算实际冶炼时间（时间不随数量增加）
         actual_duration = calculate_smelting_duration(config["base_duration"], manor)
 
         # 创建冶炼记录
         production = SmeltingProduction.objects.create(
-            manor=manor,
+            manor=locked_manor,
             metal_key=metal_key,
             metal_name=config["name"],
             quantity=quantity,
@@ -315,12 +316,7 @@ def finalize_smelting_production(production: SmeltingProduction, send_notificati
     Returns:
         是否成功完成
     """
-    import logging
-    from asgiref.sync import async_to_sync
-    from channels.layers import get_channel_layer
     from ..models import Message
-
-    logger = logging.getLogger(__name__)
 
     if production.status != SmeltingProduction.Status.PRODUCING:
         return False
@@ -330,9 +326,9 @@ def finalize_smelting_production(production: SmeltingProduction, send_notificati
 
     with transaction.atomic():
         # 添加金属到仓库（按数量添加）
-        from .inventory import add_item_to_inventory
+        from .inventory import add_item_to_inventory_locked
 
-        add_item_to_inventory(production.manor, production.metal_key, production.quantity)
+        add_item_to_inventory_locked(production.manor, production.metal_key, production.quantity)
 
         # 更新冶炼状态
         production.status = SmeltingProduction.Status.COMPLETED
@@ -350,21 +346,16 @@ def finalize_smelting_production(production: SmeltingProduction, send_notificati
             body=f"您的{production.metal_name}{quantity_text}已冶炼完成，请到仓库查收。",
         )
 
-        channel_layer = get_channel_layer()
-        if channel_layer:
-            payload = {
+        notify_user(
+            production.manor.user_id,
+            {
                 "kind": "system",
                 "title": f"{production.metal_name}{quantity_text}冶炼完成",
                 "metal_key": production.metal_key,
                 "quantity": production.quantity,
-            }
-            try:
-                async_to_sync(channel_layer.group_send)(
-                    f"user_{production.manor.user_id}",
-                    {"type": "notify.message", "payload": payload},
-                )
-            except Exception:
-                logger.warning("Failed to send smelting production notification via channels", exc_info=True)
+            },
+            log_context="smelting production notification",
+        )
 
     return True
 

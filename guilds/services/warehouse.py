@@ -5,28 +5,8 @@ from django.db.models import F
 
 from gameplay.models import InventoryItem, Manor
 
+from ..constants import DAILY_EXCHANGE_LIMIT
 from ..models import GuildExchangeLog, GuildMember, GuildWarehouse
-
-# 兑换成本配置
-EXCHANGE_COSTS = {
-    # 装备
-    'gear_green': 50,
-    'gear_blue': 150,
-    'gear_purple': 500,
-    'gear_orange': 2000,
-
-    # 经验道具
-    'exp_small': 30,
-    'exp_medium': 100,
-    'exp_large': 400,
-
-    # 资源包
-    'resource_pack_common': 20,
-    'resource_pack_advanced': 80,
-}
-
-# 每日兑换上限
-DAILY_EXCHANGE_LIMIT = 10
 
 
 def add_item_to_warehouse(guild, item_key, quantity, contribution_cost):
@@ -45,9 +25,11 @@ def add_item_to_warehouse(guild, item_key, quantity, contribution_cost):
         defaults={'contribution_cost': contribution_cost}
     )
 
-    warehouse_item.quantity += quantity
-    warehouse_item.total_produced += quantity
-    warehouse_item.save(update_fields=['quantity', 'total_produced'])
+    # 使用 F() 表达式避免并发下读-改-写丢失更新
+    GuildWarehouse.objects.filter(pk=warehouse_item.pk).update(
+        quantity=F("quantity") + quantity,
+        total_produced=F("total_produced") + quantity,
+    )
 
 
 def exchange_item(member, item_key, quantity=1):
@@ -79,14 +61,14 @@ def exchange_item(member, item_key, quantity=1):
     except ItemTemplate.DoesNotExist:
         raise ValueError("物品不存在")
 
-    # 重置每日限制（在事务外执行，减少锁持有时间）
-    member.reset_daily_limits()
-
     # 并发安全的事务处理
     # 锁定顺序：GuildMember -> GuildWarehouse -> InventoryItem
     with transaction.atomic():
         # 步骤1：锁定成员并验证兑换次数和贡献度
         member_locked = GuildMember.objects.select_for_update().get(pk=member.pk)
+
+        # 重置每日限制（必须在锁内执行，避免并发下穿透每日上限）
+        member_locked.reset_daily_limits()
 
         if member_locked.daily_exchange_count >= DAILY_EXCHANGE_LIMIT:
             raise ValueError(f"今日兑换次数已达上限（{DAILY_EXCHANGE_LIMIT}次）")
@@ -291,4 +273,4 @@ def get_exchange_logs(guild, limit=50):
     """
     return GuildExchangeLog.objects.filter(
         guild=guild
-    ).select_related('member__user').order_by('-exchanged_at')[:limit]
+    ).select_related('member__user__manor').order_by('-exchanged_at')[:limit]

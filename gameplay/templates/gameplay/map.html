@@ -415,10 +415,18 @@
     const nextPageBtn = document.getElementById('next-page');
     const pageInfo = document.getElementById('page-info');
 
+    function setListHint(text, cls) {
+        manorList.replaceChildren();
+        const el = document.createElement('p');
+        el.className = cls;
+        el.textContent = text;
+        manorList.appendChild(el);
+    }
+
     // Load manors by region
     function loadManors(page = 1) {
         currentPage = page;
-        manorList.innerHTML = '<p class="loading-hint">正在加载...</p>';
+        setListHint('正在加载...', 'loading-hint');
 
         let url = mapApiBase + '?type=region&region=' + encodeURIComponent(currentRegion) + '&page=' + page;
 
@@ -451,12 +459,12 @@
                         }
                     }
                 } else {
-                    manorList.innerHTML = '<p class="empty-hint">加载失败，请稍后重试</p>';
+                    setListHint('加载失败，请稍后重试', 'empty-hint');
                 }
             })
             .catch(err => {
                 console.error('Load error:', err);
-                manorList.innerHTML = '<p class="empty-hint">加载失败，请稍后重试</p>';
+                setListHint('加载失败，请稍后重试', 'empty-hint');
             });
     }
 
@@ -467,53 +475,89 @@
 
     function renderManorList(manors) {
         if (!manors || manors.length === 0) {
-            manorList.innerHTML = '<p class="empty-hint">暂无庄园数据</p>';
+            setListHint('暂无庄园数据', 'empty-hint');
             return;
         }
 
-        let html = '';
+        manorList.replaceChildren();
+        const fragment = document.createDocumentFragment();
+
         manors.forEach(function(m) {
-            const isSelf = m.id === currentManorId;
-            const prestigeClass = m.prestige_comparison || 'equal';
+            const manorId = Number(m && m.id);
+            if (!Number.isFinite(manorId)) return;
 
-            html += '<div class="manor-card' + (isSelf ? ' self' : '') + '" data-manor-id="' + m.id + '">';
-            html += '<div class="manor-card-info">';
-            html += '<div class="manor-name">' + escapeHtml(m.name);
-            if (isSelf) html += '<span class="self-badge">我</span>';
-            if (m.is_protected) html += '<span class="protection-badge">保护中</span>';
-            html += '</div>';
-            html += '<div class="manor-location">' + m.region_display + ' (' + m.coordinate_x + ', ' + m.coordinate_y + ')';
-            if (m.distance !== undefined && m.distance !== null) {
-                html += ' | 距离: ' + m.distance.toFixed(1);
+            const isSelf = manorId === Number(currentManorId);
+
+            const card = document.createElement('div');
+            card.className = 'manor-card' + (isSelf ? ' self' : '');
+            card.dataset.manorId = String(manorId);
+
+            const info = document.createElement('div');
+            info.className = 'manor-card-info';
+
+            const nameRow = document.createElement('div');
+            nameRow.className = 'manor-name';
+            nameRow.appendChild(document.createTextNode(String(m.name || '')));
+
+            if (isSelf) {
+                const selfBadge = document.createElement('span');
+                selfBadge.className = 'self-badge';
+                selfBadge.textContent = '我';
+                nameRow.appendChild(selfBadge);
             }
-            html += '</div>';
-            html += '</div>';
-            html += '<div class="manor-card-stats">';
+            if (m.is_protected) {
+                const protectionBadge = document.createElement('span');
+                protectionBadge.className = 'protection-badge';
+                protectionBadge.textContent = '保护中';
+                nameRow.appendChild(protectionBadge);
+            }
+
+            const locationRow = document.createElement('div');
+            locationRow.className = 'manor-location';
+            const regionDisplay = String(m.region_display || '');
+            const x = Number(m.coordinate_x);
+            const y = Number(m.coordinate_y);
+            let locationText = regionDisplay + ' (' + (Number.isFinite(x) ? x : '-') + ', ' + (Number.isFinite(y) ? y : '-') + ')';
+            if (m.distance !== undefined && m.distance !== null && Number.isFinite(Number(m.distance))) {
+                locationText += ' | 距离: ' + Number(m.distance).toFixed(1);
+            }
+            locationRow.textContent = locationText;
+
+            info.appendChild(nameRow);
+            info.appendChild(locationRow);
+
+            const stats = document.createElement('div');
+            stats.className = 'manor-card-stats';
+
             if (!isSelf) {
-                html += '<div class="manor-card-actions">';
-                html += '<button class="btn-small btn-scout" data-scout="' + m.id + '">侦察</button>';
-                html += '<a href="/manor/map/raid/' + m.id + '/" class="btn-small btn-attack">进攻</a>';
-                html += '</div>';
+                const actions = document.createElement('div');
+                actions.className = 'manor-card-actions';
+
+                const scoutBtn = document.createElement('button');
+                scoutBtn.type = 'button';
+                scoutBtn.className = 'btn-small btn-scout';
+                scoutBtn.textContent = '侦察';
+                scoutBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    startScout(String(manorId));
+                });
+
+                const attackLink = document.createElement('a');
+                attackLink.className = 'btn-small btn-attack';
+                attackLink.textContent = '进攻';
+                attackLink.href = '/manor/map/raid/' + String(manorId) + '/';
+
+                actions.appendChild(scoutBtn);
+                actions.appendChild(attackLink);
+                stats.appendChild(actions);
             }
-            html += '</div>';
-            html += '</div>';
+
+            card.appendChild(info);
+            card.appendChild(stats);
+            fragment.appendChild(card);
         });
 
-        manorList.innerHTML = html;
-
-        // Scout buttons
-        document.querySelectorAll('[data-scout]').forEach(function(btn) {
-            btn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                startScout(btn.dataset.scout);
-            });
-        });
-    }
-
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+        manorList.appendChild(fragment);
     }
 
     // Toast notification helper

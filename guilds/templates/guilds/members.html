@@ -120,17 +120,17 @@
             </div>
             <div class="guild-stat-item">
                 <h4>帮主</h4>
-                <p class="guild-stat-value stat-leader">1</p>
-                <p class="guild-stat-hint">{{ guild.get_leader.user.manor.display_name }}</p>
+                <p class="guild-stat-value stat-leader">{{ leader_count }}</p>
+                <p class="guild-stat-hint">{% if leader %}{{ leader.user.manor.display_name }}{% else %}-{% endif %}</p>
             </div>
             <div class="guild-stat-item">
                 <h4>管理员</h4>
-                <p class="guild-stat-value stat-admin">{{ guild.get_admins.count }}</p>
+                <p class="guild-stat-value stat-admin">{{ admin_count }}</p>
                 <p class="guild-stat-hint">最多2人</p>
             </div>
             <div class="guild-stat-item">
                 <h4>普通成员</h4>
-                <p class="guild-stat-value">{{ guild.current_member_count|add:"-1"|add:guild.get_admins.count|default:"0" }}</p>
+                <p class="guild-stat-value">{{ normal_member_count }}</p>
                 <p class="guild-stat-hint">-</p>
             </div>
         </div>

@@ -12,46 +12,61 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.views.decorators.http import require_GET, require_POST
 
+from core.decorators import handle_game_errors
 from core.exceptions import GameError
-from core.utils import safe_redirect_url, sanitize_error_message
-from gameplay.services import ensure_manor
-from gameplay.services.cache import CACHE_TIMEOUT_SHORT
+from core.utils.rate_limit import rate_limit_redirect
+from core.utils.validation import safe_redirect_url, sanitize_error_message
 
 from ..forms import EquipForm
-from ..models import GearSlot, GearTemplate
+from ..models import GearSlot, GearTemplate, Guest
 from ..templatetags.guest_extras import gear_summary, rarity_class, rarity_label
 
 
 @login_required
 @require_POST
+@rate_limit_redirect("equip", limit=15, window_seconds=60)
+@handle_game_errors(redirect_url="gameplay:recruitment_hall")
 def equip_view(request):
+    """
+    装备视图
+
+    使用统一装饰器处理错误，表单验证失败时抛出 ValueError
+    """
+    from ..services import ensure_inventory_gears, equip_guest as equip_guest_service
+    from gameplay.services.manor import ensure_manor
+
     manor = ensure_manor(request.user)
-    from ..services import ensure_inventory_gears
 
     slot = request.POST.get("slot") or ""
     ensure_inventory_gears(manor, slot=slot or None)
     form = EquipForm(request.POST, manor=manor)
-    default_url = "gameplay:recruitment_hall"
-    next_url = safe_redirect_url(request, request.POST.get("next"), default_url)
+
     if not form.is_valid():
-        messages.error(request, "请选择门客与可用装备")
-        return redirect(next_url)
+        raise ValueError("请选择门客与可用装备")
+
     gear = form.cleaned_data["gear"]
     guest = form.cleaned_data["guest"]
-    from ..services import equip_guest as equip_guest_service
 
-    try:
-        equip_guest_service(gear, guest)
-        messages.success(request, f"{guest.display_name} 已装备 {gear.template.name}")
-        _clear_gear_options_cache(manor.id, slots={gear.template.slot})
-    except (GameError, ValueError) as exc:
-        messages.error(request, sanitize_error_message(exc))
-    return redirect(next_url)
+    equip_guest_service(gear, guest)
+    messages.success(request, f"{guest.display_name} 已装备 {gear.template.name}")
+    _clear_gear_options_cache(manor.id, slots={gear.template.slot})
+
+    return "gameplay:recruitment_hall"
 
 
 @login_required
 @require_POST
+@rate_limit_redirect("unequip", limit=20, window_seconds=60)
 def unequip_view(request):
+    """
+    卸下装备视图
+
+    由于有复杂的验证逻辑，保持手动错误处理
+    但使用 manager 方法简化查询
+    """
+    from ..services import unequip_guest_item
+    from gameplay.services.manor import ensure_manor
+
     manor = ensure_manor(request.user)
     guest_id = request.POST.get("guest")
     gear_ids = request.POST.getlist("gear")
@@ -59,19 +74,26 @@ def unequip_view(request):
     next_url = safe_redirect_url(request, request.POST.get("next"), default_url)
     if next_url == default_url:
         next_url = safe_redirect_url(request, request.META.get("HTTP_REFERER"), default_url)
-    guest = get_object_or_404(manor.guests.select_related("template"), pk=guest_id)
+
+    # 使用 manager 方法获取门客，避免重复的 select_related
+    guest = get_object_or_404(
+        Guest.objects.for_manor(manor).with_template(),
+        pk=guest_id
+    )
+
     if not gear_ids:
         messages.warning(request, "请先勾选需要卸下的装备")
         return redirect(next_url)
+
     gears = list(manor.gears.select_related("template", "guest").filter(pk__in=gear_ids))
     if not gears:
         messages.error(request, "未找到需要卸下的装备")
         return redirect(next_url)
+
     invalid = [g for g in gears if g.guest_id != guest.id]
     if invalid:
         messages.error(request, "存在不属于该门客的装备，无法卸下")
         return redirect(next_url)
-    from ..services import unequip_guest_item
 
     try:
         removed = 0
@@ -93,6 +115,9 @@ def unequip_view(request):
 @login_required
 @require_GET
 def gear_options_view(request):
+    from gameplay.services.cache import CACHE_TIMEOUT_SHORT
+    from gameplay.services.manor import ensure_manor
+
     manor = ensure_manor(request.user)
     slot = request.GET.get("slot")
     slot_label_map = dict(GearSlot.choices)

@@ -15,8 +15,8 @@ from django.views.generic import TemplateView
 from core.exceptions import GameError
 from guests.models import Guest, GuestStatus
 
-from ..models import WorkAssignment, WorkTemplate
-from ..services import (
+from gameplay.models import WorkAssignment, WorkTemplate
+from gameplay.services import (
     assign_guest_to_work,
     claim_work_reward,
     ensure_manor,

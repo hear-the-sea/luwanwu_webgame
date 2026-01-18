@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import random
 from functools import lru_cache
-from typing import Dict, Iterable, List, Sequence, Tuple
+from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from django.db import transaction
 
@@ -16,8 +16,9 @@ from core.exceptions import (
     NoTemplateAvailableError,
     RetainerCapacityFullError,
 )
-from gameplay import services as gameplay_services
-from gameplay.models import Manor, ResourceEvent
+
+if TYPE_CHECKING:
+    from gameplay.models import Manor
 
 from ..models import (
     DEFENSE_TO_HP_MULTIPLIER,
@@ -342,6 +343,87 @@ def grant_template_skills(guest: Guest) -> None:
         GuestSkill.objects.bulk_create(skills_to_create)
 
 
+def create_guest_from_template(
+    *,
+    manor: Manor,
+    template: GuestTemplate,
+    rarity: Optional[str] = None,
+    archetype: Optional[str] = None,
+    custom_name: str = "",
+    rng: Optional[random.Random] = None,
+    grant_skills: bool = True,
+    save: bool = True,
+) -> Guest:
+    """
+    按模板创建门客（含属性波动、初始HP与技能）。
+
+    Args:
+        manor: 所属庄园
+        template: 门客模板
+        rarity: 用于属性波动的稀有度（默认使用模板稀有度）
+        archetype: 用于属性波动的流派（默认使用模板流派）
+        custom_name: 自定义名称（黑/灰门客使用）
+        rng: 随机数生成器
+        grant_skills: 是否授予模板技能（需要已保存）
+        save: 是否直接保存到数据库
+    """
+    rng = rng or random.Random()
+    effective_rarity = rarity or template.rarity
+    effective_archetype = archetype or template.archetype
+
+    gender_choice = template.default_gender
+    if not gender_choice or gender_choice == "unknown":
+        gender_choice = rng.choice(["male", "female"])
+    morality_value = template.default_morality or rng.randint(30, 100)
+
+    template_attrs = {
+        "force": template.base_attack,
+        "intellect": template.base_intellect,
+        "defense": template.base_defense,
+        "agility": template.base_agility,
+        "luck": template.base_luck,
+    }
+    varied_attrs = apply_recruitment_variance(
+        template_attrs,
+        rarity=effective_rarity,
+        archetype=effective_archetype,
+        rng=rng,
+    )
+
+    # 预计算初始 HP（与 Guest.max_hp property 保持一致）
+    initial_hp = max(
+        MIN_HP_FLOOR,
+        template.base_hp + varied_attrs["defense"] * DEFENSE_TO_HP_MULTIPLIER,
+    )
+
+    guest = Guest(
+        manor=manor,
+        template=template,
+        custom_name=custom_name,
+        force=varied_attrs["force"],
+        intellect=varied_attrs["intellect"],
+        defense_stat=varied_attrs["defense"],
+        agility=varied_attrs["agility"],
+        luck=varied_attrs["luck"],
+        # 记录初始属性（用于计算升级成长）
+        initial_force=varied_attrs["force"],
+        initial_intellect=varied_attrs["intellect"],
+        initial_defense=varied_attrs["defense"],
+        initial_agility=varied_attrs["agility"],
+        loyalty=60,
+        gender=gender_choice,
+        morality=morality_value,
+        current_hp=initial_hp,
+    )
+
+    if save:
+        guest.save()
+        if grant_skills:
+            grant_template_skills(guest)
+
+    return guest
+
+
 def reveal_candidate_rarity(manor: Manor) -> int:
     """
     使用放大镜显示所有候选门客的稀有度。
@@ -377,7 +459,10 @@ def recruit_guest(manor: Manor, pool: RecruitmentPool, seed: int | None = None) 
 
     cost = pool.cost or {}
     if cost:
-        gameplay_services.spend_resources(
+        from gameplay.models import ResourceEvent
+        from gameplay.services.resources import spend_resources
+
+        spend_resources(
             manor,
             cost,
             note=f"卡池：{pool.name}",
@@ -444,48 +529,15 @@ def finalize_candidate(candidate: RecruitmentCandidate) -> Guest:
     if current >= capacity:
         raise GuestCapacityFullError()
     rng = random.Random()
-    gender_choice = candidate.template.default_gender
-    if not gender_choice or gender_choice == "unknown":
-        gender_choice = rng.choice(["male", "female"])
-    morality_value = candidate.template.default_morality or rng.randint(30, 100)
     template = candidate.template
-
-    # 应用属性波动
-    template_attrs = {
-        "force": template.base_attack,
-        "intellect": template.base_intellect,
-        "defense": template.base_defense,
-        "agility": template.base_agility,
-        "luck": template.base_luck,
-    }
-    varied_attrs = apply_recruitment_variance(
-        template_attrs,
-        rarity=candidate.rarity,
-        archetype=candidate.archetype,
-        rng=rng,
-    )
-
-    # 预计算初始 HP（与 Guest.max_hp property 保持一致）
-    initial_hp = max(
-        MIN_HP_FLOOR,
-        template.base_hp + varied_attrs["defense"] * DEFENSE_TO_HP_MULTIPLIER
-    )
-
-    guest = Guest.objects.create(
+    guest = create_guest_from_template(
         manor=manor,
         template=template,
+        rarity=candidate.rarity,
+        archetype=candidate.archetype,
         custom_name=candidate.display_name if candidate.rarity in (GuestRarity.BLACK, GuestRarity.GRAY) else "",
-        force=varied_attrs["force"],
-        intellect=varied_attrs["intellect"],
-        defense_stat=varied_attrs["defense"],
-        agility=varied_attrs["agility"],
-        luck=varied_attrs["luck"],
-        loyalty=60,
-        gender=gender_choice,
-        morality=morality_value,
-        current_hp=initial_hp,
+        rng=rng,
     )
-    grant_template_skills(guest)
     RecruitmentRecord.objects.create(
         manor=manor,
         pool=candidate.pool,
@@ -529,59 +581,39 @@ def bulk_finalize_candidates(
     failed = candidates[available_slots:]
 
     rng = random.Random()
+    template_ids = {candidate.template_id for candidate in to_process}
+    template_map = {
+        template.id: template
+        for template in GuestTemplate.objects.filter(id__in=template_ids).prefetch_related("initial_skills")
+    }
     guests_to_create: List[Guest] = []
     records_to_create: List[RecruitmentRecord] = []
-    skills_to_grant: List[Tuple[Guest, GuestTemplate]] = []
+    templates_for_guests: List[GuestTemplate] = []
     candidate_ids_to_delete: List[int] = []
 
     for candidate in to_process:
-        template = candidate.template
-        gender_choice = template.default_gender
-        if not gender_choice or gender_choice == "unknown":
-            gender_choice = rng.choice(["male", "female"])
-        morality_value = template.default_morality or rng.randint(30, 100)
-
-        # 应用属性波动
-        template_attrs = {
-            "force": template.base_attack,
-            "intellect": template.base_intellect,
-            "defense": template.base_defense,
-            "agility": template.base_agility,
-            "luck": template.base_luck,
-        }
-        varied_attrs = apply_recruitment_variance(
-            template_attrs,
-            rarity=candidate.rarity,
-            archetype=candidate.archetype,
-            rng=rng,
-        )
-
-        # 预计算初始 HP
-        initial_hp = max(
-            MIN_HP_FLOOR,
-            template.base_hp + varied_attrs["defense"] * DEFENSE_TO_HP_MULTIPLIER
-        )
-
-        guest = Guest(
+        template = template_map.get(candidate.template_id) or candidate.template
+        guest = create_guest_from_template(
             manor=manor,
             template=template,
+            rarity=candidate.rarity,
+            archetype=candidate.archetype,
             custom_name=candidate.display_name if candidate.rarity in (GuestRarity.BLACK, GuestRarity.GRAY) else "",
-            force=varied_attrs["force"],
-            intellect=varied_attrs["intellect"],
-            defense_stat=varied_attrs["defense"],
-            agility=varied_attrs["agility"],
-            luck=varied_attrs["luck"],
-            loyalty=60,
-            gender=gender_choice,
-            morality=morality_value,
-            current_hp=initial_hp,
+            rng=rng,
+            grant_skills=False,
+            save=False,
         )
         guests_to_create.append(guest)
-        skills_to_grant.append((guest, template))
+        templates_for_guests.append(template)
         candidate_ids_to_delete.append(candidate.id)
 
     # 批量创建门客
-    created_guests = Guest.objects.bulk_create(guests_to_create)
+    # 注意：MySQL 不支持 bulk_create 返回主键（不支持 RETURNING 子句）
+    # 为了确保后续创建关联对象时有正确的外键，直接逐个创建
+    created_guests = []
+    for guest_obj in guests_to_create:
+        guest_obj.save()
+        created_guests.append(guest_obj)
 
     # 批量创建招募记录
     for i, guest in enumerate(created_guests):
@@ -598,7 +630,7 @@ def bulk_finalize_candidates(
 
     # 批量授予技能（需要逐个处理因为技能可能不同）
     all_skills_to_create = []
-    for guest, template in zip(created_guests, [t for _, t in skills_to_grant]):
+    for guest, template in zip(created_guests, templates_for_guests):
         initial_skills = list(template.initial_skills.all())
         for skill in initial_skills[:MAX_GUEST_SKILL_SLOTS]:
             all_skills_to_create.append(
@@ -657,19 +689,38 @@ def allocate_attribute_points(guest: Guest, attribute: str, points: int) -> Gues
         raise InvalidAllocationError("zero_points")
     if guest.attribute_points < points:
         raise InvalidAllocationError("insufficient")
+
+    # 属性字段映射
     attr_map = {
         "force": "force",
         "intellect": "intellect",
         "defense": "defense_stat",
         "agility": "agility",
     }
+    # 已分配点数字段映射
+    allocated_map = {
+        "force": "allocated_force",
+        "intellect": "allocated_intellect",
+        "defense": "allocated_defense",
+        "agility": "allocated_agility",
+    }
+
+    target = attr_map.get(attribute)
+    allocated_field = allocated_map.get(attribute)
+    if not target or not allocated_field:
+        raise InvalidAllocationError("unknown_attribute")
+
     guest.attribute_points -= points
     updated_fields = ["attribute_points"]
-    target = attr_map.get(attribute)
-    if not target:
-        raise InvalidAllocationError("unknown_attribute")
+
+    # 增加属性值
     setattr(guest, target, getattr(guest, target) + points)
     updated_fields.append(target)
+
+    # 记录已分配点数
+    setattr(guest, allocated_field, getattr(guest, allocated_field) + points)
+    updated_fields.append(allocated_field)
+
     unique_fields = list(dict.fromkeys(updated_fields))
     guest.save(update_fields=unique_fields)
     return guest

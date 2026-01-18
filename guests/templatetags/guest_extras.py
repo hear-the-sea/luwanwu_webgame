@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from django import template
 from django.utils.html import conditional_escape, format_html, format_html_join
-from django.utils.safestring import mark_safe
 
 from guests.models import GuestRarity
 
@@ -177,7 +176,8 @@ def gear_tooltip(template, set_map=None) -> str:
             if bonus_parts:
                 lines.append("套装属性：")
                 lines.extend(bonus_parts)
-    return "".join(format_html("<div>{}</div>", line) for line in lines)
+    # Use format_html_join to return a SafeString without needing template `|safe`.
+    return format_html_join("", "<div>{}</div>", ((line,) for line in lines))
 
 
 @register.filter
@@ -196,8 +196,8 @@ def attribute_icons(value: int) -> str:
         remaining %= divisor
         icons.extend([icon] * count)
 
-    html = ''.join(
-        f'<img src="/static/images/attri/{i}.png" class="attr-icon" alt="{i}">'
-        for i in icons
+    return format_html_join(
+        "",
+        '<img src="/static/images/attri/{0}.png" class="attr-icon" alt="{0}">',
+        ((icon,) for icon in icons),
     )
-    return mark_safe(html)

@@ -500,7 +500,7 @@
                             {% for item in panel.equipped %}
                                 <label class="equip-chip rarity-text {{ item.template.rarity|rarity_class }} tooltip">
                                     <input type="checkbox" name="gear" value="{{ item.id }}"> {{ item.template.name }}
-                                    <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map|safe }}</span>
+                                    <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map }}</span>
                                 </label>
                             {% endfor %}
                         {% else %}
@@ -516,7 +516,7 @@
                             {% for item in panel.equipped %}
                                 <label class="equip-chip rarity-text {{ item.template.rarity|rarity_class }} tooltip">
                                     <input type="checkbox" name="gear" value="{{ item.id }}"> {{ item.template.name }}
-                                    <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map|safe }}</span>
+                                    <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map }}</span>
                                 </label>
                             {% endfor %}
                         {% else %}
@@ -532,7 +532,7 @@
                             {% for item in panel.equipped %}
                                 <label class="equip-chip rarity-text {{ item.template.rarity|rarity_class }} tooltip">
                                     <input type="checkbox" name="gear" value="{{ item.id }}"> {{ item.template.name }}
-                                    <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map|safe }}</span>
+                                    <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map }}</span>
                                 </label>
                             {% endfor %}
                         {% else %}
@@ -548,7 +548,7 @@
                             {% for item in panel.equipped %}
                                 <label class="equip-chip rarity-text {{ item.template.rarity|rarity_class }} tooltip">
                                     <input type="checkbox" name="gear" value="{{ item.id }}"> {{ item.template.name }}
-                                    <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map|safe }}</span>
+                                    <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map }}</span>
                                 </label>
                             {% endfor %}
                         {% else %}
@@ -564,7 +564,7 @@
                             {% if item %}
                                 <label class="equip-chip rarity-text {{ item.template.rarity|rarity_class }} tooltip">
                                     <input type="checkbox" name="gear" value="{{ item.id }}"> {{ item.template.name }}
-                                    <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map|safe }}</span>
+                                    <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map }}</span>
                                 </label>
                             {% else %}
                                 <button type="button" class="btn-secondary btn-small equip-open" data-slot="ornament">装备</button>
@@ -580,7 +580,7 @@
                             {% if item %}
                                 <label class="equip-chip rarity-text {{ item.template.rarity|rarity_class }} tooltip">
                                     <input type="checkbox" name="gear" value="{{ item.id }}"> {{ item.template.name }}
-                                    <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map|safe }}</span>
+                                    <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map }}</span>
                                 </label>
                             {% else %}
                                 <button type="button" class="btn-secondary btn-small equip-open" data-slot="device">装备</button>
@@ -596,7 +596,7 @@
                             {% for item in panel.equipped %}
                                 <label class="equip-chip rarity-text {{ item.template.rarity|rarity_class }} tooltip">
                                     <input type="checkbox" name="gear" value="{{ item.id }}"> {{ item.template.name }}
-                                    <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map|safe }}</span>
+                                    <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map }}</span>
                                 </label>
                             {% endfor %}
                         {% else %}

@@ -12,8 +12,10 @@ from django.shortcuts import redirect
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
-from ..constants import BuildingKeys
-from ..services import (
+from core.exceptions import GameError
+from core.utils import sanitize_error_message
+from gameplay.constants import BuildingKeys
+from gameplay.services import (
     ensure_manor,
     refresh_manor_state,
 )
@@ -29,7 +31,7 @@ class TroopRecruitmentView(LoginRequiredMixin, TemplateView):
         manor = ensure_manor(self.request.user)
         refresh_manor_state(manor)
 
-        from ..services.recruitment import (
+        from gameplay.services.recruitment import (
             get_recruitment_options,
             get_active_recruitments,
             refresh_troop_recruitments,
@@ -85,11 +87,11 @@ def start_troop_recruitment_view(request: HttpRequest) -> HttpResponse:
         return redirect("gameplay:troop_recruitment")
 
     try:
-        from ..services.recruitment import start_troop_recruitment
+        from gameplay.services.recruitment import start_troop_recruitment
         recruitment = start_troop_recruitment(manor, troop_key, quantity)
         quantity_text = f"x{recruitment.quantity}" if recruitment.quantity > 1 else ""
         messages.success(request, f"{recruitment.troop_name}{quantity_text} 开始募兵，预计 {recruitment.actual_duration} 秒后完成")
-    except ValueError as e:
-        messages.error(request, str(e))
+    except (GameError, ValueError) as e:
+        messages.error(request, sanitize_error_message(e))
 
     return redirect("gameplay:troop_recruitment")

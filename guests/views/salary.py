@@ -6,52 +6,56 @@ from __future__ import annotations
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_POST
 
-from core.exceptions import GameError
-from core.utils import sanitize_error_message
-from gameplay.services import ensure_manor
+from core.decorators import handle_game_errors
 
 from ..models import Guest
 
 
 @login_required
 @require_POST
+@handle_game_errors(redirect_url="guests:roster")
 def pay_salary_view(request, pk: int):
-    """支付单个门客工资"""
+    """
+    支付单个门客工资
+
+    使用统一装饰器处理错误，代码更简洁
+    """
     from guests.services.salary import pay_guest_salary
+    from gameplay.services.manor import ensure_manor
 
     manor = ensure_manor(request.user)
     guest = get_object_or_404(Guest, pk=pk, manor=manor)
 
-    try:
-        payment = pay_guest_salary(manor, guest)
-        messages.success(
-            request,
-            f"成功支付 {guest.display_name} 的工资 {payment.amount:,} 银两"
-        )
-    except (GameError, ValueError) as e:
-        messages.error(request, sanitize_error_message(e))
+    payment = pay_guest_salary(manor, guest)
+    messages.success(
+        request,
+        f"成功支付 {guest.display_name} 的工资 {payment.amount:,} 银两"
+    )
 
-    return redirect("guests:roster")
+    return "guests:roster"
 
 
 @login_required
 @require_POST
+@handle_game_errors(redirect_url="guests:roster")
 def pay_all_salaries_view(request):
-    """一键支付所有门客工资"""
+    """
+    一键支付所有门客工资
+
+    使用统一装饰器处理错误
+    """
     from guests.services.salary import pay_all_salaries
+    from gameplay.services.manor import ensure_manor
 
     manor = ensure_manor(request.user)
 
-    try:
-        result = pay_all_salaries(manor)
-        messages.success(
-            request,
-            f"成功支付 {result['paid_count']} 位门客的工资，共计 {result['total_amount']:,} 银两"
-        )
-    except (GameError, ValueError) as e:
-        messages.error(request, sanitize_error_message(e))
+    result = pay_all_salaries(manor)
+    messages.success(
+        request,
+        f"成功支付 {result['paid_count']} 位门客的工资，共计 {result['total_amount']:,} 银两"
+    )
 
-    return redirect("guests:roster")
+    return "guests:roster"

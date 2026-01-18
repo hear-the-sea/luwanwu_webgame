@@ -7,6 +7,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from battle.models import TroopTemplate
+from gameplay.services.template_cache import clear_troop_template_caches
 from core.utils.image_utils import compress_and_resize_image
 
 
@@ -77,4 +78,5 @@ class Command(BaseCommand):
             action = "Created" if created else "Updated"
             self.stdout.write(f"{action} troop template {obj.key}")
 
+        clear_troop_template_caches()
         self.stdout.write(self.style.SUCCESS("Troop templates synced."))

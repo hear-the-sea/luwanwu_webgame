@@ -336,9 +336,7 @@ def _execute_battle(
     if defender_setup:
         tech_conf = defender_setup.get("technology") or {}
         if tech_conf:
-            from gameplay.services.technology import (
-                resolve_enemy_tech_levels, get_guest_stat_bonuses
-            )
+            from core.game_data.technology import resolve_enemy_tech_levels, get_guest_stat_bonuses
             defender_tech_levels = resolve_enemy_tech_levels(tech_conf)
 
             # 解析门客等级和属性加成

@@ -6,8 +6,10 @@
 - 一次查询获取所有已支付记录，避免 N+1 问题
 """
 
+from __future__ import annotations
+
 from datetime import date
-from typing import Dict, List, Set
+from typing import TYPE_CHECKING, Dict, List, Set
 
 from django.db import transaction
 from django.utils import timezone
@@ -18,8 +20,10 @@ from core.exceptions import (
     NoGuestsError,
     SalaryAlreadyPaidError,
 )
-from gameplay.models import Manor
 from guests.models import Guest, RARITY_SALARY, SalaryPayment
+
+if TYPE_CHECKING:
+    from gameplay.models import Manor
 
 
 def get_guest_salary(guest: Guest) -> int:

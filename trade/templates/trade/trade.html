@@ -1057,66 +1057,109 @@
         }
 
         // ===== Tooltip 位置动态调整 =====
-        const itemCells = document.querySelectorAll('.item-cell');
-        itemCells.forEach(cell => {
-            cell.addEventListener('mouseenter', function () {
-                const tooltip = this.querySelector('.item-tooltip');
-                if (!tooltip) return;
+        (function setupItemTooltips() {
+            window.__webgame_tooltip_init = window.__webgame_tooltip_init || {};
+            if (window.__webgame_tooltip_init.trade_market) return;
+            window.__webgame_tooltip_init.trade_market = true;
 
-                // 获取单元格位置
-                const cellRect = this.getBoundingClientRect();
-                const viewportHeight = window.innerHeight;
-                const viewportWidth = window.innerWidth;
+            const cellSelector = '.item-cell';
+            const tooltipSelector = '.item-tooltip';
+            const viewportPadding = 20;
+            const offset = 8;
 
-                // 默认位置：元素下方
-                let top = cellRect.bottom + 8;
-                let left = cellRect.left;
+            if (!document.querySelector(cellSelector)) return;
 
-                // 等待tooltip显示后再计算位置
-                setTimeout(() => {
+            let activeCell = null;
+            let rafId = null;
+            let sizeRetryCount = 0;
+
+            function requestUpdate() {
+                if (rafId) return;
+                rafId = requestAnimationFrame(() => {
+                    rafId = null;
+                    if (!activeCell) return;
+                    if (!activeCell.isConnected) {
+                        activeCell = null;
+                        sizeRetryCount = 0;
+                        return;
+                    }
+
+                    const tooltip = activeCell.querySelector(tooltipSelector);
+                    if (!tooltip) return;
+
+                    const cellRect = activeCell.getBoundingClientRect();
+                    const viewportHeight = window.innerHeight;
+                    const viewportWidth = window.innerWidth;
+
                     const tooltipRect = tooltip.getBoundingClientRect();
+                    if ((tooltipRect.width === 0 || tooltipRect.height === 0) && sizeRetryCount < 2) {
+                        sizeRetryCount += 1;
+                        requestUpdate();
+                        return;
+                    }
+                    sizeRetryCount = 0;
 
-                    // 如果右侧超出视口，向左对齐
-                    if (left + tooltipRect.width > viewportWidth - 20) {
-                        left = viewportWidth - tooltipRect.width - 20;
+                    let top = cellRect.bottom + offset;
+                    let left = cellRect.left;
+
+                    if (left + tooltipRect.width > viewportWidth - viewportPadding) {
+                        left = viewportWidth - tooltipRect.width - viewportPadding;
                     }
 
-                    // 如果底部超出视口，显示在元素上方
-                    if (top + tooltipRect.height > viewportHeight - 20) {
-                        top = cellRect.top - tooltipRect.height - 8;
+                    if (top + tooltipRect.height > viewportHeight - viewportPadding) {
+                        top = cellRect.top - tooltipRect.height - offset;
                     }
 
-                    // 应用位置
                     tooltip.style.top = top + 'px';
                     tooltip.style.left = left + 'px';
-                }, 10);
+                });
+            }
+
+            function setActiveCell(cell) {
+                if (activeCell === cell) return;
+                activeCell = cell;
+                sizeRetryCount = 0;
+                requestUpdate();
+            }
+
+            document.addEventListener('mouseover', function (event) {
+                const target = event.target;
+                if (!target || !target.closest) return;
+                const cell = target.closest(cellSelector);
+                if (!cell) return;
+                setActiveCell(cell);
             });
 
-            // 鼠标移动时更新位置（用于滚动场景）
-            cell.addEventListener('mousemove', function () {
-                const tooltip = this.querySelector('.item-tooltip');
-                if (!tooltip || tooltip.style.display === 'none') return;
-
-                const cellRect = this.getBoundingClientRect();
-                const viewportHeight = window.innerHeight;
-                const viewportWidth = window.innerWidth;
-                const tooltipRect = tooltip.getBoundingClientRect();
-
-                let top = cellRect.bottom + 8;
-                let left = cellRect.left;
-
-                if (left + tooltipRect.width > viewportWidth - 20) {
-                    left = viewportWidth - tooltipRect.width - 20;
-                }
-
-                if (top + tooltipRect.height > viewportHeight - 20) {
-                    top = cellRect.top - tooltipRect.height - 8;
-                }
-
-                tooltip.style.top = top + 'px';
-                tooltip.style.left = left + 'px';
+            document.addEventListener('mousemove', function (event) {
+                if (!activeCell) return;
+                const target = event.target;
+                if (!target || !target.closest) return;
+                if (!target.closest(cellSelector)) return;
+                requestUpdate();
             });
-        });
+
+            document.addEventListener('mouseout', function (event) {
+                const target = event.target;
+                if (!target || !target.closest) return;
+                const cell = target.closest(cellSelector);
+                if (!cell || cell !== activeCell) return;
+                const related = event.relatedTarget;
+                if (related && cell.contains(related)) return;
+                activeCell = null;
+                sizeRetryCount = 0;
+            });
+
+            // 处理滚动容器/窗口滚动导致的 tooltip 漂移
+            window.addEventListener('scroll', function () {
+                if (!activeCell) return;
+                requestUpdate();
+            }, true);
+
+            window.addEventListener('resize', function () {
+                if (!activeCell) return;
+                requestUpdate();
+            });
+        })();
 
         // ===== Market 倒计时更新 =====
         function updateMarketCountdowns() {

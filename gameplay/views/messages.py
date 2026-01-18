@@ -14,9 +14,9 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
-from ..constants import UIConstants
-from ..models import ResourceType
-from ..services import (
+from gameplay.constants import UIConstants
+from gameplay.models import ResourceType
+from gameplay.services import (
     claim_message_attachments,
     delete_all_messages,
     delete_messages,
@@ -135,7 +135,7 @@ def view_message(request: HttpRequest, pk: int) -> HttpResponse:
         items = attachments.get("items", {})
         item_keys = list(items.keys())
         if item_keys:
-            from ..utils.template_loader import get_item_templates_by_keys
+            from gameplay.utils.template_loader import get_item_templates_by_keys
             item_templates_map = get_item_templates_by_keys(item_keys)
         else:
             item_templates_map = {}
@@ -240,7 +240,7 @@ def claim_attachment_view(request: HttpRequest, pk: int) -> HttpResponse:
             key[5:] for key in claimed_summary.keys() if key.startswith("item_")
         ]
         if item_keys_to_lookup:
-            from ..utils.template_loader import get_item_templates_by_keys
+            from gameplay.utils.template_loader import get_item_templates_by_keys
             item_templates_map = get_item_templates_by_keys(item_keys_to_lookup)
         else:
             item_templates_map = {}

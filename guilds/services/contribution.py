@@ -5,24 +5,10 @@ from django.db.models import F
 from django.utils import timezone
 
 from gameplay.models import Manor, ResourceEvent
-from gameplay.services.resources import spend_resources
+from gameplay.services.resources import spend_resources_locked
 
+from ..constants import CONTRIBUTION_RATES, DAILY_DONATION_LIMITS, MIN_DONATION_AMOUNT
 from ..models import Guild, GuildDonationLog, GuildMember, GuildResourceLog
-
-# 贡献兑换比例
-CONTRIBUTION_RATES = {
-    'silver': 1,      # 1银两 = 1贡献
-    'grain': 2,       # 1粮食 = 2贡献
-}
-
-# 每日捐赠上限
-DAILY_DONATION_LIMITS = {
-    'silver': 100000,  # 10万银两
-    'grain': 50000,    # 5万粮食
-}
-
-# 最小捐赠数量
-MIN_DONATION_AMOUNT = 100
 
 
 def donate_resource(member, resource_type, amount):
@@ -57,6 +43,9 @@ def donate_resource(member, resource_type, amount):
 
     # 并发安全的事务处理
     with transaction.atomic():
+        # 锁定顺序：Manor -> Guild -> GuildMember，避免与资源消费等路径产生死锁
+        manor = Manor.objects.select_for_update().get(user=member.user)
+
         # 步骤1：锁定帮会（用于增加资源）
         guild_locked = Guild.objects.select_for_update().get(pk=member.guild_id)
 
@@ -91,11 +80,8 @@ def donate_resource(member, resource_type, amount):
         # 计算获得的贡献
         contribution = amount * CONTRIBUTION_RATES[resource_type]
 
-        # 获取玩家庄园
-        manor = Manor.objects.get(user=member.user)
-
         # 步骤3：使用统一的资源消费函数扣除玩家资源（已包含并发安全检查）
-        spend_resources(
+        spend_resources_locked(
             manor,
             {resource_type: amount},
             note="帮会捐献",

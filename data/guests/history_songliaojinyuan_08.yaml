@@ -1,0 +1,604 @@
+# 历史人物门客 - 宋辽金元（第08批：绿色50人；key 0359-0408）
+
+heroes:
+  green:
+  - key: hist_songliaojinyuan_0359
+    name: 挞懒
+    archetype: military
+    flavor: '（?-1139年）完颜昌，金朝将领。他主张与宋议和，归还河南地。后被完颜宗弼所杀，死于政治斗争。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0360
+    name: 撒离喝
+    archetype: military
+    flavor: '（?-1150年）金朝名将，善于攻城。他在灭辽灭宋战争中屡立战功，是金军的攻坚主力。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0361
+    name: 兀术
+    archetype: military
+    flavor: '（?-1148年）即完颜宗弼，金兀术。他是南宋人最熟悉的金朝将领，多次南侵，与岳飞、韩世忠交锋。他是金朝对宋战争的主帅。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0362
+    name: 张浩
+    archetype: civil
+    flavor: '（1085年-1156年）金朝汉臣，政治家。他精通儒学，推行汉化政策，为金朝的政治制度建设做出重要贡献。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0363
+    name: 韩昉
+    archetype: civil
+    flavor: '（1081年-1149年）金朝汉臣，一代名相。他历仕太宗、熙宗两朝，推行汉化改革，是金朝政治制度的主要设计者。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0364
+    name: 刘豫
+    archetype: civil
+    flavor: '（1073年-1143年）伪齐皇帝，金朝傀儡。他建立伪齐政权，替金人统治中原。虽为傀儡，却也在金宋之间周旋。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0365
+    name: 苏天爵
+    archetype: civil
+    flavor: '（1294年-1352年）元朝史学家、政治家。他编纂《元朝名臣事略》《滋溪文稿》，记录了大量历史资料。他是元代史学的重要人物。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0366
+    name: 蔡松年
+    archetype: civil
+    flavor: '（1107年-1159年）金朝诗人，北宋遗民。他的诗词充满亡国之痛，是金朝汉族文人的代表。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0367
+    name: 赵秉文
+    archetype: civil
+    flavor: '（1159年-1232年）金朝文学家，"儒林四杰"之一。他诗词文章俱佳，是金朝后期文坛的领袖。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0368
+    name: 王若虚
+    archetype: civil
+    flavor: '（1174年-1243年）金朝文学家，文学批评家。他的《滹南遗老集》保存了大量珍贵的文献资料。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0369
+    name: 李纯甫
+    archetype: civil
+    flavor: '（1185年-1231年）金朝诗人，号屏山居士。他的诗歌豪放不羁，与元好问齐名，是金朝诗坛的重要人物。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0370
+    name: 党怀英
+    archetype: civil
+    flavor: '（1134年-1211年）金朝书法家、文学家。他的书法自成一体，与赵秉文并称，是金朝书坛的代表人物。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0371
+    name: 王庭筠
+    archetype: civil
+    flavor: '（1151年-1202年）金朝书画家，米芾的传人。他的书画成就极高，是金朝艺术的代表人物。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0372
+    name: 赵沨
+    archetype: civil
+    flavor: '（1159年-1232年）金朝画家、诗人。他的山水画颇有名气，与王庭筠并称金朝书画双璧。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0373
+    name: 辛愿
+    archetype: civil
+    flavor: '（?-约1221年）金朝诗人，豪放派代表。他的诗歌慷慨激昂，充满北方气象。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0374
+    name: 李俊民
+    archetype: civil
+    flavor: '（1176年-1260年）金末元初诗人，隐逸名士。他经历金亡之痛，诗词中充满沧桑感。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0375
+    name: 刘祁
+    archetype: civil
+    flavor: '（1203年-1250年）金末史学家，《归潜志》的作者。他记录了金朝末年的历史，是研究金史的重要资料。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0376
+    name: 刘从益
+    archetype: civil
+    flavor: '（1086年-1149年）金朝名臣，汉族士大夫。他精通儒学，在金朝推行教育，培养了大量人才。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0377
+    name: 杨伯仁
+    archetype: military
+    flavor: '（?-1213年）金朝名将，抗蒙先驱。他在蒙古入侵初期坚守边疆，英勇作战，最终力战殉国。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0378
+    name: 郭虾蟆
+    archetype: military
+    flavor: '（1192年-1236年）金朝末年名将，会州保卫战的英雄。他坚守会州十余年，蒙军始终未能攻克。城破后自焚殉国，是金朝最后的脊梁。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0379
+    name: 移剌蒲阿
+    archetype: military
+    flavor: '（?-1233年）金朝名将，完颜陈和尚的战友。他在抗蒙战争中屡立战功，三峰山之战后被俘遇害。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0380
+    name: 温迪罕达
+    archetype: military
+    flavor: '（?-1217年）金朝将领，边防名将。他镇守边疆多年，抵御蒙古的入侵。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0381
+    name: 仆散揆
+    archetype: military
+    flavor: '（?-1207年）金朝将领，征战南宋的名将。他参与了对南宋的多次战争，是金朝后期的重要将领。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0382
+    name: 纥石烈志宁
+    archetype: military
+    flavor: '（1120年-1178年）金朝名将，征宋功臣。他在宋金战争中屡立战功，是金朝中期的重要军事统帅。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0383
+    name: 仆散忠义
+    archetype: civil
+    flavor: '（?-1187年）金朝名相，完颜雍的心腹。他辅佐金世宗创造"大定之治"，是金朝政治的中流砥柱。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0384
+    name: 徒单克宁
+    archetype: civil
+    flavor: '（1092年-1164年）金朝名臣，政治家。他推行改革，整顿吏治，为金朝的政治清明做出了贡献。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0385
+    name: 张万公
+    archetype: civil
+    flavor: '（?-1207年）金朝名臣，"泰和律令"的主持者。他主持修订法典，为金朝的法制建设做出重要贡献。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0386
+    name: 完颜匡
+    archetype: civil
+    flavor: '（?-1160年）金朝宗室，政治家。他反对完颜亮的暴政，后被杀害。他的遭遇反映了金朝政治的残酷。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0387
+    name: 萧仲恭
+    archetype: civil
+    flavor: '（?-约1150年）契丹贵族，仕金名臣。他代表了契丹人在金朝的处境，是多民族融合的见证。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0388
+    name: 哲别
+    archetype: military
+    flavor: '（？-约1224年）蒙古四杰之一，神箭手。他原是敌将，射伤铁木真后归降，成为最得力的将领。他西征花剌子模，追击摩诃末苏丹，横扫中亚，是蒙古西征的先锋。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0389
+    name: 博尔术
+    archetype: military
+    flavor: '（约1162年-1226年）蒙古四杰之一，铁木真的结义兄弟。他从少年时代就追随铁木真，忠心耿耿，战功赫赫。他是蒙古帝国的开国元勋，被封为"右手万户长"。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0390
+    name: 木华黎
+    archetype: military
+    flavor: '（1170年-1223年）蒙古四杰之一，受封太师国王。他统帅汉地战事十余年，攻略金朝北方领土。他善于使用汉人降将，是蒙古帝国汉化的先驱。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0391
+    name: 窝阔台
+    archetype: military
+    flavor: '（1186年-1241年）元太宗，铁木真三子。他继承汗位后，完成了灭金大业，并发动长子西征。他建立了草原上的都城哈拉和林，推动了蒙古帝国的制度化建设。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0392
+    name: 察合台
+    archetype: military
+    flavor: '（约1183年-1242年）铁木真次子，察合台汗国的建立者。他严格执行成吉思汗的法典"扎撒"，是蒙古帝国法律秩序的维护者。他的汗国存在了数百年。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0393
+    name: 术赤
+    archetype: military
+    flavor: '（约1181年-1227年）铁木真长子，金帐汗国的奠基者。他征服了钦察草原和俄罗斯大部分地区。因出生时铁木真被敌人俘虏，他的血统一直受到质疑。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0394
+    name: 旭烈兀
+    archetype: military
+    flavor: '（1217年-1265年）拖雷之子，忽必烈之弟，伊尔汗国的建立者。他西征中东，攻陷巴格达，灭亡阿拉伯帝国阿拔斯王朝。他的征服改变了中东的政治格局。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0395
+    name: 拔都
+    archetype: military
+    flavor: '（1209年-1255年）术赤之子，金帐汗国的真正建立者。他统帅长子西征，征服俄罗斯，进攻波兰和匈牙利，令欧洲颤栗。他的金帐汗国统治东欧二百余年。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0396
+    name: 黄道婆
+    archetype: civil
+    flavor: '（约1245年-约1330年）元代纺织革新家，棉纺织业的推动者。她从海南学习纺织技术后回到松江，改良纺织工具，推广棉纺织。她的贡献使松江成为全国棉纺织中心。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0397
+    name: 阿里海牙
+    archetype: military
+    flavor: '（约1227年-1286年）元朝将领，攻破襄阳的功臣。他善用回回炮（投石机），攻克了坚守六年的襄阳城。他的军事才能为元朝统一战争作出了重要贡献。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0398
+    name: 张弘范
+    archetype: military
+    flavor: '（1238年-1280年）元朝汉人将领，灭南宋的功臣。他率水军在崖山击败南宋残军，俘获南宋皇室。他在崖山刻石"张弘范灭宋于此"，成为历史的见证。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0399
+    name: 王恂
+    archetype: civil
+    flavor: '（1235年-1281年）元朝天文学家，与郭守敬共同编制《授时历》。他精通数学与天文，为授时历的编制作出了重要贡献。他是元代科技发展的重要推动者。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0400
+    name: 赤老温
+    archetype: military
+    flavor: '（约1160年-约1225年）蒙古四杰之一，铁木真的义兄。他从少年时代追随铁木真，忠心不二，战功卓著。他是蒙古建国的元勋之一。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0401
+    name: 者勒蔑
+    archetype: military
+    flavor: '（约1160年-约1235年）蒙古四杰之一，铁木真的救命恩人。他曾在铁木真受伤时独自守护，忠诚无二。他被封为千户长，是蒙古帝国的开国功臣。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0402
+    name: 忽必来
+    archetype: military
+    flavor: '（?-约1211年）蒙古名将，铁木真的心腹。他在统一蒙古的战争中屡立战功，是蒙古帝国建立的重要推手。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0403
+    name: 速别额台
+    archetype: military
+    flavor: '（1176年-1248年）即速不台，蒙古帝国最伟大的将领之一。他一生征战六十余年，从太平洋打到多瑙河，是蒙古西征的主帅。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0404
+    name: 合撒儿
+    archetype: military
+    flavor: '（约1164年-约1214年）铁木真的二弟，蒙古名将。他以箭术闻名，是蒙古军中的神射手。他参与了统一蒙古的战争。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0405
+    name: 别里古台
+    archetype: military
+    flavor: '（?-约1240年）铁木真的异母弟，蒙古宗室。他为人忠厚，在蒙古帝国的建立过程中发挥了重要作用。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0406
+    name: 帖木格
+    archetype: military
+    flavor: '（约1168年-1246年）铁木真的幼弟，蒙古宗室。他镇守蒙古本土，是帝国后方的守护者。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0407
+    name: 贵由
+    archetype: military
+    flavor: '（1206年-1248年）蒙古第三任大汗，窝阔台之子。他继位后与拔都产生矛盾，在位仅两年便病逝。他的短命统治加速了蒙古帝国的分裂。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0408
+    name: 阿里不哥
+    archetype: military
+    flavor: '（1219年-1266年）拖雷幼子，与忽必烈争汗位。他代表了蒙古保守势力，主张维持游牧传统。内战失败后被囚禁致死。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16

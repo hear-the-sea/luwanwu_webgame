@@ -1,7 +1,7 @@
 import pytest
 from django.utils import timezone
 
-from gameplay.services import ensure_manor
+from gameplay.services.manor import ensure_manor
 from guests.models import MAX_GUEST_LEVEL, Guest, RecruitmentPool
 from guests.services import finalize_candidate, recruit_guest, train_guest, reveal_candidate_rarity
 from guests.services.training import finalize_guest_training

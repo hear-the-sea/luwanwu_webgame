@@ -13,6 +13,32 @@ from ..models import Manor
 PRESTIGE_SILVER_THRESHOLD = 1000
 
 
+def add_prestige_silver_locked(manor: Manor, silver_spent: int) -> int:
+    """
+    累计花费银两并计算声望增长（假设调用方已在 transaction.atomic 中持有 manor 行锁）。
+    """
+    if silver_spent <= 0:
+        return 0
+    if not transaction.get_connection().in_atomic_block:
+        raise RuntimeError("add_prestige_silver_locked must be called inside transaction.atomic()")
+
+    before_spent = manor.prestige_silver_spent
+    before_spending_prestige = before_spent // PRESTIGE_SILVER_THRESHOLD
+
+    # 历史上 prestige 字段可能包含 PVP 声望，这里将其视为“PVP附加声望”
+    # spending 声望始终由累计消费推导，不应被PVP输赢影响。
+    current_pvp_prestige = max(0, manor.prestige - before_spending_prestige)
+
+    manor.prestige_silver_spent = before_spent + silver_spent
+    after_spending_prestige = manor.prestige_silver_spent // PRESTIGE_SILVER_THRESHOLD
+
+    manor.prestige = after_spending_prestige + current_pvp_prestige
+    manor.save(update_fields=["prestige_silver_spent", "prestige"])
+
+    gained = after_spending_prestige - before_spending_prestige
+    return max(0, gained)
+
+
 def add_prestige_silver(manor: Manor, silver_spent: int) -> int:
     """
     累计花费银两并计算声望增长。
@@ -29,25 +55,9 @@ def add_prestige_silver(manor: Manor, silver_spent: int) -> int:
 
     with transaction.atomic():
         locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
-
-        before_spent = locked_manor.prestige_silver_spent
-        before_spending_prestige = before_spent // PRESTIGE_SILVER_THRESHOLD
-
-        # 历史上 prestige 字段可能包含 PVP 声望，这里将其视为“PVP附加声望”
-        # spending 声望始终由累计消费推导，不应被PVP输赢影响。
-        current_pvp_prestige = max(0, locked_manor.prestige - before_spending_prestige)
-
-        locked_manor.prestige_silver_spent = before_spent + silver_spent
-        after_spending_prestige = locked_manor.prestige_silver_spent // PRESTIGE_SILVER_THRESHOLD
-
-        locked_manor.prestige = after_spending_prestige + current_pvp_prestige
-        locked_manor.save(update_fields=["prestige_silver_spent", "prestige"])
-
-        # 刷新调用方传入的 manor 对象，保持上层使用的一致性
+        gained = add_prestige_silver_locked(locked_manor, silver_spent)
         manor.refresh_from_db(fields=["prestige_silver_spent", "prestige"])
-
-        gained = after_spending_prestige - before_spending_prestige
-        return max(0, gained)
+        return gained
 
 
 def get_prestige_progress(manor: Manor) -> dict:

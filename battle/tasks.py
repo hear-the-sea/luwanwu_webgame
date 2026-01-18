@@ -3,8 +3,8 @@ from __future__ import annotations
 import logging
 
 from celery import shared_task
+from django.apps import apps
 
-from gameplay.models import Manor, MissionTemplate
 from guests.models import Guest
 
 from .services import simulate_report
@@ -44,8 +44,11 @@ def generate_report_task(
     - Comprehensive error handling and logging
     """
     try:
+        Manor = apps.get_model("gameplay", "Manor")
+        MissionTemplate = apps.get_model("gameplay", "MissionTemplate")
+
         if run_id:
-            from gameplay.models import MissionRun
+            MissionRun = apps.get_model("gameplay", "MissionRun")
 
             row = MissionRun.objects.filter(pk=run_id).values("battle_report_id").first()
             if row is None:
@@ -73,7 +76,7 @@ def generate_report_task(
 
         if mission and mission.is_defense:
             from battle.combatants import build_named_ai_guests
-            from gameplay.services.technology import resolve_enemy_tech_levels, get_guest_stat_bonuses
+            from core.game_data.technology import resolve_enemy_tech_levels, get_guest_stat_bonuses
 
             tech_conf = mission.enemy_technology or {}
             attacker_guest_level = int(tech_conf.get("guest_level", 50)) if tech_conf else 50
@@ -125,13 +128,22 @@ def generate_report_task(
             )
 
         if run_id:
-            from gameplay.models import MissionRun
+            MissionRun = apps.get_model("gameplay", "MissionRun")
             # 保留原始出征时间，仅写入战报
             MissionRun.objects.filter(pk=run_id, battle_report__isnull=True).update(battle_report=report)
 
         logger.info(f"Battle report {report.pk} generated successfully for manor {manor_id}")
         return report.pk
 
+    except ValueError as exc:
+        # Business/validation errors should not be retried.
+        logger.warning(
+            "Battle report generation aborted (non-retriable) for manor %s: %s",
+            manor_id,
+            exc,
+            extra={"manor_id": manor_id, "run_id": run_id, "mission_id": mission_id},
+        )
+        return None
     except Exception as exc:
         logger.exception(
             f"Battle report generation failed for manor {manor_id}: {exc}",

@@ -236,6 +236,14 @@
 
                                         {% if entry.can_use_in_warehouse %}
 
+                                            {% with payload=entry.template.effect_payload %}
+                                            {% if payload.action == 'rebirth_guest' %}
+                                            <button type="button" class="btn-primary btn-small" onclick="openGuestSelectModal({{ entry.id }}, 'rebirth')" {% if entry.quantity <= 0 %}disabled{% endif %}>使用</button>
+                                            {% elif payload.action == 'reroll_growth' %}
+                                            <button type="button" class="btn-primary btn-small" onclick="openGuestSelectModal({{ entry.id }}, 'xisuidan')" {% if entry.quantity <= 0 %}disabled{% endif %}>使用</button>
+                                            {% elif payload.action == 'reset_allocation' %}
+                                            <button type="button" class="btn-primary btn-small" onclick="openGuestSelectModal({{ entry.id }}, 'xidianka')" {% if entry.quantity <= 0 %}disabled{% endif %}>使用</button>
+                                            {% else %}
                                             <form method="post" action="{% url 'gameplay:use_item' entry.id %}">
 
                                                 {% csrf_token %}
@@ -243,6 +251,8 @@
                                                 <button type="submit" class="btn-primary btn-small" {% if entry.quantity <= 0 %}disabled{% endif %}>使用</button>
 
                                             </form>
+                                            {% endif %}
+                                            {% endwith %}
 
                                         {% else %}
 
@@ -306,6 +316,73 @@
     </section>
 
 </section>
+
+<!-- 门客选择弹窗（通用：重生卡/洗髓丹） -->
+<div id="guest-select-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content rebirth-modal-content">
+        <div class="modal-header">
+            <h3 id="modal-title">选择门客</h3>
+            <button type="button" class="modal-close" onclick="closeGuestSelectModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p class="rebirth-hint" id="modal-hint"></p>
+            <!-- 重生卡门客列表 -->
+            <div id="guest-list-rebirth" class="guest-list-for-rebirth" style="display: none;">
+                {% for guest in guests_for_rebirth %}
+                <div class="guest-option" data-guest-id="{{ guest.id }}">
+                    <div class="guest-info">
+                        <span class="guest-name-rebirth rarity-text-{{ guest.template.rarity }}">{{ guest.display_name }}</span>
+                        <span class="guest-level">Lv.{{ guest.level }}</span>
+                    </div>
+                    <div class="guest-stats">
+                        <span>武:{{ guest.force }}</span>
+                        <span>智:{{ guest.intellect }}</span>
+                        <span>防:{{ guest.defense_stat }}</span>
+                    </div>
+                </div>
+                {% empty %}
+                <p class="no-guests-hint">没有可用的门客（门客需处于空闲或受伤状态）</p>
+                {% endfor %}
+            </div>
+            <!-- 洗髓丹门客列表（满级100级且使用次数<10） -->
+            <div id="guest-list-xisuidan" class="guest-list-for-rebirth" style="display: none;">
+                {% for guest in guests_for_xisuidan %}
+                <div class="guest-option" data-guest-id="{{ guest.id }}">
+                    <div class="guest-info">
+                        <span class="guest-name-rebirth rarity-text-{{ guest.template.rarity }}">{{ guest.display_name }}</span>
+                        <span class="guest-level">Lv.{{ guest.level }}</span>
+                    </div>
+                    <div class="guest-stats">
+                        <span class="xisuidan-count">已用 {{ guest.xisuidan_used }}/10 次</span>
+                    </div>
+                </div>
+                {% empty %}
+                <p class="no-guests-hint">没有可用的门客（需满级100级且使用次数未满10次）</p>
+                {% endfor %}
+            </div>
+            <!-- 洗点卡门客列表（有分配过点数的） -->
+            <div id="guest-list-xidianka" class="guest-list-for-rebirth" style="display: none;">
+                {% for guest in guests_for_xidianka %}
+                <div class="guest-option" data-guest-id="{{ guest.id }}">
+                    <div class="guest-info">
+                        <span class="guest-name-rebirth rarity-text-{{ guest.template.rarity }}">{{ guest.display_name }}</span>
+                        <span class="guest-level">Lv.{{ guest.level }}</span>
+                    </div>
+                    <div class="guest-stats">
+                        <span>已分配 {{ guest.allocated_force|add:guest.allocated_intellect|add:guest.allocated_defense|add:guest.allocated_agility }} 点</span>
+                    </div>
+                </div>
+                {% empty %}
+                <p class="no-guests-hint">没有可用的门客（需有分配过属性点且处于空闲或受伤状态）</p>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn-secondary" onclick="closeGuestSelectModal()">取消</button>
+            <button type="button" class="btn-primary" id="modal-confirm-btn" disabled onclick="confirmGuestAction()">确认</button>
+        </div>
+    </div>
+</div>
 
 {% endblock %}
 
@@ -1141,6 +1218,179 @@
 
 }
 
+/* 门客重生卡弹窗样式 */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.rebirth-modal-content {
+    background: var(--bg-card);
+    border: 2px solid var(--border-primary);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 480px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.modal-close:hover {
+    color: var(--text-primary);
+}
+
+.modal-body {
+    padding: 1rem 1.5rem;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.rebirth-hint {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: rgba(255, 193, 7, 0.1);
+    border-radius: 6px;
+    border-left: 3px solid #f59e0b;
+}
+
+.guest-list-for-rebirth {
+    display: flex;
+    flex-direction: column;
+    max-height: 240px;  /* 刚好显示5个门客 */
+    overflow-y: auto;
+    border: 1px solid var(--border-primary);
+    border-radius: 8px;
+}
+
+/* 门客列表滚动条样式 */
+.guest-list-for-rebirth::-webkit-scrollbar {
+    width: 6px;
+}
+
+.guest-list-for-rebirth::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+    border-radius: 3px;
+}
+
+.guest-list-for-rebirth::-webkit-scrollbar-thumb {
+    background: var(--border-primary);
+    border-radius: 3px;
+}
+
+.guest-list-for-rebirth::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
+.guest-option {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border-primary);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.guest-option:last-child {
+    border-bottom: none;
+}
+
+.guest-option:hover {
+    background: var(--bg-hover);
+}
+
+.guest-option.selected {
+    background: rgba(218, 165, 32, 0.15);
+    border-left: 3px solid var(--accent-gold);
+    padding-left: calc(1rem - 3px);
+}
+
+.guest-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.guest-info .guest-name {
+    font-weight: 600;
+}
+
+.guest-info .guest-name-rebirth {
+    font-weight: 600;
+}
+
+/* 门客重生弹窗 - 纯文字颜色稀有度样式 */
+.rarity-text-black { color: #333; }
+.rarity-text-gray { color: #888; }
+.rarity-text-green { color: #2E8B57; }
+.rarity-text-blue { color: #4169E1; }
+.rarity-text-red { color: #DC143C; }
+.rarity-text-purple { color: #9932CC; }
+.rarity-text-orange { color: #FF8C00; }
+
+.guest-info .guest-level {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.guest-stats {
+    display: flex;
+    gap: 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.no-guests-hint {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 2rem 1rem;
+    background: var(--bg-card);
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border-primary);
+}
+
 /* 滚动条样式优化 - 与商店保持一致 */
 .shop-table-wrapper::-webkit-scrollbar {
     width: 8px;
@@ -1238,127 +1488,246 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Tooltip 位置动态调整
+    (function setupWarehouseTooltips() {
+        window.__webgame_tooltip_init = window.__webgame_tooltip_init || {};
+        if (window.__webgame_tooltip_init.warehouse) return;
+        window.__webgame_tooltip_init.warehouse = true;
 
-    const itemCells = document.querySelectorAll('.item-cell');
+        const cellSelector = '.item-cell';
+        const tooltipSelector = '.item-tooltip';
+        const viewportPadding = 20;
+        const offset = 8;
 
-    itemCells.forEach(cell => {
+        if (!document.querySelector(cellSelector)) return;
 
-        cell.addEventListener('mouseenter', function() {
+        let activeCell = null;
+        let rafId = null;
+        let sizeRetryCount = 0;
 
-            const tooltip = this.querySelector('.item-tooltip');
+        function requestUpdate() {
+            if (rafId) return;
+            rafId = requestAnimationFrame(() => {
+                rafId = null;
+                if (!activeCell) return;
+                if (!activeCell.isConnected) {
+                    activeCell = null;
+                    sizeRetryCount = 0;
+                    return;
+                }
 
-            if (!tooltip) return;
+                const tooltip = activeCell.querySelector(tooltipSelector);
+                if (!tooltip) return;
 
-
-
-            // 获取单元格位置
-
-            const cellRect = this.getBoundingClientRect();
-
-            const viewportHeight = window.innerHeight;
-
-            const viewportWidth = window.innerWidth;
-
-
-
-            // 默认位置：元素下方
-
-            let top = cellRect.bottom + 8;
-
-            let left = cellRect.left;
-
-
-
-            // 等待tooltip显示后再计算位置
-
-            setTimeout(() => {
+                const cellRect = activeCell.getBoundingClientRect();
+                const viewportHeight = window.innerHeight;
+                const viewportWidth = window.innerWidth;
 
                 const tooltipRect = tooltip.getBoundingClientRect();
+                if ((tooltipRect.width === 0 || tooltipRect.height === 0) && sizeRetryCount < 2) {
+                    sizeRetryCount += 1;
+                    requestUpdate();
+                    return;
+                }
+                sizeRetryCount = 0;
 
+                let top = cellRect.bottom + offset;
+                let left = cellRect.left;
 
-
-                // 如果右侧超出视口，向左对齐
-
-                if (left + tooltipRect.width > viewportWidth - 20) {
-
-                    left = viewportWidth - tooltipRect.width - 20;
-
+                if (left + tooltipRect.width > viewportWidth - viewportPadding) {
+                    left = viewportWidth - tooltipRect.width - viewportPadding;
                 }
 
-
-
-                // 如果底部超出视口，显示在元素上方
-
-                if (top + tooltipRect.height > viewportHeight - 20) {
-
-                    top = cellRect.top - tooltipRect.height - 8;
-
+                if (top + tooltipRect.height > viewportHeight - viewportPadding) {
+                    top = cellRect.top - tooltipRect.height - offset;
                 }
-
-
-
-                // 应用位置
 
                 tooltip.style.top = top + 'px';
-
                 tooltip.style.left = left + 'px';
+            });
+        }
 
-            }, 10);
+        function setActiveCell(cell) {
+            if (activeCell === cell) return;
+            activeCell = cell;
+            sizeRetryCount = 0;
+            requestUpdate();
+        }
 
+        document.addEventListener('mouseover', function (event) {
+            const target = event.target;
+            if (!target || !target.closest) return;
+            const cell = target.closest(cellSelector);
+            if (!cell) return;
+            setActiveCell(cell);
         });
 
-
-
-        // 鼠标移动时更新位置（用于滚动场景）
-
-        cell.addEventListener('mousemove', function() {
-
-            const tooltip = this.querySelector('.item-tooltip');
-
-            if (!tooltip || tooltip.style.display === 'none') return;
-
-
-
-            const cellRect = this.getBoundingClientRect();
-
-            const viewportHeight = window.innerHeight;
-
-            const viewportWidth = window.innerWidth;
-
-            const tooltipRect = tooltip.getBoundingClientRect();
-
-
-
-            let top = cellRect.bottom + 8;
-
-            let left = cellRect.left;
-
-
-
-            if (left + tooltipRect.width > viewportWidth - 20) {
-
-                left = viewportWidth - tooltipRect.width - 20;
-
-            }
-
-
-
-            if (top + tooltipRect.height > viewportHeight - 20) {
-
-                top = cellRect.top - tooltipRect.height - 8;
-
-            }
-
-
-
-            tooltip.style.top = top + 'px';
-
-            tooltip.style.left = left + 'px';
-
+        document.addEventListener('mousemove', function (event) {
+            if (!activeCell) return;
+            const target = event.target;
+            if (!target || !target.closest) return;
+            if (!target.closest(cellSelector)) return;
+            requestUpdate();
         });
 
+        document.addEventListener('mouseout', function (event) {
+            const target = event.target;
+            if (!target || !target.closest) return;
+            const cell = target.closest(cellSelector);
+            if (!cell || cell !== activeCell) return;
+            const related = event.relatedTarget;
+            if (related && cell.contains(related)) return;
+            activeCell = null;
+            sizeRetryCount = 0;
+        });
+
+        window.addEventListener('scroll', function () {
+            if (!activeCell) return;
+            requestUpdate();
+        }, true);
+
+        window.addEventListener('resize', function () {
+            if (!activeCell) return;
+            requestUpdate();
+        });
+    })();
+
+});
+
+// 通用门客选择弹窗
+let currentItemId = null;
+let currentActionType = null;  // 'rebirth', 'xisuidan', 'xidianka'
+let selectedGuestId = null;
+
+const MODAL_CONFIG = {
+    rebirth: {
+        title: '选择要重生的门客',
+        hint: '重生后门客将回到1级，属性将重置为模板基础值（有随机浮动）。<br><strong>装备将自动归还仓库，技能将被清空。</strong>',
+        confirmText: '确认重生',
+        listId: 'guest-list-rebirth',
+        urlTemplate: `{% url 'gameplay:use_rebirth_card' pk=0 %}`
+    },
+    xisuidan: {
+        title: '选择要洗髓的门客',
+        hint: '洗髓丹可重新随机门客升级获得的成长点数。<br><strong>新的成长点数保证不低于当前值，有机会获得更高的属性成长。</strong>',
+        confirmText: '确认洗髓',
+        listId: 'guest-list-xisuidan',
+        urlTemplate: `{% url 'gameplay:use_xisuidan' pk=0 %}`
+    },
+    xidianka: {
+        title: '选择要洗点的门客',
+        hint: '洗点卡可重置门客的属性点分配。<br><strong>已分配的属性点将全部返还，可重新分配。</strong>',
+        confirmText: '确认洗点',
+        listId: 'guest-list-xidianka',
+        urlTemplate: `{% url 'gameplay:use_xidianka' pk=0 %}`
+    }
+};
+
+function openGuestSelectModal(itemId, actionType) {
+    const config = MODAL_CONFIG[actionType];
+    if (!config) return;
+
+    currentItemId = itemId;
+    currentActionType = actionType;
+    selectedGuestId = null;
+
+    // 设置弹窗内容
+    document.getElementById('modal-title').textContent = config.title;
+    document.getElementById('modal-hint').innerHTML = config.hint;
+    document.getElementById('modal-confirm-btn').textContent = config.confirmText;
+    document.getElementById('modal-confirm-btn').disabled = true;
+
+    // 隐藏所有门客列表，只显示对应的
+    document.getElementById('guest-list-rebirth').style.display = 'none';
+    document.getElementById('guest-list-xisuidan').style.display = 'none';
+    document.getElementById('guest-list-xidianka').style.display = 'none';
+    document.getElementById(config.listId).style.display = 'block';
+
+    // 清除之前的选中状态
+    document.querySelectorAll('.guest-option').forEach(opt => opt.classList.remove('selected'));
+
+    // 显示弹窗
+    document.getElementById('guest-select-modal').style.display = 'flex';
+}
+
+function closeGuestSelectModal() {
+    document.getElementById('guest-select-modal').style.display = 'none';
+    currentItemId = null;
+    currentActionType = null;
+    selectedGuestId = null;
+}
+
+function confirmGuestAction() {
+    if (!selectedGuestId || !currentItemId || !currentActionType) {
+        gameDialog.error('请先选择门客', { title: '提示' });
+        return;
+    }
+
+    const config = MODAL_CONFIG[currentActionType];
+    const confirmBtn = document.getElementById('modal-confirm-btn');
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = '处理中...';
+
+    const url = config.urlTemplate.replace('/0/', `/${currentItemId}/`);
+    const formData = new FormData();
+    formData.append('guest_id', selectedGuestId);
+    formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+    fetch(url, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            closeGuestSelectModal();
+            gameDialog.success(data.message).then(() => {
+                location.reload();
+            });
+        } else {
+            gameDialog.error(data.error || '操作失败', { title: '错误' });
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = config.confirmText;
+        }
+    })
+    .catch(err => {
+        gameDialog.error('请求失败，请重试', { title: '错误' });
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = config.confirmText;
     });
+}
 
+// 使用事件委托绑定门客选项点击事件
+document.addEventListener('click', function(e) {
+    const modal = document.getElementById('guest-select-modal');
+
+    // 检查是否点击了门客选项或其子元素
+    const guestOption = e.target.closest('.guest-option');
+    if (guestOption && modal.contains(guestOption)) {
+        const guestId = guestOption.dataset.guestId;
+        if (!guestId) return;
+
+        // 获取当前显示的门客列表
+        const activeList = document.getElementById(MODAL_CONFIG[currentActionType]?.listId);
+        if (!activeList || !activeList.contains(guestOption)) return;
+
+        // 清除当前列表的选中状态
+        activeList.querySelectorAll('.guest-option').forEach(opt => opt.classList.remove('selected'));
+        guestOption.classList.add('selected');
+
+        // 保存选中的门客ID
+        selectedGuestId = guestId;
+
+        // 启用确认按钮
+        document.getElementById('modal-confirm-btn').disabled = false;
+    }
+
+    // 点击弹窗外部关闭
+    if (e.target.id === 'guest-select-modal') {
+        closeGuestSelectModal();
+    }
 });
 
 </script>

@@ -7,19 +7,17 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 
 from core.utils import safe_int, sanitize_error_message
+from ..constants import CONTRIBUTION_RATES, DAILY_DONATION_LIMITS
+from ..decorators import require_guild_member
 from ..services import contribution as contribution_service
 from gameplay.models import Manor
 
+
 @login_required
+@require_guild_member
 def donate_resource(request):
     """捐赠资源"""
-    user = request.user
-
-    if not hasattr(user, 'guild_membership') or not user.guild_membership.is_active:
-        messages.error(request, '您不在帮会中')
-        return redirect('guilds:hall')
-
-    member = user.guild_membership
+    member = request.guild_member
 
     if request.method == 'POST':
         resource_type = request.POST.get('resource_type')
@@ -32,28 +30,23 @@ def donate_resource(request):
         except ValueError as e:
             messages.error(request, sanitize_error_message(e))
 
-    manor = get_object_or_404(Manor, user=user)
+    manor = get_object_or_404(Manor, user=request.user)
     context = {
         'guild': member.guild,
         'member': member,
         'manor': manor,
-        'contribution_rates': contribution_service.CONTRIBUTION_RATES,
-        'daily_limits': contribution_service.DAILY_DONATION_LIMITS,
+        'contribution_rates': CONTRIBUTION_RATES,
+        'daily_limits': DAILY_DONATION_LIMITS,
     }
 
     return render(request, 'guilds/donate.html', context)
 
 
 @login_required
+@require_guild_member
 def contribution_ranking(request):
     """贡献排行榜"""
-    user = request.user
-
-    if not hasattr(user, 'guild_membership') or not user.guild_membership.is_active:
-        messages.error(request, '您不在帮会中')
-        return redirect('guilds:hall')
-
-    member = user.guild_membership
+    member = request.guild_member
     guild = member.guild
 
     ranking_type = request.GET.get('type', 'total')  # total 或 weekly
@@ -90,15 +83,10 @@ def contribution_ranking(request):
 
 
 @login_required
+@require_guild_member
 def resource_status(request):
     """资源状态"""
-    user = request.user
-
-    if not hasattr(user, 'guild_membership') or not user.guild_membership.is_active:
-        messages.error(request, '您不在帮会中')
-        return redirect('guilds:hall')
-
-    member = user.guild_membership
+    member = request.guild_member
     guild = member.guild
 
     context = {
@@ -110,19 +98,14 @@ def resource_status(request):
 
 
 @login_required
+@require_guild_member
 def donation_logs(request):
     """捐赠日志"""
-    user = request.user
-
-    if not hasattr(user, 'guild_membership') or not user.guild_membership.is_active:
-        messages.error(request, '您不在帮会中')
-        return redirect('guilds:hall')
-
-    member = user.guild_membership
+    member = request.guild_member
     guild = member.guild
 
     # 获取捐赠日志
-    logs = guild.donation_logs.all().select_related('member__user')[:50]
+    logs = guild.donation_logs.all().select_related('member__user__manor')[:50]
 
     context = {
         'guild': guild,
@@ -133,19 +116,14 @@ def donation_logs(request):
 
 
 @login_required
+@require_guild_member
 def resource_logs(request):
     """资源日志"""
-    user = request.user
-
-    if not hasattr(user, 'guild_membership') or not user.guild_membership.is_active:
-        messages.error(request, '您不在帮会中')
-        return redirect('guilds:hall')
-
-    member = user.guild_membership
+    member = request.guild_member
     guild = member.guild
 
     # 获取资源流水
-    logs = guild.resource_logs.all()[:50]
+    logs = guild.resource_logs.all().select_related("related_user")[:50]
 
     context = {
         'guild': guild,

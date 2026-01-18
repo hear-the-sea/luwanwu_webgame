@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}监牢{% endblock %}
+
+{% block content %}
+<section class="dashboard">
+  <div class="section-header">
+    <div>
+      <h1>监牢</h1>
+      <p class="caption">
+        容量：<strong>{{ prisoners|length }}</strong> / <strong>{{ jail_capacity }}</strong>
+        | 俘获概率：<strong>{{ capture_rate_percent }}%</strong>
+        | 招募条件：忠诚度 ≤ <strong>{{ recruit_loyalty_threshold }}</strong>
+        | 招募消耗：<strong>{{ recruit_cost_gold_bar }}</strong> 金条
+      </p>
+    </div>
+    <div class="section-actions">
+      <a class="btn-secondary" href="{% url 'gameplay:oath_grove' %}">前往结义林</a>
+    </div>
+  </div>
+
+  <section class="card">
+    {% if prisoners %}
+      <table class="table">
+        <thead>
+          <tr>
+            <th>囚徒</th>
+            <th>稀有度</th>
+            <th>忠诚</th>
+            <th>原属</th>
+            <th>俘获时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in prisoners %}
+          <tr>
+            <td>{{ p.display_name }}</td>
+            <td>{{ p.guest_template.rarity }}</td>
+            <td>{{ p.loyalty }}</td>
+            <td>{{ p.original_manor.display_name }}</td>
+            <td>{% if p.captured_at %}{{ p.captured_at|date:"Y-m-d H:i" }}{% endif %}</td>
+            <td>
+              <form method="post" action="{% url 'gameplay:draw_pie_view' p.id %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn-secondary">画饼</button>
+              </form>
+              <form method="post" action="{% url 'gameplay:recruit_prisoner_view' p.id %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn-primary">招募</button>
+              </form>
+              <form method="post" action="{% url 'gameplay:release_prisoner_view' p.id %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn-secondary">释放</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="empty-state">当前没有囚徒。</p>
+    {% endif %}
+    <p class="muted-text" style="margin-top: 0.8rem;">提示：监牢满员时不会进行俘获判定，也不会有任何补偿。</p>
+  </section>
+</section>
+{% endblock %}

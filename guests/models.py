@@ -6,8 +6,6 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
-from gameplay.models import Manor
-
 if TYPE_CHECKING:
     from .managers import GuestManager as GuestManagerType
 
@@ -105,7 +103,7 @@ class GuestTemplate(models.Model):
     base_luck = models.PositiveIntegerField(default=50)
     base_hp = models.PositiveIntegerField(default=1200)
     avatar = models.ImageField(upload_to='guests/', blank=True, null=True, verbose_name="门客头像")
-    flavor = models.CharField(max_length=128, blank=True)
+    flavor = models.CharField(max_length=512, blank=True)
     default_gender = models.CharField(max_length=16, choices=GENDER_CHOICES, default="unknown")
     default_morality = models.PositiveIntegerField(default=50)
     initial_skills = models.ManyToManyField("Skill", blank=True, related_name="template_initials")
@@ -216,7 +214,7 @@ class Guest(models.Model):
     # 使用自定义 Manager 提供便捷查询方法
     from .managers import GuestManager
 
-    manor = models.ForeignKey(Manor, on_delete=models.CASCADE, related_name="guests")
+    manor = models.ForeignKey("gameplay.Manor", on_delete=models.CASCADE, related_name="guests")
     template = models.ForeignKey(GuestTemplate, on_delete=models.CASCADE)
     level = models.PositiveIntegerField(default=1)
     experience = models.PositiveIntegerField(default=0)
@@ -234,6 +232,22 @@ class Guest(models.Model):
     last_hp_recovery_at = models.DateTimeField(default=timezone.now)
     gear_set_bonus = models.JSONField(default=dict, blank=True)
     attribute_points = models.PositiveIntegerField("属性点", default=0)
+
+    # 招募时的初始属性（含浮动），用于计算升级成长
+    initial_force = models.PositiveIntegerField("初始武力", default=0)
+    initial_intellect = models.PositiveIntegerField("初始智力", default=0)
+    initial_defense = models.PositiveIntegerField("初始防御", default=0)
+    initial_agility = models.PositiveIntegerField("初始敏捷", default=0)
+
+    # 玩家手动分配的属性点数
+    allocated_force = models.PositiveIntegerField("已分配武力", default=0)
+    allocated_intellect = models.PositiveIntegerField("已分配智力", default=0)
+    allocated_defense = models.PositiveIntegerField("已分配防御", default=0)
+    allocated_agility = models.PositiveIntegerField("已分配敏捷", default=0)
+
+    # 洗髓丹使用次数（每个门客最多使用10次，重生后重置）
+    xisuidan_used = models.PositiveIntegerField("洗髓丹已使用次数", default=0)
+
     gender = models.CharField(max_length=16, choices=GENDER_CHOICES, default="unknown")
     morality = models.PositiveIntegerField("品性", default=50)
     status = models.CharField(max_length=16, choices=GuestStatus.choices, default=GuestStatus.IDLE)
@@ -378,7 +392,7 @@ class GearTemplate(models.Model):
 
 
 class GearItem(models.Model):
-    manor = models.ForeignKey(Manor, on_delete=models.CASCADE, related_name="gears")
+    manor = models.ForeignKey("gameplay.Manor", on_delete=models.CASCADE, related_name="gears")
     template = models.ForeignKey(GearTemplate, on_delete=models.CASCADE)
     guest = models.ForeignKey(Guest, on_delete=models.SET_NULL, null=True, blank=True, related_name="gear_items")
     level = models.PositiveIntegerField(default=1)
@@ -396,7 +410,7 @@ class GearItem(models.Model):
 
 
 class RecruitmentRecord(models.Model):
-    manor = models.ForeignKey(Manor, on_delete=models.CASCADE, related_name="recruit_records")
+    manor = models.ForeignKey("gameplay.Manor", on_delete=models.CASCADE, related_name="recruit_records")
     pool = models.ForeignKey(RecruitmentPool, on_delete=models.SET_NULL, null=True)
     guest = models.ForeignKey(Guest, on_delete=models.CASCADE)
     rarity = models.CharField(max_length=16, choices=GuestRarity.choices)
@@ -409,7 +423,7 @@ class RecruitmentRecord(models.Model):
 
 
 class TrainingLog(models.Model):
-    manor = models.ForeignKey(Manor, on_delete=models.CASCADE)
+    manor = models.ForeignKey("gameplay.Manor", on_delete=models.CASCADE)
     guest = models.ForeignKey(Guest, on_delete=models.CASCADE)
     delta_level = models.PositiveIntegerField()
     resource_cost = models.JSONField(default=dict)
@@ -457,7 +471,7 @@ class GuestSkill(models.Model):
 
 
 class RecruitmentCandidate(models.Model):
-    manor = models.ForeignKey(Manor, on_delete=models.CASCADE, related_name="candidates")
+    manor = models.ForeignKey("gameplay.Manor", on_delete=models.CASCADE, related_name="candidates")
     pool = models.ForeignKey(RecruitmentPool, on_delete=models.CASCADE)
     template = models.ForeignKey(GuestTemplate, on_delete=models.CASCADE)
     display_name = models.CharField(max_length=64)
@@ -486,7 +500,7 @@ RARITY_SALARY = {
 
 class SalaryPayment(models.Model):
     """工资支付记录"""
-    manor = models.ForeignKey(Manor, on_delete=models.CASCADE, related_name="salary_payments")
+    manor = models.ForeignKey("gameplay.Manor", on_delete=models.CASCADE, related_name="salary_payments")
     guest = models.ForeignKey(Guest, on_delete=models.CASCADE, related_name="salary_payments")
     amount = models.PositiveIntegerField("工资金额")
     paid_at = models.DateTimeField(auto_now_add=True, verbose_name="支付时间")
@@ -508,7 +522,7 @@ class SalaryPayment(models.Model):
 
 class GuestDefection(models.Model):
     """门客叛逃记录"""
-    manor = models.ForeignKey(Manor, on_delete=models.CASCADE, related_name="guest_defections")
+    manor = models.ForeignKey("gameplay.Manor", on_delete=models.CASCADE, related_name="guest_defections")
     guest_name = models.CharField(max_length=64, verbose_name="门客名称")
     guest_level = models.PositiveIntegerField("门客等级")
     guest_rarity = models.CharField(max_length=16, choices=GuestRarity.choices, verbose_name="稀有度")

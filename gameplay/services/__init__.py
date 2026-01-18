@@ -14,7 +14,7 @@
 from __future__ import annotations
 
 # 工具函数
-from ..utils.loot_generator import resolve_drop_rewards
+from common.utils.loot import resolve_drop_rewards
 
 # 背包物品管理
 from .inventory import (
@@ -25,7 +25,10 @@ from .inventory import (
     get_item_quantity,
     list_inventory_items,
     sync_manor_grain,
+    use_guest_rebirth_card,
     use_inventory_item,
+    use_xisuidan,
+    use_xidianka,
 )
 
 # 庄园和建筑管理
@@ -60,10 +63,14 @@ from .messages import (
 
 # 任务管理
 from .missions import (
+    add_mission_extra_attempt,
     award_mission_drops,
+    bulk_get_mission_extra_attempts,
     bulk_mission_attempts_today,
     can_retreat,
     finalize_mission_run,
+    get_mission_daily_limit,
+    get_mission_extra_attempts,
     launch_mission,
     mission_attempts_today,
     normalize_mission_loadout,
@@ -116,6 +123,17 @@ from .treasury import (
     get_warehouse_used_space,
     move_item_to_treasury,
     move_item_to_warehouse,
+)
+
+# 监牢/结义林
+from .jail import (
+    add_oath_bond,
+    draw_pie,
+    list_held_prisoners,
+    list_oath_bonds,
+    recruit_prisoner,
+    release_prisoner,
+    remove_oath_bond,
 )
 
 # 声望系统
@@ -279,7 +297,10 @@ __all__ = [
     "get_item_quantity",
     "list_inventory_items",
     "sync_manor_grain",
+    "use_guest_rebirth_card",
     "use_inventory_item",
+    "use_xisuidan",
+    "use_xidianka",
     # 消息
     "MESSAGE_RETENTION_DAYS",
     "claim_message_attachments",
@@ -292,10 +313,14 @@ __all__ = [
     "mark_messages_read",
     "unread_message_count",
     # 任务
+    "add_mission_extra_attempt",
     "award_mission_drops",
+    "bulk_get_mission_extra_attempts",
     "bulk_mission_attempts_today",
     "can_retreat",
     "finalize_mission_run",
+    "get_mission_daily_limit",
+    "get_mission_extra_attempts",
     "launch_mission",
     "mission_attempts_today",
     "normalize_mission_loadout",
@@ -444,4 +469,12 @@ __all__ = [
     "refresh_raid_runs",
     "get_active_raids",
     "get_raid_history",
+    # 监牢/结义林
+    "list_held_prisoners",
+    "recruit_prisoner",
+    "list_oath_bonds",
+    "add_oath_bond",
+    "remove_oath_bond",
+    "draw_pie",
+    "release_prisoner",
 ]

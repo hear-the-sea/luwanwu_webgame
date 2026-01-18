@@ -14,25 +14,26 @@ from django.views.generic import TemplateView
 
 from core.exceptions import GameError
 from core.utils import sanitize_error_message
-from gameplay.models import InventoryItem
-from gameplay.services import ensure_manor, consume_inventory_item
+from core.utils.rate_limit import rate_limit_redirect
 
 from ..forms import RecruitForm
 from ..models import RecruitmentCandidate
 from ..services import (
     bulk_finalize_candidates,
     convert_candidate_to_retainer,
-    finalize_candidate,
     recruit_guest,
     reveal_candidate_rarity,
 )
 
 
 @method_decorator(require_POST, name="dispatch")
+@method_decorator(rate_limit_redirect("recruit_draw", limit=10, window_seconds=60), name="dispatch")
 class RecruitView(LoginRequiredMixin, TemplateView):
     http_method_names = ["post"]
 
     def post(self, request, *args, **kwargs):
+        from gameplay.services.manor import ensure_manor
+
         manor = ensure_manor(request.user)
         form = RecruitForm(request.POST)
         if not form.is_valid():
@@ -49,7 +50,10 @@ class RecruitView(LoginRequiredMixin, TemplateView):
 
 @login_required
 @require_POST
+@rate_limit_redirect("recruit_accept", limit=10, window_seconds=60)
 def accept_candidate_view(request):
+    from gameplay.services.manor import ensure_manor
+
     manor = ensure_manor(request.user)
     candidate_ids = request.POST.getlist("candidate_ids")
     action = request.POST.get("action")
@@ -97,8 +101,13 @@ def accept_candidate_view(request):
 
 @login_required
 @require_POST
+@rate_limit_redirect("recruit_reveal", limit=10, window_seconds=60)
 def use_magnifying_glass_view(request):
     """使用放大镜显现候选门客的稀有度"""
+    from gameplay.models import InventoryItem
+    from gameplay.services.inventory import consume_inventory_item
+    from gameplay.services.manor import ensure_manor
+
     manor = ensure_manor(request.user)
     item_id = request.POST.get("item_id")
 

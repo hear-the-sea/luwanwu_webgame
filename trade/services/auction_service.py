@@ -10,15 +10,15 @@ import logging
 from datetime import timedelta
 from typing import Dict, List, Optional, Tuple
 
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
 from django.db import transaction
 from django.db.models import QuerySet, Sum
 from django.utils import timezone
 
 from gameplay.models import ItemTemplate, Manor
-from gameplay.services.inventory import add_item_to_inventory, get_item_quantity
+from gameplay.models import InventoryItem
+from gameplay.services.inventory import get_item_quantity
 from gameplay.services.messages import create_message
+from gameplay.services.notifications import notify_user
 from trade.models import AuctionBid, AuctionRound, AuctionSlot, FrozenGoldBar
 
 from .auction_config import get_auction_settings, get_enabled_auction_items
@@ -26,6 +26,15 @@ from .auction_config import get_auction_settings, get_enabled_auction_items
 logger = logging.getLogger(__name__)
 
 GOLD_BAR_ITEM_KEY = "gold_bar"
+
+# 拍卖位排序字段白名单（防止order_by注入）
+ALLOWED_AUCTION_ORDER_BY = {
+    'current_price', '-current_price',
+    'starting_price', '-starting_price',
+    'min_increment', '-min_increment',
+    'bid_count', '-bid_count',
+    'created_at', '-created_at',
+}
 
 
 # ============ 金条管理 ============
@@ -66,7 +75,30 @@ def freeze_gold_bars(manor: Manor, amount: int, bid: AuctionBid) -> FrozenGoldBa
     Raises:
         ValueError: 可用金条不足时抛出
     """
-    available = get_available_gold_bars(manor)
+    if amount <= 0:
+        raise ValueError("冻结数量必须大于0")
+
+    # Concurrency safety:
+    # - Lock the gold_bar InventoryItem row (warehouse) to serialize freezes per manor.
+    # - Compute current frozen sum within the same transaction to prevent over-freezing.
+    inventory_item = (
+        InventoryItem.objects.select_for_update()
+        .filter(
+            manor=manor,
+            template__key=GOLD_BAR_ITEM_KEY,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        )
+        .select_related("template")
+        .first()
+    )
+    total = int(getattr(inventory_item, "quantity", 0) or 0)
+    frozen = int(
+        (
+            FrozenGoldBar.objects.filter(manor=manor, is_frozen=True).aggregate(total=Sum("amount")).get("total")
+        )
+        or 0
+    )
+    available = max(0, total - frozen)
     if available < amount:
         raise ValueError(f"可用金条不足，当前可用 {available} 根，需要 {amount} 根")
 
@@ -92,19 +124,21 @@ def unfreeze_gold_bars(frozen_record: FrozenGoldBar) -> None:
     Args:
         frozen_record: 冻结记录
     """
-    if not frozen_record.is_frozen:
-        return
+    with transaction.atomic():
+        locked = FrozenGoldBar.objects.select_for_update().select_related("auction_bid").filter(pk=frozen_record.pk).first()
+        if not locked or not locked.is_frozen:
+            return
 
-    frozen_record.is_frozen = False
-    frozen_record.unfrozen_at = timezone.now()
-    frozen_record.save(update_fields=["is_frozen", "unfrozen_at"])
+        locked.is_frozen = False
+        locked.unfrozen_at = timezone.now()
+        locked.save(update_fields=["is_frozen", "unfrozen_at"])
 
-    # 更新关联出价记录的状态
-    if frozen_record.auction_bid:
-        bid = frozen_record.auction_bid
-        bid.status = AuctionBid.Status.REFUNDED
-        bid.refunded_at = timezone.now()
-        bid.save(update_fields=["status", "refunded_at"])
+        # 更新关联出价记录的状态
+        if locked.auction_bid_id:
+            bid = locked.auction_bid
+            bid.status = AuctionBid.Status.REFUNDED
+            bid.refunded_at = timezone.now()
+            bid.save(update_fields=["status", "refunded_at"])
 
 
 def consume_frozen_gold_bars(frozen_record: FrozenGoldBar, manor: Manor) -> None:
@@ -115,24 +149,26 @@ def consume_frozen_gold_bars(frozen_record: FrozenGoldBar, manor: Manor) -> None
         frozen_record: 冻结记录
         manor: 庄园
     """
-    from gameplay.services.inventory import consume_inventory_item
+    from gameplay.services.inventory import consume_inventory_item_for_manor_locked
 
-    if not frozen_record.is_frozen:
-        return
+    with transaction.atomic():
+        locked = FrozenGoldBar.objects.select_for_update().select_related("auction_bid").filter(pk=frozen_record.pk).first()
+        if not locked or not locked.is_frozen:
+            return
 
-    # 实际扣除金条
-    consume_inventory_item(manor, GOLD_BAR_ITEM_KEY, frozen_record.amount)
+        # 实际扣除金条
+        consume_inventory_item_for_manor_locked(manor, GOLD_BAR_ITEM_KEY, locked.amount)
 
-    # 更新冻结记录
-    frozen_record.is_frozen = False
-    frozen_record.unfrozen_at = timezone.now()
-    frozen_record.save(update_fields=["is_frozen", "unfrozen_at"])
+        # 更新冻结记录
+        locked.is_frozen = False
+        locked.unfrozen_at = timezone.now()
+        locked.save(update_fields=["is_frozen", "unfrozen_at"])
 
-    # 更新关联出价记录的状态
-    if frozen_record.auction_bid:
-        bid = frozen_record.auction_bid
-        bid.status = AuctionBid.Status.WON
-        bid.save(update_fields=["status"])
+        # 更新关联出价记录的状态
+        if locked.auction_bid_id:
+            bid = locked.auction_bid
+            bid.status = AuctionBid.Status.WON
+            bid.save(update_fields=["status"])
 
 
 # ============ 轮次管理 ============
@@ -252,7 +288,7 @@ def get_slot_ranking(slot: AuctionSlot) -> List[AuctionBid]:
     )
 
 
-def get_cutoff_price(slot: AuctionSlot) -> int:
+def get_cutoff_price(slot: AuctionSlot, ranking: Optional[List[AuctionBid]] = None) -> int:
     """
     获取当前最低中标价（第N名的出价）
 
@@ -262,7 +298,8 @@ def get_cutoff_price(slot: AuctionSlot) -> int:
     Returns:
         最低中标价，如果出价人数不足N则返回起拍价
     """
-    ranking = get_slot_ranking(slot)
+    if ranking is None:
+        ranking = get_slot_ranking(slot)
     winner_count = slot.quantity  # 中标名额数
 
     if len(ranking) >= winner_count:
@@ -308,7 +345,13 @@ def is_in_winning_range(slot: AuctionSlot, manor: Manor) -> bool:
     return rank <= slot.quantity
 
 
-def validate_bid_amount(slot: AuctionSlot, amount: int, manor: Manor = None) -> None:
+def validate_bid_amount(
+    slot: AuctionSlot,
+    amount: int,
+    manor: Manor = None,
+    ranking: Optional[List[AuctionBid]] = None,
+    current_bid: Optional[AuctionBid] = None,
+) -> None:
     """
     验证出价金额是否合法
 
@@ -332,6 +375,10 @@ def validate_bid_amount(slot: AuctionSlot, amount: int, manor: Manor = None) -> 
         return
 
     # 如果已有出价，检查是否为加价
+    if current_bid:
+        if amount <= current_bid.amount:
+            raise ValueError(f"加价金额必须高于您之前的出价 {current_bid.amount} 金条")
+        return
     if manor:
         my_bid = AuctionBid.objects.filter(
             slot=slot, manor=manor, status=AuctionBid.Status.ACTIVE
@@ -343,8 +390,9 @@ def validate_bid_amount(slot: AuctionSlot, amount: int, manor: Manor = None) -> 
             return
 
     # 新出价者，需要高于当前最低中标价才有意义
-    cutoff = get_cutoff_price(slot)
-    ranking = get_slot_ranking(slot)
+    if ranking is None:
+        ranking = get_slot_ranking(slot)
+    cutoff = get_cutoff_price(slot, ranking=ranking)
     winner_count = slot.quantity
 
     if len(ranking) >= winner_count and amount <= cutoff:
@@ -396,9 +444,6 @@ def place_bid(manor: Manor, slot_id: int, amount: int) -> Tuple[AuctionBid, bool
         if slot.round.end_at <= timezone.now():
             raise ValueError("拍卖时间已结束")
 
-        # 验证出价金额
-        validate_bid_amount(slot, amount, manor)
-
         # 查找该玩家之前在此拍卖位的有效出价
         previous_bid = (
             AuctionBid.objects.select_for_update()
@@ -410,25 +455,14 @@ def place_bid(manor: Manor, slot_id: int, amount: int) -> Tuple[AuctionBid, bool
             .first()
         )
 
-        # 计算需要额外冻结的金条数
-        previous_frozen = 0
-        if previous_bid and hasattr(previous_bid, "frozen_record"):
-            try:
-                previous_frozen = previous_bid.frozen_record.amount
-            except FrozenGoldBar.DoesNotExist:
-                pass
+        # 验证出价金额
+        if previous_bid:
+            validate_bid_amount(slot, amount, current_bid=previous_bid)
+        else:
+            ranking_before = get_slot_ranking(slot)
+            validate_bid_amount(slot, amount, ranking=ranking_before)
 
-        additional_needed = amount - previous_frozen
-
-        # 验证可用金条是否足够
-        available = get_available_gold_bars(manor)
-        if additional_needed > available:
-            raise ValueError(
-                f"可用金条不足，当前可用 {available} 根，"
-                f"还需要 {additional_needed} 根"
-            )
-
-        # 如果有之前的出价，解冻之前的金条并标记旧出价
+        # 如果有之前的出价，先解冻旧金条并标记旧出价（事务内，避免并发占用）
         if previous_bid:
             try:
                 if previous_bid.frozen_record:
@@ -443,7 +477,8 @@ def place_bid(manor: Manor, slot_id: int, amount: int) -> Tuple[AuctionBid, bool
 
         # 获取出价前的排名情况（用于判断谁会被挤出）
         winner_count = slot.quantity
-        ranking_before = get_slot_ranking(slot)
+        if previous_bid:
+            ranking_before = get_slot_ranking(slot)
 
         # 如果已满员，记录当前第N名（可能会被挤出）
         player_to_kick = None
@@ -458,7 +493,7 @@ def place_bid(manor: Manor, slot_id: int, amount: int) -> Tuple[AuctionBid, bool
             status=AuctionBid.Status.ACTIVE,
         )
 
-        # 冻结金条
+        # 冻结金条（会在事务内做并发安全校验，避免超冻）
         freeze_gold_bars(manor, amount, new_bid)
 
         # 更新出价次数
@@ -490,7 +525,13 @@ def place_bid(manor: Manor, slot_id: int, amount: int) -> Tuple[AuctionBid, bool
                     pass
 
         # 更新 current_price 为当前最低中标价（便于前端显示）
-        slot.current_price = get_cutoff_price(slot)
+        # 直接使用 ranking_after 计算，避免再次调用 get_cutoff_price 重复查询
+        if len(ranking_after) >= winner_count:
+            slot.current_price = ranking_after[winner_count - 1].amount
+        elif ranking_after:
+            slot.current_price = ranking_after[-1].amount
+        else:
+            slot.current_price = slot.starting_price
 
         # 更新 highest_bidder 为当前第一名（便于兼容旧逻辑）
         if ranking_after:
@@ -523,64 +564,18 @@ def _notify_outbid_vickrey(
     )
 
     # WebSocket 即时推送
-    channel_layer = get_channel_layer()
-    if channel_layer:
-        payload = {
+    notify_user(
+        manor.user_id,
+        {
             "kind": "auction_outbid",
             "title": "【拍卖行】您已被挤出中标范围",
             "item_name": slot.item_template.name,
             "item_key": slot.item_template.key,
             "new_price": new_price,
             "winner_count": winner_count,
-        }
-        try:
-            async_to_sync(channel_layer.group_send)(
-                f"user_{manor.user_id}",
-                {"type": "notify.message", "payload": payload},
-            )
-        except Exception:
-            logger.warning(
-                f"Failed to send auction outbid notification to user {manor.user_id}",
-                exc_info=True,
-            )
-
-
-def _notify_outbid(
-    manor: Manor, slot: AuctionSlot, new_price: int, new_bidder: Manor
-) -> None:
-    """通知玩家被超越"""
-    create_message(
-        manor=manor,
-        kind="system",
-        title="【拍卖行】您的出价已被超越",
-        body=(
-            f"在 {slot.item_template.name} 的拍卖中，您的出价已被超越！\n\n"
-            f"最新价格：{new_price} 金条\n"
-            f"最高出价者：{new_bidder.name}\n\n"
-            f"您冻结的金条已自动退还，如需继续竞拍请尽快加价。"
-        ),
+        },
+        log_context="auction outbid notification",
     )
-
-    # WebSocket 即时推送
-    channel_layer = get_channel_layer()
-    if channel_layer:
-        payload = {
-            "kind": "auction_outbid",
-            "title": "【拍卖行】您的出价已被超越",
-            "item_name": slot.item_template.name,
-            "item_key": slot.item_template.key,
-            "new_price": new_price,
-        }
-        try:
-            async_to_sync(channel_layer.group_send)(
-                f"user_{manor.user_id}",
-                {"type": "notify.message", "payload": payload},
-            )
-        except Exception:
-            logger.warning(
-                f"Failed to send auction outbid notification to user {manor.user_id}",
-                exc_info=True,
-            )
 
 
 # ============ 结算逻辑 ============
@@ -801,9 +796,9 @@ def _send_winning_notification_vickrey(
     )
 
     # WebSocket 即时推送
-    channel_layer = get_channel_layer()
-    if channel_layer:
-        payload = {
+    notify_user(
+        winner.user_id,
+        {
             "kind": "auction_won",
             "title": "【拍卖行】恭喜您成功拍得物品",
             "item_name": slot.item_template.name,
@@ -811,17 +806,9 @@ def _send_winning_notification_vickrey(
             "quantity": 1,
             "price": settlement_price,
             "total_winners": total_winners,
-        }
-        try:
-            async_to_sync(channel_layer.group_send)(
-                f"user_{winner.user_id}",
-                {"type": "notify.message", "payload": payload},
-            )
-        except Exception:
-            logger.warning(
-                f"Failed to send auction won notification to user {winner.user_id}",
-                exc_info=True,
-            )
+        },
+        log_context="auction won notification",
+    )
 
 
 # ============ 查询接口 ============
@@ -838,7 +825,7 @@ def get_active_slots(
     Args:
         category: 物品类别筛选
         rarity: 稀有度筛选
-        order_by: 排序字段
+        order_by: 排序字段（支持字段名或 -字段名）
 
     Returns:
         拍卖位查询集
@@ -865,6 +852,25 @@ def get_active_slots(
     # 稀有度筛选
     if rarity and rarity != "all":
         queryset = queryset.filter(item_template__rarity=rarity)
+
+    # 安全校验：order_by字段白名单
+    # 规范化排序字符串，防止注入和无效输入
+    if not order_by or not isinstance(order_by, str):
+        order_by = "-current_price"
+    else:
+        # 只允许一个前导的减号
+        order_by = order_by.strip()
+        if order_by.startswith('-'):
+            field = order_by[1:]  # 移除前导'-'
+            # 检查字段是否在白名单中
+            if field not in ALLOWED_AUCTION_ORDER_BY:
+                order_by = "-current_price"
+            else:
+                order_by = f"-{field}"  # 重新构建安全的排序字符串
+        else:
+            # 没有前导'-'
+            if order_by not in ALLOWED_AUCTION_ORDER_BY:
+                order_by = "-current_price"
 
     return queryset.order_by(order_by)
 

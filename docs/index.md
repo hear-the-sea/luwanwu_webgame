@@ -12,6 +12,7 @@
 | [开发指南](development.md) | 环境搭建、命令行工具、调试技巧 | 所有开发者 |
 | [API 接口](api.md) | HTTP/WebSocket 接口规范 | 前端开发、测试 |
 | [数据库设计](database.md) | 数据模型、表结构、索引优化 | 后端开发、DBA |
+| [重构记录](refactor_notes.md) | 大文件拆分、常量/工具统一、兼容性约定 | 后端开发 |
 
 ---
 

@@ -14,6 +14,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from django.db import models, transaction
 from django.utils import timezone
 
+from common.utils.celery import safe_apply_async
+
 from core.utils.time_scale import scale_duration
 
 from ...constants import PVPConstants
@@ -162,9 +164,16 @@ def start_scout(attacker: Manor, defender: Manor) -> ScoutRecord:
     # 调度侦察完成任务
     try:
         from gameplay.tasks import complete_scout_task
-        complete_scout_task.apply_async(args=[record.id], countdown=travel_time)
     except Exception:
         logger.warning("complete_scout_task dispatch failed", exc_info=True)
+    else:
+        safe_apply_async(
+            complete_scout_task,
+            args=[record.id],
+            countdown=travel_time,
+            logger=logger,
+            log_message="complete_scout_task dispatch failed",
+        )
 
     return record
 
@@ -220,12 +229,16 @@ def finalize_scout(record: ScoutRecord, now=None) -> None:
     # 调度返程完成任务
     try:
         from gameplay.tasks import complete_scout_return_task
-        complete_scout_return_task.apply_async(
-            args=[locked_record.id],
-            countdown=locked_record.travel_time
-        )
     except Exception:
         logger.warning("complete_scout_return_task dispatch failed", exc_info=True)
+    else:
+        safe_apply_async(
+            complete_scout_return_task,
+            args=[locked_record.id],
+            countdown=locked_record.travel_time,
+            logger=logger,
+            log_message="complete_scout_return_task dispatch failed",
+        )
 
 
 def finalize_scout_return(record: ScoutRecord, now=None) -> None:
@@ -424,7 +437,14 @@ def request_scout_retreat(record: ScoutRecord) -> None:
     # 调度撤退返程完成任务
     try:
         from gameplay.tasks import complete_scout_return_task
-        countdown = max(1, elapsed)
-        complete_scout_return_task.apply_async(args=[locked_record.id], countdown=countdown)
     except Exception:
         logger.warning("complete_scout_return_task dispatch failed for retreat", exc_info=True)
+    else:
+        countdown = max(1, elapsed)
+        safe_apply_async(
+            complete_scout_return_task,
+            args=[locked_record.id],
+            countdown=countdown,
+            logger=logger,
+            log_message="complete_scout_return_task dispatch failed for retreat",
+        )

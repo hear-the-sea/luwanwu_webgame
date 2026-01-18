@@ -1,7 +1,5 @@
 from typing import Dict
 
-from gameplay.models import ResourceType
-
 MAX_SQUAD = 5
 MAX_ROUNDS = 32
 DEFAULT_BATTLE_TYPE = "skirmish"
@@ -11,8 +9,9 @@ BATTLE_TYPES: Dict[str, dict] = {
         "name": "乱军试炼",
         "description": "与乱军短兵相接，侦察敌情并掠夺补给",
         "loot_pool": {
-            ResourceType.GRAIN.value: 300,
-            ResourceType.SILVER.value: 200,
+            # Use literal resource keys to avoid importing gameplay at import-time (reduces app coupling).
+            "grain": 300,
+            "silver": 200,
         },
     },
     "task1": {

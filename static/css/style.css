@@ -719,6 +719,17 @@ button:disabled {
   font-size: 1.8rem;
 }
 
+.section-actions {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.section-actions form {
+  margin: 0;
+}
+
 .section-title h2 {
   font-size: 1.5rem;
 }
@@ -727,6 +738,32 @@ button:disabled {
   color: var(--text-muted);
   margin: 0.3rem 0 0;
   font-size: 0.9rem;
+}
+
+.form-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.form-select {
+  flex: 1;
+  min-width: 220px;
+  padding: 0.6rem 0.8rem;
+  border: 2px solid var(--border-primary);
+  border-radius: 6px;
+  background: var(--bg-hover);
+  font-size: 0.9rem;
+  font-family: inherit;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.form-select:focus {
+  outline: none;
+  border-color: var(--accent-gold);
+  box-shadow: 0 0 0 3px rgba(218, 165, 32, 0.2);
 }
 
 /* 英雄区块 */

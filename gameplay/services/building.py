@@ -5,11 +5,14 @@
 """
 
 import os
+import logging
 from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
 import yaml
 from django.conf import settings
+
+logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)
@@ -21,8 +24,15 @@ def load_building_templates() -> Dict[str, Any]:
         包含 categories 和 buildings 的字典
     """
     path = os.path.join(settings.BASE_DIR, "data", "building_templates.yaml")
-    with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        logger.error("building_templates.yaml not found: %s", path)
+        return {}
+    except Exception:
+        logger.exception("Failed to load building templates from %s", path)
+        return {}
 
 
 @lru_cache(maxsize=1)

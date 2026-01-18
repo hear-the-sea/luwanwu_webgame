@@ -8,21 +8,21 @@ heroes:
     flavor: 瓦岗军首领之一，率众起义。 出自《隋唐演义》。
     default_gender: male
     default_morality: 65
-    recruitable: false
+    recruitable: true
   - key: hero_dan_xiongxin
     name: 单雄信
     archetype: military
     flavor: 瓦岗豪杰，义气闻名。 出自《隋唐演义》。
     default_gender: male
     default_morality: 70
-    recruitable: false
+    recruitable: true
   - key: hero_wang_bodang
     name: 王伯当
     archetype: military
     flavor: 瓦岗军神射，智勇兼备。 出自《隋唐演义》。
     default_gender: male
     default_morality: 72
-    recruitable: false
+    recruitable: true
   blue:
   - key: hero_qin_shubao
     name: 秦叔宝
@@ -30,18 +30,18 @@ heroes:
     flavor: 隋唐名将，勇冠三军。 出自《隋唐演义》。
     default_gender: male
     default_morality: 80
-    recruitable: false
+    recruitable: true
   - key: hero_luo_cheng
     name: 罗成
     archetype: military
     flavor: 银枪白马，骁勇善战。 出自《隋唐演义》。
     default_gender: male
     default_morality: 75
-    recruitable: false
+    recruitable: true
   - key: hero_cheng_yaojin
     name: 程咬金
     archetype: military
     flavor: 号混世魔王，性格豪爽。 出自《隋唐演义》。
     default_gender: male
     default_morality: 70
-    recruitable: false
+    recruitable: true

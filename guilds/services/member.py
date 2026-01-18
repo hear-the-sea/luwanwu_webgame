@@ -2,31 +2,12 @@
 
 from django.db import transaction
 from django.utils import timezone
+from django.db.utils import IntegrityError
 from ..models import Guild, GuildMember, GuildApplication
 from gameplay.models import Manor
 from gameplay.services.messages import create_message
 from .guild import create_announcement
-
-
-def _get_active_membership(guild: Guild, user, error_msg: str = "您不是该帮会成员") -> GuildMember:
-    """
-    获取用户在指定帮会的有效成员记录
-
-    Args:
-        guild: 帮会对象
-        user: 用户对象
-        error_msg: 找不到成员时的错误消息
-
-    Returns:
-        GuildMember对象
-
-    Raises:
-        ValueError: 用户不是该帮会的活跃成员
-    """
-    try:
-        return GuildMember.objects.get(guild=guild, user=user, is_active=True)
-    except GuildMember.DoesNotExist:
-        raise ValueError(error_msg)
+from .utils import get_active_membership
 
 
 def apply_to_guild(user, guild, message=''):
@@ -88,66 +69,81 @@ def approve_application(application, reviewer, auto=False):
     Raises:
         ValueError: 验证失败
     """
-    if application.status != 'pending':
-        raise ValueError("申请已被处理")
-
-    guild = application.guild
-
-    # 验证帮会是否已满员
-    if guild.is_full:
-        raise ValueError("帮会已满员")
-
-    # 验证申请人是否已加入其他帮会
-    existing_membership = GuildMember.objects.filter(
-        user=application.applicant, is_active=True
-    ).first()
-    if existing_membership:
-        raise ValueError("申请人已加入其他帮会")
-
-    # 验证权限（非自动审批时）
-    if not auto:
-        membership = _get_active_membership(guild, reviewer, "您没有审批权限")
-        if not membership.can_manage:
-            raise ValueError("您没有审批权限")
-
     with transaction.atomic():
+        # 锁定申请行，避免并发重复处理
+        application_locked = (
+            GuildApplication.objects.select_for_update()
+            .select_related("guild", "applicant")
+            .get(pk=application.pk)
+        )
+        if application_locked.status != "pending":
+            raise ValueError("申请已被处理")
+
+        guild = application_locked.guild
+
+        # 锁定帮会行，串行化审批，避免并发超员
+        guild_locked = Guild.objects.select_for_update().get(pk=guild.pk)
+
+        # 验证权限（非自动审批时）
+        if not auto:
+            membership = get_active_membership(guild_locked, reviewer, "您没有审批权限")
+            if not membership.can_manage:
+                raise ValueError("您没有审批权限")
+
+        # 在锁内检查是否满员
+        current_count = GuildMember.objects.filter(guild=guild_locked, is_active=True).count()
+        if current_count >= guild_locked.member_capacity:
+            raise ValueError("帮会已满员")
+
+        # 验证申请人是否已加入其他帮会
+        existing_membership = (
+            GuildMember.objects.select_for_update()
+            .filter(user=application_locked.applicant, is_active=True)
+            .first()
+        )
+        if existing_membership:
+            raise ValueError("申请人已加入其他帮会")
+
         # 更新申请状态
-        application.status = 'approved'
-        application.reviewed_by = reviewer
-        application.reviewed_at = timezone.now()
-        application.save()
+        application_locked.status = "approved"
+        application_locked.reviewed_by = reviewer
+        application_locked.reviewed_at = timezone.now()
+        application_locked.save(update_fields=["status", "reviewed_by", "reviewed_at"])
 
         # 创建或更新成员记录
         # 由于GuildMember.user是OneToOneField，需要处理已存在的记录
-        try:
-            member = GuildMember.objects.get(user=application.applicant)
+        member_record = GuildMember.objects.select_for_update().filter(user=application_locked.applicant).first()
+        if member_record:
             # 如果用户之前有记录（退帮后重新加入），更新记录
-            member.guild = guild
-            member.position = 'member'
-            member.is_active = True
-            member.joined_at = timezone.now()
-            member.left_at = None
-            member.save()
-        except GuildMember.DoesNotExist:
-            # 如果是新成员，创建记录
-            GuildMember.objects.create(
-                guild=guild,
-                user=application.applicant,
-                position='member',
-            )
+            member_record.guild = guild_locked
+            member_record.position = "member"
+            member_record.is_active = True
+            member_record.joined_at = timezone.now()
+            member_record.left_at = None
+            member_record.save(update_fields=["guild", "position", "is_active", "joined_at", "left_at"])
+        else:
+            # 如果是新成员，创建记录（并发下可能触发唯一约束）
+            try:
+                GuildMember.objects.create(
+                    guild=guild_locked,
+                    user=application_locked.applicant,
+                    position="member",
+                )
+            except IntegrityError:
+                raise ValueError("申请人已加入其他帮会")
 
         # 发送系统消息给申请人
-        applicant_manor = Manor.objects.get(user=application.applicant)
+        applicant_manor = Manor.objects.get(user=application_locked.applicant)
         create_message(
             manor=applicant_manor,
             kind='system',
             title='入帮申请通过',
-            body=f"您的入帮申请已通过，欢迎加入【{guild.name}】！",
+            body=f"您的入帮申请已通过，欢迎加入【{guild_locked.name}】！",
         )
 
         # 发布帮会公告
         create_announcement(
-            guild,
+            guild_locked,
             'system',
             f"欢迎新成员{applicant_manor.display_name}加入帮会！",
         )
@@ -165,25 +161,30 @@ def reject_application(application, reviewer, note=''):
     Raises:
         ValueError: 验证失败
     """
-    if application.status != 'pending':
-        raise ValueError("申请已被处理")
-
-    # 验证权限
-    membership = _get_active_membership(application.guild, reviewer, "您没有审批权限")
-    if not membership.can_manage:
-        raise ValueError("您没有审批权限")
-
     with transaction.atomic():
+        application_locked = (
+            GuildApplication.objects.select_for_update()
+            .select_related("guild", "applicant")
+            .get(pk=application.pk)
+        )
+        if application_locked.status != "pending":
+            raise ValueError("申请已被处理")
+
+        # 验证权限（锁内读取，避免跨帮会越权/并发状态异常）
+        membership = get_active_membership(application_locked.guild, reviewer, "您没有审批权限")
+        if not membership.can_manage:
+            raise ValueError("您没有审批权限")
+
         # 更新申请状态
-        application.status = 'rejected'
-        application.reviewed_by = reviewer
-        application.reviewed_at = timezone.now()
-        application.review_note = note
-        application.save()
+        application_locked.status = "rejected"
+        application_locked.reviewed_by = reviewer
+        application_locked.reviewed_at = timezone.now()
+        application_locked.review_note = note
+        application_locked.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_note"])
 
         # 发送系统消息给申请人
         create_message(
-            manor=Manor.objects.get(user=application.applicant),
+            manor=Manor.objects.get(user=application_locked.applicant),
             kind='system',
             title='入帮申请被拒绝',
             body=f"您的入帮申请被拒绝。\n拒绝原因：{note if note else '无'}",
@@ -234,7 +235,7 @@ def kick_member(target_member, operator):
         ValueError: 验证失败
     """
     # 验证权限
-    operator_member = _get_active_membership(target_member.guild, operator, "您没有辞退权限")
+    operator_member = get_active_membership(target_member.guild, operator, "您没有辞退权限")
     if not operator_member.can_manage:
         raise ValueError("您没有辞退权限")
 
@@ -283,7 +284,7 @@ def appoint_admin(target_member, operator):
         ValueError: 验证失败
     """
     # 验证权限（只有帮主可任命）
-    operator_member = _get_active_membership(target_member.guild, operator, "只有帮主可以任命管理员")
+    operator_member = get_active_membership(target_member.guild, operator, "只有帮主可以任命管理员")
     if not operator_member.is_leader:
         raise ValueError("只有帮主可以任命管理员")
 
@@ -332,7 +333,7 @@ def demote_admin(target_member, operator):
         ValueError: 验证失败
     """
     # 验证权限（只有帮主可罢免）
-    operator_member = _get_active_membership(target_member.guild, operator, "只有帮主可以罢免管理员")
+    operator_member = get_active_membership(target_member.guild, operator, "只有帮主可以罢免管理员")
     if not operator_member.is_leader:
         raise ValueError("只有帮主可以罢免管理员")
 

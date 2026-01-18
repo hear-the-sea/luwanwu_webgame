@@ -1,7 +1,7 @@
 import pytest
 from django.utils import timezone
 
-from gameplay.services import ensure_manor
+from gameplay.services.manor import ensure_manor
 from guests.services import (
     ensure_auto_training,
     finalize_candidate,

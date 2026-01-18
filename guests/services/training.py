@@ -4,7 +4,8 @@
 
 from __future__ import annotations
 
-from typing import Dict
+import logging
+from typing import TYPE_CHECKING, Dict
 
 from django.db import transaction
 from django.utils import timezone
@@ -14,12 +15,64 @@ from core.exceptions import (
     GuestMaxLevelError,
     GuestTrainingInProgressError,
 )
-from gameplay import services as gameplay_services
-from gameplay.models import Manor, ResourceEvent
+
+if TYPE_CHECKING:
+    from gameplay.models import Manor
 
 from ..models import MAX_GUEST_LEVEL, RARITY_SKILL_POINT_GAINS, Guest, GuestStatus, TrainingLog
 from ..utils.training_calculator import get_level_up_cost, get_training_duration
 from ..utils.training_timer import ensure_training_timer, remaining_training_seconds
+
+logger = logging.getLogger(__name__)
+
+try:
+    from celery.exceptions import CeleryError
+except ImportError:  # pragma: no cover
+    class CeleryError(Exception):
+        pass
+
+try:
+    from kombu.exceptions import OperationalError as KombuOperationalError
+except ImportError:  # pragma: no cover
+    KombuOperationalError = OSError
+
+
+def _try_enqueue_complete_guest_training(guest: Guest, *, countdown: int, source: str) -> None:
+    try:
+        from guests.tasks import complete_guest_training
+    except ImportError:
+        logger.warning(
+            "Failed to import celery task; finalize guest training immediately",
+            extra={"guest_id": guest.id, "source": source},
+            exc_info=True,
+        )
+        # 仅在开发/测试环境下允许瞬间完成训练
+        # 生产环境应该保持 training_complete_at，依赖定时任务结算
+        from django.conf import settings
+        if settings.DEBUG:
+            logger.debug("DEBUG模式：允许瞬间完成训练")
+            finalize_guest_training(guest, now=guest.training_complete_at)
+        else:
+            # 生产环境：保持训练时间不变，让定时任务处理
+            logger.warning("生产环境：保持训练完成时间，等待定时任务结算")
+        return
+
+    try:
+        complete_guest_training.apply_async(args=[guest.id], countdown=countdown, queue="timer")
+    except (CeleryError, KombuOperationalError, OSError, ConnectionError, TimeoutError):
+        logger.warning(
+            "Failed to enqueue guest training task; finalize guest training immediately",
+            extra={"guest_id": guest.id, "countdown": countdown, "source": source},
+            exc_info=True,
+        )
+        # 仅在开发/测试环境下允许瞬间完成训练
+        from django.conf import settings
+        if settings.DEBUG:
+            logger.debug("DEBUG模式：允许瞬间完成训练")
+            finalize_guest_training(guest, now=guest.training_complete_at)
+        else:
+            # 生产环境：保持训练时间不变，让定时任务处理
+            logger.warning("生产环境：保持训练完成时间，等待定时任务结算")
 
 
 def ensure_auto_training(guest: Guest) -> None:
@@ -35,13 +88,13 @@ def ensure_auto_training(guest: Guest) -> None:
     guest.training_target_level = target_level
     guest.training_complete_at = timezone.now() + timezone.timedelta(seconds=duration)
     guest.save(update_fields=["training_target_level", "training_complete_at"])
-    from guests.tasks import complete_guest_training
 
     def enqueue_training():
-        try:
-            complete_guest_training.apply_async(args=[guest.id], countdown=max(0, int(duration)), queue="timer")
-        except Exception:
-            finalize_guest_training(guest, now=guest.training_complete_at)
+        _try_enqueue_complete_guest_training(
+            guest,
+            countdown=max(0, int(duration)),
+            source="ensure_auto_training",
+        )
 
     transaction.on_commit(enqueue_training)
 
@@ -161,15 +214,14 @@ def reduce_training_time_for_guest(guest: Guest, seconds: int) -> Dict[str, int]
         ensure_auto_training(guest)
         guest.refresh_from_db()
     if guest.training_complete_at:
-        from guests.tasks import complete_guest_training
-
         countdown = max(0, int((guest.training_complete_at - timezone.now()).total_seconds()))
 
         def enqueue_training():
-            try:
-                complete_guest_training.apply_async(args=[guest.id], countdown=countdown, queue="timer")
-            except Exception:
-                finalize_guest_training(guest, now=guest.training_complete_at)
+            _try_enqueue_complete_guest_training(
+                guest,
+                countdown=countdown,
+                source="reduce_training_time_for_guest",
+            )
 
         transaction.on_commit(enqueue_training)
     return {
@@ -211,7 +263,10 @@ def train_guest(guest: Guest, levels: int = 1) -> Guest:
         levels = MAX_GUEST_LEVEL - locked_guest.level
     manor = locked_guest.manor
     cost = get_level_up_cost(locked_guest, levels)
-    gameplay_services.spend_resources(
+    from gameplay.models import ResourceEvent
+    from gameplay.services.resources import spend_resources
+
+    spend_resources(
         manor,
         cost,
         note=f"培养 {guest.template.name}",
@@ -222,18 +277,14 @@ def train_guest(guest: Guest, levels: int = 1) -> Guest:
     locked_guest.training_complete_at = timezone.now() + timezone.timedelta(seconds=duration)
     locked_guest.save(update_fields=["training_target_level", "training_complete_at"])
     TrainingLog.objects.create(manor=manor, guest=locked_guest, delta_level=levels, resource_cost=cost)
-    from guests.tasks import complete_guest_training
 
     # Celery 不可用时直接完成训练，确保调用方立即看到等级变更（测试/开发环境友好）。
     def enqueue_training():
-        try:
-            complete_guest_training.apply_async(
-                args=[locked_guest.id],
-                countdown=max(0, int(duration)),
-                queue="timer",
-            )
-        except Exception:
-            finalize_guest_training(locked_guest, now=locked_guest.training_complete_at)
+        _try_enqueue_complete_guest_training(
+            locked_guest,
+            countdown=max(0, int(duration)),
+            source="train_guest",
+        )
 
     transaction.on_commit(enqueue_training)
     return locked_guest

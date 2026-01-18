@@ -1,0 +1,43 @@
+from __future__ import annotations
+
+from django.contrib.auth import get_user_model
+from django.contrib.messages.storage.fallback import FallbackStorage
+from django.contrib.sessions.middleware import SessionMiddleware
+from django.core.cache import cache
+from django.http import HttpResponse
+from django.test import RequestFactory, TestCase
+
+from core.utils.rate_limit import rate_limit_redirect
+
+
+User = get_user_model()
+
+
+def _attach_session_and_messages(request):
+    SessionMiddleware(lambda req: None).process_request(request)
+    request.session.save()
+    request._messages = FallbackStorage(request)
+
+
+@rate_limit_redirect("test_rate_limit", limit=1, window_seconds=60, redirect_url="/rate-limit")
+def _limited_view(request):
+    return HttpResponse("ok")
+
+
+class RateLimitRedirectTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.factory = RequestFactory()
+        self.user = User.objects.create_user(username="tester", password="pass")
+
+    def test_rate_limit_redirect_triggers(self):
+        request = self.factory.post("/test")
+        request.user = self.user
+        _attach_session_and_messages(request)
+
+        response = _limited_view(request)
+        self.assertEqual(response.status_code, 200)
+
+        response = _limited_view(request)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/rate-limit")

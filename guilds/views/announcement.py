@@ -7,22 +7,20 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.views.decorators.http import require_POST
 
+from core.utils.rate_limit import rate_limit_redirect
+from ..decorators import require_guild_member, require_guild_leader
 from ..services import guild as guild_service
 
+
 @login_required
+@require_guild_member
 def announcement_list(request):
     """公告列表"""
-    user = request.user
-
-    if not hasattr(user, 'guild_membership') or not user.guild_membership.is_active:
-        messages.error(request, '您不在帮会中')
-        return redirect('guilds:hall')
-
-    member = user.guild_membership
+    member = request.guild_member
     guild = member.guild
 
     # 获取公告列表
-    announcements = guild.announcements.all()[:30]
+    announcements = guild.announcements.select_related("author__manor").all()[:30]
 
     context = {
         'guild': guild,
@@ -34,21 +32,12 @@ def announcement_list(request):
 
 
 @login_required
+@require_guild_leader
 @require_POST
+@rate_limit_redirect("guild_announcement", limit=5, window_seconds=60)
 def create_announcement(request):
-    """创建公告"""
-    user = request.user
-
-    if not hasattr(user, 'guild_membership') or not user.guild_membership.is_active:
-        messages.error(request, '您不在帮会中')
-        return redirect('guilds:hall')
-
-    member = user.guild_membership
-
-    if not member.is_leader:
-        messages.error(request, '只有帮主可以发布公告')
-        return redirect('guilds:announcements')
-
+    """创建公告（仅帮主）"""
+    member = request.guild_member
     content = request.POST.get('content', '').strip()
 
     if not content:
@@ -59,9 +48,8 @@ def create_announcement(request):
         member.guild,
         'leader',
         content,
-        user
+        request.user
     )
 
     messages.success(request, '公告发布成功')
     return redirect('guilds:announcements')
-

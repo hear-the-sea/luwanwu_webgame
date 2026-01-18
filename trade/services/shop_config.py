@@ -87,7 +87,7 @@ def get_base_price(item_key: str) -> int | None:
         return config.price
 
     try:
-        template = ItemTemplate.objects.get(key=item_key)
+        template = ItemTemplate.objects.only("price").get(key=item_key)
         return template.price
     except ItemTemplate.DoesNotExist:
         return None

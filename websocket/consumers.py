@@ -11,7 +11,9 @@ Classes:
 from __future__ import annotations
 
 import asyncio
+import html
 import json
+import logging
 import re
 import time
 
@@ -20,13 +22,15 @@ from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db import DatabaseError
 from django_redis import get_redis_connection
+from redis.exceptions import RedisError
 
-from gameplay.models import Manor
-from gameplay.services.inventory import get_item_quantity, consume_inventory_item
 from core.exceptions import InsufficientStockError
 
 User = get_user_model()
+
+logger = logging.getLogger(__name__)
 
 
 class NotificationConsumer(AsyncJsonWebsocketConsumer):
@@ -307,7 +311,9 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
         cutoff = float(now_ts) - float(self.ONLINE_USERS_TTL)
         try:
             return int(redis.zremrangebyscore(self.ONLINE_USERS_KEY, "-inf", cutoff) or 0)
-        except Exception:
+        except RedisError as exc:
+            # Expected infra failure: Redis may be temporarily unavailable; keep the WS consumer alive.
+            logger.warning("Online stats Redis cleanup failed; skipping (cutoff=%s): %s", cutoff, exc)
             return 0
 
     def _get_online_count_sync(self) -> int:
@@ -362,8 +368,13 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
                 await self.touch_online_user(self.user_id)
             except asyncio.CancelledError:
                 return
+            except RedisError as exc:
+                # Expected infra failure: keep retrying in the next tick.
+                logger.debug("Online stats heartbeat Redis error; will retry: %s", exc)
+                continue
             except Exception:
-                # Do not crash the consumer on transient Redis/cache errors.
+                # Unexpected failure: log full traceback but keep the socket alive.
+                logger.exception("Unexpected error in online stats heartbeat loop")
                 continue
 
     async def get_stats(self):
@@ -373,10 +384,24 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
         Returns:
             Dict with "online_count" and "total_count" keys
         """
-        online_count = await sync_to_async(
-            self._get_online_count_sync, thread_sensitive=True
-        )()
-        total_count = await self.get_total_users()
+        # Keep stats best-effort: avoid killing the WS connection on Redis/DB issues.
+        try:
+            online_count = await sync_to_async(self._get_online_count_sync, thread_sensitive=True)()
+        except RedisError as exc:
+            logger.warning("Online stats Redis read failed; reporting 0 online users: %s", exc)
+            online_count = 0
+        except Exception:
+            logger.exception("Unexpected error while getting online count; reporting 0 online users")
+            online_count = 0
+
+        try:
+            total_count = await self.get_total_users()
+        except DatabaseError as exc:
+            logger.warning("Online stats DB read failed; reporting 0 total users: %s", exc)
+            total_count = 0
+        except Exception:
+            logger.exception("Unexpected error while getting total users; reporting 0 total users")
+            total_count = 0
 
         return {
             "online_count": online_count,
@@ -400,7 +425,13 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
             return int(cached_total)
 
         # Cache miss - query database and cache the result
-        total = User.objects.filter(is_staff=False, is_superuser=False).count()
+        try:
+            total = User.objects.filter(is_staff=False, is_superuser=False).count()
+        except DatabaseError as exc:
+            # Expected infra failure: DB might be temporarily unavailable.
+            logger.warning("Failed to COUNT total users; returning 0: %s", exc)
+            return 0
+
         cache.set(self.TOTAL_COUNT_CACHE_KEY, total, timeout=self.TOTAL_COUNT_CACHE_TTL)
 
         return total
@@ -471,60 +502,90 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
         await self.channel_layer.group_discard(self.GROUP_NAME, self.channel_name)
 
     async def receive_json(self, content, **kwargs):
-        msg_type = content.get("type")
+        # Defensive boundary: never let exceptions bubble up and kill the WS connection.
+        try:
+            msg_type = content.get("type")
 
-        if msg_type == "ping":
-            await self.send_json({"type": "pong"})
-            return
+            if msg_type == "ping":
+                await self.send_json({"type": "pong"})
+                return
 
-        if msg_type != "send":
-            return
+            if msg_type != "send":
+                return
 
-        raw_text = content.get("text", "")
-        if not isinstance(raw_text, str):
-            await self.send_json({"type": "error", "code": "invalid_text", "message": "消息格式错误"})
-            return
+            raw_text = content.get("text", "")
+            if not isinstance(raw_text, str):
+                await self.send_json({"type": "error", "code": "invalid_text", "message": "消息格式错误"})
+                return
 
-        text = self._normalize_text(raw_text)
-        if not text:
-            return
+            text = self._normalize_text(raw_text)
+            if not text:
+                return
 
-        if len(text) > self.MESSAGE_MAX_LEN:
-            text = text[: self.MESSAGE_MAX_LEN]
+            if len(text) > self.MESSAGE_MAX_LEN:
+                text = text[: self.MESSAGE_MAX_LEN]
 
-        allowed, retry_after = await self._rate_limit(self.user_id)
-        if not allowed:
-            tip = "发送太快，请稍候再试"
-            if retry_after:
-                tip = f"发送太快，请 {retry_after}s 后再试"
-            await self.send_json({"type": "error", "code": "rate_limited", "message": tip})
-            return
+            allowed, retry_after = await self._rate_limit(self.user_id)
+            if not allowed:
+                tip = "发送太快，请稍候再试"
+                if retry_after:
+                    tip = f"发送太快，请 {retry_after}s 后再试"
+                await self.send_json({"type": "error", "code": "rate_limited", "message": tip})
+                return
 
-        # 检查并扣除小喇叭道具
-        success, error_msg = await self._consume_trumpet()
-        if not success:
-            await self.send_json({"type": "error", "code": "no_trumpet", "message": error_msg})
-            return
+            # 检查并扣除小喇叭道具
+            success, error_msg = await self._consume_trumpet()
+            if not success:
+                await self.send_json({"type": "error", "code": "no_trumpet", "message": error_msg})
+                return
 
-        message = await self._build_message(text)
-        await self._append_history(message)
+            message = await self._build_message(text)
+            await self._append_history(message)
 
-        await self.channel_layer.group_send(
-            self.GROUP_NAME,
-            {
-                "type": "chat_message",
-                "payload": message,
-            },
-        )
+            await self.channel_layer.group_send(
+                self.GROUP_NAME,
+                {
+                    "type": "chat_message",
+                    "payload": message,
+                },
+            )
+        except asyncio.CancelledError:
+            raise
+        except (ValueError, TypeError) as exc:
+            # Expected input/serialization errors: log and keep the socket alive.
+            logger.info("World chat message rejected due to invalid payload: %s", exc)
+            await self.send_json({"type": "error", "code": "invalid_payload", "message": "消息格式错误"})
+        except Exception:
+            # Unexpected errors: record full stack for debugging, but do not drop the WS connection.
+            logger.exception("Unexpected error handling world chat message")
+            await self.send_json({"type": "error", "code": "server_error", "message": "服务器错误，请稍后重试"})
 
     async def chat_message(self, event):
         await self.send_json(event.get("payload", {}))
 
     def _normalize_text(self, text: str) -> str:
-        # Strip control chars, normalize newlines, and trim.
+        """
+        清理和规范化聊天消息文本。
+
+        安全措施：
+        1. 转义HTML特殊字符，防止XSS攻击
+        2. 移除控制字符
+        3. 规范化换行符
+        4. 限制空行数量
+
+        Args:
+            text: 原始消息文本
+
+        Returns:
+            清理后的安全文本
+        """
+        # 首先转义HTML特殊字符（防止XSS攻击）
+        text = html.escape(text)
+
+        # 移除控制字符，规范化换行符，并修剪空格
         cleaned = self._re_control_chars.sub("", text)
         cleaned = cleaned.replace("\r\n", "\n").replace("\r", "\n")
-        # Limit excessive blank lines
+        # 限制过多的空行（最多3个连续换行）
         cleaned = re.sub(r"\n{4,}", "\n\n\n", cleaned)
         return cleaned.strip()
 
@@ -535,14 +596,20 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
     def _get_display_name(self, user_id: int) -> str:
         try:
             user = User.objects.select_related("manor").get(id=user_id)
-        except Exception:
+        except User.DoesNotExist:
+            logger.info("World chat user not found when resolving display name: user_id=%s", user_id)
+            return "未知玩家"
+        except DatabaseError:
+            logger.exception("Database error when resolving world chat display name: user_id=%s", user_id)
             return "未知玩家"
 
         manor = getattr(user, "manor", None)
         if manor is not None:
             try:
                 return str(manor.display_name)
-            except Exception:
+            except (AttributeError, TypeError, ValueError) as exc:
+                # Expected formatting issues: fall back to user names.
+                logger.debug("Invalid manor display_name for world chat user_id=%s: %s", user_id, exc)
                 pass
 
         return user.get_full_name() or user.username or "玩家"
@@ -555,6 +622,10 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
         Returns:
             (success, error_message): 成功返回 (True, "")，失败返回 (False, 错误信息)
         """
+        # Lazy import to avoid pulling Django models/services into ASGI startup unless needed.
+        from gameplay.models import Manor
+        from gameplay.services.inventory import consume_inventory_item, get_item_quantity
+
         try:
             manor = Manor.objects.get(user_id=self.user_id)
         except Manor.DoesNotExist:
@@ -568,7 +639,16 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
             consume_inventory_item(manor, self.TRUMPET_ITEM_KEY, 1)
         except InsufficientStockError:
             return False, "小喇叭不足，无法在世界频道发言"
+        except ValueError as exc:
+            # Expected business/input error: invalid item key/quantity should not crash WS.
+            logger.warning("Failed to consume trumpet due to invalid input: %s", exc)
+            return False, "扣除小喇叭失败，请稍后重试"
+        except DatabaseError:
+            # Infra error: log full traceback for debugging but keep user experience stable.
+            logger.exception("Database error when consuming trumpet for user_id=%s", self.user_id)
+            return False, "扣除小喇叭失败，请稍后重试"
         except Exception:
+            logger.exception("Unexpected error when consuming trumpet for user_id=%s", self.user_id)
             return False, "扣除小喇叭失败，请稍后重试"
 
         return True, ""
@@ -578,7 +658,9 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
         cutoff_ms = int((time.time() - float(self.HISTORY_MESSAGE_TTL_SECONDS)) * 1000)
         try:
             raw_items = redis.lrange(self.HISTORY_KEY, 0, max(0, self.HISTORY_ON_CONNECT - 1))
-        except Exception:
+        except RedisError as exc:
+            # Expected infra failure: history is best-effort.
+            logger.warning("World chat history Redis read failed; returning empty history: %s", exc)
             return []
 
         messages: list[dict] = []
@@ -593,13 +675,21 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
                 if isinstance(ts, (int, float)) and int(ts) < cutoff_ms:
                     continue
                 messages.append(msg)
+            except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+                # Expected data issues: history entries may be corrupted/partial; skip safely.
+                logger.debug("Skipping malformed world chat history entry: %s", exc)
+                continue
             except Exception:
+                logger.exception("Unexpected error while parsing world chat history entry")
                 continue
 
         # Best-effort cleanup to avoid returning stale tail entries after long idle periods.
         try:
             self._trim_history_by_time_sync(cutoff_ms)
+        except RedisError as exc:
+            logger.debug("World chat history trim skipped due to Redis error: %s", exc)
         except Exception:
+            logger.exception("Unexpected error while trimming world chat history")
             pass
         return messages
 
@@ -624,9 +714,12 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
                 ts = msg.get("ts") if isinstance(msg, dict) else None
                 if isinstance(ts, (int, float)) and int(ts) >= int(cutoff_ms):
                     return
-            except Exception:
+            except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
                 # Corrupted tail entry: drop it to keep the list healthy.
+                logger.debug("Dropping corrupted world chat history tail entry: %s", exc)
                 pass
+            except Exception:
+                logger.exception("Unexpected error while trimming world chat history tail entry")
             redis.rpop(self.HISTORY_KEY)
 
     def _append_history_sync(self, message: dict) -> None:
@@ -644,8 +737,12 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
     async def _append_history(self, message: dict) -> None:
         try:
             await sync_to_async(self._append_history_sync, thread_sensitive=True)(message)
-        except Exception:
+        except RedisError as exc:
             # Best-effort: chat should still work even if history write fails.
+            logger.debug("World chat history write skipped due to Redis error: %s", exc)
+            return
+        except Exception:
+            logger.exception("Unexpected error while appending world chat history")
             return
 
     def _rate_limit_sync(self, user_id: int | None) -> tuple[bool, int | None]:
@@ -660,8 +757,9 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
             count = int(redis.incr(key) or 0)
             if count == 1:
                 redis.expire(key, self.RATE_LIMIT_WINDOW_SECONDS + 2)
-        except Exception:
+        except RedisError as exc:
             # If Redis has issues, fall back to allowing the message (avoid false negatives).
+            logger.debug("World chat rate limit Redis error; allowing message: %s", exc)
             return True, None
 
         if count > self.RATE_LIMIT_MAX_MESSAGES:
@@ -675,7 +773,8 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
         redis = self._get_redis()
         try:
             return int(redis.incr(self.NEXT_ID_KEY) or 0)
-        except Exception:
+        except RedisError as exc:
+            logger.debug("World chat next_id Redis error; falling back to timestamp: %s", exc)
             return int(time.time() * 1000)
 
     async def _build_message(self, text: str) -> dict:

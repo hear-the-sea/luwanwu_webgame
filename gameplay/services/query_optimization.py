@@ -105,7 +105,7 @@ def optimize_guest_queryset(queryset: "QuerySet") -> "QuerySet":
         "manor"
     ).prefetch_related(
         "gear_items__template",
-        "skills__skill"
+        "guest_skills__skill"
     )
 
 

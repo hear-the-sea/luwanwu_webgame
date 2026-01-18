@@ -1,0 +1,664 @@
+# 历史人物门客 - 先秦时期（第03批：蓝色55人）
+
+heroes:
+  blue:
+  - key: hist_xianqin_0095
+    name: 闵损
+    archetype: civil
+    flavor: '（前536年—前487年）孝行感人，德行典范。他是孔门弟子，以德行著称。继母虐待，他不愿父亲休妻，曰"母在一子单，母去三子寒"。这份孝心感动继母，从此一家和睦。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 56
+      defense: 20
+      agility: 14
+  - key: hist_xianqin_0096
+    name: 冉雍
+    archetype: civil
+    flavor: '（前522年—?）仲弓之德，可使南面。孔子评价他"雍也可使南面"，意思是可以做君主。他出身低微，却有君子之德。宽厚和平，不求名利，是儒家德行的典范。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 56
+      defense: 20
+      agility: 14
+  - key: hist_xianqin_0097
+    name: 冉耕
+    archetype: civil
+    flavor: '（约前544年—约前480年）德行高洁，身患恶疾。他是孔门弟子，以德行见长。不幸身患恶疾，孔子执其手叹曰"亡之！命矣夫！"其德行之美，令夫子痛惜其命运之蹇。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 58
+      defense: 20
+      agility: 14
+  - key: hist_xianqin_0098
+    name: 原宪
+    archetype: civil
+    flavor: '（约前515年—?）安贫乐道，甘于淡泊。他是孔子弟子，孔子死后隐居草泽，虽贫穷至极仍不改其志。子贡富贵来访，他"正冠"而出，展现士人风骨。安贫乐道的典范。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 58
+      defense: 20
+      agility: 14
+  - key: hist_xianqin_0099
+    name: 漆雕开
+    archetype: civil
+    flavor: '（前540年—?）求道不仕，学而不厌。孔子让他出仕，他说"吾斯之未能信"，表示还未做好准备。这份谦虚与求道之心，得到孔子赞赏。漆雕开代表了儒家重学轻仕的一面。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 58
+      defense: 20
+      agility: 14
+  - key: hist_xianqin_0100
+    name: 公西赤
+    archetype: civil
+    flavor: '（前509年—?）礼仪专家，外交之才。他精通礼仪，善于应对。孔子评价他"束带立于朝，可使与宾客言"。他是孔门中礼学的代表人物。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 56
+      defense: 20
+      agility: 14
+  - key: hist_xianqin_0101
+    name: 樊须
+    archetype: civil
+    flavor: '（前515年—?）三问知仁，好农失雅。他三次问仁，孔子分别答以"爱人"、"居处恭"、"先难而后获"。他请学稼，被孔子批评为"小人"。但他的提问，引出了孔子关于仁的重要论述。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 54
+      defense: 20
+      agility: 14
+  - key: hist_xianqin_0102
+    name: 澹台灭明
+    archetype: civil
+    flavor: '（前512年—?）以貌取人，失之子羽。他貌丑而德高，孔子初时轻视，后叹曰"以貌取人，失之子羽"。他南游至吴，从学者三百人，声名远播。不可以貌取人，澹台灭明是最好的注脚。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 56
+      defense: 20
+      agility: 14
+  - key: hist_xianqin_0103
+    name: 庆忌
+    archetype: military
+    flavor: '（?—前515年）吴国勇士，万夫莫敌。他是吴王僚之子，勇力过人，能"走追奔兽，手接飞鸟"。父死后流亡国外，图谋复仇，却被要离刺杀。庆忌之勇，冠绝吴国，可惜死于阴谋。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 48
+      intellect: 10
+      defense: 24
+      agility: 18
+  - key: hist_xianqin_0104
+    name: 韩起
+    archetype: civil
+    flavor: '（?—前514年）韩宣子，春秋名臣。他执政晋国二十年，"韩宣子之誉"成为贤相代名词。他在郑国看到《易象》与《鲁春秋》，叹"周礼尽在鲁矣"。韩氏始祖。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 52
+      defense: 20
+      agility: 14
+  - key: hist_xianqin_0105
+    name: 魏舒
+    archetype: military
+    flavor: '（?—前509年）魏献子，毁车为行。他在与狄人作战时，果断毁车为步卒，大破敌军。这一战术革新，开春秋步兵战之先。魏氏始祖之一。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 42
+      intellect: 14
+      defense: 26
+      agility: 18
+  - key: hist_xianqin_0106
+    name: 钟子期
+    archetype: civil
+    flavor: '（生卒年不详）知音难觅，伯牙绝弦。他是樵夫，却能听懂伯牙琴声中的高山流水。子期死后，伯牙摔琴绝弦，再不复弹。知音之交，钟子期与伯牙的故事成为千古绝唱。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 58
+      defense: 18
+      agility: 16
+  - key: hist_xianqin_0107
+    name: 伯牙
+    archetype: civil
+    flavor: '（生卒年不详）高山流水，觅知音。他是春秋时期著名琴师，琴艺高超。他与钟子期的知音之交，成为中国文化中最动人的友谊象征。子期死后，伯牙破琴绝弦，终身不复鼓琴。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 58
+      defense: 18
+      agility: 16
+  - key: hist_xianqin_0108
+    name: 史鱼
+    archetype: civil
+    flavor: '（?—前502年）尸谏之臣，正直典范。他是卫国大夫，屡谏卫灵公不纳。临终嘱咐儿子不要正殓，以"尸谏"之礼促使灵公反省。孔子赞其"直哉史鱼"。正直之士的极致。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 56
+      defense: 22
+      agility: 12
+  - key: hist_xianqin_0109
+    name: 蘧瑗
+    archetype: civil
+    flavor: '（约前585年—约前484年）卫国君子，五十知非。他年五十而知四十九年之非，不断自省进步。孔子赞其为君子，多次称道其德行。"行年五十而知四十九年非"成为自省的代名词。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 58
+      defense: 22
+      agility: 12
+  - key: hist_xianqin_0110
+    name: 郭偃
+    archetype: civil
+    flavor: '（生卒年不详）晋国巫史，料事如神。他善于占卜预测，辅佐晋献公。他预言"献公之子，皆弗得立"，后来果然应验。他的预言能力，为后世津津乐道。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 58
+      defense: 20
+      agility: 14
+  - key: hist_xianqin_0111
+    name: 卜偃
+    archetype: civil
+    flavor: '（生卒年不详）晋国太卜，预言骊姬之乱。他多次预言晋国大事，皆应验如神。他警告献公骊姬必乱晋国，可惜不被采纳。春秋时期著名的占卜师。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 58
+      defense: 20
+      agility: 14
+  - key: hist_xianqin_0112
+    name: 内史过
+    archetype: civil
+    flavor: '（生卒年不详）周室史官，论神明。他论"神明依德"，认为国家兴衰在德不在神。这一理性思想，是先秦无神论的萌芽。内史过的思想，超越了时代。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 58
+      defense: 20
+      agility: 14
+  - key: hist_xianqin_0113
+    name: 辛甲
+    archetype: civil
+    flavor: '（生卒年不详）商末周初史官，直言敢谏。他是殷商史官，见纣无道而入周。他直言进谏七十五次，成为忠臣直谏的典范。周文王重用他，使他得以发挥才能。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 56
+      defense: 20
+      agility: 14
+  - key: hist_xianqin_0114
+    name: 散宜生
+    archetype: civil
+    flavor: '（生卒年不详）周初功臣，赎文王。文王被囚羑里，他与姜尚等人搜集美女奇物献于纣王，赎回文王。他是周室开国功臣，忠诚与智慧并重。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 54
+      defense: 20
+      agility: 14
+  - key: hist_xianqin_0115
+    name: 闳夭
+    archetype: civil
+    flavor: '（生卒年不详）周初功臣，辅佐文王。他与散宜生、太颠并列，是文王时期的重要谋士。他们共同辅佐文王，积德累仁，为武王伐纣奠定基础。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 54
+      defense: 20
+      agility: 14
+  - key: hist_xianqin_0116
+    name: 南宫适
+    archetype: military
+    flavor: '（生卒年不详）周初功臣，辅佐武王。他参与武王伐纣，在牧野之战中立下战功。周朝建立后，他散财济贫，受到武王嘉奖。西周开国功臣之一。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 40
+      intellect: 16
+      defense: 26
+      agility: 18
+  - key: hist_xianqin_0117
+    name: 华元
+    archetype: military
+    flavor: '（?—前573年）宋国执政，羊斟败师。他为宋国执政，与楚国作战时，因车夫羊斟怀恨未分羊羹而驱车投敌，致使宋军大败。他被俘后逃归，后主持弭兵之会，促进和平。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 38
+      intellect: 18
+      defense: 26
+      agility: 18
+  - key: hist_xianqin_0118
+    name: 向戌
+    archetype: civil
+    flavor: '（生卒年不详）宋国执政，弭兵之会。他主持召开弭兵之会，使晋、楚两大国及其附庸达成和平协议。这是春秋时期规模最大的和平会议，向戌的外交努力，换来数十年相对和平。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 54
+      defense: 20
+      agility: 14
+  - key: hist_xianqin_0119
+    name: 子罕
+    archetype: civil
+    flavor: '（生卒年不详）宋国贤臣，不贪为宝。有人献玉，他却说"我以不贪为宝，尔以玉为宝"，拒不接受。"不贪为宝"成为廉洁自律的代名词。子罕的品格，令人敬仰。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 56
+      defense: 22
+      agility: 12
+  - key: hist_xianqin_0120
+    name: 华父督
+    archetype: military
+    flavor: '（?—前680年）宋国权臣，弑君乱国。他因贪恋孔父嘉之妻的美色，杀孔父嘉夺其妻，又弑杀宋殇公。虽为乱臣贼子，但其故事对后世有警示意义。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 40
+      intellect: 16
+      defense: 26
+      agility: 18
+  - key: hist_xianqin_0121
+    name: 孔父嘉
+    archetype: military
+    flavor: '（?—前710年）宋国大司马，孔子先祖。他是孔子的六世祖，为人正直，死于华父督之乱。他的后代避难逃至鲁国，最终诞生了至圣孔子。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 40
+      intellect: 16
+      defense: 26
+      agility: 18
+  - key: hist_xianqin_0122
+    name: 子目夷
+    archetype: civil
+    flavor: '（?—前611年）宋襄公之兄，宋国贤人。他劝谏襄公不要拘泥于"君子不困人于厄"的仁义，可惜不被采纳。泓水之战宋军惨败，验证了他的预见。目夷的明智与无奈，令人唏嘘。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 54
+      defense: 20
+      agility: 14
+  - key: hist_xianqin_0123
+    name: 骊姬
+    archetype: civil
+    flavor: '（?—前651年）晋献公宠妃，祸乱晋国。她用计离间献公与诸子，迫害太子申生。申生自杀，重耳、夷吾出逃，晋国陷入内乱。她虽是祸首，却也折射出宫廷斗争的残酷。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 56
+      defense: 18
+      agility: 18
+  - key: hist_xianqin_0124
+    name: 孟明视
+    archetype: military
+    flavor: '（生卒年不详）秦国大将，三败复仇。他是百里奚之子，崤之战大败于晋。秦穆公不咎既往，让他继续领兵。他卧薪尝胆，终于击败晋军。"三败而不黜"的故事，展现明君用人的胸襟。'
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 42
+      intellect: 14
+      defense: 26
+      agility: 18
+  - key: hist_xianqin_0125
+    name: 百里丙
+    archetype: military
+    flavor: '（生卒年不详）秦将，随孟明视伐晋。他与孟明视、西乞术并称，是崤之战的败将。在穆公的信任下，他们终于雪耻复仇。忠诚坚韧的将领。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 40
+      intellect: 14
+      defense: 28
+      agility: 18
+  - key: hist_xianqin_0126
+    name: 百里术
+    archetype: military
+    flavor: '（生卒年不详）秦将，崤之战败将。他与孟明视、白乙丙一同遭遇惨败，却获得穆公的宽恕。三将复仇成功，彰显了秦国君臣的坚韧与信任。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 40
+      intellect: 14
+      defense: 28
+      agility: 18
+  - key: hist_xianqin_0127
+    name: 先且居
+    archetype: military
+    flavor: '（?—前622年）晋国名将，箕之战功臣。他在箕之战中大败狄人，斩杀白狄首领。他是晋国中期的重要将领，为晋国霸业立下汗马功劳。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 42
+      intellect: 14
+      defense: 26
+      agility: 18
+  - key: hist_xianqin_0128
+    name: 郤克
+    archetype: military
+    flavor: '（?—前587年）晋国执政，鞍之战功臣。他因跛脚被齐国羞辱，发誓报仇。鞍之战中他身负重伤仍坚持指挥，大败齐军。他的坚毅与决心，令人敬佩。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 42
+      intellect: 14
+      defense: 28
+      agility: 16
+  - key: hist_xianqin_0129
+    name: 栾书
+    archetype: military
+    flavor: '（?—前573年）晋国执政，弑君权臣。他是晋国名将，参与鄢陵之战。后与荀偃弑杀晋厉公，拥立晋悼公。他虽有弑君之罪，但其军事才能不可否认。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 40
+      intellect: 18
+      defense: 26
+      agility: 16
+  - key: hist_xianqin_0130
+    name: 荀偃
+    archetype: military
+    flavor: '（?—前554年）晋国中军将，伐齐功臣。他率军伐齐，围临淄。他偃旗息鼓的典故，展现其谋略。后世称"偃旗息鼓"即由此而来。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 40
+      intellect: 18
+      defense: 24
+      agility: 18
+  - key: hist_xianqin_0131
+    name: 魏颗
+    archetype: military
+    flavor: '（生卒年不详）结草衔环，报恩典范。他遵父遗命，不令妾殉葬。后战场上有老人结草绊倒敌将，乃被救妾父之鬼报恩。"结草衔环"的成语由此而来。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 40
+      intellect: 16
+      defense: 26
+      agility: 18
+  - key: hist_xianqin_0132
+    name: 羊斟
+    archetype: military
+    flavor: '（生卒年不详）御者怀恨，败师投敌。他是宋国大夫华元的车夫，因华元杀羊犒军时未分给他，怀恨在心。战场上他驱车投敌，致使华元被俘。小人物的怨恨，酿成大祸。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 36
+      intellect: 12
+      defense: 26
+      agility: 26
+  - key: hist_xianqin_0133
+    name: 齐姜
+    archetype: civil
+    flavor: '（生卒年不详）齐桓公女，晋文公妻。她是晋文公重耳流亡齐国时所娶的妻子。她劝重耳离齐图复国，展现了她的远见与贤德。贤妻助夫，重耳终成霸业。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 56
+      defense: 20
+      agility: 16
+  - key: hist_xianqin_0134
+    name: 怀嬴
+    archetype: civil
+    flavor: '（生卒年不详）秦穆公女，晋文公妻。她先嫁晋怀公，怀公被杀后又嫁重耳。秦晋之好由此而来。她的命运折射出春秋时代女性在政治联姻中的无奈。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 54
+      defense: 20
+      agility: 18
+  - key: hist_xianqin_0135
+    name: 比干
+    archetype: civil
+    flavor: '（?—约前1046年）殷商忠臣，剖心谏君。纣王无道，他以死相谏；纣王令其剖心验证圣人七窍，他毅然剖腹取心。这等忠贞，惊天地泣鬼神。后世尊其为文财神，认为他公正无私，因无心而无偏。比干的死，是殷商亡国的先兆；他的忠诚，却成为千古士人的楷模。'
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 56
+      defense: 22
+      agility: 12
+  - key: hist_xianqin_0136
+    name: 箕子
+    archetype: civil
+    flavor: '（生卒年不详）殷商贤臣，《洪范》作者。他是商纣王的叔父，位高权重却无法阻止纣王的暴政。多次进谏无果后，他选择披发佯狂、装疯卖傻，沦为奴隶以求保全性命。周武王灭商后，专程拜访箕子于箕山，虚心请教治国之道。箕子授以《洪范九畴》，阐述天地人伦的治理法则，成为后世帝王治国的重要典籍。他是殷商三仁之一，后被封于朝鲜之地，据传开创了箕子朝鲜。他以智慧与隐忍保全自身，更将殷商文化传播至东方，功在千秋。'
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 58
+      defense: 22
+      agility: 12
+  - key: hist_xianqin_0137
+    name: 傅说
+    archetype: civil
+    flavor: '（生卒年不详）殷商名相，版筑贤臣。他出身卑微，本是傅岩之地筑墙夯土的工人，每日挥汗如雨、劳作不息。商王武丁求贤若渴，一日梦见圣人，醒后命画工绘出梦中形象，遣人四处寻访。终在傅岩找到与梦中圣人一模一样的傅说，立即起用为相。傅说不负重托，辅佐武丁励精图治，开疆拓土，使殷商国力达到鼎盛，史称"武丁中兴"。他提出"非知之艰，行之惟艰"的名言，强调实践重于空谈。从版筑工人到一代名相，傅说的逆袭是"野无遗贤"的最佳注脚，也是贤才遇明主的千古佳话。'
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 56
+      defense: 22
+      agility: 12
+  - key: hist_xianqin_0138
+    name: 召公奭
+    archetype: civil
+    flavor: '（生卒年不详）周初贤臣，甘棠遗爱。他是周文王的儿子，与周公旦并称二公，共同辅佐武王伐纣、成王定鼎。周初天下初定，他与周公分陕而治——周公治陕以东，召公治陕以西。他为政清简、刑罚宽和，常在甘棠树下处理政务、听断民讼，从不扰民。百姓感念他的恩德，在他离去后不忍砍伐那棵甘棠树，《诗经》赞曰"蔽芾甘棠，勿剪勿伐，召伯所茇"。"甘棠遗爱"的典故由此而来，成为后世廉吏循吏的最高赞誉。召公之德，泽被后世，其家族世代为周室重臣，延续数百年之久。'
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 54
+      defense: 22
+      agility: 12
+  - key: hist_xianqin_0139
+    name: 鲍叔牙
+    archetype: civil
+    flavor: '（生卒年不详）管仲挚友，知人善任。他与管仲相识于布衣微时，一同经商、共同患难，深知管仲之才远胜于己。二人分财，管仲多取，他不以为贪；二人谋事，管仲失策，他不以为愚；二人出仕，各事其主，他不以为叛。公子小白与公子纠争位时，管仲曾射小白一箭，小白即位为齐桓公后欲杀管仲，鲍叔牙力劝桓公："欲成霸业，非管仲不可。"桓公纳其言，不计前嫌，拜管仲为相，遂成春秋首霸。鲍叔牙的知人之明与举贤之德，成就了管仲的辉煌，也成就了齐国的霸业。管鲍之交，成为知己之交的千古典范。'
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 56
+      defense: 22
+      agility: 12
+  - key: hist_xianqin_0140
+    name: 介之推
+    archetype: civil
+    flavor: '（?—前636年）割股奉君，隐居不仕。他是晋国公子重耳的忠实追随者，在重耳流亡途中，途经卫国时粮尽，众人饥饿难耐。他悄然离去，竟割下自己大腿的肉烹羹献上，救了重耳一命。十九年颠沛流离，他始终不离不弃。待重耳复国成为晋文公后，遍封功臣，唯介之推不言禄、不表功，带着母亲悄然隐居于绵山。文公寻他不得，听信小人之言，放火烧山逼其出仕。大火三日，介之推抱木而死，誓不下山。文公悔恨交加，下令每年此日禁火寒食，以示哀悼。寒食节因此而来，延续千年。介之推的高风亮节——忠而不求报、功成而身退——成为士人品格的最高境界。'
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 54
+      defense: 22
+      agility: 12
+  - key: hist_xianqin_0141
+    name: 公孙侨
+    archetype: civil
+    flavor: '（?—前522年）铸刑鼎者，郑国名相。他姓公孙名侨，字子产，是郑穆公之孙。他执掌郑国政事二十余年，在大国夹缝中维护国家尊严。他将刑法铸于鼎上公之于众，开成文法公开之先河——这一创举虽遭叔向批评，却是法治精神的萌芽。他宽猛相济、礼法并用，"不毁乡校"以广开言路，虚心接受民众批评。他对外周旋于晋楚之间，以智慧保全郑国；对内革新田制、整顿吏治，使郑国政清人和。临终前他告诫继任者："唯有德者能以宽服民，其次莫如猛。"孔子闻其死讯，涕泣曰："古之遗爱也！"子产之政，是春秋时期开明政治的典范，其思想影响后世两千余年。'
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 56
+      defense: 20
+      agility: 12
+  - key: hist_xianqin_0142
+    name: 季札
+    archetype: civil
+    flavor: '（前576年—前484年）吴国贤者，挂剑风范。他是吴王寿梦的幼子，因贤德而被父兄多次推举为王，他皆坚辞不就，宁可让位于诸兄，也不违背心中的道义。他以延陵为封地，故称延陵季子。他出使中原诸国，观乐于鲁国，能从音乐中听出各国兴衰气象，评点精准，令鲁人惊叹。途经徐国时，徐君爱其佩剑，他心许之却因出使未便相赠。归途时徐君已故，他将宝剑挂于徐君墓前之树而去。人问其故，他答曰："吾心已许之，岂可因死而背心！"季札挂剑的故事成为诚信的千古典范。他一生不慕权位、重义守信，是春秋时期最具君子风范的人物之一。'
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 56
+      defense: 22
+      agility: 12
+  - key: hist_xianqin_0143
+    name: 孙阳
+    archetype: civil
+    flavor: '（约前680年—前610年）相马伯乐，知人典范。他姓孙名阳，伯乐是他的字。他观马无数，练就了一双识别千里马的慧眼。相传他年老时遇一拉盐车的瘦马，认出此马乃千里驹，抱马痛哭。他将相马之术著成《相马经》，传于后世。韩愈《马说》云："世有伯乐，然后有千里马。千里马常有，而伯乐不常有。"自此，伯乐成为善于识别人才的代名词，千里马则喻指怀才不遇的人才。后世以"伯乐相马"比喻善于发现和任用人才的领导者。他的故事提醒世人：人才遍地都是，缺少的是发现人才的眼光。能识人者，其功不在人才之下。'
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 58
+      defense: 20
+      agility: 14
+  - key: hist_xianqin_0144
+    name: 先轸
+    archetype: military
+    flavor: '（?—前627年）城濮之战，晋军主帅。他是晋文公时期的著名将领，指挥了奠定晋国霸业的城濮之战。战前，他献计以"退避三舍"诱敌深入，又以"两翼包抄"击破楚军中军，晋军大获全胜，楚帅子玉羞愤自杀。晋文公由此称霸诸侯，先轸功居首位。然而他性格刚烈直率，晋文公死后，在崤之战中全歼秦军，俘虏秦国三帅。晋襄公欲释放秦俘，先轸勃然大怒，当面顶撞襄公并吐唾于地。事后自悔失仪，主动请战狄人，摘去头盔冲入敌阵，以死谢罪。先轸的军事才能毋庸置疑，其刚烈耿直的性格虽导致结局悲壮，却也令人敬佩其磊落胸襟。'
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 44
+      intellect: 14
+      defense: 24
+      agility: 18
+  - key: hist_xianqin_0145
+    name: 狐偃
+    archetype: civil
+    flavor: '（?—前629年）晋文公舅父，霸业功臣。他字子犯，是晋文公重耳的舅父，也是流亡十九年中最重要的谋主。他足智多谋、敢于决断，在关键时刻总能为重耳指明方向。重耳在齐国贪恋安逸不愿离去，他与齐姜设计将重耳灌醉后强行带走。城濮之战前，面对强大的楚军，他献出"退避三舍"之计，既报答了楚国当年收留之恩，又在战略上以退为进。战场上他指挥若定，协助先轸大破楚军。晋文公称霸后，他位居首功。人称他为"夏日之日"——光芒四射、锋芒毕露，与赵衰的"冬日"形成对照。狐偃的智谋与果敢，是晋国霸业的重要支柱，也是春秋时期顶级谋士的典范。'
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 54
+      defense: 20
+      agility: 12
+  - key: hist_xianqin_0146
+    name: 专诸
+    archetype: military
+    flavor: '（?—前515年）鱼肠刺僚，刺客之首。他受公子光之托，藏匕首于鱼腹，刺杀吴王僚，成就公子光即位为阖闾。鱼肠剑，从此成为刺客的象征。他的舍身取义，是侠义精神的极致。《史记·刺客列传》第一人，专诸之名，永垂青史。'
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 48
+      intellect: 10
+      defense: 22
+      agility: 20
+  - key: hist_xianqin_0147
+    name: 赵胜
+    archetype: civil
+    flavor: '（?—前251年）平原君，战国四公子之一。他是赵武灵王之子，赵惠文王之弟，封于东武城，号平原君。他礼贤下士，门下食客数千人，"毛遂自荐"的典故正出于他。长平之战后秦军围攻邯郸，他遣使求救于楚，正是门客毛遂挺身而出，按剑威胁楚王，促成楚赵合纵。然而他虽好客，却不善识人：门客冯忌告诫他"利令智昏"，提醒他因小利而招致长平大祸，他虽有所悟却无力回天。他的夫人是魏国公主，信陵君窃符救赵也与他有关。战国四公子中，他名声最显，政治眼光却最短。'
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 52
+      defense: 20
+      agility: 14
+  - key: hist_xianqin_0148
+    name: 田文
+    archetype: civil
+    flavor: '（?—前279年）孟尝君，战国四公子之一。他是齐国贵族田婴之子，生于五月五日，按当时迷信本应被弃。他母亲私自养育，长大后田婴认其为子。他继承父业，养士三千，不问出身贵贱，来者不拒。"鸡鸣狗盗"的典故正出于他：他出使秦国被扣，门客有善学狗叫者盗出狐白裘贿赂秦王宠姬，有善学鸡叫者骗开函谷关，他才得以逃归。这些看似卑微的技能，却在关键时刻救了他的命。他曾任齐国相国，后因功高震主出奔他国，一度联合诸侯攻齐。他的故事说明：人才无贵贱之分，用人不拘一格，每个人都可能在特定时刻发挥关键作用。'
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 54
+      defense: 20
+      agility: 14
+  - key: hist_xianqin_0149
+    name: 黄歇
+    archetype: civil
+    flavor: '（前314年—前238年）春申君，战国四公子之一。他是楚国令尹，封春申君，开发吴地，今上海一带皆是其故地。他原是太子完的陪臣，秦国扣留太子，他巧施计谋，让太子乔装逃归，自己留秦为质，展现了非凡的忠义与胆略。太子完即位为考烈王后，他权倾楚国二十五年。他养士数千，好大喜功，曾合纵攻秦却无功而返。晚年他卷入王位之争的漩涡：门客李园将妹妹献给他，他又转献给无子的考烈王。王死后，他被李园伏杀于棘门，三族皆灭。养士千人，竟死于门客之手，春申君的结局充满讽刺。'
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 52
+      defense: 20
+      agility: 14

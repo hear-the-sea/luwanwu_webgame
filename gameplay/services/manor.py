@@ -6,18 +6,21 @@ from __future__ import annotations
 
 import logging
 import math
+import re
 from datetime import timedelta
 
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
+from django.conf import settings
+from django.core.cache import cache
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
 from core.utils.time_scale import scale_duration
 
 from ..constants import BuildingKeys, MAX_CONCURRENT_BUILDING_UPGRADES, BUILDING_MAX_LEVELS
 from ..models import Building, BuildingType, Manor, Message, ResourceEvent
-from .resources import spend_resources
+from .notifications import notify_user
+from .cache import invalidate_home_stats_cache
 
 
 # 银库/粮仓容量计算参数
@@ -138,6 +141,15 @@ def refresh_manor_state(manor: Manor) -> None:
     Args:
         manor: 庄园对象
     """
+    min_interval = getattr(settings, "MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS", 0)
+    if min_interval > 0:
+        cache_key = f"manor:refresh:{manor.pk}"
+        try:
+            if not cache.add(cache_key, "1", timeout=min_interval):
+                return
+        except Exception:
+            pass
+
     finalize_upgrades(manor)
     from .resources import sync_resource_production
 
@@ -162,26 +174,39 @@ def finalize_building_upgrade(
         是否成功完成升级（幂等：如果没有变化返回 False）
     """
     now = now or timezone.now()
-    if not building.is_upgrading or not building.upgrade_complete_at or building.upgrade_complete_at > now:
+    if not building.pk:
         return False
-    building.level += 1
-    building.is_upgrading = False
-    building.upgrade_complete_at = None
-    building.save(update_fields=["level", "is_upgrading", "upgrade_complete_at"])
+
+    # Do not rely on the in-memory object for idempotency: callers may hold stale instances.
+    updated = (
+        Building.objects.filter(
+            pk=building.pk,
+            is_upgrading=True,
+            upgrade_complete_at__isnull=False,
+            upgrade_complete_at__lte=now,
+        ).update(
+            level=F("level") + 1,
+            is_upgrading=False,
+            upgrade_complete_at=None,
+        )
+    )
+    if updated != 1:
+        return False
+
+    building = Building.objects.select_related("manor", "building_type").get(pk=building.pk)
 
     # 银库/粮仓升级时更新容量字段
     building_key = building.building_type.key
     if building_key == BuildingKeys.SILVER_VAULT:
         new_capacity = calculate_building_capacity(building.level, is_silver_vault=True)
-        building.manor.silver_capacity = new_capacity
-        building.manor.save(update_fields=["silver_capacity"])
+        Manor.objects.filter(pk=building.manor_id).update(silver_capacity=new_capacity)
     elif building_key == BuildingKeys.GRANARY:
         new_capacity = calculate_building_capacity(building.level, is_silver_vault=False)
-        building.manor.grain_capacity = new_capacity
-        building.manor.save(update_fields=["grain_capacity"])
+        Manor.objects.filter(pk=building.manor_id).update(grain_capacity=new_capacity)
 
     # 使庄园建筑等级缓存失效，确保下次访问时重新加载
     building.manor.invalidate_building_cache()
+    invalidate_home_stats_cache(building.manor_id)
     if send_notification:
         from .messages import create_message
 
@@ -191,21 +216,16 @@ def finalize_building_upgrade(
             title=f"{building.building_type.name} 升级完成",
             body=f"当前等级 Lv{building.level}",
         )
-        channel_layer = get_channel_layer()
-        if channel_layer:
-            payload = {
+        notify_user(
+            building.manor.user_id,
+            {
                 "kind": "system",
                 "title": f"{building.building_type.name} 升级完成",
                 "building_key": building.building_type.key,
                 "level": building.level,
-            }
-            try:
-                async_to_sync(channel_layer.group_send)(
-                    f"user_{building.manor.user_id}",
-                    {"type": "notify.message", "payload": payload},
-                )
-            except Exception:
-                logger.warning("Failed to send building upgrade notification via channels", exc_info=True)
+            },
+            log_context="building upgrade notification",
+        )
     return True
 
 
@@ -218,8 +238,11 @@ def finalize_upgrades(manor: Manor, now: timezone.datetime | None = None) -> Non
         now: 当前时间（可选）
     """
     now = now or timezone.now()
-    ready = manor.buildings.select_related("building_type").filter(is_upgrading=True, upgrade_complete_at__lte=now)
-    if not ready.exists():
+    ready = list(
+        manor.buildings.select_related("building_type")
+        .filter(is_upgrading=True, upgrade_complete_at__lte=now)
+    )
+    if not ready:
         return
     for building in ready:
         finalize_building_upgrade(building, now=now, send_notification=True)
@@ -290,13 +313,14 @@ def start_upgrade(building: Building) -> None:
         for resource, amount in base_cost.items()
     }
 
-    spend_resources(manor, cost, building.building_type.name, ResourceEvent.Reason.UPGRADE_COST)
+    from .resources import spend_resources_locked
+    spend_resources_locked(manor, cost, building.building_type.name, ResourceEvent.Reason.UPGRADE_COST)
 
     # 累计银两花费，计算声望
     silver_spent = cost.get("silver", 0)
     if silver_spent > 0:
-        from .prestige import add_prestige_silver
-        add_prestige_silver(manor, silver_spent)
+        from .prestige import add_prestige_silver_locked
+        add_prestige_silver_locked(manor, silver_spent)
 
     # 计算基础升级时间
     base_duration = building.next_level_duration()
@@ -313,8 +337,6 @@ def start_upgrade(building: Building) -> None:
 
 
 # ============ 庄园命名服务 ============
-
-import re
 
 # 庄园名称校验规则
 MANOR_NAME_MIN_LENGTH = 2

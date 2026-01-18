@@ -18,8 +18,6 @@ from django.views.generic import TemplateView
 
 from core.exceptions import GameError
 from core.utils import sanitize_error_message
-from gameplay.models import InventoryItem, ItemTemplate
-from gameplay.services import ensure_manor, refresh_manor_state
 
 from ..constants import TimeConstants
 from ..forms import AllocateSkillPointsForm
@@ -43,6 +41,8 @@ class RosterView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         from guests.services.salary import get_guest_salary, bulk_check_salary_paid, get_unpaid_guests
+        from gameplay.models import InventoryItem, ItemTemplate
+        from gameplay.services.manor import ensure_manor, refresh_manor_state
 
         context = super().get_context_data(**kwargs)
         manor = ensure_manor(self.request.user)
@@ -94,6 +94,9 @@ class GuestDetailView(LoginRequiredMixin, TemplateView):
     template_name = "guests/detail.html"
 
     def get_context_data(self, **kwargs):
+        from gameplay.models import InventoryItem, ItemTemplate
+        from gameplay.services.manor import ensure_manor
+
         context = super().get_context_data(**kwargs)
         manor = ensure_manor(self.request.user)
         guest = get_object_or_404(
@@ -280,6 +283,8 @@ class GuestDetailView(LoginRequiredMixin, TemplateView):
 @login_required
 @require_POST
 def dismiss_guest_view(request, pk: int):
+    from gameplay.services.manor import ensure_manor
+
     manor = ensure_manor(request.user)
     guest = get_object_or_404(manor.guests, pk=pk)
     gear_items = list(guest.gear_items.select_related("template"))

@@ -8,18 +8,16 @@ from django.contrib import messages
 from django.views.decorators.http import require_POST
 
 from core.utils import safe_int, sanitize_error_message
+from core.utils.rate_limit import rate_limit_redirect
+from ..decorators import require_guild_member
 from ..services import warehouse as warehouse_service
 
+
 @login_required
+@require_guild_member
 def warehouse(request):
     """帮会仓库"""
-    user = request.user
-
-    if not hasattr(user, 'guild_membership') or not user.guild_membership.is_active:
-        messages.error(request, '您不在帮会中')
-        return redirect('guilds:hall')
-
-    member = user.guild_membership
+    member = request.guild_member
     guild = member.guild
 
     # 获取仓库物品列表
@@ -35,16 +33,12 @@ def warehouse(request):
 
 
 @login_required
+@require_guild_member
 @require_POST
+@rate_limit_redirect("guild_exchange_item", limit=20, window_seconds=60)
 def exchange_item(request, item_key):
     """兑换物品"""
-    user = request.user
-
-    if not hasattr(user, 'guild_membership') or not user.guild_membership.is_active:
-        messages.error(request, '您不在帮会中')
-        return redirect('guilds:hall')
-
-    member = user.guild_membership
+    member = request.guild_member
     quantity = safe_int(request.POST.get('quantity', 1), default=1, min_val=1)
 
     try:
@@ -57,15 +51,10 @@ def exchange_item(request, item_key):
 
 
 @login_required
+@require_guild_member
 def exchange_logs(request):
     """兑换日志"""
-    user = request.user
-
-    if not hasattr(user, 'guild_membership') or not user.guild_membership.is_active:
-        messages.error(request, '您不在帮会中')
-        return redirect('guilds:hall')
-
-    member = user.guild_membership
+    member = request.guild_member
     guild = member.guild
 
     # 获取兑换日志
@@ -77,4 +66,3 @@ def exchange_logs(request):
     }
 
     return render(request, 'guilds/exchange_logs.html', context)
-

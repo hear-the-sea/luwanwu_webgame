@@ -35,6 +35,7 @@ class CacheKeys:
 
     # 科技加成
     TECH_BONUS_PREFIX = "tech_bonus"
+    HOME_HOURLY_RATES_PREFIX = "manor_home_hourly_rates"
 
     @staticmethod
     def player_rank(manor_id: int, prestige: int) -> str:
@@ -55,6 +56,16 @@ class CacheKeys:
     def tech_bonus(manor_id: int, tech_key: str) -> str:
         """科技加成缓存键"""
         return f"{CacheKeys.TECH_BONUS_PREFIX}:{manor_id}:{tech_key}"
+
+    @staticmethod
+    def home_hourly_rates(manor_id: int) -> str:
+        """首页建筑产出缓存键"""
+        return f"{CacheKeys.HOME_HOURLY_RATES_PREFIX}:{manor_id}"
+
+
+def invalidate_home_stats_cache(manor_id: int) -> None:
+    """清除首页统计类缓存。"""
+    cache.delete(CacheKeys.home_hourly_rates(manor_id))
 
 
 def invalidate_manor_cache(manor_id: int) -> None:

@@ -15,22 +15,16 @@ from django.views.generic import TemplateView
 
 from core.utils import safe_int
 from core.utils.rate_limit import rate_limit_json
-from guests.models import GuestStatus
-
-from ..constants import REGION_CHOICES, UIConstants
-from ..models import Manor as ManorModel, RaidRun
-from ..services import (
+from gameplay.constants import REGION_CHOICES, UIConstants
+from gameplay.models import Manor as ManorModel, RaidRun
+from gameplay.services import (
     ensure_manor,
     refresh_manor_state,
 )
-from ..services.raid import (
-    can_attack_target,
+from gameplay.services.raid import (
     get_active_raids,
     get_active_scouts,
     get_incoming_raids,
-    get_manor_public_info,
-    get_protection_status,
-    get_scout_count,
     refresh_raid_runs,
     refresh_scout_records,
     request_raid_retreat,
@@ -39,7 +33,10 @@ from ..services.raid import (
     start_raid,
     start_scout,
 )
-from ..services.recruitment import get_player_troops
+from gameplay.services.raid.map_search import get_manor_public_info
+from gameplay.services.raid.protection import get_protection_status
+from gameplay.services.raid.utils import can_attack_target
+from gameplay.selectors.map import get_map_context, get_raid_config_context
 
 
 class MapView(LoginRequiredMixin, TemplateView):
@@ -50,36 +47,14 @@ class MapView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         manor = ensure_manor(self.request.user)
-        refresh_manor_state(manor)
-
         # 获取当前选中的地区（默认显示玩家所在地区）
         selected_region = self.request.GET.get("region", manor.region)
 
         # 获取搜索查询
         search_query = self.request.GET.get("q", "").strip()
 
-        # 获取保护状态
-        protection_status = get_protection_status(manor)
-
-        # 获取出征/侦察状态
-        active_raids = get_active_raids(manor)
-        active_scouts = get_active_scouts(manor)
-        incoming_raids = get_incoming_raids(manor)
-        scout_count = get_scout_count(manor)
-
-        # 获取护院数量（用于出征配置）
-        player_troops = get_player_troops(manor)
-
-        context["manor"] = manor
+        context.update(get_map_context(manor, selected_region, search_query))
         context["regions"] = REGION_CHOICES
-        context["selected_region"] = selected_region
-        context["search_query"] = search_query
-        context["protection_status"] = protection_status
-        context["active_raids"] = active_raids
-        context["active_scouts"] = active_scouts
-        context["incoming_raids"] = incoming_raids
-        context["scout_count"] = scout_count
-        context["player_troops"] = player_troops
 
         return context
 
@@ -99,35 +74,7 @@ class RaidConfigView(LoginRequiredMixin, TemplateView):
         # 获取目标庄园
         target_manor = get_object_or_404(ManorModel, pk=target_id)
 
-        # 获取公开信息（包含距离、声望颜色等）
-        target_info = get_manor_public_info(target_manor, viewer=manor)
-
-        # 检查是否可以攻击
-        can_attack, attack_reason = can_attack_target(manor, target_manor)
-
-        # 获取可出征门客（状态为闲置）
-        available_guests = list(
-            manor.guests.filter(status=GuestStatus.IDLE)
-            .select_related("template")
-            .order_by("-level", "template__name")
-        )
-
-        # 获取护院数量
-        player_troops = get_player_troops(manor)
-        scout_count = get_scout_count(manor)
-
-        # 获取门客容量限制
-        max_squad_size = manor.max_squad_size
-
-        context["manor"] = manor
-        context["target_manor"] = target_manor
-        context["target_info"] = target_info
-        context["can_attack"] = can_attack
-        context["attack_reason"] = attack_reason
-        context["available_guests"] = available_guests
-        context["player_troops"] = player_troops
-        context["scout_count"] = scout_count
-        context["max_squad_size"] = max_squad_size
+        context.update(get_raid_config_context(manor, target_manor))
 
         return context
 

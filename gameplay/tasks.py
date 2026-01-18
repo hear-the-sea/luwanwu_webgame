@@ -6,7 +6,9 @@ from celery import shared_task
 from django.utils import timezone
 
 from gameplay.models import MissionRun
-from gameplay.services import finalize_mission_run, finalize_building_upgrade, finalize_technology_upgrade
+from gameplay.services.manor import finalize_building_upgrade
+from gameplay.services.missions import finalize_mission_run
+from gameplay.services.technology import finalize_technology_upgrade
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +135,7 @@ def complete_work_assignments_task():
     定时完成到期的打工任务
     每分钟执行一次
     """
-    from gameplay.services import complete_work_assignments
+    from gameplay.services.work import complete_work_assignments
     try:
         count = complete_work_assignments()
         return f"完成 {count} 个打工任务"
@@ -148,7 +150,7 @@ def complete_horse_production(self, production_id: int):
     完成马匹生产的后台任务。
     """
     from gameplay.models import HorseProduction
-    from gameplay.services import finalize_horse_production
+    from gameplay.services.stable import finalize_horse_production
 
     try:
         production = (
@@ -181,7 +183,7 @@ def scan_horse_productions(limit: int = 200):
     扫描并完成所有到期的马匹生产（用于 worker 宕机恢复）。
     """
     from gameplay.models import HorseProduction
-    from gameplay.services import finalize_horse_production
+    from gameplay.services.stable import finalize_horse_production
 
     now = timezone.now()
     qs = (
@@ -206,7 +208,7 @@ def complete_livestock_production(self, production_id: int):
     完成家畜养殖的后台任务。
     """
     from gameplay.models import LivestockProduction
-    from gameplay.services import finalize_livestock_production
+    from gameplay.services.ranch import finalize_livestock_production
 
     try:
         production = (
@@ -239,7 +241,7 @@ def scan_livestock_productions(limit: int = 200):
     扫描并完成所有到期的家畜养殖（用于 worker 宕机恢复）。
     """
     from gameplay.models import LivestockProduction
-    from gameplay.services import finalize_livestock_production
+    from gameplay.services.ranch import finalize_livestock_production
 
     now = timezone.now()
     qs = (
@@ -264,7 +266,7 @@ def complete_smelting_production(self, production_id: int):
     完成金属冶炼的后台任务。
     """
     from gameplay.models import SmeltingProduction
-    from gameplay.services import finalize_smelting_production
+    from gameplay.services.smithy import finalize_smelting_production
 
     try:
         production = (
@@ -297,7 +299,7 @@ def scan_smelting_productions(limit: int = 200):
     扫描并完成所有到期的金属冶炼（用于 worker 宕机恢复）。
     """
     from gameplay.models import SmeltingProduction
-    from gameplay.services import finalize_smelting_production
+    from gameplay.services.smithy import finalize_smelting_production
 
     now = timezone.now()
     qs = (
@@ -584,6 +586,17 @@ def process_raid_battle_task(self, run_id: int):
         if run.status not in [RaidRun.Status.MARCHING, RaidRun.Status.RETREATED]:
             return "invalid_status"
 
+        # 撤退中的队伍不应在 battle_at 被提前结算；按 return_at 等待完成
+        if run.status == RaidRun.Status.RETREATED:
+            if run.return_at and run.return_at > now:
+                remaining = int((run.return_at - now).total_seconds())
+                if remaining > 0:
+                    complete_raid_task.apply_async(args=[run_id], countdown=remaining)
+                    return "retreated_rescheduled"
+            # return_at 已到（或缺失），交给完成任务收尾
+            complete_raid_task.apply_async(args=[run_id], countdown=0)
+            return "retreated_forwarded"
+
         # 检查是否到达战斗时间
         if run.status == RaidRun.Status.MARCHING and run.battle_at and run.battle_at > now:
             remaining = int((run.battle_at - now).total_seconds())
@@ -625,6 +638,11 @@ def complete_raid_task(self, run_id: int):
 
         # 撤退状态直接完成
         if run.status == RaidRun.Status.RETREATED:
+            if run.return_at and run.return_at > now:
+                remaining = int((run.return_at - now).total_seconds())
+                if remaining > 0:
+                    complete_raid_task.apply_async(args=[run_id], countdown=remaining)
+                    return "rescheduled"
             finalize_raid(run, now=now)
             return "completed"
 
@@ -723,3 +741,32 @@ def cleanup_old_data_task():
 
     logger.info(f"清理了 {deleted} 条30天前的资源流水记录")
     return deleted
+
+
+# ============ 监牢系统任务 ============
+
+
+@shared_task(name="gameplay.decay_prisoner_loyalty")
+def decay_prisoner_loyalty_task():
+    """
+    每日衰减囚犯忠诚度。
+
+    每天执行一次，将所有关押中的囚犯忠诚度降低指定值（默认5点）。
+    忠诚度最低降至0。
+    """
+    from django.db.models import F, Greatest
+
+    from gameplay.constants import PVPConstants
+    from gameplay.models import JailPrisoner
+
+    decay_amount = int(getattr(PVPConstants, "JAIL_LOYALTY_DAILY_DECAY", 5) or 5)
+
+    # 批量更新所有关押中的囚犯，忠诚度减少但不低于0
+    updated = JailPrisoner.objects.filter(
+        status=JailPrisoner.Status.HELD
+    ).update(
+        loyalty=Greatest(F("loyalty") - decay_amount, 0)
+    )
+
+    logger.info(f"囚犯忠诚度每日衰减：更新了 {updated} 名囚犯，每人降低 {decay_amount} 点")
+    return updated

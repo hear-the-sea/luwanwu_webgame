@@ -2,7 +2,8 @@ import pytest
 from django.contrib.auth import get_user_model
 
 from gameplay.models import ItemTemplate, Message, ResourceEvent, ResourceType
-from gameplay.services import claim_message_attachments, ensure_manor
+from gameplay.services.manor import ensure_manor
+from gameplay.services.messages import claim_message_attachments
 
 User = get_user_model()
 
@@ -57,4 +58,3 @@ def test_claim_message_attachments_records_actual_and_stores_claimed():
     assert event.delta == 5
 
     assert message.get_attachment_summary() == "银两×5、1种道具"
-

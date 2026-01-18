@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 
 from gameplay.models import ResourceEvent
-from gameplay.services import ensure_manor
+from gameplay.services.manor import ensure_manor
 from gameplay.services.raid.combat import _apply_loot
 
 User = get_user_model()
@@ -39,4 +39,3 @@ def test_apply_loot_clamps_to_available_resources():
         )
     }
     assert deltas == {"grain": -50, "silver": -10}
-

@@ -18,7 +18,7 @@ from django.db.models import F, Sum
 from django.utils import timezone
 
 from gameplay.models import InventoryItem, ItemTemplate, Manor, ResourceEvent
-from gameplay.services.resources import spend_resources
+from gameplay.services.resources import spend_resources_locked
 from trade.models import GoldBarExchangeLog
 
 
@@ -222,13 +222,6 @@ def exchange_gold_bar(manor: Manor, quantity: int) -> dict:
     cost_info = calculate_gold_bar_cost(manor, quantity)
     total_cost = cost_info["total_cost"]
 
-    # 检查银两是否足够
-    if manor.silver < total_cost:
-        raise ValueError(
-            f"银两不足，需要 {total_cost:,} 银两"
-            f"（基础 {cost_info['base_cost']:,} + 手续费 {cost_info['fee']:,}）"
-        )
-
     # 检查金条物品模板是否存在
     try:
         gold_bar_template = ItemTemplate.objects.get(key=GOLD_BAR_ITEM_KEY)
@@ -237,9 +230,18 @@ def exchange_gold_bar(manor: Manor, quantity: int) -> dict:
 
     # 执行兑换（并发安全版本）
     with transaction.atomic():
-        # 步骤1：消耗银两（已包含并发安全检查）
-        spend_resources(
-            manor,
+        manor_locked = Manor.objects.select_for_update().get(pk=manor.pk)
+
+        # 锁内检查银两是否足够，避免并发下展示错误信息或透支
+        if manor_locked.silver < total_cost:
+            raise ValueError(
+                f"银两不足，需要 {total_cost:,} 银两"
+                f"（基础 {cost_info['base_cost']:,} + 手续费 {cost_info['fee']:,}）"
+            )
+
+        # 步骤1：消耗银两
+        spend_resources_locked(
+            manor_locked,
             {"silver": total_cost},
             note=f"兑换金条 x{quantity}",
             reason=ResourceEvent.Reason.ITEM_PURCHASE
@@ -250,7 +252,7 @@ def exchange_gold_bar(manor: Manor, quantity: int) -> dict:
         inventory_item = (
             InventoryItem.objects.select_for_update()
             .filter(
-                manor=manor,
+                manor=manor_locked,
                 template=gold_bar_template,
                 storage_location=InventoryItem.StorageLocation.WAREHOUSE,
             )
@@ -265,7 +267,7 @@ def exchange_gold_bar(manor: Manor, quantity: int) -> dict:
         else:
             # 首次获得金条，创建新记录
             InventoryItem.objects.create(
-                manor=manor,
+                manor=manor_locked,
                 template=gold_bar_template,
                 storage_location=InventoryItem.StorageLocation.WAREHOUSE,
                 quantity=quantity,
@@ -273,7 +275,7 @@ def exchange_gold_bar(manor: Manor, quantity: int) -> dict:
 
         # 步骤3：记录兑换日志
         GoldBarExchangeLog.objects.create(
-            manor=manor, quantity=quantity, silver_cost=total_cost
+            manor=manor_locked, quantity=quantity, silver_cost=total_cost
         )
 
     # 清除供应量缓存，让下次查询获取最新数据

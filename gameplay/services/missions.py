@@ -10,15 +10,17 @@ import random
 from datetime import timedelta
 from typing import Dict, List
 
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
+from common.utils.celery import safe_apply_async
+
 from ..models import InventoryItem, ItemTemplate, Manor, MissionRun, MissionTemplate, ResourceEvent, ResourceType
 from .messages import create_message
+from .notifications import notify_user
 from .resources import grant_resources
+from .troops import apply_defender_troop_losses
 from core.utils.time_scale import scale_duration
 
 # 延迟导入battle模块避免循环依赖
@@ -79,12 +81,12 @@ def refresh_mission_runs(manor: Manor) -> None:
         manor: 庄园对象
     """
     now = timezone.now()
-    active_runs = (
+    active_runs = list(
         manor.mission_runs.select_related("mission")
         .prefetch_related("guests")
         .filter(status=MissionRun.Status.ACTIVE, return_at__isnull=False, return_at__lte=now)
     )
-    if not active_runs.exists():
+    if not active_runs:
         return
 
     for run in active_runs:
@@ -100,9 +102,6 @@ def finalize_mission_run(run: MissionRun, now=None) -> None:
         now: 当前时间（可选）
     """
     now = now or timezone.now()
-    channel_layer = get_channel_layer()
-    notify_payload = None
-    user_group = None
 
     from guests.models import Guest, GuestStatus
 
@@ -211,13 +210,13 @@ def finalize_mission_run(run: MissionRun, now=None) -> None:
         if report:
             # 防守任务：扣除玩家方护院损失
             if locked_run.mission.is_defense and not locked_run.is_retreating:
-                _apply_defender_troop_losses(locked_run.manor, report)
+                apply_defender_troop_losses(locked_run.manor, report)
 
             player_won = (not locked_run.is_retreating) and report.winner == player_side
             if player_won:
                 drops = dict(report.drops or {})
                 if locked_run.mission.is_defense and not drops:
-                    from ..utils.loot_generator import resolve_drop_rewards
+                    from common.utils.loot import resolve_drop_rewards
                     seed = getattr(report, "seed", None)
                     rng = random.Random(seed) if seed is not None else random.Random()
                     drops = resolve_drop_rewards(locked_run.mission.drop_table or {}, rng)
@@ -239,6 +238,7 @@ def finalize_mission_run(run: MissionRun, now=None) -> None:
                     report.drops = drops
                     report.save(update_fields=["drops"])
                     award_mission_drops(locked_run.manor, drops, locked_run.mission.name)
+
             if not locked_run.is_retreating:
                 create_message(
                     manor=locked_run.manor,
@@ -247,79 +247,144 @@ def finalize_mission_run(run: MissionRun, now=None) -> None:
                     body='',
                     battle_report=report,
                 )
-                if channel_layer:
-                    notify_payload = {
-                        'kind': 'battle',
-                        'title': f"{locked_run.mission.name} 战报",
-                        'report_id': report.id,
-                        'mission_key': locked_run.mission.key,
-                        'mission_name': locked_run.mission.name,
-                    }
-                    user_group = f"user_{locked_run.manor.user_id}"
 
-    if notify_payload and channel_layer and user_group:
-        try:
-            async_to_sync(channel_layer.group_send)(
-                user_group,
-                {'type': 'notify.message', 'payload': notify_payload},
-            )
-        except Exception:
-            logger.warning('Failed to push mission battle notification via channels', exc_info=True)
+                # 只有当report存在时才发送WebSocket通知
+                if report:
+                    notify_user(
+                        locked_run.manor.user_id,
+                        {
+                            'kind': 'battle',
+                            'title': f"{locked_run.mission.name} 战报",
+                            'report_id': report.id,
+                            'mission_key': locked_run.mission.key,
+                            'mission_name': locked_run.mission.name,
+                        },
+                        log_context="mission battle notification",
+                    )
 
 
-def _apply_defender_troop_losses(manor: Manor, report) -> None:
+def _get_today_date_range():
     """
-    批量扣除防守方护院损失（用于防守任务）。
+    获取今日的时间范围（按服务器时区）。
+
+    Returns:
+        tuple: (start_of_day, end_of_day, today_date)
+    """
+    now = timezone.now()
+    tz = timezone.get_current_timezone()
+    start_of_day = now.astimezone(tz).replace(hour=0, minute=0, second=0, microsecond=0)
+    end_of_day = start_of_day + timedelta(days=1)
+    today_date = start_of_day.date()
+    return start_of_day, end_of_day, today_date
+
+
+def get_mission_extra_attempts(manor: Manor, mission: MissionTemplate) -> int:
+    """
+    获取今日该任务通过任务卡获得的额外次数。
 
     Args:
-        manor: 防守方庄园
-        report: 战报对象
+        manor: 庄园对象
+        mission: 任务模板对象
+
+    Returns:
+        今日额外次数
     """
-    from battle.troops import load_troop_templates
-    from ..models import PlayerTroop
+    from ..models import MissionExtraAttempt
 
-    defender_loadout = getattr(report, "defender_troops", None) or {}
-    defender_losses = (getattr(report, "losses", None) or {}).get("defender", {}) or {}
-    casualties = defender_losses.get("casualties", []) or []
+    _, _, today_date = _get_today_date_range()
+    extra = MissionExtraAttempt.objects.filter(
+        manor=manor, mission=mission, date=today_date
+    ).first()
+    return extra.extra_count if extra else 0
 
-    troop_definitions = load_troop_templates()
 
-    troops_lost: Dict[str, int] = {}
-    for entry in casualties:
-        key = entry.get("key")
-        if key not in defender_loadout:
-            continue
-        if key not in troop_definitions:
-            continue
-        try:
-            lost = int(entry.get("lost", 0) or 0)
-        except (TypeError, ValueError):
-            continue
-        if lost > 0:
-            troops_lost[key] = troops_lost.get(key, 0) + lost
+def bulk_get_mission_extra_attempts(manor: Manor, missions: List[MissionTemplate]) -> Dict[str, int]:
+    """
+    批量获取今日各任务通过任务卡获得的额外次数。
 
-    if not troops_lost:
-        return
+    Args:
+        manor: 庄园对象
+        missions: 任务模板列表
 
-    # 1次查询获取所有需要更新的护院记录
-    troops = {
-        t.troop_template.key: t
-        for t in PlayerTroop.objects.select_for_update()
-        .filter(manor=manor, troop_template__key__in=troops_lost.keys())
-        .select_related("troop_template")
-    }
+    Returns:
+        字典 {mission_key: 额外次数}
+    """
+    from ..models import MissionExtraAttempt
 
-    to_update = []
-    for troop_key, lost in troops_lost.items():
-        troop = troops.get(troop_key)
-        if not troop:
-            continue
-        troop.count = max(0, troop.count - lost)
-        to_update.append(troop)
+    _, _, today_date = _get_today_date_range()
+    extras = MissionExtraAttempt.objects.filter(
+        manor=manor, date=today_date, mission__in=missions
+    ).select_related("mission")
 
-    # 1次批量更新
-    if to_update:
-        PlayerTroop.objects.bulk_update(to_update, ["count", "updated_at"])
+    result = {m.key: 0 for m in missions}
+    for extra in extras:
+        result[extra.mission.key] = extra.extra_count
+    return result
+
+
+def add_mission_extra_attempt(manor: Manor, mission: MissionTemplate, count: int = 1) -> int:
+    """
+    为任务增加额外次数（使用任务卡时调用）。
+
+    Args:
+        manor: 庄园对象
+        mission: 任务模板对象
+        count: 增加的次数
+
+    Returns:
+        增加后的总额外次数
+    """
+    from django.db import IntegrityError
+
+    from ..models import MissionExtraAttempt
+
+    _, _, today_date = _get_today_date_range()
+    with transaction.atomic():
+        # 尝试获取现有记录并加锁
+        extra = (
+            MissionExtraAttempt.objects
+            .select_for_update()
+            .filter(manor=manor, mission=mission, date=today_date)
+            .first()
+        )
+        if extra:
+            extra.extra_count += count
+            extra.save(update_fields=["extra_count", "updated_at"])
+            return extra.extra_count
+
+    # 不存在则尝试创建（在事务外处理并发创建冲突）
+    try:
+        with transaction.atomic():
+            extra = MissionExtraAttempt.objects.create(
+                manor=manor, mission=mission, date=today_date, extra_count=count
+            )
+            return extra.extra_count
+    except IntegrityError:
+        # 并发创建冲突，重新获取并更新
+        with transaction.atomic():
+            extra = (
+                MissionExtraAttempt.objects
+                .select_for_update()
+                .get(manor=manor, mission=mission, date=today_date)
+            )
+            extra.extra_count += count
+            extra.save(update_fields=["extra_count", "updated_at"])
+            return extra.extra_count
+
+
+def get_mission_daily_limit(manor: Manor, mission: MissionTemplate) -> int:
+    """
+    获取任务今日的有效次数上限（基础 + 额外）。
+
+    Args:
+        manor: 庄园对象
+        mission: 任务模板对象
+
+    Returns:
+        今日有效次数上限
+    """
+    extra = get_mission_extra_attempts(manor, mission)
+    return mission.daily_limit + extra
 
 
 def mission_attempts_today(manor: Manor, mission: MissionTemplate) -> int:
@@ -333,10 +398,7 @@ def mission_attempts_today(manor: Manor, mission: MissionTemplate) -> int:
     Returns:
         今日挑战次数
     """
-    now = timezone.now()
-    tz = timezone.get_current_timezone()
-    start_of_day = now.astimezone(tz).replace(hour=0, minute=0, second=0, microsecond=0)
-    end_of_day = start_of_day + timedelta(days=1)
+    start_of_day, end_of_day, _ = _get_today_date_range()
     return manor.mission_runs.filter(mission=mission, started_at__gte=start_of_day, started_at__lt=end_of_day).count()
 
 
@@ -353,10 +415,7 @@ def bulk_mission_attempts_today(manor: Manor, missions: List[MissionTemplate]) -
     """
     from django.db.models import Count
 
-    now = timezone.now()
-    tz = timezone.get_current_timezone()
-    start_of_day = now.astimezone(tz).replace(hour=0, minute=0, second=0, microsecond=0)
-    end_of_day = start_of_day + timedelta(days=1)
+    start_of_day, end_of_day, _ = _get_today_date_range()
 
     # 单次查询获取所有任务的今日挑战次数
     counts = (
@@ -475,7 +534,8 @@ def launch_mission(
     """
     refresh_mission_runs(manor)
     attempts = mission_attempts_today(manor, mission)
-    if attempts >= mission.daily_limit:
+    daily_limit = get_mission_daily_limit(manor, mission)
+    if attempts >= daily_limit:
         raise ValueError("今日该任务次数已耗尽")
     from guests.models import Guest, GuestStatus
 
@@ -570,23 +630,26 @@ def launch_mission(
                 # 测试/开发环境直接同步生成，避免异步与同步重复写入
                 report = _sync_report()
             else:
-                try:
-                    generate_report_task.delay(
-                        manor_id=manor.id,
-                        mission_id=mission.id,
-                        run_id=run.id,
-                        guest_ids=[g.id for g in guests],
-                        troop_loadout=loadout,
-                        fill_default_troops=False,
-                        battle_type=mission.battle_type or "task",
-                        opponent_name=mission.name,
-                        defender_setup=defender_setup,
-                        drop_table=drop_table,
-                        travel_seconds=travel_seconds,
-                        seed=seed,
-                    )
-                except Exception:
-                    logger.warning("generate_report_task dispatch failed; falling back to sync generation", exc_info=True)
+                ok = safe_apply_async(
+                    generate_report_task,
+                    kwargs={
+                        "manor_id": manor.id,
+                        "mission_id": mission.id,
+                        "run_id": run.id,
+                        "guest_ids": [g.id for g in guests],
+                        "troop_loadout": loadout,
+                        "fill_default_troops": False,
+                        "battle_type": mission.battle_type or "task",
+                        "opponent_name": mission.name,
+                        "defender_setup": defender_setup,
+                        "drop_table": drop_table,
+                        "travel_seconds": travel_seconds,
+                        "seed": seed,
+                    },
+                    logger=logger,
+                    log_message="generate_report_task dispatch failed; falling back to sync generation",
+                )
+                if not ok:
                     report = _sync_report()
 
         if report:
@@ -597,11 +660,14 @@ def launch_mission(
                 run.battle_report = report
 
         # 调度任务完成回调
-        try:
-            countdown = max(0, int((run.return_at - timezone.now()).total_seconds()))
-            complete_mission_task.apply_async(args=[run.id], countdown=countdown)
-        except Exception:
-            logger.warning("complete_mission_task dispatch failed; relying on refresh_mission_runs", exc_info=True)
+        countdown = max(0, int((run.return_at - timezone.now()).total_seconds()))
+        safe_apply_async(
+            complete_mission_task,
+            args=[run.id],
+            countdown=countdown,
+            logger=logger,
+            log_message="complete_mission_task dispatch failed; relying on refresh_mission_runs",
+        )
 
         return run
     except Exception:
@@ -632,7 +698,13 @@ def schedule_mission_completion(run: MissionRun) -> None:
     if not run.return_at:
         return
     countdown = max(0, int((run.return_at - timezone.now()).total_seconds()))
-    complete_mission_task.apply_async(args=[run.id], countdown=countdown)
+    safe_apply_async(
+        complete_mission_task,
+        args=[run.id],
+        countdown=countdown,
+        logger=logger,
+        log_message="complete_mission_task dispatch failed; relying on refresh_mission_runs",
+    )
 
 
 def _generate_sync_battle_report(

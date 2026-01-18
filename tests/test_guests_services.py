@@ -5,7 +5,7 @@ import pytest
 from django.contrib.auth import get_user_model
 
 from core.exceptions import InvalidAllocationError
-from gameplay.services import ensure_manor
+from gameplay.services.manor import ensure_manor
 from guests.models import Guest, GuestTemplate
 from guests.services import (
     allocate_attribute_points,

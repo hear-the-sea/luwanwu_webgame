@@ -4,8 +4,10 @@ from typing import Iterable
 
 from django.utils import timezone
 
-from guests import services as guest_services
 from guests.models import Guest, MAX_GUEST_LEVEL
+from guests.services.equipment import apply_set_bonuses
+from guests.services.health import recover_guest_hp
+from guests.services.training import ensure_auto_training, finalize_guest_training
 
 
 def refresh_guest_state(
@@ -18,13 +20,13 @@ def refresh_guest_state(
     refresh: bool = False,
 ) -> Guest:
     now = now or timezone.now()
-    guest_services.finalize_guest_training(guest, now=now)
+    finalize_guest_training(guest, now=now)
     if auto_train and guest.level < MAX_GUEST_LEVEL and not guest.training_complete_at:
-        guest_services.ensure_auto_training(guest)
+        ensure_auto_training(guest)
     if recover_hp:
-        guest_services.recover_guest_hp(guest, now=now)
+        recover_guest_hp(guest, now=now)
     if apply_sets:
-        guest_services.apply_set_bonuses(guest)
+        apply_set_bonuses(guest)
     if refresh:
         guest.refresh_from_db()
     return guest

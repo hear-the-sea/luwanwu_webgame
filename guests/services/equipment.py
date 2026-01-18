@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from typing import Dict
+from typing import TYPE_CHECKING, Dict
 
 from core.exceptions import (
     DuplicateEquipmentError,
@@ -14,7 +14,9 @@ from core.exceptions import (
     EquipmentSlotFullError,
     ItemNotFoundError,
 )
-from gameplay.models import InventoryItem, Manor
+
+if TYPE_CHECKING:
+    from gameplay.models import Manor
 
 from ..models import GearItem, GearSlot, GearTemplate, Guest, GuestRarity
 from ..utils.equipment_utils import EQUIP_SLOT_MAP, SET_STAT_FIELD_MAP, compute_set_bonus
@@ -66,6 +68,8 @@ def ensure_inventory_gears(manor: Manor, *, slot: str | None = None) -> None:
 
     IMPORTANT: Only count items in WAREHOUSE since equip_guest consumes from WAREHOUSE.
     """
+    from gameplay.models import InventoryItem
+
     effect_types = list(EQUIP_SLOT_MAP.keys())
     if slot:
         effect_types = [key for key, mapped_slot in EQUIP_SLOT_MAP.items() if mapped_slot == slot]
@@ -121,6 +125,8 @@ def equip_guest(gear: GearItem, guest: Guest) -> GearItem:
     Raises:
         EquipmentError: 装备失败时抛出异常
     """
+    from gameplay.models import InventoryItem
+
     slot_capacity = {
         GearSlot.DEVICE: 3,
         GearSlot.ORNAMENT: 3,
@@ -216,6 +222,8 @@ def unequip_guest_item(gear: GearItem, guest: Guest) -> GearItem:
     Raises:
         EquipmentError: 卸下失败时抛出异常
     """
+    from gameplay.models import InventoryItem
+
     if gear.manor != guest.manor:
         raise EquipmentError("无法卸下其他庄园的装备")
     if gear.guest_id != guest.id:

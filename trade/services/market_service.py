@@ -7,15 +7,14 @@ import logging
 from datetime import timedelta
 from typing import Dict
 
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
 from django.db import transaction
 from django.db.models import F, QuerySet
 from django.utils import timezone
 
 from gameplay.models import InventoryItem, ItemTemplate, Manor, ResourceEvent
 from gameplay.services.messages import create_message
-from gameplay.services.resources import grant_resources, spend_resources
+from gameplay.services.notifications import notify_user
+from gameplay.services.resources import grant_resources_locked, spend_resources_locked
 from trade.models import MarketListing, MarketTransaction
 
 logger = logging.getLogger(__name__)
@@ -33,6 +32,19 @@ TRANSACTION_TAX_RATE = 0.10  # 10%
 # 价格限制
 MIN_PRICE_MULTIPLIER = 1.0  # 最低价格为物品price的1倍
 MAX_PRICE = 10000000  # 最高1000万银两
+
+ALLOWED_LISTING_ORDER_BY = {
+    "listed_at",
+    "-listed_at",
+    "unit_price",
+    "-unit_price",
+    "total_price",
+    "-total_price",
+    "quantity",
+    "-quantity",
+    "expires_at",
+    "-expires_at",
+}
 
 
 def get_listing_fee(duration: int) -> int:
@@ -117,11 +129,12 @@ def create_listing(
 
     # 并发安全的事务处理
     with transaction.atomic():
+        locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
         listing_fee = get_listing_fee(duration)
 
         # 步骤1：消耗手续费（已包含并发安全检查和资源验证）
-        spend_resources(
-            manor,
+        spend_resources_locked(
+            locked_manor,
             {"silver": listing_fee},
             note="交易行挂单手续费",
             reason=ResourceEvent.Reason.MARKET_LISTING_FEE
@@ -132,7 +145,7 @@ def create_listing(
         inventory_item = (
             InventoryItem.objects.select_for_update()
             .filter(
-                manor=manor,
+                manor=locked_manor,
                 template=item_template,
                 storage_location=InventoryItem.StorageLocation.WAREHOUSE,
             )
@@ -171,7 +184,7 @@ def create_listing(
         expires_at = timezone.now() + timedelta(seconds=duration)
 
         listing = MarketListing.objects.create(
-            seller=manor,
+            seller=locked_manor,
             item_template=item_template,
             quantity=quantity,
             unit_price=unit_price,
@@ -221,7 +234,8 @@ def get_active_listings(
     if rarity and rarity != "all":
         queryset = queryset.filter(item_template__rarity=rarity)
 
-    return queryset.order_by(order_by)
+    safe_order_by = order_by if order_by in ALLOWED_LISTING_ORDER_BY else "-listed_at"
+    return queryset.order_by(safe_order_by)
 
 
 def purchase_listing(buyer: Manor, listing_id: int) -> MarketTransaction:
@@ -270,48 +284,52 @@ def purchase_listing(buyer: Manor, listing_id: int) -> MarketTransaction:
         if listing.seller == buyer:
             raise ValueError("不能购买自己的物品")
 
-        # 步骤2：扣除买家银两（已包含并发安全检查）
-        spend_resources(
-            buyer,
+        # 步骤2：按固定顺序锁定买家/卖家庄园，避免隐式锁顺序导致的死锁风险
+        buyer_locked = Manor.objects.select_for_update().get(pk=buyer.pk)
+        seller_locked = Manor.objects.select_for_update().get(pk=listing.seller_id) if listing.seller_id else None
+
+        # 步骤3：扣除买家银两
+        spend_resources_locked(
+            buyer_locked,
             {"silver": listing.total_price},
             note=f"购买{listing.item_template.name}",
             reason=ResourceEvent.Reason.MARKET_PURCHASE
         )
 
-        # 步骤3：计算税费和卖家实收，发放卖家收益
+        # 步骤4：计算税费和卖家实收，发放卖家收益
         tax_amount = int(listing.total_price * TRANSACTION_TAX_RATE)
         seller_received = listing.total_price - tax_amount
 
         # 增加卖家银两（仅玩家卖家，系统商店无需处理）
-        if listing.seller_id:
-            grant_resources(
-                listing.seller,
+        if seller_locked is not None:
+            grant_resources_locked(
+                seller_locked,
                 {"silver": seller_received},
                 note=f"出售{listing.item_template.name}",
                 reason=ResourceEvent.Reason.ITEM_SOLD
             )
 
-        # 步骤4：更新挂单状态
+        # 步骤5：更新挂单状态
         now = timezone.now()
         listing.status = MarketListing.Status.SOLD
-        listing.buyer = buyer
+        listing.buyer = buyer_locked
         listing.sold_at = now
         listing.save(update_fields=["status", "buyer", "sold_at"])
 
-        # 步骤5：创建交易记录
+        # 步骤6：创建交易记录
         transaction_record = MarketTransaction.objects.create(
             listing=listing,
-            buyer=buyer,
+            buyer=buyer_locked,
             total_price=listing.total_price,
             tax_amount=tax_amount,
             seller_received=seller_received,
         )
 
-        # 步骤6：物品发放到买家仓库 - 锁定库存行防止并发冲突
+        # 步骤7：物品发放到买家仓库 - 锁定库存行防止并发冲突
         inventory_item = (
             InventoryItem.objects.select_for_update()
             .filter(
-                manor=buyer,
+                manor=buyer_locked,
                 template=listing.item_template,
                 storage_location=InventoryItem.StorageLocation.WAREHOUSE,
             )
@@ -326,7 +344,7 @@ def purchase_listing(buyer: Manor, listing_id: int) -> MarketTransaction:
         else:
             # 首次获得该物品，创建新记录
             InventoryItem.objects.create(
-                manor=buyer,
+                manor=buyer_locked,
                 template=listing.item_template,
                 storage_location=InventoryItem.StorageLocation.WAREHOUSE,
                 quantity=listing.quantity,
@@ -373,26 +391,18 @@ def purchase_listing(buyer: Manor, listing_id: int) -> MarketTransaction:
         )
 
         # WebSocket 即时推送通知卖家
-        channel_layer = get_channel_layer()
-        if channel_layer:
-            payload = {
+        notify_user(
+            listing.seller.user_id,
+            {
                 "kind": "market_sold",
                 "title": "【交易成功】您的物品已售出",
                 "item_name": listing.item_template.name,
                 "item_key": listing.item_template.key,
                 "quantity": listing.quantity,
                 "silver_received": seller_received,
-            }
-            try:
-                async_to_sync(channel_layer.group_send)(
-                    f"user_{listing.seller.user_id}",
-                    {"type": "notify.message", "payload": payload},
-                )
-            except Exception:
-                logger.warning(
-                    f"Failed to send market sold notification to user {listing.seller.user_id}",
-                    exc_info=True,
-                )
+            },
+            log_context="market sold notification",
+        )
 
     # 标记邮件已发送
     transaction_record.buyer_mail_sent = True
@@ -436,17 +446,32 @@ def cancel_listing(manor: Manor, listing_id: int) -> Dict:
     listing.status = MarketListing.Status.CANCELLED
     listing.save(update_fields=["status"])
 
-    # 退回物品到仓库
+    # 退回物品到仓库（使用原子操作防止并发丢失更新）
     # IMPORTANT: Must specify storage_location to avoid MultipleObjectsReturned
     # when the same template exists in both warehouse and treasury
-    inventory_item, created = InventoryItem.objects.get_or_create(
-        manor=manor,
-        template=listing.item_template,
-        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-        defaults={"quantity": 0},
+    inventory_item = (
+        InventoryItem.objects.select_for_update()
+        .filter(
+            manor=manor,
+            template=listing.item_template,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        )
+        .first()
     )
-    inventory_item.quantity += listing.quantity
-    inventory_item.save(update_fields=["quantity", "updated_at"])
+
+    if inventory_item:
+        # 已有该物品，使用 F() 表达式增加数量
+        InventoryItem.objects.filter(pk=inventory_item.pk).update(
+            quantity=F("quantity") + listing.quantity, updated_at=timezone.now()
+        )
+    else:
+        # 首次获得该物品，创建新记录
+        InventoryItem.objects.create(
+            manor=manor,
+            template=listing.item_template,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+            quantity=listing.quantity,
+        )
 
     return {
         "item_name": listing.item_template.name,
@@ -454,21 +479,10 @@ def cancel_listing(manor: Manor, listing_id: int) -> Dict:
     }
 
 
-def expire_listings() -> int:
-    """
-    处理过期挂单，通过邮件退回物品并删除挂单记录
-
-    Returns:
-        处理的挂单数量
-    """
-    # 查找所有过期的挂单
-    expired_listings = MarketListing.objects.filter(
-        status=MarketListing.Status.ACTIVE,
-        expires_at__lte=timezone.now(),
-    ).select_related("seller", "item_template")
-
+def _expire_listings_queryset(expired_listings: QuerySet, log_label: str) -> int:
+    """处理过期挂单，通过邮件退回物品并删除挂单记录。"""
     count = 0
-    for listing in expired_listings:
+    for listing in expired_listings.select_related("seller", "item_template"):
         try:
             with transaction.atomic():
                 # 保存挂单信息用于发送邮件（删除前先读取）
@@ -507,33 +521,39 @@ def expire_listings() -> int:
                 )
 
                 # WebSocket 即时推送通知卖家
-                channel_layer = get_channel_layer()
-                if channel_layer:
-                    payload = {
+                notify_user(
+                    seller.user_id,
+                    {
                         "kind": "market_expired",
                         "title": "【交易过期】您的物品已退回",
                         "item_name": item_name,
                         "item_key": item_key,
                         "quantity": quantity,
-                    }
-                    try:
-                        async_to_sync(channel_layer.group_send)(
-                            f"user_{seller.user_id}",
-                            {"type": "notify.message", "payload": payload},
-                        )
-                    except Exception:
-                        logger.warning(
-                            f"Failed to send market expired notification to user {seller.user_id}",
-                            exc_info=True,
-                        )
+                    },
+                    log_context="market expired notification",
+                )
 
                 count += 1
         except Exception as e:
             # 记录错误但继续处理其他挂单
-            logger.exception(f"处理过期挂单 {listing.id} 时出错：{e}")
+            logger.exception(f"{log_label} {listing.id} 时出错：{e}")
             continue
 
     return count
+
+
+def expire_listings() -> int:
+    """
+    处理过期挂单，通过邮件退回物品并删除挂单记录
+
+    Returns:
+        处理的挂单数量
+    """
+    expired_listings = MarketListing.objects.filter(
+        status=MarketListing.Status.ACTIVE,
+        expires_at__lte=timezone.now(),
+    )
+    return _expire_listings_queryset(expired_listings, "处理过期挂单")
 
 
 def expire_user_listings(manor: Manor) -> int:
@@ -550,73 +570,8 @@ def expire_user_listings(manor: Manor) -> int:
         seller=manor,
         status=MarketListing.Status.ACTIVE,
         expires_at__lte=timezone.now(),
-    ).select_related("item_template")
-
-    count = 0
-    for listing in expired_listings:
-        try:
-            with transaction.atomic():
-                # 保存挂单信息用于发送邮件
-                item_template = listing.item_template
-                item_name = item_template.name
-                item_key = item_template.key
-                quantity = listing.quantity
-                unit_price = listing.unit_price
-                listing_fee = listing.listing_fee
-                listed_at = listing.listed_at
-                expires_at = listing.expires_at
-
-                # 删除挂单记录
-                listing.delete()
-
-                # 通过邮件退回物品
-                create_message(
-                    manor=manor,
-                    kind="system",
-                    title="【交易过期】您的物品已退回",
-                    body=(
-                        f"您上架的 {item_name} x{quantity} 已过期，物品已通过附件退回。\n\n"
-                        f"挂单信息：\n"
-                        f"- 物品：{item_name}\n"
-                        f"- 数量：{quantity}\n"
-                        f"- 定价：{unit_price:,} 银两/件\n"
-                        f"- 上架时间：{listed_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                        f"- 过期时间：{expires_at.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-                        f"注意：手续费 {listing_fee:,} 银两不予退还。\n"
-                        f"请在消息中领取附件以取回物品。"
-                    ),
-                    attachments={
-                        "items": {item_key: quantity},
-                    },
-                )
-
-                # WebSocket 即时推送通知
-                channel_layer = get_channel_layer()
-                if channel_layer:
-                    payload = {
-                        "kind": "market_expired",
-                        "title": "【交易过期】您的物品已退回",
-                        "item_name": item_name,
-                        "item_key": item_key,
-                        "quantity": quantity,
-                    }
-                    try:
-                        async_to_sync(channel_layer.group_send)(
-                            f"user_{manor.user_id}",
-                            {"type": "notify.message", "payload": payload},
-                        )
-                    except Exception:
-                        logger.warning(
-                            f"Failed to send market expired notification to user {manor.user_id}",
-                            exc_info=True,
-                        )
-
-                count += 1
-        except Exception as e:
-            logger.exception(f"处理用户 {manor.id} 的过期挂单 {listing.id} 时出错：{e}")
-            continue
-
-    return count
+    )
+    return _expire_listings_queryset(expired_listings, f"处理用户 {manor.id} 的过期挂单")
 
 
 def get_my_listings(manor: Manor, status: str = None) -> QuerySet:

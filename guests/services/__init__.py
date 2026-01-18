@@ -23,6 +23,7 @@ from .recruitment import (
     CORE_POOL_TIERS,
     allocate_attribute_points,
     available_guests,
+    bulk_finalize_candidates,
     choose_template_from_entries,
     convert_candidate_to_retainer,
     finalize_candidate,
@@ -56,6 +57,7 @@ __all__ = [
     # 招募
     "allocate_attribute_points",
     "available_guests",
+    "bulk_finalize_candidates",
     "choose_template_from_entries",
     "convert_candidate_to_retainer",
     "finalize_candidate",

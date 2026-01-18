@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}结义林{% endblock %}
+
+{% block content %}
+<section class="dashboard">
+  <div class="section-header">
+    <div>
+      <h1>结义林</h1>
+      <p class="caption">
+        人数：<strong>{{ bonds|length }}</strong> / <strong>{{ oath_capacity }}</strong>
+        | 结义门客不可被俘获
+      </p>
+    </div>
+    <div class="section-actions">
+      <a class="btn-secondary" href="{% url 'gameplay:jail' %}">前往监牢</a>
+    </div>
+  </div>
+
+  <section class="card">
+    <h2 style="margin-top: 0;">新增结义</h2>
+    <form method="post" action="{% url 'gameplay:add_oath_bond_view' %}" class="form-row">
+      {% csrf_token %}
+      <select name="guest_id" class="form-select" required>
+        <option value="">请选择门客</option>
+        {% for g in available_guests %}
+        <option value="{{ g.id }}">{{ g.display_name }}（{{ g.template.rarity }}，Lv {{ g.level }}）</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn-primary">结义</button>
+    </form>
+    <p class="muted-text" style="margin-top: 0.6rem;">提示：结义只影响“是否可被俘获”，不影响任何俘获概率。</p>
+  </section>
+
+  <section class="card">
+    {% if bonds %}
+      <table class="table">
+        <thead>
+          <tr>
+            <th>门客</th>
+            <th>稀有度</th>
+            <th>等级</th>
+            <th>结义时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in bonds %}
+          <tr>
+            <td>{{ b.guest.display_name }}</td>
+            <td>{{ b.guest.template.rarity }}</td>
+            <td>Lv {{ b.guest.level }}</td>
+            <td>{% if b.created_at %}{{ b.created_at|date:"Y-m-d H:i" }}{% endif %}</td>
+            <td>
+              <form method="post" action="{% url 'gameplay:remove_oath_bond_view' b.guest_id %}">
+                {% csrf_token %}
+                <button type="submit" class="btn-secondary">解除</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="empty-state">当前没有结义门客。</p>
+    {% endif %}
+  </section>
+</section>
+{% endblock %}

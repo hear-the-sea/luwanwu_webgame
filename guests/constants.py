@@ -2,22 +2,7 @@
 门客系统相关常量
 """
 
-
-# 时间常量（秒）
-class TimeConstants:
-    """时间相关常量"""
-
-    MINUTE = 60
-    HOUR = 3600
-    DAY = 86400
-
-    # 生命值恢复
-    HP_RECOVERY_INTERVAL = 600  # 10分钟更新一次
-    HP_FULL_RECOVERY_TIME = 24 * 3600  # 24小时完全恢复
-
-    # 训练时间
-    TRAINING_CHECK_INTERVAL = 60  # 训练检查间隔
-
+from common.constants.time import TimeConstants  # noqa: F401
 
 # 门客状态
 class GuestStatus:

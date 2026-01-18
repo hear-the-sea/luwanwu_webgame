@@ -127,6 +127,26 @@ class GuestQuerySet(models.QuerySet):
         """
         return self.order_by("-created_at" if desc else "created_at")
 
+    def for_update(self, nowait: bool = False) -> "GuestQuerySet":
+        """
+        加行锁，用于并发安全的读取和更新
+
+        必须在事务中使用（@transaction.atomic）
+
+        Args:
+            nowait: 如果为 True，当行被锁定时立即报错而不是等待
+
+        Example:
+            from django.db import transaction
+
+            @transaction.atomic
+            def update_guest_level(manor, guest_id):
+                guest = Guest.objects.for_manor(manor).for_update().get(pk=guest_id)
+                guest.level += 1
+                guest.save()
+        """
+        return self.select_for_update(nowait=nowait)
+
 
 class GuestManager(models.Manager):
     """

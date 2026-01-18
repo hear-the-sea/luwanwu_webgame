@@ -135,14 +135,14 @@ class Guild(models.Model):
         return self.members.filter(
             is_active=True,
             position='leader'
-        ).select_related('user').first()
+        ).select_related('user__manor').first()
 
     def get_admins(self):
         """获取管理员列表"""
         return self.members.filter(
             is_active=True,
             position='admin'
-        ).select_related('user')
+        ).select_related('user__manor')
 
     def can_appoint_admin(self):
         """是否可以任命管理员"""

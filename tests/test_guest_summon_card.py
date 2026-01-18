@@ -1,7 +1,8 @@
 import pytest
 
 from gameplay.models import InventoryItem, ItemTemplate
-from gameplay.services import ensure_manor, use_inventory_item
+from gameplay.services.inventory import use_inventory_item
+from gameplay.services.manor import ensure_manor
 from guests.models import Guest, GuestTemplate
 from core.exceptions import GuestCapacityFullError
 
@@ -148,4 +149,3 @@ def test_summon_card_respects_guest_capacity(monkeypatch, django_user_model):
 
     item.refresh_from_db()
     assert item.quantity == 1
-

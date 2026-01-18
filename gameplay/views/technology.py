@@ -16,7 +16,7 @@ from django.views.generic import TemplateView
 from core.exceptions import GameError
 from core.utils import sanitize_error_message
 
-from ..services import (
+from gameplay.services import (
     ensure_manor,
     get_categories,
     get_martial_technologies_grouped,

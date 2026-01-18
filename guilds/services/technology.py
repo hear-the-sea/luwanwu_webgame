@@ -5,56 +5,10 @@ from django.db.models import F
 
 from gameplay.models import Manor
 
-from ..models import Guild, GuildMember, GuildResourceLog, GuildTechnology
+from ..constants import TECH_NAMES, TECH_UPGRADE_COSTS
+from ..models import Guild, GuildResourceLog, GuildTechnology
 from .guild import create_announcement
-
-
-def _get_active_membership(guild: Guild, user, error_msg: str = "您不是该帮会成员") -> GuildMember:
-    """
-    获取用户在指定帮会的有效成员记录
-
-    Args:
-        guild: 帮会对象
-        user: 用户对象
-        error_msg: 找不到成员时的错误消息
-
-    Returns:
-        GuildMember对象
-
-    Raises:
-        ValueError: 用户不是该帮会的活跃成员
-    """
-    try:
-        return GuildMember.objects.get(guild=guild, user=user, is_active=True)
-    except GuildMember.DoesNotExist:
-        raise ValueError(error_msg)
-
-# 科技升级成本配置
-TECH_UPGRADE_COSTS = {
-    # 生产类科技（成本较低）
-    'equipment_forge': {'silver': 5000, 'grain': 2000, 'gold_bar': 1},
-    'experience_refine': {'silver': 5000, 'grain': 2000, 'gold_bar': 1},
-    'resource_supply': {'silver': 4000, 'grain': 3000, 'gold_bar': 1},
-
-    # 战斗类科技（成本中等）
-    'military_study': {'silver': 8000, 'grain': 3000, 'gold_bar': 2},
-    'troop_tactics': {'silver': 8000, 'grain': 3000, 'gold_bar': 2},
-
-    # 福利类科技（成本较高）
-    'resource_boost': {'silver': 10000, 'grain': 5000, 'gold_bar': 3},
-    'march_speed': {'silver': 10000, 'grain': 5000, 'gold_bar': 3},
-}
-
-# 科技名称映射
-TECH_NAMES = {
-    'equipment_forge': '装备锻造',
-    'experience_refine': '经验炼制',
-    'resource_supply': '资源补给',
-    'military_study': '兵法研习',
-    'troop_tactics': '强兵战术',
-    'resource_boost': '资源增产',
-    'march_speed': '行军加速',
-}
+from .utils import get_active_membership
 
 
 def calculate_tech_upgrade_cost(tech_key, current_level):
@@ -91,7 +45,7 @@ def upgrade_technology(guild, tech_key, operator):
         ValueError: 验证失败
     """
     # 验证权限
-    membership = _get_active_membership(guild, operator, "只有帮主和管理员可以升级科技")
+    membership = get_active_membership(guild, operator, "只有帮主和管理员可以升级科技")
     if not membership.can_manage:
         raise ValueError("只有帮主和管理员可以升级科技")
 
@@ -105,22 +59,14 @@ def upgrade_technology(guild, tech_key, operator):
     if not tech.can_upgrade:
         raise ValueError("科技已达最高等级")
 
-    # 计算升级成本
-    cost = calculate_tech_upgrade_cost(tech_key, tech.level)
-
-    # 验证帮会资源
-    if guild.silver < cost['silver']:
-        raise ValueError(f"帮会银两不足，需要{cost['silver']}")
-    if guild.grain < cost['grain']:
-        raise ValueError(f"帮会粮食不足，需要{cost['grain']}")
-    if guild.gold_bar < cost['gold_bar']:
-        raise ValueError(f"帮会金条不足，需要{cost['gold_bar']}")
-
     # 并发安全的事务处理
     with transaction.atomic():
         # 步骤1：锁定帮会和科技，防止并发升级
         guild_locked = Guild.objects.select_for_update().get(pk=guild.pk)
         tech_locked = GuildTechnology.objects.select_for_update().get(pk=tech.pk)
+
+        # 成本必须基于锁内的当前等级计算，避免并发下低价升级
+        cost = calculate_tech_upgrade_cost(tech_key, tech_locked.level)
 
         # 步骤2：在锁内重新验证条件，防止并发穿透
         if not tech_locked.can_upgrade:

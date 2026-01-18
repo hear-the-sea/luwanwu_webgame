@@ -28,7 +28,7 @@ urlpatterns = [
 ]
 
 # 开发环境：战斗调试器仅在 DEBUG 下注册路由
-if settings.DEBUG:
+if settings.ENABLE_BATTLE_DEBUGGER:
     urlpatterns += [
         path(
             "debugger/",

@@ -3,16 +3,20 @@ from __future__ import annotations
 from typing import Dict
 
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.apps import apps
 from django.db.models import Q
 from django.views.generic import DetailView
 
-from gameplay.models import MissionRun, RaidRun, ResourceType
-from gameplay.services import ensure_manor
-from gameplay.utils.template_loader import get_item_template_names_by_keys
 from guests.models import GuestTemplate, SkillBook
 
 from .models import BattleReport
 from .troops import load_troop_templates
+
+_RESOURCE_LABELS = {
+    # Mirror gameplay.models.ResourceType labels but avoid importing gameplay at import-time (reduces app coupling).
+    "grain": "粮食",
+    "silver": "银两",
+}
 
 
 class BattleReportDetailView(LoginRequiredMixin, DetailView):
@@ -21,6 +25,8 @@ class BattleReportDetailView(LoginRequiredMixin, DetailView):
     context_object_name = "report"
 
     def get_queryset(self):
+        from gameplay.services.manor import ensure_manor
+
         manor = ensure_manor(self.request.user)
         # 允许查看：
         # 1) 自己作为战报归属方（report.manor）
@@ -31,6 +37,11 @@ class BattleReportDetailView(LoginRequiredMixin, DetailView):
         )
 
     def get_context_data(self, **kwargs):
+        from gameplay.services.manor import ensure_manor
+        from gameplay.utils.template_loader import get_item_template_names_by_keys
+
+        RaidRun = apps.get_model("gameplay", "RaidRun")
+
         context = super().get_context_data(**kwargs)
         report: BattleReport = context["report"]
         manor = ensure_manor(self.request.user)
@@ -143,11 +154,7 @@ class BattleReportDetailView(LoginRequiredMixin, DetailView):
         book_labels = {book.key: book.name for book in SkillBook.objects.filter(key__in=drops.keys())}
         drop_items = []
         for key, amount in drops.items():
-            label = key
-            try:
-                label = ResourceType(key).label
-            except ValueError:
-                label = item_templates.get(key, book_labels.get(key, key))
+            label = _RESOURCE_LABELS.get(key) or item_templates.get(key) or book_labels.get(key) or key
             drop_items.append({"key": key, "label": label, "amount": amount})
         context["drop_items"] = drop_items
         context["has_drops"] = bool(drop_items)
@@ -162,6 +169,9 @@ class BattleReportDetailView(LoginRequiredMixin, DetailView):
         2. 检查 RaidRun：根据玩家是进攻方还是防守方决定
         3. 默认：战报归属方是 attacker（普通任务）
         """
+        MissionRun = apps.get_model("gameplay", "MissionRun")
+        RaidRun = apps.get_model("gameplay", "RaidRun")
+
         # 检查是否为防守任务
         mission_run = MissionRun.objects.filter(battle_report=report).select_related("mission").first()
         if mission_run and mission_run.mission.is_defense:

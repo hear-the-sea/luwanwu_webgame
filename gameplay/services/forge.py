@@ -441,10 +441,6 @@ def start_equipment_forging(manor: Manor, equipment_key: str, quantity: int = 1)
     if equipment_key not in EQUIPMENT_CONFIG:
         raise ValueError("无效的装备类型")
 
-    # 检查是否已有锻造进行中
-    if has_active_forging(manor):
-        raise ValueError("已有装备正在锻造中，同时只能锻造一种装备")
-
     config = EQUIPMENT_CONFIG[equipment_key]
     required_level = config.get("required_forging", 1)
 
@@ -465,36 +461,39 @@ def start_equipment_forging(manor: Manor, equipment_key: str, quantity: int = 1)
     materials = config.get("materials", {})
     total_costs = {mat_key: mat_amount * quantity for mat_key, mat_amount in materials.items()}
 
-    # 检查材料是否足够
-    from .inventory import get_item_quantity
-    for mat_key, total_amount in total_costs.items():
-        current_amount = get_item_quantity(manor, mat_key)
-        mat_name = MATERIAL_NAMES.get(mat_key, mat_key)
-        if current_amount < total_amount:
-            raise ValueError(f"{mat_name}不足，需要{total_amount}，当前{current_amount}")
-
     with transaction.atomic():
-        from .inventory import consume_inventory_item
+        from gameplay.models import Manor as ManorModel
+        from .inventory import consume_inventory_item_locked
         from ..models import InventoryItem
+
+        locked_manor = ManorModel.objects.select_for_update().get(pk=manor.pk)
+
+        if has_active_forging(locked_manor):
+            raise ValueError("已有装备正在锻造中，同时只能锻造一种装备")
 
         # 扣除材料
         for mat_key, total_amount in total_costs.items():
-            item = InventoryItem.objects.filter(
-                manor=manor,
-                template__key=mat_key,
-                storage_location=InventoryItem.StorageLocation.WAREHOUSE
-            ).first()
+            item = (
+                InventoryItem.objects.select_for_update()
+                .select_related("template", "manor")
+                .filter(
+                    manor=locked_manor,
+                    template__key=mat_key,
+                    storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+                )
+                .first()
+            )
             mat_name = MATERIAL_NAMES.get(mat_key, mat_key)
             if not item or item.quantity < total_amount:
                 raise ValueError(f"{mat_name}不足")
-            consume_inventory_item(item, total_amount)
+            consume_inventory_item_locked(item, total_amount)
 
         # 计算实际锻造时间（时间不随数量增加）
-        actual_duration = calculate_forging_duration(config["base_duration"], manor)
+        actual_duration = calculate_forging_duration(config["base_duration"], locked_manor)
 
         # 创建锻造记录
         production = EquipmentProduction.objects.create(
-            manor=manor,
+            manor=locked_manor,
             equipment_key=equipment_key,
             equipment_name=config["name"],
             quantity=quantity,
@@ -546,12 +545,8 @@ def finalize_equipment_forging(production: EquipmentProduction, send_notificatio
     Returns:
         是否成功完成
     """
-    import logging
-    from asgiref.sync import async_to_sync
-    from channels.layers import get_channel_layer
     from ..models import Message
-
-    logger = logging.getLogger(__name__)
+    from .notifications import notify_user
 
     if production.status != EquipmentProduction.Status.FORGING:
         return False
@@ -561,9 +556,9 @@ def finalize_equipment_forging(production: EquipmentProduction, send_notificatio
 
     with transaction.atomic():
         # 添加装备到仓库（按数量添加）
-        from .inventory import add_item_to_inventory
+        from .inventory import add_item_to_inventory_locked
 
-        add_item_to_inventory(production.manor, production.equipment_key, production.quantity)
+        add_item_to_inventory_locked(production.manor, production.equipment_key, production.quantity)
 
         # 更新锻造状态
         production.status = EquipmentProduction.Status.COMPLETED
@@ -581,21 +576,16 @@ def finalize_equipment_forging(production: EquipmentProduction, send_notificatio
             body=f"您的{production.equipment_name}{quantity_text}已锻造完成，请到仓库查收。",
         )
 
-        channel_layer = get_channel_layer()
-        if channel_layer:
-            payload = {
+        notify_user(
+            production.manor.user_id,
+            {
                 "kind": "system",
                 "title": f"{production.equipment_name}{quantity_text}锻造完成",
                 "equipment_key": production.equipment_key,
                 "quantity": production.quantity,
-            }
-            try:
-                async_to_sync(channel_layer.group_send)(
-                    f"user_{production.manor.user_id}",
-                    {"type": "notify.message", "payload": payload},
-                )
-            except Exception:
-                logger.warning("Failed to send equipment forging notification via channels", exc_info=True)
+            },
+            log_context="equipment forging notification",
+        )
 
     return True
 

@@ -885,57 +885,107 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Tooltip 位置动态调整
-    const itemCells = document.querySelectorAll('.auction-table .item-cell');
-    itemCells.forEach(cell => {
-        cell.addEventListener('mouseenter', function() {
-            const tooltip = this.querySelector('.item-tooltip');
-            if (!tooltip) return;
+    (function setupAuctionTooltips() {
+        window.__webgame_tooltip_init = window.__webgame_tooltip_init || {};
+        if (window.__webgame_tooltip_init.auction) return;
+        window.__webgame_tooltip_init.auction = true;
 
-            const cellRect = this.getBoundingClientRect();
-            const viewportHeight = window.innerHeight;
-            const viewportWidth = window.innerWidth;
+        const cellSelector = '.auction-table .item-cell';
+        const tooltipSelector = '.item-tooltip';
+        const viewportPadding = 20;
+        const offset = 8;
 
-            setTimeout(() => {
-                const tooltipRect = tooltip.getBoundingClientRect();
-                let top = cellRect.bottom + 8;
-                let left = cellRect.left;
+        if (!document.querySelector(cellSelector)) return;
 
-                if (left + tooltipRect.width > viewportWidth - 20) {
-                    left = viewportWidth - tooltipRect.width - 20;
+        let activeCell = null;
+        let rafId = null;
+        let sizeRetryCount = 0;
+
+        function requestUpdate() {
+            if (rafId) return;
+            rafId = requestAnimationFrame(() => {
+                rafId = null;
+                if (!activeCell) return;
+                if (!activeCell.isConnected) {
+                    activeCell = null;
+                    sizeRetryCount = 0;
+                    return;
                 }
 
-                if (top + tooltipRect.height > viewportHeight - 20) {
-                    top = cellRect.top - tooltipRect.height - 8;
+                const tooltip = activeCell.querySelector(tooltipSelector);
+                if (!tooltip) return;
+
+                const cellRect = activeCell.getBoundingClientRect();
+                const viewportHeight = window.innerHeight;
+                const viewportWidth = window.innerWidth;
+
+                const tooltipRect = tooltip.getBoundingClientRect();
+                if ((tooltipRect.width === 0 || tooltipRect.height === 0) && sizeRetryCount < 2) {
+                    sizeRetryCount += 1;
+                    requestUpdate();
+                    return;
+                }
+                sizeRetryCount = 0;
+
+                let top = cellRect.bottom + offset;
+                let left = cellRect.left;
+
+                if (left + tooltipRect.width > viewportWidth - viewportPadding) {
+                    left = viewportWidth - tooltipRect.width - viewportPadding;
+                }
+
+                if (top + tooltipRect.height > viewportHeight - viewportPadding) {
+                    top = cellRect.top - tooltipRect.height - offset;
                 }
 
                 tooltip.style.top = top + 'px';
                 tooltip.style.left = left + 'px';
-            }, 10);
+            });
+        }
+
+        function setActiveCell(cell) {
+            if (activeCell === cell) return;
+            activeCell = cell;
+            sizeRetryCount = 0;
+            requestUpdate();
+        }
+
+        document.addEventListener('mouseover', function (event) {
+            const target = event.target;
+            if (!target || !target.closest) return;
+            const cell = target.closest(cellSelector);
+            if (!cell) return;
+            setActiveCell(cell);
         });
 
-        cell.addEventListener('mousemove', function() {
-            const tooltip = this.querySelector('.item-tooltip');
-            if (!tooltip || tooltip.style.display === 'none') return;
-
-            const cellRect = this.getBoundingClientRect();
-            const viewportHeight = window.innerHeight;
-            const viewportWidth = window.innerWidth;
-            const tooltipRect = tooltip.getBoundingClientRect();
-
-            let top = cellRect.bottom + 8;
-            let left = cellRect.left;
-
-            if (left + tooltipRect.width > viewportWidth - 20) {
-                left = viewportWidth - tooltipRect.width - 20;
-            }
-
-            if (top + tooltipRect.height > viewportHeight - 20) {
-                top = cellRect.top - tooltipRect.height - 8;
-            }
-
-            tooltip.style.top = top + 'px';
-            tooltip.style.left = left + 'px';
+        document.addEventListener('mousemove', function (event) {
+            if (!activeCell) return;
+            const target = event.target;
+            if (!target || !target.closest) return;
+            if (!target.closest(cellSelector)) return;
+            requestUpdate();
         });
-    });
+
+        document.addEventListener('mouseout', function (event) {
+            const target = event.target;
+            if (!target || !target.closest) return;
+            const cell = target.closest(cellSelector);
+            if (!cell || cell !== activeCell) return;
+            const related = event.relatedTarget;
+            if (related && cell.contains(related)) return;
+            activeCell = null;
+            sizeRetryCount = 0;
+        });
+
+        window.addEventListener('scroll', function () {
+            if (!activeCell) return;
+            requestUpdate();
+        }, true);
+
+        window.addEventListener('resize', function () {
+            if (!activeCell) return;
+            requestUpdate();
+        });
+    })();
 });
 </script>

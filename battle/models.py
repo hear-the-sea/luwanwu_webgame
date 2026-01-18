@@ -3,8 +3,6 @@ from __future__ import annotations
 from django.db import models
 from django.utils import timezone
 
-from gameplay.models import Manor
-
 
 class TroopTemplate(models.Model):
     """兵种模板"""
@@ -35,7 +33,7 @@ class BattleReport(models.Model):
         ("draw", "平局"),
     ]
 
-    manor = models.ForeignKey(Manor, on_delete=models.CASCADE, related_name="battle_reports")
+    manor = models.ForeignKey("gameplay.Manor", on_delete=models.CASCADE, related_name="battle_reports")
     opponent_name = models.CharField(max_length=64)
     battle_type = models.CharField(max_length=32, default="skirmish")
     attacker_team = models.JSONField(default=list)

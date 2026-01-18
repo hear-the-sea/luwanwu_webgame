@@ -45,7 +45,7 @@ def untradeable_item_template(db):
 def seller_manor(django_user_model, tradeable_item_template):
     """创建卖家庄园，拥有物品和银两"""
     user = django_user_model.objects.create_user(username="seller", password="pass12345")
-    from gameplay.services import ensure_manor
+    from gameplay.services.manor import ensure_manor
     manor = ensure_manor(user)
     manor.silver = 100000
     manor.silver_capacity = 200000  # 设置足够大的银库容量
@@ -65,7 +65,7 @@ def seller_manor(django_user_model, tradeable_item_template):
 def buyer_manor(django_user_model):
     """创建买家庄园，拥有足够银两"""
     user = django_user_model.objects.create_user(username="buyer", password="pass12345")
-    from gameplay.services import ensure_manor
+    from gameplay.services.manor import ensure_manor
     manor = ensure_manor(user)
     manor.silver = 500000
     manor.silver_capacity = 1000000  # 设置足够大的银库容量

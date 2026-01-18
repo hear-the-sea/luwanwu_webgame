@@ -1,46 +1,19 @@
-# guilds/services/guild.py
 
-import re
-
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.utils import timezone
 
 from gameplay.models import Manor
 
+from ..constants import (
+    GUILD_CREATION_COST,
+    GUILD_NAME_MAX_LENGTH,
+    GUILD_NAME_MIN_LENGTH,
+    GUILD_NAME_PATTERN,
+    GUILD_UPGRADE_BASE_COST,
+)
 from ..models import Guild, GuildAnnouncement, GuildMember, GuildTechnology
-
-
-def _get_active_membership(guild: Guild, user, error_msg: str = "您不是该帮会成员") -> GuildMember:
-    """
-    获取用户在指定帮会的有效成员记录
-
-    Args:
-        guild: 帮会对象
-        user: 用户对象
-        error_msg: 找不到成员时的错误消息
-
-    Returns:
-        GuildMember对象
-
-    Raises:
-        ValueError: 用户不是该帮会的活跃成员
-    """
-    try:
-        return GuildMember.objects.get(guild=guild, user=user, is_active=True)
-    except GuildMember.DoesNotExist:
-        raise ValueError(error_msg)
-
-
-# 配置常量
-GUILD_CREATION_COST = {'gold_bar': 2}
-GUILD_UPGRADE_BASE_COST = 5  # 金条
-
-# 帮会名称校验常量
-GUILD_NAME_MIN_LENGTH = 2
-GUILD_NAME_MAX_LENGTH = 16
-# 允许：中文、英文、数字、下划线
-GUILD_NAME_PATTERN = re.compile(r'^[\u4e00-\u9fa5a-zA-Z0-9_]+$')
+from .utils import get_active_membership
 
 
 def validate_guild_name(name: str) -> None:
@@ -86,62 +59,72 @@ def create_guild(user, name, description='', emblem='default'):
     """
     from gameplay.models import InventoryItem, ItemTemplate
 
-    # 验证用户是否已加入帮会（检查是否有活跃的成员记录）
-    existing_membership = GuildMember.objects.filter(user=user, is_active=True).first()
-    if existing_membership:
-        raise ValueError("您已加入帮会，无法创建新帮会")
-
-    # 清理可能存在的非活跃成员记录（解决 OneToOneField 唯一约束问题）
-    GuildMember.objects.filter(user=user, is_active=False).delete()
-
     # 校验帮会名称格式
     name = name.strip() if name else ""
     validate_guild_name(name)
 
-    # 验证帮会名称唯一性
-    if Guild.objects.filter(name=name, is_active=True).exists():
-        raise ValueError("帮会名称已存在")
-
-    # 验证金条（从仓库）
-    manor = Manor.objects.get(user=user)
     required_gold_bars = GUILD_CREATION_COST['gold_bar']
 
-    try:
-        gold_bar_template = ItemTemplate.objects.get(key='gold_bar')
-        gold_bar_item = InventoryItem.objects.filter(
-            manor=manor,
-            template=gold_bar_template,
-            storage_location='warehouse'
-        ).first()
+    with transaction.atomic():
+        # 并发安全：锁定并校验当前用户的帮会成员记录（OneToOneField 防止重复入帮）
+        membership = GuildMember.objects.select_for_update().filter(user=user).first()
+        if membership and membership.is_active:
+            raise ValueError("您已加入帮会，无法创建新帮会")
+        if membership and not membership.is_active:
+            membership.delete()
 
+        # 锁定庄园行（同时作为创建流程的串行化锚点）
+        manor = Manor.objects.select_for_update().get(user=user)
+
+        # 锁定并扣减金条库存（仓库）
+        try:
+            gold_bar_template = ItemTemplate.objects.get(key='gold_bar')
+        except ItemTemplate.DoesNotExist:
+            raise ValueError("金条物品不存在，请联系管理员")
+
+        gold_bar_item = (
+            InventoryItem.objects.select_for_update()
+            .filter(
+                manor=manor,
+                template=gold_bar_template,
+                storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+            )
+            .first()
+        )
         if not gold_bar_item or gold_bar_item.quantity < required_gold_bars:
             raise ValueError(f"金条不足，需要{required_gold_bars}金条")
-    except ItemTemplate.DoesNotExist:
-        raise ValueError("金条物品不存在，请联系管理员")
 
-    with transaction.atomic():
-        # 消耗金条
-        gold_bar_item.quantity -= required_gold_bars
-        if gold_bar_item.quantity <= 0:
+        updated = InventoryItem.objects.filter(
+            pk=gold_bar_item.pk, quantity__gte=required_gold_bars
+        ).update(quantity=F("quantity") - required_gold_bars)
+        if not updated:
+            raise ValueError(f"金条不足，需要{required_gold_bars}金条")
+        gold_bar_item.refresh_from_db(fields=["quantity"])
+        if gold_bar_item.quantity == 0:
             gold_bar_item.delete()
-        else:
-            gold_bar_item.save(update_fields=['quantity'])
 
         # 创建帮会
-        guild = Guild.objects.create(
-            name=name,
-            description=description,
-            emblem=emblem,
-            founder=user,
-            level=1,
-        )
+        try:
+            guild = Guild.objects.create(
+                name=name,
+                description=description,
+                emblem=emblem,
+                founder=user,
+                level=1,
+            )
+        except IntegrityError:
+            # unique=True on Guild.name
+            raise ValueError("帮会名称已存在")
 
         # 创建者自动成为帮主
-        GuildMember.objects.create(
-            guild=guild,
-            user=user,
-            position='leader',
-        )
+        try:
+            GuildMember.objects.create(
+                guild=guild,
+                user=user,
+                position='leader',
+            )
+        except IntegrityError:
+            raise ValueError("您已加入帮会，无法创建新帮会")
 
         # 初始化帮会科技（等级0）
         initialize_guild_technologies(guild)
@@ -168,20 +151,13 @@ def upgrade_guild(guild, operator):
         ValueError: 验证失败
     """
     # 验证权限
-    membership = _get_active_membership(guild, operator, "只有帮主可以升级帮会")
+    membership = get_active_membership(guild, operator, "只有帮主可以升级帮会")
     if not membership.is_leader:
         raise ValueError("只有帮主可以升级帮会")
 
     # 验证等级
     if guild.level >= 10:
         raise ValueError("帮会已达最高等级")
-
-    # 计算升级成本
-    cost = calculate_guild_upgrade_cost(guild.level)
-
-    # 验证帮会资源
-    if guild.gold_bar < cost:
-        raise ValueError(f"帮会金条不足，需要{cost}金条")
 
     # 并发安全的事务处理
     with transaction.atomic():
@@ -191,6 +167,9 @@ def upgrade_guild(guild, operator):
         # 步骤2：在锁内重新验证条件，防止并发穿透
         if guild_locked.level >= 10:
             raise ValueError("帮会已达最高等级")
+
+        # 计算升级成本（必须在锁内根据当前等级计算，避免并发下低价升级）
+        cost = calculate_guild_upgrade_cost(guild_locked.level)
 
         if guild_locked.gold_bar < cost:
             raise ValueError(f"帮会金条不足，需要{cost}金条")
@@ -208,7 +187,7 @@ def upgrade_guild(guild, operator):
 
         GuildResourceLog.objects.create(
             guild=guild_locked,
-            action='upgrade_guild',
+            action='guild_upgrade',
             gold_bar_change=-cost,
             related_user=operator,
             note=f"帮会升级至{guild_locked.level}级",
@@ -270,7 +249,7 @@ def disband_guild(guild, operator):
         ValueError: 验证失败
     """
     # 验证权限
-    membership = _get_active_membership(guild, operator, "只有帮主可以解散帮会")
+    membership = get_active_membership(guild, operator, "只有帮主可以解散帮会")
     if not membership.is_leader:
         raise ValueError("只有帮主可以解散帮会")
 
@@ -365,8 +344,8 @@ def create_announcement(guild, type, content, author=None):
         author=author,
     )
 
-    # 保留最近10条公告
-    old_announcements = guild.announcements.all()[10:]
+    # 保留最近30条公告
+    old_announcements = guild.announcements.all()[30:]
     if old_announcements:
         announcement_ids = [a.id for a in old_announcements]
         GuildAnnouncement.objects.filter(id__in=announcement_ids).delete()

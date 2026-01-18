@@ -14,8 +14,10 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
-from ..constants import UIConstants
-from ..services import (
+from core.exceptions import GameError
+from core.utils import sanitize_error_message
+from gameplay.constants import UIConstants
+from gameplay.services import (
     ensure_manor,
     get_player_technology_level,
     refresh_manor_state,
@@ -32,13 +34,13 @@ class StableView(LoginRequiredMixin, TemplateView):
         manor = ensure_manor(self.request.user)
         refresh_manor_state(manor)
 
-        from ..services import (
+        from gameplay.services import (
             get_horse_options,
             get_active_productions,
             refresh_horse_productions,
             get_stable_speed_bonus,
         )
-        from ..services.stable import get_max_production_quantity, has_active_production
+        from gameplay.services.stable import get_max_production_quantity, has_active_production
 
         # 刷新马匹生产状态
         refresh_horse_productions(manor)
@@ -78,12 +80,12 @@ def start_horse_production_view(request: HttpRequest) -> HttpResponse:
         return redirect("gameplay:stable")
 
     try:
-        from ..services import start_horse_production
+        from gameplay.services import start_horse_production
         production = start_horse_production(manor, horse_key, quantity)
         quantity_text = f"x{production.quantity}" if production.quantity > 1 else ""
         messages.success(request, f"{production.horse_name}{quantity_text} 开始生产，预计 {production.actual_duration} 秒后完成")
-    except ValueError as e:
-        messages.error(request, str(e))
+    except (GameError, ValueError) as e:
+        messages.error(request, sanitize_error_message(e))
 
     return redirect("gameplay:stable")
 
@@ -98,7 +100,7 @@ class RanchView(LoginRequiredMixin, TemplateView):
         manor = ensure_manor(self.request.user)
         refresh_manor_state(manor)
 
-        from ..services.ranch import (
+        from gameplay.services.ranch import (
             get_livestock_options,
             get_active_livestock_productions,
             refresh_livestock_productions,
@@ -145,12 +147,12 @@ def start_livestock_production_view(request: HttpRequest) -> HttpResponse:
         return redirect("gameplay:ranch")
 
     try:
-        from ..services.ranch import start_livestock_production
+        from gameplay.services.ranch import start_livestock_production
         production = start_livestock_production(manor, livestock_key, quantity)
         quantity_text = f"x{production.quantity}" if production.quantity > 1 else ""
         messages.success(request, f"{production.livestock_name}{quantity_text} 开始养殖，预计 {production.actual_duration} 秒后完成")
-    except ValueError as e:
-        messages.error(request, str(e))
+    except (GameError, ValueError) as e:
+        messages.error(request, sanitize_error_message(e))
 
     return redirect("gameplay:ranch")
 
@@ -165,7 +167,7 @@ class SmithyView(LoginRequiredMixin, TemplateView):
         manor = ensure_manor(self.request.user)
         refresh_manor_state(manor)
 
-        from ..services.smithy import (
+        from gameplay.services.smithy import (
             get_metal_options,
             get_active_smelting_productions,
             refresh_smelting_productions,
@@ -212,12 +214,12 @@ def start_smelting_production_view(request: HttpRequest) -> HttpResponse:
         return redirect("gameplay:smithy")
 
     try:
-        from ..services.smithy import start_smelting_production
+        from gameplay.services.smithy import start_smelting_production
         production = start_smelting_production(manor, metal_key, quantity)
         quantity_text = f"x{production.quantity}" if production.quantity > 1 else ""
         messages.success(request, f"{production.metal_name}{quantity_text} 开始冶炼，预计 {production.actual_duration} 秒后完成")
-    except ValueError as e:
-        messages.error(request, str(e))
+    except (GameError, ValueError) as e:
+        messages.error(request, sanitize_error_message(e))
 
     return redirect("gameplay:smithy")
 
@@ -233,7 +235,7 @@ class ForgeView(LoginRequiredMixin, TemplateView):
         manor = ensure_manor(self.request.user)
         refresh_manor_state(manor)
 
-        from ..services.forge import (
+        from gameplay.services.forge import (
             EQUIPMENT_CATEGORIES,
             get_equipment_options,
             get_active_forgings,
@@ -306,11 +308,11 @@ def start_equipment_forging_view(request: HttpRequest) -> HttpResponse:
         return redirect(f"{reverse('gameplay:forge')}?category={category}")
 
     try:
-        from ..services.forge import start_equipment_forging
+        from gameplay.services.forge import start_equipment_forging
         production = start_equipment_forging(manor, equipment_key, quantity)
         quantity_text = f"x{production.quantity}" if production.quantity > 1 else ""
         messages.success(request, f"{production.equipment_name}{quantity_text} 开始锻造，预计 {production.actual_duration} 秒后完成")
-    except ValueError as e:
-        messages.error(request, str(e))
+    except (GameError, ValueError) as e:
+        messages.error(request, sanitize_error_message(e))
 
     return redirect(f"{reverse('gameplay:forge')}?category={category}")

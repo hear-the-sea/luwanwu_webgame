@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import logging
 import random
+from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Literal, NotRequired, Tuple, TypedDict, overload
 
 from django.utils import timezone
 
@@ -251,6 +252,455 @@ def select_target_with_priority(
     return rng.choice(opponents)
 
 
+AttackSkill = Dict[str, Any]
+AttackType = Literal["ranged", "melee"]
+
+
+class AttackLogEntry(TypedDict):
+    """
+    单次攻击（或闪避）的战报结构。
+
+    注意：
+    - 战报是对外协议数据，字段名/含义需保持向后兼容。
+    - 闪避时不包含反伤/反击等技术字段（这些字段为可选）。
+    """
+
+    actor: str
+    target: str
+    damage: int
+    is_dodge: bool
+    is_crit: bool
+    side: str
+    skills: List[str]
+    agility: int
+    kind: str
+    priority: int
+    status_inflicted: List[str]
+    index: int
+    kills: int
+    target_defeated: bool
+
+    additional_targets: NotRequired[List["AttackLogEntry"]]
+
+    # 武艺/技术特殊效果（命中时才会记录）
+    is_double_strike: NotRequired[bool]
+    reflect_damage: NotRequired[int]
+    reflect_kills: NotRequired[int]
+    reflect_defeated: NotRequired[bool]
+    counter_damage: NotRequired[int]
+    counter_kills: NotRequired[int]
+    counter_defeated: NotRequired[bool]
+    attack_type: NotRequired[AttackType]
+    actor_defeated: NotRequired[bool]
+
+
+@dataclass(frozen=True, slots=True)
+class _SelectedAttackTargets:
+    """一次行动所涉及的攻击目标列表及其对应的技能触发结果。"""
+
+    engaged_targets: List[Combatant]
+    skills: List[AttackSkill]
+
+
+@dataclass(frozen=True, slots=True)
+class _DamageCalculation:
+    """命中后对目标造成的最终伤害（尚未应用到目标/攻击者），以及关键标记。"""
+
+    damage: int
+    is_crit: bool
+    is_double_strike: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _DamageApplication:
+    """将伤害应用到单位后产生的结算结果（击杀、反伤、反击等）。"""
+
+    display_damage: int
+    kills: int
+    target_defeated: bool
+    actor_defeated: bool
+    reflect_damage: int
+    reflect_kills: int
+    reflect_defeated: bool
+    counter_damage: int
+    counter_kills: int
+    counter_defeated: bool
+
+
+def _trigger_attack_skills(actor: Combatant, rng: random.Random) -> List[AttackSkill]:
+    """
+    触发本次攻击可用的技能集合。
+
+    说明：
+    - 该函数仅负责技能触发（含随机性），不负责目标选择、伤害计算或状态施加。
+    - 为保持战斗可复现性（基于 seed），此处的 RNG 调用顺序需与历史实现一致。
+    """
+
+    return trigger_skills(actor, rng)
+
+
+def _select_attack_targets(
+    actor: Combatant,
+    attacker_team: List[Combatant],
+    defender_team: List[Combatant],
+    rng: random.Random,
+) -> _SelectedAttackTargets | None:
+    """
+    选择本次行动的攻击目标（含多目标技能的扩展目标）。
+
+    目标选择规则：
+    - 先根据阵营选择存活的对手列表。
+    - 优先目标选择由 `select_target_with_priority()` 决定：
+      - 护院优先选择五行克制兵种；
+      - 门客优先选择敌方门客；
+      - 通过 `PRIORITY_TARGET_WEIGHT` 在“策略性”和“随机性”之间做权衡。
+    - 随后触发技能，读取技能的 `targets` 字段决定最大目标数；扩展目标从剩余对手中随机抽取。
+
+    返回：
+    - 若无可攻击目标，返回 None（调用方需负责设置 `has_acted_this_round` 等结算字段）。
+    - 否则返回目标列表与已触发的技能列表。
+    """
+
+    opponents = alive(defender_team) if actor.side == "attacker" else alive(attacker_team)
+    if not opponents:
+        return None
+
+    # 关键：保持 RNG 消耗顺序——先选主目标，再触发技能（历史实现依赖此顺序保证可复现）
+    primary_target = select_target_with_priority(actor, opponents, rng)
+    skills = _trigger_attack_skills(actor, rng)
+
+    multi_targets = max(1, max(int(skill.get("targets", 1)) for skill in skills) if skills else 1)
+    engaged_targets = [primary_target]
+
+    available_opponents = [unit for unit in opponents if unit is not primary_target]
+    rng.shuffle(available_opponents)
+    for extra in available_opponents[: multi_targets - 1]:
+        engaged_targets.append(extra)
+
+    return _SelectedAttackTargets(engaged_targets=engaged_targets, skills=skills)
+
+
+@overload
+def _process_status_effects(
+    actor: Combatant,
+    target: Combatant,
+    skills: List[AttackSkill],
+    rng: random.Random,
+    *,
+    phase: Literal["damage_penalty"],
+    damage: int,
+) -> int: ...
+
+
+@overload
+def _process_status_effects(
+    actor: Combatant,
+    target: Combatant,
+    skills: List[AttackSkill],
+    rng: random.Random,
+    *,
+    phase: Literal["inflict"],
+    damage: None = None,
+) -> List[str]: ...
+
+
+def _process_status_effects(
+    actor: Combatant,
+    target: Combatant,
+    skills: List[AttackSkill],
+    rng: random.Random,
+    *,
+    phase: Literal["damage_penalty", "inflict"],
+    damage: int | None = None,
+) -> int | List[str]:
+    """
+    状态效果处理（保持战斗日志与 RNG 调用顺序向后兼容）。
+
+    phase:
+    - "damage_penalty": 仅处理攻击者身上的伤害惩罚（如士气低落降低伤害）；不消耗 RNG。
+    - "inflict": 处理技能对目标施加的状态；会消耗 RNG（施加状态是概率性的）。
+
+    注意：
+    - 为避免改变随机序列，"inflict" 必须在所有命中结算（含反击概率判定）完成后调用。
+    """
+
+    if phase == "damage_penalty":
+        if damage is None:
+            raise ValueError("damage_penalty phase requires 'damage'")
+        damage_penalty = get_damage_penalty(actor)
+        if damage_penalty > 0:
+            damage = int(damage * (1 - damage_penalty))
+            damage = max(1, damage)
+        return damage
+
+    return apply_skill_statuses(skills, target, rng)
+
+
+def _calculate_attack_damage(
+    actor: Combatant,
+    target: Combatant,
+    skills: List[AttackSkill],
+    rng: random.Random,
+    *,
+    round_priority: int,
+) -> _DamageCalculation:
+    """
+    计算本次命中对目标造成的最终伤害。
+
+    覆盖内容（与历史实现保持一致的顺序）：
+    1) 计算有效攻击
+    2) 计算目标防御（按小兵/门客、攻击者类型区分）
+    3) 应用武艺技术影响（远程防御、弓近战加成）
+    4) 应用五行相克固定倍率
+    5) 按战斗双方类型计算防御减伤（含软/硬上限）
+    6) 伤害随机波动
+    7) 暴击判定
+    8) 技能伤害加成
+    9) 先手回合调整 + 特定武艺倍率
+    10) 双倍打击
+    11) 状态惩罚（伤害降低）
+    12) 屠戮倍率（门客打小兵）
+
+    该函数不直接修改 actor/target 的血量或兵力，专注于“伤害数值”的计算。
+    """
+
+    attack_value = effective_attack_value(actor, target)
+
+    # 混合防御系统：根据攻击者和目标类型使用不同防御计算
+    if target.kind == "troop":
+        if actor.kind == "guest":
+            defense_value = target.unit_defense
+        else:
+            defense_value = effective_defense_value(target, actor)
+    else:
+        defense_value = target.defense
+
+    # === 武艺技术特殊效果 ===
+
+    # 【万宗归流】拳系对远程攻击的防御加成
+    if is_ranged_attack(actor, round_priority):
+        ranged_def = target.tech_effects.get("ranged_defense", 0)
+        if ranged_def > 0:
+            defense_value = int(defense_value * (1 + ranged_def))
+
+    # 【短刃杀法】弓箭手近战攻击加成
+    if actor.troop_class == "gong" and not is_ranged_attack(actor, round_priority):
+        melee_bonus = actor.tech_effects.get("melee_attack_bonus", 0)
+        if melee_bonus > 0:
+            attack_value = int(attack_value * (1 + melee_bonus))
+
+    # === 五行相克系统（天生属性，自动生效）===
+    countered_class = TROOP_COUNTERS.get(actor.troop_class)
+    if countered_class and target.troop_class == countered_class:
+        attack_value = int(attack_value * COUNTER_DAMAGE_MULTIPLIER)
+
+    # 防御减伤公式：根据战斗双方类型选择不同计算方式
+    if target.kind == "troop" and actor.kind == "guest":
+        base_reduction = defense_value / (defense_value + GUEST_VS_TROOP_DEFENSE_CONSTANT)
+        damage_reduction = min(base_reduction, HARDCAP)
+    elif target.kind == "guest" and actor.kind == "guest":
+        base_reduction = defense_value / (defense_value + GUEST_VS_GUEST_DEFENSE_CONSTANT)
+        if base_reduction > SOFTCAP_THRESHOLD:
+            excess = base_reduction - SOFTCAP_THRESHOLD
+            damage_reduction = SOFTCAP_THRESHOLD + excess * 0.5
+        else:
+            damage_reduction = base_reduction
+        damage_reduction = min(HARDCAP, damage_reduction)
+    elif target.kind == "guest" and actor.kind == "troop":
+        base_reduction = defense_value / (defense_value + TROOP_VS_GUEST_DEFENSE_CONSTANT)
+        if base_reduction > SOFTCAP_THRESHOLD:
+            excess = base_reduction - SOFTCAP_THRESHOLD
+            damage_reduction = SOFTCAP_THRESHOLD + excess * 0.5
+        else:
+            damage_reduction = base_reduction
+        damage_reduction = min(HARDCAP, damage_reduction)
+    else:
+        base_reduction = defense_value / (defense_value + DEFAULT_DEFENSE_CONSTANT)
+        if base_reduction > SOFTCAP_THRESHOLD:
+            excess = base_reduction - SOFTCAP_THRESHOLD
+            damage_reduction = SOFTCAP_THRESHOLD + excess * 0.5
+        else:
+            damage_reduction = base_reduction
+        damage_reduction = min(HARDCAP, damage_reduction)
+
+    attack_multiplier = rng.uniform(DAMAGE_VARIANCE_MIN, DAMAGE_VARIANCE_MAX)
+
+    if target.kind == "troop" and actor.kind == "guest":
+        base_damage = attack_value * attack_multiplier * (1 - damage_reduction)
+    elif target.kind == "guest" and actor.kind == "guest":
+        base_damage = attack_value * attack_multiplier * (1 - damage_reduction)
+        base_damage *= GUEST_VS_GUEST_DAMAGE_MULTIPLIER
+    elif target.kind == "guest" and actor.kind == "troop":
+        base_damage = attack_value * attack_multiplier * (1 - damage_reduction)
+    else:
+        base_damage = attack_value * attack_multiplier * (1 - damage_reduction)
+
+    crit_chance = calculate_crit_chance(actor)
+    is_crit = rng.random() < crit_chance
+    if is_crit:
+        base_damage *= CRIT_DAMAGE_MULTIPLIER
+
+    bonus = skill_damage_bonus(skills, actor, target)
+    damage = int(base_damage + bonus)
+    damage = max(1, damage)
+
+    # 先手伤害调整
+    is_preemptive_guest = actor.kind == "guest" and actor.priority == -1
+    if is_preemptive_guest:
+        damage = int(damage * PREEMPTIVE_DAMAGE_REDUCTION)
+        damage = max(1, damage)
+
+    # 【驭剑之术】剑系先攻回合伤害倍率
+    if actor.troop_class == "jian" and round_priority == -1:
+        preempt_mult = actor.tech_effects.get("preemptive_damage", 0)
+        if preempt_mult > 0:
+            damage = int(damage * preempt_mult)
+            damage = max(1, damage)
+
+    # 【凤舞九天】弓箭先锋回合伤害倍率
+    if actor.troop_class == "gong" and round_priority == -2:
+        extra_range_mult = actor.tech_effects.get("extra_range_damage", 0)
+        if extra_range_mult > 0:
+            damage = int(damage * extra_range_mult)
+            damage = max(1, damage)
+
+    # 【狂狼必杀】刀系双倍打击
+    is_double_strike = False
+    double_strike_chance = actor.tech_effects.get("double_strike_chance", 0)
+    if double_strike_chance > 0 and rng.random() < double_strike_chance:
+        damage *= 2
+        is_double_strike = True
+
+    damage = _process_status_effects(actor, target, skills, rng, phase="damage_penalty", damage=damage)
+
+    # 屠戮倍率：门客对小兵的伤害直接乘倍率，保持 HP 与兵力一致
+    if target.kind == "troop":
+        slaughter_mult = calculate_slaughter_multiplier(actor, target)
+        if slaughter_mult != 1.0:
+            damage = int(damage * slaughter_mult)
+            damage = max(1, damage)
+
+    return _DamageCalculation(damage=damage, is_crit=is_crit, is_double_strike=is_double_strike)
+
+
+def _apply_damage_results(
+    actor: Combatant,
+    target: Combatant,
+    damage: int,
+    rng: random.Random,
+) -> _DamageApplication:
+    """
+    将伤害应用到目标，并处理命中后结算：
+    - 目标 HP/兵力扣减与击杀数计算
+    - 技术效果：反伤（剑系）、反击（枪系）
+    - 检查攻击者是否被反伤/反击击败
+
+    该函数会直接修改 `actor` 和 `target` 的状态（HP、兵力等）。
+    """
+
+    target.hp -= damage
+    target_defeated = target.hp <= 0
+
+    display_damage = damage
+
+    # 【护身剑罡】剑系伤害反弹
+    reflect_damage = 0
+    reflect_kills = 0
+    reflect_defeated = False
+    reflect_ratio = target.tech_effects.get("damage_reflect", 0)
+    if reflect_ratio > 0 and target.troop_class == "jian":
+        max_reflect = int(actor.attack * 1.0)
+        reflect_damage = min(int(damage * reflect_ratio), max_reflect)
+        actor.hp -= reflect_damage
+
+        if actor.kind == "troop":
+            per_unit_hp_actor = troop_unit_hp(actor)
+            slaughter_mult_reflect = calculate_slaughter_multiplier(target, actor)
+            reflect_kills = int(reflect_damage * slaughter_mult_reflect / per_unit_hp_actor)
+            reflect_kills = max(0, min(actor.troop_strength, reflect_kills))
+            actor.troop_strength = max(0, actor.troop_strength - reflect_kills)
+            if actor.troop_strength <= 0:
+                reflect_defeated = True
+                actor.hp = min(actor.hp, 0)
+        else:  # actor.kind == "guest"
+            if actor.hp <= 0:
+                reflect_kills = 1
+                reflect_defeated = True
+
+    # 【反戈一击】枪系反击
+    counter_damage = 0
+    counter_kills = 0
+    counter_defeated = False
+    counter_chance = target.tech_effects.get("counter_attack_chance", 0)
+    if counter_chance > 0 and target.hp > 0 and rng.random() < counter_chance:
+        counter_mult = target.tech_effects.get("counter_attack_damage", 0.30)
+        counter_attack_value = effective_attack_value(target, actor)
+        counter_damage = int(counter_attack_value * counter_mult)
+        actor.hp -= counter_damage
+
+        if actor.kind == "troop":
+            per_unit_hp_actor = troop_unit_hp(actor)
+            slaughter_mult_counter = calculate_slaughter_multiplier(target, actor)
+            counter_kills = int(counter_damage * slaughter_mult_counter / per_unit_hp_actor)
+            counter_kills = max(0, min(actor.troop_strength, counter_kills))
+            actor.troop_strength = max(0, actor.troop_strength - counter_kills)
+            if actor.troop_strength <= 0:
+                counter_defeated = True
+                actor.hp = min(actor.hp, 0)
+        else:  # actor.kind == "guest"
+            if actor.hp <= 0:
+                counter_kills = 1
+                counter_defeated = True
+
+    actor_defeated = False
+    if actor.hp <= 0:
+        actor.hp = min(actor.hp, 0)
+        actor_defeated = True
+
+    kills = 0
+    if target.kind == "troop":
+        per_unit_hp = troop_unit_hp(target)
+        kills = int(damage / per_unit_hp)
+        kills = max(0, min(target.troop_strength, kills))
+        target.troop_strength = max(0, target.troop_strength - kills)
+        if target_defeated or target.troop_strength <= 0:
+            target_defeated = True
+            target.hp = min(target.hp, 0)
+        display_damage = damage
+    else:
+        kills = 1 if target_defeated else 0
+
+    return _DamageApplication(
+        display_damage=display_damage,
+        kills=kills,
+        target_defeated=target_defeated,
+        actor_defeated=actor_defeated,
+        reflect_damage=reflect_damage,
+        reflect_kills=reflect_kills,
+        reflect_defeated=reflect_defeated,
+        counter_damage=counter_damage,
+        counter_kills=counter_kills,
+        counter_defeated=counter_defeated,
+    )
+
+
+def _finalize_attack_round(actor: Combatant, action_logs: List[AttackLogEntry]) -> AttackLogEntry | None:
+    """
+    完成本次行动的统一结算：
+    - 标记行动完成（`has_acted_this_round` / `last_round_acted`）
+    - 将多目标攻击的次要目标日志挂载到主日志 `additional_targets`
+    """
+
+    actor.has_acted_this_round = True
+    actor.last_round_acted = actor.current_round
+    if not action_logs:
+        return None
+
+    primary = action_logs[0]
+    primary["additional_targets"] = action_logs[1:]
+    return primary
+
+
 def perform_attack(
     actor: Combatant,
     attacker_team: List[Combatant],
@@ -258,40 +708,34 @@ def perform_attack(
     rng: random.Random,
     round_priority: int = 0,
 ) -> Dict[str, Any] | None:
-    if actor.side == "attacker":
-        opponents = alive(defender_team)
-    else:
-        opponents = alive(attacker_team)
+    """
+    执行一次单位攻击行动（可能包含多目标技能）。
 
-    if not opponents:
-        actor.has_acted_this_round = True
-        actor.last_round_acted = actor.current_round
-        return None
+    返回值：
+    - 返回一条主战报 `AttackLogEntry`（字典），其余目标（若存在）放在 `additional_targets`；
+    - 若行动时无可攻击目标，则返回 None，但仍会标记 `has_acted_this_round` / `last_round_acted`。
 
-    # 加权概率选择目标（护院优先克制兵种，门客优先门客）
-    target = select_target_with_priority(actor, opponents, rng)
-    skills = trigger_skills(actor, rng)
-    multi_targets = max(1, max(int(skill.get("targets", 1)) for skill in skills) if skills else 1)
-    engaged_targets = [target]
-    available_opponents = [unit for unit in opponents if unit is not target]
-    rng.shuffle(available_opponents)
-    for extra in available_opponents[: multi_targets - 1]:
-        engaged_targets.append(extra)
+    随机性兼容性：
+    - 本函数严格维护 RNG 的消耗顺序，以确保历史 seed 的战斗回放一致。
+    """
 
-    action_logs: List[Dict[str, Any]] = []
+    selection = _select_attack_targets(actor, attacker_team, defender_team, rng)
+    if selection is None:
+        return _finalize_attack_round(actor, [])
+
+    action_logs: List[AttackLogEntry] = []
     actor_defeated = False
-    for idx, current_target in enumerate(engaged_targets):
-        # 1. 闪避判定（优先）
+    for idx, current_target in enumerate(selection.engaged_targets):
         dodge_chance = calculate_dodge_chance(current_target)
         if rng.random() < dodge_chance:
-            entry = {
+            dodge_entry: AttackLogEntry = {
                 "actor": actor.name,
                 "target": current_target.name,
                 "damage": 0,
                 "is_dodge": True,
                 "is_crit": False,
                 "side": actor.side,
-                "skills": [skill["name"] for skill in skills],
+                "skills": [skill["name"] for skill in selection.skills],
                 "agility": actor.agility,
                 "kind": actor.kind,
                 "priority": actor.priority,
@@ -300,285 +744,54 @@ def perform_attack(
                 "kills": 0,
                 "target_defeated": False,
             }
-            action_logs.append(entry)
+            action_logs.append(dodge_entry)
             continue
 
-        # 2. 计算基础伤害
-        attack_value = effective_attack_value(actor, current_target)
+        damage_calc = _calculate_attack_damage(
+            actor,
+            current_target,
+            selection.skills,
+            rng,
+            round_priority=round_priority,
+        )
 
-        # 混合防御系统：根据攻击者和目标类型使用不同防御计算
-        if current_target.kind == "troop":
-            # 小兵被攻击时，根据攻击者类型选择防御计算方式
-            if actor.kind == "guest":
-                # 门客打小兵：使用单兵防御（简单直观，配合屠戮倍率）
-                defense_value = current_target.unit_defense
-            else:
-                # 小兵打小兵：使用缩放防御（避免大规模互殴失衡）
-                defense_value = effective_defense_value(current_target, actor)
-        else:
-            # 门客：直接使用防御属性
-            defense_value = current_target.defense
+        applied = _apply_damage_results(actor, current_target, damage_calc.damage, rng)
+        actor_defeated = actor_defeated or applied.actor_defeated
 
-        # === 武艺技术特殊效果 ===
-
-        # 【万宗归流】拳系对远程攻击的防御加成
-        if is_ranged_attack(actor, round_priority):
-            ranged_def = current_target.tech_effects.get("ranged_defense", 0)
-            if ranged_def > 0:
-                defense_value = int(defense_value * (1 + ranged_def))
-
-        # 【短刃杀法】弓箭手近战攻击加成
-        if actor.troop_class == "gong" and not is_ranged_attack(actor, round_priority):
-            melee_bonus = actor.tech_effects.get("melee_attack_bonus", 0)
-            if melee_bonus > 0:
-                attack_value = int(attack_value * (1 + melee_bonus))
-
-        # === 五行相克系统（天生属性，自动生效）===
-        # 克制关系查表，固定伤害加成，无需研究科技
-        countered_class = TROOP_COUNTERS.get(actor.troop_class)
-        if countered_class and current_target.troop_class == countered_class:
-            attack_value = int(attack_value * COUNTER_DAMAGE_MULTIPLIER)
-
-        # 防御减伤公式：根据战斗双方类型选择不同计算方式
-        if current_target.kind == "troop" and actor.kind == "guest":
-            # 门客打小兵：渐进公式（与其他战斗类型一致）
-            # 公式：reduction = defense / (defense + 25)
-            # 让高防兵种（枪系）有明显战略价值，硬上限75%
-            base_reduction = defense_value / (defense_value + GUEST_VS_TROOP_DEFENSE_CONSTANT)
-            damage_reduction = min(base_reduction, HARDCAP)
-        elif current_target.kind == "guest" and actor.kind == "guest":
-            # 门客打门客：软上限公式
-            # 基础减伤 = defense / (defense + 600)
-            # 超过50%后收益减半，硬上限75%
-            base_reduction = defense_value / (defense_value + GUEST_VS_GUEST_DEFENSE_CONSTANT)
-            if base_reduction > SOFTCAP_THRESHOLD:
-                excess = base_reduction - SOFTCAP_THRESHOLD
-                damage_reduction = SOFTCAP_THRESHOLD + excess * 0.5
-            else:
-                damage_reduction = base_reduction
-            damage_reduction = min(HARDCAP, damage_reduction)
-        elif current_target.kind == "guest" and actor.kind == "troop":
-            # 小兵打门客：软上限公式
-            # 基础减伤 = defense / (defense + 200)
-            # 超过50%后收益减半，硬上限75%
-            base_reduction = defense_value / (defense_value + TROOP_VS_GUEST_DEFENSE_CONSTANT)
-            if base_reduction > SOFTCAP_THRESHOLD:
-                excess = base_reduction - SOFTCAP_THRESHOLD
-                damage_reduction = SOFTCAP_THRESHOLD + excess * 0.5
-            else:
-                damage_reduction = base_reduction
-            damage_reduction = min(HARDCAP, damage_reduction)
-        else:
-            # 小兵打小兵：软上限公式（与小兵打门客一致）
-            # 基础减伤 = defense / (defense + 120)
-            # 超过50%后收益减半，硬上限75%
-            base_reduction = defense_value / (defense_value + DEFAULT_DEFENSE_CONSTANT)
-            if base_reduction > SOFTCAP_THRESHOLD:
-                excess = base_reduction - SOFTCAP_THRESHOLD
-                damage_reduction = SOFTCAP_THRESHOLD + excess * 0.5
-            else:
-                damage_reduction = base_reduction
-            damage_reduction = min(HARDCAP, damage_reduction)
-
-        # 随机波动
-        attack_multiplier = rng.uniform(DAMAGE_VARIANCE_MIN, DAMAGE_VARIANCE_MAX)
-
-        # 根据减伤类型应用不同的伤害计算
-        if current_target.kind == "troop" and actor.kind == "guest":
-            # 门客打小兵：直接应用减伤
-            base_damage = attack_value * attack_multiplier * (1 - damage_reduction)
-        elif current_target.kind == "guest" and actor.kind == "guest":
-            # 门客打门客：应用额外伤害倍率以确保合理战斗效率
-            base_damage = attack_value * attack_multiplier * (1 - damage_reduction)
-            base_damage *= GUEST_VS_GUEST_DAMAGE_MULTIPLIER
-        elif current_target.kind == "guest" and actor.kind == "troop":
-            # 小兵打门客：直接应用减伤（使用专用常数TROOP_VS_GUEST_DEFENSE_CONSTANT）
-            base_damage = attack_value * attack_multiplier * (1 - damage_reduction)
-        else:
-            # 小兵打小兵：直接应用减伤（使用软上限公式，无需额外系数）
-            base_damage = attack_value * attack_multiplier * (1 - damage_reduction)
-
-        # 3. 暴击判定
-        crit_chance = calculate_crit_chance(actor)
-        is_crit = rng.random() < crit_chance
-        if is_crit:
-            base_damage *= CRIT_DAMAGE_MULTIPLIER
-
-        # 4. 技能加成
-        bonus = skill_damage_bonus(skills, actor, current_target)
-        damage = int(base_damage + bonus)
-        damage = max(1, damage)
-
-        # 5. 先手伤害调整
-        is_preemptive_guest = actor.kind == "guest" and actor.priority == -1
-        if is_preemptive_guest:
-            # 门客先手伤害降低
-            damage = int(damage * PREEMPTIVE_DAMAGE_REDUCTION)
-            damage = max(1, damage)
-
-        # 【驭剑之术】剑系先攻回合伤害倍率
-        if actor.troop_class == "jian" and round_priority == -1:
-            preempt_mult = actor.tech_effects.get("preemptive_damage", 0)
-            if preempt_mult > 0:
-                damage = int(damage * preempt_mult)
-                damage = max(1, damage)
-
-        # 【凤舞九天】弓箭先锋回合伤害倍率
-        if actor.troop_class == "gong" and round_priority == -2:
-            extra_range_mult = actor.tech_effects.get("extra_range_damage", 0)
-            if extra_range_mult > 0:
-                damage = int(damage * extra_range_mult)
-                damage = max(1, damage)
-
-        # 【狂狼必杀】刀系双倍打击
-        is_double_strike = False
-        double_strike_chance = actor.tech_effects.get("double_strike_chance", 0)
-        if double_strike_chance > 0 and rng.random() < double_strike_chance:
-            damage *= 2
-            is_double_strike = True
-
-        # 6. 状态效果伤害惩罚（如士气低落降低30%伤害）
-        damage_penalty = get_damage_penalty(actor)
-        if damage_penalty > 0:
-            damage = int(damage * (1 - damage_penalty))
-            damage = max(1, damage)
-
-        # 6.5 屠戮倍率：门客对小兵的伤害直接乘倍率，保持 HP 与兵力一致
-        # 注意：只在门客攻击小兵时生效，小兵互殴/门客互殴不受影响
-        if current_target.kind == "troop":
-            slaughter_mult = calculate_slaughter_multiplier(actor, current_target)
-            if slaughter_mult != 1.0:
-                damage = int(damage * slaughter_mult)
-                damage = max(1, damage)
-
-        # 造成伤害（此处的 damage 为最终结算伤害，已包含屠戮倍率）
-        current_target.hp -= damage
-        target_defeated = current_target.hp <= 0
-        kills = 0
-
-        # 战报显示伤害：对小兵显示实际结算伤害（已包含屠戮倍率）
-        display_damage = damage
-
-        # 【护身剑罡】剑系伤害反弹
-        reflect_damage = 0
-        reflect_kills = 0
-        reflect_defeated = False
-        reflect_ratio = current_target.tech_effects.get("damage_reflect", 0)
-        if reflect_ratio > 0 and current_target.troop_class == "jian":
-            # 计算反弹伤害，上限为攻击者攻击力的1倍
-            # 设计理由：基于攻击力的上限更稳定，避免前期血量高时反弹无上限
-            # 同时防止双倍打击/暴击被过度反弹导致自杀
-            max_reflect = int(actor.attack * 1.0)
-            reflect_damage = min(int(damage * reflect_ratio), max_reflect)
-            actor.hp -= reflect_damage
-
-            # 计算反弹击杀数
-            if actor.kind == "troop":
-                per_unit_hp_actor = troop_unit_hp(actor)
-                slaughter_mult_reflect = calculate_slaughter_multiplier(current_target, actor)
-                reflect_kills = int(reflect_damage * slaughter_mult_reflect / per_unit_hp_actor)
-                reflect_kills = max(0, min(actor.troop_strength, reflect_kills))
-                actor.troop_strength = max(0, actor.troop_strength - reflect_kills)
-                if actor.troop_strength <= 0:
-                    reflect_defeated = True
-                    actor.hp = min(actor.hp, 0)
-            else:  # actor.kind == "guest"
-                # 门客被反弹击败
-                if actor.hp <= 0:
-                    reflect_kills = 1
-                    reflect_defeated = True
-
-        # 【反戈一击】枪系反击
-        counter_damage = 0
-        counter_kills = 0
-        counter_defeated = False
-        counter_chance = current_target.tech_effects.get("counter_attack_chance", 0)
-        if counter_chance > 0 and current_target.hp > 0 and rng.random() < counter_chance:
-            counter_mult = current_target.tech_effects.get("counter_attack_damage", 0.30)
-            counter_attack_value = effective_attack_value(current_target, actor)
-            counter_damage = int(counter_attack_value * counter_mult)
-            actor.hp -= counter_damage
-
-            # 计算反击击杀数
-            if actor.kind == "troop":
-                per_unit_hp_actor = troop_unit_hp(actor)
-                slaughter_mult_counter = calculate_slaughter_multiplier(current_target, actor)
-                counter_kills = int(counter_damage * slaughter_mult_counter / per_unit_hp_actor)
-                counter_kills = max(0, min(actor.troop_strength, counter_kills))
-                actor.troop_strength = max(0, actor.troop_strength - counter_kills)
-                if actor.troop_strength <= 0:
-                    counter_defeated = True
-                    actor.hp = min(actor.hp, 0)
-            else:  # actor.kind == "guest"
-                # 门客被反击击败
-                if actor.hp <= 0:
-                    counter_kills = 1
-                    counter_defeated = True
-
-        # 检查攻击者是否被反伤/反击杀死
-        if actor.hp <= 0:
-            actor.hp = min(actor.hp, 0)
-            actor_defeated = True
-
-        if current_target.kind == "troop":
-            per_unit_hp = troop_unit_hp(current_target)
-
-            # damage 已包含屠戮倍率，击杀按最终伤害换算即可
-            kills = int(damage / per_unit_hp)
-
-            kills = max(0, min(current_target.troop_strength, kills))
-            current_target.troop_strength = max(0, current_target.troop_strength - kills)
-            if target_defeated or current_target.troop_strength <= 0:
-                target_defeated = True
-                current_target.hp = min(current_target.hp, 0)
-
-            # 战报显示真实伤害（不转换为等效伤害）
-            # 修复：直接显示实际造成的伤害，不要用 kills * per_unit_hp
-            # 例如：造成2395伤害，击杀184人（单位HP=13）
-            #      显示：2395伤害，而不是 184*13=2392
-            display_damage = damage
-        else:
-            kills = 1 if target_defeated else 0
-
-        entry = {
+        attack_type: AttackType = "ranged" if is_ranged_attack(actor, round_priority) else "melee"
+        entry: AttackLogEntry = {
             "actor": actor.name,
             "target": current_target.name,
-            "damage": display_damage,  # 显示等效伤害（小兵=击杀数×单位HP，门客=实际伤害）
-            "is_crit": is_crit,
+            "damage": applied.display_damage,
+            "is_crit": damage_calc.is_crit,
             "is_dodge": False,
             "side": actor.side,
-            "skills": [skill["name"] for skill in skills],
+            "skills": [skill["name"] for skill in selection.skills],
             "agility": actor.agility,
             "kind": actor.kind,
             "priority": actor.priority,
             "status_inflicted": [],
             "index": idx,
-            "kills": kills,
-            "target_defeated": target_defeated,
-            # 武艺技术特殊效果记录
-            "is_double_strike": is_double_strike,
-            "reflect_damage": reflect_damage,
-            "reflect_kills": reflect_kills,
-            "reflect_defeated": reflect_defeated,
-            "counter_damage": counter_damage,
-            "counter_kills": counter_kills,
-            "counter_defeated": counter_defeated,
-            "attack_type": "ranged" if is_ranged_attack(actor, round_priority) else "melee",
+            "kills": applied.kills,
+            "target_defeated": applied.target_defeated,
+            "is_double_strike": damage_calc.is_double_strike,
+            "reflect_damage": applied.reflect_damage,
+            "reflect_kills": applied.reflect_kills,
+            "reflect_defeated": applied.reflect_defeated,
+            "counter_damage": applied.counter_damage,
+            "counter_kills": applied.counter_kills,
+            "counter_defeated": applied.counter_defeated,
+            "attack_type": attack_type,
             "actor_defeated": actor_defeated,
         }
-        entry["status_inflicted"] = apply_skill_statuses(skills, current_target, rng)
+
+        entry["status_inflicted"] = _process_status_effects(actor, current_target, selection.skills, rng, phase="inflict")
         action_logs.append(entry)
 
-        # 如果攻击者被反伤/反击杀死，停止继续攻击其他目标
         if actor_defeated:
             break
 
-    actor.has_acted_this_round = True
-    actor.last_round_acted = actor.current_round
-
-    primary = action_logs[0]
-    primary["additional_targets"] = action_logs[1:]
-    return primary
+    return _finalize_attack_round(actor, action_logs)
 
 
 def resolve_priority_phases(
@@ -713,7 +926,7 @@ def simulate_battle(
     drops: Dict[str, int] = {}
     if winner == "attacker":
         if drop_table is not None:
-            from gameplay.services import resolve_drop_rewards
+            from common.utils.loot import resolve_drop_rewards
 
             drops = resolve_drop_rewards(drop_table, rng)
         else:

@@ -1,0 +1,505 @@
+"""Raid run lifecycle helpers (start/finalize/retreat/list) split from legacy combat.py."""
+
+from __future__ import annotations
+
+import logging
+from datetime import timedelta
+from typing import Dict, List, Optional
+
+from django.db import IntegrityError, transaction
+from django.db.models import F, Q
+from django.utils import timezone
+
+from common.utils.celery import safe_apply_async
+
+from gameplay.services.raid import combat as combat_pkg
+
+from guests.models import Guest, GuestStatus
+
+from ....models import Manor, PlayerTroop, RaidRun, ResourceEvent
+from ...messages import create_message
+from .loot import _grant_loot_items
+from .travel import calculate_raid_travel_time, get_active_raid_count
+
+logger = logging.getLogger(__name__)
+
+
+def start_raid(
+    attacker: Manor, defender: Manor, guest_ids: List[int], troop_loadout: Dict[str, int], seed: Optional[int] = None
+) -> RaidRun:
+    """
+    发起踢馆出征。
+
+    Args:
+        attacker: 进攻方庄园
+        defender: 防守方庄园
+        guest_ids: 出征门客ID列表
+        troop_loadout: 兵种配置
+        seed: 随机数种子（可选）
+
+    Returns:
+        踢馆记录
+
+    Raises:
+        ValueError: 无法发起踢馆时
+    """
+    # 检查是否可以攻击目标
+    from ..utils import can_attack_target
+
+    can_attack, reason = can_attack_target(attacker, defender)
+    if not can_attack:
+        raise ValueError(reason)
+
+    # 检查出征上限
+    active_count = get_active_raid_count(attacker)
+    if active_count >= combat_pkg.PVPConstants.RAID_MAX_CONCURRENT:
+        raise ValueError(f"同时最多进行 {combat_pkg.PVPConstants.RAID_MAX_CONCURRENT} 次出征")
+
+    # 检查门客
+    if not guest_ids:
+        raise ValueError("请选择至少一名门客")
+    if not isinstance(guest_ids, list):
+        raise ValueError("门客参数无效")
+    try:
+        guest_ids = [int(gid) for gid in guest_ids]
+    except (TypeError, ValueError):
+        raise ValueError("门客参数无效")
+
+    if troop_loadout is None:
+        troop_loadout = {}
+    if not isinstance(troop_loadout, dict):
+        raise ValueError("护院配置无效")
+
+    run = None
+    with transaction.atomic():
+        # 锁定并验证门客
+        guests = list(
+            attacker.guests.select_for_update()
+            .filter(id__in=guest_ids)
+            .select_related("template")
+            .prefetch_related("skills")
+        )
+
+        if len(guests) != len(set(guest_ids)):
+            raise ValueError("部分门客不可用或已离开庄园")
+
+        # 门客数量不超过出战上限（游侠宝塔）
+        max_squad_size = getattr(attacker, "max_squad_size", None) or 0
+        if max_squad_size and len(guests) > max_squad_size:
+            raise ValueError(f"最多只能派出 {max_squad_size} 名门客出征")
+
+        for guest in guests:
+            if guest.status != GuestStatus.IDLE:
+                raise ValueError(f"门客 {guest.display_name} 当前不可出征")
+
+        # 规范化兵种配置
+        from battle.combatants import normalize_troop_loadout
+
+        loadout = normalize_troop_loadout(troop_loadout, default_if_empty=False)
+        loadout = {key: count for key, count in loadout.items() if count > 0}
+
+        # 验证兵力上限
+        from battle.services import validate_troop_capacity
+
+        validate_troop_capacity(guests, loadout)
+
+        # 扣除护院
+        _deduct_troops(attacker, loadout)
+
+        # 计算行军时间
+        travel_time = calculate_raid_travel_time(attacker, defender, guests, loadout)
+
+        # 批量更新门客状态
+        for guest in guests:
+            guest.status = GuestStatus.DEPLOYED
+        Guest.objects.bulk_update(guests, ["status"])
+
+        # 创建踢馆记录
+        now = timezone.now()
+        battle_at = now + timedelta(seconds=travel_time)
+        return_at = now + timedelta(seconds=travel_time * 2)
+
+        run = RaidRun.objects.create(
+            attacker=attacker,
+            defender=defender,
+            troop_loadout=loadout,
+            status=RaidRun.Status.MARCHING,
+            travel_time=travel_time,
+            battle_at=battle_at,
+            return_at=return_at,
+        )
+        run.guests.set(guests)
+
+    # 发送来袭警报给防守方
+    _send_raid_incoming_message(run)
+
+    # 调度战斗任务
+    try:
+        from gameplay.tasks import process_raid_battle_task
+    except Exception:
+        logger.warning("process_raid_battle_task dispatch failed", exc_info=True)
+    else:
+        safe_apply_async(
+            process_raid_battle_task,
+            args=[run.id],
+            countdown=travel_time,
+            logger=logger,
+            log_message="process_raid_battle_task dispatch failed",
+        )
+
+    return run
+
+
+def _deduct_troops(manor: Manor, loadout: Dict[str, int]) -> None:
+    """从庄园批量扣除指定数量的护院"""
+    if not loadout:
+        return
+
+    # 过滤掉数量为0的
+    loadout = {k: v for k, v in loadout.items() if v > 0}
+    if not loadout:
+        return
+
+    # 1次查询获取所有需要的护院记录
+    troops = {
+        t.troop_template.key: t
+        for t in PlayerTroop.objects.select_for_update()
+        .filter(manor=manor, troop_template__key__in=loadout.keys())
+        .select_related("troop_template")
+    }
+
+    to_update = []
+    for troop_key, count in loadout.items():
+        troop = troops.get(troop_key)
+        if not troop:
+            raise ValueError("没有该类型的护院")
+        if troop.count < count:
+            raise ValueError(f"护院 {troop.troop_template.name} 数量不足")
+        troop.count -= count
+        to_update.append(troop)
+
+    # 1次批量更新
+    if to_update:
+        PlayerTroop.objects.bulk_update(to_update, ["count", "updated_at"])
+
+
+def _send_raid_incoming_message(run: RaidRun) -> None:
+    """发送来袭警报消息"""
+    # 格式化预计抵达时间
+    arrive_time = run.battle_at.strftime("%Y-%m-%d %H:%M:%S")
+
+    body = f"""来自 {run.attacker.location_display} 的 {run.attacker.display_name} 正在向你发起进攻！
+
+预计抵达时间：{arrive_time}
+
+请立即做好防守准备！"""
+
+    create_message(
+        manor=run.defender,
+        kind="system",
+        title="紧急警报 - 敌军来袭！",
+        body=body,
+    )
+
+
+def finalize_raid(run: RaidRun, now=None) -> None:
+    """
+    完成踢馆返程，释放门客和发放战利品。
+
+    Args:
+        run: 踢馆记录
+        now: 当前时间（可选）
+    """
+    now = now or timezone.now()
+
+    with transaction.atomic():
+        locked_run = (
+            RaidRun.objects.select_for_update()
+            .select_related("attacker", "defender", "battle_report")
+            .prefetch_related("guests")
+            .filter(pk=run.pk)
+            .first()
+        )
+
+        if not locked_run:
+            return
+
+        if locked_run.status == RaidRun.Status.COMPLETED:
+            return
+
+        # 批量释放门客
+        guests = list(locked_run.guests.select_for_update())
+        guests_to_update = []
+        for guest in guests:
+            # 保留战斗造成的重伤状态，仅将仍处于 DEPLOYED 的门客恢复为空闲
+            if guest.status == GuestStatus.DEPLOYED:
+                guest.status = GuestStatus.IDLE
+                guests_to_update.append(guest)
+
+        if guests_to_update:
+            Guest.objects.bulk_update(guests_to_update, ["status"])
+
+        # 归还进攻方护院（存活的）
+        _return_surviving_troops(locked_run)
+
+        # 发放战利品给进攻方
+        if locked_run.is_attacker_victory:
+            from gameplay.models import Manor as ManorModel
+            from gameplay.services.resources import grant_resources_locked
+
+            attacker_locked = ManorModel.objects.select_for_update().get(pk=locked_run.attacker_id)
+            if locked_run.loot_resources:
+                grant_resources_locked(
+                    attacker_locked,
+                    locked_run.loot_resources,
+                    note="踢馆掠夺",
+                    reason=ResourceEvent.Reason.BATTLE_REWARD,
+                )
+            if locked_run.loot_items:
+                _grant_loot_items(attacker_locked, locked_run.loot_items)
+
+        locked_run.status = RaidRun.Status.COMPLETED
+        locked_run.completed_at = now
+        locked_run.save(update_fields=["status", "completed_at"])
+
+
+def _return_surviving_troops(run: RaidRun) -> None:
+    """批量归还存活的护院"""
+    loadout = run.troop_loadout or {}
+    if not loadout:
+        return
+
+    if not run.battle_report:
+        # 没有战报（撤退等情况），全部归还
+        _add_troops_batch(run.attacker, loadout)
+        return
+
+    # 根据战报计算存活护院
+    attacker_losses = (run.battle_report.losses or {}).get("attacker", {}) or {}
+    casualties = attacker_losses.get("casualties", []) or []
+
+    from battle.troops import load_troop_templates
+
+    troop_definitions = load_troop_templates()
+
+    troops_lost: Dict[str, int] = {}
+    for entry in casualties:
+        key = entry.get("key")
+        if key not in loadout:
+            continue
+        if key not in troop_definitions:
+            continue
+        try:
+            lost = int(entry.get("lost", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+        if lost > 0:
+            troops_lost[key] = troops_lost.get(key, 0) + lost
+
+    # 计算存活数量
+    surviving_troops = {}
+    for troop_key, original_count in loadout.items():
+        lost = troops_lost.get(troop_key, 0)
+        surviving = max(0, original_count - lost)
+        if surviving > 0:
+            surviving_troops[troop_key] = surviving
+
+    # 批量归还
+    if surviving_troops:
+        _add_troops_batch(run.attacker, surviving_troops)
+
+
+def _add_troops(manor: Manor, troop_key: str, count: int) -> None:
+    """给庄园添加护院（单个兵种）"""
+    if count <= 0:
+        return
+    _add_troops_batch(manor, {troop_key: count})
+
+
+def _add_troops_batch(manor: Manor, troops_to_add: Dict[str, int]) -> None:
+    """批量给庄园添加护院"""
+    from battle.models import TroopTemplate
+
+    if not troops_to_add:
+        return
+
+    # 过滤掉数量为0的
+    troops_to_add = {k: v for k, v in troops_to_add.items() if v > 0}
+    if not troops_to_add:
+        return
+
+    # 预加载模板
+    templates = {t.key: t for t in TroopTemplate.objects.filter(key__in=troops_to_add.keys())}
+
+    if not templates:
+        return
+
+    # 预加载现有护院
+    existing = {
+        pt.troop_template.key: pt
+        for pt in PlayerTroop.objects.select_for_update()
+        .filter(manor=manor, troop_template__key__in=troops_to_add.keys())
+        .select_related("troop_template")
+    }
+
+    to_update = []
+    to_create = []
+    now = timezone.now()
+
+    for key, count in troops_to_add.items():
+        template = templates.get(key)
+        if not template:
+            logger.warning("Unknown troop template: %s", key)
+            continue
+
+        if key in existing:
+            existing[key].count += count
+            existing[key].updated_at = now
+            to_update.append(existing[key])
+        else:
+            to_create.append(
+                PlayerTroop(
+                    manor=manor,
+                    troop_template=template,
+                    count=count,
+                )
+            )
+
+    if to_update:
+        PlayerTroop.objects.bulk_update(to_update, ["count", "updated_at"])
+    if to_create:
+        try:
+            PlayerTroop.objects.bulk_create(to_create, ignore_conflicts=True)
+        except IntegrityError:
+            # 并发创建时回退到逐个处理
+            for pt in to_create:
+                PlayerTroop.objects.filter(manor=manor, troop_template=pt.troop_template).update(
+                    count=F("count") + pt.count,
+                    updated_at=now,
+                )
+
+
+def request_raid_retreat(run: RaidRun) -> None:
+    """
+    请求踢馆撤退（仅在行军阶段可用）。
+
+    Args:
+        run: 踢馆记录
+
+    Raises:
+        ValueError: 无法撤退时
+    """
+    if run.status != RaidRun.Status.MARCHING:
+        raise ValueError("当前状态无法撤退")
+
+    if run.is_retreating:
+        raise ValueError("已在撤退中")
+
+    now = timezone.now()
+    elapsed = max(0, int((now - run.started_at).total_seconds()))
+
+    with transaction.atomic():
+        locked_run = RaidRun.objects.select_for_update().filter(pk=run.pk).first()
+        if not locked_run or locked_run.status != RaidRun.Status.MARCHING:
+            raise ValueError("当前状态无法撤退")
+
+        locked_run.is_retreating = True
+        locked_run.status = RaidRun.Status.RETREATED
+        locked_run.return_at = now + timedelta(seconds=max(1, elapsed))
+        locked_run.save(update_fields=["is_retreating", "status", "return_at"])
+
+    # 调度撤退完成任务
+    try:
+        from gameplay.tasks import complete_raid_task
+    except Exception:
+        logger.warning("complete_raid_task dispatch failed for retreat", exc_info=True)
+    else:
+        countdown = max(1, elapsed)
+        safe_apply_async(
+            complete_raid_task,
+            args=[run.id],
+            countdown=countdown,
+            logger=logger,
+            log_message="complete_raid_task dispatch failed for retreat",
+        )
+
+
+def _finalize_raid_retreat(run: RaidRun, now=None) -> None:
+    """完成撤退，归还所有护院和门客"""
+    now = now or timezone.now()
+
+    # 批量释放门客
+    guests = list(run.guests.select_for_update())
+    guests_to_update = []
+    for guest in guests:
+        # 仅将仍处于 DEPLOYED 的门客恢复为空闲，避免覆盖其他状态
+        if guest.status == GuestStatus.DEPLOYED:
+            guest.status = GuestStatus.IDLE
+            guests_to_update.append(guest)
+    if guests_to_update:
+        Guest.objects.bulk_update(guests_to_update, ["status"])
+
+    # 批量全额归还护院
+    loadout = run.troop_loadout or {}
+    if loadout:
+        _add_troops_batch(run.attacker, loadout)
+
+    run.status = RaidRun.Status.COMPLETED
+    run.completed_at = now
+    run.save(update_fields=["status", "completed_at"])
+
+
+def can_raid_retreat(run: RaidRun, now=None) -> bool:
+    """判断踢馆是否可以撤退"""
+    if run.status != RaidRun.Status.MARCHING:
+        return False
+    if run.is_retreating:
+        return False
+    return True
+
+
+def refresh_raid_runs(manor: Manor) -> None:
+    """刷新庄园的踢馆状态"""
+    now = timezone.now()
+
+    from .battle import process_raid_battle
+
+    # 处理行军中但已到达战斗时间的
+    marching_runs = RaidRun.objects.filter(attacker=manor, status=RaidRun.Status.MARCHING, battle_at__lte=now)
+    for run in marching_runs:
+        process_raid_battle(run, now=now)
+
+    # 处理返程中但已完成的
+    returning_runs = RaidRun.objects.filter(attacker=manor, status=RaidRun.Status.RETURNING, return_at__lte=now)
+    for run in returning_runs:
+        finalize_raid(run, now=now)
+
+    # 处理撤退中但已完成的
+    retreated_runs = RaidRun.objects.filter(attacker=manor, status=RaidRun.Status.RETREATED, return_at__lte=now)
+    for run in retreated_runs:
+        finalize_raid(run, now=now)
+
+
+def get_active_raids(manor: Manor) -> List[RaidRun]:
+    """获取进行中的踢馆列表"""
+    return list(
+        RaidRun.objects.filter(
+            attacker=manor,
+            status__in=[
+                RaidRun.Status.MARCHING,
+                RaidRun.Status.RETURNING,
+                RaidRun.Status.RETREATED,
+            ],
+        )
+        .select_related("defender", "battle_report")
+        .order_by("-started_at")
+    )
+
+
+def get_raid_history(manor: Manor, limit: int = 20) -> List[RaidRun]:
+    """获取踢馆历史记录"""
+    return list(
+        RaidRun.objects.filter(Q(attacker=manor) | Q(defender=manor))
+        .select_related("attacker", "defender", "battle_report")
+        .order_by("-started_at")[:limit]
+    )

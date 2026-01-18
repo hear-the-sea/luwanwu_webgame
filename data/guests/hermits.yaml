@@ -5,80 +5,320 @@ heroes:
   - key: hero_tianji_laoren
     name: 孙白发
     archetype: military
-    flavor: （隐士）外号“天机老人”，百晓生兵器谱排名第一，孙小红的爷爷。他白发苍苍，智比天高，武功深不可测，常以老烟袋为兵器。他看透世情，大智若愚，是江湖中真正的隐士高人。出自古龙小说《多情剑客无情剑》
+    flavor: 市井中一位不起眼的说书老翁，实则是兵器谱上高居云端的传说——天机老人。一杆旱烟袋吞吐着江湖的波诡云谲，满头如雪白发掩映着昔日震慑天下的雷霆万钧。他睿智通透，早已看淡名利浮云，却终因对红尘安稳的眷恋，消磨了决生死的凌厉杀气。他的陨落，并非技不如人，而是一曲令人扼腕的“英雄迟暮”——当握棒的手不再渴望鲜血，天下第一的虚名，便成了压垮神话的最后一块墓碑。出自古龙小说《多情剑客无情剑》
     default_gender: male
     default_morality: 90
-    recruitable: false
-    is_hermit: true
-    growth_range:
-    - 6
-    - 11
-    attribute_weights:
-      force: 30
-      intellect: 40
-      defense: 20
-      agility: 10
-  - key: hero_xie_xiaofeng
-    name: 谢晓峰
-    archetype: military
-    flavor: （隐士）剑气纵横三万里，一剑光寒十九州。他是神剑山庄的三少爷，天纵奇才剑术无双。然而无敌的背后是无尽的孤独，他厌倦了杀戮与名利，化身底层苦役阿吉。在卑微中他寻找真实，在尘埃里他重拾初心。谢晓峰与阿吉，名剑与孤坟，他在宿命与超脱间完成了生命的升华。出自古龙小说《三少爷的剑》
-    default_gender: male
-    default_morality: 80
-    recruitable: false
+    recruitable: true
     is_hermit: true
     growth_range:
     - 7
     - 11
     attribute_weights:
+      force: 40
+      intellect: 30
+      defense: 10
+      agility: 20
+  - key: hero_xie_xiaofeng
+    name: 谢晓峰
+    archetype: military
+    flavor: 剑气纵横三万里，一剑光寒十九州。他是神剑山庄的三少爷，天纵奇才剑术无双。然而无敌的背后是无尽的孤独，他厌倦了杀戮与名利，化身底层苦役阿吉。在卑微中他寻找真实，在尘埃里他重拾初心。谢晓峰与阿吉，名剑与孤坟，他在宿命与超脱间完成了生命的升华。出自古龙小说《三少爷的剑》
+    default_gender: male
+    default_morality: 80
+    recruitable: true
+    is_hermit: true
+    growth_range:
+    - 6
+    - 13
+    attribute_weights:
       force: 45
       intellect: 5
       defense: 15
       agility: 35
-  - key: hero_niuroutang
-    name: 牛肉汤
+  - key: hero_shen_lang
+    name: 沈浪
     archetype: military
-    flavor: （隐士）神秘少女，宫九的表妹。她名字虽怪，长相却甜美可爱，性格刁蛮任性。作为宫九最亲近的人，她深知这位“太平王世子”的秘密。在岛上的日子里，她对陆小凤软硬兼施，是这场惊天阴谋中一抹看不透的亮色。出自古龙小说《陆小凤系列》
-    default_gender: female
-    default_morality: 55
-    recruitable: false
+    flavor: 当快活王的霸业化为尘土，当云梦仙子的阴谋随风而逝，沈浪在声名最鼎盛的巅峰时刻，选择了急流勇退。一艘巨船，几壶浊酒，他携着朱七七的似水柔情，伴着熊猫儿的豪迈笑声，扬帆驶向了那片未知的碧海蓝天。他将那个充满了杀戮与算计的中原江湖，轻描淡写地抛在了身后，只给后世留下了"九州王"的无敌传说。自此，江湖再无沈浪，海阔天空任逍遥，这便是古龙笔下最令人艳羡的结局——不仅赢了天下，更赢回了自己。出自古龙小说《武林外史》
+    default_gender: male
+    default_morality: 78
+    recruitable: true
+    is_hermit: true
+    growth_range:
+    - 7
+    - 11
+    attribute_weights:
+      force: 30
+      intellect: 25
+      defense: 20
+      agility: 25
+  - key: hero_yan_guang
+    name: 严光
+    archetype: civil
+    flavor: 字子陵，东汉高士。少年时与光武帝刘秀同窗共读，情谊深厚。刘秀登基后多次征召，他却披羊裘垂钓于富春江畔，不为帝王之尊所动。一次入宫，与帝同榻而眠，竟将脚搁在龙体之上，太史惊呼"客星犯御座"。他笑而不语，翌日便飘然归去。富春山水间，他以清风明月为伴，以渔樵耕读为乐，成就了"高风亮节"的千古佳话。
+    default_gender: male
+    default_morality: 95
+    recruitable: true
     is_hermit: true
     growth_range:
     - 5
+    - 8
+    attribute_weights:
+      force: 10
+      intellect: 45
+      defense: 20
+      agility: 25
+  - key: hero_wang_xu
+    name: 王诩
+    archetype: civil
+    flavor: 世称鬼谷子，纵横家之祖，隐居云梦山鬼谷。他洞察天机，精通兵法、纵横、数术、相术，堪称诸子百家之集大成者。门下弟子皆是改变天下格局的风云人物：苏秦配六国相印，张仪连横破合纵，孙膑围魏救赵，庞涓兵败马陵。他从不涉足庙堂，却以一己之智搅动战国风云，真正做到了"运筹帷幄之中，决胜千里之外"。
+    default_gender: male
+    default_morality: 70
+    recruitable: true
+    is_hermit: true
+    growth_range:
+    - 8
+    - 14
+    attribute_weights:
+      force: 5
+      intellect: 60
+      defense: 15
+      agility: 20
+  - key: hero_fan_li
+    name: 范蠡
+    archetype: civil
+    flavor: 春秋越国大夫，辅佐勾践卧薪尝胆、十年生聚，终灭强吴。功成名就之际，他洞察"飞鸟尽良弓藏"的帝王心术，携西施泛舟五湖，从此隐姓埋名。他三次经商皆成巨富，又三散家财于贫民，世人尊为"商圣"、"陶朱公"。既能运筹帷幄定国安邦，又能急流勇退善始善终，千古以来能臣无数，善终者几何？唯范蠡一人而已。
+    default_gender: male
+    default_morality: 85
+    recruitable: true
+    is_hermit: true
+    growth_range:
+    - 7
+    - 12
+    attribute_weights:
+      force: 15
+      intellect: 50
+      defense: 15
+      agility: 20
+  - key: hero_huang_shigong
+    name: 黄石公
+    archetype: civil
+    flavor: 秦末神秘高人，真名已不可考。圯桥之上，他故意将鞋落于桥下，三试张良之诚心与耐性。张良三次跪履，终得授《太公兵法》。此书助张良运筹帷幄，成就汉室四百年基业。传说黄石公乃济北谷城山下黄石所化，故得此名。他来去无踪，神龙见首不见尾，是那个风云激荡年代里最神秘的存在。
+    default_gender: male
+    default_morality: 80
+    recruitable: true
+    is_hermit: true
+    growth_range:
+    - 7
+    - 10
+    attribute_weights:
+      force: 10
+      intellect: 55
+      defense: 15
+      agility: 20
+  - key: hero_zhang_zhihe
+    name: 张志和
+    archetype: civil
+    flavor: 唐代隐逸诗人，自号烟波钓徒。他曾入仕为官，却因性情淡泊而归隐江湖。一叶扁舟，一蓑烟雨，他在太湖山水间寻得人生真谛。"西塞山前白鹭飞，桃花流水鳜鱼肥。青箬笠，绿蓑衣，斜风细雨不须归。"这首《渔歌子》传唱千年，道尽了他超然物外的洒脱心境。世人只道他是渔翁，殊不知那扁舟之上，坐的是一位看透红尘的智者。
+    default_gender: male
+    default_morality: 90
+    recruitable: true
+    is_hermit: true
+    growth_range:
+    - 5
+    - 8
+    attribute_weights:
+      force: 10
+      intellect: 45
+      defense: 20
+      agility: 25
+  - key: hero_yan_hui
+    name: 颜回
+    archetype: civil
+    flavor: 字子渊，孔门七十二贤之首，被尊为"复圣"。他安贫乐道，居于陋巷，一箪食一瓢饮，人不堪其忧，回也不改其乐。孔子赞叹"贤哉回也"，视其为最得心法的传人。他好学不倦，闻一知十，从不迁怒于人，同样的错误绝不犯第二次。可惜天妒英才，年仅三十二岁便英年早逝，令孔子痛哭"天丧予"。短暂的一生，他以德行证道，成为后世读书人永恒的精神标杆。
+    default_gender: male
+    default_morality: 98
+    recruitable: true
+    is_hermit: true
+    growth_range:
+    - 6
     - 9
+    attribute_weights:
+      force: 5
+      intellect: 55
+      defense: 20
+      agility: 20
+  - key: hero_jie_yu
+    name: 接舆
+    archetype: civil
+    flavor: 春秋楚国狂士，世称"楚狂"。他佯狂避世，披发跣足行于市井，以疯癫之态掩护出世之心。孔子游楚时，他唱着"凤兮凤兮，何德之衰"的歌谣从车旁经过，讽刺孔子不识时务、四处碰壁。孔子欲与之言，他却疾步而去，不给圣人任何对话的机会。他的狂，是看透乱世的清醒；他的癫，是超脱凡俗的智慧。
+    default_gender: male
+    default_morality: 75
+    recruitable: true
+    is_hermit: true
+    growth_range:
+    - 5
+    - 8
+    attribute_weights:
+      force: 15
+      intellect: 45
+      defense: 15
+      agility: 25
+  - key: hero_chao_fu
+    name: 巢父
+    archetype: civil
+    flavor: 上古隐士，与许由齐名。传说尧帝欲禅位于许由，许由闻之，以为污耳，至颍水边洗耳。巢父正牵牛饮水于下游，见状问故，许由以实相告。巢父大怒道："汝既洗耳于此，污水岂非流入我牛口中？"遂牵牛往上游而去。他的洁癖近乎偏执，却也折射出那个时代隐士们对名利的极度厌恶，宁可特立独行，也不愿沾染半点尘俗。
+    default_gender: male
+    default_morality: 92
+    recruitable: true
+    is_hermit: true
+    growth_range:
+    - 4
+    - 7
     attribute_weights:
       force: 15
       intellect: 40
-      defense: 10
-      agility: 35
-  - key: hero_nie_xin
-    name: 聂信
-    archetype: military
-    flavor: （隐士）闯王李自成麾下旧部，烽火里见过生死，也在乱世里学会沉默。其人寡言少诺却重情重义，不喜显名，不入门派；更愿在暗处替人解围，像一把收在鞘里的刀。出自金庸小说《碧血剑》
+      defense: 25
+      agility: 20
+  - key: hero_bo_yi
+    name: 伯夷
+    archetype: civil
+    flavor: 商末孤竹国君之子，与弟叔齐互让王位，双双出走。武王伐纣时，二人叩马谏阻，认为以臣伐君乃不义之举。周朝建立后，他们耻食周粟，隐于首阳山采薇而食，最终饿死山中。临终作《采薇歌》："登彼西山兮，采其薇矣。以暴易暴兮，不知其非矣。"后世以"夷齐"并称，颂其志节。孔子称其为"古之贤人"，孟子赞其为"圣之清者"。
     default_gender: male
-    default_morality: 70
-    recruitable: false
+    default_morality: 95
+    recruitable: true
     is_hermit: true
     growth_range:
-    - 6
-    - 10
+    - 5
+    - 8
     attribute_weights:
-      force: 35
-      intellect: 10
-      defense: 30
-      agility: 25
-  - key: hero_jinyong_0365
-    name: 吴六奇
-    archetype: military
-    flavor: （隐士）广东提督，实为天地会红旗香主，曾是丐帮中人，外号“铁丐”。他豪气干云，虽身在曹营心在汉。与韦小宝一见如故结为兄弟，后因被归辛树夫妇误认为是汉奸而惨遭杀害，是书中极具悲剧色彩的英雄人物。出自金庸小说《鹿鼎记》
+      force: 10
+      intellect: 45
+      defense: 25
+      agility: 20
+  - key: hero_shu_qi
+    name: 叔齐
+    archetype: civil
+    flavor: 商末孤竹国君幼子，父命传位于他，他却推让于兄伯夷。伯夷不受，二人遂结伴出走，成就了一段互让王位的千古美谈。周灭商后，兄弟二人宁死不食周粟，隐居首阳山中采薇度日，终因饥饿而亡。他与兄长并称"夷齐"，成为中国历史上忠贞守节的典范。司马迁以他们二人之传开《史记》列传之首，可见其在史家心目中的崇高地位。
     default_gender: male
-    default_morality: 44
-    recruitable: false
+    default_morality: 95
+    recruitable: true
+    is_hermit: true
+    growth_range:
+    - 5
+    - 8
+    attribute_weights:
+      force: 10
+      intellect: 45
+      defense: 25
+      agility: 20
+  - key: hero_dong_feng
+    name: 董奉
+    archetype: civil
+    flavor: 三国时期神医，与张仲景、华佗并称"建安三神医"。他隐居庐山，为人治病分文不取，只求病愈者在山中种植杏树——重症种五株，轻症种一株。数年之后，杏树成林，蔚为壮观。杏熟时，他以杏换谷，再将谷米救济贫民。"杏林"之名由此而来，成为医界的代称。他医术通神，传闻能起死回生，更有长生不老之说。医者仁心，莫过于此。
+    default_gender: male
+    default_morality: 95
+    recruitable: true
     is_hermit: true
     growth_range:
     - 6
     - 9
     attribute_weights:
-      force: 35
-      intellect: 10
-      defense: 35
+      force: 10
+      intellect: 50
+      defense: 20
+      agility: 20
+  - key: hero_sun_simiao
+    name: 孙思邈
+    archetype: civil
+    flavor: 唐代医药学家，被后世尊为"药王"。他七岁能诵千言，被誉为"圣童"。隋唐两代帝王多次征召，他皆辞不就，一心隐居山林研究医术。他著《千金要方》《千金翼方》，认为"人命至重，有贵千金"，故以"千金"名之。他活至一百四十二岁高龄，被视为得道成仙。他提出"大医精诚"的医德理念，至今仍是医学界的金科玉律。
+    default_gender: male
+    default_morality: 98
+    recruitable: true
+    is_hermit: true
+    growth_range:
+    - 7
+    - 10
+    attribute_weights:
+      force: 5
+      intellect: 55
+      defense: 25
+      agility: 15
+  - key: hero_tao_yuanming
+    name: 陶渊明
+    archetype: civil
+    flavor: 东晋诗人，号五柳先生，谥靖节。他出身名门却淡泊名利，曾任彭泽令，因"不为五斗米折腰"而弃官归隐。从此躬耕田园，以诗酒自娱。"采菊东篱下，悠然见南山"，他笔下的田园生活宁静致远，成为后世文人的精神家园。《桃花源记》描绘的那片世外桃源，至今仍是无数人心中的乌托邦。他开创田园诗派，以质朴自然的语言写尽隐逸之美。
+    default_gender: male
+    default_morality: 90
+    recruitable: true
+    is_hermit: true
+    growth_range:
+    - 5
+    - 8
+    attribute_weights:
+      force: 10
+      intellect: 45
+      defense: 20
+      agility: 25
+  - key: hero_meng_haoran
+    name: 孟浩然
+    archetype: civil
+    flavor: 盛唐山水田园诗派代表，与王维并称"王孟"。他早年隐居鹿门山，以诗文闻名天下。四十岁赴京应试落第，从此绝意仕途。"春眠不觉晓，处处闻啼鸟"，他的诗清新自然，意境空灵，尽得田园山水之真趣。李白赞他"红颜弃轩冕，白首卧松云"，杜甫称其"清诗句句尽堪传"。他以布衣之身名动京华，以诗人之心归隐林泉，活出了唐人最向往的洒脱人生。
+    default_gender: male
+    default_morality: 85
+    recruitable: true
+    is_hermit: true
+    growth_range:
+    - 5
+    - 8
+    attribute_weights:
+      force: 10
+      intellect: 45
+      defense: 20
+      agility: 25
+  - key: hero_jiang_ziya
+    name: 姜尚
+    archetype: civil
+    flavor: 名尚，字子牙，号太公望。他胸怀济世之才，却穷困潦倒至七十二岁。渭水之滨，他以直钩垂钓，离水三尺，不用鱼饵。旁人笑他痴，他却笑答"愿者上钩"。周文王闻其贤名，亲自驾车相迎，拜为太师。此后他辅佐文王、武王父子灭商兴周，因功封于齐地，成为齐国始祖。他著《六韬》《三略》，被尊为兵家鼻祖、百家宗师，更是民间尊奉的众神之神。
+    default_gender: male
+    default_morality: 85
+    recruitable: true
+    is_hermit: true
+    growth_range:
+    - 8
+    - 13
+    attribute_weights:
+      force: 25
+      intellect: 45
+      defense: 15
+      agility: 15
+  - key: hero_yan_zun
+    name: 严遵
+    archetype: civil
+    flavor: 西汉蜀郡成都人，字君平。他隐于市井，以卜筮为业，日得百钱即闭肆下帘，潜心研读《老子》。杨雄年轻时曾从其游学，深受其道家思想影响。他著《老子指归》，阐发道家玄理，文辞古奥深邃。有人问他为何不出仕，他答道："我虽身在闹市，心已游于物外。"一语道尽了大隐隐于市的真谛。他活了九十余岁，终身不娶，淡泊一生，堪称蜀中高士第一人。
+    default_gender: male
+    default_morality: 90
+    recruitable: true
+    is_hermit: true
+    growth_range:
+    - 5
+    - 8
+    attribute_weights:
+      force: 5
+      intellect: 55
+      defense: 20
+      agility: 20
+  - key: hero_sima_hui
+    name: 司马徽
+    archetype: civil
+    flavor: 东汉末年名士，人称"水镜先生"。他隐居襄阳，精通道术、奇门、兵法、经学，却从不轻易评点人物，无论问及何人，皆以"好好"二字作答，世人戏称其"好好先生"。然而正是他向刘备推荐了诸葛亮与庞统，留下"卧龙凤雏得一可安天下"的千古名言。他识人之明冠绝当世，却甘于隐逸山林，以淡泊之姿旁观三国风云，堪称那个乱世中最超然的智者。
+    default_gender: male
+    default_morality: 85
+    recruitable: true
+    is_hermit: true
+    growth_range:
+    - 7
+    - 11
+    attribute_weights:
+      force: 5
+      intellect: 60
+      defense: 15
       agility: 20

@@ -15,6 +15,7 @@ from core.utils.time_scale import scale_duration
 
 from ..constants import BuildingKeys
 from ..models import LivestockProduction, Manor
+from .notifications import notify_user
 
 
 # 家畜配置
@@ -174,10 +175,6 @@ def start_livestock_production(manor: Manor, livestock_key: str, quantity: int =
     if livestock_key not in LIVESTOCK_CONFIG:
         raise ValueError("无效的家畜类型")
 
-    # 检查是否已有养殖进行中
-    if has_active_livestock_production(manor):
-        raise ValueError("已有家畜正在养殖中，同时只能养殖一种家畜")
-
     config = LIVESTOCK_CONFIG[livestock_key]
     required_level = config.get("required_animal_husbandry", 1)
 
@@ -197,16 +194,21 @@ def start_livestock_production(manor: Manor, livestock_key: str, quantity: int =
     # 计算总消耗
     total_grain_cost = config["grain_cost"] * quantity
 
-    if manor.grain < total_grain_cost:
-        raise ValueError(f"粮食不足，需要{total_grain_cost}点粮食")
-
     with transaction.atomic():
-        from .resources import spend_resources
+        from gameplay.models import Manor as ManorModel
+        from .resources import spend_resources_locked
         from ..models import ResourceEvent
 
+        locked_manor = ManorModel.objects.select_for_update().get(pk=manor.pk)
+
+        if has_active_livestock_production(locked_manor):
+            raise ValueError("已有家畜正在养殖中，同时只能养殖一种家畜")
+        if locked_manor.grain < total_grain_cost:
+            raise ValueError(f"粮食不足，需要{total_grain_cost}点粮食")
+
         # 扣除粮食
-        spend_resources(
-            manor,
+        spend_resources_locked(
+            locked_manor,
             {"grain": total_grain_cost},
             note=f"养殖{config['name']}x{quantity}",
             reason=ResourceEvent.Reason.UPGRADE_COST,
@@ -217,7 +219,7 @@ def start_livestock_production(manor: Manor, livestock_key: str, quantity: int =
 
         # 创建养殖记录
         production = LivestockProduction.objects.create(
-            manor=manor,
+            manor=locked_manor,
             livestock_key=livestock_key,
             livestock_name=config["name"],
             quantity=quantity,
@@ -269,12 +271,7 @@ def finalize_livestock_production(production: LivestockProduction, send_notifica
     Returns:
         是否成功完成
     """
-    import logging
-    from asgiref.sync import async_to_sync
-    from channels.layers import get_channel_layer
     from ..models import Message
-
-    logger = logging.getLogger(__name__)
 
     if production.status != LivestockProduction.Status.PRODUCING:
         return False
@@ -284,9 +281,9 @@ def finalize_livestock_production(production: LivestockProduction, send_notifica
 
     with transaction.atomic():
         # 添加家畜到仓库（按数量添加）
-        from .inventory import add_item_to_inventory
+        from .inventory import add_item_to_inventory_locked
 
-        add_item_to_inventory(production.manor, production.livestock_key, production.quantity)
+        add_item_to_inventory_locked(production.manor, production.livestock_key, production.quantity)
 
         # 更新养殖状态
         production.status = LivestockProduction.Status.COMPLETED
@@ -304,21 +301,16 @@ def finalize_livestock_production(production: LivestockProduction, send_notifica
             body=f"您的{production.livestock_name}{quantity_text}已养殖完成，请到仓库查收。",
         )
 
-        channel_layer = get_channel_layer()
-        if channel_layer:
-            payload = {
+        notify_user(
+            production.manor.user_id,
+            {
                 "kind": "system",
                 "title": f"{production.livestock_name}{quantity_text}养殖完成",
                 "livestock_key": production.livestock_key,
                 "quantity": production.quantity,
-            }
-            try:
-                async_to_sync(channel_layer.group_send)(
-                    f"user_{production.manor.user_id}",
-                    {"type": "notify.message", "payload": payload},
-                )
-            except Exception:
-                logger.warning("Failed to send livestock production notification via channels", exc_info=True)
+            },
+            log_context="livestock production notification",
+        )
 
     return True
 

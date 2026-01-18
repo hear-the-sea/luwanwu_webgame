@@ -58,7 +58,7 @@ class Command(BaseCommand):
         )
 
         # === presets 子命令 ===
-        presets_parser = subparsers.add_parser(
+        subparsers.add_parser(
             'presets',
             help='列出所有可用的预设配置'
         )

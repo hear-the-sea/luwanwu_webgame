@@ -26,9 +26,9 @@ def test_calculate_battle_salvage_deterministic_and_uses_guest_hp_ratio():
     exp1, equip1 = calculate_battle_salvage(report)
     exp2, equip2 = calculate_battle_salvage(report)
 
-    # dao_jie: base_duration=180 → 10 * (180/60) * 0.1 = 3
-    # defeated guest: 50 * 2.0 * (50/100) * 0.05 = 2.5 → total int(...) = 5
-    assert exp1 == 5
+    # dao_jie: base_duration=180秒 → 10 * (180/3600) * 0.1 = 0.05
+    # defeated guest: 50 * 2.0 * (50/100) * 0.05 = 2.5 → total int(...) = 2
+    assert exp1 == 2
     assert exp2 == exp1
     assert equip2 == equip1
 
@@ -47,8 +47,8 @@ def test_calculate_battle_salvage_counts_troop_losses_on_both_sides():
     report = SimpleNamespace(
         seed=42,
         losses={
-            "attacker": {"casualties": [{"key": "dao_jie", "lost": 10}]},
-            "defender": {"casualties": [{"key": "dao_jie", "lost": 10}]},
+            "attacker": {"casualties": [{"key": "dao_jie", "lost": 200}]},
+            "defender": {"casualties": [{"key": "dao_jie", "lost": 200}]},
         },
         attacker_team=[],
         defender_team=[],
@@ -56,6 +56,5 @@ def test_calculate_battle_salvage_counts_troop_losses_on_both_sides():
 
     exp, _equip = calculate_battle_salvage(report)
 
-    # Both sides: (10 + 10) * (180/60) * 0.1 = 6
-    assert exp == 6
-
+    # Both sides: (200 + 200) * (180/3600) * 0.1 = 2
+    assert exp == 2

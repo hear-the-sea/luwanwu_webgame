@@ -1,6 +1,6 @@
 import pytest
 
-from gameplay.services import ensure_manor
+from gameplay.services.manor import ensure_manor
 from guests.models import GuestStatus, RecruitmentPool
 from guests.services import finalize_candidate, recruit_guest
 
@@ -102,10 +102,13 @@ def test_defeated_guest_becomes_injured(django_user_model):
         guest.status = GuestStatus.IDLE
         guest.save()
     troop_loadout = {"dao_jie": 100, "qiang_ling": 100, "archer": 100, "fist_master": 100, "jian_shi": 100}
-    report = simulate_report(manor, seed=99, troop_loadout=troop_loadout)
+    defender_setup = {"troop_loadout": {k: 5000 for k in troop_loadout}}
+    report = simulate_report(manor, seed=99, troop_loadout=troop_loadout, defender_setup=defender_setup)
+    assert report.winner == "defender"
     # 检查是否有门客变为重伤
     manor.refresh_from_db()
     injured_guests = manor.guests.filter(status=GuestStatus.INJURED)
+    assert injured_guests.exists()
     # 由于初始HP=1，很可能有门客阵亡
     # 无论输赢，只要有人阵亡就应该变为重伤
     for guest in manor.guests.all():

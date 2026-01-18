@@ -37,7 +37,11 @@ class AccessLogMiddleware:
             status_code = getattr(response, "status_code", 500)
             user = getattr(request, "user", None)
             user_id = user.pk if user and getattr(user, "is_authenticated", False) else None
-            ip = request.META.get("HTTP_X_FORWARDED_FOR") or request.META.get("REMOTE_ADDR") or "-"
+            ip = request.META.get("REMOTE_ADDR") or "-"
+            if getattr(settings, "ACCESS_LOG_TRUST_PROXY", False):
+                forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR", "")
+                if forwarded_for:
+                    ip = forwarded_for.split(",")[0].strip() or ip
             request_id = getattr(request, "id", "-")
             logger.info(
                 "method=%s path=%s status=%s duration_ms=%s user_id=%s ip=%s request_id=%s%s",

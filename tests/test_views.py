@@ -6,7 +6,7 @@ import pytest
 from django.test import Client
 from django.urls import reverse
 
-from gameplay.services import ensure_manor
+from gameplay.services.manor import ensure_manor
 
 
 @pytest.fixture

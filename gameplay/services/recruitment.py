@@ -467,9 +467,8 @@ def finalize_troop_recruitment(recruitment: TroopRecruitment, send_notification:
         是否成功完成
     """
     import logging
-    from asgiref.sync import async_to_sync
-    from channels.layers import get_channel_layer
     from ..models import Message
+    from .notifications import notify_user
 
     logger = logging.getLogger(__name__)
 
@@ -513,21 +512,16 @@ def finalize_troop_recruitment(recruitment: TroopRecruitment, send_notification:
             body=f"您的{recruitment.troop_name}{quantity_text}已募兵完成。",
         )
 
-        channel_layer = get_channel_layer()
-        if channel_layer:
-            payload = {
+        notify_user(
+            recruitment.manor.user_id,
+            {
                 "kind": "system",
                 "title": f"{recruitment.troop_name}{quantity_text}募兵完成",
                 "troop_key": recruitment.troop_key,
                 "quantity": recruitment.quantity,
-            }
-            try:
-                async_to_sync(channel_layer.group_send)(
-                    f"user_{recruitment.manor.user_id}",
-                    {"type": "notify.message", "payload": payload},
-                )
-            except Exception:
-                logger.warning("Failed to send troop recruitment notification via channels", exc_info=True)
+            },
+            log_context="troop recruitment notification",
+        )
 
     return True
 

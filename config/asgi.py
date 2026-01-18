@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 
 from channels.auth import AuthMiddlewareStack
@@ -11,13 +12,16 @@ from django.core.asgi import get_asgi_application
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
+logger = logging.getLogger(__name__)
+
 # Initialize Django ASGI application early to ensure app registry is ready
 django_asgi_app = get_asgi_application()
 
 # Lazy import websocket routing to avoid loading Django before settings are set
 try:
     from websocket import routing as websocket_routing
-except Exception:  # pragma: no cover - fallback if apps not ready
+except Exception as exc:  # pragma: no cover - fallback if apps not ready
+    logger.exception("Failed to import websocket routing; WebSocket endpoints disabled: %s", exc)
     websocket_routing = None
 
 websocket_urlpatterns = []

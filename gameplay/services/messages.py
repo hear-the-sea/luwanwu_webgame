@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Dict
 
 from django.db import transaction
@@ -15,7 +16,7 @@ from core.exceptions import (
     MessageNotFoundError,
     NoAttachmentError,
 )
-from ..models import InventoryItem, ItemTemplate, Manor, Message, ResourceEvent, ResourceType
+from ..models import InventoryItem, ItemTemplate, Manor, Message, ResourceEvent
 from .cache import CacheKeys, CACHE_TIMEOUT_SHORT
 from .resources import grant_resources
 
@@ -110,7 +111,15 @@ def cleanup_old_messages(manor: Manor) -> None:
     Args:
         manor: 庄园对象
     """
-    threshold = timezone.now() - timezone.timedelta(days=MESSAGE_RETENTION_DAYS)
+    from django.core.cache import cache
+
+    # 性能优化：避免每次打开消息列表都触发一次 DELETE 扫描。
+    # 保留期以“天”为单位，清理无需高频执行；这里对每个庄园做节流（默认 6 小时一次）。
+    cleanup_gate_key = f"messages:cleanup_old:{manor.id}"
+    if not cache.add(cleanup_gate_key, "1", timeout=6 * 60 * 60):
+        return
+
+    threshold = timezone.now() - timedelta(days=MESSAGE_RETENTION_DAYS)
     manor.messages.filter(created_at__lt=threshold).delete()
 
 

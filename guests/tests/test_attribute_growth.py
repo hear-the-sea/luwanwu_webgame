@@ -164,23 +164,23 @@ class TestAttributeGrowth(TestCase):
         """测试：期望值计算正确（基于区间均值）"""
         expected = get_expected_growth("orange", "military", 1)
 
-        # 橙色6-12点，均值9点，武将权重：force 40%, intellect 15%, defense 23%, agility 22%
+        # 橙色6-14点，均值10点，武将权重：force 40%, intellect 15%, defense 23%, agility 22%
         # 总权重 100，每点期望 = 9 * weight / 100
-        self.assertAlmostEqual(expected["force"], 9 * 0.40, places=1)       # 3.6
-        self.assertAlmostEqual(expected["intellect"], 9 * 0.15, places=2)   # 1.35
-        self.assertAlmostEqual(expected["defense"], 9 * 0.23, places=2)     # 2.07
-        self.assertAlmostEqual(expected["agility"], 9 * 0.22, places=2)     # 1.98
+        self.assertAlmostEqual(expected["force"], 10 * 0.40, places=1)       # 4.0
+        self.assertAlmostEqual(expected["intellect"], 10 * 0.15, places=2)   # 1.50
+        self.assertAlmostEqual(expected["defense"], 10 * 0.23, places=2)     # 2.30
+        self.assertAlmostEqual(expected["agility"], 10 * 0.22, places=2)     # 2.20
 
     def test_expected_growth_civil(self):
         """测试：文官期望值计算正确（基于区间均值）"""
         expected = get_expected_growth("purple", "civil", 1)
 
-        # 紫色6-10点，均值8点，文官权重：force 20%, intellect 40%, defense 20%, agility 20%
+        # 紫色6-11点，均值8.5点，文官权重：force 20%, intellect 40%, defense 20%, agility 20%
         # 总权重 100，每点期望 = 8 * weight / 100
-        self.assertAlmostEqual(expected["force"], 8 * 0.20, places=2)       # 1.6
-        self.assertAlmostEqual(expected["intellect"], 8 * 0.40, places=1)   # 3.2
-        self.assertAlmostEqual(expected["defense"], 8 * 0.20, places=1)     # 1.6
-        self.assertAlmostEqual(expected["agility"], 8 * 0.20, places=2)     # 1.6
+        self.assertAlmostEqual(expected["force"], 8.5 * 0.20, places=2)       # 1.70
+        self.assertAlmostEqual(expected["intellect"], 8.5 * 0.40, places=1)   # 3.40
+        self.assertAlmostEqual(expected["defense"], 8.5 * 0.20, places=1)     # 1.70
+        self.assertAlmostEqual(expected["agility"], 8.5 * 0.20, places=2)     # 1.70
 
     def test_rarity_differences(self):
         """测试：不同稀有度属性点差异（区间成长）"""

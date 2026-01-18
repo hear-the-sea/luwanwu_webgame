@@ -1,0 +1,604 @@
+# 历史人物门客 - 宋辽金元（第03批：绿色50人；key 0109-0158）
+
+heroes:
+  green:
+  - key: hist_songliaojinyuan_0109
+    name: 文彦博
+    archetype: civil
+    flavor: '（1006年-1097年）北宋名相，历仕四朝五十年。他出将入相，功勋卓著，是北宋政坛的常青树。他主持平定贝州王则起义，又多次出任宰相，政绩斐然。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0110
+    name: 吕蒙正
+    archetype: civil
+    flavor: '（944年-1011年）北宋名相，三次拜相。他从寒门子弟到宰相，是科举制度的典范。他宽厚大度，不记私仇。相传《破窑赋》为他所作，鼓励后人不要因一时困顿而灰心。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0111
+    name: 赵恒
+    archetype: civil
+    flavor: '（968年-1022年）宋真宗，澶渊之盟的签订者。他在寇准的力劝下亲征澶州，最终与辽国达成和约。虽然每年需要缴纳岁币，却换来了百年和平。他崇尚道教，封禅泰山，政治上毁誉参半。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0112
+    name: 章惇
+    archetype: civil
+    flavor: '（1035年-1105年）北宋宰相，新党领袖。他支持王安石变法，打击旧党，手段激烈。他虽有才干，却因党争而毁誉参半。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0113
+    name: 曾公亮
+    archetype: civil
+    flavor: '（999年-1078年）北宋名相，《武经总要》主编。他主持编修了中国古代最重要的军事百科全书，记载了火药武器的配方。他历仕三朝，政绩卓著。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0114
+    name: 丁谓
+    archetype: civil
+    flavor: '（966年-1037年）北宋权臣，营造宫殿的能臣。他用一条渠道同时解决运输、清淤、填地三个问题，展现了惊人的工程才能。然而他陷害寇准，被列为奸臣。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0115
+    name: 范纯仁
+    archetype: civil
+    flavor: '（1027年-1101年）范仲淹之子，北宋名臣。他继承父志，为官清廉，多次出任宰相。他临终遗言"布衣而葬"，展现了范氏家风。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0116
+    name: 张耒
+    archetype: civil
+    flavor: '（1054年-1114年）苏门四学士之一，诗人。他诗风平易近人，关注民生疾苦。他与黄庭坚、秦观、晏几道齐名，是北宋文坛的重要人物。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0117
+    name: 陈师道
+    archetype: civil
+    flavor: '（1053年-1102年）北宋诗人，江西诗派代表。他诗风质朴刚健，与黄庭坚并称"黄陈"。他一生贫困，却坚守文人风骨，不为五斗米折腰。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0118
+    name: 王禹偁
+    archetype: civil
+    flavor: '（954年-1001年）北宋初期诗文大家。他倡导古文运动，是北宋文学革新的先驱。他为官刚直，多次因直言被贬。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0119
+    name: 宋祁
+    archetype: civil
+    flavor: '（998年-1061年）北宋词人、史学家。"红杏枝头春意闹"一句为他赢得"红杏尚书"的雅号。他与欧阳修共同编修《新唐书》。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0120
+    name: 林逋
+    archetype: civil
+    flavor: '（967年-1028年）北宋隐逸诗人，"梅妻鹤子"的典故来源。他隐居西湖孤山二十年，以梅为妻，以鹤为子。"疏影横斜水清浅，暗香浮动月黄昏"是咏梅绝唱。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0121
+    name: 钱惟演
+    archetype: civil
+    flavor: '（977年-1034年）北宋文学家，吴越王钱镠之孙。他是西昆体的重要作家，诗文华丽典雅。他仕途显达，却始终保持文人本色。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0122
+    name: 王曾
+    archetype: civil
+    flavor: '（978年-1038年）北宋名相，连中三元的传奇人物。他科举考试中连中解元、会元、状元，是北宋唯一的"三元及第"。他为官清廉，深受百姓爱戴。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0123
+    name: 张方平
+    archetype: civil
+    flavor: '（1007年-1091年）北宋名臣，发现苏轼的伯乐。他向欧阳修推荐苏轼，开启了苏轼的仕途。他为官四十年，政绩卓著。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0124
+    name: 吕公著
+    archetype: civil
+    flavor: '（1018年-1089年）北宋名相，旧党领袖。他反对王安石变法，主张渐进改革。他为人宽厚，深得朝野敬重。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0125
+    name: 王珪
+    archetype: civil
+    flavor: '（1019年-1085年）北宋宰相，"三旨相公"的典故来源。他为相十六年，凡事唯诺，被讥为"取圣旨、领圣旨、已得圣旨"。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0126
+    name: 刘挚
+    archetype: civil
+    flavor: '（1030年-1098年）北宋名臣，旧党重臣。他反对新法，多次被贬。他为人刚直，不畏权贵，是旧党中的硬骨头。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0127
+    name: 吕大防
+    archetype: civil
+    flavor: '（1027年-1097年）北宋名相，旧党首领。他主政期间废除新法，恢复旧制。他死于贬谪途中，是党争的牺牲品。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0128
+    name: 范祖禹
+    archetype: civil
+    flavor: '（1041年-1098年）北宋史学家，《资治通鉴》编修助手。他协助司马光编修《资治通鉴》，又独自完成《唐鉴》。他是北宋最杰出的史学家之一。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0129
+    name: 吕惠卿
+    archetype: civil
+    flavor: '（1032年-1111年）北宋新党重臣，王安石的得力助手。他协助推行新法，后与王安石反目。他才能出众，却因党争而毁誉参半。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0130
+    name: 蔡确
+    archetype: civil
+    flavor: '（1037年-1093年）北宋宰相，新党首领。他继王安石之后推行新法，因车盖亭诗案被贬。他的遭遇是北宋党争激烈的缩影。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0131
+    name: 邢恕
+    archetype: civil
+    flavor: '（1035年-1109年）北宋大臣，党争中的投机者。他先附新党，后投旧党，又归新党，是党争时代的政治变色龙。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0132
+    name: 蔡卞
+    archetype: civil
+    flavor: '（1048年-1117年）北宋大臣，蔡京之弟。他是王安石的女婿，积极推行新法。他书法精妙，与兄蔡京齐名。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0133
+    name: 曾布
+    archetype: civil
+    flavor: '（1036年-1107年）北宋宰相，曾巩之弟。他参与变法，后与王安石分道扬镳。他晚年主政，试图调和新旧两党，未能成功。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0134
+    name: 吴充
+    archetype: civil
+    flavor: '（1021年-1080年）北宋宰相，王安石的亲家。他虽与王安石为姻亲，却反对某些新法政策。他为人正直，不因私废公。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0135
+    name: 陈瓘
+    archetype: civil
+    flavor: '（1057年-1124年）北宋名臣，著名的谏官。他不畏权贵，多次弹劾蔡京等奸臣。他刚正不阿，是北宋清流的代表。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0136
+    name: 邹浩
+    archetype: civil
+    flavor: '（1060年-1111年）北宋名臣，敢言直谏的典范。他因反对立刘妃为后而被贬岭南。他的忠直得到后世敬仰。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0137
+    name: 陈尧佐
+    archetype: civil
+    flavor: '（963年-1044年）北宋名臣，陈省华之子。他兄弟三人皆为进士，号称"陈氏三状元"。他治水有方，政绩卓著。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0138
+    name: 陈尧咨
+    archetype: military
+    flavor: '（970年-1034年）北宋武将，卖油翁故事的主角。他以射箭闻名，却被卖油翁的话点醒：熟能生巧。他后转任武职，守边有功。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 24
+      agility: 16
+  - key: hist_songliaojinyuan_0139
+    name: 杜衍
+    archetype: civil
+    flavor: '（978年-1057年）北宋名相，庆历新政的支持者。他为官清廉，政声卓著。他晚年归隐，著书立说。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0140
+    name: 庞籍
+    archetype: civil
+    flavor: '（988年-1063年）北宋名相，镇守西北的名臣。他经略西夏边境多年，政绩显著。他是狄青的举荐者，慧眼识英才。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0141
+    name: 薛居正
+    archetype: civil
+    flavor: '（912年-981年）北宋初期名臣，《旧五代史》主编。他主持编修了记录五代历史的重要史书，为后世保存了珍贵史料。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0142
+    name: 李昉
+    archetype: civil
+    flavor: '（925年-996年）北宋名臣，《太平御览》主编。他主持编修了《太平御览》《太平广记》《文苑英华》等大型类书，是北宋文化事业的功臣。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0143
+    name: 徐铉
+    archetype: civil
+    flavor: '（916年-991年）南唐遗臣，入宋后的文学家。他是南唐最后的才子，随李煜入宋。他精通文字学，参与校订《说文解字》。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0144
+    name: 李沆
+    archetype: civil
+    flavor: '（947年-1004年）北宋名相，"圣相"之称。他辅佐真宗，为政持重，为相六年，政声卓著。他是北宋初期政治稳定的重要保障。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0145
+    name: 向敏中
+    archetype: civil
+    flavor: '（949年-1020年）北宋名相，三朝元老。他为政清明，处事公正。他是北宋初年政坛的重要人物。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0146
+    name: 张咏
+    archetype: civil
+    flavor: '（946年-1015年）北宋名臣，以治蜀著称。他发明了世界上最早的纸币"交子"，是金融史上的创举。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0147
+    name: 王钦若
+    archetype: civil
+    flavor: '（962年-1025年）北宋宰相，五鬼之首。他主张澶渊议和，后与丁谓专权。他虽有争议，却也是北宋政坛的重要人物。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0148
+    name: 陈彭年
+    archetype: civil
+    flavor: '（961年-1017年）北宋名臣，《广韵》主编。他主持修订韵书，对中国语言学贡献巨大。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0149
+    name: 胡瑗
+    archetype: civil
+    flavor: '（993年-1059年）北宋教育家，"安定先生"。他创立分斋教学法，影响了后世教育。他是宋代教育改革的先驱。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0150
+    name: 孙复
+    archetype: civil
+    flavor: '（992年-1057年）北宋理学先驱，《春秋尊王发微》作者。他是理学思想的重要开拓者。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0151
+    name: 石介
+    archetype: civil
+    flavor: '（1005年-1045年）北宋理学家，"泰山先生"。他与胡瑗、孙复并称"宋初三先生"，开创了宋学的新局面。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0152
+    name: 刘敞
+    archetype: civil
+    flavor: '（1019年-1068年）北宋经学家，"原父先生"。他精研《春秋》，是宋代经学的重要人物。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0153
+    name: 杨亿
+    archetype: civil
+    flavor: '（974年-1020年）北宋文学家，西昆体代表。他主持编纂《册府元龟》，是北宋大型类书的重要编纂者。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0154
+    name: 刘筠
+    archetype: civil
+    flavor: '（971年-1031年）北宋文学家，西昆体代表。他与杨亿齐名，诗风华丽典雅。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0155
+    name: 穆修
+    archetype: civil
+    flavor: '（979年-1032年）北宋古文运动先驱。他倡导古文，反对骈文，为欧阳修等人开辟了道路。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0156
+    name: 尹洙
+    archetype: civil
+    flavor: '（1001年-1047年）北宋文学家，古文运动推动者。他与欧阳修交好，共同倡导文风改革。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0157
+    name: 苏舜钦
+    archetype: civil
+    flavor: '（1008年-1048年）北宋诗人，诗风豪放。他与梅尧臣并称"苏梅"，是北宋诗歌革新的重要人物。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0158
+    name: 郑獬
+    archetype: civil
+    flavor: '（1022年-1072年）北宋状元，直言敢谏。他为人正直，多次上书言事，是北宋言官的代表。'
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12

@@ -336,6 +336,95 @@ items:
     effect_payload:
       duration: 259200  # 3天（秒）
 
+  # ---------- 任务卡 ----------
+
+  - key: mission_card
+    name: 任务卡
+    description: 使用后可为指定任务增加1次今日挑战次数。在任务详情页面使用。
+    effect_type: tool
+    rarity: blue
+    tradeable: true
+    price: 1000
+    storage_space: 1
+    is_usable: false  # 不在仓库直接使用，在任务详情页使用
+
+  # ---------- 门客重生卡 ----------
+
+  - key: guest_rebirth_card
+    name: 门客重生卡
+    description: 使用后可将指定门客重生至1级，属性点将全部重置，可重新分配成长方向。装备和技能书学习的技能将被保留。
+    effect_type: tool
+    rarity: purple
+    tradeable: true
+    price: 50000
+    storage_space: 1
+    is_usable: true
+    effect_payload:
+      action: rebirth_guest
+
+  # ---------- 洗髓丹 ----------
+
+  - key: xisuidan
+    name: 洗髓丹
+    description: 珍贵的灵丹，可重新随机门客升级获得的成长点数。新的成长点数保证不低于当前值，有机会获得更高的属性成长。
+    effect_type: tool
+    rarity: orange
+    tradeable: true
+    price: 200000
+    storage_space: 1
+    is_usable: true
+    effect_payload:
+      action: reroll_growth
+
+  # ---------- 洗点卡 ----------
+
+  - key: xidianka
+    name: 洗点卡
+    description: 使用后可重置指定门客的属性点分配，已分配的属性点将全部返还，可重新分配。
+    effect_type: tool
+    rarity: blue
+    tradeable: true
+    price: 10000
+    storage_space: 1
+    is_usable: true
+    effect_payload:
+      action: reset_allocation
+
+  # ---------- 打工宝箱 ----------
+
+  - key: work_chest_small
+    name: 打工宝箱（小）
+    description: 打工获得的小型宝箱，打开后可获得随机白银，有小概率获得绿色装备或技能书。
+    effect_type: loot_box
+    rarity: green
+    tradeable: true
+    price: 5000
+    storage_space: 5
+    is_usable: true
+    effect_payload:
+      silver_min: 5000
+      silver_max: 10000
+      # 10%概率获得绿色非套装装备（随机一件）
+      gear_chance: 0.1
+      gear_keys:
+        - equip_tieyekui      # 铁叶盔
+        - equip_housipao      # 厚丝袍
+        - equip_shapijia      # 鲨皮甲
+        - equip_gangpianxue   # 钢片靴
+        - equip_yanyuxue      # 燕羽靴
+        - equip_qingmangjian  # 青芒剑
+        - equip_duanmajian    # 断马剑
+        - equip_tongchangdao  # 铜长刀
+        - equip_jingtiedao    # 精铁刀
+        - equip_hutoumao      # 虎头矛
+      # 10%概率获得绿色技能书（随机一本）
+      skill_book_chance: 0.1
+      skill_book_keys:
+        - book_ice_curse          # 寒冰咒
+        - book_thunder_control    # 驭雷术
+        - book_dragon_break_curse # 破龙咒
+        - book_endless_chatter    # 唧唧歪歪
+
   # ══════════════════════════════════════════════════════════════════════════════
   #                              技能书
   # ══════════════════════════════════════════════════════════════════════════════

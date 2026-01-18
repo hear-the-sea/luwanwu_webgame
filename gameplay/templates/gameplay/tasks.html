@@ -24,7 +24,7 @@
                         <p class="muted-text">{{ mission.description }}</p>
                     </header>
                     <div style="margin-top: 0.5rem;">
-                        <span class="chip">今日剩余：{{ item.remaining }} / {{ mission.daily_limit }}</span>
+                        <span class="chip">今日剩余：{{ item.remaining }} / {{ item.daily_limit }}</span>
                     </div>
                     <div style="margin-top: 1rem;">
                         {% if item.remaining > 0 %}
@@ -53,8 +53,15 @@
             <a href="{% url 'gameplay:tasks' %}" class="btn-secondary btn-small">关闭</a>
         </header>
         <div class="modal-body">
-            <div class="task-modal-meta" style="margin-bottom: 1.5rem;">
-                <span class="chip">今日剩余 {{ selected_remaining }} / {{ selected_mission.daily_limit }}</span>
+            <div class="task-modal-meta" style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                <span class="chip">今日剩余 {{ selected_remaining }} / {{ selected_daily_limit }}</span>
+                {% if mission_card_count > 0 %}
+                <form method="post" action="{% url 'gameplay:use_mission_card' %}" style="display: inline;">
+                    {% csrf_token %}
+                    <input type="hidden" name="mission_key" value="{{ selected_mission.key }}">
+                    <button type="submit" class="btn-add-attempt" title="使用任务卡增加次数（剩余{{ mission_card_count }}张）">+</button>
+                </form>
+                {% endif %}
                 {% if selected_mission.is_defense %}
                     <span class="chip">自动使用空闲门客</span>
                 {% else %}
@@ -211,7 +218,7 @@
                             </div>
                         {% endif %}
                         <div class="modal-actions" style="display: flex; gap: 1rem; margin-top: 2rem;">
-                            {% if selected_attempts >= selected_mission.daily_limit %}
+                            {% if selected_attempts >= selected_daily_limit %}
                                 <button type="submit" class="btn-secondary" disabled>
                                     {% if selected_mission.is_defense %}无法接受{% else %}无法出征{% endif %}
                                 </button>
@@ -237,6 +244,34 @@
 
 {% block extra_head %}
 <style>
+/* 任务卡增加次数按钮 */
+.btn-add-attempt {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: var(--accent-gold);
+    background: var(--bg-secondary);
+    border: 2px solid var(--accent-gold);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-add-attempt:hover {
+    background: var(--accent-gold);
+    color: var(--bg-primary);
+    transform: scale(1.1);
+}
+
+.btn-add-attempt:active {
+    transform: scale(0.95);
+}
+
 /* 门客选择样式 - 一行两个 */
 .guest-selection {
     display: grid;

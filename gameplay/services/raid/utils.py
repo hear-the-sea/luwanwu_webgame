@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 from datetime import timedelta
-from typing import Tuple
+from typing import Tuple, Optional
 
 from django.db.models import F, Sum
 from django.utils import timezone
@@ -57,13 +57,21 @@ def get_prestige_color(my_prestige: int, target_prestige: int) -> str:
     return "white"  # 势均力敌
 
 
-def can_attack_target(attacker: Manor, defender: Manor) -> Tuple[bool, str]:
+def can_attack_target(
+    attacker: Manor,
+    defender: Manor,
+    *,
+    recent_attacks: Optional[int] = None,
+    now: Optional[timezone.datetime] = None,
+) -> Tuple[bool, str]:
     """
     检查是否可以攻击目标庄园。
 
     Args:
         attacker: 进攻方庄园
         defender: 防守方庄园
+        recent_attacks: 可选的“目标24小时内被攻击次数”预计算值；提供时将跳过数据库 COUNT
+        now: 可选的当前时间（用于批量计算时复用）
 
     Returns:
         (是否可攻击, 原因说明)
@@ -92,11 +100,12 @@ def can_attack_target(attacker: Manor, defender: Manor) -> Tuple[bool, str]:
         return False, "对方声望过高，无法攻击"
 
     # 检查目标24小时内被攻击次数（防止小号集群攻击）
-    now = timezone.now()
-    recent_attacks = RaidRun.objects.filter(
-        defender=defender,
-        started_at__gte=now - timedelta(hours=24)
-    ).count()
+    now = now or timezone.now()
+    if recent_attacks is None:
+        recent_attacks = RaidRun.objects.filter(
+            defender=defender,
+            started_at__gte=now - timedelta(hours=24)
+        ).count()
     if recent_attacks >= PVPConstants.RAID_MAX_DAILY_ATTACKS_RECEIVED:
         return False, "该目标今日已被多次攻击，暂时无法攻击"
 

@@ -77,6 +77,10 @@
                             <a class="btn-primary" href="{% url 'gameplay:forge' %}">锻造装备</a>
                         {% elif building.building_type.key == 'lianggongchang' %}
                             <a class="btn-primary" href="{% url 'gameplay:troop_recruitment' %}">护院招募</a>
+                        {% elif building.building_type.key == 'jail' %}
+                            <a class="btn-primary" href="{% url 'gameplay:jail' %}">查看</a>
+                        {% elif building.building_type.key == 'oath_grove' %}
+                            <a class="btn-primary" href="{% url 'gameplay:oath_grove' %}">查看</a>
                         {% endif %}
                     </div>
                 </div>

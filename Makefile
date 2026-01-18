@@ -34,8 +34,8 @@ format:
 	isort .
 
 lint:
-	flake8 .
-	mypy .
+	$(PYTHON) -m flake8 .
+	$(PYTHON) -m mypy .
 
 check: format lint
 	@echo "Code formatting and linting completed!"

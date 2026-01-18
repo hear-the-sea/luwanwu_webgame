@@ -7,11 +7,15 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.views.decorators.http import require_POST
 
+from core.utils.rate_limit import rate_limit_redirect
+from ..decorators import require_guild_member, require_guild_manager
 from ..models import Guild, GuildMember, GuildApplication
 from ..services import guild as guild_service
 from ..services import member as member_service
 
+
 @login_required
+@rate_limit_redirect("guild_apply", limit=5, window_seconds=60)
 def apply_to_guild(request, guild_id):
     """申请加入帮会"""
     guild = get_object_or_404(Guild, id=guild_id, is_active=True)
@@ -20,7 +24,7 @@ def apply_to_guild(request, guild_id):
         message = request.POST.get('message', '').strip()
 
         try:
-            application = member_service.apply_to_guild(
+            member_service.apply_to_guild(
                 user=request.user,
                 guild=guild,
                 message=message
@@ -38,19 +42,10 @@ def apply_to_guild(request, guild_id):
 
 
 @login_required
+@require_guild_manager
 def application_list(request):
     """申请列表"""
-    user = request.user
-
-    # 验证是否在帮会中且有管理权限
-    if not hasattr(user, 'guild_membership') or not user.guild_membership.is_active:
-        messages.error(request, '您不在帮会中')
-        return redirect('guilds:hall')
-
-    member = user.guild_membership
-    if not member.can_manage:
-        messages.error(request, '您没有审批权限')
-        return redirect('guilds:detail', guild_id=member.guild.id)
+    member = request.guild_member
 
     # 获取待审批的申请
     applications = GuildApplication.objects.filter(
@@ -67,10 +62,14 @@ def application_list(request):
 
 
 @login_required
+@require_guild_manager
 @require_POST
+@rate_limit_redirect("guild_approve", limit=20, window_seconds=60)
 def approve_application(request, app_id):
     """通过申请"""
-    application = get_object_or_404(GuildApplication, id=app_id)
+    member = request.guild_member
+
+    application = get_object_or_404(GuildApplication, id=app_id, guild=member.guild)
 
     try:
         member_service.approve_application(application, request.user)
@@ -82,10 +81,14 @@ def approve_application(request, app_id):
 
 
 @login_required
+@require_guild_manager
 @require_POST
+@rate_limit_redirect("guild_reject", limit=20, window_seconds=60)
 def reject_application(request, app_id):
     """拒绝申请"""
-    application = get_object_or_404(GuildApplication, id=app_id)
+    member = request.guild_member
+
+    application = get_object_or_404(GuildApplication, id=app_id, guild=member.guild)
     note = request.POST.get('note', '')
 
     try:
@@ -98,24 +101,32 @@ def reject_application(request, app_id):
 
 
 @login_required
+@require_guild_member
 def member_list(request):
     """成员列表"""
-    user = request.user
-
-    if not hasattr(user, 'guild_membership') or not user.guild_membership.is_active:
-        messages.error(request, '您不在帮会中')
-        return redirect('guilds:hall')
-
-    member = user.guild_membership
+    member = request.guild_member
     guild = member.guild
 
     # 获取成员列表
-    members = guild.members.filter(is_active=True).select_related('user').order_by('-position', '-total_contribution')
+    leader = guild.get_leader()
+    members = (
+        guild.members.filter(is_active=True)
+        .select_related("user__manor")
+        .order_by("-position", "-total_contribution")
+    )
+
+    leader_count = 1 if leader else 0
+    admin_count = guild.get_admins().count()
+    normal_member_count = max(0, guild.current_member_count - leader_count - admin_count)
 
     context = {
         'guild': guild,
         'members': members,
         'member': member,
+        "leader": leader,
+        "leader_count": leader_count,
+        "admin_count": admin_count,
+        "normal_member_count": normal_member_count,
     }
 
     return render(request, 'guilds/members.html', context)
@@ -123,6 +134,7 @@ def member_list(request):
 
 @login_required
 @require_POST
+@rate_limit_redirect("guild_kick", limit=10, window_seconds=60)
 def kick_member(request, member_id):
     """辞退成员"""
     target_member = get_object_or_404(GuildMember, id=member_id)
@@ -138,6 +150,7 @@ def kick_member(request, member_id):
 
 @login_required
 @require_POST
+@rate_limit_redirect("guild_appoint", limit=10, window_seconds=60)
 def appoint_admin(request, member_id):
     """任命管理员"""
     target_member = get_object_or_404(GuildMember, id=member_id)
@@ -153,6 +166,7 @@ def appoint_admin(request, member_id):
 
 @login_required
 @require_POST
+@rate_limit_redirect("guild_demote", limit=10, window_seconds=60)
 def demote_admin(request, member_id):
     """罢免管理员"""
     target_member = get_object_or_404(GuildMember, id=member_id)
@@ -167,16 +181,12 @@ def demote_admin(request, member_id):
 
 
 @login_required
+@require_guild_member
 @require_POST
+@rate_limit_redirect("guild_transfer", limit=5, window_seconds=60)
 def transfer_leadership(request, member_id):
     """转让帮主"""
-    user = request.user
-
-    if not hasattr(user, 'guild_membership') or not user.guild_membership.is_active:
-        messages.error(request, '您不在帮会中')
-        return redirect('guilds:hall')
-
-    current_leader = user.guild_membership
+    current_leader = request.guild_member
     new_leader = get_object_or_404(GuildMember, id=member_id)
 
     try:
@@ -189,16 +199,12 @@ def transfer_leadership(request, member_id):
 
 
 @login_required
+@require_guild_member
 @require_POST
+@rate_limit_redirect("guild_leave", limit=5, window_seconds=60)
 def leave_guild(request):
     """退出帮会"""
-    user = request.user
-
-    if not hasattr(user, 'guild_membership') or not user.guild_membership.is_active:
-        messages.error(request, '您不在帮会中')
-        return redirect('guilds:hall')
-
-    member = user.guild_membership
+    member = request.guild_member
 
     try:
         member_service.leave_guild(member)
@@ -210,19 +216,16 @@ def leave_guild(request):
 
 
 @login_required
+@require_guild_member
 @require_POST
+@rate_limit_redirect("guild_upgrade", limit=5, window_seconds=60)
 def upgrade_guild(request):
     """升级帮会"""
-    user = request.user
-
-    if not hasattr(user, 'guild_membership') or not user.guild_membership.is_active:
-        messages.error(request, '您不在帮会中')
-        return redirect('guilds:hall')
-
-    member = user.guild_membership
+    member = request.guild_member
 
     try:
-        guild_service.upgrade_guild(member.guild, user)
+        guild_service.upgrade_guild(member.guild, request.user)
+        member.guild.refresh_from_db(fields=["level"])
         messages.success(request, f'帮会升级成功！当前等级：{member.guild.level}')
     except ValueError as e:
         messages.error(request, str(e))
@@ -231,16 +234,12 @@ def upgrade_guild(request):
 
 
 @login_required
+@require_guild_member
 @require_POST
+@rate_limit_redirect("guild_disband", limit=2, window_seconds=300)
 def disband_guild(request):
     """解散帮会"""
-    user = request.user
-
-    if not hasattr(user, 'guild_membership') or not user.guild_membership.is_active:
-        messages.error(request, '您不在帮会中')
-        return redirect('guilds:hall')
-
-    member = user.guild_membership
+    member = request.guild_member
     guild = member.guild
 
     # 验证确认
@@ -250,10 +249,9 @@ def disband_guild(request):
         return redirect('guilds:detail', guild_id=guild.id)
 
     try:
-        guild_service.disband_guild(guild, user)
+        guild_service.disband_guild(guild, request.user)
         messages.success(request, '帮会已解散')
         return redirect('guilds:hall')
     except ValueError as e:
         messages.error(request, str(e))
         return redirect('guilds:detail', guild_id=guild.id)
-

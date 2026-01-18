@@ -5,14 +5,20 @@
 """
 from __future__ import annotations
 
+import logging
 import os
 from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
 import yaml
 from django.conf import settings
+from django.core.cache import cache
+from django.db import transaction
+from django.db.models import F
 
 from core.utils.time_scale import scale_duration
+from .cache import invalidate_home_stats_cache
+from .notifications import notify_user
 from core.exceptions import (
     InsufficientResourceError,
     TechnologyNotFoundError,
@@ -22,6 +28,8 @@ from core.exceptions import (
 )
 
 from ..constants import MAX_CONCURRENT_TECH_UPGRADES
+
+logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)
@@ -33,8 +41,15 @@ def load_technology_templates() -> Dict[str, Any]:
         包含 categories, technologies, troop_classes 的字典
     """
     path = os.path.join(settings.BASE_DIR, "data", "technology_templates.yaml")
-    with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        logger.error("technology_templates.yaml not found: %s", path)
+        return {}
+    except Exception:
+        logger.exception("Failed to load technology templates from %s", path)
+        return {}
 
 
 @lru_cache(maxsize=1)
@@ -311,7 +326,6 @@ def schedule_technology_completion(tech, eta_seconds: int) -> None:
         eta_seconds: 预计完成时间（秒）
     """
     import logging
-    from django.db import transaction
 
     logger = logging.getLogger(__name__)
     countdown = max(0, int(eta_seconds))
@@ -337,11 +351,10 @@ def upgrade_technology(manor, tech_key: str) -> Dict[str, Any]:
     Raises:
         ValueError: 升级失败时抛出异常
     """
-    from django.db import transaction
     from django.utils import timezone
     from datetime import timedelta
     from ..models import PlayerTechnology
-    from .resources import spend_resources
+    from .resources import spend_resources_locked
 
     template = get_technology_template(tech_key)
     if not template:
@@ -379,11 +392,11 @@ def upgrade_technology(manor, tech_key: str) -> Dict[str, Any]:
         if locked_manor.silver < cost:
             raise InsufficientResourceError("silver", cost, locked_manor.silver)
 
-        spend_resources(locked_manor, {"silver": cost}, reason="tech_upgrade", note=f"升级{template['name']}")
+        spend_resources_locked(locked_manor, {"silver": cost}, reason="tech_upgrade", note=f"升级{template['name']}")
 
         # 累计银两花费，计算声望
-        from .prestige import add_prestige_silver
-        add_prestige_silver(locked_manor, cost)
+        from .prestige import add_prestige_silver_locked
+        add_prestige_silver_locked(locked_manor, cost)
 
         # 计算升级时间并开始升级
         duration = tech.upgrade_duration()
@@ -412,29 +425,33 @@ def finalize_technology_upgrade(tech, send_notification: bool = False) -> bool:
     Returns:
         是否成功完成升级
     """
-    import logging
-    from asgiref.sync import async_to_sync
-    from channels.layers import get_channel_layer
     from django.utils import timezone
     from ..models import Message
 
-    logger = logging.getLogger(__name__)
-
-    if not tech.is_upgrading:
+    if not getattr(tech, "pk", None):
+        return False
+    now = timezone.now()
+    updated = (
+        tech.__class__.objects.filter(
+            pk=tech.pk,
+            is_upgrading=True,
+            upgrade_complete_at__isnull=False,
+            upgrade_complete_at__lte=now,
+        ).update(
+            level=F("level") + 1,
+            is_upgrading=False,
+            upgrade_complete_at=None,
+            updated_at=now,
+        )
+    )
+    if updated != 1:
         return False
 
-    if tech.upgrade_complete_at and tech.upgrade_complete_at > timezone.now():
-        return False
+    tech = tech.__class__.objects.select_related("manor").get(pk=tech.pk)
 
     # 获取技术名称
     template = get_technology_template(tech.tech_key)
     tech_name = template["name"] if template else tech.tech_key
-
-    # 完成升级
-    tech.level += 1
-    tech.is_upgrading = False
-    tech.upgrade_complete_at = None
-    tech.save()
 
     if send_notification:
         from .messages import create_message
@@ -445,22 +462,19 @@ def finalize_technology_upgrade(tech, send_notification: bool = False) -> bool:
             title=f"{tech_name} 研究完成",
             body=f"当前等级 Lv{tech.level}",
         )
-        channel_layer = get_channel_layer()
-        if channel_layer:
-            payload = {
+
+        notify_user(
+            tech.manor.user_id,
+            {
                 "kind": "system",
                 "title": f"{tech_name} 研究完成",
                 "tech_key": tech.tech_key,
                 "level": tech.level,
-            }
-            try:
-                async_to_sync(channel_layer.group_send)(
-                    f"user_{tech.manor.user_id}",
-                    {"type": "notify.message", "payload": payload},
-                )
-            except Exception:
-                logger.warning("Failed to send technology upgrade notification via channels", exc_info=True)
+            },
+            log_context="technology upgrade notification",
+        )
 
+    invalidate_home_stats_cache(tech.manor_id)
     return True
 
 
@@ -476,10 +490,21 @@ def refresh_technology_upgrades(manor) -> int:
     """
     from django.utils import timezone
 
+    min_interval = getattr(settings, "MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS", 0)
+    if min_interval > 0 and getattr(manor, "pk", None):
+        cache_key = f"tech:refresh:{manor.pk}"
+        try:
+            if not cache.add(cache_key, "1", timeout=min_interval):
+                return 0
+        except Exception:
+            pass
+
     completed = 0
-    upgrading_techs = manor.technologies.filter(
-        is_upgrading=True,
-        upgrade_complete_at__lte=timezone.now()
+    upgrading_techs = list(
+        manor.technologies.filter(
+            is_upgrading=True,
+            upgrade_complete_at__lte=timezone.now()
+        )
     )
 
     for tech in upgrading_techs:

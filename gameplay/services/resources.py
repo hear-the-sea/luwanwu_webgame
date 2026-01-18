@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Dict
 
+from django.conf import settings
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
@@ -13,6 +14,71 @@ from django.utils import timezone
 from core.utils.time_scale import scale_value
 from ..models import Manor, ResourceEvent, ResourceType
 from ..utils.resource_calculator import RESOURCE_FIELDS, get_hourly_rates
+
+
+def spend_resources_locked(
+    manor: Manor, cost: Dict[str, int], note: str, reason: str = ResourceEvent.Reason.UPGRADE_COST
+) -> None:
+    """
+    消耗庄园资源（假设调用方已在 transaction.atomic 中完成所需的并发控制）。
+
+    该函数不会创建新的事务块，也不会额外对 Manor 行加锁；适用于上层服务函数已经
+    `select_for_update()` 锁定 manor 行的场景，避免重复锁与嵌套事务的冗余开销。
+    """
+    if not cost:
+        return
+    if not transaction.get_connection().in_atomic_block:
+        raise RuntimeError("spend_resources_locked must be called inside transaction.atomic()")
+
+    filters = {f"{key}__gte": value for key, value in cost.items()}
+    updates = {key: F(key) - value for key, value in cost.items()}
+    updated = Manor.objects.filter(pk=manor.pk, **filters).update(**updates)
+    if not updated:
+        raise ValueError("资源不足")
+
+    manor.refresh_from_db(fields=RESOURCE_FIELDS)
+    negative = {key: -val for key, val in cost.items()}
+    log_resource_gain(manor, negative, reason, note)
+
+
+def grant_resources_locked(
+    manor: Manor, rewards: Dict[str, int], note: str, reason: str = ResourceEvent.Reason.TASK_REWARD
+) -> Dict[str, int]:
+    """
+    发放资源奖励给庄园（假设调用方已在 transaction.atomic 中持有 manor 行锁）。
+
+    该函数不会创建新的事务块，也不会额外对 Manor 行加锁；适用于上层服务函数已经
+    `select_for_update()` 锁定 manor 行的场景，避免重复锁与嵌套事务的冗余开销。
+    """
+    if not rewards:
+        return {}
+    if not transaction.get_connection().in_atomic_block:
+        raise RuntimeError("grant_resources_locked must be called inside transaction.atomic()")
+
+    credited: Dict[str, int] = {}
+    for resource, amount in rewards.items():
+        if amount <= 0:
+            continue
+        # 使用各资源对应的容量上限
+        if resource == ResourceType.SILVER:
+            capacity = manor.silver_capacity
+        elif resource == ResourceType.GRAIN:
+            capacity = manor.grain_capacity
+        else:
+            continue  # 未知资源类型跳过
+
+        current_value = getattr(manor, resource, 0)
+        new_value = min(capacity, current_value + amount)
+        added = max(0, new_value - current_value)
+        if added <= 0:
+            continue
+        setattr(manor, resource, new_value)
+        credited[resource] = added
+
+    if credited:
+        manor.save(update_fields=list(credited.keys()))
+        log_resource_gain(manor, credited, reason, note)
+    return credited
 
 def sync_resource_production(manor: Manor) -> None:
     """
@@ -29,6 +95,11 @@ def sync_resource_production(manor: Manor) -> None:
         manor: 庄园对象（会被刷新以反映最新状态）
     """
     now = timezone.now()
+    min_interval = getattr(settings, "RESOURCE_SYNC_MIN_INTERVAL_SECONDS", 0)
+    if min_interval > 0:
+        elapsed_hint = (now - manor.resource_updated_at).total_seconds()
+        if elapsed_hint < min_interval:
+            return
 
     with transaction.atomic():
         # Lock the manor row to prevent concurrent production syncs
@@ -116,16 +187,9 @@ def spend_resources(
     if not cost:
         return
 
-    filters = {f"{key}__gte": value for key, value in cost.items()}
-    updates = {key: F(key) - value for key, value in cost.items()}
-
     with transaction.atomic():
-        updated = Manor.objects.select_for_update().filter(pk=manor.pk, **filters).update(**updates)
-        if not updated:
-            raise ValueError("资源不足")
-        manor.refresh_from_db(fields=RESOURCE_FIELDS)
-        negative = {key: -val for key, val in cost.items()}
-        log_resource_gain(manor, negative, reason, note)
+        Manor.objects.select_for_update().filter(pk=manor.pk).exists()
+        spend_resources_locked(manor, cost, note=note, reason=reason)
 
 
 def grant_resources(
@@ -153,28 +217,7 @@ def grant_resources(
 
     with transaction.atomic():
         locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
-        for resource, amount in rewards.items():
-            if amount <= 0:
-                continue
-            # 使用各资源对应的容量上限
-            if resource == ResourceType.SILVER:
-                capacity = locked_manor.silver_capacity
-            elif resource == ResourceType.GRAIN:
-                capacity = locked_manor.grain_capacity
-            else:
-                continue  # 未知资源类型跳过
-
-            current_value = getattr(locked_manor, resource, 0)
-            new_value = min(capacity, current_value + amount)
-            added = max(0, new_value - current_value)
-            if added <= 0:
-                continue
-            setattr(locked_manor, resource, new_value)
-            credited[resource] = added
-
-        if credited:
-            locked_manor.save(update_fields=list(credited.keys()))
-            log_resource_gain(locked_manor, credited, reason, note)
+        credited = grant_resources_locked(locked_manor, rewards, note=note, reason=reason)
 
     if credited:
         manor.refresh_from_db(fields=RESOURCE_FIELDS)

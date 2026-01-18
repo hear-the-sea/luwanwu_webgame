@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
+from django.db import DatabaseError
 from django.utils import timezone
 
 from guests.models import Guest, GuestTemplate, Skill, SkillKind
@@ -118,26 +119,47 @@ def serialize_skills(guest: Guest, override_skill_keys: Optional[List[str]] = No
     # 情况0：任务临时技能覆盖（优先级最高）
     if effective_override:
         try:
-            skills = Skill.objects.filter(key__in=effective_override)
-            for skill in skills:
-                data.append(
-                    {
-                        "key": skill.key,
-                        "name": skill.name,
-                        "power": skill.base_power,
-                        "probability": skill.base_probability,
-                        "kind": getattr(skill, "kind", SkillKind.ACTIVE),
-                        "status_effect": getattr(skill, "status_effect", ""),
-                        "status_probability": getattr(skill, "status_probability", 0.0),
-                        "status_duration": getattr(skill, "status_duration", 1),
-                        "damage_formula": getattr(skill, "damage_formula", {}),
-                        "targets": getattr(skill, "targets", 1),
-                    }
+            override_keys = [effective_override] if isinstance(effective_override, str) else list(effective_override)
+        except TypeError:
+            logger.warning(
+                "Invalid override skills type; falling back to default skills",
+                extra={
+                    "guest_id": getattr(guest, "pk", None),
+                    "override_skills_type": type(effective_override).__name__,
+                },
+            )
+            override_keys = []
+
+        override_keys = [str(key) for key in override_keys if key]
+        if override_keys:
+            try:
+                skills = Skill.objects.filter(key__in=override_keys)
+                for skill in skills:
+                    data.append(
+                        {
+                            "key": skill.key,
+                            "name": skill.name,
+                            "power": skill.base_power,
+                            "probability": skill.base_probability,
+                            "kind": getattr(skill, "kind", SkillKind.ACTIVE),
+                            "status_effect": getattr(skill, "status_effect", ""),
+                            "status_probability": getattr(skill, "status_probability", 0.0),
+                            "status_duration": getattr(skill, "status_duration", 1),
+                            "damage_formula": getattr(skill, "damage_formula", {}),
+                            "targets": getattr(skill, "targets", 1),
+                        }
+                    )
+                return data  # 直接返回，不再获取原有技能
+            except DatabaseError:
+                # 获取临时技能失败，继续使用原有技能
+                logger.warning(
+                    "Failed to load override skills for guest; falling back to default skills",
+                    extra={
+                        "guest_id": getattr(guest, "pk", None),
+                        "override_skills_count": len(override_keys),
+                    },
+                    exc_info=True,
                 )
-            return data  # 直接返回，不再获取原有技能
-        except Exception:
-            # 获取临时技能失败，继续使用原有技能
-            logger.warning("Failed to load override skills for guest, falling back to default skills", exc_info=True)
 
     # 情况1：已保存的门客（玩家门客），从 guest.skills 获取
     if getattr(guest, "pk", None) is not None:
@@ -182,9 +204,13 @@ def serialize_skills(guest: Guest, override_skill_keys: Optional[List[str]] = No
                             "targets": getattr(skill, "targets", 1),
                         }
                     )
-            except Exception:
+            except DatabaseError:
                 # 获取模板技能失败，返回空列表
-                logger.warning("Failed to load template skills for AI guest", exc_info=True)
+                logger.warning(
+                    "Failed to load template skills for AI guest",
+                    extra={"guest_template": getattr(template, "key", None)},
+                    exc_info=True,
+                )
 
     return data
 
@@ -458,9 +484,8 @@ def build_ai_guests(rng: random.Random) -> List[Guest]:
 
 
 def _build_tech_effects(
-    manor,
     troop_class: str,
-    tech_levels: Optional[Dict[str, int]] = None,
+    tech_levels: Dict[str, int],
 ) -> Dict[str, float]:
     """
     构建兵种的武艺技术特殊效果参数
@@ -473,16 +498,12 @@ def _build_tech_effects(
     Returns:
         特殊效果参数字典
     """
-    from gameplay.services.technology import get_tech_bonus, get_tech_bonus_from_levels
+    from core.game_data.technology import get_tech_bonus_from_levels
 
     effects: Dict[str, float] = {}
 
     def _bonus(effect: str) -> float:
-        if tech_levels is not None:
-            return get_tech_bonus_from_levels(tech_levels, effect, troop_class)
-        if manor:
-            return get_tech_bonus(manor, effect, troop_class)
-        return 0.0
+        return get_tech_bonus_from_levels(tech_levels, effect, troop_class)
 
     if troop_class == "dao":
         # 狂狼必杀：双倍打击几率
@@ -549,10 +570,15 @@ def build_troop_combatants(
     Returns:
         小兵战斗单位列表
     """
-    from gameplay.services.technology import get_troop_class_for_key, get_troop_stat_bonuses
+    from core.game_data.technology import get_troop_class_for_key, get_troop_stat_bonuses_from_levels
 
     templates = load_troop_templates()
     troops: List[Combatant] = []
+
+    effective_levels = tech_levels
+    if effective_levels is None and manor is not None:
+        # Avoid importing gameplay.services.technology here; we only need current levels.
+        effective_levels = {t.tech_key: t.level for t in manor.technologies.all()}
 
     for key, count in loadout.items():
         if count <= 0:
@@ -566,8 +592,8 @@ def build_troop_combatants(
 
         # 获取基础属性加成
         bonuses: Dict[str, float] = {}
-        if manor or tech_levels is not None:
-            bonuses = get_troop_stat_bonuses(manor, key, tech_levels=tech_levels)
+        if effective_levels is not None:
+            bonuses = get_troop_stat_bonuses_from_levels(effective_levels, key)
 
         attack_mult = 1.0 + bonuses.get("attack", 0)
         defense_mult = 1.0 + bonuses.get("defense", 0)
@@ -588,8 +614,8 @@ def build_troop_combatants(
 
         # 获取特殊效果
         tech_effects: Dict[str, float] = {}
-        if (manor or tech_levels is not None) and troop_class:
-            tech_effects = _build_tech_effects(manor, troop_class, tech_levels=tech_levels)
+        if effective_levels is not None and troop_class:
+            tech_effects = _build_tech_effects(troop_class, tech_levels=effective_levels)
 
         # 确定优先级
         priority = int(definition["priority"])

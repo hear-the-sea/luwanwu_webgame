@@ -17,6 +17,7 @@ from guests.models import (
     SkillBook,
     SkillKind,
 )
+from guests.services.recruitment import clear_template_cache
 from core.utils.image_utils import compress_and_resize_image
 
 
@@ -308,6 +309,7 @@ class Command(BaseCommand):
             if removed:
                 self.stdout.write(self.style.WARNING(f"Removed {removed} pools not defined in payload"))
 
+        clear_template_cache()
         self.stdout.write(self.style.SUCCESS("Guest templates and pools synced."))
 
     def _load_heroes_from_dir(self, dir_path: Path, load_payload) -> dict[str, list]:

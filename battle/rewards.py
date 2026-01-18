@@ -32,13 +32,13 @@ def dispatch_battle_message(manor, opponent_label: str, report) -> None:
 
 def _grant_resources(manor, drops: Dict[str, int], opponent_label: str) -> None:
     from gameplay.models import ResourceEvent
-    from gameplay.services import grant_resources
+    from gameplay.services.resources import grant_resources
 
     grant_resources(manor, drops, f"{opponent_label} 战利品", ResourceEvent.Reason.BATTLE_REWARD)
 
 
 def _create_message(manor, opponent_label: str, report) -> None:
-    from gameplay.services import create_message
+    from gameplay.services.messages import create_message
 
     create_message(
         manor=manor,

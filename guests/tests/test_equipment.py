@@ -6,7 +6,6 @@ from django.contrib.auth import get_user_model
 
 from guests.models import Guest, GuestTemplate, GuestRarity, GuestArchetype, GearTemplate, GearSlot, GearItem
 from guests.services.equipment import equip_guest, unequip_guest_item
-from gameplay.models import ItemTemplate, InventoryItem
 
 User = get_user_model()
 
@@ -16,6 +15,8 @@ class TestEquipmentHealthManagement(TestCase):
 
     def setUp(self):
         """测试前准备"""
+        from gameplay.models import InventoryItem, ItemTemplate
+
         # 创建测试用户（庄园会自动创建）
         self.user = User.objects.create_user(username="testuser", password="testpass")
         self.manor = self.user.manor
@@ -42,6 +43,7 @@ class TestEquipmentHealthManagement(TestCase):
         )
 
         # 创建物品模板（用于背包同步）
+        self.InventoryItem = InventoryItem
         self.item_template = ItemTemplate.objects.create(
             key="test_ornament_hp",
             name="生命护符",
@@ -71,7 +73,7 @@ class TestEquipmentHealthManagement(TestCase):
         gear = GearItem.objects.create(manor=self.manor, template=self.gear_template)
 
         # 添加到背包（模拟装备来源）
-        InventoryItem.objects.create(
+        self.InventoryItem.objects.create(
             manor=self.manor,
             template=self.item_template,
             quantity=1
@@ -110,7 +112,7 @@ class TestEquipmentHealthManagement(TestCase):
         """测试：卸下装备时，如果当前生命值低于新的最大生命值，则不改变"""
         # 1. 创建装备并装备
         gear = GearItem.objects.create(manor=self.manor, template=self.gear_template)
-        InventoryItem.objects.create(
+        self.InventoryItem.objects.create(
             manor=self.manor,
             template=self.item_template,
             quantity=1
@@ -134,7 +136,7 @@ class TestEquipmentHealthManagement(TestCase):
         """测试：卸下装备时处理0生命值的情况"""
         # 1. 创建装备并装备
         gear = GearItem.objects.create(manor=self.manor, template=self.gear_template)
-        InventoryItem.objects.create(
+        self.InventoryItem.objects.create(
             manor=self.manor,
             template=self.item_template,
             quantity=1

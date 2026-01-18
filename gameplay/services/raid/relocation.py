@@ -74,7 +74,7 @@ def relocate_manor(manor: Manor, new_region: str) -> Tuple[int, int]:
     # 检查金条（需要考虑拍卖冻结的金条）
     cost = get_relocation_cost(manor)
     from trade.services.auction_service import get_available_gold_bars
-    from .inventory import consume_inventory_item
+    from ..inventory import consume_inventory_item_for_manor_locked
 
     available_gold = get_available_gold_bars(manor)
     if available_gold < cost:
@@ -82,7 +82,7 @@ def relocate_manor(manor: Manor, new_region: str) -> Tuple[int, int]:
 
     with transaction.atomic():
         # 扣除金条
-        consume_inventory_item(manor, "gold_bar", cost)
+        consume_inventory_item_for_manor_locked(manor, "gold_bar", cost)
 
         # 生成新坐标（确保唯一）
         new_x, new_y = _generate_unique_coordinate(new_region, exclude_manor_id=manor.id)

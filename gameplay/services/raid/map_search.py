@@ -7,12 +7,16 @@
 from __future__ import annotations
 
 import math
+from datetime import timedelta
 from typing import Any, Dict, List, Optional, Tuple
+
+from django.db.models import Count
+from django.utils import timezone
 
 from core.utils.time_scale import scale_duration
 
 from ...constants import PVPConstants
-from ...models import Manor
+from ...models import Manor, RaidRun
 from .utils import (
     calculate_distance,
     can_attack_target,
@@ -143,11 +147,33 @@ def _format_manor_list(searcher: Manor, manors) -> List[Dict[str, Any]]:
     """
     格式化庄园列表，添加距离和声望颜色信息。
     """
+    manors_list = list(manors)
+    if not manors_list:
+        return []
+
+    # 性能优化：批量计算“目标24小时内被攻击次数”，避免对每个目标 N+1 次 COUNT 查询。
+    now = timezone.now()
+    cutoff = now - timedelta(hours=24)
+    defender_ids = [m.id for m in manors_list]
+    recent_attack_counts = {
+        row["defender_id"]: row["cnt"]
+        for row in (
+            RaidRun.objects.filter(defender_id__in=defender_ids, started_at__gte=cutoff)
+            .values("defender_id")
+            .annotate(cnt=Count("id"))
+        )
+    }
+
     result = []
-    for manor in manors:
+    for manor in manors_list:
         distance = calculate_distance(searcher, manor)
         color = get_prestige_color(searcher.prestige, manor.prestige)
-        can_attack, reason = can_attack_target(searcher, manor)
+        can_attack, reason = can_attack_target(
+            searcher,
+            manor,
+            recent_attacks=int(recent_attack_counts.get(manor.id, 0) or 0),
+            now=now,
+        )
 
         result.append({
             "id": manor.id,

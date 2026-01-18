@@ -37,9 +37,9 @@
                         <td>
                             {% if log.action == 'donation' %}
                                 <span class="guild-action-donation">📥 捐赠</span>
-                            {% elif log.action == 'upgrade_guild' %}
+                            {% elif log.action == 'guild_upgrade' or log.action == 'upgrade_guild' %}
                                 <span class="guild-action-upgrade">⬆️ 升级</span>
-                            {% elif log.action == 'upgrade_tech' %}
+                            {% elif log.action == 'tech_upgrade' or log.action == 'upgrade_tech' %}
                                 <span class="guild-action-tech">🔬 科技</span>
                             {% elif log.action == 'production' %}
                                 <span class="guild-action-production">🏭 生产</span>
