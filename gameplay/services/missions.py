@@ -689,20 +689,24 @@ def launch_mission(
             log_message="complete_mission_task dispatch failed; relying on refresh_mission_runs",
         )
 
+        # Best-effort: 异步任务启动失败不删除 run，保留用于审计
+        # 事务已提交，资源已扣除，此时删除 run 会导致资源永久丢失
+        # 任务失败由 complete_mission 处理（标记 failed），不影响资源
         return run
-    except Exception:
-        # Clean up: delete orphaned mission run if created
-        if run is not None:
-            try:
-                run.delete()
-            except Exception:
-                logger.warning(f"Failed to delete orphaned mission run {run.id}", exc_info=True)
-
-        # Reset guest status to IDLE
-        for guest in guests:
-            guest.status = GuestStatus.IDLE
-            guest.save(update_fields=["status"])
-        logger.exception("launch_mission failed; guests reset to IDLE")
+    except ValueError as exc:
+        # 业务逻辑错误（如门客状态、资源不足等）- 事务未提交，无资源损失
+        logger.warning(
+            "launch_mission validation failed: %s",
+            exc,
+            extra={"manor_id": manor.id, "mission_id": mission_template.id, "user_id": user.id},
+        )
+        raise
+    except Exception as exc:
+        # 未预期的异常 - 事务未提交，无资源损失
+        logger.exception(
+            "launch_mission unexpected error",
+            extra={"manor_id": manor.id, "mission_id": mission_template.id, "user_id": user.id},
+        )
         raise
 
 

@@ -36,11 +36,12 @@ def test_upgrade_consumes_resources(django_user_model):
     assert manor.silver < 50000
 
 
-@pytest.mark.django_db
-def test_mission_launch_and_return(django_user_model):
-    user = django_user_model.objects.create_user(username="player3", password="pass12345")
-    manor = ensure_manor(user)
+@pytest.mark.django_db(transaction=True)
+def test_mission_launch_and_return(manor_with_troops):
+    """测试任务发起和护院归还"""
     mission = MissionTemplate.objects.get(key="huashan_lunjian")
+    manor = manor_with_troops
+
     # Recruit frontline guests
     from guests.models import RecruitmentPool
 
@@ -49,6 +50,17 @@ def test_mission_launch_and_return(django_user_model):
         candidates = recruit_guest(manor, pool, seed=seed)
         finalize_candidate(candidates[0])
     guests = list(manor.guests.all()[:3])
+
+    # 验证出征前护院数量
+    from gameplay.models import PlayerTroop
+    from battle.models import TroopTemplate
+
+    archer_template = TroopTemplate.objects.get(key="archer")
+    troop_before = PlayerTroop.objects.get(manor=manor, troop_template=archer_template)
+    initial_count = troop_before.count
+    assert initial_count >= 100
+
+    # 出征消耗 100 archer
     run = launch_mission(manor, mission, [g.id for g in guests], {"archer": 100})
     assert run.battle_report is not None
     assert run.mission == mission
@@ -56,10 +68,21 @@ def test_mission_launch_and_return(django_user_model):
     for guest in guests:
         guest.refresh_from_db()
         assert guest.status == GuestStatus.DEPLOYED
+
+    # 验证出征后护院已扣除
+    troop_before.refresh_from_db()
+    assert troop_before.count == initial_count - 100
+
     # fast-forward return
     run.return_at = timezone.now() - timedelta(seconds=1)
     run.save(update_fields=["return_at"])
     refresh_mission_runs(manor)
+
+    # 验证任务完成后护院已归还（按战报扣除伤亡）
     for guest in guests:
         guest.refresh_from_db()
         assert guest.status == GuestStatus.IDLE
+
+    troop_before.refresh_from_db()
+    # 护院数量应该 >=出征后数量（可能有伤亡）
+    assert troop_before.count >= initial_count - 100
