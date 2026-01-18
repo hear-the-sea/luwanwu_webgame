@@ -207,39 +207,54 @@ def finalize_mission_run(run: MissionRun, now=None) -> None:
         locked_run.completed_at = now
         locked_run.save(update_fields=['status', 'completed_at'])
 
+        # 防守任务：扣除玩家方护院损失
+        if report and locked_run.mission.is_defense and not locked_run.is_retreating:
+            apply_defender_troop_losses(locked_run.manor, report)
+
+        # 进攻任务：归还存活的护院（必须在report检查外，处理无战报情况）
+        if not locked_run.mission.is_defense:
+            from .troops import _return_surviving_troops_batch
+            loadout = locked_run.troop_loadout or {}
+            if loadout:
+                if locked_run.is_retreating or not report:
+                    # 撤退或无战报：全额归还
+                    _return_surviving_troops_batch(locked_run.manor, loadout)
+                else:
+                    # 按战报归还存活的护院
+                    _return_surviving_troops_batch(locked_run.manor, loadout, report)
+
+        # 计算玩家是否获胜（需要report存在）
+        player_won = False
         if report:
-            # 防守任务：扣除玩家方护院损失
-            if locked_run.mission.is_defense and not locked_run.is_retreating:
-                apply_defender_troop_losses(locked_run.manor, report)
-
             player_won = (not locked_run.is_retreating) and report.winner == player_side
-            if player_won:
-                drops = dict(report.drops or {})
-                if locked_run.mission.is_defense and not drops:
-                    from common.utils.loot import resolve_drop_rewards
-                    seed = getattr(report, "seed", None)
-                    rng = random.Random(seed) if seed is not None else random.Random()
-                    drops = resolve_drop_rewards(locked_run.mission.drop_table or {}, rng)
 
-                # 胜利方战斗回收：经验果 + 护院装备回收（参考踢馆设定）
-                try:
-                    from .battle_salvage import calculate_battle_salvage
-                    exp_fruit_count, equipment_recovery = calculate_battle_salvage(report)
-                    # 把回收奖励合并到战报掉落中，统一发放
-                    if exp_fruit_count > 0:
-                        drops["experience_fruit"] = drops.get("experience_fruit", 0) + exp_fruit_count
-                    for equip_key, count in equipment_recovery.items():
-                        drops[equip_key] = drops.get(equip_key, 0) + count
-                except Exception:
-                    logger.warning("Failed to calculate mission battle salvage rewards", exc_info=True)
+        if report and player_won:
+            drops = dict(report.drops or {})
+            if locked_run.mission.is_defense and not drops:
+                from common.utils.loot import resolve_drop_rewards
+                seed = getattr(report, "seed", None)
+                rng = random.Random(seed) if seed is not None else random.Random()
+                drops = resolve_drop_rewards(locked_run.mission.drop_table or {}, rng)
 
-                # 更新战报掉落并发放奖励
-                if drops:
-                    report.drops = drops
-                    report.save(update_fields=["drops"])
-                    award_mission_drops(locked_run.manor, drops, locked_run.mission.name)
+            # 胜利方战斗回收：经验果 + 护院装备回收（参考踢馆设定）
+            try:
+                from .battle_salvage import calculate_battle_salvage
+                exp_fruit_count, equipment_recovery = calculate_battle_salvage(report)
+                # 把回收奖励合并到战报掉落中，统一发放
+                if exp_fruit_count > 0:
+                    drops["experience_fruit"] = drops.get("experience_fruit", 0) + exp_fruit_count
+                for equip_key, count in equipment_recovery.items():
+                    drops[equip_key] = drops.get(equip_key, 0) + count
+            except Exception:
+                logger.warning("Failed to calculate mission battle salvage rewards", exc_info=True)
 
-            if not locked_run.is_retreating:
+            # 更新战报掉落并发放奖励
+            if drops:
+                report.drops = drops
+                report.save(update_fields=["drops"])
+                award_mission_drops(locked_run.manor, drops, locked_run.mission.name)
+
+        if report and not locked_run.is_retreating:
                 create_message(
                     manor=locked_run.manor,
                     kind='battle',
@@ -571,6 +586,11 @@ def launch_mission(
             # 验证兵力是否超过门客带兵上限
             from battle.services import validate_troop_capacity
             validate_troop_capacity(guests, loadout)
+
+            # 进攻任务：扣除护院（防守任务不扣除，战斗结算时扣除）
+            if not mission.is_defense and loadout:
+                from .troops import _deduct_troops_batch
+                _deduct_troops_batch(manor, loadout)
 
             travel_seconds = _travel_time_seconds(mission.base_travel_time, guests, loadout)
 

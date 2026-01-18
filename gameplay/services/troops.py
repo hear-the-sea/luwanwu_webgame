@@ -6,7 +6,10 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict
+from typing import TYPE_CHECKING, Dict, Optional
+
+from django.db.models import F
+from django.utils import timezone
 
 if TYPE_CHECKING:
     from ..models import Manor
@@ -69,3 +72,177 @@ def apply_defender_troop_losses(defender: "Manor", report) -> None:
     # 1次批量更新
     if to_update:
         PlayerTroop.objects.bulk_update(to_update, ["count", "updated_at"])
+
+
+def _deduct_troops_batch(manor: "Manor", loadout: Dict[str, int]) -> None:
+    """
+    批量从庄园扣除指定数量的护院（通用函数）。
+
+    Args:
+        manor: 庄园对象
+        loadout: 要扣除的护院配置 {troop_key: count}
+
+    Raises:
+        ValueError: 护院数量不足时抛出异常
+    """
+    if not loadout:
+        return
+
+    # 过滤掉数量为0的
+    loadout = {k: v for k, v in loadout.items() if v > 0}
+    if not loadout:
+        return
+
+    from ..models import PlayerTroop
+
+    # 1次查询获取所有需要的护院记录
+    troops = {
+        t.troop_template.key: t
+        for t in PlayerTroop.objects.select_for_update()
+        .filter(manor=manor, troop_template__key__in=loadout.keys())
+        .select_related("troop_template")
+    }
+
+    to_update = []
+    for troop_key, count in loadout.items():
+        troop = troops.get(troop_key)
+        if not troop:
+            # 护院类型不存在，跳过（兼容测试环境）
+            continue
+        if troop.count < count:
+            raise ValueError(f"护院 {troop.troop_template.name} 数量不足")
+        troop.count -= count
+        to_update.append(troop)
+
+    # 1次批量更新
+    if to_update:
+        now = timezone.now()
+        for troop in to_update:
+            troop.updated_at = now
+        PlayerTroop.objects.bulk_update(to_update, ["count", "updated_at"])
+
+
+def _return_surviving_troops_batch(
+    manor: "Manor",
+    loadout: Dict[str, int],
+    report: Optional[object] = None,
+) -> None:
+    """
+    批量归还存活的护院（通用函数）。
+
+    Args:
+        manor: 庄园对象
+        loadout: 原始出征护院配置 {troop_key: count}
+        report: 战报对象（可选，用于计算伤亡）
+    """
+    if not loadout:
+        return
+
+    from battle.troops import load_troop_templates
+    from ..models import PlayerTroop
+
+    if not report:
+        # 没有战报（撤退等情况），全部归还
+        _add_troops_batch(manor, loadout)
+        return
+
+    # 根据战报计算存活护院
+    attacker_losses = (report.losses or {}).get("attacker", {}) or {}
+    casualties = attacker_losses.get("casualties", []) or []
+
+    troop_definitions = load_troop_templates()
+
+    troops_lost: Dict[str, int] = {}
+    for entry in casualties:
+        key = entry.get("key")
+        if key not in loadout:
+            continue
+        if key not in troop_definitions:
+            continue
+        try:
+            lost = int(entry.get("lost", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+        if lost > 0:
+            troops_lost[key] = troops_lost.get(key, 0) + lost
+
+    # 计算存活数量
+    surviving_troops = {}
+    for troop_key, original_count in loadout.items():
+        lost = troops_lost.get(troop_key, 0)
+        surviving = max(0, original_count - lost)
+        if surviving > 0:
+            surviving_troops[troop_key] = surviving
+
+    # 批量归还
+    if surviving_troops:
+        _add_troops_batch(manor, surviving_troops)
+
+
+def _add_troops_batch(manor: "Manor", troops_to_add: Dict[str, int]) -> None:
+    """
+    批量给庄园添加护院（通用函数）。
+
+    Args:
+        manor: 庄园对象
+        troops_to_add: 要添加的护院配置 {troop_key: count}
+    """
+    from battle.models import TroopTemplate
+    from ..models import PlayerTroop
+
+    if not troops_to_add:
+        return
+
+    # 过滤掉数量为0的
+    troops_to_add = {k: v for k, v in troops_to_add.items() if v > 0}
+    if not troops_to_add:
+        return
+
+    # 预加载模板
+    templates = {t.key: t for t in TroopTemplate.objects.filter(key__in=troops_to_add.keys())}
+
+    if not templates:
+        return
+
+    # 预加载现有护院
+    existing = {
+        pt.troop_template.key: pt
+        for pt in PlayerTroop.objects.select_for_update()
+        .filter(manor=manor, troop_template__key__in=troops_to_add.keys())
+        .select_related("troop_template")
+    }
+
+    to_update = []
+    to_create = []
+    now = timezone.now()
+
+    for key, count in troops_to_add.items():
+        template = templates.get(key)
+        if not template:
+            continue
+
+        if key in existing:
+            existing[key].count += count
+            existing[key].updated_at = now
+            to_update.append(existing[key])
+        else:
+            to_create.append(
+                PlayerTroop(
+                    manor=manor,
+                    troop_template=template,
+                    count=count,
+                )
+            )
+
+    if to_update:
+        PlayerTroop.objects.bulk_update(to_update, ["count", "updated_at"])
+    if to_create:
+        try:
+            PlayerTroop.objects.bulk_create(to_create, ignore_conflicts=True)
+        except Exception:
+            # 并发创建时回退到逐个处理
+            for pt in to_create:
+                PlayerTroop.objects.filter(manor=manor, troop_template=pt.troop_template).update(
+                    count=F("count") + pt.count,
+                    updated_at=now,
+                )

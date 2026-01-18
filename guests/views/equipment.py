@@ -51,7 +51,7 @@ def equip_view(request):
     messages.success(request, f"{guest.display_name} 已装备 {gear.template.name}")
     _clear_gear_options_cache(manor.id, slots={gear.template.slot})
 
-    return "gameplay:recruitment_hall"
+    return redirect("guests:detail", pk=guest.pk)
 
 
 @login_required
