@@ -167,10 +167,17 @@ def _return_surviving_troops_batch(
         if lost > 0:
             troops_lost[key] = troops_lost.get(key, 0) + lost
 
-    # 计算存活数量
+    # 计算存活数量（添加上限保护）
     surviving_troops = {}
     for troop_key, original_count in loadout.items():
         lost = troops_lost.get(troop_key, 0)
+        # 上限保护：损失不能超过原始数量（防止重复条目导致超额累加）
+        if lost > original_count:
+            logger.warning(
+                f"护院损失异常：{troop_key} 原始={original_count}, 战报损失={lost}, 已上限修正",
+                extra={"manor_id": manor.id, "troop_key": troop_key, "original": original_count, "reported_lost": lost}
+            )
+            lost = original_count
         surviving = max(0, original_count - lost)
         if surviving > 0:
             surviving_troops[troop_key] = surviving
