@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Dict, Optional
 
 from django.db.models import F
@@ -13,6 +14,8 @@ from django.utils import timezone
 
 if TYPE_CHECKING:
     from ..models import Manor
+
+logger = logging.getLogger(__name__)
 
 
 def apply_defender_troop_losses(defender: "Manor", report) -> None:
@@ -231,7 +234,6 @@ def _add_troops_batch(manor: "Manor", troops_to_add: Dict[str, int]) -> None:
         .select_related("troop_template")
     }
 
-    to_update = []
     to_create = []
     now = timezone.now()
 
@@ -241,8 +243,7 @@ def _add_troops_batch(manor: "Manor", troops_to_add: Dict[str, int]) -> None:
             continue
 
         if key in existing:
-            # 关键修复：直接从数据库读取最新值，避免并发冲突
-            # 使用 F() 表达式进行原子更新
+            # 使用 F() 表达式进行原子更新，避免并发冲突
             PlayerTroop.objects.filter(
                 pk=existing[key].pk
             ).update(
