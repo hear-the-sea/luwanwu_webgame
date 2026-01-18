@@ -455,13 +455,14 @@ def apply_guest_hp_updates(
     guest_map = {c.guest_id: c for c in combatants if c.guest_id}
     hp_updates: Dict[int, int] = {}
     dirty_guests: List[Guest] = []
-    for guest in guests[: len(combatants)]:
-        comb = guest_map.get(getattr(guest, "id", None))
+    # 修复：遍历所有门客，使用guest.pk正确匹配combatant
+    for guest in guests:
+        comb = guest_map.get(guest.pk)
         if not comb:
             continue
         defeated = comb.hp <= 0
         remaining_hp = 1 if defeated else max(1, min(guest.max_hp, comb.hp))
-        hp_updates[guest.id] = remaining_hp
+        hp_updates[guest.pk] = remaining_hp
         if apply_damage and guest.pk:
             guest.current_hp = remaining_hp
             guest.last_hp_recovery_at = now
