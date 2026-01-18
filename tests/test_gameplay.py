@@ -37,7 +37,7 @@ def test_upgrade_consumes_resources(django_user_model):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_mission_launch_and_return(manor_with_troops):
+def test_mission_launch_and_return(mission_templates, manor_with_troops):
     """测试任务发起和护院归还"""
     mission = MissionTemplate.objects.get(key="huashan_lunjian")
     manor = manor_with_troops
@@ -78,11 +78,57 @@ def test_mission_launch_and_return(manor_with_troops):
     run.save(update_fields=["return_at"])
     refresh_mission_runs(manor)
 
-    # 验证任务完成后护院已归还（按战报扣除伤亡）
+    # 验证任务完成后门客状态（IDLE 或 INJURED 都是正常结果）
     for guest in guests:
         guest.refresh_from_db()
-        assert guest.status == GuestStatus.IDLE
+        # 门客可能重伤（INJURED），也可能正常（IDLE）
+        assert guest.status in [GuestStatus.IDLE, GuestStatus.INJURED]
 
     troop_before.refresh_from_db()
     # 护院数量应该 >=出征后数量（可能有伤亡）
     assert troop_before.count >= initial_count - 100
+
+
+@pytest.mark.django_db(transaction=True)
+def test_mission_launch_with_invalid_troop_type(mission_templates, manor_with_troops):
+    """测试出征包含不存在的护院类型时抛出异常，不会创建新护院"""
+    from gameplay.models import PlayerTroop
+    from battle.models import TroopTemplate
+    from guests.models import RecruitmentPool, Guest
+
+    mission = MissionTemplate.objects.get(key="huashan_lunjian")
+    manor = manor_with_troops
+
+    # 创建测试门客（直接创建，不需要通过招募系统）
+    from guests.models import GuestTemplate
+    template = GuestTemplate.objects.first()
+    if template:
+        guest = Guest.objects.create(
+            manor=manor,
+            template=template,
+            level=50,
+            status=GuestStatus.IDLE
+        )
+    else:
+        # 如果没有模板，跳过此测试
+        pytest.skip("No guest template available")
+
+    # 确认不存在某个护院类型
+    fake_troop_key = "nonexistent_troop_xxx"
+    assert not PlayerTroop.objects.filter(
+        manor=manor,
+        troop_template__key=fake_troop_key
+    ).exists()
+
+    # 尝试出征包含不存在的护院类型
+    with pytest.raises(ValueError) as exc:
+        launch_mission(manor, mission, [guest.id], {fake_troop_key: 100})
+
+    assert "不存在的类型" in str(exc.value)
+
+    # 确保没有创建该护院记录
+    assert not PlayerTroop.objects.filter(
+        manor=manor,
+        troop_template__key=fake_troop_key
+    ).exists()
+

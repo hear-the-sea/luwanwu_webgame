@@ -698,14 +698,14 @@ def launch_mission(
         logger.warning(
             "launch_mission validation failed: %s",
             exc,
-            extra={"manor_id": manor.id, "mission_id": mission_template.id, "user_id": user.id},
+            extra={"manor_id": manor.id, "mission_id": mission.id},
         )
         raise
     except Exception as exc:
         # 未预期的异常 - 事务未提交，无资源损失
         logger.exception(
             "launch_mission unexpected error",
-            extra={"manor_id": manor.id, "mission_id": mission_template.id, "user_id": user.id},
+            extra={"manor_id": manor.id, "mission_id": mission.id},
         )
         raise
 

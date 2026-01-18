@@ -84,14 +84,17 @@ def get_hourly_rates(manor: "Manor") -> Dict[str, float]:
 def normalize_mission_loadout(raw: Dict[str, int] | None, troop_templates: Dict) -> Dict[str, int]:
     """
     标准化兵力配置，过滤无效数据并填充默认值。
-    
+
     Args:
         raw: 原始兵力配置
         troop_templates: 兵种模板字典
-        
+
     Returns:
         标准化后的兵力配置
-        
+
+    Raises:
+        ValueError: 如果 raw 包含不存在的护院类型（安全检查）
+
     Examples:
         >>> normalize_mission_loadout({"infantry": "100", "invalid": -5}, templates)
         {"infantry": 100, "cavalry": 0, "archer": 0}
@@ -101,6 +104,14 @@ def normalize_mission_loadout(raw: Dict[str, int] | None, troop_templates: Dict)
 
     if raw is None:
         raw = {}
+
+    # 安全检查：检测并拒绝不存在的护院类型
+    invalid_keys = set(raw.keys()) - set(troop_templates.keys())
+    if invalid_keys:
+        # 过滤掉数量为0的key（可能是前端传递的空值）
+        invalid_nonzero = {k: v for k, v in raw.items() if k in invalid_keys and int(v or 0) > 0}
+        if invalid_nonzero:
+            raise ValueError(f"护院配置包含不存在的类型: {', '.join(invalid_nonzero.keys())}")
 
     loadout = {}
     for key in troop_templates.keys():
