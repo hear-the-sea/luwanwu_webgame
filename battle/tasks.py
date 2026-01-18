@@ -103,6 +103,7 @@ def generate_report_task(
                 drop_handler=None,
                 max_squad=len(attacker_guests) if attacker_guests else None,
                 apply_damage=False,
+                use_lock=False,  # 修复：门客已DEPLOYED，不需要锁校验
                 attacker_tech_levels=attacker_tech_levels,
                 attacker_guest_bonuses=attacker_guest_bonuses or None,
                 attacker_guest_skills=attacker_guest_skills,
@@ -125,6 +126,7 @@ def generate_report_task(
                 drop_handler=None,
                 max_squad=getattr(manor, "max_squad_size", None),
                 apply_damage=False,
+                use_lock=False,  # 修复：门客已DEPLOYED，不需要锁校验
             )
 
         if run_id:
