@@ -5,22 +5,22 @@
 
 {% block content %}
 <section class="dashboard">
-    <div class="section-header">
+    <div class="tw-section-header">
         <div>
             <h1>成员列表</h1>
-            <p>{{ guild.name }} · 成员数：{{ guild.current_member_count }} / {{ guild.member_capacity }}</p>
+            <p class="caption">{{ guild.name }} · 成员数：{{ guild.current_member_count }} / {{ guild.member_capacity }}</p>
         </div>
-        <div class="nav-links">
+        <div class="flex gap-2">
             {% if member.can_manage %}
-                <a href="{% url 'guilds:applications' %}" class="btn-primary">审批申请</a>
+                <a href="{% url 'guilds:applications' %}" class="tw-btn-primary">审批申请</a>
             {% endif %}
-            <a href="{% url 'guilds:detail' guild.id %}" class="btn-secondary">返回帮会</a>
+            <a href="{% url 'guilds:detail' guild.id %}" class="tw-btn-primary">返回帮会</a>
         </div>
     </div>
 
-    <section class="card">
+    <section class="tw-card">
         <h2>成员管理</h2>
-        <table class="table">
+        <table class="tw-table">
             <thead>
                 <tr>
                     <th>玩家</th>
@@ -36,73 +36,73 @@
             </thead>
             <tbody>
                 {% for m in members %}
-                <tr {% if m.user == user %}class="guild-table-highlight"{% endif %}>
+                <tr {% if m.user == user %}class="tw-guild-table-highlight"{% endif %}>
                     <td>
                         <strong>{{ m.user.manor.display_name }}</strong>
                         {% if m.user == user %}
-                            <span class="badge">我</span>
+                            <span class="tw-badge-gold">我</span>
                         {% endif %}
                     </td>
                     <td>
                         {% if m.is_leader %}
-                            <span class="guild-position-leader">帮主</span>
+                            <span class="tw-guild-position-leader">帮主</span>
                         {% elif m.is_admin %}
-                            <span class="guild-position-admin">管理员</span>
+                            <span class="tw-guild-position-admin">管理员</span>
                         {% else %}
-                            <span class="guild-position-member">成员</span>
+                            <span class="tw-guild-position-member">成员</span>
                         {% endif %}
                     </td>
                     <td>{{ m.total_contribution|floatformat:0 }}</td>
                     <td>{{ m.current_contribution|floatformat:0 }}</td>
                     <td>{{ m.joined_at|date:"Y-m-d" }}</td>
                     <td>
-                        <span class="muted-text">{{ m.last_active_at|date:"m-d H:i" }}</span>
+                        <span class="tw-muted">{{ m.last_active_at|date:"m-d H:i" }}</span>
                     </td>
                     {% if member.can_manage %}
                     <td>
                         {% if m.user != user %}
-                            <div class="guild-member-actions">
+                            <div class="tw-guild-member-actions">
                             {% if member.is_leader %}
                                 <!-- 帮主可以对所有人操作 -->
                                 {% if not m.is_leader %}
                                     {% if m.is_admin %}
                                         <form method="post" action="{% url 'guilds:demote_admin' m.id %}">
                                             {% csrf_token %}
-                                            <button type="submit" class="btn-secondary btn-small">罢免管理</button>
+                                            <button type="submit" class="tw-btn-secondary tw-btn-sm">罢免管理</button>
                                         </form>
                                     {% else %}
                                         <form method="post" action="{% url 'guilds:appoint_admin' m.id %}">
                                             {% csrf_token %}
-                                            <button type="submit" class="btn-secondary btn-small">任命管理</button>
+                                            <button type="submit" class="tw-btn-secondary tw-btn-sm">任命管理</button>
                                         </form>
                                     {% endif %}
                                     <form method="post" action="{% url 'guilds:transfer_leadership' m.id %}" class="transfer-form" data-name="{{ m.user.manor.display_name }}">
                                         {% csrf_token %}
-                                        <button type="submit" class="btn-secondary btn-small">转让帮主</button>
+                                        <button type="submit" class="tw-btn-secondary tw-btn-sm">转让帮主</button>
                                     </form>
                                     <form method="post" action="{% url 'guilds:kick_member' m.id %}" class="kick-form" data-name="{{ m.user.manor.display_name }}">
                                         {% csrf_token %}
-                                        <button type="submit" class="btn-danger btn-small">辞退</button>
+                                        <button type="submit" class="tw-btn-danger tw-btn-sm">辞退</button>
                                     </form>
                                 {% endif %}
                             {% elif member.is_admin and not m.is_leader and not m.is_admin %}
                                 <!-- 管理员只能辞退普通成员 -->
                                 <form method="post" action="{% url 'guilds:kick_member' m.id %}" class="kick-form" data-name="{{ m.user.manor.display_name }}">
                                     {% csrf_token %}
-                                    <button type="submit" class="btn-danger btn-small">辞退</button>
+                                    <button type="submit" class="tw-btn-danger tw-btn-sm">辞退</button>
                                 </form>
                             {% endif %}
                             </div>
                         {% else %}
-                            <span class="muted-text">-</span>
+                            <span class="tw-muted">-</span>
                         {% endif %}
                     </td>
                     {% endif %}
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="{% if member.can_manage %}7{% else %}6{% endif %}" style="text-align: center;">
-                        <span class="muted-text">暂无成员</span>
+                    <td colspan="{% if member.can_manage %}7{% else %}6{% endif %}" class="text-center">
+                        <span class="tw-muted">暂无成员</span>
                     </td>
                 </tr>
                 {% endfor %}
@@ -110,28 +110,28 @@
         </table>
     </section>
 
-    <section class="card" style="margin-top: 1.5rem;">
+    <section class="tw-card tw-guild-section-spacing">
         <h2>成员统计</h2>
-        <div class="guild-stats-grid">
-            <div class="guild-stat-item">
+        <div class="tw-guild-stats-grid">
+            <div class="tw-guild-stat-item">
                 <h4>总成员数</h4>
-                <p class="guild-stat-value stat-total">{{ guild.current_member_count }}</p>
-                <p class="guild-stat-hint">容量：{{ guild.member_capacity }}</p>
+                <p class="tw-guild-stat-value stat-total">{{ guild.current_member_count }}</p>
+                <p class="tw-guild-stat-hint">容量：{{ guild.member_capacity }}</p>
             </div>
-            <div class="guild-stat-item">
+            <div class="tw-guild-stat-item">
                 <h4>帮主</h4>
-                <p class="guild-stat-value stat-leader">{{ leader_count }}</p>
-                <p class="guild-stat-hint">{% if leader %}{{ leader.user.manor.display_name }}{% else %}-{% endif %}</p>
+                <p class="tw-guild-stat-value stat-leader">{{ leader_count }}</p>
+                <p class="tw-guild-stat-hint">{% if leader %}{{ leader.user.manor.display_name }}{% else %}-{% endif %}</p>
             </div>
-            <div class="guild-stat-item">
+            <div class="tw-guild-stat-item">
                 <h4>管理员</h4>
-                <p class="guild-stat-value stat-admin">{{ admin_count }}</p>
-                <p class="guild-stat-hint">最多2人</p>
+                <p class="tw-guild-stat-value stat-admin">{{ admin_count }}</p>
+                <p class="tw-guild-stat-hint">最多2人</p>
             </div>
-            <div class="guild-stat-item">
+            <div class="tw-guild-stat-item">
                 <h4>普通成员</h4>
-                <p class="guild-stat-value">{{ normal_member_count }}</p>
-                <p class="guild-stat-hint">-</p>
+                <p class="tw-guild-stat-value">{{ normal_member_count }}</p>
+                <p class="tw-guild-stat-hint">-</p>
             </div>
         </div>
     </section>
@@ -144,18 +144,26 @@
 document.querySelectorAll('.transfer-form').forEach(form => {
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const name = form.dataset.name;
-        const confirmed = await gameDialog.danger(`确认将帮主之位传给 ${name} 吗？`, { title: '转让帮主' });
-        if (confirmed) form.submit();
+        try {
+            const name = form.dataset.name;
+            const confirmed = await gameDialog.danger(`确认将帮主之位传给 ${name} 吗？`, { title: '转让帮主' });
+            if (confirmed) form.submit();
+        } catch (err) {
+            console.error('转让帮主确认失败:', err);
+        }
     });
 });
 // 辞退成员确认
 document.querySelectorAll('.kick-form').forEach(form => {
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const name = form.dataset.name;
-        const confirmed = await gameDialog.danger(`确认辞退 ${name} 吗？`, { title: '辞退成员' });
-        if (confirmed) form.submit();
+        try {
+            const name = form.dataset.name;
+            const confirmed = await gameDialog.danger(`确认辞退 ${name} 吗？`, { title: '辞退成员' });
+            if (confirmed) form.submit();
+        } catch (err) {
+            console.error('辞退成员确认失败:', err);
+        }
     });
 });
 </script>

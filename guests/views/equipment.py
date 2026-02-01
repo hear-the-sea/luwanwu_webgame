@@ -48,9 +48,16 @@ def equip_view(request):
     guest = form.cleaned_data["guest"]
 
     equip_guest_service(gear, guest)
-    messages.success(request, f"{guest.display_name} 已装备 {gear.template.name}")
     _clear_gear_options_cache(manor.id, slots={gear.template.slot})
 
+    # AJAX 请求返回 JSON 响应
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return JsonResponse({
+            "success": True,
+            "message": f"{guest.display_name} 已装备 {gear.template.name}"
+        })
+
+    messages.success(request, f"{guest.display_name} 已装备 {gear.template.name}")
     return redirect("guests:detail", pk=guest.pk)
 
 
@@ -168,8 +175,8 @@ def gear_options_view(request):
                 "rarity_class": rarity_class(rarity),
                 "count": row["count"],
                 "title": gear_summary(template),
-        }
-    )
+                }
+            )
     payload = {
         "slot": slot,
         "slot_label": slot_label_map.get(slot, ""),

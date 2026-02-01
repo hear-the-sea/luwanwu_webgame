@@ -48,12 +48,15 @@ class Command(BaseCommand):
             defaults = {
                 "name": name,
                 "description": entry.get("description", ""),
+                "difficulty": entry.get("difficulty", "junior"),
                 "battle_type": entry.get("battle_type", "task"),
                 "is_defense": bool(entry.get("is_defense", False)),
+                "guest_only": bool(entry.get("guest_only", False)),
                 "enemy_guests": entry.get("enemy_guests") or [],
                 "enemy_troops": entry.get("enemy_troops") or {},
                 "enemy_technology": entry.get("enemy_technology") or {},
                 "drop_table": entry.get("drop_table") or {},
+                "probability_drop_table": entry.get("probability_drop_table") or {},
                 "base_travel_time": int(entry.get("base_travel_time", 1200) or 1200),
                 "daily_limit": int(entry.get("daily_limit", 3) or 3),
             }

@@ -4,6 +4,7 @@
 """
 import math
 
+
 def calculate_building_total(base_cost, cost_growth, base_time, time_growth, max_level):
     """计算建筑1→满级的总成本和总时间"""
     total_silver = 0
@@ -31,6 +32,7 @@ def calculate_building_total(base_cost, cost_growth, base_time, time_growth, max
         'time_hours': total_time / 3600,
         'time_days': total_time / 86400,
     }
+
 
 print("=" * 80)
 print("建筑参数调整方案对比")

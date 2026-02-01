@@ -5,49 +5,13 @@
 """
 from __future__ import annotations
 
-import math
 import random
 from typing import Dict, List, TYPE_CHECKING
 
+from common.utils.random_utils import binomial_sample
+
 if TYPE_CHECKING:
     from ..combatants import Combatant
-
-
-# 二项分布采样阈值：小于此值用精确计算，大于等于此值用正态近似
-BINOMIAL_EXACT_THRESHOLD = 1000
-
-
-def binomial_sample(n: int, p: float, rng: random.Random) -> int:
-    """
-    二项分布采样：n次独立试验，每次成功概率p，返回成功次数。
-
-    小数量用精确计算，大数量用正态分布近似以提高性能。
-
-    Args:
-        n: 试验次数
-        p: 每次成功概率
-        rng: 随机数生成器
-
-    Returns:
-        成功次数
-    """
-    if n <= 0:
-        return 0
-    if p <= 0:
-        return 0
-    if p >= 1:
-        return n
-
-    if n < BINOMIAL_EXACT_THRESHOLD:
-        # 精确计算：逐个判断
-        return sum(1 for _ in range(n) if rng.random() < p)
-    else:
-        # 正态近似：μ = n*p, σ = sqrt(n*p*(1-p))
-        mean = n * p
-        std = math.sqrt(n * p * (1 - p))
-        result = rng.gauss(mean, std)
-        # 限制在 [0, n] 范围内
-        return max(0, min(n, round(result)))
 
 
 # 属性映射表
@@ -100,14 +64,14 @@ def resolve_stat(combatant: "Combatant", stat: str) -> float:
 def calculate_skill_bonus(skill: dict, actor: "Combatant", target: "Combatant") -> int:
     """
     计算技能带来的额外伤害/治疗加成。
-    
+
     支持基于公式计算：base + (ally_stat * coeff) - (enemy_stat * coeff)
-    
+
     Args:
         skill: 技能配置字典
         actor: 施法者
         target: 目标
-        
+
     Returns:
         加成数值（整数）
     """
@@ -131,13 +95,13 @@ def calculate_skill_bonus(skill: dict, actor: "Combatant", target: "Combatant") 
 def casualty_modifier(team: List["Combatant"], is_winner: bool) -> float:
     """
     计算伤亡概率修正值。
-    
+
     Hook for 科技/道具调整阵亡概率，默认不做变更。
-    
+
     Args:
         team: 队伍列表
         is_winner: 是否胜利方
-        
+
     Returns:
         修正值（浮点数）
     """
@@ -147,11 +111,11 @@ def casualty_modifier(team: List["Combatant"], is_winner: bool) -> float:
 def casualty_probability(team: List["Combatant"], is_winner: bool) -> float:
     """
     计算最终伤亡概率。
-    
+
     Args:
         team: 队伍列表
         is_winner: 是否胜利方
-        
+
     Returns:
         伤亡概率（0.05 ~ 0.95）
     """

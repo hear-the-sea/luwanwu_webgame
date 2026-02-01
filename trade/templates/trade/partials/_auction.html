@@ -1,12 +1,12 @@
 {% load static trade_filters %}
 
 <!-- 拍卖行内容 -->
-<div class="auction-container">
+<div class="flex flex-col">
     <!-- 拍卖行信息栏 -->
-    <div class="auction-info-bar">
-        <div class="auction-info-item">
-            <span class="info-label">当前轮次</span>
-            <span class="info-value">
+    <div class="tw-auction-info-bar">
+        <div class="tw-auction-info-item">
+            <span class="label">当前轮次</span>
+            <span class="value">
                 {% if auction_stats.current_round %}
                 第{{ auction_stats.current_round }}轮
                 {% else %}
@@ -14,9 +14,9 @@
                 {% endif %}
             </span>
         </div>
-        <div class="auction-info-item">
-            <span class="info-label">剩余时间</span>
-            <span class="info-value auction-countdown"
+        <div class="tw-auction-info-item">
+            <span class="label">剩余时间</span>
+            <span class="value auction-countdown"
                   data-remaining="{{ auction_stats.time_remaining }}">
                 {% if auction_stats.time_remaining %}
                 {{ auction_stats.time_remaining|format_countdown }}
@@ -25,29 +25,29 @@
                 {% endif %}
             </span>
         </div>
-        <div class="auction-info-item">
-            <span class="info-label">可用金条</span>
-            <span class="info-value gold-bar">{{ auction_stats.available_gold_bars }}</span>
+        <div class="tw-auction-info-item">
+            <span class="label">可用金条</span>
+            <span class="value gold-bar">{{ auction_stats.available_gold_bars }}</span>
         </div>
-        <div class="auction-info-item">
-            <span class="info-label">冻结金条</span>
-            <span class="info-value frozen">{{ auction_stats.my_frozen_gold_bars }}</span>
+        <div class="tw-auction-info-item">
+            <span class="label">冻结金条</span>
+            <span class="value frozen">{{ auction_stats.my_frozen_gold_bars }}</span>
         </div>
-        <div class="auction-info-item">
-            <span class="info-label">我的安全</span>
-            <span class="info-value leading">{{ auction_stats.my_leading_count }}</span>
+        <div class="tw-auction-info-item">
+            <span class="label">我的安全</span>
+            <span class="value leading">{{ auction_stats.my_leading_count }}</span>
         </div>
     </div>
 
     <!-- 子导航 -->
-    <div class="shop-mode-switch auction-sub-nav">
+    <div class="tw-mode-switch mb-4">
         <button type="button"
-                class="mode-btn {% if auction_view == 'browse' or not auction_view %}active{% endif %}"
+                class="tw-mode-btn {% if auction_view == 'browse' or not auction_view %}active{% endif %}"
                 onclick="location.href='?tab=auction&view=browse'">
             浏览竞拍
         </button>
         <button type="button"
-                class="mode-btn {% if auction_view == 'my_bids' %}active{% endif %}"
+                class="tw-mode-btn {% if auction_view == 'my_bids' %}active{% endif %}"
                 onclick="location.href='?tab=auction&view=my_bids'">
             我的竞拍
         </button>
@@ -55,16 +55,16 @@
 
     {% if auction_view == 'browse' or not auction_view %}
     <!-- 浏览竞拍区 -->
-    <div id="auction-browse-section" class="trade-card">
+    <div id="auction-browse-section" class="tw-trade-card">
         {% if auction_stats.current_round %}
         <!-- 筛选区域 -->
-        <div class="filter-bar">
-            <form method="get" class="filter-form">
+        <div class="flex flex-wrap gap-4 items-center mb-4">
+            <form method="get" class="tw-filter-form">
                 <input type="hidden" name="tab" value="auction">
                 <input type="hidden" name="view" value="browse">
 
-                <label class="filter-label">类别：</label>
-                <select name="category" class="filter-select" onchange="this.form.submit()">
+                <label class="tw-filter-label">类别：</label>
+                <select name="category" class="tw-filter-select" onchange="this.form.submit()">
                     {% for cat in categories %}
                     <option value="{{ cat.key }}" {% if selected_category == cat.key %}selected{% endif %}>
                         {{ cat.label }}
@@ -72,16 +72,16 @@
                     {% endfor %}
                 </select>
 
-                <label class="filter-label">稀有度：</label>
-                <select name="rarity" class="filter-select" onchange="this.form.submit()">
+                <label class="tw-filter-label ml-4">稀有度：</label>
+                <select name="rarity" class="tw-filter-select" onchange="this.form.submit()">
                     <option value="all">全部</option>
                     <option value="orange" {% if selected_rarity == 'orange' %}selected{% endif %}>橙色</option>
                     <option value="purple" {% if selected_rarity == 'purple' %}selected{% endif %}>紫色</option>
                     <option value="blue" {% if selected_rarity == 'blue' %}selected{% endif %}>蓝色</option>
                 </select>
 
-                <label class="filter-label">排序：</label>
-                <select name="order_by" class="filter-select" onchange="this.form.submit()">
+                <label class="tw-filter-label ml-4">排序：</label>
+                <select name="order_by" class="tw-filter-select" onchange="this.form.submit()">
                     <option value="-current_price" {% if selected_order == '-current_price' %}selected{% endif %}>价格↓</option>
                     <option value="current_price" {% if selected_order == 'current_price' %}selected{% endif %}>价格↑</option>
                     <option value="-bid_count" {% if selected_order == '-bid_count' %}selected{% endif %}>出价次数↓</option>
@@ -92,8 +92,8 @@
 
         <!-- 拍卖位列表（表格形式） -->
         {% if auction_slots %}
-        <div class="shop-table-wrapper">
-        <table class="auction-table">
+        <div class="tw-shop-table-wrapper">
+        <table class="tw-auction-table">
             <thead>
                 <tr>
                     <th>物品</th>
@@ -109,59 +109,59 @@
                 {% for slot in auction_slots %}
                 <tr class="{% if slot.bid_info.is_safe %}row-safe{% endif %}">
                     <td>
-                        <div class="item-cell">
-                            <div class="item-icon rarity-{{ slot.item_template.rarity }}">
+                        <div class="tw-item-cell">
+                            <div class="tw-item-icon rarity-{{ slot.item_template.rarity }}">
                                 {% if slot.item_template.image %}
                                 <img src="{{ slot.item_template.image.url }}"
                                      alt="{{ slot.item_template.name }}">
                                 {% else %}
-                                <span class="icon-placeholder">
+                                <span class="tw-icon-placeholder">
                                     {{ slot.item_template.name|slice:":1" }}
                                 </span>
                                 {% endif %}
                             </div>
-                            <span class="item-name rarity-{{ slot.item_template.rarity }}">
+                            <span class="tw-item-name rarity-{{ slot.item_template.rarity }}">
                                 {{ slot.item_template.name }}
                             </span>
-                            <div class="item-tooltip">
-                                <div class="tooltip-header rarity-{{ slot.item_template.rarity }}">{{ slot.item_template.name }}</div>
+                            <div class="tw-item-tooltip">
+                                <div class="tw-tooltip-header rarity-{{ slot.item_template.rarity }}">{{ slot.item_template.name }}</div>
                                 {% if slot.item_template.description %}
-                                <div class="tooltip-desc">{{ slot.item_template.description }}</div>
+                                <div class="tw-tooltip-desc">{{ slot.item_template.description }}</div>
                                 {% endif %}
-                                <div class="tooltip-auction-info">
-                                    <div class="attr-row"><span class="attr-label">起拍价</span><span class="attr-value">{{ slot.starting_price }} 金条</span></div>
-                                    <div class="attr-row"><span class="attr-label">中标名额</span><span class="attr-value">{{ slot.quantity }} 人</span></div>
+                                <div class="tw-tooltip-attrs">
+                                    <div class="tw-attr-row"><span class="tw-attr-label">起拍价</span><span class="tw-attr-value">{{ slot.starting_price }} 金条</span></div>
+                                    <div class="tw-attr-row"><span class="tw-attr-label">中标名额</span><span class="tw-attr-value">{{ slot.quantity }} 人</span></div>
                                 </div>
                             </div>
                         </div>
                     </td>
                     <td>{{ slot.quantity }}人</td>
-                    <td class="price gold">{{ slot.bid_info.cutoff_price }} 金条</td>
+                    <td class="tw-price gold">{{ slot.bid_info.cutoff_price }} 金条</td>
                     <td>
-                        <span class="{% if slot.bid_info.is_full %}full{% endif %}">
+                        <span class="{% if slot.bid_info.is_full %}text-accent-gold{% endif %}">
                             {{ slot.bid_info.bidder_count }} / {{ slot.quantity }}
                         </span>
-                        {% if slot.bid_info.is_full %}<span class="full-badge">满</span>{% endif %}
+                        {% if slot.bid_info.is_full %}<span class="tw-full-badge">满</span>{% endif %}
                     </td>
                     <td>
                         {% if slot.bid_info.my_bid_amount %}
-                        <span class="price gold">{{ slot.bid_info.my_bid_amount }} 金条</span>
+                        <span class="tw-price gold">{{ slot.bid_info.my_bid_amount }} 金条</span>
                         {% else %}
-                        <span class="text-muted">-</span>
+                        <span class="text-text-muted">-</span>
                         {% endif %}
                     </td>
                     <td>
                         {% if slot.bid_info.is_safe %}
-                        <span class="status-safe">安全</span>
+                        <span class="tw-status-safe">安全</span>
                         {% elif slot.bid_info.my_bid_amount %}
-                        <span class="status-danger">被挤出</span>
+                        <span class="tw-status-danger">被挤出</span>
                         {% else %}
-                        <span class="text-muted">-</span>
+                        <span class="text-text-muted">-</span>
                         {% endif %}
                     </td>
                     <td>
                         <button type="button"
-                                class="btn-bid-small"
+                                class="tw-btn-bid"
                                 onclick="openBidModal({{ slot.id }}, '{{ slot.item_template.name|escapejs }}', {{ slot.bid_info.cutoff_price }}, {{ slot.quantity }}, {{ slot.bid_info.bidder_count }}, {{ slot.bid_info.my_bid_amount|default:'null' }}, {{ slot.starting_price }})">
                             {% if slot.bid_info.my_bid_amount %}加价{% else %}出价{% endif %}
                         </button>
@@ -174,33 +174,33 @@
 
         <!-- 分页 -->
         {% if page_obj.has_other_pages %}
-        <div class="pagination auction-pagination">
+        <nav class="tw-pagination">
             {% if page_obj.has_previous %}
-            <a href="?tab=auction&view=browse&category={{ selected_category }}&rarity={{ selected_rarity }}&order_by={{ selected_order }}&page={{ page_obj.previous_page_number }}" class="btn-secondary">上一页</a>
+            <a href="?tab=auction&view=browse&category={{ selected_category }}&rarity={{ selected_rarity }}&order_by={{ selected_order }}&page={{ page_obj.previous_page_number }}" class="tw-btn-secondary tw-btn-sm">上一页</a>
             {% else %}
-            <button class="btn-secondary" disabled>上一页</button>
+            <button class="tw-btn-secondary tw-btn-sm" disabled>上一页</button>
             {% endif %}
 
-            <span class="page-info">第 {{ page_obj.number }} / {{ page_obj.paginator.num_pages }} 页</span>
+            <span class="tw-page-info">第 {{ page_obj.number }} / {{ page_obj.paginator.num_pages }} 页</span>
 
             {% if page_obj.has_next %}
-            <a href="?tab=auction&view=browse&category={{ selected_category }}&rarity={{ selected_rarity }}&order_by={{ selected_order }}&page={{ page_obj.next_page_number }}" class="btn-secondary">下一页</a>
+            <a href="?tab=auction&view=browse&category={{ selected_category }}&rarity={{ selected_rarity }}&order_by={{ selected_order }}&page={{ page_obj.next_page_number }}" class="tw-btn-secondary tw-btn-sm">下一页</a>
             {% else %}
-            <button class="btn-secondary" disabled>下一页</button>
+            <button class="tw-btn-secondary tw-btn-sm" disabled>下一页</button>
             {% endif %}
-        </div>
+        </nav>
         {% endif %}
 
         {% else %}
-        <div class="empty-state">
+        <div class="tw-empty-hint">
             <p>暂无拍卖物品</p>
         </div>
         {% endif %}
 
         {% else %}
-        <div class="empty-state">
+        <div class="tw-empty-hint">
             <p>当前没有进行中的拍卖</p>
-            <p style="font-size: 0.9rem; color: var(--text-muted);">
+            <p class="text-sm text-text-muted">
                 拍卖行每3天开启一轮，请稍后再来
             </p>
         </div>
@@ -209,14 +209,14 @@
 
     {% elif auction_view == 'my_bids' %}
     <!-- 我的竞拍 -->
-    <div id="auction-my-bids-section" class="trade-card">
+    <div id="auction-my-bids-section" class="tw-trade-card">
         <h3>我的竞拍</h3>
 
         {% if my_leading_slots %}
-        <div class="my-bids-section">
-            <h4 class="section-title">在中标范围内 ({{ my_leading_slots|length }})</h4>
-            <div class="shop-table-wrapper">
-                <table class="shop-table">
+        <div class="tw-my-bids-section">
+            <h4 class="tw-bids-section-title">在中标范围内 ({{ my_leading_slots|length }})</h4>
+            <div class="tw-shop-table-wrapper">
+                <table class="tw-shop-table">
                     <thead>
                         <tr>
                             <th>物品</th>
@@ -230,27 +230,27 @@
                         {% for slot in my_leading_slots %}
                         <tr>
                             <td>
-                                <div class="item-cell">
-                                    <div class="item-icon rarity-{{ slot.item_template.rarity }}">
+                                <div class="tw-item-cell">
+                                    <div class="tw-item-icon rarity-{{ slot.item_template.rarity }}">
                                         {% if slot.item_template.image %}
                                         <img src="{{ slot.item_template.image.url }}"
                                              alt="{{ slot.item_template.name }}">
                                         {% else %}
-                                        <span class="icon-placeholder">
+                                        <span class="tw-icon-placeholder">
                                             {{ slot.item_template.name|slice:":1" }}
                                         </span>
                                         {% endif %}
                                     </div>
-                                    <span class="item-name rarity-{{ slot.item_template.rarity }}">
+                                    <span class="tw-item-name rarity-{{ slot.item_template.rarity }}">
                                         {{ slot.item_template.name }}
                                     </span>
                                 </div>
                             </td>
                             <td>{{ slot.quantity }}人</td>
-                            <td class="price gold">{{ slot.bid_info.cutoff_price }} 金条</td>
-                            <td class="price gold">{{ slot.bid_info.my_bid_amount }} 金条</td>
+                            <td class="tw-price gold">{{ slot.bid_info.cutoff_price }} 金条</td>
+                            <td class="tw-price gold">{{ slot.bid_info.my_bid_amount }} 金条</td>
                             <td>
-                                <span class="safe-status">安全</span>
+                                <span class="tw-status-safe">安全</span>
                             </td>
                         </tr>
                         {% endfor %}
@@ -261,10 +261,10 @@
         {% endif %}
 
         {% if my_bids %}
-        <div class="my-bids-section">
-            <h4 class="section-title">出价记录</h4>
-            <div class="shop-table-wrapper">
-                <table class="shop-table">
+        <div class="tw-my-bids-section">
+            <h4 class="tw-bids-section-title">出价记录</h4>
+            <div class="tw-shop-table-wrapper">
+                <table class="tw-shop-table">
                     <thead>
                         <tr>
                             <th>物品</th>
@@ -277,25 +277,25 @@
                         {% for bid in my_bids %}
                         <tr>
                             <td>
-                                <div class="item-cell">
-                                    <div class="item-icon rarity-{{ bid.slot.item_template.rarity }}">
+                                <div class="tw-item-cell">
+                                    <div class="tw-item-icon rarity-{{ bid.slot.item_template.rarity }}">
                                         {% if bid.slot.item_template.image %}
                                         <img src="{{ bid.slot.item_template.image.url }}"
                                              alt="{{ bid.slot.item_template.name }}">
                                         {% else %}
-                                        <span class="icon-placeholder">
+                                        <span class="tw-icon-placeholder">
                                             {{ bid.slot.item_template.name|slice:":1" }}
                                         </span>
                                         {% endif %}
                                     </div>
-                                    <span class="item-name rarity-{{ bid.slot.item_template.rarity }}">
+                                    <span class="tw-item-name rarity-{{ bid.slot.item_template.rarity }}">
                                         {{ bid.slot.item_template.name }}
                                     </span>
                                 </div>
                             </td>
-                            <td class="price gold">{{ bid.amount }} 金条</td>
+                            <td class="tw-price gold">{{ bid.amount }} 金条</td>
                             <td>
-                                <span class="bid-status bid-status-{{ bid.status }}">
+                                <span class="tw-bid-status tw-bid-status-{{ bid.status }}">
                                     {{ bid.get_status_display }}
                                 </span>
                             </td>
@@ -309,9 +309,9 @@
         {% endif %}
 
         {% if not my_leading_slots and not my_bids %}
-        <div class="empty-state">
+        <div class="tw-empty-hint">
             <p>暂无竞拍记录</p>
-            <p style="font-size: 0.9rem; color: var(--text-muted);">
+            <p class="text-sm text-text-muted">
                 去浏览竞拍区参与竞拍吧！
             </p>
         </div>
@@ -321,458 +321,65 @@
 </div>
 
 <!-- 出价弹窗 -->
-<div id="bidModal" class="market-modal">
-    <div class="market-modal-content">
-        <span class="market-modal-close" onclick="closeBidModal()">&times;</span>
-        <h3 class="market-modal-title">竞拍出价</h3>
+<div id="bidModal" class="tw-modal-overlay" style="display: none;">
+    <div class="tw-modal-content">
+        <div class="tw-modal-header">
+            <h3>竞拍出价</h3>
+            <button type="button" class="tw-modal-close" onclick="closeBidModal()">&times;</button>
+        </div>
 
         <form method="post" id="bidForm">
             {% csrf_token %}
 
-            <div class="market-form-group">
-                <label>物品名称</label>
-                <p id="bid-modal-item-name" class="market-form-value"></p>
+            <div class="tw-modal-body">
+                <div class="tw-market-form-group">
+                    <label>物品名称</label>
+                    <p id="bid-modal-item-name" class="tw-market-form-value"></p>
+                </div>
+
+                <div class="tw-market-form-group">
+                    <label>中标名额</label>
+                    <p class="tw-market-form-value" id="bid-modal-winner-count"></p>
+                </div>
+
+                <div class="tw-market-form-group">
+                    <label>当前最低中标价</label>
+                    <p class="tw-market-form-value tw-price gold" id="bid-modal-cutoff-price"></p>
+                </div>
+
+                <div class="tw-market-form-group" id="bid-modal-my-bid-group" style="display: none;">
+                    <label>我的当前出价</label>
+                    <p class="tw-market-form-value tw-price gold" id="bid-modal-my-bid"></p>
+                </div>
+
+                <div class="tw-market-form-group">
+                    <label for="bid-modal-amount">出价金额（金条）</label>
+                    <input type="number"
+                           name="amount"
+                           id="bid-modal-amount"
+                           min="1"
+                           required>
+                    <p class="tw-market-form-hint" id="bid-modal-hint"></p>
+                    <p class="tw-market-form-hint">
+                        可用金条：<span class="tw-price gold">{{ auction_stats.available_gold_bars }}</span>
+                    </p>
+                </div>
+
+                <div class="tw-market-form-summary">
+                    <p class="tw-market-form-note">
+                        注意：出价后金条将被冻结。如果您被挤出中标范围，冻结的金条将立即退还。
+                        <br>所有中标者最终支付统一价格（最低中标价）。
+                    </p>
+                </div>
             </div>
 
-            <div class="market-form-group">
-                <label>中标名额</label>
-                <p class="market-form-value" id="bid-modal-winner-count"></p>
-            </div>
-
-            <div class="market-form-group">
-                <label>当前最低中标价</label>
-                <p class="market-form-value gold" id="bid-modal-cutoff-price"></p>
-            </div>
-
-            <div class="market-form-group" id="bid-modal-my-bid-group" style="display: none;">
-                <label>我的当前出价</label>
-                <p class="market-form-value gold" id="bid-modal-my-bid"></p>
-            </div>
-
-            <div class="market-form-group">
-                <label for="bid-modal-amount">出价金额（金条）</label>
-                <input type="number"
-                       name="amount"
-                       id="bid-modal-amount"
-                       min="1"
-                       required>
-                <p class="market-form-hint" id="bid-modal-hint"></p>
-                <p class="market-form-hint">
-                    可用金条：<span class="gold-bar">{{ auction_stats.available_gold_bars }}</span>
-                </p>
-            </div>
-
-            <div class="market-form-summary">
-                <p class="market-form-note">
-                    注意：出价后金条将被冻结。如果您被挤出中标范围，冻结的金条将立即退还。
-                    <br>所有中标者最终支付统一价格（最低中标价）。
-                </p>
-            </div>
-
-            <div class="market-form-actions">
-                <button type="button" class="btn-sell" onclick="closeBidModal()">取消</button>
-                <button type="submit" class="btn-buy">确认出价</button>
+            <div class="tw-market-form-actions">
+                <button type="button" class="tw-btn-secondary" onclick="closeBidModal()">取消</button>
+                <button type="submit" class="tw-btn-primary">确认出价</button>
             </div>
         </form>
     </div>
 </div>
-
-<style>
-/* 拍卖行容器 */
-.auction-container {
-    display: flex;
-    flex-direction: column;
-}
-
-/* 拍卖行信息栏 */
-.auction-info-bar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-    padding: 1rem;
-    background: var(--bg-card);
-    border: 1px solid var(--border-primary);
-    border-radius: 8px;
-    margin-bottom: 1rem;
-    flex-shrink: 0;
-}
-
-.auction-info-item {
-    display: flex;
-    flex-direction: column;
-    min-width: 100px;
-}
-
-.auction-info-item .info-label {
-    font-size: 0.85rem;
-    color: var(--text-secondary);
-    margin-bottom: 0.25rem;
-}
-
-.auction-info-item .info-value {
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
-.auction-info-item .info-value.gold-bar {
-    color: #fbbf24;
-}
-
-.auction-info-item .info-value.frozen {
-    color: #60a5fa;
-}
-
-.auction-info-item .info-value.leading {
-    color: #4ade80;
-}
-
-/* 子导航 */
-.auction-sub-nav {
-    flex-shrink: 0;
-    margin-bottom: 1rem;
-}
-
-/* 浏览竞拍区卡片 */
-#auction-browse-section {
-    display: flex;
-    flex-direction: column;
-}
-
-#auction-my-bids-section {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    overflow: hidden;
-}
-
-/* 筛选栏 */
-.filter-bar {
-    flex-shrink: 0;
-}
-
-/* 表格容器 - 分页后不需要滚动 */
-#auction-browse-section .shop-table-wrapper {
-    overflow-x: hidden;
-}
-
-#auction-my-bids-section .shop-table-wrapper {
-    flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
-    min-height: 0;
-}
-
-/* 拍卖表格样式 - 参考仓库 */
-.auction-table {
-    width: 100%;
-    border-collapse: collapse;
-    overflow: visible !important;
-}
-
-.auction-table th,
-.auction-table td {
-    padding: 0.75rem;
-    text-align: left;
-    border-bottom: 1px solid var(--border-primary);
-}
-
-.auction-table th {
-    background: var(--bg-secondary);
-    font-weight: 600;
-    color: var(--text-secondary);
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    white-space: nowrap;
-}
-
-.auction-table tr:hover {
-    background: var(--bg-hover);
-}
-
-.auction-table tr.row-safe {
-    background: rgba(74, 222, 128, 0.08);
-}
-
-.auction-table tr.row-safe:hover {
-    background: rgba(74, 222, 128, 0.15);
-}
-
-.auction-table tbody,
-.auction-table tbody tr,
-.auction-table tbody td {
-    overflow: visible;
-}
-
-/* 物品单元格 */
-.item-cell {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    position: relative;
-    cursor: pointer;
-}
-
-.item-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    border: 2px solid var(--border-primary);
-    background: var(--bg-secondary);
-    flex-shrink: 0;
-}
-
-.item-icon img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.icon-placeholder {
-    font-size: 1.2rem;
-    font-weight: 700;
-    color: var(--text-muted);
-}
-
-.item-name {
-    font-weight: 600;
-}
-
-/* 稀有度边框颜色（图标用） */
-.item-icon.rarity-black { border-color: #666; }
-.item-icon.rarity-gray { border-color: #999; }
-.item-icon.rarity-green { border-color: #2E8B57; }
-.item-icon.rarity-blue { border-color: #4169E1; }
-.item-icon.rarity-red { border-color: #DC143C; }
-.item-icon.rarity-purple { border-color: #9932CC; }
-.item-icon.rarity-orange { border-color: #FF8C00; }
-
-/* 稀有度文字颜色（名称用） */
-.item-name.rarity-black { color: #333; }
-.item-name.rarity-gray { color: #999; }
-.item-name.rarity-green { color: #3CB371; }
-.item-name.rarity-blue { color: #6495ED; }
-.item-name.rarity-red { color: #FF6B6B; }
-.item-name.rarity-purple { color: #BA55D3; }
-.item-name.rarity-orange { color: #FFA500; }
-
-/* Tooltip 样式 */
-.item-tooltip {
-    display: none;
-    position: fixed;
-    min-width: 200px;
-    max-width: 260px;
-    padding: 0.875rem;
-    background: rgba(40, 25, 15, 0.95);
-    border: 1px solid var(--border-light);
-    border-radius: 6px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-    z-index: 1000;
-    pointer-events: none;
-    color: var(--text-light);
-}
-
-.item-cell:hover .item-tooltip {
-    display: block;
-}
-
-.tooltip-header {
-    font-weight: 700;
-    font-size: 1rem;
-    margin-bottom: 0.25rem;
-}
-
-.tooltip-header.rarity-black { color: #E0E0E0; }
-.tooltip-header.rarity-gray { color: #A0A0A0; }
-.tooltip-header.rarity-green { color: #4ADE80; }
-.tooltip-header.rarity-blue { color: #60A5FA; }
-.tooltip-header.rarity-red { color: #F87171; }
-.tooltip-header.rarity-purple { color: #C084FC; }
-.tooltip-header.rarity-orange { color: #FBBF24; }
-
-.tooltip-desc {
-    font-size: 0.85rem;
-    color: #F3F4F6;
-    margin-bottom: 0.5rem;
-    line-height: 1.4;
-}
-
-.tooltip-auction-info {
-    margin-top: 0.5rem;
-    border-top: 1px solid rgba(255,255,255,0.1);
-    padding-top: 0.5rem;
-}
-
-.attr-row {
-    display: flex;
-    justify-content: space-between;
-    padding: 0.15rem 0;
-    font-size: 0.85rem;
-}
-
-.attr-label {
-    color: #9CA3AF;
-}
-
-.attr-value {
-    color: #FBBF24;
-    font-weight: 600;
-}
-
-/* 金条颜色 */
-.gold, .price.gold {
-    color: #fbbf24 !important;
-}
-
-.text-muted {
-    color: var(--text-muted);
-}
-
-/* 状态标签 */
-.status-safe {
-    display: inline-block;
-    padding: 0.2rem 0.5rem;
-    background: rgba(74, 222, 128, 0.15);
-    border: 1px solid #4ade80;
-    border-radius: 4px;
-    color: #4ade80;
-    font-size: 0.8rem;
-    font-weight: 600;
-}
-
-.status-danger {
-    display: inline-block;
-    padding: 0.2rem 0.5rem;
-    background: rgba(239, 68, 68, 0.15);
-    border: 1px solid #ef4444;
-    border-radius: 4px;
-    color: #ef4444;
-    font-size: 0.8rem;
-    font-weight: 600;
-}
-
-.full {
-    color: #fbbf24;
-}
-
-.full-badge {
-    display: inline-block;
-    padding: 0.1rem 0.3rem;
-    background: rgba(251, 191, 36, 0.15);
-    border: 1px solid #fbbf24;
-    border-radius: 3px;
-    color: #fbbf24;
-    font-size: 0.7rem;
-    font-weight: 600;
-    margin-left: 0.25rem;
-}
-
-/* 出价按钮（表格用小按钮） */
-.btn-bid-small {
-    padding: 0.4rem 0.8rem;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 0.85rem;
-    transition: all 0.2s;
-    background: linear-gradient(180deg, #fbbf24 0%, #d97706 100%);
-    color: #1a1a1a;
-    border: 1px solid #b45309;
-}
-
-.btn-bid-small:hover {
-    background: linear-gradient(180deg, #f59e0b 0%, #b45309 100%);
-    transform: translateY(-1px);
-    box-shadow: 0 2px 6px rgba(251, 191, 36, 0.25);
-}
-
-/* 我的竞拍区域 */
-.my-bids-section {
-    margin-bottom: 2rem;
-}
-
-.my-bids-section:last-child {
-    margin-bottom: 0;
-}
-
-.section-title {
-    color: var(--accent-gold);
-    font-size: 1rem;
-    margin: 0 0 1rem 0;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--border-primary);
-}
-
-.safe-status {
-    display: inline-block;
-    padding: 0.25rem 0.5rem;
-    background: rgba(74, 222, 128, 0.15);
-    border: 1px solid #4ade80;
-    border-radius: 4px;
-    color: #4ade80;
-    font-size: 0.85rem;
-    font-weight: 600;
-}
-
-.bid-status {
-    display: inline-block;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    font-size: 0.85rem;
-    font-weight: 600;
-}
-
-.bid-status-active {
-    background: rgba(74, 222, 128, 0.15);
-    color: #4ade80;
-}
-
-.bid-status-outbid {
-    background: rgba(251, 191, 36, 0.15);
-    color: #fbbf24;
-}
-
-.bid-status-won {
-    background: rgba(96, 165, 250, 0.15);
-    color: #60a5fa;
-}
-
-.bid-status-refunded {
-    background: rgba(156, 163, 175, 0.15);
-    color: #9ca3af;
-}
-
-/* 拍卖分页 */
-.auction-pagination {
-    flex-shrink: 0;
-    margin-top: 1rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--border-light);
-}
-
-/* 响应式 */
-@media (max-width: 768px) {
-    .auction-info-bar {
-        gap: 0.75rem;
-    }
-
-    .auction-info-item {
-        min-width: 80px;
-    }
-
-    .auction-table th,
-    .auction-table td {
-        padding: 0.5rem;
-        font-size: 0.85rem;
-    }
-}
-</style>
 
 <script>
 function openBidModal(slotId, itemName, cutoffPrice, winnerCount, bidderCount, myBidAmount, startingPrice) {
@@ -823,7 +430,7 @@ function openBidModal(slotId, itemName, cutoffPrice, winnerCount, bidderCount, m
     amountInput.min = minBid;
 
     // 显示模态框
-    modal.style.display = 'block';
+    modal.style.display = 'flex';
 }
 
 function closeBidModal() {
@@ -884,108 +491,12 @@ document.addEventListener('DOMContentLoaded', function() {
         setInterval(updateCountdown, 1000);
     }
 
-    // Tooltip 位置动态调整
-    (function setupAuctionTooltips() {
-        window.__webgame_tooltip_init = window.__webgame_tooltip_init || {};
-        if (window.__webgame_tooltip_init.auction) return;
-        window.__webgame_tooltip_init.auction = true;
-
-        const cellSelector = '.auction-table .item-cell';
-        const tooltipSelector = '.item-tooltip';
-        const viewportPadding = 20;
-        const offset = 8;
-
-        if (!document.querySelector(cellSelector)) return;
-
-        let activeCell = null;
-        let rafId = null;
-        let sizeRetryCount = 0;
-
-        function requestUpdate() {
-            if (rafId) return;
-            rafId = requestAnimationFrame(() => {
-                rafId = null;
-                if (!activeCell) return;
-                if (!activeCell.isConnected) {
-                    activeCell = null;
-                    sizeRetryCount = 0;
-                    return;
-                }
-
-                const tooltip = activeCell.querySelector(tooltipSelector);
-                if (!tooltip) return;
-
-                const cellRect = activeCell.getBoundingClientRect();
-                const viewportHeight = window.innerHeight;
-                const viewportWidth = window.innerWidth;
-
-                const tooltipRect = tooltip.getBoundingClientRect();
-                if ((tooltipRect.width === 0 || tooltipRect.height === 0) && sizeRetryCount < 2) {
-                    sizeRetryCount += 1;
-                    requestUpdate();
-                    return;
-                }
-                sizeRetryCount = 0;
-
-                let top = cellRect.bottom + offset;
-                let left = cellRect.left;
-
-                if (left + tooltipRect.width > viewportWidth - viewportPadding) {
-                    left = viewportWidth - tooltipRect.width - viewportPadding;
-                }
-
-                if (top + tooltipRect.height > viewportHeight - viewportPadding) {
-                    top = cellRect.top - tooltipRect.height - offset;
-                }
-
-                tooltip.style.top = top + 'px';
-                tooltip.style.left = left + 'px';
-            });
-        }
-
-        function setActiveCell(cell) {
-            if (activeCell === cell) return;
-            activeCell = cell;
-            sizeRetryCount = 0;
-            requestUpdate();
-        }
-
-        document.addEventListener('mouseover', function (event) {
-            const target = event.target;
-            if (!target || !target.closest) return;
-            const cell = target.closest(cellSelector);
-            if (!cell) return;
-            setActiveCell(cell);
+    // Tooltip 位置动态调整 - 使用共享模块
+    if (typeof initItemTooltip === 'function') {
+        initItemTooltip({
+            key: 'auction',
+            cellSelector: '.tw-auction-table .tw-item-cell'
         });
-
-        document.addEventListener('mousemove', function (event) {
-            if (!activeCell) return;
-            const target = event.target;
-            if (!target || !target.closest) return;
-            if (!target.closest(cellSelector)) return;
-            requestUpdate();
-        });
-
-        document.addEventListener('mouseout', function (event) {
-            const target = event.target;
-            if (!target || !target.closest) return;
-            const cell = target.closest(cellSelector);
-            if (!cell || cell !== activeCell) return;
-            const related = event.relatedTarget;
-            if (related && cell.contains(related)) return;
-            activeCell = null;
-            sizeRetryCount = 0;
-        });
-
-        window.addEventListener('scroll', function () {
-            if (!activeCell) return;
-            requestUpdate();
-        }, true);
-
-        window.addEventListener('resize', function () {
-            if (!activeCell) return;
-            requestUpdate();
-        });
-    })();
+    }
 });
 </script>

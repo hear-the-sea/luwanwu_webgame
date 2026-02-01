@@ -10,4 +10,3 @@ class ResourceType(models.TextChoices):
 
 # Backwards-friendly alias for callsites that used a plain constants container.
 ResourceTypes = ResourceType
-

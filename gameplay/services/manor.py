@@ -17,7 +17,7 @@ from django.utils import timezone
 
 from core.utils.time_scale import scale_duration
 
-from ..constants import BuildingKeys, MAX_CONCURRENT_BUILDING_UPGRADES, BUILDING_MAX_LEVELS
+from ..constants import BuildingKeys, MAX_CONCURRENT_BUILDING_UPGRADES, BUILDING_MAX_LEVELS, ManorNameConstants
 from ..models import Building, BuildingType, Manor, Message, ResourceEvent
 from .notifications import notify_user
 from .cache import invalidate_home_stats_cache
@@ -39,6 +39,7 @@ def calculate_building_capacity(level: int, is_silver_vault: bool = False) -> in
     """
     growth = CAPACITY_GROWTH_SILVER if is_silver_vault else CAPACITY_GROWTH_GRAIN
     return int(CAPACITY_BASE * (growth ** (level - 1)))
+
 
 logger = logging.getLogger(__name__)
 
@@ -147,8 +148,9 @@ def refresh_manor_state(manor: Manor) -> None:
         try:
             if not cache.add(cache_key, "1", timeout=min_interval):
                 return
-        except Exception:
-            pass
+        except Exception as e:
+            # 缓存操作失败时记录日志，但继续执行刷新逻辑
+            logger.warning(f"缓存操作失败，跳过频率限制检查: {e}")
 
     finalize_upgrades(manor)
     from .resources import sync_resource_production
@@ -282,11 +284,12 @@ def start_upgrade(building: Building) -> None:
 
     manor = building.manor
 
-    # 锁住庄园行，确保“升级并发上限”校验在并发请求下仍然可靠
+    # 锁住庄园行，确保"升级并发上限"校验在并发请求下仍然可靠
     manor = Manor.objects.select_for_update().get(pk=manor.pk)
 
-    # 刷新建筑状态，避免并发重复扣费/重复调度
-    building.refresh_from_db(fields=["is_upgrading", "level", "upgrade_complete_at"])
+    # 安全修复：同时锁定建筑行，防止同一建筑并发升级
+    # 避免 TOCTOU 漏洞：两个请求同时通过 is_upgrading 检查导致重复扣费
+    building = Building.objects.select_for_update().get(pk=building.pk)
     if building.is_upgrading:
         raise ValueError("建筑正在升级中")
 
@@ -338,13 +341,13 @@ def start_upgrade(building: Building) -> None:
 
 # ============ 庄园命名服务 ============
 
-# 庄园名称校验规则
-MANOR_NAME_MIN_LENGTH = 2
-MANOR_NAME_MAX_LENGTH = 12
+# 庄园名称验证参数（使用常量类）
+MANOR_NAME_MIN_LENGTH = ManorNameConstants.MIN_LENGTH
+MANOR_NAME_MAX_LENGTH = ManorNameConstants.MAX_LENGTH
 MANOR_NAME_PATTERN = re.compile(r'^[\u4e00-\u9fa5a-zA-Z0-9_]+$')
 
-# 敏感词列表（可扩展）
-BANNED_WORDS = ['admin', 'gm', '管理员', '客服', '官方']
+# 敏感词列表（从常量类获取）
+BANNED_WORDS = ManorNameConstants.BANNED_WORDS
 
 
 def validate_manor_name(name: str) -> tuple[bool, str]:
@@ -434,7 +437,8 @@ def rename_manor(manor: Manor, new_name: str, consume_item: bool = True) -> None
         except ItemTemplate.DoesNotExist:
             raise ValueError("庄园命名卡道具未配置")
 
-        inventory_item = InventoryItem.objects.filter(
+        # 安全修复：使用 select_for_update 防止并发消耗
+        inventory_item = InventoryItem.objects.select_for_update().filter(
             manor=manor,
             template=rename_card,
             storage_location=InventoryItem.StorageLocation.WAREHOUSE,
@@ -444,12 +448,20 @@ def rename_manor(manor: Manor, new_name: str, consume_item: bool = True) -> None
         if not inventory_item:
             raise ValueError("您没有庄园命名卡")
 
-        # 扣除道具
-        inventory_item.quantity -= 1
+        # 安全修复：使用 F() 表达式原子扣除，并检查更新结果
+        from django.db.models import F
+        updated = InventoryItem.objects.filter(
+            pk=inventory_item.pk,
+            quantity__gte=1,
+        ).update(quantity=F('quantity') - 1)
+
+        if not updated:
+            raise ValueError("道具消耗失败，请重试")
+
+        # 清理零库存记录
+        inventory_item.refresh_from_db()
         if inventory_item.quantity <= 0:
             inventory_item.delete()
-        else:
-            inventory_item.save(update_fields=['quantity'])
 
     # 更新庄园名称
     old_name = manor.name or manor.display_name

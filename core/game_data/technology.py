@@ -136,4 +136,3 @@ def clear_technology_cache() -> None:
     """Clear YAML caches (useful for tests or runtime reload)."""
     load_technology_templates.cache_clear()
     _build_troop_to_class_index.cache_clear()
-

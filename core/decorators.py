@@ -7,6 +7,7 @@ Django 视图装饰器
 from __future__ import annotations
 
 import logging
+import re
 from functools import wraps
 from typing import Callable, Optional
 
@@ -14,7 +15,7 @@ from django.contrib import messages
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect
-from django.urls import reverse
+from django.urls import reverse, NoReverseMatch
 
 from core.exceptions import GameError
 from core.utils.validation import sanitize_error_message, safe_redirect_url
@@ -46,10 +47,13 @@ def get_next_url(request: HttpRequest, default: Optional[str] = None, result: Op
         if safe_result:
             return safe_result
         # 如果 result 不是有效 URL，尝试作为 URL 名称解析
-        if ":" in str(result):
+        # 安全修复：使用更严格的 URL 名称格式验证
+        result_str = str(result)
+        # Django URL 名称格式：namespace:view_name 或 view_name（只含字母、数字、下划线、连字符、冒号）
+        if re.match(r'^[a-zA-Z0-9_:-]+$', result_str) and ":" in result_str:
             try:
-                return reverse(result)
-            except Exception:
+                return reverse(result_str)
+            except NoReverseMatch:
                 logger.warning(f"无法解析视图返回的 URL: {result}")
         # result 不安全，回退到 default
         logger.warning(f"视图返回不安全的 URL: {result}，回退到 default")
@@ -83,7 +87,6 @@ def get_next_url(request: HttpRequest, default: Optional[str] = None, result: Op
 
     # 最后回退到首页
     return "/"
-
 
 
 def is_htmx_request(request: HttpRequest) -> bool:

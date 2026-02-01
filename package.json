@@ -1,0 +1,15 @@
+{
+  "name": "web-game-v5",
+  "version": "1.0.0",
+  "description": "春秋乱世庄园主 - 古风武侠游戏",
+  "scripts": {
+    "build:css": "tailwindcss -i ./src/input.css -o ./static/css/tailwind.css",
+    "watch:css": "tailwindcss -i ./src/input.css -o ./static/css/tailwind.css --watch",
+    "build:css:prod": "tailwindcss -i ./src/input.css -o ./static/css/tailwind.css --minify"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.0",
+    "postcss": "^8.4.32",
+    "autoprefixer": "^10.4.16"
+  }
+}

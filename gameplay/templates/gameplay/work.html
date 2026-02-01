@@ -5,360 +5,141 @@
 
 {% block content %}
 <section class="dashboard">
-    <div class="section-header">
+    <div class="tw-section-header">
         <div>
             <h1>打工</h1>
             <p class="caption">派遣门客前往各处打工赚取银两，当前银两：<strong>{{ manor.silver }}</strong></p>
         </div>
-        <a class="btn-secondary" href="{% url 'gameplay:work' %}?tier={{ current_tier }}">刷新</a>
     </div>
 
     {% if working_assignments %}
-    <section class="panel" style="margin-bottom: 1rem;">
-        <div class="panel-header">=打工中 ({{ working_assignments|length }})=</div>
-        <table class="work-table">
-            <thead>
-                <tr>
-                    <th>门客</th>
-                    <th>工作内容</th>
-                    <th style="width: 100px;">报酬</th>
-                    <th style="width: 140px;">剩余时间</th>
-                    <th style="width: 120px;">操作</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for assignment in working_assignments %}
-                <tr>
-                    <td><strong>{{ assignment.guest.display_name }}</strong></td>
-                    <td>{{ assignment.work_template.name }}</td>
-                    <td class="reward-text"><strong>{{ assignment.work_template.reward_silver }}</strong> 银两</td>
-                    <td>
-                        {% if assignment.time_remaining > 0 %}
-                            <span class="countdown"
-                                  data-countdown="{{ assignment.complete_at|date:'c' }}"
-                                  data-format="zh-no-sec"
-                                  data-refresh="1">计算中</span>
-                        {% else %}
-                            <span class="success-text">已完成</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if assignment.time_remaining > 0 %}
-                            <form method="post" action="{% url 'gameplay:recall_work' assignment.id %}" class="recall-form">
-                                {% csrf_token %}
-                                <button type="submit" class="btn-secondary btn-sm">
-                                    召回
-                                </button>
-                            </form>
-                        {% else %}
-                            <form method="post" action="{% url 'gameplay:claim_work_reward' assignment.id %}">
-                                {% csrf_token %}
-                                <button type="submit" class="btn-primary btn-sm">
-                                    领取报酬
-                                </button>
-                            </form>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <section class="tw-panel mb-6">
+        <div class="tw-panel-header">打工中 ({{ working_assignments|length }})</div>
+        <div class="tw-panel-content">
+            <div class="tw-table-wrapper">
+                <table class="tw-table">
+                    <thead>
+                        <tr>
+                            <th>门客</th>
+                            <th>工作内容</th>
+                            <th class="w-24">报酬</th>
+                            <th class="w-36">剩余时间</th>
+                            <th class="w-28">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for assignment in working_assignments %}
+                        <tr>
+                            <td class="font-semibold">{{ assignment.guest.display_name }}</td>
+                            <td>{{ assignment.work_template.name }}</td>
+                            <td class="text-accent-gold font-semibold">{{ assignment.work_template.reward_silver }} 银两</td>
+                            <td>
+                                {% if assignment.time_remaining > 0 %}
+                                    <span class="countdown"
+                                          data-countdown="{{ assignment.complete_at|date:'c' }}"
+                                          data-format="zh-no-sec"
+                                          data-refresh="1">计算中</span>
+                                {% else %}
+                                    <span class="text-accent-green font-bold">已完成</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if assignment.time_remaining > 0 %}
+                                    <form method="post" action="{% url 'gameplay:recall_work' assignment.id %}" class="recall-form inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="tw-btn-secondary tw-btn-sm">召回</button>
+                                    </form>
+                                {% else %}
+                                    <form method="post" action="{% url 'gameplay:claim_work_reward' assignment.id %}" class="inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="tw-btn-primary tw-btn-sm">领取报酬</button>
+                                    </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </section>
     {% endif %}
 
     <!-- 工作区标签页 -->
-    <nav class="work-tabs">
+    <nav class="tw-troop-subtabs mb-6">
         {% for tier in work_tiers %}
         <a href="?tier={{ tier.key }}"
-           class="work-tab {% if current_tier == tier.key %}active{% endif %}">
+           class="tw-troop-subtab {% if current_tier == tier.key %}active{% endif %}">
             {{ tier.name }}
         </a>
         {% endfor %}
     </nav>
 
     <!-- 当前工作区 -->
-    <section class="card">
-        <h2>{{ current_tier_config.name }}</h2>
+    <section class="tw-panel">
+        <div class="tw-panel-header">{{ current_tier_config.name }}</div>
+        <div class="tw-panel-content">
+            {% if works %}
+            <div class="tw-building-grid">
+                {% for work in works %}
+                <article class="tw-building-card">
+                    <header>
+                        <div>
+                            <h3>{{ work.name }}</h3>
+                            <p class="tw-building-desc">{{ work.description }}</p>
+                        </div>
+                    </header>
 
-        {% if works %}
-        <div class="work-grid">
-            {% for work in works %}
-            <article class="work-card">
-                <header>
-                    <div>
-                        <h3>{{ work.name }}</h3>
-                        <p>{{ work.description }}</p>
-                    </div>
-                </header>
-                <dl>
-                    <div>
-                        <dt>等级要求</dt>
-                        <dd>Lv {{ work.required_level }}</dd>
-                    </div>
-                    <div>
-                        <dt>报酬</dt>
-                        <dd class="reward-text">{{ work.reward_silver }} 银两</dd>
-                    </div>
-                    <div>
-                        <dt>工作时长</dt>
-                        <dd>{{ work.work_duration|floatformat:0 }} 秒</dd>
-                    </div>
-                </dl>
+                    <dl class="m-0 p-0">
+                        <div class="grid grid-cols-3 gap-3 p-3 rounded bg-bg-secondary mb-4">
+                            <div class="text-center">
+                                <dt class="text-xs text-text-muted mb-1">等级要求</dt>
+                                <dd class="m-0 text-sm font-semibold text-text-primary">Lv {{ work.required_level }}</dd>
+                            </div>
+                            <div class="text-center">
+                                <dt class="text-xs text-text-muted mb-1">报酬</dt>
+                                <dd class="m-0 text-sm font-semibold text-accent-gold">{{ work.reward_silver }} 银两</dd>
+                            </div>
+                            <div class="text-center">
+                                <dt class="text-xs text-text-muted mb-1">工作时长</dt>
+                                <dd class="m-0 text-sm font-semibold text-text-primary">{{ work.work_duration|floatformat:0 }} 秒</dd>
+                            </div>
+                        </div>
+                    </dl>
 
-                {% if idle_guests %}
-                <form method="post" action="{% url 'gameplay:assign_work' %}" class="work-assign-form">
-                    {% csrf_token %}
-                    <input type="hidden" name="work_key" value="{{ work.key }}">
-                    <div class="form-row">
-                        <select name="guest_id" class="form-select" required>
-                            <option value="">选择门客</option>
-                            {% for guest in idle_guests %}
-                                {% if guest.level >= work.required_level %}
-                                <option value="{{ guest.id }}">
-                                    {{ guest.display_name }} (Lv{{ guest.level }})
-                                </option>
-                                {% endif %}
-                            {% endfor %}
-                        </select>
-                        <button type="submit" class="btn-primary btn-small">派遣</button>
-                    </div>
-                </form>
-                {% else %}
-                <p class="hint" style="margin-top: 1rem;">暂无空闲门客</p>
-                {% endif %}
-            </article>
-            {% endfor %}
+                    {% if idle_guests %}
+                    <form method="post" action="{% url 'gameplay:assign_work' %}" class="tw-card-actions pt-4 border-t border-border-light">
+                        {% csrf_token %}
+                        <input type="hidden" name="work_key" value="{{ work.key }}">
+                        <div class="flex gap-2 items-center">
+                            <select name="guest_id" class="tw-form-select flex-1" required>
+                                <option value="">选择门客</option>
+                                {% for guest in idle_guests %}
+                                    {% if guest.level >= work.required_level %}
+                                    <option value="{{ guest.id }}">
+                                        {{ guest.display_name }} (Lv{{ guest.level }})
+                                    </option>
+                                    {% endif %}
+                                {% endfor %}
+                            </select>
+                            <button type="submit" class="tw-btn-primary">派遣</button>
+                        </div>
+                    </form>
+                    {% else %}
+                    <p class="tw-muted text-sm mt-4 text-center">暂无空闲门客</p>
+                    {% endif %}
+                </article>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="tw-empty-hint">
+                <p>暂无工作配置。</p>
+                <p class="text-sm text-text-muted">请联系管理员在后台添加工作模板数据。</p>
+            </div>
+            {% endif %}
         </div>
-        {% else %}
-        <div class="work-empty-state">
-            <p>暂无工作配置。</p>
-            <p class="hint">请联系管理员在后台添加工作模板数据。</p>
-        </div>
-        {% endif %}
     </section>
 </section>
-
-<style>
-/* 打工表格 - 古风主题 */
-.work-table {
-    width: 100%;
-    border-collapse: collapse;
-    background: var(--bg-card);
-    border-radius: 8px;
-    overflow: hidden;
-}
-
-.work-table th,
-.work-table td {
-    padding: 0.75rem 1rem;
-    text-align: left;
-}
-
-.work-table th {
-    background: linear-gradient(180deg, #D4A574 0%, #C9985E 100%);
-    font-weight: 700;
-    color: var(--text-primary);
-    border-bottom: 2px solid var(--border-primary);
-    font-size: 0.95rem;
-}
-
-.work-table td {
-    border-bottom: 1px solid var(--border-light);
-}
-
-.work-table tbody tr:hover {
-    background: var(--bg-hover);
-}
-
-.work-table tr:last-child td {
-    border-bottom: none;
-}
-
-.work-table .success-text {
-    color: var(--accent-green);
-    font-weight: 700;
-}
-
-/* 工作区标签页 - 古风主题 */
-.work-tabs {
-    display: flex;
-    gap: 0.25rem;
-    margin-bottom: 1.5rem;
-    background: var(--bg-secondary);
-    padding: 0.5rem;
-    border-radius: 8px;
-    border: 2px solid var(--border-primary);
-}
-
-.work-tab {
-    padding: 0.6rem 1.2rem;
-    text-decoration: none;
-    color: var(--text-secondary);
-    border-radius: 6px;
-    transition: all 0.2s;
-    font-weight: 600;
-    border: 2px solid transparent;
-}
-
-.work-tab:hover {
-    color: var(--text-primary);
-    background: var(--bg-hover);
-}
-
-.work-tab.active {
-    color: var(--text-light);
-    background: linear-gradient(180deg, #8B4513 0%, #6B3410 100%);
-    border-color: #5A2D0C;
-    box-shadow: 0 2px 6px rgba(74, 38, 18, 0.25);
-}
-
-/* 工作卡片网格 */
-.work-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 1.5rem;
-    margin-top: 1rem;
-}
-
-/* 工作卡片 - 古风主题 */
-.work-card {
-    border: 2px solid var(--border-primary);
-    border-radius: 10px;
-    padding: 1.4rem;
-    background: var(--bg-card);
-    box-shadow: 0 4px 12px rgba(74, 38, 18, 0.15),
-                inset 0 1px 0 rgba(255, 255, 255, 0.4);
-    transition: all 0.2s;
-    position: relative;
-}
-
-.work-card::before {
-    content: '';
-    position: absolute;
-    top: -2px;
-    left: -2px;
-    right: -2px;
-    bottom: -2px;
-    border-radius: 10px;
-    padding: 2px;
-    background: linear-gradient(135deg, var(--border-decorative), var(--border-primary));
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    pointer-events: none;
-    opacity: 0.6;
-}
-
-.work-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(74, 38, 18, 0.2);
-}
-
-.work-card header {
-    margin-bottom: 1rem;
-}
-
-.work-card h3 {
-    font-size: 1.15rem;
-    font-weight: 700;
-    color: var(--text-primary);
-    margin: 0 0 0.5rem 0;
-}
-
-.work-card header p {
-    font-size: 0.9rem;
-    color: var(--text-secondary);
-    line-height: 1.5;
-    margin: 0;
-}
-
-/* 工作信息区 */
-.work-card dl {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.75rem;
-    margin-bottom: 1rem;
-    padding: 0.85rem;
-    background: var(--bg-hover);
-    border-radius: 8px;
-    border: 1px solid var(--border-light);
-}
-
-.work-card dl div {
-    text-align: center;
-}
-
-.work-card dt {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    margin-bottom: 0.3rem;
-    font-weight: 600;
-}
-
-.work-card dd {
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: var(--text-primary);
-    margin: 0;
-}
-
-.reward-text {
-    color: var(--accent-gold) !important;
-}
-
-/* 派遣表单 */
-.work-assign-form {
-    margin-top: 1rem;
-}
-
-.form-row {
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-}
-
-.form-select {
-    flex: 1;
-    padding: 0.6rem 0.8rem;
-    border: 2px solid var(--border-primary);
-    border-radius: 6px;
-    background: var(--bg-hover);
-    font-size: 0.9rem;
-    font-family: inherit;
-    color: var(--text-primary);
-    font-weight: 500;
-}
-
-.form-select:focus {
-    outline: none;
-    border-color: var(--accent-gold);
-    box-shadow: 0 0 0 3px rgba(218, 165, 32, 0.2);
-}
-
-/* 空状态 */
-.work-empty-state {
-    text-align: center;
-    padding: 3rem 1rem;
-    color: var(--text-muted);
-}
-
-.work-empty-state p {
-    margin-bottom: 0.5rem;
-}
-
-/* 成功标签 */
-.chip.success {
-    background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
-    color: var(--accent-green);
-    border-color: var(--accent-green);
-}
-
-/* 提示文字 */
-.hint {
-    color: var(--text-muted);
-    font-size: 0.9rem;
-}
-</style>
 {% endblock %}
 
 {% block extra_scripts %}
@@ -367,8 +148,12 @@
 document.querySelectorAll('.recall-form').forEach(form => {
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const confirmed = await gameDialog.danger('确定召回吗？召回将不会获得任何报酬。', { title: '召回确认' });
-        if (confirmed) form.submit();
+        try {
+            const confirmed = await gameDialog.danger('确定召回吗？召回将不会获得任何报酬。', { title: '召回确认' });
+            if (confirmed) form.submit();
+        } catch (err) {
+            console.error('召回确认失败:', err);
+        }
     });
 });
 </script>

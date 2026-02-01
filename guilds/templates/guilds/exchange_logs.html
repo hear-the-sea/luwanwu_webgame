@@ -5,21 +5,21 @@
 
 {% block content %}
 <section class="dashboard">
-    <div class="section-header">
+    <div class="tw-section-header">
         <div>
             <h1>兑换记录</h1>
-            <p>{{ guild.name }}</p>
+            <p class="caption">{{ guild.name }}</p>
         </div>
-        <div class="nav-links">
-            <a href="{% url 'guilds:warehouse' %}" class="btn-secondary">返回仓库</a>
-            <a href="{% url 'guilds:detail' guild.id %}" class="btn-secondary">返回帮会</a>
+        <div class="flex gap-2">
+            <a href="{% url 'guilds:warehouse' %}" class="tw-btn-primary">返回仓库</a>
+            <a href="{% url 'guilds:detail' guild.id %}" class="tw-btn-primary">返回帮会</a>
         </div>
     </div>
 
-    <section class="card">
+    <section class="tw-card">
         <h2>最近兑换</h2>
         {% if logs %}
-            <table class="table">
+            <table class="tw-table">
                 <thead>
                     <tr>
                         <th>成员</th>
@@ -31,25 +31,25 @@
                 </thead>
                 <tbody>
                     {% for log in logs %}
-                    <tr {% if log.member.user == user %}class="guild-table-highlight"{% endif %}>
+                    <tr {% if log.member.user == user %}class="tw-guild-table-highlight"{% endif %}>
                         <td>
                             {{ log.member.user.manor.display_name }}
                             {% if log.member.user == user %}
-                                <span class="badge">我</span>
+                                <span class="tw-badge-gold">我</span>
                             {% endif %}
                         </td>
                         <td>{{ log.item_key }}</td>
                         <td>{{ log.quantity }}</td>
-                        <td class="guild-cost-value">{{ log.contribution_cost|floatformat:0 }}</td>
+                        <td class="tw-guild-cost-value">{{ log.contribution_cost|floatformat:0 }}</td>
                         <td>
-                            <span class="muted-text">{{ log.exchanged_at|date:"Y-m-d H:i" }}</span>
+                            <span class="tw-muted">{{ log.exchanged_at|date:"Y-m-d H:i" }}</span>
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         {% else %}
-            <p class="muted-text">暂无兑换记录</p>
+            <p class="tw-muted">暂无兑换记录</p>
         {% endif %}
     </section>
 </section>

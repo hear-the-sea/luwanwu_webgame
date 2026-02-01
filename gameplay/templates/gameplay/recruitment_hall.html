@@ -1,104 +1,110 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% load guest_extras %}
 
 {% block title %}聚贤庄{% endblock %}
 
 {% block content %}
 <section class="dashboard">
-    <section class="card">
-        <div class="section-header compact">
-            <div>
-                <h2>招募类型</h2>
+    <section class="tw-panel mb-6">
+        <div class="tw-panel-header">招募类型</div>
+        <div class="tw-panel-content">
+            <div class="tw-building-grid">
+                {% for pool in pools %}
+                <article class="tw-building-card">
+                    <header>
+                        <div>
+                            <h3>{{ pool.name }}</h3>
+                            <span class="tw-badge-gold">{{ pool.get_tier_display }}</span>
+                        </div>
+                    </header>
+                    <p class="text-sm text-text-muted mb-4">{{ pool.description }}</p>
+                    <ul class="text-sm mb-4 space-y-1">
+                        <li><strong>候选人数：</strong>{{ pool.draw_count }}</li>
+                        <li>
+                            <strong>消耗：</strong>
+                            {% for key,val in pool.cost.items %}
+                            <span>{{ key }} {{ val }}</span>{% if not forloop.last %} / {% endif %}
+                            {% empty %}
+                            <span>免费</span>
+                            {% endfor %}
+                        </li>
+                    </ul>
+                    <form method="post" action="{% url 'guests:recruit' %}" class="recruit-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="pool" value="{{ pool.id }}">
+                        <button type="submit" class="tw-btn-primary w-full">招募 {{ pool.name }}</button>
+                    </form>
+                </article>
+                {% empty %}
+                <p class="tw-empty-hint">暂无卡池配置。</p>
+                {% endfor %}
             </div>
-        </div>
-        <div class="recruit-pool-grid">
-            {% for pool in pools %}
-            <article class="recruit-pool-card">
-                <header>
-                    <h3>{{ pool.name }}</h3>
-                    <span class="tier-tag">{{ pool.get_tier_display }}</span>
-                </header>
-                <p class="pool-desc">{{ pool.description }}</p>
-                <ul class="pool-meta">
-                    <li><strong>候选人数：</strong>{{ pool.draw_count }}</li>
-                    <li>
-                        <strong>消耗：</strong>
-                        {% for key,val in pool.cost.items %}
-                        <span>{{ key }} {{ val }}</span>{% if not forloop.last %} / {% endif %}
-                        {% empty %}
-                        <span>免费</span>
-                        {% endfor %}
-                    </li>
-                </ul>
-                <form method="post" action="{% url 'guests:recruit' %}" class="recruit-form">
-                    {% csrf_token %}
-                    <input type="hidden" name="pool" value="{{ pool.id }}">
-                    <button type="submit" class="btn-primary btn-block">招募 {{ pool.name }}</button>
-                </form>
-            </article>
-            {% empty %}
-            <p>暂无卡池配置。</p>
-            {% endfor %}
         </div>
     </section>
 
-    <section class="card">
-        <h2>候选区</h2>
-        {% if magnifying_glass_items %}
-        <div class="candidate-toolbar">
-            <div class="candidate-tools">
-                {% for item in magnifying_glass_items %}
-                <form method="post" action="{% url 'guests:use_magnifying_glass' %}" class="inline-form">
-                    {% csrf_token %}
-                    <input type="hidden" name="item_id" value="{{ item.id }}">
-                    <button type="submit" class="btn-secondary" {% if item.quantity <= 0 %}disabled{% endif %}>
-                        使用{{ item.template.name }} ({{ item.quantity }})
-                    </button>
-                </form>
-                {% endfor %}
-            </div>
-            <button type="button" class="btn-secondary" id="candidate-select-all-top">一键全选</button>
-        </div>
-        {% endif %}
-        <form method="post" action="{% url 'guests:candidate_accept' %}">
-            {% csrf_token %}
-            <div class="candidate-list">
-                {% for candidate in candidates %}
-                <label class="candidate-item">
-                    <input type="checkbox" name="candidate_ids" value="{{ candidate.id }}">
-                    {% if candidate.rarity_revealed %}
-                    <span class="candidate-name rarity-text {{ candidate.rarity|rarity_class }}">{{ candidate.display_name }}</span>
-                    {% else %}
-                    <span class="candidate-name">{{ candidate.display_name }}</span>
-                    {% endif %}
-                </label>
-                {% empty %}
-                <p>没有待选门客，请先进行招募。</p>
-                {% endfor %}
-            </div>
-            {% if candidates %}
-            <div class="candidate-actions">
-                <button type="button" class="btn-secondary" id="candidate-select-all">一键全选</button>
-                <button type="submit" name="action" value="accept" class="btn-primary">招募选中门客</button>
-                <button type="submit" name="action" value="retain" class="btn-secondary">收为家丁</button>
-                <button type="submit" name="action" value="discard" class="btn-secondary">放弃选中门客</button>
+    <section class="tw-panel mb-6">
+        <div class="tw-panel-header">候选区</div>
+        <div class="tw-panel-content">
+            {% if magnifying_glass_items %}
+            <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
+                <div class="flex gap-2 flex-wrap">
+                    {% for item in magnifying_glass_items %}
+                    <form method="post" action="{% url 'guests:use_magnifying_glass' %}" class="inline magnifying-glass-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="item_id" value="{{ item.id }}">
+                        <button type="submit" class="tw-btn-secondary tw-btn-sm" {% if item.quantity <= 0 %}disabled{% endif %}>
+                            使用{{ item.template.name }} ({{ item.quantity }})
+                        </button>
+                    </form>
+                    {% endfor %}
+                </div>
+                <button type="button" class="tw-btn-secondary tw-btn-sm" id="candidate-select-all-top">一键全选</button>
             </div>
             {% endif %}
-        </form>
+
+            <form method="post" action="{% url 'guests:candidate_accept' %}">
+                {% csrf_token %}
+                <div class="flex flex-wrap gap-3 mb-4">
+                    {% for candidate in candidates %}
+                    <label class="flex items-center gap-2 px-3 py-2 bg-bg-hover rounded-md cursor-pointer hover:bg-bg-secondary border border-border-light">
+                        <input type="checkbox" name="candidate_ids" value="{{ candidate.id }}" class="cursor-pointer">
+                        {% if candidate.rarity_revealed %}
+                        <span class="font-semibold rarity-text-{{ candidate.rarity|rarity_class }}">{{ candidate.display_name }}</span>
+                        {% else %}
+                        <span class="font-semibold">{{ candidate.display_name }}</span>
+                        {% endif %}
+                    </label>
+                    {% empty %}
+                    <p class="tw-muted">没有待选门客，请先进行招募。</p>
+                    {% endfor %}
+                </div>
+                {% if candidates %}
+                <div class="flex gap-2 flex-wrap pt-4 border-t border-border-light">
+                    <button type="button" class="tw-btn-secondary" id="candidate-select-all">一键全选</button>
+                    <button type="submit" name="action" value="accept" class="tw-btn-primary">招募选中门客</button>
+                    <button type="submit" name="action" value="retain" class="tw-btn-secondary">收为家丁</button>
+                    <button type="submit" name="action" value="discard" class="tw-btn-secondary">放弃选中门客</button>
+                </div>
+                {% endif %}
+            </form>
+        </div>
     </section>
 
-    <section class="card">
-        <h2>最近招募</h2>
-        <ul>
-            {% for record in records %}
-            <li>
-                {{ record.created_at|date:"m-d H:i" }} -
-                <span class="rarity-text {{ record.guest.rarity|rarity_class }}">{{ record.guest.display_name }}</span>
-            </li>
-            {% empty %}
-            <li>暂无记录</li>
-            {% endfor %}
-        </ul>
+    <section class="tw-panel">
+        <div class="tw-panel-header">最近招募</div>
+        <div class="tw-panel-content">
+            <ul class="space-y-2">
+                {% for record in records %}
+                <li class="flex items-center gap-2">
+                    <span class="text-text-muted text-sm">{{ record.created_at|date:"m-d H:i" }}</span>
+                    <span>-</span>
+                    <span class="font-semibold rarity-text-{{ record.guest.rarity|rarity_class }}">{{ record.guest.display_name }}</span>
+                </li>
+                {% empty %}
+                <li class="tw-muted">暂无记录</li>
+                {% endfor %}
+            </ul>
+        </div>
     </section>
 </section>
 {% endblock %}
@@ -115,7 +121,7 @@
             selectButtons.forEach(function (btn) {
                 btn.addEventListener("click", function () {
                     document
-                        .querySelectorAll('.candidate-list input[type="checkbox"]')
+                        .querySelectorAll('input[name="candidate_ids"]')
                         .forEach(function (checkbox) {
                             checkbox.checked = true;
                         });
@@ -129,12 +135,49 @@
         form.addEventListener('submit', async (e) => {
             {% if candidates %}
             e.preventDefault();
-            const confirmed = await gameConfirm(
-                '候选区还有待处理的门客，确定要进行新的招募吗？这将清空当前候选区。',
-                { title: '招募确认' }
-            );
-            if (confirmed) form.submit();
+            try {
+                const confirmed = await gameConfirm(
+                    '候选区还有待处理的门客，确定要进行新的招募吗？这将清空当前候选区。',
+                    { title: '招募确认' }
+                );
+                if (confirmed) form.submit();
+            } catch (err) {
+                console.error('招募确认失败:', err);
+            }
             {% endif %}
+        });
+    });
+
+    // 放大镜 AJAX 提交
+    document.querySelectorAll('.magnifying-glass-form').forEach(form => {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = form.querySelector('button[type="submit"]');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '使用中...';
+
+            try {
+                const formData = new FormData(form);
+                const resp = await fetch(form.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    await gameDialog.success(data.message);
+                    location.reload();
+                } else {
+                    gameDialog.error(data.error || '使用失败', { title: '提示' });
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                }
+            } catch (err) {
+                gameDialog.error('请求失败，请重试', { title: '错误' });
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
         });
     });
 </script>

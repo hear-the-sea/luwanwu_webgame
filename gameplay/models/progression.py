@@ -353,4 +353,3 @@ class TroopRecruitment(models.Model):
             return 0
         delta = self.complete_at - timezone.now()
         return max(0, int(delta.total_seconds()))
-

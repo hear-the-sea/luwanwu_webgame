@@ -5,7 +5,7 @@ heroes:
   - key: hero_susu
     name: 素素
     archetype: civil
-    flavor: 寻秦记女主之一素素，项少龙红颜温柔善良。她深爱项少龙，是项少龙穿越后遇到的第一个真爱。她的温柔融化了项少龙的心，是寻秦记中最温暖的存在。出自黄易小说《寻秦记》
+    flavor: 寻秦记女主之一素素，项少龙红颜温柔善良。她深爱项少龙，是项少龙穿越后遇到的第一个真爱。她的温柔融化了项少龙的心，是寻秦记中最温暖的存在。她不争不抢，却以真心守住乱世里的一点安宁。出自黄易小说《寻秦记》
     default_gender: female
     default_morality: 85
     recruitable: true
@@ -20,7 +20,7 @@ heroes:
   - key: hero_ji_yanran
     name: 纪嫣然
     archetype: civil
-    flavor: 寻秦记女主之一纪嫣然，赵国公主美艳动人。她与项少龙情深意重，在战国乱世中相守相依。她以公主之尊下嫁项少龙，是寻秦记中最动人的爱情之一。出自黄易小说《寻秦记》
+    flavor: 寻秦记女主之一纪嫣然，赵国公主美艳动人。她与项少龙情深意重，在战国乱世中相守相依。她以公主之尊下嫁项少龙，是寻秦记中最动人的爱情之一。她以智慧与胆识护住所爱，也为其挡去无数风雨。出自黄易小说《寻秦记》
     default_gender: female
     default_morality: 75
     recruitable: true
@@ -35,7 +35,7 @@ heroes:
   - key: hero_wu_tingfang
     name: 乌廷芳
     archetype: civil
-    flavor: 乌廷芳出身赵国名门，明艳聪慧，心气高傲。与项少龙从敌对到相知，情感曲折如战国风云。她敢爱敢恨，也愿为所爱放下身段。柔情与锋芒并存，使她成为寻秦记里最鲜活的红颜之一。出自黄易小说《寻秦记》
+    flavor: 乌廷芳出身赵国名门，明艳聪慧，心气高傲。与项少龙从敌对到相知，情感曲折如战国风云。她敢爱敢恨，也愿为所爱放下身段。柔情与锋芒并存，使她成为寻秦记里最鲜活的红颜之一。她的骄傲与热烈，让故事更添波澜。出自黄易小说《寻秦记》
     default_gender: female
     default_morality: 70
     recruitable: true
@@ -50,7 +50,7 @@ heroes:
   - key: hero_zhao_qian
     name: 赵倩
     archetype: military
-    flavor: 赵倩贵为公主，温婉中藏勇气。她与项少龙的情缘由对立走向相守，几经生死仍不改初心。武功不弱，心性更坚，乱世里始终保持自尊与担当。她的爱情如月，清冷却长久。出自黄易小说《寻秦记》
+    flavor: 赵倩贵为公主，温婉中藏勇气。她与项少龙的情缘由对立走向相守，几经生死仍不改初心。武功不弱，心性更坚，乱世里始终保持自尊与担当。她的爱情如月，清冷却长久。她不惧牺牲，只求所爱与百姓得安。出自黄易小说《寻秦记》
     default_gender: female
     default_morality: 75
     recruitable: true
@@ -65,7 +65,7 @@ heroes:
   - key: hero_teng_yi
     name: 滕翼
     archetype: military
-    flavor: 滕翼是项少龙最可靠的战友，沉稳寡言却忠义如山。战场上他刀光如电，行军布阵亦有章法。生死关头，他总能守住兄弟的背影。乱世喧嚣里，他以行动写下"义"字。出自黄易小说《寻秦记》
+    flavor: 滕翼是项少龙最可靠的战友，沉稳寡言却忠义如山。战场上他刀光如电，行军布阵亦有章法。生死关头，他总能守住兄弟的背影。乱世喧嚣里，他以行动写下"义"字。他少言却可信，是队伍最稳的脊梁。出自黄易小说《寻秦记》
     default_gender: male
     default_morality: 80
     recruitable: true
@@ -80,7 +80,7 @@ heroes:
   - key: hero_jing_jun
     name: 荆俊
     archetype: civil
-    flavor: 荆俊机敏如狐，擅谋略亦不失胆气。追随项少龙闯荡战国，他用智计化解无数死局，是团队里最锋利的脑。表面玩世不恭，内里却重义重情。乱世江湖，他以才智搏出一片生路。出自黄易小说《寻秦记》
+    flavor: 荆俊机敏如狐，擅谋略亦不失胆气。追随项少龙闯荡战国，他用智计化解无数死局，是团队里最锋利的脑。表面玩世不恭，内里却重义重情。乱世江湖，他以才智搏出一片生路。他的机变让敌人难以摸清底牌。出自黄易小说《寻秦记》
     default_gender: male
     default_morality: 70
     recruitable: true
@@ -95,7 +95,7 @@ heroes:
   - key: hero_song_yuzhi
     name: 宋玉致
     archetype: civil
-    flavor: 大唐双龙传女主之一宋玉致，寇仲红颜温柔美丽。她深爱寇仲，在乱世中坚守真情。她是寇仲生命中最重要的人，也是他争霸天下的动力。出自黄易小说《大唐双龙传》
+    flavor: 大唐双龙传女主之一宋玉致，寇仲红颜温柔美丽。她深爱寇仲，在乱世中坚守真情。她是寇仲生命中最重要的人，也是他争霸天下的动力。她的坚定与温柔，让寇仲在野心中仍留人性。出自黄易小说《大唐双龙传》
     default_gender: female
     default_morality: 80
     recruitable: true
@@ -110,7 +110,7 @@ heroes:
   - key: hero_song_lu
     name: 宋鲁
     archetype: military
-    flavor: 宋鲁豪迈爽直，重情重义，是寇仲最可信的臂膀。刀剑虽不及顶峰，却胜在稳健与担当。乱世纷争中，他既能冲锋陷阵，也能稳住人心。兄弟之情在他身上化作最厚实的护壁。出自黄易小说《大唐双龙传》
+    flavor: 宋鲁豪迈爽直，重情重义，是寇仲最可信的臂膀。刀剑虽不及顶峰，却胜在稳健与担当。乱世纷争中，他既能冲锋陷阵，也能稳住人心。兄弟之情在他身上化作最厚实的护壁。他的沉稳让少帅军更具韧性。出自黄易小说《大唐双龙传》
     default_gender: male
     default_morality: 80
     recruitable: true
@@ -125,7 +125,7 @@ heroes:
   - key: hero_shen_luoyan
     name: 沈落雁
     archetype: civil
-    flavor: 大唐双龙传角色沈落雁，四大美女之一智计无双。她美艳绝伦善于谋略，是大唐双龙传中最有智慧的女性角色。她在乱世中游刃有余，以美貌和智慧征服群雄。出自黄易小说《大唐双龙传》
+    flavor: 大唐双龙传角色沈落雁，四大美女之一智计无双。她美艳绝伦善于谋略，是大唐双龙传中最有智慧的女性角色。她在乱世中游刃有余，以美貌和智慧征服群雄。她进退有度，常以一步棋决定全局。出自黄易小说《大唐双龙传》
     default_gender: female
     default_morality: 60
     recruitable: true
@@ -140,7 +140,7 @@ heroes:
   - key: hero_shan_meixian
     name: 单美仙
     archetype: military
-    flavor: 大唐双龙传角色单美仙，四大美女之一性格刚烈。她武功高强美貌绝伦，是大唐双龙传中最有个性的女性角色。她以巾帼之姿在乱世中闯出一片天地。出自黄易小说《大唐双龙传》
+    flavor: 大唐双龙传角色单美仙，四大美女之一性格刚烈。她武功高强美貌绝伦，是大唐双龙传中最有个性的女性角色。她以巾帼之姿在乱世中闯出一片天地。她宁折不弯，敢为情义一战到底。出自黄易小说《大唐双龙传》
     default_gender: female
     default_morality: 70
     recruitable: true
@@ -155,7 +155,7 @@ heroes:
   - key: hero_hou_xibai
     name: 侯希白
     archetype: military
-    flavor: 大唐双龙传角色侯希白，画圣门传人风流倜傥。他武功高强擅长绘画，是大唐双龙传中最有艺术气质的角色。他与寇仲徐子陵相交甚欢。出自黄易小说《大唐双龙传》
+    flavor: 大唐双龙传角色侯希白，画圣门传人风流倜傥。他武功高强擅长绘画，是大唐双龙传中最有艺术气质的角色。他与寇仲徐子陵相交甚欢。他的画中有剑意，潇洒中藏着深厚功力。出自黄易小说《大唐双龙传》
     default_gender: male
     default_morality: 70
     recruitable: true
@@ -170,7 +170,7 @@ heroes:
   - key: hero_shang_xiuxun
     name: 商秀珣
     archetype: military
-    flavor: 大唐双龙传角色商秀珣，飞马牧场少主武功高强。她性格爽朗与徐子陵有过情感纠葛，是大唐双龙传重要女性角色。她以女中豪杰的姿态行走江湖。出自黄易小说《大唐双龙传》
+    flavor: 大唐双龙传角色商秀珣，飞马牧场少主武功高强。她性格爽朗与徐子陵有过情感纠葛，是大唐双龙传重要女性角色。她以女中豪杰的姿态行走江湖。她既能统御牧场，也能在战场上独当一面。出自黄易小说《大唐双龙传》
     default_gender: female
     default_morality: 75
     recruitable: true
@@ -200,7 +200,7 @@ heroes:
   - key: hero_gu_zixian
     name: 谷姿仙
     archetype: civil
-    flavor: 覆雨翻云女主之一谷姿仙，美艳动人情深意重。她与浪翻云的爱情感人至深，是覆雨翻云中最动人的女性角色。她以柔情温暖了浪翻云冰冷的心。出自黄易小说《覆雨翻云》
+    flavor: 覆雨翻云女主之一谷姿仙，美艳动人情深意重。她与浪翻云的爱情感人至深，是覆雨翻云中最动人的女性角色。她以柔情温暖了浪翻云冰冷的心。她的坚定与温润，让浪翻云有了人间归处。出自黄易小说《覆雨翻云》
     default_gender: female
     default_morality: 80
     recruitable: true
@@ -245,7 +245,7 @@ heroes:
   - key: hero_ji_xixi
     name: 纪惜惜
     archetype: civil
-    flavor: 覆雨翻云角色纪惜惜，浪翻云亡妻琴艺无双。她的死让浪翻云性情大变，是覆雨翻云悲剧的起点。她虽早逝却影响深远，是浪翻云心中永远的痛。出自黄易小说《覆雨翻云》
+    flavor: 覆雨翻云角色纪惜惜，浪翻云亡妻琴艺无双。她的死让浪翻云性情大变，是覆雨翻云悲剧的起点。她虽早逝却影响深远，是浪翻云心中永远的痛。她的温柔与才情在回忆里不灭，成为他执刀的源头。出自黄易小说《覆雨翻云》
     default_gender: female
     default_morality: 85
     recruitable: true
@@ -260,7 +260,7 @@ heroes:
   - key: hero_yang_xuyan
     name: 杨虚彦
     archetype: military
-    flavor: 魔门"补天阁"的传人，人称"影子刺客"。他与石之轩有千丝万缕的联系，是《大唐双龙传》中一个极为厉害的阴谋家和杀手。他心机深沉，武功诡异，是寇仲和徐子陵争霸道路上一个可怕的对手。出自黄易小说《大唐双龙传》
+    flavor: 魔门"补天阁"的传人，人称"影子刺客"。他与石之轩有千丝万缕的联系，是《大唐双龙传》中一个极为厉害的阴谋家和杀手。他心机深沉，武功诡异，是寇仲和徐子陵争霸道路上一个可怕的对手。他如影随形，最擅长在黑暗中一击致命。出自黄易小说《大唐双龙传》
     default_gender: male
     default_morality: 25
     recruitable: true
@@ -275,7 +275,7 @@ heroes:
   - key: hero_zhao_ya
     name: 赵雅
     archetype: civil
-    flavor: 赵雅出身赵国贵族，风韵与心计并存。她与项少龙纠缠不清，在权谋与情欲间游走。美艳背后是冷静算计，温柔中夹着野心。她像一张织密的网，让人难以挣脱。出自黄易小说《寻秦记》
+    flavor: 赵雅出身赵国贵族，风韵与心计并存。她与项少龙纠缠不清，在权谋与情欲间游走。美艳背后是冷静算计，温柔中夹着野心。她像一张织密的网，让人难以挣脱。她的每一步都精打细算，只为稳住自身地位。出自黄易小说《寻秦记》
     default_gender: female
     default_morality: 40
     recruitable: true
@@ -290,7 +290,7 @@ heroes:
   - key: hero_lian_jin
     name: 连晋
     archetype: military
-    flavor: 连晋心机深沉，野心炽烈。原为项少龙旧识，却因权势与仇恨步步对立。武功高强，手段狠辣，他在乱世里以阴影行事。每一次交锋都像毒蛇吐信，令人不寒而栗。出自黄易小说《寻秦记》
+    flavor: 连晋心机深沉，野心炽烈。原为项少龙旧识，却因权势与仇恨步步对立。武功高强，手段狠辣，他在乱世里以阴影行事。每一次交锋都像毒蛇吐信，令人不寒而栗。他的仇恨使他越走越偏，也更危险难测。出自黄易小说《寻秦记》
     default_gender: male
     default_morality: 25
     recruitable: true

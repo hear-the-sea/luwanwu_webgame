@@ -35,7 +35,7 @@ def trigger_skills(attacker, rng: random.Random) -> List[Dict]:
 
     # 运势决定触发率，所有技能共用同一个触发概率
     # 幂函数公式：低运势差距大，高运势收敛到95%上限
-    luck = getattr(attacker, "luck", 50)
+    luck = max(1, getattr(attacker, "luck", 50))  # 防止负数或零导致数学错误
     chance = min(0.95, 0.95 * pow(luck / 300, 0.85))
 
     for skill in attacker.skills:
@@ -87,4 +87,3 @@ def apply_skill_statuses(skills: List[Dict], target, rng: random.Random) -> List
 def _is_active_skill(skill: Dict) -> bool:
     kind = skill.get("kind", "active")
     return str(kind) == "active"
-

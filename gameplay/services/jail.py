@@ -118,8 +118,10 @@ def draw_pie(manor: Manor, prisoner_id: int) -> JailPrisoner:
     # 消耗金条
     consume_inventory_item(manor, GOLD_BAR_ITEM_KEY, cost)
 
-    # 随机降低5-10点忠诚度
-    loyalty_reduction = random.randint(5, 10)
+    # 随机降低忠诚度
+    loyalty_min = int(getattr(PVPConstants, "JAIL_PERSUADE_LOYALTY_MIN", 5) or 5)
+    loyalty_max = int(getattr(PVPConstants, "JAIL_PERSUADE_LOYALTY_MAX", 10) or 10)
+    loyalty_reduction = random.randint(loyalty_min, loyalty_max)
     prisoner.loyalty = max(0, prisoner.loyalty - loyalty_reduction)
     prisoner.save(update_fields=["loyalty"])
     # 存储减少值供视图使用
@@ -214,4 +216,3 @@ def recruit_prisoner(manor: Manor, prisoner_id: int) -> Guest:
     prisoner.status = JailPrisoner.Status.RECRUITED
     prisoner.save(update_fields=["status"])
     return guest
-

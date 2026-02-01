@@ -50,6 +50,28 @@ def guest_key(entry):
 
 
 @register.filter
+def guest_label(entry, labels):
+    """
+    从 enemy_guests 条目中提取展示名称。
+
+    支持两种格式：
+    - 字典: 优先使用 entry["label"]，否则回退到 entry["key"]
+    - 字符串: 直接使用 key
+    """
+    key = ""
+    if isinstance(entry, dict):
+        label = entry.get("label")
+        if label:
+            return label
+        key = entry.get("key", "")
+    elif isinstance(entry, str):
+        key = entry
+    if isinstance(labels, dict):
+        return labels.get(key, key)
+    return key
+
+
+@register.filter
 def building_desc(building_key):
     """
     从 YAML 配置获取建筑描述。

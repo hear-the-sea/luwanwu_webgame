@@ -5,7 +5,7 @@
 
 {% block content %}
 <section class="dashboard">
-    <div class="section-header">
+    <div class="tw-section-header">
         <div>
             <h1>技术研究</h1>
             <p class="caption">研究技术提升庄园实力，当前银两：<strong>{{ manor.silver }}</strong></p>
@@ -13,10 +13,10 @@
     </div>
 
     <!-- 分类标签页 -->
-    <nav class="tech-tabs">
+    <nav class="tw-tech-tabs">
         {% for category in categories %}
         <a href="?tab={{ category.key }}"
-           class="tech-tab {% if current_tab == category.key %}active{% endif %}">
+           class="tw-tech-tab {% if current_tab == category.key %}active{% endif %}">
             {{ category.name }}
         </a>
         {% endfor %}
@@ -24,10 +24,10 @@
 
     <!-- 武艺技术：兵种子标签页 -->
     {% if troop_classes %}
-    <nav class="troop-subtabs">
+    <nav class="tw-troop-subtabs">
         {% for tc in troop_classes %}
         <a href="?tab=martial&troop={{ tc.key }}"
-           class="troop-subtab {% if current_troop_class == tc.key %}active{% endif %}">
+           class="tw-troop-subtab {% if current_troop_class == tc.key %}active{% endif %}">
             {{ tc.name }}
         </a>
         {% endfor %}
@@ -38,15 +38,15 @@
     {% if martial_groups %}
         {% for group in martial_groups %}
         <section class="building-section">
-            <div class="building-grid">
+            <div class="tw-building-grid">
                 {% for tech in group.technologies %}
-                <article class="building-card {% if tech.is_upgrading %}tech-upgrading{% elif not tech.can_upgrade and tech.level >= tech.max_level %}tech-maxed{% endif %}">
+                <article class="tw-building-card {% if tech.is_upgrading %}tw-tech-upgrading{% elif not tech.can_upgrade and tech.level >= tech.max_level %}tw-tech-maxed{% endif %}">
                     <header>
                         <div>
                             <h3>{{ tech.name }}</h3>
-                            <p>{{ tech.description }}</p>
+                            <p class="tw-building-desc">{{ tech.description }}</p>
                         </div>
-                        <span class="badge {% if tech.level >= tech.max_level %}badge-maxed{% elif tech.is_upgrading %}badge-upgrading{% endif %}">
+                        <span class="tw-level-badge {% if tech.level >= tech.max_level %}tw-badge-maxed{% elif tech.is_upgrading %}tw-badge-upgrading{% endif %}">
                             Lv {{ tech.level }} / {{ tech.max_level }}
                         </span>
                     </header>
@@ -77,7 +77,7 @@
                         </div>
                         <div>
                             <dt>升级费用</dt>
-                            <dd class="{% if manor.silver < tech.upgrade_cost %}cost-insufficient{% endif %}">
+                            <dd class="{% if manor.silver < tech.upgrade_cost %}tw-cost-insufficient{% endif %}">
                                 {{ tech.upgrade_cost }} 银两
                             </dd>
                         </div>
@@ -92,15 +92,15 @@
                         <input type="hidden" name="tab" value="{{ current_tab }}">
                         <input type="hidden" name="troop" value="{{ current_troop_class }}">
                         {% if tech.is_upgrading %}
-                            <button type="button" class="btn-secondary btn-block" disabled>研究进行中</button>
+                            <button type="button" class="tw-btn-secondary w-full" disabled>研究进行中</button>
                         {% elif tech.can_upgrade %}
                             {% if manor.silver >= tech.upgrade_cost %}
-                                <button type="submit" class="btn-primary btn-block">升级</button>
+                                <button type="submit" class="tw-btn-primary w-full">升级</button>
                             {% else %}
-                                <button type="button" class="btn-secondary btn-block" disabled>银两不足</button>
+                                <button type="button" class="tw-btn-secondary w-full" disabled>银两不足</button>
                             {% endif %}
                         {% else %}
-                            <button type="button" class="btn-secondary btn-block" disabled>已满级</button>
+                            <button type="button" class="tw-btn-secondary w-full" disabled>已满级</button>
                         {% endif %}
                     </form>
                 </article>
@@ -113,15 +113,15 @@
     <!-- 基本技术/生产技术：直接列表 -->
     {% if technologies %}
     <section class="building-section">
-        <div class="building-grid">
+        <div class="tw-building-grid">
             {% for tech in technologies %}
-            <article class="building-card {% if tech.is_upgrading %}tech-upgrading{% elif not tech.can_upgrade and tech.level >= tech.max_level %}tech-maxed{% endif %}">
+            <article class="tw-building-card {% if tech.is_upgrading %}tw-tech-upgrading{% elif not tech.can_upgrade and tech.level >= tech.max_level %}tw-tech-maxed{% endif %}">
                 <header>
                     <div>
                         <h3>{{ tech.name }}</h3>
-                        <p>{{ tech.description }}</p>
+                        <p class="tw-building-desc">{{ tech.description }}</p>
                     </div>
-                    <span class="badge {% if tech.level >= tech.max_level %}badge-maxed{% elif tech.is_upgrading %}badge-upgrading{% endif %}">
+                    <span class="tw-level-badge {% if tech.level >= tech.max_level %}tw-badge-maxed{% elif tech.is_upgrading %}tw-badge-upgrading{% endif %}">
                         Lv {{ tech.level }} / {{ tech.max_level }}
                     </span>
                 </header>
@@ -152,7 +152,7 @@
                     </div>
                     <div>
                         <dt>升级费用</dt>
-                        <dd class="{% if manor.silver < tech.upgrade_cost %}cost-insufficient{% endif %}">
+                        <dd class="{% if manor.silver < tech.upgrade_cost %}tw-cost-insufficient{% endif %}">
                             {{ tech.upgrade_cost }} 银两
                         </dd>
                     </div>
@@ -166,159 +166,26 @@
                     {% csrf_token %}
                     <input type="hidden" name="tab" value="{{ current_tab }}">
                     {% if tech.is_upgrading %}
-                        <button type="button" class="btn-secondary btn-block" disabled>研究进行中</button>
+                        <button type="button" class="tw-btn-secondary w-full" disabled>研究进行中</button>
                     {% elif tech.can_upgrade %}
                         {% if manor.silver >= tech.upgrade_cost %}
-                            <button type="submit" class="btn-primary btn-block">升级</button>
+                            <button type="submit" class="tw-btn-primary w-full">升级</button>
                         {% else %}
-                            <button type="button" class="btn-secondary btn-block" disabled>银两不足</button>
+                            <button type="button" class="tw-btn-secondary w-full" disabled>银两不足</button>
                         {% endif %}
                     {% else %}
-                        <button type="button" class="btn-secondary btn-block" disabled>已满级</button>
+                        <button type="button" class="tw-btn-secondary w-full" disabled>已满级</button>
                     {% endif %}
                 </form>
             </article>
             {% empty %}
-            <p class="empty-hint">暂无可研究的技术</p>
+            <p class="tw-empty-hint">暂无可研究的技术</p>
             {% endfor %}
         </div>
     </section>
     {% endif %}
 
 </section>
-{% endblock %}
-
-{% block extra_head %}
-<style>
-/* 技术标签页 */
-.tech-tabs {
-    display: flex;
-    gap: 0.5rem;
-    margin-bottom: 1.5rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 3px double var(--border-primary);
-}
-
-.tech-tab {
-    padding: 0.6rem 1.2rem;
-    text-decoration: none;
-    color: var(--text-secondary);
-    font-weight: 600;
-    border: 2px solid transparent;
-    border-radius: 6px 6px 0 0;
-    transition: all 0.2s;
-    background: var(--bg-secondary);
-}
-
-.tech-tab:hover {
-    color: var(--text-primary);
-    background: var(--bg-hover);
-}
-
-.tech-tab.active {
-    color: var(--text-primary);
-    background: var(--bg-card);
-    border-color: var(--border-primary);
-    border-bottom-color: var(--bg-card);
-    margin-bottom: -3px;
-    padding-bottom: calc(0.6rem + 3px);
-}
-
-/* 兵种子标签页 */
-.troop-subtabs {
-    display: flex;
-    gap: 0.25rem;
-    margin-bottom: 1.5rem;
-    background: var(--bg-secondary);
-    padding: 0.5rem;
-    border-radius: 8px;
-    border: 2px solid var(--border-primary);
-}
-
-.troop-subtab {
-    padding: 0.5rem 1rem;
-    text-decoration: none;
-    color: var(--text-secondary);
-    border-radius: 6px;
-    transition: all 0.2s;
-    font-weight: 600;
-    font-size: 0.95rem;
-    border: 2px solid transparent;
-}
-
-.troop-subtab:hover {
-    color: var(--text-primary);
-    background: var(--bg-hover);
-}
-
-.troop-subtab.active {
-    color: var(--text-light);
-    background: linear-gradient(180deg, #8B4513 0%, #6B3410 100%);
-    border-color: #5A2D0C;
-    box-shadow: 0 2px 6px rgba(74, 38, 18, 0.25);
-}
-
-/* 技术卡片额外样式 */
-.tech-maxed {
-    opacity: 0.85;
-}
-
-.tech-maxed header h3 {
-    color: var(--text-muted);
-}
-
-.badge-maxed {
-    background: linear-gradient(135deg, var(--accent-green), #1E3A1F) !important;
-}
-
-.cost-insufficient {
-    color: var(--accent-red) !important;
-    font-weight: 700;
-}
-
-.empty-hint {
-    grid-column: 1 / -1;
-    text-align: center;
-    color: var(--text-muted);
-    padding: 2rem;
-    font-style: italic;
-}
-
-/* 调整 building-section 间距 */
-.building-section {
-    margin-bottom: 2rem;
-}
-
-.building-section .section-title {
-    margin-bottom: 1rem;
-}
-
-.building-section .section-title h2 {
-    font-size: 1.3rem;
-    color: var(--accent-gold);
-}
-
-/* 升级中状态 */
-.tech-upgrading {
-    border-color: var(--accent-gold);
-    box-shadow: 0 0 8px rgba(212, 175, 55, 0.3);
-}
-
-.badge-upgrading {
-    background: linear-gradient(135deg, var(--accent-gold), #B8860B) !important;
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
-}
-
-.countdown {
-    color: var(--accent-gold);
-    font-weight: 700;
-}
-</style>
 {% endblock %}
 
 {% block extra_scripts %}

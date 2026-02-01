@@ -47,12 +47,13 @@ specific_updates = {
     "翁归靡": "他在位期间，是乌孙与汉朝关系的蜜月期。他与解忧公主的结合，不仅是政治联姻，也包含了深厚的感情。他多次上书请求与汉朝联合抗击匈奴，是汉朝最可靠的盟友。"
 }
 
+
 def process_file(filepath):
     with open(filepath, 'r', encoding='utf-8') as f:
         lines = f.readlines()
-    
+
     new_lines = []
-    
+
     count = 0
     for line in lines:
         if line.strip().startswith('|') and '姓名' not in line and '---' not in line:
@@ -61,8 +62,8 @@ def process_file(filepath):
                 name = parts[0]
                 bio = parts[1]
                 type_ = parts[2]
-                rarity = parts[3].strip() # Ensure rarity is clean
-                
+                rarity = parts[3].strip()  # Ensure rarity is clean
+
                 # Check if specific update exists
                 if name in specific_updates:
                     new_bio = bio + specific_updates[name]
@@ -70,7 +71,7 @@ def process_file(filepath):
                     new_lines.append(new_line)
                     count += 1
                     continue
-                
+
                 # Check length, if short, append generic
                 if len(bio) < 150:
                     generic_text = ""
@@ -78,19 +79,20 @@ def process_file(filepath):
                         generic_text = " 他一生以此为念，致力于治国安邦，其言行举止皆为后世士大夫之楷模，在汉代历史上留下了浓墨重彩的一笔，其高尚的品德和卓越的才能，至今仍被人们传颂，是那个时代文臣风骨的最佳写照。"
                     else:
                         generic_text = " 他戎马一生，以此报国，其勇猛与忠诚为后人所称道，在汉代军事史上占有重要一席之地，是当之无愧的猛将，其在战场上的英姿和为国尽忠的精神，激励着一代又一代的后来者。"
-                    
+
                     new_bio = bio + generic_text
                     new_line = f"| {name} | {new_bio} | {type_} | {rarity} |\n"
                     new_lines.append(new_line)
                     count += 1
                     continue
-        
+
         new_lines.append(line)
-    
+
     with open(filepath, 'w', encoding='utf-8') as f:
         f.writelines(new_lines)
-    
+
     print(f"Expanded {count} bios.")
+
 
 if __name__ == "__main__":
     process_file(file_path)

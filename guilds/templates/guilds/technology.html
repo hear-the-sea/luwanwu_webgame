@@ -5,28 +5,28 @@
 
 {% block content %}
 <section class="dashboard">
-    <div class="section-header">
+    <div class="tw-section-header">
         <div>
             <h1>科技研究</h1>
-            <p>{{ guild.name }} · 提升全员生产战斗能力</p>
+            <p class="caption">{{ guild.name }} · 提升全员生产战斗能力</p>
         </div>
-        <div class="nav-links">
-            <a href="{% url 'guilds:detail' guild.id %}" class="btn-secondary">返回帮会</a>
+        <div class="flex gap-2">
+            <a href="{% url 'guilds:detail' guild.id %}" class="tw-btn-primary">返回帮会</a>
         </div>
     </div>
 
     <!-- 生产类科技 -->
-    <section class="card">
+    <section class="tw-card">
         <h2>生产类科技</h2>
-        <p class="muted-text">每日自动生产道具，存入帮会仓库供成员兑换</p>
-        <div class="building-grid">
+        <p class="tw-muted">每日自动生产道具，存入帮会仓库供成员兑换</p>
+        <div class="tw-building-grid">
             {% for tech in technologies %}
                 {% if tech.category == 'production' %}
-                <article class="building-card">
+                <article class="tw-building-card">
                     <header>
                         <div>
                             <h3>{{ tech_names|get_item:tech.tech_key|default:tech.tech_key }}</h3>
-                            <p class="muted-text">
+                            <p class="tw-muted">
                                 {% if tech.tech_key == 'equipment_forge' %}
                                     每日生产装备道具
                                 {% elif tech.tech_key == 'experience_refine' %}
@@ -38,9 +38,9 @@
                                 {% endif %}
                             </p>
                         </div>
-                        <span class="badge">Lv {{ tech.level }}</span>
+                        <span class="tw-badge-gold">Lv {{ tech.level }}</span>
                     </header>
-                    <dl class="guild-dl">
+                    <dl class="tw-guild-dl">
                         <div>
                             <dt>当前等级</dt>
                             <dd>{{ tech.level }} / {{ tech.max_level }}</dd>
@@ -58,19 +58,19 @@
                         {% if tech.level < tech.max_level %}
                         <div>
                             <dt>升级成本</dt>
-                            <dd class="muted-text">需消耗帮会资源</dd>
+                            <dd class="tw-muted">需消耗帮会资源</dd>
                         </div>
                         {% endif %}
                     </dl>
                     {% if member.can_manage %}
                         <form method="post" action="{% url 'guilds:upgrade_tech' tech.tech_key %}">
                             {% csrf_token %}
-                            <button type="submit" class="btn-primary" {% if tech.level >= tech.max_level %}disabled{% endif %}>
+                            <button type="submit" class="tw-btn-primary" {% if tech.level >= tech.max_level %}disabled{% endif %}>
                                 {% if tech.level >= tech.max_level %}已满级{% else %}升级{% endif %}
                             </button>
                         </form>
                     {% else %}
-                        <button type="button" class="btn-secondary" disabled>需管理权限</button>
+                        <button type="button" class="tw-btn-secondary" disabled>需管理权限</button>
                     {% endif %}
                 </article>
                 {% endif %}
@@ -79,7 +79,7 @@
     </section>
 
     <!-- 战斗类科技 -->
-    <section class="card guild-section-spacing">
+    <section class="tw-card tw-guild-section-spacing">
         <h2>战斗类科技</h2>
         <p class="muted-text">提升全体成员门客的战斗属性</p>
         <div class="building-grid">
@@ -99,9 +99,9 @@
                                 {% endif %}
                             </p>
                         </div>
-                        <span class="badge">Lv {{ tech.level }}</span>
+                        <span class="tw-badge-gold">Lv {{ tech.level }}</span>
                     </header>
-                    <dl class="guild-dl">
+                    <dl class="tw-guild-dl">
                         <div>
                             <dt>当前等级</dt>
                             <dd>{{ tech.level }} / {{ tech.max_level }}</dd>
@@ -110,9 +110,9 @@
                             <dt>当前加成</dt>
                             <dd>
                                 {% if tech.level > 0 %}
-                                    <span class="guild-tech-effect">+{{ tech.level|mul:5 }}%</span>
+                                    <span class="tw-guild-tech-effect">+{{ tech.level|mul:5 }}%</span>
                                 {% else %}
-                                    <span class="guild-tech-inactive">未激活</span>
+                                    <span class="tw-guild-tech-inactive">未激活</span>
                                 {% endif %}
                             </dd>
                         </div>
@@ -123,19 +123,19 @@
                         </div>
                         <div>
                             <dt>升级成本</dt>
-                            <dd class="muted-text">需消耗帮会资源</dd>
+                            <dd class="tw-muted">需消耗帮会资源</dd>
                         </div>
                         {% endif %}
                     </dl>
                     {% if member.can_manage %}
                         <form method="post" action="{% url 'guilds:upgrade_tech' tech.tech_key %}">
                             {% csrf_token %}
-                            <button type="submit" class="btn-primary" {% if tech.level >= tech.max_level %}disabled{% endif %}>
+                            <button type="submit" class="tw-btn-primary" {% if tech.level >= tech.max_level %}disabled{% endif %}>
                                 {% if tech.level >= tech.max_level %}已满级{% else %}升级{% endif %}
                             </button>
                         </form>
                     {% else %}
-                        <button type="button" class="btn-secondary" disabled>需管理权限</button>
+                        <button type="button" class="tw-btn-secondary" disabled>需管理权限</button>
                     {% endif %}
                 </article>
                 {% endif %}
@@ -144,7 +144,7 @@
     </section>
 
     <!-- 福利类科技 -->
-    <section class="card guild-section-spacing">
+    <section class="tw-card tw-guild-section-spacing">
         <h2>福利类科技</h2>
         <p class="muted-text">提升全体成员的资源产出和行动效率</p>
         <div class="building-grid">
@@ -164,9 +164,9 @@
                                 {% endif %}
                             </p>
                         </div>
-                        <span class="badge">Lv {{ tech.level }}</span>
+                        <span class="tw-badge-gold">Lv {{ tech.level }}</span>
                     </header>
-                    <dl class="guild-dl">
+                    <dl class="tw-guild-dl">
                         <div>
                             <dt>当前等级</dt>
                             <dd>{{ tech.level }} / {{ tech.max_level }}</dd>
@@ -176,14 +176,14 @@
                             <dd>
                                 {% if tech.level > 0 %}
                                     {% if tech.tech_key == 'resource_boost' %}
-                                        <span class="guild-tech-effect">+{{ tech.level|mul:10 }}%</span>
+                                        <span class="tw-guild-tech-effect">+{{ tech.level|mul:10 }}%</span>
                                     {% elif tech.tech_key == 'march_speed' %}
-                                        <span class="guild-tech-effect">-{{ tech.level|mul:5 }}%</span>
+                                        <span class="tw-guild-tech-effect">-{{ tech.level|mul:5 }}%</span>
                                     {% else %}
-                                        <span class="guild-tech-effect">+{{ tech.level|mul:5 }}%</span>
+                                        <span class="tw-guild-tech-effect">+{{ tech.level|mul:5 }}%</span>
                                     {% endif %}
                                 {% else %}
-                                    <span class="guild-tech-inactive">未激活</span>
+                                    <span class="tw-guild-tech-inactive">未激活</span>
                                 {% endif %}
                             </dd>
                         </div>
@@ -192,29 +192,29 @@
                             <dt>下级加成</dt>
                             <dd>
                                 {% if tech.tech_key == 'resource_boost' %}
-                                    <span class="guild-tech-effect">+{{ tech.level|add:1|mul:10 }}%</span>
+                                    <span class="tw-guild-tech-effect">+{{ tech.level|add:1|mul:10 }}%</span>
                                 {% elif tech.tech_key == 'march_speed' %}
-                                    <span class="guild-tech-effect">-{{ tech.level|add:1|mul:5 }}%</span>
+                                    <span class="tw-guild-tech-effect">-{{ tech.level|add:1|mul:5 }}%</span>
                                 {% else %}
-                                    <span class="guild-tech-effect">+{{ tech.level|add:1|mul:5 }}%</span>
+                                    <span class="tw-guild-tech-effect">+{{ tech.level|add:1|mul:5 }}%</span>
                                 {% endif %}
                             </dd>
                         </div>
                         <div>
                             <dt>升级成本</dt>
-                            <dd class="muted-text">需消耗帮会资源</dd>
+                            <dd class="tw-muted">需消耗帮会资源</dd>
                         </div>
                         {% endif %}
                     </dl>
                     {% if member.can_manage %}
                         <form method="post" action="{% url 'guilds:upgrade_tech' tech.tech_key %}">
                             {% csrf_token %}
-                            <button type="submit" class="btn-primary" {% if tech.level >= tech.max_level %}disabled{% endif %}>
+                            <button type="submit" class="tw-btn-primary" {% if tech.level >= tech.max_level %}disabled{% endif %}>
                                 {% if tech.level >= tech.max_level %}已满级{% else %}升级{% endif %}
                             </button>
                         </form>
                     {% else %}
-                        <button type="button" class="btn-secondary" disabled>需管理权限</button>
+                        <button type="button" class="tw-btn-secondary" disabled>需管理权限</button>
                     {% endif %}
                 </article>
                 {% endif %}

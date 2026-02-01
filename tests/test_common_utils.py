@@ -60,4 +60,3 @@ def test_safe_apply_async_swallows_dispatch_errors():
 
     logger = logging.getLogger("tests.safe_apply_async")
     assert safe_apply_async(DummyTask(), logger=logger) is False
-

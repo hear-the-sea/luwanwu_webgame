@@ -161,7 +161,7 @@
             <div class="card-icon">⚔️</div>
             <h3>战斗模拟</h3>
             <p>使用预设配置运行战斗模拟，快速测试战斗结果</p>
-            <a href="{% url 'battle_debugger:simulate' %}" class="btn-primary">
+            <a href="{% url 'battle_debugger:simulate' %}" class="tw-btn-primary">
                 开始模拟
             </a>
         </div>
@@ -170,7 +170,7 @@
             <div class="card-icon">⚙️</div>
             <h3>自定义配置</h3>
             <p>完全自定义门客、护院和战斗参数，精确控制战斗条件</p>
-            <a href="{% url 'battle_debugger:custom_config' %}" class="btn-primary">
+            <a href="{% url 'battle_debugger:custom_config' %}" class="tw-btn-primary">
                 自定义配置
             </a>
         </div>
@@ -179,7 +179,7 @@
             <div class="card-icon">📊</div>
             <h3>参数调优</h3>
             <p>对比不同参数值的影响，找出最佳战斗平衡点</p>
-            <a href="{% url 'battle_debugger:tune' %}" class="btn-secondary">
+            <a href="{% url 'battle_debugger:tune' %}" class="tw-btn-secondary">
                 参数调优
             </a>
         </div>
@@ -197,7 +197,7 @@
                     <a href="{% url 'battle_debugger:preset_detail' preset.name %}" class="btn-outline">
                         查看详情
                     </a>
-                    <a href="{% url 'battle_debugger:simulate' %}?preset={{ preset.name }}" class="btn-primary btn-small">
+                    <a href="{% url 'battle_debugger:simulate' %}?preset={{ preset.name }}" class="tw-btn-primary tw-btn-sm">
                         使用配置
                     </a>
                 </div>

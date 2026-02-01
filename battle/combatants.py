@@ -3,9 +3,9 @@ from __future__ import annotations
 import logging
 import random
 from dataclasses import dataclass, field
-from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
+from django.core.cache import cache
 from django.db import DatabaseError
 from django.utils import timezone
 
@@ -18,17 +18,39 @@ logger = logging.getLogger(__name__)
 
 # ============ 模板缓存 ============
 
-@lru_cache(maxsize=1)
+# 缓存配置
+GUEST_TEMPLATE_CACHE_KEY = "battle:guest_templates"
+GUEST_TEMPLATE_CACHE_TTL = 300  # 5分钟缓存，跨进程共享
+
+
 def _get_all_guest_templates() -> Dict[str, GuestTemplate]:
-    """缓存所有门客模板（按 key 索引）"""
-    return {t.key: t for t in GuestTemplate.objects.all()}
+    """
+    获取所有门客模板（使用 Django 缓存，跨进程共享）
+
+    安全修复：从 @lru_cache 改为 Django 缓存框架
+    - lru_cache 是进程内缓存，多进程环境下数据不一致
+    - Django 缓存（如 Redis）可跨进程共享，保证数据一致性
+
+    注意：缓存模板的 key 列表，每次使用时重新查询模板对象
+    避免将 Django 模型对象直接放入缓存（可能有序列化问题）
+    """
+    cached_keys = cache.get(GUEST_TEMPLATE_CACHE_KEY)
+    if cached_keys is not None:
+        # 根据缓存的 keys 查询模板（避免全表扫描）
+        return {t.key: t for t in GuestTemplate.objects.filter(key__in=cached_keys)}
+
+    # 首次查询，获取所有模板并缓存 keys
+    templates = {t.key: t for t in GuestTemplate.objects.all()}
+    cache.set(GUEST_TEMPLATE_CACHE_KEY, list(templates.keys()), timeout=GUEST_TEMPLATE_CACHE_TTL)
+    return templates
 
 
 def clear_guest_template_cache() -> None:
     """清除门客模板缓存（模板变更时调用）"""
-    _get_all_guest_templates.cache_clear()
+    cache.delete(GUEST_TEMPLATE_CACHE_KEY)
 
 # ============ 门客战斗常量 ============
+
 
 # 默认敏捷值（当门客无敏捷属性时使用）
 DEFAULT_GUEST_AGILITY = 80
@@ -165,7 +187,10 @@ def serialize_skills(guest: Guest, override_skill_keys: Optional[List[str]] = No
     if getattr(guest, "pk", None) is not None:
         if hasattr(guest, "skills"):
             try:
-                for skill in guest.skills.all():
+                # 使用 prefetch 缓存的技能数据避免 N+1 查询
+                # 如果调用方已经使用 prefetch_related("skills") 预加载，这里直接使用缓存
+                skills_qs = guest.skills.all()
+                for skill in skills_qs:
                     data.append(
                         {
                             "key": skill.key,
@@ -189,7 +214,9 @@ def serialize_skills(guest: Guest, override_skill_keys: Optional[List[str]] = No
         template = getattr(guest, "template", None)
         if template and hasattr(template, "initial_skills"):
             try:
-                for skill in template.initial_skills.all():
+                # 使用 prefetch 缓存的技能数据避免 N+1 查询
+                skills_qs = template.initial_skills.all()
+                for skill in skills_qs:
                     data.append(
                         {
                             "key": skill.key,
@@ -273,6 +300,10 @@ def build_guest_combatants(
     """
     team: List[Combatant] = []
     use_limit = limit if limit is not None else MAX_SQUAD
+
+    # 安全修复：属性上限，防止数值溢出
+    MAX_STAT_VALUE = 999999
+
     for guest in guests[:use_limit]:
         stats = guest.stat_block()
 
@@ -283,11 +314,12 @@ def build_guest_combatants(
         hp_mult = 1.0 + bonuses.get("hp", 0)
         agility_mult = 1.0 + bonuses.get("agility", 0)
 
-        attack = int(stats["attack"] * attack_mult)
-        defense = int(stats["defense"] * defense_mult)
+        # 安全修复：限制属性最大值，防止溢出
+        attack = min(MAX_STAT_VALUE, int(stats["attack"] * attack_mult))
+        defense = min(MAX_STAT_VALUE, int(stats["defense"] * defense_mult))
 
         # 战斗中的血量上限（来自 max_hp 并叠加战斗加成）
-        max_hp = int(stats["hp"] * hp_mult)
+        max_hp = min(MAX_STAT_VALUE, int(stats["hp"] * hp_mult))
 
         # 门客参战血量使用持久化的 current_hp；AI/未保存门客默认满血
         if getattr(guest, "pk", None) is not None:

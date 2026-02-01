@@ -4,6 +4,7 @@
 """
 import math
 
+
 def calculate_total_time(base_time, time_growth, max_level):
     """计算总升级时间（秒）"""
     total = 0
@@ -13,6 +14,7 @@ def calculate_total_time(base_time, time_growth, max_level):
         total += duration
     return total
 
+
 def calculate_total_cost(base_cost, cost_growth, max_level):
     """计算总升级成本"""
     total = 0
@@ -21,6 +23,7 @@ def calculate_total_cost(base_cost, cost_growth, max_level):
         cost = math.ceil(base_cost * multiplier)
         total += cost
     return total
+
 
 # 目标：6个月 = 180天 = 180 * 86400秒 = 15,552,000秒
 TARGET_DAYS = 180

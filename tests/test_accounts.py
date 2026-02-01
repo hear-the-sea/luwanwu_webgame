@@ -21,4 +21,3 @@ def test_user_can_register(client):
     )
     assert response.status_code == 302
     assert User.objects.filter(username="test-user").exists()
-

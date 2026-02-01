@@ -284,4 +284,3 @@ class Message(models.Model):
             parts.append(f"{len(items)}种道具")
 
         return "、".join(parts) if parts else "附件"
-

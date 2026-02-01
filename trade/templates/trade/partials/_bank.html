@@ -1,236 +1,70 @@
-<div class="bank-container">
-    <div class="bank-section">
-        <h3>金条兑换</h3>
-        <div class="bank-info">
-            <div class="info-row highlight-row">
-                <span class="info-label">当前汇率：</span>
-                <span class="info-value highlight">{{ bank_info.current_rate|floatformat:0 }} 银两/根</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">下一根汇率：</span>
-                <span class="info-value">{{ bank_info.next_rate|floatformat:0 }} 银两/根</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">单根总价：</span>
-                <span class="info-value">{{ bank_info.total_cost_per_bar|floatformat:0 }} 银两 <small>(含{{ bank_info.gold_bar_fee_rate|floatformat:0 }}%手续费)</small></span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">今日已兑换：</span>
-                <span class="info-value">{{ bank_info.today_count }} 根</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">当前银两：</span>
-                <span class="info-value">{{ bank_info.manor_silver|floatformat:0 }} 两</span>
-            </div>
+<div class="tw-bank-section">
+    <h3>金条兑换</h3>
+    <div class="tw-bank-info">
+        <div class="tw-info-row highlight">
+            <span class="tw-info-label">当前汇率：</span>
+            <span class="tw-info-value highlight">{{ bank_info.current_rate|floatformat:0 }} 银两/根</span>
         </div>
-
-        <div class="rate-factors">
-            <div class="factor-item">
-                <span class="factor-label">全服金条量</span>
-                <span class="factor-value">{{ bank_info.effective_supply }}</span>
-            </div>
-            <div class="factor-item">
-                <span class="factor-label">总量系数</span>
-                <span class="factor-value {% if bank_info.supply_factor > 1 %}factor-up{% else %}factor-down{% endif %}">
-                    ×{{ bank_info.supply_factor }}
-                </span>
-            </div>
-            <div class="factor-item">
-                <span class="factor-label">累进系数</span>
-                <span class="factor-value {% if bank_info.progressive_factor > 1 %}factor-up{% endif %}">
-                    ×{{ bank_info.progressive_factor }}
-                </span>
-            </div>
+        <div class="tw-info-row">
+            <span class="tw-info-label">下一根汇率：</span>
+            <span class="tw-info-value">{{ bank_info.next_rate|floatformat:0 }} 银两/根</span>
         </div>
-
-        <form method="post" action="{% url 'trade:exchange_gold_bar' %}" class="exchange-form">
-            {% csrf_token %}
-            <div class="form-group">
-                <label for="quantity">兑换数量：</label>
-                <input type="number"
-                       name="quantity"
-                       id="quantity"
-                       value="1"
-                       min="1"
-                       max="99"
-                       class="quantity-input"
-                       required>
-            </div>
-            <button type="submit" class="btn-primary">兑换金条</button>
-        </form>
-
-        <div class="bank-tips">
-            <h4>汇率说明</h4>
-            <ul>
-                <li><strong>基准价：</strong>{{ bank_info.gold_bar_base_price|floatformat:0 }} 银两/根</li>
-                <li><strong>价格区间：</strong>{{ bank_info.gold_bar_min_price|floatformat:0 }} ~ {{ bank_info.gold_bar_max_price|floatformat:0 }} 银两</li>
-                <li><strong>总量系数：</strong>全服活跃玩家金条越多，价格越高</li>
-                <li><strong>累进系数：</strong>当日兑换越多，单价越贵（每根+5%）</li>
-            </ul>
+        <div class="tw-info-row">
+            <span class="tw-info-label">单根总价：</span>
+            <span class="tw-info-value">{{ bank_info.total_cost_per_bar|floatformat:0 }} 银两 <small class="text-text-secondary">(含{{ bank_info.gold_bar_fee_rate|floatformat:0 }}%手续费)</small></span>
+        </div>
+        <div class="tw-info-row">
+            <span class="tw-info-label">今日已兑换：</span>
+            <span class="tw-info-value">{{ bank_info.today_count }} 根</span>
+        </div>
+        <div class="tw-info-row">
+            <span class="tw-info-label">当前银两：</span>
+            <span class="tw-info-value">{{ bank_info.manor_silver|floatformat:0 }} 两</span>
         </div>
     </div>
+
+    <div class="tw-rate-factors">
+        <div class="tw-factor-item">
+            <span class="tw-factor-label">全服金条量</span>
+            <span class="tw-factor-value">{{ bank_info.effective_supply }}</span>
+        </div>
+        <div class="tw-factor-item">
+            <span class="tw-factor-label">总量系数</span>
+            <span class="tw-factor-value {% if bank_info.supply_factor > 1 %}up{% else %}down{% endif %}">
+                ×{{ bank_info.supply_factor }}
+            </span>
+        </div>
+        <div class="tw-factor-item">
+            <span class="tw-factor-label">累进系数</span>
+            <span class="tw-factor-value {% if bank_info.progressive_factor > 1 %}up{% endif %}">
+                ×{{ bank_info.progressive_factor }}
+            </span>
+        </div>
+    </div>
+
+    <form method="post" action="{% url 'trade:exchange_gold_bar' %}" class="tw-exchange-form">
+        {% csrf_token %}
+        <div class="tw-form-field">
+            <label for="quantity">兑换数量：</label>
+            <input type="number"
+                   name="quantity"
+                   id="quantity"
+                   value="1"
+                   min="1"
+                   max="99"
+                   class="tw-input"
+                   required>
+        </div>
+        <button type="submit" class="tw-btn-primary w-full mt-4">兑换金条</button>
+    </form>
+
+    <div class="tw-bank-tips">
+        <h4>汇率说明</h4>
+        <ul>
+            <li><strong>基准价：</strong>{{ bank_info.gold_bar_base_price|floatformat:0 }} 银两/根</li>
+            <li><strong>价格区间：</strong>{{ bank_info.gold_bar_min_price|floatformat:0 }} ~ {{ bank_info.gold_bar_max_price|floatformat:0 }} 银两</li>
+            <li><strong>总量系数：</strong>全服活跃玩家金条越多，价格越高</li>
+            <li><strong>累进系数：</strong>当日兑换越多，单价越贵（每根+5%）</li>
+        </ul>
+    </div>
 </div>
-
-<style>
-.bank-container {
-    padding: 0rem;
-}
-
-.bank-section {
-    background: var(--bg-card);
-    border-radius: 8px;
-    padding: 1.5rem;
-    max-width: 600px;
-}
-
-.bank-section h3 {
-    margin-top: 0;
-    margin-bottom: 1.5rem;
-    color: var(--text-primary);
-    border-bottom: 2px solid var(--border-primary);
-    padding-bottom: 0.5rem;
-}
-
-.bank-info {
-    margin-bottom: 1rem;
-}
-
-.info-row {
-    display: flex;
-    justify-content: space-between;
-    padding: 0.5rem 0;
-    border-bottom: 1px solid var(--border-secondary);
-}
-
-.info-row:last-child {
-    border-bottom: none;
-}
-
-.info-row.highlight-row {
-    background: linear-gradient(90deg, rgba(245,158,11,0.1) 0%, transparent 100%);
-    margin: 0 -0.5rem;
-    padding: 0.75rem 0.5rem;
-    border-radius: 6px;
-    border-bottom: none;
-}
-
-.info-label {
-    color: var(--text-secondary);
-    font-weight: 500;
-}
-
-.info-value {
-    color: var(--text-primary);
-    font-weight: 600;
-}
-
-.info-value.highlight {
-    color: #f59e0b;
-    font-size: 1.15rem;
-}
-
-.info-value small {
-    color: var(--text-secondary);
-    font-weight: 400;
-    font-size: 0.85em;
-}
-
-.rate-factors {
-    display: flex;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-    padding: 0.75rem;
-    background: var(--bg-secondary);
-    border-radius: 6px;
-}
-
-.factor-item {
-    flex: 1;
-    text-align: center;
-}
-
-.factor-label {
-    display: block;
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-    margin-bottom: 0.25rem;
-}
-
-.factor-value {
-    font-weight: 700;
-    color: var(--text-primary);
-}
-
-.factor-value.factor-up {
-    color: #ef4444;
-}
-
-.factor-value.factor-down {
-    color: #10b981;
-}
-
-.exchange-form {
-    margin: 1.5rem 0;
-    padding: 1rem;
-    background: var(--bg-secondary);
-    border-radius: 6px;
-}
-
-.form-group {
-    margin-bottom: 1rem;
-}
-
-.form-group label {
-    display: block;
-    margin-bottom: 0.5rem;
-    color: var(--text-primary);
-    font-weight: 500;
-}
-
-.quantity-input {
-    width: 100%;
-    padding: 0.5rem;
-    border: 1px solid var(--border-primary);
-    border-radius: 4px;
-    font-size: 1rem;
-}
-
-.quantity-input:focus {
-    outline: none;
-    border-color: #2563eb;
-}
-
-.exchange-form .btn-primary {
-    width: 100%;
-    padding: 0.75rem;
-    font-size: 1rem;
-}
-
-.bank-tips {
-    margin-top: 1.5rem;
-    padding: 1rem;
-    background: var(--bg-secondary);
-    border-radius: 6px;
-}
-
-.bank-tips h4 {
-    margin-top: 0;
-    margin-bottom: 0.75rem;
-    color: var(--text-primary);
-}
-
-.bank-tips ul {
-    margin: 0;
-    padding-left: 1.5rem;
-}
-
-.bank-tips li {
-    color: var(--text-secondary);
-    margin-bottom: 0.5rem;
-    line-height: 1.5;
-}
-
-.bank-tips li strong {
-    color: var(--text-primary);
-}
-</style>

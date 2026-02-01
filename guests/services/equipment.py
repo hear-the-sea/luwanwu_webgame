@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
 from ..models import GearItem, GearSlot, GearTemplate, Guest, GuestRarity
 from ..utils.equipment_utils import EQUIP_SLOT_MAP, SET_STAT_FIELD_MAP, compute_set_bonus
+from django.db import transaction
 
 
 def apply_set_bonuses(guest: Guest) -> Dict[str, int]:
@@ -111,6 +112,7 @@ def ensure_inventory_gears(manor: Manor, *, slot: str | None = None) -> None:
             GearItem.objects.filter(id__in=[g.id for g in to_delete]).delete()
 
 
+@transaction.atomic
 def equip_guest(gear: GearItem, guest: Guest) -> GearItem:
     """
     为门客装备道具。
@@ -127,19 +129,24 @@ def equip_guest(gear: GearItem, guest: Guest) -> GearItem:
     """
     from gameplay.models import InventoryItem
 
+    # 使用 select_for_update 锁定装备和门客，防止并发问题
+    gear = GearItem.objects.select_for_update().get(pk=gear.pk)
+    guest = Guest.objects.select_for_update().get(pk=guest.pk)
+
     slot_capacity = {
         GearSlot.DEVICE: 3,
         GearSlot.ORNAMENT: 3,
     }
     slot = gear.template.slot
     capacity = slot_capacity.get(slot, 1)
-    if gear.manor != guest.manor:
+    if gear.manor_id != guest.manor_id:
         raise EquipmentError("无法装备其他庄园的装备")
-    if gear.guest and gear.guest != guest:
+    if gear.guest_id and gear.guest_id != guest.id:
         raise EquipmentAlreadyEquippedError()
     if gear.guest_id == guest.id:
         return gear
-    existing_items = list(guest.gear_items.filter(template__slot=slot))
+    # 锁定该槽位的现有装备，防止并发修改
+    existing_items = list(guest.gear_items.select_for_update().filter(template__slot=slot))
     for item in existing_items:
         if item.template.name == gear.template.name:
             raise DuplicateEquipmentError()
@@ -208,6 +215,7 @@ def equip_guest(gear: GearItem, guest: Guest) -> GearItem:
     return gear
 
 
+@transaction.atomic
 def unequip_guest_item(gear: GearItem, guest: Guest) -> GearItem:
     """
     卸下门客的装备道具。

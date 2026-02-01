@@ -15,7 +15,6 @@ from core.utils.time_scale import scale_duration
 
 from ..constants import BuildingKeys
 from ..models import HorseProduction, Manor
-from .notifications import notify_user
 
 
 # 马匹配置

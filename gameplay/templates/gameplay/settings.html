@@ -5,60 +5,60 @@
 
 {% block content %}
 <section class="dashboard">
-    <div class="section-header">
+    <div class="tw-section-header">
         <h1>设置</h1>
     </div>
 
-    <section class="panel" style="margin-bottom: 1rem;">
-        <div class="panel-header">庄园信息</div>
-        <div class="panel-content">
-            <div style="margin-bottom: 1.5rem;">
-                <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
-                    <label style="font-weight: bold; min-width: 80px;">当前名称:</label>
-                    <span style="font-size: 1.1em;">{{ manor.display_name }}</span>
+    <section class="tw-panel">
+        <div class="tw-panel-header">庄园信息</div>
+        <div class="tw-panel-content">
+            <div class="mb-6">
+                <div class="flex items-center gap-4 mb-2">
+                    <label class="font-bold min-w-[80px]">当前名称:</label>
+                    <span class="text-lg">{{ manor.display_name }}</span>
                 </div>
-                <div style="display: flex; align-items: center; gap: 1rem;">
-                    <label style="font-weight: bold; min-width: 80px;">账号:</label>
+                <div class="flex items-center gap-4">
+                    <label class="font-bold min-w-[80px]">账号:</label>
                     <span>{{ user.username }}</span>
                 </div>
             </div>
 
-            <hr style="border: none; border-top: 1px solid var(--border-primary); margin: 1.5rem 0;">
+            <hr class="border-t border-border-primary my-6">
 
-            <h3 style="margin-bottom: 1rem;">庄园更名</h3>
+            <h3 class="mb-4 text-lg font-semibold">庄园更名</h3>
 
             {% if rename_card_count > 0 %}
-            <form method="post" action="{% url 'gameplay:rename_manor' %}" style="max-width: 400px;">
+            <form method="post" action="{% url 'gameplay:rename_manor' %}" class="max-w-md">
                 {% csrf_token %}
-                <div style="margin-bottom: 1rem;">
-                    <label for="new_name" style="display: block; margin-bottom: 0.5rem;">新名称:</label>
+                <div class="mb-4">
+                    <label for="new_name" class="block mb-2 font-medium">新名称:</label>
                     <input type="text"
                            id="new_name"
                            name="new_name"
                            maxlength="12"
                            placeholder="2-12个字符，支持中英文数字下划线"
-                           style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-primary); border-radius: 4px; background: var(--bg-input); color: var(--text-primary);"
+                           class="tw-input"
                            required>
                 </div>
-                <div style="display: flex; align-items: center; gap: 1rem;">
-                    <button type="submit" class="btn-primary">
+                <div class="flex items-center gap-4 flex-wrap">
+                    <button type="submit" class="tw-btn-primary">
                         确认更名
                     </button>
-                    <span style="color: var(--text-muted);">
-                        (消耗1张庄园命名卡，当前拥有: <strong style="color: var(--accent-green);">{{ rename_card_count }}</strong> 张)
+                    <span class="text-text-muted">
+                        (消耗1张庄园命名卡，当前拥有: <strong class="text-accent-green">{{ rename_card_count }}</strong> 张)
                     </span>
                 </div>
             </form>
             {% else %}
-            <div style="padding: 1rem; background: var(--bg-secondary); border-radius: 4px; color: var(--text-muted);">
-                <p style="margin: 0;">您没有庄园命名卡，无法更名。</p>
-                <p style="margin: 0.5rem 0 0 0;">可通过商铺购买或活动获取。</p>
+            <div class="p-4 bg-bg-secondary rounded text-text-muted">
+                <p class="m-0">您没有庄园命名卡，无法更名。</p>
+                <p class="mt-2 mb-0">可通过商铺购买或活动获取。</p>
             </div>
             {% endif %}
 
-            <div style="margin-top: 1.5rem; padding: 1rem; background: var(--bg-secondary); border-radius: 4px;">
-                <h4 style="margin: 0 0 0.5rem 0; color: var(--text-secondary);">命名规则:</h4>
-                <ul style="margin: 0; padding-left: 1.5rem; color: var(--text-muted);">
+            <div class="mt-6 p-4 bg-bg-secondary rounded">
+                <h4 class="m-0 mb-2 text-text-secondary font-semibold">命名规则:</h4>
+                <ul class="m-0 pl-6 text-text-muted space-y-1">
                     <li>名称长度: 2-12 个字符</li>
                     <li>仅支持中文、英文、数字和下划线</li>
                     <li>名称具有唯一性，不可与他人重复</li>

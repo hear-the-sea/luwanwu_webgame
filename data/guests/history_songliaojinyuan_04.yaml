@@ -1,11 +1,10 @@
-# 历史人物门客 - 宋辽金元（第04批：绿色50人；key 0159-0208）
-
 heroes:
   green:
   - key: hist_songliaojinyuan_0159
     name: 刘攽
+    default_gender: male
     archetype: civil
-    flavor: '（1023年-1089年）北宋史学家，《资治通鉴》编修助手。他协助司马光编纂《资治通鉴》，贡献巨大。'
+    flavor: （1023年-1089年）北宋史学家，《资治通鉴》编修助手。他协助司马光编纂《资治通鉴》，贡献巨大。其事迹亦常被后世史家与学者反复论述。其事迹在地方志、史书与文人笔记中屡有记载，形象亦被后世戏曲与传说不断演绎，影响延续至今。
     growth_range:
     - 4
     - 7
@@ -16,8 +15,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0160
     name: 刘恕
+    default_gender: male
     archetype: civil
-    flavor: '（1032年-1078年）北宋史学家，《资治通鉴外纪》作者。他与司马光共同编修史书，是重要的史学家。'
+    flavor: （1032年-1078年）北宋史学家，《资治通鉴外纪》作者。他与司马光共同编修史书，是重要的史学家。其事迹亦常被后世史家与学者反复论述。其事迹在地方志、史书与文人笔记中屡有记载，形象亦被后世戏曲与传说不断演绎，影响延续至今。
     growth_range:
     - 4
     - 7
@@ -28,8 +28,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0161
     name: 王安国
+    default_gender: male
     archetype: civil
-    flavor: '（1028年-1074年）北宋诗人，王安石之弟。他诗才出众，却与兄长政见不同。'
+    flavor: （1028年-1074年）北宋诗人，王安石之弟。他诗才出众，却与兄长政见不同。其事迹亦常被后世史家与学者反复论述。其事迹在地方志、史书与文人笔记中屡有记载，形象亦被后世戏曲与传说不断演绎，影响延续至今。
     growth_range:
     - 4
     - 7
@@ -40,8 +41,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0162
     name: 王雱
+    default_gender: male
     archetype: civil
-    flavor: '（1044年-1076年）王安石之子，新党骨干。他参与变法，编纂《三经新义》。他英年早逝，令父悲痛。'
+    flavor: （1044年-1076年）王安石之子，新党骨干。他参与变法，编纂《三经新义》。他英年早逝，令父悲痛。其事迹亦常被后世史家与学者反复论述。其事迹在地方志、史书与文人笔记中屡有记载，形象亦被后世戏曲与传说不断演绎，影响延续至今。
     growth_range:
     - 4
     - 7
@@ -52,8 +54,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0163
     name: 郑侠
+    default_gender: male
     archetype: civil
-    flavor: '（1041年-1119年）北宋名臣，以《流民图》上书闻名。他用画作揭示民间疾苦，促成新法暂停。'
+    flavor: （1041年-1119年）北宋名臣，以《流民图》上书闻名。他用画作揭示民间疾苦，促成新法暂停。其事迹亦常被后世史家与学者反复论述。其事迹在地方志、史书与文人笔记中屡有记载，形象亦被后世戏曲与传说不断演绎，影响延续至今。
     growth_range:
     - 4
     - 7
@@ -64,8 +67,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0164
     name: 李廌
+    default_gender: male
     archetype: civil
-    flavor: '（1059年-1109年）北宋诗人，苏门六君子之一。他是苏轼的得意门生，诗文俱佳。'
+    flavor: （1059年-1109年）北宋诗人，苏门六君子之一。他是苏轼的得意门生，诗文俱佳。其事迹亦常被后世史家与学者反复论述。其事迹在地方志、史书与文人笔记中屡有记载，形象亦被后世戏曲与传说不断演绎，影响延续至今。
     growth_range:
     - 4
     - 7
@@ -76,8 +80,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0165
     name: 张邦昌
+    default_gender: male
     archetype: civil
-    flavor: '（1081年-1127年）北宋末大臣，靖康之变后被迫拥立伪楚。风雨飘摇间，他既是权力裹挟的傀儡，也是乱世政治的缩影。旋即被南渡朝廷处死，留下“亡国之际，谁能自全”的沉重叩问。'
+    flavor: （1081年-1127年）北宋末大臣，靖康之变后被迫拥立伪楚。风雨飘摇间，他既是权力裹挟的傀儡，也是乱世政治的缩影。旋即被南渡朝廷处死，留下“亡国之际，谁能自全”的沉重叩问。其事迹亦常被后世史家与学者反复论述。
     growth_range:
     - 4
     - 7
@@ -88,8 +93,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0166
     name: 吕本中
+    default_gender: male
     archetype: civil
-    flavor: '（1084年-1145年）两宋之际诗人，《江西诗社宗派图》作者。他总结了江西诗派的发展，是重要的诗论家。'
+    flavor: （1084年-1145年）两宋之际诗人，《江西诗社宗派图》作者。他总结了江西诗派的发展，是重要的诗论家。其事迹亦常被后世史家与学者反复论述。其事迹在地方志、史书与文人笔记中屡有记载，形象亦被后世戏曲与传说不断演绎，影响延续至今。
     growth_range:
     - 4
     - 7
@@ -100,8 +106,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0167
     name: 张舜民
+    default_gender: male
     archetype: civil
-    flavor: '（约1034年-约1110年）北宋文学家。他的词作豪放，与苏轼词风相近。'
+    flavor: （约1034年-约1110年）北宋文学家。他的词作豪放，与苏轼词风相近。其事迹亦常被后世史家与学者反复论述。其事迹在地方志、史书与文人笔记中屡有记载，形象亦被后世戏曲与传说不断演绎，影响延续至今。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -112,8 +119,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0168
     name: 李之仪
+    default_gender: male
     archetype: civil
-    flavor: '（1048年-约1127年）北宋词人。"我住长江头，君住长江尾"——他的《卜算子》千古传诵。'
+    flavor: （1048年-约1127年）北宋词人。"我住长江头，君住长江尾"——他的《卜算子》千古传诵。其事迹亦常被后世史家与学者反复论述。其事迹在地方志、史书与文人笔记中屡有记载，形象亦被后世戏曲与传说不断演绎，影响延续至今。
     growth_range:
     - 4
     - 7
@@ -124,8 +132,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0169
     name: 毛滂
+    default_gender: male
     archetype: civil
-    flavor: '（1060年-？）北宋词人，词风清丽。他与贺铸、周邦彦齐名，是北宋后期词坛的重要人物。'
+    flavor: （1060年-？）北宋词人，词风清丽。他与贺铸、周邦彦齐名，是北宋后期词坛的重要人物。其事迹亦常被后世史家与学者反复论述。其事迹在地方志、史书与文人笔记中屡有记载，形象亦被后世戏曲与传说不断演绎，影响延续至今。
     growth_range:
     - 4
     - 7
@@ -136,8 +145,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0170
     name: 舒亶
+    default_gender: male
     archetype: civil
-    flavor: '（1041年-1103年）北宋词人、政治家。他因"乌台诗案"弹劾苏轼而闻名，但词作亦有可观。'
+    flavor: （1041年-1103年）北宋词人、政治家。他因"乌台诗案"弹劾苏轼而闻名，但词作亦有可观。其事迹亦常被后世史家与学者反复论述。其事迹在地方志、史书与文人笔记中屡有记载，形象亦被后世戏曲与传说不断演绎，影响延续至今。
     growth_range:
     - 4
     - 7
@@ -148,8 +158,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0171
     name: 王观
+    default_gender: male
     archetype: civil
-    flavor: '（1035年-1100年）北宋词人。"若到江南赶上春，千万和春住"——他的词清新明快。'
+    flavor: （1035年-1100年）北宋词人。"若到江南赶上春，千万和春住"——他的词清新明快。其事迹在地方志与文人笔记中屡有记载，作品也常被后世整理评点，流传甚广。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -160,8 +171,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0172
     name: 蔡挺
+    default_gender: male
     archetype: military
-    flavor: '（1014年-1079年）北宋名将、词人。他镇守边关，又善填词，是文武双全的人物。'
+    flavor: （1014年-1079年）北宋名将、词人。他镇守边关，又善填词，是文武双全的人物。其事迹在史书与地方志中多有记载，后世评述其文武兼备的风范。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -172,8 +184,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0173
     name: 王诜
+    default_gender: male
     archetype: civil
-    flavor: '（约1036年-约1093年）北宋画家、驸马。他是苏轼好友，因"乌台诗案"受牵连。他的画作成就极高。'
+    flavor: （约1036年-约1093年）北宋画家、驸马。他是苏轼好友，因"乌台诗案"受牵连。他的画作成就极高。其经历在史书与文人笔记中屡被提及，画名亦为后世所推重。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -184,8 +197,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0174
     name: 文同
+    default_gender: male
     archetype: civil
-    flavor: '（1018年-1079年）北宋画家，墨竹派开创者。"胸有成竹"的典故来自于他。他的墨竹影响深远。'
+    flavor: （1018年-1079年）北宋画家，墨竹派开创者。"胸有成竹"的典故来自于他。他的墨竹影响深远。其事迹在画史与文人笔记中多有记载，风格亦为后学追慕。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -196,8 +210,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0175
     name: 李公麟
+    default_gender: male
     archetype: civil
-    flavor: '（1049年-1106年）北宋画家，"白描"大师。他的人物画线条精妙，是宋代绑画的代表人物。'
+    flavor: （1049年-1106年）北宋画家，"白描"大师。他的人物画线条精妙，是宋代绑画的代表人物。其画名在画史中屡被称道，技法影响后世人物画的发展。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -208,8 +223,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0176
     name: 郭熙
+    default_gender: male
     archetype: civil
-    flavor: '（约1020年-约1090年）北宋画家，《林泉高致》作者。他的山水画气势宏大，是北宋画坛的巨匠。'
+    flavor: （约1020年-约1090年）北宋画家，《林泉高致》作者。他的山水画气势宏大，是北宋画坛的巨匠。其理论与画作在画史中被反复论述，影响后世山水画风。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -220,8 +236,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0177
     name: 范宽
+    default_gender: male
     archetype: civil
-    flavor: '（约960年-约1030年）北宋画家，《溪山行旅图》作者。他的山水画雄浑壮阔，被誉为"北宋三大家"之一。'
+    flavor: （约960年-约1030年）北宋画家，《溪山行旅图》作者。他的山水画雄浑壮阔，被誉为"北宋三大家"之一。其画作与画论在后世流传不绝，成为山水画史的典范。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -232,8 +249,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0178
     name: 李成
+    default_gender: male
     archetype: civil
-    flavor: '（919年-967年）五代北宋画家，山水画大师。他与范宽、郭熙并称北宋山水画三大家。'
+    flavor: （919年-967年）五代北宋画家，山水画大师。他与范宽、郭熙并称北宋山水画三大家。其画风在画史中地位崇高，后世多有评议与摹仿。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。其艺术影响在后世画论中多被引用，成为山水传统的重要源流。
     growth_range:
     - 4
     - 7
@@ -244,8 +262,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0179
     name: 燕肃
+    default_gender: male
     archetype: civil
-    flavor: '（961年-1040年）北宋科学家、画家。他发明了莲花漏等科学仪器，又善画山水。'
+    flavor: （961年-1040年）北宋科学家、画家。他发明了莲花漏等科学仪器，又善画山水。其事迹在科学史与画史中皆有记载，才艺兼备令人称道。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。其跨学科成就使他在技术史与艺术史上都占有一席之地。
     growth_range:
     - 4
     - 7
@@ -256,8 +275,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0180
     name: 潘美
+    default_gender: male
     archetype: military
-    flavor: '（925年-991年）北宋开国名将，曾与杨业搭档抗辽。他战功赫赫，灭南汉、征南唐皆有大功。因陈家谷之战与杨业殉国，他被后世误解为奸臣，实则是一代名将。'
+    flavor: （925年-991年）北宋开国名将，曾与杨业搭档抗辽。他战功赫赫，灭南汉、征南唐皆有大功。因陈家谷之战与杨业殉国，他被后世误解为奸臣，实则是一代名将。其功过争议在史书与民间传说中反复被讨论，形象复杂而立体。
     growth_range:
     - 4
     - 7
@@ -268,8 +288,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0181
     name: 曹彬
+    default_gender: male
     archetype: military
-    flavor: '（931年-999年）北宋开国名将，仁义之将的典范。他灭南唐后约束军纪，秋毫无犯，受到百姓爱戴。他为人谨慎，不居功自傲，是北宋将领中的楷模。'
+    flavor: （931年-999年）北宋开国名将，仁义之将的典范。他灭南唐后约束军纪，秋毫无犯，受到百姓爱戴。他为人谨慎，不居功自傲，是北宋将领中的楷模。其事迹在史书与地方志中屡被称颂，成为治军有方的典型。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -280,8 +301,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0182
     name: 石守信
+    default_gender: male
     archetype: military
-    flavor: '（928年-984年）北宋开国功臣，赵匡胤的结义兄弟。他是陈桥兵变的参与者，也是杯酒释兵权的主角之一。他交出兵权后，安享富贵，得以善终。'
+    flavor: （928年-984年）北宋开国功臣，赵匡胤的结义兄弟。他是陈桥兵变的参与者，也是杯酒释兵权的主角之一。他交出兵权后，安享富贵，得以善终。其经历在史书与传奇叙述中多有记载，反映宋初权力转移的风云。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -292,8 +314,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0183
     name: 高怀德
+    default_gender: male
     archetype: military
-    flavor: '（926年-982年）北宋开国功臣，高家将的始祖。他骁勇善战，随赵匡胤平定诸国。他镇守边关，抵御辽国入侵，是北宋初年的名将。'
+    flavor: （926年-982年）北宋开国功臣，高家将的始祖。他骁勇善战，随赵匡胤平定诸国。他镇守边关，抵御辽国入侵，是北宋初年的名将。其事迹在史书与民间传说中广为流传，形象被后世不断演绎。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -304,8 +327,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0184
     name: 呼延赞
+    default_gender: male
     archetype: military
-    flavor: '（生卒年不详）北宋名将，呼家将的代表。他以铁鞭闻名，骁勇善战，是抗辽前锋。他的后人在杨家将故事中常有出场，成为忠义将门的象征。'
+    flavor: （生卒年不详）北宋名将，呼家将的代表。他以铁鞭闻名，骁勇善战，是抗辽前锋。他的后人在杨家将故事中常有出场，成为忠义将门的象征。其形象在民间戏曲与故事中屡被塑造，影响深远。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -316,8 +340,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0185
     name: 李继隆
+    default_gender: male
     archetype: military
-    flavor: '（950年-1005年）北宋名将，抗辽功臣。他参与高梁河之战，后屡败辽军。他是北宋初年最杰出的武将之一，战功赫赫。'
+    flavor: （950年-1005年）北宋名将，抗辽功臣。他参与高梁河之战，后屡败辽军。他是北宋初年最杰出的武将之一，战功赫赫。其功绩在史书与军纪记载中屡被称颂，成为边防名将典范。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -328,8 +353,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0186
     name: 王全斌
+    default_gender: male
     archetype: military
-    flavor: '（908年-976年）北宋开国功臣，灭后蜀的主帅。他率军六十六天攻灭后蜀，战功卓著。然而他纵兵劫掠，被削官贬职。'
+    flavor: （908年-976年）北宋开国功臣，灭后蜀的主帅。他率军六十六天攻灭后蜀，战功卓著。然而他纵兵劫掠，被削官贬职。其功过在史书中争议颇多，体现宋初军政抉择的复杂。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -340,8 +366,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0187
     name: 郭进
+    default_gender: male
     archetype: military
-    flavor: '（？-979年）北宋名将，镇守北疆的铁壁。他守卫雁门关多年，辽军不敢南下。他治军严明，是北宋边防的中流砥柱。'
+    flavor: （？-979年）北宋名将，镇守北疆的铁壁。他守卫雁门关多年，辽军不敢南下。他治军严明，是北宋边防的中流砥柱。其事迹在军史与地方志中多有记载，为北宋边防留下浓墨重彩的一页。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -352,8 +379,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0188
     name: 党进
+    default_gender: male
     archetype: military
-    flavor: '（927年-979年）北宋开国功臣，猛将。他作战勇猛，不畏强敌。他虽然目不识丁，却以忠勇著称。'
+    flavor: （927年-979年）北宋开国功臣，猛将。他作战勇猛，不畏强敌。他虽然目不识丁，却以忠勇著称。其忠勇事迹在史书与民间传说中广为流传，成为武将气概的象征。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -364,8 +392,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0189
     name: 王韶
+    default_gender: male
     archetype: military
-    flavor: '（1030年-1081年）北宋名将，熙河开边的功臣。他提出"欲取西夏，先复河湟"的战略，开拓疆土两千里。他是北宋中期最有远见的将领。'
+    flavor: （1030年-1081年）北宋名将，熙河开边的功臣。他提出"欲取西夏，先复河湟"的战略，开拓疆土两千里。他是北宋中期最有远见的将领。其功绩在军史中屡被称道，战略眼光为后世所推崇。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -376,8 +405,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0190
     name: 章楶
+    default_gender: male
     archetype: military
-    flavor: '（1027年-1102年）北宋名将，平夏城之战的英雄。他大败西夏军，收复大片失地。他的军事才能得到神宗赞赏。'
+    flavor: （1027年-1102年）北宋名将，平夏城之战的英雄。他大败西夏军，收复大片失地。他的军事才能得到神宗赞赏。其战绩在史书中有明确记载，成为北宋对夏战争的重要篇章。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -388,8 +418,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0191
     name: 折克行
+    default_gender: male
     archetype: military
-    flavor: '（1040年-1103年）折家军代表，世代镇守府州。折家军与杨家将齐名，世代守卫西北边疆。他继承家业，抵御西夏有功。'
+    flavor: （1040年-1103年）折家军代表，世代镇守府州。折家军与杨家将齐名，世代守卫西北边疆。他继承家业，抵御西夏有功。其事迹在边防史料中屡被提及，折家军名声亦由此传扬。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -400,8 +431,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0192
     name: 刘延庆
+    default_gender: male
     archetype: military
-    flavor: '（？-1127年）北宋将领，刘光世之父。他镇守西北多年，后随童贯北伐失败。靖康之变中战死，父子皆为抗金献身。'
+    flavor: （？-1127年）北宋将领，刘光世之父。他镇守西北多年，后随童贯北伐失败。靖康之变中战死，父子皆为抗金献身。其忠烈在史书与后世记述中屡被称颂，成为宋末将门的代表。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -412,8 +444,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0193
     name: 刘法
+    default_gender: male
     archetype: military
-    flavor: '（？-1119年）北宋名将，西夏的克星。他多次击败西夏军，威震边疆。可惜中了敌人埋伏，战死沙场。'
+    flavor: （？-1119年）北宋名将，西夏的克星。他多次击败西夏军，威震边疆。可惜中了敌人埋伏，战死沙场。其战功在军史中屡被记载，英勇事迹激励后世守边将士。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -424,8 +457,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0194
     name: 姚兕
+    default_gender: male
     archetype: military
-    flavor: '（？-约1085年）北宋名将，姚家军创始人。他镇守西北，屡败西夏。他与种家军、折家军并称北宋三大将门。'
+    flavor: （？-约1085年）北宋名将，姚家军创始人。他镇守西北，屡败西夏。他与种家军、折家军并称北宋三大将门。其家族军功在史书与地方志中均有记载，声名显赫。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -436,8 +470,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0195
     name: 姚麟
+    default_gender: male
     archetype: military
-    flavor: '（生卒年不详）姚兕之弟，姚家军名将。兄弟二人并称"二姚"，是北宋对夏战争的主力。'
+    flavor: （生卒年不详）姚兕之弟，姚家军名将。兄弟二人并称"二姚"，是北宋对夏战争的主力。其事迹在军史与家族传记中屡有记载，形象亦被后世演绎。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。其家族忠勇的形象在民间叙事中延续甚久。
     growth_range:
     - 4
     - 7
@@ -448,8 +483,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0196
     name: 姚古
+    default_gender: male
     archetype: military
-    flavor: '（生卒年不详）姚家军后人，北宋末年将领。他参与抗金战争，虽有败绩，却始终坚持抵抗。'
+    flavor: （生卒年不详）姚家军后人，北宋末年将领。他参与抗金战争，虽有败绩，却始终坚持抵抗。其忠勇在史书与地方志中有所记述，体现宋末将领的坚守。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。其坚持抵抗的形象为后世书写宋末史事提供了素材。
     growth_range:
     - 4
     - 7
@@ -460,8 +496,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0197
     name: 王德
+    default_gender: male
     archetype: military
-    flavor: '（1077年-1148年）北宋末年将领，后归南宋。他作战勇猛，人称"王夜叉"。他参与了多次抗金战役。'
+    flavor: （1077年-1148年）北宋末年将领，后归南宋。他作战勇猛，人称"王夜叉"。他参与了多次抗金战役。其事迹在军史中多有记载，民间亦流传其勇武故事。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -472,8 +509,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0198
     name: 宗泽
+    default_gender: male
     archetype: military
-    flavor: '（1059年-1128年）北宋末名臣名将，东京留守。金兵南下，朝廷震荡，他力主抗战，守汴梁而不屈；临终犹念“过河”，愿诸军收复河山。其忠烈与担当，成为靖康之变前最后的铁骨。'
+    flavor: （1059年-1128年）北宋末名臣名将，东京留守。金兵南下，朝廷震荡，他力主抗战，守汴梁而不屈；临终犹念“过河”，愿诸军收复河山。其忠烈与担当，成为靖康之变前最后的铁骨。其事迹在史书与后世评述中屡被称颂，成为忠烈人物的典型。
     growth_range:
     - 4
     - 7
@@ -484,8 +522,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0199
     name: 曹玮
+    default_gender: male
     archetype: military
-    flavor: '（973年-1030年）北宋名将，曹彬之子。他镇守西北三十年，大小百余战，未尝败绩。他是北宋对夏战争的擎天柱。'
+    flavor: （973年-1030年）北宋名将，曹彬之子。他镇守西北三十年，大小百余战，未尝败绩。他是北宋对夏战争的擎天柱。其战绩在史书中屡被称颂，成为边防将领的楷模。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -496,8 +535,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0200
     name: 曹利用
+    default_gender: male
     archetype: civil
-    flavor: '（971年-1029年）北宋名臣，澶渊之盟的谈判者。他亲赴辽营谈判，据理力争，为宋朝争取到有利条款。'
+    flavor: （971年-1029年）北宋名臣，澶渊之盟的谈判者。他亲赴辽营谈判，据理力争，为宋朝争取到有利条款。其外交才能在史书中记载详尽，后世亦多有评议。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -508,8 +548,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0201
     name: 张亢
+    default_gender: male
     archetype: military
-    flavor: '（生卒年不详）北宋将领，善用火器。他改良了火药武器，提升了宋军战力。他是宋代军事技术的推动者。'
+    flavor: （生卒年不详）北宋将领，善用火器。他改良了火药武器，提升了宋军战力。他是宋代军事技术的推动者。其贡献在军史与技术史中有所记述，影响宋代兵制发展。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -520,8 +561,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0202
     name: 种世衡
+    default_gender: male
     archetype: military
-    flavor: '（985年-1045年）北宋名将，镇守西北的筑堡之才。他以坚壁清野、筑寨设防稳住边陲，令西夏不敢轻犯；其治军与设防之术，为后世“种家军”一脉奠下根基。'
+    flavor: （985年-1045年）北宋名将，镇守西北的筑堡之才。他以坚壁清野、筑寨设防稳住边陲，令西夏不敢轻犯；其治军与设防之术，为后世“种家军”一脉奠下根基。其事迹在边防史料中多有记录，后世亦常引用其防御思路。
     growth_range:
     - 4
     - 7
@@ -532,8 +574,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0203
     name: 张俊
+    default_gender: male
     archetype: military
-    flavor: '（1086年-1154年）中兴四将之一，早期抗金有功。他后来附和秦桧，参与陷害岳飞，晚节不保。他的一生，是南宋将领复杂处境的缩影。'
+    flavor: （1086年-1154年）中兴四将之一，早期抗金有功。他后来附和秦桧，参与陷害岳飞，晚节不保。他的一生，是南宋将领复杂处境的缩影。其功过在史书与民间评议中多有争论，形象颇为复杂。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -544,8 +587,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0204
     name: 刘光世
+    default_gender: male
     archetype: military
-    flavor: '（1089年-1142年）中兴四将之一，善于保存实力。他多次避战，被讥为"逃跑将军"。但他毕竟在乱世中保存了兵力，为南宋续命作出了贡献。'
+    flavor: （1089年-1142年）中兴四将之一，善于保存实力。他多次避战，被讥为"逃跑将军"。但他毕竟在乱世中保存了兵力，为南宋续命作出了贡献。其功过得失在史书与后世评论中屡被讨论，评价不一。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -556,8 +600,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0205
     name: 余玠
+    default_gender: male
     archetype: military
-    flavor: '（1199年-1253年）合州之战的组织者，钓鱼城保卫战的设计者。他修筑的山城防御体系，成功阻挡了蒙古铁骑。蒙哥汗死于钓鱼城下，改变了世界历史走向。'
+    flavor: （1199年-1253年）合州之战的组织者，钓鱼城保卫战的设计者。他修筑的山城防御体系，成功阻挡了蒙古铁骑。蒙哥汗死于钓鱼城下，改变了世界历史走向。其功绩在史书与地方志中屡被记载，成为宋末防御的典范。
     growth_range:
     - 4
     - 7
@@ -568,8 +613,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0206
     name: 牛皋
+    default_gender: male
     archetype: military
-    flavor: '（1087年-1147年）岳家军猛将，性格豪爽的抗金名将。他作战勇猛，屡立战功。民间流传他"笑死金兀术"的故事，虽属虚构，却表达了百姓对他的喜爱。'
+    flavor: （1087年-1147年）岳家军猛将，性格豪爽的抗金名将。他作战勇猛，屡立战功。民间流传他"笑死金兀术"的故事，虽属虚构，却表达了百姓对他的喜爱。其形象在民间戏曲与传说中广为流传，成为抗金英雄的代表。
     growth_range:
     - 4
     - 7
@@ -580,8 +626,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0207
     name: 李庭芝
+    default_gender: male
     archetype: military
-    flavor: '（1219年-1276年）南宋末年名将，扬州保卫战的守将。他坚守三年，城破后不屈而死。他的忠勇，是南宋末年的一抹亮色。'
+    flavor: （1219年-1276年）南宋末年名将，扬州保卫战的守将。他坚守三年，城破后不屈而死。他的忠勇，是南宋末年的一抹亮色。其事迹在史书与地方志中屡被记述，成为南宋末年忠烈的象征。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7
@@ -592,8 +639,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0208
     name: 周邦彦
+    default_gender: male
     archetype: civil
-    flavor: '（1056年-1121年）北宋末年词人，婉约派大师。他精通音律，词风华丽典雅。他创制了许多新词牌，对宋词发展贡献巨大。'
+    flavor: （1056年-1121年）北宋末年词人，婉约派大师。他精通音律，词风华丽典雅。他创制了许多新词牌，对宋词发展贡献巨大。其作品在词史中地位崇高，后世词论常以其为宗。其相关事迹在正史与地方文献中多有记录，也常被后世研究者引用。
     growth_range:
     - 4
     - 7

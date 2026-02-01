@@ -480,9 +480,13 @@ def cancel_listing(manor: Manor, listing_id: int) -> Dict:
 
 
 def _expire_listings_queryset(expired_listings: QuerySet, log_label: str) -> int:
-    """处理过期挂单，通过邮件退回物品并删除挂单记录。"""
+    """处理过期挂单，通过邮件退回物品并删除挂单记录。
+
+    安全修复：先发送邮件确保物品退还成功，再删除挂单记录。
+    避免邮件发送失败导致物品永久丢失。
+    """
     count = 0
-    for listing in expired_listings.select_related("seller", "item_template"):
+    for listing in expired_listings.select_for_update().select_related("seller", "item_template"):
         try:
             with transaction.atomic():
                 # 保存挂单信息用于发送邮件（删除前先读取）
@@ -496,10 +500,11 @@ def _expire_listings_queryset(expired_listings: QuerySet, log_label: str) -> int
                 listed_at = listing.listed_at
                 expires_at = listing.expires_at
 
-                # 删除挂单记录
-                listing.delete()
+                # 安全修复：先将状态标记为过期（防止重复处理）
+                listing.status = MarketListing.Status.EXPIRED
+                listing.save(update_fields=["status"])
 
-                # 通过邮件退回物品
+                # 通过邮件退回物品（如果失败会回滚状态变更）
                 create_message(
                     manor=seller,
                     kind="system",
@@ -519,6 +524,9 @@ def _expire_listings_queryset(expired_listings: QuerySet, log_label: str) -> int
                         "items": {item_key: quantity},
                     },
                 )
+
+                # 邮件发送成功后，删除挂单记录
+                listing.delete()
 
                 # WebSocket 即时推送通知卖家
                 notify_user(

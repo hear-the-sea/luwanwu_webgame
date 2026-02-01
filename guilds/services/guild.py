@@ -344,8 +344,11 @@ def create_announcement(guild, type, content, author=None):
         author=author,
     )
 
-    # 保留最近30条公告
-    old_announcements = guild.announcements.all()[30:]
-    if old_announcements:
-        announcement_ids = [a.id for a in old_announcements]
-        GuildAnnouncement.objects.filter(id__in=announcement_ids).delete()
+    # 性能优化：保留最近30条公告，使用数据库层面的高效删除
+    # 先获取需要保留的公告ID（前30条），然后删除不在列表中的
+    keep_ids = list(
+        guild.announcements.order_by('-created_at')
+        .values_list('id', flat=True)[:30]
+    )
+    if keep_ids:
+        guild.announcements.exclude(id__in=keep_ids).delete()

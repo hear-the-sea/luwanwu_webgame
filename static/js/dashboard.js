@@ -1,6 +1,85 @@
 (function () {
   const pad = (num) => String(num).padStart(2, "0");
 
+  // Performance optimization: cache countdown elements and parsed timestamps
+  const countdownCache = new Map(); // el -> { target, style, shouldRefresh, checkUrl, completeText, removeSelector }
+  let missionLists = []; // cached mission list elements
+  let cacheInitialized = false;
+
+  function initCache() {
+    if (cacheInitialized) return;
+    countdownCache.clear();
+    document.querySelectorAll("[data-countdown]").forEach(registerCountdownElement);
+    missionLists = Array.from(document.querySelectorAll(".mission-list"));
+    cacheInitialized = true;
+  }
+
+  function registerCountdownElement(el) {
+    const targetIso = el.getAttribute("data-countdown");
+    if (!targetIso) return;
+    const target = Date.parse(targetIso);
+    if (Number.isNaN(target)) return;
+    countdownCache.set(el, {
+      target,
+      style: el.getAttribute("data-format") || "",
+      shouldRefresh: el.getAttribute("data-refresh") === "1",
+      checkUrl: el.getAttribute("data-check-url"),
+      completeText: el.getAttribute("data-complete-text"),
+      removeSelector: el.getAttribute("data-remove-selector")
+    });
+  }
+
+  function unregisterCountdownElement(el) {
+    countdownCache.delete(el);
+  }
+
+  // Observe DOM changes to update cache automatically
+  function setupMutationObserver() {
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        // Handle added nodes
+        for (const node of mutation.addedNodes) {
+          if (node.nodeType !== Node.ELEMENT_NODE) continue;
+          if (node.hasAttribute && node.hasAttribute("data-countdown")) {
+            registerCountdownElement(node);
+          }
+          // Check descendants
+          if (node.querySelectorAll) {
+            node.querySelectorAll("[data-countdown]").forEach(registerCountdownElement);
+            node.querySelectorAll(".mission-list").forEach((list) => {
+              if (!missionLists.includes(list)) missionLists.push(list);
+            });
+          }
+        }
+        // Handle removed nodes
+        for (const node of mutation.removedNodes) {
+          if (node.nodeType !== Node.ELEMENT_NODE) continue;
+          if (countdownCache.has(node)) {
+            unregisterCountdownElement(node);
+          }
+          if (node.querySelectorAll) {
+            node.querySelectorAll("[data-countdown]").forEach(unregisterCountdownElement);
+          }
+        }
+        // Handle attribute changes on data-countdown
+        if (mutation.type === "attributes" && mutation.attributeName === "data-countdown") {
+          const el = mutation.target;
+          if (el.hasAttribute("data-countdown")) {
+            registerCountdownElement(el);
+          } else {
+            unregisterCountdownElement(el);
+          }
+        }
+      }
+    });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-countdown"]
+    });
+  }
+
   function formatCountdown(diffMs, style) {
     if (diffMs <= 0) return style === "zh" || style === "zh-no-sec" ? "已返程" : "完成";
     const totalSeconds = Math.floor(diffMs / 1000);
@@ -87,24 +166,26 @@
         if (levelDiv) {
           levelDiv.textContent = `Lv ${data.level}`;
         }
-        // 更新 HP
-        const hpCell = row.querySelectorAll("td")[5]; // 第6列是"生命"列
-        if (hpCell) {
-          const hpDiv = hpCell.querySelector("div");
-          if (hpDiv) {
-            hpDiv.textContent = `HP ${data.current_hp}/${data.max_hp}`;
-          }
+        // 更新 HP - 使用类名选择器代替硬编码索引
+        const hpDiv = row.querySelector(".guest-hp");
+        if (hpDiv) {
+          hpDiv.textContent = `HP ${data.current_hp}/${data.max_hp}`;
         }
-        // 更新训练倒计时
-        const upgradeCell = row.querySelectorAll("td")[6]; // 第7列是"升级"列
+        // 更新训练倒计时 - 使用 el 的父元素
+        const upgradeCell = el.closest("td");
         if (data.training_eta) {
           el.setAttribute("data-countdown", data.training_eta);
           el.classList.remove("countdown-finished");
           el.textContent = "计算中";
         } else {
           // 已完成，显示"自动升级"
+          // 安全修复：使用 DOM API 替代 innerHTML，防止 XSS
           if (upgradeCell) {
-            upgradeCell.innerHTML = '<span class="muted-text">自动升级</span>';
+            upgradeCell.textContent = '';
+            const span = document.createElement('span');
+            span.className = 'muted-text';
+            span.textContent = '自动升级';
+            upgradeCell.appendChild(span);
           }
         }
         return true;
@@ -123,16 +204,18 @@
       ensureListPlaceholder(list);
     };
 
-    document.querySelectorAll("[data-countdown]").forEach((el) => {
-      const targetIso = el.getAttribute("data-countdown");
-      if (!targetIso) return;
-      const style = el.getAttribute("data-format") || "";
-      const shouldRefresh = el.getAttribute("data-refresh") === "1";
-      const checkUrl = el.getAttribute("data-check-url");
-      const completeText = el.getAttribute("data-complete-text");
-      const target = Date.parse(targetIso);
-      if (Number.isNaN(target)) return;
+    // Use cached elements instead of querying DOM every second
+    const toRemove = [];
+    for (const [el, cached] of countdownCache) {
+      // Check if element is still in DOM
+      if (!document.body.contains(el)) {
+        toRemove.push(el);
+        continue;
+      }
+
+      const { target, style, shouldRefresh, checkUrl, completeText, removeSelector } = cached;
       const diff = target - now;
+
       if (diff <= 0) {
         if (shouldRefresh || checkUrl) {
           el.textContent = "刷新中...";
@@ -141,13 +224,10 @@
         } else {
           el.textContent = formatCountdown(diff, style);
         }
-      } else {
-        el.textContent = formatCountdown(diff, style);
-      }
-      if (diff <= 0) {
         el.classList.add("countdown-finished");
         el.removeAttribute("data-countdown");
-        const removeSelector = el.getAttribute("data-remove-selector");
+        toRemove.push(el);
+
         if (removeSelector) {
           const targetEl = el.closest(removeSelector);
           if (targetEl) {
@@ -161,13 +241,25 @@
         } else if (shouldRefresh) {
           setTimeout(() => window.location.reload(), 500);
         }
+      } else {
+        el.textContent = formatCountdown(diff, style);
+      }
+    }
+
+    // Clean up finished countdowns from cache
+    toRemove.forEach((el) => countdownCache.delete(el));
+
+    // Use cached mission lists instead of querying DOM
+    missionLists.forEach((listEl) => {
+      if (document.body.contains(listEl)) {
+        ensureListPlaceholder(listEl);
       }
     });
-    // safety net: ensure all mission lists have placeholder if empty
-    document.querySelectorAll(".mission-list").forEach((listEl) => ensureListPlaceholder(listEl));
   }
 
   document.addEventListener("DOMContentLoaded", () => {
+    initCache();
+    setupMutationObserver();
     tick();
     setInterval(tick, 1000);
   });

@@ -50,4 +50,3 @@ def test_dispatch_battle_message_calls_service(monkeypatch):
     dispatch_battle_message(manor, "Border Clash", report)
 
     assert captured["values"] == (manor, "Border Clash", report)
-

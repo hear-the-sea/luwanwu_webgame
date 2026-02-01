@@ -216,8 +216,24 @@ def finalize_mission_run(run: MissionRun, now=None) -> None:
             from .troops import _return_surviving_troops_batch
             loadout = locked_run.troop_loadout or {}
             if loadout:
-                if locked_run.is_retreating or not report:
-                    # 撤退或无战报：全额归还
+                if locked_run.is_retreating:
+                    # 安全修复：撤退时检查是否已经开始战斗
+                    # 如果有战报，说明战斗已发生，应按战报归还（可能有损失）
+                    if report:
+                        logger.warning(
+                            f"撤退但存在战报，按战报归还护院: run_id={locked_run.id}",
+                            extra={"run_id": locked_run.id, "manor_id": locked_run.manor.id}
+                        )
+                        _return_surviving_troops_batch(locked_run.manor, loadout, report)
+                    else:
+                        # 无战报的撤退：全额归还
+                        _return_surviving_troops_batch(locked_run.manor, loadout)
+                elif not report:
+                    # 非撤退但无战报（异常情况）：记录警告并全额归还
+                    logger.warning(
+                        f"任务完成但无战报，全额归还护院: run_id={locked_run.id}",
+                        extra={"run_id": locked_run.id, "manor_id": locked_run.manor.id}
+                    )
                     _return_surviving_troops_batch(locked_run.manor, loadout)
                 else:
                     # 按战报归还存活的护院
@@ -255,27 +271,27 @@ def finalize_mission_run(run: MissionRun, now=None) -> None:
                 award_mission_drops(locked_run.manor, drops, locked_run.mission.name)
 
         if report and not locked_run.is_retreating:
-                create_message(
-                    manor=locked_run.manor,
-                    kind='battle',
-                    title=f"{locked_run.mission.name} 战报",
-                    body='',
-                    battle_report=report,
-                )
+            create_message(
+                manor=locked_run.manor,
+                kind='battle',
+                title=f"{locked_run.mission.name} 战报",
+                body='',
+                battle_report=report,
+            )
 
-                # 只有当report存在时才发送WebSocket通知
-                if report:
-                    notify_user(
-                        locked_run.manor.user_id,
-                        {
-                            'kind': 'battle',
-                            'title': f"{locked_run.mission.name} 战报",
-                            'report_id': report.id,
-                            'mission_key': locked_run.mission.key,
-                            'mission_name': locked_run.mission.name,
-                        },
-                        log_context="mission battle notification",
-                    )
+            # 只有当report存在时才发送WebSocket通知
+            if report:
+                notify_user(
+                    locked_run.manor.user_id,
+                    {
+                        'kind': 'battle',
+                        'title': f"{locked_run.mission.name} 战报",
+                        'report_id': report.id,
+                        'mission_key': locked_run.mission.key,
+                        'mission_name': locked_run.mission.name,
+                    },
+                    log_context="mission battle notification",
+                )
 
 
 def _get_today_date_range():
@@ -581,11 +597,14 @@ def launch_mission(
                 raise ValueError("请选择至少一名门客")
 
             # Calculate loadout and travel time
-            loadout = normalize_mission_loadout(troop_loadout)
+            if mission.guest_only:
+                loadout = {}
+            else:
+                loadout = normalize_mission_loadout(troop_loadout)
 
-            # 验证兵力是否超过门客带兵上限
-            from battle.services import validate_troop_capacity
-            validate_troop_capacity(guests, loadout)
+                # 验证兵力是否超过门客带兵上限
+                from battle.services import validate_troop_capacity
+                validate_troop_capacity(guests, loadout)
 
             # 进攻任务：扣除护院（防守任务不扣除，战斗结算时扣除）
             if not mission.is_defense and loadout:
@@ -701,7 +720,7 @@ def launch_mission(
             extra={"manor_id": manor.id, "mission_id": mission.id},
         )
         raise
-    except Exception as exc:
+    except Exception:
         # 未预期的异常 - 事务未提交，无资源损失
         logger.exception(
             "launch_mission unexpected error",
@@ -855,4 +874,3 @@ def can_retreat(run: MissionRun, now=None) -> bool:
     now = now or timezone.now()
     outbound_finish = run.started_at + timedelta(seconds=run.travel_time)
     return now < outbound_finish
-

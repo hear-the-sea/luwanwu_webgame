@@ -225,4 +225,3 @@ def consume_inventory_item(item_or_manor, item_key_or_amount=1, amount: int = 1)
         return
 
     raise TypeError("第一个参数必须是 InventoryItem 或 Manor 对象")
-

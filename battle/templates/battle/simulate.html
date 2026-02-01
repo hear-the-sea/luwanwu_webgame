@@ -7,15 +7,15 @@
 <form method="post">
 {% csrf_token %}
 <section class="dashboard">
-    <div class="section-header">
+    <div class="tw-section-header">
         <div>
             <h1>快速演练</h1>
-            <p>仅空闲门客可出征，目前可用 {{ guests|length }} 名。</p>
+            <p class="caption">仅空闲门客可出征，目前可用 {{ guests|length }} 名。</p>
         </div>
-        <button type="submit" class="btn-primary">发起战斗</button>
+        <button type="submit" class="tw-btn-primary">发起战斗</button>
     </div>
 
-    <section class="card">
+    <section class="tw-card">
         <h2>出征兵种配置</h2>
         <p>门客不再绑定兵种，可在此配置随行的弓箭手、枪兵与骑兵数量。</p>
         <div class="troop-config-grid">
@@ -29,20 +29,20 @@
                 </div>
             {% endfor %}
         </div>
-        <p class="hint">提示：兵种优先级可通过模板配置，优先级为 -1 / -2 的兵种会提前若干回合发动攻势，其余门客与士兵会以“冲锋中”状态等待出手。</p>
+        <p class="tw-muted mt-4">提示：兵种优先级可通过模板配置，优先级为 -1 / -2 的兵种会提前若干回合发动攻势，其余门客与士兵会以"冲锋中"状态等待出手。</p>
     </section>
 
-    <section class="card">
+    <section class="tw-card">
         <h2>当前阵容</h2>
-        <div class="building-grid">
+        <div class="tw-building-grid">
             {% for guest in guests %}
-            <article class="building-card">
+            <article class="tw-building-card">
                 <header>
                     <div>
                         <h3 class="rarity-text {{ guest.rarity|rarity_class }}">{{ guest.template.name }}</h3>
-                        <p>{{ guest.template.flavor }}</p>
+                        <p class="tw-muted">{{ guest.template.flavor }}</p>
                     </div>
-                    <span class="badge">Lv {{ guest.level }}</span>
+                    <span class="tw-badge-gold">Lv {{ guest.level }}</span>
                 </header>
                 <p>状态：{{ guest.get_status_display }}</p>
                 <p>武 {{ guest.force }} / 智 {{ guest.intellect }} / 防 {{ guest.defense_stat }} / 敏 {{ guest.agility }}</p>
@@ -56,7 +56,7 @@
                 </p>
             </article>
             {% empty %}
-                <p>暂无门客，请先前往“门客管理”进行招募。</p>
+                <p>暂无门客，请先前往"门客管理"进行招募。</p>
             {% endfor %}
         </div>
     </section>

@@ -1,0 +1,2274 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * 春秋乱世庄园主 - Tailwind 组件层
+ * 使用 @apply 定义可复用的组件类，保持与原有类名兼容
+ */
+
+@layer components {
+  /* ========== 按钮组件 ========== */
+  .tw-btn {
+    @apply px-4 py-2 border rounded-md cursor-pointer transition-all duration-200
+           text-center no-underline inline-block;
+  }
+
+  .tw-btn-primary {
+    @apply tw-btn text-text-light border-border-primary
+           hover:-translate-y-px;
+    background: linear-gradient(180deg, #8B4513 0%, #6B3410 100%);
+  }
+
+  .tw-btn-primary:hover {
+    background: linear-gradient(180deg, #7A3A10 0%, #5A2A0D 100%);
+    box-shadow: 0 4px 8px rgba(74, 38, 18, 0.25);
+  }
+
+  .tw-btn-secondary {
+    @apply tw-btn bg-bg-secondary text-text-primary border-border-light
+           hover:bg-bg-hover;
+  }
+
+  .tw-btn-danger {
+    @apply tw-btn bg-accent-red text-white border-accent-red
+           hover:brightness-110;
+  }
+
+  .tw-btn-sm {
+    @apply px-2 py-1 text-sm;
+  }
+
+  /* ========== 面板组件 ========== */
+  .tw-panel {
+    @apply bg-bg-panel border border-border-primary rounded;
+  }
+
+  .tw-panel-header {
+    @apply px-4 py-3 border-b border-border-light
+           font-bold text-text-primary bg-bg-secondary;
+  }
+
+  .tw-panel-content {
+    @apply p-4;
+  }
+
+  /* ========== 卡片组件 ========== */
+  .tw-card {
+    @apply bg-bg-card border border-border-light rounded p-4;
+  }
+
+  /* ========== 认证卡片 (登录/注册) ========== */
+  .tw-auth-card {
+    @apply bg-bg-card rounded-xl p-10 border-[3px] border-border-primary
+           max-w-md mx-auto;
+    box-shadow: 0 8px 24px rgba(74, 38, 18, 0.2);
+  }
+
+  .tw-auth-card h2 {
+    @apply mt-0 text-3xl text-text-primary border-b-2 border-border-primary pb-2 mb-4;
+  }
+
+  .tw-auth-card form {
+    @apply flex flex-col gap-5 mt-6;
+  }
+
+  .tw-auth-card p {
+    @apply text-center mt-4 text-text-secondary;
+  }
+
+  .tw-auth-card a {
+    @apply text-accent-gold hover:underline;
+  }
+
+  /* ========== 表单组件 ========== */
+  .tw-form-field {
+    @apply flex flex-col;
+  }
+
+  .tw-form-field label {
+    @apply font-semibold mb-1 text-text-secondary;
+  }
+
+  .tw-form-field input,
+  .tw-form-field select,
+  .tw-form-field textarea {
+    @apply w-full rounded-md border-2 border-border-primary p-3 text-base
+           bg-white text-text-primary
+           focus:outline-none focus:border-accent-gold;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .tw-form-field input:focus,
+  .tw-form-field select:focus,
+  .tw-form-field textarea:focus {
+    box-shadow: 0 0 0 3px rgba(218, 165, 32, 0.2);
+  }
+
+  .tw-form-field small {
+    @apply text-sm text-text-muted mt-1;
+  }
+
+  .tw-form-errors {
+    @apply rounded-lg border-2 border-accent-red p-4 text-accent-red;
+    background: #FFEAEA;
+  }
+
+  .tw-input {
+    @apply w-full px-3 py-2 border border-border-light rounded
+           bg-white text-text-primary
+           focus:outline-none focus:border-accent-gold;
+  }
+
+  .tw-label {
+    @apply block mb-1 text-text-secondary font-medium;
+  }
+
+  /* ========== 表格组件 ========== */
+  .tw-table {
+    @apply w-full border-collapse;
+  }
+
+  .tw-table th {
+    @apply px-3 py-2 text-left bg-bg-secondary border-b border-border-primary
+           font-bold text-text-primary;
+  }
+
+  .tw-table td {
+    @apply px-3 py-2 border-b border-border-light;
+  }
+
+  .tw-table tr:hover td {
+    @apply bg-bg-hover;
+  }
+
+  /* ========== 徽章/标签组件 ========== */
+  .tw-badge {
+    @apply inline-block px-2 py-0.5 text-xs rounded;
+  }
+
+  .tw-badge-gold {
+    @apply tw-badge bg-accent-gold text-text-primary;
+  }
+
+  .tw-badge-red {
+    @apply tw-badge bg-accent-red text-white;
+  }
+
+  .tw-badge-green {
+    @apply tw-badge bg-accent-green text-white;
+  }
+
+  /* ========== 状态网格 ========== */
+  .tw-status-grid {
+    @apply grid gap-1;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+
+  .tw-status-item {
+    @apply flex;
+  }
+
+  .tw-status-item label {
+    @apply text-text-secondary mr-2;
+  }
+
+  .tw-status-item .value {
+    @apply font-bold;
+  }
+
+  .tw-status-item .positive {
+    @apply text-accent-green;
+  }
+
+  .tw-status-item .negative {
+    @apply text-accent-red;
+  }
+
+  /* ========== 状态表格 ========== */
+  .tw-manor-table {
+    @apply w-full border-collapse;
+  }
+
+  .tw-manor-table td {
+    @apply border border-border-primary p-2 align-top;
+  }
+
+  .tw-manor-table .section-title {
+    @apply w-24 font-bold text-text-primary bg-bg-secondary text-center align-middle;
+  }
+
+  .tw-manor-table .content-cell {
+    @apply bg-bg-panel;
+  }
+
+  /* ========== 弹性列表 ========== */
+  .tw-flex-list {
+    @apply flex flex-wrap gap-1;
+  }
+
+  .tw-flex-list-item {
+    @apply whitespace-nowrap;
+  }
+
+  /* ========== 文字工具类 ========== */
+  .tw-muted {
+    @apply text-text-muted;
+  }
+
+  .tw-highlight {
+    @apply text-text-highlight font-bold;
+  }
+
+  /* ========== 分类标签导航 ========== */
+  .tw-category-tabs {
+    @apply flex gap-2 mb-6 flex-wrap;
+  }
+
+  .tw-tab-item {
+    @apply px-4 py-2 rounded-md no-underline text-sm transition-all
+           bg-bg-card text-text-secondary font-medium;
+    border: 2px solid var(--border-light);
+    box-shadow: 0 1px 3px rgba(74, 38, 18, 0.1);
+  }
+
+  .tw-tab-item:hover {
+    @apply bg-bg-hover text-text-primary;
+    border-color: var(--border-primary);
+    box-shadow: 0 2px 4px rgba(74, 38, 18, 0.15);
+    transform: translateY(-1px);
+  }
+
+  .tw-tab-item.active {
+    @apply text-text-light font-bold;
+    background: linear-gradient(180deg, #8B4513 0%, #6B3410 100%);
+    border-color: #5A2D0C;
+    box-shadow: 0 2px 6px rgba(74, 38, 18, 0.25);
+  }
+
+  /* ========== 建筑卡片网格 ========== */
+  .tw-building-grid {
+    @apply grid gap-4;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+
+  .tw-building-card {
+    @apply bg-bg-card rounded-lg overflow-hidden flex flex-col;
+    border: 2px solid var(--border-primary);
+    box-shadow: 0 2px 8px rgba(74, 38, 18, 0.15);
+    transition: all 0.2s ease;
+  }
+
+  .tw-building-card:hover {
+    box-shadow: 0 4px 12px rgba(74, 38, 18, 0.25);
+    transform: translateY(-2px);
+    border-color: var(--accent-gold);
+  }
+
+  .tw-building-card header {
+    @apply flex justify-between items-start p-4
+           border-b-2;
+    background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-hover) 100%);
+    border-color: var(--border-light);
+  }
+
+  .tw-building-card header h3 {
+    @apply m-0 text-base font-bold text-text-primary;
+  }
+
+  .tw-building-card header .tw-building-desc {
+    @apply text-sm text-text-muted mt-1;
+  }
+
+  .tw-building-card .tw-level-badge {
+    @apply px-2 py-1 text-xs font-bold rounded
+           bg-accent-gold text-text-primary;
+  }
+
+  .tw-building-card dl {
+    @apply m-0 p-4 flex-1;
+  }
+
+  .tw-building-card dl > div {
+    @apply flex justify-between py-1;
+  }
+
+  .tw-building-card dt {
+    @apply text-text-secondary text-sm;
+  }
+
+  .tw-building-card dd {
+    @apply m-0 text-sm font-medium text-text-primary;
+  }
+
+  .tw-building-card .tw-card-actions {
+    @apply p-4 pt-0 border-t border-border-light mt-auto;
+  }
+
+  .tw-building-card .tw-card-actions p {
+    @apply text-sm text-text-muted mb-2;
+  }
+
+  .tw-building-card .tw-btn-row {
+    @apply flex gap-2 flex-wrap;
+  }
+
+  .tw-building-card .tw-btn-row form {
+    @apply flex-1;
+    min-width: fit-content;
+  }
+
+  .tw-building-card .tw-btn-row .tw-btn-primary,
+  .tw-building-card .tw-btn-row a.tw-btn-primary {
+    @apply w-full text-center whitespace-nowrap text-sm py-2 px-3;
+  }
+
+  .tw-building-card .tw-btn-row > a.tw-btn-primary {
+    @apply flex-1;
+    min-width: fit-content;
+  }
+
+  .tw-empty-hint {
+    @apply text-text-muted text-center py-8;
+  }
+
+  /* ========== 仓库/藏宝阁标签导航 ========== */
+  .tw-storage-tabs {
+    @apply flex gap-2 mb-6 pb-2;
+    border-bottom: 3px double var(--border-primary);
+  }
+
+  .tw-storage-tab {
+    @apply px-5 py-2.5 no-underline font-semibold
+           border-2 rounded-md transition-all
+           bg-bg-card text-text-secondary;
+    border-color: var(--border-light);
+    box-shadow: 0 1px 3px rgba(74, 38, 18, 0.1);
+  }
+
+  .tw-storage-tab:hover {
+    @apply text-text-primary bg-bg-hover;
+    border-color: var(--border-primary);
+    box-shadow: 0 2px 4px rgba(74, 38, 18, 0.15);
+    transform: translateY(-1px);
+  }
+
+  .tw-storage-tab.active {
+    @apply text-text-light font-bold;
+    background: linear-gradient(180deg, #8B4513 0%, #6B3410 100%);
+    border-color: #5A2D0C;
+    box-shadow: 0 2px 6px rgba(74, 38, 18, 0.25);
+  }
+
+  /* ========== 仓库卡片容器 ========== */
+  .tw-warehouse-card {
+    @apply bg-bg-card border border-border-primary rounded-lg p-6 mb-6
+           flex flex-col;
+    max-height: calc(100vh - 400px);
+  }
+
+  /* ========== 藏宝阁容量条 ========== */
+  .tw-capacity-bar {
+    @apply bg-bg-secondary rounded-lg p-4 mb-4;
+  }
+
+  .tw-capacity-info {
+    @apply flex justify-between items-center mb-3;
+  }
+
+  .tw-capacity-label {
+    @apply font-semibold text-text-primary;
+  }
+
+  .tw-capacity-values {
+    @apply flex gap-2 items-center text-sm;
+  }
+
+  .tw-capacity-used {
+    @apply text-text-secondary;
+  }
+
+  .tw-capacity-total {
+    @apply text-text-secondary;
+  }
+
+  .tw-capacity-remaining {
+    @apply text-accent-green font-semibold;
+  }
+
+  .tw-capacity-remaining.warning {
+    @apply text-yellow-500;
+  }
+
+  .tw-capacity-remaining.critical {
+    @apply text-accent-red;
+  }
+
+  .tw-capacity-progress {
+    @apply w-full h-2 bg-border-primary rounded overflow-hidden;
+  }
+
+  .tw-capacity-progress-bar {
+    @apply h-full transition-all duration-300;
+    background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+  }
+
+  .tw-capacity-progress-bar.warning {
+    background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);
+  }
+
+  .tw-capacity-progress-bar.critical {
+    background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+  }
+
+  .tw-capacity-not-built {
+    @apply text-center py-2 text-accent-red font-medium;
+  }
+
+  /* ========== 仓库表格 ========== */
+  .tw-table-wrapper {
+    @apply flex-1 overflow-y-auto overflow-x-hidden mt-2;
+    min-height: 300px;
+  }
+
+  .tw-warehouse-table {
+    @apply w-full border-collapse;
+  }
+
+  .tw-warehouse-table th {
+    @apply px-3 py-3 text-left font-semibold text-text-secondary
+           bg-bg-secondary sticky top-0 z-10 border-b border-border-primary;
+  }
+
+  .tw-warehouse-table td {
+    @apply px-3 py-3 text-left border-b border-border-primary;
+  }
+
+  .tw-warehouse-table tr:hover {
+    @apply bg-bg-hover;
+  }
+
+  /* ========== 物品单元格 ========== */
+  .tw-item-cell {
+    @apply flex items-center gap-3 relative cursor-pointer;
+  }
+
+  .tw-item-icon {
+    @apply w-10 h-10 rounded-md flex items-center justify-center
+           overflow-hidden border-2 border-border-primary bg-bg-secondary flex-shrink-0;
+  }
+
+  .tw-item-icon img {
+    @apply w-full h-full object-cover;
+  }
+
+  .tw-icon-placeholder {
+    @apply text-xl font-bold text-text-muted;
+  }
+
+  .tw-item-name {
+    @apply font-semibold;
+  }
+
+  /* 稀有度边框颜色 */
+  .tw-item-icon.rarity-black { border-color: #666; }
+  .tw-item-icon.rarity-gray { border-color: #999; }
+  .tw-item-icon.rarity-green { border-color: #2E8B57; }
+  .tw-item-icon.rarity-blue { border-color: #4169E1; }
+  .tw-item-icon.rarity-red { border-color: #DC143C; }
+  .tw-item-icon.rarity-purple { border-color: #9932CC; }
+  .tw-item-icon.rarity-orange { border-color: #FF8C00; }
+
+  /* 稀有度文字颜色 */
+  .tw-item-name.rarity-black { color: #333; }
+  .tw-item-name.rarity-gray { color: #999; }
+  .tw-item-name.rarity-green { color: #3CB371; }
+  .tw-item-name.rarity-blue { color: #6495ED; }
+  .tw-item-name.rarity-red { color: #FF6B6B; }
+  .tw-item-name.rarity-purple { color: #BA55D3; }
+  .tw-item-name.rarity-orange { color: #FFA500; }
+
+  /* ========== 物品 Tooltip ========== */
+  .tw-item-tooltip {
+    @apply hidden fixed min-w-[220px] max-w-[280px] p-3.5 rounded-md z-[1000] pointer-events-none;
+    background: rgba(40, 25, 15, 0.95);
+    border: 1px solid var(--border-light);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    color: var(--text-light);
+  }
+
+  .tw-item-cell:hover .tw-item-tooltip {
+    @apply block;
+  }
+
+  .tw-tooltip-header {
+    @apply font-bold text-base mb-1 bg-transparent;
+  }
+
+  .tw-tooltip-header.rarity-black { color: #E0E0E0; }
+  .tw-tooltip-header.rarity-gray { color: #A0A0A0; }
+  .tw-tooltip-header.rarity-green { color: #4ADE80; }
+  .tw-tooltip-header.rarity-blue { color: #60A5FA; }
+  .tw-tooltip-header.rarity-red { color: #F87171; }
+  .tw-tooltip-header.rarity-purple { color: #C084FC; }
+  .tw-tooltip-header.rarity-orange { color: #FBBF24; }
+
+  .tw-tooltip-category {
+    @apply text-xs text-gray-300 mb-2;
+  }
+
+  .tw-tooltip-desc {
+    @apply text-sm text-gray-100 mb-2 leading-relaxed;
+  }
+
+  .tw-tooltip-attrs {
+    @apply my-2;
+  }
+
+  .tw-attr-row {
+    @apply flex justify-between py-0.5 text-sm;
+  }
+
+  .tw-attr-label {
+    @apply text-gray-400;
+  }
+
+  .tw-attr-value {
+    @apply text-green-400 font-semibold;
+  }
+
+  .tw-tooltip-set {
+    @apply mt-2;
+  }
+
+  .tw-set-name {
+    @apply text-sm text-purple-400 font-semibold mb-1;
+  }
+
+  .tw-set-bonus {
+    @apply text-xs text-purple-400 leading-relaxed;
+  }
+
+  /* ========== 种类标签 ========== */
+  .tw-category-tag {
+    @apply inline-block px-2 py-0.5 text-sm rounded
+           bg-bg-secondary border border-border-primary text-text-secondary;
+  }
+
+  /* ========== 操作栏 ========== */
+  .tw-warehouse-actions {
+    @apply p-2;
+  }
+
+  .tw-action-row {
+    @apply flex items-center justify-between min-w-[320px];
+  }
+
+  .tw-action-use {
+    @apply flex-none w-24 flex justify-start items-center;
+  }
+
+  .tw-action-treasury {
+    @apply flex items-center gap-2 justify-end;
+  }
+
+  .tw-action-treasury form {
+    @apply flex items-center gap-2;
+  }
+
+  .tw-quantity-input {
+    @apply w-16 px-2 py-1 text-center text-sm rounded
+           border border-gray-300 focus:outline-none focus:border-blue-500;
+  }
+
+  /* ========== 筛选表头 ========== */
+  .tw-filter-th {
+    @apply text-right whitespace-nowrap min-w-[200px] pr-4;
+  }
+
+  .tw-filter-form {
+    @apply flex gap-2 items-center justify-end;
+  }
+
+  .tw-filter-label {
+    @apply text-text-secondary font-semibold text-sm;
+  }
+
+  .tw-filter-select {
+    @apply px-2.5 py-1.5 text-sm rounded cursor-pointer min-w-[120px]
+           border border-border-primary bg-bg-card text-text-primary
+           hover:border-text-secondary focus:outline-none focus:border-accent-gold;
+  }
+
+  /* ========== 通用模态框 ========== */
+  .tw-modal-overlay {
+    @apply fixed inset-0 flex items-center justify-center z-[1000];
+    background: rgba(0, 0, 0, 0.6);
+  }
+
+  .tw-modal-content {
+    @apply bg-bg-card border-2 border-border-primary rounded-xl
+           w-[90%] max-w-[480px] max-h-[80vh] flex flex-col;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+
+  .tw-modal-header {
+    @apply flex justify-between items-center px-6 py-4
+           border-b border-border-primary;
+  }
+
+  .tw-modal-header h3 {
+    @apply m-0 text-lg text-text-primary;
+  }
+
+  .tw-modal-close {
+    @apply bg-transparent border-none text-2xl text-text-muted cursor-pointer
+           p-0 leading-none hover:text-text-primary;
+  }
+
+  .tw-modal-body {
+    @apply px-6 py-4 overflow-y-auto flex-1;
+  }
+
+  .tw-modal-hint {
+    @apply text-sm text-text-secondary mb-4 p-3 rounded-md;
+    background: rgba(255, 193, 7, 0.1);
+    border-left: 3px solid #f59e0b;
+  }
+
+  .tw-modal-footer {
+    @apply flex justify-end gap-3 px-6 py-4 border-t border-border-primary;
+  }
+
+  /* ========== 门客选择列表 ========== */
+  .tw-guest-list {
+    @apply flex flex-col max-h-60 overflow-y-auto
+           border border-border-primary rounded-lg;
+  }
+
+  .tw-guest-option {
+    @apply flex justify-between items-center px-4 py-3 cursor-pointer
+           bg-bg-card border-b border-border-primary transition-all;
+  }
+
+  .tw-guest-option:last-child {
+    @apply border-b-0;
+  }
+
+  .tw-guest-option:hover {
+    @apply bg-bg-hover;
+  }
+
+  .tw-guest-option.selected {
+    @apply bg-opacity-15 border-l-[3px] border-l-accent-gold;
+    background: rgba(218, 165, 32, 0.15);
+    padding-left: calc(1rem - 3px);
+  }
+
+  .tw-guest-info {
+    @apply flex items-center gap-3;
+  }
+
+  .tw-guest-name {
+    @apply font-semibold;
+  }
+
+  .tw-guest-level {
+    @apply text-sm text-text-muted;
+  }
+
+  .tw-guest-stats {
+    @apply flex gap-3 text-xs text-text-secondary;
+  }
+
+  .tw-no-guests {
+    @apply text-center text-text-muted py-8 bg-bg-card;
+  }
+
+  /* 门客稀有度颜色 */
+  .rarity-text-black { color: #333; }
+  .rarity-text-gray { color: #888; }
+  .rarity-text-green { color: #2E8B57; }
+  .rarity-text-blue { color: #4169E1; }
+  .rarity-text-red { color: #DC143C; }
+  .rarity-text-purple { color: #9932CC; }
+  .rarity-text-orange { color: #FF8C00; }
+
+  /* ========== 警告/提示框 ========== */
+  .tw-alert {
+    @apply p-4 rounded-md mb-4;
+  }
+
+  .tw-alert-info {
+    @apply tw-alert;
+    background: #e0f2fe;
+    border: 1px solid #0284c7;
+    color: #0369a1;
+  }
+
+  .tw-alert-warning {
+    @apply tw-alert;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    color: #b45309;
+  }
+
+  .tw-alert-danger {
+    @apply tw-alert;
+    background: #fee2e2;
+    border: 1px solid #dc2626;
+    color: #b91c1c;
+  }
+
+  .tw-alert strong {
+    @apply font-bold;
+  }
+
+  .tw-alert .caption {
+    @apply text-sm mt-1 opacity-80;
+  }
+
+  /* ========== 地图控制区 ========== */
+  .tw-map-controls {
+    @apply p-4;
+  }
+
+  .tw-control-row {
+    @apply flex gap-6 flex-wrap;
+  }
+
+  .tw-control-group {
+    @apply flex flex-col gap-2;
+  }
+
+  .tw-control-group label {
+    @apply font-medium text-sm text-text-secondary;
+  }
+
+  .tw-search-group {
+    @apply flex-1 min-w-[200px];
+  }
+
+  .tw-search-wrapper {
+    @apply flex gap-2;
+  }
+
+  .tw-search-wrapper .tw-form-input {
+    @apply flex-1;
+  }
+
+  .tw-form-select,
+  .tw-form-input {
+    @apply px-3 py-2 border border-border-light rounded
+           bg-bg-panel text-text-primary text-sm;
+  }
+
+  .tw-form-select {
+    @apply min-w-[150px];
+  }
+
+  .tw-btn-search {
+    @apply px-4 py-2;
+  }
+
+  /* ========== 庄园列表 ========== */
+  .tw-manor-list-section {
+    @apply p-4;
+  }
+
+  .tw-manor-list-header {
+    @apply flex justify-between items-center mb-4 pb-3
+           border-b border-border-light;
+  }
+
+  .tw-manor-list-header h2 {
+    @apply text-lg m-0;
+  }
+
+  .tw-manor-count {
+    @apply text-sm text-text-muted;
+  }
+
+  .tw-manor-list {
+    @apply flex flex-col gap-2;
+  }
+
+  .tw-manor-card {
+    @apply flex justify-between items-center px-4 py-3
+           bg-bg-hover rounded-md border border-border-light
+           cursor-pointer transition-all;
+  }
+
+  .tw-manor-card:hover {
+    @apply bg-bg-secondary border-border-primary;
+  }
+
+  .tw-manor-card.self {
+    background: #eff6ff;
+    border-color: #3b82f6;
+  }
+
+  .tw-manor-card-info {
+    @apply flex flex-col gap-1;
+  }
+
+  .tw-manor-name {
+    @apply font-semibold text-text-primary flex items-center gap-2;
+  }
+
+  .tw-self-badge {
+    @apply inline-block px-2 py-0.5 text-xs rounded text-white;
+    background: #3b82f6;
+  }
+
+  .tw-protection-badge {
+    @apply inline-block px-2 py-0.5 text-xs rounded ml-2;
+    background: #fef3c7;
+    color: #d97706;
+  }
+
+  .tw-manor-location {
+    @apply text-sm text-text-muted;
+  }
+
+  .tw-manor-card-stats {
+    @apply flex gap-4 items-center;
+  }
+
+  .tw-manor-card-actions {
+    @apply flex gap-2;
+  }
+
+  .tw-prestige-value {
+    @apply font-semibold px-2 py-1 rounded text-sm;
+  }
+
+  .tw-prestige-value.higher {
+    background: #fee2e2;
+    color: #dc2626;
+  }
+
+  .tw-prestige-value.lower {
+    background: #dcfce7;
+    color: #16a34a;
+  }
+
+  .tw-prestige-value.equal {
+    background: #e0e7ff;
+    color: #4f46e5;
+  }
+
+  /* ========== 小按钮 ========== */
+  .tw-btn-small {
+    @apply px-3 py-1.5 text-sm font-semibold rounded cursor-pointer
+           transition-all no-underline inline-flex items-center justify-center
+           gap-1 whitespace-nowrap;
+  }
+
+  .tw-btn-scout,
+  .tw-btn-attack {
+    @apply tw-btn-small text-text-light border-2;
+    background: linear-gradient(180deg, #8B4513 0%, #6B3410 100%);
+    border-color: #5A2D0C;
+    box-shadow: 0 2px 4px rgba(74, 38, 18, 0.15);
+  }
+
+  .tw-btn-scout:hover,
+  .tw-btn-attack:hover {
+    background: linear-gradient(180deg, #7A3A10 0%, #5A2A0D 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(74, 38, 18, 0.25);
+  }
+
+  .tw-btn-small:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  /* ========== 分页 ========== */
+  .tw-pagination {
+    @apply flex justify-center items-center gap-4 mt-4 pt-4
+           border-t border-border-light;
+  }
+
+  .tw-page-info {
+    @apply text-sm text-text-secondary;
+  }
+
+  .tw-loading-hint,
+  .tw-empty-state {
+    @apply text-center text-text-muted py-8;
+  }
+
+  /* ========== 区域标题 ========== */
+  .tw-section-header {
+    @apply mb-4;
+  }
+
+  .tw-section-header h1 {
+    @apply text-xl font-bold m-0 text-text-primary;
+  }
+
+  .tw-section-header .caption {
+    @apply text-sm text-text-muted mt-1;
+  }
+
+  /* ========== 任务标签页 ========== */
+  .tw-mission-tabs {
+    @apply flex gap-2 mb-6 pb-2;
+    border-bottom: 3px double var(--border-primary);
+  }
+
+  .tw-tab-btn {
+    @apply px-5 py-2.5 font-semibold text-base cursor-pointer
+           border-2 rounded-md transition-all
+           bg-bg-card text-text-secondary;
+    border-color: var(--border-light);
+    box-shadow: 0 1px 3px rgba(74, 38, 18, 0.1);
+  }
+
+  .tw-tab-btn:hover {
+    @apply text-text-primary bg-bg-hover;
+    border-color: var(--border-primary);
+    box-shadow: 0 2px 4px rgba(74, 38, 18, 0.15);
+    transform: translateY(-1px);
+  }
+
+  .tw-tab-btn.active {
+    @apply text-text-light font-bold;
+    background: linear-gradient(180deg, #8B4513 0%, #6B3410 100%);
+    border-color: #5A2D0C;
+    box-shadow: 0 2px 6px rgba(74, 38, 18, 0.25);
+  }
+
+  .tw-mission-content {
+    @apply p-4 overflow-y-auto;
+    max-height: 60vh;
+    background: var(--bg-primary);
+  }
+
+  /* ========== 任务表格 ========== */
+  .tw-mission-table {
+    @apply w-full border-collapse;
+  }
+
+  .tw-mission-table th,
+  .tw-mission-table td {
+    @apply px-3 py-3 border-b border-border-primary align-middle;
+  }
+
+  .tw-mission-table th {
+    @apply bg-bg-secondary text-text-secondary font-semibold
+           sticky top-0 z-10;
+    border-bottom: 2px solid var(--border-primary);
+  }
+
+  .tw-mission-table tr:hover {
+    @apply bg-bg-hover;
+  }
+
+  /* ========== 芯片/标签 ========== */
+  .tw-chip {
+    @apply inline-block px-2 py-0.5 text-sm rounded
+           bg-bg-secondary border border-border-light text-text-secondary;
+  }
+
+  /* ========== 任务卡增加按钮 ========== */
+  .tw-btn-add {
+    @apply inline-flex items-center justify-center w-6 h-6 p-0
+           text-lg font-bold rounded-full cursor-pointer transition-all
+           text-accent-gold bg-bg-secondary border-2 border-accent-gold;
+  }
+
+  .tw-btn-add:hover {
+    @apply text-bg-primary bg-accent-gold scale-110;
+  }
+
+  /* ========== 敌人情报网格 ========== */
+  .tw-enemy-grid {
+    @apply flex flex-wrap gap-2 items-start;
+  }
+
+  .tw-enemy-avatar {
+    @apply w-12 h-12 rounded-md object-cover border-2 border-border-primary cursor-pointer;
+  }
+
+  .tw-enemy-entry {
+    @apply relative inline-block;
+  }
+
+  .tw-enemy-count {
+    @apply absolute -bottom-0.5 -right-0.5 text-xs font-semibold
+           px-1 rounded text-text-light;
+    background: rgba(74, 38, 18, 0.9);
+  }
+
+  /* ========== 门客选择网格 ========== */
+  .tw-guest-selection {
+    @apply grid gap-2 mb-4;
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .tw-guest-checkbox {
+    @apply cursor-pointer;
+  }
+
+  .tw-guest-checkbox input {
+    @apply hidden;
+  }
+
+  .tw-guest-card {
+    @apply flex items-center gap-2 p-2 rounded-md transition-all
+           bg-bg-hover border-2 border-border-light;
+  }
+
+  .tw-guest-checkbox input:checked + .tw-guest-card {
+    @apply border-accent-gold;
+    background: #FDF6E3;
+    box-shadow: 0 0 0 1px var(--accent-gold);
+  }
+
+  .tw-guest-card:hover {
+    @apply border-border-primary;
+  }
+
+  .tw-guest-avatar {
+    @apply w-10 h-10 flex-shrink-0 rounded-md overflow-hidden bg-bg-secondary;
+  }
+
+  .tw-guest-avatar img {
+    @apply w-full h-full object-cover;
+  }
+
+  .tw-avatar-placeholder {
+    @apply w-full h-full flex items-center justify-center
+           text-base font-bold text-text-muted bg-bg-secondary;
+  }
+
+  .tw-guest-details {
+    @apply flex-1 min-w-0;
+  }
+
+  .tw-guest-info-row {
+    @apply flex items-center gap-1 mb-0.5;
+  }
+
+  .tw-guest-name-sm {
+    @apply font-semibold text-sm whitespace-nowrap overflow-hidden text-ellipsis;
+  }
+
+  .tw-guest-level-sm {
+    @apply text-xs text-text-muted bg-bg-secondary px-1.5 py-0.5 rounded flex-shrink-0;
+  }
+
+  .tw-guest-stats-sm {
+    @apply text-xs text-text-secondary;
+  }
+
+  .tw-selection-summary {
+    @apply p-2 bg-bg-secondary rounded text-center text-sm;
+  }
+
+  /* ========== 护院选择 ========== */
+  .tw-troop-selection {
+    @apply flex flex-col gap-1.5;
+  }
+
+  .tw-troop-row {
+    @apply flex justify-between items-center px-2.5 py-1.5 rounded-md gap-3
+           bg-bg-hover;
+  }
+
+  .tw-troop-info {
+    @apply flex items-center gap-2 flex-shrink-0;
+  }
+
+  .tw-troop-avatar {
+    @apply w-10 h-10 flex-shrink-0 rounded-md overflow-hidden bg-bg-secondary;
+  }
+
+  .tw-troop-avatar img {
+    @apply w-full h-full object-cover;
+  }
+
+  .tw-troop-details {
+    @apply flex flex-col gap-0.5;
+  }
+
+  .tw-troop-name {
+    @apply font-semibold text-sm;
+  }
+
+  .tw-troop-count {
+    @apply text-xs text-text-muted;
+  }
+
+  .tw-troop-slider-group {
+    @apply flex items-center gap-2 flex-1;
+  }
+
+  .tw-troop-slider {
+    @apply flex-1 min-w-[60px] h-1.5 p-0 appearance-none rounded cursor-pointer
+           bg-border-light outline-none;
+  }
+
+  .tw-troop-slider::-webkit-slider-thumb {
+    @apply appearance-none w-4 h-4 rounded-full cursor-pointer
+           bg-accent-gold border-2 border-border-primary;
+  }
+
+  .tw-troop-num-input {
+    @apply max-w-[60px] p-0 text-center text-xs font-semibold rounded flex-shrink-0
+           bg-bg-secondary border border-border-light text-text-primary
+           focus:outline-none focus:border-accent-gold;
+  }
+
+  /* ========== 稀有度掉落标签 ========== */
+  .tw-pill {
+    @apply inline-block px-2 py-0.5 text-sm rounded-full
+           bg-bg-secondary border border-border-light;
+  }
+
+  .tw-pill.rarity-black { @apply bg-gray-200 text-gray-800; }
+  .tw-pill.rarity-gray { @apply bg-gray-300 text-gray-700; }
+  .tw-pill.rarity-green { @apply bg-green-100 text-green-800 border-green-300; }
+  .tw-pill.rarity-blue { @apply bg-blue-100 text-blue-800 border-blue-300; }
+  .tw-pill.rarity-red { @apply bg-red-100 text-red-800 border-red-300; }
+  .tw-pill.rarity-purple { @apply bg-purple-100 text-purple-800 border-purple-300; }
+  .tw-pill.rarity-orange { @apply bg-orange-100 text-orange-800 border-orange-300; }
+
+  /* ========== 技术标签页 ========== */
+  .tw-tech-tabs {
+    @apply flex gap-2 mb-6 pb-2;
+    border-bottom: 3px double var(--border-primary);
+  }
+
+  .tw-tech-tab {
+    @apply px-5 py-2.5 no-underline font-semibold
+           border-2 rounded-md transition-all
+           bg-bg-card text-text-secondary;
+    border-color: var(--border-light);
+    box-shadow: 0 1px 3px rgba(74, 38, 18, 0.1);
+  }
+
+  .tw-tech-tab:hover {
+    @apply text-text-primary bg-bg-hover;
+    border-color: var(--border-primary);
+    box-shadow: 0 2px 4px rgba(74, 38, 18, 0.15);
+    transform: translateY(-1px);
+  }
+
+  .tw-tech-tab.active {
+    @apply text-text-light font-bold;
+    background: linear-gradient(180deg, #8B4513 0%, #6B3410 100%);
+    border-color: #5A2D0C;
+    box-shadow: 0 2px 6px rgba(74, 38, 18, 0.25);
+  }
+
+  /* ========== 兵种子标签页 ========== */
+  .tw-troop-subtabs {
+    @apply flex gap-1 mb-6 p-2 rounded-lg
+           bg-bg-secondary border-2 border-border-primary;
+  }
+
+  .tw-troop-subtab {
+    @apply px-4 py-2 no-underline font-semibold text-sm rounded-md
+           border-2 transition-all
+           bg-bg-card text-text-secondary;
+    border-color: var(--border-light);
+    box-shadow: 0 1px 3px rgba(74, 38, 18, 0.1);
+  }
+
+  .tw-troop-subtab:hover {
+    @apply text-text-primary bg-bg-hover;
+    border-color: var(--border-primary);
+    box-shadow: 0 2px 4px rgba(74, 38, 18, 0.15);
+    transform: translateY(-1px);
+  }
+
+  .tw-troop-subtab.active {
+    @apply text-text-light font-bold border-border-primary;
+    background: linear-gradient(180deg, #8B4513 0%, #6B3410 100%);
+    border-color: #5A2D0C;
+    box-shadow: 0 2px 6px rgba(74, 38, 18, 0.25);
+  }
+
+  /* ========== 技术卡片状态 ========== */
+  .tw-tech-maxed {
+    @apply opacity-85;
+  }
+
+  .tw-tech-maxed header h3 {
+    @apply text-text-muted;
+  }
+
+  .tw-tech-upgrading {
+    @apply border-accent-gold;
+    box-shadow: 0 0 8px rgba(212, 175, 55, 0.3);
+  }
+
+  .tw-badge-maxed {
+    background: linear-gradient(135deg, var(--accent-green), #1E3A1F) !important;
+  }
+
+  .tw-badge-upgrading {
+    background: linear-gradient(135deg, var(--accent-gold), #B8860B) !important;
+    animation: tw-pulse 2s infinite;
+  }
+
+  @keyframes tw-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  .tw-cost-insufficient {
+    @apply text-accent-red font-bold;
+  }
+
+  /* ========== 消息列表 ========== */
+  .tw-message-list {
+    @apply flex flex-col gap-2;
+  }
+
+  .tw-message-card {
+    @apply flex items-start gap-3 p-3 rounded-md transition-all
+           bg-bg-card border border-border-light;
+  }
+
+  .tw-message-card.unread {
+    @apply bg-bg-panel border-accent-gold;
+  }
+
+  .tw-message-select {
+    @apply cursor-pointer flex-shrink-0;
+  }
+
+  .tw-message-content {
+    @apply flex-1 min-w-0;
+  }
+
+  .tw-message-header {
+    @apply flex justify-between items-center gap-2 mb-1;
+  }
+
+  .tw-message-header-left {
+    @apply flex items-center gap-2 flex-wrap;
+  }
+
+  .tw-message-kind {
+    @apply px-2 py-0.5 text-xs font-semibold rounded;
+  }
+
+  .tw-message-kind.system { @apply bg-blue-100 text-blue-800; }
+  .tw-message-kind.battle { @apply bg-red-100 text-red-800; }
+  .tw-message-kind.trade { @apply bg-green-100 text-green-800; }
+  .tw-message-kind.guild { @apply bg-purple-100 text-purple-800; }
+
+  .tw-message-title {
+    @apply font-semibold text-text-primary no-underline hover:underline;
+  }
+
+  .tw-message-status-dot {
+    @apply text-xs text-accent-red font-semibold;
+  }
+
+  .tw-message-time {
+    @apply text-xs text-text-muted flex-shrink-0;
+  }
+
+  .tw-message-body {
+    @apply text-sm text-text-secondary m-0 mt-1;
+  }
+
+  .tw-message-actions {
+    @apply flex gap-2 mt-4 pt-4 border-t border-border-light;
+  }
+
+  .tw-section-actions {
+    @apply flex gap-2;
+  }
+
+  /* ========== 交易系统组件 ========== */
+  .tw-trade-header {
+    @apply flex justify-between items-end pb-2;
+    border-bottom: 3px double var(--border-primary);
+  }
+
+  .tw-trade-tabs {
+    @apply flex gap-2;
+  }
+
+  .tw-trade-tab {
+    @apply px-5 py-2.5 no-underline font-semibold
+           border-2 rounded-md transition-all
+           bg-bg-card text-text-secondary;
+    border-color: var(--border-light);
+    box-shadow: 0 1px 3px rgba(74, 38, 18, 0.1);
+  }
+
+  .tw-trade-tab:hover {
+    @apply text-text-primary bg-bg-hover;
+    border-color: var(--border-primary);
+    box-shadow: 0 2px 4px rgba(74, 38, 18, 0.15);
+    transform: translateY(-1px);
+  }
+
+  .tw-trade-tab.active {
+    @apply text-text-light font-bold;
+    background: linear-gradient(180deg, #8B4513 0%, #6B3410 100%);
+    border-color: #5A2D0C;
+    box-shadow: 0 2px 6px rgba(74, 38, 18, 0.25);
+  }
+
+  .tw-trade-content {
+    @apply mt-4;
+  }
+
+  .tw-trade-card {
+    @apply bg-bg-card border border-border-primary rounded-lg p-6 mb-6
+           flex flex-col;
+    max-height: calc(100vh - 400px);
+  }
+
+  .tw-trade-card h3 {
+    @apply text-accent-gold mb-4 text-xl;
+  }
+
+  /* 模式切换按钮 */
+  .tw-mode-switch {
+    @apply flex gap-2;
+  }
+
+  .tw-mode-btn {
+    @apply px-5 py-2 font-semibold text-sm cursor-pointer transition-all
+           border-2 border-border-primary rounded-md
+           bg-bg-secondary text-text-secondary;
+  }
+
+  .tw-mode-btn:hover {
+    @apply bg-bg-hover text-text-primary;
+    border-color: var(--text-muted);
+  }
+
+  .tw-mode-btn.active {
+    @apply text-text-light;
+    background: linear-gradient(180deg, #8B4513 0%, #6B3410 100%);
+    border-color: #5A2D0C;
+    box-shadow: 0 2px 6px rgba(74, 38, 18, 0.15);
+  }
+
+  /* 商铺表格 */
+  .tw-shop-table {
+    @apply w-full border-collapse;
+    min-width: 800px;
+    overflow: visible !important;
+  }
+
+  .tw-shop-table th,
+  .tw-shop-table td {
+    @apply px-3 py-3 text-left border-b border-border-primary;
+  }
+
+  .tw-shop-table th {
+    @apply bg-bg-secondary font-semibold text-text-secondary
+           sticky top-0 z-10;
+  }
+
+  .tw-shop-table tr:hover {
+    @apply bg-bg-hover;
+  }
+
+  .tw-shop-table-wrapper {
+    @apply flex-1 overflow-y-auto overflow-x-auto mt-2;
+    min-height: 300px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tw-shop-section-hidden {
+    @apply hidden;
+  }
+
+  /* 购买/出售按钮 */
+  .tw-btn-trade {
+    @apply px-5 py-2 rounded-md cursor-pointer font-semibold text-sm
+           transition-all whitespace-nowrap text-text-light;
+    min-width: 72px;
+    background: linear-gradient(180deg, #8B4513 0%, #6B3410 100%);
+    border: 2px solid #5A2D0C;
+    box-shadow: 0 2px 6px rgba(74, 38, 18, 0.15);
+  }
+
+  .tw-btn-trade:hover:not(:disabled) {
+    background: linear-gradient(180deg, #7A3A10 0%, #5A2A0D 100%);
+    box-shadow: 0 4px 8px rgba(74, 38, 18, 0.25);
+    transform: translateY(-1px);
+  }
+
+  .tw-btn-trade:disabled {
+    @apply opacity-60 cursor-not-allowed;
+    box-shadow: none;
+    transform: none;
+  }
+
+  .tw-out-of-stock {
+    @apply text-text-muted;
+  }
+
+  .tw-price {
+    @apply text-accent-gold font-semibold whitespace-nowrap;
+  }
+
+  .tw-price.gold {
+    color: #fbbf24 !important;
+  }
+
+  /* 银行组件 */
+  .tw-bank-section {
+    @apply bg-bg-card rounded-lg p-6 max-w-xl;
+  }
+
+  .tw-bank-section h3 {
+    @apply mt-0 mb-6 text-text-primary border-b-2 border-border-primary pb-2;
+  }
+
+  .tw-bank-info {
+    @apply mb-4;
+  }
+
+  .tw-info-row {
+    @apply flex justify-between py-2;
+    border-bottom: 1px solid var(--border-secondary);
+  }
+
+  .tw-info-row:last-child {
+    @apply border-b-0;
+  }
+
+  .tw-info-row.highlight {
+    @apply rounded-md mx-[-0.5rem] px-2 py-3 border-b-0;
+    background: linear-gradient(90deg, rgba(245,158,11,0.1) 0%, transparent 100%);
+  }
+
+  .tw-info-label {
+    @apply text-text-secondary font-medium;
+  }
+
+  .tw-info-value {
+    @apply text-text-primary font-semibold;
+  }
+
+  .tw-info-value.highlight {
+    @apply text-lg;
+    color: #f59e0b;
+  }
+
+  .tw-rate-factors {
+    @apply flex gap-4 mb-6 p-3 bg-bg-secondary rounded-md;
+  }
+
+  .tw-factor-item {
+    @apply flex-1 text-center;
+  }
+
+  .tw-factor-label {
+    @apply block text-xs text-text-secondary mb-1;
+  }
+
+  .tw-factor-value {
+    @apply font-bold text-text-primary;
+  }
+
+  .tw-factor-value.up {
+    color: #ef4444;
+  }
+
+  .tw-factor-value.down {
+    color: #10b981;
+  }
+
+  .tw-exchange-form {
+    @apply my-6 p-4 bg-bg-secondary rounded-md;
+  }
+
+  .tw-bank-tips {
+    @apply mt-6 p-4 bg-bg-secondary rounded-md;
+  }
+
+  .tw-bank-tips h4 {
+    @apply mt-0 mb-3 text-text-primary;
+  }
+
+  .tw-bank-tips ul {
+    @apply m-0 pl-6;
+  }
+
+  .tw-bank-tips li {
+    @apply text-text-secondary mb-2 leading-relaxed;
+  }
+
+  /* 市场状态 */
+  .tw-market-status-active {
+    color: #4ADE80;
+    @apply font-semibold;
+  }
+
+  .tw-market-status-sold {
+    @apply text-text-muted;
+  }
+
+  .tw-market-status-expired {
+    color: #FF6B6B;
+  }
+
+  .tw-market-countdown {
+    @apply font-semibold;
+  }
+
+  /* 市场表单 */
+  .tw-market-form-group {
+    @apply mb-6;
+  }
+
+  .tw-market-form-group label {
+    @apply block text-text-secondary font-semibold mb-2 text-sm;
+  }
+
+  .tw-market-form-group input[type="number"] {
+    @apply w-full p-3 rounded-md text-base font-medium transition-all
+           bg-bg-secondary text-text-primary;
+    border: 2px solid var(--border-primary);
+  }
+
+  .tw-market-form-group input[type="number"]:focus {
+    @apply outline-none bg-bg-card;
+    border-color: var(--accent-gold);
+    box-shadow: 0 0 0 3px rgba(218, 165, 32, 0.1);
+  }
+
+  .tw-market-form-value {
+    @apply text-accent-gold font-semibold text-lg m-0 py-2;
+  }
+
+  .tw-market-form-hint {
+    @apply text-sm text-text-muted mt-1;
+  }
+
+  .tw-market-highlight {
+    @apply text-accent-gold font-semibold;
+  }
+
+  .tw-market-form-note {
+    @apply text-sm mt-2 leading-relaxed;
+    color: #FF6B6B;
+  }
+
+  .tw-market-duration-options {
+    @apply flex flex-col gap-3;
+  }
+
+  .tw-market-radio-option {
+    @apply flex items-center p-3 rounded-md cursor-pointer transition-all
+           bg-bg-secondary;
+    border: 2px solid var(--border-primary);
+  }
+
+  .tw-market-radio-option:hover {
+    @apply bg-bg-hover;
+    border-color: var(--accent-gold);
+  }
+
+  .tw-market-radio-option input[type="radio"] {
+    @apply mr-3 cursor-pointer flex-shrink-0;
+    width: 18px;
+    height: 18px;
+  }
+
+  .tw-market-radio-option span {
+    @apply flex-1 text-sm;
+  }
+
+  .tw-market-radio-option:has(input:checked) {
+    @apply bg-bg-hover;
+    border-color: var(--accent-gold);
+  }
+
+  .tw-market-radio-option:has(input:checked) span {
+    @apply text-accent-gold font-semibold;
+  }
+
+  .tw-market-form-summary {
+    @apply bg-bg-secondary border border-border-primary rounded-md p-5 mb-6;
+  }
+
+  .tw-market-form-summary p {
+    @apply my-3 text-sm;
+  }
+
+  .tw-market-form-actions {
+    @apply flex justify-end gap-4 mt-8 pt-4 border-t border-border-primary;
+  }
+
+  /* 拍卖组件 */
+  .tw-auction-info-bar {
+    @apply flex flex-wrap gap-4 p-4 bg-bg-card border border-border-primary rounded-lg mb-4;
+  }
+
+  .tw-auction-info-item {
+    @apply flex flex-col min-w-[100px];
+  }
+
+  .tw-auction-info-item .label {
+    @apply text-sm text-text-secondary mb-1;
+  }
+
+  .tw-auction-info-item .value {
+    @apply text-lg font-semibold text-text-primary;
+  }
+
+  .tw-auction-info-item .value.gold-bar {
+    color: #fbbf24;
+  }
+
+  .tw-auction-info-item .value.frozen {
+    color: #60a5fa;
+  }
+
+  .tw-auction-info-item .value.leading {
+    color: #4ade80;
+  }
+
+  .tw-auction-table {
+    @apply w-full border-collapse;
+    overflow: visible !important;
+  }
+
+  .tw-auction-table th,
+  .tw-auction-table td {
+    @apply px-3 py-3 text-left border-b border-border-primary;
+  }
+
+  .tw-auction-table th {
+    @apply bg-bg-secondary font-semibold text-text-secondary
+           sticky top-0 z-10 whitespace-nowrap;
+  }
+
+  .tw-auction-table tr:hover {
+    @apply bg-bg-hover;
+  }
+
+  .tw-auction-table tr.row-safe {
+    background: rgba(74, 222, 128, 0.08);
+  }
+
+  .tw-auction-table tr.row-safe:hover {
+    background: rgba(74, 222, 128, 0.15);
+  }
+
+  .tw-status-safe {
+    @apply inline-block px-2 py-1 rounded text-xs font-semibold;
+    background: rgba(74, 222, 128, 0.15);
+    border: 1px solid #4ade80;
+    color: #4ade80;
+  }
+
+  .tw-status-danger {
+    @apply inline-block px-2 py-1 rounded text-xs font-semibold;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid #ef4444;
+    color: #ef4444;
+  }
+
+  .tw-full-badge {
+    @apply inline-block px-1.5 py-0.5 rounded text-xs font-semibold ml-1;
+    background: rgba(251, 191, 36, 0.15);
+    border: 1px solid #fbbf24;
+    color: #fbbf24;
+  }
+
+  .tw-btn-bid {
+    @apply px-3 py-1.5 rounded cursor-pointer font-semibold text-sm transition-all;
+    background: linear-gradient(180deg, #fbbf24 0%, #d97706 100%);
+    color: #1a1a1a;
+    border: 1px solid #b45309;
+  }
+
+  .tw-btn-bid:hover {
+    background: linear-gradient(180deg, #f59e0b 0%, #b45309 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(251, 191, 36, 0.25);
+  }
+
+  .tw-bid-status {
+    @apply inline-block px-2 py-1 rounded text-sm font-semibold;
+  }
+
+  .tw-bid-status-active {
+    background: rgba(74, 222, 128, 0.15);
+    color: #4ade80;
+  }
+
+  .tw-bid-status-outbid {
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbbf24;
+  }
+
+  .tw-bid-status-won {
+    background: rgba(96, 165, 250, 0.15);
+    color: #60a5fa;
+  }
+
+  .tw-bid-status-refunded {
+    background: rgba(156, 163, 175, 0.15);
+    color: #9ca3af;
+  }
+
+  .tw-my-bids-section {
+    @apply mb-8;
+  }
+
+  .tw-my-bids-section:last-child {
+    @apply mb-0;
+  }
+
+  .tw-bids-section-title {
+    @apply text-accent-gold text-base m-0 mb-4 pb-2 border-b border-border-primary;
+  }
+
+  /* ========== 帮会系统组件 ========== */
+  .tw-guild-info-grid {
+    @apply grid gap-6;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+
+  .tw-guild-dl {
+    @apply m-0;
+  }
+
+  .tw-guild-dl > div {
+    @apply flex justify-between py-2 border-b border-border-light;
+  }
+
+  .tw-guild-dl > div:last-child {
+    @apply border-b-0;
+  }
+
+  .tw-guild-dl dt {
+    @apply text-text-secondary;
+  }
+
+  .tw-guild-dl dd {
+    @apply m-0 font-semibold text-text-primary;
+  }
+
+  .tw-guild-resource-value {
+    @apply font-bold;
+  }
+
+  .tw-guild-resource-value.resource-silver {
+    color: #C0C0C0;
+  }
+
+  .tw-guild-resource-value.resource-grain {
+    color: #8B4513;
+  }
+
+  .tw-guild-resource-value.resource-gold {
+    color: #FFD700;
+  }
+
+  .tw-guild-resource-value.resource-blue {
+    color: #4169E1;
+  }
+
+  .tw-guild-position-leader {
+    @apply inline-block px-2 py-0.5 rounded text-xs font-bold text-white;
+    background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+  }
+
+  .tw-guild-position-admin {
+    @apply inline-block px-2 py-0.5 rounded text-xs font-bold text-white;
+    background: linear-gradient(135deg, #4169E1 0%, #1E3A8A 100%);
+  }
+
+  .tw-guild-position-member {
+    @apply inline-block px-2 py-0.5 rounded text-xs font-bold;
+    @apply bg-bg-secondary text-text-secondary;
+  }
+
+  .tw-guild-quick-links {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .tw-guild-card-divider {
+    @apply mt-4 pt-4 border-t border-border-light;
+  }
+
+  .tw-guild-announcement {
+    @apply p-4 rounded-lg mb-3 last:mb-0;
+    @apply bg-bg-secondary border border-border-light;
+  }
+
+  .tw-guild-announcement.announcement-leader {
+    @apply border-accent-gold;
+    background: rgba(218, 165, 32, 0.1);
+  }
+
+  .tw-guild-announcement.announcement-system {
+    @apply border-blue-500;
+    background: rgba(59, 130, 246, 0.1);
+  }
+
+  .tw-guild-announcement-header {
+    @apply flex justify-between items-center mb-2;
+  }
+
+  .tw-guild-announcement-title {
+    @apply font-bold text-text-primary;
+  }
+
+  .tw-guild-member-actions {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .tw-guild-warning {
+    @apply p-4 rounded-lg my-4;
+    background: #FEF3C7;
+    border: 1px solid #F59E0B;
+    color: #92400E;
+  }
+
+  .tw-guild-stats-grid {
+    @apply grid gap-4;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+
+  .tw-guild-stat-item {
+    @apply text-center p-4 rounded-lg bg-bg-secondary;
+  }
+
+  .tw-guild-stat-item h4 {
+    @apply m-0 mb-2 text-sm text-text-secondary;
+  }
+
+  .tw-guild-stat-value {
+    @apply text-2xl font-bold text-text-primary;
+  }
+
+  .tw-guild-stat-value.stat-total {
+    color: #4169E1;
+  }
+
+  .tw-guild-stat-value.stat-leader {
+    color: #FFD700;
+  }
+
+  .tw-guild-stat-value.stat-admin {
+    color: #9333EA;
+  }
+
+  .tw-guild-stat-hint {
+    @apply text-xs text-text-muted mt-1 m-0;
+  }
+
+  .tw-guild-table-row-clickable {
+    @apply cursor-pointer transition-colors;
+  }
+
+  .tw-guild-table-row-clickable:hover {
+    @apply bg-bg-hover;
+  }
+
+  .tw-guild-table-highlight {
+    background: rgba(218, 165, 32, 0.1) !important;
+  }
+
+  .tw-guild-name-link {
+    @apply text-accent-gold font-semibold no-underline hover:underline;
+  }
+
+  .tw-guild-search-form {
+    @apply flex flex-wrap gap-4 items-end;
+  }
+
+  .tw-guild-search-input {
+    @apply flex-1 min-w-[200px];
+  }
+
+  .tw-guild-search-select {
+    @apply w-40;
+  }
+
+  .tw-guild-donate-grid {
+    @apply grid gap-6;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
+
+  .tw-guild-cost-value {
+    color: #DC2626;
+    @apply font-semibold;
+  }
+
+  .tw-guild-cost-dl {
+    @apply m-0;
+  }
+
+  .tw-guild-cost-dl > div {
+    @apply flex justify-between py-2;
+  }
+
+  .tw-guild-cost-large {
+    @apply text-xl font-bold;
+  }
+
+  .tw-guild-cost-card {
+    @apply p-4 rounded-lg mb-4 bg-bg-secondary;
+  }
+
+  .tw-guild-cost-card h4 {
+    @apply m-0 mb-2 text-text-primary;
+  }
+
+  .tw-guild-cost-card p {
+    @apply m-0 mt-1 text-sm;
+  }
+
+  .tw-guild-creation-cost {
+    @apply p-4 rounded-lg my-4 bg-bg-secondary border border-border-primary;
+  }
+
+  .tw-guild-creation-cost h3 {
+    @apply m-0 mb-3 text-text-primary;
+  }
+
+  .tw-guild-tech-effect {
+    color: #16A34A;
+    @apply font-semibold;
+  }
+
+  .tw-guild-tech-inactive {
+    @apply text-text-muted;
+  }
+
+  .tw-guild-section-spacing {
+    @apply mt-6;
+  }
+}
+
+@layer utilities {
+  /* ========== 古风特殊工具类 ========== */
+  .text-shadow-light {
+    text-shadow: 1px 1px 0 var(--bg-panel);
+  }
+
+  .border-decorative {
+    border-color: var(--border-decorative);
+  }
+}
+
+/* ========== 移动端响应式样式 ========== */
+@media (max-width: 768px) {
+  /* 仓库/藏宝阁移动端适配 */
+  .tw-storage-tabs {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .tw-storage-tab {
+    flex: 1;
+    text-align: center;
+    min-width: 80px;
+  }
+
+  .tw-warehouse-card {
+    max-height: none;
+    padding: 1rem;
+  }
+
+  .tw-table-wrapper {
+    overflow-x: visible;
+    min-height: auto;
+  }
+
+  .tw-capacity-bar {
+    padding: 0.75rem;
+  }
+
+  .tw-capacity-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .tw-capacity-values {
+    flex-wrap: wrap;
+  }
+
+  /* 仓库表格改为卡片式布局 */
+  .tw-warehouse-table {
+    display: block;
+  }
+
+  .tw-warehouse-table thead {
+    display: none;
+  }
+
+  .tw-warehouse-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .tw-warehouse-table tbody tr {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem;
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    background: var(--bg-panel);
+  }
+
+  .tw-warehouse-table tbody tr td {
+    padding: 0;
+    border: none;
+  }
+
+  /* 物品单元格 */
+  .tw-warehouse-table tbody tr td:first-child {
+    margin-bottom: 0.5rem;
+  }
+
+  .tw-warehouse-table tbody tr td:nth-child(2)::before {
+    content: "种类: ";
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+
+  .tw-warehouse-table tbody tr td:nth-child(3)::before {
+    content: "数量: ";
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+
+  /* 操作区域 */
+  .tw-warehouse-actions {
+    padding: 0;
+  }
+
+  .tw-action-row {
+    flex-direction: column;
+    min-width: auto;
+    gap: 0.5rem;
+  }
+
+  .tw-action-use {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .tw-action-treasury {
+    width: 100%;
+  }
+
+  .tw-action-treasury form {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .tw-action-treasury .tw-quantity-input {
+    flex: 1;
+  }
+
+  .tw-action-treasury .tw-btn-secondary {
+    flex: 2;
+  }
+
+  /* 筛选下拉框隐藏，改用第5列作为筛选区 */
+  .tw-warehouse-table tbody tr td:nth-child(5) {
+    display: none;
+  }
+
+  /* 交易界面移动端适配 */
+  .tw-trade-header {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .tw-trade-tabs {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .tw-trade-tab {
+    flex: 1;
+    text-align: center;
+    min-width: 70px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+  }
+
+  .tw-mode-switch {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .tw-mode-btn {
+    flex: 1;
+    text-align: center;
+  }
+
+  .tw-trade-card {
+    max-height: none;
+    padding: 1rem;
+  }
+
+  /* 商店表格移动端 */
+  .tw-shop-table-wrapper {
+    overflow-x: visible;
+  }
+
+  .tw-shop-table {
+    display: block;
+    min-width: auto;
+  }
+
+  .tw-shop-table thead {
+    display: none;
+  }
+
+  .tw-shop-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .tw-shop-table tbody tr {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem;
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    background: var(--bg-panel);
+  }
+
+  .tw-shop-table tbody tr td {
+    padding: 0;
+    border: none;
+  }
+
+  .tw-shop-table tbody tr td:nth-child(2)::before {
+    content: "种类: ";
+    color: var(--text-muted);
+  }
+
+  .tw-shop-table tbody tr td:nth-child(3)::before {
+    content: "价格: ";
+    color: var(--text-muted);
+  }
+
+  .tw-shop-table tbody tr td:nth-child(4)::before {
+    content: "库存: ";
+    color: var(--text-muted);
+  }
+
+  /* 拍卖表格移动端 */
+  .tw-auction-info-bar {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .tw-auction-info-item {
+    min-width: auto;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .tw-auction-table {
+    display: block;
+  }
+
+  .tw-auction-table thead {
+    display: none;
+  }
+
+  .tw-auction-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .tw-auction-table tbody tr {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem;
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    background: var(--bg-panel);
+  }
+
+  .tw-auction-table tbody tr td {
+    padding: 0;
+    border: none;
+  }
+
+  /* 银行界面移动端 */
+  .tw-bank-section {
+    padding: 1rem;
+    max-width: none;
+  }
+
+  .tw-rate-factors {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .tw-factor-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    text-align: left;
+  }
+
+  /* 市场上架弹窗移动端 */
+  .tw-market-duration-options {
+    gap: 0.5rem;
+  }
+
+  .tw-market-radio-option {
+    padding: 0.75rem;
+  }
+
+  .tw-market-form-actions {
+    flex-direction: column;
+  }
+
+  .tw-market-form-actions button {
+    width: 100%;
+  }
+
+  /* 模态框移动端适配 */
+  .tw-modal-content {
+    width: 95%;
+    max-width: none;
+    max-height: 90vh;
+  }
+
+  .tw-modal-header {
+    padding: 1rem;
+  }
+
+  .tw-modal-body {
+    padding: 1rem;
+  }
+
+  .tw-modal-footer {
+    padding: 1rem;
+    flex-direction: column;
+  }
+
+  .tw-modal-footer button {
+    width: 100%;
+  }
+}

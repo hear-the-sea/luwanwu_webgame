@@ -20,10 +20,13 @@ from core.exceptions import (
     NoGuestsError,
     SalaryAlreadyPaidError,
 )
-from guests.models import Guest, RARITY_SALARY, SalaryPayment
+from guests.models import Guest, GuestRarity, RARITY_SALARY, SalaryPayment
 
 if TYPE_CHECKING:
     from gameplay.models import Manor
+
+# 默认工资（用于未配置稀有度的兜底情况，与灰色门客工资相同）
+DEFAULT_SALARY = RARITY_SALARY.get(GuestRarity.GRAY, 1000)
 
 
 def get_guest_salary(guest: Guest) -> int:
@@ -36,7 +39,7 @@ def get_guest_salary(guest: Guest) -> int:
     Returns:
         工资金额
     """
-    return RARITY_SALARY.get(guest.rarity, 1000)
+    return RARITY_SALARY.get(guest.rarity, DEFAULT_SALARY)
 
 
 def check_salary_paid(guest: Guest, for_date: date = None) -> bool:
@@ -103,11 +106,13 @@ def pay_guest_salary(manor: Manor, guest: Guest, for_date: date = None) -> Salar
     Raises:
         ValueError: 验证失败时抛出异常
     """
+    from django.db.models import F
+
     if for_date is None:
         for_date = timezone.now().date()
 
     # 验证门客属于该庄园
-    if guest.manor != manor:
+    if guest.manor_id != manor.id:
         raise GuestOwnershipError(guest)
 
     # 检查是否已支付
@@ -117,13 +122,16 @@ def pay_guest_salary(manor: Manor, guest: Guest, for_date: date = None) -> Salar
     # 计算工资
     salary_amount = get_guest_salary(guest)
 
-    # 验证银两是否足够
-    if manor.silver < salary_amount:
-        raise InsufficientResourceError("silver", salary_amount, manor.silver)
+    # 使用原子更新防止并发竞态，同时验证银两是否足够
+    updated = Manor.objects.filter(
+        pk=manor.pk,
+        silver__gte=salary_amount
+    ).update(silver=F('silver') - salary_amount)
 
-    # 扣除银两
-    manor.silver -= salary_amount
-    manor.save(update_fields=["silver"])
+    if not updated:
+        # 重新获取最新银两数值用于错误提示
+        manor.refresh_from_db(fields=['silver'])
+        raise InsufficientResourceError("silver", salary_amount, manor.silver)
 
     # 创建支付记录
     payment = SalaryPayment.objects.create(

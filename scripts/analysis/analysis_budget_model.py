@@ -38,11 +38,13 @@ INITIAL_SILVER = 500
 
 # ==================== 数据加载 ====================
 
+
 def load_building_data() -> List[dict]:
     """加载建筑配置"""
     with open('data/building_templates.yaml', 'r', encoding='utf-8') as f:
         data = yaml.safe_load(f)
     return data['buildings']
+
 
 def load_technology_data() -> List[dict]:
     """加载科技配置"""
@@ -51,6 +53,7 @@ def load_technology_data() -> List[dict]:
     return data['technologies']
 
 # ==================== 计算函数 ====================
+
 
 def calc_building_upgrade_cost(building: dict, target_level: int) -> Dict[str, int]:
     """计算建筑升级到目标等级的成本"""
@@ -62,6 +65,7 @@ def calc_building_upgrade_cost(building: dict, target_level: int) -> Dict[str, i
         resource: math.ceil(amount * multiplier)
         for resource, amount in base_cost.items()
     }
+
 
 def calc_building_upgrade_time(building: dict, target_level: int, citang_level: int = 0) -> int:
     """计算建筑升级到目标等级的时间（秒）"""
@@ -77,11 +81,13 @@ def calc_building_upgrade_time(building: dict, target_level: int, citang_level: 
 
     return actual_duration
 
+
 def calc_tech_upgrade_cost(tech: dict, next_level: int) -> int:
     """计算科技升级到下一级的成本（只消耗银两）"""
     base_cost = tech['base_cost']
     # 公式: base_cost * (next_level ** 2) * 5
     return base_cost * (next_level ** 2) * 5
+
 
 def calc_tech_upgrade_time(current_level: int) -> int:
     """计算科技升级时间（秒）"""
@@ -89,6 +95,7 @@ def calc_tech_upgrade_time(current_level: int) -> int:
     return int(60 * (1.4 ** current_level))
 
 # ==================== 升级路径模拟 ====================
+
 
 def simulate_building_upgrades(buildings: List[dict]) -> dict:
     """模拟建筑升级全过程"""
@@ -139,6 +146,7 @@ def simulate_building_upgrades(buildings: List[dict]) -> dict:
         'building_count': len(buildings),
         'details': building_details
     }
+
 
 def simulate_technology_upgrades(technologies: List[dict], max_days_threshold: float = 100.0) -> dict:
     """模拟科技升级全过程
@@ -202,6 +210,7 @@ def simulate_technology_upgrades(technologies: List[dict], max_days_threshold: f
 
 # ==================== 资源产出评估 ====================
 
+
 def calc_building_production_at_level(building: dict, level: int) -> float:
     """计算建筑在指定等级的每小时产量"""
     base_rate = building['base_rate_per_hour']
@@ -209,6 +218,7 @@ def calc_building_production_at_level(building: dict, level: int) -> float:
 
     growth = 1 + rate_growth * (level - 1)
     return base_rate * growth
+
 
 def estimate_resource_production() -> dict:
     """评估资源产出速率"""
@@ -240,6 +250,7 @@ def estimate_resource_production() -> dict:
     }
 
 # ==================== 主分析函数 ====================
+
 
 def main():
     print("=" * 80)
@@ -448,6 +459,7 @@ def main():
     print("  ❌ 未考虑建筑等级提升对资源产出的动态增长")
     print("  ❌ 资源产出按平均Lv10估算，实际是动态增长过程")
     print()
+
 
 if __name__ == '__main__':
     main()

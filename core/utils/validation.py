@@ -40,7 +40,8 @@ def safe_int(value: Any, default: Optional[int] = 0, min_val: Optional[int] = No
         转换后的整数，或默认值
     """
     try:
-        result = int(value) if value else default
+        # Bug修复：使用 `is not None` 替代真值判断，避免 value=0 被错误处理
+        result = int(value) if value is not None else default
     except (ValueError, TypeError):
         result = default
 
@@ -67,7 +68,8 @@ def safe_float(value: Any, default: Optional[float] = 0.0, min_val: Optional[flo
         转换后的浮点数，或默认值
     """
     try:
-        result = float(value) if value else default
+        # Bug修复：使用 `is not None` 替代真值判断，避免 value=0 被错误处理
+        result = float(value) if value is not None else default
     except (ValueError, TypeError):
         result = default
 

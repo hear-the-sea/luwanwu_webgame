@@ -36,7 +36,7 @@ TROOP_CAPACITY_LEVEL_THRESHOLD = 70  # 获得额外带兵的等级门槛
 CIVIL_FORCE_WEIGHT = 0.8        # 文官武力权重
 CIVIL_INTELLECT_WEIGHT = 0.3    # 文官智力权重
 MILITARY_FORCE_WEIGHT = 1.0     # 武将武力权重
-MILITARY_INTELLECT_WEIGHT = 0.2 # 武将智力权重
+MILITARY_INTELLECT_WEIGHT = 0.2  # 武将智力权重
 
 
 class GuestRarity(models.TextChoices):

@@ -43,13 +43,19 @@ def debugger_view(view_func):
     """
     组合装饰器：登录 + staff + DEBUG 模式
     用于保护所有 battle_debugger 视图
+
+    执行顺序：debug_only -> staff_member_required -> login_required -> view_func
+    这样确保：1) 先检查登录 2) 再检查staff权限 3) 最后检查DEBUG模式
     """
     @wraps(view_func)
-    @login_required
-    @staff_member_required
-    @debug_only
     def _wrapped(request, *args, **kwargs):
         return view_func(request, *args, **kwargs)
+
+    # 正确的装饰器顺序：从内到外应用
+    # 最终执行顺序是 login_required -> staff_member_required -> debug_only -> view
+    _wrapped = debug_only(_wrapped)
+    _wrapped = staff_member_required(_wrapped)
+    _wrapped = login_required(_wrapped)
     return _wrapped
 
 
@@ -322,7 +328,11 @@ def api_guests(request):
     """获取所有门客模板"""
     from guests.models import GuestTemplate
 
-    guests = GuestTemplate.objects.all().order_by('rarity', 'name')
+    # 优化：使用 only() 只获取需要的字段，避免加载不必要的数据
+    guests = GuestTemplate.objects.only(
+        'key', 'name', 'rarity', 'archetype',
+        'base_attack', 'base_intellect', 'base_defense', 'base_agility', 'base_luck', 'base_hp'
+    ).order_by('rarity', 'name')
     data = [
         {
             'key': g.key,
@@ -346,7 +356,8 @@ def api_skills(request):
     """获取所有技能"""
     from guests.models import Skill
 
-    skills = Skill.objects.all().order_by('name')
+    # 优化：使用 only() 只获取需要的字段
+    skills = Skill.objects.only('key', 'name', 'kind', 'description').order_by('name')
     data = [
         {
             'key': s.key,
@@ -364,7 +375,10 @@ def api_troops(request):
     """获取所有小兵类型"""
     from battle.models import TroopTemplate
 
-    troops = TroopTemplate.objects.all().order_by('priority')
+    # 优化：使用 only() 只获取需要的字段
+    troops = TroopTemplate.objects.only(
+        'key', 'name', 'base_attack', 'base_defense', 'base_hp', 'description', 'priority'
+    ).order_by('priority')
     data = [
         {
             'key': t.key,
@@ -526,4 +540,3 @@ def _parse_tunable_params(post_data) -> dict:
             if parsed is not None:
                 params[key] = parsed
     return params
-

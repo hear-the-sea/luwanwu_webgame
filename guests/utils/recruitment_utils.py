@@ -8,6 +8,11 @@ from __future__ import annotations
 import random
 from typing import List
 
+from common.utils.random_utils import (
+    cumulative_choice,
+    weighted_random_choice,
+)
+
 from ..models import GuestRarity, RecruitmentPoolEntry
 
 
@@ -44,15 +49,15 @@ RARITY_DISTRIBUTION = RARITY_WEIGHTS + [(GuestRarity.BLACK, max(BLACK_WEIGHT, 0)
 def choose_rarity(rng: random.Random) -> str:
     """
     根据权重随机选择一个稀有度。
-    
+
     使用累计权重方式实现概率抽取，确保稀有度分布符合预设比例。
-    
+
     Args:
         rng: 随机数生成器
-        
+
     Returns:
         稀有度字符串（BLACK/GRAY/GREEN等）
-        
+
     Examples:
         >>> import random
         >>> rng = random.Random(42)
@@ -60,25 +65,25 @@ def choose_rarity(rng: random.Random) -> str:
         >>> rarity in ['black', 'gray', 'green', 'blue', 'red', 'purple', 'orange']
         True
     """
-    roll = rng.randint(1, TOTAL_WEIGHT)
-    cumulative = 0
-    for rarity, weight in RARITY_DISTRIBUTION:
-        cumulative += weight
-        if roll <= cumulative:
-            return rarity
-    return GuestRarity.BLACK
+    # 使用统一的累计权重选择函数
+    return cumulative_choice(
+        RARITY_DISTRIBUTION,
+        TOTAL_WEIGHT,
+        rng,
+        default=GuestRarity.BLACK,
+    )
 
 
 def entry_rarity(entry: RecruitmentPoolEntry) -> str | None:
     """
     获取招募池条目的稀有度。
-    
+
     如果条目指定了具体模板，返回模板的稀有度；
     否则返回条目自身的稀有度配置。
-    
+
     Args:
         entry: 招募池条目
-        
+
     Returns:
         稀有度字符串，如果无法确定则返回 None
     """
@@ -90,11 +95,11 @@ def entry_rarity(entry: RecruitmentPoolEntry) -> str | None:
 def filter_entries(entries: List[RecruitmentPoolEntry], rarity: str) -> List[RecruitmentPoolEntry]:
     """
     筛选出指定稀有度的招募池条目。
-    
+
     Args:
         entries: 招募池条目列表
         rarity: 目标稀有度
-        
+
     Returns:
         符合稀有度的条目列表
     """
@@ -104,25 +109,20 @@ def filter_entries(entries: List[RecruitmentPoolEntry], rarity: str) -> List[Rec
 def weighted_choice(entries: List[RecruitmentPoolEntry], rng: random.Random) -> RecruitmentPoolEntry:
     """
     根据权重从条目列表中随机选择一个。
-    
+
     每个条目可配置权重（weight字段），权重越高被选中概率越大。
     如果未配置权重，默认权重为1。
-    
+
     Args:
         entries: 招募池条目列表
         rng: 随机数生成器
-        
+
     Returns:
         被选中的条目
-        
+
     Raises:
         IndexError: 如果条目列表为空
     """
-    total = sum(entry.weight or 1 for entry in entries) or len(entries)
-    pick = rng.uniform(0, total)
-    upto = 0
-    for entry in entries:
-        upto += entry.weight or 1
-        if upto >= pick:
-            return entry
-    return entries[-1]
+    # 使用统一的加权随机选择函数
+    weights = [entry.weight or 1 for entry in entries]
+    return weighted_random_choice(entries, weights, rng)

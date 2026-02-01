@@ -16,4 +16,3 @@ class TimeConstants:
     HP_RECOVERY_INTERVAL = 600  # 10分钟更新一次
     HP_FULL_RECOVERY_TIME = 24 * 3600  # 24小时完全恢复
     TRAINING_CHECK_INTERVAL = 60  # 训练检查间隔
-

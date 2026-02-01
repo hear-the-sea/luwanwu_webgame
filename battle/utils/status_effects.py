@@ -34,9 +34,9 @@ CONTROL_STATUS_EFFECTS = {"stunned"}
 def cleanup_status_effects(combatant: "Combatant") -> None:
     """
     清理无效的状态效果。
-    
+
     如果active和pending计数器都归零，则移除该状态。
-    
+
     Args:
         combatant: 战斗单位
     """
@@ -53,7 +53,7 @@ def cleanup_status_effects(combatant: "Combatant") -> None:
 def apply_status_effect(target: "Combatant", status: str, duration: int, defer: bool) -> None:
     """
     对目标施加状态效果。
-    
+
     Args:
         target: 目标单位
         status: 状态key
@@ -107,11 +107,11 @@ def get_damage_penalty(actor: "Combatant") -> float:
 def handle_pre_action_status(actor: "Combatant", events: List[Dict[str, Any]]) -> bool:
     """
     处理行动前的状态效果（如眩晕跳过回合）。
-    
+
     Args:
         actor: 行动单位
         events: 战斗事件列表（用于记录状态生效日志）
-        
+
     Returns:
         如果行动被阻止返回 True，否则返回 False
     """

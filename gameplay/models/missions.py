@@ -7,11 +7,24 @@ from django.utils import timezone
 
 
 class MissionTemplate(models.Model):
+    class Difficulty(models.TextChoices):
+        JUNIOR = "junior", "初级"
+        INTERMEDIATE = "intermediate", "中级"
+        ADVANCED = "advanced", "高级"
+
     key = models.SlugField(unique=True)
     name = models.CharField(max_length=128)
     description = models.TextField(blank=True)
+    difficulty = models.CharField(
+        max_length=16,
+        choices=Difficulty.choices,
+        default=Difficulty.JUNIOR,
+        verbose_name="难度",
+        help_text="任务难度分级"
+    )
     battle_type = models.CharField(max_length=32, default="task")
     is_defense = models.BooleanField(default=False, help_text="敌方主动来袭，玩家为防守方")
+    guest_only = models.BooleanField(default=False, help_text="仅允许门客出征，不可带护院")
     enemy_guests = models.JSONField(default=list, blank=True)
     enemy_troops = models.JSONField(default=dict, blank=True)
     enemy_technology = models.JSONField(default=dict, blank=True, help_text="敌方护院科技配置")
@@ -116,4 +129,3 @@ class MissionExtraAttempt(models.Model):
 
     def __str__(self) -> str:
         return f"{self.manor} - {self.mission.name} - {self.date} (+{self.extra_count})"
-

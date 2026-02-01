@@ -263,4 +263,3 @@ class JailPrisoner(models.Model):
     @property
     def display_name(self) -> str:
         return self.original_guest_name or self.guest_template.name
-

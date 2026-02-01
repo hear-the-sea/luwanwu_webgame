@@ -55,6 +55,14 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         """
         user = self.scope.get("user")
         if not user or not user.is_authenticated:
+            # 审计日志：记录认证失败的连接尝试
+            logger.warning(
+                "WebSocket authentication failed for NotificationConsumer",
+                extra={
+                    "path": self.scope.get("path"),
+                    "client": self.scope.get("client"),
+                }
+            )
             await self.close()
             return
 
@@ -81,7 +89,18 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         Args:
             event: Event dict containing "payload" key with notification data
         """
-        await self.send_json(event.get("payload", {}))
+        # 验证 payload 结构，只转发预期的字段
+        payload = event.get("payload", {})
+        safe_payload = {
+            "type": payload.get("type"),
+            "title": payload.get("title"),
+            "message": payload.get("message"),
+            "data": payload.get("data"),
+            "timestamp": payload.get("timestamp"),
+        }
+        # 移除 None 值
+        safe_payload = {k: v for k, v in safe_payload.items() if v is not None}
+        await self.send_json(safe_payload)
 
 
 class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
@@ -130,6 +149,14 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
         """
         user = self.scope.get("user")
         if not user or not user.is_authenticated:
+            # 审计日志：记录认证失败的连接尝试
+            logger.warning(
+                "WebSocket authentication failed for OnlineStatsConsumer",
+                extra={
+                    "path": self.scope.get("path"),
+                    "client": self.scope.get("client"),
+                }
+            )
             await self.close()
             return
 
@@ -472,6 +499,14 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
         user = self.scope.get("user")
         if not user or not user.is_authenticated:
+            # 审计日志：记录认证失败的连接尝试
+            logger.warning(
+                "WebSocket authentication failed for WorldChatConsumer",
+                extra={
+                    "path": self.scope.get("path"),
+                    "client": self.scope.get("client"),
+                }
+            )
             await self.close()
             return
 
@@ -561,7 +596,18 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
             await self.send_json({"type": "error", "code": "server_error", "message": "服务器错误，请稍后重试"})
 
     async def chat_message(self, event):
-        await self.send_json(event.get("payload", {}))
+        # 验证 payload 结构，只转发预期的字段
+        payload = event.get("payload", {})
+        safe_payload = {
+            "type": payload.get("type"),
+            "message": payload.get("message"),
+            "sender": payload.get("sender"),
+            "timestamp": payload.get("timestamp"),
+            "is_trumpet": payload.get("is_trumpet"),
+        }
+        # 移除 None 值
+        safe_payload = {k: v for k, v in safe_payload.items() if v is not None}
+        await self.send_json(safe_payload)
 
     def _normalize_text(self, text: str) -> str:
         """

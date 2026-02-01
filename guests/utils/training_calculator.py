@@ -72,21 +72,21 @@ def calculate_level_up_cost(current_level: int, target_levels: int = 1) -> Dict[
 def calculate_training_duration(current_level: int, rarity: str, levels: int = 1) -> int:
     """
     计算门客训练所需的时间（秒）。
-    
+
     训练时间受稀有度和等级影响：
     - 稀有度越高，训练时间越长（通过系数调整）
     - 等级越高，训练时间越长（每级增长5%）
-    
+
     基准：黑色品质1→2级需要120秒
-    
+
     Args:
         current_level: 当前等级
         rarity: 稀有度
         levels: 要训练的等级数
-        
+
     Returns:
         训练所需总秒数
-        
+
     Examples:
         >>> calculate_training_duration(1, 'black', 1)
         120
@@ -112,11 +112,11 @@ def calculate_training_duration(current_level: int, rarity: str, levels: int = 1
 def get_level_up_cost(guest: "Guest", levels: int = 1) -> Dict[str, int]:
     """
     获取指定门客升级所需成本（便捷包装函数）。
-    
+
     Args:
         guest: 门客实例
         levels: 要升级的等级数
-        
+
     Returns:
         资源成本字典
     """
@@ -126,11 +126,11 @@ def get_level_up_cost(guest: "Guest", levels: int = 1) -> Dict[str, int]:
 def get_training_duration(guest: "Guest", levels: int = 1) -> int:
     """
     获取指定门客训练所需时间（便捷包装函数）。
-    
+
     Args:
         guest: 门客实例
         levels: 要训练的等级数
-        
+
     Returns:
         训练所需秒数
     """

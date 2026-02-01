@@ -5,6 +5,7 @@
 """
 import math
 
+
 def calculate_total(base_cost, cost_growth, base_time, time_growth, max_level):
     """计算总成本和总时间"""
     total_cost = 0
@@ -29,6 +30,7 @@ def calculate_total(base_cost, cost_growth, base_time, time_growth, max_level):
         'total_time_days': total_time / 86400,
         'last_level_cost': last_cost,
     }
+
 
 def find_best_params(base_costs, cost_growths, base_times, time_growths, max_level, target_last_cost, target_days):
     """遍历参数组合，找到最接近目标的方案"""
@@ -60,6 +62,7 @@ def find_best_params(base_costs, cost_growths, base_times, time_growths, max_lev
     # 按综合得分排序
     best_scenarios.sort(key=lambda x: x['score'])
     return best_scenarios[:5]  # 返回前5个最佳方案
+
 
 # 目标
 TARGET_LAST_COST = 20_000_000

@@ -137,23 +137,23 @@ SURNAME_WEIGHTS: List[int] = (
 def generate_random_name(rng: random.Random) -> str:
     """
     生成随机的古风姓名。
-    
+
     支持多种模式：
     - 单字名（如：王勇、李明）
     - 双字名（如：张云飞、赵子龙）
     - 复姓名（如：司马懿、诸葛亮）
-    
+
     姓氏采用加权随机：
     - 常见姓氏（如李、王、张）出现概率最高（约63%）
     - 补充单姓次之（约21%）
     - 历史姓氏、复姓等较少见（约16%）
-    
+
     Args:
         rng: 随机数生成器
-        
+
     Returns:
         生成的姓名字符串
-        
+
     Examples:
         >>> import random
         >>> rng = random.Random(42)

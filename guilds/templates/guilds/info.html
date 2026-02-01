@@ -5,51 +5,51 @@
 
 {% block content %}
 <section class="dashboard">
-    <div class="section-header">
+    <div class="tw-section-header">
         <div>
             <h1>帮会设置</h1>
-            <p>{{ guild.name }}</p>
+            <p class="caption">{{ guild.name }}</p>
         </div>
-        <div class="nav-links">
-            <a href="{% url 'guilds:detail' guild.id %}" class="btn-secondary">返回帮会</a>
+        <div class="flex gap-2">
+            <a href="{% url 'guilds:detail' guild.id %}" class="tw-btn-primary">返回帮会</a>
         </div>
     </div>
 
-    <section class="card">
+    <section class="tw-card">
         <h2>基本设置</h2>
         <form method="post">
             {% csrf_token %}
-            <div class="form-field">
+            <div class="tw-form-field">
                 <label for="description">帮会简介</label>
-                <textarea id="description" name="description" rows="4" maxlength="200">{{ guild.description }}</textarea>
-                <small class="muted-text">最多200字，将显示在帮会详情页面</small>
+                <textarea id="description" name="description" rows="4" maxlength="200" class="tw-input">{{ guild.description }}</textarea>
+                <small class="tw-muted">最多200字，将显示在帮会详情页面</small>
             </div>
 
-            <div class="form-field">
-                <label>
+            <div class="tw-form-field mt-4">
+                <label class="flex items-center gap-2">
                     <input type="checkbox" name="auto_accept" {% if guild.auto_accept %}checked{% endif %}>
                     自动通过申请
                 </label>
-                <small class="muted-text">开启后，所有申请将自动通过（成员未满时）</small>
+                <small class="tw-muted">开启后，所有申请将自动通过（成员未满时）</small>
             </div>
 
-            <div class="form-actions">
-                <button type="submit" class="btn-primary">保存设置</button>
-                <a href="{% url 'guilds:detail' guild.id %}" class="btn-secondary">取消</a>
+            <div class="flex gap-2 mt-4">
+                <button type="submit" class="tw-btn-primary">保存设置</button>
+                <a href="{% url 'guilds:detail' guild.id %}" class="tw-btn-secondary">取消</a>
             </div>
         </form>
     </section>
 
-    <section class="card guild-section-spacing">
+    <section class="tw-card tw-guild-section-spacing">
         <h2>帮会信息</h2>
-        <dl class="guild-dl">
+        <dl class="tw-guild-dl">
             <div>
                 <dt>帮会名称</dt>
                 <dd>{{ guild.name }}</dd>
             </div>
             <div>
                 <dt>帮会等级</dt>
-                <dd><span class="badge">Lv {{ guild.level }} / 10</span></dd>
+                <dd><span class="tw-badge-gold">Lv {{ guild.level }} / 10</span></dd>
             </div>
             <div>
                 <dt>成员容量</dt>
@@ -62,29 +62,29 @@
         </dl>
     </section>
 
-    <section class="card guild-section-spacing">
+    <section class="tw-card tw-guild-section-spacing">
         <h2>资源状况</h2>
-        <dl class="guild-dl">
+        <dl class="tw-guild-dl">
             <div>
                 <dt>银两</dt>
-                <dd>{{ guild.silver|floatformat:0 }}</dd>
+                <dd class="tw-guild-resource-value resource-silver">{{ guild.silver|floatformat:0 }}</dd>
             </div>
             <div>
                 <dt>粮食</dt>
-                <dd>{{ guild.grain|floatformat:0 }}</dd>
+                <dd class="tw-guild-resource-value resource-grain">{{ guild.grain|floatformat:0 }}</dd>
             </div>
             <div>
                 <dt>金条</dt>
-                <dd>{{ guild.gold_bar }}</dd>
+                <dd class="tw-guild-resource-value resource-gold">{{ guild.gold_bar }}</dd>
             </div>
         </dl>
     </section>
 
-    <section class="card guild-section-spacing guild-error-card">
-        <h2 class="guild-error-title">危险操作</h2>
+    <section class="tw-card tw-guild-section-spacing tw-guild-error-card">
+        <h2 class="tw-guild-error-title">危险操作</h2>
         <p>以下操作将对帮会造成重大影响，请谨慎操作。</p>
-        <div class="guild-danger-actions">
-            <button type="button" class="btn-danger" onclick="document.getElementById('disband-modal').classList.add('visible')">
+        <div class="tw-guild-danger-actions mt-4">
+            <button type="button" class="tw-btn-danger" onclick="document.getElementById('disband-modal').style.display='flex'">
                 解散帮会
             </button>
         </div>
@@ -92,26 +92,26 @@
 </section>
 
 <!-- 解散帮会确认模态框 -->
-<div class="modal-backdrop" id="disband-modal" aria-hidden="true">
-    <div class="modal">
-        <header class="modal-header">
+<div class="tw-modal-overlay" id="disband-modal" style="display: none;">
+    <div class="tw-modal-content">
+        <div class="tw-modal-header">
             <h3>解散帮会</h3>
-            <button type="button" class="btn-secondary btn-small" onclick="document.getElementById('disband-modal').classList.remove('visible')">取消</button>
-        </header>
-        <div class="modal-body">
-            <div class="guild-warning guild-warning-severe">
-                <p class="guild-warning-title">⚠️ 警告：此操作不可撤销</p>
-                <p>解散帮会后，所有成员将被移除，帮会资源将被清空，帮会数据将被永久删除。</p>
+            <button type="button" class="tw-modal-close" onclick="document.getElementById('disband-modal').style.display='none'">&times;</button>
+        </div>
+        <div class="tw-modal-body">
+            <div class="tw-guild-warning tw-guild-warning-severe">
+                <p class="font-bold m-0">⚠️ 警告：此操作不可撤销</p>
+                <p class="mt-2 m-0">解散帮会后，所有成员将被移除，帮会资源将被清空，帮会数据将被永久删除。</p>
             </div>
             <form method="post" action="{% url 'guilds:disband' %}">
                 {% csrf_token %}
-                <div class="form-field">
+                <div class="tw-form-field mt-4">
                     <label for="confirm_name">请输入帮会名称以确认：</label>
-                    <input type="text" id="confirm_name" name="confirm_name" required placeholder="{{ guild.name }}">
-                    <small class="muted-text">必须完全匹配帮会名称才能解散</small>
+                    <input type="text" id="confirm_name" name="confirm_name" required placeholder="{{ guild.name }}" class="tw-input">
+                    <small class="tw-muted">必须完全匹配帮会名称才能解散</small>
                 </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn-danger">确认解散</button>
+                <div class="flex justify-end gap-2 mt-4">
+                    <button type="submit" class="tw-btn-danger">确认解散</button>
                 </div>
             </form>
         </div>
@@ -125,7 +125,7 @@
     if (modal) {
         modal.addEventListener('click', (event) => {
             if (event.target === modal) {
-                modal.classList.remove('visible');
+                modal.style.display = 'none';
             }
         });
     }

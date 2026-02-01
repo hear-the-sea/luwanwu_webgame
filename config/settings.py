@@ -18,6 +18,7 @@ load_dotenv(BASE_DIR / ".env")
 def env(key: str, default: str = "") -> str:
     return os.getenv(key, default)
 
+
 try:
     GAME_TIME_MULTIPLIER = float(env("GAME_TIME_MULTIPLIER", "1") or "1")
 except (TypeError, ValueError):
@@ -41,8 +42,8 @@ if not SECRET_KEY:
     from django.core.management.utils import get_random_secret_key
     SECRET_KEY = get_random_secret_key()
     warnings.warn(
-        f"DJANGO_SECRET_KEY not set. Using temporary random key for development only. "
-        f"Add this to your .env file:\nDJANGO_SECRET_KEY={SECRET_KEY}",
+        "DJANGO_SECRET_KEY not set. Using temporary random key for development only. "
+        "Run 'python -c \"from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())\"' to generate one.",
         RuntimeWarning
     )
 
@@ -81,6 +82,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "corsheaders",  # CORS 支持
     "channels",
     "accounts",
     "gameplay",
@@ -96,6 +98,7 @@ INSTALLED_APPS = [app for app in INSTALLED_APPS if app]
 MIDDLEWARE = [
     "core.middleware.RequestIDMiddleware",  # 请求追踪
     "core.middleware.AccessLogMiddleware",  # 访问日志
+    "corsheaders.middleware.CorsMiddleware",  # CORS 中间件（必须在 CommonMiddleware 之前）
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -128,18 +131,24 @@ WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
 REDIS_URL = env("REDIS_URL", "redis://127.0.0.1:6379")
+REDIS_PASSWORD = env("REDIS_PASSWORD", "")  # Redis 密码认证
 REDIS_BROKER_URL = env("REDIS_BROKER_URL", f"{REDIS_URL}/0")
 REDIS_RESULT_URL = env("REDIS_RESULT_URL", REDIS_BROKER_URL)
 REDIS_CHANNEL_URL = env("REDIS_CHANNEL_URL", f"{REDIS_URL}/1")
 REDIS_CACHE_URL = env("REDIS_CACHE_URL", f"{REDIS_URL}/2")
 
+# Redis 缓存配置（支持密码认证）
+_redis_cache_options = {
+    "CLIENT_CLASS": "django_redis.client.DefaultClient",
+}
+if REDIS_PASSWORD:
+    _redis_cache_options["PASSWORD"] = REDIS_PASSWORD
+
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
         "LOCATION": REDIS_CACHE_URL,
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-        }
+        "OPTIONS": _redis_cache_options,
     }
 }
 
@@ -431,7 +440,12 @@ CSRF_TRUSTED_ORIGINS = [
 SECURE_SSL_REDIRECT = env("DJANGO_SECURE_SSL_REDIRECT", "1" if not DEBUG else "0") == "1"
 
 # Trust X-Forwarded-Proto header from proxy (nginx, load balancer)
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+# 安全修复：仅在明确使用反向代理时才信任代理头，防止 SSL 降级攻击
+# 设置 DJANGO_USE_PROXY=1 启用（适用于 nginx、负载均衡器等场景）
+if env("DJANGO_USE_PROXY", "0") == "1":
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+else:
+    SECURE_PROXY_SSL_HEADER = None
 
 # HTTP Strict Transport Security (HSTS)
 # --------------------------------------
@@ -458,6 +472,60 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = int(env("DJANGO_DATA_UPLOAD_MAX_MEMORY_SIZE", str(
 # ---------------------------
 # Referrer Policy: Control referrer information sent to other sites
 SECURE_REFERRER_POLICY = "same-origin"
+
+# ============================================================================
+# CORS CONFIGURATION
+# ============================================================================
+# Cross-Origin Resource Sharing settings for API access from different domains
+# Only configure if you need cross-origin API access (e.g., mobile apps, separate frontend)
+
+# 是否允许携带凭证（cookies, authorization headers）
+CORS_ALLOW_CREDENTIALS = True
+
+# 允许的来源列表（从环境变量读取，逗号分隔）
+# 生产环境必须明确指定，不允许使用通配符
+cors_allowed_origins_str = env("DJANGO_CORS_ALLOWED_ORIGINS", "")
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in cors_allowed_origins_str.split(",")
+    if origin.strip()
+]
+
+# 开发环境：允许 localhost
+if DEBUG and not CORS_ALLOWED_ORIGINS:
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8000",
+    ]
+
+# 允许的请求头
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+    "hx-request",  # HTMX 支持
+    "hx-current-url",
+    "hx-target",
+    "hx-trigger",
+]
+
+# 允许的请求方法
+CORS_ALLOW_METHODS = [
+    "DELETE",
+    "GET",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT",
+]
 
 # ============================================================================
 # DEVELOPMENT ENVIRONMENT WARNINGS

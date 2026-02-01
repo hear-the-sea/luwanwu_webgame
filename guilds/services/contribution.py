@@ -38,6 +38,11 @@ def donate_resource(member, resource_type, amount):
     if amount < MIN_DONATION_AMOUNT:
         raise ValueError(f"单次捐赠最少{MIN_DONATION_AMOUNT}单位")
 
+    # 安全修复：添加单次捐赠上限，防止整数溢出和异常数据
+    MAX_DONATION_AMOUNT = 100_000_000  # 1亿上限
+    if amount > MAX_DONATION_AMOUNT:
+        raise ValueError(f"单次捐赠最多{MAX_DONATION_AMOUNT:,}单位")
+
     # 获取今日日期，用于重置每日统计
     today = timezone.now().date()
 
@@ -129,13 +134,15 @@ def reset_weekly_contributions():
     from datetime import date
     today = date.today()
 
-    members = GuildMember.objects.filter(
+    # 性能优化：使用批量更新替代循环中的逐个 save()
+    # 避免 N 次数据库写入，改为 1 次批量更新
+    GuildMember.objects.filter(
         is_active=True,
         weekly_reset_at__lt=today
+    ).update(
+        weekly_contribution=0,
+        weekly_reset_at=today
     )
-
-    for member in members:
-        member.reset_weekly_contribution()
 
 
 def get_contribution_ranking(guild, ranking_type='total', limit=10):

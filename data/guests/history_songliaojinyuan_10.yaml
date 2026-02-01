@@ -1,11 +1,10 @@
-# 历史人物门客 - 宋辽金元（第10批：绿色37人；key 0459-0495）
-
 heroes:
   green:
   - key: hist_songliaojinyuan_0459
     name: 鲜于枢
+    default_gender: male
     archetype: civil
-    flavor: '（1256年-1301年）元代书法家。他与赵孟頫并称，是元代书法的代表人物。'
+    flavor: （1256年-1301年）元代书法家。他与赵孟頫并称，是元代书法的代表人物。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。其书风在后世书论中亦多被称道。
     growth_range:
     - 4
     - 7
@@ -16,8 +15,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0460
     name: 邓文原
+    default_gender: male
     archetype: civil
-    flavor: '（1258年-1328年）元代书法家。他与赵孟頫、鲜于枢并称"元初三大家"。'
+    flavor: （1258年-1328年）元代书法家。他与赵孟頫、鲜于枢并称"元初三大家"。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。其作品常被后世书家临摹评点。
     growth_range:
     - 4
     - 7
@@ -28,8 +28,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0461
     name: 康里巎巎
+    default_gender: male
     archetype: civil
-    flavor: '（1295年-1345年）元代书法家，蒙古族。他的草书飘逸洒脱，是元代书法的另一高峰。'
+    flavor: （1295年-1345年）元代书法家，蒙古族。他的草书飘逸洒脱，是元代书法的另一高峰。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -40,8 +41,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0462
     name: 张养浩
+    default_gender: male
     archetype: civil
-    flavor: '（1270年-1329年）元朝政治家、散曲家。他的《山坡羊·潼关怀古》"兴，百姓苦；亡，百姓苦"千古传诵，道尽了历史的沧桑。'
+    flavor: （1270年-1329年）元朝政治家、散曲家。他的《山坡羊·潼关怀古》"兴，百姓苦；亡，百姓苦"千古传诵，道尽了历史的沧桑。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -52,8 +54,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0463
     name: 答失蛮
+    default_gender: male
     archetype: military
-    flavor: '（?-1285年）元朝名将，攻灭南宋的功臣。他参与了灭宋的多次战役，战功赫赫。'
+    flavor: （?-1285年）元朝名将，攻灭南宋的功臣。他参与了灭宋的多次战役，战功赫赫。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。其战绩在军史研究中亦被多次提及。
     growth_range:
     - 4
     - 7
@@ -64,8 +67,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0464
     name: 阿术
+    default_gender: male
     archetype: military
-    flavor: '（1227年-1281年）元朝名将，兀良合台之子。他攻灭大理，参与灭宋。他是元朝统一战争的主力将领。'
+    flavor: （1227年-1281年）元朝名将，兀良合台之子。他攻灭大理，参与灭宋。他是元朝统一战争的主力将领。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -76,8 +80,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0465
     name: 兀良合台
+    default_gender: male
     archetype: military
-    flavor: '（1200年-1272年）元朝名将，速不台之子。他攻灭大理，征服安南，威震南方。他是元朝向西南扩张的主帅。'
+    flavor: （1200年-1272年）元朝名将，速不台之子。他攻灭大理，征服安南，威震南方。他是元朝向西南扩张的主帅。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -88,8 +93,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0466
     name: 唆都
+    default_gender: male
     archetype: military
-    flavor: '（?-1285年）元朝将领，征缅甸的主帅。他率军攻入缅甸，虽然战事艰难，却展示了蒙古的军威。'
+    flavor: （?-1285年）元朝将领，征缅甸的主帅。他率军攻入缅甸，虽然战事艰难，却展示了蒙古的军威。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -100,8 +106,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0467
     name: 也先帖木儿
+    default_gender: male
     archetype: military
-    flavor: '（?-1294年）元朝将领，镇守西北。他抵御海都的进攻，保卫了元朝的西北边疆。'
+    flavor: （?-1294年）元朝将领，镇守西北。他抵御海都的进攻，保卫了元朝的西北边疆。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。其守边事迹为研究西北边防提供了素材。
     growth_range:
     - 4
     - 7
@@ -112,8 +119,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0468
     name: 土土哈
+    default_gender: male
     archetype: military
-    flavor: '（1237年-1297年）元朝名将，击败海都的功臣。他在西北边疆多次击退海都军，是元朝边防的柱石。'
+    flavor: （1237年-1297年）元朝名将，击败海都的功臣。他在西北边疆多次击退海都军，是元朝边防的柱石。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -124,8 +132,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0469
     name: 察罕帖木儿
+    default_gender: male
     archetype: military
-    flavor: '（1328年-1362年）元末名将，镇压红巾军的功臣。他以汉人身份效忠元朝，在中原击败红巾军。他被自己的部将杀害，是元末的悲剧英雄。'
+    flavor: （1328年-1362年）元末名将，镇压红巾军的功臣。他以汉人身份效忠元朝，在中原击败红巾军。他被自己的部将杀害，是元末的悲剧英雄。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -136,8 +145,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0470
     name: 扩廓帖木儿
+    default_gender: male
     archetype: military
-    flavor: '（?-1375年）即王保保，元末名将。他继承义父察罕帖木儿的事业，是元朝最后的支柱。朱元璋称他为"天下奇男子"。'
+    flavor: （?-1375年）即王保保，元末名将。他继承义父察罕帖木儿的事业，是元朝最后的支柱。朱元璋称他为"天下奇男子"。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -148,8 +158,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0471
     name: 李思齐
+    default_gender: male
     archetype: military
-    flavor: '（?-1374年）元末将领，镇守关陕。他与扩廓帖木儿争权，导致元军内讧。他的行为加速了元朝的灭亡。'
+    flavor: （?-1374年）元末将领，镇守关陕。他与扩廓帖木儿争权，导致元军内讧。他的行为加速了元朝的灭亡。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -160,8 +171,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0472
     name: 孛罗帖木儿
+    default_gender: male
     archetype: military
-    flavor: '（?-1365年）元末权臣，与扩廓帖木儿争权。他控制元廷，后被刺杀。他的专权是元朝灭亡的重要原因。'
+    flavor: （?-1365年）元末权臣，与扩廓帖木儿争权。他控制元廷，后被刺杀。他的专权是元朝灭亡的重要原因。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -172,8 +184,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0473
     name: 脱脱帖木儿
+    default_gender: male
     archetype: military
-    flavor: '（?-1362年）元朝宗室，镇守辽东。他在元末乱世中维持了辽东的稳定，是元朝在东北的最后力量。'
+    flavor: （?-1362年）元朝宗室，镇守辽东。他在元末乱世中维持了辽东的稳定，是元朝在东北的最后力量。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -184,8 +197,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0474
     name: 刘福通
+    default_gender: male
     archetype: military
-    flavor: '（1321年-1363年）红巾军领袖，元末农民起义的领导者。他拥立韩林儿为帝，建立龙凤政权。他是朱元璋崛起的铺路人。'
+    flavor: （1321年-1363年）红巾军领袖，元末农民起义的领导者。他拥立韩林儿为帝，建立龙凤政权。他是朱元璋崛起的铺路人。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -196,8 +210,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0475
     name: 韩山童
+    default_gender: male
     archetype: military
-    flavor: '（?-1351年）红巾军领袖，刘福通的战友。他发动颍州起义，揭开了元末农民战争的序幕。他被元军杀害，其子韩林儿继承事业。'
+    flavor: （?-1351年）红巾军领袖，刘福通的战友。他发动颍州起义，揭开了元末农民战争的序幕。他被元军杀害，其子韩林儿继承事业。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -208,8 +223,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0476
     name: 郭子兴
+    default_gender: male
     archetype: military
-    flavor: '（1302年-1355年）红巾军领袖，朱元璋的岳父。他收留朱元璋，是朱元璋事业的起点。'
+    flavor: （1302年-1355年）红巾军领袖，朱元璋的岳父。他收留朱元璋，是朱元璋事业的起点。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -220,8 +236,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0477
     name: 徐寿辉
+    default_gender: male
     archetype: military
-    flavor: '（1320年-1360年）天完政权的建立者，红巾军领袖。他在湖北建立政权，后被陈友谅所杀。'
+    flavor: （1320年-1360年）天完政权的建立者，红巾军领袖。他在湖北建立政权，后被陈友谅所杀。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -232,8 +249,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0478
     name: 明玉珍
+    default_gender: male
     archetype: military
-    flavor: '（1329年-1366年）大夏政权的建立者，红巾军出身。他占据四川，建立大夏国，与朱元璋对峙。'
+    flavor: （1329年-1366年）大夏政权的建立者，红巾军出身。他占据四川，建立大夏国，与朱元璋对峙。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -244,8 +262,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0479
     name: 方国珍
+    default_gender: male
     archetype: military
-    flavor: '（1319年-1374年）元末割据势力，占据浙东沿海。他是最早起兵反元的势力之一，后归降朱元璋。'
+    flavor: （1319年-1374年）元末割据势力，占据浙东沿海。他是最早起兵反元的势力之一，后归降朱元璋。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -256,8 +275,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0480
     name: 张士诚
+    default_gender: male
     archetype: military
-    flavor: '（1321年-1367年）元末割据势力，占据苏州。他建立大周政权，与朱元璋争雄。他最终兵败被俘，自缢身亡。'
+    flavor: （1321年-1367年）元末割据势力，占据苏州。他建立大周政权，与朱元璋争雄。他最终兵败被俘，自缢身亡。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -268,8 +288,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0481
     name: 也速
+    default_gender: male
     archetype: military
-    flavor: '（?-约1300年）蒙古宗室，镇守边疆。他是蒙古黄金家族的重要成员，参与了帝国的扩张战争。'
+    flavor: （?-约1300年）蒙古宗室，镇守边疆。他是蒙古黄金家族的重要成员，参与了帝国的扩张战争。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -280,8 +301,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0482
     name: 帖木儿不花
+    default_gender: male
     archetype: military
-    flavor: '（?-约1290年）蒙古将领，征战四方。他参与了多次征服战役，是蒙古帝国扩张时期的重要将领。'
+    flavor: （?-约1290年）蒙古将领，征战四方。他参与了多次征服战役，是蒙古帝国扩张时期的重要将领。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -292,8 +314,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0483
     name: 塔察儿
+    default_gender: male
     archetype: military
-    flavor: '（?-约1260年）蒙古宗室，东道诸王之一。他是成吉思汗弟弟的后裔，封地在东北地区。'
+    flavor: （?-约1260年）蒙古宗室，东道诸王之一。他是成吉思汗弟弟的后裔，封地在东北地区。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -304,8 +327,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0484
     name: 脱欢
+    default_gender: male
     archetype: military
-    flavor: '（1304年-1362年）元朝权臣，燕铁木儿之子。他权倾朝野，在元朝后期政治中扮演重要角色。'
+    flavor: （1304年-1362年）元朝权臣，燕铁木儿之子。他权倾朝野，在元朝后期政治中扮演重要角色。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -316,8 +340,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0485
     name: 燕铁木儿
+    default_gender: male
     archetype: military
-    flavor: '（?-1333年）元朝权臣，拥立文宗即位。他在两都之战中立下大功，成为元朝最有权势的大臣。'
+    flavor: （?-1333年）元朝权臣，拥立文宗即位。他在两都之战中立下大功，成为元朝最有权势的大臣。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -328,8 +353,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0486
     name: 哈剌哈孙
+    default_gender: male
     archetype: civil
-    flavor: '（1257年-1308年）元朝名臣，政治家。他辅佐成宗、武宗两朝，是元朝政治稳定的重要推手。'
+    flavor: （1257年-1308年）元朝名臣，政治家。他辅佐成宗、武宗两朝，是元朝政治稳定的重要推手。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -340,8 +366,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0487
     name: 马祖常
+    default_gender: male
     archetype: civil
-    flavor: '（1279年-1338年）元朝文学家，回族。他的诗歌雄浑大气，是元代少数民族诗人的代表。'
+    flavor: （1279年-1338年）元朝文学家，回族。他的诗歌雄浑大气，是元代少数民族诗人的代表。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -352,8 +379,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0488
     name: 欧阳玄
+    default_gender: male
     archetype: civil
-    flavor: '（1283年-1358年）元朝文学家，史学家。他参与编修宋辽金三史，文章典雅，是元代文坛的重要人物。'
+    flavor: （1283年-1358年）元朝文学家，史学家。他参与编修宋辽金三史，文章典雅，是元代文坛的重要人物。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -364,8 +392,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0489
     name: 危素
+    default_gender: male
     archetype: civil
-    flavor: '（1303年-1372年）元末明初文学家。他入仕元朝，后归降明朝，参与《元史》的编修工作。'
+    flavor: （1303年-1372年）元末明初文学家。他入仕元朝，后归降明朝，参与《元史》的编修工作。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -376,8 +405,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0490
     name: 王冕
+    default_gender: male
     archetype: civil
-    flavor: '（1287年-1359年）元代画家、诗人。他以画梅著称，"只留清气满乾坤"道尽高洁品格。'
+    flavor: （1287年-1359年）元代画家、诗人。他以画梅著称，"只留清气满乾坤"道尽高洁品格。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -388,8 +418,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0491
     name: 曹知白
+    default_gender: male
     archetype: civil
-    flavor: '（1272年-1355年）元代画家，山水画大家。他与黄公望、吴镇等并列，是元代画坛的重要人物。'
+    flavor: （1272年-1355年）元代画家，山水画大家。他与黄公望、吴镇等并列，是元代画坛的重要人物。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -400,8 +431,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0492
     name: 盛懋
+    default_gender: male
     archetype: civil
-    flavor: '（?-约1360年）元代画家，花鸟画名家。他的画风精细工丽，是元代院体画的代表人物。'
+    flavor: （?-约1360年）元代画家，花鸟画名家。他的画风精细工丽，是元代院体画的代表人物。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -412,8 +444,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0493
     name: 柯九思
+    default_gender: male
     archetype: civil
-    flavor: '（1290年-1343年）元代书画家、鉴赏家。他是元文宗时期的重臣，精通书画鉴定，收藏丰富。'
+    flavor: （1290年-1343年）元代书画家、鉴赏家。他是元文宗时期的重臣，精通书画鉴定，收藏丰富。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -424,8 +457,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0494
     name: 管道升
+    default_gender: female
     archetype: civil
-    flavor: '（1262年-1319年）元代女书画家，赵孟頫之妻。她工书善画，尤擅墨竹，是中国历史上著名的才女。'
+    flavor: （1262年-1319年）元代女书画家，赵孟頫之妻。她工书善画，尤擅墨竹，是中国历史上著名的才女。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -436,8 +470,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0495
     name: 赛典赤
+    default_gender: male
     archetype: civil
-    flavor: '（1211年-1279年）元朝名臣，回族政治家。他治理云南多年，推行儒学，建设水利，使云南经济文化大为发展。'
+    flavor: （1211年-1279年）元朝名臣，回族政治家。他治理云南多年，推行儒学，建设水利，使云南经济文化大为发展。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7

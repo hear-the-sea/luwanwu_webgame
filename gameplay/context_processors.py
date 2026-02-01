@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from datetime import timedelta
 
@@ -9,6 +10,8 @@ from django.utils import timezone
 from django_redis import get_redis_connection
 
 from .services import unread_message_count
+
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
@@ -123,6 +126,7 @@ def notifications(request):
             context["sidebar_active_scouts"] = active_scouts
             context["sidebar_incoming_raids"] = incoming_raids
     except Exception:
-        pass
+        # 代码质量修复：记录异常以便排查问题，而非静默忽略
+        logger.warning("Failed to load sidebar context", exc_info=True)
 
     return context

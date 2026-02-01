@@ -5,537 +5,183 @@
 
 {% block content %}
 <section class="dashboard">
-    <div class="section-header">
+    <div class="tw-section-header">
         <div>
             <h1>出征配置</h1>
             <p class="caption">目标：{{ target_manor.display_name }}</p>
         </div>
-        <a href="{% url 'gameplay:map' %}" class="btn-secondary">返回地图</a>
+        <a href="{% url 'gameplay:map' %}" class="tw-btn-secondary">返回地图</a>
     </div>
 
     <!-- 目标庄园信息 -->
-    <section class="card target-info-card">
-        <h2>目标庄园</h2>
-        <div class="target-details">
-            <div class="target-main">
-                <div class="target-name">{{ target_manor.display_name }}</div>
-                <div class="target-location">{{ target_info.region_display }} ({{ target_manor.coordinate_x }}, {{ target_manor.coordinate_y }})</div>
+    <section class="tw-panel mb-6">
+        <div class="tw-panel-header">目标庄园</div>
+        <div class="tw-panel-content">
+            <div class="flex justify-between items-start flex-wrap gap-6">
+                <div class="flex flex-col gap-2">
+                    <div class="text-2xl font-bold text-text-primary">{{ target_manor.display_name }}</div>
+                    <div class="text-text-muted">{{ target_info.region_display }} ({{ target_manor.coordinate_x }}, {{ target_manor.coordinate_y }})</div>
+                </div>
+                <div class="flex gap-8 flex-wrap">
+                    <div class="flex flex-col gap-1">
+                        <span class="text-sm text-text-muted">声望</span>
+                        <span class="text-lg font-semibold {% if target_info.prestige_comparison == 'higher' %}text-accent-red{% elif target_info.prestige_comparison == 'lower' %}text-accent-green{% endif %}">
+                            {{ target_info.prestige }}
+                        </span>
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-sm text-text-muted">距离</span>
+                        <span class="text-lg font-semibold">{{ target_info.distance|floatformat:1 }}</span>
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-sm text-text-muted">预计行军时间</span>
+                        <span class="text-lg font-semibold">{{ target_info.travel_time }}秒</span>
+                    </div>
+                    {% if target_info.is_protected %}
+                    <div class="flex flex-col gap-1">
+                        <span class="text-sm text-text-muted">状态</span>
+                        <span class="tw-protection-badge">保护中</span>
+                    </div>
+                    {% endif %}
+                </div>
             </div>
-            <div class="target-stats">
-                <div class="stat-item">
-                    <span class="stat-label">声望</span>
-                    <span class="stat-value {% if target_info.prestige_comparison == 'higher' %}text-danger{% elif target_info.prestige_comparison == 'lower' %}text-success{% endif %}">
-                        {{ target_info.prestige }}
-                    </span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">距离</span>
-                    <span class="stat-value">{{ target_info.distance|floatformat:1 }}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">预计行军时间</span>
-                    <span class="stat-value">{{ target_info.travel_time }}秒</span>
-                </div>
-                {% if target_info.is_protected %}
-                <div class="stat-item">
-                    <span class="stat-label">状态</span>
-                    <span class="stat-value protection-badge">保护中</span>
-                </div>
-                {% endif %}
-            </div>
-        </div>
 
-        {% if not can_attack %}
-        <div class="alert alert-danger">
-            <strong>无法进攻：</strong>{{ attack_reason }}
+            {% if not can_attack %}
+            <div class="tw-alert-danger mt-4">
+                <strong>无法进攻：</strong>{{ attack_reason }}
+            </div>
+            {% endif %}
         </div>
-        {% endif %}
     </section>
 
     {% if can_attack %}
     <!-- 出征配置表单 -->
-    <form id="raid-form" class="raid-form">
+    <form id="raid-form">
         <!-- 门客选择 -->
-        <section class="card">
-            <h2>选择出征门客 <span class="caption">(最多 {{ max_squad_size }} 人)</span></h2>
-            <p class="help-text">选择要派遣出征的门客，他们将参与战斗。</p>
+        <section class="tw-panel mb-6">
+            <div class="tw-panel-header">选择出征门客 <span class="font-normal text-text-muted">(最多 {{ max_squad_size }} 人)</span></div>
+            <div class="tw-panel-content">
+                <p class="text-sm text-text-muted mb-4">选择要派遣出征的门客，他们将参与战斗。</p>
 
-            {% if available_guests %}
-            <div class="guest-selection">
-                {% for guest in available_guests %}
-                <label class="guest-checkbox">
-                    <input type="checkbox" name="guest_ids" value="{{ guest.id }}" class="guest-input">
-                    <div class="guest-card">
-                        <div class="guest-avatar">
-                            {% if guest.template.avatar %}
-                            <img src="{{ guest.template.avatar.url }}" alt="{{ guest.display_name }}">
-                            {% else %}
-                            <div class="avatar-placeholder">{{ guest.display_name|slice:":1" }}</div>
-                            {% endif %}
-                        </div>
-                        <div class="guest-details">
-                            <div class="guest-info">
-                                <span class="guest-name">{{ guest.display_name }}</span>
-                                <span class="guest-level">Lv.{{ guest.level }}</span>
+                {% if available_guests %}
+                <div class="tw-guest-selection">
+                    {% for guest in available_guests %}
+                    <label class="tw-guest-checkbox">
+                        <input type="checkbox" name="guest_ids" value="{{ guest.id }}" class="guest-input">
+                        <div class="tw-guest-card">
+                            <div class="tw-guest-avatar">
+                                {% if guest.template.avatar %}
+                                <img src="{{ guest.template.avatar.url }}" alt="{{ guest.display_name }}">
+                                {% else %}
+                                <div class="tw-avatar-placeholder">{{ guest.display_name|slice:":1" }}</div>
+                                {% endif %}
                             </div>
-                            <div class="guest-stats">
-                                <span title="生命">HP {{ guest.current_hp }}/{{ guest.max_hp }}</span>
+                            <div class="tw-guest-details">
+                                <div class="tw-guest-info-row">
+                                    <span class="tw-guest-name-sm">{{ guest.display_name }}</span>
+                                    <span class="tw-guest-level-sm">Lv.{{ guest.level }}</span>
+                                </div>
+                                <div class="tw-guest-stats-sm">
+                                    <span title="生命">HP {{ guest.current_hp }}/{{ guest.max_hp }}</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                </label>
-                {% endfor %}
-            </div>
-            {% else %}
-            <div class="empty-hint">
-                <p>暂无可出征的门客</p>
-                <p class="caption">请确保有闲置状态的门客</p>
-            </div>
-            {% endif %}
+                    </label>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="tw-empty-hint">
+                    <p>暂无可出征的门客</p>
+                    <p class="text-sm text-text-muted">请确保有闲置状态的门客</p>
+                </div>
+                {% endif %}
 
-            <div class="selection-summary">
-                已选择 <strong id="selected-count">0</strong> / {{ max_squad_size }} 人
+                <div class="tw-selection-summary">
+                    已选择 <strong id="selected-count">0</strong> / {{ max_squad_size }} 人
+                </div>
             </div>
         </section>
 
         <!-- 护院配置 -->
-        <section class="card">
-            <h2>携带护院</h2>
-            <p class="help-text">选择要携带的护院数量，护院可以增强战斗力。</p>
+        <section class="tw-panel mb-6">
+            <div class="tw-panel-header">携带护院</div>
+            <div class="tw-panel-content">
+                <p class="text-sm text-text-muted mb-4">选择要携带的护院数量，护院可以增强战斗力。</p>
 
-            {% if player_troops %}
-            <div class="troop-selection">
-                {% for troop in player_troops %}
-                <div class="troop-row">
-                    <div class="troop-info">
-                        <div class="troop-avatar">
-                            {% if troop.avatar %}
-                            <img src="{{ troop.avatar }}" alt="{{ troop.name }}">
-                            {% else %}
-                            <div class="avatar-placeholder">{{ troop.name|slice:":1" }}</div>
-                            {% endif %}
+                {% if player_troops %}
+                <div class="tw-troop-selection">
+                    {% for troop in player_troops %}
+                    <div class="tw-troop-row">
+                        <div class="tw-troop-info">
+                            <div class="tw-troop-avatar">
+                                {% if troop.avatar %}
+                                <img src="{{ troop.avatar }}" alt="{{ troop.name }}">
+                                {% else %}
+                                <div class="tw-avatar-placeholder">{{ troop.name|slice:":1" }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="tw-troop-details">
+                                <span class="tw-troop-name">{{ troop.name }}</span>
+                                <span class="tw-troop-count">可用: {{ troop.count }}</span>
+                            </div>
                         </div>
-                        <div class="troop-details">
-                            <span class="troop-name">{{ troop.name }}</span>
-                            <span class="troop-count">可用: {{ troop.count }}</span>
+                        <div class="flex items-center gap-1">
+                            <button type="button" class="tw-btn-secondary tw-btn-sm btn-adjust" data-adjust="-10" data-troop="{{ troop.key }}">-10</button>
+                            <button type="button" class="tw-btn-secondary tw-btn-sm btn-adjust" data-adjust="-1" data-troop="{{ troop.key }}">-</button>
+                            <input type="number" name="troop_{{ troop.key }}" class="tw-troop-num-input troop-input"
+                                   value="0" min="0" max="{{ troop.count }}" data-troop-key="{{ troop.key }}" data-max="{{ troop.count }}">
+                            <button type="button" class="tw-btn-secondary tw-btn-sm btn-adjust" data-adjust="1" data-troop="{{ troop.key }}">+</button>
+                            <button type="button" class="tw-btn-secondary tw-btn-sm btn-adjust" data-adjust="10" data-troop="{{ troop.key }}">+10</button>
+                            <button type="button" class="tw-btn-secondary tw-btn-sm btn-max" data-troop="{{ troop.key }}">全部</button>
                         </div>
                     </div>
-                    <div class="troop-input-group">
-                        <button type="button" class="btn-adjust" data-adjust="-10" data-troop="{{ troop.key }}">-10</button>
-                        <button type="button" class="btn-adjust" data-adjust="-1" data-troop="{{ troop.key }}">-</button>
-                        <input type="number" name="troop_{{ troop.key }}" class="troop-input"
-                               value="0" min="0" max="{{ troop.count }}" data-troop-key="{{ troop.key }}" data-max="{{ troop.count }}">
-                        <button type="button" class="btn-adjust" data-adjust="1" data-troop="{{ troop.key }}">+</button>
-                        <button type="button" class="btn-adjust" data-adjust="10" data-troop="{{ troop.key }}">+10</button>
-                        <button type="button" class="btn-max" data-troop="{{ troop.key }}">全部</button>
-                    </div>
+                    {% endfor %}
                 </div>
-                {% endfor %}
+                {% else %}
+                <div class="tw-empty-hint">
+                    <p>暂无可用护院</p>
+                    <p class="text-sm text-text-muted">请先在练功场招募护院</p>
+                </div>
+                {% endif %}
             </div>
-            {% else %}
-            <div class="empty-hint">
-                <p>暂无可用护院</p>
-                <p class="caption">请先在练功场招募护院</p>
-            </div>
-            {% endif %}
         </section>
 
         <!-- 提交按钮 -->
-        <section class="card action-card">
-            <div class="action-summary">
-                <div class="summary-item">
-                    <span class="summary-label">出征门客</span>
-                    <span class="summary-value" id="summary-guests">0 人</span>
+        <section class="tw-panel">
+            <div class="tw-panel-content">
+                <div class="flex justify-center gap-12 mb-6 pb-6 border-b border-border-light flex-wrap">
+                    <div class="flex flex-col items-center gap-1">
+                        <span class="text-sm text-text-muted">出征门客</span>
+                        <span class="text-xl font-bold text-text-primary" id="summary-guests">0 人</span>
+                    </div>
+                    <div class="flex flex-col items-center gap-1">
+                        <span class="text-sm text-text-muted">携带护院</span>
+                        <span class="text-xl font-bold text-text-primary" id="summary-troops">0</span>
+                    </div>
+                    <div class="flex flex-col items-center gap-1">
+                        <span class="text-sm text-text-muted">预计到达</span>
+                        <span class="text-xl font-bold text-text-primary">{{ target_info.travel_time }} 秒后</span>
+                    </div>
                 </div>
-                <div class="summary-item">
-                    <span class="summary-label">携带护院</span>
-                    <span class="summary-value" id="summary-troops">0</span>
-                </div>
-                <div class="summary-item">
-                    <span class="summary-label">预计到达</span>
-                    <span class="summary-value">{{ target_info.travel_time }} 秒后</span>
-                </div>
-            </div>
 
-            <div class="action-buttons">
-                <a href="{% url 'gameplay:map' %}" class="btn-secondary">取消</a>
-                <button type="submit" class="btn-primary btn-large" id="submit-btn" disabled>
-                    发起进攻
-                </button>
+                <div class="flex justify-center gap-4">
+                    <a href="{% url 'gameplay:map' %}" class="tw-btn-secondary">取消</a>
+                    <button type="submit" class="tw-btn-primary px-8 py-3 text-lg" id="submit-btn" disabled>
+                        发起进攻
+                    </button>
+                </div>
             </div>
         </section>
     </form>
     {% else %}
     <!-- 无法进攻时显示返回按钮 -->
-    <section class="card action-card">
-        <div class="action-buttons">
-            <a href="{% url 'gameplay:map' %}" class="btn-primary">返回地图</a>
+    <section class="tw-panel">
+        <div class="tw-panel-content text-center">
+            <a href="{% url 'gameplay:map' %}" class="tw-btn-primary">返回地图</a>
         </div>
     </section>
     {% endif %}
 </section>
-
-<style>
-/* 出征配置页面样式 */
-.target-info-card {
-    padding: 1.5rem;
-}
-
-.target-info-card h2 {
-    margin-bottom: 1rem;
-}
-
-.target-details {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    flex-wrap: wrap;
-    gap: 1.5rem;
-}
-
-.target-main {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-
-.target-name {
-    font-size: 1.5rem;
-    font-weight: bold;
-    color: var(--text-primary);
-}
-
-.target-location {
-    color: var(--text-muted);
-}
-
-.target-stats {
-    display: flex;
-    gap: 2rem;
-    flex-wrap: wrap;
-}
-
-.stat-item {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-}
-
-.stat-label {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-}
-
-.stat-value {
-    font-size: 1.1rem;
-    font-weight: 600;
-}
-
-.text-danger {
-    color: #dc2626;
-}
-
-.text-success {
-    color: #16a34a;
-}
-
-.protection-badge {
-    display: inline-block;
-    padding: 0.25rem 0.75rem;
-    background: #fef3c7;
-    color: #d97706;
-    font-size: 0.85rem;
-    border-radius: 4px;
-}
-
-.alert {
-    padding: 1rem;
-    border-radius: 6px;
-    margin-top: 1rem;
-}
-
-.alert-danger {
-    background: #fee2e2;
-    border: 1px solid #fca5a5;
-    color: #b91c1c;
-}
-
-/* 门客选择 */
-.help-text {
-    color: var(--text-muted);
-    font-size: 0.9rem;
-    margin-bottom: 1rem;
-}
-
-.guest-selection {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 0.75rem;
-    margin-bottom: 1rem;
-}
-
-.guest-checkbox {
-    cursor: pointer;
-}
-
-.guest-checkbox input {
-    display: none;
-}
-
-.guest-card {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem 1rem;
-    background: var(--bg-hover);
-    border: 2px solid var(--border-light);
-    border-radius: 6px;
-    transition: all 0.2s;
-}
-
-.guest-checkbox input:checked + .guest-card {
-    background: #FDF6E3;
-    border-color: var(--accent-gold);
-    box-shadow: 0 0 0 1px var(--accent-gold);
-}
-
-.guest-card:hover {
-    border-color: var(--border-primary);
-}
-
-.guest-avatar, .troop-avatar {
-    width: 48px;
-    height: 48px;
-    flex-shrink: 0;
-    border-radius: 6px;
-    overflow: hidden;
-    background: var(--bg-secondary);
-}
-
-.guest-avatar img, .troop-avatar img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.avatar-placeholder {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.25rem;
-    font-weight: bold;
-    color: var(--text-muted);
-    background: var(--bg-secondary);
-}
-
-.guest-details {
-    flex: 1;
-    min-width: 0;
-}
-
-.guest-info {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.25rem;
-}
-
-.guest-name {
-    font-weight: 600;
-}
-
-.guest-level {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    background: var(--bg-secondary);
-    padding: 0.125rem 0.5rem;
-    border-radius: 4px;
-}
-
-.guest-stats {
-    display: flex;
-    gap: 0.75rem;
-    font-size: 0.85rem;
-    color: var(--text-secondary);
-}
-
-.selection-summary {
-    padding: 0.75rem;
-    background: var(--bg-secondary);
-    border-radius: 4px;
-    text-align: center;
-    font-size: 0.9rem;
-}
-
-/* 护院选择 */
-.troop-selection {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-}
-
-.troop-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.75rem 1rem;
-    background: var(--bg-hover);
-    border-radius: 6px;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-}
-
-.troop-info {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-}
-
-.troop-details {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-}
-
-.troop-name {
-    font-weight: 600;
-}
-
-.troop-count {
-    font-size: 0.85rem;
-    color: var(--text-muted);
-}
-
-.troop-input-group {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-}
-
-.btn-adjust {
-    width: 32px;
-    height: 32px;
-    border: 1px solid var(--border-light);
-    background: var(--bg-panel);
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: bold;
-    transition: all 0.2s;
-}
-
-.btn-adjust:hover {
-    background: var(--bg-secondary);
-    border-color: var(--border-primary);
-}
-
-.troop-input {
-    width: 60px;
-    height: 32px;
-    text-align: center;
-    border: 1px solid var(--border-light);
-    border-radius: 4px;
-    font-size: 0.9rem;
-}
-
-.btn-max {
-    padding: 0.375rem 0.75rem;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-light);
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.8rem;
-    transition: all 0.2s;
-}
-
-.btn-max:hover {
-    background: var(--border-light);
-}
-
-/* 操作区 */
-.action-card {
-    padding: 1.5rem;
-}
-
-.action-summary {
-    display: flex;
-    justify-content: center;
-    gap: 3rem;
-    margin-bottom: 1.5rem;
-    padding-bottom: 1.5rem;
-    border-bottom: 1px solid var(--border-light);
-    flex-wrap: wrap;
-}
-
-.summary-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.25rem;
-}
-
-.summary-label {
-    font-size: 0.85rem;
-    color: var(--text-muted);
-}
-
-.summary-value {
-    font-size: 1.25rem;
-    font-weight: bold;
-    color: var(--text-primary);
-}
-
-.action-buttons {
-    display: flex;
-    justify-content: center;
-    gap: 1rem;
-}
-
-.btn-large {
-    padding: 0.75rem 2rem;
-    font-size: 1.1rem;
-}
-
-.btn-primary:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.empty-hint {
-    text-align: center;
-    padding: 2rem;
-    color: var(--text-muted);
-}
-
-.empty-hint p {
-    margin: 0.5rem 0;
-}
-
-@media (max-width: 768px) {
-    .target-details {
-        flex-direction: column;
-    }
-
-    .target-stats {
-        width: 100%;
-        justify-content: space-between;
-    }
-
-    .troop-row {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .troop-input-group {
-        justify-content: center;
-    }
-
-    .action-summary {
-        gap: 1.5rem;
-    }
-}
-</style>
 {% endblock %}
 
 {% block extra_scripts %}

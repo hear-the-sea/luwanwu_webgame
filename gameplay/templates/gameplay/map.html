@@ -5,7 +5,7 @@
 
 {% block content %}
 <section class="dashboard">
-    <div class="section-header">
+    <div class="tw-section-header">
         <div>
             <h1>世界地图</h1>
             <p class="caption">
@@ -19,14 +19,14 @@
 
     <!-- 探子不足警告 -->
     {% if scout_count == 0 %}
-    <div class="alert alert-warning">
+    <div class="tw-alert-warning">
         <strong>探子不足</strong> - 你目前没有探子，无法进行侦察。请先在练功场招募探子。
     </div>
     {% endif %}
 
     <!-- 保护状态提示 -->
     {% if protection_status.is_protected %}
-    <div class="alert alert-info">
+    <div class="tw-alert-info">
         <strong>当前处于{{ protection_status.type_display }}中</strong>
         {% if protection_status.expires_at %}
             - 剩余时间：<span class="countdown" data-countdown="{{ protection_status.expires_at|date:'c' }}">{{ protection_status.remaining_display }}</span>
@@ -36,12 +36,12 @@
     {% endif %}
 
     <!-- 搜索和筛选 -->
-    <section class="card map-controls">
-        <div class="control-row">
+    <section class="tw-card tw-map-controls">
+        <div class="tw-control-row">
             <!-- 地区选择 -->
-            <div class="control-group">
+            <div class="tw-control-group">
                 <label for="region-select">选择地区</label>
-                <select id="region-select" class="form-select">
+                <select id="region-select" class="tw-form-select">
                     {% for region_key, region_name in regions %}
                     <option value="{{ region_key }}" {% if region_key == selected_region %}selected{% endif %}>
                         {{ region_name }}{% if region_key == manor.region %} (当前){% endif %}
@@ -51,343 +51,36 @@
             </div>
 
             <!-- 庄园搜索 -->
-            <div class="control-group search-group">
+            <div class="tw-control-group tw-search-group">
                 <label for="manor-search">搜索庄园</label>
-                <div class="search-input-wrapper">
-                    <input type="text" id="manor-search" class="form-input"
+                <div class="tw-search-wrapper">
+                    <input type="text" id="manor-search" class="tw-form-input"
                            placeholder="输入庄园名称..." value="{{ search_query }}">
-                    <button type="button" class="btn-primary btn-search" id="search-btn">搜索</button>
+                    <button type="button" class="tw-btn-primary tw-btn-search" id="search-btn">搜索</button>
                 </div>
             </div>
         </div>
     </section>
 
     <!-- 庄园列表 -->
-    <section class="card manor-list-section">
-        <div class="manor-list-header">
+    <section class="tw-card tw-manor-list-section">
+        <div class="tw-manor-list-header">
             <h2 id="list-title">{{ selected_region|default:"所有" }}地区的庄园</h2>
-            <span class="manor-count" id="manor-count">加载中...</span>
+            <span class="tw-manor-count" id="manor-count">加载中...</span>
         </div>
 
-        <div id="manor-list" class="manor-list">
-            <p class="loading-hint">正在加载庄园列表...</p>
+        <div id="manor-list" class="tw-manor-list">
+            <p class="tw-loading-hint">正在加载庄园列表...</p>
         </div>
 
         <!-- 分页 -->
-        <div id="pagination" class="pagination" style="display: none;">
-            <button class="btn-secondary" id="prev-page" disabled>上一页</button>
-            <span id="page-info">第 1 页</span>
-            <button class="btn-secondary" id="next-page">下一页</button>
+        <div id="pagination" class="tw-pagination" style="display: none;">
+            <button class="tw-btn-secondary" id="prev-page" disabled>上一页</button>
+            <span id="page-info" class="tw-page-info">第 1 页</span>
+            <button class="tw-btn-secondary" id="next-page">下一页</button>
         </div>
     </section>
 </section>
-
-<style>
-/* 地图页面专用样式 */
-.alert {
-    padding: 1rem;
-    border-radius: 6px;
-    margin-bottom: 1rem;
-}
-
-.alert-info {
-    background: #e0f2fe;
-    border: 1px solid #0284c7;
-    color: #0369a1;
-}
-
-.alert-danger {
-    background: #fee2e2;
-    border: 1px solid #dc2626;
-    color: #b91c1c;
-}
-
-.alert-warning {
-    background: #fef3c7;
-    border: 1px solid #f59e0b;
-    color: #b45309;
-}
-
-/* 地图控制区 */
-.map-controls {
-    padding: 1rem;
-}
-
-.control-row {
-    display: flex;
-    gap: 1.5rem;
-    flex-wrap: wrap;
-}
-
-.control-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-
-.control-group label {
-    font-weight: 500;
-    font-size: 0.875rem;
-    color: var(--text-secondary);
-}
-
-.search-group {
-    flex: 1;
-    min-width: 200px;
-}
-
-.search-input-wrapper {
-    display: flex;
-    gap: 0.5rem;
-}
-
-.search-input-wrapper .form-input {
-    flex: 1;
-}
-
-.form-select, .form-input {
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--border-light);
-    border-radius: 4px;
-    background: var(--bg-panel);
-    color: var(--text-primary);
-    font-size: 0.9rem;
-}
-
-.form-select {
-    min-width: 150px;
-}
-
-.btn-search {
-    padding: 0.5rem 1rem;
-}
-
-/* 庄园列表 */
-.manor-list-section {
-    padding: 1rem;
-}
-
-.manor-list-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px solid var(--border-light);
-}
-
-.manor-list-header h2 {
-    font-size: 1.1rem;
-    margin: 0;
-}
-
-.manor-count {
-    font-size: 0.875rem;
-    color: var(--text-muted);
-}
-
-.manor-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-
-.manor-card {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.75rem 1rem;
-    background: var(--bg-hover);
-    border-radius: 6px;
-    border: 1px solid var(--border-light);
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.manor-card:hover {
-    background: var(--bg-secondary);
-    border-color: var(--border-primary);
-}
-
-.manor-card.self {
-    background: #eff6ff;
-    border-color: #3b82f6;
-}
-
-.manor-card-info {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-}
-
-.manor-name {
-    font-weight: 600;
-    color: var(--text-primary);
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.manor-name .self-badge {
-    display: inline-block;
-    padding: 0.125rem 0.5rem;
-    background: #3b82f6;
-    color: white;
-    font-size: 0.7rem;
-    border-radius: 4px;
-}
-
-.manor-location {
-    font-size: 0.85rem;
-    color: var(--text-muted);
-}
-
-.manor-card-stats {
-    display: flex;
-    gap: 1rem;
-    align-items: center;
-}
-
-.prestige-value {
-    font-weight: 600;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    font-size: 0.875rem;
-}
-
-.prestige-value.higher {
-    background: #fee2e2;
-    color: #dc2626;
-}
-
-.prestige-value.lower {
-    background: #dcfce7;
-    color: #16a34a;
-}
-
-.prestige-value.equal {
-    background: #e0e7ff;
-    color: #4f46e5;
-}
-
-.manor-card-actions {
-    display: flex;
-    gap: 0.5rem;
-}
-
-.btn-small {
-    padding: 0.4rem 0.9rem;
-    font-size: 0.85rem;
-    font-weight: 600;
-    border-radius: 5px;
-    cursor: pointer;
-    transition: all 0.2s;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.3rem;
-    white-space: nowrap;
-}
-
-.btn-scout,
-.btn-attack {
-    background: linear-gradient(180deg, #8B4513 0%, #6B3410 100%);
-    color: #FFF8E7;
-    border: 2px solid #5A2D0C;
-    box-shadow: 0 2px 4px rgba(74, 38, 18, 0.15);
-}
-
-.btn-scout:hover,
-.btn-attack:hover {
-    background: linear-gradient(180deg, #7A3A10 0%, #5A2A0D 100%);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(74, 38, 18, 0.25);
-}
-
-.btn-danger {
-    background: #dc2626;
-    color: white;
-}
-
-.btn-danger:hover {
-    background: #b91c1c;
-}
-
-.btn-small:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-/* 分页 */
-.pagination {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 1rem;
-    margin-top: 1rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--border-light);
-}
-
-#page-info {
-    font-size: 0.9rem;
-    color: var(--text-secondary);
-}
-
-.loading-hint, .empty-hint {
-    text-align: center;
-    color: var(--text-muted);
-    padding: 2rem;
-}
-
-/* 保护标记 */
-.protection-badge {
-    display: inline-block;
-    padding: 0.125rem 0.5rem;
-    background: #fef3c7;
-    color: #d97706;
-    font-size: 0.7rem;
-    border-radius: 4px;
-    margin-left: 0.5rem;
-}
-
-/* Toast补充样式 */
-.toast-success {
-    background: #dcfce7 !important;
-    border-color: #16a34a !important;
-    color: #15803d;
-}
-
-.toast-error {
-    background: #fee2e2 !important;
-    border-color: #dc2626 !important;
-    color: #b91c1c;
-}
-
-.toast.fade-out {
-    opacity: 0;
-    transform: translateX(100%);
-    transition: all 0.3s ease-out;
-}
-
-@media (max-width: 768px) {
-    .control-row {
-        flex-direction: column;
-    }
-
-    .manor-card {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.75rem;
-    }
-
-    .manor-card-stats {
-        width: 100%;
-        justify-content: space-between;
-    }
-}
-</style>
 {% endblock %}
 
 {% block extra_scripts %}
@@ -403,7 +96,6 @@
     let currentSearchQuery = '';
     let totalPages = 1;
 
-    // DOM elements
     const regionSelect = document.getElementById('region-select');
     const manorSearch = document.getElementById('manor-search');
     const searchBtn = document.getElementById('search-btn');
@@ -423,13 +115,11 @@
         manorList.appendChild(el);
     }
 
-    // Load manors by region
     function loadManors(page = 1) {
         currentPage = page;
-        setListHint('正在加载...', 'loading-hint');
+        setListHint('正在加载...', 'tw-loading-hint');
 
         let url = mapApiBase + '?type=region&region=' + encodeURIComponent(currentRegion) + '&page=' + page;
-
         if (currentSearchQuery) {
             url = mapApiBase + '?type=name&q=' + encodeURIComponent(currentSearchQuery);
         }
@@ -446,8 +136,6 @@
                         pagination.style.display = 'none';
                     } else {
                         listTitle.textContent = getRegionName(currentRegion) + '地区的庄园';
-
-                        // Pagination
                         if (data.has_more || page > 1) {
                             pagination.style.display = 'flex';
                             totalPages = Math.ceil(data.total / data.page_size);
@@ -459,12 +147,12 @@
                         }
                     }
                 } else {
-                    setListHint('加载失败，请稍后重试', 'empty-hint');
+                    setListHint('加载失败，请稍后重试', 'tw-empty-state');
                 }
             })
             .catch(err => {
                 console.error('Load error:', err);
-                setListHint('加载失败，请稍后重试', 'empty-hint');
+                setListHint('加载失败，请稍后重试', 'tw-empty-state');
             });
     }
 
@@ -475,7 +163,7 @@
 
     function renderManorList(manors) {
         if (!manors || manors.length === 0) {
-            setListHint('暂无庄园数据', 'empty-hint');
+            setListHint('暂无庄园数据', 'tw-empty-state');
             return;
         }
 
@@ -489,31 +177,31 @@
             const isSelf = manorId === Number(currentManorId);
 
             const card = document.createElement('div');
-            card.className = 'manor-card' + (isSelf ? ' self' : '');
+            card.className = 'tw-manor-card' + (isSelf ? ' self' : '');
             card.dataset.manorId = String(manorId);
 
             const info = document.createElement('div');
-            info.className = 'manor-card-info';
+            info.className = 'tw-manor-card-info';
 
             const nameRow = document.createElement('div');
-            nameRow.className = 'manor-name';
+            nameRow.className = 'tw-manor-name';
             nameRow.appendChild(document.createTextNode(String(m.name || '')));
 
             if (isSelf) {
                 const selfBadge = document.createElement('span');
-                selfBadge.className = 'self-badge';
+                selfBadge.className = 'tw-self-badge';
                 selfBadge.textContent = '我';
                 nameRow.appendChild(selfBadge);
             }
             if (m.is_protected) {
                 const protectionBadge = document.createElement('span');
-                protectionBadge.className = 'protection-badge';
+                protectionBadge.className = 'tw-protection-badge';
                 protectionBadge.textContent = '保护中';
                 nameRow.appendChild(protectionBadge);
             }
 
             const locationRow = document.createElement('div');
-            locationRow.className = 'manor-location';
+            locationRow.className = 'tw-manor-location';
             const regionDisplay = String(m.region_display || '');
             const x = Number(m.coordinate_x);
             const y = Number(m.coordinate_y);
@@ -527,15 +215,15 @@
             info.appendChild(locationRow);
 
             const stats = document.createElement('div');
-            stats.className = 'manor-card-stats';
+            stats.className = 'tw-manor-card-stats';
 
             if (!isSelf) {
                 const actions = document.createElement('div');
-                actions.className = 'manor-card-actions';
+                actions.className = 'tw-manor-card-actions';
 
                 const scoutBtn = document.createElement('button');
                 scoutBtn.type = 'button';
-                scoutBtn.className = 'btn-small btn-scout';
+                scoutBtn.className = 'tw-btn-scout';
                 scoutBtn.textContent = '侦察';
                 scoutBtn.addEventListener('click', function(e) {
                     e.stopPropagation();
@@ -543,7 +231,7 @@
                 });
 
                 const attackLink = document.createElement('a');
-                attackLink.className = 'btn-small btn-attack';
+                attackLink.className = 'tw-btn-attack';
                 attackLink.textContent = '进攻';
                 attackLink.href = '/manor/map/raid/' + String(manorId) + '/';
 
@@ -560,14 +248,10 @@
         manorList.appendChild(fragment);
     }
 
-    // Toast notification helper
     function showToast(message, type) {
         type = type || 'info';
         const container = document.getElementById('toast-container');
-        if (!container) {
-            gameAlert(message);
-            return;
-        }
+        if (!container) { gameAlert(message); return; }
         const toast = document.createElement('div');
         toast.className = 'toast toast-' + type;
         toast.textContent = message;
@@ -584,33 +268,26 @@
 
         fetch(scoutApiUrl, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken
-            },
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ target_id: parseInt(targetId) })
         })
-        .then(function(res) {
-            return res.json();
-        })
-        .then(function(data) {
+        .then(res => res.json())
+        .then(data => {
             if (data.success) {
                 showToast(data.message, 'success');
-                setTimeout(function() { location.reload(); }, 1500);
+                setTimeout(() => location.reload(), 1500);
             } else {
                 showToast('侦察失败: ' + data.error, 'error');
             }
         })
-        .catch(function(err) {
+        .catch(err => {
             console.error('Scout request failed:', err);
             showToast('请求失败，请稍后重试', 'error');
         });
     }
 
-    // Make startScout global for modal buttons
     window.startScout = startScout;
 
-    // Event listeners
     regionSelect.addEventListener('change', function() {
         currentRegion = this.value;
         currentSearchQuery = '';
@@ -630,16 +307,10 @@
         }
     });
 
-    prevPageBtn.addEventListener('click', function() {
-        if (currentPage > 1) loadManors(currentPage - 1);
-    });
+    prevPageBtn.addEventListener('click', () => { if (currentPage > 1) loadManors(currentPage - 1); });
+    nextPageBtn.addEventListener('click', () => loadManors(currentPage + 1));
 
-    nextPageBtn.addEventListener('click', function() {
-        loadManors(currentPage + 1);
-    });
-
-    // Retreat raid buttons
-    document.querySelectorAll('[data-retreat-raid]').forEach(function(btn) {
+    document.querySelectorAll('[data-retreat-raid]').forEach(btn => {
         btn.addEventListener('click', async function() {
             const raidId = this.dataset.retreatRaid;
             const confirmed = await gameDialog.danger('确定要撤退吗？撤退后无法恢复。', { title: '撤退确认' });
@@ -647,9 +318,7 @@
 
             fetch('/manor/api/map/raid/' + raidId + '/retreat/', {
                 method: 'POST',
-                headers: {
-                    'X-CSRFToken': csrfToken
-                }
+                headers: { 'X-CSRFToken': csrfToken }
             })
             .then(res => res.json())
             .then(data => {
@@ -662,7 +331,6 @@
         });
     });
 
-    // Initial load
     loadManors(1);
 })();
 </script>

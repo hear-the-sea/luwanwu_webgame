@@ -5,32 +5,32 @@
 
 {% block content %}
 <section class="dashboard">
-    <div class="section-header">
+    <div class="tw-section-header">
         <div>
             <h1>{{ guild.name }}</h1>
-            <p>{{ guild.description|default:"暂无简介" }}</p>
+            <p class="caption">{{ guild.description|default:"暂无简介" }}</p>
         </div>
-        <div class="nav-links">
+        <div class="flex gap-2">
             {% if is_member %}
                 {% if member.is_leader %}
-                    <a href="{% url 'guilds:info' guild.id %}" class="btn-secondary">帮会设置</a>
+                    <a href="{% url 'guilds:info' guild.id %}" class="tw-btn-primary">帮会设置</a>
                 {% endif %}
-                <a href="{% url 'guilds:hall' %}" class="btn-secondary">返回大厅</a>
+                <a href="{% url 'guilds:hall' %}" class="tw-btn-primary">返回大厅</a>
             {% else %}
-                <a href="{% url 'guilds:apply' guild.id %}" class="btn-primary">申请加入</a>
-                <a href="{% url 'guilds:hall' %}" class="btn-secondary">返回大厅</a>
+                <a href="{% url 'guilds:apply' guild.id %}" class="tw-btn-primary">申请加入</a>
+                <a href="{% url 'guilds:hall' %}" class="tw-btn-primary">返回大厅</a>
             {% endif %}
         </div>
     </div>
 
-    <div class="guild-info-grid">
+    <div class="tw-guild-info-grid">
         <!-- 基本信息 -->
-        <section class="card">
+        <section class="tw-card">
             <h2>帮会信息</h2>
-            <dl class="guild-dl">
+            <dl class="tw-guild-dl">
                 <div>
                     <dt>等级</dt>
-                    <dd><span class="badge">Lv {{ guild.level }} / 10</span></dd>
+                    <dd><span class="tw-badge-gold">Lv {{ guild.level }} / 10</span></dd>
                 </div>
                 <div>
                     <dt>帮主</dt>
@@ -53,21 +53,21 @@
                     <dt>我的职位</dt>
                     <dd>
                         {% if member.is_leader %}
-                            <span class="guild-position-leader">帮主</span>
+                            <span class="tw-guild-position-leader">帮主</span>
                         {% elif member.is_admin %}
-                            <span class="guild-position-admin">管理员</span>
+                            <span class="tw-guild-position-admin">管理员</span>
                         {% else %}
-                            <span class="guild-position-member">成员</span>
+                            <span class="tw-guild-position-member">成员</span>
                         {% endif %}
                     </dd>
                 </div>
                 {% endif %}
             </dl>
             {% if is_member and member.can_manage %}
-            <div class="guild-card-divider">
+            <div class="tw-guild-card-divider">
                 <form method="post" action="{% url 'guilds:upgrade' %}">
                     {% csrf_token %}
-                    <button type="submit" class="btn-primary btn-block" {% if guild.level >= 10 %}disabled{% endif %}>
+                    <button type="submit" class="tw-btn-primary w-full" {% if guild.level >= 10 %}disabled{% endif %}>
                         升级帮会
                         {% if guild.level < 10 %}(需消耗帮会资源){% endif %}
                     </button>
@@ -78,40 +78,40 @@
 
         <!-- 帮会资源 -->
         {% if is_member %}
-        <section class="card">
+        <section class="tw-card">
             <h2>帮会资源</h2>
-            <dl class="guild-dl">
+            <dl class="tw-guild-dl">
                 <div>
                     <dt>银两</dt>
-                    <dd class="guild-resource-value resource-silver">{{ guild.silver|floatformat:0 }}</dd>
+                    <dd class="tw-guild-resource-value resource-silver">{{ guild.silver|floatformat:0 }}</dd>
                 </div>
                 <div>
                     <dt>粮食</dt>
-                    <dd class="guild-resource-value resource-grain">{{ guild.grain|floatformat:0 }}</dd>
+                    <dd class="tw-guild-resource-value resource-grain">{{ guild.grain|floatformat:0 }}</dd>
                 </div>
                 <div>
                     <dt>金条</dt>
-                    <dd class="guild-resource-value resource-gold">{{ guild.gold_bar }}</dd>
+                    <dd class="tw-guild-resource-value resource-gold">{{ guild.gold_bar }}</dd>
                 </div>
             </dl>
-            <div class="guild-card-divider">
-                <a href="{% url 'guilds:donate' %}" class="btn-primary btn-block">捐赠资源</a>
+            <div class="tw-guild-card-divider">
+                <a href="{% url 'guilds:donate' %}" class="tw-btn-primary w-full text-center">捐赠资源</a>
             </div>
         </section>
         {% endif %}
 
         <!-- 快捷功能 -->
         {% if is_member %}
-        <section class="card">
+        <section class="tw-card">
             <h2>快捷功能</h2>
-            <div class="guild-quick-links">
-                <a href="{% url 'guilds:members' %}" class="btn-secondary">成员列表</a>
-                <a href="{% url 'guilds:technology' %}" class="btn-secondary">科技研究</a>
-                <a href="{% url 'guilds:warehouse' %}" class="btn-secondary">帮会仓库</a>
-                <a href="{% url 'guilds:contribution_ranking' %}" class="btn-secondary">贡献排行</a>
-                <a href="{% url 'guilds:announcements' %}" class="btn-secondary">帮会公告</a>
+            <div class="tw-guild-quick-links">
+                <a href="{% url 'guilds:members' %}" class="tw-btn-secondary">成员列表</a>
+                <a href="{% url 'guilds:technology' %}" class="tw-btn-secondary">科技研究</a>
+                <a href="{% url 'guilds:warehouse' %}" class="tw-btn-secondary">帮会仓库</a>
+                <a href="{% url 'guilds:contribution_ranking' %}" class="tw-btn-secondary">贡献排行</a>
+                <a href="{% url 'guilds:announcements' %}" class="tw-btn-secondary">帮会公告</a>
                 {% if member.can_manage %}
-                    <a href="{% url 'guilds:applications' %}" class="btn-secondary">成员申请</a>
+                    <a href="{% url 'guilds:applications' %}" class="tw-btn-secondary">成员申请</a>
                 {% endif %}
             </div>
         </section>
@@ -120,18 +120,18 @@
 
     <!-- 最新公告 -->
     {% if announcements %}
-    <section class="card" style="margin-top: 1.5rem;">
-        <div class="section-title">
-            <h2>最新公告</h2>
+    <section class="tw-card tw-guild-section-spacing">
+        <div class="flex justify-between items-center">
+            <h2 class="m-0">最新公告</h2>
             {% if is_member %}
-                <a href="{% url 'guilds:announcements' %}" class="btn-secondary btn-small">查看全部</a>
+                <a href="{% url 'guilds:announcements' %}" class="tw-btn-secondary tw-btn-sm">查看全部</a>
             {% endif %}
         </div>
-        <div style="margin-top: 1rem;">
+        <div class="mt-4">
             {% for announcement in announcements %}
-            <div class="guild-announcement {% if announcement.type == 'leader' %}announcement-leader{% elif announcement.type == 'system' %}announcement-system{% endif %}">
-                <div class="guild-announcement-header">
-                    <span class="guild-announcement-title">
+            <div class="tw-guild-announcement {% if announcement.type == 'leader' %}announcement-leader{% elif announcement.type == 'system' %}announcement-system{% endif %}">
+                <div class="tw-guild-announcement-header">
+                    <span class="tw-guild-announcement-title">
                         {% if announcement.type == 'leader' %}
                             帮主公告
                         {% elif announcement.type == 'system' %}
@@ -140,12 +140,12 @@
                             普通公告
                         {% endif %}
                     </span>
-                    <span class="muted-text">{{ announcement.created_at|date:"m-d H:i" }}</span>
+                    <span class="tw-muted">{{ announcement.created_at|date:"m-d H:i" }}</span>
                 </div>
-                <p style="margin: 0;">{{ announcement.content }}</p>
+                <p class="m-0">{{ announcement.content }}</p>
                 {% if announcement.author %}
-                <div style="margin-top: 0.5rem; text-align: right;">
-                    <small class="muted-text">发布者：{{ announcement.author.manor.display_name }}</small>
+                <div class="mt-2 text-right">
+                    <small class="tw-muted">发布者：{{ announcement.author.manor.display_name }}</small>
                 </div>
                 {% endif %}
             </div>
@@ -156,22 +156,22 @@
 
     <!-- 操作区域 -->
     {% if is_member %}
-    <section class="card" style="margin-top: 1.5rem;">
+    <section class="tw-card tw-guild-section-spacing">
         <h2>其他操作</h2>
-        <div class="guild-member-actions">
-            <a href="{% url 'guilds:donation_logs' %}" class="btn-secondary">捐赠记录</a>
-            <a href="{% url 'guilds:exchange_logs' %}" class="btn-secondary">兑换记录</a>
-            <a href="{% url 'guilds:resource_logs' %}" class="btn-secondary">资源流水</a>
+        <div class="tw-guild-member-actions">
+            <a href="{% url 'guilds:donation_logs' %}" class="tw-btn-secondary">捐赠记录</a>
+            <a href="{% url 'guilds:exchange_logs' %}" class="tw-btn-secondary">兑换记录</a>
+            <a href="{% url 'guilds:resource_logs' %}" class="tw-btn-secondary">资源流水</a>
 
             {% if member.is_leader %}
-                <button type="button" class="btn-secondary"
+                <button type="button" class="tw-btn-secondary"
                     onclick="document.getElementById('disband-modal').classList.add('visible')">
                     解散帮会
                 </button>
             {% else %}
                 <form method="post" action="{% url 'guilds:leave' %}" id="leave-guild-form">
                     {% csrf_token %}
-                    <button type="submit" class="btn-secondary">退出帮会</button>
+                    <button type="submit" class="tw-btn-secondary">退出帮会</button>
                 </form>
             {% endif %}
         </div>
@@ -181,27 +181,27 @@
 
 <!-- 解散帮会确认模态框 -->
 {% if is_member and member.is_leader %}
-<div class="modal-backdrop" id="disband-modal" aria-hidden="true">
-    <div class="modal">
-        <header class="modal-header">
+<div class="tw-modal-overlay" id="disband-modal" style="display: none;">
+    <div class="tw-modal-content">
+        <div class="tw-modal-header">
             <h3>解散帮会</h3>
-            <button type="button" class="btn-secondary btn-small"
-                onclick="document.getElementById('disband-modal').classList.remove('visible')">取消</button>
-        </header>
-        <div class="modal-body">
-            <div class="guild-warning" style="margin-top: 0; margin-bottom: 1rem;">
-                <p style="font-weight: bold;">警告：此操作不可撤销</p>
-                <p style="margin-top: 0.5rem;">解散帮会后，所有成员将被移除，帮会资源将被清空，帮会数据将被永久删除。</p>
+            <button type="button" class="tw-modal-close"
+                onclick="document.getElementById('disband-modal').style.display='none'">&times;</button>
+        </div>
+        <div class="tw-modal-body">
+            <div class="tw-guild-warning" style="margin-top: 0;">
+                <p class="font-bold m-0">警告：此操作不可撤销</p>
+                <p class="mt-2 m-0">解散帮会后，所有成员将被移除，帮会资源将被清空，帮会数据将被永久删除。</p>
             </div>
             <form method="post" action="{% url 'guilds:disband' %}">
                 {% csrf_token %}
-                <div class="form-field">
+                <div class="tw-form-field mt-4">
                     <label for="confirm_name">请输入帮会名称以确认：</label>
-                    <input type="text" id="confirm_name" name="confirm_name" required placeholder="{{ guild.name }}">
-                    <small class="muted-text">必须完全匹配帮会名称才能解散</small>
+                    <input type="text" id="confirm_name" name="confirm_name" required placeholder="{{ guild.name }}" class="tw-input">
+                    <small class="tw-muted">必须完全匹配帮会名称才能解散</small>
                 </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn-danger">确认解散</button>
+                <div class="flex justify-end gap-2 mt-4">
+                    <button type="submit" class="tw-btn-danger">确认解散</button>
                 </div>
             </form>
         </div>
@@ -217,15 +217,19 @@
     if (modal) {
         modal.addEventListener('click', (event) => {
             if (event.target === modal) {
-                modal.classList.remove('visible');
+                modal.style.display = 'none';
             }
         });
     }
     // 退出帮会确认
     document.getElementById('leave-guild-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const confirmed = await gameDialog.danger('确认退出帮会吗？退出后当前贡献将清零。', { title: '退出帮会' });
-        if (confirmed) e.target.submit();
+        try {
+            const confirmed = await gameDialog.danger('确认退出帮会吗？退出后当前贡献将清零。', { title: '退出帮会' });
+            if (confirmed) e.target.submit();
+        } catch (err) {
+            console.error('退出帮会确认失败:', err);
+        }
     });
 </script>
 {% endblock %}

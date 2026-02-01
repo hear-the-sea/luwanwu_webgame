@@ -132,21 +132,25 @@ def approve_application(application, reviewer, auto=False):
             except IntegrityError:
                 raise ValueError("申请人已加入其他帮会")
 
-        # 发送系统消息给申请人
-        applicant_manor = Manor.objects.get(user=application_locked.applicant)
-        create_message(
-            manor=applicant_manor,
-            kind='system',
-            title='入帮申请通过',
-            body=f"您的入帮申请已通过，欢迎加入【{guild_locked.name}】！",
-        )
+        # 发送系统消息给申请人（在事务外获取 Manor 以减少锁持有时间）
+        applicant_user_id = application_locked.applicant_id
+        guild_name = guild_locked.name
 
-        # 发布帮会公告
-        create_announcement(
-            guild_locked,
-            'system',
-            f"欢迎新成员{applicant_manor.display_name}加入帮会！",
-        )
+    # 事务外发送消息，减少锁持有时间
+    applicant_manor = Manor.objects.get(user_id=applicant_user_id)
+    create_message(
+        manor=applicant_manor,
+        kind='system',
+        title='入帮申请通过',
+        body=f"您的入帮申请已通过，欢迎加入【{guild_name}】！",
+    )
+
+    # 发布帮会公告
+    create_announcement(
+        guild_locked,
+        'system',
+        f"欢迎新成员{applicant_manor.display_name}加入帮会！",
+    )
 
 
 def reject_application(application, reviewer, note=''):
@@ -283,14 +287,12 @@ def appoint_admin(target_member, operator):
     Raises:
         ValueError: 验证失败
     """
+    from guilds.models import Guild, GuildMember
+
     # 验证权限（只有帮主可任命）
     operator_member = get_active_membership(target_member.guild, operator, "只有帮主可以任命管理员")
     if not operator_member.is_leader:
         raise ValueError("只有帮主可以任命管理员")
-
-    # 验证管理员数量
-    if not target_member.guild.can_appoint_admin():
-        raise ValueError("管理员数量已达上限（2人）")
 
     # 验证目标成员
     if target_member.position != 'member':
@@ -301,9 +303,20 @@ def appoint_admin(target_member, operator):
     target_manor = Manor.objects.get(user=target_member.user)
 
     with transaction.atomic():
+        # 锁定帮会后重新检查管理员数量，防止并发超限
+        guild_locked = Guild.objects.select_for_update().get(pk=target_member.guild_id)
+        admin_count = guild_locked.members.filter(is_active=True, position='admin').count()
+        if admin_count >= 2:
+            raise ValueError("管理员数量已达上限（2人）")
+
+        # 锁定目标成员并重新验证状态
+        target_locked = GuildMember.objects.select_for_update().get(pk=target_member.pk)
+        if target_locked.position != 'member':
+            raise ValueError("该成员已是管理人员")
+
         # 任命为管理员
-        target_member.position = 'admin'
-        target_member.save(update_fields=['position'])
+        target_locked.position = 'admin'
+        target_locked.save(update_fields=['position'])
 
         # 发送系统消息
         create_message(
@@ -376,12 +389,14 @@ def transfer_leadership(current_leader_member, new_leader_member):
     Raises:
         ValueError: 验证失败
     """
+    from guilds.models import GuildMember
+
     # 验证当前用户是帮主
     if not current_leader_member.is_leader:
         raise ValueError("您不是帮主")
 
     # 验证新帮主是同帮会成员
-    if new_leader_member.guild != current_leader_member.guild:
+    if new_leader_member.guild_id != current_leader_member.guild_id:
         raise ValueError("只能转让给本帮会成员")
 
     # 验证新帮主是活跃成员
@@ -393,13 +408,23 @@ def transfer_leadership(current_leader_member, new_leader_member):
     new_leader_manor = Manor.objects.get(user=new_leader_member.user)
 
     with transaction.atomic():
+        # 使用 select_for_update 锁定两个成员记录，防止并发问题
+        current_locked = GuildMember.objects.select_for_update().get(pk=current_leader_member.pk)
+        new_locked = GuildMember.objects.select_for_update().get(pk=new_leader_member.pk)
+
+        # 重新验证状态（防止并发修改）
+        if not current_locked.is_leader:
+            raise ValueError("您不是帮主")
+        if not new_locked.is_active:
+            raise ValueError("该成员已离开帮会")
+
         # 原帮主降为普通成员
-        current_leader_member.position = 'member'
-        current_leader_member.save(update_fields=['position'])
+        current_locked.position = 'member'
+        current_locked.save(update_fields=['position'])
 
         # 新帮主上任
-        new_leader_member.position = 'leader'
-        new_leader_member.save(update_fields=['position'])
+        new_locked.position = 'leader'
+        new_locked.save(update_fields=['position'])
 
         # 发送系统消息
         create_message(

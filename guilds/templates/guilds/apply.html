@@ -5,26 +5,26 @@
 
 {% block content %}
 <section class="dashboard">
-    <div class="section-header">
+    <div class="tw-section-header">
         <div>
             <h1>申请加入帮会</h1>
-            <p>{{ guild.name }}</p>
+            <p class="caption">{{ guild.name }}</p>
         </div>
-        <div class="nav-links">
-            <a href="{% url 'guilds:detail' guild.id %}" class="btn-secondary">返回帮会</a>
+        <div class="flex gap-2">
+            <a href="{% url 'guilds:detail' guild.id %}" class="tw-btn-primary">返回帮会</a>
         </div>
     </div>
 
-    <section class="card">
+    <section class="tw-card">
         <h2>帮会信息</h2>
-        <dl class="guild-dl">
+        <dl class="tw-guild-dl">
             <div>
                 <dt>帮会名称</dt>
                 <dd>{{ guild.name }}</dd>
             </div>
             <div>
                 <dt>帮会等级</dt>
-                <dd><span class="badge">Lv {{ guild.level }} / 10</span></dd>
+                <dd><span class="tw-badge-gold">Lv {{ guild.level }} / 10</span></dd>
             </div>
             <div>
                 <dt>帮主</dt>
@@ -42,9 +42,9 @@
                 <dt>审批方式</dt>
                 <dd>
                     {% if guild.auto_accept %}
-                        <span class="positive">✓ 自动通过</span>
+                        <span class="text-accent-green">✓ 自动通过</span>
                     {% else %}
-                        <span class="guild-cost-value">⏳ 需审批</span>
+                        <span class="tw-guild-cost-value">⏳ 需审批</span>
                     {% endif %}
                 </dd>
             </div>
@@ -52,25 +52,25 @@
     </section>
 
     {% if guild.current_member_count >= guild.member_capacity %}
-        <section class="card guild-section-spacing guild-error-card">
-            <h2 class="guild-error-title">⚠️ 成员已满</h2>
+        <section class="tw-card tw-guild-section-spacing tw-guild-error-card">
+            <h2 class="tw-guild-error-title">⚠️ 成员已满</h2>
             <p>该帮会当前成员数已达上限，暂时无法接受新成员申请。</p>
-            <a href="{% url 'guilds:hall' %}" class="btn-secondary">返回帮会大厅</a>
+            <a href="{% url 'guilds:hall' %}" class="tw-btn-primary">返回帮会大厅</a>
         </section>
     {% else %}
-        <section class="card guild-section-spacing">
+        <section class="tw-card tw-guild-section-spacing">
             <h2>提交申请</h2>
             <form method="post">
                 {% csrf_token %}
-                <div class="form-field">
+                <div class="tw-form-field">
                     <label for="message">申请留言（选填）</label>
-                    <textarea id="message" name="message" rows="4" maxlength="200" placeholder="向帮主介绍一下自己吧..."></textarea>
-                    <small class="muted-text">最多200字</small>
+                    <textarea id="message" name="message" rows="4" maxlength="200" placeholder="向帮主介绍一下自己吧..." class="tw-input"></textarea>
+                    <small class="tw-muted">最多200字</small>
                 </div>
 
-                <div class="guild-info-card">
-                    <h3>申请说明</h3>
-                    <ul class="guild-info-list">
+                <div class="tw-guild-info-card mt-4">
+                    <h4>申请说明</h4>
+                    <ul class="tw-guild-info-list">
                         {% if guild.auto_accept %}
                             <li>该帮会已开启自动通过，提交后将立即加入</li>
                         {% else %}
@@ -82,9 +82,9 @@
                     </ul>
                 </div>
 
-                <div class="form-actions guild-section-spacing">
-                    <button type="submit" class="btn-primary">提交申请</button>
-                    <a href="{% url 'guilds:detail' guild.id %}" class="btn-secondary">取消</a>
+                <div class="flex gap-2 mt-6">
+                    <button type="submit" class="tw-btn-primary">提交申请</button>
+                    <a href="{% url 'guilds:detail' guild.id %}" class="tw-btn-secondary">取消</a>
                 </div>
             </form>
         </section>

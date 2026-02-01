@@ -1,4 +1,5 @@
 import pytest
+from django.core.management import call_command
 from django.utils import timezone
 
 from gameplay.services.manor import ensure_manor
@@ -7,8 +8,15 @@ from guests.services import finalize_candidate, recruit_guest, train_guest, reve
 from guests.services.training import finalize_guest_training
 
 
+@pytest.fixture
+def load_guest_data(db):
+    """Ensure guest templates and pools are loaded."""
+    if not RecruitmentPool.objects.exists():
+        call_command("load_guest_templates", verbosity=0)
+
+
 @pytest.mark.django_db
-def test_recruit_guest_creates_record(django_user_model):
+def test_recruit_guest_creates_record(django_user_model, load_guest_data):
     user = django_user_model.objects.create_user(username="player_guest", password="pass123")
     manor = ensure_manor(user)
     manor.silver = 2000
@@ -23,7 +31,7 @@ def test_recruit_guest_creates_record(django_user_model):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_train_guest_increases_level(django_user_model):
+def test_train_guest_increases_level(django_user_model, load_guest_data):
     user = django_user_model.objects.create_user(username="player_train", password="pass123")
     manor = ensure_manor(user)
     manor.silver = 2000
@@ -42,7 +50,7 @@ def test_train_guest_increases_level(django_user_model):
 
 
 @pytest.mark.django_db
-def test_finalize_guest_training_is_idempotent(django_user_model):
+def test_finalize_guest_training_is_idempotent(django_user_model, load_guest_data):
     user = django_user_model.objects.create_user(username="player_train2", password="pass123")
     manor = ensure_manor(user)
     manor.silver = 2000
@@ -80,7 +88,7 @@ def test_finalize_guest_training_is_idempotent(django_user_model):
 
 
 @pytest.mark.django_db
-def test_reveal_candidate_rarity_marks_all(django_user_model):
+def test_reveal_candidate_rarity_marks_all(django_user_model, load_guest_data):
     user = django_user_model.objects.create_user(username="player_magnify", password="pass123")
     manor = ensure_manor(user)
     pool = RecruitmentPool.objects.get(key="tongshi")

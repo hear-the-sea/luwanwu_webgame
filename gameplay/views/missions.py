@@ -67,12 +67,12 @@ class TaskBoardView(LoginRequiredMixin, TemplateView):
                         enemy_keys.add(key)
             troop_keys.update((mission.enemy_troops or {}).keys())
             drop_keys.update((mission.drop_table or {}).keys())
-        guest_templates = {tpl.key: tpl for tpl in GuestTemplate.objects.filter(key__in=enemy_keys)}
+        guest_templates = {tpl.key: tpl for tpl in GuestTemplate.objects.filter(key__in=enemy_keys).only('key', 'name', 'avatar')}
         guest_labels = {key: tpl.name for key, tpl in guest_templates.items()}
 
         # 加载士兵模板
         from battle.models import TroopTemplate
-        troop_templates_objs = {tpl.key: tpl for tpl in TroopTemplate.objects.filter(key__in=troop_keys)}
+        troop_templates_objs = {tpl.key: tpl for tpl in TroopTemplate.objects.filter(key__in=troop_keys).only('key', 'name')}
 
         from gameplay.utils.template_loader import get_item_templates_by_keys
         item_templates = get_item_templates_by_keys(drop_keys)
@@ -103,7 +103,10 @@ class TaskBoardView(LoginRequiredMixin, TemplateView):
             (selected_mission.daily_limit + selected_extra) if selected_mission else 0
         )
         selected_remaining = max(0, selected_daily_limit - selected_attempts)
-        available_guests = manor.guests.filter(status=GuestStatus.IDLE).select_related("template")
+        available_guests = manor.guests.filter(status=GuestStatus.IDLE).select_related("template").only(
+            'id', 'display_name', 'level', 'current_hp', 'max_hp', 'status',
+            'template__id', 'template__key', 'template__name', 'template__avatar'
+        )
 
         # 获取任务卡数量
         mission_card_count = get_item_quantity(manor, MISSION_CARD_KEY)
@@ -265,10 +268,13 @@ class AcceptMissionView(LoginRequiredMixin, TemplateView):
             if len(guest_ids) > limit:
                 messages.error(request, f"本次出征最多选择 {limit} 名门客")
                 return redirect(f"{reverse('gameplay:tasks')}?mission={mission.key}")
-            raw_loadout = {}
-            from battle.troops import troop_template_list
-            for item in troop_template_list():
-                raw_loadout[item["key"]] = request.POST.get(f"troop_{item['key']}", 0)
+            if mission.guest_only:
+                raw_loadout = {}
+            else:
+                raw_loadout = {}
+                from battle.troops import troop_template_list
+                for item in troop_template_list():
+                    raw_loadout[item["key"]] = request.POST.get(f"troop_{item['key']}", 0)
         try:
             loadout = normalize_mission_loadout(raw_loadout) if raw_loadout else {}
             launch_mission(manor, mission, guest_ids, loadout)

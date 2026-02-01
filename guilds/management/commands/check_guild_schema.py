@@ -69,4 +69,3 @@ class Command(BaseCommand):
 
         self.stdout.write("Suggested next step: run `python manage.py migrate` (or app-specific migrate) to sync schema.")
         raise SystemExit(1)
-

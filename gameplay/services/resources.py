@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Dict
 
 from django.conf import settings
@@ -14,6 +15,8 @@ from django.utils import timezone
 from core.utils.time_scale import scale_value
 from ..models import Manor, ResourceEvent, ResourceType
 from ..utils.resource_calculator import RESOURCE_FIELDS, get_hourly_rates
+
+logger = logging.getLogger(__name__)
 
 
 def spend_resources_locked(
@@ -65,6 +68,11 @@ def grant_resources_locked(
         elif resource == ResourceType.GRAIN:
             capacity = manor.grain_capacity
         else:
+            # 代码质量修复：记录未知资源类型，便于排查配置错误
+            logger.warning(
+                f"未知资源类型被跳过: {resource}={amount}",
+                extra={"manor_id": manor.id, "resource": resource, "amount": amount}
+            )
             continue  # 未知资源类型跳过
 
         current_value = getattr(manor, resource, 0)
@@ -79,6 +87,7 @@ def grant_resources_locked(
         manor.save(update_fields=list(credited.keys()))
         log_resource_gain(manor, credited, reason, note)
     return credited
+
 
 def sync_resource_production(manor: Manor) -> None:
     """

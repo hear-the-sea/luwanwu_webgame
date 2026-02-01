@@ -5,6 +5,8 @@
 from common.constants.time import TimeConstants  # noqa: F401
 
 # 门客状态
+
+
 class GuestStatus:
     """门客状态常量"""
 

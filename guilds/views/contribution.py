@@ -81,7 +81,6 @@ def contribution_ranking(request):
     return render(request, 'guilds/contribution_ranking.html', context)
 
 
-
 @login_required
 @require_guild_member
 def resource_status(request):

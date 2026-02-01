@@ -47,4 +47,3 @@ def _create_message(manor, opponent_label: str, report) -> None:
         body="",
         battle_report=report,
     )
-

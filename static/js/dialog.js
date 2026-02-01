@@ -210,7 +210,8 @@ class GameDialog {
       y: e.clientY - rect.top,
     };
 
-    this.dialog.querySelector(".game-dialog-header").classList.add("dragging");
+    const header = this.dialog.querySelector(".game-dialog-header");
+    if (header) header.classList.add("dragging");
     document.body.classList.add("game-dialog-dragging");
 
     document.addEventListener("mousemove", this._onMouseMove);
@@ -233,7 +234,8 @@ class GameDialog {
       y: touch.clientY - rect.top,
     };
 
-    this.dialog.querySelector(".game-dialog-header").classList.add("dragging");
+    const header = this.dialog.querySelector(".game-dialog-header");
+    if (header) header.classList.add("dragging");
     document.body.classList.add("game-dialog-dragging");
 
     document.addEventListener("touchmove", this._onTouchMove.bind(this), {

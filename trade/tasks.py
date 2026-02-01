@@ -29,6 +29,7 @@ def refresh_shop_stock(self):
 
         today = timezone.now().date()
         refreshed_count = 0
+        failed_items = []
 
         for item in config_list:
             # 只刷新设置了 daily_refresh 且有限库存的商品
@@ -39,8 +40,17 @@ def refresh_shop_stock(self):
                         defaults={"current_stock": item.stock, "last_refresh": today},
                     )
                     refreshed_count += 1
-                except Exception:
+                except Exception as e:
                     logger.exception(f"Failed to refresh stock for item {item.item_key}")
+                    failed_items.append({"item_key": item.item_key, "error": str(e)})
+
+        # 记录失败统计，便于监控告警
+        if failed_items:
+            logger.error(
+                f"Shop stock refresh completed with {len(failed_items)} failures: "
+                f"{[f['item_key'] for f in failed_items]}"
+            )
+            return f"refreshed {refreshed_count} items, {len(failed_items)} failed"
 
         return f"refreshed {refreshed_count} items"
     except Exception as exc:

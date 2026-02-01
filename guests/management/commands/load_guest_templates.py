@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import random
 from pathlib import Path
 
 import yaml
@@ -30,6 +31,11 @@ class Command(BaseCommand):
             type=str,
             default=str(Path(settings.BASE_DIR) / "data" / "guest_templates.yaml"),
             help="Path to YAML/JSON file containing templates/pools definitions.",
+        )
+        parser.add_argument(
+            "--assign-missing-avatars",
+            action="store_true",
+            help="Auto-assign avatars for templates missing avatar based on gender/archetype.",
         )
         parser.add_argument(
             "--skills-file",
@@ -102,6 +108,7 @@ class Command(BaseCommand):
             else:
                 hero_roster[rarity] = heroes
         template_skill_keys: dict[str, list[str]] = {}
+        assign_missing_avatars = bool(options.get("assign_missing_avatars"))
 
         def build_template_from_stats(entry: dict, rarity: str, archetype: str, stats: dict) -> dict:
             stats = stats or {}
@@ -187,6 +194,9 @@ class Command(BaseCommand):
 
         # 图片源目录
         image_source_dir = Path(settings.BASE_DIR) / "data" / "images" / "guests"
+        avatar_catalog = self._build_avatar_catalog(image_source_dir) if assign_missing_avatars else {}
+        avatar_cache: dict[str, str] = {}
+        fallback_avatar_count = 0
 
         template_keys = set()
         for data in template_data:
@@ -214,22 +224,52 @@ class Command(BaseCommand):
 
             # 处理头像字段（压缩并保存）
             avatar_filename = data.get("avatar")
+            if not avatar_filename and assign_missing_avatars and not obj.avatar:
+                avatar_filename = self._pick_fallback_avatar(
+                    avatar_catalog,
+                    data.get("archetype"),
+                    data.get("default_gender"),
+                    data.get("key"),
+                )
+                if avatar_filename:
+                    fallback_avatar_count += 1
             if avatar_filename:
                 avatar_path = image_source_dir / avatar_filename
                 if avatar_path.exists():
                     try:
-                        # 压缩图片：门客头像最大 400x400，质量 85%，转换为 WebP
-                        compressed_file, new_filename = compress_and_resize_image(
-                            avatar_path,
-                            max_size=(400, 400),
-                            quality=85,
-                            convert_to_webp=True
-                        )
-                        # 删除旧文件（如果存在）避免重复
-                        if obj.avatar:
-                            obj.avatar.delete(save=False)
-                        obj.avatar.save(new_filename, compressed_file, save=True)
-                        self.stdout.write(self.style.SUCCESS(f"  [OK] Compressed and loaded avatar: {avatar_filename} -> {new_filename}"))
+                        stored_name = avatar_cache.get(avatar_filename)
+                        saved_now = False
+                        if not stored_name:
+                            target_name = f"{avatar_path.stem}.webp"
+                            storage = obj.avatar.storage
+                            if storage.exists(target_name):
+                                stored_name = target_name
+                            else:
+                                # 压缩图片：门客头像最大 400x400，质量 85%，转换为 WebP
+                                compressed_file, new_filename = compress_and_resize_image(
+                                    avatar_path,
+                                    max_size=(400, 400),
+                                    quality=85,
+                                    convert_to_webp=True
+                                )
+                                old_name = obj.avatar.name if obj.avatar else ""
+                                obj.avatar.save(new_filename, compressed_file, save=True)
+                                stored_name = obj.avatar.name
+                                avatar_cache[avatar_filename] = stored_name
+                                self._safe_delete_old_avatar(obj, old_name, stored_name)
+                                self.stdout.write(
+                                    self.style.SUCCESS(
+                                        f"  [OK] Compressed and loaded avatar: {avatar_filename} -> {new_filename}"
+                                    )
+                                )
+                                saved_now = True
+                            avatar_cache[avatar_filename] = stored_name
+                        if not saved_now:
+                            old_name = obj.avatar.name if obj.avatar else ""
+                            if old_name != stored_name:
+                                obj.avatar.name = stored_name
+                                obj.save(update_fields=["avatar"])
+                                self._safe_delete_old_avatar(obj, old_name, stored_name)
                     except Exception as e:
                         self.stdout.write(self.style.WARNING(f"  [FAIL] Failed to load avatar {avatar_filename}: {e}"))
                 else:
@@ -310,6 +350,8 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING(f"Removed {removed} pools not defined in payload"))
 
         clear_template_cache()
+        if fallback_avatar_count:
+            self.stdout.write(self.style.SUCCESS(f"Assigned {fallback_avatar_count} fallback avatars."))
         self.stdout.write(self.style.SUCCESS("Guest templates and pools synced."))
 
     def _load_heroes_from_dir(self, dir_path: Path, load_payload) -> dict[str, list]:
@@ -333,3 +375,69 @@ class Command(BaseCommand):
             except Exception as e:
                 self.stdout.write(self.style.WARNING(f"Failed to load {file_path.name}: {e}"))
         return merged
+
+    def _safe_delete_old_avatar(self, template: GuestTemplate, old_name: str, new_name: str) -> None:
+        if not old_name or old_name == new_name:
+            return
+        if GuestTemplate.objects.filter(avatar=old_name).exclude(pk=template.pk).exists():
+            return
+        template.avatar.storage.delete(old_name)
+
+    def _build_avatar_catalog(self, image_source_dir: Path) -> dict[tuple[str, str], list[str]]:
+        catalog = {
+            ("civil", "male"): [],
+            ("civil", "female"): [],
+            ("military", "male"): [],
+            ("military", "female"): [],
+        }
+        if not image_source_dir.exists():
+            return catalog
+        for path in image_source_dir.iterdir():
+            if not path.is_file():
+                continue
+            if path.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"}:
+                continue
+            archetype, gender = self._extract_avatar_tags(path.name)
+            if not archetype or not gender:
+                continue
+            catalog[(archetype, gender)].append(path.name)
+        for key in catalog:
+            catalog[key].sort()
+        return catalog
+
+    def _extract_avatar_tags(self, filename: str) -> tuple[str | None, str | None]:
+        normalized = filename.lower().replace("-", "_")
+        archetype = None
+        if "_wen_" in normalized or "_wen." in normalized:
+            archetype = "civil"
+        elif "_wu_" in normalized or "_wu." in normalized:
+            archetype = "military"
+        gender = None
+        if "_female" in normalized:
+            gender = "female"
+        elif "_male" in normalized:
+            gender = "male"
+        return archetype, gender
+
+    def _pick_fallback_avatar(
+        self,
+        avatar_catalog: dict[tuple[str, str], list[str]],
+        archetype: str | None,
+        gender: str | None,
+        seed_key: str | None,
+    ) -> str | None:
+        if not avatar_catalog:
+            return None
+        candidates: list[str] = []
+        if archetype in {"civil", "military"}:
+            if gender in {"male", "female"}:
+                candidates = avatar_catalog.get((archetype, gender), [])
+            else:
+                candidates = avatar_catalog.get((archetype, "male"), []) + avatar_catalog.get((archetype, "female"), [])
+        if not candidates:
+            for items in avatar_catalog.values():
+                candidates.extend(items)
+        if not candidates:
+            return None
+        rng = random.Random(seed_key or "")
+        return rng.choice(candidates)

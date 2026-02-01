@@ -6,6 +6,8 @@ from common.constants.resources import ResourceType, ResourceTypes  # noqa: F401
 from common.constants.time import TimeConstants  # noqa: F401
 
 # 建筑类型键值
+
+
 class BuildingKeys:
     """建筑类型常量"""
 
@@ -50,7 +52,7 @@ BUILDING_MAX_LEVELS = {
     # 人员管理建筑
     BuildingKeys.JUXIAN_ZHUANG: 15,   # 聚贤庄：满级容量18位门客
     BuildingKeys.JIADING_FANG: 30,    # 家丁房：满级容量3050个位置
-    BuildingKeys.LIANGGONG_CHANG: 10, # 练功场：满级护院训练速度提升30%
+    BuildingKeys.LIANGGONG_CHANG: 10,  # 练功场：满级护院训练速度提升30%
 
     # 生产加工建筑
     BuildingKeys.RANCH: 10,           # 畜牧场：满级家畜制造速度提升50%
@@ -168,6 +170,9 @@ class PVPConstants:
     JAIL_LOYALTY_DAILY_DECAY = 5  # 被俘期间每日忠诚度衰减值
     JAIL_RECRUIT_LOYALTY_THRESHOLD = 30  # 忠诚度<=该值可招募
     JAIL_RECRUIT_GOLD_BAR_COST = 1  # 招募俘虏消耗金条数量（gold_bar）
+    JAIL_PERSUADE_GOLD_BAR_COST = 1  # 劝降消耗金条数量
+    JAIL_PERSUADE_LOYALTY_MIN = 5  # 劝降最小忠诚度减少
+    JAIL_PERSUADE_LOYALTY_MAX = 10  # 劝降最大忠诚度减少
 
     # 战利品
     LOOT_RESOURCE_MIN_PERCENT = 0.10  # 最低掠夺10%
@@ -237,6 +242,21 @@ class UIConstants:
     # 列表显示限制
     RECRUIT_RECORDS_DISPLAY = 6  # 招募记录显示数量
     ACTIVE_RUNS_DISPLAY = 5  # 进行中任务显示数量
+
+
+# ============ 庄园名称验证常量 ============
+
+class ManorNameConstants:
+    """庄园名称验证相关常量"""
+
+    MIN_LENGTH = 2  # 最小长度
+    MAX_LENGTH = 12  # 最大长度
+
+    # 敏感词列表（可扩展，支持中英文）
+    BANNED_WORDS = frozenset([
+        'admin', 'gm', '管理员', '客服', '官方',
+        'system', '系统', 'test', '测试',
+    ])
 
     # 任务扫描批量大小
     SCAN_BATCH_SIZE = 200  # Celery任务扫描批量大小

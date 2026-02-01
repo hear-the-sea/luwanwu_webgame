@@ -5,38 +5,38 @@
 
 {% block content %}
 <section class="dashboard">
-    <div class="section-header">
+    <div class="tw-section-header">
         <div>
             <h1>帮会仓库</h1>
-            <p>{{ guild.name }} · 我的贡献度：{{ member.current_contribution|floatformat:0 }}</p>
+            <p class="caption">{{ guild.name }} · 我的贡献度：{{ member.current_contribution|floatformat:0 }}</p>
         </div>
-        <div class="nav-links">
-            <a href="{% url 'guilds:exchange_logs' %}" class="btn-secondary">兑换记录</a>
-            <a href="{% url 'guilds:detail' guild.id %}" class="btn-secondary">返回帮会</a>
+        <div class="flex gap-2">
+            <a href="{% url 'guilds:exchange_logs' %}" class="tw-btn-secondary">兑换记录</a>
+            <a href="{% url 'guilds:detail' guild.id %}" class="tw-btn-primary">返回帮会</a>
         </div>
     </div>
 
-    <section class="card">
+    <section class="tw-card">
         <h2>可兑换物品</h2>
         {% if warehouse_items %}
-            <div class="building-grid">
+            <div class="tw-building-grid">
                 {% for item in warehouse_items %}
-                <article class="building-card">
+                <article class="tw-building-card">
                     <header>
                         <div>
                             <h3>{{ item.item_key }}</h3>
-                            <p class="muted-text">帮会科技每日产出</p>
+                            <p class="tw-muted">帮会科技每日产出</p>
                         </div>
-                        <span class="badge">{{ item.quantity }}</span>
+                        <span class="tw-badge-gold">{{ item.quantity }}</span>
                     </header>
-                    <dl class="guild-dl">
+                    <dl class="tw-guild-dl">
                         <div>
                             <dt>库存数量</dt>
                             <dd>{{ item.quantity }}</dd>
                         </div>
                         <div>
                             <dt>兑换成本</dt>
-                            <dd class="guild-cost-value">{{ item.contribution_cost }} 贡献</dd>
+                            <dd class="tw-guild-cost-value">{{ item.contribution_cost }} 贡献</dd>
                         </div>
                         <div>
                             <dt>历史产出</dt>
@@ -47,66 +47,68 @@
                             <dd>{{ item.total_exchanged }}</dd>
                         </div>
                     </dl>
-                    {% if item.is_usable %}
-                        <button
-                            type="button"
-                            class="btn-primary"
-                            onclick="openExchangeModal('{{ item.item_key }}', {{ item.contribution_cost }}, {{ item.quantity }})"
-                            {% if item.quantity <= 0 %}disabled title="库存不足"{% endif %}
-                        >
-                            兑换
-                        </button>
-                    {% else %}
-                        <button
-                            type="button"
-                            class="btn-secondary"
-                            disabled
-                            title="此物品不可在仓库使用"
-                        >
-                            不可使用
-                        </button>
-                    {% endif %}
+                    <div class="tw-guild-card-divider">
+                        {% if item.is_usable %}
+                            <button
+                                type="button"
+                                class="tw-btn-primary w-full"
+                                onclick="openExchangeModal('{{ item.item_key }}', {{ item.contribution_cost }}, {{ item.quantity }})"
+                                {% if item.quantity <= 0 %}disabled title="库存不足"{% endif %}
+                            >
+                                兑换
+                            </button>
+                        {% else %}
+                            <button
+                                type="button"
+                                class="tw-btn-secondary w-full"
+                                disabled
+                                title="此物品不可在仓库使用"
+                            >
+                                不可使用
+                            </button>
+                        {% endif %}
+                    </div>
                 </article>
                 {% endfor %}
             </div>
         {% else %}
-            <p class="muted-text">仓库暂无物品，请等待帮会科技每日产出</p>
+            <p class="tw-muted">仓库暂无物品，请等待帮会科技每日产出</p>
         {% endif %}
     </section>
 </section>
 
 <!-- 兑换确认模态框 -->
-<div class="modal-backdrop" id="exchange-modal" aria-hidden="true">
-    <div class="modal">
-        <header class="modal-header">
+<div class="tw-modal-overlay" id="exchange-modal" style="display: none;">
+    <div class="tw-modal-content">
+        <div class="tw-modal-header">
             <h3>兑换物品</h3>
-            <button type="button" class="btn-secondary btn-small" onclick="closeExchangeModal()">取消</button>
-        </header>
-        <div class="modal-body">
+            <button type="button" class="tw-modal-close" onclick="closeExchangeModal()">&times;</button>
+        </div>
+        <div class="tw-modal-body">
             <form method="post" id="exchange-form" action="">
                 {% csrf_token %}
-                <div class="guild-cost-card">
+                <div class="tw-guild-cost-card">
                     <h4 id="exchange-item-name"></h4>
                     <p>
-                        <strong>兑换成本：</strong><span id="exchange-cost" class="guild-cost-value"></span> 贡献度
+                        <strong>兑换成本：</strong><span id="exchange-cost" class="tw-guild-cost-value"></span> 贡献度
                     </p>
                     <p>
-                        <strong>当前拥有：</strong><span class="guild-resource-value resource-blue">{{ member.current_contribution|floatformat:0 }}</span> 贡献度
+                        <strong>当前拥有：</strong><span class="tw-guild-resource-value resource-blue">{{ member.current_contribution|floatformat:0 }}</span> 贡献度
                     </p>
                 </div>
 
-                <div class="form-field">
+                <div class="tw-form-field mt-4">
                     <label for="quantity">兑换数量</label>
-                    <input type="number" id="quantity" name="quantity" min="1" value="1" required>
-                    <small class="muted-text">库存：<span id="exchange-stock"></span></small>
+                    <input type="number" id="quantity" name="quantity" min="1" value="1" required class="tw-input">
+                    <small class="tw-muted">库存：<span id="exchange-stock"></span></small>
                 </div>
 
-                <div id="exchange-warning" class="guild-warning" style="display: none;">
+                <div id="exchange-warning" class="tw-guild-warning" style="display: none;">
                     <p></p>
                 </div>
 
-                <div class="form-actions">
-                    <button type="submit" class="btn-primary" id="exchange-submit">确认兑换</button>
+                <div class="flex justify-end gap-2 mt-4">
+                    <button type="submit" class="tw-btn-primary" id="exchange-submit">确认兑换</button>
                 </div>
             </form>
         </div>
@@ -137,13 +139,11 @@
 
         checkExchangeValidity(cost, stock, 1);
 
-        exchangeModal.classList.add('visible');
-        exchangeModal.setAttribute('aria-hidden', 'false');
+        exchangeModal.style.display = 'flex';
     }
 
     function closeExchangeModal() {
-        exchangeModal.classList.remove('visible');
-        exchangeModal.setAttribute('aria-hidden', 'true');
+        exchangeModal.style.display = 'none';
     }
 
     function checkExchangeValidity(unitCost, stock, quantity) {

@@ -373,11 +373,11 @@
 
 {% block content %}
 <section class="dashboard guest-detail">
-    <div class="section-header">
+    <div class="tw-section-header">
         <div>
             <h1>门客详情</h1>
         </div>
-        <a class="btn-secondary" href="{% url 'guests:roster' %}">返回列表</a>
+        <a class="tw-btn-secondary" href="{% url 'guests:roster' %}">返回列表</a>
     </div>
 
     <div class="detail-board">
@@ -387,7 +387,7 @@
             </div>
             <div class="avatar-bubble" aria-hidden="true">
                 {% if guest.template.avatar %}
-                    <img src="{{ guest.template.avatar.url }}" alt="{{ guest.display_name }}">
+                    <img src="{{ guest.template.avatar.url }}" alt="{{ guest.display_name }}" loading="lazy" width="160" height="160">
                 {% else %}
                     {{ guest.display_name|first|default:"?" }}
                 {% endif %}
@@ -479,7 +479,7 @@
                     <div>
                         <form method="post" action="{% url 'guests:dismiss' guest.id %}" class="dismiss-form" data-guest-name="{{ guest.display_name }}">
                             {% csrf_token %}
-                            <button type="submit" class="btn-secondary btn-small">辞退门客</button>
+                            <button type="submit" class="tw-btn-secondary tw-btn-sm">辞退门客</button>
                         </form>
                     </div>
                 </div>
@@ -504,7 +504,7 @@
                                 </label>
                             {% endfor %}
                         {% else %}
-                            <button type="button" class="btn-secondary btn-small equip-open" data-slot="helmet">装备</button>
+                            <button type="button" class="tw-btn-secondary tw-btn-sm equip-open" data-slot="helmet">装备</button>
                         {% endif %}
                     </div>
                     {% endwith %}
@@ -520,7 +520,7 @@
                                 </label>
                             {% endfor %}
                         {% else %}
-                            <button type="button" class="btn-secondary btn-small equip-open" data-slot="armor">装备</button>
+                            <button type="button" class="tw-btn-secondary tw-btn-sm equip-open" data-slot="armor">装备</button>
                         {% endif %}
                     </div>
                     {% endwith %}
@@ -536,7 +536,7 @@
                                 </label>
                             {% endfor %}
                         {% else %}
-                            <button type="button" class="btn-secondary btn-small equip-open" data-slot="weapon">装备</button>
+                            <button type="button" class="tw-btn-secondary tw-btn-sm equip-open" data-slot="weapon">装备</button>
                         {% endif %}
                     </div>
                     {% endwith %}
@@ -552,7 +552,7 @@
                                 </label>
                             {% endfor %}
                         {% else %}
-                            <button type="button" class="btn-secondary btn-small equip-open" data-slot="shoes">装备</button>
+                            <button type="button" class="tw-btn-secondary tw-btn-sm equip-open" data-slot="shoes">装备</button>
                         {% endif %}
                     </div>
                     {% endwith %}
@@ -567,7 +567,7 @@
                                     <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map }}</span>
                                 </label>
                             {% else %}
-                                <button type="button" class="btn-secondary btn-small equip-open" data-slot="ornament">装备</button>
+                                <button type="button" class="tw-btn-secondary tw-btn-sm equip-open" data-slot="ornament">装备</button>
                             {% endif %}
                         {% endfor %}
                     </div>
@@ -583,7 +583,7 @@
                                     <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map }}</span>
                                 </label>
                             {% else %}
-                                <button type="button" class="btn-secondary btn-small equip-open" data-slot="device">装备</button>
+                                <button type="button" class="tw-btn-secondary tw-btn-sm equip-open" data-slot="device">装备</button>
                             {% endif %}
                         {% endfor %}
                     </div>
@@ -600,24 +600,24 @@
                                 </label>
                             {% endfor %}
                         {% else %}
-                            <button type="button" class="btn-secondary btn-small equip-open" data-slot="mount">装备</button>
+                            <button type="button" class="tw-btn-secondary tw-btn-sm equip-open" data-slot="mount">装备</button>
                         {% endif %}
                     </div>
                     {% endwith %}
                 </div>
                 <div class="equip-actions">
-                    <button type="submit" class="btn-secondary btn-small">卸下选中装备</button>
+                    <button type="submit" class="tw-btn-secondary tw-btn-sm">卸下选中装备</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <section class="card intro-card">
+    <section class="tw-card intro-card">
         <h2>门客简介</h2>
         <p>{{ guest.template.flavor|default:"暂无人物故事。" }}</p>
     </section>
 
-    <section class="card skills-card">
+    <section class="tw-card skills-card">
         <h2>门客技能（{{ skill_count }}/{{ skill_capacity }}）</h2>
         <ul class="skill-list">
             {% for slot in skill_slots %}
@@ -636,10 +636,10 @@
                                 {% csrf_token %}
                                 <input type="hidden" name="guest_skill_id" value="{{ slot.record.id }}">
                                 <input type="hidden" name="next" value="{% url 'guests:detail' guest.id %}">
-                                <button type="submit" class="btn-secondary">遗忘技能</button>
+                                <button type="submit" class="tw-btn-secondary">遗忘技能</button>
                             </form>
                         {% else %}
-                            <button type="button" class="btn-primary btn-small open-skill-modal" data-slot="{{ slot.index }}" {% if not skill_books %}disabled{% endif %}>
+                            <button type="button" class="tw-btn-primary tw-btn-sm open-skill-modal" data-slot="{{ slot.index }}" {% if not skill_books %}disabled{% endif %}>
                                 学习技能
                             </button>
                         {% endif %}
@@ -648,20 +648,20 @@
             {% endfor %}
         </ul>
         {% if not skill_books %}
-            <p class="muted-text">仓库暂无技能书，可前往战斗或活动获取。</p>
+            <p class="tw-muted">仓库暂无技能书，可前往战斗或活动获取。</p>
         {% endif %}
     </section>
 </section>
 
-<div class="modal-backdrop" id="skill-book-modal" aria-hidden="true">
-    <div class="modal">
-        <header class="modal-header">
+<div class="tw-modal-overlay" id="skill-book-modal" style="display: none;">
+    <div class="tw-modal-content">
+        <div class="tw-modal-header">
             <h3>选择技能书</h3>
-            <button type="button" class="btn-secondary btn-small close-skill-modal">关闭</button>
-        </header>
-        <div class="modal-body">
+            <button type="button" class="tw-modal-close close-skill-modal">&times;</button>
+        </div>
+        <div class="tw-modal-body">
             {% if skill_books %}
-                <table class="warehouse-table">
+                <table class="tw-table">
                     <thead>
                         <tr>
                             <th>技能书</th>
@@ -682,12 +682,12 @@
                                     {% endif %}
                                 </td>
                                 <td>{{ book.inventory.quantity }}</td>
-                                <td class="warehouse-actions">
+                                <td>
                                     <form method="post" action="{% url 'guests:learn_skill' guest.id %}">
                                         {% csrf_token %}
                                         <input type="hidden" name="item_id" value="{{ book.inventory.id }}">
                                         <input type="hidden" name="next" value="{% url 'guests:detail' guest.id %}">
-                                        <button type="submit" class="btn-primary" {% if book.inventory.quantity <= 0 %}disabled{% endif %}>
+                                        <button type="submit" class="tw-btn-primary" {% if book.inventory.quantity <= 0 %}disabled{% endif %}>
                                             使用
                                         </button>
                                     </form>
@@ -697,30 +697,30 @@
                     </tbody>
                 </table>
             {% else %}
-                <p class="empty-state">仓库暂无技能书</p>
+                <p class="tw-muted">仓库暂无技能书</p>
             {% endif %}
         </div>
     </div>
 </div>
 
-<div class="modal-backdrop" id="equip-modal" aria-hidden="true" data-options-url="{% url 'guests:gear_options' %}" data-guest-id="{{ guest.id }}">
-    <div class="modal">
-        <header class="modal-header">
+<div class="tw-modal-overlay" id="equip-modal" style="display: none;" data-options-url="{% url 'guests:gear_options' %}" data-guest-id="{{ guest.id }}">
+    <div class="tw-modal-content">
+        <div class="tw-modal-header">
             <h3 data-slot-label>选择装备</h3>
-            <button type="button" class="btn-secondary btn-small close-equip-modal">关闭</button>
-        </header>
-        <div class="modal-body">
+            <button type="button" class="tw-modal-close close-equip-modal">&times;</button>
+        </div>
+        <div class="tw-modal-body">
             <form method="post" action="{% url 'guests:equip' %}">
                 {% csrf_token %}
                 <input type="hidden" name="guest" value="{{ guest.id }}">
                 <input type="hidden" name="next" value="{% url 'guests:detail' guest.id %}">
                 <input type="hidden" name="slot" value="">
-                <div class="form-field">
+                <div class="tw-form-field">
                     <label>可用装备</label>
-                    <select name="gear"></select>
+                    <select name="gear" class="tw-input"></select>
                 </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn-primary">装备</button>
+                <div class="flex justify-end gap-2 mt-4">
+                    <button type="submit" class="tw-btn-primary">装备</button>
                 </div>
             </form>
         </div>
@@ -738,13 +738,7 @@
     const closeButtons = document.querySelectorAll(".close-skill-modal");
     const toggleModal = (show) => {
       if (!modal) return;
-      if (show) {
-        modal.classList.add("visible");
-        modal.setAttribute("aria-hidden", "false");
-      } else {
-        modal.classList.remove("visible");
-        modal.setAttribute("aria-hidden", "true");
-      }
+      modal.style.display = show ? "flex" : "none";
     };
     openButtons.forEach((btn) => btn.addEventListener("click", () => toggleModal(true)));
     closeButtons.forEach((btn) => btn.addEventListener("click", () => toggleModal(false)));
@@ -805,8 +799,7 @@
       equipSelect.disabled = true;
       if (equipSubmit) equipSubmit.disabled = true;
       equipForm.querySelector("input[name='slot']").value = slot || "";
-      equipModal.classList.add("visible");
-      equipModal.setAttribute("aria-hidden", "false");
+      equipModal.style.display = "flex";
       if (equipSlotLabel) {
         equipSlotLabel.textContent = slot || "";
       }
@@ -822,8 +815,7 @@
 
     const closeEquipModal = () => {
       if (!equipModal) return;
-      equipModal.classList.remove("visible");
-      equipModal.setAttribute("aria-hidden", "true");
+      equipModal.style.display = "none";
     };
 
     openEquipButtons.forEach((btn) =>
@@ -832,6 +824,37 @@
         openEquipModal(slot);
       })
     );
+
+    // 装备表单 AJAX 提交
+    if (equipForm) {
+      equipForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const formData = new FormData(equipForm);
+        const submitBtn = equipForm.querySelector("button[type='submit']");
+        if (submitBtn) submitBtn.disabled = true;
+
+        try {
+          const resp = await fetch(equipForm.action, {
+            method: "POST",
+            body: formData,
+            headers: { "X-Requested-With": "XMLHttpRequest" }
+          });
+          const data = await resp.json();
+          if (data.success) {
+            // 关闭弹窗并刷新页面内容
+            closeEquipModal();
+            // 简单刷新装备区域 - 重新加载页面但不跳转
+            location.reload();
+          } else {
+            alert(data.message || "装备失败");
+          }
+        } catch (err) {
+          alert("请求失败，请重试");
+        } finally {
+          if (submitBtn) submitBtn.disabled = false;
+        }
+      });
+    }
 
     equipModal?.addEventListener("click", (event) => {
       if (event.target === equipModal) {

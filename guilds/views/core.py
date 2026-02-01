@@ -8,11 +8,12 @@ from django.contrib import messages
 from django.db.models import Q
 
 from core.utils import safe_int, safe_ordering
-from ..constants import GUILD_CREATION_COST
+from ..constants import GUILD_CREATION_COST, GUILD_HALL_DISPLAY_LIMIT, GUILD_LIST_PAGE_SIZE
 from ..decorators import require_guild_leader
 from ..models import Guild
 from ..services import guild as guild_service
 from gameplay.models import Manor
+
 
 @login_required
 def guild_hall(request):
@@ -25,7 +26,7 @@ def guild_hall(request):
         return redirect('guilds:detail', guild_id=user.guild_membership.guild.id)
 
     # 未加入帮会，显示帮会列表（使用 with_member_count 优化 N+1）
-    guilds = Guild.objects.with_member_count().filter(is_active=True).order_by('-level', '-created_at')[:20]
+    guilds = Guild.objects.with_member_count().filter(is_active=True).order_by('-level', '-created_at')[:GUILD_HALL_DISPLAY_LIMIT]
 
     context = {
         'guilds': guilds,
@@ -41,7 +42,7 @@ def guild_list(request):
     ordering = safe_ordering(request.GET.get('ordering', '-level'), '-level')
     search = request.GET.get('search', '')
     page = safe_int(request.GET.get('page', 1), default=1, min_val=1)
-    page_size = 20
+    page_size = GUILD_LIST_PAGE_SIZE
 
     guilds = guild_service.get_guild_list(
         ordering=ordering,
@@ -140,16 +141,23 @@ def guild_detail(request, guild_id):
             is_member = True
             member = user.guild_membership
 
-    # 获取帮会信息
+    # 获取帮会信息 - 优化查询，预加载成员数据减少 N+1
     leader = guild.get_leader()
     admins = guild.get_admins()
-    members = guild.members.filter(is_active=True).select_related('user__manor')[:20]
-    announcements = guild.announcements.select_related("author__manor").all()[:5]
+    members = guild.members.filter(is_active=True).select_related('user__manor').only(
+        'id', 'position', 'joined_at', 'total_contribution', 'is_active',
+        'user__id', 'user__username',
+        'user__manor__id', 'user__manor__name'
+    )[:20]
+    announcements = guild.announcements.select_related("author").only(
+        'id', 'type', 'content', 'created_at',
+        'author__id', 'author__username'
+    )[:5]
 
     # 获取科技信息
     technologies = None
     if is_member:
-        technologies = guild.technologies.all()
+        technologies = guild.technologies.only('id', 'tech_key', 'level', 'category', 'max_level')
 
     context = {
         'guild': guild,

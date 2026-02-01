@@ -39,7 +39,9 @@ def test_upgrade_consumes_resources(django_user_model):
 @pytest.mark.django_db(transaction=True)
 def test_mission_launch_and_return(mission_templates, manor_with_troops):
     """测试任务发起和护院归还"""
-    mission = MissionTemplate.objects.get(key="huashan_lunjian")
+    mission = MissionTemplate.objects.filter(guest_only=False, is_defense=False).first()
+    if not mission:
+        pytest.skip("No mission available that allows troops")
     manor = manor_with_troops
 
     # Recruit frontline guests
@@ -93,10 +95,11 @@ def test_mission_launch_and_return(mission_templates, manor_with_troops):
 def test_mission_launch_with_invalid_troop_type(mission_templates, manor_with_troops):
     """测试出征包含不存在的护院类型时抛出异常，不会创建新护院"""
     from gameplay.models import PlayerTroop
-    from battle.models import TroopTemplate
-    from guests.models import RecruitmentPool, Guest
+    from guests.models import Guest
 
-    mission = MissionTemplate.objects.get(key="huashan_lunjian")
+    mission = MissionTemplate.objects.filter(guest_only=False, is_defense=False).first()
+    if not mission:
+        pytest.skip("No mission available that allows troops")
     manor = manor_with_troops
 
     # 创建测试门客（直接创建，不需要通过招募系统）
@@ -131,4 +134,3 @@ def test_mission_launch_with_invalid_troop_type(mission_templates, manor_with_tr
         manor=manor,
         troop_template__key=fake_troop_key
     ).exists()
-

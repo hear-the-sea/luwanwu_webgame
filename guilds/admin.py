@@ -74,4 +74,3 @@ class GuildResourceLogAdmin(admin.ModelAdmin):
     list_filter = ['action', 'created_at']
     search_fields = ['guild__name', 'note']
     readonly_fields = ['created_at']
-

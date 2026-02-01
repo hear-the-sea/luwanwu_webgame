@@ -26,4 +26,3 @@ def safe_apply_async(
         if logger:
             logger.warning(log_message, exc_info=True)
         return False
-

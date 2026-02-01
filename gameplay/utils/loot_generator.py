@@ -10,4 +10,3 @@ from __future__ import annotations
 from common.utils.loot import resolve_drop_rewards
 
 __all__ = ["resolve_drop_rewards"]
-

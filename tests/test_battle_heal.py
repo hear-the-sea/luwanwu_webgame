@@ -43,4 +43,3 @@ def test_quan_battle_heal_attacker_remains_10_percent():
     assert heals[0]["healed"] == 100  # 1000 * 10%
     assert attacker.hp == 1100
     assert attacker.troop_strength == 60
-

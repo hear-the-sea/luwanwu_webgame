@@ -4,6 +4,7 @@
 """
 import math
 
+
 def show_level_details(name, base_cost, cost_growth, base_time, time_growth, max_level, grain_ratio=0):
     """展示各级详细数据"""
     print(f"\n{'=' * 80}")
@@ -79,6 +80,7 @@ def show_level_details(name, base_cost, cost_growth, base_time, time_growth, max
         'total_time_days': total_time / 86400,
         'last_level_cost': cost,
     }
+
 
 print("=" * 80)
 print("推荐方案详细数据")

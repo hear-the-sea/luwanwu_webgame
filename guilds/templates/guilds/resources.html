@@ -5,67 +5,67 @@
 
 {% block content %}
 <section class="dashboard">
-    <div class="section-header">
+    <div class="tw-section-header">
         <div>
             <h1>资源状态</h1>
-            <p>{{ guild.name }}</p>
+            <p class="caption">{{ guild.name }}</p>
         </div>
-        <div class="nav-links">
-            <a href="{% url 'guilds:resource_logs' %}" class="btn-secondary">资源流水</a>
-            <a href="{% url 'guilds:donation_logs' %}" class="btn-secondary">捐赠记录</a>
-            <a href="{% url 'guilds:detail' guild.id %}" class="btn-secondary">返回帮会</a>
+        <div class="flex gap-2">
+            <a href="{% url 'guilds:resource_logs' %}" class="tw-btn-secondary">资源流水</a>
+            <a href="{% url 'guilds:donation_logs' %}" class="tw-btn-secondary">捐赠记录</a>
+            <a href="{% url 'guilds:detail' guild.id %}" class="tw-btn-primary">返回帮会</a>
         </div>
     </div>
 
     <!-- 当前资源 -->
-    <section class="card">
+    <section class="tw-card">
         <h2>帮会资源</h2>
-        <div class="guild-resource-cards">
-            <div class="guild-resource-card guild-resource-silver">
+        <div class="tw-guild-resource-cards">
+            <div class="tw-guild-resource-card tw-guild-resource-silver">
                 <h4>银两</h4>
-                <p class="guild-resource-amount">{{ guild.silver|floatformat:0 }}</p>
+                <p class="tw-guild-resource-amount">{{ guild.silver|floatformat:0 }}</p>
             </div>
-            <div class="guild-resource-card guild-resource-grain">
+            <div class="tw-guild-resource-card tw-guild-resource-grain">
                 <h4>粮食</h4>
-                <p class="guild-resource-amount">{{ guild.grain|floatformat:0 }}</p>
+                <p class="tw-guild-resource-amount">{{ guild.grain|floatformat:0 }}</p>
             </div>
-            <div class="guild-resource-card guild-resource-gold">
+            <div class="tw-guild-resource-card tw-guild-resource-gold">
                 <h4>金条</h4>
-                <p class="guild-resource-amount">{{ guild.gold_bar }}</p>
+                <p class="tw-guild-resource-amount">{{ guild.gold_bar }}</p>
             </div>
         </div>
-        <div class="guild-resource-action">
-            <a href="{% url 'guilds:donate' %}" class="btn-primary guild-resource-btn">
+        <div class="tw-guild-card-divider">
+            <a href="{% url 'guilds:donate' %}" class="tw-btn-primary w-full text-center">
                 捐赠资源
             </a>
         </div>
     </section>
 
     <!-- 资源用途 -->
-    <section class="card guild-section-spacing">
+    <section class="tw-card tw-guild-section-spacing">
         <h2>资源用途</h2>
-        <div class="guild-usage-cards">
-            <div class="guild-usage-card guild-usage-blue">
+        <div class="tw-guild-usage-cards">
+            <div class="tw-guild-usage-card tw-guild-usage-blue">
                 <h3>升级帮会</h3>
                 <p>消耗帮会资源提升帮会等级，增加成员容量。等级越高，所需资源越多。</p>
-                <div class="guild-usage-footer">
-                    <p class="muted-text">当前等级：Lv {{ guild.level }} / 10</p>
+                <div class="tw-guild-usage-footer">
+                    <p class="tw-muted">当前等级：Lv {{ guild.level }} / 10</p>
                 </div>
             </div>
-            <div class="guild-usage-card guild-usage-purple">
+            <div class="tw-guild-usage-card tw-guild-usage-purple">
                 <h3>研究科技</h3>
                 <p>升级帮会科技，提升全员生产和战斗能力，每日自动产出道具。</p>
-                <div class="guild-usage-footer">
-                    <p class="muted-text">
+                <div class="tw-guild-usage-footer">
+                    <p class="tw-muted">
                         <a href="{% url 'guilds:technology' %}">查看科技 →</a>
                     </p>
                 </div>
             </div>
-            <div class="guild-usage-card guild-usage-orange">
+            <div class="tw-guild-usage-card tw-guild-usage-orange">
                 <h3>每日产出</h3>
                 <p>帮会科技每日自动产出道具，存入帮会仓库供成员兑换。</p>
-                <div class="guild-usage-footer">
-                    <p class="muted-text">
+                <div class="tw-guild-usage-footer">
+                    <p class="tw-muted">
                         <a href="{% url 'guilds:warehouse' %}">查看仓库 →</a>
                     </p>
                 </div>
@@ -74,23 +74,23 @@
     </section>
 
     <!-- 成员贡献统计 -->
-    <section class="card guild-section-spacing">
+    <section class="tw-card tw-guild-section-spacing">
         <h2>我的贡献</h2>
-        <div class="guild-contribution-cards">
-            <div class="guild-contribution-item">
+        <div class="tw-guild-contribution-cards">
+            <div class="tw-guild-contribution-item">
                 <h4>当前贡献度</h4>
-                <p class="guild-contribution-value resource-blue">{{ member.current_contribution|floatformat:0 }}</p>
-                <p class="muted-text">可用于兑换物品</p>
+                <p class="tw-guild-contribution-value resource-blue">{{ member.current_contribution|floatformat:0 }}</p>
+                <p class="tw-muted">可用于兑换物品</p>
             </div>
-            <div class="guild-contribution-item">
+            <div class="tw-guild-contribution-item">
                 <h4>总贡献度</h4>
-                <p class="guild-contribution-value guild-cost-value">{{ member.total_contribution|floatformat:0 }}</p>
-                <p class="muted-text">历史累计贡献</p>
+                <p class="tw-guild-contribution-value tw-guild-cost-value">{{ member.total_contribution|floatformat:0 }}</p>
+                <p class="tw-muted">历史累计贡献</p>
             </div>
-            <div class="guild-contribution-item">
+            <div class="tw-guild-contribution-item">
                 <h4>本周贡献</h4>
-                <p class="guild-contribution-value guild-resource-purple">{{ member.weekly_contribution|floatformat:0 }}</p>
-                <p class="muted-text">
+                <p class="tw-guild-contribution-value tw-guild-resource-purple">{{ member.weekly_contribution|floatformat:0 }}</p>
+                <p class="tw-muted">
                     <a href="{% url 'guilds:contribution_ranking' %}">查看排行 →</a>
                 </p>
             </div>

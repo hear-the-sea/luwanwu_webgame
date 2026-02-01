@@ -103,13 +103,18 @@ def upgrade_technology(guild, tech_key, operator):
             note=f"升级{TECH_NAMES.get(tech_key, tech_key)}至{tech_locked.level}级",
         )
 
-        # 步骤6：获取操作者庄园名称并发布公告
-        operator_manor = Manor.objects.get(user=operator)
-        create_announcement(
-            guild_locked,
-            'system',
-            f"{operator_manor.display_name}将{TECH_NAMES.get(tech_key, tech_key)}升至{tech_locked.level}级！",
-        )
+        # 步骤6：获取操作者庄园名称（保存用于事务外使用）
+        operator_user_id = operator.id
+        tech_name = TECH_NAMES.get(tech_key, tech_key)
+        tech_level = tech_locked.level
+
+    # 事务外发布公告，减少锁持有时间
+    operator_manor = Manor.objects.get(user_id=operator_user_id)
+    create_announcement(
+        guild_locked,
+        'system',
+        f"{operator_manor.display_name}将{tech_name}升至{tech_level}级！",
+    )
 
 
 def get_guild_tech_level(guild, tech_key):

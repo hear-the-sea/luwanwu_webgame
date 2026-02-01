@@ -5,46 +5,46 @@
 
 {% block content %}
 <section class="dashboard">
-    <div class="section-header">
+    <div class="tw-section-header">
         <div>
             <h1>搜索帮会</h1>
-            <p>快速查找想要加入的帮会</p>
+            <p class="caption">快速查找想要加入的帮会</p>
         </div>
-        <div class="nav-links">
-            <a href="{% url 'guilds:hall' %}" class="btn-secondary">返回大厅</a>
+        <div class="flex gap-2">
+            <a href="{% url 'guilds:hall' %}" class="tw-btn-primary">返回大厅</a>
         </div>
     </div>
 
-    <section class="card">
+    <section class="tw-card">
         <h2>搜索</h2>
         <form method="get">
-            <div class="form-field">
+            <div class="tw-form-field">
                 <label for="q">输入帮会名称</label>
-                <input type="text" id="q" name="q" value="{{ query }}" placeholder="请输入帮会名称..." autofocus>
+                <input type="text" id="q" name="q" value="{{ query }}" placeholder="请输入帮会名称..." autofocus class="tw-input">
             </div>
-            <div class="form-actions">
-                <button type="submit" class="btn-primary">搜索</button>
+            <div class="mt-4">
+                <button type="submit" class="tw-btn-primary">搜索</button>
             </div>
         </form>
     </section>
 
     {% if query %}
-    <section class="card guild-section-spacing">
+    <section class="tw-card tw-guild-section-spacing">
         <h2>搜索结果</h2>
         {% if guilds %}
-            <div class="building-grid">
+            <div class="tw-building-grid">
                 {% for guild in guilds %}
-                <article class="building-card">
+                <article class="tw-building-card">
                     <header>
                         <div>
                             <h3>
-                                <a href="{% url 'guilds:detail' guild.id %}" class="guild-name-link">{{ guild.name }}</a>
+                                <a href="{% url 'guilds:detail' guild.id %}" class="tw-guild-name-link">{{ guild.name }}</a>
                             </h3>
-                            <p class="muted-text">{{ guild.description|default:"暂无简介"|truncatewords:15 }}</p>
+                            <p class="tw-muted">{{ guild.description|default:"暂无简介"|truncatewords:15 }}</p>
                         </div>
-                        <span class="badge">Lv {{ guild.level }} / 10</span>
+                        <span class="tw-badge-gold">Lv {{ guild.level }} / 10</span>
                     </header>
-                    <dl class="guild-dl">
+                    <dl class="tw-guild-dl">
                         <div>
                             <dt>帮主</dt>
                             <dd>{{ guild.get_leader.user.manor.display_name }}</dd>
@@ -54,15 +54,15 @@
                             <dd>{{ guild.current_member_count }} / {{ guild.member_capacity }}</dd>
                         </div>
                     </dl>
-                    <div class="guild-search-actions">
-                        <a href="{% url 'guilds:detail' guild.id %}" class="btn-secondary">查看</a>
-                        <a href="{% url 'guilds:apply' guild.id %}" class="btn-primary">申请</a>
+                    <div class="tw-guild-search-actions">
+                        <a href="{% url 'guilds:detail' guild.id %}" class="tw-btn-primary">查看</a>
+                        <a href="{% url 'guilds:apply' guild.id %}" class="tw-btn-primary">申请</a>
                     </div>
                 </article>
                 {% endfor %}
             </div>
         {% else %}
-            <p class="muted-text">未找到名称包含 "{{ query }}" 的帮会</p>
+            <p class="tw-muted">未找到名称包含 "{{ query }}" 的帮会</p>
         {% endif %}
     </section>
     {% endif %}

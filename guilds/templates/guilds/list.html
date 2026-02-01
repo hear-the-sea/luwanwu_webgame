@@ -5,43 +5,43 @@
 
 {% block content %}
 <section class="dashboard">
-    <div class="section-header">
+    <div class="tw-section-header">
         <div>
             <h1>帮会列表</h1>
-            <p>浏览所有活跃帮会</p>
+            <p class="caption">浏览所有活跃帮会</p>
         </div>
-        <div class="nav-links">
-            <a href="{% url 'guilds:create' %}" class="btn-primary">创建帮会</a>
-            <a href="{% url 'guilds:hall' %}" class="btn-secondary">返回大厅</a>
+        <div class="flex gap-2">
+            <a href="{% url 'guilds:create' %}" class="tw-btn-primary">创建帮会</a>
+            <a href="{% url 'guilds:hall' %}" class="tw-btn-primary">返回大厅</a>
         </div>
     </div>
 
     <!-- 搜索和排序 -->
-    <section class="card">
+    <section class="tw-card">
         <h2>搜索与筛选</h2>
-        <form method="get" class="guild-search-form">
-            <div class="form-field guild-search-input">
+        <form method="get" class="tw-guild-search-form">
+            <div class="tw-form-field tw-guild-search-input">
                 <label for="search">搜索帮会名称</label>
-                <input type="text" id="search" name="search" value="{{ search }}" placeholder="输入帮会名称...">
+                <input type="text" id="search" name="search" value="{{ search }}" placeholder="输入帮会名称..." class="tw-input">
             </div>
-            <div class="form-field guild-search-select">
+            <div class="tw-form-field tw-guild-search-select">
                 <label for="ordering">排序方式</label>
-                <select id="ordering" name="ordering">
+                <select id="ordering" name="ordering" class="tw-input">
                     <option value="-level" {% if ordering == '-level' %}selected{% endif %}>等级（高到低）</option>
                     <option value="level" {% if ordering == 'level' %}selected{% endif %}>等级（低到高）</option>
                     <option value="-created_at" {% if ordering == '-created_at' %}selected{% endif %}>最新创建</option>
                     <option value="created_at" {% if ordering == 'created_at' %}selected{% endif %}>最早创建</option>
                 </select>
             </div>
-            <button type="submit" class="btn-primary guild-search-btn">搜索</button>
+            <button type="submit" class="tw-btn-primary">搜索</button>
         </form>
     </section>
 
     <!-- 帮会列表 -->
-    <section class="card guild-section-spacing">
+    <section class="tw-card tw-guild-section-spacing">
         <h2>帮会（{{ guilds.count }}）</h2>
         {% if guilds %}
-            <table class="table">
+            <table class="tw-table">
                 <thead>
                     <tr>
                         <th>帮会名称</th>
@@ -51,18 +51,18 @@
                 </thead>
                 <tbody>
                     {% for guild in guilds %}
-                    <tr class="guild-table-row-clickable" onclick="window.location.href='{% url 'guilds:detail' guild.id %}'">
+                    <tr class="tw-guild-table-row-clickable" onclick="window.location.href='{% url 'guilds:detail' guild.id %}'">
                         <td>
-                            <a href="{% url 'guilds:detail' guild.id %}" class="guild-name-link">{{ guild.name }}</a>
+                            <a href="{% url 'guilds:detail' guild.id %}" class="tw-guild-name-link">{{ guild.name }}</a>
                         </td>
                         <td>{{ guild.get_leader.user.manor.display_name }}</td>
-                        <td><span class="badge">Lv {{ guild.level }} / 10</span></td>
+                        <td><span class="tw-badge-gold">Lv {{ guild.level }} / 10</span></td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         {% else %}
-            <p class="muted-text">未找到符合条件的帮会</p>
+            <p class="tw-muted">未找到符合条件的帮会</p>
         {% endif %}
     </section>
 </section>

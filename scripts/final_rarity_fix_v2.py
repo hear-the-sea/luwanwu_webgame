@@ -37,12 +37,13 @@ rarity_map = {
     "王凤": "blue", "王匡": "blue", "梁冀": "blue", "窦太后": "blue", "曹节": "blue", "何进": "blue"
 }
 
+
 def fix_rarities(filepath):
     with open(filepath, 'r', encoding='utf-8') as f:
         lines = f.readlines()
-    
+
     data = {'orange': [], 'purple': [], 'blue': [], 'green': []}
-    
+
     for line in lines:
         if line.strip().startswith('|') and '姓名' not in line and '---' not in line:
             parts = [p.strip() for p in line.split('|') if p]
@@ -50,13 +51,13 @@ def fix_rarities(filepath):
                 name = parts[0]
                 bio = parts[1]
                 type_ = parts[2]
-                
+
                 # Default to green if not in map, otherwise use map
                 if name in rarity_map:
                     rarity = rarity_map[name]
                 else:
                     rarity = 'green'
-                
+
                 data[rarity].append({'name': name, 'bio': bio, 'type': type_, 'rarity': rarity})
 
     output = """## 历史人物篇 - 秦汉时期
@@ -71,24 +72,24 @@ def fix_rarities(filepath):
         'blue': '🔵 蓝色',
         'green': '🟢 绿色'
     }
-    
+
     order = ['orange', 'purple', 'blue', 'green']
-    
+
     for r in order:
         output += f"### {display_map[r]}\n\n"
         output += "| 姓名 | 简介 | 类型 | 稀有度 |\n"
         output += "|------|------|------|--------|\n"
-        
+
         sorted_entries = sorted(data[r], key=lambda x: (x['type'], x['name']))
-        
+
         for e in sorted_entries:
             output += f"| {e['name']} | {e['bio']} | {e['type']} | {e['rarity']} |\n"
-        
+
         output += "\n"
 
     counts = {r: len(data[r]) for r in order}
     total = sum(counts.values())
-    
+
     footer = f"""---
 
 **文档统计**：
@@ -101,12 +102,13 @@ def fix_rarities(filepath):
 *文档持续更新中... 有新的门客想法随时添加喵～* ฅ(＾・ω・＾ฅ)
 """
     output += footer
-    
+
     with open(filepath, 'w', encoding='utf-8') as f:
         f.write(output)
-    
+
     print(f"Final Rarity Fix V2. Total: {total}")
     print(f"New Counts: {counts}")
+
 
 if __name__ == "__main__":
     fix_rarities(file_path)

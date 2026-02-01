@@ -35,17 +35,9 @@ def get_available_works_for_guest(guest: Guest) -> List[WorkTemplate]:
 
 def assign_guest_to_work(guest: Guest, work_template: WorkTemplate) -> WorkAssignment:
     """派遣门客打工"""
-    # 检查门客状态
+    # 检查门客状态（初步检查，事务内会再次验证）
     if guest.status != GuestStatus.IDLE:
         raise GuestNotIdleError(guest)
-
-    # 检查打工人数限制
-    current_working = WorkAssignment.objects.filter(
-        manor=guest.manor,
-        status=WorkAssignment.Status.WORKING
-    ).count()
-    if current_working >= MAX_CONCURRENT_WORKERS:
-        raise WorkLimitExceededError(MAX_CONCURRENT_WORKERS)
 
     # 检查门客是否满足工作要求
     if guest.level < work_template.required_level:
@@ -69,6 +61,14 @@ def assign_guest_to_work(guest: Guest, work_template: WorkTemplate) -> WorkAssig
         # 再次检查状态
         if guest.status != GuestStatus.IDLE:
             raise GuestNotIdleError(guest)
+
+        # 在事务内检查打工人数限制，防止并发超限
+        current_working = WorkAssignment.objects.filter(
+            manor=guest.manor,
+            status=WorkAssignment.Status.WORKING
+        ).count()
+        if current_working >= MAX_CONCURRENT_WORKERS:
+            raise WorkLimitExceededError(MAX_CONCURRENT_WORKERS)
 
         # 计算完成时间
         now = timezone.now()

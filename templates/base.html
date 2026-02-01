@@ -8,6 +8,7 @@
     <meta name="csrf-token" content="{{ csrf_token }}">
     <title>{% block title %}春秋乱世庄园主{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <link rel="stylesheet" href="{% static 'css/tailwind.css' %}">
     {% if user.is_authenticated %}
     <link rel="stylesheet" href="{% static 'css/chat_widget.css' %}">
     {% endif %}

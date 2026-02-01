@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from functools import wraps
 from typing import Callable
 
@@ -7,6 +8,9 @@ from django.core.cache import cache
 from django.http import HttpRequest, JsonResponse
 from django.shortcuts import redirect
 from django.contrib import messages
+from django.utils.http import url_has_allowed_host_and_scheme
+
+logger = logging.getLogger(__name__)
 
 
 def _default_identifier(request: HttpRequest) -> str:
@@ -57,6 +61,8 @@ def rate_limit_json(
                 cache.set(cache_key, 1, timeout=window_seconds)
                 count = 1
             except Exception:
+                # 代码质量修复：记录缓存异常以便排查问题
+                logger.warning("Rate limit cache error, allowing request", exc_info=True)
                 return view_func(request, *args, **kwargs)
 
             if count > limit:
@@ -105,13 +111,19 @@ def rate_limit_redirect(
                 cache.set(cache_key, 1, timeout=window_seconds)
                 count = 1
             except Exception:
+                # 代码质量修复：记录缓存异常以便排查问题
+                logger.warning("Rate limit redirect cache error, allowing request", exc_info=True)
                 return view_func(request, *args, **kwargs)
 
             if count > limit:
                 messages.error(request, error_message)
                 if redirect_url:
                     return redirect(redirect_url)
-                return redirect(request.META.get("HTTP_REFERER") or "/")
+                # 安全修复：验证 Referer 是否为安全的重定向目标，防止开放重定向漏洞
+                referer = request.META.get("HTTP_REFERER", "")
+                if referer and url_has_allowed_host_and_scheme(referer, allowed_hosts={request.get_host()}):
+                    return redirect(referer)
+                return redirect("/")
             return view_func(request, *args, **kwargs)
 
         return wrapped

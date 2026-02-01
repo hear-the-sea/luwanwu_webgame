@@ -9,7 +9,8 @@
     python manage.py shell < scripts/test_recruitment_probability.py
 
     或者在 Django shell 中执行:
-    exec(open('scripts/test_recruitment_probability.py').read())
+    from pathlib import Path
+    exec(Path('scripts/test_recruitment_probability.py').read_text())
 """
 from __future__ import annotations
 

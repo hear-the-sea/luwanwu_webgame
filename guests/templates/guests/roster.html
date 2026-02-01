@@ -5,30 +5,29 @@
 
 {% block content %}
 <section class="dashboard">
-    <div class="section-header">
+    <div class="tw-section-header">
         <div>
             <p>当前门客数量：{{ guests|length }}</p>
         </div>
-        <div class="nav-links">
+        <div class="flex gap-2">
             {% if unpaid_count > 0 %}
             <form method="post" action="{% url 'guests:pay_all_salaries' %}" style="display: inline;" id="pay-all-salary-form"
                 data-amount="{{ total_unpaid_salary }}">
                 {% csrf_token %}
-                <button type="submit" class="btn-primary" {% if manor.silver < total_unpaid_salary %}disabled
+                <button type="submit" class="tw-btn-primary" {% if manor.silver < total_unpaid_salary %}disabled
                     title="银两不足" {% endif %}>
                     一键支付工资 ({{ unpaid_count }}人 / {{ total_unpaid_salary }}银两)
                 </button>
             </form>
             {% endif %}
-            <a class="btn-secondary" href="{% url 'gameplay:recruitment_hall' %}">前往聚贤庄</a>
-            <a class="btn-secondary" href="{% url 'guests:roster' %}">刷新</a>
+            <a class="tw-btn-primary" href="{% url 'gameplay:recruitment_hall' %}">前往聚贤庄</a>
         </div>
     </div>
 
-    <section class="card guest-roster-card">
+    <section class="tw-card guest-roster-card">
         {% if guests %}
         <div class="guest-table-wrapper">
-            <table class="table">
+            <table class="tw-table">
                 <thead>
                     <tr>
                         <th>门客</th>
@@ -54,7 +53,7 @@
                         <td>
                             <div class="guest-avatar" title="{{ guest.display_name }}">
                                 {% if guest.template.avatar %}
-                                <img src="{{ guest.template.avatar.url }}" alt="{{ guest.display_name }}">
+                                <img src="{{ guest.template.avatar.url }}" alt="{{ guest.display_name }}" loading="lazy" width="48" height="48">
                                 {% else %}
                                 {{ guest.display_name|first|default:"?" }}
                                 {% endif %}
@@ -62,7 +61,7 @@
                         </td>
                         <td>
                             <div class="guest-level">Lv {{ guest.level }}</div>
-                            <div class="muted-text guest-status" data-guest-id="{{ guest.id }}">{{ guest.get_status_display }}</div>
+                            <div class="tw-muted guest-status" data-guest-id="{{ guest.id }}">{{ guest.get_status_display }}</div>
                         </td>
                         <td>
                             <div
@@ -74,14 +73,14 @@
                             {% if item.paid_today %}
                             <span style="color: #4ADE80;">✓ 已支付</span>
                             {% else %}
-                            <div style="color: #FFA500;">{{ item.salary }} 银两</div>
-                            <form method="post" action="{% url 'guests:pay_salary' guest.id %}"
-                                style="margin-top: 0.25rem;">
-                                {% csrf_token %}
-                                <button type="submit" class="btn-primary btn-small" {% if manor.silver < item.salary %}disabled title="银两不足"{% endif %}>
-                                    支付
-                                </button>
-                            </form>
+                            <button type="button" class="tw-btn-primary tw-btn-sm open-salary-modal"
+                                data-guest-id="{{ guest.id }}"
+                                data-guest-name="{{ guest.display_name }}"
+                                data-salary="{{ item.salary }}"
+                                data-can-pay="{% if manor.silver >= item.salary %}true{% else %}false{% endif %}"
+                                {% if manor.silver < item.salary %}disabled title="银两不足"{% endif %}>
+                                支付工资
+                            </button>
                             {% endif %}
                         </td>
                         <td>
@@ -93,16 +92,16 @@
                                 data-format="zh" data-check-url="{% url 'guests:check_training' guest.id %}"
                                 title="完成时间 {{ guest.training_complete_at|date:'Y-m-d H:i:s' }}">计算中</span>
                             {% else %}
-                            <span class="muted-text">自动升级</span>
+                            <span class="tw-muted">自动升级</span>
                             {% endif %}
                         </td>
                         <td>
-                            <button type="button" class="btn-secondary btn-small open-exp-modal"
+                            <button type="button" class="tw-btn-secondary tw-btn-sm open-exp-modal"
                                 data-guest="{{ guest.id }}" data-guest-name="{{ guest.display_name }}"
                                 data-url="{% url 'guests:use_exp_item' guest.id %}" {% if not exp_items %}disabled{% endif %}>
                                 使用经验道具
                             </button>
-                            <button type="button" class="btn-secondary btn-small open-medicine-modal"
+                            <button type="button" class="tw-btn-secondary tw-btn-sm open-medicine-modal"
                                 data-guest="{{ guest.id }}" data-guest-name="{{ guest.display_name }}"
                                 data-url="{% url 'guests:use_medicine_item' guest.id %}">
                                 疗伤
@@ -115,70 +114,94 @@
             </table>
         </div>
         {% else %}
-        <p class="muted-text">暂无门客，先进行一次招募。</p>
+        <p class="tw-muted">暂无门客，先进行一次招募。</p>
         {% endif %}
     </section>
 
 </section>
 
-<div class="modal-backdrop" id="exp-item-modal" aria-hidden="true">
-    <div class="modal">
-        <header class="modal-header">
+<div class="tw-modal-overlay" id="exp-item-modal" style="display: none;">
+    <div class="tw-modal-content">
+        <div class="tw-modal-header">
             <h3>选择经验道具</h3>
-            <button type="button" class="btn-secondary btn-small close-exp-modal">关闭</button>
-        </header>
-        <div class="modal-body">
-            <p class="muted-text" id="exp-modal-target"></p>
+            <button type="button" class="tw-modal-close close-exp-modal">&times;</button>
+        </div>
+        <div class="tw-modal-body">
+            <p class="tw-muted" id="exp-modal-target"></p>
             {% if exp_items %}
             <form method="post" id="exp-item-form" action="">
                 {% csrf_token %}
                 <input type="hidden" name="next" value="{% url 'guests:roster' %}">
-                <div class="form-field">
+                <div class="tw-form-field">
                     <label>选择道具</label>
-                    <select name="item_id">
+                    <select name="item_id" class="tw-input">
                         {% for item in exp_items %}
                         <option value="{{ item.id }}">{{ item.template.name }}（x{{ item.quantity }}）</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn-primary">使用</button>
+                <div class="flex justify-end gap-2 mt-4">
+                    <button type="submit" class="tw-btn-primary">使用</button>
                 </div>
             </form>
             {% else %}
-            <p class="muted-text">仓库暂无经验道具。</p>
+            <p class="tw-muted">仓库暂无经验道具。</p>
             {% endif %}
         </div>
     </div>
 </div>
 
-<div class="modal-backdrop" id="medicine-modal" aria-hidden="true">
-    <div class="modal">
-        <header class="modal-header">
+<div class="tw-modal-overlay" id="medicine-modal" style="display: none;">
+    <div class="tw-modal-content">
+        <div class="tw-modal-header">
             <h3>选择药品</h3>
-            <button type="button" class="btn-secondary btn-small close-medicine-modal">关闭</button>
-        </header>
-        <div class="modal-body">
-            <p class="muted-text" id="medicine-modal-target"></p>
+            <button type="button" class="tw-modal-close close-medicine-modal">&times;</button>
+        </div>
+        <div class="tw-modal-body">
+            <p class="tw-muted" id="medicine-modal-target"></p>
             {% if medicine_items %}
             <form method="post" id="medicine-form" action="">
                 {% csrf_token %}
                 <input type="hidden" name="next" value="{% url 'guests:roster' %}">
-                <div class="form-field">
+                <div class="tw-form-field">
                     <label>选择药品</label>
-                    <select name="item_id">
+                    <select name="item_id" class="tw-input">
                         {% for item in medicine_items %}
                         <option value="{{ item.id }}">{{ item.template.name }}（x{{ item.quantity }}）</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn-primary">使用</button>
+                <div class="flex justify-end gap-2 mt-4">
+                    <button type="submit" class="tw-btn-primary">使用</button>
                 </div>
             </form>
             {% else %}
-            <p class="muted-text">仓库暂无药品。</p>
+            <p class="tw-muted">仓库暂无药品。</p>
             {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- 工资支付弹窗 -->
+<div class="tw-modal-overlay" id="salary-modal" style="display: none;">
+    <div class="tw-modal-content" style="max-width: 360px;">
+        <div class="tw-modal-header">
+            <h3>支付工资</h3>
+            <button type="button" class="tw-modal-close close-salary-modal">&times;</button>
+        </div>
+        <div class="tw-modal-body">
+            <p style="margin: 0 0 1rem;">确定要支付 <strong id="salary-guest-name"></strong> 的工资吗？</p>
+            <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; text-align: center;">
+                <div style="color: var(--text-muted); font-size: 0.9rem;">需支付</div>
+                <div style="font-size: 1.5rem; font-weight: bold; color: #FFA500;" id="salary-amount"></div>
+            </div>
+        </div>
+        <div class="tw-modal-footer">
+            <button type="button" class="tw-btn-secondary close-salary-modal">取消</button>
+            <form method="post" id="salary-form" action="" style="margin: 0;">
+                {% csrf_token %}
+                <button type="submit" class="tw-btn-primary" id="salary-confirm-btn">确认支付</button>
+            </form>
         </div>
     </div>
 </div>
@@ -196,7 +219,7 @@
     .guest-table-wrapper {
         flex: 1;
         overflow-y: auto;
-        overflow-x: hidden;
+        overflow-x: auto;
         min-height: 300px;
         margin-top: 0.5rem;
     }
@@ -219,8 +242,8 @@
     }
 
     /* 门客行分隔线 - 增强视觉层次感 */
-    .guest-roster-card .table tbody tr:not(:last-child) td {
-        border-bottom: 1px solid var(--border-light);
+    .guest-roster-card .tw-table tbody tr:not(:last-child) td {
+        border-bottom: 2px solid var(--border-primary);
     }
 
     /* 滚动条样式优化 - 与仓库保持一致 */
@@ -242,6 +265,107 @@
     .guest-table-wrapper::-webkit-scrollbar-thumb:hover {
         background: var(--text-muted);
     }
+
+    /* 移动端适配 */
+    @media (max-width: 768px) {
+        /* 顶部操作区域换行 */
+        .tw-section-header {
+            flex-direction: column;
+            align-items: stretch !important;
+            gap: 0.75rem;
+        }
+        .tw-section-header > div:last-child {
+            flex-wrap: wrap;
+        }
+        .tw-section-header .tw-btn-primary,
+        .tw-section-header .tw-btn-secondary {
+            flex: 1;
+            min-width: 120px;
+            text-align: center;
+        }
+
+        /* 卡片取消高度限制 */
+        .guest-roster-card {
+            max-height: none;
+        }
+
+        /* 表格改为卡片式布局 */
+        .guest-table-wrapper {
+            overflow-x: visible;
+            min-height: auto;
+        }
+        .guest-roster-card .tw-table {
+            display: block;
+        }
+        .guest-roster-card .tw-table thead {
+            display: none;
+        }
+        .guest-roster-card .tw-table tbody {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .guest-roster-card .tw-table tbody tr {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 0.5rem 1rem;
+            padding: 1rem;
+            border: 1px solid var(--border-light);
+            border-radius: 8px;
+            background: var(--bg-panel);
+        }
+        .guest-roster-card .tw-table tbody tr td {
+            border-bottom: none !important;
+            padding: 0;
+        }
+        /* 形象列：左侧大头像 */
+        .guest-roster-card .tw-table tbody tr td:nth-child(2) {
+            grid-row: 1 / 5;
+            display: flex;
+            align-items: center;
+        }
+        .guest-roster-card .tw-table tbody tr td:nth-child(2) .guest-avatar {
+            width: 64px;
+            height: 64px;
+        }
+        /* 门客名称 */
+        .guest-roster-card .tw-table tbody tr td:nth-child(1) {
+            font-size: 1.1rem;
+            font-weight: bold;
+        }
+        /* 等级/状态、忠诚度、工资、生命 */
+        .guest-roster-card .tw-table tbody tr td:nth-child(3),
+        .guest-roster-card .tw-table tbody tr td:nth-child(4),
+        .guest-roster-card .tw-table tbody tr td:nth-child(5),
+        .guest-roster-card .tw-table tbody tr td:nth-child(6) {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .guest-roster-card .tw-table tbody tr td:nth-child(3)::before { content: "等级: "; color: var(--text-muted); }
+        .guest-roster-card .tw-table tbody tr td:nth-child(4)::before { content: "忠诚: "; color: var(--text-muted); }
+        .guest-roster-card .tw-table tbody tr td:nth-child(5)::before { content: "工资: "; color: var(--text-muted); }
+        .guest-roster-card .tw-table tbody tr td:nth-child(6)::before { content: "生命: "; color: var(--text-muted); }
+        /* 升级倒计时 */
+        .guest-roster-card .tw-table tbody tr td:nth-child(7) {
+            grid-column: 1 / -1;
+        }
+        .guest-roster-card .tw-table tbody tr td:nth-child(7)::before { content: "升级: "; color: var(--text-muted); }
+        /* 操作按钮 */
+        .guest-roster-card .tw-table tbody tr td:nth-child(8) {
+            grid-column: 1 / -1;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+            padding-top: 0.5rem;
+            border-top: 1px dashed var(--border-light);
+        }
+        .guest-roster-card .tw-table tbody tr td:nth-child(8) button {
+            flex: 1;
+            min-width: 100px;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -249,14 +373,56 @@
 <script src="{% static 'js/dashboard.js' %}"></script>
 <script>
     (function () {
+        // 工资支付弹窗
+        const salaryModal = document.getElementById('salary-modal');
+        const salaryForm = document.getElementById('salary-form');
+        const salaryGuestName = document.getElementById('salary-guest-name');
+        const salaryAmount = document.getElementById('salary-amount');
+        const salaryConfirmBtn = document.getElementById('salary-confirm-btn');
+
+        function openSalaryModal(guestId, guestName, salary, canPay) {
+            if (!salaryModal) return;
+            salaryGuestName.textContent = guestName;
+            salaryAmount.textContent = salary + ' 银两';
+            salaryForm.action = `/guests/${guestId}/pay-salary/`;
+            salaryConfirmBtn.disabled = !canPay;
+            salaryModal.style.display = 'flex';
+        }
+
+        function closeSalaryModal() {
+            if (salaryModal) salaryModal.style.display = 'none';
+        }
+
+        document.querySelectorAll('.open-salary-modal').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const guestId = btn.dataset.guestId;
+                const guestName = btn.dataset.guestName;
+                const salary = btn.dataset.salary;
+                const canPay = btn.dataset.canPay === 'true';
+                openSalaryModal(guestId, guestName, salary, canPay);
+            });
+        });
+
+        document.querySelectorAll('.close-salary-modal').forEach(btn => {
+            btn.addEventListener('click', closeSalaryModal);
+        });
+
+        salaryModal?.addEventListener('click', (e) => {
+            if (e.target === salaryModal) closeSalaryModal();
+        });
+
         // 一键支付工资确认
         const payAllForm = document.getElementById('pay-all-salary-form');
         if (payAllForm) {
             payAllForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                const amount = payAllForm.dataset.amount;
-                const confirmed = await gameConfirm(`确认支付所有门客工资共计 ${amount} 银两？`, { title: '支付工资' });
-                if (confirmed) payAllForm.submit();
+                try {
+                    const amount = payAllForm.dataset.amount;
+                    const confirmed = await gameConfirm(`确认支付所有门客工资共计 ${amount} 银两？`, { title: '支付工资' });
+                    if (confirmed) payAllForm.submit();
+                } catch (err) {
+                    console.error('支付工资确认失败:', err);
+                }
             });
         }
 
@@ -315,31 +481,41 @@
             if (levelDiv) {
                 levelDiv.textContent = `Lv ${newLevel}`;
             }
-            // 更新 HP
+            // 更新 HP - 使用类名选择器代替硬编码索引
             if (currentHp !== undefined && maxHp !== undefined) {
-                const hpCell = row.querySelectorAll('td')[5]; // 第6列是"生命"列
-                if (hpCell) {
-                    const hpDiv = hpCell.querySelector('div');
-                    if (hpDiv) {
-                        hpDiv.textContent = `HP ${currentHp}/${maxHp}`;
-                    }
+                const hpDiv = row.querySelector('.guest-hp');
+                if (hpDiv) {
+                    hpDiv.textContent = `HP ${currentHp}/${maxHp}`;
                 }
             }
             // 更新训练倒计时（dashboard.js 的 tick() 每秒自动检测 [data-countdown] 属性）
             const countdownSpan = row.querySelector('.countdown');
-            const upgradeCell = row.querySelectorAll('td')[6]; // 第7列是"升级"列
+            const upgradeCell = countdownSpan ? countdownSpan.closest('td') : null;
             if (trainingEta) {
                 if (countdownSpan) {
                     countdownSpan.setAttribute('data-countdown', trainingEta);
                     countdownSpan.classList.remove('countdown-finished');
                 } else if (upgradeCell) {
                     // 原来是"自动升级"状态，需要创建倒计时元素
+                    // 安全修复：使用 DOM API 替代 innerHTML，防止 XSS
                     const checkUrl = `/guests/${guestId}/check-training/`;
-                    upgradeCell.innerHTML = `<span class="countdown" data-countdown="${trainingEta}" data-format="zh" data-check-url="${checkUrl}">计算中</span>`;
+                    upgradeCell.textContent = '';
+                    const span = document.createElement('span');
+                    span.className = 'countdown';
+                    span.setAttribute('data-countdown', trainingEta);
+                    span.setAttribute('data-format', 'zh');
+                    span.setAttribute('data-check-url', checkUrl);
+                    span.textContent = '计算中';
+                    upgradeCell.appendChild(span);
                 }
             } else if (upgradeCell && countdownSpan) {
                 // 已完成升级，显示"自动升级"
-                upgradeCell.innerHTML = '<span class="muted-text">自动升级</span>';
+                // 安全修复：使用 DOM API 替代 innerHTML，防止 XSS
+                upgradeCell.textContent = '';
+                const span = document.createElement('span');
+                span.className = 'muted-text';
+                span.textContent = '自动升级';
+                upgradeCell.appendChild(span);
             }
         }
 
@@ -351,13 +527,7 @@
         const closeButtons = document.querySelectorAll(".close-exp-modal");
         const toggleModal = (show) => {
             if (!modal) return;
-            if (show) {
-                modal.classList.add("visible");
-                modal.setAttribute("aria-hidden", "false");
-            } else {
-                modal.classList.remove("visible");
-                modal.setAttribute("aria-hidden", "true");
-            }
+            modal.style.display = show ? "flex" : "none";
         };
         openButtons.forEach((btn) => {
             btn.addEventListener("click", () => {
@@ -418,13 +588,7 @@
         const closeMedButtons = document.querySelectorAll(".close-medicine-modal");
         const toggleMedModal = (show) => {
             if (!medModal) return;
-            if (show) {
-                medModal.classList.add("visible");
-                medModal.setAttribute("aria-hidden", "false");
-            } else {
-                medModal.classList.remove("visible");
-                medModal.setAttribute("aria-hidden", "true");
-            }
+            medModal.style.display = show ? "flex" : "none";
         };
         openMedButtons.forEach((btn) => {
             btn.addEventListener("click", () => {

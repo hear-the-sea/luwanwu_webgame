@@ -14,12 +14,74 @@
   let socket;
   let reconnectDelay = 2000;
   let currentUnreadCount = parseInt(messagesLink.dataset.unread || "0", 10);
-  let reloadScheduled = false; // 防止重复刷新
+  let refreshBannerShown = false; // 防止重复显示刷新提示
 
-  function scheduleReload() {
-    if (reloadScheduled) return; // 已经计划刷新，不重复触发
-    reloadScheduled = true;
-    setTimeout(() => window.location.reload(), 1500);
+  // Performance optimization: show a non-intrusive refresh banner instead of auto-reload
+  function showRefreshBanner(message) {
+    if (refreshBannerShown) return;
+    refreshBannerShown = true;
+
+    const banner = document.createElement("div");
+    banner.id = "refresh-banner";
+    banner.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(135deg, var(--accent-gold, #DAA520), var(--accent-red, #DC143C));
+      color: white;
+      padding: 10px 20px;
+      text-align: center;
+      z-index: 10000;
+      font-size: 14px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 15px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    `;
+
+    const textSpan = document.createElement("span");
+    textSpan.textContent = message || "页面内容已更新";
+
+    const refreshBtn = document.createElement("button");
+    refreshBtn.textContent = "点击刷新";
+    refreshBtn.style.cssText = `
+      background: white;
+      color: var(--accent-red, #DC143C);
+      border: none;
+      padding: 5px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    `;
+    refreshBtn.onclick = () => window.location.reload();
+
+    const dismissBtn = document.createElement("button");
+    dismissBtn.textContent = "稍后";
+    dismissBtn.style.cssText = `
+      background: transparent;
+      color: white;
+      border: 1px solid white;
+      padding: 5px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+    `;
+    dismissBtn.onclick = () => {
+      banner.remove();
+      // Allow showing banner again after 30 seconds
+      setTimeout(() => { refreshBannerShown = false; }, 30000);
+    };
+
+    banner.appendChild(textSpan);
+    banner.appendChild(refreshBtn);
+    banner.appendChild(dismissBtn);
+    document.body.appendChild(banner);
+  }
+
+  // Keep legacy function for backward compatibility, but use banner instead
+  function scheduleReload(message) {
+    showRefreshBanner(message);
   }
 
   function updateUnreadCount(increment = 1) {
@@ -118,7 +180,7 @@
       // 如果在相关页面，自动刷新以显示更新的任务列表和门客状态
       const path = window.location.pathname;
       if (path.includes("/gameplay/tasks") ||
-          path.includes("/gameplay/") && path.endsWith("/") ||
+          (path.includes("/gameplay/") && path.endsWith("/")) ||
           path.includes("/guests/roster")) {
         scheduleReload();
       }

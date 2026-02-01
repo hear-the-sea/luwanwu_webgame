@@ -42,4 +42,3 @@ class LoginForm(AuthenticationForm):
             field.widget.attrs.update(
                 {"class": "input", "placeholder": field.label},
             )
-

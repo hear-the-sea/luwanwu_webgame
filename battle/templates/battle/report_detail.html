@@ -159,18 +159,18 @@
 
 {% block content %}
 <section class="dashboard">
-    <div class="section-header">
+    <div class="tw-section-header">
         <div>
             <h1>{{ report.opponent_name }} 战报</h1>
         </div>
-        <a class="btn-secondary" href="{% url 'home' %}">返回首页</a>
+        <a class="tw-btn-secondary" href="{% url 'home' %}">返回首页</a>
     </div>
 
 
-    <section class="card">
+    <section class="tw-card">
         <h2>阵容对比</h2>
-        <div class="building-grid">
-            <article class="building-card">
+        <div class="tw-building-grid">
+            <article class="tw-building-card">
                 <h3>我方 {% if is_attacker %}<span class="role-tag attacker">进攻方</span>{% else %}<span class="role-tag defender">防守方</span>{% endif %}</h3>
                 <ul class="team-members">
                     {% for member in attacker_team_display %}
@@ -202,7 +202,7 @@
                     {% endfor %}
                 </ul>
             </article>
-            <article class="building-card">
+            <article class="tw-building-card">
                 <h3>敌方 {% if is_attacker %}<span class="role-tag defender">防守方</span>{% else %}<span class="role-tag attacker">进攻方</span>{% endif %}</h3>
                 <ul class="team-members">
                     {% for member in defender_team_display %}
@@ -237,7 +237,7 @@
         </div>
     </section>
 
-    <section class="card">
+    <section class="tw-card">
         <h2>战斗回合</h2>
         <div class="battle-rounds">
             {% for round in report.rounds %}
@@ -278,7 +278,7 @@
                                                 {% if event.attack_type == 'ranged' %}<span class="tech-tag ranged">远程</span>{% endif %}
                                             </div>
                                         </div>
-                                        <div class="muted-text">
+                                        <div class="tw-muted">
                                             <div>→ {{ event.target }} (-{{ event.damage }}) ｜ 伤害人数：{{ event.kills|default:0 }}{% if event.target_defeated %} ｜ 敌方全军覆没{% endif %}</div>
                                             {% if event.reflect_damage %}<div class="reflect-text">← {{ event.target }}爆发护身剑罡（{{ event.reflect_damage }}伤害）｜ 伤害人数：{{ event.reflect_kills|default:0 }}{% if event.reflect_defeated %} 敌方全军覆没{% endif %}</div>{% endif %}
                                             {% if event.counter_damage %}<div class="counter-text">← {{ event.target }}爆发反戈一击（{{ event.counter_damage }}伤害）｜ 伤害人数：{{ event.counter_kills|default:0 }}{% if event.counter_defeated %} 敌方全军覆没{% endif %}</div>{% endif %}
@@ -328,7 +328,7 @@
                                                 {% if event.attack_type == 'ranged' %}<span class="tech-tag ranged">远程</span>{% endif %}
                                             </div>
                                         </div>
-                                        <div class="muted-text">
+                                        <div class="tw-muted">
                                             <div>→ {{ event.target }} (-{{ event.damage }}) ｜ 伤害人数：{{ event.kills|default:0 }}{% if event.target_defeated %} ｜ 敌方全军覆没{% endif %}</div>
                                             {% if event.reflect_damage %}<div class="reflect-text">← {{ event.target }}爆发护身剑罡（{{ event.reflect_damage }}伤害）｜ 伤害人数：{{ event.reflect_kills|default:0 }}{% if event.reflect_defeated %} 敌方全军覆没{% endif %}</div>{% endif %}
                                             {% if event.counter_damage %}<div class="counter-text">← {{ event.target }}爆发反戈一击（{{ event.counter_damage }}伤害）｜ 伤害人数：{{ event.counter_kills|default:0 }}{% if event.counter_defeated %} 敌方全军覆没{% endif %}</div>{% endif %}
@@ -349,7 +349,7 @@
             {% endfor %}
         </div>
     </section>
-    <section class="card">
+    <section class="tw-card">
         <h2>战斗损失与掉落</h2>
         <div class="battle-loss-grid battle-loss-row">
             <article class="battle-loss friendly battle-loss-left">
@@ -388,7 +388,7 @@
             {% endif %}
         </div>
     </section>
-    <section class="card">
+    <section class="tw-card">
         <h2>战斗结果</h2>
         {% if player_won %}
             <p class="battle-result victory">战斗胜利！</p>

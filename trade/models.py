@@ -2,8 +2,6 @@ from django.db import models
 from django.utils import timezone
 
 
-
-
 class ShopStock(models.Model):
     """商铺库存跟踪（仅记录有限库存的商品）"""
 

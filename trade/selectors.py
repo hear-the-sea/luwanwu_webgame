@@ -58,14 +58,16 @@ def get_trade_context(request, manor) -> dict:
             paginator = Paginator(slots, 5)
             page_obj = paginator.get_page(page)
 
-            slots_with_info = []
-            for slot in page_obj:
-                slot.bid_info = get_slot_bid_info(slot, manor)
-                slots_with_info.append(slot)
+            # 使用批量查询优化 N+1 问题
+            from trade.services.auction_service import get_slots_bid_info_batch
+            slots_list = list(page_obj)
+            bid_info_map = get_slots_bid_info_batch(slots_list, manor)
+            for slot in slots_list:
+                slot.bid_info = bid_info_map.get(slot.id, {})
 
             context.update(
                 {
-                    "auction_slots": slots_with_info,
+                    "auction_slots": slots_list,
                     "page_obj": page_obj,
                     "selected_category": category,
                     "selected_rarity": rarity,
@@ -122,7 +124,7 @@ def get_trade_context(request, manor) -> dict:
             sellable_items = [
                 item
                 for item in sellable_items
-                if normalize_effect_type(itm.inventory_item.template.effect_type or "other") == selected_category
+                if normalize_effect_type(item.inventory_item.template.effect_type or "other") == selected_category
             ]
 
         context.update(

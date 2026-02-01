@@ -24,4 +24,3 @@ BATTLE_TYPES: Dict[str, dict] = {
 
 def get_battle_config(battle_type: str) -> dict:
     return BATTLE_TYPES.get(battle_type, BATTLE_TYPES[DEFAULT_BATTLE_TYPE])
-

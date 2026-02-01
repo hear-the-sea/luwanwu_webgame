@@ -8,6 +8,7 @@
   - 累进系数：基于当日个人已兑换数量，越买越贵（软限制）
 """
 
+import logging
 import math
 from datetime import date, timedelta
 from decimal import Decimal
@@ -20,6 +21,8 @@ from django.utils import timezone
 from gameplay.models import InventoryItem, ItemTemplate, Manor, ResourceEvent
 from gameplay.services.resources import spend_resources_locked
 from trade.models import GoldBarExchangeLog
+
+logger = logging.getLogger(__name__)
 
 
 # 金条基础配置
@@ -42,7 +45,8 @@ SUPPLY_CACHE_TTL = 300  # 缓存5分钟
 
 def get_today_exchange_count(manor: Manor) -> int:
     """获取今日已兑换金条数量"""
-    today = date.today()
+    # 安全修复：使用 timezone.now().date() 保持时区一致性
+    today = timezone.now().date()
     count = GoldBarExchangeLog.objects.filter(
         manor=manor, exchange_date=today
     ).aggregate(total=Sum("quantity"))["total"]
@@ -59,6 +63,9 @@ def get_effective_gold_supply() -> int:
     只统计最近 ACTIVE_DAYS_THRESHOLD 天内有登录的玩家持有的金条，
     排除弃游玩家的"死金条"对汇率的影响。
 
+    使用缓存击穿保护：当缓存失效时，只有一个请求执行数据库查询，
+    其他请求等待或使用旧值。
+
     Returns:
         int: 活跃玩家持有的金条总量
     """
@@ -66,16 +73,37 @@ def get_effective_gold_supply() -> int:
     if cached is not None:
         return cached
 
-    cutoff = timezone.now() - timedelta(days=ACTIVE_DAYS_THRESHOLD)
+    # 缓存击穿保护：使用分布式锁防止并发查询
+    lock_key = f"{SUPPLY_CACHE_KEY}:lock"
+    lock_acquired = cache.add(lock_key, "1", timeout=10)  # 10秒锁超时
 
-    result = InventoryItem.objects.filter(
-        template__key=GOLD_BAR_ITEM_KEY,
-        manor__user__last_login__gte=cutoff,
-    ).aggregate(total=Sum("quantity"))
+    if not lock_acquired:
+        # 未获取到锁，等待短暂时间后重试获取缓存
+        import time
+        time.sleep(0.1)
+        cached = cache.get(SUPPLY_CACHE_KEY)
+        if cached is not None:
+            return cached
+        # 仍然没有缓存，返回默认值避免阻塞
+        logger.warning("Gold supply cache miss and lock not acquired, using default")
+        return GOLD_BAR_TARGET_SUPPLY
 
-    total = result["total"] or 0
-    cache.set(SUPPLY_CACHE_KEY, total, SUPPLY_CACHE_TTL)
-    return total
+    try:
+        cutoff = timezone.now() - timedelta(days=ACTIVE_DAYS_THRESHOLD)
+
+        result = InventoryItem.objects.filter(
+            template__key=GOLD_BAR_ITEM_KEY,
+            manor__user__last_login__gte=cutoff,
+        ).aggregate(total=Sum("quantity"))
+
+        total = result["total"] or 0
+        cache.set(SUPPLY_CACHE_KEY, total, SUPPLY_CACHE_TTL)
+        return total
+    except Exception as e:
+        logger.warning(f"Failed to query gold supply: {e}")
+        return GOLD_BAR_TARGET_SUPPLY
+    finally:
+        cache.delete(lock_key)
 
 
 def calculate_supply_factor() -> float:

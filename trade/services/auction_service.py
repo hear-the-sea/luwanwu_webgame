@@ -378,6 +378,9 @@ def validate_bid_amount(
     if current_bid:
         if amount <= current_bid.amount:
             raise ValueError(f"加价金额必须高于您之前的出价 {current_bid.amount} 金条")
+        # 检查最小加价幅度
+        if amount < current_bid.amount + slot.min_increment:
+            raise ValueError(f"加价幅度至少为 {slot.min_increment} 金条")
         return
     if manor:
         my_bid = AuctionBid.objects.filter(
@@ -387,6 +390,9 @@ def validate_bid_amount(
             # 已有出价，需要比自己之前的出价高
             if amount <= my_bid.amount:
                 raise ValueError(f"加价金额必须高于您之前的出价 {my_bid.amount} 金条")
+            # 检查最小加价幅度
+            if amount < my_bid.amount + slot.min_increment:
+                raise ValueError(f"加价幅度至少为 {slot.min_increment} 金条")
             return
 
     # 新出价者，需要高于当前最低中标价才有意义
@@ -625,6 +631,7 @@ def settle_auction_round(round_id: int = None) -> Dict:
         round=auction_round, status=AuctionSlot.Status.ACTIVE
     ).select_related("item_template", "highest_bidder")
 
+    failed_slots = []
     for slot in slots:
         try:
             result = _settle_slot(slot)
@@ -635,7 +642,17 @@ def settle_auction_round(round_id: int = None) -> Dict:
                 stats["unsold"] += 1
         except Exception as e:
             logger.exception(f"结算拍卖位 {slot.id} 时出错：{e}")
+            failed_slots.append({"slot_id": slot.id, "error": str(e)})
             continue
+
+    # 如果有结算失败的拍卖位，记录警告并在stats中标记
+    if failed_slots:
+        logger.error(
+            f"拍卖轮次 #{auction_round.round_number} 有 {len(failed_slots)} 个拍卖位结算失败",
+            extra={"failed_slots": failed_slots}
+        )
+        stats["failed"] = len(failed_slots)
+        stats["failed_details"] = failed_slots
 
     # 标记轮次为已完成
     with transaction.atomic():
@@ -747,8 +764,11 @@ def _partial_consume_frozen_gold_bars(
         manor: 庄园
         consume_amount: 实际扣除的金条数
         refund_amount: 退还的金条数
+
+    Raises:
+        ValueError: 金条扣除失败时抛出
     """
-    from gameplay.services.inventory import consume_inventory_item
+    from gameplay.services.inventory import consume_inventory_item_for_manor_locked
 
     try:
         frozen_record = bid.frozen_record
@@ -758,13 +778,24 @@ def _partial_consume_frozen_gold_bars(
     if not frozen_record or not frozen_record.is_frozen:
         return
 
-    # 实际只扣除结算价格的金条
-    consume_inventory_item(manor, GOLD_BAR_ITEM_KEY, consume_amount)
+    # 使用事务确保原子性：金条扣除和冻结记录更新必须同时成功
+    with transaction.atomic():
+        # 锁定冻结记录，防止并发修改
+        locked_record = FrozenGoldBar.objects.select_for_update().filter(
+            pk=frozen_record.pk, is_frozen=True
+        ).first()
 
-    # 更新冻结记录
-    frozen_record.is_frozen = False
-    frozen_record.unfrozen_at = timezone.now()
-    frozen_record.save(update_fields=["is_frozen", "unfrozen_at"])
+        if not locked_record:
+            # 已被其他事务处理
+            return
+
+        # 实际只扣除结算价格的金条（使用锁定版本的函数）
+        consume_inventory_item_for_manor_locked(manor, GOLD_BAR_ITEM_KEY, consume_amount)
+
+        # 更新冻结记录
+        locked_record.is_frozen = False
+        locked_record.unfrozen_at = timezone.now()
+        locked_record.save(update_fields=["is_frozen", "unfrozen_at"])
 
     logger.info(
         f"维克里拍卖结算: 庄园 {manor.id} 实际扣除 {consume_amount} 金条，"
@@ -977,6 +1008,66 @@ def get_slot_bid_info(slot: AuctionSlot, manor: Manor = None) -> Dict:
             info["is_safe"] = is_in_winning_range(slot, manor)
 
     return info
+
+
+def get_slots_bid_info_batch(slots: List[AuctionSlot], manor: Manor = None) -> Dict[int, Dict]:
+    """
+    批量获取多个拍卖位的出价信息（优化 N+1 查询）
+
+    Args:
+        slots: 拍卖位列表
+        manor: 庄园（可选，用于判断自己是否在中标范围）
+
+    Returns:
+        slot_id -> bid_info 的字典映射
+    """
+    if not slots:
+        return {}
+
+    slot_ids = [slot.id for slot in slots]
+
+    # 批量获取所有相关出价
+    all_bids = list(
+        AuctionBid.objects.filter(
+            slot_id__in=slot_ids,
+            status=AuctionBid.Status.ACTIVE
+        ).order_by('slot_id', '-amount').select_related('manor')
+    )
+
+    # 按 slot_id 分组
+    bids_by_slot: Dict[int, List[AuctionBid]] = {}
+    for bid in all_bids:
+        if bid.slot_id not in bids_by_slot:
+            bids_by_slot[bid.slot_id] = []
+        bids_by_slot[bid.slot_id].append(bid)
+
+    result = {}
+    for slot in slots:
+        ranking = bids_by_slot.get(slot.id, [])
+        winner_count = slot.quantity
+        bidder_count = len(ranking)
+        cutoff_price = ranking[winner_count - 1].amount if len(ranking) >= winner_count else slot.starting_price
+
+        info = {
+            "winner_count": winner_count,
+            "bidder_count": bidder_count,
+            "cutoff_price": cutoff_price,
+            "is_full": bidder_count >= winner_count,
+            "my_bid_amount": None,
+            "is_safe": None,
+        }
+
+        if manor:
+            my_bid = next((b for b in ranking if b.manor_id == manor.id), None)
+            if my_bid:
+                info["my_bid_amount"] = my_bid.amount
+                # 检查是否在中标范围内
+                my_rank = next((i + 1 for i, b in enumerate(ranking) if b.manor_id == manor.id), None)
+                info["is_safe"] = my_rank is not None and my_rank <= winner_count
+
+        result[slot.id] = info
+
+    return result
 
 
 def get_auction_stats(manor: Manor = None) -> Dict:

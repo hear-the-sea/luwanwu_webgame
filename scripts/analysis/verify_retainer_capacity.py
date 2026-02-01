@@ -7,9 +7,11 @@
 RETAINER_CAPACITY_BASE = 50
 RETAINER_CAPACITY_PER_LEVEL = 100
 
+
 def calculate_capacity(level):
     """计算家丁房容量"""
     return RETAINER_CAPACITY_BASE + level * RETAINER_CAPACITY_PER_LEVEL
+
 
 print("=" * 60)
 print("家丁房容量验证")

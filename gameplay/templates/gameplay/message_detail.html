@@ -5,61 +5,57 @@
 
 {% block content %}
 <section class="dashboard">
-    <div class="section-header">
+    <div class="tw-section-header">
         <div>
             <h1>消息详情</h1>
         </div>
-        <a href="{% url 'gameplay:messages' %}" class="btn-secondary">返回消息列表</a>
+        <a href="{% url 'gameplay:messages' %}" class="tw-btn-secondary">返回消息列表</a>
     </div>
 
-    <section class="card">
-        <div style="padding: 1.5rem;">
+    <section class="tw-panel">
+        <div class="tw-panel-content">
             <!-- 消息头部 -->
-            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid #D4A574;">
+            <div class="flex justify-between items-start mb-6 pb-4 border-b-2 border-border-primary">
                 <div>
-                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                        <span class="message-kind {{ message.kind }}" style="padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.875rem; {% if message.kind == 'reward' %}background-color: #FFA500; color: white;{% elif message.kind == 'system' %}background-color: #4A90E2; color: white;{% else %}background-color: #FF6B6B; color: white;{% endif %}">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="tw-message-kind {{ message.kind }}">
                             {{ message.get_kind_display }}
                         </span>
                         {% if message.has_attachments %}
-                            <span style="padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.875rem; background-color: #4ADE80; color: white;">
-                                📦 有附件
-                            </span>
+                            <span class="tw-badge-green">📦 有附件</span>
                         {% endif %}
                     </div>
-                    <h2 style="margin: 0; font-size: 1.5em;">{{ message.title }}</h2>
+                    <h2 class="m-0 text-2xl text-text-primary">{{ message.title }}</h2>
                 </div>
-                <div style="text-align: right; color: #888;">
+                <div class="text-right text-text-muted text-sm">
                     <div>{{ message.created_at|date:"Y-m-d H:i:s" }}</div>
                 </div>
             </div>
 
             <!-- 消息正文 -->
             {% if message.body %}
-            <div style="padding: 1.5rem; background-color: #F0E5CA; border-radius: 8px; margin-bottom: 1.5rem; line-height: 1.8; white-space: pre-wrap;">{{ message.body }}</div>
+            <div class="p-6 bg-bg-panel rounded-lg mb-6 leading-relaxed whitespace-pre-wrap">{{ message.body|escape }}</div>
             {% endif %}
 
             <!-- 附件信息 -->
             {% if message.has_attachments %}
-            <div style="padding: 1.5rem; background-color: #FFF9E6; border: 2px solid #FFA500; border-radius: 8px;">
-                <h3 style="margin: 0 0 1rem 0; color: #FFA500; display: flex; align-items: center; gap: 0.5rem;">
+            <div class="p-6 bg-yellow-50 border-2 border-accent-gold rounded-lg">
+                <h3 class="m-0 mb-4 text-accent-gold flex items-center gap-2">
                     📦 附件内容
                     {% if message.is_claimed %}
-                        <span style="padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.875rem; background-color: #4ADE80; color: white;">
-                            ✓ 已领取
-                        </span>
+                        <span class="tw-badge-green">✓ 已领取</span>
                     {% endif %}
                 </h3>
 
                 <!-- 资源列表 -->
                 {% if attachment_details.resources %}
-                <div style="margin-bottom: 1.5rem;">
-                    <h4 style="margin: 0 0 0.75rem 0; color: #D4A574;">💰 资源</h4>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.75rem;">
+                <div class="mb-6">
+                    <h4 class="m-0 mb-3 text-border-primary font-semibold">💰 资源</h4>
+                    <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));">
                         {% for resource in attachment_details.resources %}
-                        <div style="padding: 0.75rem; background-color: white; border-left: 3px solid #4A90E2; border-radius: 4px;">
-                            <div style="font-size: 0.875rem; color: #888; margin-bottom: 0.25rem;">{{ resource.name }}</div>
-                            <div style="font-size: 1.25em; font-weight: bold; color: #4A90E2;">{{ resource.amount }}</div>
+                        <div class="p-3 bg-white border-l-4 border-blue-500 rounded">
+                            <div class="text-sm text-text-muted mb-1">{{ resource.name }}</div>
+                            <div class="text-xl font-bold text-blue-500">{{ resource.amount }}</div>
                         </div>
                         {% endfor %}
                     </div>
@@ -69,28 +65,28 @@
                 <!-- 道具列表 -->
                 {% if attachment_details.items %}
                 <div>
-                    <h4 style="margin: 0 0 0.75rem 0; color: #D4A574;">🎁 道具</h4>
-                    <div style="display: flex; flex-wrap: wrap; gap: 1rem;">
+                    <h4 class="m-0 mb-3 text-border-primary font-semibold">🎁 道具</h4>
+                    <div class="flex flex-wrap gap-4">
                         {% for item in attachment_details.items %}
-                        <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background-color: white; border-radius: 8px; border: 1px solid #D4A574;">
+                        <div class="flex items-center gap-3 px-4 py-3 bg-white rounded-lg border border-border-primary">
                             <!-- 物品图片 -->
-                            <div style="flex-shrink: 0;">
+                            <div class="flex-shrink-0">
                                 {% if item.image %}
-                                    <img src="{{ item.image.url }}" alt="{{ item.name }}" style="width: 48px; height: 48px; object-fit: contain;">
+                                    <img src="{{ item.image.url }}" alt="{{ item.name }}" class="w-12 h-12 object-contain">
                                 {% elif item.icon %}
-                                    <div style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; font-size: 2em;">
+                                    <div class="w-12 h-12 flex items-center justify-center text-3xl">
                                         {{ item.icon }}
                                     </div>
                                 {% else %}
-                                    <div style="width: 48px; height: 48px; background-color: #E8D4A0; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 1.5em;">
+                                    <div class="w-12 h-12 bg-bg-secondary rounded flex items-center justify-center text-2xl">
                                         🎁
                                     </div>
                                 {% endif %}
                             </div>
                             <!-- 物品信息 -->
                             <div>
-                                <div style="font-weight: bold; color: #333;">{{ item.name }}</div>
-                                <div style="color: #FFA500; font-size: 0.9em;">× {{ item.quantity }}</div>
+                                <div class="font-bold text-text-primary">{{ item.name }}</div>
+                                <div class="text-accent-gold text-sm">× {{ item.quantity }}</div>
                             </div>
                         </div>
                         {% endfor %}
@@ -100,19 +96,19 @@
 
                 <!-- 领取按钮 -->
                 {% if not message.is_claimed %}
-                <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 2px solid #FFE5B4; text-align: center;">
+                <div class="mt-6 pt-6 border-t-2 border-yellow-200 text-center">
                     <form method="post" action="{% url 'gameplay:claim_attachment' message.id %}">
                         {% csrf_token %}
-                        <button type="submit" class="btn-primary" style="padding: 0.75rem 2rem; font-size: 1.1em;">
+                        <button type="submit" class="tw-btn-primary px-8 py-3 text-lg">
                             🎁 领取附件
                         </button>
                     </form>
-                    <p style="margin: 0.5rem 0 0 0; color: #888; font-size: 0.875rem;">
+                    <p class="mt-2 text-text-muted text-sm">
                         领取后资源和道具将自动发放到您的账户
                     </p>
                 </div>
                 {% else %}
-                <div style="margin-top: 1.5rem; padding: 1rem; background-color: #E8F5E9; border-left: 4px solid #4ADE80; text-align: center; color: #2E7D32;">
+                <div class="mt-6 p-4 bg-green-50 border-l-4 border-accent-green text-center text-green-700">
                     ✓ 附件已领取，物品已发放到您的仓库
                 </div>
                 {% endif %}
@@ -120,12 +116,12 @@
             {% endif %}
 
             <!-- 操作按钮 -->
-            <div style="margin-top: 1.5rem; display: flex; gap: 1rem; justify-content: center;">
-                <a href="{% url 'gameplay:messages' %}" class="btn-secondary">返回消息列表</a>
-                <form method="post" action="{% url 'gameplay:delete_messages' %}" style="display: inline;" id="delete-message-form">
+            <div class="mt-6 flex gap-4 justify-center">
+                <a href="{% url 'gameplay:messages' %}" class="tw-btn-secondary">返回消息列表</a>
+                <form method="post" action="{% url 'gameplay:delete_messages' %}" class="inline" id="delete-message-form">
                     {% csrf_token %}
                     <input type="hidden" name="message_ids" value="{{ message.id }}">
-                    <button type="submit" class="btn-secondary" style="color: #FF6B6B;">删除消息</button>
+                    <button type="submit" class="tw-btn-danger">删除消息</button>
                 </form>
             </div>
         </div>
@@ -137,8 +133,12 @@
 <script>
 document.getElementById('delete-message-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const confirmed = await gameDialog.danger('确认删除这条消息吗？', { title: '删除消息' });
-    if (confirmed) e.target.submit();
+    try {
+        const confirmed = await gameDialog.danger('确认删除这条消息吗？', { title: '删除消息' });
+        if (confirmed) e.target.submit();
+    } catch (err) {
+        console.error('删除消息确认失败:', err);
+    }
 });
 </script>
 {% endblock %}

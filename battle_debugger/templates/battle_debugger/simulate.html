@@ -329,7 +329,7 @@
             <button type="submit" class="btn-primary" id="submitBtn">
                 🚀 开始模拟
             </button>
-            <a href="{% url 'battle_debugger:index' %}" class="btn-secondary">
+            <a href="{% url 'battle_debugger:index' %}" class="tw-btn-secondary">
                 ← 返回
             </a>
         </div>
@@ -337,10 +337,12 @@
 </div>
 
 <script>
-document.getElementById('simulateForm').addEventListener('submit', function() {
+document.getElementById('simulateForm')?.addEventListener('submit', function() {
     const btn = document.getElementById('submitBtn');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> 模拟中...';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> 模拟中...';
+    }
 });
 </script>
 {% endblock %}

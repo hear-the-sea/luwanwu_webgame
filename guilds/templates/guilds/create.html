@@ -5,66 +5,66 @@
 
 {% block content %}
 <section class="dashboard">
-    <div class="section-header">
+    <div class="tw-section-header">
         <div>
             <h1>创建帮会</h1>
-            <p>招贤纳士，建立属于自己的帮会</p>
+            <p class="caption">招贤纳士，建立属于自己的帮会</p>
         </div>
-        <div class="nav-links">
-            <a href="{% url 'guilds:hall' %}" class="btn-secondary">返回大厅</a>
+        <div class="flex gap-2">
+            <a href="{% url 'guilds:hall' %}" class="tw-btn-primary">返回大厅</a>
         </div>
     </div>
 
-    <section class="card">
+    <section class="tw-card">
         <h2>帮会信息</h2>
         <form method="post">
             {% csrf_token %}
-            <div class="form-field">
+            <div class="tw-form-field">
                 <label for="name">帮会名称 *</label>
-                <input type="text" id="name" name="name" required maxlength="20" placeholder="请输入帮会名称（2-20字）">
-                <small class="muted-text">帮会名称将显示在帮会列表和成员界面中</small>
+                <input type="text" id="name" name="name" required maxlength="20" placeholder="请输入帮会名称（2-20字）" class="tw-input">
+                <small class="tw-muted">帮会名称将显示在帮会列表和成员界面中</small>
             </div>
 
-            <div class="form-field">
+            <div class="tw-form-field mt-4">
                 <label for="description">帮会简介</label>
-                <textarea id="description" name="description" rows="4" maxlength="200" placeholder="介绍一下你的帮会吧..."></textarea>
-                <small class="muted-text">简介将显示在帮会详情页面（选填，最多200字）</small>
+                <textarea id="description" name="description" rows="4" maxlength="200" placeholder="介绍一下你的帮会吧..." class="tw-input"></textarea>
+                <small class="tw-muted">简介将显示在帮会详情页面（选填，最多200字）</small>
             </div>
 
-            <div class="form-field">
+            <div class="tw-form-field mt-4">
                 <label for="emblem">帮会徽记</label>
-                <select id="emblem" name="emblem">
+                <select id="emblem" name="emblem" class="tw-input">
                     <option value="default">默认</option>
                     <option value="dragon">青龙</option>
                     <option value="tiger">白虎</option>
                     <option value="phoenix">朱雀</option>
                     <option value="tortoise">玄武</option>
                 </select>
-                <small class="muted-text">选择帮会的标志性徽记</small>
+                <small class="tw-muted">选择帮会的标志性徽记</small>
             </div>
 
-            <div class="guild-creation-cost">
+            <div class="tw-guild-creation-cost">
                 <h3>创建费用</h3>
-                <dl class="guild-cost-dl">
+                <dl class="tw-guild-cost-dl">
                     <div>
                         <dt>需要金条</dt>
-                        <dd class="guild-cost-value guild-cost-large">{{ creation_cost.gold_bar }}</dd>
+                        <dd class="tw-guild-cost-value tw-guild-cost-large">{{ creation_cost.gold_bar }}</dd>
                     </div>
                     <div>
                         <dt>当前拥有</dt>
-                        <dd class="guild-cost-large {% if gold_bar_count >= creation_cost.gold_bar %}positive{% else %}negative{% endif %}">
+                        <dd class="tw-guild-cost-large {% if gold_bar_count >= creation_cost.gold_bar %}text-accent-green{% else %}text-accent-red{% endif %}">
                             {{ gold_bar_count }}
                         </dd>
                     </div>
                 </dl>
-                <p class="muted-text guild-cost-hint">创建帮会后，您将自动成为帮主，初始成员容量为10人</p>
+                <p class="tw-muted mt-2">创建帮会后，您将自动成为帮主，初始成员容量为10人</p>
             </div>
 
-            <div class="form-actions guild-section-spacing">
-                <button type="submit" class="btn-primary" {% if gold_bar_count < creation_cost.gold_bar %}disabled title="金条不足"{% endif %}>
+            <div class="flex gap-2 tw-guild-section-spacing">
+                <button type="submit" class="tw-btn-primary" {% if gold_bar_count < creation_cost.gold_bar %}disabled title="金条不足"{% endif %}>
                     创建帮会
                 </button>
-                <a href="{% url 'guilds:hall' %}" class="btn-secondary">取消</a>
+                <a href="{% url 'guilds:hall' %}" class="tw-btn-secondary">取消</a>
             </div>
         </form>
     </section>

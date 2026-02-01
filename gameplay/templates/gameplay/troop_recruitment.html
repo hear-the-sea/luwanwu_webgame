@@ -4,372 +4,132 @@
 
 {% block content %}
 <section class="dashboard">
-    <div class="section-header">
+    <div class="tw-section-header">
         <div>
             <h1>护院募兵</h1>
-            <p class="caption">训练护院卫队{% if speed_bonus_percent > 0 %}，综合加成：<span class="bonus-text">+{{ speed_bonus_percent }}%</span> 募兵速度{% endif %}</p>
+            <p class="caption">训练护院卫队{% if speed_bonus_percent > 0 %}，综合加成：<span class="text-accent-green font-semibold">+{{ speed_bonus_percent }}%</span> 募兵速度{% endif %}</p>
             <p class="caption">练功场等级：{{ training_level }}{% if citang_level > 1 %}，祠堂等级：{{ citang_level }}{% endif %}，当前家丁：<strong>{{ manor.retainer_count }}</strong> / {{ manor.retainer_capacity }}</p>
         </div>
-        <a class="btn-secondary" href="{% url 'gameplay:troop_recruitment' %}">刷新</a>
+        <a class="tw-btn-secondary" href="{% url 'gameplay:troop_recruitment' %}">刷新</a>
     </div>
 
     {% if not can_recruit %}
-    <section class="card warning-card">
-        <h2>功能未解锁</h2>
-        <p>练功场等级不足，需要升级到1级才能进行募兵。</p>
-        <a href="{% url 'gameplay:dashboard' %}" class="btn-primary">前往升级</a>
+    <section class="tw-panel mb-6">
+        <div class="tw-panel-content">
+            <div class="tw-alert-warning">
+                <h2 class="text-lg font-semibold mb-2">功能未解锁</h2>
+                <p class="mb-4">练功场等级不足，需要升级到1级才能进行募兵。</p>
+                <a href="{% url 'gameplay:dashboard' %}" class="tw-btn-primary">前往升级</a>
+            </div>
+        </div>
     </section>
     {% else %}
 
     {% if active_recruitments %}
-    <section class="card">
-        <h2>募兵中</h2>
-        <div class="task-list">
-            {% for recruitment in active_recruitments %}
-            <article class="task-card">
-                <header>
-                    <h3>{{ recruitment.troop_name }} x{{ recruitment.quantity }}</h3>
-                    <p>消耗家丁 {{ recruitment.retainer_cost }}</p>
-                </header>
-                <div class="task-meta">
-                    {% if recruitment.time_remaining > 0 %}
-                        <span class="chip soft">剩余时间：{{ recruitment.time_remaining }} 秒</span>
-                    {% else %}
-                        <span class="chip success">已完成！</span>
-                    {% endif %}
-                </div>
-            </article>
-            {% endfor %}
+    <section class="tw-panel mb-6">
+        <div class="tw-panel-header">募兵中</div>
+        <div class="tw-panel-content">
+            <div class="flex flex-col gap-4">
+                {% for recruitment in active_recruitments %}
+                <article class="tw-card">
+                    <header class="mb-3">
+                        <h3 class="text-base font-semibold text-text-primary mb-1">{{ recruitment.troop_name }} x{{ recruitment.quantity }}</h3>
+                        <p class="text-sm text-text-muted">消耗家丁 {{ recruitment.retainer_cost }}</p>
+                    </header>
+                    <div class="flex gap-2 flex-wrap">
+                        {% if recruitment.time_remaining > 0 %}
+                            <span class="tw-chip">剩余时间：{{ recruitment.time_remaining }} 秒</span>
+                        {% else %}
+                            <span class="tw-badge-green">已完成！</span>
+                        {% endif %}
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
         </div>
     </section>
     {% endif %}
 
-    <section class="card">
-        <h2>可募兵种</h2>
-        <p class="hint" style="margin-bottom: 1rem;">
-            提升相关武艺科技等级可解锁更高级的护院
-            {% if is_recruiting %}<br><span class="warning-text">当前有护院正在募兵中，同时只能募兵一种</span>{% endif %}
-        </p>
+    <section class="tw-panel">
+        <div class="tw-panel-header">可募兵种</div>
+        <div class="tw-panel-content">
+            <p class="text-sm text-text-muted mb-4">
+                提升相关武艺科技等级可解锁更高级的护院
+                {% if is_recruiting %}<br><span class="text-accent-red font-medium">当前有护院正在募兵中，同时只能募兵一种</span>{% endif %}
+            </p>
 
-        <div class="building-grid">
-            {% for troop in recruitment_options %}
-            <article class="building-card {% if not troop.is_unlocked %}locked{% elif is_recruiting %}disabled{% endif %}">
-                <header>
-                    <div>
-                        <h3>{{ troop.name }}</h3>
-                        {% if troop.description %}
-                        <p class="troop-desc">{{ troop.description }}</p>
-                        {% endif %}
-                        {% if not troop.is_unlocked %}
-                        <p class="locked-hint">需要{{ troop.tech_name }} {{ troop.tech_level_required }} 级（当前 {{ troop.player_tech_level }} 级）</p>
-                        {% endif %}
-                    </div>
-                </header>
-
-                <dl class="requirements-info">
-                    <div class="requirements-header">
-                        <dt>募兵需求</dt>
-                        <dd>
-                            <span class="{% if not troop.retainer_satisfied %}insufficient{% endif %}">
-                                家丁×{{ troop.retainer_cost }}({{ manor.retainer_count }})
-                            </span>
-                            {% for eq in troop.equipment %}
-                            <span class="{% if not eq.satisfied %}insufficient{% endif %}">
-                                {{ eq.name }}×{{ eq.required }}({{ eq.have }})
-                            </span>
-                            {% endfor %}
-                        </dd>
-                    </div>
-                </dl>
-
-                <dl class="time-info">
-                    <div>
-                        <dt>基础时间</dt>
-                        <dd>{{ troop.base_duration }} 秒</dd>
-                    </div>
-                    <div>
-                        <dt>实际时间</dt>
-                        <dd class="bonus-text">{{ troop.actual_duration }} 秒</dd>
-                    </div>
-                </dl>
-
-                <form method="post" action="{% url 'gameplay:start_troop_recruitment' %}" class="production-form">
-                    {% csrf_token %}
-                    <input type="hidden" name="troop_key" value="{{ troop.key }}">
-                    {% if not troop.is_unlocked %}
-                        <button type="button" class="btn-locked btn-small" disabled>未解锁</button>
-                    {% elif is_recruiting %}
-                        <button type="button" class="btn-disabled btn-small" disabled>募兵中</button>
-                    {% elif troop.is_unlocked %}
-                        <div class="quantity-row">
-                            <label for="quantity-{{ troop.key }}">数量：</label>
-                            <input type="number" name="quantity" id="quantity-{{ troop.key }}"
-                                   value="1" min="1" max="10"
-                                   class="quantity-input">
+            <div class="tw-building-grid">
+                {% for troop in recruitment_options %}
+                <article class="tw-building-card {% if not troop.is_unlocked %}opacity-60{% elif is_recruiting %}opacity-50{% endif %}">
+                    <header>
+                        <div>
+                            <h3>{{ troop.name }}</h3>
+                            {% if troop.description %}
+                            <p class="text-xs text-text-muted mt-1">{{ troop.description }}</p>
+                            {% endif %}
+                            {% if not troop.is_unlocked %}
+                            <p class="text-sm text-accent-red font-medium mt-1">需要{{ troop.tech_name }} {{ troop.tech_level_required }} 级（当前 {{ troop.player_tech_level }} 级）</p>
+                            {% endif %}
                         </div>
-                        {% if troop.can_afford %}
-                            <button type="submit" class="btn-primary btn-small">募兵</button>
-                        {% else %}
-                            <button type="button" class="btn-disabled btn-small" disabled>资源不足</button>
+                    </header>
+
+                    <dl class="m-0 p-0">
+                        <!-- 募兵需求 -->
+                        <div class="p-3 mb-3 rounded bg-yellow-50 border border-yellow-200">
+                            <dt class="text-xs text-yellow-700 font-medium mb-1">募兵需求</dt>
+                            <dd class="m-0 text-sm text-yellow-800 flex flex-wrap gap-2">
+                                <span class="{% if not troop.retainer_satisfied %}text-accent-red font-semibold{% endif %}">
+                                    家丁×{{ troop.retainer_cost }}({{ manor.retainer_count }})
+                                </span>
+                                {% for eq in troop.equipment %}
+                                <span class="{% if not eq.satisfied %}text-accent-red font-semibold{% endif %}">
+                                    {{ eq.name }}×{{ eq.required }}({{ eq.have }})
+                                </span>
+                                {% endfor %}
+                            </dd>
+                        </div>
+
+                        <!-- 时间信息 -->
+                        <div class="grid grid-cols-2 gap-3 p-3 rounded bg-bg-secondary">
+                            <div class="text-center">
+                                <dt class="text-xs text-text-muted mb-1">基础时间</dt>
+                                <dd class="m-0 text-sm font-semibold text-text-primary">{{ troop.base_duration }} 秒</dd>
+                            </div>
+                            <div class="text-center">
+                                <dt class="text-xs text-text-muted mb-1">实际时间</dt>
+                                <dd class="m-0 text-sm font-semibold text-accent-green">{{ troop.actual_duration }} 秒</dd>
+                            </div>
+                        </div>
+                    </dl>
+
+                    <form method="post" action="{% url 'gameplay:start_troop_recruitment' %}" class="tw-card-actions mt-4 pt-4 border-t border-border-light">
+                        {% csrf_token %}
+                        <input type="hidden" name="troop_key" value="{{ troop.key }}">
+                        {% if not troop.is_unlocked %}
+                            <button type="button" class="tw-btn-secondary w-full opacity-60" disabled>未解锁</button>
+                        {% elif is_recruiting %}
+                            <button type="button" class="tw-btn-secondary w-full opacity-60" disabled>募兵中</button>
+                        {% elif troop.is_unlocked %}
+                            <div class="flex items-center justify-center gap-2 mb-3">
+                                <label for="quantity-{{ troop.key }}" class="text-sm text-text-secondary">数量：</label>
+                                <input type="number" name="quantity" id="quantity-{{ troop.key }}"
+                                       value="1" min="1" max="10"
+                                       class="tw-quantity-input">
+                            </div>
+                            {% if troop.can_afford %}
+                                <button type="submit" class="tw-btn-primary w-full">募兵</button>
+                            {% else %}
+                                <button type="button" class="tw-btn-secondary w-full opacity-60" disabled>资源不足</button>
+                            {% endif %}
                         {% endif %}
-                    {% endif %}
-                </form>
-            </article>
-            {% empty %}
-            <p>暂无可募兵种</p>
-            {% endfor %}
+                    </form>
+                </article>
+                {% empty %}
+                <p class="tw-empty-hint">暂无可募兵种</p>
+                {% endfor %}
+            </div>
         </div>
     </section>
     {% endif %}
 </section>
-
-<style>
-.warning-card {
-    background: #fef3c7;
-    border-color: #f59e0b;
-}
-
-.warning-card h2 {
-    color: #92400e;
-}
-
-.warning-card p {
-    color: #78350f;
-    margin-bottom: 1rem;
-}
-
-.building-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 1.5rem;
-    margin-top: 1rem;
-}
-
-.building-card {
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    padding: 1.5rem;
-    background: white;
-    transition: box-shadow 0.2s;
-}
-
-.building-card:hover {
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-}
-
-.building-card.locked {
-    background: #f9fafb;
-    opacity: 0.7;
-}
-
-.building-card.disabled {
-    background: #f9fafb;
-    opacity: 0.6;
-}
-
-.building-card header {
-    margin-bottom: 1rem;
-}
-
-.building-card h3 {
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: #111827;
-    margin-bottom: 0.25rem;
-}
-
-.building-card header p {
-    font-size: 0.875rem;
-    color: #6b7280;
-    line-height: 1.5;
-}
-
-.troop-desc {
-    font-size: 0.75rem !important;
-    color: #9ca3af !important;
-}
-
-.locked-hint {
-    color: #dc2626 !important;
-    font-weight: 500;
-}
-
-.warning-text {
-    color: #dc2626;
-    font-weight: 500;
-}
-
-.requirements-info {
-    margin-bottom: 0.75rem;
-    padding: 0.75rem;
-    background: #fef3c7;
-    border-radius: 4px;
-}
-
-.requirements-header {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-}
-
-.requirements-info dt {
-    font-size: 0.75rem;
-    color: #92400e;
-    font-weight: 500;
-}
-
-.requirements-info dd {
-    font-size: 0.875rem;
-    color: #78350f;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-}
-
-.requirements-info dd span.insufficient {
-    color: #dc2626;
-    font-weight: 600;
-}
-
-.time-info {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.75rem;
-    margin-bottom: 1rem;
-    padding: 0.75rem;
-    background: #f9fafb;
-    border-radius: 4px;
-}
-
-.time-info div {
-    text-align: center;
-}
-
-.time-info dt {
-    font-size: 0.75rem;
-    color: #6b7280;
-    margin-bottom: 0.25rem;
-}
-
-.time-info dd {
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: #111827;
-}
-
-.bonus-text {
-    color: #16a34a;
-}
-
-.hint {
-    color: #6b7280;
-    font-size: 0.875rem;
-}
-
-.production-form {
-    margin-top: 1rem;
-    text-align: center;
-}
-
-.quantity-row {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
-}
-
-.quantity-row label {
-    font-size: 0.875rem;
-    color: #374151;
-}
-
-.quantity-input {
-    width: 80px;
-    padding: 0.375rem 0.5rem;
-    border: 1px solid #d1d5db;
-    border-radius: 4px;
-    font-size: 0.875rem;
-    text-align: center;
-}
-
-.quantity-input:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-}
-
-.btn-disabled {
-    background: #d1d5db;
-    color: #9ca3af;
-    cursor: not-allowed;
-    padding: 0.5rem 1rem;
-    border: none;
-    border-radius: 4px;
-    font-size: 0.875rem;
-}
-
-.btn-locked {
-    background: #fecaca;
-    color: #991b1b;
-    cursor: not-allowed;
-    padding: 0.5rem 1rem;
-    border: none;
-    border-radius: 4px;
-    font-size: 0.875rem;
-}
-
-.task-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-}
-
-.task-card {
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    padding: 1rem;
-    background: white;
-}
-
-.task-card header {
-    margin-bottom: 0.75rem;
-}
-
-.task-card h3 {
-    font-size: 1rem;
-    font-weight: 600;
-    color: #111827;
-    margin-bottom: 0.25rem;
-}
-
-.task-card header p {
-    font-size: 0.875rem;
-    color: #6b7280;
-}
-
-.task-meta {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-}
-
-.chip {
-    display: inline-block;
-    padding: 0.25rem 0.75rem;
-    border-radius: 9999px;
-    font-size: 0.75rem;
-    font-weight: 500;
-}
-
-.chip.soft {
-    background: #f3f4f6;
-    color: #4b5563;
-}
-
-.chip.success {
-    background: #dcfce7;
-    color: #16a34a;
-}
-</style>
 {% endblock %}

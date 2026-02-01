@@ -5,7 +5,7 @@
 
 {% block content %}
 <section class="dashboard">
-  <div class="section-header">
+  <div class="tw-section-header">
     <div>
       <h1>监牢</h1>
       <p class="caption">
@@ -15,54 +15,60 @@
         | 招募消耗：<strong>{{ recruit_cost_gold_bar }}</strong> 金条
       </p>
     </div>
-    <div class="section-actions">
-      <a class="btn-secondary" href="{% url 'gameplay:oath_grove' %}">前往结义林</a>
+    <div class="tw-section-actions">
+      <a class="tw-btn-secondary" href="{% url 'gameplay:oath_grove' %}">前往结义林</a>
     </div>
   </div>
 
-  <section class="card">
-    {% if prisoners %}
-      <table class="table">
-        <thead>
-          <tr>
-            <th>囚徒</th>
-            <th>稀有度</th>
-            <th>忠诚</th>
-            <th>原属</th>
-            <th>俘获时间</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for p in prisoners %}
-          <tr>
-            <td>{{ p.display_name }}</td>
-            <td>{{ p.guest_template.rarity }}</td>
-            <td>{{ p.loyalty }}</td>
-            <td>{{ p.original_manor.display_name }}</td>
-            <td>{% if p.captured_at %}{{ p.captured_at|date:"Y-m-d H:i" }}{% endif %}</td>
-            <td>
-              <form method="post" action="{% url 'gameplay:draw_pie_view' p.id %}" style="display:inline;">
-                {% csrf_token %}
-                <button type="submit" class="btn-secondary">画饼</button>
-              </form>
-              <form method="post" action="{% url 'gameplay:recruit_prisoner_view' p.id %}" style="display:inline;">
-                {% csrf_token %}
-                <button type="submit" class="btn-primary">招募</button>
-              </form>
-              <form method="post" action="{% url 'gameplay:release_prisoner_view' p.id %}" style="display:inline;">
-                {% csrf_token %}
-                <button type="submit" class="btn-secondary">释放</button>
-              </form>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p class="empty-state">当前没有囚徒。</p>
-    {% endif %}
-    <p class="muted-text" style="margin-top: 0.8rem;">提示：监牢满员时不会进行俘获判定，也不会有任何补偿。</p>
+  <section class="tw-panel">
+    <div class="tw-panel-content">
+      {% if prisoners %}
+        <div class="tw-table-wrapper">
+          <table class="tw-table">
+            <thead>
+              <tr>
+                <th>囚徒</th>
+                <th>稀有度</th>
+                <th>忠诚</th>
+                <th>原属</th>
+                <th>俘获时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in prisoners %}
+              <tr>
+                <td class="font-semibold">{{ p.display_name }}</td>
+                <td>{{ p.guest_template.rarity }}</td>
+                <td>{{ p.loyalty }}</td>
+                <td>{{ p.original_manor.display_name }}</td>
+                <td class="text-text-muted text-sm">{% if p.captured_at %}{{ p.captured_at|date:"Y-m-d H:i" }}{% endif %}</td>
+                <td>
+                  <div class="flex gap-2 flex-wrap">
+                    <form method="post" action="{% url 'gameplay:draw_pie_view' p.id %}" class="inline">
+                      {% csrf_token %}
+                      <button type="submit" class="tw-btn-secondary tw-btn-sm">画饼</button>
+                    </form>
+                    <form method="post" action="{% url 'gameplay:recruit_prisoner_view' p.id %}" class="inline">
+                      {% csrf_token %}
+                      <button type="submit" class="tw-btn-primary tw-btn-sm">招募</button>
+                    </form>
+                    <form method="post" action="{% url 'gameplay:release_prisoner_view' p.id %}" class="inline">
+                      {% csrf_token %}
+                      <button type="submit" class="tw-btn-secondary tw-btn-sm">释放</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="tw-empty-state">当前没有囚徒。</p>
+      {% endif %}
+      <p class="tw-muted text-sm mt-4">提示：监牢满员时不会进行俘获判定，也不会有任何补偿。</p>
+    </div>
   </section>
 </section>
 {% endblock %}

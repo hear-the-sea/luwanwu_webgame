@@ -9,6 +9,7 @@
 """
 import math
 
+
 def calculate_upgrade_details(base_cost, cost_growth, base_time, time_growth, max_level):
     """计算每一级的详细数据"""
     levels = []
@@ -40,6 +41,7 @@ def calculate_upgrade_details(base_cost, cost_growth, base_time, time_growth, ma
         'total_days': total_time / 86400,
         'last_level_cost': levels[-1]['cost'],
     }
+
 
 # 目标：最后一级2000万银两
 TARGET_LAST_LEVEL_COST = 20_000_000

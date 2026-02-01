@@ -1,11 +1,10 @@
-# 历史人物门客 - 宋辽金元（第07批：绿色50人；key 0309-0358）
-
 heroes:
   green:
   - key: hist_songliaojinyuan_0309
     name: 萧干
+    default_gender: male
     archetype: military
-    flavor: '（?-1122年）辽朝名将，忠臣。他在辽朝灭亡之际仍坚持抵抗，最终战死，忠烈可嘉。'
+    flavor: （?-1122年）辽朝名将，忠臣。他在辽朝灭亡之际仍坚持抵抗，最终战死，忠烈可嘉。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -16,8 +15,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0310
     name: 耶律燕山
+    default_gender: male
     archetype: military
-    flavor: '（?-约1125年）辽朝宗室，抗金将领。他在辽亡后仍坚持抵抗金朝，是契丹人的骄傲。'
+    flavor: （?-约1125年）辽朝宗室，抗金将领。他在辽亡后仍坚持抵抗金朝，是契丹人的骄傲。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -28,8 +28,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0311
     name: 萧昱
+    default_gender: male
     archetype: civil
-    flavor: '（?-约1100年）辽朝名臣，汉化推动者。他精通汉学，推动辽朝政治制度改革。'
+    flavor: （?-约1100年）辽朝名臣，汉化推动者。他精通汉学，推动辽朝政治制度改革。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。其改革思路在辽史研究中亦常被讨论。
     growth_range:
     - 4
     - 7
@@ -40,8 +41,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0312
     name: 刘六符
+    default_gender: male
     archetype: civil
-    flavor: '（?-约1040年）辽朝汉臣，外交使者。他多次出使宋朝，精通外交事务。'
+    flavor: （?-约1040年）辽朝汉臣，外交使者。他多次出使宋朝，精通外交事务。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。其外交活动在后世研究辽宋关系时多被引用。
     growth_range:
     - 4
     - 7
@@ -52,8 +54,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0313
     name: 耶律化哥
+    default_gender: male
     archetype: military
-    flavor: '（?-约1050年）辽朝名将，南京留守。他镇守南疆多年，维护辽宋边境安宁。'
+    flavor: （?-约1050年）辽朝名将，南京留守。他镇守南疆多年，维护辽宋边境安宁。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。其守边事迹被视为南疆稳定的重要注脚。
     growth_range:
     - 4
     - 7
@@ -64,8 +67,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0314
     name: 萧得里底
+    default_gender: male
     archetype: military
-    flavor: '（?-约1115年）辽朝将领，抗金先驱。他在金朝崛起时抵抗金军，表现英勇。'
+    flavor: （?-约1115年）辽朝将领，抗金先驱。他在金朝崛起时抵抗金军，表现英勇。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。其抗金经历在军史中亦常被提及。
     growth_range:
     - 4
     - 7
@@ -76,8 +80,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0315
     name: 耶律涅里
+    default_gender: male
     archetype: civil
-    flavor: '（?-约1060年）辽朝宗室，政治家。他参与朝政，是辽朝中期的重要人物。'
+    flavor: （?-约1060年）辽朝宗室，政治家。他参与朝政，是辽朝中期的重要人物。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。其政治作为在后世整理中亦被多次提及。
     growth_range:
     - 4
     - 7
@@ -88,8 +93,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0316
     name: 张孝杰
+    default_gender: male
     archetype: civil
-    flavor: '（?-约1080年）辽朝汉臣，权臣。他在辽朝中期位高权重，影响朝政。'
+    flavor: （?-约1080年）辽朝汉臣，权臣。他在辽朝中期位高权重，影响朝政。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。其权势兴衰为后世研究提供了素材。
     growth_range:
     - 4
     - 7
@@ -100,8 +106,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0317
     name: 耶律俨
+    default_gender: male
     archetype: civil
-    flavor: '（?-约1110年）辽朝史学家。他编修辽朝国史，为辽史研究提供了重要资料。'
+    flavor: （?-约1110年）辽朝史学家。他编修辽朝国史，为辽史研究提供了重要资料。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。其史学贡献在后世修史时也被重视。
     growth_range:
     - 4
     - 7
@@ -112,8 +119,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0318
     name: 李继迁
+    default_gender: male
     archetype: military
-    flavor: '（963年-1004年）西夏奠基者，李元昊的祖父。他割据西北，与宋辽两大帝国周旋。他的努力为李元昊建国奠定了基础，是党项族崛起的关键人物。'
+    flavor: （963年-1004年）西夏奠基者，李元昊的祖父。他割据西北，与宋辽两大帝国周旋。他的努力为李元昊建国奠定了基础，是党项族崛起的关键人物。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -124,8 +132,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0319
     name: 李德明
+    default_gender: male
     archetype: military
-    flavor: '（981年-1032年）李继迁之子，李元昊之父。他巩固西夏政权，发展经济文化，为儿子称帝做好了准备。他是西夏从部落联盟向封建王朝转型的关键人物。'
+    flavor: （981年-1032年）李继迁之子，李元昊之父。他巩固西夏政权，发展经济文化，为儿子称帝做好了准备。他是西夏从部落联盟向封建王朝转型的关键人物。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -136,8 +145,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0320
     name: 李谅祚
+    default_gender: male
     archetype: military
-    flavor: '（1047年-1067年）西夏毅宗，推行汉化政策。他在位期间，西夏进一步封建化，与中原文化交流加深。他是西夏文化发展的重要推动者。'
+    flavor: （1047年-1067年）西夏毅宗，推行汉化政策。他在位期间，西夏进一步封建化，与中原文化交流加深。他是西夏文化发展的重要推动者。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -148,8 +158,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0321
     name: 野利仁荣
+    default_gender: male
     archetype: civil
-    flavor: '（？-1042年）西夏大臣，西夏文字的主要创制者。他与李元昊一起创制西夏文，使党项族拥有了自己的文字。他是西夏文化建设的核心人物。'
+    flavor: （？-1042年）西夏大臣，西夏文字的主要创制者。他与李元昊一起创制西夏文，使党项族拥有了自己的文字。他是西夏文化建设的核心人物。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -160,8 +171,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0322
     name: 李乾顺
+    default_gender: male
     archetype: military
-    flavor: '（1083年-1139年）西夏崇宗，西夏中兴之主。他在位五十四年，是西夏在位最长的皇帝。他整顿内政，与宋金保持和平，使西夏国力恢复。'
+    flavor: （1083年-1139年）西夏崇宗，西夏中兴之主。他在位五十四年，是西夏在位最长的皇帝。他整顿内政，与宋金保持和平，使西夏国力恢复。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -172,8 +184,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0323
     name: 李仁孝
+    default_gender: male
     archetype: civil
-    flavor: '（1124年-1193年）西夏仁宗，西夏文化鼎盛期的皇帝。他在位期间推行汉化，大兴佛教，是西夏最有文化修养的皇帝。'
+    flavor: （1124年-1193年）西夏仁宗，西夏文化鼎盛期的皇帝。他在位期间推行汉化，大兴佛教，是西夏最有文化修养的皇帝。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -184,8 +197,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0324
     name: 任得敬
+    default_gender: male
     archetype: military
-    flavor: '（？-1170年）西夏权臣，企图篡位的外戚。他专权跋扈，妄图分裂西夏，最终被李仁孝诛杀。他的叛乱是西夏内政动荡的缩影。'
+    flavor: （？-1170年）西夏权臣，企图篡位的外戚。他专权跋扈，妄图分裂西夏，最终被李仁孝诛杀。他的叛乱是西夏内政动荡的缩影。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -196,8 +210,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0325
     name: 李安全
+    default_gender: male
     archetype: military
-    flavor: '（？-1211年）西夏襄宗，弑君篡位者。他发动政变夺取皇位，但在蒙古入侵时表现软弱。他的统治加速了西夏的衰落。'
+    flavor: （？-1211年）西夏襄宗，弑君篡位者。他发动政变夺取皇位，但在蒙古入侵时表现软弱。他的统治加速了西夏的衰落。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -208,8 +223,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0326
     name: 李遵顼
+    default_gender: male
     archetype: civil
-    flavor: '（1163年-1226年）西夏神宗，西夏末期皇帝。他是中国历史上唯一的状元皇帝，却在位期间与蒙古反复交战，国力大损。'
+    flavor: （1163年-1226年）西夏神宗，西夏末期皇帝。他是中国历史上唯一的状元皇帝，却在位期间与蒙古反复交战，国力大损。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -220,8 +236,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0327
     name: 李睍
+    default_gender: male
     archetype: military
-    flavor: '（？-1227年）西夏末帝，西夏亡国之君。他在蒙古围城时坚守中兴府，最终城破被俘。他是党项民族最后的皇帝。'
+    flavor: （？-1227年）西夏末帝，西夏亡国之君。他在蒙古围城时坚守中兴府，最终城破被俘。他是党项民族最后的皇帝。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -232,8 +249,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0328
     name: 嵬名安惠
+    default_gender: male
     archetype: military
-    flavor: '（生卒年不详）西夏重臣，抗蒙英雄。他在西夏末年抵抗蒙古入侵，力战不屈。他的忠勇代表了党项人的骨气。'
+    flavor: （生卒年不详）西夏重臣，抗蒙英雄。他在西夏末年抵抗蒙古入侵，力战不屈。他的忠勇代表了党项人的骨气。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -244,8 +262,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0329
     name: 斡道冲
+    default_gender: male
     archetype: civil
-    flavor: '（？-1183年）西夏名臣，学者。他精通汉学，推动西夏文化发展。他是西夏汉化进程的重要人物。'
+    flavor: （？-1183年）西夏名臣，学者。他精通汉学，推动西夏文化发展。他是西夏汉化进程的重要人物。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -256,8 +275,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0330
     name: 李秉常
+    default_gender: male
     archetype: military
-    flavor: '（1061年-1086年）西夏惠宗，幼年即位的皇帝。他母亲梁太后摄政，与宋朝关系紧张。他试图亲政却被软禁，抑郁而终。'
+    flavor: （1061年-1086年）西夏惠宗，幼年即位的皇帝。他母亲梁太后摄政，与宋朝关系紧张。他试图亲政却被软禁，抑郁而终。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -268,8 +288,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0331
     name: 梁太后
+    default_gender: female
     archetype: civil
-    flavor: '（？-1099年）西夏惠宗之母，摄政者。她主政期间与宋朝多次交战，维护了西夏的独立。她是西夏历史上最有权势的女性。'
+    flavor: （？-1099年）西夏惠宗之母，摄政者。她主政期间与宋朝多次交战，维护了西夏的独立。她是西夏历史上最有权势的女性。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -280,8 +301,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0332
     name: 没藏讹庞
+    default_gender: male
     archetype: military
-    flavor: '（？-1048年）西夏权臣，李元昊的外戚。他专权跋扈，企图控制朝政。他被李谅祚诛杀，是西夏早期权臣政治的代表。'
+    flavor: （？-1048年）西夏权臣，李元昊的外戚。他专权跋扈，企图控制朝政。他被李谅祚诛杀，是西夏早期权臣政治的代表。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -292,8 +314,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0333
     name: 野利遇乞
+    default_gender: male
     archetype: military
-    flavor: '（？-1042年）西夏名将，野利仁荣之兄。他骁勇善战，是李元昊时期的重要将领。他在对宋战争中屡立战功。'
+    flavor: （？-1042年）西夏名将，野利仁荣之兄。他骁勇善战，是李元昊时期的重要将领。他在对宋战争中屡立战功。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -304,8 +327,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0334
     name: 李察哥
+    default_gender: male
     archetype: military
-    flavor: '（？-约1044年）西夏宗室，名将。他在好水川、定川寨之战中击败宋军，是西夏军事的重要人物。'
+    flavor: （？-约1044年）西夏宗室，名将。他在好水川、定川寨之战中击败宋军，是西夏军事的重要人物。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -316,8 +340,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0335
     name: 曹玮仁
+    default_gender: male
     archetype: military
-    flavor: '（生卒年不详）西夏将领，抗蒙英雄。他在西夏末年坚守城池，抵抗蒙古入侵。他是党项民族最后的守卫者之一。'
+    flavor: （生卒年不详）西夏将领，抗蒙英雄。他在西夏末年坚守城池，抵抗蒙古入侵。他是党项民族最后的守卫者之一。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -328,8 +353,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0336
     name: 李彦宗
+    default_gender: male
     archetype: civil
-    flavor: '（生卒年不详）西夏宗室，出使大臣。他多次出使宋朝，维护西夏外交利益。他是西夏外交史上的重要人物。'
+    flavor: （生卒年不详）西夏宗室，出使大臣。他多次出使宋朝，维护西夏外交利益。他是西夏外交史上的重要人物。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -340,8 +366,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0337
     name: 完颜宗望
+    default_gender: male
     archetype: military
-    flavor: '（？-1127年）金朝开国名将，靖康之变的主导者之一。他攻陷燕京，俘虏宋徽宗宋钦宗，将他们押往五国城。他是金朝灭北宋的功臣，也是宋人的噩梦。'
+    flavor: （？-1127年）金朝开国名将，靖康之变的主导者之一。他攻陷燕京，俘虏宋徽宗宋钦宗，将他们押往五国城。他是金朝灭北宋的功臣，也是宋人的噩梦。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -352,8 +379,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0338
     name: 完颜宗翰
+    default_gender: male
     archetype: military
-    flavor: '（1080年-1137年）金朝开国名将，与完颜宗望并称。他策划并实施了靖康之变，攻破北宋首都。他是金朝建立初期最重要的军事统帅之一。'
+    flavor: （1080年-1137年）金朝开国名将，与完颜宗望并称。他策划并实施了靖康之变，攻破北宋首都。他是金朝建立初期最重要的军事统帅之一。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -364,8 +392,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0339
     name: 完颜亮
+    default_gender: male
     archetype: military
-    flavor: '（1122年-1161年）金海陵王，迁都燕京的皇帝。他雄心勃勃，发动南侵却在采石矶惨败。他残暴多疑，最终被部下所杀。他的失败标志着金朝由盛转衰。'
+    flavor: （1122年-1161年）金海陵王，迁都燕京的皇帝。他雄心勃勃，发动南侵却在采石矶惨败。他残暴多疑，最终被部下所杀。他的失败标志着金朝由盛转衰。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -376,8 +405,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0340
     name: 完颜雍
+    default_gender: male
     archetype: civil
-    flavor: '（1123年-1189年）金世宗，金朝中兴之主。他推行汉法，减轻赋税，创造了"大定之治"。他与南宋讲和，使金朝获得了难得的和平发展时期。'
+    flavor: （1123年-1189年）金世宗，金朝中兴之主。他推行汉法，减轻赋税，创造了"大定之治"。他与南宋讲和，使金朝获得了难得的和平发展时期。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -388,8 +418,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0341
     name: 元好问
+    default_gender: male
     archetype: civil
-    flavor: '（1190年-1257年）金末元初文学家，词曲皆精的大家。"问世间情为何物，直教生死相许"——他的《雁丘词》千古传诵。他亲历国亡家破，诗词中充满了家国之痛。'
+    flavor: （1190年-1257年）金末元初文学家，词曲皆精的大家。"问世间情为何物，直教生死相许"——他的《雁丘词》千古传诵。他亲历国亡家破，诗词中充满了家国之痛。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -400,8 +431,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0342
     name: 完颜陈和尚
+    default_gender: male
     archetype: military
-    flavor: '（1192年-1232年）金末名将，抗蒙英雄。三峰山之战，他率军死战，最终力竭被俘，坚贞不屈而死。他是金朝末年最杰出的将领，忠勇可嘉。'
+    flavor: （1192年-1232年）金末名将，抗蒙英雄。三峰山之战，他率军死战，最终力竭被俘，坚贞不屈而死。他是金朝末年最杰出的将领，忠勇可嘉。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -412,8 +444,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0343
     name: 完颜守绪
+    default_gender: male
     archetype: military
-    flavor: '（1198年-1234年）金哀宗，金朝末代皇帝。他在蔡州被宋蒙联军围困，城破自缢。他的悲剧标志着女真金朝的终结。'
+    flavor: （1198年-1234年）金哀宗，金朝末代皇帝。他在蔡州被宋蒙联军围困，城破自缢。他的悲剧标志着女真金朝的终结。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -424,8 +457,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0344
     name: 完颜吴乞买
+    default_gender: male
     archetype: military
-    flavor: '（1075年-1135年）金太宗，金朝第二位皇帝。他继承阿骨打的事业，灭亡北宋，俘虏徽钦二帝。他奠定了金朝百年基业，是女真崛起的重要推手。'
+    flavor: （1075年-1135年）金太宗，金朝第二位皇帝。他继承阿骨打的事业，灭亡北宋，俘虏徽钦二帝。他奠定了金朝百年基业，是女真崛起的重要推手。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -436,8 +470,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0345
     name: 完颜晟
+    default_gender: male
     archetype: civil
-    flavor: '（1119年-1150年）金熙宗，金朝第三位皇帝。他推行汉化改革，改官制、建礼仪。虽然晚年昏庸，却为金朝的封建化进程做出了贡献。'
+    flavor: （1119年-1150年）金熙宗，金朝第三位皇帝。他推行汉化改革，改官制、建礼仪。虽然晚年昏庸，却为金朝的封建化进程做出了贡献。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -448,8 +483,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0346
     name: 完颜璟
+    default_gender: male
     archetype: civil
-    flavor: '（1168年-1208年）金章宗，金朝文化鼎盛时期的皇帝。他精通诗词书画，在位期间金朝文化达到顶峰。"泰和体"诗歌成为一代风尚。'
+    flavor: （1168年-1208年）金章宗，金朝文化鼎盛时期的皇帝。他精通诗词书画，在位期间金朝文化达到顶峰。"泰和体"诗歌成为一代风尚。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -460,8 +496,9 @@ heroes:
       agility: 12
   - key: hist_songliaojinyuan_0347
     name: 完颜珣
+    default_gender: male
     archetype: military
-    flavor: '（1163年-1224年）金宣宗，金朝后期皇帝。他迁都南京，力图挽救金朝颓势。虽然未能阻止蒙古的进攻，却为金朝延续了十余年国祚。'
+    flavor: （1163年-1224年）金宣宗，金朝后期皇帝。他迁都南京，力图挽救金朝颓势。虽然未能阻止蒙古的进攻，却为金朝延续了十余年国祚。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -472,8 +509,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0348
     name: 完颜永济
+    default_gender: male
     archetype: military
-    flavor: '（?-1213年）金卫绍王，即位不久即被蒙古击败。他的软弱加速了金朝的衰落，最终被权臣所弑。'
+    flavor: （?-1213年）金卫绍王，即位不久即被蒙古击败。他的软弱加速了金朝的衰落，最终被权臣所弑。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -484,8 +522,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0349
     name: 完颜娄室
+    default_gender: male
     archetype: military
-    flavor: '（1077年-1130年）金朝开国名将，与完颜宗翰齐名。他征战四方，攻灭辽朝残余势力，是金朝建立初期的重要军事支柱。'
+    flavor: （1077年-1130年）金朝开国名将，与完颜宗翰齐名。他征战四方，攻灭辽朝残余势力，是金朝建立初期的重要军事支柱。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -496,8 +535,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0350
     name: 完颜斡鲁
+    default_gender: male
     archetype: military
-    flavor: '（?-1127年）金朝名将，灭辽功臣。他参与了对辽朝的多次征战，是金朝建国时期的重要将领。'
+    flavor: （?-1127年）金朝名将，灭辽功臣。他参与了对辽朝的多次征战，是金朝建国时期的重要将领。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -508,8 +548,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0351
     name: 完颜杲
+    default_gender: male
     archetype: military
-    flavor: '（1068年-1123年）金朝开国功臣，完颜阿骨打之弟。他在灭辽战争中屡立战功，是金朝建立的重要推动者。'
+    flavor: （1068年-1123年）金朝开国功臣，完颜阿骨打之弟。他在灭辽战争中屡立战功，是金朝建立的重要推动者。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -520,8 +561,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0352
     name: 完颜银术可
+    default_gender: male
     archetype: military
-    flavor: '（?-1140年）金朝名将，完颜宗弼的部将。他在对宋战争中屡建奇功，是金军南侵的重要将领。'
+    flavor: （?-1140年）金朝名将，完颜宗弼的部将。他在对宋战争中屡建奇功，是金军南侵的重要将领。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -532,8 +574,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0353
     name: 完颜昂
+    default_gender: male
     archetype: military
-    flavor: '（?-1162年）金朝宗室，完颜亮的心腹。他参与了完颜亮的政变与南侵，最终与完颜亮一同覆灭。'
+    flavor: （?-1162年）金朝宗室，完颜亮的心腹。他参与了完颜亮的政变与南侵，最终与完颜亮一同覆灭。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -544,8 +587,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0354
     name: 完颜合达
+    default_gender: male
     archetype: military
-    flavor: '（?-1232年）金朝末年名将，与完颜陈和尚并称。他在抗蒙战争中表现英勇，三峰山之战力战不屈，最终壮烈殉国。'
+    flavor: （?-1232年）金朝末年名将，与完颜陈和尚并称。他在抗蒙战争中表现英勇，三峰山之战力战不屈，最终壮烈殉国。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -556,8 +600,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0355
     name: 完颜仲德
+    default_gender: male
     archetype: military
-    flavor: '（?-1234年）金朝末年将领，蔡州保卫战的英雄。他在金朝最后时刻坚守蔡州，与城共亡，展现了女真人的骨气。'
+    flavor: （?-1234年）金朝末年将领，蔡州保卫战的英雄。他在金朝最后时刻坚守蔡州，与城共亡，展现了女真人的骨气。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -568,8 +613,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0356
     name: 完颜承裔
+    default_gender: male
     archetype: military
-    flavor: '（?-1230年）金朝名将，抗蒙英雄。他在河北抵抗蒙古入侵，多次击退敌军。他的坚守为金朝争取了宝贵时间。'
+    flavor: （?-1230年）金朝名将，抗蒙英雄。他在河北抵抗蒙古入侵，多次击退敌军。他的坚守为金朝争取了宝贵时间。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -580,8 +626,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0357
     name: 蒲察官奴
+    default_gender: male
     archetype: military
-    flavor: '（?-1233年）金朝末年将领，归德保卫战的英雄。他以少胜多，多次击败蒙军。最终城破殉国，忠烈可嘉。'
+    flavor: （?-1233年）金朝末年将领，归德保卫战的英雄。他以少胜多，多次击败蒙军。最终城破殉国，忠烈可嘉。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7
@@ -592,8 +639,9 @@ heroes:
       agility: 16
   - key: hist_songliaojinyuan_0358
     name: 粘罕
+    default_gender: male
     archetype: military
-    flavor: '（1080年-1137年）即完颜宗翰，金朝开国元勋。他是灭辽灭宋的主帅，靖康之变的策划者。他对金朝的建立与扩张贡献最大。'
+    flavor: （1080年-1137年）即完颜宗翰，金朝开国元勋。他是灭辽灭宋的主帅，靖康之变的策划者。他对金朝的建立与扩张贡献最大。其事迹在史籍与地方文献中多有记载，后世评述亦多，影响延续至今。其相关事功在后世整理时常被引述，成为研究该时期的重要线索。
     growth_range:
     - 4
     - 7

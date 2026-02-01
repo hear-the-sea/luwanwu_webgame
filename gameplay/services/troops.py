@@ -143,7 +143,6 @@ def _return_surviving_troops_batch(
         return
 
     from battle.troops import load_troop_templates
-    from ..models import PlayerTroop
 
     if not report:
         # 没有战报（撤退等情况），全部归还
@@ -208,7 +207,10 @@ def _add_troops_batch(manor: "Manor", troops_to_add: Dict[str, int]) -> None:
         troops_to_add: 要添加的护院配置 {troop_key: count}
 
     注意：此函数假设调用者已经持有适当的事务锁
+
+    安全修复：使用 update_or_create 确保原子性，避免并发创建导致的护院复制漏洞
     """
+    from django.db import IntegrityError
     from battle.models import TroopTemplate
     from ..models import PlayerTroop
 
@@ -226,15 +228,6 @@ def _add_troops_batch(manor: "Manor", troops_to_add: Dict[str, int]) -> None:
     if not templates:
         return
 
-    # 预加载现有护院（使用 select_for_update 锁定）
-    existing = {
-        pt.troop_template.key: pt
-        for pt in PlayerTroop.objects.select_for_update()
-        .filter(manor=manor, troop_template__key__in=troops_to_add.keys())
-        .select_related("troop_template")
-    }
-
-    to_create = []
     now = timezone.now()
 
     for key, count in troops_to_add.items():
@@ -242,30 +235,30 @@ def _add_troops_batch(manor: "Manor", troops_to_add: Dict[str, int]) -> None:
         if not template:
             continue
 
-        if key in existing:
-            # 使用 F() 表达式进行原子更新，避免并发冲突
-            PlayerTroop.objects.filter(
-                pk=existing[key].pk
-            ).update(
-                count=F("count") + count,
-                updated_at=now
-            )
-        else:
-            to_create.append(
-                PlayerTroop(
+        # 安全修复：使用原子性的 update_or_create 操作
+        # 先尝试使用 F() 表达式更新（最高效）
+        updated = PlayerTroop.objects.filter(
+            manor=manor,
+            troop_template=template
+        ).update(
+            count=F("count") + count,
+            updated_at=now
+        )
+
+        # 如果没有更新到任何行，说明记录不存在，需要创建
+        if not updated:
+            try:
+                PlayerTroop.objects.create(
                     manor=manor,
                     troop_template=template,
                     count=count,
                 )
-            )
-
-    if to_create:
-        try:
-            PlayerTroop.objects.bulk_create(to_create, ignore_conflicts=True)
-        except Exception:
-            # 并发创建时回退到逐个处理
-            for pt in to_create:
-                PlayerTroop.objects.filter(manor=manor, troop_template=pt.troop_template).update(
-                    count=F("count") + pt.count,
-                    updated_at=now,
+            except IntegrityError:
+                # 并发创建冲突，改用更新
+                PlayerTroop.objects.filter(
+                    manor=manor,
+                    troop_template=template
+                ).update(
+                    count=F("count") + count,
+                    updated_at=now
                 )

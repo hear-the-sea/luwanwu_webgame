@@ -243,6 +243,8 @@ body {
   padding: 8px;
   background-color: var(--bg-secondary);
   flex: 1;
+  min-width: 0; /* 防止溢出 */
+  overflow: hidden;
 }
 
 /* 全宽布局 (无侧边栏) */
@@ -253,6 +255,8 @@ body {
   padding: 8px;
   background-color: var(--bg-secondary);
   flex: 1;
+  min-width: 0; /* 防止溢出 */
+  overflow: hidden;
 }
 
 /* 左侧边栏 */
@@ -260,6 +264,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0; /* 防止溢出 */
 }
 
 /* 通用面板样式 */
@@ -268,6 +273,8 @@ body {
   border: 1px solid var(--border-primary);
   padding: 2px;
   box-shadow: inset 0 0 0 1px #F0E5CA;
+  min-width: 0; /* 防止溢出 */
+  overflow: hidden;
 }
 
 .panel-header {
@@ -340,6 +347,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0; /* 防止 grid/flex 子元素溢出 */
+  overflow: hidden; /* 确保内容不会超出 */
 }
 
 /* 资源状态栏 (底部) */
@@ -1987,31 +1996,32 @@ a.rarity-text:hover {
   color: #ea580c !important;
 }
 
-.rarity-black {
+/* 稀有度圆点背景色 - 仅用于 .rarity-dot */
+.rarity-dot.rarity-black {
   background: #1a1a1a;
 }
 
-.rarity-gray {
+.rarity-dot.rarity-gray {
   background: #666;
 }
 
-.rarity-green {
+.rarity-dot.rarity-green {
   background: #10b981;
 }
 
-.rarity-blue {
+.rarity-dot.rarity-blue {
   background: #2563eb;
 }
 
-.rarity-red {
+.rarity-dot.rarity-red {
   background: var(--accent-red);
 }
 
-.rarity-purple {
+.rarity-dot.rarity-purple {
   background: #7c3aed;
 }
 
-.rarity-orange {
+.rarity-dot.rarity-orange {
   background: #ea580c;
 }
 
@@ -2248,7 +2258,7 @@ a.rarity-text:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
+  border-radius: 8px;
   border: 2px solid var(--border-primary);
   background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-card) 100%);
   font-size: 1.5rem;
@@ -2263,7 +2273,7 @@ a.rarity-text:hover {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 50%;
+  border-radius: 6px;
 }
 
 .guest-avatar:hover {

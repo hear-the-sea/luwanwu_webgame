@@ -454,20 +454,22 @@ def recruit_guest(manor: Manor, pool: RecruitmentPool, seed: int | None = None) 
     Returns:
         招募得到的候选门客列表
     """
-    # 如果存在候选门客，先清空（防止玩家绕过前端确认）
-    manor.candidates.all().delete()
-
     cost = pool.cost or {}
     if cost:
         from gameplay.models import ResourceEvent
         from gameplay.services.resources import spend_resources
 
+        # 并发安全修复：先检查资源是否足够再删除候选
+        # 避免资源不足时候选已被删除的问题
         spend_resources(
             manor,
             cost,
             note=f"卡池：{pool.name}",
             reason=ResourceEvent.Reason.RECRUIT_COST,
         )
+
+    # 资源扣除成功后再清空候选门客（防止玩家绕过前端确认）
+    manor.candidates.all().delete()
     pool_entries = list(pool.entries.select_related("template"))
     rng = random.Random(seed)
     candidates_to_create: List[RecruitmentCandidate] = []
@@ -523,7 +525,10 @@ def finalize_candidate(candidate: RecruitmentCandidate) -> Guest:
     Raises:
         ValueError: 庄园容量已满时抛出
     """
-    manor = candidate.manor
+    from gameplay.models import Manor
+
+    # 使用 select_for_update 锁定庄园，防止并发超出容量
+    manor = Manor.objects.select_for_update().get(pk=candidate.manor_id)
     capacity = manor.guest_capacity
     current = manor.guests.count()
     if current >= capacity:
@@ -567,8 +572,10 @@ def bulk_finalize_candidates(
     if not candidates:
         return [], []
 
-    # 获取庄园信息（假设所有候选属于同一庄园）
-    manor = candidates[0].manor
+    from gameplay.models import Manor
+
+    # 使用 select_for_update 锁定庄园，防止并发超出容量
+    manor = Manor.objects.select_for_update().get(pk=candidates[0].manor_id)
     capacity = manor.guest_capacity
     current_count = manor.guests.count()
     available_slots = capacity - current_count

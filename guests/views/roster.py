@@ -283,26 +283,30 @@ class GuestDetailView(LoginRequiredMixin, TemplateView):
 @login_required
 @require_POST
 def dismiss_guest_view(request, pk: int):
+    from django.db import transaction
     from gameplay.services.manor import ensure_manor
 
     manor = ensure_manor(request.user)
     guest = get_object_or_404(manor.guests, pk=pk)
     gear_items = list(guest.gear_items.select_related("template"))
     gear_summary = Counter(gear.template.name for gear in gear_items)
-    if gear_items:
-        from ..services import unequip_guest_item
-
-        errors = []
-        for gear in gear_items:
-            try:
-                unequip_guest_item(gear, guest)
-            except (GameError, ValueError) as exc:
-                errors.append(sanitize_error_message(exc))
     guest_name = guest.display_name
-    guest.delete()
-    if gear_items and errors:
-        messages.warning(request, f"已辞退 {guest_name}，但部分装备未能返还：{'；'.join(errors)}")
-    elif gear_items:
+
+    # 使用事务确保装备卸下和门客删除的原子性
+    try:
+        with transaction.atomic():
+            if gear_items:
+                from ..services import unequip_guest_item
+
+                for gear in gear_items:
+                    # 如果任何装备卸下失败，整个事务回滚
+                    unequip_guest_item(gear, guest)
+            guest.delete()
+    except (GameError, ValueError) as exc:
+        messages.error(request, f"辞退失败：{sanitize_error_message(exc)}")
+        return redirect("guests:detail", pk=pk)
+
+    if gear_items:
         readable = "、".join(
             f"{name} x{count}" if count > 1 else name for name, count in gear_summary.items()
         )

@@ -5,49 +5,49 @@
 
 {% block content %}
 <section class="dashboard">
-    <div class="section-header">
+    <div class="tw-section-header">
         <div>
             <h1>成员申请</h1>
-            <p>{{ guild.name }} · 待审批：{{ applications.count }}</p>
+            <p class="caption">{{ guild.name }} · 待审批：{{ applications.count }}</p>
         </div>
-        <div class="nav-links">
-            <a href="{% url 'guilds:members' %}" class="btn-secondary">成员列表</a>
-            <a href="{% url 'guilds:detail' guild.id %}" class="btn-secondary">返回帮会</a>
+        <div class="flex gap-2">
+            <a href="{% url 'guilds:members' %}" class="tw-btn-secondary">成员列表</a>
+            <a href="{% url 'guilds:detail' guild.id %}" class="tw-btn-primary">返回帮会</a>
         </div>
     </div>
 
-    <section class="card">
+    <section class="tw-card">
         <h2>待审批申请</h2>
         {% if applications %}
-            <div style="display: flex; flex-direction: column; gap: 1rem;">
+            <div class="flex flex-col gap-4">
                 {% for app in applications %}
-                <div class="guild-application-card">
-                    <div class="guild-application-header">
+                <div class="tw-guild-application-card">
+                    <div class="tw-guild-application-header">
                         <div>
-                            <h3 style="margin: 0 0 0.5rem 0; font-size: 1.2rem;">{{ app.applicant.username }}</h3>
-                            <p class="muted-text" style="margin: 0;">申请时间：{{ app.created_at|date:"Y-m-d H:i" }}</p>
+                            <h3 class="m-0 mb-2 text-lg">{{ app.applicant.username }}</h3>
+                            <p class="tw-muted m-0">申请时间：{{ app.created_at|date:"Y-m-d H:i" }}</p>
                         </div>
-                        <div class="guild-application-actions">
+                        <div class="tw-guild-application-actions">
                             <form method="post" action="{% url 'guilds:approve_application' app.id %}">
                                 {% csrf_token %}
-                                <button type="submit" class="btn-primary" {% if guild.current_member_count >= guild.member_capacity %}disabled title="成员已满"{% endif %}>
+                                <button type="submit" class="tw-btn-primary" {% if guild.current_member_count >= guild.member_capacity %}disabled title="成员已满"{% endif %}>
                                     通过
                                 </button>
                             </form>
-                            <button type="button" class="btn-secondary" onclick="showRejectModal({{ app.id }}, '{{ app.applicant.username }}')">
+                            <button type="button" class="tw-btn-secondary" onclick="showRejectModal({{ app.id }}, '{{ app.applicant.username }}')">
                                 拒绝
                             </button>
                         </div>
                     </div>
                     {% if app.message %}
-                        <div class="guild-application-message">
+                        <div class="tw-guild-application-message">
                             "{{ app.message }}"
                         </div>
                     {% else %}
-                        <p class="muted-text" style="margin: 0;">未留言</p>
+                        <p class="tw-muted m-0">未留言</p>
                     {% endif %}
                     {% if guild.current_member_count >= guild.member_capacity %}
-                        <div class="guild-warning">
+                        <div class="tw-guild-warning">
                             <p>成员已满，无法通过新申请。请先升级帮会或辞退成员。</p>
                         </div>
                     {% endif %}
@@ -55,28 +55,28 @@
                 {% endfor %}
             </div>
         {% else %}
-            <p class="muted-text">暂无待审批的申请</p>
+            <p class="tw-muted">暂无待审批的申请</p>
         {% endif %}
     </section>
 </section>
 
 <!-- 拒绝申请模态框 -->
-<div class="modal-backdrop" id="reject-modal" aria-hidden="true">
-    <div class="modal">
-        <header class="modal-header">
+<div class="tw-modal-overlay" id="reject-modal" style="display: none;">
+    <div class="tw-modal-content">
+        <div class="tw-modal-header">
             <h3>拒绝申请</h3>
-            <button type="button" class="btn-secondary btn-small" onclick="closeRejectModal()">取消</button>
-        </header>
-        <div class="modal-body">
+            <button type="button" class="tw-modal-close" onclick="closeRejectModal()">&times;</button>
+        </div>
+        <div class="tw-modal-body">
             <form method="post" id="reject-form" action="">
                 {% csrf_token %}
-                <p id="reject-target" style="margin-bottom: 1rem; font-weight: 600;"></p>
-                <div class="form-field">
+                <p id="reject-target" class="mb-4 font-bold"></p>
+                <div class="tw-form-field">
                     <label for="note">拒绝原因（选填）</label>
-                    <textarea id="note" name="note" rows="3" placeholder="可以告诉申请者拒绝的原因..."></textarea>
+                    <textarea id="note" name="note" rows="3" placeholder="可以告诉申请者拒绝的原因..." class="tw-input"></textarea>
                 </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn-primary">确认拒绝</button>
+                <div class="flex justify-end gap-2 mt-4">
+                    <button type="submit" class="tw-btn-primary">确认拒绝</button>
                 </div>
             </form>
         </div>
@@ -93,13 +93,11 @@
     function showRejectModal(appId, username) {
         rejectForm.action = `/guilds/applications/${appId}/reject/`;
         rejectTarget.textContent = `确认拒绝 ${username} 的申请吗？`;
-        rejectModal.classList.add('visible');
-        rejectModal.setAttribute('aria-hidden', 'false');
+        rejectModal.style.display = 'flex';
     }
 
     function closeRejectModal() {
-        rejectModal.classList.remove('visible');
-        rejectModal.setAttribute('aria-hidden', 'true');
+        rejectModal.style.display = 'none';
     }
 
     rejectModal?.addEventListener('click', (event) => {

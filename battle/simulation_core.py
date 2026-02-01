@@ -873,6 +873,8 @@ def simulate_battle(
     drop_table: Dict[str, Any] | None = None,
     max_rounds: int = MAX_ROUNDS,
 ) -> BattleSimulationResult:
+    # 防止传入过大的回合数导致性能问题
+    max_rounds = min(max_rounds, MAX_ROUNDS * 2)
     rounds: List[Dict[str, Any]] = []
     priority_rounds, next_round_start = resolve_priority_phases(attacker_units, defender_units, rng)
     rounds.extend(priority_rounds)

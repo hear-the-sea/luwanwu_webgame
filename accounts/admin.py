@@ -11,4 +11,3 @@ class UserAdmin(DjangoUserAdmin):
     )
     list_display = ("username", "email", "title", "is_staff", "date_joined")
     search_fields = ("username", "email", "title")
-

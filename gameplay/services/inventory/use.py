@@ -12,6 +12,7 @@ from django.db import transaction
 
 from core.exceptions import GuestCapacityFullError, ItemNotConfiguredError, ItemNotUsableError
 from gameplay.models import InventoryItem, ItemTemplate, Manor, ResourceEvent
+from guests.models import Guest, GuestStatus
 from gameplay.services.resources import grant_resources
 
 from .core import add_item_to_inventory, consume_inventory_item_locked
@@ -272,10 +273,9 @@ def _validate_guest_item_use(
     action: str,
     deployed_message: str,
     working_message: str,
-) -> tuple[InventoryItem, "Guest"]:
+) -> tuple[InventoryItem, Guest]:
     """校验门客类道具的通用前置条件并加锁。"""
     from core.exceptions import InsufficientStockError
-    from guests.models import Guest, GuestStatus
 
     if not item.pk:
         raise ValueError("物品不存在")
@@ -330,12 +330,17 @@ def use_guest_rebirth_card(manor: Manor, item: InventoryItem, guest_id: int) -> 
 
     gear_items = list(guest.gear_items.select_related("template"))
     unequipped_count = 0
+    unequip_errors = []
     for gear in gear_items:
         try:
             unequip_guest_item(gear, guest)
             unequipped_count += 1
-        except Exception:
-            pass
+        except Exception as e:
+            # 记录装备卸载失败的具体错误，避免装备丢失
+            logger.warning(
+                f"门客重生时装备卸载失败: guest_id={guest.pk}, gear_id={gear.pk}, error={e}"
+            )
+            unequip_errors.append({"gear_id": gear.pk, "error": str(e)})
 
     skills_count = guest.guest_skills.count()
     guest.guest_skills.all().delete()

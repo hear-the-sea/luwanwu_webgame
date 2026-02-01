@@ -12,12 +12,12 @@ def audit() -> None:
     green_count = 0
     total_count = 0
     valid_rarities = {"orange", "purple", "blue", "green"}
-    
+
     # 匹配人物表格行（排除统计表/占位行等非人物行）
     for i, line in enumerate(lines):
         if "|" not in line or "稀有度" in line or "---" in line:
             continue
-        
+
         parts = [p.strip() for p in line.split("|")]
         if len(parts) < 5:
             continue
@@ -26,7 +26,7 @@ def audit() -> None:
         rarity = parts[-2]
         if rarity not in valid_rarities:
             continue
-            
+
         total_count += 1
 
         # 判断是否是绿色门客表格行 (编号在第一列，且是数字)
@@ -48,7 +48,7 @@ def audit() -> None:
         if name in names:
             errors.append(f"行 {i+1}: 重复姓名 '{name}'")
         names.add(name)
-        
+
         if is_green:
             if entry_id in ids:
                 errors.append(f"行 {i+1}: 重复编号 '{entry_id}'")
@@ -56,7 +56,7 @@ def audit() -> None:
 
         # 2. 字数检查 (粗略中文字符统计)
         clean_bio = re.sub(r"[^\u4e00-\u9fa5]", "", bio)
-        if len(clean_bio) < 140: # 150字包含标点，纯中文140算及格线
+        if len(clean_bio) < 140:  # 150字包含标点，纯中文140算及格线
             errors.append(f"行 {i+1}: '{name}' 简介字数不足 ({len(clean_bio)}字)")
 
         # 3. 生卒年格式检查
@@ -77,7 +77,7 @@ def audit() -> None:
         print("✅ 完美！未发现任何合规性问题。")
     else:
         print(f"❌ 发现 {len(errors)} 处错误:")
-        for err in errors[:20]: # 只显示前20个
+        for err in errors[:20]:  # 只显示前20个
             print(err)
 
 

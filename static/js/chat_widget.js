@@ -8,6 +8,30 @@
     return;
   }
 
+  // Performance optimization: throttle function
+  function throttle(fn, delay) {
+    let lastCall = 0;
+    let timeoutId = null;
+    return function(...args) {
+      const now = Date.now();
+      const remaining = delay - (now - lastCall);
+      if (remaining <= 0) {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        lastCall = now;
+        fn.apply(this, args);
+      } else if (!timeoutId) {
+        timeoutId = setTimeout(() => {
+          lastCall = Date.now();
+          timeoutId = null;
+          fn.apply(this, args);
+        }, remaining);
+      }
+    };
+  }
+
   const userId = parseInt(widget.dataset.userId || "0", 10);
   const wsPath = widget.dataset.wsPath || "/ws/chat/world/";
   const scheme = window.location.protocol === "https:" ? "wss" : "ws";
@@ -245,7 +269,8 @@
     if (msgId) {
       if (messageIds.has(msgId)) return;
       messageIds.add(msgId);
-      if (messageIds.size > 800) {
+      // Performance optimization: lower threshold for earlier cleanup
+      if (messageIds.size > 400) {
         // Best-effort cleanup: drop the entire set when it grows too large.
         messageIds.clear();
         messageIds.add(msgId);
@@ -539,14 +564,15 @@
 
   document.addEventListener("mousedown", (e) => {
     if (!isOpen) return;
-    if (widget.contains(e.target)) return;
+    if (e.target && widget.contains(e.target)) return;
     setOpen(false);
   });
 
-  window.addEventListener("resize", () => {
+  // Performance optimization: throttled resize handler
+  window.addEventListener("resize", throttle(() => {
     ensureWidgetInViewport();
     layoutPanel();
-  });
+  }, 100));
 
   loadWidgetPos();
   loadUnreadDot();

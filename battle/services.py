@@ -69,8 +69,12 @@ def lock_guests_for_battle(guests: List[Guest]) -> Generator[List[Guest], None, 
             if guest.status == GuestStatus.INJURED:
                 raise ValueError(f"门客 {guest.display_name} 处于重伤状态，请先治疗")
 
-        # 将门客状态设为出征中
-        Guest.objects.filter(id__in=guest_ids).update(status=GuestStatus.DEPLOYED)
+        # 安全修复：使用锁定的对象进行批量更新，避免 TOCTOU 漏洞
+        # 直接修改锁定对象的状态，然后 bulk_update
+        for guest in locked_guests:
+            guest.status = GuestStatus.DEPLOYED
+        if locked_guests:
+            Guest.objects.bulk_update(locked_guests, ["status"])
 
         try:
             # 刷新门客对象以反映状态变更

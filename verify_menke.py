@@ -1,9 +1,10 @@
 import re
 import sys
 
+
 def verify_menke_db(file_path):
     print(f"Verifying {file_path}...")
-    
+
     with open(file_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
@@ -29,11 +30,11 @@ def verify_menke_db(file_path):
         "李自成", "余鱼同", "文泰来", "骆冰", "徐天宏", "赵半山", "无尘道长", "白阿绣", "丁不四",
         "丁不三", "贝海石", "梅芳姑", "田归农",
         # Added based on initial read
-        "殷天正", "韦一笑", "谢逊", "金毛狮王", "紫衫龙王", "杨逍", "范遥", "殷梨亭", "莫声谷", 
+        "殷天正", "韦一笑", "谢逊", "金毛狮王", "紫衫龙王", "杨逍", "范遥", "殷梨亭", "莫声谷",
         "宋远桥", "俞莲舟", "张松溪", "俞岱岩", "纪晓芙", "周芷若", "灭绝师太", "方证大师", "冲虚道长",
         "一灯大师", "达摩祖师", "扫地僧", "独孤求败", "东方不败", "天山童姥", "李秋水", "无崖子", "慕容博", "萧远山",
         "黄药师", "欧阳克", "梅超风", "陈玄风", "完颜洪烈", "杨康", "穆念慈", "朱聪", "韩宝驹", "南希仁",
-        "张阿生", "全金发", "韩小莹", "马钰", "丘处机", "谭处端", "刘处玄", "孙不二", "郝大通", "冯默风", 
+        "张阿生", "全金发", "韩小莹", "马钰", "丘处机", "谭处端", "刘处玄", "孙不二", "郝大通", "冯默风",
         "陆乘风", "曲灵风", "朱子柳", "武三通", "杨铁心", "包惜弱", "沙通天", "侯通海", "彭连虎",
         "灵智上人", "李莫愁", "郭芙", "耶律齐", "程英", "陆无双", "霍都", "达尔巴", "裘千尺", "公孙止",
         "公孙绿萼", "郭破虏", "郭襄", "尹志平", "洪凌波", "陆展元", "尹克西", "潇湘子", "武敦儒", "武修文",
@@ -45,10 +46,10 @@ def verify_menke_db(file_path):
     # Parsing tables
     # Format: | 姓名 | 简介 | ...
     table_pattern = re.compile(r'\|\s*(.*?)\s*\|\s*(.*?)\s*\|\s*(.*?)\s*\|\s*(.*?)\s*\|\s*(.*?)\s*\|')
-    
+
     lines = content.split('\n')
     entries = []
-    
+
     # Heuristic: just pattern match lines.
     for line in lines:
         if line.strip().startswith('|') and '---' not in line and '姓名' not in line:
@@ -60,26 +61,26 @@ def verify_menke_db(file_path):
                 typ = match.group(3).strip()
                 rarity = match.group(4).strip()
                 source = match.group(5).strip()
-                
-                if name: # skip empty lines if any
-                     entries.append({
-                        "name": name,
-                        "bio": bio,
-                        "type": typ,
-                        "rarity": rarity,
-                        "source": source
-                    })
+
+                if name:  # skip empty lines if any
+                    entries.append({
+                       "name": name,
+                       "bio": bio,
+                       "type": typ,
+                       "rarity": rarity,
+                       "source": source
+                        })
 
     print(f"Total entries found: {len(entries)}")
-    
+
     issues = []
-    
+
     rarity_counts = {"orange": 0, "purple": 0, "blue": 0, "green": 0}
-    
+
     for entry in entries:
         name = entry['name']
         rarity = entry['rarity']
-        
+
         # Check rarity
         if rarity in rarity_counts:
             rarity_counts[rarity] += 1
@@ -93,10 +94,10 @@ def verify_menke_db(file_path):
                 if keyword in name:
                     issues.append(f"Suspicious name: '{name}' contains '{keyword}'. Check if it's a title.")
                     break
-        
+
         # Check bio length
         if len(entry['bio']) < 50:
-             issues.append(f"Bio too short for {name}: {len(entry['bio'])} chars")
+            issues.append(f"Bio too short for {name}: {len(entry['bio'])} chars")
 
     # Report Stats
     total = len(entries)
@@ -106,10 +107,11 @@ def verify_menke_db(file_path):
         print(f"Purple: {rarity_counts['purple']} ({rarity_counts['purple']/total*100:.1f}%)")
         print(f"Blue: {rarity_counts['blue']} ({rarity_counts['blue']/total*100:.1f}%)")
         print(f"Green: {rarity_counts['green']} ({rarity_counts['green']/total*100:.1f}%)")
-    
+
     print("\nPotential Issues Found:")
     for issue in issues:
         print(f"- {issue}")
+
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:

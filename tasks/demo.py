@@ -11,4 +11,3 @@ logger = logging.getLogger(__name__)
 def ping() -> str:
     logger.info("Demo Celery task executed.")
     return "pong"
-

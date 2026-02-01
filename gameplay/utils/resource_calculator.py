@@ -8,6 +8,9 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Dict, TYPE_CHECKING
 
+from core.utils import safe_int
+from core.utils.time_scale import scale_duration
+
 if TYPE_CHECKING:
     from ..models import Manor
 
@@ -116,11 +119,7 @@ def normalize_mission_loadout(raw: Dict[str, int] | None, troop_templates: Dict)
     loadout = {}
     for key in troop_templates.keys():
         value = raw.get(key, 0)
-        try:
-            parsed = int(value)
-        except (TypeError, ValueError):
-            parsed = 0
-        loadout[key] = max(0, parsed)
+        loadout[key] = safe_int(value, default=0, min_val=0)
 
     return loadout
 
@@ -161,5 +160,7 @@ def calculate_travel_time(base_time: int, guests, troop_loadout: Dict[str, int],
 
     # 总减免时间
     reduction = int((guest_speed * 0.5) + troop_speed)
+    final_time = max(10, max(0, base_time - reduction))
 
-    return max(10, max(0, base_time - reduction))
+    # 应用全局时间流速倍率
+    return scale_duration(final_time, minimum=10)

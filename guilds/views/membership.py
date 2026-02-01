@@ -8,7 +8,7 @@ from django.contrib import messages
 from django.views.decorators.http import require_POST
 
 from core.utils.rate_limit import rate_limit_redirect
-from ..decorators import require_guild_member, require_guild_manager
+from ..decorators import require_guild_member, require_guild_manager, require_guild_leader
 from ..models import Guild, GuildMember, GuildApplication
 from ..services import guild as guild_service
 from ..services import member as member_service
@@ -133,11 +133,15 @@ def member_list(request):
 
 
 @login_required
+@require_guild_manager
 @require_POST
 @rate_limit_redirect("guild_kick", limit=10, window_seconds=60)
 def kick_member(request, member_id):
     """辞退成员"""
-    target_member = get_object_or_404(GuildMember, id=member_id)
+    # 安全修复：在查询时就过滤帮会，防止信息泄露
+    target_member = get_object_or_404(
+        GuildMember, id=member_id, guild_id=request.guild_member.guild_id
+    )
 
     try:
         member_service.kick_member(target_member, request.user)
@@ -149,11 +153,15 @@ def kick_member(request, member_id):
 
 
 @login_required
+@require_guild_leader
 @require_POST
 @rate_limit_redirect("guild_appoint", limit=10, window_seconds=60)
 def appoint_admin(request, member_id):
     """任命管理员"""
-    target_member = get_object_or_404(GuildMember, id=member_id)
+    # 安全修复：在查询时就过滤帮会，防止信息泄露
+    target_member = get_object_or_404(
+        GuildMember, id=member_id, guild_id=request.guild_member.guild_id
+    )
 
     try:
         member_service.appoint_admin(target_member, request.user)
@@ -165,11 +173,15 @@ def appoint_admin(request, member_id):
 
 
 @login_required
+@require_guild_leader
 @require_POST
 @rate_limit_redirect("guild_demote", limit=10, window_seconds=60)
 def demote_admin(request, member_id):
     """罢免管理员"""
-    target_member = get_object_or_404(GuildMember, id=member_id)
+    # 安全修复：在查询时就过滤帮会，防止信息泄露
+    target_member = get_object_or_404(
+        GuildMember, id=member_id, guild_id=request.guild_member.guild_id
+    )
 
     try:
         member_service.demote_admin(target_member, request.user)
@@ -181,13 +193,16 @@ def demote_admin(request, member_id):
 
 
 @login_required
-@require_guild_member
+@require_guild_leader  # 安全修复：只有帮主才能转让，改用 require_guild_leader
 @require_POST
 @rate_limit_redirect("guild_transfer", limit=5, window_seconds=60)
 def transfer_leadership(request, member_id):
     """转让帮主"""
     current_leader = request.guild_member
-    new_leader = get_object_or_404(GuildMember, id=member_id)
+    # 安全修复：在查询时就过滤帮会，防止跨帮会转让
+    new_leader = get_object_or_404(
+        GuildMember, id=member_id, guild_id=current_leader.guild_id
+    )
 
     try:
         member_service.transfer_leadership(current_leader, new_leader)
