@@ -56,7 +56,7 @@ def trace_troop_return(run_id: int):
     print(f"\n3. 战报损失:")
     losses = report.losses or {}
     attacker_losses = losses.get('attacker', {}) or {}
-    casualties = attacker_losses.get('casualties", [])
+    casualties = attacker_losses.get('casualties', [])
 
     if not casualties:
         print(f"   (无伤亡记录)")

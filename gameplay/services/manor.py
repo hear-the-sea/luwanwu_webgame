@@ -458,10 +458,11 @@ def rename_manor(manor: Manor, new_name: str, consume_item: bool = True) -> None
         if not updated:
             raise ValueError("道具消耗失败，请重试")
 
-        # 清理零库存记录
-        inventory_item.refresh_from_db()
-        if inventory_item.quantity <= 0:
-            inventory_item.delete()
+        # 清理零库存记录（使用条件删除避免竞态条件）
+        InventoryItem.objects.filter(
+            pk=inventory_item.pk,
+            quantity__lte=0,
+        ).delete()
 
     # 更新庄园名称
     old_name = manor.name or manor.display_name

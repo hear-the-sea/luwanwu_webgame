@@ -325,9 +325,6 @@ def schedule_technology_completion(tech, eta_seconds: int) -> None:
         tech: PlayerTechnology 实例
         eta_seconds: 预计完成时间（秒）
     """
-    import logging
-
-    logger = logging.getLogger(__name__)
     countdown = max(0, int(eta_seconds))
     try:
         from gameplay.tasks import complete_technology_upgrade

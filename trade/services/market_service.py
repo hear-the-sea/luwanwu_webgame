@@ -32,12 +32,15 @@ TRANSACTION_TAX_RATE = 0.10  # 10%
 # 价格限制
 MIN_PRICE_MULTIPLIER = 1.0  # 最低价格为物品price的1倍
 MAX_PRICE = 10000000  # 最高1000万银两
+MAX_TOTAL_PRICE = 2000000000  # 最高总价20亿（防止整数溢出）
 
 ALLOWED_LISTING_ORDER_BY = {
     "listed_at",
     "-listed_at",
     "unit_price",
     "-unit_price",
+    "price",
+    "-price",
     "total_price",
     "-total_price",
     "quantity",
@@ -174,13 +177,19 @@ def create_listing(
             raise ValueError("物品数量不足或已被其他操作占用")
 
         # 步骤3.5：清理零库存记录，保持数据库整洁
-        # 刷新对象以获取更新后的数量
-        inventory_item.refresh_from_db()
-        if inventory_item.quantity == 0:
-            inventory_item.delete()
+        # 使用条件删除避免竞态条件
+        InventoryItem.objects.filter(
+            pk=inventory_item.pk,
+            quantity=0,
+        ).delete()
 
         # 步骤4：创建挂单记录
         total_price = unit_price * quantity
+
+        # 防止整数溢出（数据库 IntegerField 最大约21亿）
+        if total_price > MAX_TOTAL_PRICE:
+            raise ValueError(f"总价不能超过 {MAX_TOTAL_PRICE:,} 银两")
+
         expires_at = timezone.now() + timedelta(seconds=duration)
 
         listing = MarketListing.objects.create(
@@ -284,9 +293,23 @@ def purchase_listing(buyer: Manor, listing_id: int) -> MarketTransaction:
         if listing.seller == buyer:
             raise ValueError("不能购买自己的物品")
 
-        # 步骤2：按固定顺序锁定买家/卖家庄园，避免隐式锁顺序导致的死锁风险
-        buyer_locked = Manor.objects.select_for_update().get(pk=buyer.pk)
-        seller_locked = Manor.objects.select_for_update().get(pk=listing.seller_id) if listing.seller_id else None
+        # 步骤2：按固定顺序锁定买家/卖家庄园，避免死锁
+        # 规则：始终按 pk 从小到大的顺序锁定
+        buyer_pk = buyer.pk
+        seller_pk = listing.seller_id
+
+        if seller_pk and buyer_pk < seller_pk:
+            # 买家 pk 较小，先锁买家再锁卖家
+            buyer_locked = Manor.objects.select_for_update().get(pk=buyer_pk)
+            seller_locked = Manor.objects.select_for_update().get(pk=seller_pk)
+        elif seller_pk and buyer_pk > seller_pk:
+            # 卖家 pk 较小，先锁卖家再锁买家
+            seller_locked = Manor.objects.select_for_update().get(pk=seller_pk)
+            buyer_locked = Manor.objects.select_for_update().get(pk=buyer_pk)
+        else:
+            # 无卖家（系统商店）或 pk 相同（不应发生）
+            buyer_locked = Manor.objects.select_for_update().get(pk=buyer_pk)
+            seller_locked = Manor.objects.select_for_update().get(pk=seller_pk) if seller_pk else None
 
         # 步骤3：扣除买家银两
         spend_resources_locked(
@@ -486,9 +509,11 @@ def _expire_listings_queryset(expired_listings: QuerySet, log_label: str) -> int
     避免邮件发送失败导致物品永久丢失。
     """
     count = 0
-    for listing in expired_listings.select_for_update().select_related("seller", "item_template"):
+    for listing in expired_listings.select_related("seller", "item_template"):
         try:
             with transaction.atomic():
+                # 在事务内重新获取并锁定记录，防止并发处理
+                listing = MarketListing.objects.select_for_update().get(pk=listing.pk)
                 # 保存挂单信息用于发送邮件（删除前先读取）
                 seller = listing.seller
                 item_template = listing.item_template
