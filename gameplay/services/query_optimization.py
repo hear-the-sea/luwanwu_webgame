@@ -170,9 +170,9 @@ def get_idle_guests_optimized(manor) -> list:
         ).select_related(
             "template"
         ).only(
-            "id", "display_name", "level", "rarity", "status",
-            "current_hp", "max_hp",
-            "template__name", "template__key"
+            "id", "level", "status", "custom_name",
+            "current_hp", "hp_bonus", "defense_stat",
+            "template__name", "template__key", "template__rarity"
         ).order_by("-level", "template__name")
     )
 

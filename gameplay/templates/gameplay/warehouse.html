@@ -170,6 +170,29 @@
             </tbody>
         </table>
         </div>
+
+        {# 分页导航 #}
+        {% if pagination.total_pages > 1 %}
+        <nav class="tw-pagination mt-4">
+            {% if pagination.has_previous %}
+                <a href="?tab={{ current_tab }}&category={{ selected_category }}&page=1" class="tw-btn-secondary tw-btn-sm">首页</a>
+                <a href="?tab={{ current_tab }}&category={{ selected_category }}&page={{ pagination.previous_page }}" class="tw-btn-secondary tw-btn-sm">上一页</a>
+            {% else %}
+                <span class="tw-btn-secondary tw-btn-sm disabled">首页</span>
+                <span class="tw-btn-secondary tw-btn-sm disabled">上一页</span>
+            {% endif %}
+
+            <span class="tw-pagination-info">{{ pagination.page }} / {{ pagination.total_pages }}</span>
+
+            {% if pagination.has_next %}
+                <a href="?tab={{ current_tab }}&category={{ selected_category }}&page={{ pagination.next_page }}" class="tw-btn-secondary tw-btn-sm">下一页</a>
+                <a href="?tab={{ current_tab }}&category={{ selected_category }}&page={{ pagination.total_pages }}" class="tw-btn-secondary tw-btn-sm">末页</a>
+            {% else %}
+                <span class="tw-btn-secondary tw-btn-sm disabled">下一页</span>
+                <span class="tw-btn-secondary tw-btn-sm disabled">末页</span>
+            {% endif %}
+        </nav>
+        {% endif %}
     </section>
 </section>
 
@@ -318,21 +341,21 @@ let selectedGuestId = null;
 const MODAL_CONFIG = {
     rebirth: {
         title: '选择要重生的门客',
-        hint: '重生后门客将回到1级，属性将重置为模板基础值（有随机浮动）。<br><strong>装备将自动归还仓库，技能将被清空。</strong>',
+        hint: '重生后门客将回到1级，属性将重置为模板基础值（有随机浮动）。装备将自动归还仓库，技能将被清空。',
         confirmText: '确认重生',
         listId: 'guest-list-rebirth',
         urlTemplate: `{% url 'gameplay:use_rebirth_card' pk=0 %}`
     },
     xisuidan: {
         title: '选择要洗髓的门客',
-        hint: '洗髓丹可重新随机门客升级获得的成长点数。<br><strong>新的成长点数保证不低于当前值，有机会获得更高的属性成长。</strong>',
+        hint: '洗髓丹可重新随机门客升级获得的成长点数。新的成长点数保证不低于当前值，有机会获得更高的属性成长。',
         confirmText: '确认洗髓',
         listId: 'guest-list-xisuidan',
         urlTemplate: `{% url 'gameplay:use_xisuidan' pk=0 %}`
     },
     xidianka: {
         title: '选择要洗点的门客',
-        hint: '洗点卡可重置门客的属性点分配。<br><strong>已分配的属性点将全部返还，可重新分配。</strong>',
+        hint: '洗点卡可重置门客的属性点分配。已分配的属性点将全部返还，可重新分配。',
         confirmText: '确认洗点',
         listId: 'guest-list-xidianka',
         urlTemplate: `{% url 'gameplay:use_xidianka' pk=0 %}`

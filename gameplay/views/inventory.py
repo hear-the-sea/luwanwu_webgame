@@ -56,7 +56,8 @@ class WarehouseView(LoginRequiredMixin, TemplateView):
 
         current_tab = self.request.GET.get("tab", "warehouse")
         selected_category = self.request.GET.get("category", "all")
-        context.update(get_warehouse_context(manor, current_tab, selected_category))
+        page = safe_int(self.request.GET.get("page", 1), default=1, min_val=1)
+        context.update(get_warehouse_context(manor, current_tab, selected_category, page))
         return context
 
 

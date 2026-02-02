@@ -130,6 +130,28 @@
     color: #4c2b12;
 }
 
+/* 阵容对比布局优化 */
+.lineup-comparison {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    width: 100%;
+    max-width: 100%;
+}
+
+.lineup-comparison .tw-building-card {
+    width: 100%;
+    margin: 0;
+    padding: 1rem 1.25rem;
+}
+
+@media (max-width: 768px) {
+    .lineup-comparison {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+}
+
 /* 角色标签样式 */
 .role-tag {
     display: inline-block;
@@ -163,13 +185,12 @@
         <div>
             <h1>{{ report.opponent_name }} 战报</h1>
         </div>
-        <a class="tw-btn-secondary" href="{% url 'home' %}">返回首页</a>
     </div>
 
 
     <section class="tw-card">
         <h2>阵容对比</h2>
-        <div class="tw-building-grid">
+        <div class="lineup-comparison">
             <article class="tw-building-card">
                 <h3>我方 {% if is_attacker %}<span class="role-tag attacker">进攻方</span>{% else %}<span class="role-tag defender">防守方</span>{% endif %}</h3>
                 <ul class="team-members">
@@ -198,7 +219,7 @@
                             </span>
                         </li>
                     {% empty %}
-                        <li>无</li>
+                        <li>未携带护院</li>
                     {% endfor %}
                 </ul>
             </article>
@@ -230,7 +251,7 @@
                             </span>
                         </li>
                     {% empty %}
-                        <li>无</li>
+                        <li>未携带护院</li>
                     {% endfor %}
                 </ul>
             </article>
@@ -354,7 +375,7 @@
         <div class="battle-loss-grid battle-loss-row">
             <article class="battle-loss friendly battle-loss-left">
                 <h3>我方损失</h3>
-                <p>总阵亡：{{ attacker_loss.troops_lost|default:0 }}</p>
+                <p>阵亡护院：{{ attacker_loss.troops_lost|default:0 }}</p>
                 <div class="loss-details">
                     {% for entry in attacker_loss.casualties %}
                         {% if entry.lost > 0 %}
@@ -365,7 +386,7 @@
             </article>
             <article class="battle-loss enemy battle-loss-right">
                 <h3>敌方损失</h3>
-                <p>总阵亡：{{ defender_loss.troops_lost|default:0 }}</p>
+                <p>阵亡护院：{{ defender_loss.troops_lost|default:0 }}</p>
                 <div class="loss-details">
                     {% for entry in defender_loss.casualties %}
                         {% if entry.lost > 0 %}
@@ -398,6 +419,9 @@
             <p class="battle-result defeat">胜败乃兵家常事，大侠请重新来过。</p>
         {% endif %}
         <p>结算时间：{{ report.completed_at|date:"Y-m-d H:i:s" }}</p>
+        <div class="mt-6 flex justify-center">
+            <a href="{% url 'gameplay:messages' %}" class="tw-btn-primary">返回消息列表</a>
+        </div>
     </section>
 </section>
 {% endblock %}

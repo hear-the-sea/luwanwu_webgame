@@ -131,7 +131,7 @@
 
         document.addEventListener('mouseout', function(e) {
             const cell = e.target?.closest?.(config.cellSelector);
-            if (cell === activeCell && (!e.relatedTarget || !cell.contains(e.relatedTarget))) {
+            if (cell && cell === activeCell && (!e.relatedTarget || !cell.contains(e.relatedTarget))) {
                 activeCell = null;
                 sizeRetryCount = 0;
             }

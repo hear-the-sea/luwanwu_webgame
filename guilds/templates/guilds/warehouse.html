@@ -18,13 +18,16 @@
 
     <section class="tw-card">
         <h2>可兑换物品</h2>
+        {% if pagination.total_count > 0 %}
+            <p class="tw-muted mb-4">共 {{ pagination.total_count }} 件物品，第 {{ pagination.page }}/{{ pagination.total_pages }} 页</p>
+        {% endif %}
         {% if warehouse_items %}
             <div class="tw-building-grid">
                 {% for item in warehouse_items %}
                 <article class="tw-building-card">
                     <header>
                         <div>
-                            <h3>{{ item.item_key }}</h3>
+                            <h3>{{ item.template.name|default:item.item_key }}</h3>
                             <p class="tw-muted">帮会科技每日产出</p>
                         </div>
                         <span class="tw-badge-gold">{{ item.quantity }}</span>
@@ -52,7 +55,7 @@
                             <button
                                 type="button"
                                 class="tw-btn-primary w-full"
-                                onclick="openExchangeModal('{{ item.item_key }}', {{ item.contribution_cost }}, {{ item.quantity }})"
+                                onclick="openExchangeModal('{{ item.item_key|escapejs }}', {{ item.contribution_cost }}, {{ item.quantity }}, '{{ item.template.name|default:item.item_key|escapejs }}')"
                                 {% if item.quantity <= 0 %}disabled title="库存不足"{% endif %}
                             >
                                 兑换
@@ -73,6 +76,28 @@
             </div>
         {% else %}
             <p class="tw-muted">仓库暂无物品，请等待帮会科技每日产出</p>
+        {% endif %}
+
+        {% if pagination.total_pages > 1 %}
+        <nav class="tw-pagination mt-4">
+            {% if pagination.has_previous %}
+                <a href="?page=1" class="tw-btn-secondary tw-btn-sm">首页</a>
+                <a href="?page={{ pagination.previous_page }}" class="tw-btn-secondary tw-btn-sm">上一页</a>
+            {% else %}
+                <span class="tw-btn-secondary tw-btn-sm disabled">首页</span>
+                <span class="tw-btn-secondary tw-btn-sm disabled">上一页</span>
+            {% endif %}
+
+            <span class="tw-pagination-info">{{ pagination.page }} / {{ pagination.total_pages }}</span>
+
+            {% if pagination.has_next %}
+                <a href="?page={{ pagination.next_page }}" class="tw-btn-secondary tw-btn-sm">下一页</a>
+                <a href="?page={{ pagination.total_pages }}" class="tw-btn-secondary tw-btn-sm">末页</a>
+            {% else %}
+                <span class="tw-btn-secondary tw-btn-sm disabled">下一页</span>
+                <span class="tw-btn-secondary tw-btn-sm disabled">末页</span>
+            {% endif %}
+        </nav>
         {% endif %}
     </section>
 </section>
@@ -129,9 +154,9 @@
 
     const currentContribution = {{ member.current_contribution }};
 
-    function openExchangeModal(itemKey, cost, stock) {
-        exchangeForm.action = `/guilds/warehouse/${itemKey}/exchange/`;
-        exchangeItemName.textContent = itemKey;
+    function openExchangeModal(itemKey, cost, stock, itemName) {
+        exchangeForm.action = `/guilds/warehouse/${encodeURIComponent(itemKey)}/exchange/`;
+        exchangeItemName.textContent = itemName || itemKey;
         exchangeCost.textContent = cost;
         exchangeStock.textContent = stock;
         quantityInput.max = stock;

@@ -12,11 +12,11 @@
         <div class="tw-section-actions">
             <form method="post" action="{% url 'gameplay:mark_all_messages_read' %}">
                 {% csrf_token %}
-                <button type="submit" class="tw-btn-secondary">全部标记已读</button>
+                <button type="submit" class="tw-btn-primary">全部标记已读</button>
             </form>
             <form method="post" action="{% url 'gameplay:delete_all_messages' %}" id="delete-all-form">
                 {% csrf_token %}
-                <button type="submit" class="tw-btn-secondary">一键清空</button>
+                <button type="submit" class="tw-btn-primary">一键清空</button>
             </form>
         </div>
     </div>
@@ -34,6 +34,7 @@
                             <header class="tw-message-header">
                                 <div class="tw-message-header-left">
                                     <span class="tw-message-kind {{ message.kind }}">{{ message.get_kind_display }}</span>
+                                    <span class="tw-message-time mobile-only">{{ message.created_at|date:"Y-m-d H:i" }}</span>
                                     <a
                                         class="tw-message-title js-message-link"
                                         data-message-id="{{ message.id }}"
@@ -45,23 +46,15 @@
                                     {% endif %}
                                     {% if message.has_attachments %}
                                         <span class="tw-badge-gold">📦 附件</span>
+                                        {% if message.is_claimed %}
+                                            <span class="tw-badge-green">✓ 已领取</span>
+                                        {% else %}
+                                            <button type="button" class="tw-btn-primary tw-btn-sm" onclick="claimAttachment({{ message.id }}, '{% url 'gameplay:claim_attachment' message.id %}')">领取</button>
+                                        {% endif %}
                                     {% endif %}
                                 </div>
-                                <span class="tw-message-time">{{ message.created_at|date:"Y-m-d H:i" }}</span>
+                                <span class="tw-message-time hide-mobile">{{ message.created_at|date:"Y-m-d H:i" }}</span>
                             </header>
-                            {% if message.body %}
-                                <p class="tw-message-body">{{ message.body|escape }}</p>
-                            {% endif %}
-                            {% if message.has_attachments %}
-                                <div class="flex items-center gap-2 mt-2">
-                                    <span class="text-sm text-text-secondary">{{ message.get_attachment_summary }}</span>
-                                    {% if message.is_claimed %}
-                                        <span class="tw-badge-green">✓ 已领取</span>
-                                    {% else %}
-                                        <button type="button" class="tw-btn-primary tw-btn-sm" onclick="claimAttachment({{ message.id }}, '{% url 'gameplay:claim_attachment' message.id %}')">领取附件</button>
-                                    {% endif %}
-                                </div>
-                            {% endif %}
                         </div>
                     </article>
                 {% empty %}
@@ -69,8 +62,8 @@
                 {% endfor %}
             </div>
             <div class="tw-message-actions">
-                <button type="submit" formaction="{% url 'gameplay:mark_messages_read' %}" class="tw-btn-secondary">标记已读</button>
-                <button type="submit" formaction="{% url 'gameplay:delete_messages' %}" class="tw-btn-danger">删除已选</button>
+                <button type="submit" formaction="{% url 'gameplay:mark_messages_read' %}" class="tw-btn-primary">标记已读</button>
+                <button type="submit" formaction="{% url 'gameplay:delete_messages' %}" class="tw-btn-primary">删除已选</button>
             </div>
         </form>
 

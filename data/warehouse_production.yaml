@@ -1,0 +1,80 @@
+# 帮会仓库科技产出配置
+#
+# 配置说明：
+# - tech_key: 科技标识符
+# - levels: 各等级的产出配置
+#   - item_key: 物品标识符
+#   - quantity: 产出数量
+#   - contribution_cost: 兑换所需贡献度
+
+# 装备锻造科技
+equipment:
+  levels:
+    1:
+      - item_key: gear_green_random
+        quantity: 2
+        contribution_cost: 50
+    2:
+      - item_key: gear_green_random
+        quantity: 3
+        contribution_cost: 50
+    3:
+      - item_key: gear_blue_random
+        quantity: 2
+        contribution_cost: 150
+    4:
+      - item_key: gear_blue_random
+        quantity: 3
+        contribution_cost: 150
+    5:
+      - item_key: gear_purple_random
+        quantity: 1
+        contribution_cost: 500
+
+# 经验炼制科技
+experience:
+  levels:
+    1:
+      - item_key: exp_small
+        quantity: 3
+        contribution_cost: 30
+    2:
+      - item_key: exp_small
+        quantity: 5
+        contribution_cost: 30
+    3:
+      - item_key: exp_medium
+        quantity: 2
+        contribution_cost: 100
+    4:
+      - item_key: exp_medium
+        quantity: 3
+        contribution_cost: 100
+    5:
+      - item_key: exp_large
+        quantity: 1
+        contribution_cost: 400
+
+# 资源补给科技
+resource:
+  levels:
+    1:
+      - item_key: resource_pack_silver
+        quantity: 2
+        contribution_cost: 20
+    2:
+      - item_key: resource_pack_grain
+        quantity: 2
+        contribution_cost: 20
+    3:
+      - item_key: resource_pack_silver
+        quantity: 3
+        contribution_cost: 30
+    4:
+      - item_key: resource_pack_mixed
+        quantity: 2
+        contribution_cost: 20
+    5:
+      - item_key: resource_pack_advanced
+        quantity: 3
+        contribution_cost: 80

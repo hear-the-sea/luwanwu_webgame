@@ -1,5 +1,7 @@
 # guilds/services/warehouse.py
 
+import re
+
 from django.db import transaction
 from django.db.models import F
 
@@ -7,6 +9,7 @@ from gameplay.models import InventoryItem, Manor
 
 from ..constants import DAILY_EXCHANGE_LIMIT
 from ..models import GuildExchangeLog, GuildMember, GuildWarehouse
+from .warehouse_config import get_production_items
 
 
 def add_item_to_warehouse(guild, item_key, quantity, contribution_cost):
@@ -112,14 +115,14 @@ def exchange_item(member, item_key, quantity=1):
         if not updated_wh:
             raise ValueError("库存不足，兑换失败")
 
-        # 清理零库存记录
-        warehouse_item.refresh_from_db()
-        if warehouse_item.quantity == 0:
-            warehouse_item.delete()
+        # 清理零库存记录（使用条件删除避免竞态条件）
+        # 避免：refresh_from_db() 后另一个事务增加了库存，此时删除会丢失数据
+        GuildWarehouse.objects.filter(pk=warehouse_item.pk, quantity=0).delete()
 
         # 步骤5：添加物品到玩家仓库
         # 修复：使用正确的template字段和StorageLocation枚举
-        manor = Manor.objects.get(user=member_locked.user)
+        # 并发安全：锁定Manor防止并发冲突
+        manor = Manor.objects.select_for_update().get(user=member_locked.user)
 
         # 锁定现有库存记录，防止并发冲突
         inventory_item = (
@@ -156,6 +159,20 @@ def exchange_item(member, item_key, quantity=1):
         )
 
 
+def _produce_items_from_config(guild, tech_key: str, tech_level: int):
+    """
+    通用科技产出函数（使用YAML配置）
+
+    Args:
+        guild: Guild对象
+        tech_key: 科技标识符（equipment/experience/resource）
+        tech_level: 科技等级
+    """
+    items = get_production_items(tech_key, tech_level)
+    for item in items:
+        add_item_to_warehouse(guild, item.item_key, item.quantity, item.contribution_cost)
+
+
 def produce_equipment(guild, tech_level):
     """
     装备锻造科技产出装备
@@ -164,19 +181,7 @@ def produce_equipment(guild, tech_level):
         guild: Guild对象
         tech_level: 科技等级
     """
-    # 根据等级确定产出
-    production_table = {
-        1: [('gear_green_random', 2, 50)],
-        2: [('gear_green_random', 3, 50)],
-        3: [('gear_blue_random', 2, 150)],
-        4: [('gear_blue_random', 3, 150)],
-        5: [('gear_purple_random', 1, 500)],
-    }
-
-    items = production_table.get(tech_level, [])
-    for item_key, quantity, cost in items:
-        # 这里简化处理，实际应该从ItemTemplate中随机选择装备
-        add_item_to_warehouse(guild, item_key, quantity, cost)
+    _produce_items_from_config(guild, "equipment", tech_level)
 
 
 def produce_experience_items(guild, tech_level):
@@ -187,17 +192,7 @@ def produce_experience_items(guild, tech_level):
         guild: Guild对象
         tech_level: 科技等级
     """
-    production_table = {
-        1: [('exp_small', 3, 30)],
-        2: [('exp_small', 5, 30)],
-        3: [('exp_medium', 2, 100)],
-        4: [('exp_medium', 3, 100)],
-        5: [('exp_large', 1, 400)],
-    }
-
-    items = production_table.get(tech_level, [])
-    for item_key, quantity, cost in items:
-        add_item_to_warehouse(guild, item_key, quantity, cost)
+    _produce_items_from_config(guild, "experience", tech_level)
 
 
 def produce_resource_packs(guild, tech_level):
@@ -208,56 +203,68 @@ def produce_resource_packs(guild, tech_level):
         guild: Guild对象
         tech_level: 科技等级
     """
-    production_table = {
-        1: [('resource_pack_silver', 2, 20)],
-        2: [('resource_pack_grain', 2, 20)],
-        3: [('resource_pack_silver', 3, 30)],
-        4: [('resource_pack_mixed', 2, 20)],
-        5: [('resource_pack_advanced', 3, 80)],
-    }
-
-    items = production_table.get(tech_level, [])
-    for item_key, quantity, cost in items:
-        add_item_to_warehouse(guild, item_key, quantity, cost)
+    _produce_items_from_config(guild, "resource", tech_level)
 
 
-def get_warehouse_items(guild):
+def get_warehouse_items(guild, page=1, per_page=50):
     """
-    获取帮会仓库物品列表，附加ItemTemplate信息（N+1查询优化版本）
+    获取帮会仓库物品列表，附加ItemTemplate信息（N+1查询优化版本 + 分页）
 
     性能优化：
     - 原实现：每个仓库物品执行1次ItemTemplate查询（N+1问题）
     - 优化后：批量预加载所有模板，总共2次查询
+    - 分页优化：每页最多加载per_page条记录
 
     Args:
         guild: Guild对象
+        page: 当前页码（从1开始）
+        per_page: 每页数量，默认50
 
     Returns:
-        list: 包含仓库物品和ItemTemplate信息的字典列表
+        dict: 包含分页信息和物品列表的字典
+            - items: 当前页物品列表
+            - page: 当前页码
+            - total_pages: 总页数
+            - total_count: 总数量
+            - has_previous: 是否有上一页
+            - has_next: 是否有下一页
     """
+    from django.core.paginator import Paginator
     from gameplay.utils.template_loader import get_item_templates_by_keys
 
-    # 查询1：获取所有仓库物品
-    warehouse_items = list(
-        GuildWarehouse.objects.filter(guild=guild, quantity__gt=0).order_by(
-            '-contribution_cost', 'item_key'
-        )
-    )
+    # 查询1：获取所有仓库物品（QuerySet，延迟执行）
+    warehouse_queryset = GuildWarehouse.objects.filter(
+        guild=guild, quantity__gt=0
+    ).order_by('-contribution_cost', 'item_key')
 
-    # 查询2：批量预加载所有需要的ItemTemplate，避免逐个查询
+    # 分页处理
+    paginator = Paginator(warehouse_queryset, per_page)
+    page_obj = paginator.get_page(page)
+
+    # 转换为列表以便后续处理
+    warehouse_items = list(page_obj)
+
+    # 查询2：批量预加载当前页需要的ItemTemplate，避免逐个查询
     item_keys = {item.item_key for item in warehouse_items}
     templates_dict = get_item_templates_by_keys(item_keys)
 
     # 在内存中关联模板信息
-    result = []
     for item in warehouse_items:
         template = templates_dict.get(item.item_key)
         item.template = template
-        # 如果找不到模板，默认可用（向后兼容）
-        item.is_usable = template.is_usable if template else True
-        result.append(item)
+        # 如果找不到模板，标记为不可用（防止幽灵物品被兑换）
+        item.is_usable = template.is_usable if template else False
 
-    return result
+    return {
+        'items': warehouse_items,
+        'page': page_obj.number,
+        'total_pages': paginator.num_pages,
+        'total_count': paginator.count,
+        'has_previous': page_obj.has_previous(),
+        'has_next': page_obj.has_next(),
+        'previous_page': page_obj.previous_page_number() if page_obj.has_previous() else None,
+        'next_page': page_obj.next_page_number() if page_obj.has_next() else None,
+    }
 
 
 def get_exchange_logs(guild, limit=50):

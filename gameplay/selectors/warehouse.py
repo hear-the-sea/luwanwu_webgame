@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+from django.core.paginator import Paginator
+
 from guests.models import GuestStatus
 
 from ..models import InventoryItem
 from ..services import get_treasury_capacity, get_treasury_used_space
 
+# 每页显示的物品数量
+WAREHOUSE_PAGE_SIZE = 50
 
-def get_warehouse_context(manor, current_tab: str, selected_category: str) -> dict:
+
+def get_warehouse_context(manor, current_tab: str, selected_category: str, page: int = 1) -> dict:
     # Get frozen gold bars for display adjustment
     from trade.services.auction_service import get_frozen_gold_bars
 
@@ -68,24 +73,45 @@ def get_warehouse_context(manor, current_tab: str, selected_category: str) -> di
         else:
             items = items.filter(template__effect_type=selected_category)
 
+    # 使用 values + distinct 只查询 effect_type，避免加载全部对象
+    effect_types = all_items.values_list("template__effect_type", flat=True).distinct()
+
+    category_map = {
+        "resource_pack": "资源包",
+        "resource": "资源",
+        "skill_book": "技能书",
+        "experience_items": "经验",
+        "medicine": "药品",
+        "tool": "道具",
+        "equip_helmet": "头盔",
+        "equip_armor": "衣服",
+        "equip_shoes": "鞋子",
+        "equip_weapon": "武器",
+        "equip_mount": "坐骑",
+        "equip_ornament": "饰品",
+        "equip_device": "器械",
+    }
+
     categories = []
-    seen = set()
     has_tools = False
-    for entry in all_items:
-        key = entry.template.effect_type or "other"
+    for effect_type in effect_types:
+        key = effect_type or "other"
         if key in tool_effect_types:
             has_tools = True
             continue
-        label = entry.category_display or key
-        if key not in seen:
-            seen.add(key)
-            categories.append({"key": key, "label": label})
+        label = category_map.get(key, "装备" if key.startswith("equip_") else "其他")
+        categories.append({"key": key, "label": label})
     if has_tools:
         categories.append({"key": tool_category_key, "label": "道具"})
     categories.sort(key=lambda x: x["label"])
 
     frozen_gold = context["frozen_gold_bars"] if current_tab == "warehouse" else 0
-    items_list = list(items)
+
+    # 分页处理
+    paginator = Paginator(items, WAREHOUSE_PAGE_SIZE)
+    page_obj = paginator.get_page(page)
+    items_list = list(page_obj)
+
     for item in items_list:
         if item.template.key == "gold_bar" and frozen_gold > 0:
             item.display_quantity = max(0, item.quantity - frozen_gold)
@@ -95,4 +121,16 @@ def get_warehouse_context(manor, current_tab: str, selected_category: str) -> di
     context["inventory_items"] = items_list
     context["categories"] = categories
     context["selected_category"] = selected_category
+
+    # 分页信息
+    context["pagination"] = {
+        "page": page_obj.number,
+        "total_pages": paginator.num_pages,
+        "total_count": paginator.count,
+        "has_previous": page_obj.has_previous(),
+        "has_next": page_obj.has_next(),
+        "previous_page": page_obj.previous_page_number() if page_obj.has_previous() else None,
+        "next_page": page_obj.next_page_number() if page_obj.has_next() else None,
+    }
+
     return context

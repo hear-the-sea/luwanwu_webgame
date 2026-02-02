@@ -11,7 +11,7 @@ from django.db import transaction
 from django.db.models import F
 
 from gameplay.models import InventoryItem, ItemTemplate, Manor, ResourceEvent
-from gameplay.services.resources import grant_resources, spend_resources
+from gameplay.services.resources import grant_resources_locked, spend_resources_locked
 from gameplay.utils.template_loader import get_item_templates_by_keys
 
 from ..models import ShopPurchaseLog, ShopSellLog, ShopStock
@@ -138,16 +138,29 @@ def get_shop_items_for_display() -> List[ShopItemDisplay]:
     return result
 
 
-def get_sellable_inventory(manor: Manor) -> List[SellableItemDisplay]:
+def get_sellable_inventory(manor: Manor, category: str = None) -> List[SellableItemDisplay]:
     """
     获取玩家可出售的物品列表
 
     IMPORTANT: Only show WAREHOUSE items since sell_item only operates on WAREHOUSE.
+
+    Args:
+        manor: 庄园对象
+        category: 分类筛选（可选），使用 normalized effect_type
     """
     items = manor.inventory_items.select_related("template").filter(
         quantity__gt=0,
         storage_location=InventoryItem.StorageLocation.WAREHOUSE
     )
+
+    # 数据库层面的分类筛选
+    if category and category != "all":
+        tool_effect_types = {"tool", "magnifying_glass", "peace_shield", "manor_rename"}
+        if category in tool_effect_types:
+            items = items.filter(template__effect_type__in=tool_effect_types)
+        else:
+            items = items.filter(template__effect_type=category)
+
     result = []
 
     for item in items:
@@ -156,6 +169,21 @@ def get_sellable_inventory(manor: Manor) -> List[SellableItemDisplay]:
             result.append(SellableItemDisplay(inventory_item=item, sell_price=sell_price))
 
     return result
+
+
+def get_sellable_effect_types(manor: Manor) -> set:
+    """
+    获取玩家可出售物品的 effect_type 集合（用于构建分类列表）
+
+    使用 values_list + distinct 避免加载全部对象
+    """
+    effect_types = manor.inventory_items.filter(
+        quantity__gt=0,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        template__price__gt=0,  # 只有有价格的物品才能出售
+    ).values_list("template__effect_type", flat=True).distinct()
+
+    return {_normalize_effect_type(et or "other") for et in effect_types}
 
 
 @transaction.atomic
@@ -203,9 +231,10 @@ def buy_item(manor: Manor, item_key: str, quantity: int) -> Dict:
         if stock.current_stock < quantity:
             raise ValueError("库存不足")
 
-    # 检查并扣除银两
-    spend_resources(
-        manor,
+    # 锁定庄园并检查扣除银两（并发安全）
+    locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
+    spend_resources_locked(
+        locked_manor,
         {"silver": total_cost},
         f"购买 {template.name} x{quantity}",
         ResourceEvent.Reason.SHOP_PURCHASE,
@@ -224,7 +253,7 @@ def buy_item(manor: Manor, item_key: str, quantity: int) -> Dict:
     # IMPORTANT: Must specify storage_location to avoid MultipleObjectsReturned
     # when the same template exists in both warehouse and treasury
     inventory_item, created = InventoryItem.objects.select_for_update().get_or_create(
-        manor=manor,
+        manor=locked_manor,
         template=template,
         storage_location=InventoryItem.StorageLocation.WAREHOUSE,
         defaults={"quantity": 0}
@@ -236,7 +265,7 @@ def buy_item(manor: Manor, item_key: str, quantity: int) -> Dict:
 
     # 记录购买日志
     ShopPurchaseLog.objects.create(
-        manor=manor,
+        manor=locked_manor,
         item_key=item_key,
         quantity=quantity,
         unit_price=unit_price,
@@ -300,9 +329,10 @@ def sell_item(manor: Manor, item_key: str, quantity: int) -> Dict:
 
     total_income = unit_price * quantity
 
-    # 发放银两（先锁 Manor，保持与 buy_item 相同的锁顺序）
-    grant_resources(
-        manor,
+    # 锁定庄园并发放银两（并发安全）
+    locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
+    grant_resources_locked(
+        locked_manor,
         {"silver": total_income},
         f"出售 {template.name} x{quantity}",
         ResourceEvent.Reason.SHOP_SELL,
@@ -321,7 +351,7 @@ def sell_item(manor: Manor, item_key: str, quantity: int) -> Dict:
 
     # 记录出售日志
     ShopSellLog.objects.create(
-        manor=manor,
+        manor=locked_manor,
         item_key=item_key,
         quantity=quantity,
         unit_price=unit_price,

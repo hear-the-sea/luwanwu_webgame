@@ -21,6 +21,7 @@ from .services.market_service import (
 )
 from .services.shop_service import (
     EFFECT_TYPE_CATEGORY,
+    get_sellable_effect_types,
     get_sellable_inventory,
     get_shop_items_for_display,
 )
@@ -82,8 +83,11 @@ def get_trade_context(request, manor) -> dict:
         elif auction_view == "my_bids":
             my_bids = get_my_bids(manor)
             my_leading = get_my_leading_bids(manor)
+            # 使用批量查询优化 N+1 问题
+            from trade.services.auction_service import get_slots_bid_info_batch
+            bid_info_map = get_slots_bid_info_batch(my_leading, manor)
             for slot in my_leading:
-                slot.bid_info = get_slot_bid_info(slot, manor)
+                slot.bid_info = bid_info_map.get(slot.id, {})
             context.update(
                 {
                     "my_bids": my_bids,
@@ -102,29 +106,23 @@ def get_trade_context(request, manor) -> dict:
         if selected_category != "all":
             selected_category = normalize_effect_type(selected_category)
         shop_items = get_shop_items_for_display()
-        sellable_items = list(get_sellable_inventory(manor))
+        sellable_items = list(get_sellable_inventory(manor, category=selected_category))
 
+        # 使用 distinct 查询构建分类，避免遍历全部对象
         categories = {"all"}
         categories.update(normalize_effect_type(item.effect_type or "other") for item in shop_items)
-        categories.update(
-            normalize_effect_type(itm.inventory_item.template.effect_type or "other")
-            for itm in sellable_items
-        )
+        categories.update(get_sellable_effect_types(manor))
         category_options = [{"key": "all", "label": "全部"}] + [
             {"key": c, "label": EFFECT_TYPE_CATEGORY.get(c, c)}
             for c in sorted(c for c in categories if c and c != "all")
         ]
 
+        # 商店物品筛选（shop_items 是配置数据，数量固定，内存筛选可接受）
         if selected_category != "all":
             shop_items = [
                 item
                 for item in shop_items
                 if normalize_effect_type(item.effect_type or "other") == selected_category
-            ]
-            sellable_items = [
-                item
-                for item in sellable_items
-                if normalize_effect_type(item.inventory_item.template.effect_type or "other") == selected_category
             ]
 
         context.update(
@@ -173,13 +171,17 @@ def get_trade_context(request, manor) -> dict:
         elif market_view == "sell":
             category = request.GET.get("category", "all")
             page = safe_int(request.GET.get("page", 1), 1)
-            tradeable_items = get_tradeable_inventory(manor)
+
+            # 使用数据库筛选代替内存筛选
+            tradeable_qs = get_tradeable_inventory(manor)
             if category != "all":
-                tradeable_items = [
-                    item for item in tradeable_items
-                    if (item.template.effect_type or "other") == category
-                ]
-            paginator = Paginator(tradeable_items, 5)
+                tool_effect_types = {"tool", "magnifying_glass", "peace_shield", "manor_rename"}
+                if category in tool_effect_types:
+                    tradeable_qs = tradeable_qs.filter(template__effect_type__in=tool_effect_types)
+                else:
+                    tradeable_qs = tradeable_qs.filter(template__effect_type=category)
+
+            paginator = Paginator(tradeable_qs, 5)
             page_obj = paginator.get_page(page)
             context.update(
                 {

@@ -941,7 +941,7 @@
   }
 
   .tw-mission-content {
-    @apply p-4 overflow-y-auto;
+    @apply overflow-y-auto;
     max-height: 60vh;
     background: var(--bg-primary);
   }
@@ -953,13 +953,20 @@
 
   .tw-mission-table th,
   .tw-mission-table td {
-    @apply px-3 py-3 border-b border-border-primary align-middle;
+    @apply px-3 py-3 align-middle;
+    border-bottom: 1px solid var(--border-primary);
+  }
+
+  .tw-mission-table tbody tr:last-child td {
+    border-bottom: none;
   }
 
   .tw-mission-table th {
-    @apply bg-bg-secondary text-text-secondary font-semibold
+    @apply text-text-secondary font-semibold
            sticky top-0 z-10;
+    background: #f5ead8;
     border-bottom: 2px solid var(--border-primary);
+    box-shadow: 0 2px 4px rgba(74, 38, 18, 0.1);
   }
 
   .tw-mission-table tr:hover {
@@ -1226,28 +1233,46 @@
 
   /* ========== 消息列表 ========== */
   .tw-message-list {
-    @apply flex flex-col gap-2;
+    @apply flex flex-col;
   }
 
   .tw-message-card {
-    @apply flex items-start gap-3 p-3 rounded-md transition-all
-           bg-bg-card border border-border-light;
+    @apply flex items-center gap-4 transition-all;
+    min-height: 72px;
+    padding: 1rem 1.25rem;
+    background: linear-gradient(135deg, #fefcf9 0%, #faf6f0 100%);
+    border-bottom: 1px solid var(--border-primary);
+    box-shadow: 0 1px 2px rgba(74, 38, 18, 0.05);
+  }
+
+  .tw-message-card:hover {
+    background: linear-gradient(135deg, #fff8ed 0%, #f5ead8 100%);
+    box-shadow: 0 2px 6px rgba(74, 38, 18, 0.12);
+  }
+
+  .tw-message-card:last-child {
+    border-bottom: none;
   }
 
   .tw-message-card.unread {
-    @apply bg-bg-panel border-accent-gold;
+    background: linear-gradient(135deg, #fffdf5 0%, #fef8e8 100%);
+    border-left: 4px solid var(--accent-gold);
+  }
+
+  .tw-message-card.unread:hover {
+    background: linear-gradient(135deg, #fff8ed 0%, #f5ead8 100%);
   }
 
   .tw-message-select {
-    @apply cursor-pointer flex-shrink-0;
+    @apply cursor-pointer flex-shrink-0 self-center;
   }
 
   .tw-message-content {
-    @apply flex-1 min-w-0;
+    @apply flex-1 min-w-0 flex flex-col justify-center;
   }
 
   .tw-message-header {
-    @apply flex justify-between items-center gap-2 mb-1;
+    @apply flex justify-between items-center gap-2;
   }
 
   .tw-message-header-left {
@@ -1262,6 +1287,7 @@
   .tw-message-kind.battle { @apply bg-red-100 text-red-800; }
   .tw-message-kind.trade { @apply bg-green-100 text-green-800; }
   .tw-message-kind.guild { @apply bg-purple-100 text-purple-800; }
+  .tw-message-kind.reward { @apply bg-yellow-100 text-yellow-800; }
 
   .tw-message-title {
     @apply font-semibold text-text-primary no-underline hover:underline;
@@ -1275,8 +1301,40 @@
     @apply text-xs text-text-muted flex-shrink-0;
   }
 
+  .tw-message-time.mobile-only {
+    display: none;
+  }
+
+  @media (max-width: 768px) {
+    .tw-message-time.mobile-only {
+      display: inline;
+    }
+    .tw-message-time.hide-mobile,
+    .hide-mobile {
+      display: none !important;
+    }
+    .tw-message-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.25rem;
+    }
+    .tw-message-header-left {
+      width: 100%;
+    }
+    .tw-message-title {
+      flex-basis: 100%;
+      order: 10;
+    }
+    .tw-message-status-dot,
+    .tw-badge-gold,
+    .tw-badge-green,
+    .tw-message-header-left .tw-btn-primary {
+      order: 11;
+    }
+  }
+
   .tw-message-body {
-    @apply text-sm text-text-secondary m-0 mt-1;
+    @apply text-sm text-text-secondary m-0 mt-1 line-clamp-1;
   }
 
   .tw-message-actions {

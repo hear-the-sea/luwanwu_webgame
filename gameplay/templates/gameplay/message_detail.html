@@ -3,129 +3,245 @@
 
 {% block title %}{{ message.title }}{% endblock %}
 
+{% block extra_head %}
+<style>
+    .msg-detail-card {
+        background: linear-gradient(135deg, #fefcf9 0%, #faf6f0 100%);
+        border: 1px solid var(--border-primary);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .msg-detail-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 1rem;
+        background: linear-gradient(135deg, #f5ead8 0%, #efe0c8 100%);
+        border-bottom: 1px solid var(--border-primary);
+    }
+    .msg-detail-header .tags {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .msg-detail-title {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--border-light);
+    }
+    .msg-detail-title h2 {
+        margin: 0;
+        font-size: 1.1rem;
+        color: var(--text-primary);
+        line-height: 1.4;
+    }
+    .msg-detail-body {
+        padding: 1rem;
+        background: var(--bg-panel);
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        line-height: 1.6;
+        white-space: pre-wrap;
+    }
+    .msg-attachment {
+        margin: 0.75rem;
+        padding: 0.75rem;
+        background: linear-gradient(135deg, #fffdf5 0%, #fef8e8 100%);
+        border: 1px solid var(--accent-gold);
+        border-radius: 6px;
+    }
+    .msg-attachment-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px dashed var(--accent-gold);
+        font-weight: 600;
+        color: var(--accent-gold);
+    }
+    .msg-resource-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+    }
+    .msg-resource-item {
+        padding: 0.5rem 0.75rem;
+        background: #fff;
+        border-left: 3px solid #3b82f6;
+        border-radius: 4px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .msg-resource-item .label {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+    }
+    .msg-resource-item .value {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #3b82f6;
+    }
+    .msg-item-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .msg-item-card {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.4rem 0.6rem;
+        background: #fff;
+        border: 1px solid var(--border-light);
+        border-radius: 6px;
+    }
+    .msg-item-card img {
+        width: 36px;
+        height: 36px;
+        object-fit: contain;
+    }
+    .msg-item-card .icon-placeholder {
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        background: var(--bg-secondary);
+        border-radius: 4px;
+    }
+    .msg-item-card .info .name {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+    .msg-item-card .info .qty {
+        font-size: 0.75rem;
+        color: var(--accent-gold);
+    }
+    .msg-claim-area {
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 1px dashed var(--accent-gold);
+        text-align: center;
+    }
+    .msg-claimed-notice {
+        padding: 0.5rem;
+        background: #ecfdf5;
+        border-left: 3px solid var(--accent-green);
+        color: #059669;
+        font-size: 0.85rem;
+        text-align: center;
+        border-radius: 4px;
+    }
+    .msg-actions {
+        display: flex;
+        gap: 0.75rem;
+        justify-content: center;
+        padding: 1rem;
+        background: var(--bg-secondary);
+        border-top: 1px solid var(--border-light);
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <section class="dashboard">
     <div class="tw-section-header">
         <div>
             <h1>消息详情</h1>
         </div>
-        <a href="{% url 'gameplay:messages' %}" class="tw-btn-secondary">返回消息列表</a>
     </div>
 
-    <section class="tw-panel">
-        <div class="tw-panel-content">
-            <!-- 消息头部 -->
-            <div class="flex justify-between items-start mb-6 pb-4 border-b-2 border-border-primary">
-                <div>
-                    <div class="flex items-center gap-2 mb-2">
-                        <span class="tw-message-kind {{ message.kind }}">
-                            {{ message.get_kind_display }}
-                        </span>
-                        {% if message.has_attachments %}
-                            <span class="tw-badge-green">📦 有附件</span>
-                        {% endif %}
-                    </div>
-                    <h2 class="m-0 text-2xl text-text-primary">{{ message.title }}</h2>
-                </div>
-                <div class="text-right text-text-muted text-sm">
-                    <div>{{ message.created_at|date:"Y-m-d H:i:s" }}</div>
-                </div>
+    <div class="msg-detail-card">
+        <!-- 消息头部 -->
+        <div class="msg-detail-header">
+            <div class="tags">
+                <span class="tw-message-kind {{ message.kind }}">{{ message.get_kind_display }}</span>
+                {% if message.has_attachments %}
+                    <span class="tw-badge-gold" style="font-size: 0.75rem;">📦 附件</span>
+                {% endif %}
+            </div>
+            <span class="text-text-muted" style="font-size: 0.8rem;">{{ message.created_at|date:"Y-m-d H:i" }}</span>
+        </div>
+
+        <!-- 标题 -->
+        <div class="msg-detail-title">
+            <h2>{{ message.title }}</h2>
+        </div>
+
+        <!-- 消息正文 -->
+        {% if message.body %}
+        <div class="msg-detail-body">{{ message.body|escape }}</div>
+        {% endif %}
+
+        <!-- 附件信息 -->
+        {% if message.has_attachments %}
+        <div class="msg-attachment">
+            <div class="msg-attachment-header">
+                📦 附件内容
+                {% if message.is_claimed %}
+                    <span class="tw-badge-green" style="font-size: 0.7rem;">✓ 已领取</span>
+                {% endif %}
             </div>
 
-            <!-- 消息正文 -->
-            {% if message.body %}
-            <div class="p-6 bg-bg-panel rounded-lg mb-6 leading-relaxed whitespace-pre-wrap">{{ message.body|escape }}</div>
+            <!-- 资源列表 -->
+            {% if attachment_details.resources %}
+            <div class="msg-resource-grid">
+                {% for resource in attachment_details.resources %}
+                <div class="msg-resource-item">
+                    <div class="label">{{ resource.name }}</div>
+                    <div class="value">+{{ resource.amount }}</div>
+                </div>
+                {% endfor %}
+            </div>
             {% endif %}
 
-            <!-- 附件信息 -->
-            {% if message.has_attachments %}
-            <div class="p-6 bg-yellow-50 border-2 border-accent-gold rounded-lg">
-                <h3 class="m-0 mb-4 text-accent-gold flex items-center gap-2">
-                    📦 附件内容
-                    {% if message.is_claimed %}
-                        <span class="tw-badge-green">✓ 已领取</span>
+            <!-- 道具列表 -->
+            {% if attachment_details.items %}
+            <div class="msg-item-list">
+                {% for item in attachment_details.items %}
+                <div class="msg-item-card">
+                    {% if item.image %}
+                        <img src="{{ item.image.url }}" alt="{{ item.name }}">
+                    {% elif item.icon %}
+                        <div class="icon-placeholder">{{ item.icon }}</div>
+                    {% else %}
+                        <div class="icon-placeholder">🎁</div>
                     {% endif %}
-                </h3>
-
-                <!-- 资源列表 -->
-                {% if attachment_details.resources %}
-                <div class="mb-6">
-                    <h4 class="m-0 mb-3 text-border-primary font-semibold">💰 资源</h4>
-                    <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));">
-                        {% for resource in attachment_details.resources %}
-                        <div class="p-3 bg-white border-l-4 border-blue-500 rounded">
-                            <div class="text-sm text-text-muted mb-1">{{ resource.name }}</div>
-                            <div class="text-xl font-bold text-blue-500">{{ resource.amount }}</div>
-                        </div>
-                        {% endfor %}
+                    <div class="info">
+                        <div class="name">{{ item.name }}</div>
+                        <div class="qty">×{{ item.quantity }}</div>
                     </div>
                 </div>
-                {% endif %}
-
-                <!-- 道具列表 -->
-                {% if attachment_details.items %}
-                <div>
-                    <h4 class="m-0 mb-3 text-border-primary font-semibold">🎁 道具</h4>
-                    <div class="flex flex-wrap gap-4">
-                        {% for item in attachment_details.items %}
-                        <div class="flex items-center gap-3 px-4 py-3 bg-white rounded-lg border border-border-primary">
-                            <!-- 物品图片 -->
-                            <div class="flex-shrink-0">
-                                {% if item.image %}
-                                    <img src="{{ item.image.url }}" alt="{{ item.name }}" class="w-12 h-12 object-contain">
-                                {% elif item.icon %}
-                                    <div class="w-12 h-12 flex items-center justify-center text-3xl">
-                                        {{ item.icon }}
-                                    </div>
-                                {% else %}
-                                    <div class="w-12 h-12 bg-bg-secondary rounded flex items-center justify-center text-2xl">
-                                        🎁
-                                    </div>
-                                {% endif %}
-                            </div>
-                            <!-- 物品信息 -->
-                            <div>
-                                <div class="font-bold text-text-primary">{{ item.name }}</div>
-                                <div class="text-accent-gold text-sm">× {{ item.quantity }}</div>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endif %}
-
-                <!-- 领取按钮 -->
-                {% if not message.is_claimed %}
-                <div class="mt-6 pt-6 border-t-2 border-yellow-200 text-center">
-                    <form method="post" action="{% url 'gameplay:claim_attachment' message.id %}">
-                        {% csrf_token %}
-                        <button type="submit" class="tw-btn-primary px-8 py-3 text-lg">
-                            🎁 领取附件
-                        </button>
-                    </form>
-                    <p class="mt-2 text-text-muted text-sm">
-                        领取后资源和道具将自动发放到您的账户
-                    </p>
-                </div>
-                {% else %}
-                <div class="mt-6 p-4 bg-green-50 border-l-4 border-accent-green text-center text-green-700">
-                    ✓ 附件已领取，物品已发放到您的仓库
-                </div>
-                {% endif %}
+                {% endfor %}
             </div>
             {% endif %}
 
-            <!-- 操作按钮 -->
-            <div class="mt-6 flex gap-4 justify-center">
-                <a href="{% url 'gameplay:messages' %}" class="tw-btn-secondary">返回消息列表</a>
-                <form method="post" action="{% url 'gameplay:delete_messages' %}" class="inline" id="delete-message-form">
+            <!-- 领取按钮 -->
+            {% if not message.is_claimed %}
+            <div class="msg-claim-area">
+                <form method="post" action="{% url 'gameplay:claim_attachment' message.id %}">
                     {% csrf_token %}
-                    <input type="hidden" name="message_ids" value="{{ message.id }}">
-                    <button type="submit" class="tw-btn-danger">删除消息</button>
+                    <button type="submit" class="tw-btn-primary">领取附件</button>
                 </form>
             </div>
+            {% else %}
+            <div class="msg-claimed-notice">✓ 附件已领取</div>
+            {% endif %}
         </div>
-    </section>
+        {% endif %}
+
+        <!-- 操作按钮 -->
+        <div class="msg-actions">
+            <a href="{% url 'gameplay:messages' %}" class="tw-btn-primary">返回消息列表</a>
+            <form method="post" action="{% url 'gameplay:delete_messages' %}" class="inline" id="delete-message-form">
+                {% csrf_token %}
+                <input type="hidden" name="message_ids" value="{{ message.id }}">
+                <button type="submit" class="tw-btn-secondary">删除消息</button>
+            </form>
+        </div>
+    </div>
 </section>
 {% endblock %}
 

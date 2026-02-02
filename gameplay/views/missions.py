@@ -104,8 +104,9 @@ class TaskBoardView(LoginRequiredMixin, TemplateView):
         )
         selected_remaining = max(0, selected_daily_limit - selected_attempts)
         available_guests = manor.guests.filter(status=GuestStatus.IDLE).select_related("template").only(
-            'id', 'display_name', 'level', 'current_hp', 'max_hp', 'status',
-            'template__id', 'template__key', 'template__name', 'template__avatar'
+            'id', 'level', 'current_hp', 'status', 'custom_name',
+            'hp_bonus', 'defense_stat',  # max_hp 计算所需
+            'template__id', 'template__key', 'template__name', 'template__avatar', 'template__rarity'
         )
 
         # 获取任务卡数量
