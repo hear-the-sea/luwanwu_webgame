@@ -216,8 +216,15 @@ def leave_guild(member):
     display_name = member_manor.display_name
 
     with transaction.atomic():
-        # 删除成员记录（因为 user 是 OneToOneField，必须删除才能加入其他帮会）
-        member.delete()
+        # 安全修复：使用软删除保留历史数据（贡献度、捐赠日志等）
+        # 锁定成员记录防止并发问题
+        member_locked = GuildMember.objects.select_for_update().get(pk=member.pk)
+        if not member_locked.is_active:
+            raise ValueError("您不在帮会中")
+
+        member_locked.is_active = False
+        member_locked.left_at = timezone.now()
+        member_locked.save(update_fields=['is_active', 'left_at'])
 
         # 发布公告
         create_announcement(
@@ -257,8 +264,15 @@ def kick_member(target_member, operator):
     display_name = target_manor.display_name
 
     with transaction.atomic():
-        # 删除成员记录（因为 user 是 OneToOneField，必须删除才能加入其他帮会）
-        target_member.delete()
+        # 安全修复：使用软删除保留历史数据（贡献度、捐赠日志等）
+        # 锁定成员记录防止并发问题
+        target_locked = GuildMember.objects.select_for_update().get(pk=target_member.pk)
+        if not target_locked.is_active:
+            raise ValueError("该成员已不在帮会中")
+
+        target_locked.is_active = False
+        target_locked.left_at = timezone.now()
+        target_locked.save(update_fields=['is_active', 'left_at'])
 
         # 发送系统消息
         create_message(

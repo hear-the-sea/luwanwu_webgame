@@ -461,11 +461,13 @@ def place_bid(manor: Manor, slot_id: int, amount: int) -> Tuple[AuctionBid, bool
             .first()
         )
 
+        # 安全修复：统一在事务开始时获取一次排名，避免 TOCTOU 问题和变量未定义
+        ranking_before = get_slot_ranking(slot)
+
         # 验证出价金额
         if previous_bid:
             validate_bid_amount(slot, amount, current_bid=previous_bid)
         else:
-            ranking_before = get_slot_ranking(slot)
             validate_bid_amount(slot, amount, ranking=ranking_before)
 
         # 如果有之前的出价，先解冻旧金条并标记旧出价（事务内，避免并发占用）
@@ -482,9 +484,8 @@ def place_bid(manor: Manor, slot_id: int, amount: int) -> Tuple[AuctionBid, bool
         is_first_bid = previous_bid is None
 
         # 获取出价前的排名情况（用于判断谁会被挤出）
+        # 注意：ranking_before 已在上方统一获取，无需再次查询
         winner_count = slot.quantity
-        if previous_bid:
-            ranking_before = get_slot_ranking(slot)
 
         # 如果已满员，记录当前第N名（可能会被挤出）
         player_to_kick = None

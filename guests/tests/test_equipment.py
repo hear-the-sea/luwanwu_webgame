@@ -85,7 +85,7 @@ class TestEquipmentHealthManagement(TestCase):
         self.assertEqual(self.guest.current_hp, 10000)
 
         # 2. 装备道具（额外+200 HP）
-        equip_guest(gear, self.guest)
+        gear = equip_guest(gear, self.guest)
         self.guest.refresh_from_db()
 
         # 装备后的最大生命值：10,000 + 200 = 10,200
@@ -118,7 +118,7 @@ class TestEquipmentHealthManagement(TestCase):
             quantity=1
         )
 
-        equip_guest(gear, self.guest)
+        gear = equip_guest(gear, self.guest)
         self.guest.refresh_from_db()
 
         # 装备后最大生命值10,200，当前生命值设为8,000（低于卸下后的10,000）
@@ -142,7 +142,7 @@ class TestEquipmentHealthManagement(TestCase):
             quantity=1
         )
 
-        equip_guest(gear, self.guest)
+        gear = equip_guest(gear, self.guest)
         self.guest.refresh_from_db()
 
         # 门客阵亡，生命值为0

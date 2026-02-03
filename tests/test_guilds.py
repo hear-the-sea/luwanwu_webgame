@@ -194,13 +194,14 @@ class TestGuildMembership:
 
         # 添加成员
         target_member = GuildMember.objects.create(guild=guild, user=second_user, position='member')
-        member_id = target_member.id
 
         # 踢出成员（参数是GuildMember对象，不是guild和user）
         member_service.kick_member(target_member, user_with_gold_bars)
 
-        # 验证成员记录已被删除（kick_member 是删除而不是设置 is_active=False）
-        assert not GuildMember.objects.filter(id=member_id).exists()
+        # 验证成员记录已被软删除（is_active=False）
+        target_member.refresh_from_db()
+        assert target_member.is_active is False
+        assert target_member.left_at is not None
 
     def test_leave_guild(self, user_with_gold_bars, second_user):
         """测试主动退出帮会"""
@@ -212,13 +213,14 @@ class TestGuildMembership:
 
         # 添加成员
         member = GuildMember.objects.create(guild=guild, user=second_user, position='member')
-        member_id = member.id
 
         # 退出帮会（参数是GuildMember对象）
         member_service.leave_guild(member)
 
-        # 验证成员记录已被删除（leave_guild 是删除而不是设置 is_active=False）
-        assert not GuildMember.objects.filter(id=member_id).exists()
+        # 验证成员记录已被软删除（is_active=False）
+        member.refresh_from_db()
+        assert member.is_active is False
+        assert member.left_at is not None
 
     def test_leader_cannot_leave(self, user_with_gold_bars):
         """测试帮主不能直接退出"""

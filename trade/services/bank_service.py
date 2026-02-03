@@ -41,6 +41,8 @@ ACTIVE_DAYS_THRESHOLD = 14  # 活跃判定天数
 # 缓存配置
 SUPPLY_CACHE_KEY = "gold_bar:effective_supply"
 SUPPLY_CACHE_TTL = 300  # 缓存5分钟
+SUPPLY_STALE_CACHE_KEY = "gold_bar:effective_supply:stale"
+SUPPLY_STALE_CACHE_TTL = 3600  # 过期缓存保留1小时，用于降级
 
 
 def get_today_exchange_count(manor: Manor) -> int:
@@ -63,8 +65,11 @@ def get_effective_gold_supply() -> int:
     只统计最近 ACTIVE_DAYS_THRESHOLD 天内有登录的玩家持有的金条，
     排除弃游玩家的"死金条"对汇率的影响。
 
-    使用缓存击穿保护：当缓存失效时，只有一个请求执行数据库查询，
-    其他请求等待或使用旧值。
+    缓存策略（三级降级）：
+    1. 主缓存有效 → 直接返回
+    2. 主缓存失效 + 获取锁成功 → 查询数据库并更新缓存
+    3. 主缓存失效 + 获取锁失败 → 使用过期缓存（stale cache）
+    4. 过期缓存也没有 → 返回默认值
 
     Returns:
         int: 活跃玩家持有的金条总量
@@ -84,8 +89,13 @@ def get_effective_gold_supply() -> int:
         cached = cache.get(SUPPLY_CACHE_KEY)
         if cached is not None:
             return cached
-        # 仍然没有缓存，返回默认值避免阻塞
-        logger.warning("Gold supply cache miss and lock not acquired, using default")
+        # 降级策略：使用过期缓存（stale cache），避免使用硬编码默认值
+        stale = cache.get(SUPPLY_STALE_CACHE_KEY)
+        if stale is not None:
+            logger.info("Gold supply cache miss, using stale cache value: %d", stale)
+            return stale
+        # 过期缓存也没有，返回默认值
+        logger.warning("Gold supply cache miss and no stale cache, using default")
         return GOLD_BAR_TARGET_SUPPLY
 
     try:
@@ -97,10 +107,16 @@ def get_effective_gold_supply() -> int:
         ).aggregate(total=Sum("quantity"))
 
         total = result["total"] or 0
+        # 同时更新主缓存和过期缓存（过期缓存TTL更长，用于降级）
         cache.set(SUPPLY_CACHE_KEY, total, SUPPLY_CACHE_TTL)
+        cache.set(SUPPLY_STALE_CACHE_KEY, total, SUPPLY_STALE_CACHE_TTL)
         return total
     except Exception as e:
         logger.warning(f"Failed to query gold supply: {e}")
+        # 降级策略：优先使用过期缓存
+        stale = cache.get(SUPPLY_STALE_CACHE_KEY)
+        if stale is not None:
+            return stale
         return GOLD_BAR_TARGET_SUPPLY
     finally:
         cache.delete(lock_key)

@@ -807,7 +807,7 @@ def resolve_priority_phases(
     next_round_no = 1
     min_priority = min(priority_values)
 
-    # 防止异常优先级值导致过多阶段循环
+    # 安全修复：验证优先级上下限，防止异常优先级值导致过多阶段循环
     if min_priority < MIN_ALLOWED_PRIORITY:
         logger.warning(
             "Priority value %d exceeds minimum allowed %d, clamping",
@@ -815,6 +815,15 @@ def resolve_priority_phases(
             MIN_ALLOWED_PRIORITY,
         )
         min_priority = MIN_ALLOWED_PRIORITY
+
+    # 安全修复：同时检查优先级上限
+    if min_priority > MAX_ALLOWED_PRIORITY:
+        logger.warning(
+            "Priority value %d exceeds maximum allowed %d, clamping",
+            min_priority,
+            MAX_ALLOWED_PRIORITY,
+        )
+        min_priority = MAX_ALLOWED_PRIORITY
 
     staged_priorities = list(range(min_priority, 0))
     for priority in staged_priorities:
@@ -873,8 +882,8 @@ def simulate_battle(
     drop_table: Dict[str, Any] | None = None,
     max_rounds: int = MAX_ROUNDS,
 ) -> BattleSimulationResult:
-    # 防止传入过大的回合数导致性能问题
-    max_rounds = min(max_rounds, MAX_ROUNDS * 2)
+    # 安全修复：验证回合数范围，防止负数和过大值导致异常
+    max_rounds = max(1, min(max_rounds, MAX_ROUNDS * 2))
     rounds: List[Dict[str, Any]] = []
     priority_rounds, next_round_start = resolve_priority_phases(attacker_units, defender_units, rng)
     rounds.extend(priority_rounds)

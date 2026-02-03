@@ -49,7 +49,7 @@ def calculate_level_up_cost(current_level: int, target_levels: int = 1) -> Dict[
         资源成本字典 {"grain": 粮食数量, "silver": 银两数量}
 
     Raises:
-        ValueError: 如果升级后超过最大等级
+        ValueError: 如果参数不合法或升级后超过最大等级
 
     Examples:
         >>> calculate_level_up_cost(1, 1)
@@ -57,6 +57,12 @@ def calculate_level_up_cost(current_level: int, target_levels: int = 1) -> Dict[
         >>> calculate_level_up_cost(5, 2)
         {'grain': 1320, 'silver': 100}
     """
+    # 安全修复：验证参数范围，防止负数导致异常行为
+    if current_level < 1:
+        raise ValueError(f"当前等级必须>=1，收到: {current_level}")
+    if target_levels < 1:
+        raise ValueError(f"升级等级数必须>=1，收到: {target_levels}")
+
     target_level = current_level + target_levels
     if target_level > MAX_GUEST_LEVEL:
         raise ValueError(f"已达等级上限 {MAX_GUEST_LEVEL}")

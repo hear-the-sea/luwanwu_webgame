@@ -92,9 +92,19 @@ def _purge_sessions_fallback(user_id: int, current_session_key: str) -> None:
                 continue
             session.delete()
             deleted_count += 1
-        except Exception:
-            # Skip corrupted sessions during fallback scan
-            logger.debug(f"Failed to decode/delete session {session.session_key[:8]}...", exc_info=True)
+        except (ValueError, KeyError, TypeError) as e:
+            # 安全修复：明确捕获特定的解码异常类型，而非所有异常
+            logger.debug(
+                f"Failed to decode session {session.session_key[:8]}...: {type(e).__name__}",
+                exc_info=True
+            )
+            continue
+        except Exception as e:
+            # 其他未预期的异常记录为警告级别
+            logger.warning(
+                f"Unexpected error processing session {session.session_key[:8]}...: {e}",
+                exc_info=True
+            )
             continue
 
     if deleted_count > 0:

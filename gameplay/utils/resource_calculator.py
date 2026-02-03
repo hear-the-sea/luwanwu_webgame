@@ -124,6 +124,13 @@ def normalize_mission_loadout(raw: Dict[str, int] | None, troop_templates: Dict)
     return loadout
 
 
+# 旅行时间计算常量
+AGILITY_SPEED_FACTOR = 0.5  # 敏捷转换速度系数（每点敏捷减免0.5秒）
+TROOP_SPEED_FACTOR = 0.5    # 兵种速度加成系数
+DEFAULT_TROOP_SPEED = 60    # 默认兵种速度加成
+MIN_TRAVEL_TIME = 10        # 最小旅行时间（秒）
+
+
 def calculate_travel_time(base_time: int, guests, troop_loadout: Dict[str, int], troop_templates: Dict) -> int:
     """
     计算任务旅行时间，考虑门客敏捷和兵种速度加成。
@@ -149,18 +156,18 @@ def calculate_travel_time(base_time: int, guests, troop_loadout: Dict[str, int],
     total_troops = sum(count for count in troop_loadout.values() if count > 0)
     if total_troops > 0:
         weighted_speed = sum(
-            count * troop_templates.get(key, {}).get("speed_bonus", 60)
+            count * troop_templates.get(key, {}).get("speed_bonus", DEFAULT_TROOP_SPEED)
             for key, count in troop_loadout.items()
             if count > 0
         )
         avg_speed = weighted_speed / total_troops
-        troop_speed = avg_speed * 0.5
+        troop_speed = avg_speed * TROOP_SPEED_FACTOR
     else:
         troop_speed = 0
 
     # 总减免时间
-    reduction = int((guest_speed * 0.5) + troop_speed)
-    final_time = max(10, max(0, base_time - reduction))
+    reduction = int((guest_speed * AGILITY_SPEED_FACTOR) + troop_speed)
+    final_time = max(MIN_TRAVEL_TIME, max(0, base_time - reduction))
 
     # 应用全局时间流速倍率
-    return scale_duration(final_time, minimum=10)
+    return scale_duration(final_time, minimum=MIN_TRAVEL_TIME)

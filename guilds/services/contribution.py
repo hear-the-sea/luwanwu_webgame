@@ -10,6 +10,9 @@ from gameplay.services.resources import spend_resources_locked
 from ..constants import CONTRIBUTION_RATES, DAILY_DONATION_LIMITS, MIN_DONATION_AMOUNT
 from ..models import Guild, GuildDonationLog, GuildMember, GuildResourceLog
 
+# 安全修复：贡献度累积上限，防止PositiveIntegerField溢出（最大2147483647）
+MAX_CONTRIBUTION = 2_000_000_000  # 20亿安全上限
+
 
 def donate_resource(member, resource_type, amount):
     """
@@ -84,6 +87,10 @@ def donate_resource(member, resource_type, amount):
 
         # 计算获得的贡献
         contribution = amount * CONTRIBUTION_RATES[resource_type]
+
+        # 安全修复：检查贡献度累积上限，防止整数溢出
+        if member_locked.total_contribution + contribution > MAX_CONTRIBUTION:
+            raise ValueError(f"贡献度已达上限（{MAX_CONTRIBUTION:,}）")
 
         # 步骤3：使用统一的资源消费函数扣除玩家资源（已包含并发安全检查）
         spend_resources_locked(

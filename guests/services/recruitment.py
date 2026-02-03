@@ -692,6 +692,7 @@ def allocate_attribute_points(guest: Guest, attribute: str, points: int) -> Gues
     Raises:
         ValueError: 参数不合法时抛出
     """
+    # 安全修复：验证点数范围
     if points <= 0:
         raise InvalidAllocationError("zero_points")
     if guest.attribute_points < points:
@@ -716,6 +717,12 @@ def allocate_attribute_points(guest: Guest, attribute: str, points: int) -> Gues
     allocated_field = allocated_map.get(attribute)
     if not target or not allocated_field:
         raise InvalidAllocationError("unknown_attribute")
+
+    # 安全修复：检查属性上限，防止溢出
+    MAX_ATTRIBUTE_VALUE = 9999  # 属性值安全上限
+    current_value = getattr(guest, target)
+    if current_value + points > MAX_ATTRIBUTE_VALUE:
+        raise InvalidAllocationError("attribute_overflow")
 
     guest.attribute_points -= points
     updated_fields = ["attribute_points"]

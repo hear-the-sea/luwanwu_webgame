@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict
+from typing import Dict, Tuple
 
 from django.conf import settings
 from django.db import transaction
@@ -17,6 +17,27 @@ from ..models import Manor, ResourceEvent, ResourceType
 from ..utils.resource_calculator import RESOURCE_FIELDS, get_hourly_rates
 
 logger = logging.getLogger(__name__)
+
+
+def _get_resource_capacity(manor: Manor, resource: str) -> Tuple[int, bool]:
+    """
+    获取指定资源的容量上限。
+
+    DRY 修复：提取重复的容量判断逻辑为辅助函数。
+
+    Args:
+        manor: 庄园对象（应该是锁定后的对象以保证事务一致性）
+        resource: 资源类型
+
+    Returns:
+        (容量值, 是否为有效资源类型)
+    """
+    if resource == ResourceType.SILVER:
+        return manor.silver_capacity, True
+    elif resource == ResourceType.GRAIN:
+        return manor.grain_capacity, True
+    else:
+        return 0, False
 
 
 def spend_resources_locked(
@@ -46,47 +67,66 @@ def spend_resources_locked(
 
 def grant_resources_locked(
     manor: Manor, rewards: Dict[str, int], note: str, reason: str = ResourceEvent.Reason.TASK_REWARD
-) -> Dict[str, int]:
+) -> Tuple[Dict[str, int], Dict[str, int]]:
     """
     发放资源奖励给庄园（假设调用方已在 transaction.atomic 中持有 manor 行锁）。
 
     该函数不会创建新的事务块，也不会额外对 Manor 行加锁；适用于上层服务函数已经
     `select_for_update()` 锁定 manor 行的场景，避免重复锁与嵌套事务的冗余开销。
+
+    Returns:
+        (credited, overflow) - 实际入账资源和溢出资源字典
     """
     if not rewards:
-        return {}
+        return {}, {}
     if not transaction.get_connection().in_atomic_block:
         raise RuntimeError("grant_resources_locked must be called inside transaction.atomic()")
 
     credited: Dict[str, int] = {}
+    overflow: Dict[str, int] = {}
+
     for resource, amount in rewards.items():
         if amount <= 0:
             continue
-        # 使用各资源对应的容量上限
-        if resource == ResourceType.SILVER:
-            capacity = manor.silver_capacity
-        elif resource == ResourceType.GRAIN:
-            capacity = manor.grain_capacity
-        else:
-            # 代码质量修复：记录未知资源类型，便于排查配置错误
-            logger.warning(
+
+        # DRY 修复：使用辅助函数获取容量
+        capacity, is_valid = _get_resource_capacity(manor, resource)
+        if not is_valid:
+            # 代码质量修复：在开发环境抛异常，生产环境记录错误日志
+            if settings.DEBUG:
+                raise ValueError(f"未知资源类型: {resource}")
+            logger.error(
                 f"未知资源类型被跳过: {resource}={amount}",
                 extra={"manor_id": manor.id, "resource": resource, "amount": amount}
             )
-            continue  # 未知资源类型跳过
+            continue
 
         current_value = getattr(manor, resource, 0)
         new_value = min(capacity, current_value + amount)
         added = max(0, new_value - current_value)
+        overflowed = amount - added
+
         if added <= 0:
+            overflow[resource] = amount
             continue
+
         setattr(manor, resource, new_value)
         credited[resource] = added
+        if overflowed > 0:
+            overflow[resource] = overflowed
 
     if credited:
         manor.save(update_fields=list(credited.keys()))
         log_resource_gain(manor, credited, reason, note)
-    return credited
+
+    # 记录溢出情况便于调试
+    if overflow:
+        logger.debug(
+            f"资源溢出被丢弃: {overflow}",
+            extra={"manor_id": manor.id, "overflow": overflow}
+        )
+
+    return credited, overflow
 
 
 def sync_resource_production(manor: Manor) -> None:
@@ -129,13 +169,10 @@ def sync_resource_production(manor: Manor) -> None:
 
                 current_value = getattr(locked_manor, resource)
 
-                # 使用各资源对应的容量上限
-                if resource == ResourceType.SILVER:
-                    capacity = locked_manor.silver_capacity
-                elif resource == ResourceType.GRAIN:
-                    capacity = locked_manor.grain_capacity
-                else:
-                    continue  # 未知资源类型跳过
+                # DRY 修复：使用辅助函数获取容量（在锁内调用保证事务一致性）
+                capacity, is_valid = _get_resource_capacity(locked_manor, resource)
+                if not is_valid:
+                    continue
 
                 new_value = min(capacity, current_value + gain)
                 added = max(0, new_value - current_value)
@@ -197,8 +234,12 @@ def spend_resources(
         return
 
     with transaction.atomic():
-        Manor.objects.select_for_update().filter(pk=manor.pk).exists()
-        spend_resources_locked(manor, cost, note=note, reason=reason)
+        # 安全修复：正确获取锁定后的 manor 对象并传递给 spend_resources_locked
+        locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
+        spend_resources_locked(locked_manor, cost, note=note, reason=reason)
+
+    # 刷新原始 manor 对象以反映最新状态
+    manor.refresh_from_db(fields=RESOURCE_FIELDS)
 
 
 def grant_resources(
@@ -222,11 +263,10 @@ def grant_resources(
     if not rewards:
         return {}
 
-    credited: Dict[str, int] = {}
-
     with transaction.atomic():
         locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
-        credited = grant_resources_locked(locked_manor, rewards, note=note, reason=reason)
+        # 修复：正确解构 grant_resources_locked 的返回值
+        credited, _overflow = grant_resources_locked(locked_manor, rewards, note=note, reason=reason)
 
     if credited:
         manor.refresh_from_db(fields=RESOURCE_FIELDS)
