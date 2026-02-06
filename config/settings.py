@@ -4,6 +4,7 @@ import math
 import os
 import sys
 from pathlib import Path
+from urllib.parse import quote, urlparse, urlunparse
 
 from dotenv import load_dotenv
 from kombu import Queue
@@ -137,10 +138,32 @@ ASGI_APPLICATION = "config.asgi.application"
 
 REDIS_URL = env("REDIS_URL", "redis://127.0.0.1:6379")
 REDIS_PASSWORD = env("REDIS_PASSWORD", "")  # Redis 密码认证
-REDIS_BROKER_URL = env("REDIS_BROKER_URL", f"{REDIS_URL}/0")
-REDIS_RESULT_URL = env("REDIS_RESULT_URL", REDIS_BROKER_URL)
-REDIS_CHANNEL_URL = env("REDIS_CHANNEL_URL", f"{REDIS_URL}/1")
-REDIS_CACHE_URL = env("REDIS_CACHE_URL", f"{REDIS_URL}/2")
+
+
+def _redis_url_with_password(url: str, password: str) -> str:
+    """Inject password into a redis:// URL if it has no auth part."""
+    if not password:
+        return url
+
+    parsed = urlparse(url)
+    if parsed.scheme not in {"redis", "rediss"}:
+        return url
+
+    # If URL already includes userinfo (username/password), keep it.
+    if "@" in (parsed.netloc or ""):
+        return url
+
+    host = parsed.hostname or ""
+    port = f":{parsed.port}" if parsed.port else ""
+    auth = f":{quote(password, safe='')}@"
+    netloc = f"{auth}{host}{port}"
+    return urlunparse(parsed._replace(netloc=netloc))
+
+
+REDIS_BROKER_URL = _redis_url_with_password(env("REDIS_BROKER_URL", f"{REDIS_URL}/0"), REDIS_PASSWORD)
+REDIS_RESULT_URL = _redis_url_with_password(env("REDIS_RESULT_URL", REDIS_BROKER_URL), REDIS_PASSWORD)
+REDIS_CHANNEL_URL = _redis_url_with_password(env("REDIS_CHANNEL_URL", f"{REDIS_URL}/1"), REDIS_PASSWORD)
+REDIS_CACHE_URL = _redis_url_with_password(env("REDIS_CACHE_URL", f"{REDIS_URL}/2"), REDIS_PASSWORD)
 
 # Redis 缓存配置（支持密码认证）
 _redis_cache_options = {
@@ -265,11 +288,12 @@ CHANNEL_LAYERS = {
     },
 }
 
-CELERY_BROKER_URL = env("CELERY_BROKER_URL", REDIS_BROKER_URL)
+CELERY_BROKER_URL = _redis_url_with_password(env("CELERY_BROKER_URL", REDIS_BROKER_URL), REDIS_PASSWORD)
 CELERY_RESULT_BACKEND = env(
     "CELERY_RESULT_BACKEND",
     CELERY_BROKER_URL if "CELERY_BROKER_URL" in os.environ else REDIS_RESULT_URL,
 )
+CELERY_RESULT_BACKEND = _redis_url_with_password(CELERY_RESULT_BACKEND, REDIS_PASSWORD)
 CELERY_DEFAULT_QUEUE = env("CELERY_DEFAULT_QUEUE", "default")
 CELERY_BATTLE_QUEUE = env("CELERY_BATTLE_QUEUE", "battle")
 CELERY_TIMER_QUEUE = env("CELERY_TIMER_QUEUE", "timer")
