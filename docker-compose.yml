@@ -5,8 +5,8 @@ services:
       - sh
       - -c
       - |
-        if [ -n "${REDIS_PASSWORD:-}" ]; then
-          exec redis-server --appendonly yes --requirepass "$REDIS_PASSWORD";
+        if [ -n "$$REDIS_PASSWORD" ]; then
+          exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD";
         fi
         exec redis-server --appendonly yes;
     volumes:
@@ -15,8 +15,8 @@ services:
       test:
         - CMD-SHELL
         - |
-          if [ -n "${REDIS_PASSWORD:-}" ]; then
-            redis-cli -a "$REDIS_PASSWORD" ping
+          if [ -n "$$REDIS_PASSWORD" ]; then
+            redis-cli -a "$$REDIS_PASSWORD" ping
           else
             redis-cli ping
           fi
