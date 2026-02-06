@@ -77,6 +77,18 @@ pip install -r requirements.txt
 make install
 ```
 
+为了保证环境可复现（尤其是线上/CI），建议使用锁定依赖安装：
+
+```bash
+make install-lock
+```
+
+更新锁文件：
+
+```bash
+make lock
+```
+
 建议安装 `pre-commit` 钩子，避免提交前才发现格式/静态检查问题：
 
 ```bash

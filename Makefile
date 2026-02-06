@@ -8,6 +8,12 @@ FLAKE8_TARGETS ?= accounts battle gameplay guests guilds trade core websocket co
 install:
 	pip install -r requirements-dev.txt
 
+install-lock:
+	pip install -r requirements.lock.txt
+
+lock:
+	$(PYTHON) -m pip freeze > requirements.lock.txt
+
 precommit:
 	pre-commit install
 
