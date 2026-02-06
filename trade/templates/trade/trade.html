@@ -109,7 +109,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // Market 全局函数
-function openListingModal(itemKey, itemName, available, minPrice) {
+function openListingModal(itemKey, itemName, available, minPrice, rarity, imageUrl) {
     const modal = document.getElementById('listingModal');
     if (!modal) return;
     const itemKeyEl = document.getElementById('modal-item-key');
@@ -118,11 +118,27 @@ function openListingModal(itemKey, itemName, available, minPrice) {
     const minPriceEl = document.getElementById('modal-min-price');
     const quantityEl = document.getElementById('modal-quantity');
     const unitPriceEl = document.getElementById('modal-unit-price');
+    const itemIconEl = document.getElementById('modal-item-icon');
+    const itemInitialEl = document.getElementById('modal-item-initial');
 
     if (itemKeyEl) itemKeyEl.value = itemKey;
-    if (itemNameEl) itemNameEl.textContent = itemName;
+    if (itemNameEl) {
+        itemNameEl.textContent = itemName;
+        itemNameEl.className = 'tw-item-name rarity-text-' + (rarity || 'gray');
+    }
     if (availableEl) availableEl.textContent = available;
     if (minPriceEl) minPriceEl.textContent = minPrice.toLocaleString();
+
+    // 更新物品图标
+    if (itemIconEl) {
+        itemIconEl.className = 'tw-item-icon rarity-' + (rarity || 'gray');
+        if (imageUrl) {
+            itemIconEl.innerHTML = '<img src="' + imageUrl + '" alt="' + itemName + '" style="width:100%;height:100%;object-fit:contain;">';
+        } else if (itemInitialEl) {
+            itemIconEl.innerHTML = '<span class="tw-icon-placeholder">' + (itemName ? itemName.charAt(0) : '?') + '</span>';
+        }
+    }
+
     if (quantityEl) {
         quantityEl.value = 1;
         quantityEl.max = available;
@@ -138,7 +154,7 @@ function openListingModal(itemKey, itemName, available, minPrice) {
     });
     updateFee();
     updateTotalPrice();
-    modal.style.display = 'block';
+    modal.style.display = 'flex';
 }
 
 function closeListingModal() {

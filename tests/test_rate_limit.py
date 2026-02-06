@@ -6,6 +6,7 @@ from django.contrib.sessions.middleware import SessionMiddleware
 from django.core.cache import cache
 from django.http import HttpResponse
 from django.test import RequestFactory, TestCase
+from redis.exceptions import RedisError
 
 from core.utils.rate_limit import rate_limit_redirect
 
@@ -39,5 +40,24 @@ class RateLimitRedirectTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
         response = _limited_view(request)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/rate-limit")
+
+    def test_rate_limit_redirect_returns_busy_when_cache_down(self):
+        request = self.factory.post("/test")
+        request.user = self.user
+        _attach_session_and_messages(request)
+
+        original_add = cache.add
+
+        def raise_redis_error(*args, **kwargs):
+            raise RedisError("cache unavailable")
+
+        try:
+            cache.add = raise_redis_error
+            response = _limited_view(request)
+        finally:
+            cache.add = original_add
+
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response["Location"], "/rate-limit")

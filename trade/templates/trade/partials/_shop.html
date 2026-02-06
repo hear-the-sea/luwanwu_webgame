@@ -3,6 +3,17 @@
     <!-- 购买区域 -->
     <div id="shop-buy-section" class="tw-trade-card">
         {% if shop_items %}
+        <div class="tw-filter-bar">
+            <form method="get" class="tw-filter-form">
+                <input type="hidden" name="tab" value="shop">
+                <label for="shop-category" class="tw-filter-label">筛选</label>
+                <select id="shop-category" name="category" class="tw-filter-select" onchange="this.form.submit()">
+                    {% for opt in categories %}
+                    <option value="{{ opt.key }}" {% if selected_category == opt.key %}selected{% endif %}>{{ opt.label }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
         <div class="tw-shop-table-wrapper">
         <table class="tw-shop-table">
             <thead>
@@ -12,17 +23,6 @@
                     <th>价格</th>
                     <th>库存</th>
                     <th>操作</th>
-                    <th class="tw-filter-th">
-                        <form method="get" class="tw-filter-form">
-                            <input type="hidden" name="tab" value="shop">
-                            <label for="shop-category" class="tw-filter-label">筛选</label>
-                            <select id="shop-category" name="category" class="tw-filter-select" onchange="this.form.submit()">
-                                {% for opt in categories %}
-                                <option value="{{ opt.key }}" {% if selected_category == opt.key %}selected{% endif %}>{{ opt.label }}</option>
-                                {% endfor %}
-                            </select>
-                        </form>
-                    </th>
                 </tr>
             </thead>
             <tbody>
@@ -91,7 +91,6 @@
                         <span class="tw-out-of-stock">售罄</span>
                         {% endif %}
                     </td>
-                    <td></td>
                 </tr>
                 {% endfor %}
             </tbody>

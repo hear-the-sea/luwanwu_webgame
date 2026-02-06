@@ -218,7 +218,7 @@
                         <td>
                             <button type="button"
                                     class="tw-btn-trade"
-                                    onclick="openListingModal('{{ item.template.key|escapejs }}', '{{ item.template.name|escapejs }}', {{ item.quantity }}, {{ item.template.price }})">
+                                    onclick="openListingModal('{{ item.template.key|escapejs }}', '{{ item.template.name|escapejs }}', {{ item.quantity }}, {{ item.template.price }}, '{{ item.template.rarity|default:"gray" }}', '{% if item.template.image %}{{ item.template.image.url }}{% endif %}')">
                                 上架
                             </button>
                         </td>
@@ -379,69 +379,101 @@
             <button type="button" class="tw-modal-close" onclick="closeListingModal()">&times;</button>
         </div>
 
-        <form method="post" action="{% url 'trade:market_create_listing' %}">
+        <form method="post" action="{% url 'trade:market_create_listing' %}" class="tw-modal-form">
             {% csrf_token %}
             <input type="hidden" name="item_key" id="modal-item-key">
+            <input type="hidden" id="modal-item-rarity" value="">
 
             <div class="tw-modal-body">
-                <div class="tw-market-form-group">
-                    <label>物品名称</label>
-                    <p id="modal-item-name" class="tw-market-form-value"></p>
+                <!-- 物品信息卡片 -->
+                <div class="tw-listing-item-card">
+                    <div class="tw-item-cell">
+                        <div class="tw-item-icon" id="modal-item-icon">
+                            <span class="tw-icon-placeholder" id="modal-item-initial"></span>
+                        </div>
+                        <div class="tw-listing-item-info">
+                            <span id="modal-item-name" class="tw-item-name"></span>
+                            <span class="tw-listing-item-stock">库存：<strong id="modal-available"></strong></span>
+                        </div>
+                    </div>
+                    <div class="tw-listing-ref-price">
+                        <span class="tw-listing-ref-label">参考价</span>
+                        <span class="tw-listing-ref-value" id="modal-min-price"></span>
+                    </div>
                 </div>
 
-                <div class="tw-market-form-group">
-                    <label for="modal-quantity">上架数量</label>
-                    <input type="number"
-                           name="quantity"
-                           id="modal-quantity"
-                           min="1"
-                           required>
-                    <p class="tw-market-form-hint">可用：<span id="modal-available"></span></p>
+                <!-- 上架设置 -->
+                <div class="tw-listing-form-grid">
+                    <div class="tw-market-form-group">
+                        <label for="modal-quantity">上架数量</label>
+                        <input type="number"
+                               name="quantity"
+                               id="modal-quantity"
+                               min="1"
+                               placeholder="输入数量"
+                               required>
+                    </div>
+
+                    <div class="tw-market-form-group">
+                        <label for="modal-unit-price">单价（银两）</label>
+                        <input type="number"
+                               name="unit_price"
+                               id="modal-unit-price"
+                               min="0"
+                               max="10000000"
+                               placeholder="输入单价"
+                               required>
+                    </div>
                 </div>
 
-                <div class="tw-market-form-group">
-                    <label for="modal-unit-price">单价（银两）</label>
-                    <input type="number"
-                           name="unit_price"
-                           id="modal-unit-price"
-                           min="0"
-                           max="10000000"
-                           required>
-                    <p class="tw-market-form-hint">
-                        最低：<span id="modal-min-price"></span> 银两，最高：10,000,000 银两
-                    </p>
-                    <p class="tw-market-form-hint">
-                        总价：<span id="modal-total-price" class="tw-market-highlight">0</span> 银两
-                    </p>
+                <div class="tw-listing-total-row">
+                    <span>预计总价</span>
+                    <span class="tw-listing-total-value"><span id="modal-total-price">0</span> 银两</span>
                 </div>
 
+                <!-- 上架时长选择 -->
                 <div class="tw-market-form-group">
                     <label>上架时长</label>
-                    <div class="tw-market-duration-options">
-                        <label class="tw-market-radio-option">
+                    <div class="tw-listing-duration-grid">
+                        <label class="tw-listing-duration-card">
                             <input type="radio" name="duration" value="7200" checked onchange="updateFee()">
-                            <span>2小时（手续费 5,000 银两）</span>
+                            <div class="tw-listing-duration-content">
+                                <span class="tw-listing-duration-time">2小时</span>
+                                <span class="tw-listing-duration-fee">手续费 5,000</span>
+                            </div>
                         </label>
-                        <label class="tw-market-radio-option">
+                        <label class="tw-listing-duration-card">
                             <input type="radio" name="duration" value="28800" onchange="updateFee()">
-                            <span>8小时（手续费 10,000 银两）</span>
+                            <div class="tw-listing-duration-content">
+                                <span class="tw-listing-duration-time">8小时</span>
+                                <span class="tw-listing-duration-fee">手续费 10,000</span>
+                            </div>
                         </label>
-                        <label class="tw-market-radio-option">
+                        <label class="tw-listing-duration-card">
                             <input type="radio" name="duration" value="86400" onchange="updateFee()">
-                            <span>24小时（手续费 20,000 银两）</span>
+                            <div class="tw-listing-duration-content">
+                                <span class="tw-listing-duration-time">24小时</span>
+                                <span class="tw-listing-duration-fee">手续费 20,000</span>
+                            </div>
                         </label>
                     </div>
                 </div>
 
-                <div class="tw-market-form-summary">
-                    <p>手续费：<span id="modal-fee" class="tw-market-highlight">5,000</span> 银两</p>
-                    <p class="tw-market-form-note">
-                        注意：成交后卖家需支付10%税费，超期未售出手续费不退还
-                    </p>
+                <!-- 费用汇总 -->
+                <div class="tw-listing-summary">
+                    <div class="tw-listing-summary-row">
+                        <span>上架手续费</span>
+                        <span><span id="modal-fee">5,000</span> 银两</span>
+                    </div>
+                    <div class="tw-listing-summary-row tw-listing-summary-note">
+                        <span>成交税费</span>
+                        <span>成交价的 10%</span>
+                    </div>
+                    <p class="tw-listing-warning">超期未售出手续费不退还</p>
                 </div>
             </div>
 
-            <div class="tw-market-form-actions">
+            <div class="tw-modal-footer">
                 <button type="button" class="tw-btn-secondary" onclick="closeListingModal()">取消</button>
                 <button type="submit" class="tw-btn-primary">确认上架</button>
             </div>

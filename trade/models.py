@@ -224,6 +224,14 @@ class AuctionRound(models.Model):
     start_at = models.DateTimeField("开始时间")
     end_at = models.DateTimeField("结束时间", db_index=True)
     settled_at = models.DateTimeField("结算时间", null=True, blank=True)
+    status_singleton = models.CharField(
+        "状态单例锁",
+        max_length=16,
+        null=True,
+        blank=True,
+        unique=True,
+        editable=False,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -234,6 +242,24 @@ class AuctionRound(models.Model):
         indexes = [
             models.Index(fields=["status", "end_at"]),
         ]
+
+    @staticmethod
+    def _status_singleton_for(status: str) -> str | None:
+        if status in {AuctionRound.Status.ACTIVE, AuctionRound.Status.SETTLING}:
+            return status
+        return None
+
+    def save(self, *args, **kwargs):
+        self.status_singleton = self._status_singleton_for(self.status)
+
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None:
+            update_fields = set(update_fields)
+            if "status" in update_fields or "status_singleton" in update_fields:
+                update_fields.add("status_singleton")
+                kwargs["update_fields"] = list(update_fields)
+
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"第{self.round_number}轮拍卖 ({self.get_status_display()})"

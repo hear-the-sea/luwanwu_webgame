@@ -9,6 +9,8 @@ from django.shortcuts import redirect, render
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, TemplateView
 
+from core.utils.network import get_client_ip
+
 from .forms import LoginForm, SignUpForm
 from .models import User
 from .utils import purge_other_sessions
@@ -28,22 +30,7 @@ def _get_client_ip(request) -> str:
     - 仅当配置了可信代理时才使用 X-Forwarded-For
     - 防止攻击者通过伪造 HTTP 头绕过登录限制
     """
-    # 安全修复：优先使用 REMOTE_ADDR，仅在配置可信代理时才信任 X-Forwarded-For
-    from django.conf import settings
-
-    remote_addr = request.META.get('REMOTE_ADDR', 'unknown')
-
-    # 仅当请求来自可信代理时才解析 X-Forwarded-For
-    trusted_proxies = getattr(settings, 'TRUSTED_PROXY_IPS', [])
-    if trusted_proxies and remote_addr in trusted_proxies:
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR', '')
-        if x_forwarded_for:
-            # 取第一个非代理 IP（最左边的是原始客户端）
-            ip = x_forwarded_for.split(',')[0].strip()
-            if ip:
-                return ip
-
-    return remote_addr
+    return get_client_ip(request, trust_proxy=True)
 
 
 def _get_login_attempt_key(request, username: str = None) -> tuple[str, str]:

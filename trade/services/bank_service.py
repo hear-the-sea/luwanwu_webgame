@@ -10,7 +10,7 @@
 
 import logging
 import math
-from datetime import date, timedelta
+from datetime import timedelta
 from decimal import Decimal
 
 from django.core.cache import cache
@@ -196,8 +196,8 @@ def calculate_next_rate(manor: Manor) -> int:
     """
     supply_factor = calculate_supply_factor()
     today_count = get_today_exchange_count(manor)
-    # 下一根的累进系数
-    progressive_factor = calculate_progressive_factor(today_count)
+    # 下一根的累进系数应基于“今日已兑换数量 + 1”
+    progressive_factor = calculate_progressive_factor(today_count + 1)
 
     rate = int(GOLD_BAR_BASE_PRICE * supply_factor * progressive_factor)
     return max(GOLD_BAR_MIN_PRICE, min(GOLD_BAR_MAX_PRICE, rate))

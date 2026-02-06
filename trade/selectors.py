@@ -10,7 +10,6 @@ from .services.auction_service import (
     get_auction_stats,
     get_my_bids,
     get_my_leading_bids,
-    get_slot_bid_info,
 )
 from .services.bank_service import get_bank_info
 from .services.market_service import (

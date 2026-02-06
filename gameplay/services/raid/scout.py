@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 def get_scout_tech_level(manor: Manor) -> int:
     """获取庄园的侦察术等级"""
-    from .technology import get_player_technology_level
+    from ..technology import get_player_technology_level
     return get_player_technology_level(manor, "scout_art")
 
 
@@ -262,11 +262,21 @@ def finalize_scout_return(record: ScoutRecord, now=None) -> None:
         # 根据 is_success 设置最终状态并发送消息
         if locked_record.is_success:
             locked_record.status = ScoutRecord.Status.SUCCESS
+            # 归还探子（成功时探子安全返回）
+            try:
+                troop = PlayerTroop.objects.select_for_update().get(
+                    manor=locked_record.attacker,
+                    troop_template__key=PVPConstants.SCOUT_TROOP_KEY
+                )
+                troop.count += locked_record.scout_cost
+                troop.save(update_fields=["count"])
+            except PlayerTroop.DoesNotExist:
+                pass
             # 发送成功消息给进攻方
             _send_scout_success_message(locked_record)
         else:
             locked_record.status = ScoutRecord.Status.FAILED
-            # 发送失败消息给进攻方
+            # 发送失败消息给进攻方（探子损失，不归还）
             _send_scout_fail_message(locked_record)
 
         locked_record.completed_at = now
@@ -280,8 +290,13 @@ def _gather_scout_intel(defender: Manor) -> Dict[str, Any]:
         total=models.Sum("count")
     )["total"] or 0
 
-    # 门客数量
-    guest_count = defender.guests.count()
+    # 门客数量和平均等级
+    guests = defender.guests.all()
+    guest_count = guests.count()
+    avg_guest_level = 0
+    if guest_count > 0:
+        total_level = sum(g.level for g in guests)
+        avg_guest_level = round(total_level / guest_count)
 
     # 资产等级
     asset_level, _ = get_asset_level(defender)
@@ -289,6 +304,7 @@ def _gather_scout_intel(defender: Manor) -> Dict[str, Any]:
     return {
         "troop_description": get_troop_description(total_troops),
         "guest_count": guest_count,
+        "avg_guest_level": avg_guest_level,
         "asset_level": asset_level,
         "scouted_at": timezone.now().isoformat(),
     }
@@ -297,13 +313,12 @@ def _gather_scout_intel(defender: Manor) -> Dict[str, Any]:
 def _send_scout_success_message(record: ScoutRecord) -> None:
     """发送侦察成功消息"""
     intel = record.intel_data or {}
-    body = f"""侦察员已成功潜入 {record.defender.display_name}，获取到以下情报：
+    body = f"""探子已成功潜入 {record.defender.display_name}，获取到以下情报：
 
 【护院情况】{intel.get('troop_description', '未知')}
 【门客数量】{intel.get('guest_count', 0)} 人
-【资产状况】{intel.get('asset_level', '未知')}
-
-情报有效期：24小时"""
+【门客等级】平均 {intel.get('avg_guest_level', 0)} 级
+【资产状况】{intel.get('asset_level', '未知')}"""
 
     create_message(
         manor=record.attacker,

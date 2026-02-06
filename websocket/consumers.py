@@ -600,10 +600,11 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
         payload = event.get("payload", {})
         safe_payload = {
             "type": payload.get("type"),
-            "message": payload.get("message"),
+            "channel": payload.get("channel"),
+            "id": payload.get("id"),
+            "ts": payload.get("ts", payload.get("timestamp")),
             "sender": payload.get("sender"),
-            "timestamp": payload.get("timestamp"),
-            "is_trumpet": payload.get("is_trumpet"),
+            "text": payload.get("text", payload.get("message")),
         }
         # 移除 None 值
         safe_payload = {k: v for k, v in safe_payload.items() if v is not None}

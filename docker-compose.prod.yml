@@ -1,7 +1,14 @@
 services:
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes"]
+    command:
+      - sh
+      - -c
+      - |
+        if [ -n "${REDIS_PASSWORD:-}" ]; then
+          exec redis-server --appendonly yes --requirepass "$REDIS_PASSWORD";
+        fi
+        exec redis-server --appendonly yes;
     volumes:
       - redis_data:/data
     restart: unless-stopped
@@ -12,8 +19,8 @@ services:
     environment:
       MYSQL_DATABASE: webgame
       MYSQL_USER: webgame
-      MYSQL_PASSWORD: webgame
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env.docker}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env.docker}
     volumes:
       - db_data:/var/lib/mysql
     restart: unless-stopped

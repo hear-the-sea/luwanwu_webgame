@@ -216,7 +216,7 @@ def finalize_building_upgrade(
             manor=building.manor,
             kind=Message.Kind.SYSTEM,
             title=f"{building.building_type.name} 升级完成",
-            body=f"当前等级 Lv{building.level}",
+            body=f"等级 Lv{building.level - 1} → Lv{building.level}",
         )
         notify_user(
             building.manor.user_id,

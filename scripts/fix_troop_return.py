@@ -6,6 +6,7 @@
 import os
 import sys
 import django
+import argparse
 from pathlib import Path
 
 # 设置 Django settings
@@ -15,10 +16,11 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 sys.path.insert(0, str(Path(__file__).parent.parent))
 django.setup()
 
-from gameplay.models import MissionRun, PlayerTroop
-from django.db import transaction
-from django.db.models import F
-from django.utils import timezone
+from django.db import transaction  # noqa: E402
+from django.db.models import F  # noqa: E402
+from django.utils import timezone  # noqa: E402
+
+from gameplay.models import MissionRun, PlayerTroop  # noqa: E402
 
 
 def fix_mission_troop_return(run_id: int):
@@ -52,7 +54,7 @@ def fix_mission_troop_return(run_id: int):
 
     # 获取出征配置
     loadout = run.troop_loadout or {}
-    print(f"\n出征配置:")
+    print("\n出征配置:")
     for key, count in loadout.items():
         if count > 0:
             print(f"  {key}: {count}")
@@ -61,7 +63,7 @@ def fix_mission_troop_return(run_id: int):
         print("\n⚠️  无战报，将全额归还")
         target_troops = loadout
     else:
-        print(f"\n有战报，将按损失归还")
+        print("\n有战报，将按损失归还")
 
         # 解析战报损失
         losses = report.losses or {}
@@ -101,7 +103,7 @@ def fix_mission_troop_return(run_id: int):
         return
 
     # 执行归还
-    print(f"\n执行归还:")
+    print("\n执行归还:")
     print("-" * 60)
 
     with transaction.atomic():
@@ -138,7 +140,6 @@ def fix_mission_troop_return(run_id: int):
 
 
 if __name__ == "__main__":
-    import argparse
     parser = argparse.ArgumentParser(description="修复护院归还问题")
     parser.add_argument("run_id", type=int, help="MissionRun ID")
     parser.add_argument("--dry-run", action="store_true", help="仅模拟，不实际修改")
@@ -150,15 +151,12 @@ if __name__ == "__main__":
         print("=" * 60)
 
         try:
-            # 仅显示信息，不执行修复
-            from gameplay.models import MissionRun
-
             run = MissionRun.objects.select_related('manor', 'battle_report', 'mission').get(pk=args.run_id)
             manor = run.manor
             report = run.battle_report
 
             loadout = run.troop_loadout or {}
-            print(f"\n出征配置:")
+            print("\n出征配置:")
             for key, count in loadout.items():
                 if count > 0:
                     print(f"  {key}: {count}")
@@ -180,7 +178,7 @@ if __name__ == "__main__":
                     if lost > 0:
                         troops_lost[key] = troops_lost.get(key, 0) + lost
 
-                print(f"\n应归还:")
+                print("\n应归还:")
                 for troop_key, original_count in loadout.items():
                     if original_count == 0:
                         continue

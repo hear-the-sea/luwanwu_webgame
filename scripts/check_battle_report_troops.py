@@ -17,15 +17,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 django.setup()
 
-import argparse
-from gameplay.models import MissionRun
+import argparse  # noqa: E402
+
+from gameplay.models import MissionRun  # noqa: E402
 
 
 def check_mission_run(run_id: int):
     """检查任务运行记录的护院损失"""
-    print(f"=" * 60)
+    print("=" * 60)
     print(f"检查任务运行 ID: {run_id}")
-    print(f"=" * 60)
+    print("=" * 60)
 
     try:
         run = MissionRun.objects.select_related("manor", "mission").get(pk=run_id)
@@ -34,7 +35,7 @@ def check_mission_run(run_id: int):
         return
 
     # 显示基本信息
-    print(f"\n📋 基本信息:")
+    print("\n📋 基本信息:")
     print(f"  庄园 ID: {run.manor_id}")
     print(f"  任务: {run.mission.name if run.mission else 'N/A'}")
     print(f"  状态: {run.status}")
@@ -44,7 +45,7 @@ def check_mission_run(run_id: int):
 
     # 显示出征配置
     loadout = run.troop_loadout or {}
-    print(f"\n⚔️  出征护院配置:")
+    print("\n⚔️  出征护院配置:")
     if loadout:
         for key, count in loadout.items():
             print(f"  {key}: {count}")
@@ -54,10 +55,10 @@ def check_mission_run(run_id: int):
     # 显示战报信息
     report = run.battle_report
     if not report:
-        print(f"\n⚠️  警告：该任务没有战报")
+        print("\n⚠️  警告：该任务没有战报")
         return
 
-    print(f"\n📜 战报信息:")
+    print("\n📜 战报信息:")
     print(f"  战报 ID: {report.id}")
     print(f"  对手: {report.opponent_name}")
     print(f"  战斗类型: {report.battle_type}")
@@ -69,7 +70,7 @@ def check_mission_run(run_id: int):
     attacker_losses = losses.get("attacker", {})
     defender_losses = losses.get("defender", {})
 
-    print(f"\n💥 攻击方损失（attacker）:")
+    print("\n💥 攻击方损失（attacker）:")
     attacker_casualties = attacker_losses.get("casualties", [])
     if attacker_casualties:
         # 检查是否有重复条目
@@ -88,7 +89,7 @@ def check_mission_run(run_id: int):
             print(f"  - {key} ({label}): 损失 {lost}{duplicate_mark}")
 
         # 累加统计
-        print(f"\n📊 累加统计:")
+        print("\n📊 累加统计:")
         total_by_key = {}
         for entry in attacker_casualties:
             key = entry.get("key", "unknown")
@@ -113,7 +114,7 @@ def check_mission_run(run_id: int):
         print("  (无)")
 
     # 显示防守方损失
-    print(f"\n🛡️  防守方损失（defender）:")
+    print("\n🛡️  防守方损失（defender）:")
     defender_casualties = defender_losses.get("casualties", [])
     if defender_casualties:
         for entry in defender_casualties:
@@ -126,14 +127,14 @@ def check_mission_run(run_id: int):
 
     # 显示战报中记录的护院数据
     attacker_troops = report.attacker_troops or {}
-    print(f"\n📈 战报中攻击方护院数据:")
+    print("\n📈 战报中攻击方护院数据:")
     if attacker_troops:
         for key, count in attacker_troops.items():
             print(f"  {key}: {count}")
     else:
         print("  (无)")
 
-    print(f"\n" + "=" * 60)
+    print("\n" + "=" * 60)
 
 
 if __name__ == "__main__":

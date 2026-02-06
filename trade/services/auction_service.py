@@ -7,10 +7,12 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import timedelta
 from typing import Dict, List, Optional, Tuple
 
-from django.db import transaction
+from django.core.cache import cache
+from django.db import IntegrityError, transaction
 from django.db.models import QuerySet, Sum
 from django.utils import timezone
 
@@ -26,6 +28,10 @@ from .auction_config import get_auction_settings, get_enabled_auction_items
 logger = logging.getLogger(__name__)
 
 GOLD_BAR_ITEM_KEY = "gold_bar"
+AUCTION_CREATE_LOCK_KEY = "trade:auction:create_round:lock"
+AUCTION_CREATE_LOCK_TIMEOUT = 30
+AUCTION_SETTLE_LOCK_KEY = "trade:auction:settle_round:lock"
+AUCTION_SETTLE_LOCK_TIMEOUT = 300
 
 # 拍卖位排序字段白名单（防止order_by注入）
 ALLOWED_AUCTION_ORDER_BY = {
@@ -194,69 +200,88 @@ def create_auction_round() -> Optional[AuctionRound]:
     Returns:
         AuctionRound: 新创建的轮次，如果已存在进行中轮次则返回 None
     """
-    # 检查是否已有进行中的轮次
-    if get_current_round():
-        logger.info("已有进行中的拍卖轮次，跳过创建")
+    lock_value = str(uuid.uuid4())
+    lock_acquired = cache.add(AUCTION_CREATE_LOCK_KEY, lock_value, timeout=AUCTION_CREATE_LOCK_TIMEOUT)
+    if not lock_acquired:
+        logger.info("拍卖轮次创建锁未获取，跳过本次创建")
         return None
 
-    settings = get_auction_settings()
-    enabled_items = get_enabled_auction_items()
+    try:
+        settings = get_auction_settings()
+        enabled_items = get_enabled_auction_items()
 
-    if not enabled_items:
-        logger.warning("没有启用的拍卖商品，跳过创建轮次")
-        return None
+        if not enabled_items:
+            logger.warning("没有启用的拍卖商品，跳过创建轮次")
+            return None
 
-    round_number = get_next_round_number()
-    now = timezone.now()
-    end_at = now + timedelta(days=settings.cycle_days)
+        now = timezone.now()
+        end_at = now + timedelta(days=settings.cycle_days)
 
-    with transaction.atomic():
-        # 创建轮次
-        auction_round = AuctionRound.objects.create(
-            round_number=round_number,
-            status=AuctionRound.Status.ACTIVE,
-            start_at=now,
-            end_at=end_at,
-        )
+        with transaction.atomic():
+            # 锁内检查，避免并发场景下创建多个进行中/结算中的轮次
+            if AuctionRound.objects.select_for_update().filter(
+                status__in=[AuctionRound.Status.ACTIVE, AuctionRound.Status.SETTLING]
+            ).exists():
+                logger.info("已有进行中或结算中的拍卖轮次，跳过创建")
+                return None
 
-        # 预先获取所有物品模板
-        item_keys = [item_config.item_key for item_config in enabled_items]
-        templates_map = {
-            t.key: t for t in ItemTemplate.objects.filter(key__in=item_keys)
-        }
+            last_round = AuctionRound.objects.select_for_update().order_by("-round_number").first()
+            round_number = (last_round.round_number + 1) if last_round else 1
 
-        # 批量创建拍卖位
-        slots_to_create = []
-        for item_config in enabled_items:
-            item_template = templates_map.get(item_config.item_key)
-            if not item_template:
-                logger.warning(f"物品模板不存在: {item_config.item_key}，跳过")
-                continue
-
-            # 创建多个拍卖位（分单拍卖）
-            for slot_index in range(item_config.slots):
-                slots_to_create.append(
-                    AuctionSlot(
-                        round=auction_round,
-                        item_template=item_template,
-                        quantity=item_config.quantity_per_slot,
-                        starting_price=item_config.starting_price,
-                        current_price=item_config.starting_price,
-                        min_increment=item_config.min_increment,
-                        status=AuctionSlot.Status.ACTIVE,
-                        config_key=item_config.item_key,
-                        slot_index=slot_index,
-                    )
+            # 创建轮次
+            try:
+                auction_round = AuctionRound.objects.create(
+                    round_number=round_number,
+                    status=AuctionRound.Status.ACTIVE,
+                    start_at=now,
+                    end_at=end_at,
                 )
+            except IntegrityError:
+                # 极端并发下兜底：轮次编号唯一约束冲突时跳过本次创建，等待下次调度重试
+                logger.warning("创建拍卖轮次时发生编号冲突，跳过本次创建")
+                return None
 
-        if slots_to_create:
-            AuctionSlot.objects.bulk_create(slots_to_create)
+            # 预先获取所有物品模板
+            item_keys = [item_config.item_key for item_config in enabled_items]
+            templates_map = {
+                t.key: t for t in ItemTemplate.objects.filter(key__in=item_keys)
+            }
 
-        logger.info(
-            f"创建拍卖轮次 #{round_number}，共 {len(slots_to_create)} 个拍卖位"
-        )
+            # 批量创建拍卖位
+            slots_to_create = []
+            for item_config in enabled_items:
+                item_template = templates_map.get(item_config.item_key)
+                if not item_template:
+                    logger.warning(f"物品模板不存在: {item_config.item_key}，跳过")
+                    continue
 
-    return auction_round
+                # 创建多个拍卖位（分单拍卖）
+                for slot_index in range(item_config.slots):
+                    slots_to_create.append(
+                        AuctionSlot(
+                            round=auction_round,
+                            item_template=item_template,
+                            quantity=item_config.quantity_per_slot,
+                            starting_price=item_config.starting_price,
+                            current_price=item_config.starting_price,
+                            min_increment=item_config.min_increment,
+                            status=AuctionSlot.Status.ACTIVE,
+                            config_key=item_config.item_key,
+                            slot_index=slot_index,
+                        )
+                    )
+
+            if slots_to_create:
+                AuctionSlot.objects.bulk_create(slots_to_create)
+
+            logger.info(
+                f"创建拍卖轮次 #{round_number}，共 {len(slots_to_create)} 个拍卖位"
+            )
+
+        return auction_round
+    finally:
+        if cache.get(AUCTION_CREATE_LOCK_KEY) == lock_value:
+            cache.delete(AUCTION_CREATE_LOCK_KEY)
 
 
 # ============ 出价逻辑（维克里拍卖） ============
@@ -600,75 +625,90 @@ def settle_auction_round(round_id: int = None) -> Dict:
     """
     stats = {"settled": 0, "sold": 0, "unsold": 0, "total_gold_bars": 0}
 
-    with transaction.atomic():
-        # 获取要结算的轮次
-        if round_id:
-            auction_round = (
-                AuctionRound.objects.select_for_update()
-                .filter(id=round_id, status=AuctionRound.Status.ACTIVE)
-                .first()
-            )
-        else:
-            # 查找已到期但未结算的轮次
-            auction_round = (
-                AuctionRound.objects.select_for_update()
-                .filter(
-                    status=AuctionRound.Status.ACTIVE,
-                    end_at__lte=timezone.now(),
+    lock_value = str(uuid.uuid4())
+    lock_acquired = cache.add(AUCTION_SETTLE_LOCK_KEY, lock_value, timeout=AUCTION_SETTLE_LOCK_TIMEOUT)
+    if not lock_acquired:
+        logger.info("拍卖结算锁未获取，跳过本次结算")
+        return stats
+
+    try:
+        with transaction.atomic():
+            # 获取要结算的轮次（支持恢复 SETTLING 状态）
+            if round_id:
+                auction_round = (
+                    AuctionRound.objects.select_for_update()
+                    .filter(id=round_id, status__in=[AuctionRound.Status.ACTIVE, AuctionRound.Status.SETTLING])
+                    .first()
                 )
-                .first()
+            else:
+                auction_round = (
+                    AuctionRound.objects.select_for_update()
+                    .filter(
+                        status__in=[AuctionRound.Status.ACTIVE, AuctionRound.Status.SETTLING],
+                        end_at__lte=timezone.now(),
+                    )
+                    .order_by("end_at", "id")
+                    .first()
+                )
+
+            if not auction_round:
+                logger.info("没有需要结算的拍卖轮次")
+                return stats
+
+            # 标记为结算中
+            if auction_round.status != AuctionRound.Status.SETTLING:
+                auction_round.status = AuctionRound.Status.SETTLING
+                auction_round.save(update_fields=["status"])
+
+        # 遍历拍卖位进行结算（每个拍卖位单独事务）
+        slots = AuctionSlot.objects.filter(
+            round=auction_round, status=AuctionSlot.Status.ACTIVE
+        ).select_related("item_template", "highest_bidder")
+
+        failed_slots = []
+        for slot in slots:
+            try:
+                result = _settle_slot(slot)
+                if result["sold"]:
+                    stats["sold"] += 1
+                    stats["total_gold_bars"] += result["price"]
+                else:
+                    stats["unsold"] += 1
+            except Exception as e:
+                logger.exception(f"结算拍卖位 {slot.id} 时出错：{e}")
+                failed_slots.append({"slot_id": slot.id, "error": str(e)})
+                continue
+
+        # 如果有结算失败的拍卖位，保持轮次为 SETTLING 并抛出异常触发重试
+        if failed_slots:
+            logger.error(
+                f"拍卖轮次 #{auction_round.round_number} 有 {len(failed_slots)} 个拍卖位结算失败",
+                extra={"failed_slots": failed_slots},
+            )
+            stats["failed"] = len(failed_slots)
+            stats["failed_details"] = failed_slots
+            raise RuntimeError(
+                f"拍卖轮次 #{auction_round.round_number} 结算失败：{len(failed_slots)} 个拍卖位异常"
             )
 
-        if not auction_round:
-            logger.info("没有需要结算的拍卖轮次")
-            return stats
+        # 标记轮次为已完成
+        with transaction.atomic():
+            locked_round = AuctionRound.objects.select_for_update().get(pk=auction_round.pk)
+            locked_round.status = AuctionRound.Status.COMPLETED
+            locked_round.settled_at = timezone.now()
+            locked_round.save(update_fields=["status", "settled_at"])
 
-        # 标记为结算中
-        auction_round.status = AuctionRound.Status.SETTLING
-        auction_round.save(update_fields=["status"])
-
-    # 遍历拍卖位进行结算（每个拍卖位单独事务）
-    slots = AuctionSlot.objects.filter(
-        round=auction_round, status=AuctionSlot.Status.ACTIVE
-    ).select_related("item_template", "highest_bidder")
-
-    failed_slots = []
-    for slot in slots:
-        try:
-            result = _settle_slot(slot)
-            if result["sold"]:
-                stats["sold"] += 1
-                stats["total_gold_bars"] += result["price"]
-            else:
-                stats["unsold"] += 1
-        except Exception as e:
-            logger.exception(f"结算拍卖位 {slot.id} 时出错：{e}")
-            failed_slots.append({"slot_id": slot.id, "error": str(e)})
-            continue
-
-    # 如果有结算失败的拍卖位，记录警告并在stats中标记
-    if failed_slots:
-        logger.error(
-            f"拍卖轮次 #{auction_round.round_number} 有 {len(failed_slots)} 个拍卖位结算失败",
-            extra={"failed_slots": failed_slots}
+        stats["settled"] = 1
+        logger.info(
+            f"拍卖轮次 #{auction_round.round_number} 结算完成，"
+            f"售出 {stats['sold']} 件，流拍 {stats['unsold']} 件，"
+            f"共收取 {stats['total_gold_bars']} 金条"
         )
-        stats["failed"] = len(failed_slots)
-        stats["failed_details"] = failed_slots
 
-    # 标记轮次为已完成
-    with transaction.atomic():
-        auction_round.status = AuctionRound.Status.COMPLETED
-        auction_round.settled_at = timezone.now()
-        auction_round.save(update_fields=["status", "settled_at"])
-
-    stats["settled"] = 1
-    logger.info(
-        f"拍卖轮次 #{auction_round.round_number} 结算完成，"
-        f"售出 {stats['sold']} 件，流拍 {stats['unsold']} 件，"
-        f"共收取 {stats['total_gold_bars']} 金条"
-    )
-
-    return stats
+        return stats
+    finally:
+        if cache.get(AUCTION_SETTLE_LOCK_KEY) == lock_value:
+            cache.delete(AUCTION_SETTLE_LOCK_KEY)
 
 
 def _settle_slot(slot: AuctionSlot) -> Dict:

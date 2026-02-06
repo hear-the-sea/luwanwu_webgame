@@ -72,6 +72,11 @@ if not DEBUG and not ALLOWED_HOSTS:
 if DEBUG and not ALLOWED_HOSTS:
     ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 
+# Trusted reverse proxy addresses (exact IPs or CIDR), comma-separated.
+# Example: "127.0.0.1,172.16.0.0/12"
+trusted_proxy_ips_str = env("DJANGO_TRUSTED_PROXY_IPS", "")
+TRUSTED_PROXY_IPS = [ip.strip() for ip in trusted_proxy_ips_str.split(",") if ip.strip()]
+
 ENABLE_BATTLE_DEBUGGER = DEBUG and env("DJANGO_ENABLE_DEBUGGER", "1") == "1"
 
 INSTALLED_APPS = [
@@ -357,6 +362,8 @@ CELERY_BEAT_SCHEDULE = {
 ACCESS_LOG_ENABLED = env("DJANGO_ACCESS_LOG", "1") == "1"
 # Only trust X-Forwarded-For when behind a trusted proxy/load balancer.
 ACCESS_LOG_TRUST_PROXY = env("DJANGO_ACCESS_LOG_TRUST_PROXY", "0") == "1"
+if ACCESS_LOG_TRUST_PROXY and not TRUSTED_PROXY_IPS:
+    ACCESS_LOG_TRUST_PROXY = False
 
 # Minimum interval (seconds) between resource sync attempts in request paths.
 # Helps avoid frequent row locks under high traffic.
@@ -582,7 +589,7 @@ if RUNNING_TESTS and env("DJANGO_TEST_USE_ENV_SERVICES", "0") != "1":
     except Exception:
         pass
 
-if DEBUG:
+if DEBUG and not RUNNING_TESTS:
     import warnings
     warnings.warn(
         "Running in DEBUG mode. Security features are relaxed. "

@@ -6,6 +6,7 @@
 import os
 import sys
 import django
+import argparse
 from pathlib import Path
 
 # 设置 Django settings
@@ -15,9 +16,9 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 sys.path.insert(0, str(Path(__file__).parent.parent))
 django.setup()
 
-from gameplay.models import MissionRun, PlayerTroop
-from battle.models import TroopTemplate
-from django.db import transaction
+from battle.models import TroopTemplate  # noqa: E402
+from django.db import transaction  # noqa: E402
+from gameplay.models import MissionRun, PlayerTroop  # noqa: E402
 
 
 def diagnose_arrow_god_return(run_id: int):
@@ -32,12 +33,12 @@ def diagnose_arrow_god_return(run_id: int):
 
     # 1. 检查出征配置
     loadout = run.troop_loadout or {}
-    print(f"\n1. 出征配置:")
+    print("\n1. 出征配置:")
     arrow_deployed = loadout.get('arrow_god', 0)
     print(f"   arrow_god: {arrow_deployed}")
 
     # 2. 检查战报损失
-    print(f"\n2. 战报损失:")
+    print("\n2. 战报损失:")
     losses = report.losses or {}
     attacker_losses = losses.get('attacker', {})
     casualties = attacker_losses.get('casualties', [])
@@ -53,7 +54,7 @@ def diagnose_arrow_god_return(run_id: int):
     print(f"   应该剩余: {arrow_deployed - arrow_lost}")
 
     # 3. 检查当前库存
-    print(f"\n3. 当前库存:")
+    print("\n3. 当前库存:")
     arrow_troop = PlayerTroop.objects.filter(
         manor=manor,
         troop_template__key='arrow_god'
@@ -65,27 +66,27 @@ def diagnose_arrow_god_return(run_id: int):
         print(f"   战报完成时间: {report.completed_at}")
 
         if arrow_troop.updated_at > report.completed_at:
-            print(f"   ✅ 护院在战斗后被更新过")
+            print("   ✅ 护院在战斗后被更新过")
         else:
-            print(f"   ❌ 护院在战斗后没有被更新")
+            print("   ❌ 护院在战斗后没有被更新")
 
         # 4. 检查是否有多次更新
-        print(f"\n4. 检查是否有多次出征/归还:")
+        print("\n4. 检查是否有多次出征/归还:")
         recent_runs = MissionRun.objects.filter(
             manor=manor,
             troop_loadout__arrow_god__gt=0
         ).order_by('-started_at')[:5]
 
-        print(f"   最近的 arrow_god 出征记录:")
+        print("   最近的 arrow_god 出征记录:")
         for r in recent_runs:
             arrow_count = r.troop_loadout.get('arrow_god', 0)
             print(f"     任务 {r.id}: 出征 {arrow_count}, 时间 {r.started_at}, 状态 {r.status}")
 
     else:
-        print(f"   ❌ 没有 arrow_god 的 PlayerTroop 记录")
+        print("   ❌ 没有 arrow_god 的 PlayerTroop 记录")
 
     # 5. 模拟完整的归还流程
-    print(f"\n5. 模拟完整的归还流程:")
+    print("\n5. 模拟完整的归还流程:")
 
     # 计算 surviving_troops
     troops_lost = {}
@@ -113,7 +114,7 @@ def diagnose_arrow_god_return(run_id: int):
 
     # 检查 _add_troops_batch 的逻辑
     troops_to_add = surviving_troops
-    print(f"\n6. 模拟 _add_troops_batch:")
+    print("\n6. 模拟 _add_troops_batch:")
 
     with transaction.atomic():
         # 预加载模板
@@ -152,20 +153,19 @@ def diagnose_arrow_god_return(run_id: int):
         print(f"   to_create 数量: {len(to_create)}")
 
         if to_update:
-            print(f"   to_update 详情:")
+            print("   to_update 详情:")
             for pt in to_update:
                 print(f"     {pt.troop_template.key}: count={pt.count}")
 
     # 7. 检查是否有异常被吞掉
-    print(f"\n7. 检查可能的异常:")
-    print(f"   建议：查看应用日志，搜索 '归还护院' 或 '批量更新护院'")
-    print(f"   检查是否有异常或错误信息")
+    print("\n7. 检查可能的异常:")
+    print("   建议：查看应用日志，搜索 '归还护院' 或 '批量更新护院'")
+    print("   检查是否有异常或错误信息")
 
     print("\n" + "=" * 60)
 
 
 if __name__ == "__main__":
-    import argparse
     parser = argparse.ArgumentParser(description="诊断护院归还问题")
     parser.add_argument("run_id", type=int, help="MissionRun ID")
     args = parser.parse_args()

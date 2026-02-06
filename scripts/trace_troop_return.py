@@ -6,6 +6,7 @@
 import os
 import sys
 import django
+import argparse
 from pathlib import Path
 
 # 设置 Django settings
@@ -15,11 +16,8 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 sys.path.insert(0, str(Path(__file__).parent.parent))
 django.setup()
 
-from gameplay.models import MissionRun, PlayerTroop
-from gameplay.services.troops import _return_surviving_troops_batch, _add_troops_batch
-from battle.models import TroopTemplate
-from django.db import transaction
-from django.utils import timezone
+from battle.models import TroopTemplate  # noqa: E402
+from gameplay.models import MissionRun, PlayerTroop  # noqa: E402
 
 
 def trace_troop_return(run_id: int):
@@ -32,7 +30,7 @@ def trace_troop_return(run_id: int):
     manor = run.manor
     report = run.battle_report
 
-    print(f"\n1. 基本信息:")
+    print("\n1. 基本信息:")
     print(f"   状态: {run.status}")
     print(f"   完成: {run.completed_at}")
     print(f"   是否防守: {run.mission.is_defense}")
@@ -40,7 +38,7 @@ def trace_troop_return(run_id: int):
 
     # 显示出征配置
     loadout = run.troop_loadout or {}
-    print(f"\n2. 出征配置 (run.troop_loadout):")
+    print("\n2. 出征配置 (run.troop_loadout):")
     for key, count in loadout.items():
         if count > 0:
             print(f"   {key}: {count}")
@@ -49,17 +47,17 @@ def trace_troop_return(run_id: int):
 
     # 检查战报
     if not report:
-        print(f"\n❌ 无战报，无法追踪")
+        print("\n❌ 无战报，无法追踪")
         return
 
     # 解析战报损失
-    print(f"\n3. 战报损失:")
+    print("\n3. 战报损失:")
     losses = report.losses or {}
     attacker_losses = losses.get('attacker', {}) or {}
     casualties = attacker_losses.get('casualties', [])
 
     if not casualties:
-        print(f"   (无伤亡记录)")
+        print("   (无伤亡记录)")
     else:
         # 只显示在 loadout 中的护院
         for entry in casualties:
@@ -69,7 +67,7 @@ def trace_troop_return(run_id: int):
                 print(f"   {key}: 损失 {lost}")
 
     # 模拟计算 surviving_troops
-    print(f"\n4. 计算 surviving_troops:")
+    print("\n4. 计算 surviving_troops:")
     troops_lost = {}
     for entry in casualties:
         key = entry.get("key")
@@ -100,12 +98,12 @@ def trace_troop_return(run_id: int):
     print(f"\n5. surviving_troops 结果: {surviving_troops}")
 
     if not surviving_troops:
-        print(f"\n❌ surviving_troops 为空，不会调用 _add_troops_batch")
-        print(f"   这就是问题所在！")
+        print("\n❌ surviving_troops 为空，不会调用 _add_troops_batch")
+        print("   这就是问题所在！")
         return
 
     # 检查 _add_troops_batch 执行前的库存
-    print(f"\n6. 执行归还前的库存:")
+    print("\n6. 执行归还前的库存:")
     for key in surviving_troops.keys():
         pt = PlayerTroop.objects.filter(
             manor=manor,
@@ -117,7 +115,7 @@ def trace_troop_return(run_id: int):
             print(f"   {key}: (不存在)")
 
     # 执行归还（不实际修改数据库，只模拟）
-    print(f"\n7. 模拟 _add_troops_batch 逻辑:")
+    print("\n7. 模拟 _add_troops_batch 逻辑:")
 
     troops_to_add = surviving_troops
 
@@ -126,7 +124,7 @@ def trace_troop_return(run_id: int):
     print(f"   模板数量: {len(templates)}")
 
     if not templates:
-        print(f"   ❌ 模板为空，无法归还")
+        print("   ❌ 模板为空，无法归还")
         return
 
     # 预加载现有护院
@@ -156,17 +154,16 @@ def trace_troop_return(run_id: int):
     if to_create:
         print(f"   需要创建: {to_create}")
 
-    print(f"\n8. 结论:")
-    print(f"   surviving_troops 不为空")
-    print(f"   应该会调用 _add_troops_batch")
-    print(f"   如果实际库存没有增加，说明:")
-    print(f"   1. 事务被回滚")
-    print(f"   2. _add_troops_batch 内部出错")
-    print(f"   3. 原子更新失败")
+    print("\n8. 结论:")
+    print("   surviving_troops 不为空")
+    print("   应该会调用 _add_troops_batch")
+    print("   如果实际库存没有增加，说明:")
+    print("   1. 事务被回滚")
+    print("   2. _add_troops_batch 内部出错")
+    print("   3. 原子更新失败")
 
 
 if __name__ == "__main__":
-    import argparse
     parser = argparse.ArgumentParser(description="追踪护院归还逻辑")
     parser.add_argument("run_id", type=int, help="MissionRun ID")
     args = parser.parse_args()

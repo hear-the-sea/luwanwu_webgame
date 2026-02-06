@@ -799,7 +799,6 @@
 /* ========== 仓库/藏宝阁标签导航 ========== */
 
 .tw-storage-tabs {
-  margin-bottom: 1.5rem;
   display: flex;
   gap: 0.5rem;
   padding-bottom: 0.5rem;
@@ -1349,6 +1348,15 @@
   border-color: var(--border-primary);
   background-color: var(--bg-card);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.tw-modal-form {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .tw-modal-header {
@@ -2447,7 +2455,6 @@
 /* ========== 技术标签页 ========== */
 
 .tw-tech-tabs {
-  margin-bottom: 1.5rem;
   display: flex;
   gap: 0.5rem;
   padding-bottom: 0.5rem;
@@ -2491,7 +2498,6 @@
 /* ========== 兵种子标签页 ========== */
 
 .tw-troop-subtabs {
-  margin-bottom: 1.5rem;
   display: flex;
   gap: 0.25rem;
   border-radius: 0.5rem;
@@ -3274,6 +3280,235 @@
   padding-top: 1rem;
 }
 
+/* 上架弹窗优化样式 */
+
+.tw-listing-item-card {
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-hover) 100%);
+  border: 2px solid var(--border-primary);
+}
+
+.tw-listing-item-card .tw-item-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.tw-listing-item-card .tw-item-icon {
+  display: flex;
+  height: 3rem;
+  width: 3rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  border-width: 2px;
+}
+
+.tw-listing-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.tw-listing-item-info .tw-item-name {
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 700;
+}
+
+.tw-listing-item-stock {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: var(--text-muted);
+}
+
+.tw-listing-item-stock strong {
+  color: var(--text-primary);
+}
+
+.tw-listing-ref-price {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.tw-listing-ref-label {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  color: var(--text-muted);
+}
+
+.tw-listing-ref-value {
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+  font-weight: 700;
+  color: var(--accent-gold);
+}
+
+.tw-listing-form-grid {
+  margin-bottom: 1rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.tw-listing-total-row {
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 0.375rem;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  background: rgba(218, 165, 32, 0.1);
+  border: 1px solid rgba(218, 165, 32, 0.3);
+}
+
+.tw-listing-total-row span:first-child {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: var(--text-secondary);
+}
+
+.tw-listing-total-value {
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+  font-weight: 700;
+  color: var(--accent-gold);
+}
+
+.tw-listing-duration-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.tw-listing-duration-card {
+  position: relative;
+  cursor: pointer;
+}
+
+.tw-listing-duration-card input {
+  position: absolute;
+  height: 0px;
+  width: 0px;
+  opacity: 0;
+}
+
+.tw-listing-duration-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  text-align: center;
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-primary);
+}
+
+.tw-listing-duration-card input:checked + .tw-listing-duration-content {
+  border-color: var(--accent-gold);
+  background: rgba(218, 165, 32, 0.1);
+}
+
+.tw-listing-duration-card:hover .tw-listing-duration-content {
+  border-color: var(--accent-gold);
+}
+
+.tw-listing-duration-time {
+  margin-bottom: 0.25rem;
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.tw-listing-duration-fee {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  color: var(--text-muted);
+}
+
+.tw-listing-summary {
+  border-radius: 0.5rem;
+  border-width: 1px;
+  border-color: var(--border-primary);
+  background-color: var(--bg-secondary);
+  padding: 1rem;
+}
+
+.tw-listing-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.tw-listing-summary-row span:first-child {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: var(--text-secondary);
+}
+
+.tw-listing-summary-row span:last-child {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tw-listing-summary-note {
+  margin-top: 0.5rem;
+  border-top-width: 1px;
+  border-color: var(--border-light);
+  padding-top: 0.5rem;
+}
+
+.tw-listing-summary-note span:last-child {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.tw-listing-warning {
+  margin-top: 0.75rem;
+  margin-bottom: 0px;
+  text-align: center;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  color: #FF6B6B;
+}
+
+@media (max-width: 480px) {
+  .tw-listing-form-grid {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+
+  .tw-listing-duration-grid {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+
+  .tw-listing-item-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .tw-listing-ref-price {
+    align-items: flex-start;
+  }
+}
+
 /* 拍卖组件 */
 
 .tw-auction-info-bar {
@@ -4037,6 +4272,10 @@
   max-height: 80vh;
 }
 
+.w-0 {
+  width: 0px;
+}
+
 .w-10 {
   width: 2.5rem;
 }
@@ -4622,6 +4861,10 @@
   padding-top: 0px;
 }
 
+.pt-2 {
+  padding-top: 0.5rem;
+}
+
 .pt-4 {
   padding-top: 1rem;
 }
@@ -4809,6 +5052,10 @@
 
 .no-underline {
   text-decoration-line: none;
+}
+
+.opacity-0 {
+  opacity: 0;
 }
 
 .opacity-50 {
@@ -5173,19 +5420,19 @@
     width: 95%;
     max-width: none;
     max-height: 90vh;
-  }
-
-  .tw-modal-header {
-    padding: 1rem;
+    overflow: hidden;
   }
 
   .tw-modal-body {
     padding: 1rem;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .tw-modal-footer {
     padding: 1rem;
     flex-direction: column;
+    flex-shrink: 0;
   }
 
   .tw-modal-footer button {

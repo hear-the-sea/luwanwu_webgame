@@ -19,10 +19,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libfreetype6-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Create a non-root user for runtime safety.
+RUN useradd -m -u 10001 appuser
+
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY . /app
+
+RUN chown -R appuser:appuser /app
+
+USER appuser
 
 EXPOSE 8000
 

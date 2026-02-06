@@ -8,7 +8,7 @@
 
 | 软件 | 版本要求 | 说明 |
 |------|----------|------|
-| Python | 3.11+ | 推荐 3.12 |
+| Python | 3.12+ | 推荐 3.12（与 CI/Docker 保持一致） |
 | MySQL | 8.0+ | 或 SQLite（开发） |
 | Redis | 7.0+ | Celery + Channels 必需 |
 | Node.js | 18+ | 前端资源编译（可选） |
@@ -31,6 +31,13 @@ cp .env.docker.prod.example .env.docker
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
+生产部署前请至少确认：
+
+- 设置强随机 `DJANGO_SECRET_KEY`
+- 设置 `MYSQL_PASSWORD` 与 `MYSQL_ROOT_PASSWORD`
+- 正确配置 `DJANGO_ALLOWED_HOSTS` 与 `DJANGO_CSRF_TRUSTED_ORIGINS`
+- 若通过反向代理/负载均衡终止 TLS，设置 `DJANGO_USE_PROXY=1`、`DJANGO_TRUSTED_PROXY_IPS`、`DJANGO_ACCESS_LOG_TRUST_PROXY=1`
+
 常用容器内命令：
 
 ```bash
@@ -52,13 +59,13 @@ cd web_game_v5
 
 ```bash
 # 创建虚拟环境
-python3 -m venv venv
+python3 -m venv .venv
 
 # 激活虚拟环境
 # Linux/macOS:
-source venv/bin/activate
+source .venv/bin/activate
 # Windows:
-venv\Scripts\activate
+.venv\Scripts\activate
 ```
 
 ### 3. 安装依赖
@@ -68,6 +75,12 @@ pip install -r requirements.txt
 
 # 或使用 Makefile
 make install
+```
+
+建议安装 `pre-commit` 钩子，避免提交前才发现格式/静态检查问题：
+
+```bash
+make precommit
 ```
 
 ### 4. 配置环境变量

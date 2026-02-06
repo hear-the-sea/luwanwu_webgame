@@ -57,20 +57,16 @@ module.exports = {
     },
   },
   // 动态类名支持 - JS 中操作的类名需要在这里列出
+  // 注意：自定义 CSS 类（如 toast-success, game-dialog-btn-primary）
+  // 不需要放在 safelist 里，它们在 CSS 文件中直接定义
   safelist: [
-    // Toast 类型
-    { pattern: /toast-(system|success|error|warning|info)/ },
-    // 对话框按钮类型
-    { pattern: /game-dialog-btn-(primary|secondary|danger)/ },
-    // 连接状态
-    { pattern: /is-(connected|connecting|disconnected)/ },
-    // Flash 消息类型
-    { pattern: /flash-(success|error|warning|info)/ },
-    // 其他状态类
     'is-open',
     'is-self',
     'is-error',
     'is-dragging',
+    'is-connected',
+    'is-connecting',
+    'is-disconnected',
     'countdown-finished',
     'dragging',
     'active',

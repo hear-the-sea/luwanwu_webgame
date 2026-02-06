@@ -18,11 +18,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 django.setup()
 
-import argparse
-from django.db import transaction
-from django.utils import timezone
-from gameplay.models import MissionRun, PlayerTroop
-from battle.models import TroopTemplate
+import argparse  # noqa: E402
+
+from django.db import transaction  # noqa: E402
+from django.utils import timezone  # noqa: E402
+
+from battle.models import TroopTemplate  # noqa: E402
+from gameplay.models import MissionRun, PlayerTroop  # noqa: E402
 
 
 def audit_mission_runs(dry_run=True):

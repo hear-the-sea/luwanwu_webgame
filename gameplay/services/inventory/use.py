@@ -6,6 +6,7 @@ This module depends on the core inventory operations in `core.py`.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List
 
 from django.db import transaction
@@ -19,6 +20,8 @@ from .core import add_item_to_inventory, consume_inventory_item_locked
 
 # Do NOT `import random` here: tests monkeypatch `gameplay.services.inventory.random.random`.
 from gameplay.services import inventory as inventory_pkg
+
+logger = logging.getLogger(__name__)
 
 # 不在仓库使用的物品提示信息
 NON_WAREHOUSE_MESSAGES = {
@@ -534,7 +537,12 @@ def use_xidianka(manor: Manor, item: InventoryItem, guest_id: int) -> Dict[str, 
 
     guest_name = guest.display_name
 
-    total_allocated = guest.allocated_force + guest.allocated_intellect + guest.allocated_defense + guest.allocated_agility
+    total_allocated = (
+        guest.allocated_force
+        + guest.allocated_intellect
+        + guest.allocated_defense
+        + guest.allocated_agility
+    )
     if total_allocated == 0:
         raise ValueError("该门客没有分配过属性点，无需使用洗点卡")
 

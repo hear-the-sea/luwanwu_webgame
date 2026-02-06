@@ -1,11 +1,15 @@
 PYTHON ?= python3
 MANAGE ?= $(PYTHON) manage.py
 LOCAL_STATE_DIR ?= .local
+FLAKE8_TARGETS ?= accounts battle gameplay guests guilds trade core websocket config tests
 
 .PHONY: install migrate dev dev-ws worker beat test format lint check clean
 
 install:
-	pip install -r requirements.txt
+	pip install -r requirements-dev.txt
+
+precommit:
+	pre-commit install
 
 migrate:
 	$(MANAGE) migrate
@@ -34,7 +38,7 @@ format:
 	isort .
 
 lint:
-	$(PYTHON) -m flake8 .
+	$(PYTHON) -m flake8 --jobs=1 $(FLAKE8_TARGETS)
 	$(PYTHON) -m mypy .
 
 check: format lint

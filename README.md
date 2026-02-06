@@ -103,7 +103,7 @@
 - **实时性**：WebSocket/Socket.IO 用于战斗倒计时、喇叭广播、斗技场进度推送。
 
 ## 五、推荐技术栈（尽量简化）
-- **语言**：Python 3.11+
+- **语言**：Python 3.12+
 - **Web 框架**：Django 5 + Django REST Framework（接口）+ Django Channels（WebSocket/实时推送）
 - **ORM/数据层**：Django ORM + 内置迁移（可结合 Django Admin 维护配置）
 - **任务队列**：Celery + Redis（Broker/Cache）
@@ -232,7 +232,7 @@ web_game_v5/
 1. `cp .env.example .env` 并根据实际数据库/Redis 凭据调整。
    - Redis 拆分已预留：`REDIS_URL`（默认基址）、`REDIS_CHANNEL_URL`（Channels）、`REDIS_BROKER_URL`/`REDIS_RESULT_URL`（Celery）、`REDIS_CACHE_URL`（缓存/锁），默认指向同一实例不同 DB，后续按需改为独立实例即可。
    - （可选）`GAME_TIME_MULTIPLIER` 可用于加速/减速所有计时类行为（升级/出征/生产/训练等），开发调试默认建议为 `1`。
-2. （可选）创建虚拟环境并执行 `make install` 或 `pip install -r requirements.txt`。
+2. （可选）创建虚拟环境并执行 `make install`（开发依赖）或 `pip install -r requirements.txt`（运行时依赖）。
 3. 初始化数据库：`python manage.py migrate`（可选 `python manage.py createsuperuser` 便于调试后台）。
 4. 同步模板数据：
    - 门客/卡池/技能：`python manage.py load_guest_templates --file data/guest_templates.yaml`（默认加载 `data/guest_skills.yaml`）
@@ -255,7 +255,8 @@ web_game_v5/
 
 1. 准备生产环境变量：
    - `cp .env.docker.prod.example .env.docker`
-   - 修改：`DJANGO_SECRET_KEY`、`DJANGO_ALLOWED_HOSTS`、`DJANGO_CSRF_TRUSTED_ORIGINS`、数据库密码等
+   - 修改：`DJANGO_SECRET_KEY`、`DJANGO_ALLOWED_HOSTS`、`DJANGO_CSRF_TRUSTED_ORIGINS`、`MYSQL_PASSWORD`、`MYSQL_ROOT_PASSWORD` 等
+   - 反向代理部署请配置：`DJANGO_USE_PROXY=1`、`DJANGO_TRUSTED_PROXY_IPS`、`DJANGO_ACCESS_LOG_TRUST_PROXY=1`
 2. 启动（含 Nginx 反代、静态文件、WebSocket）：
    - `docker compose -f docker-compose.prod.yml up -d --build`
 3. 首次上线常用操作：

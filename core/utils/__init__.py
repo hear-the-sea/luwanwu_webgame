@@ -8,6 +8,7 @@ from .validation import (
     safe_redirect_url,
     sanitize_error_message,
 )
+from .network import get_client_ip
 
 __all__ = [
     "safe_int",
@@ -16,4 +17,5 @@ __all__ = [
     "safe_ordering",
     "safe_redirect_url",
     "sanitize_error_message",
+    "get_client_ip",
 ]

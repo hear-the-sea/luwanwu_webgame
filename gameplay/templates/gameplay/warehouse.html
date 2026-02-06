@@ -44,6 +44,19 @@
         </div>
         {% endif %}
 
+        <div class="tw-filter-bar">
+            <form method="get" class="tw-filter-form">
+                <input type="hidden" name="tab" value="{{ current_tab }}">
+                <label for="category" class="tw-filter-label">筛选</label>
+                <select id="category" name="category" class="tw-filter-select" onchange="this.form.submit()">
+                    <option value="all" {% if selected_category == 'all' %}selected{% endif %}>全部</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.key }}" {% if selected_category == cat.key %}selected{% endif %}>{{ cat.label }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+
         <div class="tw-table-wrapper">
         <table class="tw-warehouse-table">
             <thead>
@@ -52,18 +65,6 @@
                     <th>种类</th>
                     <th>数量</th>
                     <th>操作</th>
-                    <th class="tw-filter-th">
-                        <form method="get" class="tw-filter-form">
-                            <input type="hidden" name="tab" value="{{ current_tab }}">
-                            <label for="category" class="tw-filter-label">筛选</label>
-                            <select id="category" name="category" class="tw-filter-select" onchange="this.form.submit()">
-                                <option value="all" {% if selected_category == 'all' %}selected{% endif %}>全部</option>
-                                {% for cat in categories %}
-                                <option value="{{ cat.key }}" {% if selected_category == cat.key %}selected{% endif %}>{{ cat.label }}</option>
-                                {% endfor %}
-                            </select>
-                        </form>
-                    </th>
                 </tr>
             </thead>
             <tbody>
@@ -160,11 +161,10 @@
                         </form>
                         {% endif %}
                     </td>
-                    <td></td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="5" class="tw-empty-hint">{% if current_tab == 'treasury' %}藏宝阁为空{% else %}仓库为空，先通过战斗或任务获取物品吧。{% endif %}</td>
+                    <td colspan="4" class="tw-empty-hint">{% if current_tab == 'treasury' %}藏宝阁为空{% else %}仓库为空，先通过战斗或任务获取物品吧。{% endif %}</td>
                 </tr>
                 {% endfor %}
             </tbody>
