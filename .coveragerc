@@ -1,0 +1,24 @@
+[run]
+branch = True
+source =
+    accounts
+    battle
+    battle_debugger
+    common
+    config
+    core
+    gameplay
+    guests
+    guilds
+    tasks
+    trade
+    websocket
+omit =
+    */migrations/*
+    */tests/*
+    tests/*
+    manage.py
+
+[report]
+show_missing = True
+skip_empty = True
