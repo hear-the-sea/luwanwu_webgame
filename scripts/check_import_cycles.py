@@ -17,7 +17,6 @@ PROJECT_PACKAGES = {
     "accounts",
     "battle",
     "battle_debugger",
-    "choujiang",
     "common",
     "config",
     "core",

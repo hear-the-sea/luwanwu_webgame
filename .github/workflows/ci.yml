@@ -29,8 +29,9 @@ jobs:
 
       - name: Tests (pytest)
         env:
-          DJANGO_DEBUG: "1"
+          DJANGO_DEBUG: "0"
           DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1"
-          DJANGO_SECRET_KEY: "ci-not-a-secret"
+          DJANGO_SECRET_KEY: "ci-only-not-a-real-secret-key-change-me-1234567890"
         run: |
+          python manage.py check --deploy
           python -m pytest -q

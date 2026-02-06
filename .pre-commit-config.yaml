@@ -21,3 +21,4 @@ repos:
       - id: trailing-whitespace
       - id: check-yaml
       - id: check-merge-conflict
+      - id: check-added-large-files
