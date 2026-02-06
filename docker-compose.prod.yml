@@ -28,6 +28,13 @@ services:
   web:
     build: .
     env_file: .env.docker
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     command:
       [
         "bash",
@@ -52,6 +59,13 @@ services:
   worker:
     build: .
     env_file: .env.docker
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     command: ["bash", "/app/docker/entrypoint.sh", "celery", "-A", "config", "worker", "-l", "info"]
     volumes:
       - media:/app/media
@@ -63,6 +77,13 @@ services:
   beat:
     build: .
     env_file: .env.docker
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     command:
       - bash
       - /app/docker/entrypoint.sh
