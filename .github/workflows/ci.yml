@@ -23,13 +23,18 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.lock.txt ]; then
             pip install -r requirements.lock.txt
-          else
-            pip install -r requirements-dev.txt
           fi
+          # Ensure dev tools (mypy/black/pre-commit) are available.
+          pip install -r requirements-dev.txt
 
       - name: Lint (flake8)
         run: |
           python -m flake8 --jobs=1 accounts battle gameplay guests guilds trade core websocket config tests
+
+      - name: Type check (mypy)
+        continue-on-error: true
+        run: |
+          python -m mypy .
 
       - name: Tests (pytest)
         env:

@@ -22,3 +22,11 @@ repos:
       - id: check-yaml
       - id: check-merge-conflict
       - id: check-added-large-files
+
+  - repo: local
+    hooks:
+      - id: repo-safety
+        name: repo safety (block secrets/db/media)
+        entry: python3 scripts/precommit_repo_safety.py
+        language: system
+        pass_filenames: false
