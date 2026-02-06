@@ -12,7 +12,7 @@ install-lock:
 	pip install -r requirements.lock.txt
 
 lock:
-	$(PYTHON) -m pip freeze > requirements.lock.txt
+	$(PYTHON) scripts/generate_requirements_lock.py > requirements.lock.txt
 
 precommit:
 	pre-commit install
