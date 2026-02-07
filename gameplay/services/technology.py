@@ -297,13 +297,13 @@ def get_martial_technologies_grouped(manor) -> List[Dict[str, Any]]:
     # 按兵种分组
     grouped = {}
     for tech in technologies:
-        troop_class = tech.get("troop_class")
+        troop_class = str(tech.get("troop_class") or "")
         if troop_class not in grouped:
             class_info = troop_classes.get(troop_class, {})
             grouped[troop_class] = {
                 "class_key": troop_class,
                 "class_name": class_info.get("name", troop_class),
-                "technologies": []
+                "technologies": [],
             }
         grouped[troop_class]["technologies"].append(tech)
 

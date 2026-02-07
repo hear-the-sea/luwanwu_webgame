@@ -67,6 +67,8 @@ class NotificationConsumerTests(SimpleTestCase):
 class OnlineStatsConsumerTests(SimpleTestCase):
     def _build_consumer(self) -> OnlineStatsConsumer:
         consumer = OnlineStatsConsumer()
+        # Disable debouncing so assertions on group_send are deterministic.
+        consumer.BROADCAST_DEBOUNCE_SECONDS = 0
         consumer.channel_name = "test-channel"
         consumer.channel_layer = AsyncMock()
         consumer.send_json = AsyncMock()

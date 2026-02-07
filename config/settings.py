@@ -475,6 +475,7 @@ SECURE_SSL_REDIRECT = env("DJANGO_SECURE_SSL_REDIRECT", "1" if not DEBUG else "0
 # Trust X-Forwarded-Proto header from proxy (nginx, load balancer)
 # 安全修复：仅在明确使用反向代理时才信任代理头，防止 SSL 降级攻击
 # 设置 DJANGO_USE_PROXY=1 启用（适用于 nginx、负载均衡器等场景）
+SECURE_PROXY_SSL_HEADER: tuple[str, str] | None
 if env("DJANGO_USE_PROXY", "0") == "1":
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 else:
@@ -569,7 +570,14 @@ CORS_ALLOW_METHODS = [
 # ============================================================================
 # When running tests (pytest/`manage.py test`) we default to lightweight local
 # backends to avoid requiring external services (MySQL/Redis).
-RUNNING_TESTS = ("pytest" in sys.modules) or ("test" in sys.argv)
+# Detect unit-test runs early enough for Django/pytest-django.
+# `pytest` is not always imported before settings are evaluated, so also
+# inspect the executable/script name.
+RUNNING_TESTS = (
+    ("pytest" in sys.modules)
+    or ("test" in sys.argv)
+    or ("pytest" in os.path.basename(sys.argv[0] or ""))
+)
 if RUNNING_TESTS and env("DJANGO_TEST_USE_ENV_SERVICES", "0") != "1":
     # Celery's Settings object prioritizes CELERY_* environment variables over Django settings.
     # During tests we want to avoid any external broker/backend (Redis), so we clear these
@@ -588,6 +596,7 @@ if RUNNING_TESTS and env("DJANGO_TEST_USE_ENV_SERVICES", "0") != "1":
             "NAME": ":memory:",
         }
     }
+
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
@@ -615,10 +624,16 @@ if RUNNING_TESTS and env("DJANGO_TEST_USE_ENV_SERVICES", "0") != "1":
     except Exception:
         pass
 
-if DEBUG and not RUNNING_TESTS:
+if DEBUG and not RUNNING_TESTS and env("DJANGO_WARN_DEBUG", "1") == "1":
+    # Avoid warning spam in tooling contexts that may import settings
+    # (e.g. type checkers). Only warn when we are actually starting a server
+    # or worker process.
     import warnings
-    warnings.warn(
-        "Running in DEBUG mode. Security features are relaxed. "
-        "DO NOT use DEBUG=True in production!",
-        RuntimeWarning
-    )
+
+    argv = " ".join(sys.argv)
+    if any(token in argv for token in ("runserver", "daphne", "celery", "gunicorn", "uvicorn")):
+        warnings.warn(
+            "Running in DEBUG mode. Security features are relaxed. "
+            "DO NOT use DEBUG=True in production!",
+            RuntimeWarning,
+        )

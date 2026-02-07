@@ -190,7 +190,7 @@ def sync_resource_production(manor: Manor) -> None:
 
             # Log resource gain if any resources were produced
             if produced:
-                log_resource_gain(locked_manor, produced, ResourceEvent.Reason.PRODUCE, note="离线产出")
+                log_resource_gain(locked_manor, {str(k): int(v) for k, v in produced.items()}, ResourceEvent.Reason.PRODUCE, note="离线产出")
 
     # Always refresh the original manor object to reflect database state
     manor.refresh_from_db(fields=RESOURCE_FIELDS + ["resource_updated_at"])

@@ -16,7 +16,7 @@ def _recruit_frontline(manor, draws: int = 3) -> None:
 
 
 @pytest.mark.django_db
-def test_simulate_report_creates_battle(django_user_model):
+def test_simulate_report_creates_battle(game_data, django_user_model):
     user = django_user_model.objects.create_user(username="general", password="pass123")
     manor = ensure_manor(user)
     manor.silver = 5000
@@ -45,7 +45,7 @@ def test_simulate_report_creates_battle(django_user_model):
 
 
 @pytest.mark.django_db
-def test_simulate_report_rewards_on_victory(django_user_model):
+def test_simulate_report_rewards_on_victory(game_data, django_user_model):
     user = django_user_model.objects.create_user(username="champion", password="pass123")
     manor = ensure_manor(user)
     manor.silver = 5000
@@ -74,7 +74,7 @@ def test_simulate_report_rewards_on_victory(django_user_model):
 
 
 @pytest.mark.django_db
-def test_simulate_report_requires_idle_guests(django_user_model):
+def test_simulate_report_requires_idle_guests(game_data, django_user_model):
     user = django_user_model.objects.create_user(username="busy", password="pass123")
     manor = ensure_manor(user)
     manor.silver = 3000
@@ -89,7 +89,7 @@ def test_simulate_report_requires_idle_guests(django_user_model):
 
 
 @pytest.mark.django_db
-def test_defeated_guest_becomes_injured(django_user_model):
+def test_defeated_guest_becomes_injured(game_data, django_user_model):
     """阵亡的门客变为重伤状态"""
     user = django_user_model.objects.create_user(username="defeated", password="pass123")
     manor = ensure_manor(user)

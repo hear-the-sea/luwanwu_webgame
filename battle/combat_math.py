@@ -29,7 +29,13 @@ TROOP_DEFENSE_SQRT_DIVISOR = 2.0
 
 
 def _unit_strength(unit: Any) -> int:
-    return int(getattr(unit, "initial_troop_strength", None) or getattr(unit, "troop_strength", 1))
+    strength = getattr(unit, "initial_troop_strength", None)
+    if strength is None:
+        strength = getattr(unit, "troop_strength", None)
+    try:
+        return max(1, int(strength or 1))
+    except (TypeError, ValueError):
+        return 1
 
 
 def _current_strength(unit: Any) -> int:
@@ -43,7 +49,10 @@ def _current_strength(unit: Any) -> int:
     strength = getattr(unit, "troop_strength", None)
     if strength is None or strength <= 0:
         strength = getattr(unit, "initial_troop_strength", 0)
-    return max(1, int(strength))
+    try:
+        return max(1, int(strength or 1))
+    except (TypeError, ValueError):
+        return 1
 
 
 def _unit_attack_value(unit: Any) -> int:

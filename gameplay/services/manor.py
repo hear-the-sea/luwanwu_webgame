@@ -11,8 +11,10 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.core.cache import cache
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import F
+from datetime import datetime
+
 from django.utils import timezone
 
 from core.utils.time_scale import scale_duration
@@ -57,15 +59,33 @@ def ensure_manor(user, region: str = "overseas") -> Manor:
     """
     manor, created = Manor.objects.get_or_create(user=user)
     if created:
-        # 设置地区和坐标
-        x, y = generate_unique_coordinate(region)
-        manor.region = region
-        manor.coordinate_x = x
-        manor.coordinate_y = y
-        # 设置新手保护（7天）
+        # First persist the record (already created by get_or_create), then
+        # assign a unique coordinate under a transaction to avoid races.
         from ..constants import PVPConstants
-        manor.newbie_protection_until = timezone.now() + timedelta(days=PVPConstants.NEWBIE_PROTECTION_DAYS)
-        manor.save(update_fields=["region", "coordinate_x", "coordinate_y", "newbie_protection_until"])
+
+        assigned = False
+        for _ in range(5):
+            x, y = generate_unique_coordinate(region)
+            try:
+                with transaction.atomic():
+                    locked = Manor.objects.select_for_update().get(pk=manor.pk)
+                    locked.region = region
+                    locked.coordinate_x = x
+                    locked.coordinate_y = y
+                    locked.newbie_protection_until = timezone.now() + timedelta(days=PVPConstants.NEWBIE_PROTECTION_DAYS)
+                    locked.save(update_fields=["region", "coordinate_x", "coordinate_y", "newbie_protection_until"])
+                manor.region = region
+                manor.coordinate_x = x
+                manor.coordinate_y = y
+                manor.newbie_protection_until = locked.newbie_protection_until
+                assigned = True
+                break
+            except IntegrityError:
+                # Retry on unique constraint conflicts.
+                continue
+
+        if not assigned:
+            raise RuntimeError("Failed to allocate a unique manor coordinate after multiple attempts")
         bootstrap_buildings(manor)
     else:
         ensure_buildings_exist(manor)
@@ -85,22 +105,40 @@ def generate_unique_coordinate(region: str) -> tuple[int, int]:
     import random
     from ..constants import PVPConstants
 
-    max_attempts = 100
+    # Generate a handful of candidates and check them in a single query.
+    # This reduces DB round-trips compared to `exists()` in a tight loop.
+    for _ in range(10):
+        candidates: list[tuple[int, int]] = []
+        for __ in range(20):
+            candidates.append(
+                (
+                    random.randint(PVPConstants.COORDINATE_MIN, PVPConstants.COORDINATE_MAX),
+                    random.randint(PVPConstants.COORDINATE_MIN, PVPConstants.COORDINATE_MAX),
+                )
+            )
+        occupied = set(
+            Manor.objects.filter(
+                region=region,
+                coordinate_x__in=[x for x, _ in candidates],
+                coordinate_y__in=[y for _, y in candidates],
+            ).values_list("coordinate_x", "coordinate_y")
+        )
+        for x, y in candidates:
+            if (x, y) not in occupied:
+                return x, y
+
+    # Fallback: in extremely dense regions, fall back to the original approach.
+    max_attempts = 200
     for _ in range(max_attempts):
         x = random.randint(PVPConstants.COORDINATE_MIN, PVPConstants.COORDINATE_MAX)
         y = random.randint(PVPConstants.COORDINATE_MIN, PVPConstants.COORDINATE_MAX)
         if not Manor.objects.filter(region=region, coordinate_x=x, coordinate_y=y).exists():
             return x, y
 
-    # 如果随机失败，使用顺序查找（极端情况）
-    for x in range(PVPConstants.COORDINATE_MIN, PVPConstants.COORDINATE_MAX + 1):
-        for y in range(PVPConstants.COORDINATE_MIN, PVPConstants.COORDINATE_MAX + 1):
-            if not Manor.objects.filter(region=region, coordinate_x=x, coordinate_y=y).exists():
-                return x, y
-
-    # 如果地区已满，返回随机坐标（理论上不会发生，999*999=998001个位置）
-    logger.warning(f"地区 {region} 坐标已满，使用随机坐标")
-    return random.randint(1, 999), random.randint(1, 999)
+    logger.warning("Failed to find a unique coordinate for region=%s; using random fallback", region)
+    return random.randint(PVPConstants.COORDINATE_MIN, PVPConstants.COORDINATE_MAX), random.randint(
+        PVPConstants.COORDINATE_MIN, PVPConstants.COORDINATE_MAX
+    )
 
 
 def bootstrap_buildings(manor: Manor) -> None:
@@ -162,7 +200,7 @@ def refresh_manor_state(manor: Manor) -> None:
 
 
 def finalize_building_upgrade(
-    building: Building, now: timezone.datetime | None = None, send_notification: bool = True
+    building: Building, now: datetime | None = None, send_notification: bool = True
 ) -> bool:
     """
     完成单个建筑的升级（如果已到达完成时间）。
@@ -231,7 +269,7 @@ def finalize_building_upgrade(
     return True
 
 
-def finalize_upgrades(manor: Manor, now: timezone.datetime | None = None) -> None:
+def finalize_upgrades(manor: Manor, now: datetime | None = None) -> None:
     """
     完成庄园所有到期的建筑升级。
 

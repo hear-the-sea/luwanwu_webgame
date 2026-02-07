@@ -1,0 +1,167 @@
+from __future__ import annotations
+
+from types import SimpleNamespace
+
+import pytest
+
+
+@pytest.mark.django_db
+def test_calculate_tech_upgrade_cost_defaults_and_scales():
+    from guilds.services.technology import calculate_tech_upgrade_cost
+
+    cost0 = calculate_tech_upgrade_cost("unknown", 0)
+    assert cost0 == {"silver": 5000, "grain": 2000, "gold_bar": 1}
+
+    cost2 = calculate_tech_upgrade_cost("unknown", 2)
+    assert cost2 == {"silver": 20000, "grain": 8000, "gold_bar": 4}
+
+
+@pytest.mark.django_db
+def test_get_guild_tech_level_returns_zero_when_missing(django_user_model):
+    from guilds.models import Guild
+    from guilds.services.technology import get_guild_tech_level
+
+    founder = django_user_model.objects.create_user(username="tech_founder", password="pass")
+    guild = Guild.objects.create(name="TechGuild", founder=founder)
+
+    assert get_guild_tech_level(guild, "military_study") == 0
+
+
+@pytest.mark.django_db
+def test_get_tech_bonus_branches(django_user_model):
+    from guilds.models import Guild, GuildTechnology
+    from guilds.services.technology import get_tech_bonus
+
+    founder = django_user_model.objects.create_user(username="tech_founder2", password="pass")
+    guild = Guild.objects.create(name="TechGuild2", founder=founder)
+
+    GuildTechnology.objects.create(guild=guild, tech_key="military_study", level=5)
+    GuildTechnology.objects.create(guild=guild, tech_key="troop_tactics", level=4)
+    GuildTechnology.objects.create(guild=guild, tech_key="resource_boost", level=2)
+    GuildTechnology.objects.create(guild=guild, tech_key="march_speed", level=3)
+
+    assert get_tech_bonus(guild, "guest_force") == pytest.approx(0.10)
+    assert get_tech_bonus(guild, "guest_intellect") == pytest.approx(0.06)
+    assert get_tech_bonus(guild, "guest_defense") == pytest.approx(0.02)
+
+    assert get_tech_bonus(guild, "troop_attack") == pytest.approx(0.12)
+    assert get_tech_bonus(guild, "troop_defense") == pytest.approx(0.06)
+    assert get_tech_bonus(guild, "troop_hp") == pytest.approx(0.0)
+
+    assert get_tech_bonus(guild, "resource_production") == pytest.approx(0.10)
+    assert get_tech_bonus(guild, "march_speed") == pytest.approx(0.15)
+    assert get_tech_bonus(guild, "unknown") == pytest.approx(0.0)
+
+
+@pytest.mark.django_db
+def test_apply_guild_bonus_to_guest_and_troop(django_user_model):
+    from guilds.models import Guild, GuildTechnology
+    from guilds.services.technology import apply_guild_bonus_to_guest, apply_guild_bonus_to_troop
+
+    founder = django_user_model.objects.create_user(username="tech_founder3", password="pass")
+    guild = Guild.objects.create(name="TechGuild3", founder=founder)
+    GuildTechnology.objects.create(guild=guild, tech_key="military_study", level=5)
+    GuildTechnology.objects.create(guild=guild, tech_key="troop_tactics", level=5)
+
+    user_no_guild = SimpleNamespace()
+    guest_no_guild = SimpleNamespace(
+        force=100,
+        intellect=100,
+        defense=100,
+        manor=SimpleNamespace(user=user_no_guild),
+    )
+    assert apply_guild_bonus_to_guest(guest_no_guild) == {"force": 100, "intellect": 100, "defense": 100}
+
+    user_in_guild = SimpleNamespace(guild_membership=SimpleNamespace(is_active=True, guild=guild))
+    guest_in_guild = SimpleNamespace(
+        force=100,
+        intellect=100,
+        defense=100,
+        manor=SimpleNamespace(user=user_in_guild),
+    )
+    assert apply_guild_bonus_to_guest(guest_in_guild) == {"force": 110, "intellect": 106, "defense": 102}
+
+    troop_stats = {"attack": 100, "defense": 100, "hp": 100}
+    assert apply_guild_bonus_to_troop(troop_stats, user_no_guild) == troop_stats
+
+    # troop_tactics level=5 -> attack +15%, defense +9%, hp +5%
+    # Note: implementation truncates via int().
+    assert apply_guild_bonus_to_troop(troop_stats, user_in_guild) == {"attack": 114, "defense": 109, "hp": 105}
+
+
+@pytest.mark.django_db
+def test_upgrade_technology_happy_path(monkeypatch, django_user_model):
+    from guilds.models import Guild, GuildResourceLog, GuildTechnology
+    from guilds.services.technology import upgrade_technology
+    from gameplay.services.manor import ensure_manor
+
+    # Make permission check deterministic.
+    monkeypatch.setattr(
+        "guilds.services.technology.get_active_membership",
+        lambda *_a, **_k: SimpleNamespace(can_manage=True),
+    )
+
+    announcements: list[str] = []
+    monkeypatch.setattr(
+        "guilds.services.technology.create_announcement",
+        lambda _guild, _type, content: announcements.append(content),
+    )
+
+    operator = django_user_model.objects.create_user(username="tech_operator", password="pass")
+    ensure_manor(operator)
+
+    founder = django_user_model.objects.create_user(username="tech_founder4", password="pass")
+    guild = Guild.objects.create(name="TechGuild4", founder=founder, silver=999999, grain=999999, gold_bar=999999)
+    tech = GuildTechnology.objects.create(guild=guild, tech_key="equipment_forge", level=0, max_level=5)
+
+    upgrade_technology(guild, "equipment_forge", operator)
+
+    tech.refresh_from_db()
+    guild.refresh_from_db()
+    assert tech.level == 1
+    assert guild.silver < 999999
+    assert GuildResourceLog.objects.filter(guild=guild, action="tech_upgrade").exists()
+    assert announcements
+
+
+@pytest.mark.django_db
+def test_upgrade_technology_permission_denied(monkeypatch, django_user_model):
+    from guilds.models import Guild, GuildTechnology
+    from guilds.services.technology import upgrade_technology
+
+    monkeypatch.setattr(
+        "guilds.services.technology.get_active_membership",
+        lambda *_a, **_k: SimpleNamespace(can_manage=False),
+    )
+
+    operator = django_user_model.objects.create_user(username="tech_operator2", password="pass")
+    founder = django_user_model.objects.create_user(username="tech_founder5", password="pass")
+    guild = Guild.objects.create(name="TechGuild5", founder=founder)
+    GuildTechnology.objects.create(guild=guild, tech_key="equipment_forge", level=0, max_level=5)
+
+    with pytest.raises(ValueError, match="只有帮主和管理员"):
+        upgrade_technology(guild, "equipment_forge", operator)
+
+
+@pytest.mark.django_db
+def test_upgrade_technology_insufficient_resources(monkeypatch, django_user_model):
+    from guilds.models import Guild, GuildTechnology
+    from guilds.services.technology import upgrade_technology
+
+    monkeypatch.setattr(
+        "guilds.services.technology.get_active_membership",
+        lambda *_a, **_k: SimpleNamespace(can_manage=True),
+    )
+    monkeypatch.setattr("guilds.services.technology.create_announcement", lambda *_a, **_k: None)
+    monkeypatch.setattr("guilds.services.technology.Manor.objects.get", lambda *_a, **_k: SimpleNamespace(display_name="X"))
+
+    operator = django_user_model.objects.create_user(username="tech_operator3", password="pass")
+    founder = django_user_model.objects.create_user(username="tech_founder6", password="pass")
+    guild = Guild.objects.create(name="TechGuild6", founder=founder, silver=0, grain=999999, gold_bar=999999)
+    tech = GuildTechnology.objects.create(guild=guild, tech_key="equipment_forge", level=0, max_level=5)
+
+    with pytest.raises(ValueError, match="银两不足"):
+        upgrade_technology(guild, "equipment_forge", operator)
+
+    tech.refresh_from_db()
+    assert tech.level == 0

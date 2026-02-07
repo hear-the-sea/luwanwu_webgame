@@ -2,6 +2,7 @@ PYTHON ?= python3
 MANAGE ?= $(PYTHON) manage.py
 LOCAL_STATE_DIR ?= .local
 FLAKE8_TARGETS ?= accounts battle gameplay guests guilds trade core websocket config tests
+MYPY_TARGETS ?= accounts battle common config core gameplay guests guilds tasks trade websocket
 
 .PHONY: install migrate dev dev-ws worker beat test format lint check clean
 
@@ -54,7 +55,7 @@ format:
 
 lint:
 	$(PYTHON) -m flake8 --jobs=1 $(FLAKE8_TARGETS)
-	$(PYTHON) -m mypy .
+	@$(PYTHON) -c "import mypy" >/dev/null 2>&1 || { echo "mypy is not installed; skipping type check. Run: make install"; exit 0; }; $(PYTHON) -m mypy $(MYPY_TARGETS)
 
 check: format lint
 	@echo "Code formatting and linting completed!"

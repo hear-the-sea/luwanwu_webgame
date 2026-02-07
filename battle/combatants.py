@@ -37,10 +37,13 @@ def _get_all_guest_templates() -> Dict[str, GuestTemplate]:
     cached_keys = cache.get(GUEST_TEMPLATE_CACHE_KEY)
     if cached_keys is not None:
         # 根据缓存的 keys 查询模板（避免全表扫描）
-        return {t.key: t for t in GuestTemplate.objects.filter(key__in=cached_keys)}
+        return {
+            t.key: t
+            for t in GuestTemplate.objects.filter(key__in=cached_keys).prefetch_related("initial_skills")
+        }
 
     # 首次查询，获取所有模板并缓存 keys
-    templates = {t.key: t for t in GuestTemplate.objects.all()}
+    templates = {t.key: t for t in GuestTemplate.objects.all().prefetch_related("initial_skills")}
     cache.set(GUEST_TEMPLATE_CACHE_KEY, list(templates.keys()), timeout=GUEST_TEMPLATE_CACHE_TTL)
     return templates
 

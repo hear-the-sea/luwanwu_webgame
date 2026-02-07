@@ -632,7 +632,7 @@ class ItemNotUsableError(ItemError):
                 "magnifying_glass": "放大镜请在候选区使用",
                 "unknown_effect": "未知的道具效果",
             }
-            message = reason_messages.get(reason, "此物品不可使用")
+            message = reason_messages.get(reason or "", "此物品不可使用")
         super().__init__(message, item_name=item_name, reason=reason)
 
 

@@ -134,6 +134,10 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
     ONLINE_COUNT_CACHE_TTL = 5  # 5 seconds cache for online count
     TOTAL_COUNT_CACHE_TTL = 300  # 5 minutes cache for total count
 
+    # Broadcast debouncing (avoid broadcast storms on connect/disconnect bursts)
+    BROADCAST_DEBOUNCE_SECONDS = 1
+    BROADCAST_DEBOUNCE_CACHE_KEY = "stats:online:broadcast:debounce"
+
     # Initialize instance attributes with defaults to prevent AttributeError
     # in edge cases where disconnect is called before successful authentication
     user_id: int | None = None
@@ -176,14 +180,7 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
         stats = await self.get_stats()
         await self.send_json(stats)
 
-        # Broadcast updated statistics to all connected clients
-        await self.channel_layer.group_send(
-            self.STATS_GROUP,
-            {
-                "type": "stats_update",
-                "stats": stats,
-            },
-        )
+        await self._broadcast_stats_best_effort(stats)
 
     async def disconnect(self, close_code):
         """
@@ -214,6 +211,22 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
 
         # Broadcast updated statistics to remaining clients
         stats = await self.get_stats()
+        await self._broadcast_stats_best_effort(stats)
+
+    async def _broadcast_stats_best_effort(self, stats: dict) -> None:
+        """Broadcast stats to all clients with simple debouncing."""
+        if int(self.BROADCAST_DEBOUNCE_SECONDS) > 0:
+            try:
+                if not cache.add(
+                    self.BROADCAST_DEBOUNCE_CACHE_KEY,
+                    "1",
+                    timeout=int(self.BROADCAST_DEBOUNCE_SECONDS),
+                ):
+                    return
+            except Exception:
+                # Debounce is an optimization; if cache is unavailable, still broadcast.
+                logger.debug("Online stats broadcast debounce cache unavailable", exc_info=True)
+
         await self.channel_layer.group_send(
             self.STATS_GROUP,
             {
@@ -312,8 +325,20 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
         return new_count
         """
 
-        remaining = int(
-            redis.eval(
+        try:
+            if not hasattr(self, "_online_stats_remove_script_sha"):
+                self._online_stats_remove_script_sha = redis.script_load(script)
+            remaining_raw = redis.evalsha(
+                self._online_stats_remove_script_sha,
+                2,
+                count_key,
+                self.ONLINE_USERS_KEY,
+                str(int(user_id)),
+                str(int(self.ONLINE_USERS_TTL * 2)),
+            )
+        except RedisError:
+            # Fall back to EVAL if SCRIPT LOAD/EVALSHA isn't supported (or script cache was flushed).
+            remaining_raw = redis.eval(
                 script,
                 2,
                 count_key,
@@ -321,8 +346,8 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
                 str(int(user_id)),
                 str(int(self.ONLINE_USERS_TTL * 2)),
             )
-            or 0
-        )
+
+        remaining = int(remaining_raw or 0)
 
         cache.delete(self.ONLINE_COUNT_CACHE_KEY)
         return remaining

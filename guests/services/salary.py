@@ -106,40 +106,44 @@ def pay_guest_salary(manor: Manor, guest: Guest, for_date: date = None) -> Salar
     Raises:
         ValueError: 验证失败时抛出异常
     """
-    from django.db.models import F
+    from gameplay.models import Manor
 
     if for_date is None:
         for_date = timezone.now().date()
 
+    # Concurrency safety:
+    # - Lock manor row to serialize with pay_all_salaries()
+    # - Lock guest row to serialize per-guest salary payments
+    manor_locked = Manor.objects.select_for_update().get(pk=manor.pk)
+    guest_locked = Guest.objects.select_for_update().get(pk=guest.pk)
+
     # 验证门客属于该庄园
-    if guest.manor_id != manor.id:
-        raise GuestOwnershipError(guest)
+    if guest_locked.manor_id != manor_locked.id:
+        raise GuestOwnershipError(guest_locked)
 
     # 检查是否已支付
-    if check_salary_paid(guest, for_date):
-        raise SalaryAlreadyPaidError(guest)
+    if check_salary_paid(guest_locked, for_date):
+        raise SalaryAlreadyPaidError(guest_locked)
 
     # 计算工资
-    salary_amount = get_guest_salary(guest)
+    salary_amount = get_guest_salary(guest_locked)
 
-    # 使用原子更新防止并发竞态，同时验证银两是否足够
-    updated = Manor.objects.filter(
-        pk=manor.pk,
-        silver__gte=salary_amount
-    ).update(silver=F('silver') - salary_amount)
+    if manor_locked.silver < salary_amount:
+        raise InsufficientResourceError("silver", salary_amount, manor_locked.silver)
 
-    if not updated:
-        # 重新获取最新银两数值用于错误提示
-        manor.refresh_from_db(fields=['silver'])
-        raise InsufficientResourceError("silver", salary_amount, manor.silver)
+    manor_locked.silver -= salary_amount
+    manor_locked.save(update_fields=["silver"])
 
     # 创建支付记录
     payment = SalaryPayment.objects.create(
-        manor=manor,
-        guest=guest,
+        manor=manor_locked,
+        guest=guest_locked,
         amount=salary_amount,
         for_date=for_date
     )
+
+    # Keep caller's instance reasonably up to date.
+    manor.silver = manor_locked.silver
 
     return payment
 
@@ -162,8 +166,14 @@ def pay_all_salaries(manor: Manor, for_date: date = None) -> Dict:
     if for_date is None:
         for_date = timezone.now().date()
 
+    from django.db.models import F
+
+    from gameplay.models import Manor
+
+    manor_locked = Manor.objects.select_for_update().get(pk=manor.pk)
+
     # 获取所有门客
-    guests = list(Guest.objects.filter(manor=manor).select_related("template"))
+    guests = list(Guest.objects.filter(manor=manor_locked).select_related("template"))
 
     if not guests:
         raise NoGuestsError()
@@ -181,9 +191,9 @@ def pay_all_salaries(manor: Manor, for_date: date = None) -> Dict:
     # 计算总工资
     total_salary = sum(get_guest_salary(guest) for guest in unpaid_guests)
 
-    # 验证银两是否足够
-    if manor.silver < total_salary:
-        raise InsufficientResourceError("silver", total_salary, manor.silver)
+    # 验证银两是否足够（锁内，避免并发透支）
+    if manor_locked.silver < total_salary:
+        raise InsufficientResourceError("silver", total_salary, manor_locked.silver)
 
     # 批量支付
     payments = []
@@ -200,9 +210,8 @@ def pay_all_salaries(manor: Manor, for_date: date = None) -> Dict:
     # 批量创建记录
     SalaryPayment.objects.bulk_create(payments)
 
-    # 扣除总银两
-    manor.silver -= total_salary
-    manor.save(update_fields=["silver"])
+    Manor.objects.filter(pk=manor_locked.pk).update(silver=F("silver") - total_salary)
+    manor.silver = manor_locked.silver - total_salary
 
     return {
         "paid_count": len(unpaid_guests),

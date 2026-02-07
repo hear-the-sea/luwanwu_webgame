@@ -106,7 +106,11 @@ class GuestTemplate(models.Model):
     flavor = models.CharField(max_length=512, blank=True)
     default_gender = models.CharField(max_length=16, choices=GENDER_CHOICES, default="unknown")
     default_morality = models.PositiveIntegerField(default=50)
-    initial_skills = models.ManyToManyField("Skill", blank=True, related_name="template_initials")
+    initial_skills: models.ManyToManyField["Skill", "Skill"] = models.ManyToManyField(
+        "Skill",
+        blank=True,
+        related_name="template_initials",
+    )
     recruitable = models.BooleanField(default=True)
     # 是否为隐士（隐藏在民间的高手，虽为黑色但不可重复招募）
     is_hermit = models.BooleanField(default=False, verbose_name="隐士")
@@ -251,7 +255,11 @@ class Guest(models.Model):
     gender = models.CharField(max_length=16, choices=GENDER_CHOICES, default="unknown")
     morality = models.PositiveIntegerField("品性", default=50)
     status = models.CharField(max_length=16, choices=GuestStatus.choices, default=GuestStatus.IDLE)
-    skills = models.ManyToManyField(Skill, through="GuestSkill", blank=True)
+    skills: models.ManyToManyField["Skill", "Skill"] = models.ManyToManyField(
+        Skill,
+        through="GuestSkill",
+        blank=True,
+    )
     training_target_level = models.PositiveIntegerField(default=0)
     training_complete_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -24,7 +24,7 @@ def _bootstrap_guest(django_user_model):
 
 
 @pytest.mark.django_db
-def test_ensure_training_timer_creates_timer(django_user_model):
+def test_ensure_training_timer_creates_timer(game_data, django_user_model):
     guest = _bootstrap_guest(django_user_model)
     guest.training_complete_at = None
     guest.training_target_level = 0
@@ -37,7 +37,7 @@ def test_ensure_training_timer_creates_timer(django_user_model):
 
 
 @pytest.mark.django_db
-def test_reduce_training_time_for_guest_levels_up(django_user_model):
+def test_reduce_training_time_for_guest_levels_up(game_data, django_user_model):
     guest = _bootstrap_guest(django_user_model)
     ensure_auto_training(guest)
     guest.refresh_from_db()

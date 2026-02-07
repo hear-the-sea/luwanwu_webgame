@@ -13,7 +13,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, FrozenSet
 
 
@@ -147,10 +147,10 @@ class RarityConfig:
     ORDER: tuple = ("black", "gray", "green", "blue", "red", "purple", "orange")
 
     # 稀有度基础HP
-    HP_PROFILES: Dict[str, int] = None  # 在 __post_init__ 中设置
+    HP_PROFILES: Dict[str, int] = field(default_factory=dict)  # 在 __post_init__ 中设置
 
     # 稀有度工资
-    SALARY: Dict[str, int] = None  # 在 __post_init__ 中设置
+    SALARY: Dict[str, int] = field(default_factory=dict)  # 在 __post_init__ 中设置
 
     def __post_init__(self):
         # 由于 frozen=True，需要通过 object.__setattr__ 设置
@@ -182,7 +182,7 @@ class EquipmentConfig:
     """装备系统配置"""
 
     # 每个槽位的容量
-    SLOT_CAPACITY: Dict[str, int] = None
+    SLOT_CAPACITY: Dict[str, int] = field(default_factory=dict)
 
     # 可多装备的槽位
     MULTI_EQUIP_SLOTS: FrozenSet[str] = frozenset({"device", "ornament"})

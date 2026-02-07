@@ -150,7 +150,8 @@ def _return_surviving_troops_batch(
         return
 
     # 根据战报计算存活护院
-    attacker_losses = (report.losses or {}).get("attacker", {}) or {}
+    losses = getattr(report, "losses", None) or {}
+    attacker_losses = losses.get("attacker", {}) or {}
     casualties = attacker_losses.get("casualties", []) or []
 
     troop_definitions = load_troop_templates()

@@ -12,11 +12,11 @@ from guests.services.training import finalize_guest_training
 def load_guest_data(db):
     """Ensure guest templates and pools are loaded."""
     if not RecruitmentPool.objects.exists():
-        call_command("load_guest_templates", verbosity=0)
+        call_command("load_guest_templates", verbosity=0, skip_images=True)
 
 
 @pytest.mark.django_db
-def test_recruit_guest_creates_record(django_user_model, load_guest_data):
+def test_recruit_guest_creates_record(game_data, django_user_model, load_guest_data):
     user = django_user_model.objects.create_user(username="player_guest", password="pass123")
     manor = ensure_manor(user)
     manor.silver = 2000
@@ -31,7 +31,7 @@ def test_recruit_guest_creates_record(django_user_model, load_guest_data):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_train_guest_increases_level(django_user_model, load_guest_data):
+def test_train_guest_increases_level(game_data, django_user_model, load_guest_data):
     user = django_user_model.objects.create_user(username="player_train", password="pass123")
     manor = ensure_manor(user)
     manor.silver = 2000
@@ -50,7 +50,7 @@ def test_train_guest_increases_level(django_user_model, load_guest_data):
 
 
 @pytest.mark.django_db
-def test_finalize_guest_training_is_idempotent(django_user_model, load_guest_data):
+def test_finalize_guest_training_is_idempotent(game_data, django_user_model, load_guest_data):
     user = django_user_model.objects.create_user(username="player_train2", password="pass123")
     manor = ensure_manor(user)
     manor.silver = 2000
@@ -88,7 +88,7 @@ def test_finalize_guest_training_is_idempotent(django_user_model, load_guest_dat
 
 
 @pytest.mark.django_db
-def test_reveal_candidate_rarity_marks_all(django_user_model, load_guest_data):
+def test_reveal_candidate_rarity_marks_all(game_data, django_user_model, load_guest_data):
     user = django_user_model.objects.create_user(username="player_magnify", password="pass123")
     manor = ensure_manor(user)
     pool = RecruitmentPool.objects.get(key="tongshi")

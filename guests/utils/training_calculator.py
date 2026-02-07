@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-from typing import Dict, TYPE_CHECKING
+from typing import Dict, TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from ..models import Guest
@@ -101,7 +101,9 @@ def calculate_training_duration(current_level: int, rarity: str, levels: int = 1
         >>> calculate_training_duration(10, 'black', 1)
         174
     """
-    rarity_coeff = RARITY_TIME_COEFFICIENT.get(rarity, 1.0)
+    # `rarity` is usually a string (GuestRarity values), while the coefficient
+    # map is keyed by those enum values.
+    rarity_coeff = RARITY_TIME_COEFFICIENT.get(cast(GuestRarity, rarity), 1.0)
     total = 0
 
     for i in range(levels):

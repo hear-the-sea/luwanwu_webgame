@@ -1,6 +1,16 @@
 #!/usr/bin/env python
-"""Split guest_templates.yaml heroes into separate files by source/author."""
+"""Split guest_templates.yaml heroes into separate files by source/author.
 
+This is a utility script for maintaining YAML-driven guest templates.
+
+By default it assumes it is run from within the repo and will locate
+`data/` relative to this file. You can override the location with
+`--base-dir`.
+"""
+
+from __future__ import annotations
+
+import argparse
 from pathlib import Path
 
 import yaml
@@ -93,7 +103,17 @@ def to_plain(value):
 
 
 def main():
-    base_dir = Path("/home/daniel/code/web_game_v5/data")
+    parser = argparse.ArgumentParser(description="Split guest_templates.yaml heroes by source")
+    parser.add_argument(
+        "--base-dir",
+        type=Path,
+        default=None,
+        help="Repo base directory (defaults to repo root detected from script location)",
+    )
+    args = parser.parse_args()
+
+    repo_root = args.base_dir or Path(__file__).resolve().parents[1]
+    base_dir = repo_root / "data"
     backup_file = base_dir / "guest_templates_full.yaml"
     input_file = backup_file if backup_file.exists() else base_dir / "guest_templates.yaml"
     output_dir = base_dir / "guests"

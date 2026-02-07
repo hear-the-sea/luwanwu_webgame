@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Dict, TYPE_CHECKING
+from typing import DefaultDict, Dict, TYPE_CHECKING
 
 from core.utils import safe_int
 from core.utils.time_scale import scale_duration
@@ -65,7 +65,7 @@ def get_hourly_rates(manor: "Manor") -> Dict[str, float]:
         get_resource_production_bonus_from_levels,
     )
 
-    rates = defaultdict(float)
+    rates: DefaultDict[str, float] = defaultdict(float)
     tech_levels = get_player_technologies(manor)
     for building in manor.buildings.select_related("building_type"):
         base_rate = building.hourly_rate()
@@ -81,10 +81,10 @@ def get_hourly_rates(manor: "Manor") -> Dict[str, float]:
         # 茅厕特殊效果：额外产出等量银两
         if building.building_type.key == BuildingKeys.LATRINE:
             rates[ResourceType.SILVER] += rate
-    return rates
+    return dict(rates)
 
 
-def normalize_mission_loadout(raw: Dict[str, int] | None, troop_templates: Dict) -> Dict[str, int]:
+def normalize_mission_loadout(raw: Dict[str, int] | None, troop_templates: Dict[str, Dict]) -> Dict[str, int]:
     """
     标准化兵力配置，过滤无效数据并填充默认值。
 
@@ -116,10 +116,10 @@ def normalize_mission_loadout(raw: Dict[str, int] | None, troop_templates: Dict)
         if invalid_nonzero:
             raise ValueError(f"护院配置包含不存在的类型: {', '.join(invalid_nonzero.keys())}")
 
-    loadout = {}
+    loadout: Dict[str, int] = {}
     for key in troop_templates.keys():
         value = raw.get(key, 0)
-        loadout[key] = safe_int(value, default=0, min_val=0)
+        loadout[key] = safe_int(value, default=0, min_val=0) or 0
 
     return loadout
 

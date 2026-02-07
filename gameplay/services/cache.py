@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from functools import wraps
-from typing import Callable, TypeVar
+from typing import Callable, TypeVar, cast
 
 from django.core.cache import cache
 
@@ -118,28 +118,28 @@ def cached(
         def get_manor_data(manor):
             return expensive_computation(manor)
     """
+
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @wraps(func)
         def wrapper(*args, **kwargs) -> T:
             cache_key = key_func(*args, **kwargs)
-            result = cache.get(cache_key)
+            sentinel = object()
+            result = cache.get(cache_key, sentinel)
 
-            if result is not None:
-                return result
+            if result is not sentinel:
+                # If `cache_none=False` we don't normally store None, but keep
+                # compatibility with legacy callers that may have cached None.
+                if result is None and not cache_none:
+                    return cast(T, None)
+                return cast(T, result)
 
-            if result is None and not cache_none:
-                # 检查是否是缓存的None值
-                sentinel = object()
-                if cache.get(cache_key, sentinel) is not sentinel:
-                    return None
+            computed = func(*args, **kwargs)
+            if computed is not None or cache_none:
+                cache.set(cache_key, computed, timeout=timeout)
+            return cast(T, computed)
 
-            result = func(*args, **kwargs)
-
-            if result is not None or cache_none:
-                cache.set(cache_key, result, timeout=timeout)
-
-            return result
         return wrapper
+
     return decorator
 
 
@@ -163,4 +163,4 @@ def get_or_set(
     if result is None:
         result = default_func()
         cache.set(key, result, timeout=timeout)
-    return result
+    return cast(T, result)

@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import random
-from typing import Dict, List, TYPE_CHECKING
+from typing import Any, Dict, List, TYPE_CHECKING
 
 from common.utils.random_utils import binomial_sample
 
@@ -129,7 +129,7 @@ def calculate_team_losses(
     is_winner: bool,
     rng: random.Random,
     side: str = "attacker",
-) -> Dict[str, float]:
+) -> Dict[str, Any]:
     """
     计算队伍的战斗损失统计。
 

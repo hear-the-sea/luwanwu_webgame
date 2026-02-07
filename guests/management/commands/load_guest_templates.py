@@ -49,8 +49,16 @@ class Command(BaseCommand):
             default="",
             help="Optional directory containing hero roster YAML files (e.g., gulong.yaml, huangyi.yaml).",
         )
+        parser.add_argument(
+            "--skip-images",
+            action="store_true",
+            help="Skip avatar compression/storage. Useful for CI/tests.",
+        )
 
     def handle(self, *args, **options):
+        verbosity = int(options.get("verbosity", 1) or 1)
+        skip_images = bool(options.get("skip_images"))
+
         file_path = Path(options["file"])
         if not file_path.exists():
             raise CommandError(f"File {file_path} does not exist.")
@@ -175,7 +183,8 @@ class Command(BaseCommand):
             obj, created = Skill.objects.update_or_create(key=data["key"], defaults=defaults)
             skill_map[obj.key] = obj
             action = "Created" if created else "Updated"
-            self.stdout.write(f"{action} skill {obj.key}")
+            if verbosity >= 1:
+                self.stdout.write(f"{action} skill {obj.key}")
 
         for data in book_data:
             skill_key = data["skill"]
@@ -190,11 +199,12 @@ class Command(BaseCommand):
             }
             obj, created = SkillBook.objects.update_or_create(key=data["key"], defaults=defaults)
             action = "Created" if created else "Updated"
-            self.stdout.write(f"{action} book {obj.key}")
+            if verbosity >= 1:
+                self.stdout.write(f"{action} book {obj.key}")
 
         # 图片源目录
         image_source_dir = Path(settings.BASE_DIR) / "data" / "images" / "guests"
-        avatar_catalog = self._build_avatar_catalog(image_source_dir) if assign_missing_avatars else {}
+        avatar_catalog = self._build_avatar_catalog(image_source_dir) if assign_missing_avatars and not skip_images else {}
         avatar_cache: dict[str, str] = {}
         fallback_avatar_count = 0
 
@@ -223,62 +233,71 @@ class Command(BaseCommand):
             obj, created = GuestTemplate.objects.update_or_create(key=data["key"], defaults=defaults)
 
             # 处理头像字段（压缩并保存）
-            avatar_filename = data.get("avatar")
-            if not avatar_filename and assign_missing_avatars and not obj.avatar:
-                avatar_filename = self._pick_fallback_avatar(
-                    avatar_catalog,
-                    data.get("archetype"),
-                    data.get("default_gender"),
-                    data.get("key"),
-                )
+            if not skip_images:
+                avatar_filename = data.get("avatar")
+                if not avatar_filename and assign_missing_avatars and not obj.avatar:
+                    avatar_filename = self._pick_fallback_avatar(
+                        avatar_catalog,
+                        data.get("archetype"),
+                        data.get("default_gender"),
+                        data.get("key"),
+                    )
+                    if avatar_filename:
+                        fallback_avatar_count += 1
+
                 if avatar_filename:
-                    fallback_avatar_count += 1
-            if avatar_filename:
-                avatar_path = image_source_dir / avatar_filename
-                if avatar_path.exists():
-                    try:
-                        stored_name = avatar_cache.get(avatar_filename)
-                        saved_now = False
-                        if not stored_name:
-                            target_name = f"{avatar_path.stem}.webp"
-                            storage = obj.avatar.storage
-                            if storage.exists(target_name):
-                                stored_name = target_name
-                            else:
-                                # 压缩图片：门客头像最大 400x400，质量 85%，转换为 WebP
-                                compressed_file, new_filename = compress_and_resize_image(
-                                    avatar_path,
-                                    max_size=(400, 400),
-                                    quality=85,
-                                    convert_to_webp=True
-                                )
-                                old_name = obj.avatar.name if obj.avatar else ""
-                                obj.avatar.save(new_filename, compressed_file, save=True)
-                                stored_name = obj.avatar.name
-                                avatar_cache[avatar_filename] = stored_name
-                                self._safe_delete_old_avatar(obj, old_name, stored_name)
-                                self.stdout.write(
-                                    self.style.SUCCESS(
-                                        f"  [OK] Compressed and loaded avatar: {avatar_filename} -> {new_filename}"
+                    avatar_path = image_source_dir / avatar_filename
+                    if avatar_path.exists():
+                        try:
+                            stored_name = avatar_cache.get(avatar_filename)
+                            saved_now = False
+                            if not stored_name:
+                                target_name = f"{avatar_path.stem}.webp"
+                                storage = obj.avatar.storage
+                                if storage.exists(target_name):
+                                    stored_name = target_name
+                                else:
+                                    # 压缩图片：门客头像最大 400x400，质量 85%，转换为 WebP
+                                    compressed_file, new_filename = compress_and_resize_image(
+                                        avatar_path,
+                                        max_size=(400, 400),
+                                        quality=85,
+                                        convert_to_webp=True,
                                     )
+                                    old_name = obj.avatar.name if obj.avatar else ""
+                                    obj.avatar.save(new_filename, compressed_file, save=True)
+                                    stored_name = obj.avatar.name
+                                    avatar_cache[avatar_filename] = stored_name
+                                    self._safe_delete_old_avatar(obj, old_name, stored_name)
+                                    if verbosity >= 1:
+                                        self.stdout.write(
+                                            self.style.SUCCESS(
+                                                f"  [OK] Compressed and loaded avatar: {avatar_filename} -> {new_filename}"
+                                            )
+                                        )
+                                    saved_now = True
+                                avatar_cache[avatar_filename] = stored_name
+
+                            if not saved_now:
+                                old_name = obj.avatar.name if obj.avatar else ""
+                                if old_name != stored_name:
+                                    obj.avatar.name = stored_name
+                                    obj.save(update_fields=["avatar"])
+                                    self._safe_delete_old_avatar(obj, old_name, stored_name)
+                        except Exception as exc:
+                            if verbosity >= 1:
+                                self.stdout.write(
+                                    self.style.WARNING(f"  [FAIL] Failed to load avatar {avatar_filename}: {exc}")
                                 )
-                                saved_now = True
-                            avatar_cache[avatar_filename] = stored_name
-                        if not saved_now:
-                            old_name = obj.avatar.name if obj.avatar else ""
-                            if old_name != stored_name:
-                                obj.avatar.name = stored_name
-                                obj.save(update_fields=["avatar"])
-                                self._safe_delete_old_avatar(obj, old_name, stored_name)
-                    except Exception as e:
-                        self.stdout.write(self.style.WARNING(f"  [FAIL] Failed to load avatar {avatar_filename}: {e}"))
-                else:
-                    self.stdout.write(self.style.WARNING(f"  [NOT FOUND] Avatar not found: {avatar_path}"))
+                    else:
+                        if verbosity >= 1:
+                            self.stdout.write(self.style.WARNING(f"  [NOT FOUND] Avatar not found: {avatar_path}"))
 
             template_keys.add(obj.key)
             template_skill_keys[obj.key] = data.get("skills") or []
             action = "Created" if created else "Updated"
-            self.stdout.write(f"{action} template {obj.key}")
+            if verbosity >= 1:
+                self.stdout.write(f"{action} template {obj.key}")
 
         key_to_template = {tpl.key: tpl for tpl in GuestTemplate.objects.filter(key__in=template_keys)}
 
@@ -350,9 +369,10 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING(f"Removed {removed} pools not defined in payload"))
 
         clear_template_cache()
-        if fallback_avatar_count:
-            self.stdout.write(self.style.SUCCESS(f"Assigned {fallback_avatar_count} fallback avatars."))
-        self.stdout.write(self.style.SUCCESS("Guest templates and pools synced."))
+        if verbosity >= 1:
+            if fallback_avatar_count:
+                self.stdout.write(self.style.SUCCESS(f"Assigned {fallback_avatar_count} fallback avatars."))
+            self.stdout.write(self.style.SUCCESS("Guest templates and pools synced."))
 
     def _load_heroes_from_dir(self, dir_path: Path, load_payload) -> dict[str, list]:
         """Load and merge hero roster from all YAML/JSON files in a directory.

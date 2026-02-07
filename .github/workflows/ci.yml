@@ -24,17 +24,16 @@ jobs:
           if [ -f requirements.lock.txt ]; then
             pip install -r requirements.lock.txt
           fi
-          # Ensure dev tools (mypy/black/pre-commit) are available.
-          pip install -r requirements-dev.txt
+          # Type-checking deps (keep them small/stable for CI).
+          pip install "mypy>=1.8" "django-stubs>=5.0" "django-stubs-ext>=5.0" "types-PyYAML"
 
       - name: Lint (flake8)
         run: |
           python -m flake8 --jobs=1 accounts battle gameplay guests guilds trade core websocket config tests
 
       - name: Type check (mypy)
-        continue-on-error: true
         run: |
-          python -m mypy .
+          python -m mypy accounts battle common config core gameplay guests guilds tasks trade websocket
 
       - name: Tests (pytest + coverage)
         env:
@@ -44,4 +43,4 @@ jobs:
         run: |
           python manage.py check --deploy
           python -m coverage run -m pytest -q
-          python -m coverage report --fail-under=52
+          python -m coverage report --fail-under=57

@@ -88,6 +88,10 @@ def entry_rarity(entry: RecruitmentPoolEntry) -> str | None:
         稀有度字符串，如果无法确定则返回 None
     """
     if entry.template_id:
+        # When a template_id exists, template should be populated, but keep a
+        # defensive guard for stubs/missing relations.
+        if entry.template is None:
+            return None
         return entry.template.rarity
     return entry.rarity
 

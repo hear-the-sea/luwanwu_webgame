@@ -48,6 +48,7 @@ def rate_limit_json(
     window_seconds: int,
     key_func: Callable[[HttpRequest], str] | None = None,
     error_message: str = "请求过于频繁，请稍后再试",
+    include_safe_methods: bool = False,
 ) -> Callable:
     """
     Lightweight, cache-backed rate limiting for JSON views.
@@ -63,7 +64,7 @@ def rate_limit_json(
     def decorator(view_func: Callable) -> Callable:
         @wraps(view_func)
         def wrapped(request: HttpRequest, *args, **kwargs):
-            if request.method in {"GET", "HEAD", "OPTIONS"}:
+            if not include_safe_methods and request.method in {"GET", "HEAD", "OPTIONS"}:
                 return view_func(request, *args, **kwargs)
             user = getattr(request, "user", None)
             if user and (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
@@ -106,6 +107,7 @@ def rate_limit_redirect(
     window_seconds: int,
     error_message: str = "操作过于频繁，请稍后再试",
     redirect_url: str | None = None,
+    include_safe_methods: bool = False,
 ) -> Callable:
     """
     Lightweight, cache-backed rate limiting for redirect-based views.
@@ -120,6 +122,8 @@ def rate_limit_redirect(
     def decorator(view_func: Callable) -> Callable:
         @wraps(view_func)
         def wrapped(request: HttpRequest, *args, **kwargs):
+            if not include_safe_methods and request.method in {"GET", "HEAD", "OPTIONS"}:
+                return view_func(request, *args, **kwargs)
             user = getattr(request, "user", None)
             if user and (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
                 return view_func(request, *args, **kwargs)

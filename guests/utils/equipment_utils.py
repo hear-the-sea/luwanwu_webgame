@@ -75,7 +75,7 @@ def compute_set_bonus(gear_items) -> Dict[str, int]:
                 bonuses = {}
 
         info = sets.setdefault(set_key, {"count": 0, "pieces": pieces, "bonus": bonuses})
-        info["count"] += 1
+        info["count"] = int(info.get("count") or 0) + 1  # type: ignore[arg-type, call-overload]
         if info.get("pieces") is None and pieces is not None:
             info["pieces"] = pieces
         if info.get("bonus") is None and bonuses:
@@ -83,8 +83,8 @@ def compute_set_bonus(gear_items) -> Dict[str, int]:
 
     bonuses_out: Dict[str, int] = {}
     for _, info in sets.items():
-        required = info.get("pieces") or info.get("count") or 0
-        if info.get("count", 0) < required:
+        required = int(info.get("pieces") or info.get("count") or 0)  # type: ignore[arg-type, call-overload]
+        if int(info.get("count") or 0) < required:  # type: ignore[arg-type, call-overload]
             continue
         bonus_map = info.get("bonus") or {}
         if not isinstance(bonus_map, dict):

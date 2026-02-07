@@ -234,25 +234,25 @@ def claim_message_attachments(message: Message) -> Dict:
     """
     # CRITICAL: Use select_for_update to acquire row lock and prevent concurrent claims
     # This must be the first database operation in the transaction
-    message = (
+    locked_message = (
         Message.objects.select_for_update()
         .select_related("manor")
         .filter(pk=message.pk)
         .first()
     )
 
-    if not message:
+    if locked_message is None:
         raise MessageNotFoundError()
 
-    if not message.has_attachments:
+    if not locked_message.has_attachments:
         raise NoAttachmentError()
 
     # Check claim status AFTER acquiring lock
-    if message.is_claimed:
+    if locked_message.is_claimed:
         raise AttachmentAlreadyClaimedError()
 
-    manor = Manor.objects.select_for_update().get(pk=message.manor_id)
-    attachments = message.attachments
+    manor = Manor.objects.select_for_update().get(pk=locked_message.manor_id)
+    attachments = locked_message.attachments
     claimed_summary = {}
 
     # 发放资源
@@ -260,7 +260,7 @@ def claim_message_attachments(message: Message) -> Dict:
     claimed_resources = grant_resources(
         manor,
         resources,
-        note=f"邮件附件：{message.title}",
+        note=f"邮件附件：{locked_message.title}",
         reason=ResourceEvent.Reason.ADMIN_ADJUST,
     )
     claimed_summary.update(claimed_resources)

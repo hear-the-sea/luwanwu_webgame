@@ -7,18 +7,34 @@ from __future__ import annotations
 
 import random
 from typing import Dict, Optional, TYPE_CHECKING
+from collections.abc import Mapping
 
 if TYPE_CHECKING:
     pass
 
 
 # 波动参数配置
-ATTRIBUTE_VARIANCE_CONFIG = {
+ATTRIBUTE_VARIANCE_CONFIG: Dict[str, object] = {
     "min_ratio": 0.88,      # 单项最低不低于模板的88%
     "max_ratio": 1.12,      # 单项最高不超过模板的112%
     "max_deviation": 3,     # 单次偏移最多±3点
     "luck_deviation": 5,    # 运势偏移范围±5点
 }
+
+
+MIN_RATIO = float(ATTRIBUTE_VARIANCE_CONFIG.get("min_ratio", 0.88))  # type: ignore[arg-type]
+MAX_RATIO = float(ATTRIBUTE_VARIANCE_CONFIG.get("max_ratio", 1.12))  # type: ignore[arg-type]
+
+
+def _int_config(config: Mapping[str, object], key: str, default: int) -> int:
+    value = config.get(key, default)
+    try:
+        if isinstance(value, bool):
+            return default
+        return int(value)  # type: ignore[arg-type, call-overload]
+    except (TypeError, ValueError):
+        return default
+
 
 # 硬约束
 MAX_GROWABLE_ATTRIBUTE = 99  # 可成长属性硬上限
@@ -77,8 +93,8 @@ def apply_recruitment_variance(
         new_value = base_value + deviation
 
         # 约束1：不低于88%，不超过112%
-        min_value = max(1, int(base_value * ATTRIBUTE_VARIANCE_CONFIG["min_ratio"]))
-        max_value = int(base_value * ATTRIBUTE_VARIANCE_CONFIG["max_ratio"])
+        min_value = max(1, int(base_value * MIN_RATIO))
+        max_value = int(base_value * MAX_RATIO)
         new_value = max(min_value, min(max_value, new_value))
 
         # 约束2：可成长属性 < 100
@@ -93,9 +109,10 @@ def apply_recruitment_variance(
 
     # 步骤5：运势波动±5点
     base_luck = template_attrs["luck"]
+    luck_dev = _int_config(ATTRIBUTE_VARIANCE_CONFIG, "luck_deviation", 5)
     luck_deviation = rng.randint(
-        -ATTRIBUTE_VARIANCE_CONFIG["luck_deviation"],
-        ATTRIBUTE_VARIANCE_CONFIG["luck_deviation"]
+        -luck_dev,
+        luck_dev,
     )
     result["luck"] = max(1, base_luck + luck_deviation)  # 确保运势至少为1
 
@@ -123,7 +140,7 @@ def _generate_balanced_deviations(
     Returns:
         偏移量字典
     """
-    max_dev = ATTRIBUTE_VARIANCE_CONFIG["max_deviation"]
+    max_dev = _int_config(ATTRIBUTE_VARIANCE_CONFIG, "max_deviation", 3)
 
     # 计算每个属性的实际最大偏移（受模板值12%限制）
     attr_max_devs = {}
@@ -207,14 +224,14 @@ def _adjust_to_target_total(
             candidates = [
                 attr for attr in growable
                 if adjusted[attr] < MAX_GROWABLE_ATTRIBUTE
-                and adjusted[attr] < int(template_attrs[attr] * ATTRIBUTE_VARIANCE_CONFIG["max_ratio"])
+                and adjusted[attr] < int(template_attrs[attr] * MAX_RATIO)
             ]
             if candidates:
                 attr_to_adjust = min(candidates, key=lambda k: adjusted[k])
                 adjusted[attr_to_adjust] = min(
                     adjusted[attr_to_adjust] + min(diff, 1),
                     MAX_GROWABLE_ATTRIBUTE,
-                    int(template_attrs[attr_to_adjust] * ATTRIBUTE_VARIANCE_CONFIG["max_ratio"])
+                    int(template_attrs[attr_to_adjust] * MAX_RATIO)
                 )
             else:
                 break  # 无法继续增加
@@ -222,11 +239,11 @@ def _adjust_to_target_total(
             # 需要减少：选择最高的且还有余量的属性
             candidates = [
                 attr for attr in growable
-                if adjusted[attr] > max(1, int(template_attrs[attr] * ATTRIBUTE_VARIANCE_CONFIG["min_ratio"]))
+                if adjusted[attr] > max(1, int(template_attrs[attr] * MIN_RATIO))
             ]
             if candidates:
                 attr_to_adjust = max(candidates, key=lambda k: adjusted[k])
-                min_value = max(1, int(template_attrs[attr_to_adjust] * ATTRIBUTE_VARIANCE_CONFIG["min_ratio"]))
+                min_value = max(1, int(template_attrs[attr_to_adjust] * MIN_RATIO))
                 adjusted[attr_to_adjust] = max(
                     adjusted[attr_to_adjust] + max(diff, -1),
                     min_value

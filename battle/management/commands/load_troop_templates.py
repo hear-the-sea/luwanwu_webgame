@@ -21,8 +21,16 @@ class Command(BaseCommand):
             default=str(Path(settings.BASE_DIR) / "data" / "troop_templates.yaml"),
             help="Path to YAML file containing troop templates.",
         )
+        parser.add_argument(
+            "--skip-images",
+            action="store_true",
+            help="Skip avatar compression/storage. Useful for CI/tests.",
+        )
 
     def handle(self, *args, **options):
+        verbosity = int(options.get("verbosity", 1) or 1)
+        skip_images = bool(options.get("skip_images"))
+
         file_path = Path(options["file"])
         if not file_path.exists():
             raise CommandError(f"File {file_path} does not exist.")
@@ -53,30 +61,42 @@ class Command(BaseCommand):
             obj, created = TroopTemplate.objects.update_or_create(key=data["key"], defaults=defaults)
 
             # 处理头像字段（压缩并保存）
-            avatar_filename = data.get("avatar")
-            if avatar_filename:
-                avatar_path = image_source_dir / avatar_filename
-                if avatar_path.exists():
-                    try:
-                        # 压缩图片：兵种头像最大 300x300，质量 85%，转换为 WebP
-                        compressed_file, new_filename = compress_and_resize_image(
-                            avatar_path,
-                            max_size=(300, 300),
-                            quality=85,
-                            convert_to_webp=True
-                        )
-                        # 删除旧文件（如果存在）避免重复
-                        if obj.avatar:
-                            obj.avatar.delete(save=False)
-                        obj.avatar.save(new_filename, compressed_file, save=True)
-                        self.stdout.write(self.style.SUCCESS(f"  [OK] Compressed and loaded avatar: {avatar_filename} -> {new_filename}"))
-                    except Exception as e:
-                        self.stdout.write(self.style.WARNING(f"  [FAIL] Failed to load avatar {avatar_filename}: {e}"))
-                else:
-                    self.stdout.write(self.style.WARNING(f"  [NOT FOUND] Avatar not found: {avatar_path}"))
+            if not skip_images:
+                avatar_filename = data.get("avatar")
+                if avatar_filename:
+                    avatar_path = image_source_dir / avatar_filename
+                    if avatar_path.exists():
+                        try:
+                            # 压缩图片：兵种头像最大 300x300，质量 85%，转换为 WebP
+                            compressed_file, new_filename = compress_and_resize_image(
+                                avatar_path,
+                                max_size=(300, 300),
+                                quality=85,
+                                convert_to_webp=True,
+                            )
+                            # 删除旧文件（如果存在）避免重复
+                            if obj.avatar:
+                                obj.avatar.delete(save=False)
+                            obj.avatar.save(new_filename, compressed_file, save=True)
+                            if verbosity >= 1:
+                                self.stdout.write(
+                                    self.style.SUCCESS(
+                                        f"  [OK] Compressed and loaded avatar: {avatar_filename} -> {new_filename}"
+                                    )
+                                )
+                        except Exception as exc:
+                            if verbosity >= 1:
+                                self.stdout.write(
+                                    self.style.WARNING(f"  [FAIL] Failed to load avatar {avatar_filename}: {exc}")
+                                )
+                    else:
+                        if verbosity >= 1:
+                            self.stdout.write(self.style.WARNING(f"  [NOT FOUND] Avatar not found: {avatar_path}"))
 
             action = "Created" if created else "Updated"
-            self.stdout.write(f"{action} troop template {obj.key}")
+            if verbosity >= 1:
+                self.stdout.write(f"{action} troop template {obj.key}")
 
         clear_troop_template_caches()
-        self.stdout.write(self.style.SUCCESS("Troop templates synced."))
+        if verbosity >= 1:
+            self.stdout.write(self.style.SUCCESS("Troop templates synced."))

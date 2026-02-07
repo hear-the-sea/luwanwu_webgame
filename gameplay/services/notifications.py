@@ -7,12 +7,16 @@ WebSocket 通知服务模块
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, TYPE_CHECKING
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
 logger = logging.getLogger(__name__)
+
+
+if TYPE_CHECKING:
+    from gameplay.models import Manor
 
 
 def notify_user(

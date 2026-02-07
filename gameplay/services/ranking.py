@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import List, Dict, Any, Optional
 
 from django.core.cache import cache
+from django.db.models import Q
 
 from ..models import Manor
 from .cache import (
@@ -75,16 +76,13 @@ def get_player_rank(manor: Manor) -> Optional[int]:
     if cached_rank is not None:
         return cached_rank
 
-    # 计算比当前玩家声望高的玩家数量
-    higher_count = Manor.objects.filter(prestige__gt=manor.prestige).count()
-
-    # 同声望的玩家按创建时间排序，计算同分但更早的玩家
-    same_but_earlier = Manor.objects.filter(
-        prestige=manor.prestige,
-        created_at__lt=manor.created_at
+    # Performance: compute rank using a single COUNT query.
+    # Rank = 1 + count(prestige higher OR same prestige but created earlier)
+    ahead_count = Manor.objects.filter(
+        Q(prestige__gt=manor.prestige) | Q(prestige=manor.prestige, created_at__lt=manor.created_at)
     ).count()
 
-    rank = higher_count + same_but_earlier + 1
+    rank = ahead_count + 1
     # 缓存30秒，声望变化时 cache_key 会变化自动失效
     cache.set(cache_key, rank, timeout=CACHE_TIMEOUT_MEDIUM)
     return rank

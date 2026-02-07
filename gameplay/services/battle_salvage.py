@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import random
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 from guests.models import Guest
 
@@ -43,7 +43,7 @@ def calculate_battle_salvage(
     attacker_losses = losses.get("attacker", {}) or {}
     defender_losses = losses.get("defender", {}) or {}
 
-    all_casualties = []
+    all_casualties: List[Dict[str, Any]] = []
     all_casualties.extend(attacker_losses.get("casualties", []) or [])
     all_casualties.extend(defender_losses.get("casualties", []) or [])
 
