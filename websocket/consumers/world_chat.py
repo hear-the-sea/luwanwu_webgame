@@ -10,6 +10,7 @@ from asgiref.sync import sync_to_async
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.db import DatabaseError
 from django_redis import get_redis_connection
 from redis.exceptions import RedisError
@@ -47,6 +48,35 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
     RATE_LIMIT_MAX_MESSAGES = 6
 
     TRUMPET_ITEM_KEY = "small_trumpet"
+
+    # Fallback in-memory rate limiting when Redis is unavailable
+    _fallback_rate_limits: dict[int, list[float]] = {}
+
+    # Display name cache TTL (5 minutes)
+    DISPLAY_NAME_CACHE_TTL = 300
+
+    # Lua script for batch history trimming (O(1) per removed message vs O(n) round trips)
+    TRIM_HISTORY_SCRIPT = """
+local key = KEYS[1]
+local cutoff = tonumber(ARGV[1])
+local limit = tonumber(ARGV[2])
+local removed = 0
+while removed < limit do
+    local tail = redis.call('LINDEX', key, -1)
+    if not tail then break end
+    local ok, msg = pcall(cjson.decode, tail)
+    if not ok then
+        redis.call('RPOP', key)
+        removed = removed + 1
+    elseif msg.ts and tonumber(msg.ts) < cutoff then
+        redis.call('RPOP', key)
+        removed = removed + 1
+    else
+        break
+    end
+end
+return removed
+"""
 
     user_id: int | None = None
     display_name: str = ""
@@ -172,6 +202,11 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
 
     @database_sync_to_async
     def _get_display_name(self, user_id: int) -> str:
+        cache_key = f"user:display_name:{user_id}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         try:
             user = User.objects.select_related("manor").get(id=user_id)
         except User.DoesNotExist:
@@ -184,11 +219,15 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
         manor = getattr(user, "manor", None)
         if manor is not None:
             try:
-                return str(manor.display_name)
+                display_name = str(manor.display_name)
             except (AttributeError, TypeError, ValueError) as exc:
                 logger.debug("Invalid manor display_name for world chat user_id=%s: %s", user_id, exc)
+                display_name = user.get_full_name() or user.username or "玩家"
+        else:
+            display_name = user.get_full_name() or user.username or "玩家"
 
-        return user.get_full_name() or user.username or "玩家"
+        cache.set(cache_key, display_name, timeout=self.DISPLAY_NAME_CACHE_TTL)
+        return display_name
 
     @database_sync_to_async
     def _consume_trumpet(self) -> tuple[bool, str]:
@@ -263,7 +302,25 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
         return await sync_to_async(self._get_history_sync, thread_sensitive=True)()
 
     def _trim_history_by_time_sync(self, cutoff_ms: int) -> None:
+        """Trim expired messages from history using Lua script for O(1) performance."""
         redis = self._get_redis()
+        try:
+            redis.eval(
+                self.TRIM_HISTORY_SCRIPT,
+                1,
+                self.HISTORY_KEY,
+                cutoff_ms,
+                self.HISTORY_LIMIT
+            )
+        except (RedisError, AttributeError) as exc:
+            # Fallback to Python-based trimming when Lua is unavailable (e.g., in tests)
+            logger.debug("Lua script unavailable, using Python fallback: %s", exc)
+            self._trim_history_by_time_fallback(cutoff_ms, redis)
+        except Exception:
+            logger.exception("Unexpected error while trimming world chat history")
+
+    def _trim_history_by_time_fallback(self, cutoff_ms: int, redis) -> None:
+        """Python fallback for trimming history when Lua is unavailable."""
         for _ in range(int(self.HISTORY_LIMIT)):
             raw_tail = redis.lindex(self.HISTORY_KEY, -1)
             if not raw_tail:
@@ -314,11 +371,30 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
             if count == 1:
                 redis.expire(key, self.RATE_LIMIT_WINDOW_SECONDS + 2)
         except RedisError as exc:
-            logger.debug("World chat rate limit Redis error; allowing message: %s", exc)
-            return True, None
+            logger.warning("World chat rate limit Redis error, using fallback: %s", exc)
+            return self._fallback_rate_limit(user_id)
 
         if count > self.RATE_LIMIT_MAX_MESSAGES:
             return False, self.RATE_LIMIT_WINDOW_SECONDS
+        return True, None
+
+    def _fallback_rate_limit(self, user_id: int) -> tuple[bool, int | None]:
+        """Fallback in-memory rate limiting when Redis is unavailable."""
+        import time
+        now = time.time()
+        window = self.RATE_LIMIT_WINDOW_SECONDS
+
+        if user_id not in self._fallback_rate_limits:
+            self._fallback_rate_limits[user_id] = []
+
+        # Clean up expired records
+        timestamps = self._fallback_rate_limits[user_id]
+        timestamps[:] = [t for t in timestamps if now - t < window]
+
+        if len(timestamps) >= self.RATE_LIMIT_MAX_MESSAGES:
+            return False, int(window - (now - timestamps[0]))
+
+        timestamps.append(now)
         return True, None
 
     async def _rate_limit(self, user_id: int | None) -> tuple[bool, int | None]:

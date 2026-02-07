@@ -126,7 +126,7 @@ class LoginView(DjangoLoginView):
         attempts = _record_failed_attempt(self.request, username)
         remaining = LOGIN_ATTEMPT_LIMIT - attempts
         if remaining > 0:
-            messages.warning(self.request, f"登录失败，还可尝试 {remaining} 次")
+            messages.warning(self.request, "用户名或密码错误，请重试")
         else:
             # 安全修复：使用模糊的提示信息
             messages.error(self.request, "登录尝试次数过多，请稍后再试")

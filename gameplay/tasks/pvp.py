@@ -1,0 +1,290 @@
+from __future__ import annotations
+
+import logging
+
+from celery import shared_task
+from django.utils import timezone
+
+logger = logging.getLogger(__name__)
+
+
+# ============ Scout Tasks ============
+
+
+@shared_task(name="gameplay.complete_scout", bind=True, max_retries=2, default_retry_delay=30)
+def complete_scout_task(self, record_id: int):
+    """
+    Complete scout background task.
+    """
+    from gameplay.models import ScoutRecord
+    from gameplay.services.raid import finalize_scout
+
+    try:
+        record = (
+            ScoutRecord.objects
+            .select_related("attacker", "defender")
+            .filter(pk=record_id)
+            .first()
+        )
+        if not record:
+            logger.warning(f"ScoutRecord {record_id} not found")
+            return "not_found"
+
+        now = timezone.now()
+        if record.status != ScoutRecord.Status.SCOUTING:
+            return "already_completed"
+
+        if record.complete_at and record.complete_at > now:
+            remaining = int((record.complete_at - now).total_seconds())
+            if remaining > 0:
+                complete_scout_task.apply_async(args=[record_id], countdown=remaining)
+                return "rescheduled"
+
+        finalize_scout(record, now=now)
+        return "completed"
+    except Exception as exc:
+        logger.exception(f"Failed to complete scout {record_id}: {exc}")
+        raise self.retry(exc=exc)
+
+
+@shared_task(name="gameplay.complete_scout_return", bind=True, max_retries=2, default_retry_delay=30)
+def complete_scout_return_task(self, record_id: int):
+    """
+    Complete scout return background task.
+
+    After scout return completes, send result message to attacker.
+    """
+    from gameplay.models import ScoutRecord
+    from gameplay.services.raid import finalize_scout_return
+
+    try:
+        record = (
+            ScoutRecord.objects
+            .select_related("attacker", "defender")
+            .filter(pk=record_id)
+            .first()
+        )
+        if not record:
+            logger.warning(f"ScoutRecord {record_id} not found")
+            return "not_found"
+
+        now = timezone.now()
+        if record.status != ScoutRecord.Status.RETURNING:
+            return "invalid_status"
+
+        if record.return_at and record.return_at > now:
+            remaining = int((record.return_at - now).total_seconds())
+            if remaining > 0:
+                complete_scout_return_task.apply_async(args=[record_id], countdown=remaining)
+                return "rescheduled"
+
+        finalize_scout_return(record, now=now)
+        return "completed"
+    except Exception as exc:
+        logger.exception(f"Failed to complete scout return {record_id}: {exc}")
+        raise self.retry(exc=exc)
+
+
+@shared_task(name="gameplay.scan_scout_records")
+def scan_scout_records(limit: int = 200):
+    """
+    Scan and complete all overdue scout tasks (for worker downtime recovery).
+
+    Handles two statuses:
+    - SCOUTING: Outbound arrival, determine success/failure, enter return
+    - RETURNING: Return complete, send result message to attacker
+    """
+    from gameplay.models import ScoutRecord
+    from gameplay.services.raid import finalize_scout, finalize_scout_return
+
+    now = timezone.now()
+    count = 0
+
+    # Handle outbound arrival (SCOUTING -> RETURNING)
+    scouting_qs = (
+        ScoutRecord.objects
+        .select_related("attacker", "defender")
+        .filter(status=ScoutRecord.Status.SCOUTING, complete_at__lte=now)
+        .order_by("complete_at")[:limit]
+    )
+    for record in scouting_qs:
+        try:
+            finalize_scout(record, now=now)
+            count += 1
+        except Exception:
+            logger.exception(f"Failed to finalize scout record {record.id}")
+
+    # Handle return complete (RETURNING -> SUCCESS/FAILED)
+    returning_qs = (
+        ScoutRecord.objects
+        .select_related("attacker", "defender")
+        .filter(status=ScoutRecord.Status.RETURNING, return_at__lte=now)
+        .order_by("return_at")[:limit]
+    )
+    for record in returning_qs:
+        try:
+            finalize_scout_return(record, now=now)
+            count += 1
+        except Exception:
+            logger.exception(f"Failed to finalize scout return {record.id}")
+
+    return count
+
+
+# ============ Raid Tasks ============
+
+
+@shared_task(name="gameplay.process_raid_battle", bind=True, max_retries=2, default_retry_delay=30)
+def process_raid_battle_task(self, run_id: int):
+    """
+    Process raid battle background task.
+    """
+    from gameplay.models import RaidRun
+    from gameplay.services.raid import process_raid_battle
+
+    try:
+        run = (
+            RaidRun.objects
+            .select_related("attacker", "defender")
+            .prefetch_related("guests")
+            .filter(pk=run_id)
+            .first()
+        )
+        if not run:
+            logger.warning(f"RaidRun {run_id} not found")
+            return "not_found"
+
+        now = timezone.now()
+        if run.status not in [RaidRun.Status.MARCHING, RaidRun.Status.RETREATED]:
+            return "invalid_status"
+
+        # Retreating troops should not be settled early at battle_at; wait for return_at
+        if run.status == RaidRun.Status.RETREATED:
+            if run.return_at and run.return_at > now:
+                remaining = int((run.return_at - now).total_seconds())
+                if remaining > 0:
+                    complete_raid_task.apply_async(args=[run_id], countdown=remaining)
+                    return "retreated_rescheduled"
+            complete_raid_task.apply_async(args=[run_id], countdown=0)
+            return "retreated_forwarded"
+
+        if run.status == RaidRun.Status.MARCHING and run.battle_at and run.battle_at > now:
+            remaining = int((run.battle_at - now).total_seconds())
+            if remaining > 0:
+                process_raid_battle_task.apply_async(args=[run_id], countdown=remaining)
+                return "rescheduled"
+
+        process_raid_battle(run, now=now)
+        return "completed"
+    except Exception as exc:
+        logger.exception(f"Failed to process raid battle {run_id}: {exc}")
+        raise self.retry(exc=exc)
+
+
+@shared_task(name="gameplay.complete_raid", bind=True, max_retries=2, default_retry_delay=30)
+def complete_raid_task(self, run_id: int):
+    """
+    Complete raid return background task.
+    """
+    from gameplay.models import RaidRun
+    from gameplay.services.raid import finalize_raid
+
+    try:
+        run = (
+            RaidRun.objects
+            .select_related("attacker", "defender", "battle_report")
+            .prefetch_related("guests")
+            .filter(pk=run_id)
+            .first()
+        )
+        if not run:
+            logger.warning(f"RaidRun {run_id} not found")
+            return "not_found"
+
+        now = timezone.now()
+        if run.status == RaidRun.Status.COMPLETED:
+            return "already_completed"
+
+        # Retreated status completes directly
+        if run.status == RaidRun.Status.RETREATED:
+            if run.return_at and run.return_at > now:
+                remaining = int((run.return_at - now).total_seconds())
+                if remaining > 0:
+                    complete_raid_task.apply_async(args=[run_id], countdown=remaining)
+                    return "rescheduled"
+            finalize_raid(run, now=now)
+            return "completed"
+
+        # Returning status checks time
+        if run.status == RaidRun.Status.RETURNING:
+            if run.return_at and run.return_at > now:
+                remaining = int((run.return_at - now).total_seconds())
+                if remaining > 0:
+                    complete_raid_task.apply_async(args=[run_id], countdown=remaining)
+                    return "rescheduled"
+            finalize_raid(run, now=now)
+            return "completed"
+
+        return "invalid_status"
+    except Exception as exc:
+        logger.exception(f"Failed to complete raid {run_id}: {exc}")
+        raise self.retry(exc=exc)
+
+
+@shared_task(name="gameplay.scan_raid_runs")
+def scan_raid_runs(limit: int = 200):
+    """
+    Scan and process all overdue raid tasks (for worker downtime recovery).
+    """
+    from gameplay.models import RaidRun
+    from gameplay.services.raid import process_raid_battle, finalize_raid
+
+    now = timezone.now()
+    count = 0
+
+    # Handle marching but battle time arrived
+    marching_qs = (
+        RaidRun.objects
+        .select_related("attacker", "defender")
+        .prefetch_related("guests")
+        .filter(status=RaidRun.Status.MARCHING, battle_at__lte=now)
+        .order_by("battle_at")[:limit]
+    )
+    for run in marching_qs:
+        try:
+            process_raid_battle(run, now=now)
+            count += 1
+        except Exception:
+            logger.exception(f"Failed to process raid battle {run.id}")
+
+    # Handle returning but completed
+    returning_qs = (
+        RaidRun.objects
+        .select_related("attacker", "defender", "battle_report")
+        .prefetch_related("guests")
+        .filter(status=RaidRun.Status.RETURNING, return_at__lte=now)
+        .order_by("return_at")[:limit]
+    )
+    for run in returning_qs:
+        try:
+            finalize_raid(run, now=now)
+            count += 1
+        except Exception:
+            logger.exception(f"Failed to finalize raid {run.id}")
+
+    # Handle retreated but completed
+    retreated_qs = (
+        RaidRun.objects
+        .select_related("attacker", "defender")
+        .prefetch_related("guests")
+        .filter(status=RaidRun.Status.RETREATED, return_at__lte=now)
+        .order_by("return_at")[:limit]
+    )
+    for run in retreated_qs:
+        try:
+            finalize_raid(run, now=now)
+            count += 1
+        except Exception:
+            logger.exception(f"Failed to finalize retreated raid {run.id}")
+
+    return count

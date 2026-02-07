@@ -45,7 +45,7 @@ def _patch_model(monkeypatch, dotted_path: str, *, first_result=None, slice_resu
 
 @pytest.mark.django_db
 def test_complete_mission_task_not_found(monkeypatch):
-    monkeypatch.setattr(tasks, "MissionRun", SimpleNamespace(objects=_Chain(first_result=None)))
+    monkeypatch.setattr("gameplay.tasks.missions.MissionRun", SimpleNamespace(objects=_Chain(first_result=None)))
 
     assert tasks.complete_mission_task.run(123) == "not_found"
 
@@ -55,9 +55,9 @@ def test_complete_mission_task_reschedules_when_not_due(monkeypatch):
     now = timezone.now()
     run = SimpleNamespace(return_at=now + timedelta(seconds=10))
 
-    monkeypatch.setattr(tasks, "MissionRun", SimpleNamespace(objects=_Chain(first_result=run)))
+    monkeypatch.setattr("gameplay.tasks.missions.MissionRun", SimpleNamespace(objects=_Chain(first_result=run)))
     finalize = []
-    monkeypatch.setattr(tasks, "finalize_mission_run", lambda *_args, **_kwargs: finalize.append(True))
+    monkeypatch.setattr("gameplay.tasks.missions.finalize_mission_run", lambda *_args, **_kwargs: finalize.append(True))
 
     called = {}
 
@@ -82,17 +82,16 @@ def test_complete_building_upgrade_completes_or_skips(monkeypatch):
         objects = _Chain(first_result=building)
 
     monkeypatch.setattr("gameplay.models.Building", _Building)
-    monkeypatch.setattr(tasks, "finalize_building_upgrade", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr("gameplay.tasks.buildings.finalize_building_upgrade", lambda *_args, **_kwargs: True)
 
     assert tasks.complete_building_upgrade.run(7) == "completed"
 
-    monkeypatch.setattr(tasks, "finalize_building_upgrade", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr("gameplay.tasks.buildings.finalize_building_upgrade", lambda *_args, **_kwargs: False)
     assert tasks.complete_building_upgrade.run(7) == "skipped"
 
 
 @pytest.mark.django_db
 def test_scan_building_upgrades_counts_successes(monkeypatch):
-    now = timezone.now()
     buildings = [SimpleNamespace(id=1), SimpleNamespace(id=2), SimpleNamespace(id=3)]
 
     class _Building:
@@ -105,8 +104,7 @@ def test_scan_building_upgrades_counts_successes(monkeypatch):
             raise RuntimeError("boom")
         return building.id != 3
 
-    monkeypatch.setattr(tasks, "finalize_building_upgrade", _finalize)
-    monkeypatch.setattr(tasks.timezone, "now", lambda: now)
+    monkeypatch.setattr("gameplay.tasks.buildings.finalize_building_upgrade", _finalize)
 
     assert tasks.scan_building_upgrades() == 1
 
@@ -198,7 +196,7 @@ def test_scan_technology_upgrades_counts(monkeypatch):
     def _finalize(tech, **_kwargs):
         return tech.id in {1, 3}
 
-    monkeypatch.setattr(tasks, "finalize_technology_upgrade", _finalize)
+    monkeypatch.setattr("gameplay.tasks.technology.finalize_technology_upgrade", _finalize)
 
     assert tasks.scan_technology_upgrades() == 2
 

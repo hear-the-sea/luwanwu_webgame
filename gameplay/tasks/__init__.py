@@ -1,0 +1,109 @@
+"""
+Gameplay tasks package.
+
+This package contains all Celery tasks for the gameplay module, organized by domain:
+- missions: Mission completion tasks
+- buildings: Building upgrade tasks
+- technology: Technology upgrade tasks
+- production: All production tasks (horse, livestock, smelting, equipment, work)
+- recruitment: Troop recruitment tasks
+- pvp: Raid and scout tasks
+- maintenance: Data cleanup and prisoner loyalty decay tasks
+"""
+from __future__ import annotations
+
+# Re-export commonly used imports for backward compatibility
+from django.utils import timezone
+
+from gameplay.models import MissionRun
+from gameplay.services.manor import finalize_building_upgrade
+from gameplay.services.technology import finalize_technology_upgrade
+
+# Missions
+from gameplay.tasks.missions import complete_mission_task
+
+# Buildings
+from gameplay.tasks.buildings import (
+    complete_building_upgrade,
+    scan_building_upgrades,
+)
+
+# Technology
+from gameplay.tasks.technology import (
+    complete_technology_upgrade,
+    scan_technology_upgrades,
+)
+
+# Production (horse, livestock, smelting, equipment, work)
+from gameplay.tasks.production import (
+    complete_horse_production,
+    scan_horse_productions,
+    complete_livestock_production,
+    scan_livestock_productions,
+    complete_smelting_production,
+    scan_smelting_productions,
+    complete_equipment_forging,
+    scan_equipment_forgings,
+    complete_work_assignments_task,
+)
+
+# Recruitment
+from gameplay.tasks.recruitment import (
+    complete_troop_recruitment,
+    scan_troop_recruitments,
+)
+
+# PvP (raid, scout)
+from gameplay.tasks.pvp import (
+    complete_scout_task,
+    complete_scout_return_task,
+    scan_scout_records,
+    process_raid_battle_task,
+    complete_raid_task,
+    scan_raid_runs,
+)
+
+# Maintenance
+from gameplay.tasks.maintenance import (
+    cleanup_old_data_task,
+    decay_prisoner_loyalty_task,
+)
+
+__all__ = [
+    # Backward compatibility
+    "timezone",
+    "MissionRun",
+    "finalize_building_upgrade",
+    "finalize_technology_upgrade",
+    # Missions
+    "complete_mission_task",
+    # Buildings
+    "complete_building_upgrade",
+    "scan_building_upgrades",
+    # Technology
+    "complete_technology_upgrade",
+    "scan_technology_upgrades",
+    # Production
+    "complete_horse_production",
+    "scan_horse_productions",
+    "complete_livestock_production",
+    "scan_livestock_productions",
+    "complete_smelting_production",
+    "scan_smelting_productions",
+    "complete_equipment_forging",
+    "scan_equipment_forgings",
+    "complete_work_assignments_task",
+    # Recruitment
+    "complete_troop_recruitment",
+    "scan_troop_recruitments",
+    # PvP
+    "complete_scout_task",
+    "complete_scout_return_task",
+    "scan_scout_records",
+    "process_raid_battle_task",
+    "complete_raid_task",
+    "scan_raid_runs",
+    # Maintenance
+    "cleanup_old_data_task",
+    "decay_prisoner_loyalty_task",
+]

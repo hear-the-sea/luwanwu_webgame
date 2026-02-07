@@ -112,7 +112,7 @@ def get_effective_gold_supply() -> int:
         cache.set(SUPPLY_STALE_CACHE_KEY, total, SUPPLY_STALE_CACHE_TTL)
         return total
     except Exception as e:
-        logger.warning(f"Failed to query gold supply: {e}")
+        logger.warning("Failed to query gold supply: %s", e, exc_info=True)
         # 降级策略：优先使用过期缓存
         stale = cache.get(SUPPLY_STALE_CACHE_KEY)
         if stale is not None:

@@ -8,17 +8,31 @@
 使用方法:
     python manage.py shell < scripts/test_recruitment_probability.py
 
-    或者在 Django shell 中执行:
-    from pathlib import Path
-    exec(Path('scripts/test_recruitment_probability.py').read_text())
+    或者直接运行（需要设置 DJANGO_SETTINGS_MODULE 并确保依赖可用）:
+    python scripts/test_recruitment_probability.py
 """
 from __future__ import annotations
 
+import os
 import random
 import sys
 import time
 from collections import Counter
 from typing import Dict
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+
+try:
+    import django
+    from django.apps import apps
+
+    if not apps.ready:
+        django.setup()
+except Exception as exc:
+    if __name__ == "__main__":
+        print(f"[ERROR] Django setup failed: {exc}")
+        print("Hint: run via `python manage.py shell < scripts/test_recruitment_probability.py`")
+        raise SystemExit(1) from exc
 
 # 导入招募系统模块
 from guests.utils.recruitment_utils import (

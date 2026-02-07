@@ -210,7 +210,7 @@ web_game_v5/
 项目使用 Celery 处理耗时和定时任务，配置了三个专用队列：
 
 ```python
-# config/settings.py
+# config/settings/celery_conf.py
 CELERY_TASK_QUEUES = (
     Queue("default"),   # 默认队列
     Queue("battle"),    # 战斗相关

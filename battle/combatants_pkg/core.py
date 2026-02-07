@@ -1,0 +1,53 @@
+"""
+Core combatant data classes.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any, Dict, List
+
+
+@dataclass(slots=True)
+class BattleSimulationResult:
+    rounds: List[Dict[str, Any]]
+    winner: str
+    losses: Dict[str, dict]
+    drops: Dict[str, int]
+    seed: int
+    starts_at: datetime
+    completed_at: datetime
+
+
+@dataclass(slots=True)
+class Combatant:
+    name: str
+    attack: int
+    defense: int
+    hp: int
+    max_hp: int
+    side: str
+    rarity: str
+    luck: int
+    agility: int
+    priority: int
+    kind: str
+    troop_strength: int
+    initial_troop_strength: int = 0
+    initial_hp: int = 0
+    unit_attack: int = 0
+    unit_defense: int = 0
+    unit_hp: int = 0
+    skills: list = field(default_factory=list)
+    template_key: str | None = None
+    force_attr: int = 0
+    intellect_attr: int = 0
+    defense_attr: int = 0
+    guest_id: int | None = None
+    level: int = 1
+    status_effects: Dict[str, Dict[str, int]] = field(default_factory=dict)
+    has_acted_this_round: bool = False
+    current_round: int = 0
+    last_round_acted: int = 0
+    troop_class: str = ""
+    tech_effects: Dict[str, float] = field(default_factory=dict)

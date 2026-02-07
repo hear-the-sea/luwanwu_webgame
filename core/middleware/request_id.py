@@ -77,7 +77,7 @@ class RequestIDMiddleware(MiddlewareMixin):
             finally:
                 try:
                     delattr(request, "_request_id_token")
-                except Exception:
+                except AttributeError:
                     pass
 
         return response
@@ -94,5 +94,5 @@ class RequestIDMiddleware(MiddlewareMixin):
             finally:
                 try:
                     delattr(request, "_request_id_token")
-                except Exception:
+                except AttributeError:
                     pass

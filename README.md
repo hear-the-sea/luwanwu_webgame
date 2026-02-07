@@ -266,6 +266,6 @@ web_game_v5/
 
 ## 十二、后续迭代提示
 - 结合游戏玩法补充更多 Django App/DRF Router（庄园、建筑、门客等），在 `config/urls.py` 中按领域挂载。
-- 异步任务建议按领域放在各 App 的 `tasks.py` 中，并在 `config/settings.py` 的 `CELERY_TASK_ROUTES` / `CELERY_BEAT_SCHEDULE` 配置队列与调度。
+- 异步任务建议按领域放在各 App 的 `tasks.py` 中，并在 `config/settings/celery_conf.py` 的 `CELERY_TASK_ROUTES` / `CELERY_BEAT_SCHEDULE` 配置队列与调度。
 - 数值/概率优先走 `data/*.yaml`，导入型数据用 `python manage.py load_*_templates` 同步（门客/物品/任务/兵种等）。
-- 日志与健康检查：访问 `/health/live`、`/health/ready`；日志格式在 `config/settings.py` 的 `LOGGING` 配置。
+- 日志与健康检查：访问 `/health/live`、`/health/ready`；日志格式在 `config/settings/logging_conf.py` 的 `LOGGING` 配置。

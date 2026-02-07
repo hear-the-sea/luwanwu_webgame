@@ -41,7 +41,7 @@ def refresh_shop_stock(self):
                     )
                     refreshed_count += 1
                 except Exception as e:
-                    logger.exception(f"Failed to refresh stock for item {item.item_key}")
+                    logger.exception("Failed to refresh stock for item %s: %s", item.item_key, e)
                     failed_items.append({"item_key": item.item_key, "error": str(e)})
 
         # 记录失败统计，便于监控告警
@@ -54,7 +54,7 @@ def refresh_shop_stock(self):
 
         return f"refreshed {refreshed_count} items"
     except Exception as exc:
-        logger.exception(f"Failed to refresh shop stock: {exc}")
+        logger.exception("Failed to refresh shop stock: %s", exc)
         raise self.retry(exc=exc)
 
 
@@ -70,7 +70,7 @@ def process_expired_listings(self):
         count = expire_listings()
         return f"处理了 {count} 个过期挂单"
     except Exception as exc:
-        logger.exception(f"Failed to process expired listings: {exc}")
+        logger.exception("Failed to process expired listings: %s", exc)
         raise self.retry(exc=exc)
 
 
@@ -109,7 +109,7 @@ def settle_auction_round_task(self):
         else:
             return "没有需要结算的拍卖轮次"
     except Exception as exc:
-        logger.exception(f"结算拍卖轮次失败: {exc}")
+        logger.exception("结算拍卖轮次失败: %s", exc)
         raise self.retry(exc=exc)
 
 
@@ -145,5 +145,5 @@ def create_auction_round_task(self):
         else:
             return "已有进行中的拍卖轮次或无可用商品，跳过创建"
     except Exception as exc:
-        logger.exception(f"创建拍卖轮次失败: {exc}")
+        logger.exception("创建拍卖轮次失败: %s", exc)
         raise self.retry(exc=exc)

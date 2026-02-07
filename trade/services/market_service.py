@@ -569,7 +569,7 @@ def _expire_listings_queryset(expired_listings: QuerySet, log_label: str) -> int
                 count += 1
         except Exception as e:
             # 记录错误但继续处理其他挂单
-            logger.exception(f"{log_label} {listing.id} 时出错：{e}")
+            logger.exception("%s %s 时出错: %s", log_label, listing.id, e)
             continue
 
     return count

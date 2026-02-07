@@ -1,0 +1,166 @@
+"""
+AI guest generator.
+"""
+from __future__ import annotations
+
+import random
+from typing import Any, Dict, List
+
+from guests.models import Guest
+
+from .cache import get_all_guest_templates
+
+
+def _get_max_squad() -> int:
+    """Get MAX_SQUAD from constants, with fallback."""
+    try:
+        from battle.constants import MAX_SQUAD as SQUAD
+        return SQUAD
+    except ImportError:
+        return 5
+
+
+def allocate_ai_attribute_points(guest: Guest, total_points: int) -> Dict[str, int]:
+    """
+    Allocate attribute points for AI guest (by archetype weights).
+
+    Args:
+        guest: Guest instance (for archetype check)
+        total_points: Total points to allocate
+
+    Returns:
+        Allocation dict {"force": X, "intellect": Y, "defense": Z, "agility": W}
+    """
+    from guests.utils.attribute_growth import MILITARY_ATTRIBUTE_WEIGHTS, CIVIL_ATTRIBUTE_WEIGHTS
+
+    if guest.archetype == "military":
+        weights = MILITARY_ATTRIBUTE_WEIGHTS
+    else:
+        weights = CIVIL_ATTRIBUTE_WEIGHTS
+
+    choices = []
+    for attr, weight in weights.items():
+        choices.extend([attr] * weight)
+
+    allocation = {"force": 0, "intellect": 0, "defense": 0, "agility": 0}
+    for _ in range(total_points):
+        attr = random.choice(choices)
+        allocation[attr] += 1
+
+    return allocation
+
+
+def build_named_ai_guests(
+    guest_keys: List[str | Dict[str, Any]],
+    level: int = 50
+) -> List[Guest]:
+    """
+    Build AI guests from specified templates with random attribute growth.
+
+    Args:
+        guest_keys: Guest config list, supports two formats:
+            - string: template key (backward compatible)
+            - dict: {"key": "template_key", "skills": ["skill1", "skill2"]}
+        level: Guest level (default 50)
+
+    Returns:
+        AI guest list with attributes grown based on level
+    """
+    from guests.models import RARITY_SKILL_POINT_GAINS
+    from guests.utils.attribute_growth import allocate_level_up_attributes
+
+    parsed_configs: List[Dict[str, Any]] = []
+    template_keys_to_fetch: List[str] = []
+
+    for entry in guest_keys:
+        if isinstance(entry, str):
+            parsed_configs.append({"key": entry, "skills": None})
+            template_keys_to_fetch.append(entry)
+        elif isinstance(entry, dict):
+            key = entry.get("key", "")
+            skills = entry.get("skills")
+            parsed_configs.append({"key": key, "skills": skills})
+            if key:
+                template_keys_to_fetch.append(key)
+
+    all_templates = get_all_guest_templates()
+    templates = {key: all_templates[key] for key in template_keys_to_fetch if key in all_templates}
+    guests: List[Guest] = []
+
+    for config in parsed_configs:
+        template_key = config["key"]
+        override_skills = config["skills"]
+
+        template = templates.get(template_key)
+        if not template:
+            continue
+
+        dummy_guest = Guest(
+            template=template,
+            level=level,
+            attack_bonus=40,
+            defense_bonus=40,
+            force=template.base_attack,
+            intellect=template.base_intellect,
+            defense_stat=template.base_defense,
+            agility=template.base_agility,
+            luck=template.base_luck,
+            gender=template.default_gender,
+            morality=template.default_morality,
+        )
+
+        if level > 1:
+            growth_levels = level - 1
+
+            growth = allocate_level_up_attributes(dummy_guest, levels=growth_levels)
+            dummy_guest.force += growth.get("force", 0)
+            dummy_guest.intellect += growth.get("intellect", 0)
+            dummy_guest.defense_stat += growth.get("defense", 0)
+            dummy_guest.agility += growth.get("agility", 0)
+            per_level_points = int(RARITY_SKILL_POINT_GAINS.get(template.rarity, 1))  # type: ignore[arg-type,call-overload]
+            total_attribute_points = per_level_points * growth_levels
+
+            if total_attribute_points > 0:
+                attr_allocation = allocate_ai_attribute_points(dummy_guest, total_attribute_points)
+                dummy_guest.force += attr_allocation.get("force", 0)
+                dummy_guest.intellect += attr_allocation.get("intellect", 0)
+                dummy_guest.defense_stat += attr_allocation.get("defense", 0)
+                dummy_guest.agility += attr_allocation.get("agility", 0)
+
+        if override_skills is not None:
+            setattr(dummy_guest, "_override_skills", override_skills)
+
+        guests.append(dummy_guest)
+
+    return guests
+
+
+def build_ai_guests(rng: random.Random) -> List[Guest]:
+    """Build random AI guests for testing."""
+    all_templates = get_all_guest_templates()
+    templates = list(all_templates.values())
+    rng.shuffle(templates)
+    guests: List[Guest] = []
+    max_squad = _get_max_squad()
+    for template in templates[:max_squad]:
+        dummy_guest = Guest(
+            template=template,
+            level=10,
+            attack_bonus=20,
+            defense_bonus=20,
+        )
+        guests.append(dummy_guest)
+    return guests
+
+
+def generate_ai_loadout(rng: random.Random) -> Dict[str, int]:
+    """Generate random AI troop loadout."""
+    from battle.troops import load_troop_templates
+
+    templates = load_troop_templates()
+    loadout: Dict[str, int] = {}
+    for key, definition in templates.items():
+        base = definition.get("default_count", 120)
+        jitter = rng.randint(-int(base * 0.2), int(base * 0.2)) if base else 0
+        loadout[key] = max(0, int(base + jitter))
+    return loadout

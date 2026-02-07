@@ -29,7 +29,7 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
 
     ONLINE_COUNT_CACHE_KEY = "stats:online_users_count"
     TOTAL_COUNT_CACHE_KEY = "stats:total_users_count"
-    ONLINE_COUNT_CACHE_TTL = 5
+    ONLINE_COUNT_CACHE_TTL = 15
     TOTAL_COUNT_CACHE_TTL = 300
 
     BROADCAST_DEBOUNCE_SECONDS = 1
@@ -93,8 +93,8 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
                     timeout=int(self.BROADCAST_DEBOUNCE_SECONDS),
                 ):
                     return
-            except Exception:
-                logger.debug("Online stats broadcast debounce cache unavailable", exc_info=True)
+            except Exception as exc:
+                logger.debug("Online stats broadcast debounce cache unavailable: %s", exc, exc_info=True)
 
         await self.channel_layer.group_send(
             self.STATS_GROUP,
@@ -224,8 +224,8 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
             except RedisError as exc:
                 logger.debug("Online stats heartbeat Redis error; will retry: %s", exc)
                 continue
-            except Exception:
-                logger.exception("Unexpected error in online stats heartbeat loop")
+            except Exception as exc:
+                logger.exception("Unexpected error in online stats heartbeat loop: %s", exc)
                 continue
 
     async def get_stats(self):
@@ -234,8 +234,8 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
         except RedisError as exc:
             logger.warning("Online stats Redis read failed; reporting 0 online users: %s", exc)
             online_count = 0
-        except Exception:
-            logger.exception("Unexpected error while getting online count; reporting 0 online users")
+        except Exception as exc:
+            logger.exception("Unexpected error while getting online count; reporting 0 online users: %s", exc)
             online_count = 0
 
         try:
@@ -243,8 +243,8 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
         except DatabaseError as exc:
             logger.warning("Online stats DB read failed; reporting 0 total users: %s", exc)
             total_count = 0
-        except Exception:
-            logger.exception("Unexpected error while getting total users; reporting 0 total users")
+        except Exception as exc:
+            logger.exception("Unexpected error while getting total users; reporting 0 total users: %s", exc)
             total_count = 0
 
         return {

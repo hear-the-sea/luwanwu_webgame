@@ -40,8 +40,8 @@ def guild_tech_daily_production(self):
                     produce_equipment(guild, tech.level)
                     tech.last_production_at = timezone.now()
                     tech.save(update_fields=["last_production_at"])
-                except Exception:
-                    logger.exception(f"Failed to produce equipment for guild {guild.id}")
+                except Exception as exc:
+                    logger.exception("Failed to produce equipment for guild %s: %s", guild.id, exc)
 
             # 经验炼制
             tech = techs.get("experience_refine")
@@ -50,8 +50,8 @@ def guild_tech_daily_production(self):
                     produce_experience_items(guild, tech.level)
                     tech.last_production_at = timezone.now()
                     tech.save(update_fields=["last_production_at"])
-                except Exception:
-                    logger.exception(f"Failed to produce experience items for guild {guild.id}")
+                except Exception as exc:
+                    logger.exception("Failed to produce experience items for guild %s: %s", guild.id, exc)
 
             # 资源补给
             tech = techs.get("resource_supply")
@@ -60,14 +60,14 @@ def guild_tech_daily_production(self):
                     produce_resource_packs(guild, tech.level)
                     tech.last_production_at = timezone.now()
                     tech.save(update_fields=["last_production_at"])
-                except Exception:
-                    logger.exception(f"Failed to produce resource packs for guild {guild.id}")
+                except Exception as exc:
+                    logger.exception("Failed to produce resource packs for guild %s: %s", guild.id, exc)
 
             processed_count += 1
 
         return f"processed {processed_count} guilds"
     except Exception as exc:
-        logger.exception(f"Failed to run guild tech daily production: {exc}")
+        logger.exception("Failed to run guild tech daily production: %s", exc)
         raise self.retry(exc=exc)
 
 
@@ -81,7 +81,7 @@ def reset_guild_weekly_stats(self):
         reset_weekly_contributions()
         return "reset completed"
     except Exception as exc:
-        logger.exception(f"Failed to reset guild weekly stats: {exc}")
+        logger.exception("Failed to reset guild weekly stats: %s", exc)
         raise self.retry(exc=exc)
 
 
@@ -103,5 +103,5 @@ def cleanup_old_guild_logs(self):
         logger.info(f"Cleaned up {total} old guild logs (donation={donation_deleted}, exchange={exchange_deleted}, resource={resource_deleted})")
         return f"cleaned up {total} logs"
     except Exception as exc:
-        logger.exception(f"Failed to cleanup old guild logs: {exc}")
+        logger.exception("Failed to cleanup old guild logs: %s", exc)
         raise self.retry(exc=exc)

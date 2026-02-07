@@ -182,6 +182,7 @@ def settle_auction_round(
 
         failed_slots = []
         settle_one = settle_slot_func or _settle_slot
+
         for slot in slots:
             try:
                 result = settle_one(slot)
@@ -191,7 +192,7 @@ def settle_auction_round(
                 else:
                     stats["unsold"] += 1
             except Exception as exc:
-                logger.exception(f"结算拍卖位 {slot.id} 时出错：{exc}")
+                logger.exception("结算拍卖位 %s 时出错: %s", slot.id, exc)
                 failed_slots.append({"slot_id": slot.id, "error": str(exc)})
                 continue
 
