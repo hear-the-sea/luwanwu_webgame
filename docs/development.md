@@ -95,6 +95,40 @@ make lock
 make precommit
 ```
 
+---
+
+## 质量门禁（推荐）
+
+本项目默认启用 CI 质量门禁（GitHub Actions）：
+
+- `flake8`：基础代码风格检查（仓库内固定 `jobs=1`，保证在受限环境也可运行）
+- `pytest + coverage`：单元测试与覆盖率报告
+- `python manage.py check --deploy`：部署安全检查
+
+本地建议按以下顺序执行：
+
+```bash
+make format
+make lint
+make cov
+```
+
+覆盖率阈值会在 CI 中强制执行（见 `.github/workflows/ci.yml`）。
+
+---
+
+## 开发调试工具
+
+### 战斗调试器（battle_debugger）
+
+`battle_debugger` 仅在开发环境可用，并且需要显式启用：
+
+```bash
+export DJANGO_ENABLE_DEBUGGER=1
+```
+
+默认关闭可以避免在开发/测试环境中意外加载额外路由与调试页面。
+
 ### 4. 配置环境变量
 
 ```bash
