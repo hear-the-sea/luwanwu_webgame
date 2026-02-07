@@ -15,6 +15,7 @@ class ResourceEvent(models.Model):
         RECRUIT_COST = "recruit_cost", "门客招募"
         TRAINING_COST = "training_cost", "门客培养"
         ITEM_USE = "item_use", "道具使用"
+        BANK_EXCHANGE = "bank_exchange", "钱庄兑换"
         SHOP_PURCHASE = "shop_purchase", "商铺购买"
         SHOP_SELL = "shop_sell", "商铺出售"
         WORK_REWARD = "work_reward", "打工报酬"

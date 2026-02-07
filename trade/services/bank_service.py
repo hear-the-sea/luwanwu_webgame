@@ -288,7 +288,7 @@ def exchange_gold_bar(manor: Manor, quantity: int) -> dict:
             manor_locked,
             {"silver": total_cost},
             note=f"兑换金条 x{quantity}",
-            reason=ResourceEvent.Reason.ITEM_PURCHASE
+            reason=ResourceEvent.Reason.BANK_EXCHANGE,
         )
 
         # 步骤2：锁定并增加金条库存

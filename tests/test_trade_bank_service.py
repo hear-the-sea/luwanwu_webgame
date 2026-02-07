@@ -1,0 +1,122 @@
+from __future__ import annotations
+
+import pytest
+from django.core.cache import cache
+
+from gameplay.models import InventoryItem, ItemTemplate
+from gameplay.services.manor import ensure_manor
+from trade.models import GoldBarExchangeLog
+from trade.services import bank_service
+
+
+def _ensure_gold_bar_template() -> ItemTemplate:
+    template, _ = ItemTemplate.objects.get_or_create(
+        key=bank_service.GOLD_BAR_ITEM_KEY,
+        defaults={
+            "name": "金条",
+            "effect_type": ItemTemplate.EffectType.TOOL,
+            "is_usable": False,
+            "tradeable": False,
+        },
+    )
+    return template
+
+
+@pytest.mark.django_db
+def test_calculate_progressive_factor_caps():
+    assert bank_service.calculate_progressive_factor(0) == 1.0
+    assert bank_service.calculate_progressive_factor(1) == 1.05
+    assert bank_service.calculate_progressive_factor(100) == 1.60
+
+
+@pytest.mark.django_db
+def test_calculate_supply_factor_clamps(monkeypatch):
+    monkeypatch.setattr(bank_service, "get_effective_gold_supply", lambda: 0)
+    assert bank_service.calculate_supply_factor() == 0.85
+
+    monkeypatch.setattr(bank_service, "get_effective_gold_supply", lambda: bank_service.GOLD_BAR_TARGET_SUPPLY)
+    assert bank_service.calculate_supply_factor() == pytest.approx(1.0)
+
+    monkeypatch.setattr(
+        bank_service,
+        "get_effective_gold_supply",
+        lambda: bank_service.GOLD_BAR_TARGET_SUPPLY * 10_000,
+    )
+    assert bank_service.calculate_supply_factor() == 1.40
+
+
+@pytest.mark.django_db
+def test_calculate_gold_bar_cost_includes_fee(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="bank_cost", password="pass12345")
+    manor = ensure_manor(user)
+
+    monkeypatch.setattr(bank_service, "calculate_supply_factor", lambda: 1.0)
+    monkeypatch.setattr(bank_service, "get_today_exchange_count", lambda *_args, **_kwargs: 0)
+
+    cost = bank_service.calculate_gold_bar_cost(manor, 2)
+
+    expected_rates = [
+        max(
+            bank_service.GOLD_BAR_MIN_PRICE,
+            min(
+                bank_service.GOLD_BAR_MAX_PRICE,
+                int(bank_service.GOLD_BAR_BASE_PRICE * bank_service.calculate_progressive_factor(0)),
+            ),
+        ),
+        max(
+            bank_service.GOLD_BAR_MIN_PRICE,
+            min(
+                bank_service.GOLD_BAR_MAX_PRICE,
+                int(bank_service.GOLD_BAR_BASE_PRICE * bank_service.calculate_progressive_factor(1)),
+            ),
+        ),
+    ]
+
+    assert cost["rate_details"] == expected_rates
+    assert cost["base_cost"] == sum(expected_rates)
+    assert cost["fee"] == int(cost["base_cost"] * bank_service.GOLD_BAR_FEE_RATE)
+    assert cost["total_cost"] == cost["base_cost"] + cost["fee"]
+
+
+@pytest.mark.django_db
+def test_exchange_gold_bar_deducts_silver_and_creates_inventory(monkeypatch, django_user_model):
+    cache.clear()
+
+    user = django_user_model.objects.create_user(username="bank_exchange", password="pass12345")
+    manor = ensure_manor(user)
+    manor.silver = 1_000_000_000
+    manor.save(update_fields=["silver"])
+
+    _ = _ensure_gold_bar_template()
+
+    monkeypatch.setattr(
+        bank_service,
+        "calculate_gold_bar_cost",
+        lambda *_args, **_kwargs: {
+            "base_cost": 100,
+            "fee": 10,
+            "total_cost": 110,
+            "rate_details": [50, 50],
+            "avg_rate": 50,
+        },
+    )
+    monkeypatch.setattr(bank_service, "calculate_next_rate", lambda *_args, **_kwargs: 123)
+
+    result = bank_service.exchange_gold_bar(manor, 2)
+    assert result["total_cost"] == 110
+    assert result["quantity"] == 2
+    assert result["next_rate"] == 123
+
+    manor.refresh_from_db()
+    assert manor.silver == 1_000_000_000 - 110
+
+    inventory_item = InventoryItem.objects.get(
+        manor=manor,
+        template__key=bank_service.GOLD_BAR_ITEM_KEY,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+    assert inventory_item.quantity == 2
+
+    log = GoldBarExchangeLog.objects.get(manor=manor)
+    assert log.quantity == 2
+    assert log.silver_cost == 110
