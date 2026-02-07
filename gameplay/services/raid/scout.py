@@ -164,8 +164,15 @@ def start_scout(attacker: Manor, defender: Manor) -> ScoutRecord:
     # 调度侦察完成任务
     try:
         from gameplay.tasks import complete_scout_task
-    except Exception:
-        logger.warning("complete_scout_task dispatch failed", exc_info=True)
+    except Exception as exc:
+        logger.warning(
+            "complete_scout_task dispatch failed: record_id=%s attacker=%s defender=%s error=%s",
+            record.id,
+            attacker.id,
+            defender.id,
+            exc,
+            exc_info=True,
+        )
     else:
         safe_apply_async(
             complete_scout_task,
@@ -229,8 +236,13 @@ def finalize_scout(record: ScoutRecord, now=None) -> None:
     # 调度返程完成任务
     try:
         from gameplay.tasks import complete_scout_return_task
-    except Exception:
-        logger.warning("complete_scout_return_task dispatch failed", exc_info=True)
+    except Exception as exc:
+        logger.warning(
+            "complete_scout_return_task dispatch failed: record_id=%s error=%s",
+            locked_record.id,
+            exc,
+            exc_info=True,
+        )
     else:
         safe_apply_async(
             complete_scout_return_task,
@@ -452,8 +464,13 @@ def request_scout_retreat(record: ScoutRecord) -> None:
     # 调度撤退返程完成任务
     try:
         from gameplay.tasks import complete_scout_return_task
-    except Exception:
-        logger.warning("complete_scout_return_task dispatch failed for retreat", exc_info=True)
+    except Exception as exc:
+        logger.warning(
+            "complete_scout_return_task dispatch failed for retreat: record_id=%s error=%s",
+            locked_record.id,
+            exc,
+            exc_info=True,
+        )
     else:
         countdown = max(1, elapsed)
         safe_apply_async(

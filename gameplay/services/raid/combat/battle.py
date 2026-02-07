@@ -99,8 +99,15 @@ def process_raid_battle(run: RaidRun, now=None) -> None:
             capture_info = _try_capture_guest(locked_run, report, is_attacker_victory)
             if capture_info:
                 locked_run.battle_rewards = {**(locked_run.battle_rewards or {}), "capture": capture_info}
-        except Exception:
-            logger.warning("raid capture failed", exc_info=True)
+        except Exception as exc:
+            logger.warning(
+                "raid capture failed: run_id=%s attacker=%s defender=%s error=%s",
+                locked_run.id,
+                locked_run.attacker_id,
+                locked_run.defender_id,
+                exc,
+                exc_info=True,
+            )
 
         # 计算并发放战斗通用奖励（经验果+装备回收）给胜利方
         from gameplay.services.battle_salvage import calculate_battle_salvage, grant_battle_salvage
@@ -129,8 +136,13 @@ def process_raid_battle(run: RaidRun, now=None) -> None:
     # 调度返程完成任务
     try:
         from gameplay.tasks import complete_raid_task
-    except Exception:
-        logger.warning("complete_raid_task dispatch failed", exc_info=True)
+    except Exception as exc:
+        logger.warning(
+            "complete_raid_task dispatch failed: run_id=%s error=%s",
+            locked_run.id,
+            exc,
+            exc_info=True,
+        )
     else:
         remaining = locked_run.travel_time  # 返程时间等于单程时间
         safe_apply_async(
@@ -208,8 +220,14 @@ def _try_capture_guest(run: RaidRun, report, is_attacker_victory: bool) -> Optio
         from guests.models import GearItem
 
         GearItem.objects.filter(guest=target).delete()
-    except Exception:
-        logger.warning("failed to delete captured guest gear", exc_info=True)
+    except Exception as exc:
+        logger.warning(
+            "failed to delete captured guest gear: run_id=%s guest_id=%s error=%s",
+            run.id,
+            target.pk,
+            exc,
+            exc_info=True,
+        )
 
     JailPrisoner.objects.create(
         captor=winner,

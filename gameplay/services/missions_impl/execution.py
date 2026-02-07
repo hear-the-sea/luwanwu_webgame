@@ -186,8 +186,14 @@ def finalize_mission_run(run: MissionRun, now=None) -> None:
                     drops["experience_fruit"] = drops.get("experience_fruit", 0) + exp_fruit_count
                 for equip_key, count in equipment_recovery.items():
                     drops[equip_key] = drops.get(equip_key, 0) + count
-            except Exception:
-                logger.warning("Failed to calculate mission battle salvage rewards", exc_info=True)
+            except Exception as exc:
+                logger.warning(
+                    "Failed to calculate mission battle salvage rewards: run_id=%s report_id=%s error=%s",
+                    locked_run.id,
+                    getattr(report, "id", None),
+                    exc,
+                    exc_info=True,
+                )
 
             if drops:
                 report.drops = drops
@@ -358,10 +364,10 @@ def launch_mission(
             extra={"manor_id": manor.id, "mission_id": mission.id},
         )
         raise
-    except Exception:
+    except Exception as exc:
         logger.exception(
             "launch_mission unexpected error",
-            extra={"manor_id": manor.id, "mission_id": mission.id},
+            extra={"manor_id": manor.id, "mission_id": mission.id, "error": str(exc)},
         )
         raise
 
