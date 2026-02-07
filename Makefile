@@ -38,6 +38,15 @@ beat:
 test:
 	$(PYTHON) -m pytest
 
+cov:
+	$(PYTHON) -m coverage run -m pytest
+	$(PYTHON) -m coverage report -m
+
+cov-html:
+	$(PYTHON) -m coverage run -m pytest
+	$(PYTHON) -m coverage html
+	@echo "Open htmlcov/index.html"
+
 # Code formatting and linting
 format:
 	black .

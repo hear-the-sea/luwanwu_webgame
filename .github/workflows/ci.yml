@@ -36,16 +36,12 @@ jobs:
         run: |
           python -m mypy .
 
-      - name: Tests (pytest)
+      - name: Tests (pytest + coverage)
         env:
           DJANGO_DEBUG: "0"
           DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1"
           DJANGO_SECRET_KEY: "ci-only-not-a-real-secret-key-change-me-1234567890"
         run: |
           python manage.py check --deploy
-          python -m pytest -q
-
-      - name: Coverage (minimum)
-        run: |
           python -m coverage run -m pytest -q
           python -m coverage report --fail-under=40
