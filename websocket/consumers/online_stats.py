@@ -1,0 +1,268 @@
+from __future__ import annotations
+
+import asyncio
+import logging
+import time
+
+from asgiref.sync import sync_to_async
+from channels.db import database_sync_to_async
+from channels.generic.websocket import AsyncJsonWebsocketConsumer
+from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.db import DatabaseError
+from django_redis import get_redis_connection
+from redis.exceptions import RedisError
+
+User = get_user_model()
+
+logger = logging.getLogger(__name__)
+
+
+class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
+    """WebSocket consumer for real-time online user statistics."""
+
+    STATS_GROUP = "online_stats"
+    ONLINE_USERS_KEY = "online_users_zset"
+    ONLINE_USERS_TTL = 1800  # 30 minutes window for auto-cleanup
+    ONLINE_USERS_HEARTBEAT_INTERVAL = 300  # refresh every 5 minutes
+    ONLINE_USER_CONN_COUNT_KEY_PREFIX = "online_user_conn_count:"
+
+    ONLINE_COUNT_CACHE_KEY = "stats:online_users_count"
+    TOTAL_COUNT_CACHE_KEY = "stats:total_users_count"
+    ONLINE_COUNT_CACHE_TTL = 5
+    TOTAL_COUNT_CACHE_TTL = 300
+
+    BROADCAST_DEBOUNCE_SECONDS = 1
+    BROADCAST_DEBOUNCE_CACHE_KEY = "stats:online:broadcast:debounce"
+
+    user_id: int | None = None
+    is_real_user: bool = False
+    heartbeat_task: asyncio.Task | None = None
+
+    async def connect(self):
+        user = self.scope.get("user")
+        if not user or not user.is_authenticated:
+            logger.warning(
+                "WebSocket authentication failed for OnlineStatsConsumer",
+                extra={
+                    "path": self.scope.get("path"),
+                    "client": self.scope.get("client"),
+                },
+            )
+            await self.close()
+            return
+
+        self.user_id = user.id
+        self.is_real_user = not (user.is_staff or user.is_superuser)
+
+        await self.channel_layer.group_add(self.STATS_GROUP, self.channel_name)
+        await self.accept()
+
+        if self.is_real_user:
+            await self.add_online_connection(self.user_id)
+            self.heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+
+        stats = await self.get_stats()
+        await self.send_json(stats)
+        await self._broadcast_stats_best_effort(stats)
+
+    async def disconnect(self, close_code):
+        if self.heartbeat_task:
+            self.heartbeat_task.cancel()
+            try:
+                await self.heartbeat_task
+            except asyncio.CancelledError:
+                pass
+            finally:
+                self.heartbeat_task = None
+
+        if self.is_real_user:
+            await self.remove_online_connection(self.user_id)
+
+        await self.channel_layer.group_discard(self.STATS_GROUP, self.channel_name)
+
+        stats = await self.get_stats()
+        await self._broadcast_stats_best_effort(stats)
+
+    async def _broadcast_stats_best_effort(self, stats: dict) -> None:
+        if int(self.BROADCAST_DEBOUNCE_SECONDS) > 0:
+            try:
+                if not cache.add(
+                    self.BROADCAST_DEBOUNCE_CACHE_KEY,
+                    "1",
+                    timeout=int(self.BROADCAST_DEBOUNCE_SECONDS),
+                ):
+                    return
+            except Exception:
+                logger.debug("Online stats broadcast debounce cache unavailable", exc_info=True)
+
+        await self.channel_layer.group_send(
+            self.STATS_GROUP,
+            {
+                "type": "stats_update",
+                "stats": stats,
+            },
+        )
+
+    async def stats_update(self, event):
+        await self.send_json(event["stats"])
+
+    def _get_redis(self):
+        return get_redis_connection("default")
+
+    def _touch_online_user_sync(self, user_id: int, now_ts: float) -> None:
+        redis = self._get_redis()
+        count_key = f"{self.ONLINE_USER_CONN_COUNT_KEY_PREFIX}{int(user_id)}"
+        redis.zadd(self.ONLINE_USERS_KEY, {int(user_id): float(now_ts)})
+        redis.expire(self.ONLINE_USERS_KEY, self.ONLINE_USERS_TTL * 2)
+        redis.expire(count_key, self.ONLINE_USERS_TTL * 2)
+
+    def _add_online_connection_sync(self, user_id: int, now_ts: float) -> None:
+        redis = self._get_redis()
+        count_key = f"{self.ONLINE_USER_CONN_COUNT_KEY_PREFIX}{int(user_id)}"
+        pipe = redis.pipeline()
+        pipe.incr(count_key)
+        pipe.expire(count_key, self.ONLINE_USERS_TTL * 2)
+        pipe.zadd(self.ONLINE_USERS_KEY, {int(user_id): float(now_ts)})
+        pipe.expire(self.ONLINE_USERS_KEY, self.ONLINE_USERS_TTL * 2)
+        pipe.execute()
+
+        cache.delete(self.ONLINE_COUNT_CACHE_KEY)
+
+    def _remove_online_connection_sync(self, user_id: int) -> int:
+        redis = self._get_redis()
+        count_key = f"{self.ONLINE_USER_CONN_COUNT_KEY_PREFIX}{int(user_id)}"
+
+        script = """
+        local count_key = KEYS[1]
+        local zset_key = KEYS[2]
+        local user_id = ARGV[1]
+        local ttl = tonumber(ARGV[2])
+
+        local current = redis.call('GET', count_key)
+        if not current then
+          redis.call('ZREM', zset_key, user_id)
+          return 0
+        end
+        current = tonumber(current)
+        if current <= 1 then
+          redis.call('DEL', count_key)
+          redis.call('ZREM', zset_key, user_id)
+          return 0
+        end
+
+        local new_count = redis.call('DECR', count_key)
+        redis.call('EXPIRE', count_key, ttl)
+        return new_count
+        """
+
+        try:
+            if not hasattr(self, "_online_stats_remove_script_sha"):
+                self._online_stats_remove_script_sha = redis.script_load(script)
+            remaining_raw = redis.evalsha(
+                self._online_stats_remove_script_sha,
+                2,
+                count_key,
+                self.ONLINE_USERS_KEY,
+                str(int(user_id)),
+                str(int(self.ONLINE_USERS_TTL * 2)),
+            )
+        except RedisError:
+            remaining_raw = redis.eval(
+                script,
+                2,
+                count_key,
+                self.ONLINE_USERS_KEY,
+                str(int(user_id)),
+                str(int(self.ONLINE_USERS_TTL * 2)),
+            )
+
+        remaining = int(remaining_raw or 0)
+        cache.delete(self.ONLINE_COUNT_CACHE_KEY)
+        return remaining
+
+    def _cleanup_expired_users_sync(self, now_ts: float) -> int:
+        redis = self._get_redis()
+        cutoff = float(now_ts) - float(self.ONLINE_USERS_TTL)
+        try:
+            return int(redis.zremrangebyscore(self.ONLINE_USERS_KEY, "-inf", cutoff) or 0)
+        except RedisError as exc:
+            logger.warning("Online stats Redis cleanup failed; skipping (cutoff=%s): %s", cutoff, exc)
+            return 0
+
+    def _get_online_count_sync(self) -> int:
+        cached_count = cache.get(self.ONLINE_COUNT_CACHE_KEY)
+        if cached_count is not None:
+            return int(cached_count)
+
+        now_ts = time.time()
+        self._cleanup_expired_users_sync(now_ts)
+        redis = self._get_redis()
+        count = int(redis.zcard(self.ONLINE_USERS_KEY) or 0)
+        cache.set(self.ONLINE_COUNT_CACHE_KEY, count, timeout=self.ONLINE_COUNT_CACHE_TTL)
+        return count
+
+    async def touch_online_user(self, user_id: int):
+        await sync_to_async(self._touch_online_user_sync, thread_sensitive=True)(user_id, time.time())
+
+    async def add_online_connection(self, user_id: int):
+        await sync_to_async(self._add_online_connection_sync, thread_sensitive=True)(user_id, time.time())
+
+    async def remove_online_connection(self, user_id: int):
+        await sync_to_async(self._remove_online_connection_sync, thread_sensitive=True)(user_id)
+
+    async def _heartbeat_loop(self) -> None:
+        interval = max(30, min(self.ONLINE_USERS_HEARTBEAT_INTERVAL, self.ONLINE_USERS_TTL // 2))
+        while True:
+            try:
+                await asyncio.sleep(interval)
+                if not self.is_real_user or not self.user_id:
+                    return
+                await self.touch_online_user(self.user_id)
+            except asyncio.CancelledError:
+                return
+            except RedisError as exc:
+                logger.debug("Online stats heartbeat Redis error; will retry: %s", exc)
+                continue
+            except Exception:
+                logger.exception("Unexpected error in online stats heartbeat loop")
+                continue
+
+    async def get_stats(self):
+        try:
+            online_count = await sync_to_async(self._get_online_count_sync, thread_sensitive=True)()
+        except RedisError as exc:
+            logger.warning("Online stats Redis read failed; reporting 0 online users: %s", exc)
+            online_count = 0
+        except Exception:
+            logger.exception("Unexpected error while getting online count; reporting 0 online users")
+            online_count = 0
+
+        try:
+            total_count = await self.get_total_users()
+        except DatabaseError as exc:
+            logger.warning("Online stats DB read failed; reporting 0 total users: %s", exc)
+            total_count = 0
+        except Exception:
+            logger.exception("Unexpected error while getting total users; reporting 0 total users")
+            total_count = 0
+
+        return {
+            "online_count": online_count,
+            "total_count": total_count,
+        }
+
+    @database_sync_to_async
+    def get_total_users(self):
+        cached_total = cache.get(self.TOTAL_COUNT_CACHE_KEY)
+        if cached_total is not None:
+            return int(cached_total)
+
+        try:
+            total = User.objects.filter(is_staff=False, is_superuser=False).count()
+        except DatabaseError as exc:
+            logger.warning("Failed to COUNT total users; returning 0: %s", exc)
+            return 0
+
+        cache.set(self.TOTAL_COUNT_CACHE_KEY, total, timeout=self.TOTAL_COUNT_CACHE_TTL)
+        return total
