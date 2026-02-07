@@ -7,7 +7,9 @@ class ShopStock(models.Model):
 
     item_key = models.CharField(max_length=64, unique=True)
     current_stock = models.IntegerField()
-    last_refresh = models.DateField(auto_now_add=True)
+    # Tracks the last daily refresh date. Must be writable so that
+    # refresh tasks can set it deterministically.
+    last_refresh = models.DateField(default=timezone.localdate)
 
     class Meta:
         db_table = "trade_shop_stock"

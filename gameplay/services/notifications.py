@@ -59,8 +59,8 @@ def notify_user(
             {"type": "notify.message", "payload": payload},
         )
         return True
-    except Exception:
-        logger.warning("Failed to send %s via channels", log_context, exc_info=True)
+    except Exception as exc:
+        logger.warning("Failed to send %s via channels: %s", log_context, exc, exc_info=True)
         return False
 
 

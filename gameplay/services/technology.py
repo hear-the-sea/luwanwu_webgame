@@ -40,6 +40,7 @@ def load_technology_templates() -> Dict[str, Any]:
     Returns:
         包含 categories, technologies, troop_classes 的字典
     """
+
     path = os.path.join(settings.BASE_DIR, "data", "technology_templates.yaml")
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -47,8 +48,8 @@ def load_technology_templates() -> Dict[str, Any]:
     except FileNotFoundError:
         logger.error("technology_templates.yaml not found: %s", path)
         return {}
-    except Exception:
-        logger.exception("Failed to load technology templates from %s", path)
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+        logger.exception("Failed to load technology templates from %s: %s", path, exc)
         return {}
 
 
@@ -325,6 +326,7 @@ def schedule_technology_completion(tech, eta_seconds: int) -> None:
         tech: PlayerTechnology 实例
         eta_seconds: 预计完成时间（秒）
     """
+
     countdown = max(0, int(eta_seconds))
     try:
         from gameplay.tasks import complete_technology_upgrade
@@ -493,8 +495,8 @@ def refresh_technology_upgrades(manor) -> int:
         try:
             if not cache.add(cache_key, "1", timeout=min_interval):
                 return 0
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Technology refresh throttle cache unavailable: %s", exc, exc_info=True)
 
     completed = 0
     upgrading_techs = list(

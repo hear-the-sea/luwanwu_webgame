@@ -334,14 +334,23 @@ def use_guest_rebirth_card(manor: Manor, item: InventoryItem, guest_id: int) -> 
     gear_items = list(guest.gear_items.select_related("template"))
     unequipped_count = 0
     unequip_errors = []
+
     for gear in gear_items:
         try:
             unequip_guest_item(gear, guest)
             unequipped_count += 1
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             # 记录装备卸载失败的具体错误，避免装备丢失
             logger.warning(
                 f"门客重生时装备卸载失败: guest_id={guest.pk}, gear_id={gear.pk}, error={e}"
+            )
+            unequip_errors.append({"gear_id": gear.pk, "error": str(e)})
+        except Exception as e:
+            logger.exception(
+                "门客重生时装备卸载异常: guest_id=%s gear_id=%s error=%s",
+                guest.pk,
+                gear.pk,
+                e,
             )
             unequip_errors.append({"gear_id": gear.pk, "error": str(e)})
 

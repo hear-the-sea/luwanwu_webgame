@@ -188,7 +188,7 @@ def refresh_manor_state(manor: Manor) -> None:
                 return
         except Exception as e:
             # 缓存操作失败时记录日志，但继续执行刷新逻辑
-            logger.warning(f"缓存操作失败，跳过频率限制检查: {e}")
+            logger.warning("缓存操作失败，跳过频率限制检查: %s", e, exc_info=True)
 
     finalize_upgrades(manor)
     from .resources import sync_resource_production
