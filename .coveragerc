@@ -3,7 +3,6 @@ branch = True
 source =
     accounts
     battle
-    battle_debugger
     common
     config
     core
@@ -15,6 +14,8 @@ source =
     websocket
 omit =
     */migrations/*
+    */management/commands/*
+    */templatetags/*
     */tests/*
     tests/*
     manage.py

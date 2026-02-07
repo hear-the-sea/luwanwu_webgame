@@ -78,7 +78,9 @@ if DEBUG and not ALLOWED_HOSTS:
 trusted_proxy_ips_str = env("DJANGO_TRUSTED_PROXY_IPS", "")
 TRUSTED_PROXY_IPS = [ip.strip() for ip in trusted_proxy_ips_str.split(",") if ip.strip()]
 
-ENABLE_BATTLE_DEBUGGER = DEBUG and env("DJANGO_ENABLE_DEBUGGER", "1") == "1"
+# Battle debugger is a development-only tool and should be explicitly enabled.
+# Default is disabled to avoid accidental exposure in dev/test environments.
+ENABLE_BATTLE_DEBUGGER = DEBUG and env("DJANGO_ENABLE_DEBUGGER", "0") == "1"
 
 INSTALLED_APPS = [
     "django.contrib.admin",
