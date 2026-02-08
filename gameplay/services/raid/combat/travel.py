@@ -145,8 +145,13 @@ def _dismiss_marching_raids_if_protected(defender: Manor) -> int:
         # 调度返程完成任务（事务外）
         try:
             from gameplay.tasks import complete_raid_task
-        except Exception:
-            logger.warning("complete_raid_task dispatch failed for dismissed raid", exc_info=True)
+        except Exception as exc:
+            logger.warning(
+                "complete_raid_task dispatch failed for dismissed raid: run_id=%s error=%s",
+                run.id,
+                exc,
+                exc_info=True,
+            )
         else:
             safe_apply_async(
                 complete_raid_task,

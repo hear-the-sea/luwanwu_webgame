@@ -136,8 +136,13 @@ def start_raid(
     # 调度战斗任务
     try:
         from gameplay.tasks import process_raid_battle_task
-    except Exception:
-        logger.warning("process_raid_battle_task dispatch failed", exc_info=True)
+    except Exception as exc:
+        logger.warning(
+            "process_raid_battle_task dispatch failed: run_id=%s error=%s",
+            run.id,
+            exc,
+            exc_info=True,
+        )
     else:
         safe_apply_async(
             process_raid_battle_task,
@@ -411,8 +416,13 @@ def request_raid_retreat(run: RaidRun) -> None:
     # 调度撤退完成任务
     try:
         from gameplay.tasks import complete_raid_task
-    except Exception:
-        logger.warning("complete_raid_task dispatch failed for retreat", exc_info=True)
+    except Exception as exc:
+        logger.warning(
+            "complete_raid_task dispatch failed for retreat: run_id=%s error=%s",
+            run.id,
+            exc,
+            exc_info=True,
+        )
     else:
         countdown = max(1, elapsed)
         safe_apply_async(
