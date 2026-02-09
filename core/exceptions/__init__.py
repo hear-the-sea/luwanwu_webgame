@@ -1,0 +1,163 @@
+"""
+游戏核心异常类
+
+提供统一的异常处理机制，替代分散的 ValueError。
+每个异常类包含错误代码和用户友好的消息。
+
+使用示例:
+    from core.exceptions import InsufficientResourceError, GuestNotIdleError
+
+    if not has_enough_silver(manor, cost):
+        raise InsufficientResourceError("silver", cost, manor.silver)
+
+    if guest.status != GuestStatus.IDLE:
+        raise GuestNotIdleError(guest)
+"""
+
+from .base import GameError
+from .building import (
+    BuildingError,
+    BuildingNotBuiltError,
+    BuildingNotFoundError,
+    BuildingUpgradingError,
+    TechnologyConcurrentUpgradeLimitError,
+    TechnologyError,
+    TechnologyMaxLevelError,
+    TechnologyNotFoundError,
+    TechnologyUpgradeInProgressError,
+)
+from .gameplay import (
+    MissionCannotRetreatError,
+    MissionDailyLimitError,
+    MissionError,
+    NoGuestToPayError,
+    SalaryAlreadyPaidError,
+    SalaryError,
+    WorkError,
+    WorkLimitExceededError,
+    WorkNotCompletedError,
+    WorkNotInProgressError,
+    WorkRewardClaimedError,
+)
+from .guest import (
+    GuestError,
+    GuestFullHpError,
+    GuestInjuredError,
+    GuestMaxLevelError,
+    GuestNotIdleError,
+    GuestNotRequirementError,
+    GuestOwnershipError,
+    GuestTrainingInProgressError,
+    InvalidHealAmountError,
+    NoGuestsError,
+)
+from .item import (
+    DuplicateEquipmentError,
+    EquipmentAlreadyEquippedError,
+    EquipmentError,
+    EquipmentNotEquippedError,
+    InsufficientStockError,
+    ItemError,
+    ItemInsufficientError,
+    ItemNotConfiguredError,
+    ItemNotFoundError,
+    ItemNotUsableError,
+)
+from .message import (
+    AttachmentAlreadyClaimedError,
+    AttachmentNotFoundError,
+    MessageError,
+    MessageNotFoundError,
+    NoAttachmentError,
+)
+from .recruitment import (
+    AttributePointError,
+    InvalidAllocationError,
+    NoTemplateAvailableError,
+    PoolNotConfiguredError,
+    RecruitmentError,
+)
+from .resource import (
+    CapacityError,
+    EquipmentSlotFullError,
+    GuestCapacityFullError,
+    InsufficientResourceError,
+    InsufficientSilverError,
+    InsufficientSpaceError,
+    ResourceError,
+    RetainerCapacityFullError,
+    SkillSlotFullError,
+    TreasuryCapacityFullError,
+)
+
+__all__ = [
+    # Base
+    "GameError",
+    # Resource & Capacity
+    "ResourceError",
+    "InsufficientResourceError",
+    "InsufficientSilverError",
+    "CapacityError",
+    "GuestCapacityFullError",
+    "RetainerCapacityFullError",
+    "SkillSlotFullError",
+    "EquipmentSlotFullError",
+    "TreasuryCapacityFullError",
+    "InsufficientSpaceError",
+    # Guest
+    "GuestError",
+    "GuestNotIdleError",
+    "GuestInjuredError",
+    "GuestMaxLevelError",
+    "GuestTrainingInProgressError",
+    "GuestNotRequirementError",
+    "GuestOwnershipError",
+    "GuestFullHpError",
+    "InvalidHealAmountError",
+    "NoGuestsError",
+    # Item & Equipment
+    "ItemError",
+    "ItemNotFoundError",
+    "ItemInsufficientError",
+    "InsufficientStockError",
+    "ItemNotConfiguredError",
+    "ItemNotUsableError",
+    "EquipmentError",
+    "EquipmentAlreadyEquippedError",
+    "EquipmentNotEquippedError",
+    "DuplicateEquipmentError",
+    # Gameplay (Mission, Work, Salary)
+    "MissionError",
+    "MissionDailyLimitError",
+    "MissionCannotRetreatError",
+    "WorkError",
+    "WorkNotInProgressError",
+    "WorkNotCompletedError",
+    "WorkRewardClaimedError",
+    "WorkLimitExceededError",
+    "SalaryError",
+    "SalaryAlreadyPaidError",
+    "NoGuestToPayError",
+    # Building & Technology
+    "BuildingError",
+    "BuildingUpgradingError",
+    "BuildingNotBuiltError",
+    "BuildingNotFoundError",
+    "TechnologyError",
+    "TechnologyNotFoundError",
+    "TechnologyUpgradeInProgressError",
+    "TechnologyConcurrentUpgradeLimitError",
+    "TechnologyMaxLevelError",
+    # Message
+    "MessageError",
+    "MessageNotFoundError",
+    "AttachmentNotFoundError",
+    "AttachmentAlreadyClaimedError",
+    "NoAttachmentError",
+    # Recruitment & Attribute
+    "RecruitmentError",
+    "PoolNotConfiguredError",
+    "NoTemplateAvailableError",
+    "AttributePointError",
+    "InvalidAllocationError",
+]
