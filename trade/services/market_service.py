@@ -502,18 +502,38 @@ def cancel_listing(manor: Manor, listing_id: int) -> Dict:
     }
 
 
-def _expire_listings_queryset(expired_listings: QuerySet, log_label: str) -> int:
+def _expire_listings_queryset(expired_listings: QuerySet, log_label: str, limit: int = None) -> int:
     """处理过期挂单，通过邮件退回物品并删除挂单记录。
 
     安全修复：先发送邮件确保物品退还成功，再删除挂单记录。
     避免邮件发送失败导致物品永久丢失。
+
+    优化：
+    - 支持 limit 参数，防止单次处理过多导致超时或数据库锁竞争
     """
+    # 如果指定了 limit，先切片限制查询数量
+    # 注意：在切片前通常应该有排序，这里隐式依赖数据库默认排序或模型Meta排序
+    # 为了确定性，显式按过期时间排序
+    if limit:
+        expired_listings = expired_listings.order_by("expires_at")[:limit]
+
     count = 0
     for listing in expired_listings.select_related("seller", "item_template"):
         try:
             with transaction.atomic():
                 # 在事务内重新获取并锁定记录，防止并发处理
-                listing = MarketListing.objects.select_for_update().get(pk=listing.pk)
+                # 使用 select_for_update(skip_locked=True) 进一步优化并发，
+                # 如果其他进程正在处理该行，直接跳过而不是等待
+                listing = (
+                    MarketListing.objects.select_for_update(skip_locked=True)
+                    .filter(pk=listing.pk)
+                    .first()
+                )
+
+                if not listing:
+                    # 已经被其他进程处理或删除
+                    continue
+
                 # 保存挂单信息用于发送邮件（删除前先读取）
                 seller = listing.seller
                 item_template = listing.item_template
@@ -575,9 +595,12 @@ def _expire_listings_queryset(expired_listings: QuerySet, log_label: str) -> int
     return count
 
 
-def expire_listings() -> int:
+def expire_listings(limit: int = 1000) -> int:
     """
     处理过期挂单，通过邮件退回物品并删除挂单记录
+
+    Args:
+        limit: 单次最大处理数量（默认1000），防止定时任务超时
 
     Returns:
         处理的挂单数量
@@ -586,7 +609,7 @@ def expire_listings() -> int:
         status=MarketListing.Status.ACTIVE,
         expires_at__lte=timezone.now(),
     )
-    return _expire_listings_queryset(expired_listings, "处理过期挂单")
+    return _expire_listings_queryset(expired_listings, "处理过期挂单", limit=limit)
 
 
 def expire_user_listings(manor: Manor) -> int:

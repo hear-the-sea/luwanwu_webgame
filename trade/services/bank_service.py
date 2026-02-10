@@ -83,12 +83,7 @@ def get_effective_gold_supply() -> int:
     lock_acquired = cache.add(lock_key, "1", timeout=10)  # 10秒锁超时
 
     if not lock_acquired:
-        # 未获取到锁，等待短暂时间后重试获取缓存
-        import time
-        time.sleep(0.1)
-        cached = cache.get(SUPPLY_CACHE_KEY)
-        if cached is not None:
-            return cached
+        # 未获取到锁：直接降级到过期缓存，避免 sleep 放大高并发延迟。
         # 降级策略：使用过期缓存（stale cache），避免使用硬编码默认值
         stale = cache.get(SUPPLY_STALE_CACHE_KEY)
         if stale is not None:
@@ -207,8 +202,9 @@ def calculate_gold_bar_cost(manor: Manor, quantity: int) -> dict:
     """
     计算兑换金条所需银两（含手续费）
 
-    由于累进系数的存在，每根金条的价格都可能不同，
-    需要逐根计算总价。
+    优化：
+    - 修复了 O(N) 性能问题，针对累进系数封顶（12根）后的计算进行数学优化
+    - 即使购买 10000 根也能瞬间完成计算
 
     Args:
         manor: 庄园对象
@@ -223,12 +219,49 @@ def calculate_gold_bar_cost(manor: Manor, quantity: int) -> dict:
     base_cost = 0
     rate_details = []
 
-    for i in range(quantity):
-        progressive_factor = calculate_progressive_factor(today_count + i)
+    # 累进系数封顶阈值 calculation: 1 + 0.05 * x = 1.60 => x = 12
+    # 即第 12 根（index 12，count=12）开始达到最大值
+    # 注意：calculate_progressive_factor(12) = 1.6
+    # 之前代码 range(quantity) 是从 today_count + i 开始
+
+    # 逐个计算直到达到封顶或计算完所有数量
+    calculated_count = 0
+    current_idx = 0
+
+    # 阶段1：计算未封顶的部分
+    while calculated_count < quantity:
+        current_count = today_count + current_idx
+        # 预先判断是否已封顶，减少函数调用开销
+        if current_count >= 12:
+            break
+
+        progressive_factor = calculate_progressive_factor(current_count)
         rate = int(GOLD_BAR_BASE_PRICE * supply_factor * progressive_factor)
         rate = max(GOLD_BAR_MIN_PRICE, min(GOLD_BAR_MAX_PRICE, rate))
+
         base_cost += rate
-        rate_details.append(rate)
+        if len(rate_details) < 10:  # 限制详情列表长度，避免过大
+            rate_details.append(rate)
+
+        calculated_count += 1
+        current_idx += 1
+
+    # 阶段2：处理剩余已封顶的部分（批量计算）
+    remaining = quantity - calculated_count
+    if remaining > 0:
+        # 封顶汇率
+        capped_factor = 1.60
+        capped_rate = int(GOLD_BAR_BASE_PRICE * supply_factor * capped_factor)
+        capped_rate = max(GOLD_BAR_MIN_PRICE, min(GOLD_BAR_MAX_PRICE, capped_rate))
+
+        base_cost += capped_rate * remaining
+
+        # 补充详情
+        if len(rate_details) < 10:
+            rate_details.append(capped_rate)
+            if remaining > 1:
+                # 如果还有更多，加个省略号或标识（但在int list里只能放int）
+                pass
 
     fee = int(base_cost * GOLD_BAR_FEE_RATE)
     total_cost = base_cost + fee
@@ -246,8 +279,9 @@ def exchange_gold_bar(manor: Manor, quantity: int) -> dict:
     """
     兑换金条（动态汇率版本）
 
-    汇率会根据全服活跃金条总量和个人当日已兑换数量动态调整。
-    移除了每日硬性限额，但累进系数会使大量兑换变得昂贵。
+    安全修复：
+    - 将价格计算移入 transaction.atomic() 内部
+    - 依托 Manor 行锁实现用户级串行化，防止并发低价买入漏洞
 
     Args:
         manor: 庄园对象
@@ -262,10 +296,6 @@ def exchange_gold_bar(manor: Manor, quantity: int) -> dict:
     if quantity <= 0:
         raise ValueError("兑换数量必须大于0")
 
-    # 计算所需银两（动态汇率，逐根计算）
-    cost_info = calculate_gold_bar_cost(manor, quantity)
-    total_cost = cost_info["total_cost"]
-
     # 检查金条物品模板是否存在
     try:
         gold_bar_template = ItemTemplate.objects.get(key=GOLD_BAR_ITEM_KEY)
@@ -276,7 +306,12 @@ def exchange_gold_bar(manor: Manor, quantity: int) -> dict:
     with transaction.atomic():
         manor_locked = Manor.objects.select_for_update().get(pk=manor.pk)
 
-        # 锁内检查银两是否足够，避免并发下展示错误信息或透支
+        # 安全修复：在锁内重新计算价格，确保基于最新的今日已兑换数量
+        # 防止并发请求利用旧的低价买入
+        cost_info = calculate_gold_bar_cost(manor_locked, quantity)
+        total_cost = cost_info["total_cost"]
+
+        # 锁内检查银两是否足够
         if manor_locked.silver < total_cost:
             raise ValueError(
                 f"银两不足，需要 {total_cost:,} 银两"

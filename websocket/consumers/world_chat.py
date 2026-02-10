@@ -231,36 +231,8 @@ return removed
 
     @database_sync_to_async
     def _consume_trumpet(self) -> tuple[bool, str]:
-        from gameplay.models import Manor
-        from gameplay.services.inventory import consume_inventory_item, get_item_quantity
-
-        if self.user_id is None:
-            return False, "未登录，无法发言"
-
-        try:
-            manor = Manor.objects.get(user_id=int(self.user_id))
-        except Manor.DoesNotExist:
-            return False, "庄园不存在，无法发言"
-
-        quantity = get_item_quantity(manor, self.TRUMPET_ITEM_KEY)
-        if quantity < 1:
-            return False, "小喇叭不足，无法在世界频道发言"
-
-        try:
-            consume_inventory_item(manor, self.TRUMPET_ITEM_KEY, 1)
-        except InsufficientStockError:
-            return False, "小喇叭不足，无法在世界频道发言"
-        except ValueError as exc:
-            logger.warning("Failed to consume trumpet due to invalid input: %s", exc)
-            return False, "扣除小喇叭失败，请稍后重试"
-        except DatabaseError:
-            logger.exception("Database error when consuming trumpet for user_id=%s", self.user_id)
-            return False, "扣除小喇叭失败，请稍后重试"
-        except Exception:
-            logger.exception("Unexpected error when consuming trumpet for user_id=%s", self.user_id)
-            return False, "扣除小喇叭失败，请稍后重试"
-
-        return True, ""
+        from gameplay.services.chat import consume_trumpet
+        return consume_trumpet(self.user_id)
 
     def _get_history_sync(self) -> list[dict]:
         redis = self._get_redis()
@@ -387,9 +359,16 @@ return removed
         if user_id not in self._fallback_rate_limits:
             self._fallback_rate_limits[user_id] = []
 
-        # Clean up expired records
+        # Clean up expired records for current user
         timestamps = self._fallback_rate_limits[user_id]
         timestamps[:] = [t for t in timestamps if now - t < window]
+
+        # Memory leak protection: periodically cleanup inactive users
+        # Simple heuristic: if dictionary grows too large, scan and purge empty entries
+        if len(self._fallback_rate_limits) > 1000:
+            empty_keys = [uid for uid, ts in self._fallback_rate_limits.items() if not ts]
+            for uid in empty_keys:
+                del self._fallback_rate_limits[uid]
 
         if len(timestamps) >= self.RATE_LIMIT_MAX_MESSAGES:
             return False, int(window - (now - timestamps[0]))

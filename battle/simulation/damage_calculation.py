@@ -232,9 +232,8 @@ def calculate_attack_damage(
     damage = process_status_effects(actor, target, skills, rng, phase="damage_penalty", damage=damage)
 
     # 屠戮倍率：门客对小兵的伤害直接乘倍率，保持 HP 与兵力一致
-    from ..combat_math import calculate_slaughter_multiplier
-
     if target.kind == "troop":
+        # 修复：直接使用已导入的 calculate_slaughter_multiplier，不再重复从 ..combat_math 导入
         slaughter_mult = calculate_slaughter_multiplier(actor, target)
         if slaughter_mult != 1.0:
             damage = int(damage * slaughter_mult)
