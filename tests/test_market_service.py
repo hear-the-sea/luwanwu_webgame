@@ -1,0 +1,314 @@
+"""Tests for market service (交易行/集市) logic."""
+
+from __future__ import annotations
+
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from trade.services import market_service
+
+pytestmark = pytest.mark.django_db
+
+
+# ============ Constants tests ============
+
+
+def test_listing_fees_has_expected_durations():
+    """Test that LISTING_FEES has expected duration options."""
+    assert 7200 in market_service.LISTING_FEES  # 2 hours
+    assert 28800 in market_service.LISTING_FEES  # 8 hours
+    assert 86400 in market_service.LISTING_FEES  # 24 hours
+
+
+def test_listing_fees_values():
+    """Test that listing fees have correct values."""
+    assert market_service.LISTING_FEES[7200] == 5000
+    assert market_service.LISTING_FEES[28800] == 10000
+    assert market_service.LISTING_FEES[86400] == 20000
+
+
+def test_transaction_tax_rate():
+    """Test that transaction tax rate is 10%."""
+    assert market_service.TRANSACTION_TAX_RATE == 0.10
+
+
+def test_price_limits():
+    """Test that price limits are correctly defined."""
+    assert market_service.MIN_PRICE_MULTIPLIER == 1.0
+    assert market_service.MAX_PRICE == 10000000
+    assert market_service.MAX_TOTAL_PRICE == 2000000000
+
+
+def test_allowed_listing_order_by_fields():
+    """Test that allowed order by fields are defined."""
+    expected_fields = {
+        "listed_at", "-listed_at",
+        "unit_price", "-unit_price",
+        "price", "-price",
+        "total_price", "-total_price",
+        "quantity", "-quantity",
+        "expires_at", "-expires_at",
+    }
+    assert market_service.ALLOWED_LISTING_ORDER_BY == expected_fields
+
+
+# ============ get_listing_fee tests ============
+
+
+def test_get_listing_fee_returns_correct_fee():
+    """Test that get_listing_fee returns correct fee for known durations."""
+    assert market_service.get_listing_fee(7200) == 5000
+    assert market_service.get_listing_fee(28800) == 10000
+    assert market_service.get_listing_fee(86400) == 20000
+
+
+def test_get_listing_fee_returns_default_for_unknown():
+    """Test that get_listing_fee returns default for unknown duration."""
+    assert market_service.get_listing_fee(9999) == 5000
+
+
+# ============ validate_listing_price tests ============
+
+
+def test_validate_listing_price_rejects_below_minimum():
+    """Test that price below minimum is rejected."""
+    item_template = SimpleNamespace(price=1000)
+
+    with pytest.raises(ValueError, match="单价不能低于"):
+        market_service.validate_listing_price(item_template, 500)
+
+
+def test_validate_listing_price_rejects_above_maximum():
+    """Test that price above maximum is rejected."""
+    item_template = SimpleNamespace(price=100)
+
+    with pytest.raises(ValueError, match="单价不能超过"):
+        market_service.validate_listing_price(item_template, 20000000)
+
+
+def test_validate_listing_price_accepts_valid_price():
+    """Test that valid price is accepted."""
+    item_template = SimpleNamespace(price=1000)
+
+    # Should not raise
+    market_service.validate_listing_price(item_template, 1500)
+
+
+def test_validate_listing_price_accepts_exact_minimum():
+    """Test that exact minimum price is accepted."""
+    item_template = SimpleNamespace(price=1000)
+
+    # Should not raise (1000 * 1.0 = 1000)
+    market_service.validate_listing_price(item_template, 1000)
+
+
+def test_validate_listing_price_accepts_exact_maximum():
+    """Test that exact maximum price is accepted."""
+    item_template = SimpleNamespace(price=100)
+
+    # Should not raise
+    market_service.validate_listing_price(item_template, 10000000)
+
+
+# ============ create_listing validation tests ============
+
+
+def test_create_listing_rejects_invalid_duration():
+    """Test that invalid duration is rejected."""
+    manor = MagicMock()
+
+    with pytest.raises(ValueError, match="无效的上架时长"):
+        market_service.create_listing(manor, "item_key", 1, 1000, 9999)
+
+
+def test_create_listing_rejects_nonexistent_item():
+    """Test that nonexistent item is rejected."""
+    manor = MagicMock()
+
+    with patch.object(market_service.ItemTemplate, "objects") as mock_qs:
+        mock_qs.filter.return_value.first.return_value = None
+
+        with pytest.raises(ValueError, match="物品不存在"):
+            market_service.create_listing(manor, "fake_item", 1, 1000, 7200)
+
+
+def test_create_listing_rejects_non_tradeable_item():
+    """Test that non-tradeable item is rejected."""
+    manor = MagicMock()
+    item_template = SimpleNamespace(key="item", tradeable=False, price=100)
+
+    with patch.object(market_service.ItemTemplate, "objects") as mock_qs:
+        mock_qs.filter.return_value.first.return_value = item_template
+
+        with pytest.raises(ValueError, match="该物品不可交易"):
+            market_service.create_listing(manor, "item", 1, 1000, 7200)
+
+
+def test_create_listing_rejects_zero_quantity():
+    """Test that zero quantity is rejected."""
+    manor = MagicMock()
+    item_template = SimpleNamespace(key="item", tradeable=True, price=100)
+
+    with patch.object(market_service.ItemTemplate, "objects") as mock_qs:
+        mock_qs.filter.return_value.first.return_value = item_template
+
+        with pytest.raises(ValueError, match="数量必须大于0"):
+            market_service.create_listing(manor, "item", 0, 1000, 7200)
+
+
+def test_create_listing_rejects_negative_quantity():
+    """Test that negative quantity is rejected."""
+    manor = MagicMock()
+    item_template = SimpleNamespace(key="item", tradeable=True, price=100)
+
+    with patch.object(market_service.ItemTemplate, "objects") as mock_qs:
+        mock_qs.filter.return_value.first.return_value = item_template
+
+        with pytest.raises(ValueError, match="数量必须大于0"):
+            market_service.create_listing(manor, "item", -1, 1000, 7200)
+
+
+# ============ get_active_listings tests ============
+
+
+def test_get_active_listings_uses_safe_order_by():
+    """Test that get_active_listings uses safe order by field."""
+    with patch.object(market_service.MarketListing, "objects") as mock_qs:
+        mock_filter = MagicMock()
+        mock_qs.filter.return_value.select_related.return_value = mock_filter
+        mock_filter.filter.return_value = mock_filter
+        mock_filter.order_by.return_value = mock_filter
+
+        # Valid order by
+        market_service.get_active_listings(order_by="-listed_at")
+        mock_filter.order_by.assert_called_with("-listed_at")
+
+
+def test_get_active_listings_rejects_unsafe_order_by():
+    """Test that get_active_listings falls back for unsafe order by."""
+    with patch.object(market_service.MarketListing, "objects") as mock_qs:
+        mock_filter = MagicMock()
+        mock_qs.filter.return_value.select_related.return_value = mock_filter
+        mock_filter.filter.return_value = mock_filter
+        mock_filter.order_by.return_value = mock_filter
+
+        # Invalid order by should fall back to default
+        market_service.get_active_listings(order_by="sql_injection_attempt")
+        mock_filter.order_by.assert_called_with("-listed_at")
+
+
+# ============ purchase_listing validation tests ============
+
+
+def test_purchase_listing_rejects_nonexistent():
+    """Test that nonexistent listing is rejected."""
+    buyer = MagicMock()
+
+    with patch.object(market_service.MarketListing, "objects") as mock_qs:
+        mock_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = None
+
+        with pytest.raises(ValueError, match="挂单不存在"):
+            market_service.purchase_listing(buyer, 999)
+
+
+# ============ cancel_listing tests ============
+
+
+def test_cancel_listing_rejects_nonexistent():
+    """Test that nonexistent listing cannot be cancelled."""
+    manor = MagicMock()
+
+    with patch.object(market_service.MarketListing, "objects") as mock_qs:
+        mock_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = None
+
+        with pytest.raises(ValueError, match="挂单不存在或无权取消"):
+            market_service.cancel_listing(manor, 999)
+
+
+# ============ get_my_listings tests ============
+
+
+def test_get_my_listings_filters_by_manor():
+    """Test that get_my_listings filters by manor."""
+    manor = MagicMock()
+    manor.pk = 1
+
+    with patch.object(market_service.MarketListing, "objects") as mock_qs:
+        mock_filter = MagicMock()
+        mock_qs.filter.return_value.select_related.return_value = mock_filter
+        mock_filter.filter.return_value = mock_filter
+        mock_filter.order_by.return_value = mock_filter
+
+        market_service.get_my_listings(manor)
+
+        mock_qs.filter.assert_called_once_with(seller=manor)
+
+
+def test_get_my_listings_filters_by_status():
+    """Test that get_my_listings can filter by status."""
+    manor = MagicMock()
+
+    with patch.object(market_service.MarketListing, "objects") as mock_qs:
+        mock_filter = MagicMock()
+        mock_qs.filter.return_value.select_related.return_value = mock_filter
+        mock_filter.filter.return_value = mock_filter
+        mock_filter.order_by.return_value = mock_filter
+
+        market_service.get_my_listings(manor, status="active")
+
+        mock_filter.filter.assert_called_once_with(status="active")
+
+
+def test_get_my_listings_ignores_all_status():
+    """Test that get_my_listings ignores 'all' status filter."""
+    manor = MagicMock()
+
+    with patch.object(market_service.MarketListing, "objects") as mock_qs:
+        mock_filter = MagicMock()
+        mock_qs.filter.return_value.select_related.return_value = mock_filter
+        mock_filter.order_by.return_value = mock_filter
+
+        market_service.get_my_listings(manor, status="all")
+
+        # filter should not be called with status when status is "all"
+        mock_filter.filter.assert_not_called()
+
+
+# ============ get_market_stats tests ============
+
+
+def test_get_market_stats_returns_expected_keys():
+    """Test that get_market_stats returns expected keys."""
+    with patch.object(market_service.MarketListing, "objects") as mock_listing_qs:
+        with patch.object(market_service.MarketTransaction, "objects") as mock_tx_qs:
+            mock_listing_qs.filter.return_value.count.return_value = 10
+            mock_tx_qs.filter.return_value.count.return_value = 5
+
+            stats = market_service.get_market_stats()
+
+            assert "active_count" in stats
+            assert "sold_today" in stats
+            assert stats["active_count"] == 10
+            assert stats["sold_today"] == 5
+
+
+# ============ get_tradeable_inventory tests ============
+
+
+def test_get_tradeable_inventory_filters_correctly():
+    """Test that get_tradeable_inventory applies correct filters."""
+    manor = MagicMock()
+
+    with patch.object(market_service.InventoryItem, "objects") as mock_qs:
+        mock_filter = MagicMock()
+        mock_qs.filter.return_value.select_related.return_value = mock_filter
+
+        market_service.get_tradeable_inventory(manor)
+
+        # Verify filter was called with expected parameters
+        call_kwargs = mock_qs.filter.call_args[1]
+        assert call_kwargs["manor"] == manor
+        assert call_kwargs["template__tradeable"] is True
+        assert call_kwargs["quantity__gt"] == 0

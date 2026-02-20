@@ -70,6 +70,10 @@ def _get_recruitable_templates_by_rarity() -> Dict[str, List[GuestTemplate]]:
     templates = list(GuestTemplate.objects.filter(recruitable=True))
     result: Dict[str, List[GuestTemplate]] = {}
     for template in templates:
+        # 隐士虽然是 black，但不应混入普通 black 池（隐士有专门的抽取逻辑）
+        if template.is_hermit:
+            continue
+
         if template.rarity not in result:
             result[template.rarity] = []
         result[template.rarity].append(template)
@@ -144,11 +148,22 @@ def get_excluded_template_ids(manor: Manor) -> set[int]:
 
 
 def list_pools(core_only: bool = False) -> Iterable[RecruitmentPool]:
-    """列出所有招募卡池"""
-    qs = RecruitmentPool.objects.prefetch_related("entries__template").order_by("tier", "id")
+    """列出所有招募卡池，按级别从高到低排序（殿试->村募）"""
+    qs = RecruitmentPool.objects.prefetch_related("entries__template")
     if core_only:
         qs = qs.filter(tier__in=CORE_POOL_TIERS)
-    return qs
+
+    # 定义排序优先级：殿试 > 会试 > 乡试 > 村募
+    tier_priority = {
+        RecruitmentPool.Tier.DIANSHI: 0,
+        RecruitmentPool.Tier.HUISHI: 1,
+        RecruitmentPool.Tier.XIANGSHI: 2,
+        RecruitmentPool.Tier.TONGSHI: 3,
+    }
+
+    pools = list(qs)
+    pools.sort(key=lambda p: tier_priority.get(p.tier, 99))
+    return pools
 
 
 def available_guests(manor: Manor) -> Sequence[Guest]:
@@ -163,6 +178,42 @@ def available_guests(manor: Manor) -> Sequence[Guest]:
 def list_candidates(manor: Manor) -> Iterable[RecruitmentCandidate]:
     """列出庄园的招募候选门客"""
     return manor.candidates.select_related("pool", "template").order_by("created_at")
+
+
+def _build_rarity_search_order(rarity: str) -> list[str]:
+    search_order = [rarity]
+    if rarity in RARITY_ORDER:
+        idx = RARITY_ORDER.index(rarity)
+        search_order.extend(RARITY_ORDER[idx + 1 :] + RARITY_ORDER[:idx])
+    else:
+        search_order.extend(RARITY_ORDER)
+    return search_order
+
+
+def _resolve_entry_template(
+    entry: RecruitmentPoolEntry,
+    rarity_hint: str,
+    excluded_ids: set[int],
+    explicit_template_ids: set[int],
+    templates_by_rarity: Dict[str, List[GuestTemplate]],
+    category_cache: Dict[Tuple[str | None, str | None], List[GuestTemplate]],
+    rng: random.Random,
+) -> GuestTemplate | None:
+    if entry.template_id:
+        return entry.template if entry.template.recruitable else None
+
+    rarity_value = entry.rarity or rarity_hint
+    if not rarity_value:
+        return None
+    archetype_key = entry.archetype or None
+    cache_key = (rarity_value, archetype_key)
+    if cache_key not in category_cache:
+        base_templates = templates_by_rarity.get(rarity_value, [])
+        if archetype_key:
+            base_templates = [t for t in base_templates if t.archetype == archetype_key]
+        category_cache[cache_key] = _filter_templates(base_templates, explicit_template_ids | excluded_ids)
+    templates = category_cache[cache_key]
+    return rng.choice(templates) if templates else None
 
 
 def choose_template_from_entries(
@@ -214,41 +265,22 @@ def choose_template_from_entries(
     templates_by_rarity = _get_recruitable_templates_by_rarity()
     category_cache: Dict[Tuple[str | None, str | None], List[GuestTemplate]] = {}
 
-    def resolve_entry(entry: RecruitmentPoolEntry, rarity_hint: str) -> GuestTemplate | None:
-        if entry.template_id:
-            return entry.template if entry.template.recruitable else None
-        rarity_value = entry.rarity or rarity_hint
-        if not rarity_value:
-            return None
-        archetype_key = entry.archetype or None
-        cache_key = (rarity_value, archetype_key)
-        if cache_key not in category_cache:
-            # 使用缓存的模板数据进行过滤
-            base_templates = templates_by_rarity.get(rarity_value, [])
-            if archetype_key:
-                base_templates = [t for t in base_templates if t.archetype == archetype_key]
-            # 排除已拥有的模板和显式指定的模板
-            all_excluded = explicit_template_ids | excluded_ids
-            templates = _filter_templates(base_templates, all_excluded)
-            category_cache[cache_key] = templates
-        templates = category_cache[cache_key]
-        if not templates:
-            return None
-        return rng.choice(templates)
-
-    search_order = [rarity]
-    if rarity in RARITY_ORDER:
-        idx = RARITY_ORDER.index(rarity)
-        search_order.extend(RARITY_ORDER[idx + 1 :] + RARITY_ORDER[:idx])
-    else:
-        search_order.extend(RARITY_ORDER)
+    search_order = _build_rarity_search_order(rarity)
 
     for rarity_option in search_order:
         options = filter_entries(filtered_entries, rarity_option)
         if not options:
             continue
         chosen_entry = weighted_choice(options, rng)
-        template = resolve_entry(chosen_entry, rarity_option)
+        template = _resolve_entry_template(
+            chosen_entry,
+            rarity_option,
+            excluded_ids,
+            explicit_template_ids,
+            templates_by_rarity,
+            category_cache,
+            rng,
+        )
         if template:
             return template
 
@@ -270,12 +302,7 @@ def _choose_template_by_rarity_cached(
     templates_by_rarity = _get_recruitable_templates_by_rarity()
 
     # 构建搜索顺序：目标稀有度优先，然后按顺序尝试其他稀有度
-    search_order = [rarity]
-    if rarity in RARITY_ORDER:
-        idx = RARITY_ORDER.index(rarity)
-        search_order.extend(RARITY_ORDER[idx + 1 :] + RARITY_ORDER[:idx])
-    else:
-        search_order.extend(RARITY_ORDER)
+    search_order = _build_rarity_search_order(rarity)
 
     for rarity_option in search_order:
         templates = templates_by_rarity.get(rarity_option, [])
@@ -297,15 +324,12 @@ def _choose_template_by_rarity(
     如果目标稀有度无可用模板，会尝试降级到其他稀有度。
     """
     # 构建搜索顺序：目标稀有度优先，然后按顺序尝试其他稀有度
-    search_order = [rarity]
-    if rarity in RARITY_ORDER:
-        idx = RARITY_ORDER.index(rarity)
-        search_order.extend(RARITY_ORDER[idx + 1 :] + RARITY_ORDER[:idx])
-    else:
-        search_order.extend(RARITY_ORDER)
+    search_order = _build_rarity_search_order(rarity)
 
     for rarity_option in search_order:
         qs = GuestTemplate.objects.filter(rarity=rarity_option, recruitable=True)
+        if rarity_option == GuestRarity.BLACK:
+            qs = qs.filter(is_hermit=False)
         if excluded_ids:
             qs = qs.exclude(id__in=excluded_ids)
         templates = list(qs)
@@ -485,7 +509,8 @@ def recruit_guest(manor: Manor, pool: RecruitmentPool, seed: int | None = None) 
         template = choose_template_from_entries(pool_entries, rng=rng, excluded_ids=excluded_ids)
         template_to_use = template
         display_name = template.name
-        if template.rarity in (GuestRarity.BLACK, GuestRarity.GRAY):
+        # 黑色和灰色门客随机生成名字，但隐士除外（隐士保留原名）
+        if template.rarity in (GuestRarity.BLACK, GuestRarity.GRAY) and not template.is_hermit:
             display_name = generate_random_name(rng)
         # 红色和灰色门客自动显示稀有度
         rarity_revealed = template_to_use.rarity in (GuestRarity.RED, GuestRarity.GRAY)
@@ -535,12 +560,19 @@ def finalize_candidate(candidate: RecruitmentCandidate) -> Guest:
         raise GuestCapacityFullError()
     rng = random.Random()
     template = candidate.template
+
+    # 确定是否需要使用自定义名称（普通黑/灰门客使用随机名，隐士使用原名）
+    use_custom_name = (
+        candidate.rarity in (GuestRarity.BLACK, GuestRarity.GRAY)
+        and not template.is_hermit
+    )
+
     guest = create_guest_from_template(
         manor=manor,
         template=template,
         rarity=candidate.rarity,
         archetype=candidate.archetype,
-        custom_name=candidate.display_name if candidate.rarity in (GuestRarity.BLACK, GuestRarity.GRAY) else "",
+        custom_name=candidate.display_name if use_custom_name else "",
         rng=rng,
     )
     RecruitmentRecord.objects.create(
@@ -600,12 +632,19 @@ def bulk_finalize_candidates(
 
     for candidate in to_process:
         template = template_map.get(candidate.template_id) or candidate.template
+
+        # 确定是否需要使用自定义名称（普通黑/灰门客使用随机名，隐士使用原名）
+        use_custom_name = (
+            candidate.rarity in (GuestRarity.BLACK, GuestRarity.GRAY)
+            and not template.is_hermit
+        )
+
         guest = create_guest_from_template(
             manor=manor,
             template=template,
             rarity=candidate.rarity,
             archetype=candidate.archetype,
-            custom_name=candidate.display_name if candidate.rarity in (GuestRarity.BLACK, GuestRarity.GRAY) else "",
+            custom_name=candidate.display_name if use_custom_name else "",
             rng=rng,
             grant_skills=False,
             save=False,

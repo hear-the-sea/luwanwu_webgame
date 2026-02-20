@@ -18,27 +18,7 @@ def _safe_int(value, default: int = 0) -> int:
         return default
 
 
-def calculate_battle_salvage(
-    report,
-    attacker_guests: List[Guest] | None = None,
-    defender_guests: List[Guest] | None = None,
-) -> Tuple[int, Dict[str, int]]:
-    """
-    根据战报计算“胜利方战斗回收”奖励（经验果 + 护院装备回收）。
-
-    规则参考《踢馆功能设定书》5.5（双方通用奖励）。
-    """
-    from gameplay.services.recruitment import get_troop_template
-
-    if not report:
-        return 0, {}
-
-    attacker_guests = attacker_guests or []
-    defender_guests = defender_guests or []
-
-    # 使用战报seed作为随机源，确保同一战报回收结果可重放、可测试
-    rng = random.Random(_safe_int(getattr(report, "seed", 0), 0))
-
+def _collect_all_casualties(report) -> List[Dict[str, Any]]:
     losses = getattr(report, "losses", None) or {}
     attacker_losses = losses.get("attacker", {}) or {}
     defender_losses = losses.get("defender", {}) or {}
@@ -46,11 +26,16 @@ def calculate_battle_salvage(
     all_casualties: List[Dict[str, Any]] = []
     all_casualties.extend(attacker_losses.get("casualties", []) or [])
     all_casualties.extend(defender_losses.get("casualties", []) or [])
+    return all_casualties
+
+
+def _calculate_troop_recovery(casualties: List[Dict[str, Any]], rng: random.Random) -> Tuple[float, Dict[str, int]]:
+    from gameplay.services.recruitment import get_troop_template
 
     troop_exp_fruit = 0.0
     equipment_recovery: Dict[str, int] = {}
 
-    for entry in all_casualties:
+    for entry in casualties:
         key = entry.get("key", "")
         lost = _safe_int(entry.get("lost", 0), 0)
         if lost <= 0:
@@ -62,7 +47,6 @@ def calculate_battle_salvage(
 
         recruit = troop_config.get("recruit", {}) or {}
         base_duration = _safe_int(recruit.get("base_duration", 60), 60) or 60
-        # base_duration 是秒，转换成小时后乘以系数（经验果效果是减少1小时升级时间）
         troop_exp_fruit += lost * (base_duration / 3600) * 0.1
 
         equipment_list = recruit.get("equipment", []) or []
@@ -74,24 +58,53 @@ def calculate_battle_salvage(
             if recovered > 0:
                 equipment_recovery[equip_key] = equipment_recovery.get(equip_key, 0) + recovered
 
-    # 门客经验果：优先使用战报队伍信息（可包含 initial_hp / level / remaining_hp）
-    guest_exp_fruit = 0.0
+    return troop_exp_fruit, equipment_recovery
+
+
+def _member_exp_fruit(member: Dict[str, Any]) -> float:
+    remaining_hp = _safe_int(member.get("remaining_hp", 0), 0)
+    if remaining_hp > 0:
+        return 0.0
+
+    level = _safe_int(member.get("level", 1), 1) or 1
+    rarity = str(member.get("rarity") or "gray")
+    rarity_mult = PVPConstants.RARITY_EXP_MULTIPLIER.get(rarity, 1.0)
+
+    max_hp = _safe_int(member.get("max_hp") or member.get("hp") or 0, 0)
+    initial_hp = _safe_int(member.get("initial_hp", max_hp), max_hp)
+    hp_ratio = 1.0 if max_hp <= 0 else max(0.0, min(1.0, initial_hp / max_hp))
+
+    return level * rarity_mult * hp_ratio * 0.05
+
+
+def _calculate_guest_recovery(report) -> float:
     attacker_team = getattr(report, "attacker_team", None) or []
     defender_team = getattr(report, "defender_team", None) or []
-    for member in list(attacker_team) + list(defender_team):
-        remaining_hp = _safe_int(member.get("remaining_hp", 0), 0)
-        if remaining_hp > 0:
-            continue
+    all_members = list(attacker_team) + list(defender_team)
+    return sum(_member_exp_fruit(member) for member in all_members)
 
-        level = _safe_int(member.get("level", 1), 1) or 1
-        rarity = str(member.get("rarity") or "gray")
-        rarity_mult = PVPConstants.RARITY_EXP_MULTIPLIER.get(rarity, 1.0)
 
-        max_hp = _safe_int(member.get("max_hp") or member.get("hp") or 0, 0)
-        initial_hp = _safe_int(member.get("initial_hp", max_hp), max_hp)
-        hp_ratio = 1.0 if max_hp <= 0 else max(0.0, min(1.0, initial_hp / max_hp))
+def calculate_battle_salvage(
+    report,
+    attacker_guests: List[Guest] | None = None,
+    defender_guests: List[Guest] | None = None,
+) -> Tuple[int, Dict[str, int]]:
+    """
+    根据战报计算“胜利方战斗回收”奖励（经验果 + 护院装备回收）。
 
-        guest_exp_fruit += level * rarity_mult * hp_ratio * 0.05
+    规则参考《踢馆功能设定书》5.5（双方通用奖励）。
+    """
+    if not report:
+        return 0, {}
+
+    attacker_guests = attacker_guests or []
+    defender_guests = defender_guests or []
+
+    rng = random.Random(_safe_int(getattr(report, "seed", 0), 0))
+
+    casualties = _collect_all_casualties(report)
+    troop_exp_fruit, equipment_recovery = _calculate_troop_recovery(casualties, rng)
+    guest_exp_fruit = _calculate_guest_recovery(report)
 
     total_exp_fruit = int(troop_exp_fruit + guest_exp_fruit)
     return total_exp_fruit, equipment_recovery

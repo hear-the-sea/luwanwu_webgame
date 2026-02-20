@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import random
 from contextlib import contextmanager
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, Generator, List
 
 from django.db import transaction
@@ -28,6 +29,149 @@ from .rewards import dispatch_battle_message, grant_battle_rewards
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class BattleOptions:
+    """
+    Encapsulates configuration and optional parameters for battle execution.
+    """
+    battle_type: str = DEFAULT_BATTLE_TYPE
+    seed: int | None = None
+    troop_loadout: Dict[str, int] | None = None
+    fill_default_troops: bool = True
+    defender_setup: Dict[str, Any] | None = None
+    defender_guests: List[Guest] | None = None
+    defender_limit: int = MAX_SQUAD
+    drop_table: Dict[str, Any] | None = None
+    opponent_name: str | None = None
+    travel_seconds: int | None = None
+    auto_reward: bool = True
+    drop_handler: Callable[[Dict[str, int]], None] | None = None
+    rng_source: random.Random | None = None
+    send_message: bool = True
+    limit: int = MAX_SQUAD
+    apply_damage: bool = True
+    attacker_tech_levels: Dict[str, int] | None = None
+    attacker_guest_bonuses: Dict[str, float] | None = None
+    attacker_guest_skills: List[str] | None = None
+    attacker_manor: Any | None = None
+
+
+def _collect_guest_ids(guests: List[Guest]) -> list[int]:
+    return [int(guest.id) for guest in guests if guest.pk]
+
+
+def _lock_guest_rows(guest_ids: list[int]) -> list[Guest]:
+    # Enforce ordering to prevent deadlocks
+    return list(Guest.objects.select_for_update().filter(id__in=guest_ids).order_by("id"))
+
+
+def _validate_locked_guest_statuses(locked_guests: list[Guest]) -> None:
+    for guest in locked_guests:
+        if guest.status == GuestStatus.DEPLOYED:
+            raise ValueError(f"门客 {guest.display_name} 正在战斗中，请稍后再试")
+        if guest.status == GuestStatus.WORKING:
+            raise ValueError(f"门客 {guest.display_name} 正在打工中，无法出征")
+        if guest.status == GuestStatus.INJURED:
+            raise ValueError(f"门客 {guest.display_name} 处于重伤状态，请先治疗")
+
+
+def _mark_locked_guests_deployed(locked_guests: list[Guest]) -> None:
+    for guest in locked_guests:
+        guest.status = GuestStatus.DEPLOYED
+    if locked_guests:
+        Guest.objects.bulk_update(locked_guests, ["status"])
+
+
+def _refresh_guest_instances(guests: List[Guest]) -> None:
+    for guest in guests:
+        if guest.pk:
+            guest.refresh_from_db()
+
+
+def _release_deployed_guests(guest_ids: list[int]) -> None:
+    Guest.objects.filter(id__in=guest_ids, status=GuestStatus.DEPLOYED).update(status=GuestStatus.IDLE)
+
+
+def _recover_guest_hp_batch(guests: List[Guest], now) -> None:
+    from guests.services.health import recover_guest_hp
+
+    for guest in guests:
+        if getattr(guest, "pk", None):
+            recover_guest_hp(guest, now=now)
+
+
+def _resolve_battle_rng(seed: int | None, rng_source: random.Random | None) -> tuple[int, random.Random]:
+    final_seed, rng_fallback = build_rng(seed)
+    return final_seed, (rng_source or rng_fallback)
+
+
+def _extract_defender_tech_profile(defender_setup: Dict[str, Any] | None) -> tuple[dict, int, dict, List[str] | None]:
+    defender_tech_levels: dict[str, int] = {}
+    defender_guest_level = 50
+    defender_guest_bonuses: dict[str, float] = {}
+    defender_guest_skills: List[str] | None = None
+
+    if not defender_setup:
+        return defender_tech_levels, defender_guest_level, defender_guest_bonuses, defender_guest_skills
+
+    tech_conf = defender_setup.get("technology") or {}
+    if not tech_conf:
+        return defender_tech_levels, defender_guest_level, defender_guest_bonuses, defender_guest_skills
+
+    from core.game_data.technology import get_guest_stat_bonuses, resolve_enemy_tech_levels
+
+    defender_tech_levels = resolve_enemy_tech_levels(tech_conf)
+    if "guest_level" in tech_conf:
+        defender_guest_level = int(tech_conf.get("guest_level", 50))
+    defender_guest_bonuses = get_guest_stat_bonuses(tech_conf)
+    if "guest_skills" in tech_conf:
+        defender_guest_skills = tech_conf.get("guest_skills") or []
+
+    return defender_tech_levels, defender_guest_level, defender_guest_bonuses, defender_guest_skills
+
+
+def _build_defender_guest_and_loadout(
+    defender_guests: List[Guest] | None,
+    defender_setup: Dict[str, Any] | None,
+    defender_limit: int,
+    fill_default_troops: bool,
+    rng: random.Random,
+    now,
+    defender_guest_level: int,
+    defender_guest_bonuses: Dict[str, float],
+    defender_guest_skills: List[str] | None,
+) -> tuple[list[Combatant], Dict[str, int]]:
+    if defender_guests is not None:
+        _recover_guest_hp_batch(defender_guests[:defender_limit], now)
+        defender_guests_comb = build_guest_combatants(defender_guests, side="defender", limit=defender_limit)
+        defender_loadout = normalize_troop_loadout(
+            (defender_setup or {}).get("troop_loadout"),
+            default_if_empty=fill_default_troops,
+        )
+        return defender_guests_comb, defender_loadout
+
+    if defender_setup:
+        defender_guest_keys = defender_setup.get("guest_keys") or []
+        defender_templates = build_named_ai_guests(defender_guest_keys, level=defender_guest_level)
+        defender_guests_comb = build_guest_combatants(
+            defender_templates,
+            side="defender",
+            limit=defender_limit,
+            stat_bonuses=defender_guest_bonuses,
+            override_skill_keys=defender_guest_skills,
+        )
+        defender_loadout = normalize_troop_loadout(
+            defender_setup.get("troop_loadout"),
+            default_if_empty=fill_default_troops,
+        )
+        return defender_guests_comb, defender_loadout
+
+    defender_loadout = generate_ai_loadout(rng)
+    ai_guest_pool = build_ai_guests(rng)
+    defender_guests_comb = build_guest_combatants(ai_guest_pool, side="defender", limit=defender_limit)
+    return defender_guests_comb, defender_loadout
+
+
 @contextmanager
 def lock_guests_for_battle(guests: List[Guest]) -> Generator[List[Guest], None, None]:
     """
@@ -49,46 +193,21 @@ def lock_guests_for_battle(guests: List[Guest]) -> Generator[List[Guest], None, 
         yield []
         return
 
-    guest_ids = [g.id for g in guests if g.pk]
+    guest_ids = _collect_guest_ids(guests)
     if not guest_ids:
         yield guests
         return
 
     with transaction.atomic():
-        # 使用 select_for_update 获取行级锁，nowait=False 等待锁释放
-        locked_guests = list(
-            Guest.objects.select_for_update().filter(id__in=guest_ids)
-        )
-
-        # 检查所有门客状态是否允许出征
-        for guest in locked_guests:
-            if guest.status == GuestStatus.DEPLOYED:
-                raise ValueError(f"门客 {guest.display_name} 正在战斗中，请稍后再试")
-            if guest.status == GuestStatus.WORKING:
-                raise ValueError(f"门客 {guest.display_name} 正在打工中，无法出征")
-            if guest.status == GuestStatus.INJURED:
-                raise ValueError(f"门客 {guest.display_name} 处于重伤状态，请先治疗")
-
-        # 安全修复：使用锁定的对象进行批量更新，避免 TOCTOU 漏洞
-        # 直接修改锁定对象的状态，然后 bulk_update
-        for guest in locked_guests:
-            guest.status = GuestStatus.DEPLOYED
-        if locked_guests:
-            Guest.objects.bulk_update(locked_guests, ["status"])
+        locked_guests = _lock_guest_rows(guest_ids)
+        _validate_locked_guest_statuses(locked_guests)
+        _mark_locked_guests_deployed(locked_guests)
 
         try:
-            # 刷新门客对象以反映状态变更
-            for guest in guests:
-                if guest.pk:
-                    guest.refresh_from_db()
+            _refresh_guest_instances(guests)
             yield guests
         finally:
-            # 战斗结束后，恢复门客状态为空闲（除非已被其他逻辑修改为重伤等）
-            # 只恢复仍处于 DEPLOYED 状态的门客
-            Guest.objects.filter(
-                id__in=guest_ids,
-                status=GuestStatus.DEPLOYED
-            ).update(status=GuestStatus.IDLE)
+            _release_deployed_guests(guest_ids)
 
 
 def validate_troop_capacity(guests: List[Guest], troop_loadout: Dict[str, int]) -> None:
@@ -210,178 +329,95 @@ def simulate_report(
     active_guests = guests[:limit]
 
     # 使用并发锁执行战斗（防止同一门客同时参与多场战斗）
+    options = BattleOptions(
+        battle_type=battle_type,
+        seed=seed,
+        troop_loadout=troop_loadout,
+        fill_default_troops=fill_default_troops,
+        defender_setup=defender_setup,
+        defender_guests=defender_guests,
+        defender_limit=defender_limit,
+        drop_table=drop_table,
+        opponent_name=opponent_name,
+        travel_seconds=travel_seconds,
+        auto_reward=auto_reward,
+        drop_handler=drop_handler,
+        rng_source=rng_source,
+        send_message=send_message,
+        limit=limit,
+        apply_damage=apply_damage,
+        attacker_tech_levels=attacker_tech_levels,
+        attacker_guest_bonuses=attacker_guest_bonuses,
+        attacker_guest_skills=attacker_guest_skills,
+        attacker_manor=attacker_manor,
+    )
+
     if use_lock:
         with lock_guests_for_battle(active_guests):
-            return _execute_battle(
-                manor=manor,
-                guests=guests,
-                active_guests=active_guests,
-                config=config,
-                battle_type=battle_type,
-                seed=seed,
-                troop_loadout=troop_loadout,
-                fill_default_troops=fill_default_troops,
-                defender_setup=defender_setup,
-                defender_guests=defender_guests,
-                defender_limit=defender_limit,
-                drop_table=drop_table,
-                opponent_name=opponent_name,
-                travel_seconds=travel_seconds,
-                auto_reward=auto_reward,
-                drop_handler=drop_handler,
-                rng_source=rng_source,
-                send_message=send_message,
-                limit=limit,
-                apply_damage=apply_damage,
-                attacker_tech_levels=attacker_tech_levels,
-                attacker_guest_bonuses=attacker_guest_bonuses,
-                attacker_guest_skills=attacker_guest_skills,
-                attacker_manor=attacker_manor,
-            )
+            return _execute_battle(manor, guests, active_guests, options)
     else:
         # 不使用锁（用于测试或特殊场景）
-        return _execute_battle(
-            manor=manor,
-            guests=guests,
-            active_guests=active_guests,
-            config=config,
-            battle_type=battle_type,
-            seed=seed,
-            troop_loadout=troop_loadout,
-            fill_default_troops=fill_default_troops,
-            defender_setup=defender_setup,
-            defender_guests=defender_guests,
-            defender_limit=defender_limit,
-            drop_table=drop_table,
-            opponent_name=opponent_name,
-            travel_seconds=travel_seconds,
-            auto_reward=auto_reward,
-            drop_handler=drop_handler,
-            rng_source=rng_source,
-            send_message=send_message,
-            limit=limit,
-            apply_damage=apply_damage,
-            attacker_tech_levels=attacker_tech_levels,
-            attacker_guest_bonuses=attacker_guest_bonuses,
-            attacker_guest_skills=attacker_guest_skills,
-            attacker_manor=attacker_manor,
-        )
+        return _execute_battle(manor, guests, active_guests, options)
 
 
 def _execute_battle(
     manor,
     guests: List[Guest],
     active_guests: List[Guest],
-    config: dict,
-    battle_type: str,
-    seed: int | None,
-    troop_loadout: Dict[str, int] | None,
-    fill_default_troops: bool,
-    defender_setup: Dict[str, Any] | None,
-    defender_guests: List[Guest] | None,
-    defender_limit: int,
-    drop_table: Dict[str, Any] | None,
-    opponent_name: str | None,
-    travel_seconds: int | None,
-    auto_reward: bool,
-    drop_handler: Callable[[Dict[str, int]], None] | None,
-    rng_source: random.Random | None,
-    send_message: bool,
-    limit: int,
-    apply_damage: bool,
-    attacker_tech_levels: Dict[str, int] | None,
-    attacker_guest_bonuses: Dict[str, float] | None,
-    attacker_guest_skills: List[str] | None,
-    attacker_manor,
+    options: BattleOptions,
 ) -> BattleReport:
     """
     执行战斗的内部实现函数。
 
     此函数包含实际的战斗模拟逻辑，由 simulate_report 在获取锁后调用。
     """
-    from guests.services.health import recover_guest_hp
+    # Unpack commonly used options for readability
+    config = get_battle_config(options.battle_type)
 
     # 战前按时间补算自然恢复（仅对已保存的非重伤门客生效）
     now = timezone.now()
-    for guest in active_guests:
-        if getattr(guest, "pk", None):
-            recover_guest_hp(guest, now=now)
+    _recover_guest_hp_batch(active_guests, now)
 
-    normalized_loadout = normalize_troop_loadout(troop_loadout, default_if_empty=fill_default_troops)
+    normalized_loadout = normalize_troop_loadout(
+        options.troop_loadout,
+        default_if_empty=options.fill_default_troops
+    )
 
     # 验证兵力是否超过门客带兵上限（使用实际出战的门客）
     validate_troop_capacity(active_guests, normalized_loadout)
 
-    final_seed, rng_fallback = build_rng(seed)
-    rng = rng_source or rng_fallback
+    final_seed, rng = _resolve_battle_rng(options.seed, options.rng_source)
 
     attacker_guests_comb = build_guest_combatants(
         guests,
         side="attacker",
-        limit=limit,
-        stat_bonuses=attacker_guest_bonuses,
-        override_skill_keys=attacker_guest_skills,
+        limit=options.limit,
+        stat_bonuses=options.attacker_guest_bonuses,
+        override_skill_keys=options.attacker_guest_skills,
     )
     # 攻击方小兵应用武艺技术加成
-    attacker_manor = manor if attacker_manor is None else attacker_manor
+    attacker_manor = manor if options.attacker_manor is None else options.attacker_manor
     attacker_troops = build_troop_combatants(
         normalized_loadout,
         side="attacker",
         manor=attacker_manor,
-        tech_levels=attacker_tech_levels,
+        tech_levels=options.attacker_tech_levels,
     )
 
-    # 解析敌方科技配置
-    defender_tech_levels = {}
-    defender_guest_level = 50  # 默认50级
-    defender_guest_bonuses = {}
-    defender_guest_skills = None  # 临时技能列表
-
-    if defender_setup:
-        tech_conf = defender_setup.get("technology") or {}
-        if tech_conf:
-            from core.game_data.technology import resolve_enemy_tech_levels, get_guest_stat_bonuses
-            defender_tech_levels = resolve_enemy_tech_levels(tech_conf)
-
-            # 解析门客等级和属性加成
-            if "guest_level" in tech_conf:
-                defender_guest_level = int(tech_conf.get("guest_level", 50))
-            defender_guest_bonuses = get_guest_stat_bonuses(tech_conf)
-
-            # 解析门客临时技能
-            if "guest_skills" in tech_conf:
-                defender_guest_skills = tech_conf.get("guest_skills") or []
-
-    if defender_guests is not None:
-        # 使用真实防守门客（PVP等）
-        defender_active_guests = defender_guests[:defender_limit]
-        for guest in defender_active_guests:
-            if getattr(guest, "pk", None):
-                recover_guest_hp(guest, now=now)
-        defender_guests_comb = build_guest_combatants(defender_guests, side="defender", limit=defender_limit)
-        defender_loadout = normalize_troop_loadout(
-            (defender_setup or {}).get("troop_loadout"),
-            default_if_empty=fill_default_troops,
-        )
-    else:
-        if defender_setup:
-            defender_guest_keys = defender_setup.get("guest_keys") or []
-            defender_templates = build_named_ai_guests(defender_guest_keys, level=defender_guest_level)
-            defender_guests_comb = build_guest_combatants(
-                defender_templates,
-                side="defender",
-                limit=defender_limit,
-                stat_bonuses=defender_guest_bonuses,
-                override_skill_keys=defender_guest_skills
-            )
-            defender_loadout = normalize_troop_loadout(
-                defender_setup.get("troop_loadout"),
-                default_if_empty=fill_default_troops,
-            )
-        else:
-            defender_loadout = generate_ai_loadout(rng)
-            ai_guest_pool = build_ai_guests(rng)
-            defender_guests_comb = build_guest_combatants(ai_guest_pool, side="defender", limit=defender_limit)
+    defender_tech_levels, defender_guest_level, defender_guest_bonuses, defender_guest_skills = _extract_defender_tech_profile(
+        options.defender_setup
+    )
+    defender_guests_comb, defender_loadout = _build_defender_guest_and_loadout(
+        options.defender_guests,
+        options.defender_setup,
+        options.defender_limit,
+        options.fill_default_troops,
+        rng,
+        now,
+        defender_guest_level,
+        defender_guest_bonuses,
+        defender_guest_skills,
+    )
 
     # 构建敌方护院，传入科技等级
     defender_troops = build_troop_combatants(
@@ -395,36 +431,36 @@ def _execute_battle(
     # 根据双方敏捷分布动态分配优先级（前25%先锋）
     assign_agility_based_priorities(attacker_units, defender_units)
 
-    opponent_label = opponent_name or config.get("name", "乱军试炼")
+    opponent_label = options.opponent_name or config.get("name", "乱军试炼")
     simulation = simulate_battle(
         attacker_units=attacker_units,
         defender_units=defender_units,
         rng=rng,
         seed=final_seed,
-        travel_seconds=travel_seconds,
+        travel_seconds=options.travel_seconds,
         config=config,
-        drop_table=drop_table,
+        drop_table=options.drop_table,
     )
 
     grant_battle_rewards(
         manor,
         simulation.drops,
         opponent_label,
-        auto_reward=auto_reward,
-        drop_handler=drop_handler,
+        auto_reward=options.auto_reward,
+        drop_handler=options.drop_handler,
     )
-    hp_updates = apply_guest_hp_updates(guests, attacker_guests_comb, apply_damage=apply_damage)
+    hp_updates = apply_guest_hp_updates(guests, attacker_guests_comb, apply_damage=options.apply_damage)
     simulation.losses["attacker"]["hp_updates"] = hp_updates
-    if defender_guests is not None:
+    if options.defender_guests is not None:
         defender_hp_updates = apply_guest_hp_updates(
-            defender_guests, defender_guests_comb, apply_damage=apply_damage
+            options.defender_guests, defender_guests_comb, apply_damage=options.apply_damage
         )
         simulation.losses["defender"]["hp_updates"] = defender_hp_updates
 
     report = BattleReport.objects.create(
         manor=manor,
         opponent_name=opponent_label,
-        battle_type=battle_type,
+        battle_type=options.battle_type,
         attacker_team=[serialize_guest_for_report(c) for c in attacker_guests_comb],
         attacker_troops=normalized_loadout,
         defender_team=[serialize_guest_for_report(c) for c in defender_guests_comb],
@@ -437,7 +473,7 @@ def _execute_battle(
         completed_at=simulation.completed_at,
         seed=simulation.seed,
     )
-    if send_message:
+    if options.send_message:
         dispatch_battle_message(manor, opponent_label, report)
     return report
 

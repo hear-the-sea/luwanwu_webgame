@@ -250,29 +250,25 @@ def estimate_resource_production() -> dict:
     }
 
 # ==================== 主分析函数 ====================
+# ==================== 主分析函数 ====================
 
 
-def main():
+def _print_separator(title: str | None = None) -> None:
     print("=" * 80)
-    print("全局预算模型分析 - 验证「一年全勤满级」可行性")
-    print("=" * 80)
-    print()
+    if title:
+        print(title)
+        print("=" * 80)
 
-    # 加载数据
-    buildings = load_building_data()
-    technologies = load_technology_data()
 
+def _print_overview(buildings: List[dict], technologies: List[dict]) -> None:
     print("📊 数据概览:")
     print(f"  - 建筑总数: {len(buildings)}")
     print(f"  - 科技总数: {len(technologies)}")
     print()
 
-    # 分析建筑
-    print("=" * 80)
-    print("🏗️  建筑升级预算分析")
-    print("=" * 80)
 
-    building_result = simulate_building_upgrades(buildings)
+def _print_building_analysis(building_result: dict) -> None:
+    _print_separator("🏗️  建筑升级预算分析")
 
     print("\n总资源消耗:")
     print(f"  - 银两: {building_result['total_silver']:,}")
@@ -283,26 +279,26 @@ def main():
 
     print("\n最耗时的建筑 TOP 5:")
     sorted_buildings = sorted(building_result['details'], key=lambda x: x['total_time_days'], reverse=True)
-    for i, b in enumerate(sorted_buildings[:5], 1):
-        print(f"  {i}. {b['name']} (Lv{b['max_level']}): {b['total_time_days']:.2f} 天")
+    for index, building in enumerate(sorted_buildings[:5], 1):
+        print(f"  {index}. {building['name']} (Lv{building['max_level']}): {building['total_time_days']:.2f} 天")
 
     print("\n最耗资源的建筑 TOP 5 (按银两):")
     sorted_by_silver = sorted(building_result['details'], key=lambda x: x['total_silver'], reverse=True)
-    for i, b in enumerate(sorted_by_silver[:5], 1):
-        print(f"  {i}. {b['name']} (Lv{b['max_level']}): {b['total_silver']:,} 银两, {b['total_grain']:,} 粮食")
+    for index, building in enumerate(sorted_by_silver[:5], 1):
+        print(
+            f"  {index}. {building['name']} (Lv{building['max_level']}): "
+            f"{building['total_silver']:,} 银两, {building['total_grain']:,} 粮食"
+        )
 
-    # 分析科技
+
+def _print_tech_analysis(tech_result: dict) -> None:
     print()
-    print("=" * 80)
-    print("🔬 科技升级预算分析")
-    print("=" * 80)
-
-    tech_result = simulate_technology_upgrades(technologies, max_days_threshold=100.0)
+    _print_separator("🔬 科技升级预算分析")
 
     if tech_result['unreachable_count'] > 0:
         print(f"\n⚠️  发现 {tech_result['unreachable_count']} 个不可达科技（单个总耗时 > 100天）:")
-        for t in tech_result['unreachable']:
-            print(f"   ❌ {t['name']} (Lv{t['max_level']}): {t['total_time_days']:.2f} 天 ({t['total_silver']:,} 银两)")
+        for tech in tech_result['unreachable']:
+            print(f"   ❌ {tech['name']} (Lv{tech['max_level']}): {tech['total_time_days']:.2f} 天 ({tech['total_silver']:,} 银两)")
         print(f"\n✅ 可达科技数量: {tech_result['reachable_count']} / {tech_result['tech_count']}")
 
     print("\n总资源消耗（仅计算可达科技）:")
@@ -313,56 +309,68 @@ def main():
 
     print("\n最耗时的科技 TOP 10 (可达):")
     sorted_techs = sorted(tech_result['details'], key=lambda x: x['total_time_days'], reverse=True)
-    for i, t in enumerate(sorted_techs[:10], 1):
-        print(f"  {i}. {t['name']} (Lv{t['max_level']}): {t['total_time_days']:.2f} 天 ({t['total_silver']:,} 银两)")
+    for index, tech in enumerate(sorted_techs[:10], 1):
+        print(f"  {index}. {tech['name']} (Lv{tech['max_level']}): {tech['total_time_days']:.2f} 天 ({tech['total_silver']:,} 银两)")
 
-    # 综合分析
-    print()
-    print("=" * 80)
-    print("📈 综合预算分析")
-    print("=" * 80)
 
+def _calc_combined_metrics(building_result: dict, tech_result: dict) -> dict:
     total_silver = building_result['total_silver'] + tech_result['total_silver']
     total_grain = building_result['total_grain']
-
-    # 假设建筑和科技可以同时进行
     total_time_days = max(building_result['total_time_parallel_days'], tech_result['total_time_parallel_days'])
+    return {
+        'total_silver': total_silver,
+        'total_grain': total_grain,
+        'total_time_days': total_time_days,
+    }
+
+
+def _print_combined_analysis(building_result: dict, tech_result: dict, combined: dict) -> None:
+    print()
+    _print_separator("📈 综合预算分析")
 
     print("\n总资源需求:")
-    print(f"  - 银两: {total_silver:,}")
-    print(f"  - 粮食: {total_grain:,}")
+    print(f"  - 银两: {combined['total_silver']:,}")
+    print(f"  - 粮食: {combined['total_grain']:,}")
 
     print("\n总时长需求（建筑与科技并行）:")
     print(f"  - 建筑: {building_result['total_time_parallel_days']:.1f} 天")
     print(f"  - 科技: {tech_result['total_time_parallel_days']:.1f} 天")
-    print(f"  - 瓶颈: {total_time_days:.1f} 天")
+    print(f"  - 瓶颈: {combined['total_time_days']:.1f} 天")
 
-    # 资源产出评估
+
+def _print_production_analysis(combined: dict, production: dict) -> dict:
     print()
-    print("=" * 80)
-    print("💰 资源产出评估")
-    print("=" * 80)
+    _print_separator("💰 资源产出评估")
 
-    production = estimate_resource_production()
     print("\n建筑产出（假设平均Lv10）:")
     print(f"  - 粮食: {production['grain_per_hour']:.0f} /小时 ({production['grain_per_day']:.0f} /天)")
     print(f"  - 银两: {production['silver_per_hour']:.0f} /小时 ({production['silver_per_day']:.0f} /天)")
 
-    # 回本时间估算
-    days_to_break_even_grain = total_grain / production['grain_per_day'] if production['grain_per_day'] > 0 else float('inf')
-    days_to_break_even_silver = total_silver / production['silver_per_day'] if production['silver_per_day'] > 0 else float('inf')
+    days_to_break_even_grain = (
+        combined['total_grain'] / production['grain_per_day'] if production['grain_per_day'] > 0 else float('inf')
+    )
+    days_to_break_even_silver = (
+        combined['total_silver'] / production['silver_per_day'] if production['silver_per_day'] > 0 else float('inf')
+    )
 
     print("\n仅靠建筑产出回本时间:")
     print(f"  - 粮食: {days_to_break_even_grain:.1f} 天")
     print(f"  - 银两: {days_to_break_even_silver:.1f} 天")
 
-    # 一年可行性分析
+    return {
+        'days_to_break_even_grain': days_to_break_even_grain,
+        'days_to_break_even_silver': days_to_break_even_silver,
+    }
+
+
+def _print_feasibility(combined: dict, production: dict) -> dict:
     print()
-    print("=" * 80)
-    print("🎯 一年全勤满级可行性评估")
-    print("=" * 80)
+    _print_separator("🎯 一年全勤满级可行性评估")
 
     one_year_days = 365
+    total_time_days = combined['total_time_days']
+    total_grain = combined['total_grain']
+    total_silver = combined['total_silver']
 
     print("\n时间维度:")
     print(f"  - 升级总耗时: {total_time_days:.1f} 天")
@@ -395,10 +403,16 @@ def main():
         deficit = total_silver - production['silver_per_day'] * one_year_days
         print(f"  ❌ 银两不足，缺口: {deficit:,.0f}")
 
+    return {
+        'grain_sufficient': grain_sufficient,
+        'silver_sufficient': silver_sufficient,
+        'one_year_days': one_year_days,
+    }
+
+
+def _print_conclusion(building_result: dict, tech_result: dict, combined: dict, production: dict, feasibility: dict) -> None:
     print()
-    print("=" * 80)
-    print("💡 结论与建议")
-    print("=" * 80)
+    _print_separator("💡 结论与建议")
     print()
 
     print("📌 关键发现:")
@@ -406,14 +420,18 @@ def main():
     print("1️⃣  不可达科技问题:")
     if tech_result['unreachable_count'] > 0:
         print(f"   ⚠️  {tech_result['unreachable_count']} 个科技配置的max_level过高，导致指数公式爆炸")
-        for t in tech_result['unreachable']:
-            print(f"      - {t['name']}: max_level={t['max_level']} → 需要 {t['total_time_days']:.0f} 天")
+        for tech in tech_result['unreachable']:
+            print(f"      - {tech['name']}: max_level={tech['max_level']} → 需要 {tech['total_time_days']:.0f} 天")
         print("   💡 建议：降低max_level或修改时间公式（从指数改为幂函数）")
     else:
         print("   ✅ 所有科技均在可达范围内")
 
     print()
     print("2️⃣  可达内容的可行性:")
+    total_time_days = combined['total_time_days']
+    one_year_days = feasibility['one_year_days']
+    grain_sufficient = feasibility['grain_sufficient']
+    silver_sufficient = feasibility['silver_sufficient']
 
     if total_time_days <= one_year_days and grain_sufficient and silver_sufficient:
         print("   ✅ 全勤玩家一年可以达到全建筑和所有可达科技满级")
@@ -427,13 +445,13 @@ def main():
             print(f"      ✅ 时间充足: {total_time_days:.1f}天 < {one_year_days}天，还剩 {one_year_days - total_time_days:.1f}天")
 
         if not grain_sufficient:
-            deficit = total_grain - production['grain_per_day'] * one_year_days
+            deficit = combined['total_grain'] - production['grain_per_day'] * one_year_days
             print(f"      🌾 粮食不足: 缺口 {deficit:,.0f}，需要额外来源（任务/战斗）")
         else:
             print("      ✅ 粮食充足")
 
         if not silver_sufficient:
-            deficit = total_silver - production['silver_per_day'] * one_year_days
+            deficit = combined['total_silver'] - production['silver_per_day'] * one_year_days
             print(f"      💰 银两不足: 缺口 {deficit:,.0f}，需要额外来源（任务/战斗/打工）")
         else:
             print("      ✅ 银两充足")
@@ -443,14 +461,20 @@ def main():
     treasury_detail = next((b for b in building_result['details'] if b['key'] == 'treasury'), None)
     if treasury_detail:
         print("   ⚠️  藏宝阁单个建筑占据:")
-        print(f"      - 时间: {treasury_detail['total_time_days']:.1f}天 (占建筑总时长 {treasury_detail['total_time_days'] / building_result['total_time_sequential_days'] * 100:.0f}%)")
-        print(f"      - 银两: {treasury_detail['total_silver']:,} (占建筑总成本 {treasury_detail['total_silver'] / building_result['total_silver'] * 100:.0f}%)")
+        print(
+            "      - 时间: "
+            f"{treasury_detail['total_time_days']:.1f}天 "
+            f"(占建筑总时长 {treasury_detail['total_time_days'] / building_result['total_time_sequential_days'] * 100:.0f}%)"
+        )
+        print(
+            "      - 银两: "
+            f"{treasury_detail['total_silver']:,} "
+            f"(占建筑总成本 {treasury_detail['total_silver'] / building_result['total_silver'] * 100:.0f}%)"
+        )
         print("   💡 建议：考虑降低藏宝阁max_level或调整cost_growth参数")
 
     print()
-    print("=" * 80)
-    print("⚠️  分析局限性")
-    print("=" * 80)
+    _print_separator("⚠️  分析局限性")
     print()
     print("本分析基于以下假设，实际情况可能有差异:")
     print("  ❌ 未考虑任务奖励、战斗掉落、打工收益等额外资源来源")
@@ -459,6 +483,30 @@ def main():
     print("  ❌ 未考虑建筑等级提升对资源产出的动态增长")
     print("  ❌ 资源产出按平均Lv10估算，实际是动态增长过程")
     print()
+
+
+def main():
+    _print_separator("全局预算模型分析 - 验证「一年全勤满级」可行性")
+    print()
+
+    buildings = load_building_data()
+    technologies = load_technology_data()
+    _print_overview(buildings, technologies)
+
+    building_result = simulate_building_upgrades(buildings)
+    _print_building_analysis(building_result)
+
+    tech_result = simulate_technology_upgrades(technologies, max_days_threshold=100.0)
+    _print_tech_analysis(tech_result)
+
+    combined = _calc_combined_metrics(building_result, tech_result)
+    _print_combined_analysis(building_result, tech_result, combined)
+
+    production = estimate_resource_production()
+    _print_production_analysis(combined, production)
+
+    feasibility = _print_feasibility(combined, production)
+    _print_conclusion(building_result, tech_result, combined, production, feasibility)
 
 
 if __name__ == '__main__':

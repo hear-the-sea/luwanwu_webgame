@@ -71,6 +71,62 @@ def parse_rows(text: str) -> list[Row]:
     return rows
 
 
+def _collect_duplicate_name_issues(rows: list[Row]) -> list[str]:
+    issues: list[str] = []
+    name_counts = Counter(r.name for r in rows)
+    dups = [n for n, c in name_counts.items() if c > 1]
+    for name in sorted(dups):
+        lines = [str(r.line_no) for r in rows if r.name == name]
+        issues.append(f"Duplicate name '{name}' at lines: {', '.join(lines)}")
+    return issues
+
+
+def _collect_bio_length_issues(rows: list[Row], min_bio_len: int) -> list[str]:
+    issues: list[str] = []
+    for row in rows:
+        if len(row.bio) < min_bio_len:
+            issues.append(f"Bio too short ({len(row.bio)}) for '{row.name}' at line {row.line_no}")
+    return issues
+
+
+def _collect_three_kingdoms_issues(rows: list[Row]) -> list[str]:
+    issues: list[str] = []
+    for row in rows:
+        if row.name in THREE_KINGDOMS_NAMES:
+            issues.append(f"Disallowed era (Han末/三国) name '{row.name}' at line {row.line_no}")
+        if any(keyword in row.bio for keyword in THREE_KINGDOMS_KEYWORDS):
+            issues.append(f"Bio mentions Han末/三国 keywords for '{row.name}' at line {row.line_no}")
+    return issues
+
+
+def _collect_issues(rows: list[Row], min_bio_len: int) -> list[str]:
+    issues: list[str] = []
+    if not rows:
+        issues.append("No rows found.")
+
+    issues.extend(_collect_duplicate_name_issues(rows))
+    issues.extend(_collect_bio_length_issues(rows, min_bio_len))
+    issues.extend(_collect_three_kingdoms_issues(rows))
+    return issues
+
+
+def _print_success(path: Path, rows: list[Row]) -> None:
+    rarity_counts = Counter(r.rarity for r in rows)
+    type_counts = Counter(r.typ for r in rows)
+    print(f"[OK] {path}")
+    print(f"- rows: {len(rows)}")
+    print(f"- rarity: {dict(rarity_counts)}")
+    print(f"- type: {dict(type_counts)}")
+
+
+def _print_fail(path: Path, issues: list[str]) -> None:
+    print(f"[FAIL] {path} issues: {len(issues)}")
+    for issue in issues[:200]:
+        print(f"- {issue}")
+    if len(issues) > 200:
+        print(f"... ({len(issues) - 200} more)")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("path", type=Path)
@@ -79,45 +135,13 @@ def main() -> int:
 
     text = args.path.read_text(encoding="utf-8")
     rows = parse_rows(text)
-
-    issues: list[str] = []
-    if not rows:
-        issues.append("No rows found.")
-
-    # Duplicates
-    name_counts = Counter(r.name for r in rows)
-    dups = [n for n, c in name_counts.items() if c > 1]
-    for n in sorted(dups):
-        lines = [str(r.line_no) for r in rows if r.name == n]
-        issues.append(f"Duplicate name '{n}' at lines: {', '.join(lines)}")
-
-    # Bio length
-    for r in rows:
-        if len(r.bio) < args.min_bio_len:
-            issues.append(f"Bio too short ({len(r.bio)}) for '{r.name}' at line {r.line_no}")
-
-    # Three Kingdoms (heuristic)
-    for r in rows:
-        if r.name in THREE_KINGDOMS_NAMES:
-            issues.append(f"Disallowed era (Han末/三国) name '{r.name}' at line {r.line_no}")
-        if any(k in r.bio for k in THREE_KINGDOMS_KEYWORDS):
-            issues.append(f"Bio mentions Han末/三国 keywords for '{r.name}' at line {r.line_no}")
+    issues = _collect_issues(rows, args.min_bio_len)
 
     if issues:
-        print(f"[FAIL] {args.path} issues: {len(issues)}")
-        for it in issues[:200]:
-            print(f"- {it}")
-        if len(issues) > 200:
-            print(f"... ({len(issues) - 200} more)")
+        _print_fail(args.path, issues)
         return 1
 
-    # Basic stats
-    rarity_counts = Counter(r.rarity for r in rows)
-    type_counts = Counter(r.typ for r in rows)
-    print(f"[OK] {args.path}")
-    print(f"- rows: {len(rows)}")
-    print(f"- rarity: {dict(rarity_counts)}")
-    print(f"- type: {dict(type_counts)}")
+    _print_success(args.path, rows)
     return 0
 
 

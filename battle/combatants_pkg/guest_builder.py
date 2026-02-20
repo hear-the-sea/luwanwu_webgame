@@ -34,6 +34,84 @@ def _get_max_squad() -> int:
         return 5
 
 
+def _serialize_skill(skill: Skill) -> dict:
+    return {
+        "key": skill.key,
+        "name": skill.name,
+        "power": skill.base_power,
+        "probability": skill.base_probability,
+        "kind": getattr(skill, "kind", SkillKind.ACTIVE),
+        "status_effect": getattr(skill, "status_effect", ""),
+        "status_probability": getattr(skill, "status_probability", 0.0),
+        "status_duration": getattr(skill, "status_duration", 1),
+        "damage_formula": getattr(skill, "damage_formula", {}),
+        "targets": getattr(skill, "targets", 1),
+    }
+
+
+def _normalize_override_keys(guest: Guest, override_keys: Any) -> list[str]:
+    if not override_keys:
+        return []
+
+    try:
+        raw_keys = [override_keys] if isinstance(override_keys, str) else list(override_keys)
+    except TypeError:
+        logger.warning(
+            "Invalid override skills type; falling back to default skills",
+            extra={
+                "guest_id": getattr(guest, "pk", None),
+                "override_skills_type": type(override_keys).__name__,
+            },
+        )
+        return []
+
+    return [str(key) for key in raw_keys if key]
+
+
+def _serialize_override_skills(guest: Guest, override_keys: list[str]) -> list[dict] | None:
+    if not override_keys:
+        return None
+
+    try:
+        return [_serialize_skill(skill) for skill in Skill.objects.filter(key__in=override_keys)]
+    except DatabaseError:
+        logger.warning(
+            "Failed to load override skills for guest; falling back to default skills",
+            extra={
+                "guest_id": getattr(guest, "pk", None),
+                "override_skills_count": len(override_keys),
+            },
+            exc_info=True,
+        )
+        return None
+
+
+def _serialize_guest_model_skills(guest: Guest) -> list[dict]:
+    if getattr(guest, "pk", None) is None or not hasattr(guest, "skills"):
+        return []
+
+    try:
+        return [_serialize_skill(skill) for skill in guest.skills.all()]
+    except ValueError:
+        return []
+
+
+def _serialize_guest_template_skills(guest: Guest) -> list[dict]:
+    template = getattr(guest, "template", None)
+    if not template or not hasattr(template, "initial_skills"):
+        return []
+
+    try:
+        return [_serialize_skill(skill) for skill in template.initial_skills.all()]
+    except DatabaseError:
+        logger.warning(
+            "Failed to load template skills for AI guest",
+            extra={"guest_template": getattr(template, "key", None)},
+            exc_info=True,
+        )
+        return []
+
+
 def serialize_skills(guest: Guest, override_skill_keys: Optional[List[str]] = None) -> List[dict]:
     """
     Serialize guest skills to battle system format.
@@ -45,103 +123,16 @@ def serialize_skills(guest: Guest, override_skill_keys: Optional[List[str]] = No
     Returns:
         List of skill dicts
     """
-    data: List[dict] = []
-
     guest_override_skills = getattr(guest, "_override_skills", None)
     effective_override = guest_override_skills if guest_override_skills is not None else override_skill_keys
-
-    if effective_override:
-        try:
-            override_keys = [effective_override] if isinstance(effective_override, str) else list(effective_override)
-        except TypeError:
-            logger.warning(
-                "Invalid override skills type; falling back to default skills",
-                extra={
-                    "guest_id": getattr(guest, "pk", None),
-                    "override_skills_type": type(effective_override).__name__,
-                },
-            )
-            override_keys = []
-
-        override_keys = [str(key) for key in override_keys if key]
-        if override_keys:
-            try:
-                skills = Skill.objects.filter(key__in=override_keys)
-                for skill in skills:
-                    data.append(
-                        {
-                            "key": skill.key,
-                            "name": skill.name,
-                            "power": skill.base_power,
-                            "probability": skill.base_probability,
-                            "kind": getattr(skill, "kind", SkillKind.ACTIVE),
-                            "status_effect": getattr(skill, "status_effect", ""),
-                            "status_probability": getattr(skill, "status_probability", 0.0),
-                            "status_duration": getattr(skill, "status_duration", 1),
-                            "damage_formula": getattr(skill, "damage_formula", {}),
-                            "targets": getattr(skill, "targets", 1),
-                        }
-                    )
-                return data
-            except DatabaseError:
-                logger.warning(
-                    "Failed to load override skills for guest; falling back to default skills",
-                    extra={
-                        "guest_id": getattr(guest, "pk", None),
-                        "override_skills_count": len(override_keys),
-                    },
-                    exc_info=True,
-                )
+    normalized_override_keys = _normalize_override_keys(guest, effective_override)
+    override_data = _serialize_override_skills(guest, normalized_override_keys)
+    if override_data is not None:
+        return override_data
 
     if getattr(guest, "pk", None) is not None:
-        if hasattr(guest, "skills"):
-            try:
-                skills_qs = guest.skills.all()
-                for skill in skills_qs:
-                    data.append(
-                        {
-                            "key": skill.key,
-                            "name": skill.name,
-                            "power": skill.base_power,
-                            "probability": skill.base_probability,
-                            "kind": getattr(skill, "kind", SkillKind.ACTIVE),
-                            "status_effect": getattr(skill, "status_effect", ""),
-                            "status_probability": getattr(skill, "status_probability", 0.0),
-                            "status_duration": getattr(skill, "status_duration", 1),
-                            "damage_formula": getattr(skill, "damage_formula", {}),
-                            "targets": getattr(skill, "targets", 1),
-                        }
-                    )
-            except ValueError:
-                pass
-    else:
-        template = getattr(guest, "template", None)
-        if template and hasattr(template, "initial_skills"):
-            try:
-                skills_qs = template.initial_skills.all()
-                for skill in skills_qs:
-                    data.append(
-                        {
-                            "key": skill.key,
-                            "name": skill.name,
-                            "power": skill.base_power,
-                            "probability": skill.base_probability,
-                            "kind": getattr(skill, "kind", SkillKind.ACTIVE),
-                            "status_effect": getattr(skill, "status_effect", ""),
-                            "status_probability": getattr(skill, "status_probability", 0.0),
-                            "status_duration": getattr(skill, "status_duration", 1),
-                            "damage_formula": getattr(skill, "damage_formula", {}),
-                            "targets": getattr(skill, "targets", 1),
-                        }
-                    )
-            except DatabaseError:
-                logger.warning(
-                    "Failed to load template skills for AI guest",
-                    extra={"guest_template": getattr(template, "key", None)},
-                    exc_info=True,
-                )
-
-    return data
+        return _serialize_guest_model_skills(guest)
+    return _serialize_guest_template_skills(guest)
 
 
 def serialize_guest_for_report(combatant: Combatant) -> Dict[str, Any]:

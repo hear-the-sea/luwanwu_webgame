@@ -5,19 +5,19 @@
 from __future__ import annotations
 
 import random
-from typing import Any, Dict, List, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING, cast
 
 from .damage_application import apply_damage_results
 from .damage_calculation import calculate_attack_damage, process_status_effects
 from .target_selection import is_ranged_attack, select_attack_targets
-from .types import AttackLogEntry, AttackType
-from .utils import alive, calculate_dodge_chance
+from .types import AttackLogEntry, AttackSkill, AttackType
+from .utils import calculate_dodge_chance
 
 if TYPE_CHECKING:
     from ..combatants import Combatant
 
 
-def _trigger_attack_skills(actor: "Combatant", rng: random.Random) -> List[Dict[str, Any]]:
+def _trigger_attack_skills(actor: "Combatant", rng: random.Random) -> list[AttackSkill]:
     """
     触发本次攻击可用的技能集合。
 
@@ -30,7 +30,7 @@ def _trigger_attack_skills(actor: "Combatant", rng: random.Random) -> List[Dict[
     return trigger_skills(actor, rng)
 
 
-def _finalize_attack_round(actor: "Combatant", action_logs: List[AttackLogEntry]) -> AttackLogEntry | None:
+def _finalize_attack_round(actor: "Combatant", action_logs: list[AttackLogEntry]) -> AttackLogEntry | None:
     """
     完成本次行动的统一结算：
     - 标记行动完成（`has_acted_this_round` / `last_round_acted`）
@@ -49,11 +49,11 @@ def _finalize_attack_round(actor: "Combatant", action_logs: List[AttackLogEntry]
 
 def perform_attack(
     actor: "Combatant",
-    attacker_team: List["Combatant"],
-    defender_team: List["Combatant"],
+    attacker_team: list["Combatant"],
+    defender_team: list["Combatant"],
     rng: random.Random,
     round_priority: int = 0,
-) -> Dict[str, Any] | None:
+) -> dict[str, Any] | None:
     """
     执行一次单位攻击行动（可能包含多目标技能）。
 
@@ -67,9 +67,9 @@ def perform_attack(
 
     selection = select_attack_targets(actor, attacker_team, defender_team, rng, _trigger_attack_skills)
     if selection is None:
-        return _finalize_attack_round(actor, [])
+        return cast(dict[str, Any] | None, _finalize_attack_round(actor, []))
 
-    action_logs: List[AttackLogEntry] = []
+    action_logs: list[AttackLogEntry] = []
     actor_defeated = False
     for idx, current_target in enumerate(selection.engaged_targets):
         dodge_chance = calculate_dodge_chance(current_target)
@@ -137,4 +137,4 @@ def perform_attack(
         if actor_defeated:
             break
 
-    return _finalize_attack_round(actor, action_logs)
+    return cast(dict[str, Any] | None, _finalize_attack_round(actor, action_logs))

@@ -36,16 +36,27 @@ SET_STAT_FIELD_MAP = {
 }
 
 
-def compute_set_bonus(gear_items) -> Dict[str, int]:
-    """
-    计算装备列表提供的套装加成。
+def _normalize_set_bonus_definition(raw_bonus) -> tuple[int | None, dict]:
+    bonus_def = raw_bonus or {}
+    if not isinstance(bonus_def, dict):
+        if isinstance(bonus_def, (list, tuple)):
+            bonus_def = {"bonus": bonus_def}
+        else:
+            return None, {}
 
-    Args:
-        gear_items: 装备对象列表（需包含template属性）
+    pieces = bonus_def.get("pieces")
+    bonuses = bonus_def.get("bonus") or bonus_def.get("bonuses") or bonus_def
+    if not isinstance(bonuses, (dict, list, tuple)):
+        if hasattr(bonuses, "get"):
+            bonuses = [bonuses]
+        else:
+            bonuses = {}
+    if not isinstance(bonuses, dict):
+        return pieces, {}
+    return pieces, bonuses
 
-    Returns:
-        加成属性字典 {"attack": 10, "defense": 5}
-    """
+
+def _collect_set_info(gear_items) -> Dict[str, Dict[str, object]]:
     sets: Dict[str, Dict[str, object]] = {}
     for gear in gear_items:
         tpl = getattr(gear, "template", None)
@@ -54,35 +65,22 @@ def compute_set_bonus(gear_items) -> Dict[str, int]:
         set_key = getattr(tpl, "set_key", "") or ""
         if not set_key:
             continue
-        bonus_def = getattr(tpl, "set_bonus", None) or {}
-        if not isinstance(bonus_def, dict):
-            # 兼容旧数据或错误格式，如果是列表等其他类型，尝试直接作为 bonus 列表处理
-            if isinstance(bonus_def, (list, tuple)):
-                bonus_def = {"bonus": bonus_def}
-            else:
-                continue
-
-        pieces = bonus_def.get("pieces")
-        bonuses = bonus_def.get("bonus") or bonus_def.get("bonuses") or bonus_def
-
-        # 确保 bonuses 是字典或列表，避免后续处理出错
-        if not isinstance(bonuses, (dict, list, tuple)):
-            # 如果 bonuses 既不是字典也不是列表，可能是旧格式的直接嵌套
-            # 这里尝试尽力而为，如果它看起来像是一个单项加成，包装成列表
-            if hasattr(bonuses, "get"):
-                bonuses = [bonuses]
-            else:
-                bonuses = {}
+        pieces, bonuses = _normalize_set_bonus_definition(getattr(tpl, "set_bonus", None))
+        if not bonuses:
+            continue
 
         info = sets.setdefault(set_key, {"count": 0, "pieces": pieces, "bonus": bonuses})
         info["count"] = int(info.get("count") or 0) + 1  # type: ignore[arg-type, call-overload]
         if info.get("pieces") is None and pieces is not None:
             info["pieces"] = pieces
-        if info.get("bonus") is None and bonuses:
+        if info.get("bonus") is None:
             info["bonus"] = bonuses
+    return sets
 
+
+def _accumulate_active_set_bonuses(sets: Dict[str, Dict[str, object]]) -> Dict[str, int]:
     bonuses_out: Dict[str, int] = {}
-    for _, info in sets.items():
+    for info in sets.values():
         required = int(info.get("pieces") or info.get("count") or 0)  # type: ignore[arg-type, call-overload]
         if int(info.get("count") or 0) < required:  # type: ignore[arg-type, call-overload]
             continue
@@ -95,3 +93,17 @@ def compute_set_bonus(gear_items) -> Dict[str, int]:
             except (TypeError, ValueError):
                 continue
     return bonuses_out
+
+
+def compute_set_bonus(gear_items) -> Dict[str, int]:
+    """
+    计算装备列表提供的套装加成。
+
+    Args:
+        gear_items: 装备对象列表（需包含template属性）
+
+    Returns:
+        加成属性字典 {"attack": 10, "defense": 5}
+    """
+    sets = _collect_set_info(gear_items)
+    return _accumulate_active_set_bonuses(sets)

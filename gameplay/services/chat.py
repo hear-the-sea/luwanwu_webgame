@@ -6,11 +6,9 @@ from __future__ import annotations
 import logging
 from typing import Tuple
 
-from django.db import transaction
-
 from gameplay.models import Manor
-from gameplay.services.inventory import consume_inventory_item, get_item_quantity
 from core.exceptions import InsufficientStockError
+from gameplay.services.inventory import consume_inventory_item
 
 logger = logging.getLogger(__name__)
 
@@ -35,11 +33,6 @@ def consume_trumpet(user_id: int) -> Tuple[bool, str]:
     except Manor.DoesNotExist:
         return False, "庄园不存在，无法发言"
 
-    # 检查数量（非事务内快速检查，减少不必要的锁竞争）
-    quantity = get_item_quantity(manor, TRUMPET_ITEM_KEY)
-    if quantity < 1:
-        return False, "小喇叭不足，无法在世界频道发言"
-
     try:
         # 消耗道具（内部包含事务处理）
         consume_inventory_item(manor, TRUMPET_ITEM_KEY, 1)
@@ -49,6 +42,6 @@ def consume_trumpet(user_id: int) -> Tuple[bool, str]:
     except ValueError as exc:
         logger.warning("Failed to consume trumpet due to invalid input: %s", exc)
         return False, "扣除小喇叭失败，请稍后重试"
-    except Exception as exc:
+    except Exception:
         logger.exception("Unexpected error when consuming trumpet for user_id=%s", user_id)
         return False, "扣除小喇叭失败，请稍后重试"

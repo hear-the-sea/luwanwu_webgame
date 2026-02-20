@@ -7,13 +7,14 @@ from __future__ import annotations
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db.models import Prefetch
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
-from django.db.models import Prefetch
+from typing import Any
 
 from core.exceptions import GameError
 from core.utils import safe_int_list, sanitize_error_message
@@ -39,79 +40,146 @@ from gameplay.services.recruitment import get_player_troops
 MISSION_CARD_KEY = "mission_card"
 
 
+def _collect_mission_asset_keys(missions: list[MissionTemplate]) -> tuple[set[str], set[str], set[str]]:
+    enemy_keys: set[str] = set()
+    troop_keys: set[str] = set()
+    drop_keys: set[str] = set()
+
+    for mission in missions:
+        for entry in mission.enemy_guests or []:
+            if isinstance(entry, str):
+                enemy_keys.add(entry)
+            elif isinstance(entry, dict):
+                key = entry.get("key")
+                if key:
+                    enemy_keys.add(key)
+        troop_keys.update((mission.enemy_troops or {}).keys())
+        drop_keys.update((mission.drop_table or {}).keys())
+
+    return enemy_keys, troop_keys, drop_keys
+
+
+def _parse_drop_value(value: Any) -> tuple[float | None, int | None]:
+    chance = None
+    count = None
+    if isinstance(value, dict):
+        raw_chance = value.get("chance", value.get("probability"))
+        raw_count = value.get("count", value.get("quantity", value.get("amount")))
+        try:
+            chance = float(raw_chance) if raw_chance is not None else None
+        except (TypeError, ValueError):
+            chance = None
+        try:
+            count = int(raw_count) if raw_count is not None else None
+        except (TypeError, ValueError):
+            count = None
+    else:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            number = None
+        if number is not None and 0 < number < 1:
+            chance = number
+            count = 1
+        elif number is not None and number >= 1:
+            count = int(number)
+
+    if chance is not None and count is None:
+        count = 1
+    return chance, count
+
+
+def _resolve_drop_label(
+    key: str,
+    drop_labels: dict[str, str],
+    item_templates: dict[str, Any],
+    book_labels: dict[str, str],
+) -> str:
+    label = drop_labels.get(key, key)
+    if label != key:
+        return label
+    tpl = item_templates.get(key)
+    if tpl:
+        return tpl.name
+    if key in book_labels:
+        return book_labels[key]
+    return key
+
+
+def _build_drop_lists(
+    selected_mission: MissionTemplate,
+    drop_labels: dict[str, str],
+    item_templates: dict[str, Any],
+    book_labels: dict[str, str],
+    loot_rarities: dict[str, str],
+) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    guaranteed_drops: list[dict[str, str]] = []
+    probability_drops: list[dict[str, str]] = []
+
+    for key, val in (selected_mission.drop_table or {}).items():
+        label = _resolve_drop_label(key, drop_labels, item_templates, book_labels)
+        chance, count = _parse_drop_value(val)
+        rarity = loot_rarities.get(key) or "default"
+
+        display_label = f"{label} x{count}" if (count is not None and count >= 1) else label
+        if chance is not None and 0 < chance < 1:
+            probability_drops.append({"label": display_label, "rarity": rarity})
+        else:
+            guaranteed_drops.append({"label": display_label, "rarity": rarity})
+
+    for key, val in (selected_mission.probability_drop_table or {}).items():
+        label = _resolve_drop_label(key, drop_labels, item_templates, book_labels)
+        _, count = _parse_drop_value(val)
+        display_label = f"{label} x{count}" if (count is not None and count >= 1) else label
+        rarity = loot_rarities.get(key) or "default"
+        probability_drops.append({"label": display_label, "rarity": rarity})
+
+    return guaranteed_drops, probability_drops
+
+
 class TaskBoardView(LoginRequiredMixin, TemplateView):
     """任务面板页面"""
 
     template_name = "gameplay/tasks.html"
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        manor = ensure_manor(self.request.user)
-        refresh_manor_state(manor)
-        refresh_mission_runs(manor)
-        missions = list(MissionTemplate.objects.all().order_by("id"))
-        missions_by_key = {mission.key: mission for mission in missions}
-        attempts = bulk_mission_attempts_today(manor, missions)
-        extra_attempts = bulk_get_mission_extra_attempts(manor, missions)
-        enemy_keys = set()
-        troop_keys = set()
-        drop_keys = set()
-        for mission in missions:
-            # enemy_guests 支持字符串和字典两种格式
-            for entry in (mission.enemy_guests or []):
-                if isinstance(entry, str):
-                    enemy_keys.add(entry)
-                elif isinstance(entry, dict):
-                    key = entry.get("key")
-                    if key:
-                        enemy_keys.add(key)
-            troop_keys.update((mission.enemy_troops or {}).keys())
-            drop_keys.update((mission.drop_table or {}).keys())
-        guest_templates = {tpl.key: tpl for tpl in GuestTemplate.objects.filter(key__in=enemy_keys).only('key', 'name', 'avatar')}
-        guest_labels = {key: tpl.name for key, tpl in guest_templates.items()}
-
-        # 加载士兵模板
-        from battle.models import TroopTemplate
-        troop_templates_objs = {tpl.key: tpl for tpl in TroopTemplate.objects.filter(key__in=troop_keys).only('key', 'name')}
-
-        from gameplay.utils.template_loader import get_item_templates_by_keys
-        item_templates = get_item_templates_by_keys(drop_keys)
-        loot_labels = {key: tpl.name for key, tpl in item_templates.items()}
-        loot_rarities = {key: (tpl.rarity or "default") for key, tpl in item_templates.items()}
-        book_labels = {book.key: book.name for book in SkillBook.objects.filter(key__in=drop_keys)}
-        loot_labels.update(book_labels)
-
-        # 计算每个任务的剩余次数（包含额外次数）
-        mission_data = []
+    def _build_mission_data(
+        self,
+        missions: list[MissionTemplate],
+        attempts: dict[str, int],
+        extra_attempts: dict[str, int],
+    ) -> list[dict[str, Any]]:
+        mission_data: list[dict[str, Any]] = []
         for mission in missions:
             used = attempts.get(mission.key, 0)
             extra = extra_attempts.get(mission.key, 0)
             daily_limit = mission.daily_limit + extra
             remaining = max(0, daily_limit - used)
-            mission_data.append({
-                "mission": mission,
-                "used": used,
-                "remaining": remaining,
-                "daily_limit": daily_limit,
-                "extra": extra,
-            })
-        selected_key = self.request.GET.get("mission")
+            mission_data.append(
+                {
+                    "mission": mission,
+                    "used": used,
+                    "remaining": remaining,
+                    "daily_limit": daily_limit,
+                    "extra": extra,
+                }
+            )
+        return mission_data
+
+    def _build_selection_summary(
+        self,
+        selected_key: str | None,
+        missions_by_key: dict[str, MissionTemplate],
+        attempts: dict[str, int],
+        extra_attempts: dict[str, int],
+    ) -> tuple[MissionTemplate | None, int, int, int]:
         selected_mission = missions_by_key.get(selected_key) if selected_key else None
         selected_attempts = attempts.get(selected_key, 0) if selected_key else 0
         selected_extra = extra_attempts.get(selected_key, 0) if selected_key else 0
-        selected_daily_limit = (
-            (selected_mission.daily_limit + selected_extra) if selected_mission else 0
-        )
+        selected_daily_limit = (selected_mission.daily_limit + selected_extra) if selected_mission else 0
         selected_remaining = max(0, selected_daily_limit - selected_attempts)
-        available_guests = manor.guests.filter(status=GuestStatus.IDLE).select_related("template").only(
-            'id', 'level', 'current_hp', 'status', 'custom_name',
-            'hp_bonus', 'defense_stat',  # max_hp 计算所需
-            'template__id', 'template__key', 'template__name', 'template__avatar', 'template__rarity'
-        )
+        return selected_mission, selected_attempts, selected_daily_limit, selected_remaining
 
-        # 获取任务卡数量
-        mission_card_count = get_item_quantity(manor, MISSION_CARD_KEY)
-
+    def _build_troop_config(self) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
         from battle.troops import load_troop_templates
 
         troop_templates = load_troop_templates()
@@ -128,6 +196,50 @@ class TaskBoardView(LoginRequiredMixin, TemplateView):
             }
             for key, data in troop_template_items
         ]
+        return troop_templates, config_items
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        manor = ensure_manor(self.request.user)
+        refresh_manor_state(manor)
+        refresh_mission_runs(manor)
+        missions = list(MissionTemplate.objects.all().order_by("id"))
+        missions_by_key = {mission.key: mission for mission in missions}
+        attempts = bulk_mission_attempts_today(manor, missions)
+        extra_attempts = bulk_get_mission_extra_attempts(manor, missions)
+        enemy_keys, troop_keys, drop_keys = _collect_mission_asset_keys(missions)
+        guest_templates = {tpl.key: tpl for tpl in GuestTemplate.objects.filter(key__in=enemy_keys).only('key', 'name', 'avatar')}
+        guest_labels = {key: tpl.name for key, tpl in guest_templates.items()}
+
+        # 加载士兵模板
+        from battle.models import TroopTemplate
+        troop_templates_objs = {tpl.key: tpl for tpl in TroopTemplate.objects.filter(key__in=troop_keys).only('key', 'name')}
+
+        from gameplay.utils.template_loader import get_item_templates_by_keys
+        item_templates = get_item_templates_by_keys(drop_keys)
+        loot_labels = {key: tpl.name for key, tpl in item_templates.items()}
+        loot_rarities = {key: (tpl.rarity or "default") for key, tpl in item_templates.items()}
+        book_labels = {book.key: book.name for book in SkillBook.objects.filter(key__in=drop_keys)}
+        loot_labels.update(book_labels)
+
+        mission_data = self._build_mission_data(missions, attempts, extra_attempts)
+        selected_key = self.request.GET.get("mission")
+        selected_mission, selected_attempts, selected_daily_limit, selected_remaining = self._build_selection_summary(
+            selected_key,
+            missions_by_key,
+            attempts,
+            extra_attempts,
+        )
+        available_guests = manor.guests.filter(status=GuestStatus.IDLE).select_related("template").only(
+            'id', 'level', 'current_hp', 'status', 'custom_name',
+            'hp_bonus', 'defense_stat',  # max_hp 计算所需
+            'template__id', 'template__key', 'template__name', 'template__avatar', 'template__rarity'
+        )
+
+        # 获取任务卡数量
+        mission_card_count = get_item_quantity(manor, MISSION_CARD_KEY)
+
+        troop_templates, config_items = self._build_troop_config()
         active_runs = (
             manor.mission_runs.select_related("mission", "battle_report")
             .prefetch_related(Prefetch("guests", queryset=Guest.objects.select_related("template")))
@@ -148,90 +260,15 @@ class TaskBoardView(LoginRequiredMixin, TemplateView):
         context["selected_drop_items"] = []
         context["selected_probability_drop_items"] = []
         if selected_mission:
-            # 分离guaranteed drops和probability drops
-            drops = selected_mission.drop_table or {}
-            guaranteed_drops = []
-            probability_drops_from_table = []
-
-            def parse_drop_value(value):
-                chance = None
-                count = None
-                if isinstance(value, dict):
-                    raw_chance = value.get("chance", value.get("probability"))
-                    raw_count = value.get("count", value.get("quantity", value.get("amount")))
-                    try:
-                        chance = float(raw_chance) if raw_chance is not None else None
-                    except (TypeError, ValueError):
-                        chance = None
-                    try:
-                        count = int(raw_count) if raw_count is not None else None
-                    except (TypeError, ValueError):
-                        count = None
-                else:
-                    try:
-                        number = float(value)
-                    except (TypeError, ValueError):
-                        number = None
-                    if number is not None and number < 1 and number > 0:
-                        chance = number
-                        count = 1
-                    elif number is not None and number >= 1:
-                        count = int(number)
-                if chance is not None and count is None:
-                    count = 1
-                return chance, count
-
-            for key, val in drops.items():
-                label = drop_labels.get(key, key)
-                if label == key:  # fallback: use pre-loaded templates
-                    tpl = item_templates.get(key)
-                    if tpl:
-                        label = tpl.name
-                    elif key in book_labels:
-                        label = book_labels[key]
-
-                chance, count = parse_drop_value(val)
-
-                rarity = loot_rarities.get(key) or "default"
-
-                # 区分概率掉落（<1）和确定掉落（>=1）
-                if chance is not None and chance < 1 and chance > 0:
-                    # 概率掉落 - 不显示具体概率
-                    display_label = label
-                    if count and count > 1:
-                        display_label = f"{label} x{count}"
-                    probability_drops_from_table.append({"label": display_label, "rarity": rarity})
-                else:
-                    # 确定掉落
-                    display_label = label
-                    if count is not None and count >= 1:
-                        display_label = f"{label} x{count}"
-                    guaranteed_drops.append({"label": display_label, "rarity": rarity})
-
+            guaranteed_drops, probability_drops = _build_drop_lists(
+                selected_mission,
+                drop_labels,
+                item_templates,
+                book_labels,
+                loot_rarities,
+            )
             context["selected_drop_items"] = guaranteed_drops
-
-            # 处理probability_drop_table中的概率掉落
-            probability_drops = selected_mission.probability_drop_table or {}
-            for key, val in probability_drops.items():
-                label = drop_labels.get(key, key)
-                if label == key:  # fallback: use pre-loaded templates
-                    tpl = item_templates.get(key)
-                    if tpl:
-                        label = tpl.name
-                    elif key in book_labels:
-                        label = book_labels[key]
-
-                chance, count = parse_drop_value(val)
-
-                display_label = label
-                # 只显示名称和数量，不显示概率
-                if count is not None and count >= 1:
-                    display_label = f"{label} x{count}"
-
-                rarity = loot_rarities.get(key) or "default"
-                probability_drops_from_table.append({"label": display_label, "rarity": rarity})
-
-            context["selected_probability_drop_items"] = probability_drops_from_table
+            context["selected_probability_drop_items"] = probability_drops
         context["available_guests"] = available_guests
         context["troop_config"] = config_items
         context["player_troops"] = get_player_troops(manor)

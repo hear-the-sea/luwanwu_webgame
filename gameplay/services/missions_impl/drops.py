@@ -7,40 +7,43 @@ from ...models import InventoryItem, ItemTemplate, Manor, ResourceEvent, Resourc
 from ..resources import grant_resources
 
 
-def award_mission_drops(manor: Manor, drops: Dict[str, int], note: str) -> None:
-    if not drops:
-        return
-
+def _split_drop_payload(drops: Dict[str, int]) -> tuple[Dict[str, int], Dict[str, int]]:
     resource_keys = set(ResourceType.values)
     resources = {k: v for k, v in drops.items() if k in resource_keys}
-    item_keys = {k: v for k, v in drops.items() if k not in resource_keys}
-    if resources:
-        grant_resources(manor, resources, note, ResourceEvent.Reason.BATTLE_REWARD)
+    items = {k: v for k, v in drops.items() if k not in resource_keys}
+    return resources, items
 
+
+def _load_item_templates_with_skillbook_fallback(item_keys: Dict[str, int]) -> Dict[str, ItemTemplate]:
     if not item_keys:
-        return
+        return {}
 
     from guests.models import SkillBook
 
     templates = {it.key: it for it in ItemTemplate.objects.filter(key__in=item_keys.keys())}
     missing_keys = set(item_keys.keys()) - set(templates.keys())
-    if missing_keys:
-        books = {book.key: book for book in SkillBook.objects.filter(key__in=missing_keys)}
-        for key in list(missing_keys):
-            book = books.get(key)
-            if not book:
-                continue
-            tmpl, _ = ItemTemplate.objects.get_or_create(
-                key=key,
-                defaults={
-                    "name": book.name,
-                    "description": book.description,
-                    "effect_type": ItemTemplate.EffectType.SKILL_BOOK,
-                    "effect_payload": {"skill_key": book.skill.key, "skill_name": book.skill.name},
-                },
-            )
-            templates[key] = tmpl
+    if not missing_keys:
+        return templates
 
+    books = {book.key: book for book in SkillBook.objects.filter(key__in=missing_keys)}
+    for key in list(missing_keys):
+        book = books.get(key)
+        if not book:
+            continue
+        tmpl, _ = ItemTemplate.objects.get_or_create(
+            key=key,
+            defaults={
+                "name": book.name,
+                "description": book.description,
+                "effect_type": ItemTemplate.EffectType.SKILL_BOOK,
+                "effect_payload": {"skill_key": book.skill.key, "skill_name": book.skill.name},
+            },
+        )
+        templates[key] = tmpl
+    return templates
+
+
+def _upsert_warehouse_items(manor: Manor, item_keys: Dict[str, int], templates: Dict[str, ItemTemplate]) -> None:
     template_ids = [templates[key].id for key in item_keys.keys() if key in templates]
     existing_items = {
         item.template_id: item
@@ -75,6 +78,21 @@ def award_mission_drops(manor: Manor, drops: Dict[str, int], note: str) -> None:
         InventoryItem.objects.bulk_create(to_create)
     if to_update:
         InventoryItem.objects.bulk_update(to_update, ["quantity"])
+
+
+def award_mission_drops(manor: Manor, drops: Dict[str, int], note: str) -> None:
+    if not drops:
+        return
+
+    resources, item_keys = _split_drop_payload(drops)
+    if resources:
+        grant_resources(manor, resources, note, ResourceEvent.Reason.BATTLE_REWARD)
+
+    if not item_keys:
+        return
+
+    templates = _load_item_templates_with_skillbook_fallback(item_keys)
+    _upsert_warehouse_items(manor, item_keys, templates)
 
 
 def resolve_defense_drops_if_missing(report, mission_drop_table: dict) -> dict:

@@ -16,4 +16,5 @@ logger = logging.getLogger(__name__)
 
 @app.task(bind=True)
 def debug_task(self):
-    logger.debug(f"Request: {self.request!r}")
+    # 安全优化：只记录必要的调试信息，避免打印完整请求对象（可能包含敏感参数）
+    logger.debug("Debug task executed: id=%s, task=%s", self.request.id, self.request.task)

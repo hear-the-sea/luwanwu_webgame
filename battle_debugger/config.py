@@ -231,6 +231,22 @@ class ConfigLoader:
         else:
             setattr(obj, final_key, value)
 
+    def _validate_party_guests(self, guests: List[GuestConfig], side_name: str) -> List[str]:
+        errors: List[str] = []
+        for i, guest in enumerate(guests):
+            if not guest.template:
+                errors.append(f"{side_name}门客{i}: 缺少template")
+            if guest.level < 1 or guest.level > 100:
+                errors.append(f"{side_name}门客{i}: 等级必须在1-100之间")
+        return errors
+
+    def _validate_party_troops(self, troops: Dict[str, int], side_name: str) -> List[str]:
+        errors: List[str] = []
+        for troop_key, count in troops.items():
+            if count <= 0:
+                errors.append(f"{side_name}小兵 {troop_key}: 数量必须大于0")
+        return errors
+
     def validate(self, config: BattleConfig) -> List[str]:
         """
         校验配置
@@ -241,42 +257,22 @@ class ConfigLoader:
         Returns:
             错误列表，空列表表示无错误
         """
-        errors = []
+        errors: List[str] = []
 
-        # 检查至少有一方有单位
         attacker_has_units = bool(config.attacker.guests or config.attacker.troops)
         defender_has_units = bool(config.defender.guests or config.defender.troops)
 
         if not attacker_has_units:
             errors.append("攻方必须至少有门客或小兵")
-
         if not defender_has_units:
             errors.append("守方必须至少有门客或小兵")
 
-        # 检查门客配置
-        for i, guest in enumerate(config.attacker.guests):
-            if not guest.template:
-                errors.append(f"攻方门客{i}: 缺少template")
-            if guest.level < 1 or guest.level > 100:
-                errors.append(f"攻方门客{i}: 等级必须在1-100之间")
-
-        for i, guest in enumerate(config.defender.guests):
-            if not guest.template:
-                errors.append(f"守方门客{i}: 缺少template")
-            if guest.level < 1 or guest.level > 100:
-                errors.append(f"守方门客{i}: 等级必须在1-100之间")
-
-        # 检查小兵数量
-        for troop_key, count in config.attacker.troops.items():
-            if count <= 0:
-                errors.append(f"攻方小兵 {troop_key}: 数量必须大于0")
-
-        for troop_key, count in config.defender.troops.items():
-            if count <= 0:
-                errors.append(f"守方小兵 {troop_key}: 数量必须大于0")
+        errors.extend(self._validate_party_guests(config.attacker.guests, "攻方"))
+        errors.extend(self._validate_party_guests(config.defender.guests, "守方"))
+        errors.extend(self._validate_party_troops(config.attacker.troops, "攻方"))
+        errors.extend(self._validate_party_troops(config.defender.troops, "守方"))
 
         return errors
-
     def list_presets(self) -> List[str]:
         """
         列出所有可用的预设配置

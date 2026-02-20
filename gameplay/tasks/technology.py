@@ -5,9 +5,13 @@ import logging
 from celery import shared_task
 from django.utils import timezone
 
+from common.utils.celery import safe_apply_async_with_dedup
 from gameplay.services.technology import finalize_technology_upgrade
 
 logger = logging.getLogger(__name__)
+
+# 任务去重超时时间（秒）
+_TASK_DEDUP_TIMEOUT = 5
 
 
 @shared_task(name="gameplay.complete_technology_upgrade", bind=True, max_retries=2, default_retry_delay=30)
@@ -20,18 +24,26 @@ def complete_technology_upgrade(self, tech_id: int):
     try:
         tech = PlayerTechnology.objects.select_related("manor", "manor__user").filter(pk=tech_id).first()
         if not tech:
-            logger.warning(f"PlayerTechnology {tech_id} not found")
+            logger.warning("PlayerTechnology %d not found", tech_id)
             return "not_found"
         now = timezone.now()
         if tech.upgrade_complete_at and tech.upgrade_complete_at > now:
             remaining = int((tech.upgrade_complete_at - now).total_seconds())
             if remaining > 0:
-                complete_technology_upgrade.apply_async(args=[tech_id], countdown=remaining)
+                safe_apply_async_with_dedup(
+                    complete_technology_upgrade,
+                    dedup_key=f"technology:upgrade:{tech_id}",
+                    dedup_timeout=_TASK_DEDUP_TIMEOUT,
+                    args=[tech_id],
+                    countdown=remaining,
+                    logger=logger,
+                    log_message=f"technology upgrade reschedule failed: tech_id={tech_id}",
+                )
                 return "rescheduled"
         finalized = finalize_technology_upgrade(tech, send_notification=True)
         return "completed" if finalized else "skipped"
     except Exception as exc:
-        logger.exception(f"Failed to complete technology upgrade {tech_id}: {exc}")
+        logger.exception("Failed to complete technology upgrade %d: %s", tech_id, exc)
         raise self.retry(exc=exc)
 
 
@@ -54,5 +66,5 @@ def scan_technology_upgrades(limit: int = 200):
             if finalize_technology_upgrade(tech, send_notification=True):
                 count += 1
         except Exception:
-            logger.exception(f"Failed to finalize technology {tech.id}")
+            logger.exception("Failed to finalize technology %d", tech.id)
     return count

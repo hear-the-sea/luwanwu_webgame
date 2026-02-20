@@ -481,11 +481,16 @@ button:disabled {
 }
 
 .flash.success,
-.flash.info,
-.flash.warning {
+.flash.info {
   background: #E8F5E9;
   color: var(--accent-green);
   border-color: #A5D6A7;
+}
+
+.flash.warning {
+  background: #FFF8E6;
+  color: #B45309;
+  border-color: #FCD34D;
 }
 
 /* 仪表盘 */

@@ -1,38 +1,57 @@
 from __future__ import annotations
 
 import logging
+from typing import Callable
 
 from celery import shared_task
 from django.utils import timezone
 
+from common.utils.celery import safe_apply_async_with_dedup
+
 logger = logging.getLogger(__name__)
+
+# ============ 忠诚度与叛逃处理常量 ============
+DEFECTION_PROBABILITY = 0.3  # 低忠诚度门客每日叛逃概率 (30%)
+DEFECTION_BATCH_SIZE = 500  # 叛逃批量处理大小
+DEFECTION_QUERY_CHUNK_SIZE = 2000  # 叛逃候选查询分块大小
+
+# 任务去重超时时间（秒）
+_TASK_DEDUP_TIMEOUT = 5
 
 
 @shared_task(name="guests.complete_training", bind=True, max_retries=2, default_retry_delay=30)
-def complete_guest_training(self, guest_id: int):
+def complete_guest_training(self, guest_id: int) -> str:
     from guests.models import Guest
     from guests.services import finalize_guest_training
 
     try:
         guest = Guest.objects.select_related("manor").filter(pk=guest_id).first()
         if not guest:
-            logger.warning(f"Guest {guest_id} not found")
+            logger.warning("Guest %d not found", guest_id)
             return "not_found"
         now = timezone.now()
         if guest.training_complete_at and guest.training_complete_at > now:
             remaining = int((guest.training_complete_at - now).total_seconds())
             if remaining > 0:
-                complete_guest_training.apply_async(args=[guest_id], countdown=remaining, queue="timer")
+                safe_apply_async_with_dedup(
+                    complete_guest_training,
+                    dedup_key=f"guest:training:{guest_id}",
+                    dedup_timeout=_TASK_DEDUP_TIMEOUT,
+                    args=[guest_id],
+                    countdown=remaining,
+                    logger=logger,
+                    log_message=f"guest training reschedule failed: guest_id={guest_id}",
+                )
                 return "rescheduled"
         finalized = finalize_guest_training(guest, now=now)
         return "completed" if finalized else "skipped"
     except Exception as exc:
-        logger.exception(f"Failed to complete guest training {guest_id}: {exc}")
+        logger.exception("Failed to complete guest training %d: %s", guest_id, exc)
         raise self.retry(exc=exc)
 
 
 @shared_task(name="guests.scan_training")
-def scan_guest_training(limit: int = 200):
+def scan_guest_training(limit: int = 200) -> int:
     from guests.models import Guest
     from guests.services import finalize_guest_training
 
@@ -48,99 +67,117 @@ def scan_guest_training(limit: int = 200):
             if finalize_guest_training(guest, now=now):
                 count += 1
         except Exception:
-            logger.exception(f"Failed to finalize guest training {guest.id}")
+            logger.exception("Failed to finalize guest training %d", guest.id)
     return count
 
 
 @shared_task(name="guests.process_daily_loyalty", bind=True, max_retries=2, default_retry_delay=60)
-def process_daily_loyalty(self):
+def process_daily_loyalty(self) -> str:
     """
     处理每日门客忠诚度变化
     建议每日凌晨执行一次
     """
-    import random
+    import hashlib
     from datetime import timedelta
 
-    from guests.models import Guest, SalaryPayment, GuestDefection
+    from django.db.models import F, Q
+    from django.db.models.functions import Greatest, Least
+
     from gameplay.services.messages import create_message
+    from guests.models import Guest, SalaryPayment
 
     try:
         today = timezone.now().date()
         yesterday = today - timedelta(days=1)
 
-        # 批量查询所有昨日已支付工资的 guest_ids（优化 N+1）
-        paid_guest_ids = set(
-            SalaryPayment.objects.filter(for_date=yesterday).values_list("guest_id", flat=True)
+        paid_guest_ids_qs = SalaryPayment.objects.filter(for_date=yesterday).values_list("guest_id", flat=True)
+        base_qs = Guest.objects.filter(Q(loyalty_processed_for_date__lt=today) | Q(loyalty_processed_for_date__isnull=True))
+
+        paid_qs = base_qs.filter(id__in=paid_guest_ids_qs)
+        unpaid_qs = base_qs.exclude(id__in=paid_guest_ids_qs)
+
+        increased_count = paid_qs.update(
+            loyalty=Least(100, F("loyalty") + 1),
+            loyalty_processed_for_date=today,
+        )
+        decreased_count = unpaid_qs.update(
+            loyalty=Greatest(0, F("loyalty") - 1),
+            loyalty_processed_for_date=today,
         )
 
-        # 获取所有门客
-        guests = list(Guest.objects.select_related("manor__user", "template").all())
-
-        # 分类处理
-        to_increase = []  # 需要增加忠诚度的门客
-        to_decrease = []  # 需要减少忠诚度的门客
-        defection_candidates = []  # 可能叛逃的门客
-
-        for guest in guests:
-            paid = guest.id in paid_guest_ids
-
-            if paid:
-                # 支付了工资，忠诚度+1，最高100
-                if guest.loyalty < 100:
-                    guest.loyalty = min(100, guest.loyalty + 1)
-                    to_increase.append(guest)
-            else:
-                # 未支付工资，忠诚度-1
-                guest.loyalty = max(0, guest.loyalty - 1)
-                to_decrease.append(guest)
-
-                # 检查是否叛逃（忠诚度<30时有30%概率）
-                if guest.loyalty < 30 and random.random() < 0.3:
-                    defection_candidates.append(guest)
-
-        # 批量更新忠诚度（优化：减少数据库写入次数）
-        all_updated = to_increase + to_decrease
-        if all_updated:
-            Guest.objects.bulk_update(all_updated, ["loyalty"], batch_size=500)
-
-        # 处理叛逃（这些需要单独处理，因为涉及删除和发送消息）
+        # 处理叛逃：仅对未支付工资且 loyalty < 30 的候选做抽样，再对命中者逐个处理。
+        # 说明：概率逻辑必须在 Python 侧执行，避免 DB 随机函数带来不可控性能和可重复性问题。
         defection_count = 0
-        for guest in defection_candidates:
-            try:
-                # 记录叛逃信息
-                GuestDefection.objects.create(
-                    manor=guest.manor,
-                    guest_name=guest.display_name,
-                    guest_level=guest.level,
-                    guest_rarity=guest.rarity,
-                    loyalty_at_defection=guest.loyalty
-                )
+        batch: list[int] = []
 
-                # 发送邮件通知
-                create_message(
-                    manor=guest.manor,
-                    kind="system",
-                    title="【门客叛逃】门客离开了庄园",
-                    body=(
-                        f"由于长期未支付工资，您的门客 {guest.display_name} (Lv{guest.level}) "
-                        f"对您失去了信任，已经离开了庄园。\n\n"
-                        f"门客信息：\n"
-                        f"- 名称：{guest.display_name}\n"
-                        f"- 等级：{guest.level}\n"
-                        f"- 稀有度：{guest.get_rarity_display()}\n"
-                        f"- 叛逃时忠诚度：{guest.loyalty}\n\n"
-                        f"提示：请及时支付门客工资以保持他们的忠诚。"
-                    ),
-                )
+        # NOTE: `paid_qs`/`unpaid_qs` are derived from `base_qs` which filters by
+        # `loyalty_processed_for_date < today`. After the bulk updates above,
+        # those querysets would become empty if evaluated again.
+        # So for defections we re-select candidates by `loyalty_processed_for_date=today`.
+        defection_candidate_ids = (
+            Guest.objects.filter(loyalty_processed_for_date=today, loyalty__lt=30)
+            .exclude(id__in=paid_guest_ids_qs)
+            .values_list("id", flat=True)
+        )
 
-                # 删除门客
-                guest.delete()
-                defection_count += 1
-            except Exception:
-                logger.exception(f"Failed to process defection for guest {guest.id}")
+        for guest_id in defection_candidate_ids.iterator(chunk_size=DEFECTION_QUERY_CHUNK_SIZE):
+            guest_id_int = int(guest_id)
+            if _should_defect(guest_id_int, today, probability=DEFECTION_PROBABILITY, hasher=hashlib.sha256):
+                batch.append(guest_id_int)
+                if len(batch) >= DEFECTION_BATCH_SIZE:
+                    defection_count += _process_defection_batch(batch, create_message=create_message)
+                    batch = []
 
-        updated_count = len(all_updated)
+        if batch:
+            defection_count += _process_defection_batch(batch, create_message=create_message)
+
+        updated_count = increased_count + decreased_count
         return f"处理了 {updated_count} 个门客的忠诚度，{defection_count} 个门客叛逃"
     except Exception as exc:
-        logger.exception(f"Failed to process daily loyalty: {exc}")
+        logger.exception("Failed to process daily loyalty: %s", exc)
         raise self.retry(exc=exc)
+
+
+def _should_defect(guest_id: int, date_value, *, probability: float, hasher) -> bool:
+    payload = f"{date_value.isoformat()}:{int(guest_id)}".encode("utf-8")
+    digest = hasher(payload).digest()
+    value = int.from_bytes(digest[:8], "big") / 2**64
+    return value < float(probability)
+
+
+def _process_defection_batch(guest_ids: list[int], *, create_message: Callable) -> int:
+    from guests.models import Guest, GuestDefection
+
+    defection_count = 0
+    for guest in Guest.objects.select_related("manor__user", "template").filter(id__in=guest_ids):
+        try:
+            GuestDefection.objects.create(
+                manor=guest.manor,
+                guest_name=guest.display_name,
+                guest_level=guest.level,
+                guest_rarity=guest.rarity,
+                loyalty_at_defection=guest.loyalty,
+            )
+
+            create_message(
+                manor=guest.manor,
+                kind="system",
+                title="【门客叛逃】门客离开了庄园",
+                body=(
+                    f"由于长期未支付工资，您的门客 {guest.display_name} (Lv{guest.level}) "
+                    f"对您失去了信任，已经离开了庄园。\n\n"
+                    f"门客信息：\n"
+                    f"- 名称：{guest.display_name}\n"
+                    f"- 等级：{guest.level}\n"
+                    f"- 稀有度：{guest.get_rarity_display()}\n"
+                    f"- 叛逃时忠诚度：{guest.loyalty}\n\n"
+                    f"提示：请及时支付门客工资以保持他们的忠诚。"
+                ),
+            )
+
+            guest.delete()
+            defection_count += 1
+        except Exception:
+            logger.exception("Failed to process defection for guest %d", guest.id)
+
+    return defection_count

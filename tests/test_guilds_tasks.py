@@ -6,6 +6,12 @@ import pytest
 from django.utils import timezone
 
 
+def _dispatch_immediately(task, *, args=None, kwargs=None, countdown=None, logger=None, log_message=""):
+    del kwargs, countdown, logger, log_message
+    task.run(*(args or []))
+    return True
+
+
 @pytest.mark.django_db
 def test_guild_tech_daily_production_runs_and_updates_last_production_at(monkeypatch, django_user_model):
     from guilds.models import Guild, GuildTechnology
@@ -30,6 +36,7 @@ def test_guild_tech_daily_production_runs_and_updates_last_production_at(monkeyp
         "retry",
         lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("retry should not be called")),
     )
+    monkeypatch.setattr("common.utils.celery.safe_apply_async", _dispatch_immediately)
 
     founder = django_user_model.objects.create_user(username="g_founder", password="pass")
     guild = Guild.objects.create(name="G1", founder=founder, is_active=True)
@@ -38,7 +45,7 @@ def test_guild_tech_daily_production_runs_and_updates_last_production_at(monkeyp
         GuildTechnology.objects.create(guild=guild, tech_key=key, level=2)
 
     result = guild_tech_daily_production.run()
-    assert result == "processed 1 guilds"
+    assert result == "dispatched 1 guild tasks"
     assert sorted(calls) == [("equipment", 2), ("exp", 2), ("packs", 2)]
 
     updated = {t.tech_key: t.last_production_at for t in GuildTechnology.objects.filter(guild=guild)}
@@ -69,6 +76,7 @@ def test_guild_tech_daily_production_handles_inner_errors(monkeypatch, django_us
         "retry",
         lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("retry should not be called")),
     )
+    monkeypatch.setattr("common.utils.celery.safe_apply_async", _dispatch_immediately)
 
     founder = django_user_model.objects.create_user(username="g_founder2", password="pass")
     guild = Guild.objects.create(name="G2", founder=founder, is_active=True)
@@ -77,7 +85,7 @@ def test_guild_tech_daily_production_handles_inner_errors(monkeypatch, django_us
     GuildTechnology.objects.create(guild=guild, tech_key="resource_supply", level=2)
 
     result = guild_tech_daily_production.run()
-    assert result == "processed 1 guilds"
+    assert result == "dispatched 1 guild tasks"
     assert sorted(calls) == ["exp", "packs"]
 
 

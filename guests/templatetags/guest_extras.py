@@ -19,6 +19,90 @@ RARITY_CLASS_MAP = {
 
 RARITY_LABEL_MAP = {value: label for value, label in GuestRarity.choices}
 
+_GEAR_STAT_LABELS = {
+    "hp": "生命",
+    "force": "武力",
+    "intellect": "智力",
+    "defense": "防御",
+    "agility": "敏捷",
+    "luck": "运势",
+    "attack": "攻击",
+}
+
+
+def _iter_template_stat_parts(template) -> list[str]:
+    parts: list[str] = []
+    atk = getattr(template, "attack_bonus", 0)
+    if atk:
+        parts.append(f"{_GEAR_STAT_LABELS['attack']}+{atk}")
+    defense_bonus = getattr(template, "defense_bonus", 0)
+    if defense_bonus:
+        parts.append(f"{_GEAR_STAT_LABELS['defense']}+{defense_bonus}")
+    extra_stats = getattr(template, "extra_stats", {}) or {}
+    for key, value in extra_stats.items():
+        if value is None:
+            continue
+        parts.append(f"{_GEAR_STAT_LABELS.get(key, key)}+{value}")
+    return parts
+
+
+def _build_set_bonus_summary(set_key: str, set_bonus) -> str:
+    pieces = set_bonus.get("pieces") if isinstance(set_bonus, dict) else None
+    bonus_map = set_bonus.get("bonus") if isinstance(set_bonus, dict) else None
+    bonus_parts = []
+    if isinstance(bonus_map, dict):
+        for key, value in bonus_map.items():
+            if value is None:
+                continue
+            bonus_parts.append(f"{_GEAR_STAT_LABELS.get(key, key)}+{value}")
+    piece_text = f"{pieces}件" if pieces else "套装"
+    set_text = f"{set_key or '套装'}（{piece_text}）"
+    if bonus_parts:
+        set_text += "：" + "、".join(bonus_parts)
+    return set_text
+
+
+def _render_set_members(lines: list, members: list, set_desc: str, esc) -> None:
+    if not members:
+        return
+    if set_desc:
+        lines.append(format_html("套装：{}", esc(set_desc)))
+    else:
+        lines.append("套装")
+
+    member_texts = []
+    for member in members:
+        name = member.get("name") or ""
+        slot = member.get("slot") or ""
+        equipped = member.get("equipped")
+        cls = "equipped" if equipped else "unequipped"
+        member_texts.append((cls, esc(f"{slot}·{name}")))
+
+    lines.append(
+        format_html(
+            "成员：{}",
+            format_html_join(
+                "，",
+                '<span class="set-member {0}">{1}</span>',
+                member_texts,
+            ),
+        )
+    )
+
+
+def _render_set_bonus_lines(lines: list, bonus_map: dict, esc) -> None:
+    if not isinstance(bonus_map, dict) or not bonus_map:
+        return
+    bonus_parts = []
+    for key, value in bonus_map.items():
+        if value is None:
+            continue
+        label = _GEAR_STAT_LABELS.get(key, key)
+        bonus_parts.append(format_html("{}+{}", esc(label), value))
+    if bonus_parts:
+        lines.append("套装属性：")
+        lines.extend(bonus_parts)
+
 
 def _normalize_rarity(value: str | GuestRarity | None) -> GuestRarity | None:
     if not value:
@@ -54,51 +138,20 @@ def gear_summary(template) -> str:
     """
     if not template:
         return ""
-    stat_labels = {
-        "hp": "生命",
-        "force": "武力",
-        "intellect": "智力",
-        "defense": "防御",
-        "agility": "敏捷",
-        "luck": "运势",
-        "attack": "攻击",
-    }
+
     parts = []
     desc = getattr(template, "description", "")
     if desc:
         parts.append(str(desc))
-    stats = []
-    atk = getattr(template, "attack_bonus", 0)
-    if atk:
-        stats.append(f"{stat_labels['attack']}+{atk}")
-    defense_bonus = getattr(template, "defense_bonus", 0)
-    if defense_bonus:
-        stats.append(f"{stat_labels['defense']}+{defense_bonus}")
-    extra_stats = getattr(template, "extra_stats", {}) or {}
-    for key, value in extra_stats.items():
-        if value is None:
-            continue
-        label = stat_labels.get(key, key)
-        stats.append(f"{label}+{value}")
+
+    stats = _iter_template_stat_parts(template)
     if stats:
         parts.append("、".join(stats))
+
     set_key = getattr(template, "set_key", "") or ""
     set_bonus = getattr(template, "set_bonus", {}) or {}
     if set_key or set_bonus:
-        pieces = set_bonus.get("pieces") if isinstance(set_bonus, dict) else None
-        bonus_map = set_bonus.get("bonus") if isinstance(set_bonus, dict) else None
-        bonus_parts = []
-        if isinstance(bonus_map, dict):
-            for key, value in bonus_map.items():
-                if value is None:
-                    continue
-                label = stat_labels.get(key, key)
-                bonus_parts.append(f"{label}+{value}")
-        piece_text = f"{pieces}件" if pieces else "套装"
-        set_text = f"{set_key or '套装'}（{piece_text}）"
-        if bonus_parts:
-            set_text += "：" + "、".join(bonus_parts)
-        parts.append(set_text)
+        parts.append(_build_set_bonus_summary(set_key, set_bonus))
     return "；".join(parts)
 
 
@@ -110,31 +163,14 @@ def gear_tooltip(template, set_map=None) -> str:
     if not template:
         return ""
     esc = conditional_escape
-    stat_labels = {
-        "hp": "生命",
-        "force": "武力",
-        "intellect": "智力",
-        "defense": "防御",
-        "agility": "敏捷",
-        "luck": "运势",
-        "attack": "攻击",
-    }
     lines = []
     desc = getattr(template, "description", "") or ""
     if desc:
         lines.append(format_html("{}", esc(desc)))
+
     attrs = []
-    atk = getattr(template, "attack_bonus", 0)
-    if atk:
-        attrs.append(format_html("{} +{}", esc(stat_labels["attack"]), atk))
-    defense_bonus = getattr(template, "defense_bonus", 0)
-    if defense_bonus:
-        attrs.append(format_html("{} +{}", esc(stat_labels["defense"]), defense_bonus))
-    extra_stats = getattr(template, "extra_stats", {}) or {}
-    for key, value in extra_stats.items():
-        if value is None:
-            continue
-        label = stat_labels.get(key, key)
+    for part in _iter_template_stat_parts(template):
+        label, _, value = part.partition("+")
         attrs.append(format_html("{} +{}", esc(label), value))
     lines.extend(attrs)
 
@@ -144,38 +180,8 @@ def gear_tooltip(template, set_map=None) -> str:
         members = info.get("members") or []
         bonus_map = info.get("bonus") or {}
         set_desc = info.get("description") or ""
-        if members:
-            if set_desc:
-                lines.append(format_html("套装：{}", esc(set_desc)))
-            else:
-                lines.append("套装")
-            member_texts = []
-            for member in members:
-                name = member.get("name") or ""
-                slot = member.get("slot") or ""
-                equipped = member.get("equipped")
-                cls = "equipped" if equipped else "unequipped"
-                member_texts.append((cls, esc(f"{slot}·{name}")))
-            lines.append(
-                format_html(
-                    "成员：{}",
-                    format_html_join(
-                        "，",
-                        '<span class="set-member {0}">{1}</span>',
-                        member_texts,
-                    ),
-                )
-            )
-        if isinstance(bonus_map, dict) and bonus_map:
-            bonus_parts = []
-            for key, value in bonus_map.items():
-                if value is None:
-                    continue
-                label = stat_labels.get(key, key)
-                bonus_parts.append(format_html("{}+{}", esc(label), value))
-            if bonus_parts:
-                lines.append("套装属性：")
-                lines.extend(bonus_parts)
+        _render_set_members(lines, members, set_desc, esc)
+        _render_set_bonus_lines(lines, bonus_map, esc)
     # Use format_html_join to return a SafeString without needing template `|safe`.
     return format_html_join("", "<div>{}</div>", ((line,) for line in lines))
 

@@ -8,6 +8,65 @@ from typing import Dict
 logger = logging.getLogger(__name__)
 
 
+def _create_default_rng() -> random.Random:
+    return random.Random(secrets.randbits(128))
+
+
+def _add_drop(drops: Dict[str, int], key: str, count: int) -> None:
+    if count <= 0:
+        return
+    drops[key] = drops.get(key, 0) + int(count)
+
+
+def _parse_numeric_drop_value(value: float | int) -> tuple[float | None, int]:
+    if value >= 1:
+        return None, int(value)
+    return float(value), 1
+
+
+def _parse_dict_drop_value(value: dict) -> tuple[float | None, int]:
+    chance_raw = value.get("chance", value.get("probability"))
+    count_raw = value.get("count", value.get("quantity", value.get("amount")))
+
+    try:
+        chance = float(chance_raw) if chance_raw is not None else None
+    except (TypeError, ValueError):
+        chance = None
+
+    try:
+        count = int(count_raw) if count_raw is not None else None
+    except (TypeError, ValueError):
+        count = None
+
+    if count is None:
+        count = 1
+    return chance, count
+
+
+def _should_drop(chance: float | None, rng: random.Random) -> bool:
+    if chance is None:
+        return True
+    if chance <= 0:
+        return False
+    if chance >= 1:
+        return True
+    return rng.random() < chance
+
+
+def _resolve_drop_entry(value: float | int | dict) -> tuple[float | None, int] | None:
+    if isinstance(value, dict):
+        chance, count = _parse_dict_drop_value(value)
+        return chance, count
+
+    if isinstance(value, (int, float)):
+        chance, count = _parse_numeric_drop_value(value)
+        if chance is not None and chance <= 0:
+            return None
+        return chance, count
+
+    return None
+
+
 def resolve_drop_rewards(drop_table: Dict[str, float | int | dict], rng: random.Random | None = None) -> Dict[str, int]:
     """
     Resolve a YAML-like drop table into concrete drops.
@@ -26,53 +85,18 @@ def resolve_drop_rewards(drop_table: Dict[str, float | int | dict], rng: random.
     """
     # 使用加密安全的随机种子，防止掉落结果被预测
     if rng is None:
-        rng = random.Random(secrets.randbits(128))
+        rng = _create_default_rng()
     drops: Dict[str, int] = {}
 
     for key, value in (drop_table or {}).items():
         if value is None:
             continue
 
-        if isinstance(value, dict):
-            chance = value.get("chance", value.get("probability"))
-            count = value.get("count", value.get("quantity", value.get("amount")))
-
-            try:
-                chance = float(chance) if chance is not None else None
-            except (TypeError, ValueError):
-                chance = None
-
-            try:
-                count = int(count) if count is not None else None
-            except (TypeError, ValueError):
-                count = None
-
-            if count is None:
-                count = 1
-
-            if chance is None:
-                if count > 0:
-                    drops[key] = drops.get(key, 0) + count
-                continue
-
-            if chance <= 0:
-                continue
-
-            if chance >= 1 or rng.random() < chance:
-                drops[key] = drops.get(key, 0) + count
+        resolved = _resolve_drop_entry(value)
+        if resolved is None:
             continue
-
-        # Guaranteed drop (value >= 1)
-        if isinstance(value, (int, float)) and value >= 1:
-            # 修复：使用累加而非覆盖，保持与字典模式一致
-            drops[key] = drops.get(key, 0) + int(value)
-        # Probabilistic drop (value < 1)
-        elif isinstance(value, (int, float)):
-            probability = float(value)
-            if probability <= 0:
-                continue
-            if rng.random() < probability:
-                # 修复：使用累加而非覆盖
-                drops[key] = drops.get(key, 0) + 1
+        chance, count = resolved
+        if _should_drop(chance, rng):
+            _add_drop(drops, key, count)
 
     return drops

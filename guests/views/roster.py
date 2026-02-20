@@ -36,6 +36,155 @@ from ..utils.guest_state import refresh_guests_state
 logger = logging.getLogger(__name__)
 
 
+def _load_guest_detail(manor, guest_pk: int):
+    return get_object_or_404(
+        manor.guests.select_related("template").prefetch_related(
+            Prefetch(
+                "gear_items",
+                queryset=GearItem.objects.select_related("template").only(
+                    "id",
+                    "guest_id",
+                    "template_id",
+                    "template__slot",
+                    "template__name",
+                    "template__rarity",
+                    "template__set_key",
+                    "template__set_description",
+                    "template__set_bonus",
+                    "template__attack_bonus",
+                    "template__defense_bonus",
+                    "template__extra_stats",
+                ),
+            ),
+            Prefetch(
+                "guest_skills",
+                queryset=GuestSkill.objects.select_related("skill").only(
+                    "id",
+                    "guest_id",
+                    "skill_id",
+                    "learned_at",
+                    "skill__key",
+                    "skill__name",
+                    "skill__description",
+                ),
+            ),
+        ),
+        pk=guest_pk,
+    )
+
+
+def _refresh_guest_runtime_state(guest, now) -> None:
+    needs_refresh = False
+    if guest.training_complete_at and guest.training_complete_at <= now:
+        if finalize_guest_training(guest, now=now):
+            needs_refresh = True
+    if guest.status != GuestStatus.INJURED and guest.current_hp < guest.max_hp:
+        last = guest.last_hp_recovery_at or guest.created_at or now
+        if (now - last).total_seconds() >= TimeConstants.HP_RECOVERY_INTERVAL:
+            recover_guest_hp(guest, now=now)
+            needs_refresh = True
+    if needs_refresh:
+        guest.refresh_from_db()
+
+
+def _build_gear_set_context(gear_items):
+    equipped_templates = [item.template for item in gear_items]
+    set_keys = {tpl.set_key for tpl in equipped_templates if getattr(tpl, "set_key", "")}
+    gear_sets = []
+    gear_set_map = {}
+    if not set_keys:
+        return gear_sets, gear_set_map
+
+    templates = list(
+        GearTemplate.objects.filter(set_key__in=set_keys)
+        .only("id", "name", "set_key", "set_description", "set_bonus", "rarity", "slot")
+        .order_by("set_key", "slot", "id")
+    )
+    templates_by_set = {}
+    for tpl in templates:
+        templates_by_set.setdefault(tpl.set_key, []).append(tpl)
+    equipped_ids = {tpl.id for tpl in equipped_templates}
+    for set_key in sorted(templates_by_set):
+        members = templates_by_set.get(set_key, [])
+        if not members:
+            continue
+        bonus = members[0].set_bonus or {}
+        members_payload = [
+            {
+                "id": tpl.id,
+                "name": tpl.name,
+                "slot": tpl.get_slot_display() if hasattr(tpl, "get_slot_display") else tpl.slot,
+                "rarity": tpl.rarity,
+                "equipped": tpl.id in equipped_ids,
+            }
+            for tpl in members
+        ]
+        set_desc = members[0].set_description if hasattr(members[0], "set_description") else ""
+        payload = {
+            "description": set_desc,
+            "pieces": bonus.get("pieces"),
+            "bonus": bonus.get("bonus") or bonus,
+            "members": members_payload,
+        }
+        gear_sets.append({"key": set_key, **payload})
+        gear_set_map[set_key] = payload
+    return gear_sets, gear_set_map
+
+
+def _build_skill_books_context(manor, guest_skill_records):
+    from gameplay.models import InventoryItem, ItemTemplate
+
+    skill_books = []
+    if len(guest_skill_records) >= MAX_GUEST_SKILL_SLOTS:
+        return skill_books
+
+    skill_book_items = (
+        manor.inventory_items.filter(
+            template__effect_type=ItemTemplate.EffectType.SKILL_BOOK,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        )
+        .select_related("template")
+        .only("id", "quantity", "template__name", "template__effect_payload")
+        .order_by("template__name")
+    )
+    skill_keys = {
+        (item.template.effect_payload or {}).get("skill_key")
+        for item in skill_book_items
+        if (item.template.effect_payload or {}).get("skill_key")
+    }
+    skills = {skill.key: skill for skill in Skill.objects.filter(key__in=skill_keys).only("key", "name", "description")}
+    for entry in skill_book_items:
+        payload = entry.template.effect_payload or {}
+        key = payload.get("skill_key")
+        skill_books.append(
+            {
+                "inventory": entry,
+                "skill": skills.get(key),
+                "skill_key": key,
+            }
+        )
+    return skill_books
+
+
+def _build_slot_panels(slots, equipped, slot_capacity):
+    slot_panels = []
+    for slot, label in slots:
+        equipped_list = equipped.get(slot) or []
+        capacity = slot_capacity.get(slot, 1)
+        positions = [equipped_list[idx] if idx < len(equipped_list) else None for idx in range(capacity)]
+        slot_panels.append(
+            {
+                "value": slot,
+                "label": label,
+                "equipped": equipped_list,
+                "positions": positions,
+                "options": [],
+                "capacity": capacity,
+            }
+        )
+    return slot_panels
+
+
 class RosterView(LoginRequiredMixin, TemplateView):
     template_name = "guests/roster.html"
 
@@ -94,57 +243,13 @@ class GuestDetailView(LoginRequiredMixin, TemplateView):
     template_name = "guests/detail.html"
 
     def get_context_data(self, **kwargs):
-        from gameplay.models import InventoryItem, ItemTemplate
         from gameplay.services.manor import ensure_manor
 
         context = super().get_context_data(**kwargs)
         manor = ensure_manor(self.request.user)
-        guest = get_object_or_404(
-            manor.guests.select_related("template").prefetch_related(
-                Prefetch(
-                    "gear_items",
-                    queryset=GearItem.objects.select_related("template").only(
-                        "id",
-                        "guest_id",
-                        "template_id",
-                        "template__slot",
-                        "template__name",
-                        "template__rarity",
-                        "template__set_key",
-                        "template__set_description",
-                        "template__set_bonus",
-                        "template__attack_bonus",
-                        "template__defense_bonus",
-                        "template__extra_stats",
-                    ),
-                ),
-                Prefetch(
-                    "guest_skills",
-                    queryset=GuestSkill.objects.select_related("skill").only(
-                        "id",
-                        "guest_id",
-                        "skill_id",
-                        "learned_at",
-                        "skill__key",
-                        "skill__name",
-                        "skill__description",
-                    ),
-                ),
-            ),
-            pk=self.kwargs["pk"],
-        )
+        guest = _load_guest_detail(manor, self.kwargs["pk"])
         now = timezone.now()
-        needs_refresh = False
-        if guest.training_complete_at and guest.training_complete_at <= now:
-            if finalize_guest_training(guest, now=now):
-                needs_refresh = True
-        if guest.status != GuestStatus.INJURED and guest.current_hp < guest.max_hp:
-            last = guest.last_hp_recovery_at or guest.created_at or now
-            if (now - last).total_seconds() >= TimeConstants.HP_RECOVERY_INTERVAL:
-                recover_guest_hp(guest, now=now)
-                needs_refresh = True
-        if needs_refresh:
-            guest.refresh_from_db()
+        _refresh_guest_runtime_state(guest, now)
         slots = [(choice.value, choice.label) for choice in GearSlot]
         slot_capacity = {
             GearSlot.DEVICE.value: 3,
@@ -159,52 +264,7 @@ class GuestDetailView(LoginRequiredMixin, TemplateView):
             guest.guest_skills.all(),
             key=lambda record: (record.learned_at, record.id),
         )
-        # 套装详情
-        equipped_templates = [item.template for item in gear_items]
-        set_keys = {tpl.set_key for tpl in equipped_templates if getattr(tpl, "set_key", "")}
-        gear_sets = []
-        gear_set_map = {}
-        if set_keys:
-            templates = list(
-                GearTemplate.objects.filter(set_key__in=set_keys)
-                .only("id", "name", "set_key", "set_description", "set_bonus", "rarity", "slot")
-                .order_by("set_key", "slot", "id")
-            )
-            templates_by_set = {}
-            for tpl in templates:
-                templates_by_set.setdefault(tpl.set_key, []).append(tpl)
-            equipped_ids = {tpl.id for tpl in equipped_templates}
-            for set_key in sorted(templates_by_set):
-                members = templates_by_set.get(set_key, [])
-                if not members:
-                    continue
-                bonus = members[0].set_bonus or {}
-                members_payload = [
-                    {
-                        "id": tpl.id,
-                        "name": tpl.name,
-                        "slot": tpl.get_slot_display() if hasattr(tpl, "get_slot_display") else tpl.slot,
-                        "rarity": tpl.rarity,
-                        "equipped": tpl.id in equipped_ids,
-                    }
-                    for tpl in members
-                ]
-                set_desc = members[0].set_description if hasattr(members[0], "set_description") else ""
-                gear_sets.append(
-                    {
-                        "key": set_key,
-                        "description": set_desc,
-                        "pieces": bonus.get("pieces"),
-                        "bonus": bonus.get("bonus") or bonus,
-                        "members": members_payload,
-                    }
-                )
-                gear_set_map[set_key] = {
-                    "description": set_desc,
-                    "pieces": bonus.get("pieces"),
-                    "bonus": bonus.get("bonus") or bonus,
-                    "members": members_payload,
-                }
+        gear_sets, gear_set_map = _build_gear_set_context(gear_items)
         skill_slots = []
         for idx in range(MAX_GUEST_SKILL_SLOTS):
             record = guest_skill_records[idx] if idx < len(guest_skill_records) else None
@@ -215,53 +275,8 @@ class GuestDetailView(LoginRequiredMixin, TemplateView):
                     "skill": record.skill if record else None,
                 }
             )
-        skill_books = []
-        if len(guest_skill_records) < MAX_GUEST_SKILL_SLOTS:
-            skill_book_items = (
-                manor.inventory_items.filter(
-                    template__effect_type=ItemTemplate.EffectType.SKILL_BOOK,
-                    storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-                )
-                .select_related("template")
-                .only("id", "quantity", "template__name", "template__effect_payload")
-                .order_by("template__name")
-            )
-            skill_keys = {
-                (item.template.effect_payload or {}).get("skill_key")
-                for item in skill_book_items
-                if (item.template.effect_payload or {}).get("skill_key")
-            }
-            skills = {
-                skill.key: skill
-                for skill in Skill.objects.filter(key__in=skill_keys).only("key", "name", "description")
-            }
-            for entry in skill_book_items:
-                payload = entry.template.effect_payload or {}
-                key = payload.get("skill_key")
-                skill_books.append(
-                    {
-                        "inventory": entry,
-                        "skill": skills.get(key),
-                        "skill_key": key,
-                    }
-                )
-        slot_panels = []
-        for slot, label in slots:
-            equipped_list = equipped.get(slot) or []
-            capacity = slot_capacity.get(slot, 1)
-            positions = []
-            for idx in range(capacity):
-                positions.append(equipped_list[idx] if idx < len(equipped_list) else None)
-            slot_panels.append(
-                {
-                    "value": slot,
-                    "label": label,
-                    "equipped": equipped_list,
-                    "positions": positions,
-                    "options": [],
-                    "capacity": capacity,
-                }
-            )
+        skill_books = _build_skill_books_context(manor, guest_skill_records)
+        slot_panels = _build_slot_panels(slots, equipped, slot_capacity)
         context.update(
             {
                 "guest": guest,

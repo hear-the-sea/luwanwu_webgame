@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import random
-from typing import List, Literal, TYPE_CHECKING, overload
+from typing import Callable, List, Literal, TYPE_CHECKING, overload
 
 from .constants import (
     BASE_CRIT_CHANCE,
@@ -28,6 +28,124 @@ from .types import AttackSkill, _DamageCalculation
 
 if TYPE_CHECKING:
     from ..combatants import Combatant
+
+
+def _at_least_one(value: int) -> int:
+    return max(1, value)
+
+
+def _calculate_defense_value(
+    actor: "Combatant",
+    target: "Combatant",
+    effective_defense_value_fn: Callable[["Combatant", "Combatant"], int],
+) -> int:
+    if target.kind != "troop":
+        return int(target.defense)
+    if actor.kind == "guest":
+        return int(target.unit_defense)
+    return int(effective_defense_value_fn(target, actor))
+
+
+def _apply_attack_and_defense_tech_effects(
+    actor: "Combatant",
+    target: "Combatant",
+    round_priority: int,
+    attack_value: int,
+    defense_value: int,
+) -> tuple[int, int]:
+    ranged_attack = is_ranged_attack(actor, round_priority)
+
+    if ranged_attack:
+        ranged_def = target.tech_effects.get("ranged_defense", 0)
+        if ranged_def > 0:
+            defense_value = int(defense_value * (1 + ranged_def))
+
+    if actor.troop_class == "gong" and not ranged_attack:
+        melee_bonus = actor.tech_effects.get("melee_attack_bonus", 0)
+        if melee_bonus > 0:
+            attack_value = int(attack_value * (1 + melee_bonus))
+
+    return attack_value, defense_value
+
+
+def _apply_troop_counter_bonus(actor: "Combatant", target: "Combatant", attack_value: int) -> int:
+    countered_class = TROOP_COUNTERS.get(actor.troop_class)
+    if countered_class and target.troop_class == countered_class:
+        return int(attack_value * COUNTER_DAMAGE_MULTIPLIER)
+    return attack_value
+
+
+def _apply_softcap(base_reduction: float) -> float:
+    if base_reduction > SOFTCAP_THRESHOLD:
+        excess = base_reduction - SOFTCAP_THRESHOLD
+        return SOFTCAP_THRESHOLD + excess * 0.5
+    return base_reduction
+
+
+def _calculate_damage_reduction(actor: "Combatant", target: "Combatant", defense_value: int) -> float:
+    pair = (actor.kind, target.kind)
+    if pair == ("guest", "troop"):
+        base_reduction = defense_value / (defense_value + GUEST_VS_TROOP_DEFENSE_CONSTANT)
+        return min(base_reduction, HARDCAP)
+
+    constants = {
+        ("guest", "guest"): GUEST_VS_GUEST_DEFENSE_CONSTANT,
+        ("troop", "guest"): TROOP_VS_GUEST_DEFENSE_CONSTANT,
+    }
+    defense_constant = constants.get(pair, DEFAULT_DEFENSE_CONSTANT)
+    base_reduction = defense_value / (defense_value + defense_constant)
+    return min(HARDCAP, _apply_softcap(base_reduction))
+
+
+def _calculate_base_damage(
+    actor: "Combatant",
+    target: "Combatant",
+    attack_value: int,
+    damage_reduction: float,
+    attack_multiplier: float,
+) -> float:
+    base_damage = attack_value * attack_multiplier * (1 - damage_reduction)
+    if actor.kind == "guest" and target.kind == "guest":
+        base_damage *= GUEST_VS_GUEST_DAMAGE_MULTIPLIER
+    return base_damage
+
+
+def _apply_round_and_tech_damage_modifiers(actor: "Combatant", round_priority: int, damage: int) -> int:
+    if actor.kind == "guest" and actor.priority == -1:
+        damage = _at_least_one(int(damage * PREEMPTIVE_DAMAGE_REDUCTION))
+
+    if actor.troop_class == "jian" and round_priority == -1:
+        preempt_mult = actor.tech_effects.get("preemptive_damage", 0)
+        if preempt_mult > 0:
+            damage = _at_least_one(int(damage * preempt_mult))
+
+    if actor.troop_class == "gong" and round_priority == -2:
+        extra_range_mult = actor.tech_effects.get("extra_range_damage", 0)
+        if extra_range_mult > 0:
+            damage = _at_least_one(int(damage * extra_range_mult))
+
+    return damage
+
+
+def _roll_double_strike(actor: "Combatant", damage: int, rng: random.Random) -> tuple[int, bool]:
+    double_strike_chance = actor.tech_effects.get("double_strike_chance", 0)
+    if double_strike_chance > 0 and rng.random() < double_strike_chance:
+        return damage * 2, True
+    return damage, False
+
+
+def _apply_slaughter_multiplier(
+    actor: "Combatant",
+    target: "Combatant",
+    damage: int,
+    calculate_slaughter_multiplier_fn: Callable[["Combatant", "Combatant"], float],
+) -> int:
+    if target.kind != "troop":
+        return damage
+    slaughter_mult = calculate_slaughter_multiplier_fn(actor, target)
+    if slaughter_mult == 1.0:
+        return damage
+    return _at_least_one(int(damage * slaughter_mult))
 
 
 @overload
@@ -124,74 +242,15 @@ def calculate_attack_damage(
 
     attack_value = effective_attack_value(actor, target)
 
-    # 混合防御系统：根据攻击者和目标类型使用不同防御计算
-    if target.kind == "troop":
-        if actor.kind == "guest":
-            defense_value = target.unit_defense
-        else:
-            defense_value = effective_defense_value(target, actor)
-    else:
-        defense_value = target.defense
-
-    # === 武艺技术特殊效果 ===
-
-    # 【万宗归流】拳系对远程攻击的防御加成
-    if is_ranged_attack(actor, round_priority):
-        ranged_def = target.tech_effects.get("ranged_defense", 0)
-        if ranged_def > 0:
-            defense_value = int(defense_value * (1 + ranged_def))
-
-    # 【短刃杀法】弓箭手近战攻击加成
-    if actor.troop_class == "gong" and not is_ranged_attack(actor, round_priority):
-        melee_bonus = actor.tech_effects.get("melee_attack_bonus", 0)
-        if melee_bonus > 0:
-            attack_value = int(attack_value * (1 + melee_bonus))
-
-    # === 五行相克系统（天生属性，自动生效）===
-    countered_class = TROOP_COUNTERS.get(actor.troop_class)
-    if countered_class and target.troop_class == countered_class:
-        attack_value = int(attack_value * COUNTER_DAMAGE_MULTIPLIER)
-
-    # 防御减伤公式：根据战斗双方类型选择不同计算方式
-    if target.kind == "troop" and actor.kind == "guest":
-        base_reduction = defense_value / (defense_value + GUEST_VS_TROOP_DEFENSE_CONSTANT)
-        damage_reduction = min(base_reduction, HARDCAP)
-    elif target.kind == "guest" and actor.kind == "guest":
-        base_reduction = defense_value / (defense_value + GUEST_VS_GUEST_DEFENSE_CONSTANT)
-        if base_reduction > SOFTCAP_THRESHOLD:
-            excess = base_reduction - SOFTCAP_THRESHOLD
-            damage_reduction = SOFTCAP_THRESHOLD + excess * 0.5
-        else:
-            damage_reduction = base_reduction
-        damage_reduction = min(HARDCAP, damage_reduction)
-    elif target.kind == "guest" and actor.kind == "troop":
-        base_reduction = defense_value / (defense_value + TROOP_VS_GUEST_DEFENSE_CONSTANT)
-        if base_reduction > SOFTCAP_THRESHOLD:
-            excess = base_reduction - SOFTCAP_THRESHOLD
-            damage_reduction = SOFTCAP_THRESHOLD + excess * 0.5
-        else:
-            damage_reduction = base_reduction
-        damage_reduction = min(HARDCAP, damage_reduction)
-    else:
-        base_reduction = defense_value / (defense_value + DEFAULT_DEFENSE_CONSTANT)
-        if base_reduction > SOFTCAP_THRESHOLD:
-            excess = base_reduction - SOFTCAP_THRESHOLD
-            damage_reduction = SOFTCAP_THRESHOLD + excess * 0.5
-        else:
-            damage_reduction = base_reduction
-        damage_reduction = min(HARDCAP, damage_reduction)
+    defense_value = _calculate_defense_value(actor, target, effective_defense_value)
+    attack_value, defense_value = _apply_attack_and_defense_tech_effects(
+        actor, target, round_priority, attack_value, defense_value
+    )
+    attack_value = _apply_troop_counter_bonus(actor, target, attack_value)
+    damage_reduction = _calculate_damage_reduction(actor, target, defense_value)
 
     attack_multiplier = rng.uniform(DAMAGE_VARIANCE_MIN, DAMAGE_VARIANCE_MAX)
-
-    if target.kind == "troop" and actor.kind == "guest":
-        base_damage = attack_value * attack_multiplier * (1 - damage_reduction)
-    elif target.kind == "guest" and actor.kind == "guest":
-        base_damage = attack_value * attack_multiplier * (1 - damage_reduction)
-        base_damage *= GUEST_VS_GUEST_DAMAGE_MULTIPLIER
-    elif target.kind == "guest" and actor.kind == "troop":
-        base_damage = attack_value * attack_multiplier * (1 - damage_reduction)
-    else:
-        base_damage = attack_value * attack_multiplier * (1 - damage_reduction)
+    base_damage = _calculate_base_damage(actor, target, attack_value, damage_reduction, attack_multiplier)
 
     crit_chance = BASE_CRIT_CHANCE
     is_crit = rng.random() < crit_chance
@@ -199,44 +258,12 @@ def calculate_attack_damage(
         base_damage *= CRIT_DAMAGE_MULTIPLIER
 
     bonus = skill_damage_bonus(skills, actor, target)
-    damage = int(base_damage + bonus)
-    damage = max(1, damage)
-
-    # 先手伤害调整
-    is_preemptive_guest = actor.kind == "guest" and actor.priority == -1
-    if is_preemptive_guest:
-        damage = int(damage * PREEMPTIVE_DAMAGE_REDUCTION)
-        damage = max(1, damage)
-
-    # 【驭剑之术】剑系先攻回合伤害倍率
-    if actor.troop_class == "jian" and round_priority == -1:
-        preempt_mult = actor.tech_effects.get("preemptive_damage", 0)
-        if preempt_mult > 0:
-            damage = int(damage * preempt_mult)
-            damage = max(1, damage)
-
-    # 【凤舞九天】弓箭先锋回合伤害倍率
-    if actor.troop_class == "gong" and round_priority == -2:
-        extra_range_mult = actor.tech_effects.get("extra_range_damage", 0)
-        if extra_range_mult > 0:
-            damage = int(damage * extra_range_mult)
-            damage = max(1, damage)
-
-    # 【狂狼必杀】刀系双倍打击
-    is_double_strike = False
-    double_strike_chance = actor.tech_effects.get("double_strike_chance", 0)
-    if double_strike_chance > 0 and rng.random() < double_strike_chance:
-        damage *= 2
-        is_double_strike = True
+    damage = _at_least_one(int(base_damage + bonus))
+    damage = _apply_round_and_tech_damage_modifiers(actor, round_priority, damage)
+    damage, is_double_strike = _roll_double_strike(actor, damage, rng)
 
     damage = process_status_effects(actor, target, skills, rng, phase="damage_penalty", damage=damage)
 
-    # 屠戮倍率：门客对小兵的伤害直接乘倍率，保持 HP 与兵力一致
-    if target.kind == "troop":
-        # 修复：直接使用已导入的 calculate_slaughter_multiplier，不再重复从 ..combat_math 导入
-        slaughter_mult = calculate_slaughter_multiplier(actor, target)
-        if slaughter_mult != 1.0:
-            damage = int(damage * slaughter_mult)
-            damage = max(1, damage)
+    damage = _apply_slaughter_multiplier(actor, target, damage, calculate_slaughter_multiplier)
 
     return _DamageCalculation(damage=damage, is_crit=is_crit, is_double_strike=is_double_strike)

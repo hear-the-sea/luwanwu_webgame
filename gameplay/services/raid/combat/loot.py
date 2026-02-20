@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Iterable, Tuple
 
 from django.db import IntegrityError
 from django.db.models import F
@@ -13,22 +13,11 @@ from ....models import InventoryItem, ItemTemplate, Manor, ResourceEvent
 from ...resources import log_resource_gain
 
 
-def _calculate_loot(defender: Manor) -> Tuple[Dict[str, int], Dict[str, int]]:
-    """
-    计算战利品。
-
-    Returns:
-        (掠夺的资源, 掠夺的物品)
-    """
-    # 资源掠夺：10%~30%
-    loot_percent = combat_pkg.random.uniform(
-        combat_pkg.PVPConstants.LOOT_RESOURCE_MIN_PERCENT,
-        combat_pkg.PVPConstants.LOOT_RESOURCE_MAX_PERCENT,
-    )
-
+def _calculate_resource_loot(defender: Manor, loot_percent: float) -> Dict[str, int]:
     loot_resources: Dict[str, int] = {}
+
     if defender.grain > 0:
-        loot_grain = min(int(defender.grain * loot_percent), 10000)  # 单次上限
+        loot_grain = min(int(defender.grain * loot_percent), 10000)
         if loot_grain > 0:
             loot_resources["grain"] = loot_grain
 
@@ -37,119 +26,155 @@ def _calculate_loot(defender: Manor) -> Tuple[Dict[str, int], Dict[str, int]]:
         if loot_silver > 0:
             loot_resources["silver"] = loot_silver
 
-    # 物品掠夺
-    loot_items: Dict[str, int] = {}
-    base_qs = InventoryItem.objects.filter(
+    return loot_resources
+
+
+def _build_loot_item_queryset(defender: Manor):
+    return InventoryItem.objects.filter(
         manor=defender,
         template__tradeable=True,
         quantity__gt=0,
         storage_location=InventoryItem.StorageLocation.WAREHOUSE,
     )
 
-    items_looted = 0
-    max_loot_items = combat_pkg.PVPConstants.LOOT_ITEM_MAX_COUNT
 
-    # 小库存：一次性拉取并打乱顺序（避免按DB默认顺序带来的偏差）
-    total_candidates = base_qs.count()
-    if total_candidates <= combat_pkg.LOOT_ITEM_SMALL_INVENTORY_THRESHOLD:
-        rows = list(base_qs.values("quantity", "template__key", "template__rarity"))
-        combat_pkg.random.shuffle(rows)
-    else:
-        # 大库存：分批抽样，限制单次扫描上限，避免极端情况下全表遍历
-        seen_ids: set[int] = set()
-        for _ in range(combat_pkg.LOOT_ITEM_SAMPLE_MAX_BATCHES):
-            if items_looted >= max_loot_items:
-                break
+def _parse_loot_candidate(row: Dict[str, Any], loot_items: Dict[str, int]) -> Tuple[str, int, float] | None:
+    quantity = int(row.get("quantity", 0) or 0)
+    if quantity <= 0:
+        return None
 
-            remaining_qs = base_qs.exclude(id__in=seen_ids) if seen_ids else base_qs
-            remaining_count = remaining_qs.count()
-            if remaining_count <= 0:
-                break
+    template_key = row.get("template__key")
+    if not template_key:
+        return None
+    template_key = str(template_key)
+    if template_key in loot_items:
+        return None
 
-            batch_size = min(combat_pkg.LOOT_ITEM_SAMPLE_BATCH_SIZE, remaining_count)
-            max_offset = max(0, remaining_count - batch_size)
-            offset = combat_pkg.random.randint(0, max_offset) if max_offset else 0
+    rarity = row.get("template__rarity") or "gray"
+    if not isinstance(rarity, str):
+        rarity = str(rarity)
 
-            batch_rows = list(
-                remaining_qs.order_by("id").values("id", "quantity", "template__key", "template__rarity")[offset : offset + batch_size]
-            )
-            if not batch_rows:
-                continue
+    rarity_mult = combat_pkg.PVPConstants.RARITY_LOOT_MULTIPLIER.get(rarity, 1.0)
+    loot_chance = combat_pkg.PVPConstants.LOOT_ITEM_BASE_CHANCE * rarity_mult
+    return template_key, quantity, loot_chance
 
-            for row in batch_rows:
-                seen_ids.add(int(row["id"]))
 
-            combat_pkg.random.shuffle(batch_rows)
-            for row in batch_rows:
-                if items_looted >= max_loot_items:
-                    break
+def _roll_loot_quantity(quantity: int) -> int:
+    max_qty = min(
+        int(quantity * combat_pkg.PVPConstants.LOOT_ITEM_MAX_QUANTITY_PERCENT),
+        combat_pkg.PVPConstants.LOOT_ITEM_MAX_QUANTITY,
+    )
+    loot_qty = combat_pkg.random.randint(1, max(1, max_qty))
+    return min(loot_qty, quantity)
 
-                quantity = int(row.get("quantity", 0) or 0)
-                if quantity <= 0:
-                    continue
 
-                template_key = row.get("template__key")
-                if not template_key:
-                    continue
-                template_key = str(template_key)
-                if template_key in loot_items:
-                    continue
+def _try_loot_from_row(row: Dict[str, Any], loot_items: Dict[str, int]) -> Tuple[str, int] | None:
+    candidate = _parse_loot_candidate(row, loot_items)
+    if candidate is None:
+        return None
 
-                # 计算掠夺概率
-                rarity = (row.get("template__rarity") or "gray")
-                if not isinstance(rarity, str):
-                    rarity = str(rarity)
-                rarity_mult = combat_pkg.PVPConstants.RARITY_LOOT_MULTIPLIER.get(rarity, 1.0)
-                loot_chance = combat_pkg.PVPConstants.LOOT_ITEM_BASE_CHANCE * rarity_mult
+    template_key, quantity, loot_chance = candidate
+    if combat_pkg.random.random() >= loot_chance:
+        return None
 
-                if combat_pkg.random.random() < loot_chance:
-                    # 掠夺数量
-                    max_qty = min(
-                        int(quantity * combat_pkg.PVPConstants.LOOT_ITEM_MAX_QUANTITY_PERCENT),
-                        combat_pkg.PVPConstants.LOOT_ITEM_MAX_QUANTITY,
-                    )
-                    loot_qty = combat_pkg.random.randint(1, max(1, max_qty))
-                    loot_qty = min(loot_qty, quantity)
+    loot_qty = _roll_loot_quantity(quantity)
+    if loot_qty <= 0:
+        return None
+    return template_key, loot_qty
 
-                    if loot_qty > 0:
-                        loot_items[template_key] = loot_qty
-                        items_looted += 1
 
-        return loot_resources, loot_items
-
-    # 小库存路径：直接遍历打乱后的候选
+def _collect_loot_from_rows(
+    rows: Iterable[Dict[str, Any]],
+    loot_items: Dict[str, int],
+    *,
+    items_looted: int,
+    max_loot_items: int,
+) -> int:
     for row in rows:
         if items_looted >= max_loot_items:
             break
 
-        quantity = int(row.get("quantity", 0) or 0)
-        if quantity <= 0:
+        looted = _try_loot_from_row(row, loot_items)
+        if looted is None:
             continue
 
-        template_key = row.get("template__key")
-        if not template_key:
+        template_key, loot_qty = looted
+        loot_items[template_key] = loot_qty
+        items_looted += 1
+
+    return items_looted
+
+
+def _build_small_inventory_rows(base_qs) -> list[Dict[str, Any]]:
+    rows = list(base_qs.values("quantity", "template__key", "template__rarity"))
+    combat_pkg.random.shuffle(rows)
+    return rows
+
+
+def _iter_sample_batches(base_qs) -> Iterable[list[Dict[str, Any]]]:
+    seen_ids: set[int] = set()
+    for _ in range(combat_pkg.LOOT_ITEM_SAMPLE_MAX_BATCHES):
+        remaining_qs = base_qs.exclude(id__in=seen_ids) if seen_ids else base_qs
+        remaining_count = remaining_qs.count()
+        if remaining_count <= 0:
+            break
+
+        batch_size = min(combat_pkg.LOOT_ITEM_SAMPLE_BATCH_SIZE, remaining_count)
+        max_offset = max(0, remaining_count - batch_size)
+        offset = combat_pkg.random.randint(0, max_offset) if max_offset else 0
+
+        batch_rows = list(
+            remaining_qs.order_by("id").values("id", "quantity", "template__key", "template__rarity")[
+                offset : offset + batch_size
+            ]
+        )
+        if not batch_rows:
             continue
-        template_key = str(template_key)
-        if template_key in loot_items:
-            continue
 
-        rarity = (row.get("template__rarity") or "gray")
-        if not isinstance(rarity, str):
-            rarity = str(rarity)
-        rarity_mult = combat_pkg.PVPConstants.RARITY_LOOT_MULTIPLIER.get(rarity, 1.0)
-        loot_chance = combat_pkg.PVPConstants.LOOT_ITEM_BASE_CHANCE * rarity_mult
+        for row in batch_rows:
+            seen_ids.add(int(row["id"]))
 
-        if combat_pkg.random.random() < loot_chance:
-            max_qty = min(
-                int(quantity * combat_pkg.PVPConstants.LOOT_ITEM_MAX_QUANTITY_PERCENT),
-                combat_pkg.PVPConstants.LOOT_ITEM_MAX_QUANTITY,
-            )
-            loot_qty = combat_pkg.random.randint(1, max(1, max_qty))
-            loot_qty = min(loot_qty, quantity)
-            if loot_qty > 0:
-                loot_items[template_key] = loot_qty
-                items_looted += 1
+        combat_pkg.random.shuffle(batch_rows)
+        yield batch_rows
 
+
+def _calculate_loot_items(base_qs) -> Dict[str, int]:
+    loot_items: Dict[str, int] = {}
+    items_looted = 0
+    max_loot_items = combat_pkg.PVPConstants.LOOT_ITEM_MAX_COUNT
+
+    total_candidates = base_qs.count()
+    if total_candidates <= combat_pkg.LOOT_ITEM_SMALL_INVENTORY_THRESHOLD:
+        rows = _build_small_inventory_rows(base_qs)
+        _collect_loot_from_rows(rows, loot_items, items_looted=items_looted, max_loot_items=max_loot_items)
+        return loot_items
+
+    for batch_rows in _iter_sample_batches(base_qs):
+        items_looted = _collect_loot_from_rows(
+            batch_rows,
+            loot_items,
+            items_looted=items_looted,
+            max_loot_items=max_loot_items,
+        )
+        if items_looted >= max_loot_items:
+            break
+
+    return loot_items
+
+
+def _calculate_loot(defender: Manor) -> Tuple[Dict[str, int], Dict[str, int]]:
+    """
+    计算战利品。
+
+    Returns:
+        (掠夺的资源, 掠夺的物品)
+    """
+    loot_percent = combat_pkg.random.uniform(
+        combat_pkg.PVPConstants.LOOT_RESOURCE_MIN_PERCENT,
+        combat_pkg.PVPConstants.LOOT_RESOURCE_MAX_PERCENT,
+    )
+    loot_resources = _calculate_resource_loot(defender, loot_percent)
+    loot_items = _calculate_loot_items(_build_loot_item_queryset(defender))
     return loot_resources, loot_items
 
 
@@ -219,8 +244,7 @@ def _format_loot_description(resources: Dict[str, int], items: Dict[str, int]) -
 
     if items:
         templates = {
-            t.key: t.name
-            for t in ItemTemplate.objects.filter(key__in=items.keys()).only("key", "name")
+            t.key: t.name for t in ItemTemplate.objects.filter(key__in=items.keys()).only("key", "name")
         }
         for key, qty in items.items():
             name = templates.get(key, key)
@@ -243,8 +267,7 @@ def _format_battle_rewards_description(battle_rewards: Dict[str, Any]) -> str:
 
     if equipment:
         templates = {
-            t.key: t.name
-            for t in ItemTemplate.objects.filter(key__in=equipment.keys()).only("key", "name")
+            t.key: t.name for t in ItemTemplate.objects.filter(key__in=equipment.keys()).only("key", "name")
         }
         for key, qty in equipment.items():
             name = templates.get(key, key)
@@ -267,10 +290,7 @@ def _grant_loot_items(manor: Manor, items: Dict[str, int]) -> None:
     if not items:
         return
 
-    templates = {
-        t.key: t
-        for t in ItemTemplate.objects.filter(key__in=items.keys()).only("id", "key")
-    }
+    templates = {t.key: t for t in ItemTemplate.objects.filter(key__in=items.keys()).only("id", "key")}
 
     if not templates:
         return

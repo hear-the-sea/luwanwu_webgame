@@ -74,6 +74,76 @@ class ItemTemplate(models.Model):
         return self.name
 
 
+_ITEM_EFFECT_STAT_LABELS = {
+    "hp": "生命",
+    "force": "武力",
+    "intellect": "智力",
+    "defense": "防御",
+    "agility": "敏捷",
+    "luck": "运势",
+    "troop_capacity": "可携带护院人数",
+    "attack": "攻击",
+    "defense_bonus": "防御",
+}
+
+
+def _resource_pack_summary(payload: dict) -> str:
+    labels = dict(ResourceType.choices)
+    parts = [f"{labels.get(key, key)} +{amount}" for key, amount in payload.items()]
+    return "、".join(parts)
+
+
+def _equipment_set_summary(payload: dict) -> str:
+    set_desc = payload.get("set_description")
+    set_bonus = payload.get("set_bonus") or {}
+    if not (set_desc or set_bonus):
+        return ""
+
+    pieces = set_bonus.get("pieces") if isinstance(set_bonus, dict) else None
+    bonus_map = set_bonus.get("bonus") if isinstance(set_bonus, dict) else None
+    bonus_parts = []
+    if isinstance(bonus_map, dict):
+        for key, value in bonus_map.items():
+            if value is None:
+                continue
+            bonus_parts.append(f"{_ITEM_EFFECT_STAT_LABELS.get(key, key)}+{value}")
+
+    desc_text = set_desc or "套装"
+    piece_text = f"（{pieces}件）" if pieces else ""
+    if bonus_parts:
+        return f"{desc_text}{piece_text}：" + "、".join(bonus_parts)
+    return f"{desc_text}{piece_text}"
+
+
+def _equipment_summary(payload: dict) -> str:
+    parts = []
+    for key, value in payload.items():
+        if value is None or key in {"set_key", "set_bonus", "set_description"}:
+            continue
+        parts.append(f"{_ITEM_EFFECT_STAT_LABELS.get(key, key)}+{value}")
+
+    set_text = _equipment_set_summary(payload)
+    if set_text:
+        return ("、".join(parts) + "；" if parts else "") + set_text
+    return "、".join(parts) or "提升属性"
+
+
+def _tool_summary(template_key: str, payload: dict) -> str:
+    if template_key == "fangdajing":
+        return "显现候选稀有度"
+    if template_key.startswith("peace_shield_"):
+        duration = payload.get("duration")
+        if not duration:
+            return "免战保护"
+        hours = duration // 3600
+        if hours % 24 == 0:
+            return f"免战保护 {hours // 24} 天"
+        return f"免战保护 {hours} 小时"
+    if template_key == "manor_rename_card":
+        return "更换庄园名称"
+    return "道具"
+
+
 class InventoryItem(models.Model):
     class StorageLocation(models.TextChoices):
         WAREHOUSE = "warehouse", "仓库"
@@ -107,78 +177,19 @@ class InventoryItem(models.Model):
         payload = self.template.effect_payload or {}
         effect_type = self.template.effect_type
         if effect_type == ItemTemplate.EffectType.RESOURCE_PACK and payload:
-            labels = dict(ResourceType.choices)
-            parts = []
-            for key, amount in payload.items():
-                label = labels.get(key, key)
-                parts.append(f"{label} +{amount}")
-            return "、".join(parts)
+            return _resource_pack_summary(payload)
         if effect_type == ItemTemplate.EffectType.SKILL_BOOK:
             skill_name = payload.get("skill_name") or payload.get("skill_key", "技能")
             return f"学习 {skill_name}"
         if effect_type and effect_type.startswith("equip_"):
-            stat_labels = {
-                "hp": "生命",
-                "force": "武力",
-                "intellect": "智力",
-                "defense": "防御",
-                "agility": "敏捷",
-                "luck": "运势",
-                "troop_capacity": "可携带护院人数",
-                "attack": "攻击",
-                "defense_bonus": "防御",
-            }
-            parts = []
-            payload = payload or {}
-            set_desc = payload.get("set_description")
-            set_bonus = payload.get("set_bonus") or {}
-            for key, value in payload.items():
-                if value is None:
-                    continue
-                if key in {"set_key", "set_bonus", "set_description"}:
-                    continue
-                label = stat_labels.get(key, key)
-                parts.append(f"{label}+{value}")
-            set_text = ""
-            if set_desc or set_bonus:
-                pieces = set_bonus.get("pieces") if isinstance(set_bonus, dict) else None
-                bonus_map = set_bonus.get("bonus") if isinstance(set_bonus, dict) else None
-                bonus_parts = []
-                if isinstance(bonus_map, dict):
-                    for key, value in bonus_map.items():
-                        if value is None:
-                            continue
-                        label = stat_labels.get(key, key)
-                        bonus_parts.append(f"{label}+{value}")
-                desc_text = set_desc or "套装"
-                piece_text = f"（{pieces}件）" if pieces else ""
-                if bonus_parts:
-                    set_text = f"{desc_text}{piece_text}：" + "、".join(bonus_parts)
-                else:
-                    set_text = f"{desc_text}{piece_text}"
-            if set_text:
-                return ("、".join(parts) + "；" if parts else "") + set_text
-            return "、".join(parts) or "提升属性"
+            return _equipment_summary(payload)
         if effect_type == ItemTemplate.EffectType.MEDICINE:
             hp = payload.get("hp")
             if hp:
                 return f"恢复生命 +{hp}"
             return "恢复生命"
         if effect_type == ItemTemplate.EffectType.TOOL:
-            key = self.template.key or ""
-            if key == "fangdajing":
-                return "显现候选稀有度"
-            if key.startswith("peace_shield_"):
-                duration = payload.get("duration")
-                if duration:
-                    hours = duration // 3600
-                    if hours % 24 == 0:
-                        return f"免战保护 {hours // 24} 天"
-                    return f"免战保护 {hours} 小时"
-                return "免战保护"
-            if key == "manor_rename_card":
-                return "更换庄园名称"
-            return "道具"
+            return _tool_summary(self.template.key or "", payload)
         return "无特殊效果"
 
     @property

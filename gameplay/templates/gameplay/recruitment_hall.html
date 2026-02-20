@@ -3,37 +3,75 @@
 
 {% block title %}聚贤庄{% endblock %}
 
+{% block extra_head %}
+<style>
+    /* 响应式卡片布局：移动端垂直，PC端水平 */
+    .pool-img-container {
+        height: 8rem; /* 128px (mobile) - 增加高度以显示更多图片内容 */
+        width: 100%;
+    }
+
+    @media (min-width: 768px) {
+        /* PC端：卡片设为相对定位，作为容器 */
+        .pool-card-responsive {
+            display: flex !important;
+            flex-direction: column !important; /* 恢复垂直堆叠，但用absolute定位实现特殊效果 */
+            position: relative;
+            padding-left: 7rem !important; /* 左侧留出图片空间 112px */
+            min-height: 6rem; /* 确保高度足够 */
+            justify-content: center;
+        }
+        /* 图片容器绝对定位到左侧 */
+        .pool-img-container {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 6.5rem !important; /* 104px宽 */
+            height: 100% !important;  /* 撑满卡片高度 */
+            border-right: 2px solid #e5e7eb;
+        }
+        .pool-content {
+            padding: 0.5rem 0 0.5rem 0 !important;
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <section class="dashboard">
+    <div class="tw-panel-header mb-4 bg-transparent border-0 p-0 text-2xl">聚贤庄</div>
     <section class="tw-panel mb-6">
         <div class="tw-panel-header">招募类型</div>
         <div class="tw-panel-content">
-            <div class="tw-building-grid">
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
                 {% for pool in pools %}
-                <article class="tw-building-card">
-                    <header>
-                        <div>
-                            <h3>{{ pool.name }}</h3>
-                            <span class="tw-badge-gold">{{ pool.get_tier_display }}</span>
-                        </div>
-                    </header>
-                    <p class="text-sm text-text-muted mb-4">{{ pool.description }}</p>
-                    <ul class="text-sm mb-4 space-y-1">
-                        <li><strong>候选人数：</strong>{{ pool.draw_count }}</li>
-                        <li>
-                            <strong>消耗：</strong>
-                            {% for key,val in pool.cost.items %}
-                            <span>{{ key }} {{ val }}</span>{% if not forloop.last %} / {% endif %}
-                            {% empty %}
-                            <span>免费</span>
-                            {% endfor %}
-                        </li>
-                    </ul>
-                    <form method="post" action="{% url 'guests:recruit' %}" class="recruit-form">
-                        {% csrf_token %}
-                        <input type="hidden" name="pool" value="{{ pool.id }}">
-                        <button type="submit" class="tw-btn-primary w-full">招募 {{ pool.name }}</button>
-                    </form>
+                <article class="tw-building-card overflow-hidden text-sm pool-card-responsive">
+                    <div class="relative w-full bg-gray-200 pool-img-container">
+                        {% if pool.key == 'tongshi' %}
+                        <img src="/static/images/buildings/cunmu.webp" class="w-full h-full object-cover" alt="{{ pool.name }}">
+                        {% elif pool.key == 'xiangshi' %}
+                        <img src="/static/images/buildings/xiangshi.webp" class="w-full h-full object-cover" alt="{{ pool.name }}">
+                        {% elif pool.key == 'huishi' %}
+                        <img src="/static/images/buildings/huishi.webp" class="w-full h-full object-cover" alt="{{ pool.name }}">
+                        {% elif pool.key == 'dianshi' %}
+                        <img src="/static/images/buildings/dianshi.webp" class="w-full h-full object-cover" alt="{{ pool.name }}">
+                        {% endif %}
+                    </div>
+
+                    <div class="p-2 pool-content">
+                        <p class="text-xs text-text-muted mb-2 h-8 overflow-hidden text-ellipsis leading-tight">{{ pool.description }}</p>
+                        <form method="post" action="{% url 'guests:recruit' %}" class="recruit-form"
+                              data-pool-name="{{ pool.name }}"
+                              data-pool-cost="{% for key,val in pool.cost.items %}{{ key }} {{ val }}{% empty %}免费{% endfor %}"
+                              data-pool-base="{{ pool.draw_count }}"
+                              data-pool-bonus="{{ manor.tavern_recruitment_bonus }}">
+                            {% csrf_token %}
+                            <input type="hidden" name="pool" value="{{ pool.id }}">
+                            <button type="submit" class="tw-btn-primary w-full py-1">招募</button>
+                        </form>
+                    </div>
                 </article>
                 {% empty %}
                 <p class="tw-empty-hint">暂无卡池配置。</p>
@@ -68,8 +106,8 @@
                     {% for candidate in candidates %}
                     <label class="flex items-center gap-2 px-3 py-2 bg-bg-hover rounded-md cursor-pointer hover:bg-bg-secondary border border-border-light">
                         <input type="checkbox" name="candidate_ids" value="{{ candidate.id }}" class="cursor-pointer">
-                        {% if candidate.rarity_revealed %}
-                        <span class="font-semibold rarity-text-{{ candidate.rarity|rarity_class }}">{{ candidate.display_name }}</span>
+                        {% if candidate.rarity_revealed or candidate.rarity == 'gray' or candidate.rarity == 'red' %}
+                        <span class="font-semibold rarity-text-{{ candidate.rarity }}">{{ candidate.display_name }}</span>
                         {% else %}
                         <span class="font-semibold">{{ candidate.display_name }}</span>
                         {% endif %}
@@ -98,7 +136,7 @@
                 <li class="flex items-center gap-2">
                     <span class="text-text-muted text-sm">{{ record.created_at|date:"m-d H:i" }}</span>
                     <span>-</span>
-                    <span class="font-semibold rarity-text-{{ record.guest.rarity|rarity_class }}">{{ record.guest.display_name }}</span>
+                    <span class="font-semibold rarity-text-{{ record.guest.rarity }}">{{ record.guest.display_name }}</span>
                 </li>
                 {% empty %}
                 <li class="tw-muted">暂无记录</li>
@@ -130,21 +168,46 @@
         }
     });
 
-    // 招募确认（如果有候选者）
+    // 招募确认
     document.querySelectorAll('.recruit-form').forEach(form => {
         form.addEventListener('submit', async (e) => {
-            {% if candidates %}
             e.preventDefault();
+
+            // 如果有待处理候选，先提示处理
+            {% if candidates %}
             try {
                 const confirmed = await gameConfirm(
                     '候选区还有待处理的门客，确定要进行新的招募吗？这将清空当前候选区。',
+                    { title: '招募确认' }
+                );
+                if (!confirmed) return;
+            } catch (err) {
+                console.error('招募确认失败:', err);
+                return;
+            }
+            {% endif %}
+
+            // 招募前确认消耗
+            const poolName = form.dataset.poolName;
+            const costText = form.dataset.poolCost;
+            const baseCount = parseInt(form.dataset.poolBase);
+            const bonusCount = parseInt(form.dataset.poolBonus);
+            const totalCount = baseCount + bonusCount;
+
+            let countText = `${totalCount}人`;
+            if (bonusCount > 0) {
+                countText += ` (基础${baseCount} + 酒馆加成${bonusCount})`;
+            }
+
+            try {
+                const confirmed = await gameConfirm(
+                    `确定要进行 ${poolName} 吗？\n预计招募候选：${countText}\n本次消耗：${costText}`,
                     { title: '招募确认' }
                 );
                 if (confirmed) form.submit();
             } catch (err) {
                 console.error('招募确认失败:', err);
             }
-            {% endif %}
         });
     });
 

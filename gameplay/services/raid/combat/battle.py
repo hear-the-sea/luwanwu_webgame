@@ -30,6 +30,105 @@ from .travel import _dismiss_marching_raids_if_protected
 logger = logging.getLogger(__name__)
 
 
+def _load_locked_raid_run(run_pk: int) -> Optional[RaidRun]:
+    return (
+        RaidRun.objects.select_for_update()
+        .select_related("attacker", "defender")
+        .prefetch_related("guests")
+        .filter(pk=run_pk)
+        .first()
+    )
+
+
+def _prepare_run_for_battle(run_pk: int, now) -> Optional[RaidRun]:
+    locked_run = _load_locked_raid_run(run_pk)
+    if not locked_run:
+        return None
+
+    if locked_run.status == RaidRun.Status.RETREATED:
+        if locked_run.return_at and locked_run.return_at > now:
+            return None
+        _finalize_raid_retreat(locked_run, now)
+        return None
+
+    if locked_run.status != RaidRun.Status.MARCHING:
+        return None
+
+    locked_run.status = RaidRun.Status.BATTLING
+    locked_run.save(update_fields=["status"])
+    return locked_run
+
+
+def _apply_raid_loot_if_needed(locked_run: RaidRun, is_attacker_victory: bool) -> None:
+    if not is_attacker_victory:
+        return
+
+    locked_defender = Manor.objects.select_for_update().get(pk=locked_run.defender_id)
+    loot_resources, loot_items = _calculate_loot(locked_defender)
+    applied_resources, applied_items = _apply_loot(
+        locked_defender,
+        loot_resources,
+        loot_items,
+        locked_manor=locked_defender,
+    )
+    locked_run.loot_resources = applied_resources
+    locked_run.loot_items = applied_items
+
+
+def _apply_capture_reward(locked_run: RaidRun, report, is_attacker_victory: bool) -> None:
+    try:
+        capture_info = _try_capture_guest(locked_run, report, is_attacker_victory)
+        if capture_info:
+            locked_run.battle_rewards = {**(locked_run.battle_rewards or {}), "capture": capture_info}
+    except Exception as exc:
+        logger.warning(
+            "raid capture failed: run_id=%s attacker=%s defender=%s error=%s",
+            locked_run.id,
+            locked_run.attacker_id,
+            locked_run.defender_id,
+            exc,
+            exc_info=True,
+        )
+
+
+def _apply_salvage_reward(locked_run: RaidRun, report, is_attacker_victory: bool) -> None:
+    from gameplay.services.battle_salvage import calculate_battle_salvage, grant_battle_salvage
+
+    exp_fruit_count, equipment_recovery = calculate_battle_salvage(report)
+    if exp_fruit_count <= 0 and not equipment_recovery:
+        return
+
+    winner_manor = locked_run.attacker if is_attacker_victory else locked_run.defender
+    grant_battle_salvage(winner_manor, exp_fruit_count, equipment_recovery)
+    locked_run.battle_rewards = {
+        **(locked_run.battle_rewards or {}),
+        "exp_fruit": exp_fruit_count,
+        "equipment": equipment_recovery,
+    }
+
+
+def _dispatch_complete_raid_task(run: RaidRun) -> None:
+    try:
+        from gameplay.tasks import complete_raid_task
+    except Exception as exc:
+        logger.warning(
+            "complete_raid_task dispatch failed: run_id=%s error=%s",
+            run.id,
+            exc,
+            exc_info=True,
+        )
+        return
+
+    remaining = run.travel_time
+    safe_apply_async(
+        complete_raid_task,
+        args=[run.id],
+        countdown=remaining,
+        logger=logger,
+        log_message="complete_raid_task dispatch failed",
+    )
+
+
 def process_raid_battle(run: RaidRun, now=None) -> None:
     """
     处理踢馆战斗。
@@ -41,165 +140,81 @@ def process_raid_battle(run: RaidRun, now=None) -> None:
     now = now or timezone.now()
 
     with transaction.atomic():
-        locked_run = (
-            RaidRun.objects.select_for_update()
-            .select_related("attacker", "defender")
-            .prefetch_related("guests")
-            .filter(pk=run.pk)
-            .first()
-        )
-
-        if not locked_run:
+        locked_run = _prepare_run_for_battle(run.pk, now)
+        if locked_run is None:
             return
 
-        # 检查状态
-        if locked_run.status == RaidRun.Status.RETREATED:
-            # 已撤退：仅在到达返程完成时间后才可完成（避免在 battle_at 被提前结算）
-            if locked_run.return_at and locked_run.return_at > now:
-                return
-            _finalize_raid_retreat(locked_run, now)
-            return
+        # 修复：在战斗计算前显式锁定攻守双方 Manor
+        # 确保后续的声望计算、俘虏容量检查等都是基于最新状态，防止并发陈旧读
+        from gameplay.models import Manor as ManorModel
+        ManorModel.objects.select_for_update().filter(pk__in=[locked_run.attacker_id, locked_run.defender_id]).order_by("pk").count()
 
-        if locked_run.status != RaidRun.Status.MARCHING:
-            return
-
-        locked_run.status = RaidRun.Status.BATTLING
-        locked_run.save(update_fields=["status"])
-
-        # 执行战斗
         report = _execute_raid_battle(locked_run)
-
-        # 应用防守方护院损失（护院实际损耗）
         apply_defender_troop_losses(locked_run.defender, report)
 
-        # 判定胜负
         is_attacker_victory = report.winner == "attacker"
         locked_run.is_attacker_victory = is_attacker_victory
         locked_run.battle_report = report
 
-        # 计算战利品（仅进攻方胜利时）
-        if is_attacker_victory:
-            locked_defender = Manor.objects.select_for_update().get(pk=locked_run.defender_id)
-            loot_resources, loot_items = _calculate_loot(locked_defender)
-            # 扣除防守方资源和物品，记录实际扣除量
-            applied_resources, applied_items = _apply_loot(
-                locked_defender,
-                loot_resources,
-                loot_items,
-                locked_manor=locked_defender,
-            )
-            locked_run.loot_resources = applied_resources
-            locked_run.loot_items = applied_items
-
-        # 计算声望变化
+        _apply_raid_loot_if_needed(locked_run, is_attacker_victory)
         _apply_prestige_changes(locked_run, is_attacker_victory)
+        _apply_capture_reward(locked_run, report, is_attacker_victory)
+        _apply_salvage_reward(locked_run, report, is_attacker_victory)
 
-        # 俘获门客（胜利方有概率俘获失败方出战门客，单场最多1名）
-        try:
-            capture_info = _try_capture_guest(locked_run, report, is_attacker_victory)
-            if capture_info:
-                locked_run.battle_rewards = {**(locked_run.battle_rewards or {}), "capture": capture_info}
-        except Exception as exc:
-            logger.warning(
-                "raid capture failed: run_id=%s attacker=%s defender=%s error=%s",
-                locked_run.id,
-                locked_run.attacker_id,
-                locked_run.defender_id,
-                exc,
-                exc_info=True,
-            )
-
-        # 计算并发放战斗通用奖励（经验果+装备回收）给胜利方
-        from gameplay.services.battle_salvage import calculate_battle_salvage, grant_battle_salvage
-
-        exp_fruit_count, equipment_recovery = calculate_battle_salvage(report)
-        if exp_fruit_count > 0 or equipment_recovery:
-            winner_manor = locked_run.attacker if is_attacker_victory else locked_run.defender
-            grant_battle_salvage(winner_manor, exp_fruit_count, equipment_recovery)
-            # 记录战斗奖励到 run 以便消息显示
-            locked_run.battle_rewards = {
-                **(locked_run.battle_rewards or {}),
-                "exp_fruit": exp_fruit_count,
-                "equipment": equipment_recovery,
-            }
-
-        # 更新状态为返程
         locked_run.status = RaidRun.Status.RETURNING
         locked_run.save()
 
-    # 发送战报消息
     _send_raid_battle_messages(locked_run)
-
-    # 检查防守方是否触发保护（达到24小时被攻击上限），遣返其他正在路上的进攻队伍
     _dismiss_marching_raids_if_protected(locked_run.defender)
-
-    # 调度返程完成任务
-    try:
-        from gameplay.tasks import complete_raid_task
-    except Exception as exc:
-        logger.warning(
-            "complete_raid_task dispatch failed: run_id=%s error=%s",
-            locked_run.id,
-            exc,
-            exc_info=True,
-        )
-    else:
-        remaining = locked_run.travel_time  # 返程时间等于单程时间
-        safe_apply_async(
-            complete_raid_task,
-            args=[locked_run.id],
-            countdown=remaining,
-            logger=logger,
-            log_message="complete_raid_task dispatch failed",
-        )
+    _dispatch_complete_raid_task(locked_run)
 
 
-def _try_capture_guest(run: RaidRun, report, is_attacker_victory: bool) -> Optional[Dict[str, Any]]:
-    """
-    尝试俘获失败方出战门客（单场最多1名）。
-
-    规则：
-    - 概率固定（不受监牢/结义林影响）
-    - 失败方：仅从本场出战门客中抽取
-    - 结义门客不可被俘获
-    - 监牢满员时不进行俘获判定，不给任何补偿
-    - 俘获成功：门客从失败方列表移除，装备自动消失，进入胜利方监牢
-    """
+def _resolve_capture_sides(run: RaidRun, is_attacker_victory: bool) -> tuple[Manor, Manor]:
     winner = run.attacker if is_attacker_victory else run.defender
     loser = run.defender if is_attacker_victory else run.attacker
+    return winner, loser
 
+
+def _can_attempt_capture(winner: Manor) -> bool:
     capacity = int(getattr(winner, "jail_capacity", 0) or 0)
     if capacity <= 0:
-        return None
+        return False
 
     held_count = JailPrisoner.objects.filter(captor=winner, status=JailPrisoner.Status.HELD).count()
     if held_count >= capacity:
-        return None
+        return False
 
     capture_rate = float(getattr(combat_pkg.PVPConstants, "RAID_CAPTURE_GUEST_RATE", 0.0) or 0.0)
     if capture_rate <= 0:
-        return None
+        return False
     if combat_pkg.random.random() >= capture_rate:
-        return None
+        return False
 
+    return True
+
+
+def _collect_losing_guest_ids(report, is_attacker_victory: bool) -> List[int]:
     losing_team = (report.defender_team or []) if is_attacker_victory else (report.attacker_team or [])
     losing_guest_ids: List[int] = []
+
     for entry in losing_team:
         guest_id = entry.get("guest_id") if isinstance(entry, dict) else None
-        if guest_id:
-            try:
-                losing_guest_ids.append(int(guest_id))
-            except (TypeError, ValueError):
-                continue
+        if not guest_id:
+            continue
+        try:
+            losing_guest_ids.append(int(guest_id))
+        except (TypeError, ValueError):
+            continue
 
-    if not losing_guest_ids:
-        return None
+    return losing_guest_ids
 
+
+def _filter_capture_candidates(losing_guest_ids: List[int]) -> List[int]:
     oathed_ids = set(OathBond.objects.filter(guest_id__in=losing_guest_ids).values_list("guest_id", flat=True))
-    candidates = [gid for gid in losing_guest_ids if gid not in oathed_ids]
-    if not candidates:
-        return None
+    return [guest_id for guest_id in losing_guest_ids if guest_id not in oathed_ids]
 
+
+def _select_capture_target(candidates: List[int], loser: Manor) -> Optional[Guest]:
     target_guest_id = combat_pkg.random.choice(candidates)
     target = (
         Guest.objects.select_for_update().select_related("template", "manor").filter(pk=target_guest_id, manor=loser).first()
@@ -207,15 +222,13 @@ def _try_capture_guest(run: RaidRun, report, is_attacker_victory: bool) -> Optio
     if not target:
         return None
 
-    # 兜底：并发下如果刚结义/状态变化，直接放弃俘获
     if OathBond.objects.filter(guest=target).exists():
         return None
 
-    captured_name = target.display_name
-    captured_rarity = getattr(getattr(target, "template", None), "rarity", "") or ""
-    captured_template_key = getattr(getattr(target, "template", None), "key", "") or ""
+    return target
 
-    # 装备自动消失：删除该门客已装备的装备实例
+
+def _delete_captured_guest_gear(run: RaidRun, target: Guest) -> None:
     try:
         from guests.models import GearItem
 
@@ -229,20 +242,8 @@ def _try_capture_guest(run: RaidRun, report, is_attacker_victory: bool) -> Optio
             exc_info=True,
         )
 
-    JailPrisoner.objects.create(
-        captor=winner,
-        original_manor=loser,
-        guest_template=target.template,
-        original_guest_name=captured_name,
-        original_level=target.level,
-        loyalty=target.loyalty,  # 保留被俘前的忠诚度
-        status=JailPrisoner.Status.HELD,
-        raid_run=run,
-    )
 
-    # 从失败方门客列表移除（门客本体删除；装备已提前删除）
-    target.delete()
-
+def _capture_guest_payload(captured_name: str, captured_rarity: str, captured_template_key: str, is_attacker_victory: bool) -> Dict[str, Any]:
     return {
         "guest_name": captured_name,
         "rarity": captured_rarity,
@@ -250,6 +251,55 @@ def _try_capture_guest(run: RaidRun, report, is_attacker_victory: bool) -> Optio
         "from": "defender" if is_attacker_victory else "attacker",
         "into": "jail",
     }
+
+
+def _try_capture_guest(run: RaidRun, report, is_attacker_victory: bool) -> Optional[Dict[str, Any]]:
+    """
+    尝试俘获失败方出战门客（单场最多1名）。
+
+    规则：
+    - 概率固定（不受监牢/结义林影响）
+    - 失败方：仅从本场出战门客中抽取
+    - 结义门客不可被俘获
+    - 监牢满员时不进行俘获判定，不给任何补偿
+    - 俘获成功：门客从失败方列表移除，装备自动消失，进入胜利方监牢
+    """
+    winner, loser = _resolve_capture_sides(run, is_attacker_victory)
+    if not _can_attempt_capture(winner):
+        return None
+
+    losing_guest_ids = _collect_losing_guest_ids(report, is_attacker_victory)
+    if not losing_guest_ids:
+        return None
+
+    candidates = _filter_capture_candidates(losing_guest_ids)
+    if not candidates:
+        return None
+
+    target = _select_capture_target(candidates, loser)
+    if not target:
+        return None
+
+    captured_name = target.display_name
+    captured_rarity = getattr(getattr(target, "template", None), "rarity", "") or ""
+    captured_template_key = getattr(getattr(target, "template", None), "key", "") or ""
+
+    _delete_captured_guest_gear(run, target)
+
+    JailPrisoner.objects.create(
+        captor=winner,
+        original_manor=loser,
+        guest_template=target.template,
+        original_guest_name=captured_name,
+        original_level=target.level,
+        loyalty=target.loyalty,
+        status=JailPrisoner.Status.HELD,
+        raid_run=run,
+    )
+
+    target.delete()
+
+    return _capture_guest_payload(captured_name, captured_rarity, captured_template_key, is_attacker_victory)
 
 
 def _execute_raid_battle(run: RaidRun):

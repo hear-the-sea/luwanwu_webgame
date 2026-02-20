@@ -129,7 +129,7 @@ class GuestTemplate(models.Model):
 
 class RecruitmentPool(models.Model):
     class Tier(models.TextChoices):
-        TONGSHI = "tongshi", "童试"
+        TONGSHI = "tongshi", "村募"
         XIANGSHI = "xiangshi", "乡试"
         HUISHI = "huishi", "会试"
         DIANSHI = "dianshi", "殿试"
@@ -231,6 +231,13 @@ class Guest(models.Model):
     agility = models.PositiveIntegerField("敏捷", default=80)
     luck = models.PositiveIntegerField("运势", default=50)
     loyalty = models.PositiveIntegerField("忠诚度", default=80)
+    loyalty_processed_for_date = models.DateField(
+        "忠诚度处理日期",
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="记录最近一次每日忠诚度结算的日期，用于避免重复执行",
+    )
     hp_bonus = models.IntegerField(default=0)
     current_hp = models.PositiveIntegerField(default=0)
     last_hp_recovery_at = models.DateTimeField(default=timezone.now)
@@ -521,6 +528,7 @@ class SalaryPayment(models.Model):
         indexes = [
             models.Index(fields=["guest", "for_date"]),
             models.Index(fields=["manor", "for_date"]),
+            models.Index(fields=["for_date"], name="guests_salar_for_date_idx"),
         ]
         unique_together = ("guest", "for_date")
 

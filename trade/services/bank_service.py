@@ -217,7 +217,7 @@ def calculate_gold_bar_cost(manor: Manor, quantity: int) -> dict:
     today_count = get_today_exchange_count(manor)
 
     base_cost = 0
-    rate_details = []
+    rate_details: list[int] = []
 
     # 累进系数封顶阈值 calculation: 1 + 0.05 * x = 1.60 => x = 12
     # 即第 12 根（index 12，count=12）开始达到最大值

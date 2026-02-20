@@ -13,6 +13,108 @@ if TYPE_CHECKING:
     from ..combatants import Combatant
 
 
+def _mark_actor_troop_damage(
+    actor: "Combatant",
+    damage: int,
+    source: "Combatant",
+    troop_unit_hp_fn,
+    calculate_slaughter_multiplier_fn,
+) -> tuple[int, bool]:
+    per_unit_hp_actor = troop_unit_hp_fn(actor)
+    slaughter_mult = calculate_slaughter_multiplier_fn(source, actor)
+    kills = int(damage * slaughter_mult / per_unit_hp_actor)
+    kills = max(0, min(actor.troop_strength, kills))
+    actor.troop_strength = max(0, actor.troop_strength - kills)
+    defeated = actor.troop_strength <= 0
+    if defeated:
+        actor.hp = min(actor.hp, 0)
+    return kills, defeated
+
+
+def _mark_actor_guest_damage(actor: "Combatant") -> tuple[int, bool]:
+    if actor.hp <= 0:
+        return 1, True
+    return 0, False
+
+
+def _apply_reflect(
+    actor: "Combatant",
+    target: "Combatant",
+    damage: int,
+    troop_unit_hp_fn,
+    calculate_slaughter_multiplier_fn,
+) -> tuple[int, int, bool]:
+    reflect_ratio = target.tech_effects.get("damage_reflect", 0)
+    if reflect_ratio <= 0 or target.troop_class != "jian":
+        return 0, 0, False
+
+    max_reflect = int(actor.attack * 1.0)
+    reflect_damage = min(int(damage * reflect_ratio), max_reflect)
+    actor.hp -= reflect_damage
+
+    if actor.kind == "troop":
+        reflect_kills, reflect_defeated = _mark_actor_troop_damage(
+            actor,
+            reflect_damage,
+            target,
+            troop_unit_hp_fn,
+            calculate_slaughter_multiplier_fn,
+        )
+    else:
+        reflect_kills, reflect_defeated = _mark_actor_guest_damage(actor)
+
+    return reflect_damage, reflect_kills, reflect_defeated
+
+
+def _apply_counter(
+    actor: "Combatant",
+    target: "Combatant",
+    rng: random.Random,
+    effective_attack_value_fn,
+    troop_unit_hp_fn,
+    calculate_slaughter_multiplier_fn,
+) -> tuple[int, int, bool]:
+    counter_chance = target.tech_effects.get("counter_attack_chance", 0)
+    if counter_chance <= 0 or target.hp <= 0 or rng.random() >= counter_chance:
+        return 0, 0, False
+
+    counter_mult = target.tech_effects.get("counter_attack_damage", 0.30)
+    counter_attack_value = effective_attack_value_fn(target, actor)
+    counter_damage = int(counter_attack_value * counter_mult)
+    actor.hp -= counter_damage
+
+    if actor.kind == "troop":
+        counter_kills, counter_defeated = _mark_actor_troop_damage(
+            actor,
+            counter_damage,
+            target,
+            troop_unit_hp_fn,
+            calculate_slaughter_multiplier_fn,
+        )
+    else:
+        counter_kills, counter_defeated = _mark_actor_guest_damage(actor)
+
+    return counter_damage, counter_kills, counter_defeated
+
+
+def _apply_target_damage(target: "Combatant", damage: int, troop_unit_hp_fn) -> tuple[int, bool, int]:
+    target.hp -= damage
+    target_defeated = target.hp <= 0
+
+    if target.kind == "troop":
+        per_unit_hp = troop_unit_hp_fn(target)
+        kills = int(damage / per_unit_hp)
+        kills = max(0, min(target.troop_strength, kills))
+        target.troop_strength = max(0, target.troop_strength - kills)
+        if target_defeated or target.troop_strength <= 0:
+            target_defeated = True
+            target.hp = min(target.hp, 0)
+        return kills, target_defeated, damage
+
+    kills = 1 if target_defeated else 0
+    return kills, target_defeated, damage
+
+
 def apply_damage_results(
     actor: "Combatant",
     target: "Combatant",
@@ -33,77 +135,26 @@ def apply_damage_results(
         troop_unit_hp,
     )
 
-    target.hp -= damage
-    target_defeated = target.hp <= 0
+    kills, target_defeated, display_damage = _apply_target_damage(target, damage, troop_unit_hp)
+    reflect_damage, reflect_kills, reflect_defeated = _apply_reflect(
+        actor,
+        target,
+        damage,
+        troop_unit_hp,
+        calculate_slaughter_multiplier,
+    )
+    counter_damage, counter_kills, counter_defeated = _apply_counter(
+        actor,
+        target,
+        rng,
+        effective_attack_value,
+        troop_unit_hp,
+        calculate_slaughter_multiplier,
+    )
 
-    display_damage = damage
-
-    # 【护身剑罡】剑系伤害反弹
-    reflect_damage = 0
-    reflect_kills = 0
-    reflect_defeated = False
-    reflect_ratio = target.tech_effects.get("damage_reflect", 0)
-    if reflect_ratio > 0 and target.troop_class == "jian":
-        max_reflect = int(actor.attack * 1.0)
-        reflect_damage = min(int(damage * reflect_ratio), max_reflect)
-        actor.hp -= reflect_damage
-
-        if actor.kind == "troop":
-            per_unit_hp_actor = troop_unit_hp(actor)
-            slaughter_mult_reflect = calculate_slaughter_multiplier(target, actor)
-            reflect_kills = int(reflect_damage * slaughter_mult_reflect / per_unit_hp_actor)
-            reflect_kills = max(0, min(actor.troop_strength, reflect_kills))
-            actor.troop_strength = max(0, actor.troop_strength - reflect_kills)
-            if actor.troop_strength <= 0:
-                reflect_defeated = True
-                actor.hp = min(actor.hp, 0)
-        else:  # actor.kind == "guest"
-            if actor.hp <= 0:
-                reflect_kills = 1
-                reflect_defeated = True
-
-    # 【反戈一击】枪系反击
-    counter_damage = 0
-    counter_kills = 0
-    counter_defeated = False
-    counter_chance = target.tech_effects.get("counter_attack_chance", 0)
-    if counter_chance > 0 and target.hp > 0 and rng.random() < counter_chance:
-        counter_mult = target.tech_effects.get("counter_attack_damage", 0.30)
-        counter_attack_value = effective_attack_value(target, actor)
-        counter_damage = int(counter_attack_value * counter_mult)
-        actor.hp -= counter_damage
-
-        if actor.kind == "troop":
-            per_unit_hp_actor = troop_unit_hp(actor)
-            slaughter_mult_counter = calculate_slaughter_multiplier(target, actor)
-            counter_kills = int(counter_damage * slaughter_mult_counter / per_unit_hp_actor)
-            counter_kills = max(0, min(actor.troop_strength, counter_kills))
-            actor.troop_strength = max(0, actor.troop_strength - counter_kills)
-            if actor.troop_strength <= 0:
-                counter_defeated = True
-                actor.hp = min(actor.hp, 0)
-        else:  # actor.kind == "guest"
-            if actor.hp <= 0:
-                counter_kills = 1
-                counter_defeated = True
-
-    actor_defeated = False
-    if actor.hp <= 0:
+    actor_defeated = actor.hp <= 0
+    if actor_defeated:
         actor.hp = min(actor.hp, 0)
-        actor_defeated = True
-
-    kills = 0
-    if target.kind == "troop":
-        per_unit_hp = troop_unit_hp(target)
-        kills = int(damage / per_unit_hp)
-        kills = max(0, min(target.troop_strength, kills))
-        target.troop_strength = max(0, target.troop_strength - kills)
-        if target_defeated or target.troop_strength <= 0:
-            target_defeated = True
-            target.hp = min(target.hp, 0)
-        display_damage = damage
-    else:
-        kills = 1 if target_defeated else 0
 
     return _DamageApplication(
         display_damage=display_damage,

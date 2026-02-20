@@ -5,9 +5,10 @@
 from __future__ import annotations
 
 import random
-from typing import List, TYPE_CHECKING
+from typing import Callable, TYPE_CHECKING
 
 from .constants import PRIORITY_TARGET_WEIGHT, TROOP_COUNTERS
+from .types import AttackSkill, _SelectedAttackTargets
 from .utils import alive
 
 if TYPE_CHECKING:
@@ -24,7 +25,7 @@ def is_ranged_attack(actor: "Combatant", round_priority: int) -> bool:
 
 def select_target_with_priority(
     actor: "Combatant",
-    opponents: List["Combatant"],
+    opponents: list["Combatant"],
     rng: random.Random
 ) -> "Combatant":
     """
@@ -46,7 +47,7 @@ def select_target_with_priority(
         >>> # 门客有70%概率优先攻击敌方门客
         >>> # 30%概率随机选择，增加战斗不确定性
     """
-    priority_targets: List["Combatant"] = []
+    priority_targets: list["Combatant"] = []
 
     # 护院：优先攻击克制的兵种
     if actor.kind == "troop":
@@ -74,11 +75,11 @@ def select_target_with_priority(
 
 def select_attack_targets(
     actor: "Combatant",
-    attacker_team: List["Combatant"],
-    defender_team: List["Combatant"],
+    attacker_team: list["Combatant"],
+    defender_team: list["Combatant"],
     rng: random.Random,
-    trigger_attack_skills_fn,
-) -> tuple | None:
+    trigger_attack_skills_fn: Callable[["Combatant", random.Random], list[AttackSkill]],
+) -> _SelectedAttackTargets | None:
     """
     选择本次行动的攻击目标（含多目标技能的扩展目标）。
 
@@ -94,8 +95,6 @@ def select_attack_targets(
     - 若无可攻击目标，返回 None（调用方需负责设置 `has_acted_this_round` 等结算字段）。
     - 否则返回 (engaged_targets, skills) 元组。
     """
-    from .types import _SelectedAttackTargets
-
     opponents = alive(defender_team) if actor.side == "attacker" else alive(attacker_team)
     if not opponents:
         return None

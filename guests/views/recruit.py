@@ -19,12 +19,29 @@ from core.utils.rate_limit import rate_limit_redirect
 
 from ..forms import RecruitForm
 from ..models import RecruitmentCandidate
-from ..services import (
-    bulk_finalize_candidates,
-    convert_candidate_to_retainer,
-    recruit_guest,
-    reveal_candidate_rarity,
-)
+from ..services import bulk_finalize_candidates, convert_candidate_to_retainer, recruit_guest, reveal_candidate_rarity
+
+
+def _load_selected_candidates(manor, candidate_ids):
+    queryset = RecruitmentCandidate.objects.filter(manor=manor, id__in=candidate_ids)
+    return queryset, list(queryset)
+
+
+def _retain_candidates(candidates) -> tuple[int, str | None]:
+    retained = 0
+    error_message = None
+    for candidate in candidates:
+        try:
+            convert_candidate_to_retainer(candidate)
+            retained += 1
+        except (GameError, ValueError) as exc:
+            error_message = sanitize_error_message(exc)
+            break
+    return retained, error_message
+
+
+def _finalize_candidates(candidates) -> tuple[list, list]:
+    return bulk_finalize_candidates(candidates)
 
 
 @method_decorator(require_POST, name="dispatch")
@@ -62,8 +79,7 @@ def accept_candidate_view(request):
         messages.warning(request, "请先勾选候选门客。")
         return redirect("gameplay:recruitment_hall")
 
-    queryset = RecruitmentCandidate.objects.filter(manor=manor, id__in=candidate_ids)
-    candidates = list(queryset)
+    queryset, candidates = _load_selected_candidates(manor, candidate_ids)
     if not candidates:
         messages.error(request, "未找到选中的候选门客。")
         return redirect("gameplay:recruitment_hall")
@@ -73,15 +89,7 @@ def accept_candidate_view(request):
         queryset.delete()
         messages.info(request, f"已放弃 {deleted} 名候选门客。")
     elif action == "retain":
-        retained = 0
-        error_message = None
-        for candidate in candidates:
-            try:
-                convert_candidate_to_retainer(candidate)
-                retained += 1
-            except (GameError, ValueError) as exc:
-                error_message = sanitize_error_message(exc)
-                break
+        retained, error_message = _retain_candidates(candidates)
         if retained:
             messages.success(request, f"已将 {retained} 名候选收为家丁。")
         if error_message:
@@ -89,7 +97,7 @@ def accept_candidate_view(request):
     else:
         # 使用批量确认函数优化性能
         try:
-            succeeded, failed = bulk_finalize_candidates(candidates)
+            succeeded, failed = _finalize_candidates(candidates)
             if succeeded:
                 names = [g.display_name for g in succeeded]
                 messages.success(request, f"成功招募 {len(succeeded)} 名门客：{', '.join(names)}")

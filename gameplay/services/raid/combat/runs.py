@@ -10,7 +10,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import F, Q
 from django.utils import timezone
 
-from common.utils.celery import safe_apply_async
+from common.utils.celery import safe_apply_async, safe_apply_async_with_dedup
 
 from gameplay.services.raid import combat as combat_pkg
 
@@ -22,6 +22,262 @@ from .loot import _grant_loot_items
 from .travel import calculate_raid_travel_time, get_active_raid_count
 
 logger = logging.getLogger(__name__)
+
+
+_REFRESH_DISPATCH_DEDUP_SECONDS = 5
+
+
+def _try_dispatch_raid_refresh_task(task, run_id: int, stage: str) -> bool:
+    return safe_apply_async_with_dedup(
+        task,
+        dedup_key=f"pvp:refresh_dispatch:raid:{stage}:{run_id}",
+        dedup_timeout=_REFRESH_DISPATCH_DEDUP_SECONDS,
+        args=[run_id],
+        countdown=0,
+        logger=logger,
+        log_message=f"raid refresh dispatch failed: stage={stage} run_id={run_id}",
+    )
+
+
+def _validate_and_normalize_raid_inputs(
+    attacker: Manor,
+    defender: Manor,
+    guest_ids: List[int],
+    troop_loadout: Dict[str, int] | None,
+) -> tuple[List[int], Dict[str, int]]:
+    from ..utils import can_attack_target
+
+    can_attack, reason = can_attack_target(attacker, defender)
+    if not can_attack:
+        raise ValueError(reason)
+
+    active_count = get_active_raid_count(attacker)
+    if active_count >= combat_pkg.PVPConstants.RAID_MAX_CONCURRENT:
+        raise ValueError(f"同时最多进行 {combat_pkg.PVPConstants.RAID_MAX_CONCURRENT} 次出征")
+
+    if not guest_ids:
+        raise ValueError("请选择至少一名门客")
+    if not isinstance(guest_ids, list):
+        raise ValueError("门客参数无效")
+    try:
+        normalized_guest_ids = [int(gid) for gid in guest_ids]
+    except (TypeError, ValueError):
+        raise ValueError("门客参数无效")
+
+    normalized_troop_loadout = troop_loadout or {}
+    if not isinstance(normalized_troop_loadout, dict):
+        raise ValueError("护院配置无效")
+    return normalized_guest_ids, normalized_troop_loadout
+
+
+def _load_and_validate_attacker_guests(attacker: Manor, guest_ids: List[int]) -> list[Guest]:
+    guests = list(
+        attacker.guests.select_for_update()
+        .filter(id__in=guest_ids)
+        .select_related("template")
+        .prefetch_related("skills")
+    )
+
+    if len(guests) != len(set(guest_ids)):
+        raise ValueError("部分门客不可用或已离开庄园")
+
+    max_squad_size = getattr(attacker, "max_squad_size", None) or 0
+    if max_squad_size and len(guests) > max_squad_size:
+        raise ValueError(f"最多只能派出 {max_squad_size} 名门客出征")
+
+    for guest in guests:
+        if guest.status != GuestStatus.IDLE:
+            raise ValueError(f"门客 {guest.display_name} 当前不可出征")
+    return guests
+
+
+def _normalize_and_validate_raid_loadout(guests: list[Guest], troop_loadout: Dict[str, int]) -> Dict[str, int]:
+    from battle.combatants import normalize_troop_loadout
+    from battle.services import validate_troop_capacity
+
+    loadout = normalize_troop_loadout(troop_loadout, default_if_empty=False)
+    loadout = {key: count for key, count in loadout.items() if count > 0}
+    validate_troop_capacity(guests, loadout)
+    return loadout
+
+
+def _create_raid_run_record(
+    attacker: Manor,
+    defender: Manor,
+    guests: list[Guest],
+    loadout: Dict[str, int],
+    travel_time: int,
+) -> RaidRun:
+    for guest in guests:
+        guest.status = GuestStatus.DEPLOYED
+    Guest.objects.bulk_update(guests, ["status"])
+
+    now = timezone.now()
+    run = RaidRun.objects.create(
+        attacker=attacker,
+        defender=defender,
+        troop_loadout=loadout,
+        status=RaidRun.Status.MARCHING,
+        travel_time=travel_time,
+        battle_at=now + timedelta(seconds=travel_time),
+        return_at=now + timedelta(seconds=travel_time * 2),
+    )
+    run.guests.set(guests)
+    return run
+
+
+def _dispatch_raid_battle_task(run: RaidRun, travel_time: int) -> None:
+    try:
+        from gameplay.tasks import process_raid_battle_task
+    except Exception as exc:
+        logger.warning(
+            "process_raid_battle_task dispatch failed: run_id=%s error=%s",
+            run.id,
+            exc,
+            exc_info=True,
+        )
+        return
+
+    safe_apply_async(
+        process_raid_battle_task,
+        args=[run.id],
+        countdown=travel_time,
+        logger=logger,
+        log_message="process_raid_battle_task dispatch failed",
+    )
+
+
+def _extract_raid_troops_lost(loadout: Dict[str, int], battle_report) -> Dict[str, int]:
+    if not battle_report:
+        return {}
+
+    attacker_losses = (battle_report.losses or {}).get("attacker", {}) or {}
+    casualties = attacker_losses.get("casualties", []) or []
+
+    from battle.troops import load_troop_templates
+
+    troop_definitions = load_troop_templates()
+    troops_lost: Dict[str, int] = {}
+    for entry in casualties:
+        key = entry.get("key")
+        if key not in loadout or key not in troop_definitions:
+            continue
+        try:
+            lost = int(entry.get("lost", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+        if lost > 0:
+            troops_lost[key] = troops_lost.get(key, 0) + lost
+    return troops_lost
+
+
+def _calculate_surviving_raid_troops(loadout: Dict[str, int], troops_lost: Dict[str, int]) -> Dict[str, int]:
+    surviving_troops: Dict[str, int] = {}
+    for troop_key, original_count in loadout.items():
+        surviving = max(0, original_count - troops_lost.get(troop_key, 0))
+        if surviving > 0:
+            surviving_troops[troop_key] = surviving
+    return surviving_troops
+
+
+def _normalize_troops_for_addition(troops_to_add: Dict[str, int]) -> Dict[str, int]:
+    return {k: v for k, v in troops_to_add.items() if v > 0}
+
+
+def _collect_troop_upserts(
+    manor: Manor,
+    troops_to_add: Dict[str, int],
+    templates: Dict[str, object],
+    existing: Dict[str, PlayerTroop],
+    now,
+) -> tuple[list[PlayerTroop], list[PlayerTroop]]:
+    to_update: list[PlayerTroop] = []
+    to_create: list[PlayerTroop] = []
+    for key, count in troops_to_add.items():
+        template = templates.get(key)
+        if not template:
+            logger.warning("Unknown troop template: %s", key)
+            continue
+        if key in existing:
+            existing[key].count += count
+            existing[key].updated_at = now
+            to_update.append(existing[key])
+        else:
+            to_create.append(PlayerTroop(manor=manor, troop_template=template, count=count))
+    return to_update, to_create
+
+
+def _bulk_create_troops_with_fallback(to_create: list[PlayerTroop], now) -> None:
+    if not to_create:
+        return
+    try:
+        PlayerTroop.objects.bulk_create(to_create, ignore_conflicts=True)
+    except IntegrityError:
+        for pt in to_create:
+            PlayerTroop.objects.filter(manor=pt.manor, troop_template=pt.troop_template).update(
+                count=F("count") + pt.count,
+                updated_at=now,
+            )
+
+
+def _collect_due_raid_run_ids(manor: Manor, now) -> tuple[list[int], list[int], list[int]]:
+    marching_ids = list(
+        RaidRun.objects.filter(attacker=manor, status=RaidRun.Status.MARCHING, battle_at__lte=now).values_list("id", flat=True)
+    )
+    returning_ids = list(
+        RaidRun.objects.filter(attacker=manor, status=RaidRun.Status.RETURNING, return_at__lte=now).values_list("id", flat=True)
+    )
+    retreated_ids = list(
+        RaidRun.objects.filter(attacker=manor, status=RaidRun.Status.RETREATED, return_at__lte=now).values_list("id", flat=True)
+    )
+    return marching_ids, returning_ids, retreated_ids
+
+
+def _dispatch_async_raid_refresh(
+    marching_ids: list[int],
+    returning_ids: list[int],
+    retreated_ids: list[int],
+) -> tuple[list[int], list[int], list[int], bool]:
+    try:
+        from gameplay.tasks import complete_raid_task, process_raid_battle_task
+    except Exception:
+        logger.warning("Failed to import raid tasks, falling back to sync refresh", exc_info=True)
+        return marching_ids, returning_ids, retreated_ids, False
+
+    sync_marching_ids: list[int] = []
+    for run_id in marching_ids:
+        if not _try_dispatch_raid_refresh_task(process_raid_battle_task, run_id, "battle"):
+            sync_marching_ids.append(run_id)
+
+    sync_finalizing_ids: list[int] = []
+    for run_id in returning_ids + retreated_ids:
+        if not _try_dispatch_raid_refresh_task(complete_raid_task, run_id, "return"):
+            sync_finalizing_ids.append(run_id)
+
+    if not sync_marching_ids and not sync_finalizing_ids:
+        return [], [], [], True
+
+    sync_finalizing_set = set(sync_finalizing_ids)
+    return (
+        sync_marching_ids,
+        [run_id for run_id in returning_ids if run_id in sync_finalizing_set],
+        [run_id for run_id in retreated_ids if run_id in sync_finalizing_set],
+        False,
+    )
+
+
+def _process_due_raid_run_ids(now, marching_ids: list[int], returning_ids: list[int], retreated_ids: list[int]) -> None:
+    from .battle import process_raid_battle
+
+    if marching_ids:
+        for run in RaidRun.objects.filter(id__in=marching_ids).order_by("battle_at"):
+            process_raid_battle(run, now=now)
+    if returning_ids:
+        for run in RaidRun.objects.filter(id__in=returning_ids).order_by("return_at"):
+            finalize_raid(run, now=now)
+    if retreated_ids:
+        for run in RaidRun.objects.filter(id__in=retreated_ids).order_by("return_at"):
+            finalize_raid(run, now=now)
 
 
 def start_raid(
@@ -43,114 +299,26 @@ def start_raid(
     Raises:
         ValueError: 无法发起踢馆时
     """
-    # 检查是否可以攻击目标
-    from ..utils import can_attack_target
+    guest_ids, troop_loadout = _validate_and_normalize_raid_inputs(attacker, defender, guest_ids, troop_loadout)
 
-    can_attack, reason = can_attack_target(attacker, defender)
-    if not can_attack:
-        raise ValueError(reason)
-
-    # 检查出征上限
-    active_count = get_active_raid_count(attacker)
-    if active_count >= combat_pkg.PVPConstants.RAID_MAX_CONCURRENT:
-        raise ValueError(f"同时最多进行 {combat_pkg.PVPConstants.RAID_MAX_CONCURRENT} 次出征")
-
-    # 检查门客
-    if not guest_ids:
-        raise ValueError("请选择至少一名门客")
-    if not isinstance(guest_ids, list):
-        raise ValueError("门客参数无效")
-    try:
-        guest_ids = [int(gid) for gid in guest_ids]
-    except (TypeError, ValueError):
-        raise ValueError("门客参数无效")
-
-    if troop_loadout is None:
-        troop_loadout = {}
-    if not isinstance(troop_loadout, dict):
-        raise ValueError("护院配置无效")
-
-    run = None
     with transaction.atomic():
-        # 锁定并验证门客
-        guests = list(
-            attacker.guests.select_for_update()
-            .filter(id__in=guest_ids)
-            .select_related("template")
-            .prefetch_related("skills")
-        )
+        # Lock attacker to prevent concurrent raids bypassing limits
+        Manor.objects.select_for_update().get(pk=attacker.pk)
 
-        if len(guests) != len(set(guest_ids)):
-            raise ValueError("部分门客不可用或已离开庄园")
+        # Re-check concurrent limit inside lock
+        active_count = get_active_raid_count(attacker)
+        if active_count >= combat_pkg.PVPConstants.RAID_MAX_CONCURRENT:
+            raise ValueError(f"同时最多进行 {combat_pkg.PVPConstants.RAID_MAX_CONCURRENT} 次出征")
 
-        # 门客数量不超过出战上限（游侠宝塔）
-        max_squad_size = getattr(attacker, "max_squad_size", None) or 0
-        if max_squad_size and len(guests) > max_squad_size:
-            raise ValueError(f"最多只能派出 {max_squad_size} 名门客出征")
-
-        for guest in guests:
-            if guest.status != GuestStatus.IDLE:
-                raise ValueError(f"门客 {guest.display_name} 当前不可出征")
-
-        # 规范化兵种配置
-        from battle.combatants import normalize_troop_loadout
-
-        loadout = normalize_troop_loadout(troop_loadout, default_if_empty=False)
-        loadout = {key: count for key, count in loadout.items() if count > 0}
-
-        # 验证兵力上限
-        from battle.services import validate_troop_capacity
-
-        validate_troop_capacity(guests, loadout)
-
-        # 扣除护院
+        guests = _load_and_validate_attacker_guests(attacker, guest_ids)
+        loadout = _normalize_and_validate_raid_loadout(guests, troop_loadout)
         _deduct_troops(attacker, loadout)
-
-        # 计算行军时间
         travel_time = calculate_raid_travel_time(attacker, defender, guests, loadout)
-
-        # 批量更新门客状态
-        for guest in guests:
-            guest.status = GuestStatus.DEPLOYED
-        Guest.objects.bulk_update(guests, ["status"])
-
-        # 创建踢馆记录
-        now = timezone.now()
-        battle_at = now + timedelta(seconds=travel_time)
-        return_at = now + timedelta(seconds=travel_time * 2)
-
-        run = RaidRun.objects.create(
-            attacker=attacker,
-            defender=defender,
-            troop_loadout=loadout,
-            status=RaidRun.Status.MARCHING,
-            travel_time=travel_time,
-            battle_at=battle_at,
-            return_at=return_at,
-        )
-        run.guests.set(guests)
+        run = _create_raid_run_record(attacker, defender, guests, loadout, travel_time)
 
     # 发送来袭警报给防守方
     _send_raid_incoming_message(run)
-
-    # 调度战斗任务
-    try:
-        from gameplay.tasks import process_raid_battle_task
-    except Exception as exc:
-        logger.warning(
-            "process_raid_battle_task dispatch failed: run_id=%s error=%s",
-            run.id,
-            exc,
-            exc_info=True,
-        )
-    else:
-        safe_apply_async(
-            process_raid_battle_task,
-            args=[run.id],
-            countdown=travel_time,
-            logger=logger,
-            log_message="process_raid_battle_task dispatch failed",
-        )
+    _dispatch_raid_battle_task(run, travel_time)
 
     return run
 
@@ -279,35 +447,8 @@ def _return_surviving_troops(run: RaidRun) -> None:
         _add_troops_batch(run.attacker, loadout)
         return
 
-    # 根据战报计算存活护院
-    attacker_losses = (run.battle_report.losses or {}).get("attacker", {}) or {}
-    casualties = attacker_losses.get("casualties", []) or []
-
-    from battle.troops import load_troop_templates
-
-    troop_definitions = load_troop_templates()
-
-    troops_lost: Dict[str, int] = {}
-    for entry in casualties:
-        key = entry.get("key")
-        if key not in loadout:
-            continue
-        if key not in troop_definitions:
-            continue
-        try:
-            lost = int(entry.get("lost", 0) or 0)
-        except (TypeError, ValueError):
-            continue
-        if lost > 0:
-            troops_lost[key] = troops_lost.get(key, 0) + lost
-
-    # 计算存活数量
-    surviving_troops = {}
-    for troop_key, original_count in loadout.items():
-        lost = troops_lost.get(troop_key, 0)
-        surviving = max(0, original_count - lost)
-        if surviving > 0:
-            surviving_troops[troop_key] = surviving
+    troops_lost = _extract_raid_troops_lost(loadout, run.battle_report)
+    surviving_troops = _calculate_surviving_raid_troops(loadout, troops_lost)
 
     # 批量归还
     if surviving_troops:
@@ -328,8 +469,7 @@ def _add_troops_batch(manor: Manor, troops_to_add: Dict[str, int]) -> None:
     if not troops_to_add:
         return
 
-    # 过滤掉数量为0的
-    troops_to_add = {k: v for k, v in troops_to_add.items() if v > 0}
+    troops_to_add = _normalize_troops_for_addition(troops_to_add)
     if not troops_to_add:
         return
 
@@ -347,41 +487,12 @@ def _add_troops_batch(manor: Manor, troops_to_add: Dict[str, int]) -> None:
         .select_related("troop_template")
     }
 
-    to_update = []
-    to_create = []
     now = timezone.now()
-
-    for key, count in troops_to_add.items():
-        template = templates.get(key)
-        if not template:
-            logger.warning("Unknown troop template: %s", key)
-            continue
-
-        if key in existing:
-            existing[key].count += count
-            existing[key].updated_at = now
-            to_update.append(existing[key])
-        else:
-            to_create.append(
-                PlayerTroop(
-                    manor=manor,
-                    troop_template=template,
-                    count=count,
-                )
-            )
+    to_update, to_create = _collect_troop_upserts(manor, troops_to_add, templates, existing, now)
 
     if to_update:
         PlayerTroop.objects.bulk_update(to_update, ["count", "updated_at"])
-    if to_create:
-        try:
-            PlayerTroop.objects.bulk_create(to_create, ignore_conflicts=True)
-        except IntegrityError:
-            # 并发创建时回退到逐个处理
-            for pt in to_create:
-                PlayerTroop.objects.filter(manor=manor, troop_template=pt.troop_template).update(
-                    count=F("count") + pt.count,
-                    updated_at=now,
-                )
+    _bulk_create_troops_with_fallback(to_create, now)
 
 
 def request_raid_retreat(run: RaidRun) -> None:
@@ -468,26 +579,24 @@ def can_raid_retreat(run: RaidRun, now=None) -> bool:
     return True
 
 
-def refresh_raid_runs(manor: Manor) -> None:
-    """刷新庄园的踢馆状态"""
+def refresh_raid_runs(manor: Manor, *, prefer_async: bool = False) -> None:
+    """刷新庄园的踢馆状态（支持异步优先结算）。"""
     now = timezone.now()
+    marching_ids, returning_ids, retreated_ids = _collect_due_raid_run_ids(manor, now)
 
-    from .battle import process_raid_battle
+    if not marching_ids and not returning_ids and not retreated_ids:
+        return
 
-    # 处理行军中但已到达战斗时间的
-    marching_runs = RaidRun.objects.filter(attacker=manor, status=RaidRun.Status.MARCHING, battle_at__lte=now)
-    for run in marching_runs:
-        process_raid_battle(run, now=now)
+    if prefer_async:
+        marching_ids, returning_ids, retreated_ids, done_async = _dispatch_async_raid_refresh(
+            marching_ids,
+            returning_ids,
+            retreated_ids,
+        )
+        if done_async:
+            return
 
-    # 处理返程中但已完成的
-    returning_runs = RaidRun.objects.filter(attacker=manor, status=RaidRun.Status.RETURNING, return_at__lte=now)
-    for run in returning_runs:
-        finalize_raid(run, now=now)
-
-    # 处理撤退中但已完成的
-    retreated_runs = RaidRun.objects.filter(attacker=manor, status=RaidRun.Status.RETREATED, return_at__lte=now)
-    for run in retreated_runs:
-        finalize_raid(run, now=now)
+    _process_due_raid_run_ids(now, marching_ids, returning_ids, retreated_ids)
 
 
 def get_active_raids(manor: Manor) -> List[RaidRun]:

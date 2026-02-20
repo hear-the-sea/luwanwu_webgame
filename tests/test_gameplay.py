@@ -5,6 +5,7 @@ from django.utils import timezone
 
 from gameplay.models import MissionTemplate
 from gameplay.services.manor import ensure_manor, refresh_manor_state, start_upgrade
+import gameplay.services.manor as manor_service
 from gameplay.services.missions import launch_mission, refresh_mission_runs
 from guests.models import GuestStatus
 from guests.services import finalize_candidate, recruit_guest
@@ -134,3 +135,53 @@ def test_mission_launch_with_invalid_troop_type(game_data, mission_templates, ma
         manor=manor,
         troop_template__key=fake_troop_key
     ).exists()
+
+
+@pytest.mark.django_db
+def test_refresh_manor_state_local_fallback_throttles_when_cache_unavailable(django_user_model, settings, monkeypatch):
+    user = django_user_model.objects.create_user(username="player_refresh_fallback", password="pass12345")
+    manor = ensure_manor(user)
+
+    settings.MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS = 5
+
+    manor_service._LOCAL_REFRESH_FALLBACK.clear()
+
+    monkeypatch.setattr(manor_service.cache, "add", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("cache down")))
+
+    calls = {"finalize": 0, "resource": 0, "mission": 0}
+
+    monkeypatch.setattr(manor_service, "finalize_upgrades", lambda _manor: calls.__setitem__("finalize", calls["finalize"] + 1))
+    monkeypatch.setattr("gameplay.services.resources.sync_resource_production", lambda _manor: calls.__setitem__("resource", calls["resource"] + 1))
+    monkeypatch.setattr("gameplay.services.missions.refresh_mission_runs", lambda _manor: calls.__setitem__("mission", calls["mission"] + 1))
+
+    refresh_manor_state(manor)
+    refresh_manor_state(manor)
+
+    assert calls == {"finalize": 1, "resource": 1, "mission": 1}
+
+
+@pytest.mark.django_db
+def test_refresh_manor_state_local_fallback_allows_after_interval(django_user_model, settings, monkeypatch):
+    user = django_user_model.objects.create_user(username="player_refresh_interval", password="pass12345")
+    manor = ensure_manor(user)
+
+    settings.MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS = 5
+
+    manor_service._LOCAL_REFRESH_FALLBACK.clear()
+
+    monkeypatch.setattr(manor_service.cache, "add", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("cache down")))
+
+    monotonic_values = iter([100.0, 102.0, 106.1])
+    monkeypatch.setattr(manor_service.time, "monotonic", lambda: next(monotonic_values))
+
+    calls = {"finalize": 0, "resource": 0, "mission": 0}
+
+    monkeypatch.setattr(manor_service, "finalize_upgrades", lambda _manor: calls.__setitem__("finalize", calls["finalize"] + 1))
+    monkeypatch.setattr("gameplay.services.resources.sync_resource_production", lambda _manor: calls.__setitem__("resource", calls["resource"] + 1))
+    monkeypatch.setattr("gameplay.services.missions.refresh_mission_runs", lambda _manor: calls.__setitem__("mission", calls["mission"] + 1))
+
+    refresh_manor_state(manor)
+    refresh_manor_state(manor)
+    refresh_manor_state(manor)
+
+    assert calls == {"finalize": 2, "resource": 2, "mission": 2}

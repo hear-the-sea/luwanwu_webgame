@@ -100,7 +100,7 @@ def create_auction_round(
             for item_config in enabled_items:
                 item_template = templates_map.get(item_config.item_key)
                 if not item_template:
-                    logger.warning(f"物品模板不存在: {item_config.item_key}，跳过")
+                    logger.warning("物品模板不存在: %s，跳过", item_config.item_key)
                     continue
 
                 for slot_index in range(item_config.slots):
@@ -121,7 +121,7 @@ def create_auction_round(
             if slots_to_create:
                 AuctionSlot.objects.bulk_create(slots_to_create)
 
-            logger.info(f"创建拍卖轮次 #{round_number}，共 {len(slots_to_create)} 个拍卖位")
+            logger.info("创建拍卖轮次 #%d，共 %d 个拍卖位", round_number, len(slots_to_create))
 
         return auction_round
     finally:

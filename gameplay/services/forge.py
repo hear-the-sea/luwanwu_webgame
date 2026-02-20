@@ -548,22 +548,27 @@ def finalize_equipment_forging(production: EquipmentProduction, send_notificatio
     from ..models import Message
     from .notifications import notify_user
 
-    if production.status != EquipmentProduction.Status.FORGING:
-        return False
-
-    if production.complete_at > timezone.now():
-        return False
-
     with transaction.atomic():
+        # 修复：锁定生产记录，防止并发重复领取
+        locked_production = EquipmentProduction.objects.select_for_update().get(pk=production.pk)
+
+        if locked_production.status != EquipmentProduction.Status.FORGING:
+            return False
+        if locked_production.complete_at > timezone.now():
+            return False
+
         # 添加装备到仓库（按数量添加）
         from .inventory import add_item_to_inventory_locked
 
-        add_item_to_inventory_locked(production.manor, production.equipment_key, production.quantity)
+        add_item_to_inventory_locked(locked_production.manor, locked_production.equipment_key, locked_production.quantity)
 
         # 更新锻造状态
-        production.status = EquipmentProduction.Status.COMPLETED
-        production.finished_at = timezone.now()
-        production.save(update_fields=["status", "finished_at"])
+        locked_production.status = EquipmentProduction.Status.COMPLETED
+        locked_production.finished_at = timezone.now()
+        locked_production.save(update_fields=["status", "finished_at"])
+
+        # 更新传入对象状态，以便后续通知使用正确信息
+        production.status = locked_production.status
 
     if send_notification:
         from .messages import create_message

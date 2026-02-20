@@ -7,7 +7,9 @@ from __future__ import annotations
 import logging
 import math
 import re
+import time
 from datetime import timedelta
+from threading import Lock
 
 from django.conf import settings
 from django.core.cache import cache
@@ -44,6 +46,73 @@ def calculate_building_capacity(level: int, is_silver_vault: bool = False) -> in
 
 
 logger = logging.getLogger(__name__)
+
+
+_LOCAL_REFRESH_FALLBACK: dict[int, float] = {}
+_LOCAL_REFRESH_FALLBACK_LOCK = Lock()
+_LOCAL_REFRESH_FALLBACK_MAX_SIZE = 10000
+_LOCAL_REFRESH_FALLBACK_CLEANUP_BATCH = 2000  # 每次清理的条目数
+_LOCAL_REFRESH_FALLBACK_EVICT_COUNT = 1000  # LRU淘汰数量
+
+
+def _should_skip_refresh_by_local_fallback(manor_id: int, min_interval: int) -> bool:
+    """
+    当分布式缓存不可用时，使用进程内节流兜底，避免每次请求都执行重刷。
+
+    清理策略：
+    1. 优先清理过期条目（超过 min_interval * 2 或 60秒）
+    2. 如果仍超限，使用 LRU 策略淘汰最旧的条目
+
+    Returns:
+        True 表示应跳过本次刷新；False 表示允许刷新。
+    """
+    if manor_id <= 0 or min_interval <= 0:
+        return False
+
+    now_monotonic = time.monotonic()
+    stale_threshold = max(min_interval * 2, 60)
+
+    with _LOCAL_REFRESH_FALLBACK_LOCK:
+        last_refresh = _LOCAL_REFRESH_FALLBACK.get(manor_id)
+        if last_refresh is not None and now_monotonic - last_refresh < min_interval:
+            return True
+
+        _LOCAL_REFRESH_FALLBACK[manor_id] = now_monotonic
+
+        # 仅在超限时执行清理，减少锁内操作
+        if len(_LOCAL_REFRESH_FALLBACK) > _LOCAL_REFRESH_FALLBACK_MAX_SIZE:
+            _cleanup_local_fallback_cache(now_monotonic, stale_threshold)
+
+    return False
+
+
+def _cleanup_local_fallback_cache(now_monotonic: float, stale_threshold: float) -> None:
+    """
+    清理本地回退缓存（在锁内调用）。
+
+    策略：
+    1. 批量删除过期条目
+    2. 如果仍超限，LRU 淘汰最旧条目
+    """
+    stale_before = now_monotonic - stale_threshold
+
+    # 第一轮：删除过期条目
+    stale_keys = [
+        key for key, ts in _LOCAL_REFRESH_FALLBACK.items()
+        if ts < stale_before
+    ]
+    for key in stale_keys[:_LOCAL_REFRESH_FALLBACK_CLEANUP_BATCH]:
+        _LOCAL_REFRESH_FALLBACK.pop(key, None)
+
+    # 第二轮：如果仍超限，LRU 淘汰
+    if len(_LOCAL_REFRESH_FALLBACK) > _LOCAL_REFRESH_FALLBACK_MAX_SIZE:
+        # 按时间戳排序，淘汰最旧的条目
+        sorted_items = sorted(
+            _LOCAL_REFRESH_FALLBACK.items(),
+            key=lambda item: item[1]
+        )
+        for key, _ in sorted_items[:_LOCAL_REFRESH_FALLBACK_EVICT_COUNT]:
+            _LOCAL_REFRESH_FALLBACK.pop(key, None)
 
 
 def ensure_manor(user, region: str = "overseas") -> Manor:
@@ -173,12 +242,13 @@ def ensure_buildings_exist(manor: Manor) -> None:
         Building.objects.bulk_create(buildings_to_create)
 
 
-def refresh_manor_state(manor: Manor) -> None:
+def refresh_manor_state(manor: Manor, *, prefer_async: bool = False) -> None:
     """
     刷新庄园状态：完成建筑升级、同步资源产出、刷新任务状态。
 
     Args:
         manor: 庄园对象
+        prefer_async: 是否优先使用异步结算（用于首页等高频读取场景）
     """
     min_interval = getattr(settings, "MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS", 0)
     if min_interval > 0:
@@ -187,8 +257,9 @@ def refresh_manor_state(manor: Manor) -> None:
             if not cache.add(cache_key, "1", timeout=min_interval):
                 return
         except Exception as e:
-            # 缓存操作失败时记录日志，但继续执行刷新逻辑
-            logger.warning("缓存操作失败，跳过频率限制检查: %s", e, exc_info=True)
+            logger.warning("缓存操作失败，降级为本地节流: %s", e, exc_info=True)
+            if _should_skip_refresh_by_local_fallback(manor.pk, min_interval):
+                return
 
     finalize_upgrades(manor)
     from .resources import sync_resource_production
@@ -196,7 +267,10 @@ def refresh_manor_state(manor: Manor) -> None:
     sync_resource_production(manor)
     from .missions import refresh_mission_runs
 
-    refresh_mission_runs(manor)
+    if prefer_async:
+        refresh_mission_runs(manor, prefer_async=True)
+    else:
+        refresh_mission_runs(manor)
 
 
 def finalize_building_upgrade(
@@ -305,12 +379,15 @@ def schedule_building_completion(building: Building, eta_seconds: int) -> None:
     transaction.on_commit(lambda: complete_building_upgrade.apply_async(args=[building.id], countdown=countdown))
 
 
-@transaction.atomic
 def start_upgrade(building: Building) -> None:
     """
     开始建筑升级，消耗资源并设置升级计时器。
 
     支持建筑学科技减免：实际成本 = 基础成本 × (1 - 减免比例)
+
+    优化说明：
+    - 将验证逻辑移到事务外，减少锁持有时间
+    - 只在实际扣费和状态更新时持有锁
 
     Args:
         building: 建筑对象
@@ -322,12 +399,9 @@ def start_upgrade(building: Building) -> None:
 
     manor = building.manor
 
-    # 锁住庄园行，确保"升级并发上限"校验在并发请求下仍然可靠
-    manor = Manor.objects.select_for_update().get(pk=manor.pk)
+    # ========== 事务外预检查（快速失败，不持有锁）==========
 
-    # 安全修复：同时锁定建筑行，防止同一建筑并发升级
-    # 避免 TOCTOU 漏洞：两个请求同时通过 is_upgrading 检查导致重复扣费
-    building = Building.objects.select_for_update().get(pk=building.pk)
+    # 预检查：是否正在升级（仅作为快速失败，实际检查在事务内）
     if building.is_upgrading:
         raise ValueError("建筑正在升级中")
 
@@ -337,6 +411,7 @@ def start_upgrade(building: Building) -> None:
     if max_level is not None and building.level >= max_level:
         raise ValueError(f"{building.building_type.name}已达到最大等级（Lv{max_level}）")
 
+    # 预检查升级数量（仅作为快速失败）
     upgrading_count = Building.objects.filter(manor=manor, is_upgrading=True).count()
     if upgrading_count >= MAX_CONCURRENT_BUILDING_UPGRADES:
         raise ValueError(f"同时最多只能升级 {MAX_CONCURRENT_BUILDING_UPGRADES} 个建筑")
@@ -354,15 +429,6 @@ def start_upgrade(building: Building) -> None:
         for resource, amount in base_cost.items()
     }
 
-    from .resources import spend_resources_locked
-    spend_resources_locked(manor, cost, building.building_type.name, ResourceEvent.Reason.UPGRADE_COST)
-
-    # 累计银两花费，计算声望
-    silver_spent = cost.get("silver", 0)
-    if silver_spent > 0:
-        from .prestige import add_prestige_silver_locked
-        add_prestige_silver_locked(manor, silver_spent)
-
     # 计算基础升级时间
     base_duration = building.next_level_duration()
 
@@ -371,10 +437,35 @@ def start_upgrade(building: Building) -> None:
     duration_seconds = max(1, int(base_duration * (1 - time_reduction)))
     duration_seconds = scale_duration(duration_seconds, minimum=1)
 
-    building.upgrade_complete_at = timezone.now() + timedelta(seconds=duration_seconds)
-    building.is_upgrading = True
-    building.save(update_fields=["upgrade_complete_at", "is_upgrading"])
-    schedule_building_completion(building, duration_seconds)
+    # ========== 事务内执行（持有锁的时间最小化）==========
+    with transaction.atomic():
+        # 锁住庄园行，确保"升级并发上限"校验在并发请求下仍然可靠
+        manor = Manor.objects.select_for_update().get(pk=manor.pk)
+
+        # 安全修复：同时锁定建筑行，防止同一建筑并发升级
+        # 避免 TOCTOU 漏洞：两个请求同时通过 is_upgrading 检查导致重复扣费
+        building = Building.objects.select_for_update().get(pk=building.pk)
+        if building.is_upgrading:
+            raise ValueError("建筑正在升级中")
+
+        # 再次验证升级数量（在锁内）
+        upgrading_count = Building.objects.filter(manor=manor, is_upgrading=True).count()
+        if upgrading_count >= MAX_CONCURRENT_BUILDING_UPGRADES:
+            raise ValueError(f"同时最多只能升级 {MAX_CONCURRENT_BUILDING_UPGRADES} 个建筑")
+
+        from .resources import spend_resources_locked
+        spend_resources_locked(manor, cost, building.building_type.name, ResourceEvent.Reason.UPGRADE_COST)
+
+        # 累计银两花费，计算声望
+        silver_spent = cost.get("silver", 0)
+        if silver_spent > 0:
+            from .prestige import add_prestige_silver_locked
+            add_prestige_silver_locked(manor, silver_spent)
+
+        building.upgrade_complete_at = timezone.now() + timedelta(seconds=duration_seconds)
+        building.is_upgrading = True
+        building.save(update_fields=["upgrade_complete_at", "is_upgrading"])
+        schedule_building_completion(building, duration_seconds)
 
 
 # ============ 庄园命名服务 ============
@@ -505,7 +596,11 @@ def rename_manor(manor: Manor, new_name: str, consume_item: bool = True) -> None
     # 更新庄园名称
     old_name = manor.name or manor.display_name
     manor.name = new_name
-    manor.save(update_fields=['name'])
+    try:
+        manor.save(update_fields=['name'])
+    except IntegrityError:
+        logger.warning(f"Manor rename race condition detected for {new_name} by user {manor.user_id}")
+        raise ValueError("该名称已被使用")
 
     # 发送系统消息
     from .messages import create_message

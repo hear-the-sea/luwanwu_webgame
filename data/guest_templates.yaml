@@ -105,9 +105,9 @@ attribute_profiles:
       luck: 145
 pools:
 - key: tongshi
-  name: 童试
+  name: 村募
   tier: tongshi
-  description: 在地方由县、府等学官对童生进行的入学考试，通过者成为生员（秀才）。
+  description: 在地方由村长主持的初级招募，寻找有潜力的年轻人。
   cost:
     silver: 120
   draw_count: 1

@@ -5,7 +5,12 @@ import logging
 from celery import shared_task
 from django.utils import timezone
 
+from common.utils.celery import safe_apply_async_with_dedup
+
 logger = logging.getLogger(__name__)
+
+# 任务去重超时时间（秒）
+_TASK_DEDUP_TIMEOUT = 5
 
 
 # ============ Horse Production ============
@@ -27,20 +32,28 @@ def complete_horse_production(self, production_id: int):
             .first()
         )
         if not production:
-            logger.warning(f"HorseProduction {production_id} not found")
+            logger.warning("HorseProduction %d not found", production_id)
             return "not_found"
 
         now = timezone.now()
         if production.complete_at and production.complete_at > now:
             remaining = int((production.complete_at - now).total_seconds())
             if remaining > 0:
-                complete_horse_production.apply_async(args=[production_id], countdown=remaining)
+                safe_apply_async_with_dedup(
+                    complete_horse_production,
+                    dedup_key=f"production:horse:{production_id}",
+                    dedup_timeout=_TASK_DEDUP_TIMEOUT,
+                    args=[production_id],
+                    countdown=remaining,
+                    logger=logger,
+                    log_message=f"horse production reschedule failed: id={production_id}",
+                )
                 return "rescheduled"
 
         finalized = finalize_horse_production(production, send_notification=True)
         return "completed" if finalized else "skipped"
     except Exception as exc:
-        logger.exception(f"Failed to complete horse production {production_id}: {exc}")
+        logger.exception("Failed to complete horse production %d: %s", production_id, exc)
         raise self.retry(exc=exc)
 
 
@@ -89,20 +102,28 @@ def complete_livestock_production(self, production_id: int):
             .first()
         )
         if not production:
-            logger.warning(f"LivestockProduction {production_id} not found")
+            logger.warning("LivestockProduction %d not found", production_id)
             return "not_found"
 
         now = timezone.now()
         if production.complete_at and production.complete_at > now:
             remaining = int((production.complete_at - now).total_seconds())
             if remaining > 0:
-                complete_livestock_production.apply_async(args=[production_id], countdown=remaining)
+                safe_apply_async_with_dedup(
+                    complete_livestock_production,
+                    dedup_key=f"production:livestock:{production_id}",
+                    dedup_timeout=_TASK_DEDUP_TIMEOUT,
+                    args=[production_id],
+                    countdown=remaining,
+                    logger=logger,
+                    log_message=f"livestock production reschedule failed: id={production_id}",
+                )
                 return "rescheduled"
 
         finalized = finalize_livestock_production(production, send_notification=True)
         return "completed" if finalized else "skipped"
     except Exception as exc:
-        logger.exception(f"Failed to complete livestock production {production_id}: {exc}")
+        logger.exception("Failed to complete livestock production %d: %s", production_id, exc)
         raise self.retry(exc=exc)
 
 
@@ -151,20 +172,28 @@ def complete_smelting_production(self, production_id: int):
             .first()
         )
         if not production:
-            logger.warning(f"SmeltingProduction {production_id} not found")
+            logger.warning("SmeltingProduction %d not found", production_id)
             return "not_found"
 
         now = timezone.now()
         if production.complete_at and production.complete_at > now:
             remaining = int((production.complete_at - now).total_seconds())
             if remaining > 0:
-                complete_smelting_production.apply_async(args=[production_id], countdown=remaining)
+                safe_apply_async_with_dedup(
+                    complete_smelting_production,
+                    dedup_key=f"production:smelting:{production_id}",
+                    dedup_timeout=_TASK_DEDUP_TIMEOUT,
+                    args=[production_id],
+                    countdown=remaining,
+                    logger=logger,
+                    log_message=f"smelting production reschedule failed: id={production_id}",
+                )
                 return "rescheduled"
 
         finalized = finalize_smelting_production(production, send_notification=True)
         return "completed" if finalized else "skipped"
     except Exception as exc:
-        logger.exception(f"Failed to complete smelting production {production_id}: {exc}")
+        logger.exception("Failed to complete smelting production %d: %s", production_id, exc)
         raise self.retry(exc=exc)
 
 
@@ -213,20 +242,28 @@ def complete_equipment_forging(self, production_id: int):
             .first()
         )
         if not production:
-            logger.warning(f"EquipmentProduction {production_id} not found")
+            logger.warning("EquipmentProduction %d not found", production_id)
             return "not_found"
 
         now = timezone.now()
         if production.complete_at and production.complete_at > now:
             remaining = int((production.complete_at - now).total_seconds())
             if remaining > 0:
-                complete_equipment_forging.apply_async(args=[production_id], countdown=remaining)
+                safe_apply_async_with_dedup(
+                    complete_equipment_forging,
+                    dedup_key=f"production:equipment:{production_id}",
+                    dedup_timeout=_TASK_DEDUP_TIMEOUT,
+                    args=[production_id],
+                    countdown=remaining,
+                    logger=logger,
+                    log_message=f"equipment forging reschedule failed: id={production_id}",
+                )
                 return "rescheduled"
 
         finalized = finalize_equipment_forging(production, send_notification=True)
         return "completed" if finalized else "skipped"
     except Exception as exc:
-        logger.exception(f"Failed to complete equipment forging {production_id}: {exc}")
+        logger.exception("Failed to complete equipment forging %d: %s", production_id, exc)
         raise self.retry(exc=exc)
 
 

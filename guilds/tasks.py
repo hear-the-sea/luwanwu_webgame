@@ -89,13 +89,14 @@ def guild_tech_daily_production(self):
         dispatched_count = 0
 
         for guild_id in guild_ids:
-            safe_apply_async(
+            dispatched = safe_apply_async(
                 process_single_guild_production,
                 args=[guild_id],
                 logger=logger,
                 log_message=f"Failed to dispatch daily production for guild {guild_id}"
             )
-            dispatched_count += 1
+            if dispatched:
+                dispatched_count += 1
 
         return f"dispatched {dispatched_count} guild tasks"
     except Exception as exc:

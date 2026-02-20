@@ -108,65 +108,67 @@ class Command(BaseCommand):
         else:
             raise CommandError(f'未知子命令: {subcommand}')
 
-    def handle_simulate(self, options):
-        """处理simulate子命令"""
-        loader = ConfigLoader()
-
-        # 加载配置
-        config = None
+    def _load_config(self, loader: ConfigLoader, options):
         if options.get('preset'):
             try:
                 config = loader.load_preset(options['preset'])
-                self.stdout.write(
-                    self.style.SUCCESS(f'✓ 加载预设配置: {options["preset"]}')
-                )
-            except FileNotFoundError as e:
-                raise CommandError(str(e))
+            except FileNotFoundError as exc:
+                raise CommandError(str(exc))
+            self.stdout.write(self.style.SUCCESS(f'✓ 加载预设配置: {options["preset"]}'))
+            return config
 
-        elif options.get('config'):
+        if options.get('config'):
             try:
                 config = loader.load_yaml(options['config'])
-                self.stdout.write(
-                    self.style.SUCCESS(f'✓ 加载配置文件: {options["config"]}')
-                )
             except FileNotFoundError:
                 raise CommandError(f'配置文件不存在: {options["config"]}')
-        else:
-            raise CommandError('必须指定 --preset 或 --config')
+            self.stdout.write(self.style.SUCCESS(f'✓ 加载配置文件: {options["config"]}'))
+            return config
 
-        # 应用覆盖参数
-        if options.get('override'):
-            overrides = {}
-            for override in options['override']:
+        raise CommandError('必须指定 --preset 或 --config')
+
+    def _parse_overrides(self, raw_overrides):
+        overrides = {}
+        for override in raw_overrides:
+            try:
+                key, value = override.split('=', 1)
+            except ValueError:
+                raise CommandError(f'无效的覆盖参数格式: {override}')
+
+            try:
+                parsed_value = int(value)
+            except ValueError:
                 try:
-                    key, value = override.split('=', 1)
-                    # 尝试转换数值
-                    try:
-                        value = int(value)
-                    except ValueError:
-                        try:
-                            value = float(value)
-                        except ValueError:
-                            pass  # 保持字符串
-                    overrides[key] = value
+                    parsed_value = float(value)
                 except ValueError:
-                    raise CommandError(f'无效的覆盖参数格式: {override}')
+                    parsed_value = value
+            overrides[key] = parsed_value
+        return overrides
 
-            if overrides:
-                config = loader.merge_config(config, overrides)
-                self.stdout.write(
-                    self.style.WARNING(f'✓ 应用参数覆盖: {overrides}')
-                )
+    def _apply_overrides(self, loader: ConfigLoader, config, options):
+        raw_overrides = options.get('override')
+        if not raw_overrides:
+            return config
 
-        # 校验配置
+        overrides = self._parse_overrides(raw_overrides)
+        if not overrides:
+            return config
+
+        merged = loader.merge_config(config, overrides)
+        self.stdout.write(self.style.WARNING(f'✓ 应用参数覆盖: {overrides}'))
+        return merged
+
+    def _validate_or_raise(self, loader: ConfigLoader, config) -> None:
         errors = loader.validate(config)
-        if errors:
-            self.stdout.write(self.style.ERROR('配置错误:'))
-            for error in errors:
-                self.stdout.write(self.style.ERROR(f'  - {error}'))
-            raise CommandError('配置校验失败')
+        if not errors:
+            return
 
-        # 运行模拟
+        self.stdout.write(self.style.ERROR('配置错误:'))
+        for error in errors:
+            self.stdout.write(self.style.ERROR(f'  - {error}'))
+        raise CommandError('配置校验失败')
+
+    def _run_simulations(self, config, options) -> list:
         simulator = BattleSimulator(config)
         seed = options.get('seed')
         repeat = options.get('repeat', 1)
@@ -178,28 +180,34 @@ class Command(BaseCommand):
 
         results = []
         for i in range(repeat):
-            # 使用指定种子或自动生成
             current_seed = seed + i if seed is not None else None
-
             result = simulator.run_battle(seed=current_seed)
             results.append(result)
 
             if repeat == 1 or verbose:
                 self.print_battle_result(result, config, verbose)
-            else:
-                # 批量模式，只显示简要信息
-                winner_icon = "✓" if result["winner"] == "attacker" else "✗"
-                self.stdout.write(
-                    f'  [{i+1}/{repeat}] {winner_icon} '
-                    f'种子:{result["seed"]} | '
-                    f'胜者:{result["winner"]} | '
-                    f'回合:{len(result["combat_log"])}'
-                )
+                continue
 
-        # 显示统计
-        if repeat > 1:
+            winner_icon = "✓" if result["winner"] == "attacker" else "✗"
+            self.stdout.write(
+                f'  [{i+1}/{repeat}] {winner_icon} '
+                f'种子:{result["seed"]} | '
+                f'胜者:{result["winner"]} | '
+                f'回合:{len(result["combat_log"])}'
+            )
+
+        return results
+
+    def handle_simulate(self, options):
+        """处理simulate子命令"""
+        loader = ConfigLoader()
+        config = self._load_config(loader, options)
+        config = self._apply_overrides(loader, config, options)
+        self._validate_or_raise(loader, config)
+
+        results = self._run_simulations(config, options)
+        if options.get('repeat', 1) > 1:
             self.print_statistics(results)
-
     def handle_presets(self, options):
         """处理presets子命令"""
         loader = ConfigLoader()

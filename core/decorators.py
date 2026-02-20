@@ -23,6 +23,94 @@ from core.utils.validation import sanitize_error_message, safe_redirect_url
 logger = logging.getLogger(__name__)
 
 
+def _resolve_returned_url(request: HttpRequest, result: str) -> str | None:
+    safe_result = safe_redirect_url(request, result, "")
+    if safe_result:
+        return safe_result
+
+    result_str = str(result)
+    if re.match(r"^[a-zA-Z0-9_:-]+$", result_str) and ":" in result_str:
+        try:
+            return reverse(result_str)
+        except NoReverseMatch:
+            logger.warning("无法解析视图返回的 URL: %s", result)
+
+    logger.warning("视图返回不安全的 URL: %s，回退到 default", result)
+    return None
+
+
+def _resolve_default_url(default: str | None) -> str | None:
+    if not default:
+        return None
+
+    if ":" in str(default):
+        try:
+            return reverse(default)
+        except Exception:
+            logger.warning("无法解析 redirect_url: %s", default)
+    return str(default)
+
+
+def _add_success_message(
+    request: HttpRequest,
+    success_message: str | Callable[..., str] | None,
+    result: HttpResponse | str | None,
+) -> None:
+    if not success_message:
+        return
+
+    if callable(success_message):
+        try:
+            msg = success_message(result)
+        except Exception:
+            msg = "操作成功"
+    else:
+        msg = success_message
+    messages.success(request, msg)
+
+
+def _handle_success_response(
+    request: HttpRequest,
+    result: HttpResponse | str | None,
+    redirect_url: str | None,
+    success_message: str | Callable[..., str] | None,
+) -> HttpResponse | None:
+    if isinstance(result, str):
+        _add_success_message(request, success_message, result)
+        return redirect(get_next_url(request, redirect_url, result=result))
+
+    if result is None:
+        _add_success_message(request, success_message, result)
+        return redirect(get_next_url(request, redirect_url))
+
+    return None
+
+
+def _handle_game_exception(
+    request: HttpRequest,
+    view_func: Callable,
+    exc: GameError | ValueError,
+    redirect_url: str | None,
+) -> HttpResponse:
+    error_msg = sanitize_error_message(exc)
+
+    if isinstance(exc, ValueError):
+        logger.debug(
+            f"ValueError in {view_func.__name__}: {exc}",
+            exc_info=False,
+            extra={"request": request},
+        )
+
+    if is_htmx_request(request):
+        return redirect(get_next_url(request, redirect_url))
+
+    if is_ajax_request(request) or expects_json(request):
+        return JsonResponse({"success": False, "message": error_msg}, status=400)
+
+    messages.error(request, error_msg)
+    return redirect(get_next_url(request, redirect_url))
+
+
 def get_next_url(request: HttpRequest, default: Optional[str] = None, result: Optional[str] = None) -> str:
     """
     获取安全的重定向 URL。
@@ -41,52 +129,21 @@ def get_next_url(request: HttpRequest, default: Optional[str] = None, result: Op
         - result 必须是安全的 URL 名称或路径，不应直接使用用户输入
         - 如果 result 无法通过安全验证，会回退到 default
     """
-    # 如果视图返回了 URL 字符串，优先使用
     if result:
-        safe_result = safe_redirect_url(request, result, "")
-        if safe_result:
-            return safe_result
-        # 如果 result 不是有效 URL，尝试作为 URL 名称解析
-        # 安全修复：使用更严格的 URL 名称格式验证
-        result_str = str(result)
-        # Django URL 名称格式：namespace:view_name 或 view_name（只含字母、数字、下划线、连字符、冒号）
-        if re.match(r'^[a-zA-Z0-9_:-]+$', result_str) and ":" in result_str:
-            try:
-                return reverse(result_str)
-            except NoReverseMatch:
-                logger.warning(f"无法解析视图返回的 URL: {result}")
-        # result 不安全，回退到 default
-        logger.warning(f"视图返回不安全的 URL: {result}，回退到 default")
+        resolved = _resolve_returned_url(request, result)
+        if resolved:
+            return resolved
 
-    # 从 POST 或 GET 获取 next 参数
     next_param = request.POST.get("next") or request.GET.get("next")
+    for candidate in (next_param, request.META.get("HTTP_REFERER")):
+        if not candidate:
+            continue
+        safe_url = safe_redirect_url(request, candidate, "")
+        if safe_url:
+            return safe_url
 
-    # 如果有 next 参数，验证其安全性
-    if next_param:
-        safe_next = safe_redirect_url(request, next_param, "")
-        if safe_next:
-            return safe_next
-
-    # 尝试使用 HTTP_REFERER
-    referer = request.META.get("HTTP_REFERER")
-    if referer:
-        safe_referer = safe_redirect_url(request, referer, "")
-        if safe_referer:
-            return safe_referer
-
-    # 使用默认值
-    if default:
-        # 如果默认值是 URL 名称（如 "gameplay:dashboard"），则解析它
-        if ":" in str(default):
-            try:
-                return reverse(default)
-            except Exception:
-                logger.warning(f"无法解析 redirect_url: {default}")
-        # 默认值本身应该是安全的（由开发者控制）
-        return str(default)
-
-    # 最后回退到首页
-    return "/"
+    default_url = _resolve_default_url(default)
+    return default_url or "/"
 
 
 def is_htmx_request(request: HttpRequest) -> bool:
@@ -159,71 +216,16 @@ def handle_game_errors(
             try:
                 result = view_func(request, *args, **kwargs)
 
-                # 如果是字符串，视为重定向 URL
-                if isinstance(result, str):
-                    # 添加成功消息
-                    if success_message:
-                        if callable(success_message):
-                            try:
-                                msg = success_message(result)
-                            except Exception:
-                                msg = "操作成功"
-                        else:
-                            msg = success_message
-                        messages.success(request, msg)
-
-                    # 使用返回的 URL 作为重定向目标
-                    next_url = get_next_url(request, redirect_url, result=result)
-                    return redirect(next_url)
-
-                # 如果返回 None，使用默认重定向
-                if result is None:
-                    if success_message:
-                        if callable(success_message):
-                            try:
-                                msg = success_message(result)
-                            except Exception:
-                                msg = "操作成功"
-                        else:
-                            msg = success_message
-                        messages.success(request, msg)
-
-                    next_url = get_next_url(request, redirect_url)
-                    return redirect(next_url)
-
-                # 如果已经是 HttpResponse，直接返回
+                response = _handle_success_response(request, result, redirect_url, success_message)
+                if response is not None:
+                    return response
                 return result
 
             except (GameError, ValueError) as exc:
-                error_msg = sanitize_error_message(exc)
-
-                # 记录 ValueError 日志（可能是程序错误）
-                # 降低日志级别为 debug，避免表单验证错误刷屏
-                if isinstance(exc, ValueError):
-                    logger.debug(
-                        f"ValueError in {view_func.__name__}: {exc}",
-                        exc_info=False,  # 不需要堆栈，因为这是预期的用户输入错误
-                        extra={"request": request},
-                    )
-
-                # HTMX 请求：返回重定向响应（HTMX 会自动处理）
-                if is_htmx_request(request):
-                    next_url = get_next_url(request, redirect_url)
-                    return redirect(next_url)
-
-                # 传统 AJAX/JSON 请求返回 JSON 响应
-                if is_ajax_request(request) or expects_json(request):
-                    return JsonResponse(
-                        {"success": False, "message": error_msg},
-                        status=400,
-                    )
-
-                # 普通请求：添加错误消息并重定向
-                messages.error(request, error_msg)
-                next_url = get_next_url(request, redirect_url)
-                return redirect(next_url)
+                return _handle_game_exception(request, view_func, exc, redirect_url)
 
         return wrapper
+
     return decorator
 
 

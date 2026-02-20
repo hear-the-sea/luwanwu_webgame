@@ -15,8 +15,6 @@ from django.db import DatabaseError
 from django_redis import get_redis_connection
 from redis.exceptions import RedisError
 
-from core.exceptions import InsufficientStockError
-
 User = get_user_model()
 
 logger = logging.getLogger(__name__)
@@ -122,6 +120,41 @@ return removed
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.GROUP_NAME, self.channel_name)
 
+    async def _process_send_message(self, content: dict) -> None:
+        raw_text = content.get("text", "")
+        if not isinstance(raw_text, str):
+            await self.send_json({"type": "error", "code": "invalid_text", "message": "消息格式错误"})
+            return
+
+        text = self._normalize_text(raw_text)
+        if not text:
+            return
+        if len(text) > self.MESSAGE_MAX_LEN:
+            text = text[: self.MESSAGE_MAX_LEN]
+
+        allowed, retry_after = await self._rate_limit(self.user_id)
+        if not allowed:
+            tip = "发送太快，请稍候再试"
+            if retry_after:
+                tip = f"发送太快，请 {retry_after}s 后再试"
+            await self.send_json({"type": "error", "code": "rate_limited", "message": tip})
+            return
+
+        success, error_msg = await self._consume_trumpet()
+        if not success:
+            await self.send_json({"type": "error", "code": "no_trumpet", "message": error_msg})
+            return
+
+        message = await self._build_message(text)
+        await self._append_history(message)
+        await self.channel_layer.group_send(
+            self.GROUP_NAME,
+            {
+                "type": "chat_message",
+                "payload": message,
+            },
+        )
+
     async def receive_json(self, content, **kwargs):
         try:
             msg_type = content.get("type")
@@ -132,42 +165,7 @@ return removed
 
             if msg_type != "send":
                 return
-
-            raw_text = content.get("text", "")
-            if not isinstance(raw_text, str):
-                await self.send_json({"type": "error", "code": "invalid_text", "message": "消息格式错误"})
-                return
-
-            text = self._normalize_text(raw_text)
-            if not text:
-                return
-
-            if len(text) > self.MESSAGE_MAX_LEN:
-                text = text[: self.MESSAGE_MAX_LEN]
-
-            allowed, retry_after = await self._rate_limit(self.user_id)
-            if not allowed:
-                tip = "发送太快，请稍候再试"
-                if retry_after:
-                    tip = f"发送太快，请 {retry_after}s 后再试"
-                await self.send_json({"type": "error", "code": "rate_limited", "message": tip})
-                return
-
-            success, error_msg = await self._consume_trumpet()
-            if not success:
-                await self.send_json({"type": "error", "code": "no_trumpet", "message": error_msg})
-                return
-
-            message = await self._build_message(text)
-            await self._append_history(message)
-
-            await self.channel_layer.group_send(
-                self.GROUP_NAME,
-                {
-                    "type": "chat_message",
-                    "payload": message,
-                },
-            )
+            await self._process_send_message(content)
         except asyncio.CancelledError:
             raise
         except (ValueError, TypeError) as exc:
@@ -232,6 +230,8 @@ return removed
     @database_sync_to_async
     def _consume_trumpet(self) -> tuple[bool, str]:
         from gameplay.services.chat import consume_trumpet
+        if self.user_id is None:
+            return False, "未登录，无法发言"
         return consume_trumpet(self.user_id)
 
     def _get_history_sync(self) -> list[dict]:

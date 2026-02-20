@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import logging
-from typing import List
+from typing import List, Tuple
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -18,14 +18,93 @@ from core.decorators import handle_game_errors
 from core.exceptions import GameError
 from core.utils.validation import safe_redirect_url, sanitize_error_message
 
-from ..models import (
-    Guest,
-    GuestSkill,
-    MAX_GUEST_SKILL_SLOTS,
-    Skill,
-)
+from ..models import Guest, GuestSkill, MAX_GUEST_SKILL_SLOTS, Skill
 
 logger = logging.getLogger(__name__)
+
+
+def _get_guest_and_next_url(request, pk: int):
+    from gameplay.services.manor import ensure_manor
+
+    manor = ensure_manor(request.user)
+    guest = get_object_or_404(Guest.objects.for_manor(manor).with_template(), pk=pk)
+    default_url = reverse("guests:detail", args=[guest.pk])
+    next_url = safe_redirect_url(request, request.POST.get("next"), default_url)
+    return manor, guest, next_url
+
+
+def _get_skill_book_inventory_item(manor, item_id: str):
+    from gameplay.models import InventoryItem, ItemTemplate
+
+    return get_object_or_404(
+        manor.inventory_items.select_related("template"),
+        pk=item_id,
+        template__effect_type=ItemTemplate.EffectType.SKILL_BOOK,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+
+def _resolve_skill_from_inventory_item(inventory_item) -> Skill | None:
+    payload = inventory_item.template.effect_payload or {}
+    skill_key = payload.get("skill_key")
+    if not skill_key:
+        return None
+    return get_object_or_404(Skill, key=skill_key)
+
+
+def _collect_unmet_skill_requirements(guest: Guest, skill: Skill) -> List[str]:
+    unmet: List[str] = []
+    if skill.required_level and guest.level < skill.required_level:
+        unmet.append(f"等级需 ≥ {skill.required_level}")
+    if skill.required_force and guest.force < skill.required_force:
+        unmet.append(f"武力需 ≥ {skill.required_force}")
+    if skill.required_intellect and guest.intellect < skill.required_intellect:
+        unmet.append(f"智力需 ≥ {skill.required_intellect}")
+    if skill.required_defense and guest.defense_stat < skill.required_defense:
+        unmet.append(f"防御需 ≥ {skill.required_defense}")
+    if skill.required_agility and guest.agility < skill.required_agility:
+        unmet.append(f"敏捷需 ≥ {skill.required_agility}")
+    return unmet
+
+
+def _validate_learn_skill_preconditions(guest: Guest, skill: Skill) -> Tuple[str, str] | None:
+    if guest.guest_skills.filter(skill=skill).exists():
+        return "warning", f"{guest.display_name} 已掌握 {skill.name}"
+
+    if guest.guest_skills.count() >= MAX_GUEST_SKILL_SLOTS:
+        return "error", "技能位已满"
+
+    unmet = _collect_unmet_skill_requirements(guest, skill)
+    if unmet:
+        return "error", f"学习条件不足：{'，'.join(unmet)}"
+
+    return None
+
+
+def _persist_skill_learning(guest: Guest, skill: Skill, inventory_item) -> None:
+    from gameplay.models import InventoryItem
+    from gameplay.services.inventory import consume_inventory_item_locked
+
+    with transaction.atomic():
+        # Lock guest to prevent concurrent skill learning exceeding limits
+        Guest.objects.select_for_update().get(pk=guest.pk)
+
+        if guest.guest_skills.count() >= MAX_GUEST_SKILL_SLOTS:
+            raise ValueError("技能位已满")
+
+        if guest.guest_skills.filter(skill=skill).exists():
+            raise ValueError(f"{guest.display_name} 已掌握 {skill.name}")
+
+        locked_item = InventoryItem.objects.select_for_update().filter(pk=inventory_item.pk).first()
+        if not locked_item or locked_item.quantity < 1:
+            raise ValueError("技能书数量不足")
+
+        GuestSkill.objects.create(
+            guest=guest,
+            skill=skill,
+            source=GuestSkill.Source.BOOK,
+        )
+        consume_inventory_item_locked(locked_item)
 
 
 @login_required
@@ -38,94 +117,37 @@ def learn_skill_view(request, pk: int):
     但使用 manager 方法简化查询
     """
     from django.core.exceptions import ObjectDoesNotExist
-    from gameplay.models import InventoryItem, ItemTemplate
-    from gameplay.services.manor import ensure_manor
 
-    manor = ensure_manor(request.user)
-    # 使用 manager 方法获取门客，避免重复的 select_related
-    guest = get_object_or_404(
-        Guest.objects.for_manor(manor).with_template(),
-        pk=pk
-    )
-    default_url = reverse("guests:detail", args=[guest.pk])
-    next_url = safe_redirect_url(request, request.POST.get("next"), default_url)
+    manor, guest, next_url = _get_guest_and_next_url(request, pk)
 
     item_id = request.POST.get("item_id")
     if not item_id:
         messages.error(request, "请选择技能书")
         return redirect(next_url)
 
-    inventory_item = get_object_or_404(
-        manor.inventory_items.select_related("template"),
-        pk=item_id,
-        template__effect_type=ItemTemplate.EffectType.SKILL_BOOK,
-        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-    )
-
-    payload = inventory_item.template.effect_payload or {}
-    skill_key = payload.get("skill_key")
-    if not skill_key:
+    inventory_item = _get_skill_book_inventory_item(manor, item_id)
+    skill = _resolve_skill_from_inventory_item(inventory_item)
+    if skill is None:
         messages.error(request, "技能书配置有误")
         return redirect(next_url)
 
-    skill = get_object_or_404(Skill, key=skill_key)
-
-    # 验证技能是否已学会
-    if guest.guest_skills.filter(skill=skill).exists():
-        messages.warning(request, f"{guest.display_name} 已掌握 {skill.name}")
+    precondition_error = _validate_learn_skill_preconditions(guest, skill)
+    if precondition_error is not None:
+        level, message = precondition_error
+        if level == "warning":
+            messages.warning(request, message)
+        else:
+            messages.error(request, message)
         return redirect(next_url)
 
-    # 验证技能位
-    current_count = guest.guest_skills.count()
-    if current_count >= MAX_GUEST_SKILL_SLOTS:
-        messages.error(request, "技能位已满")
-        return redirect(next_url)
-
-    # 验证学习条件
-    unmet: List[str] = []
-    if skill.required_level and guest.level < skill.required_level:
-        unmet.append(f"等级需 ≥ {skill.required_level}")
-    if skill.required_force and guest.force < skill.required_force:
-        unmet.append(f"武力需 ≥ {skill.required_force}")
-    if skill.required_intellect and guest.intellect < skill.required_intellect:
-        unmet.append(f"智力需 ≥ {skill.required_intellect}")
-    if skill.required_defense and guest.defense_stat < skill.required_defense:
-        unmet.append(f"防御需 ≥ {skill.required_defense}")
-    if skill.required_agility and guest.agility < skill.required_agility:
-        unmet.append(f"敏捷需 ≥ {skill.required_agility}")
-
-    if unmet:
-        messages.error(request, f"学习条件不足：{'，'.join(unmet)}")
-        return redirect(next_url)
-
-    # 使用事务确保原子性，并复用 consume_inventory_item 保证并发安全
     try:
-        from gameplay.services.inventory import consume_inventory_item_locked
-
-        with transaction.atomic():
-            # 先加行锁，防止并发
-            locked_item = (
-                InventoryItem.objects.select_for_update()
-                .filter(pk=inventory_item.pk)
-                .first()
-            )
-            if not locked_item or locked_item.quantity < 1:
-                raise ValueError("技能书数量不足")
-
-            GuestSkill.objects.create(
-                guest=guest,
-                skill=skill,
-                source=GuestSkill.Source.BOOK,
-            )
-            # locked_item 已持有行锁，直接在当前事务中扣减，避免嵌套事务开销
-            consume_inventory_item_locked(locked_item)
-
+        _persist_skill_learning(guest, skill, inventory_item)
         messages.success(request, f"{guest.display_name} 习得 {skill.name}")
     except (GameError, ValueError, ObjectDoesNotExist) as exc:
-        logger.error(f"Failed to learn skill {skill.key} for guest {guest.id}: {exc}")
+        logger.error("Failed to learn skill %s for guest %d: %s", skill.key, guest.id, exc)
         messages.error(request, sanitize_error_message(exc))
     except Exception as exc:
-        logger.exception(f"Unexpected error learning skill {skill.key} for guest {guest.id}: {exc}")
+        logger.exception("Unexpected error learning skill %s for guest %d: %s", skill.key, guest.id, exc)
         messages.error(request, "学习技能失败，请稍后重试")
     return redirect(next_url)
 
@@ -142,10 +164,7 @@ def forget_skill_view(request, pk: int):
     from gameplay.services.manor import ensure_manor
 
     # 使用 manager 方法获取门客，避免重复的 select_related
-    guest = get_object_or_404(
-        Guest.objects.for_manor(ensure_manor(request.user)).with_template(),
-        pk=pk
-    )
+    guest = get_object_or_404(Guest.objects.for_manor(ensure_manor(request.user)).with_template(), pk=pk)
 
     guest_skill_id = request.POST.get("guest_skill_id")
     if not guest_skill_id:

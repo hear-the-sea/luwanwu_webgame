@@ -135,6 +135,37 @@ def get_guild_tech_level(guild, tech_key):
         return 0
 
 
+def _calc_military_study_bonus(level: int, bonus_type: str) -> float:
+    if bonus_type == 'guest_force':
+        bonus = 0.0
+        if level >= 1:
+            bonus += 0.02 * min(level, 2)
+        if level >= 3:
+            bonus += 0.02 * (level - 2)
+        return bonus
+
+    if bonus_type == 'guest_intellect':
+        return 0.02 * (level - 2) if level >= 3 else 0.0
+
+    if bonus_type == 'guest_defense':
+        return 0.02 if level >= 5 else 0.0
+
+    return 0.0
+
+
+def _calc_troop_tactics_bonus(level: int, bonus_type: str) -> float:
+    if bonus_type == 'troop_attack':
+        return 0.03 * level
+
+    if bonus_type == 'troop_defense':
+        return 0.03 * (level - 2) if level >= 3 else 0.0
+
+    if bonus_type == 'troop_hp':
+        return 0.05 if level >= 5 else 0.0
+
+    return 0.0
+
+
 def get_tech_bonus(guild, bonus_type):
     """
     获取科技加成
@@ -146,56 +177,23 @@ def get_tech_bonus(guild, bonus_type):
     Returns:
         float: 加成系数（如0.1表示10%加成）
     """
-    bonus = 0.0
-
-    if bonus_type == 'guest_force':
-        # 兵法研习 - 武力加成
+    if bonus_type in {'guest_force', 'guest_intellect', 'guest_defense'}:
         level = get_guild_tech_level(guild, 'military_study')
-        if level >= 1:
-            bonus += 0.02 * min(level, 2)  # Lv1-2: 每级+2%
-        if level >= 3:
-            bonus += 0.02 * (level - 2)  # Lv3+: 每级+2%
+        return _calc_military_study_bonus(level, bonus_type)
 
-    elif bonus_type == 'guest_intellect':
-        # 兵法研习 - 智力加成
-        level = get_guild_tech_level(guild, 'military_study')
-        if level >= 3:
-            bonus += 0.02 * (level - 2)  # Lv3+: 每级+2%
-
-    elif bonus_type == 'guest_defense':
-        # 兵法研习 - 防御加成
-        level = get_guild_tech_level(guild, 'military_study')
-        if level >= 5:
-            bonus += 0.02  # Lv5: +2%
-
-    elif bonus_type == 'troop_attack':
-        # 强兵战术 - 兵种攻击加成
+    if bonus_type in {'troop_attack', 'troop_defense', 'troop_hp'}:
         level = get_guild_tech_level(guild, 'troop_tactics')
-        bonus += 0.03 * level  # 每级+3%
+        return _calc_troop_tactics_bonus(level, bonus_type)
 
-    elif bonus_type == 'troop_defense':
-        # 强兵战术 - 兵种防御加成
-        level = get_guild_tech_level(guild, 'troop_tactics')
-        if level >= 3:
-            bonus += 0.03 * (level - 2)  # Lv3+: 每级+3%
-
-    elif bonus_type == 'troop_hp':
-        # 强兵战术 - 兵种生命加成
-        level = get_guild_tech_level(guild, 'troop_tactics')
-        if level >= 5:
-            bonus += 0.05  # Lv5: +5%
-
-    elif bonus_type == 'resource_production':
-        # 资源增产 - 资源产出加成
+    if bonus_type == 'resource_production':
         level = get_guild_tech_level(guild, 'resource_boost')
-        bonus += 0.05 * level  # 每级+5%
+        return 0.05 * level
 
-    elif bonus_type == 'march_speed':
-        # 行军加速 - 行军时间减少
+    if bonus_type == 'march_speed':
         level = get_guild_tech_level(guild, 'march_speed')
-        bonus += 0.05 * level  # 每级-5%
+        return 0.05 * level
 
-    return bonus
+    return 0.0
 
 
 def apply_guild_bonus_to_guest(guest):

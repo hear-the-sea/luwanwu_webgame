@@ -18,7 +18,7 @@ from ..services.query_optimization import optimize_guest_queryset
 
 
 def get_home_context(manor) -> dict:
-    refresh_manor_state(manor)
+    refresh_manor_state(manor, prefer_async=True)
     refresh_technology_upgrades(manor)
 
     resources = [
@@ -90,8 +90,8 @@ def get_home_context(manor) -> dict:
         refresh_raid_runs,
     )
 
-    refresh_scout_records(manor)
-    refresh_raid_runs(manor)
+    refresh_scout_records(manor, prefer_async=True)
+    refresh_raid_runs(manor, prefer_async=True)
 
     return {
         "manor": manor,

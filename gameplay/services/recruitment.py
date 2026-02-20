@@ -187,9 +187,15 @@ def check_recruitment_requirements(
     else:
         result["tech_satisfied"] = True
 
-    # 检查装备
+    # 检查装备 - 优化：批量预加载 ItemTemplate，避免 N+1 查询
     equipment_list = recruit_config.get("equipment", [])
     all_equipment_satisfied = True
+
+    # 批量加载所有需要的 ItemTemplate
+    from ..models import ItemTemplate
+    item_templates = {
+        t.key: t for t in ItemTemplate.objects.filter(key__in=equipment_list)
+    }
 
     for item_key in equipment_list:
         required = quantity
@@ -204,11 +210,10 @@ def check_recruitment_requirements(
 
         if not satisfied:
             all_equipment_satisfied = False
-            from ..models import ItemTemplate
-            try:
-                item = ItemTemplate.objects.get(key=item_key)
+            item = item_templates.get(item_key)
+            if item:
                 result["errors"].append(f"{item.name}不足（需要{required}，拥有{have}）")
-            except ItemTemplate.DoesNotExist:
+            else:
                 result["errors"].append(f"装备{item_key}不足")
 
     result["equipment_satisfied"] = all_equipment_satisfied
@@ -246,10 +251,40 @@ def get_recruitment_options(manor: Manor) -> List[Dict[str, Any]]:
 
     Returns:
         募兵选项列表
+
+    优化说明：
+    - 批量预加载所有 ItemTemplate，避免 N+1 查询
+    - 批量预加载玩家科技等级，减少重复查询
+    - 批量预加载玩家物品数量，减少重复查询
     """
+    from ..models import ItemTemplate
+
     data = load_troop_templates()
     troops = data.get("troops", [])
     is_recruiting = has_active_recruitment(manor)
+
+    # 收集所有需要的 item_key 和 tech_key，用于批量查询
+    all_item_keys: set[str] = set()
+    all_tech_keys: set[str] = set()
+    for troop in troops:
+        recruit_config = troop.get("recruit")
+        if not recruit_config:
+            continue
+        all_item_keys.update(recruit_config.get("equipment", []))
+        tech_key = recruit_config.get("tech_key")
+        if tech_key:
+            all_tech_keys.add(tech_key)
+
+    # 批量加载 ItemTemplate
+    item_templates = {
+        t.key: t for t in ItemTemplate.objects.filter(key__in=all_item_keys)
+    }
+
+    # 批量加载玩家物品数量
+    item_quantities = _batch_get_item_quantities(manor, all_item_keys)
+
+    # 批量加载玩家科技等级
+    tech_levels = _batch_get_tech_levels(manor, all_tech_keys)
 
     options = []
     for troop in troops:
@@ -261,9 +296,9 @@ def get_recruitment_options(manor: Manor) -> List[Dict[str, Any]]:
         tech_key = recruit_config.get("tech_key")
         tech_level_required = recruit_config.get("tech_level", 0)
 
-        # 获取科技等级
+        # 获取科技等级（从缓存的批量查询结果）
         if tech_key:
-            player_tech_level = get_player_technology_level(manor, tech_key)
+            player_tech_level = tech_levels.get(tech_key, 0)
             is_unlocked = player_tech_level >= tech_level_required
         else:
             player_tech_level = 0
@@ -273,19 +308,15 @@ def get_recruitment_options(manor: Manor) -> List[Dict[str, Any]]:
         base_duration = recruit_config.get("base_duration", 120)
         actual_duration = calculate_recruitment_duration(base_duration, manor)
 
-        # 检查装备状态
+        # 检查装备状态（从缓存的批量查询结果）
         equipment_list = recruit_config.get("equipment", [])
         equipment_status = []
         can_afford = True
 
         for item_key in equipment_list:
-            have = get_item_quantity(manor, item_key)
-            from ..models import ItemTemplate
-            try:
-                item = ItemTemplate.objects.get(key=item_key)
-                item_name = item.name
-            except ItemTemplate.DoesNotExist:
-                item_name = item_key
+            have = item_quantities.get(item_key, 0)
+            item = item_templates.get(item_key)
+            item_name = item.name if item else item_key
 
             equipment_status.append({
                 "key": item_key,
@@ -327,6 +358,153 @@ def get_recruitment_options(manor: Manor) -> List[Dict[str, Any]]:
     return options
 
 
+def _batch_get_item_quantities(manor: Manor, item_keys: set[str]) -> Dict[str, int]:
+    """
+    批量获取玩家物品数量。
+
+    Args:
+        manor: 庄园实例
+        item_keys: 物品 key 集合
+
+    Returns:
+        {item_key: quantity} 字典
+    """
+    if not item_keys:
+        return {}
+
+    from ..models import InventoryItem
+
+    items = InventoryItem.objects.filter(
+        manor=manor,
+        template__key__in=item_keys,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    ).select_related("template")
+
+    result: Dict[str, int] = {}
+    for item in items:
+        key = item.template.key
+        result[key] = result.get(key, 0) + item.quantity
+
+    return result
+
+
+def _batch_get_tech_levels(manor: Manor, tech_keys: set[str]) -> Dict[str, int]:
+    """
+    批量获取玩家科技等级。
+
+    Args:
+        manor: 庄园实例
+        tech_keys: 科技 key 集合
+
+    Returns:
+        {tech_key: level} 字典
+    """
+    if not tech_keys:
+        return {}
+
+    from ..models import PlayerTechnology
+
+    techs = PlayerTechnology.objects.filter(
+        manor=manor,
+        tech_key__in=tech_keys,
+    )
+
+    return {t.tech_key: t.level for t in techs}
+
+
+def _validate_start_recruitment_inputs(manor: Manor, troop_key: str, quantity: int) -> dict:
+    if quantity < 1:
+        raise ValueError("募兵数量至少为1")
+    if has_active_recruitment(manor):
+        raise ValueError("已有募兵正在进行中，同时只能进行一种募兵")
+    if manor.get_building_level(BuildingKeys.LIANGGONG_CHANG) < 1:
+        raise ValueError("练功场等级不足，需要1级以上")
+
+    troop = get_troop_template(troop_key)
+    if not troop:
+        raise ValueError("无效的兵种类型")
+    recruit_config = troop.get("recruit")
+    if not recruit_config:
+        raise ValueError("该兵种不可募兵")
+
+    check_result = check_recruitment_requirements(manor, troop_key, quantity)
+    if not check_result["can_recruit"]:
+        raise ValueError("、".join(check_result["errors"]))
+    return troop
+
+
+def _consume_equipment_for_recruitment(manor: Manor, equipment_list: list[str], quantity: int) -> Dict[str, int]:
+    from ..models import InventoryItem
+
+    if not equipment_list:
+        return {}
+
+    locked_items = {
+        item.template.key: item
+        for item in InventoryItem.objects.select_for_update()
+        .filter(
+            manor=manor,
+            template__key__in=equipment_list,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        )
+        .select_related("template")
+    }
+
+    equipment_costs: Dict[str, int] = {}
+    to_update: list[InventoryItem] = []
+    delete_ids: list[int] = []
+
+    for item_key in equipment_list:
+        item = locked_items.get(item_key)
+        if not item or item.quantity < quantity:
+            raise ValueError(f"装备不足: {item_key}")
+
+        item.quantity -= quantity
+        if item.quantity <= 0:
+            delete_ids.append(item.id)
+        else:
+            to_update.append(item)
+        equipment_costs[item_key] = quantity
+
+    if delete_ids:
+        InventoryItem.objects.filter(id__in=delete_ids).delete()
+    if to_update:
+        InventoryItem.objects.bulk_update(to_update, ["quantity"])
+
+    return equipment_costs
+
+
+def _consume_retainers_for_recruitment(manor: Manor, retainer_cost: int) -> None:
+    if manor.retainer_count < retainer_cost:
+        raise ValueError(f"家丁不足，需要{retainer_cost}")
+    Manor.objects.filter(pk=manor.pk).update(retainer_count=manor.retainer_count - retainer_cost)
+    manor.retainer_count -= retainer_cost
+
+
+def _create_troop_recruitment_record(
+    manor: Manor,
+    troop: Dict[str, Any],
+    troop_key: str,
+    quantity: int,
+    equipment_costs: Dict[str, int],
+    retainer_cost: int,
+    base_duration: int,
+) -> tuple[TroopRecruitment, int]:
+    actual_duration = calculate_recruitment_duration(base_duration, manor)
+    recruitment = TroopRecruitment.objects.create(
+        manor=manor,
+        troop_key=troop_key,
+        troop_name=troop["name"],
+        quantity=quantity,
+        equipment_costs=equipment_costs,
+        retainer_cost=retainer_cost,
+        base_duration=base_duration,
+        actual_duration=actual_duration,
+        complete_at=timezone.now() + timedelta(seconds=actual_duration),
+    )
+    return recruitment, actual_duration
+
+
 def start_troop_recruitment(
     manor: Manor,
     troop_key: str,
@@ -346,30 +524,8 @@ def start_troop_recruitment(
     Raises:
         ValueError: 参数错误、条件不满足或已有募兵进行中
     """
-    if quantity < 1:
-        raise ValueError("募兵数量至少为1")
-
-    # 检查是否已有募兵进行中
-    if has_active_recruitment(manor):
-        raise ValueError("已有募兵正在进行中，同时只能进行一种募兵")
-
-    # 检查练功场等级
-    training_level = manor.get_building_level(BuildingKeys.LIANGGONG_CHANG)
-    if training_level < 1:
-        raise ValueError("练功场等级不足，需要1级以上")
-
-    troop = get_troop_template(troop_key)
-    if not troop:
-        raise ValueError("无效的兵种类型")
-
-    recruit_config = troop.get("recruit")
-    if not recruit_config:
-        raise ValueError("该兵种不可募兵")
-
-    # 检查所有条件
-    check_result = check_recruitment_requirements(manor, troop_key, quantity)
-    if not check_result["can_recruit"]:
-        raise ValueError("、".join(check_result["errors"]))
+    troop = _validate_start_recruitment_inputs(manor, troop_key, quantity)
+    recruit_config = troop.get("recruit") or {}
 
     # 获取配置
     equipment_list = recruit_config.get("equipment", [])
@@ -377,54 +533,17 @@ def start_troop_recruitment(
     base_duration = recruit_config.get("base_duration", 120)
 
     with transaction.atomic():
-        # 扣除装备
-        from ..models import InventoryItem
-
-        equipment_costs = {}
-        for item_key in equipment_list:
-            item = InventoryItem.objects.select_for_update().filter(
-                manor=manor,
-                template__key=item_key,
-                storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-            ).first()
-
-            if not item or item.quantity < quantity:
-                raise ValueError(f"装备不足: {item_key}")
-
-            item.quantity -= quantity
-            if item.quantity <= 0:
-                item.delete()
-            else:
-                item.save(update_fields=["quantity"])
-
-            equipment_costs[item_key] = quantity
-
-        # 扣除家丁
-        if manor.retainer_count < retainer_cost:
-            raise ValueError(f"家丁不足，需要{retainer_cost}")
-
-        Manor.objects.filter(pk=manor.pk).update(
-            retainer_count=manor.retainer_count - retainer_cost
+        equipment_costs = _consume_equipment_for_recruitment(manor, equipment_list, quantity)
+        _consume_retainers_for_recruitment(manor, retainer_cost)
+        recruitment, actual_duration = _create_troop_recruitment_record(
+            manor,
+            troop,
+            troop_key,
+            quantity,
+            equipment_costs,
+            retainer_cost,
+            base_duration,
         )
-        manor.retainer_count -= retainer_cost
-
-        # 计算实际募兵时间
-        actual_duration = calculate_recruitment_duration(base_duration, manor)
-
-        # 创建募兵记录
-        recruitment = TroopRecruitment.objects.create(
-            manor=manor,
-            troop_key=troop_key,
-            troop_name=troop["name"],
-            quantity=quantity,
-            equipment_costs=equipment_costs,
-            retainer_cost=retainer_cost,
-            base_duration=base_duration,
-            actual_duration=actual_duration,
-            complete_at=timezone.now() + timedelta(seconds=actual_duration),
-        )
-
-        # 调度 Celery 任务
         _schedule_recruitment_completion(recruitment, actual_duration)
 
     return recruitment
@@ -485,7 +604,7 @@ def finalize_troop_recruitment(recruitment: TroopRecruitment, send_notification:
         try:
             troop_template = TroopTemplate.objects.get(key=recruitment.troop_key)
         except TroopTemplate.DoesNotExist:
-            logger.error(f"TroopTemplate not found: {recruitment.troop_key}")
+            logger.error("TroopTemplate not found: %s", recruitment.troop_key)
             return False
 
         player_troop, created = PlayerTroop.objects.get_or_create(

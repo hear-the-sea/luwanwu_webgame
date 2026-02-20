@@ -50,6 +50,9 @@ def list_oath_bonds(manor: Manor) -> List[OathBond]:
 
 @transaction.atomic
 def add_oath_bond(manor: Manor, guest_id: int) -> OathBond:
+    # Lock manor to serialize oath bond additions and prevent capacity bypass
+    locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
+
     guest = (
         Guest.objects.select_for_update()
         .select_related("template")
@@ -59,8 +62,8 @@ def add_oath_bond(manor: Manor, guest_id: int) -> OathBond:
     if not guest:
         raise ValueError("门客不存在")
 
-    # 容量校验：结义林只影响结义人数
-    capacity = int(getattr(manor, "oath_capacity", 0) or 0)
+    # 容量校验：使用锁定后的对象读取容量
+    capacity = int(getattr(locked_manor, "oath_capacity", 0) or 0)
     current = OathBond.objects.filter(manor=manor).count()
     if current >= capacity:
         raise ValueError("结义人数已满")
@@ -101,6 +104,9 @@ def draw_pie(manor: Manor, prisoner_id: int) -> JailPrisoner:
     """
     画饼：消耗1金条，随机降低囚徒5-10点忠诚度
     """
+    from django.db.models import F
+    from gameplay.models import InventoryItem  # 修复：补充缺失的导入
+
     prisoner = (
         JailPrisoner.objects.select_for_update()
         .filter(pk=prisoner_id, captor=manor, status=JailPrisoner.Status.HELD)
@@ -111,12 +117,22 @@ def draw_pie(manor: Manor, prisoner_id: int) -> JailPrisoner:
 
     # 检查金条
     cost = 1
-    have = get_item_quantity(manor, GOLD_BAR_ITEM_KEY)
-    if have < cost:
+    # 使用 select_for_update 锁定库存行
+    gold_bar_item = InventoryItem.objects.select_for_update().filter(
+        manor=manor,
+        template__key=GOLD_BAR_ITEM_KEY,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        quantity__gte=cost
+    ).first()
+
+    if not gold_bar_item:
+        have = get_item_quantity(manor, GOLD_BAR_ITEM_KEY)
         raise ValueError(f"金条不足，需要 {cost} 个（当前 {have} 个）")
 
-    # 消耗金条
-    consume_inventory_item(manor, GOLD_BAR_ITEM_KEY, cost)
+    # 原子消耗金条
+    InventoryItem.objects.filter(pk=gold_bar_item.pk).update(quantity=F('quantity') - cost)
+    # 清理零库存
+    InventoryItem.objects.filter(pk=gold_bar_item.pk, quantity__lte=0).delete()
 
     # 随机降低忠诚度
     loyalty_min = int(getattr(PVPConstants, "JAIL_PERSUADE_LOYALTY_MIN", 5) or 5)
@@ -132,6 +148,10 @@ def draw_pie(manor: Manor, prisoner_id: int) -> JailPrisoner:
 
 @transaction.atomic
 def recruit_prisoner(manor: Manor, prisoner_id: int) -> Guest:
+    # 死锁/并发预防：先锁定 Manor，确保容量检查原子化
+    # 必须使用锁定后的对象来检查容量，防止陈旧读
+    locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
+
     prisoner = (
         JailPrisoner.objects.select_for_update()
         .select_related("guest_template")
@@ -147,8 +167,9 @@ def recruit_prisoner(manor: Manor, prisoner_id: int) -> Guest:
     if int(prisoner.loyalty) > threshold:
         raise ValueError("忠诚度过高，无法招募")
 
-    capacity = manor.guest_capacity
-    current = manor.guests.count()
+    # 使用锁定后的 manor 对象检查容量
+    capacity = locked_manor.guest_capacity
+    current = locked_manor.guests.count()
     if current >= capacity:
         raise GuestCapacityFullError()
 

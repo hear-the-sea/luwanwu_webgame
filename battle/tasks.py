@@ -67,7 +67,7 @@ def generate_report_task(
         try:
             manor = Manor.objects.select_related("user").get(pk=manor_id)
         except Manor.DoesNotExist:
-            logger.error(f"Manor {manor_id} not found for battle report generation")
+            logger.error("Manor %d not found for battle report generation", manor_id)
             # Don't retry if manor doesn't exist
             return None
 
@@ -134,7 +134,7 @@ def generate_report_task(
             # 保留原始出征时间，仅写入战报
             MissionRun.objects.filter(pk=run_id, battle_report__isnull=True).update(battle_report=report)
 
-        logger.info(f"Battle report {report.pk} generated successfully for manor {manor_id}")
+        logger.info("Battle report %d generated successfully for manor %d", report.pk, manor_id)
         return report.pk
 
     except ValueError as exc:

@@ -29,6 +29,58 @@ from gameplay.services import (
 )
 
 
+def _is_json_request(request: HttpRequest) -> bool:
+    return (
+        "application/json" in request.headers.get("Accept", "").lower()
+        or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    )
+
+
+def _build_attachment_details(message) -> dict:
+    attachment_details = {"resources": [], "items": []}
+    if not message.has_attachments:
+        return attachment_details
+
+    attachments = message.attachments or {}
+    if message.is_claimed:
+        claimed = attachments.get("claimed")
+        if isinstance(claimed, dict):
+            attachments = claimed
+
+    resources = attachments.get("resources", {})
+    resource_labels = dict(ResourceType.choices)
+    for key, amount in resources.items():
+        attachment_details["resources"].append(
+            {
+                "key": key,
+                "name": resource_labels.get(key, key),
+                "amount": amount,
+            }
+        )
+
+    items = attachments.get("items", {})
+    item_keys = list(items.keys())
+    if item_keys:
+        from gameplay.utils.template_loader import get_item_templates_by_keys
+
+        item_templates_map = get_item_templates_by_keys(item_keys)
+    else:
+        item_templates_map = {}
+    for item_key, quantity in items.items():
+        item_template = item_templates_map.get(item_key)
+        attachment_details["items"].append(
+            {
+                "key": item_key,
+                "name": item_template.name if item_template else item_key,
+                "icon": item_template.icon if item_template else None,
+                "image": item_template.image if item_template else None,
+                "quantity": quantity,
+            }
+        )
+
+    return attachment_details
+
+
 class MessageListView(LoginRequiredMixin, TemplateView):
     """消息列表页面"""
 
@@ -75,11 +127,7 @@ def view_message(request: HttpRequest, pk: int) -> HttpResponse:
         pk=pk,
     )
 
-    # 检测是否为JSON/AJAX请求
-    is_json_request = (
-        "application/json" in request.headers.get("Accept", "").lower()
-        or request.headers.get("X-Requested-With") == "XMLHttpRequest"
-    )
+    is_json_request = _is_json_request(request)
 
     # 标记为已读（只有在消息未读时才执行）
     was_unread = not message.is_read
@@ -108,55 +156,7 @@ def view_message(request: HttpRequest, pk: int) -> HttpResponse:
     if message.battle_report_id:
         return redirect("battle:report_detail", pk=message.battle_report_id)
 
-    # 准备附件详细信息
-    attachment_details = {
-        'resources': [],
-        'items': []
-    }
-
-    if message.has_attachments:
-        attachments = message.attachments or {}
-        if message.is_claimed:
-            claimed = attachments.get("claimed")
-            if isinstance(claimed, dict):
-                attachments = claimed
-
-        # 资源详情
-        resources = attachments.get("resources", {})
-        resource_labels = dict(ResourceType.choices)
-        for key, amount in resources.items():
-            attachment_details['resources'].append({
-                'key': key,
-                'name': resource_labels.get(key, key),
-                'amount': amount
-            })
-
-        # 道具详情（批量预加载物品模板，避免N+1查询）
-        items = attachments.get("items", {})
-        item_keys = list(items.keys())
-        if item_keys:
-            from gameplay.utils.template_loader import get_item_templates_by_keys
-            item_templates_map = get_item_templates_by_keys(item_keys)
-        else:
-            item_templates_map = {}
-        for item_key, quantity in items.items():
-            item_template = item_templates_map.get(item_key)
-            if item_template:
-                attachment_details['items'].append({
-                    'key': item_key,
-                    'name': item_template.name,
-                    'icon': item_template.icon,
-                    'image': item_template.image,
-                    'quantity': quantity
-                })
-            else:
-                attachment_details['items'].append({
-                    'key': item_key,
-                    'name': item_key,
-                    'icon': None,
-                    'image': None,
-                    'quantity': quantity
-                })
+    attachment_details = _build_attachment_details(message)
 
     context = {
         'message': message,

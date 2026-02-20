@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Iterable, Mapping, Optional
 
+from django.core.cache import cache
+
 
 def safe_apply_async(
     task: Any,
@@ -26,3 +28,38 @@ def safe_apply_async(
         if logger:
             logger.warning(log_message, exc_info=True)
         return False
+
+
+def safe_apply_async_with_dedup(
+    task: Any,
+    *,
+    dedup_key: str,
+    dedup_timeout: int,
+    args: Optional[Iterable[Any]] = None,
+    kwargs: Optional[Mapping[str, Any]] = None,
+    countdown: Optional[int] = None,
+    logger: Optional[logging.Logger] = None,
+    log_message: str = "celery task dispatch failed",
+) -> bool:
+    """
+    Best-effort Celery dispatch with cache-based dedup gate.
+
+    Returns True when dispatch succeeded, or when another worker/request already dispatched
+    the same dedup key in the dedup window. Returns False only when dispatch fails.
+    """
+    if dedup_key and dedup_timeout > 0:
+        try:
+            if not cache.add(dedup_key, "1", timeout=dedup_timeout):
+                return True
+        except Exception:
+            if logger:
+                logger.debug("celery dispatch dedup cache unavailable: %s", dedup_key, exc_info=True)
+
+    return safe_apply_async(
+        task,
+        args=args,
+        kwargs=kwargs,
+        countdown=countdown,
+        logger=logger,
+        log_message=log_message,
+    )

@@ -40,6 +40,35 @@ def _get_resource_capacity(manor: Manor, resource: str) -> Tuple[int, bool]:
         return 0, False
 
 
+def _handle_unknown_resource(manor: Manor, resource: str, amount: int) -> None:
+    if settings.DEBUG:
+        raise ValueError(f"未知资源类型: {resource}")
+    logger.error(
+        "未知资源类型被跳过: %s=%s",
+        resource,
+        amount,
+        extra={"manor_id": manor.id, "resource": resource, "amount": amount},
+    )
+
+
+def _credit_resource(manor: Manor, resource: str, amount: int) -> Tuple[int, int] | None:
+    if amount <= 0:
+        return None
+
+    capacity, is_valid = _get_resource_capacity(manor, resource)
+    if not is_valid:
+        _handle_unknown_resource(manor, resource, amount)
+        return None
+
+    current_value = getattr(manor, resource, 0)
+    new_value = min(capacity, current_value + amount)
+    added = max(0, new_value - current_value)
+    overflowed = amount - added
+    if added > 0:
+        setattr(manor, resource, new_value)
+    return added, overflowed
+
+
 def spend_resources_locked(
     manor: Manor, cost: Dict[str, int], note: str, reason: str = ResourceEvent.Reason.UPGRADE_COST
 ) -> None:
@@ -86,31 +115,15 @@ def grant_resources_locked(
     overflow: Dict[str, int] = {}
 
     for resource, amount in rewards.items():
-        if amount <= 0:
+        credit_result = _credit_resource(manor, resource, amount)
+        if credit_result is None:
             continue
 
-        # DRY 修复：使用辅助函数获取容量
-        capacity, is_valid = _get_resource_capacity(manor, resource)
-        if not is_valid:
-            # 代码质量修复：在开发环境抛异常，生产环境记录错误日志
-            if settings.DEBUG:
-                raise ValueError(f"未知资源类型: {resource}")
-            logger.error(
-                f"未知资源类型被跳过: {resource}={amount}",
-                extra={"manor_id": manor.id, "resource": resource, "amount": amount}
-            )
-            continue
-
-        current_value = getattr(manor, resource, 0)
-        new_value = min(capacity, current_value + amount)
-        added = max(0, new_value - current_value)
-        overflowed = amount - added
-
+        added, overflowed = credit_result
         if added <= 0:
             overflow[resource] = amount
             continue
 
-        setattr(manor, resource, new_value)
         credited[resource] = added
         if overflowed > 0:
             overflow[resource] = overflowed
@@ -122,8 +135,9 @@ def grant_resources_locked(
     # 记录溢出情况便于调试
     if overflow:
         logger.debug(
-            f"资源溢出被丢弃: {overflow}",
-            extra={"manor_id": manor.id, "overflow": overflow}
+            "资源溢出被丢弃: %s",
+            overflow,
+            extra={"manor_id": manor.id, "overflow": overflow},
         )
 
     return credited, overflow

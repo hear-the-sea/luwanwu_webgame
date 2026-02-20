@@ -58,96 +58,131 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         verbosity = int(options.get("verbosity", 1) or 1)
         skip_images = bool(options.get("skip_images"))
+        assign_missing_avatars = bool(options.get("assign_missing_avatars"))
 
-        file_path = Path(options["file"])
-        if not file_path.exists():
-            raise CommandError(f"File {file_path} does not exist.")
-
-        def load_payload(path: Path) -> dict:
-            with path.open("r", encoding="utf-8") as f:
-                if path.suffix.lower() in {".yaml", ".yml"}:
-                    return yaml.safe_load(f) or {}
-                if path.suffix.lower() == ".json":
-                    return json.load(f) or {}
-                raise CommandError("Unsupported file type. Use .yaml/.yml/.json")
-
-        payload = load_payload(file_path)
-
+        payload = self._load_main_payload(Path(options["file"]))
         if not payload:
             self.stdout.write(self.style.WARNING("Empty payload, nothing to import."))
             return
 
-        skills_file = options.get("skills_file") or ""
-        skills_payload = {}
+        skills_payload = self._load_skills_payload(options.get("skills_file") or "")
+        heroes_dir_payload = self._load_heroes_payload(options.get("heroes_dir") or "")
+
+        sections = self._build_sections(payload, skills_payload, heroes_dir_payload)
+        template_data = sections["template_data"]
+        pool_data = sections["pool_data"]
+        skill_data = sections["skill_data"]
+        book_data = sections["book_data"]
+
+        self._append_hero_roster_templates(
+            template_data,
+            sections["hero_roster"],
+            sections["attribute_profiles"],
+            verbosity,
+        )
+
+        skill_map = self._sync_skills_and_books(skill_data, book_data, verbosity)
+        template_keys, template_skill_keys, fallback_avatar_count = self._sync_templates(
+            template_data,
+            assign_missing_avatars,
+            skip_images,
+            verbosity,
+        )
+
+        key_to_template = {tpl.key: tpl for tpl in GuestTemplate.objects.filter(key__in=template_keys)}
+        self._sync_template_skills(template_skill_keys, key_to_template, skill_map)
+
+        pool_keys = self._sync_pools(pool_data, key_to_template, verbosity)
+        self._cleanup_removed_pools(pool_keys)
+        self._finish_sync(verbosity, fallback_avatar_count)
+
+    def _load_payload(self, path: Path) -> dict:
+        with path.open("r", encoding="utf-8") as f:
+            if path.suffix.lower() in {".yaml", ".yml"}:
+                return yaml.safe_load(f) or {}
+            if path.suffix.lower() == ".json":
+                return json.load(f) or {}
+            raise CommandError("Unsupported file type. Use .yaml/.yml/.json")
+
+    def _load_main_payload(self, file_path: Path) -> dict:
+        if not file_path.exists():
+            raise CommandError(f"File {file_path} does not exist.")
+        return self._load_payload(file_path)
+
+    def _load_skills_payload(self, skills_file: str) -> dict:
         if skills_file:
             skills_path = Path(skills_file)
             if not skills_path.exists():
                 raise CommandError(f"Skills file {skills_path} does not exist.")
-            skills_payload = load_payload(skills_path)
-        else:
-            default_skills_path = Path(settings.BASE_DIR) / "data" / "guest_skills.yaml"
-            if default_skills_path.exists():
-                skills_payload = load_payload(default_skills_path)
+            return self._load_payload(skills_path)
 
-        # Load hero roster from separate directory if specified
-        heroes_dir = options.get("heroes_dir") or ""
-        heroes_dir_payload: dict[str, list] = {}
+        default_skills_path = Path(settings.BASE_DIR) / "data" / "guest_skills.yaml"
+        if default_skills_path.exists():
+            return self._load_payload(default_skills_path)
+        return {}
+
+    def _load_heroes_payload(self, heroes_dir: str) -> dict[str, list]:
         if heroes_dir:
             heroes_path = Path(heroes_dir)
             if not heroes_path.exists() or not heroes_path.is_dir():
                 raise CommandError(f"Heroes directory {heroes_path} does not exist.")
-            heroes_dir_payload = self._load_heroes_from_dir(heroes_path, load_payload)
-        else:
-            # Try default directory
-            default_heroes_path = Path(settings.BASE_DIR) / "data" / "guests"
-            if default_heroes_path.exists() and default_heroes_path.is_dir():
-                heroes_dir_payload = self._load_heroes_from_dir(default_heroes_path, load_payload)
+            return self._load_heroes_from_dir(heroes_path, self._load_payload)
 
-        template_data = payload.get("templates") or []
-        pool_data = payload.get("pools") or []
-        skill_data = (payload.get("skills") or []) + (skills_payload.get("skills") or [])
-        book_data = (payload.get("skill_books") or []) + (skills_payload.get("skill_books") or [])
-        attribute_profiles = payload.get("attribute_profiles") or {}
-        # Merge hero_roster from main file and heroes directory
-        hero_roster = payload.get("heroes") or payload.get("hero_roster") or {}
+        default_heroes_path = Path(settings.BASE_DIR) / "data" / "guests"
+        if default_heroes_path.exists() and default_heroes_path.is_dir():
+            return self._load_heroes_from_dir(default_heroes_path, self._load_payload)
+        return {}
+
+    def _build_sections(self, payload: dict, skills_payload: dict, heroes_dir_payload: dict[str, list]) -> dict:
+        hero_roster = dict(payload.get("heroes") or payload.get("hero_roster") or {})
         for rarity, heroes in heroes_dir_payload.items():
-            if rarity in hero_roster:
-                hero_roster[rarity].extend(heroes)
-            else:
-                hero_roster[rarity] = heroes
-        template_skill_keys: dict[str, list[str]] = {}
-        assign_missing_avatars = bool(options.get("assign_missing_avatars"))
+            hero_roster.setdefault(rarity, []).extend(heroes)
+        return {
+            "template_data": list(payload.get("templates") or []),
+            "pool_data": list(payload.get("pools") or []),
+            "skill_data": (payload.get("skills") or []) + (skills_payload.get("skills") or []),
+            "book_data": (payload.get("skill_books") or []) + (skills_payload.get("skill_books") or []),
+            "attribute_profiles": payload.get("attribute_profiles") or {},
+            "hero_roster": hero_roster,
+        }
 
-        def build_template_from_stats(entry: dict, rarity: str, archetype: str, stats: dict) -> dict:
-            stats = stats or {}
-            hp_profile = RARITY_HP_PROFILES.get(rarity, {"base": 1200})
-            base_hp = stats.get("base_hp", entry.get("base_hp", hp_profile["base"]))
-            mapped = {
-                "base_attack": stats.get("force", entry.get("base_attack", 100)),
-                "base_intellect": stats.get("intellect", entry.get("base_intellect", 100)),
-                "base_defense": stats.get("defense", entry.get("base_defense", 100)),
-                "base_agility": stats.get("agility", entry.get("base_agility", 80)),
-                "base_luck": stats.get("luck", entry.get("base_luck", 50)),
-                "base_hp": base_hp,
-            }
-            built = {
-                "key": entry["key"],
-                "name": entry["name"],
-                "archetype": archetype,
-                "rarity": rarity,
-                "flavor": entry.get("flavor", ""),
-                "default_gender": entry.get("default_gender", "unknown"),
-                "default_morality": entry.get("default_morality", 70),
-                "recruitable": entry.get("recruitable", True),
-                "is_hermit": entry.get("is_hermit", False),
-                "skills": entry.get("skills") or [],
-                "avatar": entry.get("avatar"),  # 保留头像字段
-                "growth_range": entry.get("growth_range") or [],
-                "attribute_weights": entry.get("attribute_weights") or {},
-            }
-            built.update(mapped)
-            return built
+    def _build_template_from_stats(self, entry: dict, rarity: str, archetype: str, stats: dict) -> dict:
+        stats = stats or {}
+        hp_profile = RARITY_HP_PROFILES.get(rarity, {"base": 1200})
+        base_hp = stats.get("base_hp", entry.get("base_hp", hp_profile["base"]))
+        mapped = {
+            "base_attack": stats.get("force", entry.get("base_attack", 100)),
+            "base_intellect": stats.get("intellect", entry.get("base_intellect", 100)),
+            "base_defense": stats.get("defense", entry.get("base_defense", 100)),
+            "base_agility": stats.get("agility", entry.get("base_agility", 80)),
+            "base_luck": stats.get("luck", entry.get("base_luck", 50)),
+            "base_hp": base_hp,
+        }
+        built = {
+            "key": entry["key"],
+            "name": entry["name"],
+            "archetype": archetype,
+            "rarity": rarity,
+            "flavor": entry.get("flavor", ""),
+            "default_gender": entry.get("default_gender", "unknown"),
+            "default_morality": entry.get("default_morality", 70),
+            "recruitable": entry.get("recruitable", True),
+            "is_hermit": entry.get("is_hermit", False),
+            "skills": entry.get("skills") or [],
+            "avatar": entry.get("avatar"),
+            "growth_range": entry.get("growth_range") or [],
+            "attribute_weights": entry.get("attribute_weights") or {},
+        }
+        built.update(mapped)
+        return built
 
+    def _append_hero_roster_templates(
+        self,
+        template_data: list[dict],
+        hero_roster: dict,
+        attribute_profiles: dict,
+        verbosity: int,
+    ) -> None:
         for rarity, heroes in hero_roster.items():
             profiles = attribute_profiles.get(rarity, {})
             for hero in heroes:
@@ -158,9 +193,10 @@ class Command(BaseCommand):
                         self.style.WARNING(f"Skip hero {hero['key']}: missing attribute profile for {rarity}/{archetype}")
                     )
                     continue
-                template_data.append(build_template_from_stats(hero, rarity, archetype, stats))
+                template_data.append(self._build_template_from_stats(hero, rarity, archetype, stats))
 
-        skill_map = {}
+    def _sync_skills_and_books(self, skill_data: list[dict], book_data: list[dict], verbosity: int) -> dict[str, Skill]:
+        skill_map: dict[str, Skill] = {}
         for data in skill_data:
             defaults = {
                 "name": data["name"],
@@ -182,13 +218,16 @@ class Command(BaseCommand):
             }
             obj, created = Skill.objects.update_or_create(key=data["key"], defaults=defaults)
             skill_map[obj.key] = obj
-            action = "Created" if created else "Updated"
             if verbosity >= 1:
-                self.stdout.write(f"{action} skill {obj.key}")
+                self.stdout.write(f"{'Created' if created else 'Updated'} skill {obj.key}")
+
+        unresolved_book_skill_keys = {data["skill"] for data in book_data if data["skill"] not in skill_map}
+        if unresolved_book_skill_keys:
+            skill_map.update({skill.key: skill for skill in Skill.objects.filter(key__in=unresolved_book_skill_keys)})
 
         for data in book_data:
             skill_key = data["skill"]
-            skill_obj = skill_map.get(skill_key) or Skill.objects.filter(key=skill_key).first()
+            skill_obj = skill_map.get(skill_key)
             if not skill_obj:
                 self.stdout.write(self.style.WARNING(f"Skip book {data['key']}: missing skill {skill_key}"))
                 continue
@@ -198,131 +237,207 @@ class Command(BaseCommand):
                 "skill": skill_obj,
             }
             obj, created = SkillBook.objects.update_or_create(key=data["key"], defaults=defaults)
-            action = "Created" if created else "Updated"
             if verbosity >= 1:
-                self.stdout.write(f"{action} book {obj.key}")
+                self.stdout.write(f"{'Created' if created else 'Updated'} book {obj.key}")
 
-        # 图片源目录
+        return skill_map
+
+    def _template_defaults(self, data: dict) -> dict:
+        hp_profile = RARITY_HP_PROFILES.get(data["rarity"], {"base": 1200})
+        return {
+            "name": data["name"],
+            "archetype": data["archetype"],
+            "rarity": data["rarity"],
+            "base_attack": data.get("base_attack", 100),
+            "base_intellect": data.get("base_intellect", 100),
+            "base_defense": data.get("base_defense", 100),
+            "base_agility": data.get("base_agility", 80),
+            "base_luck": data.get("base_luck", 50),
+            "base_hp": data.get("base_hp", hp_profile["base"]),
+            "flavor": data.get("flavor", ""),
+            "default_gender": data.get("default_gender", "unknown"),
+            "default_morality": data.get("default_morality", 50),
+            "recruitable": data.get("recruitable", True),
+            "is_hermit": data.get("is_hermit", False),
+            "growth_range": data.get("growth_range") or [],
+            "attribute_weights": data.get("attribute_weights") or {},
+        }
+
+    def _prepare_avatar_context(self, assign_missing_avatars: bool, skip_images: bool) -> tuple[Path, dict, dict[str, str]]:
         image_source_dir = Path(settings.BASE_DIR) / "data" / "images" / "guests"
         avatar_catalog = self._build_avatar_catalog(image_source_dir) if assign_missing_avatars and not skip_images else {}
-        avatar_cache: dict[str, str] = {}
+        return image_source_dir, avatar_catalog, {}
+
+    def _ensure_avatar_saved(
+        self,
+        obj: GuestTemplate,
+        avatar_filename: str,
+        avatar_path: Path,
+        avatar_cache: dict[str, str],
+        verbosity: int,
+    ) -> tuple[str, bool]:
+        stored_name = avatar_cache.get(avatar_filename)
+        saved_now = False
+        if stored_name:
+            return stored_name, saved_now
+
+        target_name = f"{avatar_path.stem}.webp"
+        storage = obj.avatar.storage
+        if storage.exists(target_name):
+            stored_name = target_name
+        else:
+            compressed_file, new_filename = compress_and_resize_image(
+                avatar_path,
+                max_size=(400, 400),
+                quality=85,
+                convert_to_webp=True,
+            )
+            old_name = obj.avatar.name if obj.avatar else ""
+            obj.avatar.save(new_filename, compressed_file, save=True)
+            stored_name = obj.avatar.name
+            self._safe_delete_old_avatar(obj, old_name, stored_name)
+            if verbosity >= 1:
+                self.stdout.write(
+                    self.style.SUCCESS(f"  [OK] Compressed and loaded avatar: {avatar_filename} -> {new_filename}")
+                )
+            saved_now = True
+        avatar_cache[avatar_filename] = stored_name
+        return stored_name, saved_now
+
+    def _sync_template_avatar(
+        self,
+        obj: GuestTemplate,
+        data: dict,
+        assign_missing_avatars: bool,
+        image_source_dir: Path,
+        avatar_catalog: dict,
+        avatar_cache: dict[str, str],
+        verbosity: int,
+    ) -> int:
+        avatar_filename = data.get("avatar")
+        fallback_count = 0
+        if not avatar_filename and assign_missing_avatars and not obj.avatar:
+            avatar_filename = self._pick_fallback_avatar(
+                avatar_catalog,
+                data.get("archetype"),
+                data.get("default_gender"),
+                data.get("key"),
+            )
+            if avatar_filename:
+                fallback_count = 1
+
+        if not avatar_filename:
+            return fallback_count
+
+        avatar_path = image_source_dir / avatar_filename
+        if not avatar_path.exists():
+            if verbosity >= 1:
+                self.stdout.write(self.style.WARNING(f"  [NOT FOUND] Avatar not found: {avatar_path}"))
+            return fallback_count
+
+        try:
+            stored_name, saved_now = self._ensure_avatar_saved(
+                obj,
+                avatar_filename,
+                avatar_path,
+                avatar_cache,
+                verbosity,
+            )
+            if not saved_now:
+                old_name = obj.avatar.name if obj.avatar else ""
+                if old_name != stored_name:
+                    obj.avatar.name = stored_name
+                    obj.save(update_fields=["avatar"])
+                    self._safe_delete_old_avatar(obj, old_name, stored_name)
+        except Exception as exc:
+            if verbosity >= 1:
+                self.stdout.write(self.style.WARNING(f"  [FAIL] Failed to load avatar {avatar_filename}: {exc}"))
+
+        return fallback_count
+
+    def _sync_templates(
+        self,
+        template_data: list[dict],
+        assign_missing_avatars: bool,
+        skip_images: bool,
+        verbosity: int,
+    ) -> tuple[set[str], dict[str, list[str]], int]:
+        image_source_dir, avatar_catalog, avatar_cache = self._prepare_avatar_context(assign_missing_avatars, skip_images)
+        template_keys: set[str] = set()
+        template_skill_keys: dict[str, list[str]] = {}
         fallback_avatar_count = 0
 
-        template_keys = set()
         for data in template_data:
-            hp_profile = RARITY_HP_PROFILES.get(data["rarity"], {"base": 1200})
-            base_hp = data.get("base_hp", hp_profile["base"])
-            defaults = {
-                "name": data["name"],
-                "archetype": data["archetype"],
-                "rarity": data["rarity"],
-                "base_attack": data.get("base_attack", 100),
-                "base_intellect": data.get("base_intellect", 100),
-                "base_defense": data.get("base_defense", 100),
-                "base_agility": data.get("base_agility", 80),
-                "base_luck": data.get("base_luck", 50),
-                "base_hp": base_hp,
-                "flavor": data.get("flavor", ""),
-                "default_gender": data.get("default_gender", "unknown"),
-                "default_morality": data.get("default_morality", 50),
-                "recruitable": data.get("recruitable", True),
-                "is_hermit": data.get("is_hermit", False),
-                "growth_range": data.get("growth_range") or [],
-                "attribute_weights": data.get("attribute_weights") or {},
-            }
-            obj, created = GuestTemplate.objects.update_or_create(key=data["key"], defaults=defaults)
-
-            # 处理头像字段（压缩并保存）
+            obj, created = GuestTemplate.objects.update_or_create(key=data["key"], defaults=self._template_defaults(data))
             if not skip_images:
-                avatar_filename = data.get("avatar")
-                if not avatar_filename and assign_missing_avatars and not obj.avatar:
-                    avatar_filename = self._pick_fallback_avatar(
-                        avatar_catalog,
-                        data.get("archetype"),
-                        data.get("default_gender"),
-                        data.get("key"),
-                    )
-                    if avatar_filename:
-                        fallback_avatar_count += 1
-
-                if avatar_filename:
-                    avatar_path = image_source_dir / avatar_filename
-                    if avatar_path.exists():
-                        try:
-                            stored_name = avatar_cache.get(avatar_filename)
-                            saved_now = False
-                            if not stored_name:
-                                target_name = f"{avatar_path.stem}.webp"
-                                storage = obj.avatar.storage
-                                if storage.exists(target_name):
-                                    stored_name = target_name
-                                else:
-                                    # 压缩图片：门客头像最大 400x400，质量 85%，转换为 WebP
-                                    compressed_file, new_filename = compress_and_resize_image(
-                                        avatar_path,
-                                        max_size=(400, 400),
-                                        quality=85,
-                                        convert_to_webp=True,
-                                    )
-                                    old_name = obj.avatar.name if obj.avatar else ""
-                                    obj.avatar.save(new_filename, compressed_file, save=True)
-                                    stored_name = obj.avatar.name
-                                    avatar_cache[avatar_filename] = stored_name
-                                    self._safe_delete_old_avatar(obj, old_name, stored_name)
-                                    if verbosity >= 1:
-                                        self.stdout.write(
-                                            self.style.SUCCESS(
-                                                f"  [OK] Compressed and loaded avatar: {avatar_filename} -> {new_filename}"
-                                            )
-                                        )
-                                    saved_now = True
-                                avatar_cache[avatar_filename] = stored_name
-
-                            if not saved_now:
-                                old_name = obj.avatar.name if obj.avatar else ""
-                                if old_name != stored_name:
-                                    obj.avatar.name = stored_name
-                                    obj.save(update_fields=["avatar"])
-                                    self._safe_delete_old_avatar(obj, old_name, stored_name)
-                        except Exception as exc:
-                            if verbosity >= 1:
-                                self.stdout.write(
-                                    self.style.WARNING(f"  [FAIL] Failed to load avatar {avatar_filename}: {exc}")
-                                )
-                    else:
-                        if verbosity >= 1:
-                            self.stdout.write(self.style.WARNING(f"  [NOT FOUND] Avatar not found: {avatar_path}"))
+                fallback_avatar_count += self._sync_template_avatar(
+                    obj,
+                    data,
+                    assign_missing_avatars,
+                    image_source_dir,
+                    avatar_catalog,
+                    avatar_cache,
+                    verbosity,
+                )
 
             template_keys.add(obj.key)
             template_skill_keys[obj.key] = data.get("skills") or []
-            action = "Created" if created else "Updated"
             if verbosity >= 1:
-                self.stdout.write(f"{action} template {obj.key}")
+                self.stdout.write(f"{'Created' if created else 'Updated'} template {obj.key}")
 
-        key_to_template = {tpl.key: tpl for tpl in GuestTemplate.objects.filter(key__in=template_keys)}
+        return template_keys, template_skill_keys, fallback_avatar_count
 
-        if template_skill_keys:
-            for template_key, skill_keys in template_skill_keys.items():
-                tpl = key_to_template.get(template_key)
-                if not tpl:
+    def _sync_template_skills(
+        self,
+        template_skill_keys: dict[str, list[str]],
+        key_to_template: dict[str, GuestTemplate],
+        skill_map: dict[str, Skill],
+    ) -> None:
+        unresolved_skill_keys = {
+            skill_key
+            for keys in template_skill_keys.values()
+            for skill_key in keys
+            if skill_key not in skill_map
+        }
+        if unresolved_skill_keys:
+            skill_map.update({skill.key: skill for skill in Skill.objects.filter(key__in=unresolved_skill_keys)})
+
+        for template_key, skill_keys in template_skill_keys.items():
+            tpl = key_to_template.get(template_key)
+            if not tpl:
+                continue
+            if not skill_keys:
+                tpl.initial_skills.clear()
+                continue
+
+            skill_objs = []
+            for skill_key in skill_keys:
+                skill_obj = skill_map.get(skill_key)
+                if not skill_obj:
+                    self.stdout.write(self.style.WARNING(f"Skip template skill {skill_key} for {template_key}: skill not found"))
                     continue
-                if not skill_keys:
-                    tpl.initial_skills.clear()
-                    continue
-                skill_objs = []
-                for skill_key in skill_keys:
-                    skill_obj = skill_map.get(skill_key) or Skill.objects.filter(key=skill_key).first()
-                    if not skill_obj:
-                        self.stdout.write(
-                            self.style.WARNING(f"Skip template skill {skill_key} for {template_key}: skill not found")
-                        )
-                        continue
-                    skill_objs.append(skill_obj)
-                tpl.initial_skills.set(skill_objs)
+                skill_objs.append(skill_obj)
+            tpl.initial_skills.set(skill_objs)
 
-        pool_keys = set()
+    def _sync_pools(
+        self,
+        pool_data: list[dict],
+        key_to_template: dict[str, GuestTemplate],
+        verbosity: int,
+    ) -> set[str]:
+        template_keys_in_pools = {
+            entry.get("template")
+            for pool in pool_data
+            for entry in (pool.get("entries") or [])
+            if entry.get("template")
+        }
+        missing_keys = {key for key in template_keys_in_pools if key not in key_to_template}
+        if missing_keys:
+            key_to_template.update({tpl.key: tpl for tpl in GuestTemplate.objects.filter(key__in=missing_keys)})
+
+        pool_keys: set[str] = set()
         for pool in pool_data:
-            entries = pool.pop("entries", [])
+            entries = pool.get("entries") or []
             defaults = {
                 "name": pool["name"],
                 "tier": pool.get("tier", RecruitmentPool.Tier.TONGSHI),
@@ -333,41 +448,53 @@ class Command(BaseCommand):
             pool_obj, _ = RecruitmentPool.objects.update_or_create(key=pool["key"], defaults=defaults)
             pool_keys.add(pool_obj.key)
             RecruitmentPoolEntry.objects.filter(pool=pool_obj).delete()
+
+            new_entries: list[RecruitmentPoolEntry] = []
             for entry in entries:
                 template_key = entry.get("template")
                 rarity = entry.get("rarity")
                 archetype = entry.get("archetype")
                 weight = entry.get("weight", 1)
+
                 tpl = None
                 if template_key:
-                    tpl = key_to_template.get(template_key) or GuestTemplate.objects.filter(key=template_key).first()
+                    tpl = key_to_template.get(template_key)
                     if not tpl:
-                        self.stdout.write(
-                            self.style.WARNING(f"Skip pool {pool_obj.key} entry {template_key}: template not found")
-                        )
+                        self.stdout.write(self.style.WARNING(f"Skip pool {pool_obj.key} entry {template_key}: template not found"))
                         continue
                 elif not rarity:
                     self.stdout.write(
                         self.style.WARNING(
-                            f"Skip pool {pool_obj.key} entry with weight {weight}: "
-                            "must specify template or rarity."
+                            f"Skip pool {pool_obj.key} entry with weight {weight}: must specify template or rarity."
                         )
                     )
                     continue
-                RecruitmentPoolEntry.objects.create(
-                    pool=pool_obj,
-                    template=tpl,
-                    rarity=rarity,
-                    archetype=archetype,
-                    weight=weight,
+
+                new_entries.append(
+                    RecruitmentPoolEntry(
+                        pool=pool_obj,
+                        template=tpl,
+                        rarity=rarity,
+                        archetype=archetype,
+                        weight=weight,
+                    )
                 )
-            self.stdout.write(f"Configured pool {pool_obj.key} with {len(entries)} entries")
 
-        if pool_keys:
-            removed, _ = RecruitmentPool.objects.exclude(key__in=pool_keys).delete()
-            if removed:
-                self.stdout.write(self.style.WARNING(f"Removed {removed} pools not defined in payload"))
+            if new_entries:
+                RecruitmentPoolEntry.objects.bulk_create(new_entries)
+            if verbosity >= 1:
+                self.stdout.write(f"Configured pool {pool_obj.key} with {len(new_entries)} entries")
 
+        return pool_keys
+
+    def _cleanup_removed_pools(self, pool_keys: set[str]) -> None:
+        if not pool_keys:
+            return
+        removed, _ = RecruitmentPool.objects.exclude(key__in=pool_keys).delete()
+        if removed:
+            self.stdout.write(self.style.WARNING(f"Removed {removed} pools not defined in payload"))
+
+    def _finish_sync(self, verbosity: int, fallback_avatar_count: int) -> None:
         clear_template_cache()
         if verbosity >= 1:
             if fallback_avatar_count:

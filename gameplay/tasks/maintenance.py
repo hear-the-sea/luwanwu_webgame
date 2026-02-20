@@ -25,7 +25,7 @@ def cleanup_old_data_task():
     cutoff = timezone.now() - timedelta(days=30)
     deleted, _ = ResourceEvent.objects.filter(created_at__lt=cutoff).delete()
 
-    logger.info(f"Cleaned up {deleted} resource event records older than 30 days")
+    logger.info("Cleaned up %d resource event records older than 30 days", deleted)
     return deleted
 
 
@@ -49,5 +49,5 @@ def decay_prisoner_loyalty_task():
         loyalty=Greatest(F("loyalty") - decay_amount, 0)
     )
 
-    logger.info(f"Prisoner loyalty daily decay: updated {updated} prisoners, each reduced by {decay_amount}")
+    logger.info("Prisoner loyalty daily decay: updated %d prisoners, each reduced by %d", updated, decay_amount)
     return updated

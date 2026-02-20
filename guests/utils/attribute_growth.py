@@ -46,6 +46,36 @@ CIVIL_ATTRIBUTE_WEIGHTS = {
 }
 
 
+def _resolve_growth_range(rarity: str, growth_range: list | None) -> tuple[int, int]:
+    if growth_range and len(growth_range) == 2:
+        return int(growth_range[0]), int(growth_range[1])
+    default_min, default_max = RARITY_ATTRIBUTE_GROWTH_RANGE.get(rarity, (1, 3))
+    return int(default_min), int(default_max)
+
+
+def _resolve_weights(archetype: str, attribute_weights: dict | None) -> dict[str, int]:
+    if attribute_weights:
+        weights = {
+            "force": int(attribute_weights.get("force", 0) or 0),
+            "intellect": int(attribute_weights.get("intellect", 0) or 0),
+            "defense": int(attribute_weights.get("defense", 0) or 0),
+            "agility": int(attribute_weights.get("agility", 0) or 0),
+        }
+        if sum(weights.values()) > 0:
+            return weights
+    if archetype == GuestArchetype.MILITARY:
+        return MILITARY_ATTRIBUTE_WEIGHTS
+    return CIVIL_ATTRIBUTE_WEIGHTS
+
+
+def _build_weighted_choices(weights: dict[str, int]) -> list[str]:
+    choices: list[str] = []
+    for attr, weight in weights.items():
+        if weight > 0:
+            choices.extend([attr] * int(weight))
+    return choices
+
+
 def allocate_level_up_attributes(
     guest: "Guest",
     levels: int = 1,
@@ -79,37 +109,9 @@ def allocate_level_up_attributes(
 
     template = guest.template
 
-    # 成长点数区间：模板配置 > 稀有度默认
-    if template.growth_range and len(template.growth_range) == 2:
-        min_growth, max_growth = template.growth_range
-    else:
-        min_growth, max_growth = RARITY_ATTRIBUTE_GROWTH_RANGE.get(guest.rarity, (1, 3))
-
-    # 属性权重：模板配置 > 职业默认
-    if template.attribute_weights:
-        # 确保所有属性都有权重，缺失的属性使用默认值 0
-        weights = {
-            "force": template.attribute_weights.get("force", 0),
-            "intellect": template.attribute_weights.get("intellect", 0),
-            "defense": template.attribute_weights.get("defense", 0),
-            "agility": template.attribute_weights.get("agility", 0),
-        }
-        # 如果所有权重都是0，回退到职业默认
-        if sum(weights.values()) == 0:
-            if guest.archetype == GuestArchetype.MILITARY:
-                weights = MILITARY_ATTRIBUTE_WEIGHTS
-            else:
-                weights = CIVIL_ATTRIBUTE_WEIGHTS
-    elif guest.archetype == GuestArchetype.MILITARY:
-        weights = MILITARY_ATTRIBUTE_WEIGHTS
-    else:  # CIVIL
-        weights = CIVIL_ATTRIBUTE_WEIGHTS
-
-    # 创建加权选择池（只添加权重>0的属性）
-    choices = []
-    for attr, weight in weights.items():
-        if weight > 0:
-            choices.extend([attr] * int(weight))
+    min_growth, max_growth = _resolve_growth_range(guest.rarity, template.growth_range)
+    weights = _resolve_weights(guest.archetype, template.attribute_weights)
+    choices = _build_weighted_choices(weights)
 
     # 初始化分配结果
     allocation = {
@@ -121,7 +123,7 @@ def allocate_level_up_attributes(
 
     # 逐级计算：每一级独立随机生成成长点数，然后分配
     for _ in range(levels):
-        points_this_level = rng.randint(int(min_growth), int(max_growth))
+        points_this_level = rng.randint(min_growth, max_growth)
         for _ in range(points_this_level):
             attr = rng.choice(choices)
             allocation[attr] += 1
@@ -169,34 +171,12 @@ def get_expected_growth(
         >>> get_expected_growth("orange", "military", 1)
         {'force': 2.7, 'intellect': 1.08, 'defense': 2.97, 'agility': 2.25}
     """
-    # 成长点数区间：自定义 > 稀有度默认
-    if growth_range and len(growth_range) == 2:
-        min_growth, max_growth = growth_range
-    else:
-        min_growth, max_growth = RARITY_ATTRIBUTE_GROWTH_RANGE.get(rarity, (1, 3))
+    min_growth, max_growth = _resolve_growth_range(rarity, growth_range)
 
     mean_growth = (min_growth + max_growth) / 2
     total_points = mean_growth * levels
 
-    # 属性权重：自定义 > 职业默认
-    if attribute_weights:
-        # 确保所有属性都有权重，缺失的属性使用默认值 0
-        weights = {
-            "force": attribute_weights.get("force", 0),
-            "intellect": attribute_weights.get("intellect", 0),
-            "defense": attribute_weights.get("defense", 0),
-            "agility": attribute_weights.get("agility", 0),
-        }
-        # 如果所有权重都是0，回退到职业默认
-        if sum(weights.values()) == 0:
-            if archetype == GuestArchetype.MILITARY:
-                weights = MILITARY_ATTRIBUTE_WEIGHTS
-            else:
-                weights = CIVIL_ATTRIBUTE_WEIGHTS
-    elif archetype == GuestArchetype.MILITARY:
-        weights = MILITARY_ATTRIBUTE_WEIGHTS
-    else:
-        weights = CIVIL_ATTRIBUTE_WEIGHTS
+    weights = _resolve_weights(archetype, attribute_weights)
 
     # 计算权重总和
     total_weight = sum(weights.values())

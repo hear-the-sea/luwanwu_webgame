@@ -43,7 +43,7 @@ def purge_other_sessions(user_id: int, current_session_key: str | None) -> None:
         if not lock_acquired:
             # 非阻塞处理：无法获取锁时直接返回，session 清理不是关键路径
             # 避免使用 time.sleep 阻塞 worker，防止高并发下 worker 耗尽
-            logger.debug(f"Login lock busy for user {user_id}, skipping session purge")
+            logger.debug("Login lock busy for user %s, skipping session purge", user_id)
             return
 
         try:
@@ -54,9 +54,9 @@ def purge_other_sessions(user_id: int, current_session_key: str | None) -> None:
             if old_session_key and old_session_key != current_session_key:
                 try:
                     Session.objects.filter(session_key=old_session_key).delete()
-                    logger.debug(f"Purged old session for user {user_id}")
+                    logger.debug("Purged old session for user %s", user_id)
                 except Exception as e:
-                    logger.warning(f"Failed to delete old session for user {user_id}: {e}")
+                    logger.warning("Failed to delete old session for user %s: %s", user_id, e)
 
             # 记录当前 session key 到缓存
             cache.set(cache_key, current_session_key, timeout=USER_SESSION_CACHE_TTL)
@@ -67,7 +67,7 @@ def purge_other_sessions(user_id: int, current_session_key: str | None) -> None:
 
     except Exception as e:
         # 缓存不可用时降级为原始逻辑（但仅在必要时）
-        logger.warning(f"Cache unavailable, falling back to session scan: {e}")
+        logger.warning("Cache unavailable, falling back to session scan: %s", e)
         _purge_sessions_fallback(user_id, current_session_key)
 
 
@@ -95,17 +95,21 @@ def _purge_sessions_fallback(user_id: int, current_session_key: str) -> None:
         except (ValueError, KeyError, TypeError) as e:
             # 安全修复：明确捕获特定的解码异常类型，而非所有异常
             logger.debug(
-                f"Failed to decode session {session.session_key[:8]}...: {type(e).__name__}",
+                "Failed to decode session %s...: %s",
+                session.session_key[:8],
+                type(e).__name__,
                 exc_info=True
             )
             continue
         except Exception as e:
             # 其他未预期的异常记录为警告级别
             logger.warning(
-                f"Unexpected error processing session {session.session_key[:8]}...: {e}",
+                "Unexpected error processing session %s...: %s",
+                session.session_key[:8],
+                e,
                 exc_info=True
             )
             continue
 
     if deleted_count > 0:
-        logger.info(f"Fallback purged {deleted_count} sessions for user {user_id}")
+        logger.info("Fallback purged %d sessions for user %s", deleted_count, user_id)

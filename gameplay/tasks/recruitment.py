@@ -5,7 +5,12 @@ import logging
 from celery import shared_task
 from django.utils import timezone
 
+from common.utils.celery import safe_apply_async_with_dedup
+
 logger = logging.getLogger(__name__)
+
+# 任务去重超时时间（秒）
+_TASK_DEDUP_TIMEOUT = 5
 
 
 @shared_task(name="gameplay.complete_troop_recruitment", bind=True, max_retries=2, default_retry_delay=30)
@@ -24,14 +29,22 @@ def complete_troop_recruitment(self, recruitment_id: int):
             .first()
         )
         if not recruitment:
-            logger.warning(f"TroopRecruitment {recruitment_id} not found")
+            logger.warning("TroopRecruitment %d not found", recruitment_id)
             return "not_found"
 
         now = timezone.now()
         if recruitment.complete_at and recruitment.complete_at > now:
             remaining = int((recruitment.complete_at - now).total_seconds())
             if remaining > 0:
-                complete_troop_recruitment.apply_async(args=[recruitment_id], countdown=remaining)
+                safe_apply_async_with_dedup(
+                    complete_troop_recruitment,
+                    dedup_key=f"recruitment:troop:{recruitment_id}",
+                    dedup_timeout=_TASK_DEDUP_TIMEOUT,
+                    args=[recruitment_id],
+                    countdown=remaining,
+                    logger=logger,
+                    log_message=f"troop recruitment reschedule failed: id={recruitment_id}",
+                )
                 return "rescheduled"
 
         finalized = finalize_troop_recruitment(recruitment, send_notification=True)

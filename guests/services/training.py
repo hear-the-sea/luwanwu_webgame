@@ -99,6 +99,52 @@ def ensure_auto_training(guest: Guest) -> None:
     transaction.on_commit(enqueue_training)
 
 
+def _reduce_guest_training_once(guest: Guest, remaining_seconds: int) -> tuple[int, int, bool]:
+    """单步缩减训练时间。
+
+    Returns:
+        (实际减少秒数, 消耗后的剩余秒数, 是否影响了训练进度)
+    """
+    remaining = remaining_training_seconds(guest, now=timezone.now())
+    if remaining <= 0:
+        finalized = finalize_guest_training(guest)
+        if finalized:
+            guest.refresh_from_db()
+        return 0, remaining_seconds, finalized
+
+    consume = min(remaining_seconds, remaining)
+    if consume >= remaining:
+        finalize_guest_training(guest, now=guest.training_complete_at)
+        guest.refresh_from_db()
+        if guest.level < MAX_GUEST_LEVEL and not guest.training_complete_at:
+            ensure_auto_training(guest)
+            guest.refresh_from_db()
+    else:
+        guest.training_complete_at = guest.training_complete_at - timezone.timedelta(seconds=consume)
+        guest.save(update_fields=["training_complete_at"])
+    return consume, remaining_seconds - consume, consume > 0
+
+
+def _reschedule_guest_training_if_needed(guest: Guest, source: str) -> None:
+    finalize_guest_training(guest)
+    if guest.level < MAX_GUEST_LEVEL and not guest.training_complete_at:
+        ensure_auto_training(guest)
+        guest.refresh_from_db()
+    if not guest.training_complete_at:
+        return
+
+    countdown = max(0, int((guest.training_complete_at - timezone.now()).total_seconds()))
+
+    def enqueue_training():
+        _try_enqueue_complete_guest_training(
+            guest,
+            countdown=countdown,
+            source=source,
+        )
+
+    transaction.on_commit(enqueue_training)
+
+
 def reduce_training_time(manor: Manor, seconds: int) -> Dict[str, int]:
     """
     缩短庄园所有门客的训练时间。多余的时间会顺延到下一级。
@@ -129,29 +175,9 @@ def reduce_training_time(manor: Manor, seconds: int) -> Dict[str, int]:
         if not ensure_training_timer(guest, now=now):
             continue
         while remaining_seconds > 0 and guest.training_complete_at and guest.level < MAX_GUEST_LEVEL:
-            remaining = remaining_training_seconds(guest, now=timezone.now())
-            if remaining <= 0:
-                finalize_guest_training(guest)
-                guest.refresh_from_db()
-                if guest.level >= MAX_GUEST_LEVEL:
-                    break
-                continue
-            if remaining_seconds >= remaining:
-                total_reduced += remaining
-                remaining_seconds -= remaining
-                finalize_guest_training(guest)
-                guest.refresh_from_db()
-                applied += 1
-                if guest.level >= MAX_GUEST_LEVEL:
-                    break
-                if not guest.training_complete_at:
-                    ensure_auto_training(guest)
-                    guest.refresh_from_db()
-            else:
-                guest.training_complete_at = guest.training_complete_at - timezone.timedelta(seconds=remaining_seconds)
-                guest.save(update_fields=["training_complete_at"])
-                total_reduced += remaining_seconds
-                remaining_seconds = 0
+            reduced, remaining_seconds, touched = _reduce_guest_training_once(guest, remaining_seconds)
+            total_reduced += reduced
+            if touched:
                 applied += 1
         if remaining_seconds <= 0:
             break
@@ -186,44 +212,12 @@ def reduce_training_time_for_guest(guest: Guest, seconds: int) -> Dict[str, int]
     while remaining_seconds > 0 and guest.level < MAX_GUEST_LEVEL:
         if not ensure_training_timer(guest, now=now):
             break
-        remaining = remaining_training_seconds(guest, now=timezone.now())
-        if remaining <= 0:
-            if finalize_guest_training(guest):
-                levels_applied += 1
-                guest.refresh_from_db()
-            else:
-                break
-            continue
+        reduced, remaining_seconds, touched = _reduce_guest_training_once(guest, remaining_seconds)
+        total_reduced += reduced
+        if touched:
+            levels_applied += 1
 
-        consume = min(remaining_seconds, remaining)
-        total_reduced += consume
-        remaining_seconds -= consume
-
-        if consume >= remaining:
-            # 完成当前等级并进入下一级
-            if finalize_guest_training(guest, now=guest.training_complete_at):
-                levels_applied += 1
-                guest.refresh_from_db()
-        else:
-            guest.training_complete_at = guest.training_complete_at - timezone.timedelta(seconds=consume)
-            guest.save(update_fields=["training_complete_at"])
-
-    # 确保训练计时器存在并重新调度任务
-    finalize_guest_training(guest)
-    if guest.level < MAX_GUEST_LEVEL and not guest.training_complete_at:
-        ensure_auto_training(guest)
-        guest.refresh_from_db()
-    if guest.training_complete_at:
-        countdown = max(0, int((guest.training_complete_at - timezone.now()).total_seconds()))
-
-        def enqueue_training():
-            _try_enqueue_complete_guest_training(
-                guest,
-                countdown=countdown,
-                source="reduce_training_time_for_guest",
-            )
-
-        transaction.on_commit(enqueue_training)
+    _reschedule_guest_training_if_needed(guest, source="reduce_training_time_for_guest")
     return {
         "time_reduced": total_reduced,
         "applied_levels": levels_applied,
@@ -235,20 +229,14 @@ def reduce_training_time_for_guest(guest: Guest, seconds: int) -> Dict[str, int]
 def train_guest(guest: Guest, levels: int = 1) -> Guest:
     """
     开始培养门客，消耗资源并设置训练计时器。
-
-    Args:
-        guest: 门客对象
-        levels: 要提升的等级数（默认为1）
-
-    Returns:
-        更新后的门客对象
-
-    Raises:
-        GuestMaxLevelError: 门客已达上限时抛出
-        GuestTrainingInProgressError: 门客已在训练中时抛出
     """
     if not getattr(guest, "pk", None):
         raise GuestError("门客未保存，无法训练")
+
+    # 死锁预防：统一锁顺序 Manor -> Guest
+    # 全局规则是先锁 Manor (资源扣除) 再锁 Guest (状态变更)
+    from gameplay.models import Manor
+    Manor.objects.select_for_update().get(pk=guest.manor_id)
 
     locked_guest = (
         Guest.objects.select_for_update()

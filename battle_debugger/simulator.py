@@ -17,6 +17,109 @@ logger = logging.getLogger(__name__)
 
 # ============ 参数覆盖机制 ============
 
+
+def _patch_slaughter_multiplier(cm, params: Dict[str, Any], originals: Dict[str, Any]) -> None:
+    if "slaughter_multiplier" not in params:
+        return
+    originals["slaughter"] = cm.calculate_slaughter_multiplier
+    multiplier = params["slaughter_multiplier"]
+
+    def custom_slaughter(attacker, target):
+        if getattr(attacker, "kind", "") != "guest":
+            return 1.0
+        if getattr(target, "kind", "") != "troop":
+            return 1.0
+        return multiplier
+
+    cm.calculate_slaughter_multiplier = custom_slaughter
+
+
+def _patch_attack_value(cm, params: Dict[str, Any], originals: Dict[str, Any]) -> None:
+    if "troop_attack_divisor_vs_guest" not in params and "troop_attack_divisor_vs_troop" not in params:
+        return
+
+    originals["attack"] = cm.effective_attack_value
+    div_guest = params.get("troop_attack_divisor_vs_guest", 4.0)
+    div_troop = params.get("troop_attack_divisor_vs_troop", 1.0)
+    orig_attack = cm.effective_attack_value
+
+    def custom_attack(actor, target=None):
+        if getattr(actor, "kind", "") != "troop":
+            return orig_attack(actor, target)
+
+        strength = cm._current_strength(actor)
+        unit_attack = cm._unit_attack_value(actor)
+        if target is not None and getattr(target, "kind", "") != "troop":
+            multiplier = max(1.0, strength / div_guest)
+        else:
+            multiplier = max(1.0, strength / div_troop)
+        return max(1, int(unit_attack * multiplier))
+
+    cm.effective_attack_value = custom_attack
+
+
+def _patch_defense_value(cm, params: Dict[str, Any], originals: Dict[str, Any]) -> None:
+    if "troop_defense_divisor" not in params:
+        return
+
+    originals["defense"] = cm.effective_defense_value
+    divisor = params["troop_defense_divisor"]
+    orig_defense = cm.effective_defense_value
+
+    def custom_defense(target, attacker=None):
+        if getattr(target, "kind", "") != "troop":
+            return orig_defense(target, attacker)
+
+        unit_defense = cm._unit_defense_value(target)
+        strength = cm._current_strength(target)
+        multiplier = max(1.0, math.sqrt(strength) / divisor)
+        return max(1, int(unit_defense * multiplier))
+
+    cm.effective_defense_value = custom_defense
+
+
+def _patch_crit_chance(sc, params: Dict[str, Any], originals: Dict[str, Any]) -> None:
+    if "crit_chance" not in params:
+        return
+
+    originals["crit"] = sc.calculate_crit_chance
+    chance = params["crit_chance"]
+
+    def custom_crit(actor):
+        return chance
+
+    sc.calculate_crit_chance = custom_crit
+
+
+def _patch_priority_target_weight(sc, params: Dict[str, Any], originals: Dict[str, Any]) -> None:
+    if "priority_target_weight" not in params:
+        return
+
+    originals["priority_weight"] = sc.PRIORITY_TARGET_WEIGHT
+    sc.PRIORITY_TARGET_WEIGHT = params["priority_target_weight"]
+
+
+def _apply_battle_param_patches(cm, sc, params: Dict[str, Any], originals: Dict[str, Any]) -> None:
+    _patch_slaughter_multiplier(cm, params, originals)
+    _patch_attack_value(cm, params, originals)
+    _patch_defense_value(cm, params, originals)
+    _patch_crit_chance(sc, params, originals)
+    _patch_priority_target_weight(sc, params, originals)
+
+
+def _restore_battle_param_patches(cm, sc, originals: Dict[str, Any]) -> None:
+    restore_handlers = {
+        "slaughter": lambda value: setattr(cm, "calculate_slaughter_multiplier", value),
+        "attack": lambda value: setattr(cm, "effective_attack_value", value),
+        "defense": lambda value: setattr(cm, "effective_defense_value", value),
+        "crit": lambda value: setattr(sc, "calculate_crit_chance", value),
+        "priority_weight": lambda value: setattr(sc, "PRIORITY_TARGET_WEIGHT", value),
+    }
+    for key, value in originals.items():
+        handler = restore_handlers.get(key)
+        if handler is not None:
+            handler(value)
+
 @contextmanager
 def patch_battle_params(params: Dict[str, Any]):
     """
@@ -40,95 +143,13 @@ def patch_battle_params(params: Dict[str, Any]):
     import battle.combat_math as cm
     import battle.simulation_core as sc
 
-    # 保存原始函数/值
-    originals = {}
-
-    # === 屠戮倍率 ===
-    if "slaughter_multiplier" in params:
-        originals["slaughter"] = cm.calculate_slaughter_multiplier
-        multiplier = params["slaughter_multiplier"]
-
-        def custom_slaughter(attacker, target):
-            if getattr(attacker, "kind", "") != "guest":
-                return 1.0
-            if getattr(target, "kind", "") != "troop":
-                return 1.0
-            return multiplier
-
-        cm.calculate_slaughter_multiplier = custom_slaughter
-
-    # === 攻击倍率 ===
-    if "troop_attack_divisor_vs_guest" in params or "troop_attack_divisor_vs_troop" in params:
-        originals["attack"] = cm.effective_attack_value
-        div_guest = params.get("troop_attack_divisor_vs_guest", 4.0)
-        div_troop = params.get("troop_attack_divisor_vs_troop", 1.0)
-        orig_attack = cm.effective_attack_value
-
-        def custom_attack(actor, target=None):
-            if getattr(actor, "kind", "") != "troop":
-                return orig_attack(actor, target)
-
-            strength = cm._current_strength(actor)
-            unit_attack = cm._unit_attack_value(actor)
-
-            if target is not None and getattr(target, "kind", "") != "troop":
-                multiplier = max(1.0, strength / div_guest)
-            else:
-                multiplier = max(1.0, strength / div_troop)
-
-            return max(1, int(unit_attack * multiplier))
-
-        cm.effective_attack_value = custom_attack
-
-    # === 防御倍率 ===
-    if "troop_defense_divisor" in params:
-        originals["defense"] = cm.effective_defense_value
-        divisor = params["troop_defense_divisor"]
-        orig_defense = cm.effective_defense_value
-
-        def custom_defense(target, attacker=None):
-            if getattr(target, "kind", "") != "troop":
-                return orig_defense(target, attacker)
-
-            unit_defense = cm._unit_defense_value(target)
-            strength = cm._current_strength(target)
-            multiplier = max(1.0, math.sqrt(strength) / divisor)
-            return max(1, int(unit_defense * multiplier))
-
-        cm.effective_defense_value = custom_defense
-
-    # === 暴击率 ===
-    if "crit_chance" in params:
-        originals["crit"] = sc.calculate_crit_chance
-        chance = params["crit_chance"]
-
-        def custom_crit(actor):
-            return chance
-
-        sc.calculate_crit_chance = custom_crit
-
-    # === 优先目标权重 ===
-    if "priority_target_weight" in params:
-        originals["priority_weight"] = sc.PRIORITY_TARGET_WEIGHT
-        sc.PRIORITY_TARGET_WEIGHT = params["priority_target_weight"]
+    originals: Dict[str, Any] = {}
+    _apply_battle_param_patches(cm, sc, params, originals)
 
     try:
         yield
     finally:
-        # 恢复所有原始值
-        for key, value in originals.items():
-            if key == "slaughter":
-                cm.calculate_slaughter_multiplier = value
-            elif key == "attack":
-                cm.effective_attack_value = value
-            elif key == "defense":
-                cm.effective_defense_value = value
-            elif key == "crit":
-                sc.calculate_crit_chance = value
-            elif key == "priority_weight":
-                sc.PRIORITY_TARGET_WEIGHT = value
-
-
+        _restore_battle_param_patches(cm, sc, originals)
 # ============ 战斗模拟器 ============
 
 class BattleSimulator:

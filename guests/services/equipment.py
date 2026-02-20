@@ -23,6 +23,100 @@ from ..utils.equipment_utils import EQUIP_SLOT_MAP, SET_STAT_FIELD_MAP, compute_
 from django.db import transaction
 
 
+_GEAR_EXTRA_STAT_FIELDS = {
+    "hp": "hp_bonus",
+    "force": "force",
+    "intellect": "intellect",
+    "defense": "defense_stat",
+    "agility": "agility",
+    "luck": "luck",
+}
+
+
+def _slot_capacity(slot: str) -> int:
+    return {
+        GearSlot.DEVICE: 3,
+        GearSlot.ORNAMENT: 3,
+    }.get(slot, 1)
+
+
+def _apply_template_stats_to_guest(guest: Guest, template, sign: int, updates: set[str]) -> None:
+    guest.attack_bonus += sign * template.attack_bonus
+    guest.defense_bonus += sign * template.defense_bonus
+    for key, field in _GEAR_EXTRA_STAT_FIELDS.items():
+        value = (template.extra_stats or {}).get(key)
+        if value:
+            setattr(guest, field, getattr(guest, field) + sign * int(value))
+            updates.add(field)
+
+
+def _clear_replaced_items(guest: Guest, existing_items: list[GearItem]) -> None:
+    from gameplay.models import InventoryItem, ItemTemplate
+    from django.db.models import F
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    for item in existing_items:
+        guest.attack_bonus -= item.template.attack_bonus
+        guest.defense_bonus -= item.template.defense_bonus
+        for key, field in _GEAR_EXTRA_STAT_FIELDS.items():
+            value = (item.template.extra_stats or {}).get(key)
+            if value:
+                setattr(guest, field, getattr(guest, field) - int(value))
+        item.guest = None
+        item.save(update_fields=["guest"])
+
+        # 修复：被替换的装备必须退回仓库
+        # 1. 查找对应的 ItemTemplate (GearTemplate 与 ItemTemplate 通过 key 关联)
+        item_template = ItemTemplate.objects.filter(key=item.template.key).first()
+        if not item_template:
+            logger.error(f"Cannot return gear to inventory: ItemTemplate not found for key {item.template.key}")
+            continue
+
+        # 2. 使用原子更新增加库存
+        updated = InventoryItem.objects.filter(
+            manor=guest.manor,
+            template=item_template,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE
+        ).update(quantity=F('quantity') + 1)
+
+        if updated == 0:
+            # 3. 如果不存在则创建
+            InventoryItem.objects.create(
+                manor=guest.manor,
+                template=item_template,
+                storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+                quantity=1
+            )
+
+
+def _consume_warehouse_item_for_gear(guest: Guest, gear: GearItem) -> None:
+    from gameplay.models import InventoryItem
+    from django.db.models import F
+
+    # 修复：使用 select_for_update 锁定库存行，防止并发双重消费
+    inv_item = InventoryItem.objects.select_for_update().filter(
+        manor=guest.manor,
+        template__key=gear.template.key,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        quantity__gt=0,  # 确保有库存
+    ).order_by("id").first()
+
+    if not inv_item:
+        # 理论上 equip_guest 之前应该校验过，但并发下可能被抢占
+        raise EquipmentError("装备库存不足")
+
+    # 使用原子更新扣减库存
+    InventoryItem.objects.filter(pk=inv_item.pk).update(quantity=F('quantity') - 1)
+
+    # 清理零库存记录（再次检查以确保安全）
+    InventoryItem.objects.filter(
+        pk=inv_item.pk,
+        quantity__lte=0
+    ).delete()
+
+
 def apply_set_bonuses(guest: Guest) -> Dict[str, int]:
     """
     重新计算套装效果，并将其数值写回门客属性。上一轮套装效果会被先撤销。
@@ -127,18 +221,12 @@ def equip_guest(gear: GearItem, guest: Guest) -> GearItem:
     Raises:
         EquipmentError: 装备失败时抛出异常
     """
-    from gameplay.models import InventoryItem
-
     # 使用 select_for_update 锁定装备和门客，防止并发问题
     gear = GearItem.objects.select_for_update().get(pk=gear.pk)
     guest = Guest.objects.select_for_update().get(pk=guest.pk)
 
-    slot_capacity = {
-        GearSlot.DEVICE: 3,
-        GearSlot.ORNAMENT: 3,
-    }
     slot = gear.template.slot
-    capacity = slot_capacity.get(slot, 1)
+    capacity = _slot_capacity(slot)
     if gear.manor_id != guest.manor_id:
         raise EquipmentError("无法装备其他庄园的装备")
     if gear.guest_id and gear.guest_id != guest.id:
@@ -151,59 +239,17 @@ def equip_guest(gear: GearItem, guest: Guest) -> GearItem:
         if item.template.name == gear.template.name:
             raise DuplicateEquipmentError()
     if capacity == 1 and existing_items:
-        # 替换装备时，完整移除旧装备的所有属性加成
-        for item in existing_items:
-            guest.attack_bonus -= item.template.attack_bonus
-            guest.defense_bonus -= item.template.defense_bonus
-            # 移除旧装备的 extra_stats 属性
-            old_extra_stats = item.template.extra_stats or {}
-            for key, field in {
-                "hp": "hp_bonus",
-                "force": "force",
-                "intellect": "intellect",
-                "defense": "defense_stat",
-                "agility": "agility",
-                "luck": "luck",
-            }.items():
-                value = old_extra_stats.get(key)
-                if value:
-                    setattr(guest, field, getattr(guest, field) - int(value))
-            item.guest = None
-            item.save(update_fields=["guest"])
+        _clear_replaced_items(guest, existing_items)
     elif capacity > 1 and len(existing_items) >= capacity:
         raise EquipmentSlotFullError(slot)
+
     gear.guest = guest
     gear.save(update_fields=["guest"])
-    # 从背包中消耗一个道具
-    # IMPORTANT: Must specify storage_location to avoid ambiguity
-    # when the same template exists in both warehouse and treasury
-    inv_item = InventoryItem.objects.filter(
-        manor=guest.manor,
-        template__key=gear.template.key,
-        storage_location=InventoryItem.StorageLocation.WAREHOUSE
-    ).order_by("id").first()
-    if inv_item and inv_item.quantity > 0:
-        inv_item.quantity -= 1
-        if inv_item.quantity <= 0:
-            inv_item.delete()
-        else:
-            inv_item.save(update_fields=["quantity"])
-    extra_stats = gear.template.extra_stats or {}
+
+    _consume_warehouse_item_for_gear(guest, gear)
+
     updates = {"attack_bonus", "defense_bonus"}
-    guest.attack_bonus += gear.template.attack_bonus
-    guest.defense_bonus += gear.template.defense_bonus
-    for key, field in {
-        "hp": "hp_bonus",
-        "force": "force",
-        "intellect": "intellect",
-        "defense": "defense_stat",
-        "agility": "agility",
-        "luck": "luck",
-    }.items():
-        value = extra_stats.get(key)
-        if value:
-            setattr(guest, field, getattr(guest, field) + int(value))
-            updates.add(field)
+    _apply_template_stats_to_guest(guest, gear.template, +1, updates)
     guest.save(update_fields=list(updates))
     apply_set_bonuses(guest)
 
@@ -219,18 +265,12 @@ def equip_guest(gear: GearItem, guest: Guest) -> GearItem:
 def unequip_guest_item(gear: GearItem, guest: Guest) -> GearItem:
     """
     卸下门客的装备道具。
-
-    Args:
-        gear: 要卸下的道具
-        guest: 门客对象
-
-    Returns:
-        卸下后的道具对象
-
-    Raises:
-        EquipmentError: 卸下失败时抛出异常
     """
     from gameplay.models import InventoryItem
+
+    # 并发安全：锁定装备和门客，防止并发卸载/穿戴
+    gear = GearItem.objects.select_for_update().get(pk=gear.pk)
+    guest = Guest.objects.select_for_update().get(pk=guest.pk)
 
     if gear.manor != guest.manor:
         raise EquipmentError("无法卸下其他庄园的装备")
@@ -269,13 +309,26 @@ def unequip_guest_item(gear: GearItem, guest: Guest) -> GearItem:
 
     # 装备退回到背包
     # IMPORTANT: Must specify storage_location to avoid MultipleObjectsReturned
-    # when the same template exists in both warehouse and treasury
-    inv_item, _ = InventoryItem.objects.get_or_create(
+    from django.db.models import F
+
+    # 使用原子更新增加库存，防止并发覆盖
+    # 先尝试更新现有记录
+    updated = InventoryItem.objects.filter(
         manor=guest.manor,
         template=item_template,
-        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-        defaults={"quantity": 0}
-    )
-    inv_item.quantity += 1
-    inv_item.save(update_fields=["quantity"])
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE
+    ).update(quantity=F('quantity') + 1)
+
+    if updated == 0:
+        # 如果不存在，则创建（加锁防止并发创建冲突）
+        # 注意：这里理论上仍有极其微小的竞态（两个并发请求同时发现 updated==0），
+        # 但 InventoryItem通常有唯一约束(manor, template, location)。
+        # 若发生 IntegrityError，让应用层重试或由上层事务回滚即可。
+        InventoryItem.objects.create(
+            manor=guest.manor,
+            template=item_template,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+            quantity=1
+        )
+
     return gear

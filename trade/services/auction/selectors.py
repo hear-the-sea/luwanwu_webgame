@@ -79,7 +79,7 @@ def get_my_leading_bids(manor: Manor) -> List[AuctionSlot]:
     if not current_round:
         return []
 
-    my_active_bids = (
+    my_active_bids = list(
         AuctionBid.objects.filter(
             manor=manor,
             status=AuctionBid.Status.ACTIVE,
@@ -89,10 +89,44 @@ def get_my_leading_bids(manor: Manor) -> List[AuctionSlot]:
         .select_related("slot", "slot__item_template")
     )
 
+    if not my_active_bids:
+        return []
+
+    # Batch fetch rankings to avoid N+1
+    slot_ids = [bid.slot_id for bid in my_active_bids]
+
+    # We need to sort by amount DESC, created_at ASC to determine rank
+    # Fetching slot_id and manor_id is enough to determine position
+    competitor_bids = (
+        AuctionBid.objects.filter(
+            slot_id__in=slot_ids,
+            status=AuctionBid.Status.ACTIVE
+        )
+        .values_list("slot_id", "manor_id")
+        .order_by("slot_id", "-amount", "created_at")
+    )
+
+    # Group by slot in memory
+    rankings_map = {}
+    for slot_id, bidder_id in competitor_bids:
+        if slot_id not in rankings_map:
+            rankings_map[slot_id] = []
+        rankings_map[slot_id].append(bidder_id)
+
     result = []
     for bid in my_active_bids:
-        if is_in_winning_range(bid.slot, manor):
-            result.append(bid.slot)
+        slot = bid.slot
+        rank_list = rankings_map.get(slot.id, [])
+
+        # Check if I am in top N
+        try:
+            # list.index raises ValueError if not found
+            # 1-based rank
+            rank = rank_list.index(manor.id) + 1
+            if rank <= slot.quantity:
+                result.append(slot)
+        except ValueError:
+            continue
 
     return result
 

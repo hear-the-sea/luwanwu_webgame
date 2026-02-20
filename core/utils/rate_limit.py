@@ -4,16 +4,18 @@ import logging
 from functools import wraps
 from typing import Callable
 
+from django.contrib import messages
 from django.core.cache import cache
 from django.http import HttpRequest, JsonResponse
 from django.shortcuts import redirect
-from django.contrib import messages
 from django.utils.http import url_has_allowed_host_and_scheme
 from redis.exceptions import RedisError
 
 from core.utils.network import get_client_ip
 
 logger = logging.getLogger(__name__)
+
+_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
 def _cache_error_response(is_json: bool, error_message: str, request: HttpRequest, redirect_url: str | None = None):
@@ -41,6 +43,49 @@ def _default_identifier(request: HttpRequest) -> str:
     return f"ip:{ip}"
 
 
+def _validate_rate_limit_options(limit: int, window_seconds: int) -> None:
+    if limit <= 0:
+        raise ValueError("limit must be > 0")
+    if window_seconds <= 0:
+        raise ValueError("window_seconds must be > 0")
+
+
+def _should_bypass_rate_limit(request: HttpRequest, include_safe_methods: bool) -> bool:
+    if not include_safe_methods and request.method in _SAFE_METHODS:
+        return True
+
+    user = getattr(request, "user", None)
+    return bool(user and (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)))
+
+
+def _safe_identifier(request: HttpRequest, key_func: Callable[[HttpRequest], str] | None = None) -> str:
+    return (key_func(request) if key_func else _default_identifier(request)).strip()
+
+
+def _increment_cache_counter(cache_key: str, window_seconds: int) -> int:
+    try:
+        if cache.add(cache_key, 1, timeout=window_seconds):
+            return 1
+        return int(cache.incr(cache_key))
+    except ValueError:
+        cache.set(cache_key, 1, timeout=window_seconds)
+        return 1
+
+
+def _get_rate_limit_count(cache_key: str, window_seconds: int, log_prefix: str) -> int | None:
+    try:
+        return _increment_cache_counter(cache_key, window_seconds)
+    except RedisError:
+        logger.error("%s Redis unavailable", log_prefix, exc_info=True)
+        return None
+    except ConnectionError:
+        logger.error("%s cache connection unavailable", log_prefix, exc_info=True)
+        return None
+    except Exception:
+        logger.error("%s cache unexpected error", log_prefix, exc_info=True)
+        return None
+
+
 def rate_limit_json(
     scope: str,
     *,
@@ -56,39 +101,18 @@ def rate_limit_json(
     This is intended for non-DRF endpoints (plain Django views).
     Fails closed (503) if cache is unavailable to keep critical operations safe.
     """
-    if limit <= 0:
-        raise ValueError("limit must be > 0")
-    if window_seconds <= 0:
-        raise ValueError("window_seconds must be > 0")
+    _validate_rate_limit_options(limit, window_seconds)
 
     def decorator(view_func: Callable) -> Callable:
         @wraps(view_func)
         def wrapped(request: HttpRequest, *args, **kwargs):
-            if not include_safe_methods and request.method in {"GET", "HEAD", "OPTIONS"}:
-                return view_func(request, *args, **kwargs)
-            user = getattr(request, "user", None)
-            if user and (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+            if _should_bypass_rate_limit(request, include_safe_methods):
                 return view_func(request, *args, **kwargs)
 
-            identifier = (key_func(request) if key_func else _default_identifier(request)).strip()
+            identifier = _safe_identifier(request, key_func)
             cache_key = f"rl:{scope}:{identifier}"
-
-            try:
-                if cache.add(cache_key, 1, timeout=window_seconds):
-                    count = 1
-                else:
-                    count = int(cache.incr(cache_key))
-            except ValueError:
-                cache.set(cache_key, 1, timeout=window_seconds)
-                count = 1
-            except RedisError:
-                logger.error("Rate limit Redis unavailable", exc_info=True)
-                return _cache_error_response(True, error_message, request)
-            except ConnectionError:
-                logger.error("Rate limit cache connection unavailable", exc_info=True)
-                return _cache_error_response(True, error_message, request)
-            except Exception:
-                logger.error("Rate limit cache unexpected error", exc_info=True)
+            count = _get_rate_limit_count(cache_key, window_seconds, "Rate limit")
+            if count is None:
                 return _cache_error_response(True, error_message, request)
 
             if count > limit:
@@ -114,50 +138,22 @@ def rate_limit_redirect(
 
     Returns a safe redirect with error message if cache is unavailable.
     """
-    if limit <= 0:
-        raise ValueError("limit must be > 0")
-    if window_seconds <= 0:
-        raise ValueError("window_seconds must be > 0")
+    _validate_rate_limit_options(limit, window_seconds)
 
     def decorator(view_func: Callable) -> Callable:
         @wraps(view_func)
         def wrapped(request: HttpRequest, *args, **kwargs):
-            if not include_safe_methods and request.method in {"GET", "HEAD", "OPTIONS"}:
-                return view_func(request, *args, **kwargs)
-            user = getattr(request, "user", None)
-            if user and (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+            if _should_bypass_rate_limit(request, include_safe_methods):
                 return view_func(request, *args, **kwargs)
 
-            identifier = _default_identifier(request).strip()
+            identifier = _safe_identifier(request)
             cache_key = f"rl:{scope}:{identifier}"
-
-            try:
-                if cache.add(cache_key, 1, timeout=window_seconds):
-                    count = 1
-                else:
-                    count = int(cache.incr(cache_key))
-            except ValueError:
-                cache.set(cache_key, 1, timeout=window_seconds)
-                count = 1
-            except RedisError:
-                logger.error("Rate limit redirect Redis unavailable", exc_info=True)
-                return _cache_error_response(False, error_message, request, redirect_url)
-            except ConnectionError:
-                logger.error("Rate limit redirect cache connection unavailable", exc_info=True)
-                return _cache_error_response(False, error_message, request, redirect_url)
-            except Exception:
-                logger.error("Rate limit redirect cache unexpected error", exc_info=True)
+            count = _get_rate_limit_count(cache_key, window_seconds, "Rate limit redirect")
+            if count is None:
                 return _cache_error_response(False, error_message, request, redirect_url)
 
             if count > limit:
-                messages.error(request, error_message)
-                if redirect_url:
-                    return redirect(redirect_url)
-                # 安全修复：验证 Referer 是否为安全的重定向目标，防止开放重定向漏洞
-                referer = request.META.get("HTTP_REFERER", "")
-                if referer and url_has_allowed_host_and_scheme(referer, allowed_hosts={request.get_host()}):
-                    return redirect(referer)
-                return redirect("/")
+                return _cache_error_response(False, error_message, request, redirect_url)
             return view_func(request, *args, **kwargs)
 
         return wrapped

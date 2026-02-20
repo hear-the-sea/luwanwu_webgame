@@ -101,3 +101,53 @@ def test_deduct_troops_raises_when_missing(monkeypatch):
 
     with pytest.raises(ValueError, match="没有该类型的护院"):
         combat_runs._deduct_troops(SimpleNamespace(), {"inf": 1})
+
+
+def test_refresh_raid_runs_prefers_async_dispatch(monkeypatch):
+    class _Status:
+        MARCHING = "marching"
+        RETURNING = "returning"
+        RETREATED = "retreated"
+
+    class _RaidObjects:
+        def __init__(self):
+            self._status = None
+
+        def filter(self, **kwargs):
+            self._status = kwargs.get("status")
+            return self
+
+        def values_list(self, *_args, **_kwargs):
+            mapping = {
+                _Status.MARCHING: [1, 2],
+                _Status.RETURNING: [3],
+                _Status.RETREATED: [4],
+            }
+            return list(mapping.get(self._status, []))
+
+    dummy_cls = type("_RaidRun", (), {"Status": _Status, "objects": _RaidObjects()})
+    monkeypatch.setattr(combat_runs, "RaidRun", dummy_cls)
+
+    dispatched = []
+
+    def _dispatch(_task, run_id, stage):
+        dispatched.append((run_id, stage))
+        return True
+
+    monkeypatch.setattr(combat_runs, "_try_dispatch_raid_refresh_task", _dispatch)
+
+    called = {"battle": 0, "finalize": 0}
+    monkeypatch.setattr(
+        "gameplay.services.raid.combat.battle.process_raid_battle",
+        lambda *_args, **_kwargs: called.__setitem__("battle", called["battle"] + 1),
+    )
+    monkeypatch.setattr(
+        combat_runs,
+        "finalize_raid",
+        lambda *_args, **_kwargs: called.__setitem__("finalize", called["finalize"] + 1),
+    )
+
+    combat_runs.refresh_raid_runs(SimpleNamespace(id=9), prefer_async=True)
+
+    assert set(dispatched) == {(1, "battle"), (2, "battle"), (3, "return"), (4, "return")}
+    assert called == {"battle": 0, "finalize": 0}

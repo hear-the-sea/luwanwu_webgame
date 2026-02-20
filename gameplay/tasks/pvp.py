@@ -5,7 +5,12 @@ import logging
 from celery import shared_task
 from django.utils import timezone
 
+from common.utils.celery import safe_apply_async_with_dedup
+
 logger = logging.getLogger(__name__)
+
+# 任务去重超时时间（秒）
+_TASK_DEDUP_TIMEOUT = 5
 
 
 # ============ Scout Tasks ============
@@ -27,7 +32,7 @@ def complete_scout_task(self, record_id: int):
             .first()
         )
         if not record:
-            logger.warning(f"ScoutRecord {record_id} not found")
+            logger.warning("ScoutRecord %d not found", record_id)
             return "not_found"
 
         now = timezone.now()
@@ -37,13 +42,22 @@ def complete_scout_task(self, record_id: int):
         if record.complete_at and record.complete_at > now:
             remaining = int((record.complete_at - now).total_seconds())
             if remaining > 0:
-                complete_scout_task.apply_async(args=[record_id], countdown=remaining)
+                # 使用去重机制避免并发重复调度
+                safe_apply_async_with_dedup(
+                    complete_scout_task,
+                    dedup_key=f"pvp:scout:complete:{record_id}",
+                    dedup_timeout=_TASK_DEDUP_TIMEOUT,
+                    args=[record_id],
+                    countdown=remaining,
+                    logger=logger,
+                    log_message=f"scout task reschedule failed: record_id={record_id}",
+                )
                 return "rescheduled"
 
         finalize_scout(record, now=now)
         return "completed"
     except Exception as exc:
-        logger.exception(f"Failed to complete scout {record_id}: {exc}")
+        logger.exception("Failed to complete scout %d: %s", record_id, exc)
         raise self.retry(exc=exc)
 
 
@@ -65,7 +79,7 @@ def complete_scout_return_task(self, record_id: int):
             .first()
         )
         if not record:
-            logger.warning(f"ScoutRecord {record_id} not found")
+            logger.warning("ScoutRecord %d not found", record_id)
             return "not_found"
 
         now = timezone.now()
@@ -75,13 +89,22 @@ def complete_scout_return_task(self, record_id: int):
         if record.return_at and record.return_at > now:
             remaining = int((record.return_at - now).total_seconds())
             if remaining > 0:
-                complete_scout_return_task.apply_async(args=[record_id], countdown=remaining)
+                # 使用去重机制避免并发重复调度
+                safe_apply_async_with_dedup(
+                    complete_scout_return_task,
+                    dedup_key=f"pvp:scout:return:{record_id}",
+                    dedup_timeout=_TASK_DEDUP_TIMEOUT,
+                    args=[record_id],
+                    countdown=remaining,
+                    logger=logger,
+                    log_message=f"scout return task reschedule failed: record_id={record_id}",
+                )
                 return "rescheduled"
 
         finalize_scout_return(record, now=now)
         return "completed"
     except Exception as exc:
-        logger.exception(f"Failed to complete scout return {record_id}: {exc}")
+        logger.exception("Failed to complete scout return %d: %s", record_id, exc)
         raise self.retry(exc=exc)
 
 
@@ -112,7 +135,7 @@ def scan_scout_records(limit: int = 200):
             finalize_scout(record, now=now)
             count += 1
         except Exception:
-            logger.exception(f"Failed to finalize scout record {record.id}")
+            logger.exception("Failed to finalize scout record %d", record.id)
 
     # Handle return complete (RETURNING -> SUCCESS/FAILED)
     returning_qs = (
@@ -126,7 +149,7 @@ def scan_scout_records(limit: int = 200):
             finalize_scout_return(record, now=now)
             count += 1
         except Exception:
-            logger.exception(f"Failed to finalize scout return {record.id}")
+            logger.exception("Failed to finalize scout return %d", record.id)
 
     return count
 
@@ -151,7 +174,7 @@ def process_raid_battle_task(self, run_id: int):
             .first()
         )
         if not run:
-            logger.warning(f"RaidRun {run_id} not found")
+            logger.warning("RaidRun %d not found", run_id)
             return "not_found"
 
         now = timezone.now()
@@ -163,21 +186,45 @@ def process_raid_battle_task(self, run_id: int):
             if run.return_at and run.return_at > now:
                 remaining = int((run.return_at - now).total_seconds())
                 if remaining > 0:
-                    complete_raid_task.apply_async(args=[run_id], countdown=remaining)
+                    safe_apply_async_with_dedup(
+                        complete_raid_task,
+                        dedup_key=f"pvp:raid:complete:{run_id}",
+                        dedup_timeout=_TASK_DEDUP_TIMEOUT,
+                        args=[run_id],
+                        countdown=remaining,
+                        logger=logger,
+                        log_message=f"raid complete task reschedule failed: run_id={run_id}",
+                    )
                     return "retreated_rescheduled"
-            complete_raid_task.apply_async(args=[run_id], countdown=0)
+            safe_apply_async_with_dedup(
+                complete_raid_task,
+                dedup_key=f"pvp:raid:complete:{run_id}",
+                dedup_timeout=_TASK_DEDUP_TIMEOUT,
+                args=[run_id],
+                countdown=0,
+                logger=logger,
+                log_message=f"raid complete task forward failed: run_id={run_id}",
+            )
             return "retreated_forwarded"
 
         if run.status == RaidRun.Status.MARCHING and run.battle_at and run.battle_at > now:
             remaining = int((run.battle_at - now).total_seconds())
             if remaining > 0:
-                process_raid_battle_task.apply_async(args=[run_id], countdown=remaining)
+                safe_apply_async_with_dedup(
+                    process_raid_battle_task,
+                    dedup_key=f"pvp:raid:battle:{run_id}",
+                    dedup_timeout=_TASK_DEDUP_TIMEOUT,
+                    args=[run_id],
+                    countdown=remaining,
+                    logger=logger,
+                    log_message=f"raid battle task reschedule failed: run_id={run_id}",
+                )
                 return "rescheduled"
 
         process_raid_battle(run, now=now)
         return "completed"
     except Exception as exc:
-        logger.exception(f"Failed to process raid battle {run_id}: {exc}")
+        logger.exception("Failed to process raid battle %d: %s", run_id, exc)
         raise self.retry(exc=exc)
 
 
@@ -198,7 +245,7 @@ def complete_raid_task(self, run_id: int):
             .first()
         )
         if not run:
-            logger.warning(f"RaidRun {run_id} not found")
+            logger.warning("RaidRun %d not found", run_id)
             return "not_found"
 
         now = timezone.now()
@@ -210,7 +257,15 @@ def complete_raid_task(self, run_id: int):
             if run.return_at and run.return_at > now:
                 remaining = int((run.return_at - now).total_seconds())
                 if remaining > 0:
-                    complete_raid_task.apply_async(args=[run_id], countdown=remaining)
+                    safe_apply_async_with_dedup(
+                        complete_raid_task,
+                        dedup_key=f"pvp:raid:complete:{run_id}",
+                        dedup_timeout=_TASK_DEDUP_TIMEOUT,
+                        args=[run_id],
+                        countdown=remaining,
+                        logger=logger,
+                        log_message=f"raid complete task reschedule failed: run_id={run_id}",
+                    )
                     return "rescheduled"
             finalize_raid(run, now=now)
             return "completed"
@@ -220,14 +275,22 @@ def complete_raid_task(self, run_id: int):
             if run.return_at and run.return_at > now:
                 remaining = int((run.return_at - now).total_seconds())
                 if remaining > 0:
-                    complete_raid_task.apply_async(args=[run_id], countdown=remaining)
+                    safe_apply_async_with_dedup(
+                        complete_raid_task,
+                        dedup_key=f"pvp:raid:complete:{run_id}",
+                        dedup_timeout=_TASK_DEDUP_TIMEOUT,
+                        args=[run_id],
+                        countdown=remaining,
+                        logger=logger,
+                        log_message=f"raid complete task reschedule failed: run_id={run_id}",
+                    )
                     return "rescheduled"
             finalize_raid(run, now=now)
             return "completed"
 
         return "invalid_status"
     except Exception as exc:
-        logger.exception(f"Failed to complete raid {run_id}: {exc}")
+        logger.exception("Failed to complete raid %d: %s", run_id, exc)
         raise self.retry(exc=exc)
 
 
@@ -255,7 +318,7 @@ def scan_raid_runs(limit: int = 200):
             process_raid_battle(run, now=now)
             count += 1
         except Exception:
-            logger.exception(f"Failed to process raid battle {run.id}")
+            logger.exception("Failed to process raid battle %d", run.id)
 
     # Handle returning but completed
     returning_qs = (
@@ -270,7 +333,7 @@ def scan_raid_runs(limit: int = 200):
             finalize_raid(run, now=now)
             count += 1
         except Exception:
-            logger.exception(f"Failed to finalize raid {run.id}")
+            logger.exception("Failed to finalize raid %d", run.id)
 
     # Handle retreated but completed
     retreated_qs = (
@@ -285,6 +348,6 @@ def scan_raid_runs(limit: int = 200):
             finalize_raid(run, now=now)
             count += 1
         except Exception:
-            logger.exception(f"Failed to finalize retreated raid {run.id}")
+            logger.exception("Failed to finalize retreated raid %d", run.id)
 
     return count

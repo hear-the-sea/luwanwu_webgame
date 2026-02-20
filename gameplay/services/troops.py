@@ -18,6 +18,51 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _extract_casualties_for_loadout(loadout: Dict[str, int], report: Optional[object]) -> list[dict]:
+    if not report:
+        return []
+    losses = getattr(report, "losses", None) or {}
+    attacker_losses = losses.get("attacker", {}) or {}
+    return attacker_losses.get("casualties", []) or []
+
+
+def _build_troops_lost(loadout: Dict[str, int], casualties: list[dict]) -> Dict[str, int]:
+    from battle.troops import load_troop_templates
+
+    troop_definitions = load_troop_templates()
+    troops_lost: Dict[str, int] = {}
+    for entry in casualties:
+        key = entry.get("key")
+        if key not in loadout or key not in troop_definitions:
+            continue
+        try:
+            lost = int(entry.get("lost", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+        if lost > 0:
+            troops_lost[key] = troops_lost.get(key, 0) + lost
+    return troops_lost
+
+
+def _calculate_surviving_troops(manor: "Manor", loadout: Dict[str, int], troops_lost: Dict[str, int]) -> Dict[str, int]:
+    surviving_troops: Dict[str, int] = {}
+    for troop_key, original_count in loadout.items():
+        lost = troops_lost.get(troop_key, 0)
+        if lost > original_count:
+            logger.warning(
+                "护院损失异常：%s 原始=%s, 战报损失=%s, 已上限修正",
+                troop_key,
+                original_count,
+                lost,
+                extra={"manor_id": manor.id, "troop_key": troop_key, "original": original_count, "reported_lost": lost},
+            )
+            lost = original_count
+        surviving = max(0, original_count - lost)
+        if surviving > 0:
+            surviving_troops[troop_key] = surviving
+    return surviving_troops
+
+
 def apply_defender_troop_losses(defender: "Manor", report) -> None:
     """
     批量应用防守方护院损失到 PlayerTroop。
@@ -142,60 +187,31 @@ def _return_surviving_troops_batch(
     if not loadout:
         return
 
-    from battle.troops import load_troop_templates
-
     if not report:
         # 没有战报（撤退等情况），全部归还
         _add_troops_batch(manor, loadout)
         return
 
-    # 根据战报计算存活护院
-    losses = getattr(report, "losses", None) or {}
-    attacker_losses = losses.get("attacker", {}) or {}
-    casualties = attacker_losses.get("casualties", []) or []
-
-    troop_definitions = load_troop_templates()
-
-    troops_lost: Dict[str, int] = {}
-    for entry in casualties:
-        key = entry.get("key")
-        if key not in loadout:
-            continue
-        if key not in troop_definitions:
-            continue
-        try:
-            lost = int(entry.get("lost", 0) or 0)
-        except (TypeError, ValueError):
-            continue
-        if lost > 0:
-            troops_lost[key] = troops_lost.get(key, 0) + lost
-
-    # 计算存活数量（添加上限保护）
-    surviving_troops = {}
-    for troop_key, original_count in loadout.items():
-        lost = troops_lost.get(troop_key, 0)
-        # 上限保护：损失不能超过原始数量（防止重复条目导致超额累加）
-        if lost > original_count:
-            logger.warning(
-                f"护院损失异常：{troop_key} 原始={original_count}, 战报损失={lost}, 已上限修正",
-                extra={"manor_id": manor.id, "troop_key": troop_key, "original": original_count, "reported_lost": lost}
-            )
-            lost = original_count
-        surviving = max(0, original_count - lost)
-        if surviving > 0:
-            surviving_troops[troop_key] = surviving
+    casualties = _extract_casualties_for_loadout(loadout, report)
+    troops_lost = _build_troops_lost(loadout, casualties)
+    surviving_troops = _calculate_surviving_troops(manor, loadout, troops_lost)
 
     # 批量归还
     if surviving_troops:
         logger.info(
-            f"归还护院: manor_id={manor.id}, surviving_troops={surviving_troops}",
-            extra={"manor_id": manor.id, "surviving_troops": surviving_troops}
+            "归还护院: manor_id=%s, surviving_troops=%s",
+            manor.id,
+            surviving_troops,
+            extra={"manor_id": manor.id, "surviving_troops": surviving_troops},
         )
         _add_troops_batch(manor, surviving_troops)
     else:
         logger.warning(
-            f"没有存活护院需要归还: manor_id={manor.id}, loadout={loadout}, troops_lost={troops_lost}",
-            extra={"manor_id": manor.id, "loadout": loadout, "troops_lost": troops_lost}
+            "没有存活护院需要归还: manor_id=%s, loadout=%s, troops_lost=%s",
+            manor.id,
+            loadout,
+            troops_lost,
+            extra={"manor_id": manor.id, "loadout": loadout, "troops_lost": troops_lost},
         )
 
 

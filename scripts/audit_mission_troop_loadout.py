@@ -27,6 +27,131 @@ from battle.models import TroopTemplate  # noqa: E402
 from gameplay.models import MissionRun, PlayerTroop  # noqa: E402
 
 
+def _empty_issues() -> dict:
+    return {
+        "invalid_keys": [],
+        "format_errors": [],
+        "missing_player_troop": [],
+        "completed_runs": [],
+        "active_runs": [],
+    }
+
+
+def _is_high_risk_active_run(run: MissionRun) -> bool:
+    return run.status == "ACTIVE" and (run.return_at is None or run.return_at > timezone.now())
+
+
+def _build_run_issue(run: MissionRun, missing_troops: list[str]) -> dict:
+    return {
+        "run_id": run.id,
+        "manor_id": run.manor_id,
+        "mission": run.mission.key if run.mission else "N/A",
+        "missing_troops": missing_troops,
+        "status": run.status,
+        "return_at": run.return_at,
+    }
+
+
+def _check_run_loadout(run: MissionRun, loadout: dict) -> tuple[list[str], list[str]]:
+    invalid_keys: list[str] = []
+    missing_troops: list[str] = []
+
+    for troop_key in loadout:
+        if not TroopTemplate.objects.filter(key=troop_key).exists():
+            invalid_keys.append(troop_key)
+            continue
+
+        troop_exists = PlayerTroop.objects.filter(manor=run.manor, troop_template__key=troop_key).exists()
+        if not troop_exists:
+            missing_troops.append(troop_key)
+
+    return invalid_keys, missing_troops
+
+
+def _append_run_issues(issues: dict, run: MissionRun, loadout) -> None:
+    if not isinstance(loadout, dict):
+        issues["format_errors"].append(
+            {
+                "run_id": run.id,
+                "manor_id": run.manor_id,
+                "error": f"troop_loadout 不是字典类型: {type(loadout)}",
+            }
+        )
+        return
+
+    if not loadout:
+        return
+
+    invalid_keys, missing_troops = _check_run_loadout(run, loadout)
+
+    if invalid_keys:
+        issues["invalid_keys"].append(
+            {
+                "run_id": run.id,
+                "manor_id": run.manor_id,
+                "mission": run.mission.key if run.mission else "N/A",
+                "invalid_keys": invalid_keys,
+                "status": run.status,
+                "return_at": run.return_at,
+            }
+        )
+
+    if not missing_troops:
+        return
+
+    issue = _build_run_issue(run, missing_troops)
+    if _is_high_risk_active_run(run):
+        issues["active_runs"].append(issue)
+    else:
+        issues["completed_runs"].append(issue)
+
+
+def _print_format_errors(issues: dict) -> None:
+    if not issues["format_errors"]:
+        return
+
+    print(f"\n❌ 格式错误: {len(issues['format_errors'])} 个")
+    for error in issues["format_errors"][:5]:
+        print(f"  - Run {error['run_id']}: {error['error']}")
+    if len(issues["format_errors"]) > 5:
+        print(f"  ... 还有 {len(issues['format_errors']) - 5} 个")
+
+
+def _print_invalid_keys(issues: dict) -> None:
+    if not issues["invalid_keys"]:
+        return
+
+    print(f"\n⚠️  包含不存在的护院类型: {len(issues['invalid_keys'])} 个")
+    for issue in issues["invalid_keys"][:5]:
+        print(f"  - Run {issue['run_id']} (庄园 {issue['manor_id']}): {issue['invalid_keys']}")
+    if len(issues["invalid_keys"]) > 5:
+        print(f"  ... 还有 {len(issues['invalid_keys']) - 5} 个")
+
+
+def _print_completed_runs(issues: dict) -> None:
+    if not issues["completed_runs"]:
+        return
+
+    print(f"\n✅ 已完成任务（玩家缺少护院）: {len(issues['completed_runs'])} 个")
+    print("   这些任务已完成，风险较低（已归还或已扣除）")
+    for issue in issues["completed_runs"][:3]:
+        print(f"  - Run {issue['run_id']}: {issue['missing_troops']}")
+    if len(issues["completed_runs"]) > 3:
+        print(f"  ... 还有 {len(issues['completed_runs']) - 3} 个")
+
+
+def _print_active_runs(issues: dict) -> None:
+    if not issues["active_runs"]:
+        return
+
+    print(f"\n🔴 进行中任务（玩家缺少护院，高风险）: {len(issues['active_runs'])} 个")
+    print("   警告：这些任务结算时可能触发护院复制漏洞！")
+    for issue in issues["active_runs"]:
+        print(f"  - Run {issue['run_id']} (庄园 {issue['manor_id']})")
+        print(f"    缺少护院: {issue['missing_troops']}")
+        print(f"    返程时间: {issue['return_at']}")
+
+
 def audit_mission_runs(dry_run=True):
     """
     巡检所有 MissionRun 的 troop_loadout
@@ -42,85 +167,16 @@ def audit_mission_runs(dry_run=True):
     print(f"模式: {'仅检查（不修复）' if dry_run else '自动修复'}")
     print("=" * 60)
 
-    # 获取所有有 troop_loadout 的 run
     runs_with_loadout = MissionRun.objects.exclude(troop_loadout__isnull=True).exclude(troop_loadout={})
-
     total = runs_with_loadout.count()
     print(f"\n总共 {total} 个任务记录包含护院配置\n")
 
-    issues = {
-        "invalid_keys": [],       # 包含不存在的 troop_template.key
-        "format_errors": [],      # 格式错误
-        "missing_player_troop": [],  # 玩家没有该护院
-        "completed_runs": [],     # 已完成的任务（低风险）
-        "active_runs": [],        # 进行中的任务（高风险）
-    }
-
+    issues = _empty_issues()
     for run in runs_with_loadout:
-        loadout = run.troop_loadout or {}
+        _append_run_issues(issues, run, run.troop_loadout or {})
 
-        # 检查格式
-        if not isinstance(loadout, dict):
-            issues["format_errors"].append({
-                "run_id": run.id,
-                "manor_id": run.manor_id,
-                "error": f"troop_loadout 不是字典类型: {type(loadout)}"
-            })
-            continue
-
-        if not loadout:
-            continue
-
-        # 检查每个 troop_key
-        invalid_keys = []
-        missing_troops = []
-
-        for troop_key, count in loadout.items():
-            # 检查 TroopTemplate 是否存在
-            if not TroopTemplate.objects.filter(key=troop_key).exists():
-                invalid_keys.append(troop_key)
-                continue
-
-            # 检查玩家是否有该护院
-            troop_exists = PlayerTroop.objects.filter(
-                manor=run.manor,
-                troop_template__key=troop_key
-            ).exists()
-
-            if not troop_exists:
-                missing_troops.append(troop_key)
-
-        # 记录问题
-        if invalid_keys:
-            issues["invalid_keys"].append({
-                "run_id": run.id,
-                "manor_id": run.manor_id,
-                "mission": run.mission.key if run.mission else "N/A",
-                "invalid_keys": invalid_keys,
-                "status": run.status,
-                "return_at": run.return_at,
-            })
-
-        if missing_troops:
-            issue = {
-                "run_id": run.id,
-                "manor_id": run.manor_id,
-                "mission": run.mission.key if run.mission else "N/A",
-                "missing_troops": missing_troops,
-                "status": run.status,
-                "return_at": run.return_at,
-            }
-
-            # 分类：进行中的任务是高风险
-            if run.status == "ACTIVE" and (run.return_at is None or run.return_at > timezone.now()):
-                issues["active_runs"].append(issue)
-            else:
-                issues["completed_runs"].append(issue)
-
-    # 打印报告
     _print_report(issues)
 
-    # 自动修复（如果指定）
     if not dry_run:
         _fix_issues(issues)
 
@@ -133,41 +189,11 @@ def _print_report(issues):
     print("巡检结果")
     print("=" * 60)
 
-    # 格式错误
-    if issues["format_errors"]:
-        print(f"\n❌ 格式错误: {len(issues['format_errors'])} 个")
-        for error in issues["format_errors"][:5]:  # 只显示前5个
-            print(f"  - Run {error['run_id']}: {error['error']}")
-        if len(issues["format_errors"]) > 5:
-            print(f"  ... 还有 {len(issues['format_errors']) - 5} 个")
+    _print_format_errors(issues)
+    _print_invalid_keys(issues)
+    _print_completed_runs(issues)
+    _print_active_runs(issues)
 
-    # 不存在的 troop key
-    if issues["invalid_keys"]:
-        print(f"\n⚠️  包含不存在的护院类型: {len(issues['invalid_keys'])} 个")
-        for issue in issues["invalid_keys"][:5]:
-            print(f"  - Run {issue['run_id']} (庄园 {issue['manor_id']}): {issue['invalid_keys']}")
-        if len(issues["invalid_keys"]) > 5:
-            print(f"  ... 还有 {len(issues['invalid_keys']) - 5} 个")
-
-    # 已完成任务（低风险）
-    if issues["completed_runs"]:
-        print(f"\n✅ 已完成任务（玩家缺少护院）: {len(issues['completed_runs'])} 个")
-        print("   这些任务已完成，风险较低（已归还或已扣除）")
-        for issue in issues["completed_runs"][:3]:
-            print(f"  - Run {issue['run_id']}: {issue['missing_troops']}")
-        if len(issues["completed_runs"]) > 3:
-            print(f"  ... 还有 {len(issues['completed_runs']) - 3} 个")
-
-    # 进行中任务（高风险）
-    if issues["active_runs"]:
-        print(f"\n🔴 进行中任务（玩家缺少护院，高风险）: {len(issues['active_runs'])} 个")
-        print("   警告：这些任务结算时可能触发护院复制漏洞！")
-        for issue in issues["active_runs"]:
-            print(f"  - Run {issue['run_id']} (庄园 {issue['manor_id']})")
-            print(f"    缺少护院: {issue['missing_troops']}")
-            print(f"    返程时间: {issue['return_at']}")
-
-    # 汇总
     total_issues = (
         len(issues["format_errors"]) +
         len(issues["invalid_keys"]) +
@@ -193,14 +219,11 @@ def _fix_issues(issues):
 
     fixed = 0
 
-    # 修复高风险任务：清空 troop_loadout
     for issue in issues["active_runs"]:
         try:
             with transaction.atomic():
                 run = MissionRun.objects.select_for_update().get(pk=issue["run_id"])
-                # 记录原始配置
                 original = run.troop_loadout.copy()
-                # 清空配置
                 run.troop_loadout = {}
                 run.save(update_fields=["troop_loadout"])
                 fixed += 1
@@ -228,7 +251,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # 如果指定了 --fix，则不是 dry-run
     dry_run = not args.fix
 
     try:

@@ -31,6 +31,44 @@ NON_WAREHOUSE_MESSAGES = {
 }
 
 
+def _collect_weighted_template_choices(choices: list) -> tuple[list[str], list[int]]:
+    template_keys: List[str] = []
+    weights: List[int] = []
+    for entry in choices:
+        if not isinstance(entry, dict):
+            continue
+        template_key = entry.get("template_key")
+        if not template_key:
+            continue
+        try:
+            weight = int(entry.get("weight", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+        if weight <= 0:
+            continue
+        template_keys.append(str(template_key))
+        weights.append(weight)
+    return template_keys, weights
+
+
+def _weighted_choose_template_key(template_keys: List[str], weights: List[int]) -> str:
+    total_weight = sum(weights)
+    roll = inventory_pkg.random.random() * total_weight
+    chosen_key = template_keys[-1]
+    cumulative = 0
+    for template_key, weight in zip(template_keys, weights):
+        cumulative += weight
+        if roll < cumulative:
+            chosen_key = template_key
+            break
+    return chosen_key
+
+
+def _ensure_guest_capacity(manor: Manor) -> None:
+    if manor.guests.count() >= manor.guest_capacity:
+        raise GuestCapacityFullError()
+
+
 def _apply_resource_pack(item: InventoryItem) -> Dict[str, Any]:
     """使用资源包，发放资源奖励。"""
     payload = item.template.effect_payload or {}
@@ -81,41 +119,14 @@ def _apply_guest_summon(item: InventoryItem) -> Dict[str, Any]:
     if not isinstance(choices, list):
         raise ItemNotConfiguredError()
 
-    template_keys: List[str] = []
-    weights: List[int] = []
-    for entry in choices:
-        if not isinstance(entry, dict):
-            continue
-        template_key = entry.get("template_key")
-        if not template_key:
-            continue
-        try:
-            weight = int(entry.get("weight", 0) or 0)
-        except (TypeError, ValueError):
-            continue
-        if weight <= 0:
-            continue
-        template_keys.append(str(template_key))
-        weights.append(weight)
-
+    template_keys, weights = _collect_weighted_template_choices(choices)
     if not template_keys:
         raise ItemNotConfiguredError()
 
-    total_weight = sum(weights)
-    roll = inventory_pkg.random.random() * total_weight
-    chosen_key = template_keys[-1]
-    cumulative = 0
-    for template_key, weight in zip(template_keys, weights):
-        cumulative += weight
-        if roll < cumulative:
-            chosen_key = template_key
-            break
+    chosen_key = _weighted_choose_template_key(template_keys, weights)
 
     manor = item.manor
-    capacity = manor.guest_capacity
-    current = manor.guests.count()
-    if current >= capacity:
-        raise GuestCapacityFullError()
+    _ensure_guest_capacity(manor)
 
     from guests.models import GuestTemplate
     from guests.services.recruitment import create_guest_from_template
@@ -230,6 +241,12 @@ def use_inventory_item(item: InventoryItem, manor: Manor | None = None) -> Dict[
     if not item.pk:
         raise ValueError("物品不存在")
 
+    # 死锁预防：统一锁顺序 Manor -> InventoryItem
+    # 商店服务是先锁 Manor 后锁 Item，此处必须保持一致
+    target_manor_id = manor.pk if manor else item.manor_id
+    if target_manor_id:
+        Manor.objects.select_for_update().get(pk=target_manor_id)
+
     # 构建查询条件
     query_filter = {"pk": item.pk}
     if manor is not None:
@@ -317,6 +334,9 @@ def _validate_guest_item_use(
 @transaction.atomic
 def use_guest_rebirth_card(manor: Manor, item: InventoryItem, guest_id: int) -> Dict[str, Any]:
     """使用门客重生卡，将指定门客重置为1级。"""
+    # 死锁预防：统一锁顺序 Manor -> InventoryItem -> Guest
+    Manor.objects.select_for_update().get(pk=manor.pk)
+
     locked_item, guest = _validate_guest_item_use(
         manor,
         item,
@@ -459,6 +479,9 @@ def use_xisuidan(manor: Manor, item: InventoryItem, guest_id: int) -> Dict[str, 
     """
     使用洗髓丹，重新随机门客的升级成长点数。
     """
+    # 死锁预防：统一锁顺序 Manor -> InventoryItem -> Guest
+    Manor.objects.select_for_update().get(pk=manor.pk)
+
     from guests.utils.attribute_growth import generate_growth_points
     locked_item, guest = _validate_guest_item_use(
         manor,
@@ -535,6 +558,9 @@ def use_xidianka(manor: Manor, item: InventoryItem, guest_id: int) -> Dict[str, 
     """
     使用洗点卡，重置门客的属性点分配。
     """
+    # 死锁预防：统一锁顺序 Manor -> InventoryItem -> Guest
+    Manor.objects.select_for_update().get(pk=manor.pk)
+
     locked_item, guest = _validate_guest_item_use(
         manor,
         item,

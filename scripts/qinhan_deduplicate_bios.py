@@ -151,44 +151,36 @@ KEYWORDS = [
 ]
 
 
+
+def _append_unique_token(tokens: list[str], token: str, limit: int = 3) -> bool:
+    if token not in tokens:
+        tokens.append(token)
+    return len(tokens) >= limit
+
+
+def _collect_pattern_tokens(bio: str, tokens: list[str], pattern: str, limit: int = 3) -> bool:
+    for match in re.finditer(pattern, bio):
+        token = match.group(0)
+        if _append_unique_token(tokens, token, limit=limit):
+            return True
+    return False
+
+
 def extract_feature_tokens(bio: str) -> list[str]:
     """
     Pull a few *existing* tokens from the bio to anchor a customized add-on.
     We only reuse what is already in the text to avoid introducing risky claims.
     """
-
     tokens: list[str] = []
+    patterns = [
+        r"《[^》]{2,20}》",
+        r"[\u4e00-\u9fff]{2,10}(之乱|之役|之战|之祸|之变|会议)",
+        r"(关中|河西|河套|西域|岭南|南越|渤海|齐地|赵地|陇右|巴蜀|南阳|洛阳|长安)",
+        r"“[^”]{2,20}”",
+    ]
 
-    # Book titles like 《汉书》, 《史记》, 《淮南子》, etc.
-    for m in re.finditer(r"《[^》]{2,20}》", bio):
-        t = m.group(0)
-        if t not in tokens:
-            tokens.append(t)
-        if len(tokens) >= 3:
-            return tokens
-
-    # Named events often end with “之乱/之役/之战/之祸/之变/会议”.
-    for m in re.finditer(r"[\u4e00-\u9fff]{2,10}(之乱|之役|之战|之祸|之变|会议)", bio):
-        t = m.group(0)
-        if t not in tokens:
-            tokens.append(t)
-        if len(tokens) >= 3:
-            return tokens
-
-    # Places / regions that frequently appear in Qin-Han bios.
-    for m in re.finditer(r"(关中|河西|河套|西域|岭南|南越|渤海|齐地|赵地|陇右|巴蜀|南阳|洛阳|长安)", bio):
-        t = m.group(0)
-        if t not in tokens:
-            tokens.append(t)
-        if len(tokens) >= 3:
-            return tokens
-
-    # Short quoted mottos are a nice personalization anchor.
-    for m in re.finditer(r"“[^”]{2,20}”", bio):
-        t = m.group(0)
-        if t not in tokens:
-            tokens.append(t)
-        if len(tokens) >= 3:
+    for pattern in patterns:
+        if _collect_pattern_tokens(bio, tokens, pattern):
             return tokens
 
     return tokens

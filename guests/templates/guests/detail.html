@@ -38,31 +38,6 @@
   background: var(--bg-card);
 }
 
-.guest-detail .archetype-badge {
-  position: absolute;
-  top: 1rem;
-  right: 0.5rem;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-  font-weight: 700;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  border: 2px solid #fff;
-}
-
-.guest-detail .archetype-badge.military {
-  background: linear-gradient(135deg, #dc2626, #ef4444);
-  color: #fff;
-}
-
-.guest-detail .archetype-badge.civil {
-  background: linear-gradient(135deg, #2563eb, #3b82f6);
-  color: #fff;
-}
 
 .guest-detail .avatar-bubble {
   width: 160px;
@@ -373,18 +348,13 @@
 
 {% block content %}
 <section class="dashboard guest-detail">
-    <div class="tw-section-header">
-        <div>
-            <h1>门客详情</h1>
-        </div>
+    <div class="flex justify-between items-center mb-6 border-b border-border-primary pb-2">
+        <h1 class="text-2xl font-bold text-text-primary m-0">门客详情</h1>
         <a class="tw-btn-secondary" href="{% url 'guests:roster' %}">返回列表</a>
     </div>
 
     <div class="detail-board">
         <div class="board-card avatar-card">
-            <div class="archetype-badge {% if guest.archetype == 'military' %}military{% else %}civil{% endif %}" title="{% if guest.archetype == 'military' %}武将{% else %}文官{% endif %}">
-                {% if guest.archetype == 'military' %}武{% else %}文{% endif %}
-            </div>
             <div class="avatar-bubble" aria-hidden="true">
                 {% if guest.template.avatar %}
                     <img src="{{ guest.template.avatar.url }}" alt="{{ guest.display_name }}" loading="lazy" width="160" height="160">
@@ -612,9 +582,15 @@
         </div>
     </div>
 
-    <section class="tw-card intro-card">
-        <h2>门客简介</h2>
-        <p>{{ guest.template.flavor|default:"暂无人物故事。" }}</p>
+    <section class="board-card intro-card relative overflow-hidden mt-6">
+        <div class="flex items-center gap-2 mb-3 border-b border-border-light border-dashed">
+            <h3 class="m-0 text-text-primary font-bold text-lg">生平事迹</h3>
+        </div>
+        <div class="relative z-10 pl-2">
+            <p class="text-text-secondary leading-loose text-justify font-serif text-lg opacity-90 indent-8">
+                {{ guest.template.flavor|default:"此人行踪神秘，江湖上未有其传闻。" }}
+            </p>
+        </div>
     </section>
 
     <section class="tw-card skills-card">
