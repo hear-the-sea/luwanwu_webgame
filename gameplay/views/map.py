@@ -4,8 +4,6 @@
 
 from __future__ import annotations
 
-import json
-
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, JsonResponse
@@ -13,7 +11,7 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
-from core.utils import safe_int
+from core.utils import json_error, json_success, parse_json_object, safe_int, safe_positive_int
 from core.utils.rate_limit import rate_limit_json
 from gameplay.constants import REGION_CHOICES, UIConstants
 from gameplay.models import Manor as ManorModel
@@ -35,6 +33,45 @@ from gameplay.services.raid import (
 from gameplay.services.raid.map_search import get_manor_public_info
 from gameplay.services.raid.protection import get_protection_status
 from gameplay.services.raid.utils import can_attack_target
+
+
+def _resolve_attack_fields_from_info(info: dict, viewer_manor, target_manor) -> tuple[bool, str]:
+    can_attack_value = info.get("can_attack")
+    attack_reason_value = info.get("attack_reason")
+    if isinstance(can_attack_value, bool) and isinstance(attack_reason_value, str):
+        return can_attack_value, attack_reason_value
+    return can_attack_target(viewer_manor, target_manor)
+
+
+def _request_json_object_or_error(request: HttpRequest) -> tuple[dict | None, JsonResponse | None]:
+    data = parse_json_object(request.body)
+    if data is None:
+        return None, json_error("无效的请求数据")
+    return data, None
+
+
+def _target_manor_or_error(data: dict) -> tuple[ManorModel | None, JsonResponse | None]:
+    target_id = safe_positive_int(data.get("target_id"), default=None)
+    if target_id is None:
+        return None, json_error("目标庄园参数无效")
+    try:
+        return ManorModel.objects.get(pk=target_id), None
+    except (ManorModel.DoesNotExist, ValueError, TypeError):
+        return None, json_error("目标庄园不存在", status=404)
+
+
+def _request_target_manor_or_error(
+    request: HttpRequest,
+) -> tuple[dict | None, ManorModel | None, JsonResponse | None]:
+    data, error = _request_json_object_or_error(request)
+    if error is not None:
+        return None, None, error
+    assert data is not None
+    target_manor, error = _target_manor_or_error(data)
+    if error is not None:
+        return None, None, error
+    assert target_manor is not None
+    return data, target_manor, None
 
 
 class MapView(LoginRequiredMixin, TemplateView):
@@ -85,31 +122,22 @@ def map_search_api(request: HttpRequest) -> JsonResponse:
     search_type = request.GET.get("type", "region")
     query = request.GET.get("q", "").strip()
     region = request.GET.get("region", manor.region)
-    page = safe_int(request.GET.get("page", "1"), 1)
+    page = safe_int(request.GET.get("page", "1"), 1, min_val=1)
     page_size = UIConstants.MAP_SEARCH_PAGE_SIZE
 
     if search_type == "name" and query:
         # 按名称搜索
         results = search_manors_by_name(manor, query, limit=UIConstants.MAP_SEARCH_NAME_LIMIT)
-        return JsonResponse(
-            {
-                "success": True,
-                "results": results,
-                "total": len(results),
-            }
-        )
+        return json_success(results=results, total=len(results))
     else:
         # 按地区搜索
         results, total = search_manors_by_region(manor, region, page=page, page_size=page_size)
-        return JsonResponse(
-            {
-                "success": True,
-                "results": results,
-                "total": total,
-                "page": page,
-                "page_size": page_size,
-                "has_more": page * page_size < total,
-            }
+        return json_success(
+            results=results,
+            total=total,
+            page=page,
+            page_size=page_size,
+            has_more=page * page_size < total,
         )
 
 
@@ -122,19 +150,12 @@ def manor_detail_api(request: HttpRequest, manor_id: int) -> JsonResponse:
         # 优化：使用 select_related 预加载用户信息
         target_manor = ManorModel.objects.select_related("user").get(pk=manor_id)
     except ManorModel.DoesNotExist:
-        return JsonResponse({"success": False, "error": "庄园不存在"}, status=404)
+        return json_error("庄园不存在", status=404)
 
     info = get_manor_public_info(target_manor, viewer=viewer_manor)
-    can_attack, reason = can_attack_target(viewer_manor, target_manor)
+    can_attack, reason = _resolve_attack_fields_from_info(info, viewer_manor, target_manor)
 
-    return JsonResponse(
-        {
-            "success": True,
-            "manor": info,
-            "can_attack": can_attack,
-            "attack_reason": reason,
-        }
-    )
+    return json_success(manor=info, can_attack=can_attack, attack_reason=reason)
 
 
 @login_required
@@ -144,33 +165,21 @@ def start_scout_api(request: HttpRequest) -> JsonResponse:
     """发起侦察API"""
     manor = ensure_manor(request.user)
 
-    try:
-        data = json.loads(request.body)
-    except json.JSONDecodeError:
-        return JsonResponse({"success": False, "error": "无效的请求数据"}, status=400)
-
-    target_id = data.get("target_id")
-    if not target_id:
-        return JsonResponse({"success": False, "error": "请指定目标庄园"}, status=400)
-
-    try:
-        target_manor = ManorModel.objects.get(pk=target_id)
-    except ManorModel.DoesNotExist:
-        return JsonResponse({"success": False, "error": "目标庄园不存在"}, status=404)
+    _data, target_manor, error = _request_target_manor_or_error(request)
+    if error is not None:
+        return error
+    assert target_manor is not None
 
     try:
         record = start_scout(manor, target_manor)
-        return JsonResponse(
-            {
-                "success": True,
-                "message": f"已派出探子前往 {target_manor.display_name}",
-                "scout_id": record.id,
-                "travel_time": record.travel_time,
-                "success_rate": round(record.success_rate * 100),
-            }
+        return json_success(
+            message=f"已派出探子前往 {target_manor.display_name}",
+            scout_id=record.id,
+            travel_time=record.travel_time,
+            success_rate=round(record.success_rate * 100),
         )
     except ValueError as e:
-        return JsonResponse({"success": False, "error": str(e)}, status=400)
+        return json_error(str(e))
 
 
 @login_required
@@ -180,37 +189,27 @@ def start_raid_api(request: HttpRequest) -> JsonResponse:
     """发起踢馆API"""
     manor = ensure_manor(request.user)
 
-    try:
-        data = json.loads(request.body)
-    except json.JSONDecodeError:
-        return JsonResponse({"success": False, "error": "无效的请求数据"}, status=400)
+    data, target_manor, error = _request_target_manor_or_error(request)
+    if error is not None:
+        return error
+    assert data is not None
+    assert target_manor is not None
 
-    target_id = data.get("target_id")
     guest_ids = data.get("guest_ids", [])
     troop_loadout = data.get("troop_loadout", {})
 
-    if not target_id:
-        return JsonResponse({"success": False, "error": "请指定目标庄园"}, status=400)
     if not guest_ids:
-        return JsonResponse({"success": False, "error": "请选择出征门客"}, status=400)
-
-    try:
-        target_manor = ManorModel.objects.get(pk=target_id)
-    except ManorModel.DoesNotExist:
-        return JsonResponse({"success": False, "error": "目标庄园不存在"}, status=404)
+        return json_error("请选择出征门客")
 
     try:
         run = start_raid(manor, target_manor, guest_ids, troop_loadout)
-        return JsonResponse(
-            {
-                "success": True,
-                "message": f"已向 {target_manor.display_name} 发起进攻",
-                "raid_id": run.id,
-                "travel_time": run.travel_time,
-            }
+        return json_success(
+            message=f"已向 {target_manor.display_name} 发起进攻",
+            raid_id=run.id,
+            travel_time=run.travel_time,
         )
     except ValueError as e:
-        return JsonResponse({"success": False, "error": str(e)}, status=400)
+        return json_error(str(e))
 
 
 @login_required
@@ -223,18 +222,13 @@ def retreat_raid_api(request: HttpRequest, raid_id: int) -> JsonResponse:
     try:
         run = RaidRun.objects.get(pk=raid_id, attacker=manor)
     except RaidRun.DoesNotExist:
-        return JsonResponse({"success": False, "error": "出征记录不存在"}, status=404)
+        return json_error("出征记录不存在", status=404)
 
     try:
         request_raid_retreat(run)
-        return JsonResponse(
-            {
-                "success": True,
-                "message": "已开始撤退",
-            }
-        )
+        return json_success(message="已开始撤退")
     except ValueError as e:
-        return JsonResponse({"success": False, "error": str(e)}, status=400)
+        return json_error(str(e))
 
 
 @login_required
@@ -250,39 +244,36 @@ def raid_status_api(request: HttpRequest) -> JsonResponse:
     active_scouts = get_active_scouts(manor)
     incoming_raids = get_incoming_raids(manor)
 
-    return JsonResponse(
-        {
-            "success": True,
-            "active_raids": [
-                {
-                    "id": r.id,
-                    "target_name": r.defender.display_name,
-                    "status": r.status,
-                    "status_display": r.get_status_display(),
-                    "time_remaining": r.time_remaining,
-                    "can_retreat": r.can_retreat,
-                }
-                for r in active_raids
-            ],
-            "active_scouts": [
-                {
-                    "id": s.id,
-                    "target_name": s.defender.display_name,
-                    "time_remaining": s.time_remaining,
-                    "success_rate": round(s.success_rate * 100),
-                }
-                for s in active_scouts
-            ],
-            "incoming_raids": [
-                {
-                    "id": r.id,
-                    "attacker_name": r.attacker.display_name,
-                    "attacker_location": r.attacker.location_display,
-                    "time_remaining": r.time_remaining,
-                }
-                for r in incoming_raids
-            ],
-        }
+    return json_success(
+        active_raids=[
+            {
+                "id": r.id,
+                "target_name": r.defender.display_name,
+                "status": r.status,
+                "status_display": r.get_status_display(),
+                "time_remaining": r.time_remaining,
+                "can_retreat": r.can_retreat,
+            }
+            for r in active_raids
+        ],
+        active_scouts=[
+            {
+                "id": s.id,
+                "target_name": s.defender.display_name,
+                "time_remaining": s.time_remaining,
+                "success_rate": round(s.success_rate * 100),
+            }
+            for s in active_scouts
+        ],
+        incoming_raids=[
+            {
+                "id": r.id,
+                "attacker_name": r.attacker.display_name,
+                "attacker_location": r.attacker.location_display,
+                "time_remaining": r.time_remaining,
+            }
+            for r in incoming_raids
+        ],
     )
 
 
@@ -292,9 +283,4 @@ def protection_status_api(request: HttpRequest) -> JsonResponse:
     manor = ensure_manor(request.user)
 
     status = get_protection_status(manor)
-    return JsonResponse(
-        {
-            "success": True,
-            "protection": status,
-        }
-    )
+    return json_success(protection=status)

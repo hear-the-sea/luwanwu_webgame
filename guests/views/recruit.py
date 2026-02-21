@@ -7,14 +7,13 @@ from __future__ import annotations
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
 from core.exceptions import GameError
-from core.utils import sanitize_error_message
+from core.utils import is_ajax_request, json_error, json_success, sanitize_error_message
 from core.utils.rate_limit import rate_limit_redirect
 
 from ..forms import RecruitForm
@@ -131,7 +130,7 @@ def use_magnifying_glass_view(request):
         storage_location=InventoryItem.StorageLocation.WAREHOUSE,
     )
 
-    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    is_ajax = is_ajax_request(request)
 
     try:
         count = reveal_candidate_rarity(manor)
@@ -139,17 +138,17 @@ def use_magnifying_glass_view(request):
             consume_inventory_item(item)
             msg = f"使用放大镜成功：显现 {count} 位候选门客的稀有度"
             if is_ajax:
-                return JsonResponse({"success": True, "message": msg})
+                return json_success(message=msg)
             messages.success(request, msg)
         else:
             msg = "当前候选门客的稀有度已全部显现"
             if is_ajax:
-                return JsonResponse({"success": False, "error": msg})
+                return json_error(msg, status=200)
             messages.info(request, msg)
     except (GameError, ValueError) as exc:
         error_msg = sanitize_error_message(exc)
         if is_ajax:
-            return JsonResponse({"success": False, "error": error_msg})
+            return json_error(error_msg, status=200)
         messages.error(request, error_msg)
 
     return redirect("gameplay:recruitment_hall")

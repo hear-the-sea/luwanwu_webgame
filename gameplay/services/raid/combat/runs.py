@@ -64,6 +64,29 @@ def _try_dispatch_raid_refresh_task(task, run_id: int, stage: str) -> bool:
     )
 
 
+def _lock_manor_pair(attacker_id: int, defender_id: int) -> tuple[Manor, Manor]:
+    """Lock attacker/defender rows in a stable order to avoid deadlocks."""
+    ids = [attacker_id] if attacker_id == defender_id else sorted([attacker_id, defender_id])
+    locked = {m.pk: m for m in Manor.objects.select_for_update().filter(pk__in=ids).order_by("pk")}
+    attacker = locked.get(attacker_id)
+    defender = locked.get(defender_id)
+    if attacker is None or defender is None:
+        raise ValueError("目标庄园不存在")
+    return attacker, defender
+
+
+def _recheck_can_attack_target(attacker: Manor, defender: Manor, now) -> tuple[bool, str]:
+    from ..utils import can_attack_target
+
+    return can_attack_target(attacker, defender, now=now, use_cached_recent_attacks=False)
+
+
+def _invalidate_recent_attacks_cache_on_commit(defender_id: int) -> None:
+    from ..utils import invalidate_recent_attacks_cache
+
+    transaction.on_commit(lambda: invalidate_recent_attacks_cache(defender_id))
+
+
 def _validate_and_normalize_raid_inputs(
     attacker: Manor,
     defender: Manor,
@@ -72,7 +95,7 @@ def _validate_and_normalize_raid_inputs(
 ) -> tuple[List[int], Dict[str, int]]:
     from ..utils import can_attack_target
 
-    can_attack, reason = can_attack_target(attacker, defender)
+    can_attack, reason = can_attack_target(attacker, defender, use_cached_recent_attacks=False)
     if not can_attack:
         raise ValueError(reason)
 
@@ -241,10 +264,23 @@ def _collect_troop_upserts(
 def _bulk_create_troops_with_fallback(to_create: list[PlayerTroop], now) -> None:
     if not to_create:
         return
-    try:
-        PlayerTroop.objects.bulk_create(to_create, ignore_conflicts=True)
-    except IntegrityError:
-        for pt in to_create:
+    # Use per-row upsert to avoid silent quantity loss:
+    # bulk_create(ignore_conflicts=True) swallows conflicts without raising,
+    # which may drop increments under concurrent create races.
+    for pt in to_create:
+        updated = PlayerTroop.objects.filter(manor=pt.manor, troop_template=pt.troop_template).update(
+            count=F("count") + pt.count,
+            updated_at=now,
+        )
+        if updated:
+            continue
+        try:
+            PlayerTroop.objects.create(
+                manor=pt.manor,
+                troop_template=pt.troop_template,
+                count=pt.count,
+            )
+        except IntegrityError:
             PlayerTroop.objects.filter(manor=pt.manor, troop_template=pt.troop_template).update(
                 count=F("count") + pt.count,
                 updated_at=now,
@@ -339,19 +375,25 @@ def start_raid(
     guest_ids, troop_loadout = _validate_and_normalize_raid_inputs(attacker, defender, guest_ids, troop_loadout)
 
     with transaction.atomic():
-        # Lock attacker to prevent concurrent raids bypassing limits
-        Manor.objects.select_for_update().get(pk=attacker.pk)
+        # Lock both attacker and defender in a stable order, then re-check all start constraints.
+        attacker_locked, defender_locked = _lock_manor_pair(attacker.pk, defender.pk)
+        now = timezone.now()
+
+        can_attack, reason = _recheck_can_attack_target(attacker_locked, defender_locked, now=now)
+        if not can_attack:
+            raise ValueError(reason)
 
         # Re-check concurrent limit inside lock
-        active_count = get_active_raid_count(attacker)
+        active_count = get_active_raid_count(attacker_locked)
         if active_count >= combat_pkg.PVPConstants.RAID_MAX_CONCURRENT:
             raise ValueError(f"同时最多进行 {combat_pkg.PVPConstants.RAID_MAX_CONCURRENT} 次出征")
 
-        guests = _load_and_validate_attacker_guests(attacker, guest_ids)
+        guests = _load_and_validate_attacker_guests(attacker_locked, guest_ids)
         loadout = _normalize_and_validate_raid_loadout(guests, troop_loadout)
-        _deduct_troops(attacker, loadout)
-        travel_time = calculate_raid_travel_time(attacker, defender, guests, loadout)
-        run = _create_raid_run_record(attacker, defender, guests, loadout, travel_time)
+        _deduct_troops(attacker_locked, loadout)
+        travel_time = calculate_raid_travel_time(attacker_locked, defender_locked, guests, loadout)
+        run = _create_raid_run_record(attacker_locked, defender_locked, guests, loadout, travel_time)
+        _invalidate_recent_attacks_cache_on_commit(defender_locked.pk)
 
     # 发送来袭警报给防守方
     _send_raid_incoming_message(run)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from guests.models import GuestStatus
 
 from ..services import refresh_manor_state
@@ -13,6 +15,14 @@ from ..services.raid import (
     get_scout_count,
 )
 from ..services.recruitment import get_player_troops
+
+
+def _resolve_attack_fields(target_info: dict[str, Any], manor, target_manor) -> tuple[bool, str]:
+    can_attack_value = target_info.get("can_attack")
+    attack_reason_value = target_info.get("attack_reason")
+    if isinstance(can_attack_value, bool) and isinstance(attack_reason_value, str):
+        return can_attack_value, attack_reason_value
+    return can_attack_target(manor, target_manor)
 
 
 def get_map_context(manor, selected_region: str, search_query: str) -> dict:
@@ -34,7 +44,7 @@ def get_map_context(manor, selected_region: str, search_query: str) -> dict:
 def get_raid_config_context(manor, target_manor) -> dict:
     refresh_manor_state(manor)
     target_info = get_manor_public_info(target_manor, viewer=manor)
-    can_attack, attack_reason = can_attack_target(manor, target_manor)
+    can_attack, attack_reason = _resolve_attack_fields(target_info, manor, target_manor)
     available_guests = list(
         manor.guests.filter(status=GuestStatus.IDLE).select_related("template").order_by("-level", "template__name")
     )

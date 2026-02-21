@@ -3,10 +3,12 @@ from unittest.mock import Mock
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db import IntegrityError
 from django.test import RequestFactory
 from django.urls import reverse
 
 from accounts import views as account_views
+from accounts.forms import SignUpForm
 
 User = get_user_model()
 
@@ -26,6 +28,88 @@ def test_user_can_register(client):
     )
     assert response.status_code == 302
     assert User.objects.filter(username="test-user").exists()
+
+
+@pytest.mark.django_db
+def test_user_email_blank_is_normalized_to_null():
+    user = User.objects.create_user(username="email_null_user", password="pass123")
+    user.refresh_from_db()
+    assert user.email is None
+
+
+@pytest.mark.django_db
+def test_user_email_unique_constraint_is_enforced():
+    User.objects.create_user(username="email_unique_1", email="Dup@Example.com", password="pass123")
+    with pytest.raises(IntegrityError):
+        User.objects.create_user(username="email_unique_2", email="dup@example.com", password="pass123")
+
+
+@pytest.mark.django_db
+def test_signup_form_rejects_duplicate_email_case_insensitive():
+    User.objects.create_user(username="email_form_exists", email="used@example.com", password="pass123")
+    form = SignUpForm(
+        data={
+            "username": "email_form_new",
+            "email": " USED@EXAMPLE.COM ",
+            "title": "测试",
+            "region": "overseas",
+            "password1": "StrongPass123!",
+            "password2": "StrongPass123!",
+        }
+    )
+    assert form.is_valid() is False
+    assert "email" in form.errors
+
+
+@pytest.mark.django_db
+def test_register_view_handles_integrity_error_duplicate_email_race(client, monkeypatch):
+    User.objects.create_user(username="race_existing", email="race@example.com", password="pass123")
+
+    monkeypatch.setattr("accounts.forms.SignUpForm.clean_email", lambda self: self.cleaned_data["email"])
+    monkeypatch.setattr("accounts.forms.SignUpForm.validate_unique", lambda self: None)
+
+    response = client.post(
+        reverse("accounts:register"),
+        {
+            "username": "race_new_user",
+            "email": "race@example.com",
+            "title": "先锋官",
+            "region": "overseas",
+            "password1": "StrongPass123!",
+            "password2": "StrongPass123!",
+        },
+    )
+    assert response.status_code == 200
+    assert User.objects.filter(username="race_new_user").exists() is False
+    form = response.context["form"]
+    assert "email" in form.errors
+    assert any("该邮箱已注册" in msg for msg in form.errors["email"])
+
+
+@pytest.mark.django_db
+def test_register_view_handles_integrity_error_duplicate_username_race(client, monkeypatch):
+    User.objects.create_user(username="race_same_name", email="race_name_old@example.com", password="pass123")
+
+    monkeypatch.setattr("accounts.forms.SignUpForm.clean_email", lambda self: self.cleaned_data["email"])
+    monkeypatch.setattr("accounts.forms.SignUpForm.clean_username", lambda self: self.cleaned_data["username"])
+    monkeypatch.setattr("accounts.forms.SignUpForm.validate_unique", lambda self: None)
+
+    response = client.post(
+        reverse("accounts:register"),
+        {
+            "username": "race_same_name",
+            "email": "race_name_new@example.com",
+            "title": "先锋官",
+            "region": "overseas",
+            "password1": "StrongPass123!",
+            "password2": "StrongPass123!",
+        },
+    )
+    assert response.status_code == 200
+    assert User.objects.filter(email="race_name_new@example.com").exists() is False
+    form = response.context["form"]
+    assert "username" in form.errors
+    assert any("该用户名已存在" in msg for msg in form.errors["username"])
 
 
 def _build_login_request(remote_addr: str = "127.0.0.1"):

@@ -27,7 +27,7 @@ class SignUpForm(UserCreationForm):
             )
 
     def clean_email(self):
-        email = self.cleaned_data["email"].lower()
+        email = self.cleaned_data["email"].strip().lower()
         if User.objects.filter(email__iexact=email).exists():
             raise forms.ValidationError("该邮箱已注册")
         return email

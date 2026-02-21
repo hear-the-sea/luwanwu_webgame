@@ -6,7 +6,8 @@
 
 from __future__ import annotations
 
-from typing import Any, List, Optional, TypeVar
+import json
+from typing import Any, Dict, List, Optional, TypeVar
 
 from django.http import HttpRequest
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -69,6 +70,46 @@ def safe_int(
             result = min(max_val, result)
 
     return result
+
+
+def safe_positive_int(value: Any, default: Optional[int] = None) -> Optional[int]:
+    """
+    安全地将值转换为正整数（> 0）。
+
+    Args:
+        value: 要转换的值
+        default: 转换失败或非正整数时的默认值
+
+    Returns:
+        正整数或默认值
+    """
+    result = safe_int(value, default=None)
+    if result is None or result <= 0:
+        return default
+    return result
+
+
+def parse_json_object(raw: Any, *, empty_as_object: bool = False) -> Optional[Dict[str, Any]]:
+    """
+    安全解析 JSON 对象。
+
+    Args:
+        raw: 原始 JSON 字符串/字节串
+        empty_as_object: True 时将空请求体视为 {}
+
+    Returns:
+        dict 对象；若解析失败或顶层不是对象则返回 None
+    """
+    payload = raw
+    if empty_as_object and payload in {None, "", b""}:
+        payload = "{}"
+    try:
+        data = json.loads(payload)
+    except (TypeError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    return data
 
 
 def safe_float(

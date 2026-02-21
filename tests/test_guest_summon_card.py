@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 
 from core.exceptions import GuestCapacityFullError
@@ -149,3 +151,48 @@ def test_summon_card_respects_guest_capacity(monkeypatch, django_user_model):
 
     item.refresh_from_db()
     assert item.quantity == 1
+
+
+@pytest.mark.django_db
+def test_loot_box_logs_and_tracks_skipped_bonus_items(monkeypatch, caplog, django_user_model):
+    user = django_user_model.objects.create_user(username="loot_box_skip_bonus", password="pass123")
+    manor = ensure_manor(user)
+    initial_silver = manor.silver
+
+    template = ItemTemplate.objects.create(
+        key="loot_box_skip_bonus_test",
+        name="测试宝箱",
+        effect_type=ItemTemplate.EffectType.LOOT_BOX,
+        is_usable=True,
+        effect_payload={
+            "resources": {"silver": 100},
+            "skill_book_chance": 1,
+            "skill_book_keys": ["missing_bonus_item"],
+        },
+    )
+    item = InventoryItem.objects.create(
+        manor=manor,
+        template=template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    monkeypatch.setattr("gameplay.services.inventory.random.random", lambda: 0.0)
+    monkeypatch.setattr("gameplay.services.inventory.random.choice", lambda keys: keys[0])
+
+    def _raise_bonus_item_error(*_args, **_kwargs):
+        raise ValueError("bonus item template missing")
+
+    monkeypatch.setattr(
+        "gameplay.services.inventory.use.add_item_to_inventory",
+        _raise_bonus_item_error,
+    )
+
+    with caplog.at_level(logging.WARNING):
+        payload = use_inventory_item(item)
+
+    manor.refresh_from_db()
+    assert manor.silver == initial_silver + 100
+    assert payload["skipped_bonus_items"] == ["missing_bonus_item"]
+    assert any("loot box bonus item grant skipped" in rec.getMessage() for rec in caplog.records)
+    assert not InventoryItem.objects.filter(pk=item.pk).exists()

@@ -4,17 +4,19 @@
 
 from __future__ import annotations
 
+from typing import Any, Callable, Mapping
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
 from core.exceptions import GameError
-from core.utils import safe_int, sanitize_error_message
+from core.utils import is_ajax_request, json_error, json_success, safe_int, safe_positive_int, sanitize_error_message
 from core.utils.rate_limit import rate_limit_redirect
 from gameplay.constants import UIConstants
 from gameplay.models import InventoryItem
@@ -28,6 +30,89 @@ from gameplay.services import (
     use_xidianka,
     use_xisuidan,
 )
+
+
+def _parse_positive_quantity(raw_quantity: str | None, default: int = 1) -> int | None:
+    """Parse quantity from user input, allowing empty to fall back to default."""
+    if raw_quantity is None or raw_quantity == "":
+        return default
+    return safe_positive_int(raw_quantity, default=None)
+
+
+def _warehouse_item(manor, pk: int) -> InventoryItem:
+    return get_object_or_404(
+        manor.inventory_items.select_related("template"),
+        pk=pk,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+
+def _error_response(
+    request: HttpRequest, is_ajax: bool, error: str, redirect_url: str = "gameplay:warehouse"
+) -> HttpResponse:
+    if is_ajax:
+        return json_error(error, status=200)
+    messages.error(request, error)
+    return redirect(redirect_url)
+
+
+def _move_item_between_storage(
+    request: HttpRequest,
+    pk: int,
+    *,
+    move_func: Callable[[Any, int, int], None],
+    success_message: Callable[[int], str],
+    redirect_url: str,
+) -> HttpResponse:
+    manor = ensure_manor(request.user)
+    quantity = _parse_positive_quantity(request.POST.get("quantity"), default=1)
+    is_ajax = is_ajax_request(request)
+    if quantity is None:
+        return _error_response(request, is_ajax, "数量参数无效", redirect_url=redirect_url)
+
+    try:
+        move_func(manor, pk, quantity)
+        message = success_message(quantity)
+        if is_ajax:
+            return json_success(message=message)
+        messages.success(request, message)
+    except ValueError as exc:
+        return _error_response(request, is_ajax, sanitize_error_message(exc), redirect_url=redirect_url)
+
+    return redirect(redirect_url)
+
+
+def _use_target_guest_item(
+    request: HttpRequest,
+    pk: int,
+    *,
+    expected_action: str,
+    missing_guest_error: str,
+    success_fallback_message: Callable[[Mapping[str, Any]], str],
+    service_call: Callable[[Any, InventoryItem, int], Mapping[str, Any]],
+) -> HttpResponse:
+    manor = ensure_manor(request.user)
+    item = _warehouse_item(manor, pk)
+    is_ajax = is_ajax_request(request)
+
+    payload = item.template.effect_payload or {}
+    if payload.get("action") != expected_action:
+        return _error_response(request, is_ajax, "物品类型错误")
+
+    guest_id = safe_positive_int(request.POST.get("guest_id"), default=None)
+    if guest_id is None:
+        return _error_response(request, is_ajax, missing_guest_error)
+
+    try:
+        result = service_call(manor, item, guest_id)
+        message = str(result.get("_message") or success_fallback_message(result))
+        if is_ajax:
+            return json_success(message=message)
+        messages.success(request, message)
+    except (GameError, ValueError) as exc:
+        return _error_response(request, is_ajax, sanitize_error_message(exc))
+
+    return redirect("gameplay:warehouse")
 
 
 class RecruitmentHallView(LoginRequiredMixin, TemplateView):
@@ -66,12 +151,8 @@ class WarehouseView(LoginRequiredMixin, TemplateView):
 def use_item_view(request: HttpRequest, pk: int) -> HttpResponse:
     """使用物品"""
     manor = ensure_manor(request.user)
-    item = get_object_or_404(
-        manor.inventory_items.select_related("template"),
-        pk=pk,
-        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-    )
-    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    item = _warehouse_item(manor, pk)
+    is_ajax = is_ajax_request(request)
     try:
         # 传入manor参数进行安全校验
         payload = use_inventory_item(item, manor=manor)
@@ -83,12 +164,10 @@ def use_item_view(request: HttpRequest, pk: int) -> HttpResponse:
                 "、".join(f"{key}+{value}" for key, value in payload.items() if not key.startswith("_")) or "效果已生效"
             )
         if is_ajax:
-            return JsonResponse({"success": True, "message": f"{item.template.name} 使用成功：{summary}"})
+            return json_success(message=f"{item.template.name} 使用成功：{summary}")
         messages.success(request, f"{item.template.name} 使用成功：{summary}")
     except (GameError, ValueError) as exc:
-        if is_ajax:
-            return JsonResponse({"success": False, "error": sanitize_error_message(exc)})
-        messages.error(request, sanitize_error_message(exc))
+        return _error_response(request, is_ajax, sanitize_error_message(exc))
     return redirect("gameplay:warehouse")
 
 
@@ -97,23 +176,15 @@ def use_item_view(request: HttpRequest, pk: int) -> HttpResponse:
 @rate_limit_redirect("move_to_treasury", limit=30, window_seconds=60)
 def move_item_to_treasury_view(request: HttpRequest, pk: int) -> HttpResponse:
     """将物品从仓库移动到藏宝阁"""
-    manor = ensure_manor(request.user)
-    quantity = safe_int(request.POST.get("quantity", 1), default=1, min_val=1)
-    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    from gameplay.services import move_item_to_treasury
 
-    try:
-        from gameplay.services import move_item_to_treasury
-
-        move_item_to_treasury(manor, pk, quantity)
-        if is_ajax:
-            return JsonResponse({"success": True, "message": f"已将 {quantity} 个物品移动到藏宝阁"})
-        messages.success(request, f"已将 {quantity} 个物品移动到藏宝阁")
-    except ValueError as exc:
-        if is_ajax:
-            return JsonResponse({"success": False, "error": sanitize_error_message(exc)})
-        messages.error(request, sanitize_error_message(exc))
-
-    return redirect("gameplay:warehouse")
+    return _move_item_between_storage(
+        request,
+        pk,
+        move_func=move_item_to_treasury,
+        success_message=lambda quantity: f"已将 {quantity} 个物品移动到藏宝阁",
+        redirect_url=reverse("gameplay:warehouse"),
+    )
 
 
 @login_required
@@ -121,24 +192,15 @@ def move_item_to_treasury_view(request: HttpRequest, pk: int) -> HttpResponse:
 @rate_limit_redirect("move_to_warehouse", limit=30, window_seconds=60)
 def move_item_to_warehouse_view(request: HttpRequest, pk: int) -> HttpResponse:
     """将物品从藏宝阁移动到仓库"""
-    manor = ensure_manor(request.user)
-    quantity = safe_int(request.POST.get("quantity", 1), default=1, min_val=1)
-    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    from gameplay.services import move_item_to_warehouse
 
-    try:
-        from gameplay.services import move_item_to_warehouse
-
-        move_item_to_warehouse(manor, pk, quantity)
-        if is_ajax:
-            return JsonResponse({"success": True, "message": f"已将 {quantity} 个物品移动到仓库"})
-        messages.success(request, f"已将 {quantity} 个物品移动到仓库")
-    except ValueError as exc:
-        if is_ajax:
-            return JsonResponse({"success": False, "error": sanitize_error_message(exc)})
-        messages.error(request, sanitize_error_message(exc))
-
-    # 返回仓库页并定位到 treasury 标签
-    return redirect(f"{reverse('gameplay:warehouse')}?tab=treasury")
+    return _move_item_between_storage(
+        request,
+        pk,
+        move_func=move_item_to_warehouse,
+        success_message=lambda quantity: f"已将 {quantity} 个物品移动到仓库",
+        redirect_url=f"{reverse('gameplay:warehouse')}?tab=treasury",
+    )
 
 
 @login_required
@@ -152,44 +214,14 @@ def use_guest_rebirth_card_view(request: HttpRequest, pk: int) -> HttpResponse:
         pk: 物品ID
         guest_id: 目标门客ID（通过POST传入）
     """
-    manor = ensure_manor(request.user)
-    item = get_object_or_404(
-        manor.inventory_items.select_related("template"),
-        pk=pk,
-        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    return _use_target_guest_item(
+        request,
+        pk,
+        expected_action="rebirth_guest",
+        missing_guest_error="请选择要重生的门客",
+        success_fallback_message=lambda result: f"门客 {result.get('guest_name', '')} 已重生为1级",
+        service_call=use_guest_rebirth_card,
     )
-    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
-
-    # 验证物品类型
-    payload = item.template.effect_payload or {}
-    if payload.get("action") != "rebirth_guest":
-        if is_ajax:
-            return JsonResponse({"success": False, "error": "物品类型错误"})
-        messages.error(request, "物品类型错误")
-        return redirect("gameplay:warehouse")
-
-    # 获取目标门客ID
-    from core.utils import safe_int
-
-    guest_id = safe_int(request.POST.get("guest_id"), default=0)
-    if not guest_id:
-        if is_ajax:
-            return JsonResponse({"success": False, "error": "请选择要重生的门客"})
-        messages.error(request, "请选择要重生的门客")
-        return redirect("gameplay:warehouse")
-
-    try:
-        result = use_guest_rebirth_card(manor, item, guest_id)
-        message = result.get("_message", f"门客 {result.get('guest_name', '')} 已重生为1级")
-        if is_ajax:
-            return JsonResponse({"success": True, "message": message})
-        messages.success(request, message)
-    except (GameError, ValueError) as exc:
-        if is_ajax:
-            return JsonResponse({"success": False, "error": sanitize_error_message(exc)})
-        messages.error(request, sanitize_error_message(exc))
-
-    return redirect("gameplay:warehouse")
 
 
 @login_required
@@ -203,42 +235,14 @@ def use_xisuidan_view(request: HttpRequest, pk: int) -> HttpResponse:
         pk: 物品ID
         guest_id: 目标门客ID（通过POST传入）
     """
-    manor = ensure_manor(request.user)
-    item = get_object_or_404(
-        manor.inventory_items.select_related("template"),
-        pk=pk,
-        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    return _use_target_guest_item(
+        request,
+        pk,
+        expected_action="reroll_growth",
+        missing_guest_error="请选择要洗髓的门客",
+        success_fallback_message=lambda _result: "洗髓完成",
+        service_call=use_xisuidan,
     )
-    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
-
-    # 验证物品类型
-    payload = item.template.effect_payload or {}
-    if payload.get("action") != "reroll_growth":
-        if is_ajax:
-            return JsonResponse({"success": False, "error": "物品类型错误"})
-        messages.error(request, "物品类型错误")
-        return redirect("gameplay:warehouse")
-
-    # 获取目标门客ID
-    guest_id = safe_int(request.POST.get("guest_id"), default=0)
-    if not guest_id:
-        if is_ajax:
-            return JsonResponse({"success": False, "error": "请选择要洗髓的门客"})
-        messages.error(request, "请选择要洗髓的门客")
-        return redirect("gameplay:warehouse")
-
-    try:
-        result = use_xisuidan(manor, item, guest_id)
-        message = result.get("_message", "洗髓完成")
-        if is_ajax:
-            return JsonResponse({"success": True, "message": message})
-        messages.success(request, message)
-    except (GameError, ValueError) as exc:
-        if is_ajax:
-            return JsonResponse({"success": False, "error": sanitize_error_message(exc)})
-        messages.error(request, sanitize_error_message(exc))
-
-    return redirect("gameplay:warehouse")
 
 
 @login_required
@@ -252,39 +256,11 @@ def use_xidianka_view(request: HttpRequest, pk: int) -> HttpResponse:
         pk: 物品ID
         guest_id: 目标门客ID（通过POST传入）
     """
-    manor = ensure_manor(request.user)
-    item = get_object_or_404(
-        manor.inventory_items.select_related("template"),
-        pk=pk,
-        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    return _use_target_guest_item(
+        request,
+        pk,
+        expected_action="reset_allocation",
+        missing_guest_error="请选择要洗点的门客",
+        success_fallback_message=lambda _result: "洗点完成",
+        service_call=use_xidianka,
     )
-    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
-
-    # 验证物品类型
-    payload = item.template.effect_payload or {}
-    if payload.get("action") != "reset_allocation":
-        if is_ajax:
-            return JsonResponse({"success": False, "error": "物品类型错误"})
-        messages.error(request, "物品类型错误")
-        return redirect("gameplay:warehouse")
-
-    # 获取目标门客ID
-    guest_id = safe_int(request.POST.get("guest_id"), default=0)
-    if not guest_id:
-        if is_ajax:
-            return JsonResponse({"success": False, "error": "请选择要洗点的门客"})
-        messages.error(request, "请选择要洗点的门客")
-        return redirect("gameplay:warehouse")
-
-    try:
-        result = use_xidianka(manor, item, guest_id)
-        message = result.get("_message", "洗点完成")
-        if is_ajax:
-            return JsonResponse({"success": True, "message": message})
-        messages.success(request, message)
-    except (GameError, ValueError) as exc:
-        if is_ajax:
-            return JsonResponse({"success": False, "error": sanitize_error_message(exc)})
-        messages.error(request, sanitize_error_message(exc))
-
-    return redirect("gameplay:warehouse")

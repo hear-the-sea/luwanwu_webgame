@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import contextlib
 from datetime import datetime
 from datetime import timezone as dt_timezone
 from types import SimpleNamespace
 
 import pytest
+from django.db import IntegrityError
 
 from gameplay.services.raid.combat import runs as combat_runs
 
@@ -174,3 +176,143 @@ def test_refresh_raid_runs_prefers_async_dispatch(monkeypatch):
 
     assert set(dispatched) == {(1, "battle"), (2, "battle"), (3, "return"), (4, "return")}
     assert called == {"battle": 0, "finalize": 0}
+
+
+def test_bulk_create_troops_with_fallback_upserts_without_losing_counts(monkeypatch):
+    update_sequences = {
+        "existing": [1],
+        "missing": [0],
+        "race": [0, 1],
+    }
+    update_calls = []
+    create_calls = []
+
+    class _QS:
+        def __init__(self, key):
+            self.key = key
+
+        def update(self, **kwargs):
+            update_calls.append((self.key, kwargs))
+            seq = update_sequences.get(self.key, [])
+            if seq:
+                return seq.pop(0)
+            return 0
+
+    class _Objects:
+        @staticmethod
+        def filter(*, manor, troop_template):
+            return _QS(troop_template.key)
+
+        @staticmethod
+        def create(*, manor, troop_template, count):
+            create_calls.append((troop_template.key, count))
+            if troop_template.key == "race":
+                raise IntegrityError("duplicate key")
+            return SimpleNamespace(manor=manor, troop_template=troop_template, count=count)
+
+    monkeypatch.setattr(combat_runs, "PlayerTroop", type("_PlayerTroop", (), {"objects": _Objects()}))
+
+    to_create = [
+        SimpleNamespace(manor="m", troop_template=SimpleNamespace(key="existing"), count=2),
+        SimpleNamespace(manor="m", troop_template=SimpleNamespace(key="missing"), count=3),
+        SimpleNamespace(manor="m", troop_template=SimpleNamespace(key="race"), count=4),
+    ]
+    combat_runs._bulk_create_troops_with_fallback(to_create, now="now")
+
+    assert create_calls == [("missing", 3), ("race", 4)]
+    assert [key for key, _kwargs in update_calls] == ["existing", "missing", "race", "race"]
+
+
+def test_start_raid_rechecks_attack_constraints_inside_transaction(monkeypatch):
+    attacker = SimpleNamespace(pk=1, id=1)
+    defender = SimpleNamespace(pk=2, id=2)
+
+    monkeypatch.setattr(combat_runs.transaction, "atomic", contextlib.nullcontext)
+    monkeypatch.setattr(
+        combat_runs,
+        "_validate_and_normalize_raid_inputs",
+        lambda *_args, **_kwargs: ([101], {"inf": 1}),
+    )
+    monkeypatch.setattr(combat_runs, "_lock_manor_pair", lambda *_args, **_kwargs: (attacker, defender))
+    monkeypatch.setattr(
+        combat_runs,
+        "_recheck_can_attack_target",
+        lambda *_args, **_kwargs: (False, "对方处于免战牌保护期"),
+    )
+
+    def _unexpected_active_count(*_args, **_kwargs):
+        raise AssertionError("should not read active raid count when lock-time attack check fails")
+
+    called = {"load_guests": 0}
+
+    def _unexpected_load_guests(*_args, **_kwargs):
+        called["load_guests"] += 1
+        return []
+
+    monkeypatch.setattr(combat_runs, "get_active_raid_count", _unexpected_active_count)
+    monkeypatch.setattr(combat_runs, "_load_and_validate_attacker_guests", _unexpected_load_guests)
+
+    with pytest.raises(ValueError, match="免战牌保护期"):
+        combat_runs.start_raid(attacker, defender, [101], {"inf": 1})
+
+    assert called["load_guests"] == 0
+
+
+def test_start_raid_invalidates_recent_attack_cache_on_commit(monkeypatch):
+    attacker = SimpleNamespace(pk=1, id=1)
+    defender = SimpleNamespace(pk=2, id=2)
+    invalidated = {"defender_id": None}
+
+    monkeypatch.setattr(combat_runs.transaction, "atomic", contextlib.nullcontext)
+    monkeypatch.setattr(combat_runs.transaction, "on_commit", lambda callback: callback())
+    monkeypatch.setattr(
+        combat_runs,
+        "_validate_and_normalize_raid_inputs",
+        lambda *_args, **_kwargs: ([101], {"inf": 1}),
+    )
+    monkeypatch.setattr(combat_runs, "_lock_manor_pair", lambda *_args, **_kwargs: (attacker, defender))
+    monkeypatch.setattr(combat_runs, "_recheck_can_attack_target", lambda *_args, **_kwargs: (True, ""))
+    monkeypatch.setattr(combat_runs, "get_active_raid_count", lambda *_args, **_kwargs: 0)
+    monkeypatch.setattr(combat_runs, "_load_and_validate_attacker_guests", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(combat_runs, "_normalize_and_validate_raid_loadout", lambda *_args, **_kwargs: {"inf": 1})
+    monkeypatch.setattr(combat_runs, "_deduct_troops", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_runs, "calculate_raid_travel_time", lambda *_args, **_kwargs: 1)
+    monkeypatch.setattr(
+        combat_runs,
+        "_create_raid_run_record",
+        lambda *_args, **_kwargs: SimpleNamespace(id=99, attacker=attacker, defender=defender),
+    )
+    monkeypatch.setattr(combat_runs, "_send_raid_incoming_message", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_runs, "_dispatch_raid_battle_task", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "gameplay.services.raid.utils.invalidate_recent_attacks_cache",
+        lambda defender_id: invalidated.__setitem__("defender_id", defender_id),
+    )
+
+    combat_runs.start_raid(attacker, defender, [101], {"inf": 1})
+
+    assert invalidated["defender_id"] == defender.id
+
+
+def test_validate_and_normalize_raid_inputs_uses_uncached_attack_check(monkeypatch):
+    attacker = SimpleNamespace(id=1)
+    defender = SimpleNamespace(id=2)
+    seen = {"use_cached_recent_attacks": None}
+
+    def _fake_can_attack(_attacker, _defender, **kwargs):
+        seen["use_cached_recent_attacks"] = kwargs.get("use_cached_recent_attacks")
+        return True, ""
+
+    monkeypatch.setattr("gameplay.services.raid.utils.can_attack_target", _fake_can_attack)
+    monkeypatch.setattr(combat_runs, "get_active_raid_count", lambda *_args, **_kwargs: 0)
+
+    guest_ids, troop_loadout = combat_runs._validate_and_normalize_raid_inputs(
+        attacker,
+        defender,
+        [101],
+        {"inf": 1},
+    )
+
+    assert guest_ids == [101]
+    assert troop_loadout == {"inf": 1}
+    assert seen["use_cached_recent_attacks"] is False

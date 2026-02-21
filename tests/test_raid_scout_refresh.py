@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import contextlib
 from types import SimpleNamespace
+
+import pytest
 
 from gameplay.services.raid import scout as scout_service
 
@@ -74,3 +77,43 @@ def test_send_scout_success_message_tolerates_invalid_intel_shape(monkeypatch):
     assert sent["kind"] == "system"
     assert "侦察报告" in sent["title"]
     assert "未知" in sent["body"]
+
+
+def test_start_scout_rechecks_attack_constraints_inside_transaction(monkeypatch):
+    attacker = SimpleNamespace(pk=1, id=1)
+    defender = SimpleNamespace(pk=2, id=2)
+    calls = {"can_attack": 0}
+
+    def _fake_can_attack(*_args, **_kwargs):
+        calls["can_attack"] += 1
+        if calls["can_attack"] == 1:
+            return True, ""
+        return False, "对方处于免战牌保护期"
+
+    monkeypatch.setattr(scout_service.transaction, "atomic", contextlib.nullcontext)
+    monkeypatch.setattr(scout_service, "can_attack_target", _fake_can_attack)
+    monkeypatch.setattr(scout_service, "check_scout_cooldown", lambda *_args, **_kwargs: (False, None))
+    monkeypatch.setattr(scout_service, "get_scout_count", lambda *_args, **_kwargs: 1)
+    monkeypatch.setattr(scout_service, "_lock_manor_pair", lambda *_args, **_kwargs: (attacker, defender))
+
+    with pytest.raises(ValueError, match="免战牌保护期"):
+        scout_service.start_scout(attacker, defender)
+
+    assert calls["can_attack"] == 2
+
+
+def test_start_scout_precheck_uses_uncached_attack_check(monkeypatch):
+    attacker = SimpleNamespace(pk=1, id=1)
+    defender = SimpleNamespace(pk=2, id=2)
+    seen = {"use_cached_recent_attacks": None}
+
+    def _fake_can_attack(*_args, **kwargs):
+        seen["use_cached_recent_attacks"] = kwargs.get("use_cached_recent_attacks")
+        return False, "blocked"
+
+    monkeypatch.setattr(scout_service, "can_attack_target", _fake_can_attack)
+
+    with pytest.raises(ValueError, match="blocked"):
+        scout_service.start_scout(attacker, defender)
+
+    assert seen["use_cached_recent_attacks"] is False

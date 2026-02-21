@@ -54,6 +54,17 @@ def _try_dispatch_scout_refresh_task(task, record_id: int, phase: str) -> bool:
     )
 
 
+def _lock_manor_pair(attacker_id: int, defender_id: int) -> tuple[Manor, Manor]:
+    """Lock attacker/defender rows in a stable order to avoid deadlocks."""
+    ids = [attacker_id] if attacker_id == defender_id else sorted([attacker_id, defender_id])
+    locked = {m.pk: m for m in Manor.objects.select_for_update().filter(pk__in=ids).order_by("pk")}
+    attacker = locked.get(attacker_id)
+    defender = locked.get(defender_id)
+    if attacker is None or defender is None:
+        raise ValueError("目标庄园不存在")
+    return attacker, defender
+
+
 def _collect_due_scout_record_ids(manor: Manor, now) -> tuple[list[int], list[int]]:
     scouting_ids = list(
         ScoutRecord.objects.filter(
@@ -189,7 +200,7 @@ def start_scout(attacker: Manor, defender: Manor) -> ScoutRecord:
         ValueError: 无法发起侦察时
     """
     # 检查是否可以攻击目标
-    can_attack, reason = can_attack_target(attacker, defender)
+    can_attack, reason = can_attack_target(attacker, defender, use_cached_recent_attacks=False)
     if not can_attack:
         raise ValueError(reason)
 
@@ -205,14 +216,38 @@ def start_scout(attacker: Manor, defender: Manor) -> ScoutRecord:
     if scout_count < 1:
         raise ValueError("探子不足，无法发起侦察")
 
-    # 计算成功率和时间
-    success_rate = calculate_scout_success_rate(attacker, defender)
-    travel_time = calculate_scout_travel_time(attacker, defender)
-
     with transaction.atomic():
+        attacker_locked, defender_locked = _lock_manor_pair(attacker.pk, defender.pk)
+        now = timezone.now()
+
+        # Re-check target eligibility after row locks to close TOCTOU gaps.
+        can_attack_locked, reason_locked = can_attack_target(
+            attacker_locked,
+            defender_locked,
+            now=now,
+            use_cached_recent_attacks=False,
+        )
+        if not can_attack_locked:
+            raise ValueError(reason_locked)
+
+        cooldown_locked = (
+            ScoutCooldown.objects.select_for_update()
+            .filter(attacker=attacker_locked, defender=defender_locked, cooldown_until__gt=now)
+            .first()
+        )
+        if cooldown_locked:
+            remaining = int((cooldown_locked.cooldown_until - now).total_seconds())
+            minutes = max(0, remaining) // 60
+            seconds = max(0, remaining) % 60
+            raise ValueError(f"侦察冷却中，剩余 {minutes}分{seconds}秒")
+
+        # Recompute on locked state to keep timing and odds consistent with the accepted request.
+        success_rate = calculate_scout_success_rate(attacker_locked, defender_locked)
+        travel_time = calculate_scout_travel_time(attacker_locked, defender_locked)
+
         # 扣除探子
         troop = PlayerTroop.objects.select_for_update().get(
-            manor=attacker, troop_template__key=PVPConstants.SCOUT_TROOP_KEY
+            manor=attacker_locked, troop_template__key=PVPConstants.SCOUT_TROOP_KEY
         )
         if troop.count < 1:
             raise ValueError("探子不足，无法发起侦察")
@@ -220,12 +255,11 @@ def start_scout(attacker: Manor, defender: Manor) -> ScoutRecord:
         troop.save(update_fields=["count"])
 
         # 创建侦察记录
-        now = timezone.now()
         complete_at = now + timedelta(seconds=travel_time)
 
         record = ScoutRecord.objects.create(
-            attacker=attacker,
-            defender=defender,
+            attacker=attacker_locked,
+            defender=defender_locked,
             status=ScoutRecord.Status.SCOUTING,
             scout_cost=1,
             success_rate=success_rate,

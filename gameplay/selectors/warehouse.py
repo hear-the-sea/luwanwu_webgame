@@ -11,6 +11,11 @@ from ..services import get_treasury_capacity, get_treasury_used_space
 WAREHOUSE_PAGE_SIZE = 50
 
 
+def _distinct_effect_types(items):
+    """Return distinct effect types without inheriting potentially expensive/invalid ordering."""
+    return items.order_by().values_list("template__effect_type", flat=True).distinct()
+
+
 def get_warehouse_context(manor, current_tab: str, selected_category: str, page: int = 1) -> dict:
     # Get frozen gold bars for display adjustment
     from trade.services.auction_service import get_frozen_gold_bars
@@ -21,34 +26,28 @@ def get_warehouse_context(manor, current_tab: str, selected_category: str, page:
         "current_tab": current_tab,
     }
 
-    guests_for_rebirth = (
+    # Load eligible guests once, then derive specific lists in memory to avoid repeated DB queries.
+    eligible_guests = list(
         manor.guests.select_related("template")
         .filter(status__in=[GuestStatus.IDLE, GuestStatus.INJURED])
-        .order_by("-level", "template__name")
+        .order_by("-level", "template__name", "id")
     )
-    context["guests_for_rebirth"] = list(guests_for_rebirth)
+    context["guests_for_rebirth"] = eligible_guests
 
-    guests_for_xisuidan = (
-        manor.guests.select_related("template")
-        .filter(status__in=[GuestStatus.IDLE, GuestStatus.INJURED], level=100, xisuidan_used__lt=10)
-        .order_by("xisuidan_used", "template__name")
-    )
-    context["guests_for_xisuidan"] = list(guests_for_xisuidan)
+    guests_for_xisuidan = [guest for guest in eligible_guests if guest.level == 100 and guest.xisuidan_used < 10]
+    guests_for_xisuidan.sort(key=lambda guest: (guest.xisuidan_used, guest.template.name, guest.id))
+    context["guests_for_xisuidan"] = guests_for_xisuidan
 
-    guests_for_xidianka = (
-        manor.guests.select_related("template")
-        .filter(
-            status__in=[GuestStatus.IDLE, GuestStatus.INJURED],
+    context["guests_for_xidianka"] = [
+        guest
+        for guest in eligible_guests
+        if (
+            guest.allocated_force != 0
+            or guest.allocated_intellect != 0
+            or guest.allocated_defense != 0
+            or guest.allocated_agility != 0
         )
-        .exclude(
-            allocated_force=0,
-            allocated_intellect=0,
-            allocated_defense=0,
-            allocated_agility=0,
-        )
-        .order_by("-level", "template__name")
-    )
-    context["guests_for_xidianka"] = list(guests_for_xidianka)
+    ]
 
     tool_effect_types = {"tool", "magnifying_glass", "peace_shield", "manor_rename"}
     tool_category_key = "tool"
@@ -83,7 +82,8 @@ def get_warehouse_context(manor, current_tab: str, selected_category: str, page:
             items = items.filter(template__effect_type=selected_category)
 
     # 使用 values + distinct 只查询 effect_type，避免加载全部对象
-    effect_types = all_items.values_list("template__effect_type", flat=True).distinct()
+    # 并清除既有排序，避免 PostgreSQL 下 DISTINCT + 非选择列 ORDER BY 的兼容性问题。
+    effect_types = _distinct_effect_types(all_items)
 
     category_map = {
         "resource_pack": "资源包",

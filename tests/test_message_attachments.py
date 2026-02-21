@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from gameplay.models import ItemTemplate, Message, ResourceEvent, ResourceType
 from gameplay.services.manor.core import ensure_manor
+from gameplay.services.utils import messages as message_service
 from gameplay.services.utils.cache import CacheKeys
 from gameplay.services.utils.messages import (
     claim_message_attachments,
@@ -162,6 +163,75 @@ def test_cleanup_old_messages_tolerates_cache_add_error(monkeypatch):
         "gameplay.services.utils.messages.cache.add",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache add failed")),
     )
+    message_service._LOCAL_CLEANUP_FALLBACK.clear()
 
     cleanup_old_messages(manor)
     assert Message.objects.filter(pk=message.pk).exists() is False
+
+
+@pytest.mark.django_db
+def test_cleanup_old_messages_cache_add_error_uses_local_fallback_gate(monkeypatch):
+    user = User.objects.create_user(username="mail_user_cleanup_gate", password="pass123")
+    manor = ensure_manor(user)
+
+    first_message = Message.objects.create(manor=manor, kind=Message.Kind.SYSTEM, title="old_msg_first")
+    Message.objects.filter(pk=first_message.pk).update(created_at=timezone.now() - timedelta(days=30))
+
+    monkeypatch.setattr(
+        "gameplay.services.utils.messages.cache.add",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache add failed")),
+    )
+    message_service._LOCAL_CLEANUP_FALLBACK.clear()
+
+    cleanup_old_messages(manor)
+    assert Message.objects.filter(pk=first_message.pk).exists() is False
+
+    second_message = Message.objects.create(manor=manor, kind=Message.Kind.SYSTEM, title="old_msg_second")
+    Message.objects.filter(pk=second_message.pk).update(created_at=timezone.now() - timedelta(days=30))
+
+    # 第二次应被本地节流门禁拦截，避免缓存故障时每次请求都触发清理扫描
+    cleanup_old_messages(manor)
+    assert Message.objects.filter(pk=second_message.pk).exists() is True
+
+
+def test_local_cleanup_fallback_evicts_oldest_when_oversized(monkeypatch):
+    message_service._LOCAL_CLEANUP_FALLBACK.clear()
+    monkeypatch.setattr(message_service, "_LOCAL_CLEANUP_FALLBACK_MAX_SIZE", 3)
+    monkeypatch.setattr(message_service, "_LOCAL_CLEANUP_FALLBACK_EVICT_COUNT", 2)
+    monkeypatch.setattr(message_service.time, "monotonic", lambda: 100.0)
+
+    message_service._LOCAL_CLEANUP_FALLBACK.update(
+        {
+            1: 90.0,
+            2: 91.0,
+            3: 92.0,
+            4: 93.0,
+        }
+    )
+
+    allowed = message_service._allow_cleanup_via_local_fallback(5, interval_seconds=120)
+    assert allowed is True
+    assert 5 in message_service._LOCAL_CLEANUP_FALLBACK
+    assert 1 not in message_service._LOCAL_CLEANUP_FALLBACK
+    assert len(message_service._LOCAL_CLEANUP_FALLBACK) <= message_service._LOCAL_CLEANUP_FALLBACK_MAX_SIZE
+
+
+def test_local_cleanup_fallback_evicts_enough_to_respect_max_size(monkeypatch):
+    message_service._LOCAL_CLEANUP_FALLBACK.clear()
+    monkeypatch.setattr(message_service, "_LOCAL_CLEANUP_FALLBACK_MAX_SIZE", 3)
+    monkeypatch.setattr(message_service, "_LOCAL_CLEANUP_FALLBACK_EVICT_COUNT", 1)
+    monkeypatch.setattr(message_service.time, "monotonic", lambda: 100.0)
+
+    message_service._LOCAL_CLEANUP_FALLBACK.update(
+        {
+            1: 90.0,
+            2: 91.0,
+            3: 92.0,
+            4: 93.0,
+            5: 94.0,
+        }
+    )
+
+    allowed = message_service._allow_cleanup_via_local_fallback(6, interval_seconds=120)
+    assert allowed is True
+    assert len(message_service._LOCAL_CLEANUP_FALLBACK) <= message_service._LOCAL_CLEANUP_FALLBACK_MAX_SIZE

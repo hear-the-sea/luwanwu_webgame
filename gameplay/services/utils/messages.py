@@ -5,7 +5,10 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import timedelta
+from heapq import nsmallest
+from threading import Lock
 from typing import Dict
 
 from django.core.cache import cache
@@ -23,6 +26,12 @@ from .cache import CACHE_TIMEOUT_SHORT, CacheKeys
 # 从 core.config 导入配置
 MESSAGE_RETENTION_DAYS = MESSAGE.RETENTION_DAYS
 logger = logging.getLogger(__name__)
+
+_LOCAL_CLEANUP_FALLBACK: dict[int, float] = {}
+_LOCAL_CLEANUP_FALLBACK_LOCK = Lock()
+_LOCAL_CLEANUP_FALLBACK_MAX_SIZE = 10000
+_LOCAL_CLEANUP_FALLBACK_CLEANUP_BATCH = 2000
+_LOCAL_CLEANUP_FALLBACK_EVICT_COUNT = 1000
 
 
 def _safe_cache_get(key: str, default=None):
@@ -45,8 +54,33 @@ def _safe_cache_add(key: str, value, timeout: int) -> bool:
         return bool(cache.add(key, value, timeout=timeout))
     except Exception:
         logger.warning("messages cache.add failed: key=%s", key, exc_info=True)
-        # cleanup gate fail-open: still allow cleanup path to proceed
+        return False
+
+
+def _allow_cleanup_via_local_fallback(manor_id: int, interval_seconds: int) -> bool:
+    """Fallback gate when cache is unavailable to avoid repeated full-table deletes."""
+    if manor_id <= 0 or interval_seconds <= 0:
         return True
+
+    now_monotonic = time.monotonic()
+    stale_before = now_monotonic - max(interval_seconds * 2, 60)
+
+    with _LOCAL_CLEANUP_FALLBACK_LOCK:
+        last_cleanup = _LOCAL_CLEANUP_FALLBACK.get(manor_id)
+        if last_cleanup is not None and now_monotonic - last_cleanup < interval_seconds:
+            return False
+
+        _LOCAL_CLEANUP_FALLBACK[manor_id] = now_monotonic
+        if len(_LOCAL_CLEANUP_FALLBACK) > _LOCAL_CLEANUP_FALLBACK_MAX_SIZE:
+            stale_keys = [key for key, ts in _LOCAL_CLEANUP_FALLBACK.items() if ts < stale_before]
+            for key in stale_keys[:_LOCAL_CLEANUP_FALLBACK_CLEANUP_BATCH]:
+                _LOCAL_CLEANUP_FALLBACK.pop(key, None)
+        if len(_LOCAL_CLEANUP_FALLBACK) > _LOCAL_CLEANUP_FALLBACK_MAX_SIZE:
+            overflow = len(_LOCAL_CLEANUP_FALLBACK) - _LOCAL_CLEANUP_FALLBACK_MAX_SIZE
+            evict_count = max(_LOCAL_CLEANUP_FALLBACK_EVICT_COUNT, overflow)
+            for key, _ in nsmallest(evict_count, _LOCAL_CLEANUP_FALLBACK.items(), key=lambda item: item[1]):
+                _LOCAL_CLEANUP_FALLBACK.pop(key, None)
+    return True
 
 
 def _safe_cache_delete(key: str) -> None:
@@ -153,8 +187,11 @@ def cleanup_old_messages(manor: Manor) -> None:
     """
     # 性能优化：避免每次打开消息列表都触发一次 DELETE 扫描。
     # 保留期以“天”为单位，清理无需高频执行；这里对每个庄园做节流（默认 6 小时一次）。
+    cleanup_gate_timeout = 6 * 60 * 60
     cleanup_gate_key = f"messages:cleanup_old:{manor.id}"
-    if not _safe_cache_add(cleanup_gate_key, "1", timeout=6 * 60 * 60):
+    if not _safe_cache_add(
+        cleanup_gate_key, "1", timeout=cleanup_gate_timeout
+    ) and not _allow_cleanup_via_local_fallback(manor.id, cleanup_gate_timeout):
         return
 
     threshold = timezone.now() - timedelta(days=MESSAGE_RETENTION_DAYS)

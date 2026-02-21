@@ -14,6 +14,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from core.decorators import handle_game_errors
 from core.exceptions import GameError
+from core.utils import is_ajax_request, json_success
 from core.utils.rate_limit import rate_limit_redirect
 from core.utils.validation import safe_redirect_url, sanitize_error_message
 
@@ -53,8 +54,8 @@ def equip_view(request):
     _clear_gear_options_cache(manor.id, slots={gear.template.slot})
 
     # AJAX 请求返回 JSON 响应
-    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-        return JsonResponse({"success": True, "message": f"{guest.display_name} 已装备 {gear.template.name}"})
+    if is_ajax_request(request):
+        return json_success(message=f"{guest.display_name} 已装备 {gear.template.name}")
 
     messages.success(request, f"{guest.display_name} 已装备 {gear.template.name}")
     return redirect("guests:detail", pk=guest.pk)

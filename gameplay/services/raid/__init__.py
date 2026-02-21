@@ -64,7 +64,9 @@ from .utils import (
     can_attack_target,
     get_asset_level,
     get_prestige_color,
+    get_recent_attacks_24h,
     get_troop_description,
+    invalidate_recent_attacks_cache,
     is_same_region,
 )
 
@@ -74,6 +76,8 @@ __all__ = [
     "is_same_region",
     "get_prestige_color",
     "can_attack_target",
+    "get_recent_attacks_24h",
+    "invalidate_recent_attacks_cache",
     "get_asset_level",
     "get_troop_description",
     # 地图查询

@@ -7,7 +7,6 @@ from __future__ import annotations
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils.decorators import method_decorator
@@ -16,6 +15,7 @@ from django.views.generic import TemplateView
 
 from core.decorators import handle_game_errors
 from core.exceptions import GameError
+from core.utils import is_ajax_request, json_error, json_success
 from core.utils.rate_limit import rate_limit_json
 from core.utils.validation import safe_redirect_url, sanitize_error_message
 
@@ -75,7 +75,7 @@ def use_experience_item_view(request, pk: int):
     # 使用 manager 方法获取门客，避免重复的 select_related
     guest = get_object_or_404(Guest.objects.for_manor(manor).with_template(), pk=pk)
     item_id = request.POST.get("item_id")
-    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    is_ajax = is_ajax_request(request)
     default_url = reverse("guests:detail", args=[guest.pk])
     next_url = safe_redirect_url(request, request.POST.get("next"), default_url)
 
@@ -102,35 +102,29 @@ def use_experience_item_view(request, pk: int):
         eta_str = eta.strftime("%H:%M:%S") if eta else "已完成升级"
         msg = f"{item.template.name} 已使用，缩短 {reduced_hours} 小时。预计完成：{eta_str}"
         if is_ajax:
-            return JsonResponse(
-                {
-                    "success": True,
-                    "message": msg,
-                    "item_id": item_id,
-                    "new_quantity": new_quantity,
-                    "guest_id": guest.pk,
-                    "new_level": guest.level,
-                    "current_hp": guest.current_hp,
-                    "max_hp": guest.max_hp,
-                    "training_eta": eta.isoformat() if eta else None,
-                }
+            return json_success(
+                message=msg,
+                item_id=item_id,
+                new_quantity=new_quantity,
+                guest_id=guest.pk,
+                new_level=guest.level,
+                current_hp=guest.current_hp,
+                max_hp=guest.max_hp,
+                training_eta=eta.isoformat() if eta else None,
             )
         messages.success(request, msg)
     except (GameError, ValueError) as exc:
         error_msg = sanitize_error_message(exc)
         if is_ajax:
-            return JsonResponse({"success": False, "message": error_msg})
+            return json_error(error_msg, status=200, include_message=True)
         messages.error(request, error_msg)
     except ObjectDoesNotExist:
         # 物品可能已被删除（refresh_from_db 时）
         if is_ajax:
-            return JsonResponse(
-                {
-                    "success": True,
-                    "message": "道具已使用",
-                    "item_id": item_id,
-                    "new_quantity": 0,
-                }
+            return json_success(
+                message="道具已使用",
+                item_id=item_id,
+                new_quantity=0,
             )
     return redirect(next_url)
 
@@ -158,17 +152,14 @@ def check_training_view(request, pk: int):
     guest.refresh_from_db()
 
     # 返回最新的门客状态
-    return JsonResponse(
-        {
-            "success": True,
-            "guest_id": guest.pk,
-            "level": guest.level,
-            "current_hp": guest.current_hp,
-            "max_hp": guest.max_hp,
-            "training_eta": guest.training_complete_at.isoformat() if guest.training_complete_at else None,
-            "status": guest.status,
-            "attribute_points": guest.attribute_points,
-        }
+    return json_success(
+        guest_id=guest.pk,
+        level=guest.level,
+        current_hp=guest.current_hp,
+        max_hp=guest.max_hp,
+        training_eta=guest.training_complete_at.isoformat() if guest.training_complete_at else None,
+        status=guest.status,
+        attribute_points=guest.attribute_points,
     )
 
 

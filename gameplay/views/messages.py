@@ -10,14 +10,14 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
 from core.exceptions import GameError
-from core.utils import sanitize_error_message
+from core.utils import is_json_request, json_error, json_success, sanitize_error_message
 from core.utils.validation import safe_redirect_url
 from gameplay.constants import UIConstants
 from gameplay.models import ResourceType
@@ -34,13 +34,6 @@ from gameplay.services import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _is_json_request(request: HttpRequest) -> bool:
-    return (
-        "application/json" in request.headers.get("Accept", "").lower()
-        or request.headers.get("X-Requested-With") == "XMLHttpRequest"
-    )
 
 
 def _build_attachment_details(message) -> dict:
@@ -177,7 +170,7 @@ def view_message(request: HttpRequest, pk: int) -> HttpResponse:
         pk=pk,
     )
 
-    is_json_request = _is_json_request(request)
+    is_json = is_json_request(request)
 
     # 标记为已读（只有在消息未读时才执行）
     was_unread = not message.is_read
@@ -186,9 +179,8 @@ def view_message(request: HttpRequest, pk: int) -> HttpResponse:
         message.refresh_from_db()
 
     # 对于JSON请求，返回结构化的响应数据
-    if is_json_request:
+    if is_json:
         response_data = {
-            "success": True,
             "message_id": message.pk,
             "was_unread": was_unread,
             "unread_count": unread_message_count(manor),
@@ -197,7 +189,7 @@ def view_message(request: HttpRequest, pk: int) -> HttpResponse:
         if message.battle_report_id:
             response_data["redirect_url"] = reverse("battle:report_detail", kwargs={"pk": message.battle_report_id})
 
-        return JsonResponse(response_data)
+        return json_success(**response_data)
 
     # 战报消息跳转到战报详情
     if message.battle_report_id:
@@ -274,49 +266,40 @@ def claim_attachment_view(request: HttpRequest, pk: int) -> HttpResponse:
         manor.messages,
         pk=pk,
     )
-    is_json_request = _is_json_request(request)
+    is_json = is_json_request(request)
 
     try:
         claimed_summary = claim_message_attachments(message)
         summary_text, claimed_payload = _format_claimed_summary(claimed_summary)
         unread_count = unread_message_count(manor)
 
-        if is_json_request:
-            return JsonResponse(
-                {
-                    "success": True,
-                    "message_id": pk,
-                    "summary": summary_text,
-                    "claimed": claimed_payload,
-                    "unread_count": unread_count,
-                }
+        if is_json:
+            return json_success(
+                message_id=pk,
+                summary=summary_text,
+                claimed=claimed_payload,
+                unread_count=unread_count,
             )
 
         messages.success(request, f"附件领取成功：{summary_text}")
     except (GameError, ValueError) as exc:
         error_message = sanitize_error_message(exc)
-        if is_json_request:
-            return JsonResponse(
-                {
-                    "success": False,
-                    "message_id": pk,
-                    "error": error_message,
-                    "unread_count": unread_message_count(manor),
-                },
+        if is_json:
+            return json_error(
+                error_message,
                 status=400,
+                message_id=pk,
+                unread_count=unread_message_count(manor),
             )
         messages.error(request, error_message)
     except Exception:
         logger.exception("Unexpected error in claim_attachment_view: message_id=%s", pk)
-        if is_json_request:
-            return JsonResponse(
-                {
-                    "success": False,
-                    "message_id": pk,
-                    "error": "操作失败，请稍后重试",
-                    "unread_count": unread_message_count(manor),
-                },
+        if is_json:
+            return json_error(
+                "操作失败，请稍后重试",
                 status=500,
+                message_id=pk,
+                unread_count=unread_message_count(manor),
             )
         messages.error(request, "操作失败，请稍后重试")
 

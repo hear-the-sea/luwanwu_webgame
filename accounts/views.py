@@ -7,6 +7,7 @@ from django.contrib.auth import login
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView as DjangoLoginView
 from django.core.cache import cache
+from django.db import IntegrityError, transaction
 from django.shortcuts import redirect, render
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, TemplateView
@@ -226,7 +227,21 @@ class RegisterView(CreateView):
         # 在保存用户前，将地区信息附加到用户对象
         user = form.save(commit=False)
         user._signup_region = form.cleaned_data.get("region", "overseas")
-        user.save()
+        try:
+            # 在可能存在外层事务（如测试事务）时，使用 savepoint 隔离唯一约束冲突
+            # 避免 IntegrityError 污染当前连接，导致后续模板渲染触发 TransactionManagementError。
+            with transaction.atomic():
+                user.save()
+        except IntegrityError:
+            normalized_email = (form.cleaned_data.get("email") or "").strip().lower()
+            username = (form.cleaned_data.get("username") or "").strip()
+            if normalized_email and User.objects.filter(email__iexact=normalized_email).exists():
+                form.add_error("email", "该邮箱已注册")
+            elif username and User.objects.filter(username=username).exists():
+                form.add_error("username", "该用户名已存在")
+            else:
+                form.add_error(None, "注册失败，请稍后重试")
+            return self.form_invalid(form)
         self.object = user
 
         login(self.request, self.object)

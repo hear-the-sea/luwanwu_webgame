@@ -7,12 +7,13 @@ from typing import Callable
 
 from django.contrib import messages
 from django.core.cache import cache
-from django.http import HttpRequest, JsonResponse
+from django.http import HttpRequest
 from django.shortcuts import redirect
 from django.utils.http import url_has_allowed_host_and_scheme
 from redis.exceptions import RedisError
 
 from core.utils.network import get_client_ip
+from core.utils.responses import json_error
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +23,7 @@ _MEMCACHE_KEY_LIMIT = 250
 
 def _cache_error_response(is_json: bool, error_message: str, request: HttpRequest, redirect_url: str | None = None):
     if is_json:
-        return JsonResponse(
-            {"success": False, "error": "系统繁忙，请稍后再试"},
-            status=503,
-        )
+        return json_error("系统繁忙，请稍后再试", status=503)
 
     messages.error(request, error_message)
     if redirect_url:
@@ -147,7 +145,7 @@ def rate_limit_json(
                 return _cache_error_response(True, error_message, request)
 
             if count > limit:
-                return JsonResponse({"success": False, "error": error_message}, status=429)
+                return json_error(error_message, status=429)
             return view_func(request, *args, **kwargs)
 
         return wrapped

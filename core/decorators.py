@@ -13,11 +13,14 @@ from typing import Callable, Optional
 
 from django.contrib import messages
 from django.db import transaction
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.urls import NoReverseMatch, reverse
 
 from core.exceptions import GameError
+from core.utils import json_error
+from core.utils.http import accepts_json as _accepts_json_header
+from core.utils.http import is_ajax_request as _is_ajax_header
 from core.utils.validation import safe_redirect_url, sanitize_error_message
 
 logger = logging.getLogger(__name__)
@@ -116,7 +119,7 @@ def _handle_game_exception(
         return redirect(get_next_url(request, redirect_url))
 
     if is_ajax_request(request) or expects_json(request):
-        return JsonResponse({"success": False, "message": error_msg}, status=400)
+        return json_error(error_msg, status=400, include_message=True)
 
     messages.error(request, error_msg)
     return redirect(get_next_url(request, redirect_url))
@@ -170,15 +173,14 @@ def is_ajax_request(request: HttpRequest) -> bool:
 
     注意：不包含 HTMX，HTMX 使用 is_htmx_request() 检测
     """
-    return request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    return _is_ajax_header(request)
 
 
 def expects_json(request: HttpRequest) -> bool:
     """
     检测客户端是否期望 JSON 响应。
     """
-    accept = request.headers.get("Accept", "")
-    return "application/json" in accept
+    return _accepts_json_header(request)
 
 
 def handle_game_errors(

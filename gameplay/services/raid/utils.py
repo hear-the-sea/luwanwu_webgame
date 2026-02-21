@@ -6,15 +6,89 @@
 
 from __future__ import annotations
 
+import logging
 import math
 from datetime import timedelta
 from typing import Optional, Tuple
 
+from django.core.cache import cache
 from django.db.models import F, Sum
 from django.utils import timezone
 
 from ...constants import PVPConstants
 from ...models import InventoryItem, Manor, RaidRun
+
+logger = logging.getLogger(__name__)
+
+
+def _recent_attacks_cache_key(defender_id: int) -> str:
+    return f"raid:recent_attacks_24h:{int(defender_id)}"
+
+
+def _recent_attacks_cache_ttl_seconds() -> int:
+    try:
+        from django.conf import settings
+
+        raw = getattr(settings, "RAID_RECENT_ATTACKS_CACHE_TTL_SECONDS", 5)
+    except Exception:
+        raw = 5
+    try:
+        ttl = int(raw)
+    except (TypeError, ValueError):
+        ttl = 5
+    return max(1, ttl)
+
+
+def _safe_cache_get(key: str):
+    try:
+        return cache.get(key)
+    except Exception:
+        logger.warning("raid utils cache.get failed: key=%s", key, exc_info=True)
+        return None
+
+
+def _safe_cache_set(key: str, value: int, timeout: int) -> None:
+    try:
+        cache.set(key, int(value), timeout=timeout)
+    except Exception:
+        logger.warning("raid utils cache.set failed: key=%s", key, exc_info=True)
+
+
+def _safe_cache_delete(key: str) -> None:
+    try:
+        cache.delete(key)
+    except Exception:
+        logger.warning("raid utils cache.delete failed: key=%s", key, exc_info=True)
+
+
+def invalidate_recent_attacks_cache(defender_id: int) -> None:
+    """Invalidate cached 24h raid-received count for a defender manor."""
+    if int(defender_id or 0) <= 0:
+        return
+    _safe_cache_delete(_recent_attacks_cache_key(int(defender_id)))
+
+
+def get_recent_attacks_24h(defender: Manor, now=None, *, use_cache: bool = True) -> int:
+    """
+    Return how many raids the defender received in the last 24 hours.
+
+    Cache is best-effort and should be disabled (`use_cache=False`) for strict checks
+    inside critical locked transactions.
+    """
+    now = now or timezone.now()
+    defender_id = int(getattr(defender, "id", 0) or 0)
+    cache_key = _recent_attacks_cache_key(defender_id) if defender_id > 0 else ""
+
+    if use_cache and cache_key:
+        cached = _safe_cache_get(cache_key)
+        if isinstance(cached, int) and cached >= 0:
+            return cached
+
+    recent_attacks = RaidRun.objects.filter(defender=defender, started_at__gte=now - timedelta(hours=24)).count()
+
+    if use_cache and cache_key:
+        _safe_cache_set(cache_key, recent_attacks, timeout=_recent_attacks_cache_ttl_seconds())
+    return int(recent_attacks)
 
 
 def calculate_distance(manor1: Manor, manor2: Manor) -> float:
@@ -63,6 +137,7 @@ def can_attack_target(
     *,
     recent_attacks: Optional[int] = None,
     now: Optional[timezone.datetime] = None,
+    use_cached_recent_attacks: bool = True,
 ) -> Tuple[bool, str]:
     """
     检查是否可以攻击目标庄园。
@@ -72,6 +147,7 @@ def can_attack_target(
         defender: 防守方庄园
         recent_attacks: 可选的“目标24小时内被攻击次数”预计算值；提供时将跳过数据库 COUNT
         now: 可选的当前时间（用于批量计算时复用）
+        use_cached_recent_attacks: 是否允许使用短TTL缓存读取被攻击次数
 
     Returns:
         (是否可攻击, 原因说明)
@@ -102,7 +178,7 @@ def can_attack_target(
     # 检查目标24小时内被攻击次数（防止小号集群攻击）
     now = now or timezone.now()
     if recent_attacks is None:
-        recent_attacks = RaidRun.objects.filter(defender=defender, started_at__gte=now - timedelta(hours=24)).count()
+        recent_attacks = get_recent_attacks_24h(defender, now=now, use_cache=use_cached_recent_attacks)
     if recent_attacks >= PVPConstants.RAID_MAX_DAILY_ATTACKS_RECEIVED:
         return False, "该目标今日已被多次攻击，暂时无法攻击"
 

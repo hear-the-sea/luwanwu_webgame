@@ -166,6 +166,8 @@ MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS = int(
 
 # Cache TTL for home/dashboard stats
 HOME_STATS_CACHE_TTL_SECONDS = int(env("DJANGO_HOME_STATS_CACHE_TTL_SECONDS", "15"))
+# Cache TTL for defender 24h raid-received counter in attack checks
+RAID_RECENT_ATTACKS_CACHE_TTL_SECONDS = int(env("DJANGO_RAID_RECENT_ATTACKS_CACHE_TTL_SECONDS", "5"))
 
 # High-value thresholds for logging/monitoring
 TRADE_HIGH_VALUE_SILVER_THRESHOLD = int(env("DJANGO_TRADE_HIGH_VALUE_SILVER_THRESHOLD", "1000000"))

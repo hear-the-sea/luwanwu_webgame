@@ -2,11 +2,13 @@
 视图层和API端点测试
 """
 
+import json
+
 import pytest
 from django.test import Client
 from django.urls import reverse
 
-from gameplay.models import ItemTemplate, Message
+from gameplay.models import InventoryItem, ItemTemplate, Message
 from gameplay.services.manor.core import ensure_manor
 
 
@@ -120,6 +122,195 @@ class TestInventoryViews:
         response = client.get(reverse("gameplay:recruitment_hall"))
         assert response.status_code == 200
         assert "pools" in response.context
+
+    def test_use_rebirth_card_rejects_non_positive_guest_id(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        template = ItemTemplate.objects.create(
+            key="view_rebirth_card_item",
+            name="门客重生卡",
+            effect_payload={"action": "rebirth_guest"},
+        )
+        item = InventoryItem.objects.create(manor=manor, template=template, quantity=1)
+        called = {"count": 0}
+
+        def _unexpected_call(*args, **kwargs):
+            called["count"] += 1
+            return {}
+
+        monkeypatch.setattr("gameplay.views.inventory.use_guest_rebirth_card", _unexpected_call)
+
+        response = client.post(
+            reverse("gameplay:use_rebirth_card", kwargs={"pk": item.pk}),
+            {"guest_id": -1},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["success"] is False
+        assert "请选择要重生的门客" in payload["error"]
+        assert called["count"] == 0
+
+    def test_use_xisuidan_rejects_non_positive_guest_id(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        template = ItemTemplate.objects.create(
+            key="view_xisuidan_item",
+            name="洗髓丹",
+            effect_payload={"action": "reroll_growth"},
+        )
+        item = InventoryItem.objects.create(manor=manor, template=template, quantity=1)
+        called = {"count": 0}
+
+        def _unexpected_call(*args, **kwargs):
+            called["count"] += 1
+            return {}
+
+        monkeypatch.setattr("gameplay.views.inventory.use_xisuidan", _unexpected_call)
+
+        response = client.post(
+            reverse("gameplay:use_xisuidan", kwargs={"pk": item.pk}),
+            {"guest_id": -1},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["success"] is False
+        assert "请选择要洗髓的门客" in payload["error"]
+        assert called["count"] == 0
+
+    def test_use_xidianka_rejects_non_positive_guest_id(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        template = ItemTemplate.objects.create(
+            key="view_xidianka_item",
+            name="洗点卡",
+            effect_payload={"action": "reset_allocation"},
+        )
+        item = InventoryItem.objects.create(manor=manor, template=template, quantity=1)
+        called = {"count": 0}
+
+        def _unexpected_call(*args, **kwargs):
+            called["count"] += 1
+            return {}
+
+        monkeypatch.setattr("gameplay.views.inventory.use_xidianka", _unexpected_call)
+
+        response = client.post(
+            reverse("gameplay:use_xidianka", kwargs={"pk": item.pk}),
+            {"guest_id": -1},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["success"] is False
+        assert "请选择要洗点的门客" in payload["error"]
+        assert called["count"] == 0
+
+    def test_move_item_to_treasury_rejects_invalid_quantity(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        template = ItemTemplate.objects.create(key="move_treasury_item", name="藏宝阁测试道具")
+        item = InventoryItem.objects.create(
+            manor=manor,
+            template=template,
+            quantity=5,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        )
+        called = {"count": 0}
+
+        def _unexpected_call(*args, **kwargs):
+            called["count"] += 1
+
+        monkeypatch.setattr("gameplay.services.move_item_to_treasury", _unexpected_call)
+
+        response = client.post(
+            reverse("gameplay:move_to_treasury", kwargs={"pk": item.pk}),
+            {"quantity": -3},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["success"] is False
+        assert "数量参数无效" in payload["error"]
+        assert called["count"] == 0
+
+    def test_move_item_to_treasury_ajax_success(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        template = ItemTemplate.objects.create(key="move_treasury_success_item", name="藏宝阁成功道具")
+        item = InventoryItem.objects.create(
+            manor=manor,
+            template=template,
+            quantity=5,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        )
+        called = {"args": None}
+
+        def _fake_move(manor_arg, item_id_arg, quantity_arg):
+            called["args"] = (manor_arg.id, item_id_arg, quantity_arg)
+
+        monkeypatch.setattr("gameplay.services.move_item_to_treasury", _fake_move)
+
+        response = client.post(
+            reverse("gameplay:move_to_treasury", kwargs={"pk": item.pk}),
+            {"quantity": 2},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["success"] is True
+        assert "移动到藏宝阁" in payload["message"]
+        assert called["args"] == (manor.id, item.pk, 2)
+
+    def test_move_item_to_warehouse_rejects_invalid_quantity(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        template = ItemTemplate.objects.create(key="move_warehouse_item", name="仓库测试道具")
+        item = InventoryItem.objects.create(
+            manor=manor,
+            template=template,
+            quantity=5,
+            storage_location=InventoryItem.StorageLocation.TREASURY,
+        )
+        called = {"count": 0}
+
+        def _unexpected_call(*args, **kwargs):
+            called["count"] += 1
+
+        monkeypatch.setattr("gameplay.services.move_item_to_warehouse", _unexpected_call)
+
+        response = client.post(
+            reverse("gameplay:move_to_warehouse", kwargs={"pk": item.pk}),
+            {"quantity": -3},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["success"] is False
+        assert "数量参数无效" in payload["error"]
+        assert called["count"] == 0
+
+    def test_move_item_to_warehouse_ajax_success(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        template = ItemTemplate.objects.create(key="move_warehouse_success_item", name="仓库成功道具")
+        item = InventoryItem.objects.create(
+            manor=manor,
+            template=template,
+            quantity=5,
+            storage_location=InventoryItem.StorageLocation.TREASURY,
+        )
+        called = {"args": None}
+
+        def _fake_move(manor_arg, item_id_arg, quantity_arg):
+            called["args"] = (manor_arg.id, item_id_arg, quantity_arg)
+
+        monkeypatch.setattr("gameplay.services.move_item_to_warehouse", _fake_move)
+
+        response = client.post(
+            reverse("gameplay:move_to_warehouse", kwargs={"pk": item.pk}),
+            {"quantity": 3},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["success"] is True
+        assert "移动到仓库" in payload["message"]
+        assert called["args"] == (manor.id, item.pk, 3)
 
 
 # ============ 消息系统测试 ============
@@ -341,6 +532,18 @@ class TestMapAPI:
         data = response.json()
         assert data["success"] is True
 
+    def test_map_search_negative_page_clamped_to_one(self, manor_with_user):
+        """地图搜索页码应限制为正整数"""
+        manor, client = manor_with_user
+        response = client.get(
+            reverse("gameplay:map_search_api"),
+            {"type": "region", "region": manor.region, "page": -5},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["page"] == 1
+
     def test_protection_status_api(self, manor_with_user):
         """保护状态API"""
         manor, client = manor_with_user
@@ -374,6 +577,112 @@ class TestMapAPI:
         response = client.get(reverse("gameplay:manor_detail_api", kwargs={"manor_id": 99999}))
         assert response.status_code == 404
 
+    def test_start_scout_api_rejects_invalid_target_id(self, manor_with_user):
+        """侦察API应拒绝非法目标ID"""
+        _manor, client = manor_with_user
+        response = client.post(
+            reverse("gameplay:start_scout_api"),
+            data=json.dumps({"target_id": "abc"}),
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        payload = response.json()
+        assert payload["success"] is False
+        assert "参数无效" in payload["error"]
+
+    @pytest.mark.parametrize("target_id", [0, -1])
+    def test_start_scout_api_rejects_non_positive_target_id(self, manor_with_user, target_id):
+        """侦察API应拒绝非正整数目标ID"""
+        _manor, client = manor_with_user
+        response = client.post(
+            reverse("gameplay:start_scout_api"),
+            data=json.dumps({"target_id": target_id}),
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        payload = response.json()
+        assert payload["success"] is False
+        assert "参数无效" in payload["error"]
+
+    def test_start_scout_api_rejects_non_object_json(self, manor_with_user):
+        """侦察API应拒绝非对象JSON"""
+        _manor, client = manor_with_user
+        response = client.post(
+            reverse("gameplay:start_scout_api"),
+            data=json.dumps(["bad-shape"]),
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        payload = response.json()
+        assert payload["success"] is False
+        assert "无效的请求数据" in payload["error"]
+
+    def test_start_scout_api_rejects_invalid_utf8_json(self, manor_with_user):
+        """侦察API应拒绝非法UTF-8 JSON请求体"""
+        _manor, client = manor_with_user
+        response = client.post(
+            reverse("gameplay:start_scout_api"),
+            data=b"\xff",
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        payload = response.json()
+        assert payload["success"] is False
+        assert "无效的请求数据" in payload["error"]
+
+    def test_start_raid_api_rejects_invalid_target_id(self, manor_with_user):
+        """进攻API应拒绝非法目标ID"""
+        _manor, client = manor_with_user
+        response = client.post(
+            reverse("gameplay:start_raid_api"),
+            data=json.dumps({"target_id": "abc", "guest_ids": [1], "troop_loadout": {}}),
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        payload = response.json()
+        assert payload["success"] is False
+        assert "参数无效" in payload["error"]
+
+    @pytest.mark.parametrize("target_id", [0, -1])
+    def test_start_raid_api_rejects_non_positive_target_id(self, manor_with_user, target_id):
+        """进攻API应拒绝非正整数目标ID"""
+        _manor, client = manor_with_user
+        response = client.post(
+            reverse("gameplay:start_raid_api"),
+            data=json.dumps({"target_id": target_id, "guest_ids": [1], "troop_loadout": {}}),
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        payload = response.json()
+        assert payload["success"] is False
+        assert "参数无效" in payload["error"]
+
+    def test_start_raid_api_rejects_non_object_json(self, manor_with_user):
+        """进攻API应拒绝非对象JSON"""
+        _manor, client = manor_with_user
+        response = client.post(
+            reverse("gameplay:start_raid_api"),
+            data=json.dumps(["bad-shape"]),
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        payload = response.json()
+        assert payload["success"] is False
+        assert "无效的请求数据" in payload["error"]
+
+    def test_start_raid_api_rejects_invalid_utf8_json(self, manor_with_user):
+        """进攻API应拒绝非法UTF-8 JSON请求体"""
+        _manor, client = manor_with_user
+        response = client.post(
+            reverse("gameplay:start_raid_api"),
+            data=b"\xff",
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        payload = response.json()
+        assert payload["success"] is False
+        assert "无效的请求数据" in payload["error"]
+
 
 # ============ POST 操作测试 ============
 
@@ -396,6 +705,85 @@ class TestPostOperations:
         manor, client = manor_with_user
         response = client.post(reverse("gameplay:delete_messages"))
         assert response.status_code == 302
+
+
+@pytest.mark.django_db
+class TestJailAndOathAPI:
+    """监牢与结义林 API 测试"""
+
+    def test_add_oath_bond_api_rejects_non_object_json(self, manor_with_user):
+        _manor, client = manor_with_user
+        response = client.post(
+            reverse("gameplay:add_oath_bond_api"),
+            data=json.dumps(["bad-shape"]),
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        payload = response.json()
+        assert payload["success"] is False
+        assert "无效的请求数据" in payload["error"]
+
+    def test_add_oath_bond_api_rejects_invalid_utf8_json(self, manor_with_user):
+        _manor, client = manor_with_user
+        response = client.post(
+            reverse("gameplay:add_oath_bond_api"),
+            data=b"\xff",
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        payload = response.json()
+        assert payload["success"] is False
+        assert "无效的请求数据" in payload["error"]
+
+    @pytest.mark.parametrize("guest_id", [0, -1])
+    def test_add_oath_bond_api_rejects_non_positive_guest_id(self, manor_with_user, guest_id):
+        _manor, client = manor_with_user
+        response = client.post(
+            reverse("gameplay:add_oath_bond_api"),
+            data=json.dumps({"guest_id": guest_id}),
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        payload = response.json()
+        assert payload["success"] is False
+        assert "请指定门客" in payload["error"]
+
+    def test_remove_oath_bond_api_rejects_non_object_json(self, manor_with_user):
+        _manor, client = manor_with_user
+        response = client.post(
+            reverse("gameplay:remove_oath_bond_api"),
+            data=json.dumps(["bad-shape"]),
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        payload = response.json()
+        assert payload["success"] is False
+        assert "无效的请求数据" in payload["error"]
+
+    def test_remove_oath_bond_api_rejects_invalid_utf8_json(self, manor_with_user):
+        _manor, client = manor_with_user
+        response = client.post(
+            reverse("gameplay:remove_oath_bond_api"),
+            data=b"\xff",
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        payload = response.json()
+        assert payload["success"] is False
+        assert "无效的请求数据" in payload["error"]
+
+    @pytest.mark.parametrize("guest_id", [0, -1])
+    def test_remove_oath_bond_api_rejects_non_positive_guest_id(self, manor_with_user, guest_id):
+        _manor, client = manor_with_user
+        response = client.post(
+            reverse("gameplay:remove_oath_bond_api"),
+            data=json.dumps({"guest_id": guest_id}),
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        payload = response.json()
+        assert payload["success"] is False
+        assert "请指定门客" in payload["error"]
 
 
 # ============ 权限测试 ============

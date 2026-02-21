@@ -4,8 +4,6 @@
 
 from __future__ import annotations
 
-import json
-
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -14,7 +12,7 @@ from django.shortcuts import redirect
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
-from core.utils import safe_int
+from core.utils import json_error, json_success, parse_json_object, safe_positive_int
 from core.utils.rate_limit import rate_limit_json
 from core.utils.validation import sanitize_error_message
 from gameplay.constants import PVPConstants
@@ -28,6 +26,16 @@ from gameplay.services import (
     release_prisoner,
     remove_oath_bond,
 )
+
+
+def _oath_guest_id_from_json_or_error(request: HttpRequest) -> tuple[int | None, JsonResponse | None]:
+    data = parse_json_object(request.body, empty_as_object=True)
+    if data is None:
+        return None, json_error("无效的请求数据")
+    guest_id = safe_positive_int(data.get("guest_id"), default=None)
+    if guest_id is None:
+        return None, json_error("请指定门客")
+    return guest_id, None
 
 
 class JailView(LoginRequiredMixin, TemplateView):
@@ -78,25 +86,22 @@ class OathGroveView(LoginRequiredMixin, TemplateView):
 def jail_status_api(request: HttpRequest) -> JsonResponse:
     manor = ensure_manor(request.user)
     prisoners = list_held_prisoners(manor)
-    return JsonResponse(
-        {
-            "success": True,
-            "jail": {
-                "capacity": int(getattr(manor, "jail_capacity", 0) or 0),
-                "count": len(prisoners),
-                "prisoners": [
-                    {
-                        "id": p.id,
-                        "name": p.display_name,
-                        "template_key": getattr(p.guest_template, "key", ""),
-                        "rarity": getattr(p.guest_template, "rarity", ""),
-                        "loyalty": int(p.loyalty),
-                        "captured_at": p.captured_at.isoformat() if p.captured_at else "",
-                        "original_manor": getattr(getattr(p, "original_manor", None), "display_name", ""),
-                    }
-                    for p in prisoners
-                ],
-            },
+    return json_success(
+        jail={
+            "capacity": int(getattr(manor, "jail_capacity", 0) or 0),
+            "count": len(prisoners),
+            "prisoners": [
+                {
+                    "id": p.id,
+                    "name": p.display_name,
+                    "template_key": getattr(p.guest_template, "key", ""),
+                    "rarity": getattr(p.guest_template, "rarity", ""),
+                    "loyalty": int(p.loyalty),
+                    "captured_at": p.captured_at.isoformat() if p.captured_at else "",
+                    "original_manor": getattr(getattr(p, "original_manor", None), "display_name", ""),
+                }
+                for p in prisoners
+            ],
         }
     )
 
@@ -105,23 +110,20 @@ def jail_status_api(request: HttpRequest) -> JsonResponse:
 def oath_status_api(request: HttpRequest) -> JsonResponse:
     manor = ensure_manor(request.user)
     bonds = list_oath_bonds(manor)
-    return JsonResponse(
-        {
-            "success": True,
-            "oath_grove": {
-                "capacity": int(getattr(manor, "oath_capacity", 0) or 0),
-                "count": len(bonds),
-                "bonds": [
-                    {
-                        "guest_id": b.guest_id,
-                        "name": b.guest.display_name,
-                        "template_key": getattr(b.guest.template, "key", ""),
-                        "rarity": getattr(b.guest.template, "rarity", ""),
-                        "created_at": b.created_at.isoformat() if b.created_at else "",
-                    }
-                    for b in bonds
-                ],
-            },
+    return json_success(
+        oath_grove={
+            "capacity": int(getattr(manor, "oath_capacity", 0) or 0),
+            "count": len(bonds),
+            "bonds": [
+                {
+                    "guest_id": b.guest_id,
+                    "name": b.guest.display_name,
+                    "template_key": getattr(b.guest.template, "key", ""),
+                    "rarity": getattr(b.guest.template, "rarity", ""),
+                    "created_at": b.created_at.isoformat() if b.created_at else "",
+                }
+                for b in bonds
+            ],
         }
     )
 
@@ -169,8 +171,8 @@ def release_prisoner_view(request: HttpRequest, prisoner_id: int):
 @require_POST
 def add_oath_bond_view(request: HttpRequest):
     manor = ensure_manor(request.user)
-    guest_id = safe_int(request.POST.get("guest_id"))
-    if not guest_id:
+    guest_id = safe_positive_int(request.POST.get("guest_id"), default=None)
+    if guest_id is None:
         messages.error(request, "请指定门客")
         return redirect("gameplay:oath_grove")
     try:
@@ -203,15 +205,9 @@ def recruit_prisoner_api(request: HttpRequest, prisoner_id: int) -> JsonResponse
     manor = ensure_manor(request.user)
     try:
         guest = recruit_prisoner(manor, int(prisoner_id))
-        return JsonResponse(
-            {
-                "success": True,
-                "message": f"成功招募：{guest.display_name}（等级已重置，装备已清空）",
-                "guest_id": guest.id,
-            }
-        )
+        return json_success(message=f"成功招募：{guest.display_name}（等级已重置，装备已清空）", guest_id=guest.id)
     except Exception as exc:
-        return JsonResponse({"success": False, "error": sanitize_error_message(exc)}, status=400)
+        return json_error(sanitize_error_message(exc))
 
 
 @login_required
@@ -222,17 +218,14 @@ def draw_pie_api(request: HttpRequest, prisoner_id: int) -> JsonResponse:
     try:
         prisoner = draw_pie(manor, int(prisoner_id))
         reduction = getattr(prisoner, "_reduction", 0)
-        return JsonResponse(
-            {
-                "success": True,
-                "message": f"画饼成功！{prisoner.display_name} 忠诚度 -{reduction}",
-                "prisoner_id": prisoner.id,
-                "new_loyalty": prisoner.loyalty,
-                "reduction": reduction,
-            }
+        return json_success(
+            message=f"画饼成功！{prisoner.display_name} 忠诚度 -{reduction}",
+            prisoner_id=prisoner.id,
+            new_loyalty=prisoner.loyalty,
+            reduction=reduction,
         )
     except Exception as exc:
-        return JsonResponse({"success": False, "error": sanitize_error_message(exc)}, status=400)
+        return json_error(sanitize_error_message(exc))
 
 
 @login_required
@@ -242,15 +235,9 @@ def release_prisoner_api(request: HttpRequest, prisoner_id: int) -> JsonResponse
     manor = ensure_manor(request.user)
     try:
         prisoner = release_prisoner(manor, int(prisoner_id))
-        return JsonResponse(
-            {
-                "success": True,
-                "message": f"已释放：{prisoner.display_name}",
-                "prisoner_id": prisoner.id,
-            }
-        )
+        return json_success(message=f"已释放：{prisoner.display_name}", prisoner_id=prisoner.id)
     except Exception as exc:
-        return JsonResponse({"success": False, "error": sanitize_error_message(exc)}, status=400)
+        return json_error(sanitize_error_message(exc))
 
 
 @login_required
@@ -258,25 +245,16 @@ def release_prisoner_api(request: HttpRequest, prisoner_id: int) -> JsonResponse
 @rate_limit_json("oath_add", limit=10, window_seconds=60, error_message="操作过于频繁，请稍后再试")
 def add_oath_bond_api(request: HttpRequest) -> JsonResponse:
     manor = ensure_manor(request.user)
-    try:
-        data = json.loads(request.body or "{}")
-    except json.JSONDecodeError:
-        return JsonResponse({"success": False, "error": "无效的请求数据"}, status=400)
-
-    guest_id = safe_int(data.get("guest_id"))
-    if not guest_id:
-        return JsonResponse({"success": False, "error": "请指定门客"}, status=400)
+    guest_id, error = _oath_guest_id_from_json_or_error(request)
+    if error is not None:
+        return error
+    assert guest_id is not None
 
     try:
         bond = add_oath_bond(manor, guest_id)
-        return JsonResponse(
-            {
-                "success": True,
-                "message": f"结义成功：{bond.guest.display_name}",
-            }
-        )
+        return json_success(message=f"结义成功：{bond.guest.display_name}")
     except Exception as exc:
-        return JsonResponse({"success": False, "error": sanitize_error_message(exc)}, status=400)
+        return json_error(sanitize_error_message(exc))
 
 
 @login_required
@@ -284,19 +262,15 @@ def add_oath_bond_api(request: HttpRequest) -> JsonResponse:
 @rate_limit_json("oath_remove", limit=10, window_seconds=60, error_message="操作过于频繁，请稍后再试")
 def remove_oath_bond_api(request: HttpRequest) -> JsonResponse:
     manor = ensure_manor(request.user)
-    try:
-        data = json.loads(request.body or "{}")
-    except json.JSONDecodeError:
-        return JsonResponse({"success": False, "error": "无效的请求数据"}, status=400)
-
-    guest_id = safe_int(data.get("guest_id"))
-    if not guest_id:
-        return JsonResponse({"success": False, "error": "请指定门客"}, status=400)
+    guest_id, error = _oath_guest_id_from_json_or_error(request)
+    if error is not None:
+        return error
+    assert guest_id is not None
 
     try:
         deleted = remove_oath_bond(manor, guest_id)
         if not deleted:
-            return JsonResponse({"success": False, "error": "该门客未结义"}, status=400)
-        return JsonResponse({"success": True, "message": "已解除结义"})
+            return json_error("该门客未结义")
+        return json_success(message="已解除结义")
     except Exception as exc:
-        return JsonResponse({"success": False, "error": sanitize_error_message(exc)}, status=400)
+        return json_error(sanitize_error_message(exc))
