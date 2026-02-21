@@ -1,4 +1,5 @@
 import pytest
+from types import SimpleNamespace
 
 from gameplay.services.manor import ensure_manor
 
@@ -123,3 +124,52 @@ def test_generate_report_task_retries_on_unexpected_error(monkeypatch, django_us
         )
 
     assert isinstance(state["exc"], RuntimeError)
+
+
+@pytest.mark.django_db
+def test_generate_report_task_defense_tolerates_invalid_enemy_technology(monkeypatch, django_user_model):
+    from battle.tasks import generate_report_task
+    from gameplay.models import MissionTemplate
+
+    user = django_user_model.objects.create_user(username="task_defense_bad_tech", password="pass")
+    manor = ensure_manor(user)
+    mission = MissionTemplate.objects.create(
+        key="m_task_defense_bad_tech",
+        name="DefenseTask",
+        is_defense=True,
+        enemy_technology="bad-config",
+        enemy_troops="bad-troops",
+        enemy_guests="bad-guests",
+    )
+
+    level_state = {}
+    guest_keys_state = {}
+
+    def _build_named_ai_guests(keys, level):
+        guest_keys_state["keys"] = keys
+        level_state["level"] = level
+        return []
+
+    def _fake_simulate_report(**kwargs):
+        assert kwargs["troop_loadout"] == {}
+        assert kwargs["attacker_tech_levels"] == {}
+        assert kwargs["attacker_guest_bonuses"] is None
+        assert kwargs["attacker_guest_skills"] is None
+        return SimpleNamespace(pk=321)
+
+    monkeypatch.setattr("battle.combatants.build_named_ai_guests", _build_named_ai_guests)
+    monkeypatch.setattr("battle.tasks.simulate_report", _fake_simulate_report)
+    monkeypatch.setattr(generate_report_task, "retry", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("retry should not be called")))
+
+    got = generate_report_task.run(
+        manor_id=manor.id,
+        mission_id=mission.id,
+        run_id=None,
+        guest_ids=[],
+        troop_loadout={},
+        battle_type="task",
+    )
+
+    assert got == 321
+    assert level_state["level"] == 50
+    assert guest_keys_state["keys"] == []

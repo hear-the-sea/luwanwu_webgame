@@ -11,6 +11,7 @@ from django.db import transaction
 from django.db.models import F, QuerySet
 from django.utils import timezone
 
+from core.config import TRADE
 from gameplay.models import InventoryItem, ItemTemplate, Manor, ResourceEvent
 from gameplay.services.messages import create_message
 from gameplay.services.notifications import notify_user
@@ -26,13 +27,11 @@ LISTING_FEES = {
     86400: 20000,  # 24小时 -> 20000银两
 }
 
-# 税率
-TRANSACTION_TAX_RATE = 0.10  # 10%
-
-# 价格限制
-MIN_PRICE_MULTIPLIER = 1.0  # 最低价格为物品price的1倍
-MAX_PRICE = 10000000  # 最高1000万银两
-MAX_TOTAL_PRICE = 2000000000  # 最高总价20亿（防止整数溢出）
+# 从 core.config 导入配置
+TRANSACTION_TAX_RATE = TRADE.TRANSACTION_TAX_RATE
+MIN_PRICE_MULTIPLIER = TRADE.MIN_PRICE_MULTIPLIER
+MAX_PRICE = TRADE.MAX_PRICE
+MAX_TOTAL_PRICE = TRADE.MAX_TOTAL_PRICE
 
 ALLOWED_LISTING_ORDER_BY = {
     "listed_at",
@@ -48,6 +47,41 @@ ALLOWED_LISTING_ORDER_BY = {
     "expires_at",
     "-expires_at",
 }
+
+
+def _safe_int(value, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_create_message(**kwargs) -> bool:
+    try:
+        create_message(**kwargs)
+    except Exception as exc:
+        logger.warning("market create_message failed: %s", exc, exc_info=True)
+        return False
+    return True
+
+
+def _safe_notify_user(user_id: int, payload: dict, *, log_context: str) -> None:
+    try:
+        notify_user(user_id, payload, log_context=log_context)
+    except Exception as exc:
+        logger.warning("market notify_user failed: user_id=%s error=%s", user_id, exc, exc_info=True)
+
+
+def _normalize_expire_limit(limit: int | None) -> int | None:
+    if limit is None:
+        return None
+    try:
+        parsed = int(limit)
+    except (TypeError, ValueError):
+        raise ValueError("limit 必须是整数")
+    if parsed <= 0:
+        return 0
+    return parsed
 
 
 def get_listing_fee(duration: int) -> int:
@@ -74,11 +108,13 @@ def validate_listing_price(item_template: ItemTemplate, unit_price: int) -> None
     Raises:
         ValueError: 如果价格不合法
     """
-    min_price = int(item_template.price * MIN_PRICE_MULTIPLIER)
-    if unit_price < min_price:
+    template_price = max(0, _safe_int(getattr(item_template, "price", 0), 0))
+    normalized_unit_price = _safe_int(unit_price, -1)
+    min_price = int(template_price * MIN_PRICE_MULTIPLIER)
+    if normalized_unit_price < min_price:
         raise ValueError(f"单价不能低于 {min_price} 银两")
 
-    if unit_price > MAX_PRICE:
+    if normalized_unit_price > MAX_PRICE:
         raise ValueError(f"单价不能超过 {MAX_PRICE:,} 银两")
 
 
@@ -110,6 +146,10 @@ def create_listing(
     Raises:
         ValueError: 验证失败时抛出异常
     """
+    quantity = _safe_int(quantity, 0)
+    unit_price = _safe_int(unit_price, -1)
+    duration = _safe_int(duration, -1)
+
     # 验证时长
     if duration not in LISTING_FEES:
         raise ValueError(f"无效的上架时长，请选择 {list(LISTING_FEES.keys())}")
@@ -375,7 +415,7 @@ def purchase_listing(buyer: Manor, listing_id: int) -> MarketTransaction:
 
     # 事务外发送邮件通知，减少锁持有时间
     # 买家通知（物品已直接添加到仓库，邮件仅作通知用途，不含附件）
-    create_message(
+    buyer_mail_sent = _safe_create_message(
         manor=buyer,
         kind="system",
         title="【交易成功】您购买的物品已送达",
@@ -394,8 +434,9 @@ def purchase_listing(buyer: Manor, listing_id: int) -> MarketTransaction:
     )
 
     # 卖家通知（仅玩家卖家，银两已直接发放，邮件仅作通知）
+    seller_mail_sent = False
     if listing.seller_id:
-        create_message(
+        seller_mail_sent = _safe_create_message(
             manor=listing.seller,
             kind="system",
             title="【交易成功】您的物品已售出",
@@ -414,7 +455,7 @@ def purchase_listing(buyer: Manor, listing_id: int) -> MarketTransaction:
         )
 
         # WebSocket 即时推送通知卖家
-        notify_user(
+        _safe_notify_user(
             listing.seller.user_id,
             {
                 "kind": "market_sold",
@@ -428,8 +469,8 @@ def purchase_listing(buyer: Manor, listing_id: int) -> MarketTransaction:
         )
 
     # 标记邮件已发送
-    transaction_record.buyer_mail_sent = True
-    transaction_record.seller_mail_sent = True
+    transaction_record.buyer_mail_sent = buyer_mail_sent
+    transaction_record.seller_mail_sent = seller_mail_sent
     transaction_record.save(update_fields=["buyer_mail_sent", "seller_mail_sent"])
 
     return transaction_record
@@ -502,7 +543,7 @@ def cancel_listing(manor: Manor, listing_id: int) -> Dict:
     }
 
 
-def _expire_listings_queryset(expired_listings: QuerySet, log_label: str, limit: int = None) -> int:
+def _expire_listings_queryset(expired_listings: QuerySet, log_label: str, limit: int | None = None) -> int:
     """处理过期挂单，通过邮件退回物品并删除挂单记录。
 
     安全修复：先发送邮件确保物品退还成功，再删除挂单记录。
@@ -511,11 +552,15 @@ def _expire_listings_queryset(expired_listings: QuerySet, log_label: str, limit:
     优化：
     - 支持 limit 参数，防止单次处理过多导致超时或数据库锁竞争
     """
+    normalized_limit = _normalize_expire_limit(limit)
+    if normalized_limit == 0:
+        return 0
+
     # 如果指定了 limit，先切片限制查询数量
     # 注意：在切片前通常应该有排序，这里隐式依赖数据库默认排序或模型Meta排序
     # 为了确定性，显式按过期时间排序
-    if limit:
-        expired_listings = expired_listings.order_by("expires_at")[:limit]
+    if normalized_limit:
+        expired_listings = expired_listings.order_by("expires_at")[:normalized_limit]
 
     count = 0
     for listing in expired_listings.select_related("seller", "item_template"):
@@ -574,7 +619,7 @@ def _expire_listings_queryset(expired_listings: QuerySet, log_label: str, limit:
                 listing.delete()
 
                 # WebSocket 即时推送通知卖家
-                notify_user(
+                _safe_notify_user(
                     seller.user_id,
                     {
                         "kind": "market_expired",

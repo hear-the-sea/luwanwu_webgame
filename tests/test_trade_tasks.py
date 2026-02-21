@@ -5,7 +5,12 @@ from django.utils import timezone
 
 from trade.models import ShopStock
 from trade.services.shop_config import ShopItemConfig
-from trade.tasks import refresh_shop_stock
+from trade.tasks import (
+    create_auction_round_task,
+    process_expired_listings,
+    refresh_shop_stock,
+    settle_auction_round_task,
+)
 
 
 @pytest.mark.django_db
@@ -55,3 +60,153 @@ def test_refresh_shop_stock_returns_failure_summary(monkeypatch):
     assert result == "refreshed 1 items, 1 failed"
 
     assert ShopStock.objects.get(item_key="ok").current_stock == 2
+
+
+@pytest.mark.django_db
+def test_settle_auction_round_task_does_not_fail_when_create_round_dispatch_fails(monkeypatch):
+    monkeypatch.setattr(
+        "trade.services.auction_service.settle_auction_round",
+        lambda: {"settled": 1, "sold": 2, "unsold": 0, "total_gold_bars": 20},
+    )
+
+    def _raise_dispatch_error():
+        raise RuntimeError("dispatch failed")
+
+    monkeypatch.setattr("trade.tasks.create_auction_round_task.delay", _raise_dispatch_error)
+
+    result = settle_auction_round_task.run()
+    assert "结算完成" in result
+    assert "售出 2 件" in result
+
+
+@pytest.mark.django_db
+def test_refresh_shop_stock_skips_invalid_item_configs(monkeypatch):
+    config_list = [
+        ShopItemConfig(item_key="", price=None, stock=5, daily_refresh=True),
+        ShopItemConfig(item_key="bad_stock", price=None, stock=-3, daily_refresh=True),
+        ShopItemConfig(item_key="daily_item", price=None, stock=7, daily_refresh=True),
+    ]
+
+    monkeypatch.setattr("trade.tasks.reload_shop_config", lambda: None)
+    monkeypatch.setattr("trade.tasks.get_shop_config", lambda: list(config_list))
+
+    result = refresh_shop_stock.run()
+    assert result == "refreshed 1 items"
+    assert ShopStock.objects.filter(item_key="daily_item", current_stock=7).exists()
+    assert not ShopStock.objects.filter(item_key="bad_stock").exists()
+
+
+@pytest.mark.django_db
+def test_refresh_shop_stock_retries_when_loading_config_fails(monkeypatch):
+    monkeypatch.setattr("trade.tasks.reload_shop_config", lambda: None)
+    monkeypatch.setattr(
+        "trade.tasks.get_shop_config",
+        lambda: (_ for _ in ()).throw(RuntimeError("config failed")),
+    )
+
+    called = {"retry": 0}
+
+    def _retry(exc):
+        called["retry"] += 1
+        raise RuntimeError(f"retry called: {exc}")
+
+    monkeypatch.setattr(refresh_shop_stock, "retry", _retry)
+
+    with pytest.raises(RuntimeError, match="retry called"):
+        refresh_shop_stock.run()
+
+    assert called["retry"] == 1
+
+
+@pytest.mark.django_db
+def test_process_expired_listings_coerces_invalid_count(monkeypatch):
+    monkeypatch.setattr("trade.services.market_service.expire_listings", lambda: "invalid")
+    result = process_expired_listings.run()
+    assert result == "处理了 0 个过期挂单"
+
+
+@pytest.mark.django_db
+def test_process_expired_listings_retries_on_error(monkeypatch):
+    monkeypatch.setattr(
+        "trade.services.market_service.expire_listings",
+        lambda: (_ for _ in ()).throw(RuntimeError("expire failed")),
+    )
+
+    called = {"retry": 0}
+
+    def _retry(exc):
+        called["retry"] += 1
+        raise RuntimeError(f"retry called: {exc}")
+
+    monkeypatch.setattr(process_expired_listings, "retry", _retry)
+
+    with pytest.raises(RuntimeError, match="retry called"):
+        process_expired_listings.run()
+
+    assert called["retry"] == 1
+
+
+@pytest.mark.django_db
+def test_settle_auction_round_task_tolerates_non_dict_stats(monkeypatch):
+    monkeypatch.setattr("trade.services.auction_service.settle_auction_round", lambda: "invalid")
+    monkeypatch.setattr(
+        settle_auction_round_task,
+        "retry",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("retry should not be called")),
+    )
+
+    result = settle_auction_round_task.run()
+    assert result == "没有需要结算的拍卖轮次"
+
+
+@pytest.mark.django_db
+def test_settle_auction_round_task_coerces_invalid_stats_numbers(monkeypatch):
+    monkeypatch.setattr(
+        "trade.services.auction_service.settle_auction_round",
+        lambda: {"settled": "1", "sold": "x", "unsold": None, "total_gold_bars": -7},
+    )
+    monkeypatch.setattr("trade.tasks.create_auction_round_task.delay", lambda: None)
+
+    result = settle_auction_round_task.run()
+    assert "结算完成" in result
+    assert "售出 0 件" in result
+    assert "流拍 0 件" in result
+    assert "共 0 金条" in result
+
+
+@pytest.mark.django_db
+def test_create_auction_round_task_tolerates_slots_count_error(monkeypatch):
+    class _Slots:
+        def count(self):
+            raise RuntimeError("count failed")
+
+    class _Round:
+        round_number = 3
+        slots = _Slots()
+
+    monkeypatch.setattr("trade.services.auction_config.reload_auction_config", lambda: None)
+    monkeypatch.setattr("trade.services.auction_service.create_auction_round", lambda: _Round())
+
+    result = create_auction_round_task.run()
+    assert result == "创建拍卖轮次 #3，拍卖位数量: 0"
+
+
+@pytest.mark.django_db
+def test_create_auction_round_task_retries_when_reload_fails(monkeypatch):
+    monkeypatch.setattr(
+        "trade.services.auction_config.reload_auction_config",
+        lambda: (_ for _ in ()).throw(RuntimeError("reload failed")),
+    )
+
+    called = {"retry": 0}
+
+    def _retry(exc):
+        called["retry"] += 1
+        raise RuntimeError(f"retry called: {exc}")
+
+    monkeypatch.setattr(create_auction_round_task, "retry", _retry)
+
+    with pytest.raises(RuntimeError, match="retry called"):
+        create_auction_round_task.run()
+
+    assert called["retry"] == 1

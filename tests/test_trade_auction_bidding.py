@@ -174,3 +174,61 @@ def test_place_bid_allows_same_player_to_raise_bid_and_unfreezes_previous(monkey
     assert bid2.status == AuctionBid.Status.ACTIVE
     assert bid2.frozen_record.is_frozen is True
     assert auction_service.get_available_gold_bars(manor) == 5
+
+
+@pytest.mark.django_db
+def test_place_bid_succeeds_when_outbid_notification_fails(monkeypatch, django_user_model):
+    user1 = django_user_model.objects.create_user(username="auction_notify_fail_1", password="pass12345")
+    user2 = django_user_model.objects.create_user(username="auction_notify_fail_2", password="pass12345")
+    manor1 = ensure_manor(user1)
+    manor2 = ensure_manor(user2)
+    _set_gold_bars(manor1, 10)
+    _set_gold_bars(manor2, 10)
+
+    slot = _create_active_round_and_slot(item_key="auction_notify_fail_item", quantity=1)
+
+    auction_service.place_bid(manor1, slot.id, 5)
+    monkeypatch.setattr("trade.services.auction.bidding.create_message", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("msg down")))
+    monkeypatch.setattr("trade.services.auction.bidding.notify_user", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("ws down")))
+
+    bid2, _ = auction_service.place_bid(manor2, slot.id, 6)
+    bid2.refresh_from_db()
+
+    assert bid2.status == AuctionBid.Status.ACTIVE
+    assert bid2.frozen_record.is_frozen is True
+
+
+@pytest.mark.django_db
+def test_validate_bid_amount_rejects_non_positive_amount(django_user_model):
+    user = django_user_model.objects.create_user(username="auction_validate_non_positive", password="pass12345")
+    _ = ensure_manor(user)
+
+    slot = _create_active_round_and_slot(item_key="auction_validate_non_positive_item")
+    slot.bid_count = 0
+
+    with pytest.raises(ValueError, match="出价金额必须大于0"):
+        auction_service.validate_bid_amount(slot, 0)
+
+
+@pytest.mark.django_db
+def test_place_bid_rejects_invalid_amount_type(django_user_model):
+    user = django_user_model.objects.create_user(username="auction_invalid_amount_type", password="pass12345")
+    manor = ensure_manor(user)
+    _set_gold_bars(manor, 10)
+    slot = _create_active_round_and_slot(item_key="auction_invalid_amount_type_item")
+
+    with pytest.raises(ValueError, match="出价金额必须大于0"):
+        auction_service.place_bid(manor, slot.id, "invalid")
+
+
+@pytest.mark.django_db
+def test_place_bid_rejects_invalid_winner_count_configuration(django_user_model):
+    user = django_user_model.objects.create_user(username="auction_invalid_winner_count", password="pass12345")
+    manor = ensure_manor(user)
+    _set_gold_bars(manor, 10)
+    slot = _create_active_round_and_slot(item_key="auction_invalid_winner_count_item", quantity=1)
+    slot.quantity = 0
+    slot.save(update_fields=["quantity"])
+
+    with pytest.raises(ValueError, match="拍卖位配置异常"):
+        auction_service.place_bid(manor, slot.id, 5)

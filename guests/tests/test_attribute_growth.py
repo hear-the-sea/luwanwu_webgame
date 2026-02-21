@@ -4,7 +4,16 @@
 import random
 from django.test import TestCase
 from django.contrib.auth import get_user_model
-from guests.models import Guest, GuestTemplate, GuestRarity, GuestArchetype
+from guests.models import (
+    CIVIL_FORCE_WEIGHT,
+    CIVIL_INTELLECT_WEIGHT,
+    MILITARY_FORCE_WEIGHT,
+    MILITARY_INTELLECT_WEIGHT,
+    Guest,
+    GuestArchetype,
+    GuestRarity,
+    GuestTemplate,
+)
 from guests.utils.attribute_growth import (
     allocate_level_up_attributes,
     apply_attribute_growth,
@@ -279,8 +288,8 @@ class TestStatBlockWithoutMultiplier(TestCase):
 
         stats = guest.stat_block()
 
-        # 武将攻击 = 武力×1.0 + 智力×0.2
-        expected_attack = int(400 * 1.0 + 200 * 0.2)
+        # 武将攻击 = 武力×MILITARY_FORCE_WEIGHT + 智力×MILITARY_INTELLECT_WEIGHT
+        expected_attack = int(400 * MILITARY_FORCE_WEIGHT + 200 * MILITARY_INTELLECT_WEIGHT)
         self.assertEqual(stats["attack"], expected_attack)
         self.assertEqual(stats["defense"], 300)
         self.assertEqual(stats["intellect"], 200)
@@ -305,8 +314,8 @@ class TestStatBlockWithoutMultiplier(TestCase):
 
         stats = guest.stat_block()
 
-        # 文官攻击 = 武力×0.8 + 智力×0.3
-        expected_attack = int(200 * 0.8 + 500 * 0.3)
+        # 文官攻击 = 武力×CIVIL_FORCE_WEIGHT + 智力×CIVIL_INTELLECT_WEIGHT
+        expected_attack = int(200 * CIVIL_FORCE_WEIGHT + 500 * CIVIL_INTELLECT_WEIGHT)
         self.assertEqual(stats["attack"], expected_attack)
 
     def test_no_multiplier_applied(self):

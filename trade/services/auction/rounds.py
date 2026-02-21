@@ -31,6 +31,49 @@ from .gold_bars import consume_frozen_gold_bars, unfreeze_gold_bars
 logger = logging.getLogger(__name__)
 
 
+def _safe_int(value, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_cache_add(key: str, value: str, timeout: int) -> bool:
+    try:
+        return bool(cache.add(key, value, timeout=timeout))
+    except Exception as exc:
+        logger.warning("cache.add failed for key=%s, fallback to unlocked mode: %s", key, exc, exc_info=True)
+        # 降级为“无分布式锁”模式，避免缓存故障导致功能不可用。
+        return True
+
+
+def _safe_cache_get(key: str, default=None):
+    try:
+        return cache.get(key, default)
+    except Exception as exc:
+        logger.warning("cache.get failed for key=%s: %s", key, exc, exc_info=True)
+        return default
+
+
+def _safe_cache_delete(key: str) -> None:
+    try:
+        cache.delete(key)
+    except Exception as exc:
+        logger.warning("cache.delete failed for key=%s: %s", key, exc, exc_info=True)
+
+
+def _safe_notify_user(user_id: int, payload: dict, *, log_context: str) -> None:
+    try:
+        notify_user(user_id, payload, log_context=log_context)
+    except Exception as exc:
+        logger.warning(
+            "auction winning notify_user failed: user_id=%s error=%s",
+            user_id,
+            exc,
+            exc_info=True,
+        )
+
+
 def get_current_round() -> Optional[AuctionRound]:
     """获取当前进行中的拍卖轮次。"""
     return AuctionRound.objects.filter(status=AuctionRound.Status.ACTIVE).first()
@@ -54,7 +97,7 @@ def create_auction_round(
         get_enabled_items_func: Optional dependency injection for enabled auction items.
     """
     lock_value = str(uuid.uuid4())
-    lock_acquired = cache.add(AUCTION_CREATE_LOCK_KEY, lock_value, timeout=AUCTION_CREATE_LOCK_TIMEOUT)
+    lock_acquired = _safe_cache_add(AUCTION_CREATE_LOCK_KEY, lock_value, timeout=AUCTION_CREATE_LOCK_TIMEOUT)
     if not lock_acquired:
         logger.info("拍卖轮次创建锁未获取，跳过本次创建")
         return None
@@ -125,8 +168,8 @@ def create_auction_round(
 
         return auction_round
     finally:
-        if cache.get(AUCTION_CREATE_LOCK_KEY) == lock_value:
-            cache.delete(AUCTION_CREATE_LOCK_KEY)
+        if _safe_cache_get(AUCTION_CREATE_LOCK_KEY) == lock_value:
+            _safe_cache_delete(AUCTION_CREATE_LOCK_KEY)
 
 
 def settle_auction_round(
@@ -143,7 +186,7 @@ def settle_auction_round(
     stats = {"settled": 0, "sold": 0, "unsold": 0, "total_gold_bars": 0}
 
     lock_value = str(uuid.uuid4())
-    lock_acquired = cache.add(AUCTION_SETTLE_LOCK_KEY, lock_value, timeout=AUCTION_SETTLE_LOCK_TIMEOUT)
+    lock_acquired = _safe_cache_add(AUCTION_SETTLE_LOCK_KEY, lock_value, timeout=AUCTION_SETTLE_LOCK_TIMEOUT)
     if not lock_acquired:
         logger.info("拍卖结算锁未获取，跳过本次结算")
         return stats
@@ -160,7 +203,7 @@ def settle_auction_round(
                 auction_round = (
                     AuctionRound.objects.select_for_update()
                     .filter(
-                        status__in=[AuctionRound.Status.ACTIVE, AuctionRound.Status.SETTLING],
+                        status=AuctionRound.Status.ACTIVE,
                         end_at__lte=timezone.now(),
                     )
                     .order_by("end_at", "id")
@@ -186,9 +229,15 @@ def settle_auction_round(
         for slot in slots:
             try:
                 result = settle_one(slot)
-                if result["sold"]:
+                if not isinstance(result, dict):
+                    raise ValueError(f"invalid settle slot result for slot={slot.id}: {result!r}")
+
+                if result.get("skipped"):
+                    continue
+
+                if result.get("sold"):
                     stats["sold"] += 1
-                    stats["total_gold_bars"] += result["price"]
+                    stats["total_gold_bars"] += max(0, _safe_int(result.get("price", 0), 0))
                 else:
                     stats["unsold"] += 1
             except Exception as exc:
@@ -207,6 +256,12 @@ def settle_auction_round(
 
         with transaction.atomic():
             locked_round = AuctionRound.objects.select_for_update().get(pk=auction_round.pk)
+
+            # 并发保护：若仍有 ACTIVE 拍卖位，说明可能有其他结算进程在处理，不提前完结轮次。
+            if AuctionSlot.objects.filter(round=locked_round, status=AuctionSlot.Status.ACTIVE).exists():
+                logger.info("拍卖轮次 #%s 仍有未完成拍卖位，保持 SETTLING 状态", locked_round.round_number)
+                return stats
+
             locked_round.status = AuctionRound.Status.COMPLETED
             locked_round.settled_at = timezone.now()
             locked_round.save(update_fields=["status", "settled_at"])
@@ -219,8 +274,21 @@ def settle_auction_round(
         )
         return stats
     finally:
-        if cache.get(AUCTION_SETTLE_LOCK_KEY) == lock_value:
-            cache.delete(AUCTION_SETTLE_LOCK_KEY)
+        if _safe_cache_get(AUCTION_SETTLE_LOCK_KEY) == lock_value:
+            _safe_cache_delete(AUCTION_SETTLE_LOCK_KEY)
+
+
+def _refund_losing_bids(losing_bids: list[AuctionBid]) -> None:
+    for losing_bid in losing_bids:
+        try:
+            if losing_bid.frozen_record and losing_bid.frozen_record.is_frozen:
+                unfreeze_gold_bars(losing_bid.frozen_record)
+        except FrozenGoldBar.DoesNotExist:
+            pass
+
+        losing_bid.status = AuctionBid.Status.REFUNDED
+        losing_bid.refunded_at = timezone.now()
+        losing_bid.save(update_fields=["status", "refunded_at"])
 
 
 def _settle_slot(slot: AuctionSlot) -> Dict:
@@ -230,10 +298,20 @@ def _settle_slot(slot: AuctionSlot) -> Dict:
     with transaction.atomic():
         slot = AuctionSlot.objects.select_for_update().get(pk=slot.pk)
 
+        if slot.status != AuctionSlot.Status.ACTIVE:
+            return {**result, "skipped": True}
+
         ranking = get_slot_ranking(slot)
-        winner_count = slot.quantity
+        winner_count = _safe_int(getattr(slot, "quantity", 0), 0)
 
         if not ranking:
+            slot.status = AuctionSlot.Status.UNSOLD
+            slot.save(update_fields=["status"])
+            return result
+
+        if winner_count <= 0:
+            logger.error("拍卖位配置异常: slot_id=%s quantity=%s", slot.id, slot.quantity)
+            _refund_losing_bids(ranking)
             slot.status = AuctionSlot.Status.UNSOLD
             slot.save(update_fields=["status"])
             return result
@@ -268,16 +346,7 @@ def _settle_slot(slot: AuctionSlot) -> Dict:
         result["winner_count"] = actual_winner_count
 
         # Mark losers and update their bid status to keep data consistent.
-        for losing_bid in ranking[winner_count:]:
-            try:
-                if losing_bid.frozen_record and losing_bid.frozen_record.is_frozen:
-                    unfreeze_gold_bars(losing_bid.frozen_record)
-            except FrozenGoldBar.DoesNotExist:
-                pass
-
-            losing_bid.status = AuctionBid.Status.REFUNDED
-            losing_bid.refunded_at = timezone.now()
-            losing_bid.save(update_fields=["status", "refunded_at"])
+        _refund_losing_bids(ranking[winner_count:])
 
         slot.status = AuctionSlot.Status.SOLD
         slot.save(update_fields=["status"])
@@ -337,7 +406,7 @@ def _send_winning_notification_vickrey(
         },
     )
 
-    notify_user(
+    _safe_notify_user(
         winner.user_id,
         {
             "kind": "auction_won",

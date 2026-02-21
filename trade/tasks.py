@@ -14,6 +14,30 @@ from .services.shop_config import get_shop_config, reload_shop_config
 logger = logging.getLogger(__name__)
 
 
+def _safe_int(value, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _coerce_non_negative_int(value, default: int = 0) -> int:
+    parsed = _safe_int(value, default)
+    return parsed if parsed >= 0 else default
+
+
+def _normalize_settlement_stats(stats) -> tuple[int, int, int, int]:
+    if not isinstance(stats, dict):
+        logger.warning("settle_auction_round returned non-dict stats: %r", stats)
+        return 0, 0, 0, 0
+
+    settled = _coerce_non_negative_int(stats.get("settled", 0), 0)
+    sold = _coerce_non_negative_int(stats.get("sold", 0), 0)
+    unsold = _coerce_non_negative_int(stats.get("unsold", 0), 0)
+    total_gold_bars = _coerce_non_negative_int(stats.get("total_gold_bars", 0), 0)
+    return settled, sold, unsold, total_gold_bars
+
+
 @shared_task(name="trade.refresh_shop_stock", bind=True, max_retries=2, default_retry_delay=60)
 def refresh_shop_stock(self):
     """
@@ -32,17 +56,24 @@ def refresh_shop_stock(self):
         failed_items = []
 
         for item in config_list:
+            item_key = str(getattr(item, "item_key", "") or "").strip()
+            daily_refresh = bool(getattr(item, "daily_refresh", False))
+            stock = _coerce_non_negative_int(getattr(item, "stock", 0), 0)
+
             # 只刷新设置了 daily_refresh 且有限库存的商品
-            if item.daily_refresh and item.stock > 0:
+            if not item_key:
+                logger.warning("Skip refresh shop stock for invalid item config: %r", item)
+                continue
+            if daily_refresh and stock > 0:
                 try:
                     ShopStock.objects.update_or_create(
-                        item_key=item.item_key,
-                        defaults={"current_stock": item.stock, "last_refresh": today},
+                        item_key=item_key,
+                        defaults={"current_stock": stock, "last_refresh": today},
                     )
                     refreshed_count += 1
                 except Exception as e:
-                    logger.exception("Failed to refresh stock for item %s: %s", item.item_key, e)
-                    failed_items.append({"item_key": item.item_key, "error": str(e)})
+                    logger.exception("Failed to refresh stock for item %s: %s", item_key, e)
+                    failed_items.append({"item_key": item_key, "error": str(e)})
 
         # 记录失败统计，便于监控告警
         if failed_items:
@@ -67,7 +98,7 @@ def process_expired_listings(self):
     try:
         from .services.market_service import expire_listings
 
-        count = expire_listings()
+        count = _coerce_non_negative_int(expire_listings(), 0)
         return f"处理了 {count} 个过期挂单"
     except Exception as exc:
         logger.exception("Failed to process expired listings: %s", exc)
@@ -92,19 +123,22 @@ def settle_auction_round_task(self):
     try:
         from .services.auction_service import settle_auction_round
 
-        stats = settle_auction_round()
+        settled, sold, unsold, total_gold_bars = _normalize_settlement_stats(settle_auction_round())
 
-        if stats["settled"] > 0:
+        if settled > 0:
             # 结算完成后触发创建新轮次
-            create_auction_round_task.delay()
+            try:
+                create_auction_round_task.delay()
+            except Exception as exc:
+                logger.warning("拍卖结算后触发新轮次任务失败: %s", exc, exc_info=True)
             logger.info(
-                f"拍卖轮次结算完成：售出 {stats['sold']} 件，"
-                f"流拍 {stats['unsold']} 件，"
-                f"共收取 {stats['total_gold_bars']} 金条"
+                f"拍卖轮次结算完成：售出 {sold} 件，"
+                f"流拍 {unsold} 件，"
+                f"共收取 {total_gold_bars} 金条"
             )
             return (
-                f"结算完成：售出 {stats['sold']} 件，流拍 {stats['unsold']} 件，"
-                f"共 {stats['total_gold_bars']} 金条"
+                f"结算完成：售出 {sold} 件，流拍 {unsold} 件，"
+                f"共 {total_gold_bars} 金条"
             )
         else:
             return "没有需要结算的拍卖轮次"
@@ -134,13 +168,24 @@ def create_auction_round_task(self):
         auction_round = create_auction_round()
 
         if auction_round:
+            round_number = _safe_int(getattr(auction_round, "round_number", 0), 0)
+            try:
+                slot_count = _coerce_non_negative_int(auction_round.slots.count(), 0)
+            except Exception as exc:
+                logger.warning(
+                    "读取拍卖轮次槽位数失败: round=%s error=%s",
+                    round_number,
+                    exc,
+                    exc_info=True,
+                )
+                slot_count = 0
             logger.info(
-                f"创建拍卖轮次 #{auction_round.round_number}，"
-                f"共 {auction_round.slots.count()} 个拍卖位"
+                f"创建拍卖轮次 #{round_number}，"
+                f"共 {slot_count} 个拍卖位"
             )
             return (
-                f"创建拍卖轮次 #{auction_round.round_number}，"
-                f"拍卖位数量: {auction_round.slots.count()}"
+                f"创建拍卖轮次 #{round_number}，"
+                f"拍卖位数量: {slot_count}"
             )
         else:
             return "已有进行中的拍卖轮次或无可用商品，跳过创建"

@@ -2,9 +2,10 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.db import transaction
 
-from gameplay.models import ResourceEvent
+from gameplay.models import InventoryItem, ItemTemplate, ResourceEvent
 from gameplay.services.manor import ensure_manor
 from gameplay.services.raid.combat import _apply_loot
+from gameplay.services.raid.combat import _format_battle_rewards_description, _format_loot_description, _grant_loot_items
 
 User = get_user_model()
 
@@ -39,3 +40,32 @@ def test_apply_loot_clamps_to_available_resources():
         )
     }
     assert deltas == {"grain": -50, "silver": -10}
+
+
+@pytest.mark.django_db
+def test_grant_loot_items_normalizes_quantities():
+    user = User.objects.create_user(username="raid_loot_grant", password="pass123")
+    manor = ensure_manor(user)
+    template = ItemTemplate.objects.create(key="raid_loot_item", name="Raid Loot", tradeable=True)
+
+    _grant_loot_items(
+        manor,
+        {
+            "raid_loot_item": "2",
+            "raid_loot_item_bad": -3,
+            "": 5,
+        },
+    )
+
+    item = InventoryItem.objects.get(
+        manor=manor,
+        template=template,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+    assert item.quantity == 2
+
+
+def test_formatters_tolerate_invalid_mapping_shapes():
+    assert _format_loot_description(["bad"], ["shape"]) == "无"
+    assert _format_battle_rewards_description(["bad"]) == ""
+    assert "经验果 x3" in _format_battle_rewards_description({"exp_fruit": "3", "equipment": ["bad"]})

@@ -177,9 +177,12 @@ def test_draw_pie_raises_when_gold_insufficient():
     with patch.object(jail_service.JailPrisoner, "objects") as mock_qs:
         mock_qs.select_for_update.return_value.filter.return_value.first.return_value = prisoner
 
-        with patch.object(jail_service, "get_item_quantity", return_value=0):
-            with pytest.raises(ValueError, match="金条不足"):
-                jail_service.draw_pie(manor, prisoner_id=1)
+        # 修复：Mock InventoryItem 查询链返回 None，避免真实 ORM 尝试解析 SimpleNamespace
+        with patch("gameplay.models.InventoryItem") as mock_inventory_item:
+            mock_inventory_item.objects.select_for_update.return_value.filter.return_value.first.return_value = None
+            with patch.object(jail_service, "get_item_quantity", return_value=0):
+                with pytest.raises(ValueError, match="金条不足"):
+                    jail_service.draw_pie(manor, prisoner_id=1)
 
 
 @patch("gameplay.services.jail.Manor")
@@ -239,7 +242,7 @@ def test_draw_pie_loyalty_cannot_go_below_zero(mock_manor_model):
 
 
 @patch("gameplay.services.jail.Manor")
-def test_draw_pie_raises_when_gold_insufficient(mock_manor_model):
+def test_draw_pie_raises_when_gold_insufficient_with_manor_lock(mock_manor_model):
     """Test that ValueError is raised when gold bars are insufficient."""
     manor = SimpleNamespace(pk=1)
     mock_manor_model.objects.select_for_update.return_value.get.return_value = manor

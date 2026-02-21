@@ -30,6 +30,33 @@ from .travel import _dismiss_marching_raids_if_protected
 logger = logging.getLogger(__name__)
 
 
+def _normalize_mapping(raw: Any) -> Dict[str, Any]:
+    if isinstance(raw, dict):
+        return raw
+    return {}
+
+
+def _coerce_positive_int(raw: Any, default: int = 0) -> int:
+    try:
+        parsed = int(raw)
+    except (TypeError, ValueError):
+        parsed = default
+    return parsed if parsed > 0 else 0
+
+
+def _normalize_positive_int_mapping(raw: Any) -> Dict[str, int]:
+    data = _normalize_mapping(raw)
+    normalized: Dict[str, int] = {}
+    for key, value in data.items():
+        normalized_key = str(key or "").strip()
+        if not normalized_key:
+            continue
+        normalized_value = _coerce_positive_int(value, 0)
+        if normalized_value > 0:
+            normalized[normalized_key] = normalized_value
+    return normalized
+
+
 def _load_locked_raid_run(run_pk: int) -> Optional[RaidRun]:
     return (
         RaidRun.objects.select_for_update()
@@ -79,7 +106,8 @@ def _apply_capture_reward(locked_run: RaidRun, report, is_attacker_victory: bool
     try:
         capture_info = _try_capture_guest(locked_run, report, is_attacker_victory)
         if capture_info:
-            locked_run.battle_rewards = {**(locked_run.battle_rewards or {}), "capture": capture_info}
+            battle_rewards = _normalize_mapping(locked_run.battle_rewards)
+            locked_run.battle_rewards = {**battle_rewards, "capture": capture_info}
     except Exception as exc:
         logger.warning(
             "raid capture failed: run_id=%s attacker=%s defender=%s error=%s",
@@ -95,15 +123,18 @@ def _apply_salvage_reward(locked_run: RaidRun, report, is_attacker_victory: bool
     from gameplay.services.battle_salvage import calculate_battle_salvage, grant_battle_salvage
 
     exp_fruit_count, equipment_recovery = calculate_battle_salvage(report)
-    if exp_fruit_count <= 0 and not equipment_recovery:
+    normalized_exp_fruit_count = _coerce_positive_int(exp_fruit_count, 0)
+    normalized_equipment_recovery = _normalize_positive_int_mapping(equipment_recovery)
+    if normalized_exp_fruit_count <= 0 and not normalized_equipment_recovery:
         return
 
     winner_manor = locked_run.attacker if is_attacker_victory else locked_run.defender
-    grant_battle_salvage(winner_manor, exp_fruit_count, equipment_recovery)
+    grant_battle_salvage(winner_manor, normalized_exp_fruit_count, normalized_equipment_recovery)
+    battle_rewards = _normalize_mapping(locked_run.battle_rewards)
     locked_run.battle_rewards = {
-        **(locked_run.battle_rewards or {}),
-        "exp_fruit": exp_fruit_count,
-        "equipment": equipment_recovery,
+        **battle_rewards,
+        "exp_fruit": normalized_exp_fruit_count,
+        "equipment": normalized_equipment_recovery,
     }
 
 
@@ -309,7 +340,7 @@ def _execute_raid_battle(run: RaidRun):
     attacker = run.attacker
     defender = run.defender
     guests = list(run.guests.select_for_update().select_related("template").prefetch_related("skills"))
-    loadout = run.troop_loadout or {}
+    loadout = _normalize_positive_int_mapping(run.troop_loadout)
 
     # 到达时刻快照：防守方为庄园中未出征的门客与护院（仅取空闲门客）
     defender_guests = list(
@@ -392,14 +423,16 @@ def _apply_prestige_changes(run: RaidRun, is_attacker_victory: bool) -> None:
 def _send_raid_battle_messages(run: RaidRun) -> None:
     """发送踢馆战报消息"""
     is_victory = run.is_attacker_victory
-    battle_rewards = run.battle_rewards or {}
+    battle_rewards = _normalize_mapping(run.battle_rewards)
+    loot_resources = _normalize_positive_int_mapping(run.loot_resources)
+    loot_items = _normalize_positive_int_mapping(run.loot_items)
     battle_rewards_desc = _format_battle_rewards_description(battle_rewards)
     capture_desc = _format_capture_description(battle_rewards.get("capture"))
 
     # 进攻方消息
     if is_victory:
         attacker_title = "踢馆战报 - 踢馆胜利"
-        loot_desc = _format_loot_description(run.loot_resources, run.loot_items)
+        loot_desc = _format_loot_description(loot_resources, loot_items)
         attacker_body = f"""对 {run.defender.display_name} 的踢馆行动取得胜利！
 
 战利品：
@@ -439,7 +472,7 @@ def _send_raid_battle_messages(run: RaidRun) -> None:
     # 防守方消息
     if is_victory:
         defender_title = "踢馆战报 - 防守失败"
-        loot_desc = _format_loot_description(run.loot_resources, run.loot_items)
+        loot_desc = _format_loot_description(loot_resources, loot_items)
         defender_body = f"""来自 {run.attacker.location_display} 的 {run.attacker.display_name} 踢馆成功！
 
 损失：

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -112,6 +113,14 @@ def test_validate_listing_price_accepts_exact_maximum():
     market_service.validate_listing_price(item_template, 10000000)
 
 
+def test_validate_listing_price_handles_non_integer_template_price():
+    """Test that malformed template price does not crash validation."""
+    item_template = SimpleNamespace(price="bad")
+
+    # min price should be treated as 0
+    market_service.validate_listing_price(item_template, 10)
+
+
 # ============ create_listing validation tests ============
 
 
@@ -168,6 +177,38 @@ def test_create_listing_rejects_negative_quantity():
 
         with pytest.raises(ValueError, match="数量必须大于0"):
             market_service.create_listing(manor, "item", -1, 1000, 7200)
+
+
+def test_create_listing_rejects_non_integer_quantity():
+    """Test that non-integer quantity is rejected safely."""
+    manor = MagicMock()
+    item_template = SimpleNamespace(key="item", tradeable=True, price=100)
+
+    with patch.object(market_service.ItemTemplate, "objects") as mock_qs:
+        mock_qs.filter.return_value.first.return_value = item_template
+
+        with pytest.raises(ValueError, match="数量必须大于0"):
+            market_service.create_listing(manor, "item", cast(int, "abc"), 1000, 7200)
+
+
+def test_create_listing_rejects_non_integer_unit_price():
+    """Test that non-integer price input is rejected safely."""
+    manor = MagicMock()
+    item_template = SimpleNamespace(key="item", tradeable=True, price=100)
+
+    with patch.object(market_service.ItemTemplate, "objects") as mock_qs:
+        mock_qs.filter.return_value.first.return_value = item_template
+
+        with pytest.raises(ValueError, match="单价不能低于"):
+            market_service.create_listing(manor, "item", 1, cast(int, "abc"), 7200)
+
+
+def test_create_listing_rejects_non_integer_duration():
+    """Test that non-integer duration is rejected safely."""
+    manor = MagicMock()
+
+    with pytest.raises(ValueError, match="无效的上架时长"):
+        market_service.create_listing(manor, "item_key", 1, 1000, cast(int, "abc"))
 
 
 # ============ get_active_listings tests ============
@@ -312,3 +353,33 @@ def test_get_tradeable_inventory_filters_correctly():
         assert call_kwargs["manor"] == manor
         assert call_kwargs["template__tradeable"] is True
         assert call_kwargs["quantity__gt"] == 0
+
+
+# ============ expire listings limit handling tests ============
+
+
+def test_expire_listings_queryset_returns_zero_when_limit_zero():
+    queryset = MagicMock()
+
+    result = market_service._expire_listings_queryset(queryset, "test", limit=0)
+
+    assert result == 0
+    queryset.order_by.assert_not_called()
+    queryset.select_related.assert_not_called()
+
+
+def test_expire_listings_queryset_returns_zero_when_limit_negative():
+    queryset = MagicMock()
+
+    result = market_service._expire_listings_queryset(queryset, "test", limit=-10)
+
+    assert result == 0
+    queryset.order_by.assert_not_called()
+    queryset.select_related.assert_not_called()
+
+
+def test_expire_listings_queryset_rejects_non_integer_limit():
+    queryset = MagicMock()
+
+    with pytest.raises(ValueError, match="limit 必须是整数"):
+        market_service._expire_listings_queryset(queryset, "test", limit=cast(int, "abc"))

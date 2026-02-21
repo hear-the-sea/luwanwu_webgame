@@ -32,6 +32,29 @@ from ..constants import MAX_CONCURRENT_TECH_UPGRADES
 logger = logging.getLogger(__name__)
 
 
+def _coerce_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _coerce_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _normalize_templates_data(raw: Any, *, path: str) -> Dict[str, Any]:
+    if raw is None:
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    logger.error("technology templates root must be a mapping: path=%s type=%s", path, type(raw).__name__)
+    return {}
+
+
 @lru_cache(maxsize=1)
 def load_technology_templates() -> Dict[str, Any]:
     """
@@ -44,7 +67,8 @@ def load_technology_templates() -> Dict[str, Any]:
     path = os.path.join(settings.BASE_DIR, "data", "technology_templates.yaml")
     try:
         with open(path, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
+            raw = yaml.safe_load(f)
+        return _normalize_templates_data(raw, path=path)
     except FileNotFoundError:
         logger.error("technology_templates.yaml not found: %s", path)
         return {}
@@ -62,7 +86,15 @@ def _build_technology_index() -> Dict[str, Dict[str, Any]]:
         {tech_key: tech_config} 索引字典
     """
     data = load_technology_templates()
-    return {tech["key"]: tech for tech in data.get("technologies", [])}
+    result: Dict[str, Dict[str, Any]] = {}
+    for tech in data.get("technologies", []) or []:
+        if not isinstance(tech, dict):
+            continue
+        tech_key = str(tech.get("key") or "").strip()
+        if not tech_key:
+            continue
+        result[tech_key] = tech
+    return result
 
 
 @lru_cache(maxsize=1)
@@ -75,9 +107,13 @@ def _build_troop_to_class_index() -> Dict[str, str]:
     """
     data = load_technology_templates()
     index = {}
-    for class_key, class_info in data.get("troop_classes", {}).items():
-        for troop_key in class_info.get("troops", []):
-            index[troop_key] = class_key
+    for class_key, class_info in (data.get("troop_classes", {}) or {}).items():
+        if not isinstance(class_info, dict):
+            continue
+        for troop_key in class_info.get("troops", []) or []:
+            troop_key_str = str(troop_key).strip()
+            if troop_key_str:
+                index[troop_key_str] = str(class_key)
     return index
 
 
@@ -119,19 +155,25 @@ def get_technologies_by_category(category: str) -> List[Dict[str, Any]]:
         技术配置列表
     """
     data = load_technology_templates()
-    return [tech for tech in data.get("technologies", []) if tech.get("category") == category]
+    return [tech for tech in (data.get("technologies", []) or []) if isinstance(tech, dict) and tech.get("category") == category]
 
 
 def get_categories() -> List[Dict[str, Any]]:
     """获取所有技术分类。"""
     data = load_technology_templates()
-    return data.get("categories", [])
+    categories = data.get("categories", [])
+    if isinstance(categories, list):
+        return categories
+    return []
 
 
 def get_troop_classes() -> Dict[str, Any]:
     """获取兵种分类映射。"""
     data = load_technology_templates()
-    return data.get("troop_classes", {})
+    troop_classes = data.get("troop_classes", {})
+    if isinstance(troop_classes, dict):
+        return troop_classes
+    return {}
 
 
 def calculate_upgrade_cost(tech_key: str, current_level: int) -> int:
@@ -157,7 +199,7 @@ def calculate_upgrade_cost(tech_key: str, current_level: int) -> int:
     template = get_technology_template(tech_key)
     if not template:
         return 0
-    base_cost = template.get("base_cost", 8000)
+    base_cost = _coerce_int(template.get("base_cost", 8000), 8000)
     growth = 1.5  # 指数增长系数
     return int(base_cost * (growth ** current_level))
 
@@ -527,16 +569,21 @@ def get_tech_bonus_from_levels(levels: Dict[str, int], effect_type: str, troop_c
     """
     data = load_technology_templates()
     total = 0.0
-    for tech in data.get("technologies", []):
+    for tech in data.get("technologies", []) or []:
+        if not isinstance(tech, dict):
+            continue
         if tech.get("effect_type") != effect_type:
+            continue
+        tech_key = str(tech.get("key") or "").strip()
+        if not tech_key:
             continue
         tech_troop_class = tech.get("troop_class")
         if tech_troop_class and troop_class and tech_troop_class != troop_class:
             continue
-        level = int(levels.get(tech["key"], 0) or 0)
+        level = _coerce_int(levels.get(tech_key, 0), 0)
         if level <= 0:
             continue
-        effect_per_level = tech.get("effect_per_level", 0.10)
+        effect_per_level = _coerce_float(tech.get("effect_per_level", 0.10), 0.10)
         total += level * effect_per_level
     return total
 
@@ -567,10 +614,16 @@ def build_uniform_tech_levels(level: int) -> Dict[str, int]:
         {tech_key: level} 字典
     """
     data = load_technology_templates()
+    base_level = max(0, _coerce_int(level, 0))
     resolved: Dict[str, int] = {}
-    for tech in data.get("technologies", []):
-        max_level = int(tech.get("max_level", level) or level)
-        resolved[tech["key"]] = max(0, min(int(level or 0), max_level))
+    for tech in data.get("technologies", []) or []:
+        if not isinstance(tech, dict):
+            continue
+        tech_key = str(tech.get("key") or "").strip()
+        if not tech_key:
+            continue
+        max_level = max(0, _coerce_int(tech.get("max_level", base_level), base_level))
+        resolved[tech_key] = max(0, min(base_level, max_level))
     return resolved
 
 
@@ -585,13 +638,16 @@ def resolve_enemy_tech_levels(config: Dict[str, Any]) -> Dict[str, int]:
     Returns:
         {tech_key: level} 字典
     """
-    if not config:
+    if not config or not isinstance(config, dict):
         return {}
     levels = {}
     if config.get("level") is not None:
-        levels = build_uniform_tech_levels(int(config.get("level", 0)))
+        levels = build_uniform_tech_levels(_coerce_int(config.get("level", 0), 0))
     for key, val in (config.get("levels") or {}).items():
-        levels[key] = int(val)
+        normalized_key = str(key).strip()
+        if not normalized_key:
+            continue
+        levels[normalized_key] = max(0, _coerce_int(val, 0))
     return levels
 
 
@@ -614,7 +670,7 @@ def get_guest_stat_bonuses(config: Dict[str, Any]) -> Dict[str, float]:
 
     # 方式1：统一百分比加成
     if "guest_bonus" in config:
-        bonus_percent = float(config.get("guest_bonus", 0))
+        bonus_percent = _coerce_float(config.get("guest_bonus", 0), 0.0)
         bonuses["attack"] = bonus_percent
         bonuses["defense"] = bonus_percent
         bonuses["hp"] = bonus_percent
@@ -650,7 +706,9 @@ def get_resource_production_bonus_from_levels(
     data = load_technology_templates()
 
     total_bonus = 0.0
-    for tech in data.get("technologies", []):
+    for tech in data.get("technologies", []) or []:
+        if not isinstance(tech, dict):
+            continue
         if tech.get("effect_type") != "resource_production":
             continue
         if tech.get("resource_type") != resource_type:
@@ -667,10 +725,13 @@ def get_resource_production_bonus_from_levels(
             if required_building_keys and building_key not in required_building_keys:
                 continue
 
-        level = int(levels.get(tech["key"], 0) or 0)
+        tech_key = str(tech.get("key") or "").strip()
+        if not tech_key:
+            continue
+        level = _coerce_int(levels.get(tech_key, 0), 0)
         if level <= 0:
             continue
-        effect_per_level = float(tech.get("effect_per_level", 0.05) or 0.0)
+        effect_per_level = _coerce_float(tech.get("effect_per_level", 0.05), 0.05)
         total_bonus += level * effect_per_level
 
     return total_bonus

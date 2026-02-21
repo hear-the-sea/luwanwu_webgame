@@ -29,6 +29,20 @@ logger = logging.getLogger(__name__)
 _REFRESH_DISPATCH_DEDUP_SECONDS = 5
 
 
+def _normalize_mapping(raw: Any) -> Dict[str, Any]:
+    if isinstance(raw, dict):
+        return raw
+    return {}
+
+
+def _coerce_non_negative_int(raw: Any, default: int = 0) -> int:
+    try:
+        parsed = int(raw)
+    except (TypeError, ValueError):
+        parsed = default
+    return parsed if parsed >= 0 else 0
+
+
 def _try_dispatch_scout_refresh_task(task, record_id: int, phase: str) -> bool:
     return safe_apply_async_with_dedup(
         task,
@@ -394,13 +408,18 @@ def _gather_scout_intel(defender: Manor) -> Dict[str, Any]:
 
 def _send_scout_success_message(record: ScoutRecord) -> None:
     """发送侦察成功消息"""
-    intel = record.intel_data or {}
+    intel = _normalize_mapping(record.intel_data)
+    troop_description = str(intel.get("troop_description") or "未知")
+    guest_count = _coerce_non_negative_int(intel.get("guest_count", 0), 0)
+    avg_guest_level = _coerce_non_negative_int(intel.get("avg_guest_level", 0), 0)
+    asset_level = str(intel.get("asset_level") or "未知")
+
     body = f"""探子已成功潜入 {record.defender.display_name}，获取到以下情报：
 
-【护院情况】{intel.get('troop_description', '未知')}
-【门客数量】{intel.get('guest_count', 0)} 人
-【门客等级】平均 {intel.get('avg_guest_level', 0)} 级
-【资产状况】{intel.get('asset_level', '未知')}"""
+【护院情况】{troop_description}
+【门客数量】{guest_count} 人
+【门客等级】平均 {avg_guest_level} 级
+【资产状况】{asset_level}"""
 
     create_message(
         manor=record.attacker,

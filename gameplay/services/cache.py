@@ -37,6 +37,10 @@ class CacheKeys:
     TECH_BONUS_PREFIX = "tech_bonus"
     HOME_HOURLY_RATES_PREFIX = "manor_home_hourly_rates"
 
+    # 门客模板相关
+    GUEST_TEMPLATES_BY_RARITY = "guest_templates:by_rarity"
+    HERMIT_TEMPLATES = "guest_templates:hermit"
+
     @staticmethod
     def player_rank(manor_id: int, prestige: int) -> str:
         """玩家排名缓存键"""

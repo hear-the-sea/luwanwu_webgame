@@ -56,6 +56,46 @@ class BattleOptions:
     attacker_manor: Any | None = None
 
 
+def _normalize_mapping(raw: Any) -> Dict[str, Any]:
+    if isinstance(raw, dict):
+        return raw
+    return {}
+
+
+def _coerce_int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _normalize_skill_keys(raw: Any) -> List[str] | None:
+    if not isinstance(raw, (list, tuple, set)):
+        return None
+    keys = [str(item).strip() for item in raw if str(item).strip()]
+    return keys or None
+
+
+def _normalize_guest_configs(raw: Any) -> List[str | Dict[str, Any]]:
+    if not isinstance(raw, (list, tuple, set)):
+        return []
+    normalized: List[str | Dict[str, Any]] = []
+    for entry in raw:
+        if isinstance(entry, str):
+            key = entry.strip()
+            if key:
+                normalized.append(key)
+        elif isinstance(entry, dict):
+            normalized.append(entry)
+    return normalized
+
+
+def _normalize_troop_loadout_input(raw: Any) -> Dict[str, int] | None:
+    if isinstance(raw, dict):
+        return raw
+    return None
+
+
 def _collect_guest_ids(guests: List[Guest]) -> list[int]:
     return [int(guest.id) for guest in guests if guest.pk]
 
@@ -111,10 +151,11 @@ def _extract_defender_tech_profile(defender_setup: Dict[str, Any] | None) -> tup
     defender_guest_bonuses: dict[str, float] = {}
     defender_guest_skills: List[str] | None = None
 
-    if not defender_setup:
+    normalized_setup = _normalize_mapping(defender_setup)
+    if not normalized_setup:
         return defender_tech_levels, defender_guest_level, defender_guest_bonuses, defender_guest_skills
 
-    tech_conf = defender_setup.get("technology") or {}
+    tech_conf = _normalize_mapping(normalized_setup.get("technology"))
     if not tech_conf:
         return defender_tech_levels, defender_guest_level, defender_guest_bonuses, defender_guest_skills
 
@@ -122,10 +163,9 @@ def _extract_defender_tech_profile(defender_setup: Dict[str, Any] | None) -> tup
 
     defender_tech_levels = resolve_enemy_tech_levels(tech_conf)
     if "guest_level" in tech_conf:
-        defender_guest_level = int(tech_conf.get("guest_level", 50))
+        defender_guest_level = max(1, _coerce_int(tech_conf.get("guest_level", 50), 50))
     defender_guest_bonuses = get_guest_stat_bonuses(tech_conf)
-    if "guest_skills" in tech_conf:
-        defender_guest_skills = tech_conf.get("guest_skills") or []
+    defender_guest_skills = _normalize_skill_keys(tech_conf.get("guest_skills"))
 
     return defender_tech_levels, defender_guest_level, defender_guest_bonuses, defender_guest_skills
 
@@ -141,17 +181,19 @@ def _build_defender_guest_and_loadout(
     defender_guest_bonuses: Dict[str, float],
     defender_guest_skills: List[str] | None,
 ) -> tuple[list[Combatant], Dict[str, int]]:
+    normalized_setup = _normalize_mapping(defender_setup)
+
     if defender_guests is not None:
         _recover_guest_hp_batch(defender_guests[:defender_limit], now)
         defender_guests_comb = build_guest_combatants(defender_guests, side="defender", limit=defender_limit)
         defender_loadout = normalize_troop_loadout(
-            (defender_setup or {}).get("troop_loadout"),
+            _normalize_troop_loadout_input(normalized_setup.get("troop_loadout")),
             default_if_empty=fill_default_troops,
         )
         return defender_guests_comb, defender_loadout
 
-    if defender_setup:
-        defender_guest_keys = defender_setup.get("guest_keys") or []
+    if normalized_setup:
+        defender_guest_keys = _normalize_guest_configs(normalized_setup.get("guest_keys"))
         defender_templates = build_named_ai_guests(defender_guest_keys, level=defender_guest_level)
         defender_guests_comb = build_guest_combatants(
             defender_templates,
@@ -161,7 +203,7 @@ def _build_defender_guest_and_loadout(
             override_skill_keys=defender_guest_skills,
         )
         defender_loadout = normalize_troop_loadout(
-            defender_setup.get("troop_loadout"),
+            _normalize_troop_loadout_input(normalized_setup.get("troop_loadout")),
             default_if_empty=fill_default_troops,
         )
         return defender_guests_comb, defender_loadout
@@ -173,7 +215,7 @@ def _build_defender_guest_and_loadout(
 
 
 @contextmanager
-def lock_guests_for_battle(guests: List[Guest]) -> Generator[List[Guest], None, None]:
+def lock_guests_for_battle(guests: List[Guest], manor=None) -> Generator[List[Guest], None, None]:
     """
     获取门客的战斗锁，防止并发战斗。
 
@@ -182,6 +224,7 @@ def lock_guests_for_battle(guests: List[Guest]) -> Generator[List[Guest], None, 
 
     Args:
         guests: 要锁定的门客列表
+        manor: 可选庄园对象。提供时会先锁定庄园行，统一锁顺序为 Manor -> Guest
 
     Yields:
         锁定后的门客列表
@@ -199,6 +242,12 @@ def lock_guests_for_battle(guests: List[Guest]) -> Generator[List[Guest], None, 
         return
 
     with transaction.atomic():
+        # 统一锁顺序为 Manor -> Guest，降低跨服务死锁风险
+        if manor is not None and getattr(manor, "pk", None):
+            from gameplay.models import Manor
+
+            Manor.objects.select_for_update().get(pk=manor.pk)
+
         locked_guests = _lock_guest_rows(guest_ids)
         _validate_locked_guest_statuses(locked_guests)
         _mark_locked_guests_deployed(locked_guests)
@@ -300,7 +349,8 @@ def simulate_report(
     Returns:
         BattleReport: 战斗报告实例
     """
-    config = get_battle_config(battle_type)
+    # 确定本场上阵人数（默认遵循庄园可上阵上限）
+    limit = max_squad or (getattr(manor, "max_squad_size", None) or MAX_SQUAD)
 
     # 获取出战门客
     if attacker_guests is None:
@@ -309,7 +359,7 @@ def simulate_report(
         # 仅空闲门客可出征，重伤门客无法出征
         guests = list(
             guest_qs.filter(status=GuestStatus.IDLE)
-            .order_by("-template__rarity", "-level")[: max_squad or MAX_SQUAD]
+            .order_by("-template__rarity", "-level")[:limit]
         )
         if not guests:
             if total_guests > 0:
@@ -323,8 +373,6 @@ def simulate_report(
         if not guests:
             raise ValueError("请选择可出征的门客")
 
-    # 确定本场上阵人数
-    limit = max_squad or (getattr(manor, "max_squad_size", None) or MAX_SQUAD)
     defender_limit = defender_max_squad or limit
     active_guests = guests[:limit]
 
@@ -353,28 +401,18 @@ def simulate_report(
     )
 
     if use_lock:
-        with lock_guests_for_battle(active_guests):
+        with lock_guests_for_battle(active_guests, manor=manor):
             return _execute_battle(manor, guests, active_guests, options)
     else:
         # 不使用锁（用于测试或特殊场景）
         return _execute_battle(manor, guests, active_guests, options)
 
 
-def _execute_battle(
-    manor,
-    guests: List[Guest],
+def _prepare_battle_environment(
     active_guests: List[Guest],
     options: BattleOptions,
-) -> BattleReport:
-    """
-    执行战斗的内部实现函数。
-
-    此函数包含实际的战斗模拟逻辑，由 simulate_report 在获取锁后调用。
-    """
-    # Unpack commonly used options for readability
-    config = get_battle_config(options.battle_type)
-
-    # 战前按时间补算自然恢复（仅对已保存的非重伤门客生效）
+) -> Dict[str, int]:
+    """战前准备：HP恢复和兵力配置"""
     now = timezone.now()
     _recover_guest_hp_batch(active_guests, now)
 
@@ -382,12 +420,17 @@ def _execute_battle(
         options.troop_loadout,
         default_if_empty=options.fill_default_troops
     )
-
-    # 验证兵力是否超过门客带兵上限（使用实际出战的门客）
     validate_troop_capacity(active_guests, normalized_loadout)
+    return normalized_loadout
 
-    final_seed, rng = _resolve_battle_rng(options.seed, options.rng_source)
 
+def _build_attacker_units(
+    guests: List[Guest],
+    normalized_loadout: Dict[str, int],
+    options: BattleOptions,
+    manor,
+) -> tuple[List[Combatant], List[Combatant]]:
+    """构建攻击方战斗单位（门客+小兵）"""
     attacker_guests_comb = build_guest_combatants(
         guests,
         side="attacker",
@@ -395,7 +438,7 @@ def _execute_battle(
         stat_bonuses=options.attacker_guest_bonuses,
         override_skill_keys=options.attacker_guest_skills,
     )
-    # 攻击方小兵应用武艺技术加成
+
     attacker_manor = manor if options.attacker_manor is None else options.attacker_manor
     attacker_troops = build_troop_combatants(
         normalized_loadout,
@@ -404,9 +447,19 @@ def _execute_battle(
         tech_levels=options.attacker_tech_levels,
     )
 
+    return attacker_guests_comb, attacker_troops
+
+
+def _build_defender_units(
+    options: BattleOptions,
+    rng: random.Random,
+    now,
+) -> tuple[List[Combatant], List[Combatant], Dict[str, int]]:
+    """构建防守方战斗单位（门客+小兵）"""
     defender_tech_levels, defender_guest_level, defender_guest_bonuses, defender_guest_skills = _extract_defender_tech_profile(
         options.defender_setup
     )
+
     defender_guests_comb, defender_loadout = _build_defender_guest_and_loadout(
         options.defender_guests,
         options.defender_setup,
@@ -419,16 +472,24 @@ def _execute_battle(
         defender_guest_skills,
     )
 
-    # 构建敌方护院，传入科技等级
     defender_troops = build_troop_combatants(
         defender_loadout,
         side="defender",
         tech_levels=defender_tech_levels or None
     )
-    attacker_units = attacker_guests_comb + attacker_troops
-    defender_units = defender_guests_comb + defender_troops
 
-    # 根据双方敏捷分布动态分配优先级（前25%先锋）
+    return defender_guests_comb, defender_troops, defender_loadout
+
+
+def _execute_simulation(
+    attacker_units: List[Combatant],
+    defender_units: List[Combatant],
+    options: BattleOptions,
+    config: Dict,
+    rng: random.Random,
+    final_seed: int,
+) -> tuple[Any, str]:
+    """执行战斗模拟"""
     assign_agility_based_priorities(attacker_units, defender_units)
 
     opponent_label = options.opponent_name or config.get("name", "乱军试炼")
@@ -441,7 +502,21 @@ def _execute_battle(
         config=config,
         drop_table=options.drop_table,
     )
+    return simulation, opponent_label
 
+
+def _finalize_battle_results(
+    manor,
+    simulation: Any,
+    guests: List[Guest],
+    attacker_guests_comb: List[Combatant],
+    defender_guests_comb: List[Combatant],
+    normalized_loadout: Dict[str, int],
+    defender_loadout: Dict[str, int],
+    options: BattleOptions,
+    opponent_label: str,
+) -> BattleReport:
+    """处理战斗结果：奖励、HP更新、战报创建、消息发送"""
     grant_battle_rewards(
         manor,
         simulation.drops,
@@ -449,8 +524,10 @@ def _execute_battle(
         auto_reward=options.auto_reward,
         drop_handler=options.drop_handler,
     )
+
     hp_updates = apply_guest_hp_updates(guests, attacker_guests_comb, apply_damage=options.apply_damage)
     simulation.losses["attacker"]["hp_updates"] = hp_updates
+
     if options.defender_guests is not None:
         defender_hp_updates = apply_guest_hp_updates(
             options.defender_guests, defender_guests_comb, apply_damage=options.apply_damage
@@ -473,8 +550,63 @@ def _execute_battle(
         completed_at=simulation.completed_at,
         seed=simulation.seed,
     )
+
     if options.send_message:
         dispatch_battle_message(manor, opponent_label, report)
+
+    return report
+
+
+def _execute_battle(
+    manor,
+    guests: List[Guest],
+    active_guests: List[Guest],
+    options: BattleOptions,
+) -> BattleReport:
+    """
+    执行战斗的内部实现函数。
+
+    此函数包含实际的战斗模拟逻辑，由 simulate_report 在获取锁后调用。
+    """
+    config = get_battle_config(options.battle_type)
+
+    # 1. 战前准备
+    normalized_loadout = _prepare_battle_environment(active_guests, options)
+
+    # 2. 初始化随机数
+    final_seed, rng = _resolve_battle_rng(options.seed, options.rng_source)
+
+    # 3. 构建攻击方单位
+    attacker_guests_comb, attacker_troops = _build_attacker_units(
+        guests, normalized_loadout, options, manor
+    )
+
+    # 4. 构建防守方单位
+    now = timezone.now()
+    defender_guests_comb, defender_troops, defender_loadout = _build_defender_units(
+        options, rng, now
+    )
+
+    # 5. 执行战斗模拟
+    attacker_units = attacker_guests_comb + attacker_troops
+    defender_units = defender_guests_comb + defender_troops
+    simulation, opponent_label = _execute_simulation(
+        attacker_units, defender_units, options, config, rng, final_seed
+    )
+
+    # 6. 处理战斗结果
+    report = _finalize_battle_results(
+        manor,
+        simulation,
+        guests,
+        attacker_guests_comb,
+        defender_guests_comb,
+        normalized_loadout,
+        defender_loadout,
+        options,
+        opponent_label,
+    )
+
     return report
 
 

@@ -6,6 +6,46 @@ class DummyManor:
         self.log = []
 
 
+def test_grant_battle_rewards_uses_locked_path_in_atomic(monkeypatch):
+    manor = type("M", (), {"pk": 1})()
+    drops = {"silver": 100}
+    captured = {}
+
+    monkeypatch.setattr("battle.rewards._in_atomic_block", lambda: True)
+    monkeypatch.setattr(
+        "battle.rewards._grant_resources_locked",
+        lambda manor_arg, drops_arg, label: captured.setdefault("args", (manor_arg, drops_arg, label)),
+    )
+    monkeypatch.setattr(
+        "battle.rewards._grant_resources",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("should not call non-locked path")),
+    )
+
+    grant_battle_rewards(manor, drops, "test opponent")
+
+    assert captured["args"] == (manor, drops, "test opponent")
+
+
+def test_grant_battle_rewards_uses_normal_path_outside_atomic(monkeypatch):
+    manor = DummyManor()
+    drops = {"grain": 10}
+    captured = {}
+
+    monkeypatch.setattr("battle.rewards._in_atomic_block", lambda: False)
+    monkeypatch.setattr(
+        "battle.rewards._grant_resources",
+        lambda manor_arg, drops_arg, label: captured.setdefault("args", (manor_arg, drops_arg, label)),
+    )
+    monkeypatch.setattr(
+        "battle.rewards._grant_resources_locked",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("should not call locked path")),
+    )
+
+    grant_battle_rewards(manor, drops, "normal path")
+
+    assert captured["args"] == (manor, drops, "normal path")
+
+
 def test_grant_battle_rewards_uses_handler(monkeypatch):
     manor = DummyManor()
     drops = {"silver": 100}

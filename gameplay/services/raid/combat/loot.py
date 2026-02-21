@@ -13,6 +13,33 @@ from ....models import InventoryItem, ItemTemplate, Manor, ResourceEvent
 from ...resources import log_resource_gain
 
 
+def _normalize_mapping(raw: Any) -> Dict[str, Any]:
+    if isinstance(raw, dict):
+        return raw
+    return {}
+
+
+def _coerce_positive_int(raw: Any, default: int = 0) -> int:
+    try:
+        parsed = int(raw)
+    except (TypeError, ValueError):
+        parsed = default
+    return parsed if parsed > 0 else 0
+
+
+def _normalize_positive_int_mapping(raw: Any) -> Dict[str, int]:
+    data = _normalize_mapping(raw)
+    normalized: Dict[str, int] = {}
+    for key, value in data.items():
+        normalized_key = str(key or "").strip()
+        if not normalized_key:
+            continue
+        normalized_value = _coerce_positive_int(value, 0)
+        if normalized_value > 0:
+            normalized[normalized_key] = normalized_value
+    return normalized
+
+
 def _calculate_resource_loot(defender: Manor, loot_percent: float) -> Dict[str, int]:
     loot_resources: Dict[str, int] = {}
 
@@ -184,6 +211,8 @@ def _apply_loot(
     """
     从防守方扣除被掠夺的资源和物品，返回实际扣除量。
     """
+    loot_resources = _normalize_positive_int_mapping(loot_resources)
+    loot_items = _normalize_positive_int_mapping(loot_items)
     manor = locked_manor or Manor.objects.select_for_update().get(pk=defender.pk)
     actual_resources: Dict[str, int] = {}
     actual_items: Dict[str, int] = {}
@@ -235,6 +264,8 @@ def _apply_loot(
 
 def _format_loot_description(resources: Dict[str, int], items: Dict[str, int]) -> str:
     """格式化战利品描述"""
+    resources = _normalize_positive_int_mapping(resources)
+    items = _normalize_positive_int_mapping(items)
     parts = []
 
     if resources.get("grain"):
@@ -255,12 +286,13 @@ def _format_loot_description(resources: Dict[str, int], items: Dict[str, int]) -
 
 def _format_battle_rewards_description(battle_rewards: Dict[str, Any]) -> str:
     """格式化战斗通用奖励描述"""
-    if not battle_rewards:
+    normalized_rewards = _normalize_mapping(battle_rewards)
+    if not normalized_rewards:
         return ""
 
     parts = []
-    exp_fruit = battle_rewards.get("exp_fruit", 0)
-    equipment = battle_rewards.get("equipment", {})
+    exp_fruit = _coerce_positive_int(normalized_rewards.get("exp_fruit", 0), 0)
+    equipment = _normalize_positive_int_mapping(normalized_rewards.get("equipment"))
 
     if exp_fruit > 0:
         parts.append(f"经验果 x{exp_fruit}")
@@ -287,6 +319,7 @@ def _format_capture_description(capture_payload: Any) -> str:
 
 def _grant_loot_items(manor: Manor, items: Dict[str, int]) -> None:
     """批量发放掠夺的物品"""
+    items = _normalize_positive_int_mapping(items)
     if not items:
         return
 
@@ -297,8 +330,6 @@ def _grant_loot_items(manor: Manor, items: Dict[str, int]) -> None:
 
     # 逐项 upsert：避免批量写入在并发创建下的 IntegrityError / 丢失更新问题
     for key, qty in items.items():
-        if qty <= 0:
-            continue
         template = templates.get(key)
         if not template:
             continue
@@ -312,14 +343,14 @@ def _grant_loot_items(manor: Manor, items: Dict[str, int]) -> None:
             .first()
         )
         if existing:
-            InventoryItem.objects.filter(pk=existing.pk).update(quantity=F("quantity") + int(qty))
+            InventoryItem.objects.filter(pk=existing.pk).update(quantity=F("quantity") + qty)
         else:
             try:
                 InventoryItem.objects.create(
                     manor=manor,
                     template=template,
                     storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-                    quantity=int(qty),
+                    quantity=qty,
                 )
             except IntegrityError:
                 # 并发创建时回退到原子性累加
@@ -327,4 +358,4 @@ def _grant_loot_items(manor: Manor, items: Dict[str, int]) -> None:
                     manor=manor,
                     template=template,
                     storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-                ).update(quantity=F("quantity") + int(qty))
+                ).update(quantity=F("quantity") + qty)

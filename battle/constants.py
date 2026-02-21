@@ -1,8 +1,11 @@
 from typing import Dict
 
-MAX_SQUAD = 5
-MAX_ROUNDS = 32
-DEFAULT_BATTLE_TYPE = "skirmish"
+from core.config import BATTLE
+
+# 从 core.config 导入配置，保持向后兼容
+MAX_SQUAD = BATTLE.MAX_SQUAD
+MAX_ROUNDS = BATTLE.MAX_ROUNDS
+DEFAULT_BATTLE_TYPE = BATTLE.DEFAULT_BATTLE_TYPE
 
 BATTLE_TYPES: Dict[str, dict] = {
     DEFAULT_BATTLE_TYPE: {

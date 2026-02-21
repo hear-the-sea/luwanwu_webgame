@@ -18,7 +18,7 @@ from ..troops import apply_defender_troop_losses
 from core.utils.time_scale import scale_duration
 
 from .attempts import get_mission_daily_limit, mission_attempts_today
-from .drops import award_mission_drops, resolve_defense_drops_if_missing
+from .drops import award_mission_drops_locked, resolve_defense_drops_if_missing
 from .loadout import normalize_mission_loadout, travel_time_seconds
 from .sync_report import generate_sync_battle_report
 
@@ -26,6 +26,26 @@ logger = logging.getLogger(__name__)
 
 
 _MISSION_REFRESH_DISPATCH_DEDUP_SECONDS = 5
+
+
+def _normalize_mapping(raw: Any) -> Dict[str, object]:
+    if isinstance(raw, dict):
+        return raw
+    return {}
+
+
+def _normalize_guest_configs(raw: Any) -> List[Any]:
+    if not isinstance(raw, (list, tuple, set)):
+        return []
+    normalized: List[Any] = []
+    for entry in raw:
+        if isinstance(entry, str):
+            key = entry.strip()
+            if key:
+                normalized.append(key)
+        elif isinstance(entry, dict):
+            normalized.append(entry)
+    return normalized
 
 
 def _try_dispatch_mission_refresh_task(task, run_id: int) -> bool:
@@ -273,7 +293,7 @@ def _apply_mission_rewards_if_won(locked_run: MissionRun, report: Any, player_si
 
     report.drops = drops
     report.save(update_fields=["drops"])
-    award_mission_drops(locked_run.manor, drops, locked_run.mission.name)
+    award_mission_drops_locked(locked_run.manor, drops, locked_run.mission.name)
 
 
 def _send_mission_report_message(locked_run: MissionRun, report: Any) -> None:
@@ -430,11 +450,11 @@ def _build_defender_setup_and_drop_table(mission: MissionTemplate, loadout: Dict
 
     return (
         {
-            "guest_keys": mission.enemy_guests or [],
-            "troop_loadout": mission.enemy_troops or {},
-            "technology": mission.enemy_technology or {},
+            "guest_keys": _normalize_guest_configs(mission.enemy_guests),
+            "troop_loadout": _normalize_mapping(mission.enemy_troops),
+            "technology": _normalize_mapping(mission.enemy_technology),
         },
-        dict(mission.drop_table or {}),
+        _normalize_mapping(mission.drop_table),
     )
 
 

@@ -89,6 +89,28 @@ def test_return_surviving_troops_filters_casualties(monkeypatch):
     assert called["payload"] == {"inf": 3}
 
 
+def test_extract_raid_troops_lost_handles_non_mapping_losses(monkeypatch):
+    monkeypatch.setattr("battle.troops.load_troop_templates", lambda: {"inf": {"label": "步兵"}})
+
+    report = SimpleNamespace(losses=["not-a-mapping"])
+    assert combat_runs._extract_raid_troops_lost({"inf": 3}, report) == {}
+
+
+def test_return_surviving_troops_ignores_invalid_loadout_shape(monkeypatch):
+    called = {"count": 0}
+
+    def _add_batch(_manor, payload):
+        called["count"] += 1
+        called["payload"] = payload
+
+    monkeypatch.setattr(combat_runs, "_add_troops_batch", _add_batch)
+
+    run = SimpleNamespace(attacker=object(), troop_loadout=["bad-shape"], battle_report=None)
+    combat_runs._return_surviving_troops(run)
+
+    assert called["count"] == 0
+
+
 def test_deduct_troops_raises_when_missing(monkeypatch):
     class _PlayerTroop:
         objects = SimpleNamespace(

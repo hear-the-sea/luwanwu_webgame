@@ -35,13 +35,13 @@ except Exception as exc:
         raise SystemExit(1) from exc
 
 # 导入招募系统模块
-from guests.utils.recruitment_utils import (
+from guests.utils.recruitment_utils import (  # noqa: E402
     RARITY_DISTRIBUTION,
     RARITY_ORDER,
     TOTAL_WEIGHT,
     choose_rarity,
 )
-from guests.models import GuestRarity
+from guests.models import GuestRarity  # noqa: E402
 
 # 稀有度中文名称映射
 RARITY_NAMES = {

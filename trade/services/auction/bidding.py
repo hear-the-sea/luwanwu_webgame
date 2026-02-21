@@ -18,6 +18,50 @@ from .gold_bars import freeze_gold_bars, unfreeze_gold_bars
 logger = logging.getLogger(__name__)
 
 
+def _safe_int(value, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _normalize_bid_amount(amount: int) -> int:
+    normalized = _safe_int(amount, 0)
+    if normalized <= 0:
+        raise ValueError("出价金额必须大于0")
+    return normalized
+
+
+def _safe_winner_count(slot: AuctionSlot) -> int:
+    return max(1, _safe_int(getattr(slot, "quantity", 1), 1))
+
+
+def _require_valid_winner_count(slot: AuctionSlot) -> int:
+    winner_count = _safe_int(getattr(slot, "quantity", 0), 0)
+    if winner_count <= 0:
+        raise ValueError("拍卖位配置异常，请联系管理员")
+    return winner_count
+
+
+def _safe_create_message(**kwargs) -> None:
+    try:
+        create_message(**kwargs)
+    except Exception as exc:
+        logger.warning("auction outbid create_message failed: %s", exc, exc_info=True)
+
+
+def _safe_notify_user(user_id: int, payload: dict, *, log_context: str) -> None:
+    try:
+        notify_user(user_id, payload, log_context=log_context)
+    except Exception as exc:
+        logger.warning(
+            "auction outbid notify_user failed: user_id=%s error=%s",
+            user_id,
+            exc,
+            exc_info=True,
+        )
+
+
 def _validate_bid_raise_or_increment(slot: AuctionSlot, amount: int, current_amount: int) -> None:
     if amount <= current_amount:
         raise ValueError(f"加价金额必须高于您之前的出价 {current_amount} 金条")
@@ -145,7 +189,7 @@ def get_cutoff_price(slot: AuctionSlot, ranking: Optional[List[AuctionBid]] = No
     """获取当前最低中标价（第N名的出价）。"""
     if ranking is None:
         ranking = get_slot_ranking(slot)
-    winner_count = slot.quantity  # 中标名额数
+    winner_count = _safe_winner_count(slot)
 
     if len(ranking) >= winner_count:
         return ranking[winner_count - 1].amount
@@ -179,6 +223,8 @@ def validate_bid_amount(
     current_bid: Optional[AuctionBid] = None,
 ) -> None:
     """验证出价金额是否合法。"""
+    amount = _normalize_bid_amount(amount)
+
     # When there are no active bids, treat it as the first bid regardless of
     # `slot.bid_count` (which is a historical counter).
     if ranking is None:
@@ -202,7 +248,7 @@ def validate_bid_amount(
 
     # 新出价者，需要高于当前最低中标价才有意义
     cutoff = get_cutoff_price(slot, ranking=ranking)
-    winner_count = slot.quantity
+    winner_count = _safe_winner_count(slot)
 
     if len(ranking) >= winner_count and amount <= cutoff:
         raise ValueError(f"出价金额需要高于当前最低中标价 {cutoff} 金条才能进入前 {winner_count} 名")
@@ -224,6 +270,7 @@ def place_bid(
     outbid_player = None  # 被挤出前N名的玩家
     winner_count = 0
     slot: AuctionSlot | None = None
+    amount = _normalize_bid_amount(amount)
 
     with transaction.atomic():
         slot = _load_locked_slot(slot_id)
@@ -239,7 +286,7 @@ def place_bid(
 
         is_first_bid = previous_bid is None
 
-        winner_count = slot.quantity
+        winner_count = _require_valid_winner_count(slot)
 
         player_to_kick = _pick_candidate_to_kick(ranking_before, winner_count)
 
@@ -266,7 +313,7 @@ def place_bid(
 
 def _notify_outbid_vickrey(manor: Manor, slot: AuctionSlot, new_price: int, new_bidder: Manor, winner_count: int) -> None:
     """通知玩家被挤出中标范围（维克里拍卖）。"""
-    create_message(
+    _safe_create_message(
         manor=manor,
         kind="system",
         title="【拍卖行】您已被挤出中标范围",
@@ -277,7 +324,7 @@ def _notify_outbid_vickrey(manor: Manor, slot: AuctionSlot, new_price: int, new_
         ),
     )
 
-    notify_user(
+    _safe_notify_user(
         manor.user_id,
         {
             "kind": "auction_outbid",

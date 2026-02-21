@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from gameplay.models import InventoryItem, ItemTemplate
@@ -49,6 +51,38 @@ def test_get_shop_items_for_display_uses_current_stock(monkeypatch):
 
 
 @pytest.mark.django_db
+def test_get_shop_items_for_display_tolerates_invalid_price_and_stock(monkeypatch):
+    template = ItemTemplate.objects.create(
+        key="shop_display_invalid_item",
+        name="展示异常物品",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=False,
+        tradeable=False,
+        price=12,
+    )
+
+    monkeypatch.setattr(
+        "trade.services.shop_service.get_shop_config",
+        lambda: [
+            SimpleNamespace(
+                item_key=template.key,
+                price="bad",
+                stock="bad",
+                daily_refresh=False,
+                is_unlimited=False,
+            )
+        ],
+    )
+
+    items = get_shop_items_for_display()
+    assert len(items) == 1
+    assert items[0].key == template.key
+    assert items[0].price == 0
+    assert items[0].stock == 0
+    assert items[0].available is False
+
+
+@pytest.mark.django_db
 def test_buy_item_decrements_stock_and_increments_inventory(monkeypatch, django_user_model):
     user = django_user_model.objects.create_user(username="shop_buy", password="pass12345")
     manor = ensure_manor(user)
@@ -87,6 +121,33 @@ def test_buy_item_decrements_stock_and_increments_inventory(monkeypatch, django_
     assert log.quantity == 2
     assert log.unit_price == 5
     assert log.total_cost == 10
+
+
+@pytest.mark.django_db
+def test_buy_item_rejects_negative_price_config(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="shop_buy_bad_price", password="pass12345")
+    manor = ensure_manor(user)
+    manor.silver = 1000
+    manor.save(update_fields=["silver"])
+
+    template = ItemTemplate.objects.create(
+        key="shop_buy_bad_price_item",
+        name="异常价格物品",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=False,
+        tradeable=False,
+        price=10,
+    )
+
+    config = ShopItemConfig(item_key=template.key, price=-5, stock=4, daily_refresh=False)
+    monkeypatch.setattr("trade.services.shop_service.get_shop_item_config", lambda *_args, **_kwargs: config)
+
+    with pytest.raises(ValueError, match="价格配置异常"):
+        buy_item(manor, template.key, 2)
+
+    manor.refresh_from_db()
+    assert manor.silver == 1000
+    assert not ShopPurchaseLog.objects.filter(manor=manor, item_key=template.key).exists()
 
 
 @pytest.mark.django_db

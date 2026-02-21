@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from django.db import transaction
 from django.db.models import F
@@ -66,14 +66,33 @@ EFFECT_TYPE_CATEGORY = {
 }
 
 
-def _normalize_effect_type(effect_type: str) -> str:
+def _coerce_int(raw: Any, default: int = 0) -> int:
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+def _coerce_non_negative_int(raw: Any, default: int = 0) -> int:
+    parsed = _coerce_int(raw, default)
+    return parsed if parsed >= 0 else default
+
+
+def _normalize_mapping(raw: Any) -> dict:
+    if isinstance(raw, dict):
+        return raw
+    return {}
+
+
+def _normalize_effect_type(effect_type: Any) -> str:
     """统一工具类 effect_type，兼容旧数据。"""
+    effect_type = str(effect_type or "").strip()
     if effect_type in {"magnifying_glass", "peace_shield", "manor_rename"}:
         return ItemTemplate.EffectType.TOOL
     return effect_type
 
 
-def _get_category(effect_type: str) -> str:
+def _get_category(effect_type: Any) -> str:
     """获取种类显示名称"""
     effect_type = _normalize_effect_type(effect_type)
     if effect_type.startswith("equip_"):
@@ -103,7 +122,8 @@ def get_shop_items_for_display() -> List[ShopItemDisplay]:
             continue
 
         # 确定价格
-        price = config.price if config.price is not None else template.price
+        raw_price = config.price if config.price is not None else template.price
+        price = _coerce_non_negative_int(raw_price, 0)
 
         # 确定库存
         if config.is_unlimited:
@@ -113,6 +133,7 @@ def get_shop_items_for_display() -> List[ShopItemDisplay]:
         else:
             # 有限库存：从数据库获取当前库存，如果不存在则使用配置的初始值
             current_stock = stocks.get(config.item_key, config.stock)
+            current_stock = _coerce_non_negative_int(current_stock, 0)
             stock = current_stock
             stock_display = str(current_stock)
             available = current_stock > 0
@@ -131,7 +152,7 @@ def get_shop_items_for_display() -> List[ShopItemDisplay]:
                 effect_type=_normalize_effect_type(template.effect_type or ""),
                 category=_get_category(template.effect_type or ""),
                 rarity=template.rarity or "black",
-                effect_payload=template.effect_payload or {},
+                effect_payload=_normalize_mapping(template.effect_payload),
             )
         )
 
@@ -154,12 +175,13 @@ def get_sellable_inventory(manor: Manor, category: str = None) -> List[SellableI
     )
 
     # 数据库层面的分类筛选
-    if category and category != "all":
+    normalized_category = _normalize_effect_type(category or "all")
+    if normalized_category and normalized_category != "all":
         tool_effect_types = {"tool", "magnifying_glass", "peace_shield", "manor_rename"}
-        if category in tool_effect_types:
+        if normalized_category in tool_effect_types:
             items = items.filter(template__effect_type__in=tool_effect_types)
         else:
-            items = items.filter(template__effect_type=category)
+            items = items.filter(template__effect_type=normalized_category)
 
     result = []
 
@@ -205,6 +227,7 @@ def buy_item(manor: Manor, item_key: str, quantity: int) -> Dict:
     Raises:
         ValueError: 购买失败时抛出
     """
+    quantity = _coerce_int(quantity, 0)
     if quantity <= 0:
         raise ValueError("购买数量必须大于 0")
 
@@ -220,13 +243,17 @@ def buy_item(manor: Manor, item_key: str, quantity: int) -> Dict:
         raise ValueError("商品不存在")
 
     # 确定价格
-    unit_price = config.price if config.price is not None else template.price
+    raw_unit_price = config.price if config.price is not None else template.price
+    unit_price = _coerce_int(raw_unit_price, -1)
+    if unit_price < 0:
+        raise ValueError("商品价格配置异常")
     total_cost = unit_price * quantity
 
     # 检查库存（使用行级锁防止超卖）
     if not config.is_unlimited:
         stock, created = ShopStock.objects.select_for_update().get_or_create(
-            item_key=item_key, defaults={"current_stock": config.stock}
+            item_key=item_key,
+            defaults={"current_stock": _coerce_non_negative_int(config.stock, 0)},
         )
         if stock.current_stock < quantity:
             raise ValueError("库存不足")
@@ -298,6 +325,7 @@ def sell_item(manor: Manor, item_key: str, quantity: int) -> Dict:
     Raises:
         ValueError: 出售失败时抛出
     """
+    quantity = _coerce_int(quantity, 0)
     if quantity <= 0:
         raise ValueError("出售数量必须大于 0")
 

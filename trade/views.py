@@ -3,6 +3,7 @@
 """
 
 import logging
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
@@ -35,6 +36,34 @@ from .selectors import get_trade_context
 logger = logging.getLogger(__name__)
 
 
+def _trade_redirect(tab: str | None = None, view: str | None = None):
+    base_url = reverse("trade:trade")
+    params = {}
+    if tab:
+        params["tab"] = tab
+    if view:
+        params["view"] = view
+    if not params:
+        return redirect(base_url)
+    return redirect(f"{base_url}?{urlencode(params)}")
+
+
+def _handle_trade_error(request, exc: Exception) -> None:
+    messages.error(request, sanitize_error_message(exc))
+
+
+def _handle_unexpected_trade_error(request, exc: Exception, *, op: str) -> None:
+    logger.exception("trade view unexpected error: op=%s user_id=%s error=%s", op, getattr(request.user, "id", None), exc)
+    _handle_trade_error(request, exc)
+
+
+def _get_positive_int_setting(name: str, default: int) -> int:
+    value = safe_int(getattr(settings, name, default), default=default)
+    if value is None or value <= 0:
+        return default
+    return value
+
+
 class TradeView(LoginRequiredMixin, TemplateView):
     """交易主页面"""
 
@@ -62,10 +91,12 @@ def shop_buy_view(request):
         messages.success(
             request, f"成功购买 {result['item_name']} x{result['quantity']}，花费 {result['total_cost']} 银两"
         )
-    except (GameError, ValueError) as e:
-        messages.error(request, sanitize_error_message(e))
+    except (GameError, ValueError) as exc:
+        _handle_trade_error(request, exc)
+    except Exception as exc:
+        _handle_unexpected_trade_error(request, exc, op="shop_buy")
 
-    return redirect("trade:trade")
+    return _trade_redirect()
 
 
 @login_required
@@ -82,10 +113,12 @@ def shop_sell_view(request):
         messages.success(
             request, f"成功出售 {result['item_name']} x{result['quantity']}，获得 {result['total_income']} 银两"
         )
-    except (GameError, ValueError) as e:
-        messages.error(request, sanitize_error_message(e))
+    except (GameError, ValueError) as exc:
+        _handle_trade_error(request, exc)
+    except Exception as exc:
+        _handle_unexpected_trade_error(request, exc, op="shop_sell")
 
-    return redirect("trade:trade")
+    return _trade_redirect()
 
 
 @login_required
@@ -103,10 +136,12 @@ def exchange_gold_bar_view(request):
             f"成功兑换 {result['quantity']} 根金条，花费 {result['total_cost']:,} 银两"
             f"（含手续费 {result['fee']:,} 银两）。下一根汇率：{result['next_rate']:,} 银两。",
         )
-    except (GameError, ValueError) as e:
-        messages.error(request, sanitize_error_message(e))
+    except (GameError, ValueError) as exc:
+        _handle_trade_error(request, exc)
+    except Exception as exc:
+        _handle_unexpected_trade_error(request, exc, op="bank_exchange")
 
-    return redirect(reverse("trade:trade") + "?tab=bank")
+    return _trade_redirect(tab="bank")
 
 
 @login_required
@@ -127,10 +162,12 @@ def market_create_listing_view(request):
             f"成功上架 {listing.item_template.name} x{quantity}，单价 {unit_price} 银两，"
             f"总价 {listing.total_price:,} 银两。上架时长 {listing.get_duration_display()}。",
         )
-    except (GameError, ValueError) as e:
-        messages.error(request, sanitize_error_message(e))
+    except (GameError, ValueError) as exc:
+        _handle_trade_error(request, exc)
+    except Exception as exc:
+        _handle_unexpected_trade_error(request, exc, op="market_create_listing")
 
-    return redirect(reverse("trade:trade") + "?tab=market&view=sell")
+    return _trade_redirect(tab="market", view="sell")
 
 
 @login_required
@@ -142,7 +179,8 @@ def market_purchase_view(request, listing_id: int):
 
     try:
         transaction = purchase_listing(manor, listing_id)
-        if transaction.total_price >= settings.TRADE_HIGH_VALUE_SILVER_THRESHOLD:
+        high_value_threshold = _get_positive_int_setting("TRADE_HIGH_VALUE_SILVER_THRESHOLD", 1_000_000)
+        if transaction.total_price >= high_value_threshold:
             logger.warning(
                 "High-value market purchase: user_id=%s listing_id=%s total_price=%s",
                 request.user.id,
@@ -152,12 +190,14 @@ def market_purchase_view(request, listing_id: int):
         messages.success(
             request,
             f"成功购买 {transaction.listing.item_template.name} x{transaction.listing.quantity}，"
-            f"花费 {transaction.total_price:,} 银两。物品已通过邮件发送，请查收！",
+            f"花费 {transaction.total_price:,} 银两。物品已直接存入仓库，请查收！",
         )
-    except (GameError, ValueError) as e:
-        messages.error(request, sanitize_error_message(e))
+    except (GameError, ValueError) as exc:
+        _handle_trade_error(request, exc)
+    except Exception as exc:
+        _handle_unexpected_trade_error(request, exc, op="market_purchase")
 
-    return redirect(reverse("trade:trade") + "?tab=market&view=buy")
+    return _trade_redirect(tab="market", view="buy")
 
 
 @login_required
@@ -173,10 +213,12 @@ def market_cancel_view(request, listing_id: int):
             request,
             f"已取消挂单，{result['item_name']} x{result['quantity']} 已退回仓库。",
         )
-    except (GameError, ValueError) as e:
-        messages.error(request, sanitize_error_message(e))
+    except (GameError, ValueError) as exc:
+        _handle_trade_error(request, exc)
+    except Exception as exc:
+        _handle_unexpected_trade_error(request, exc, op="market_cancel")
 
-    return redirect(reverse("trade:trade") + "?tab=market&view=my_listings")
+    return _trade_redirect(tab="market", view="my_listings")
 
 
 @login_required
@@ -188,8 +230,9 @@ def auction_bid_view(request, slot_id: int):
     amount = safe_int(request.POST.get("amount", 0), default=0, min_val=1)
 
     try:
-        bid, is_first_bid = place_bid(manor, slot_id, amount)
-        if amount >= settings.AUCTION_HIGH_BID_THRESHOLD:
+        _bid, is_first_bid = place_bid(manor, slot_id, amount)
+        high_bid_threshold = _get_positive_int_setting("AUCTION_HIGH_BID_THRESHOLD", 200)
+        if amount >= high_bid_threshold:
             logger.warning(
                 "High-value auction bid: user_id=%s slot_id=%s amount=%s",
                 request.user.id,
@@ -206,7 +249,9 @@ def auction_bid_view(request, slot_id: int):
                 request,
                 f"成功加价至 {amount} 金条！您目前是最高出价者。",
             )
-    except (GameError, ValueError) as e:
-        messages.error(request, sanitize_error_message(e))
+    except (GameError, ValueError) as exc:
+        _handle_trade_error(request, exc)
+    except Exception as exc:
+        _handle_unexpected_trade_error(request, exc, op="auction_bid")
 
-    return redirect(reverse("trade:trade") + "?tab=auction")
+    return _trade_redirect(tab="auction")

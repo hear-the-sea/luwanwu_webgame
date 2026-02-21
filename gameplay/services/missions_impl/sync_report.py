@@ -1,8 +1,67 @@
 from __future__ import annotations
 
-from typing import Dict
+from typing import Any, Dict
 
 from ...models import Manor, MissionTemplate
+
+
+def _normalize_enemy_technology_config(raw) -> Dict[str, object]:
+    if isinstance(raw, dict):
+        return raw
+    return {}
+
+
+def _normalize_mapping(raw) -> Dict[str, object]:
+    if isinstance(raw, dict):
+        return raw
+    return {}
+
+
+def _normalize_guest_configs(raw) -> list[str | Dict[str, object]]:
+    if not isinstance(raw, (list, tuple, set)):
+        return []
+    normalized: list[str | Dict[str, object]] = []
+    for entry in raw:
+        if isinstance(entry, str):
+            key = entry.strip()
+            if key:
+                normalized.append(key)
+        elif isinstance(entry, dict):
+            normalized.append(entry)
+    return normalized
+
+
+def _normalize_troop_loadout(raw) -> Dict[str, int]:
+    if not isinstance(raw, dict):
+        return {}
+    normalized: Dict[str, int] = {}
+    for key, value in raw.items():
+        key_str = str(key).strip()
+        if not key_str:
+            continue
+        try:
+            qty = int(value)
+        except (TypeError, ValueError):
+            qty = 0
+        normalized[key_str] = max(0, qty)
+    return normalized
+
+
+def _coerce_enemy_guest_level(config: Dict[str, object], default: int = 50) -> int:
+    raw_level: Any = config.get("guest_level", default)
+    try:
+        level = int(raw_level)
+    except (TypeError, ValueError):
+        level = default
+    return max(1, level)
+
+
+def _normalize_guest_skills(config: Dict[str, object]) -> list[str] | None:
+    raw = config.get("guest_skills")
+    if not isinstance(raw, (list, tuple, set)):
+        return None
+    skills = [str(item).strip() for item in raw if str(item).strip()]
+    return skills or None
 
 
 def generate_sync_battle_report(
@@ -23,18 +82,19 @@ def generate_sync_battle_report(
         from battle.combatants import build_named_ai_guests
         from gameplay.services.technology import get_guest_stat_bonuses, resolve_enemy_tech_levels
 
-        tech_conf = mission.enemy_technology or {}
-        attacker_guest_level = int(tech_conf.get("guest_level", 50)) if tech_conf else 50
-        attacker_guests = build_named_ai_guests(mission.enemy_guests or [], level=attacker_guest_level)
-        attacker_tech_levels = resolve_enemy_tech_levels(tech_conf) if tech_conf else {}
-        attacker_guest_bonuses = get_guest_stat_bonuses(tech_conf) if tech_conf else {}
-        attacker_guest_skills = tech_conf.get("guest_skills") or None
+        tech_conf = _normalize_enemy_technology_config(mission.enemy_technology)
+        attacker_guest_level = _coerce_enemy_guest_level(tech_conf)
+        attacker_guests = build_named_ai_guests(_normalize_guest_configs(mission.enemy_guests), level=attacker_guest_level)
+        attacker_tech_levels = resolve_enemy_tech_levels(tech_conf)
+        attacker_guest_bonuses = get_guest_stat_bonuses(tech_conf)
+        attacker_guest_skills = _normalize_guest_skills(tech_conf)
+        enemy_troops = _normalize_troop_loadout(mission.enemy_troops)
 
         return simulate_report(
             manor=manor,
             battle_type=mission.battle_type or "task",
             seed=seed,
-            troop_loadout=mission.enemy_troops or {},
+            troop_loadout=enemy_troops,
             fill_default_troops=False,
             attacker_guests=attacker_guests,
             defender_setup={"troop_loadout": loadout},
@@ -63,7 +123,7 @@ def generate_sync_battle_report(
         fill_default_troops=False,
         attacker_guests=guests,
         defender_setup=defender_setup,
-        drop_table=mission.drop_table or {},
+        drop_table=_normalize_mapping(mission.drop_table),
         opponent_name=mission.name,
         travel_seconds=travel_seconds,
         send_message=False,

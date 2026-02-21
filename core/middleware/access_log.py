@@ -11,6 +11,14 @@ from core.utils.network import get_client_ip
 logger = logging.getLogger("access")
 
 
+def _sanitize_log_value(value, *, max_length: int = 2048) -> str:
+    text = str(value)
+    sanitized = text.replace("\r", " ").replace("\n", " ").replace("\t", " ")
+    if len(sanitized) > max_length:
+        return sanitized[:max_length]
+    return sanitized
+
+
 class AccessLogMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
@@ -41,14 +49,19 @@ class AccessLogMiddleware:
             user_id = user.pk if user and getattr(user, "is_authenticated", False) else None
             ip = get_client_ip(request, trust_proxy=getattr(settings, "ACCESS_LOG_TRUST_PROXY", False))
             request_id = getattr(request, "id", "-")
+            method = _sanitize_log_value(getattr(request, "method", "UNKNOWN"), max_length=16)
+            log_path = _sanitize_log_value(path)
+            log_ip = _sanitize_log_value(ip, max_length=128)
+            log_request_id = _sanitize_log_value(request_id, max_length=128)
+            exc_name = _sanitize_log_value(type(exc).__name__, max_length=64) if exc else ""
             logger.info(
                 "method=%s path=%s status=%s duration_ms=%s user_id=%s ip=%s request_id=%s%s",
-                request.method,
-                path,
+                method,
+                log_path,
                 status_code,
                 duration_ms,
                 user_id,
-                ip,
-                request_id,
-                f" exc={type(exc).__name__}" if exc else "",
+                log_ip,
+                log_request_id,
+                f" exc={exc_name}" if exc else "",
             )

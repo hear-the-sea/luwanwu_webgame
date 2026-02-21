@@ -120,6 +120,7 @@ def _restore_battle_param_patches(cm, sc, originals: Dict[str, Any]) -> None:
         if handler is not None:
             handler(value)
 
+
 @contextmanager
 def patch_battle_params(params: Dict[str, Any]):
     """
@@ -150,7 +151,10 @@ def patch_battle_params(params: Dict[str, Any]):
         yield
     finally:
         _restore_battle_param_patches(cm, sc, originals)
+
+
 # ============ 战斗模拟器 ============
+
 
 class BattleSimulator:
     """战斗模拟器"""

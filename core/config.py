@@ -79,12 +79,12 @@ class ManorConfig:
     """庄园系统配置"""
 
     # 门客容量
-    GUEST_CAPACITY_BASE: int = 5
-    GUEST_CAPACITY_PER_LEVEL: int = 2
+    GUEST_CAPACITY_BASE: int = 3
+    GUEST_CAPACITY_PER_LEVEL: int = 1
 
     # 家丁容量
-    RETAINER_CAPACITY_BASE: int = 20
-    RETAINER_CAPACITY_PER_LEVEL: int = 5
+    RETAINER_CAPACITY_BASE: int = 50
+    RETAINER_CAPACITY_PER_LEVEL: int = 100
 
     # 出战上限
     SQUAD_SIZE_BASE: int = 3
@@ -134,6 +134,18 @@ class BuildingKeys:
     LIANBING_DAYING: str = "lianbingdaying"  # 练兵大营
     LIANGGONG_CHANG: str = "lianggongchang"  # 练功场
     TREASURY: str = "treasury"  # 藏宝阁
+    BATHHOUSE: str = "bathhouse"  # 澡堂
+    LATRINE: str = "latrine"  # 茅厕
+    SILVER_VAULT: str = "silver_vault"  # 银库
+    GRANARY: str = "granary"  # 粮仓
+    RANCH: str = "ranch"  # 畜牧场
+    SMITHY: str = "smithy"  # 冶炼坊
+    STABLE: str = "stable"  # 马房
+    TAVERN: str = "tavern"  # 酒馆
+    FORGE: str = "forge"  # 铁匠铺
+    CITANG: str = "citang"  # 祠堂
+    JAIL: str = "jail"  # 监牢
+    OATH_GROVE: str = "oath_grove"  # 结义林
 
 
 # ============ 稀有度配置 ============
@@ -241,6 +253,59 @@ class TechnologyConfig:
     MAX_LEVEL: int = 10
 
 
+# ============ 门客忠诚度配置 ============
+
+
+@dataclass(frozen=True)
+class GuestLoyaltyConfig:
+    """门客忠诚度系统配置"""
+
+    # 叛逃相关
+    DEFECTION_PROBABILITY: float = 0.3  # 低忠诚度门客每日叛逃概率 (30%)
+    DEFECTION_BATCH_SIZE: int = 500  # 叛逃批量处理大小
+    DEFECTION_QUERY_CHUNK_SIZE: int = 2000  # 叛逃候选查询分块大小
+
+
+# ============ 安全配置 ============
+
+
+@dataclass(frozen=True)
+class SecurityConfig:
+    """安全相关配置"""
+
+    # 登录限制
+    LOGIN_ATTEMPT_LIMIT: int = 5  # 最大尝试次数
+    LOGIN_ATTEMPT_WINDOW: int = 300  # 时间窗口（秒）
+    LOGIN_LOCKOUT_DURATION: int = 900  # 锁定时长（秒）
+
+
+# ============ 消息配置 ============
+
+
+@dataclass(frozen=True)
+class MessageConfig:
+    """消息系统配置"""
+
+    RETENTION_DAYS: int = 7  # 消息保留天数
+
+
+# ============ 交易配置 ============
+
+
+@dataclass(frozen=True)
+class TradeConfig:
+    """交易系统配置"""
+
+    # 市场交易
+    TRANSACTION_TAX_RATE: float = 0.10  # 交易税率 10%
+    MIN_PRICE_MULTIPLIER: float = 1.0  # 最低价格为物品price的1倍
+    MAX_PRICE: int = 10000000  # 最高1000万银两
+    MAX_TOTAL_PRICE: int = 2000000000  # 最高总价20亿（防止整数溢出）
+
+    # 商店
+    BUY_PRICE_MULTIPLIER: int = 2  # 购买价 = 基准价 * 2
+
+
 # ============ 单例实例 ============
 
 # 提供全局访问的配置实例
@@ -254,3 +319,7 @@ EQUIPMENT = EquipmentConfig()
 RECRUITMENT = RecruitmentConfig()
 WORK = WorkConfig()
 TECHNOLOGY = TechnologyConfig()
+GUEST_LOYALTY = GuestLoyaltyConfig()
+SECURITY = SecurityConfig()
+MESSAGE = MessageConfig()
+TRADE = TradeConfig()

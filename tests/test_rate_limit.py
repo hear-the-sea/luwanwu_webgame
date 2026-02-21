@@ -61,3 +61,48 @@ class RateLimitRedirectTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response["Location"], "/rate-limit")
+
+    def test_rate_limit_redirect_blank_key_func_falls_back(self):
+        @rate_limit_redirect(
+            "test_rate_limit_blank_key",
+            limit=1,
+            window_seconds=60,
+            redirect_url="/rate-limit",
+            key_func=lambda _req: "   ",
+        )
+        def limited_view(request):
+            return HttpResponse("ok")
+
+        request = self.factory.post("/test")
+        request.user = self.user
+        _attach_session_and_messages(request)
+
+        first = limited_view(request)
+        second = limited_view(request)
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 302)
+        self.assertEqual(second["Location"], "/rate-limit")
+
+    def test_rate_limit_redirect_key_func_error_falls_back(self):
+        def bad_key_func(_request):
+            raise RuntimeError("boom")
+
+        @rate_limit_redirect(
+            "test_rate_limit_bad_key",
+            limit=1,
+            window_seconds=60,
+            redirect_url="/rate-limit",
+            key_func=bad_key_func,
+        )
+        def limited_view(request):
+            return HttpResponse("ok")
+
+        request = self.factory.post("/test")
+        request.user = self.user
+        _attach_session_and_messages(request)
+
+        first = limited_view(request)
+        second = limited_view(request)
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 302)
+        self.assertEqual(second["Location"], "/rate-limit")

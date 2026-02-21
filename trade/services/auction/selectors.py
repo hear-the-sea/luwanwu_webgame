@@ -107,7 +107,7 @@ def get_my_leading_bids(manor: Manor) -> List[AuctionSlot]:
     )
 
     # Group by slot in memory
-    rankings_map = {}
+    rankings_map: dict[int, list[int]] = {}
     for slot_id, bidder_id in competitor_bids:
         if slot_id not in rankings_map:
             rankings_map[slot_id] = []
@@ -169,7 +169,7 @@ def get_slots_bid_info_batch(slots: List[AuctionSlot], manor: Manor = None) -> D
     slot_ids = [slot.id for slot in slots]
     all_bids = list(
         AuctionBid.objects.filter(slot_id__in=slot_ids, status=AuctionBid.Status.ACTIVE)
-        .order_by("slot_id", "-amount")
+        .order_by("slot_id", "-amount", "created_at")
         .select_related("manor")
     )
 
@@ -182,7 +182,12 @@ def get_slots_bid_info_batch(slots: List[AuctionSlot], manor: Manor = None) -> D
         ranking = bids_by_slot.get(slot.id, [])
         winner_count = slot.quantity
         bidder_count = len(ranking)
-        cutoff_price = ranking[winner_count - 1].amount if len(ranking) >= winner_count else slot.starting_price
+        if len(ranking) >= winner_count:
+            cutoff_price = ranking[winner_count - 1].amount
+        elif ranking:
+            cutoff_price = ranking[-1].amount
+        else:
+            cutoff_price = slot.starting_price
 
         info = {
             "winner_count": winner_count,

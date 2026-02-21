@@ -7,16 +7,16 @@ from celery import shared_task
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async_with_dedup
+from core.config import GUEST_LOYALTY
 
 logger = logging.getLogger(__name__)
 
-# ============ 忠诚度与叛逃处理常量 ============
-DEFECTION_PROBABILITY = 0.3  # 低忠诚度门客每日叛逃概率 (30%)
-DEFECTION_BATCH_SIZE = 500  # 叛逃批量处理大小
-DEFECTION_QUERY_CHUNK_SIZE = 2000  # 叛逃候选查询分块大小
-
 # 任务去重超时时间（秒）
 _TASK_DEDUP_TIMEOUT = 5
+# 向后兼容导出：供测试与外部调用方使用
+DEFECTION_PROBABILITY = GUEST_LOYALTY.DEFECTION_PROBABILITY
+DEFECTION_BATCH_SIZE = GUEST_LOYALTY.DEFECTION_BATCH_SIZE
+DEFECTION_QUERY_CHUNK_SIZE = GUEST_LOYALTY.DEFECTION_QUERY_CHUNK_SIZE
 
 
 @shared_task(name="guests.complete_training", bind=True, max_retries=2, default_retry_delay=30)

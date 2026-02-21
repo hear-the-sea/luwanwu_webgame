@@ -273,6 +273,7 @@ class ConfigLoader:
         errors.extend(self._validate_party_troops(config.defender.troops, "守方"))
 
         return errors
+
     def list_presets(self) -> List[str]:
         """
         列出所有可用的预设配置

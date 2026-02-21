@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import random
-from functools import lru_cache
 from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from django.db import transaction
@@ -56,19 +55,36 @@ CORE_POOL_TIERS = (
 
 # ============ 模板缓存 ============
 
-@lru_cache(maxsize=1)
 def _get_recruitable_templates_by_rarity() -> Dict[str, List[GuestTemplate]]:
     """
     获取所有可招募模板，按稀有度分组缓存。
 
-    使用 lru_cache 缓存结果，避免重复查询数据库。
+    使用 Django Cache 缓存结果，支持多进程共享。
     当模板数据变更时，需要调用 clear_template_cache() 刷新。
 
     Returns:
         按稀有度分组的模板字典
     """
+    from django.core.cache import cache
+    from gameplay.services.cache import CacheKeys, CACHE_TIMEOUT_CONFIG
+
+    cache_key = CacheKeys.GUEST_TEMPLATES_BY_RARITY
+    cached = cache.get(cache_key)
+    if cached is not None:
+        # 缓存命中，重建模板对象
+        template_ids_by_rarity = cached
+        all_template_ids = [tid for ids in template_ids_by_rarity.values() for tid in ids]
+        templates = {t.id: t for t in GuestTemplate.objects.filter(id__in=all_template_ids)}
+        result = {}
+        for rarity, ids in template_ids_by_rarity.items():
+            result[rarity] = [templates[tid] for tid in ids if tid in templates]
+        return result
+
+    # 缓存未命中，查询数据库
     templates = list(GuestTemplate.objects.filter(recruitable=True))
     result: Dict[str, List[GuestTemplate]] = {}
+    template_ids_by_rarity: Dict[str, List[int]] = {}
+
     for template in templates:
         # 隐士虽然是 black，但不应混入普通 black 池（隐士有专门的抽取逻辑）
         if template.is_hermit:
@@ -76,11 +92,15 @@ def _get_recruitable_templates_by_rarity() -> Dict[str, List[GuestTemplate]]:
 
         if template.rarity not in result:
             result[template.rarity] = []
+            template_ids_by_rarity[template.rarity] = []
         result[template.rarity].append(template)
+        template_ids_by_rarity[template.rarity].append(template.id)
+
+    # 缓存模板ID列表（可序列化）
+    cache.set(cache_key, template_ids_by_rarity, timeout=CACHE_TIMEOUT_CONFIG)
     return result
 
 
-@lru_cache(maxsize=1)
 def _get_hermit_templates() -> List[GuestTemplate]:
     """
     获取所有可招募的隐士模板（缓存）。
@@ -88,11 +108,24 @@ def _get_hermit_templates() -> List[GuestTemplate]:
     Returns:
         隐士模板列表
     """
-    return list(GuestTemplate.objects.filter(
+    from django.core.cache import cache
+    from gameplay.services.cache import CacheKeys, CACHE_TIMEOUT_CONFIG
+
+    cache_key = CacheKeys.HERMIT_TEMPLATES
+    cached = cache.get(cache_key)
+    if cached is not None:
+        # 缓存命中，重建模板对象
+        return list(GuestTemplate.objects.filter(id__in=cached))
+
+    # 缓存未命中，查询数据库
+    templates = list(GuestTemplate.objects.filter(
         rarity=GuestRarity.BLACK,
         is_hermit=True,
         recruitable=True,
     ))
+    template_ids = [t.id for t in templates]
+    cache.set(cache_key, template_ids, timeout=CACHE_TIMEOUT_CONFIG)
+    return templates
 
 
 def clear_template_cache() -> None:
@@ -101,8 +134,13 @@ def clear_template_cache() -> None:
 
     当 GuestTemplate 数据变更时调用此函数刷新缓存。
     """
-    _get_recruitable_templates_by_rarity.cache_clear()
-    _get_hermit_templates.cache_clear()
+    from django.core.cache import cache
+    from gameplay.services.cache import CacheKeys
+
+    cache.delete_many([
+        CacheKeys.GUEST_TEMPLATES_BY_RARITY,
+        CacheKeys.HERMIT_TEMPLATES,
+    ])
 
 
 def _filter_templates(
@@ -585,55 +623,28 @@ def finalize_candidate(candidate: RecruitmentCandidate) -> Guest:
     return guest
 
 
-@transaction.atomic
-def bulk_finalize_candidates(
-    candidates: List[RecruitmentCandidate],
-) -> Tuple[List[Guest], List[RecruitmentCandidate]]:
-    """
-    批量确认招募候选门客，将其转为正式门客。
-
-    在单个事务中处理多个候选，减少数据库往返次数。
-    会在开始时一���性检查容量，避免重复查询。
-
-    Args:
-        candidates: 候选门客对象列表
-
-    Returns:
-        (成功招募的门客列表, 因容量不足而失败的候选列表)
-    """
-    if not candidates:
-        return [], []
-
-    from gameplay.models import Manor
-
-    # 使用 select_for_update 锁定庄园，防止并发超出容量
-    manor = Manor.objects.select_for_update().get(pk=candidates[0].manor_id)
-    capacity = manor.guest_capacity
-    current_count = manor.guests.count()
-    available_slots = capacity - current_count
-
-    if available_slots <= 0:
-        return [], candidates
-
-    # 按可用槽位数量处理候选
-    to_process = candidates[:available_slots]
-    failed = candidates[available_slots:]
-
-    rng = random.Random()
-    template_ids = {candidate.template_id for candidate in to_process}
-    template_map = {
+def _preload_templates(template_ids: set[int]) -> Dict[int, GuestTemplate]:
+    """预加载模板数据（事务外操作）"""
+    return {
         template.id: template
         for template in GuestTemplate.objects.filter(id__in=template_ids).prefetch_related("initial_skills")
     }
+
+
+def _prepare_guest_objects(
+    candidates: List[RecruitmentCandidate],
+    template_map: Dict[int, GuestTemplate],
+    manor,
+    rng: random.Random,
+) -> tuple[List[Guest], List[GuestTemplate], List[int]]:
+    """准备门客对象（事务外操作，不涉及数据库写入）"""
     guests_to_create: List[Guest] = []
-    records_to_create: List[RecruitmentRecord] = []
     templates_for_guests: List[GuestTemplate] = []
     candidate_ids_to_delete: List[int] = []
 
-    for candidate in to_process:
+    for candidate in candidates:
         template = template_map.get(candidate.template_id) or candidate.template
 
-        # 确定是否需要使用自定义名称（普通黑/灰门客使用随机名，隐士使用原名）
         use_custom_name = (
             candidate.rarity in (GuestRarity.BLACK, GuestRarity.GRAY)
             and not template.is_hermit
@@ -653,15 +664,61 @@ def bulk_finalize_candidates(
         templates_for_guests.append(template)
         candidate_ids_to_delete.append(candidate.id)
 
-    # 批量创建门客
-    # 注意：MySQL 不支持 bulk_create 返回主键（不支持 RETURNING 子句）
-    # 为了确保后续创建关联对象时有正确的外键，直接逐个创建
+    return guests_to_create, templates_for_guests, candidate_ids_to_delete
+
+
+@transaction.atomic
+def bulk_finalize_candidates(
+    candidates: List[RecruitmentCandidate],
+) -> Tuple[List[Guest], List[RecruitmentCandidate]]:
+    """
+    批量确认招募候选门客，将其转为正式门客。
+
+    优化策略：
+    1. 使用辅助函数预加载模板数据
+    2. 使用辅助函数准备门客对象
+    3. 减少事务内的复杂逻辑，提升并发性能
+
+    Args:
+        candidates: 候选门客对象列表
+
+    Returns:
+        (成功招募的门客列表, 因容量不足而失败的候选列表)
+    """
+    if not candidates:
+        return [], []
+
+    from gameplay.models import Manor
+
+    # 锁定庄园并检查容量
+    manor = Manor.objects.select_for_update().get(pk=candidates[0].manor_id)
+    capacity = manor.guest_capacity
+    current_count = manor.guests.count()
+    available_slots = capacity - current_count
+
+    if available_slots <= 0:
+        return [], candidates
+
+    to_process = candidates[:available_slots]
+    failed = candidates[available_slots:]
+
+    # 预加载模板并准备门客对象
+    rng = random.Random()
+    template_ids = {candidate.template_id for candidate in to_process}
+    template_map = _preload_templates(template_ids)
+
+    guests_to_create, templates_for_guests, candidate_ids_to_delete = _prepare_guest_objects(
+        to_process, template_map, manor, rng
+    )
+
+    # 批量写入数据库
     created_guests = []
     for guest_obj in guests_to_create:
         guest_obj.save()
         created_guests.append(guest_obj)
 
     # 批量创建招募记录
+    records_to_create = []
     for i, guest in enumerate(created_guests):
         candidate = to_process[i]
         records_to_create.append(

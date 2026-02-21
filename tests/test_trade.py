@@ -7,7 +7,7 @@ from django.utils import timezone
 from datetime import timedelta
 
 from gameplay.models import Manor, ItemTemplate, InventoryItem
-from trade.models import MarketListing
+from trade.models import MarketListing, MarketTransaction
 from trade.services import market_service
 
 
@@ -264,6 +264,40 @@ class TestMarketPurchase:
         with pytest.raises(ValueError, match="已过期"):
             market_service.purchase_listing(buyer_manor, listing.id)
 
+    def test_purchase_listing_succeeds_when_message_send_fails(
+        self, seller_manor, buyer_manor, tradeable_item_template, monkeypatch
+    ):
+        """测试交易成功后消息失败不会导致购买接口报错"""
+        listing = market_service.create_listing(
+            manor=seller_manor,
+            item_key='test_tradeable_item',
+            quantity=10,
+            unit_price=2000,
+            duration=7200,
+        )
+
+        def _raise_message_error(**_kwargs):
+            raise RuntimeError("message backend unavailable")
+
+        monkeypatch.setattr(market_service, "create_message", _raise_message_error)
+
+        transaction = market_service.purchase_listing(buyer_manor, listing.id)
+
+        listing.refresh_from_db()
+        assert listing.status == MarketListing.Status.SOLD
+
+        buyer_inventory = InventoryItem.objects.filter(
+            manor=buyer_manor,
+            template=tradeable_item_template,
+            storage_location='warehouse'
+        ).first()
+        assert buyer_inventory is not None
+        assert buyer_inventory.quantity == 10
+
+        tx = MarketTransaction.objects.get(pk=transaction.pk)
+        assert tx.buyer_mail_sent is False
+        assert tx.seller_mail_sent is False
+
 
 @pytest.mark.django_db
 class TestMarketCancel:
@@ -352,6 +386,29 @@ class TestMarketExpire:
         ).first()
         assert message is not None
         assert message.attachments.get("items", {}).get("test_tradeable_item") == 10
+
+    def test_expire_listings_still_completes_when_notify_fails(self, seller_manor, monkeypatch):
+        """测试过期处理过程中推送失败不会回滚主流程"""
+        listing = market_service.create_listing(
+            manor=seller_manor,
+            item_key='test_tradeable_item',
+            quantity=10,
+            unit_price=2000,
+            duration=7200,
+        )
+        listing_id = listing.id
+
+        listing.expires_at = timezone.now() - timedelta(hours=1)
+        listing.save()
+
+        def _raise_notify_error(*_args, **_kwargs):
+            raise RuntimeError("ws unavailable")
+
+        monkeypatch.setattr(market_service, "notify_user", _raise_notify_error)
+
+        count = market_service.expire_listings()
+        assert count == 1
+        assert not MarketListing.objects.filter(id=listing_id).exists()
 
 
 @pytest.mark.django_db

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 from functools import wraps
 from typing import Callable
@@ -16,6 +17,7 @@ from core.utils.network import get_client_ip
 logger = logging.getLogger(__name__)
 
 _SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+_MEMCACHE_KEY_LIMIT = 250
 
 
 def _cache_error_response(is_json: bool, error_message: str, request: HttpRequest, redirect_url: str | None = None):
@@ -59,7 +61,36 @@ def _should_bypass_rate_limit(request: HttpRequest, include_safe_methods: bool) 
 
 
 def _safe_identifier(request: HttpRequest, key_func: Callable[[HttpRequest], str] | None = None) -> str:
-    return (key_func(request) if key_func else _default_identifier(request)).strip()
+    try:
+        raw_identifier = key_func(request) if key_func else _default_identifier(request)
+    except Exception:
+        logger.warning("Rate limit key_func failed, fallback to default identifier", exc_info=True)
+        raw_identifier = None
+
+    identifier = str(raw_identifier).strip() if raw_identifier is not None else ""
+    if identifier:
+        return identifier
+    return _default_identifier(request)
+
+
+def _is_cache_safe_identifier(identifier: str) -> bool:
+    return bool(identifier) and all(33 <= ord(ch) <= 126 for ch in identifier)
+
+
+def _build_cache_key(scope: str, identifier: str) -> str:
+    safe_scope = str(scope or "").strip()
+    if not _is_cache_safe_identifier(safe_scope):
+        safe_scope = "default"
+
+    base = f"rl:{safe_scope}:"
+    candidate = f"{base}{identifier}"
+    if len(candidate) <= _MEMCACHE_KEY_LIMIT and _is_cache_safe_identifier(identifier):
+        return candidate
+
+    digest_source = f"{scope}|{identifier}"
+    digest = hashlib.sha256(digest_source.encode("utf-8")).hexdigest()
+    scope_prefix = safe_scope[:32] or "default"
+    return f"rl:{scope_prefix}:h:{digest}"
 
 
 def _increment_cache_counter(cache_key: str, window_seconds: int) -> int:
@@ -110,7 +141,7 @@ def rate_limit_json(
                 return view_func(request, *args, **kwargs)
 
             identifier = _safe_identifier(request, key_func)
-            cache_key = f"rl:{scope}:{identifier}"
+            cache_key = _build_cache_key(scope, identifier)
             count = _get_rate_limit_count(cache_key, window_seconds, "Rate limit")
             if count is None:
                 return _cache_error_response(True, error_message, request)
@@ -129,6 +160,7 @@ def rate_limit_redirect(
     *,
     limit: int,
     window_seconds: int,
+    key_func: Callable[[HttpRequest], str] | None = None,
     error_message: str = "操作过于频繁，请稍后再试",
     redirect_url: str | None = None,
     include_safe_methods: bool = False,
@@ -146,8 +178,8 @@ def rate_limit_redirect(
             if _should_bypass_rate_limit(request, include_safe_methods):
                 return view_func(request, *args, **kwargs)
 
-            identifier = _safe_identifier(request)
-            cache_key = f"rl:{scope}:{identifier}"
+            identifier = _safe_identifier(request, key_func)
+            cache_key = _build_cache_key(scope, identifier)
             count = _get_rate_limit_count(cache_key, window_seconds, "Rate limit redirect")
             if count is None:
                 return _cache_error_response(False, error_message, request, redirect_url)

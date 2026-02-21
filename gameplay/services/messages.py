@@ -7,10 +7,12 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Dict
 
+from django.core.cache import cache
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
+from core.config import MESSAGE
 from core.exceptions import (
     AttachmentAlreadyClaimedError,
     MessageNotFoundError,
@@ -18,10 +20,15 @@ from core.exceptions import (
 )
 from ..models import InventoryItem, ItemTemplate, Manor, Message, ResourceEvent
 from .cache import CacheKeys, CACHE_TIMEOUT_SHORT
-from .resources import grant_resources
+from .resources import grant_resources_locked
 
-# 消息保留天数（自动清理超过此天数的消息）
-MESSAGE_RETENTION_DAYS = 7
+# 从 core.config 导入配置
+MESSAGE_RETENTION_DAYS = MESSAGE.RETENTION_DAYS
+
+
+def _invalidate_unread_count_cache(manor_id: int) -> None:
+    """Invalidate unread-count cache for a manor."""
+    cache.delete(CacheKeys.unread_count(manor_id))
 
 
 def create_message(
@@ -48,8 +55,6 @@ def create_message(
     Returns:
         创建的消息对象
     """
-    from django.core.cache import cache
-
     message = Message.objects.create(
         manor=manor,
         kind=kind,
@@ -61,7 +66,7 @@ def create_message(
     )
 
     # 清除未读消息数缓存
-    cache.delete(CacheKeys.unread_count(manor.id))
+    _invalidate_unread_count_cache(manor.id)
 
     return message
 
@@ -76,8 +81,6 @@ def bulk_create_messages(messages_data: list) -> list:
     Returns:
         创建的消息对象列表
     """
-    from django.core.cache import cache
-
     if not messages_data:
         return []
 
@@ -111,8 +114,6 @@ def cleanup_old_messages(manor: Manor) -> None:
     Args:
         manor: 庄园对象
     """
-    from django.core.cache import cache
-
     # 性能优化：避免每次打开消息列表都触发一次 DELETE 扫描。
     # 保留期以“天”为单位，清理无需高频执行；这里对每个庄园做节流（默认 6 小时一次）。
     cleanup_gate_key = f"messages:cleanup_old:{manor.id}"
@@ -120,7 +121,9 @@ def cleanup_old_messages(manor: Manor) -> None:
         return
 
     threshold = timezone.now() - timedelta(days=MESSAGE_RETENTION_DAYS)
-    manor.messages.filter(created_at__lt=threshold).delete()
+    deleted_count, _details = manor.messages.filter(created_at__lt=threshold).delete()
+    if deleted_count > 0:
+        _invalidate_unread_count_cache(manor.id)
 
 
 def list_messages(manor: Manor):
@@ -146,6 +149,7 @@ def delete_messages(manor: Manor, message_ids):
         message_ids: 消息ID列表
     """
     manor.messages.filter(id__in=message_ids).delete()
+    _invalidate_unread_count_cache(manor.id)
 
 
 def delete_all_messages(manor: Manor):
@@ -156,6 +160,7 @@ def delete_all_messages(manor: Manor):
         manor: 庄园对象
     """
     manor.messages.all().delete()
+    _invalidate_unread_count_cache(manor.id)
 
 
 def mark_messages_read(manor: Manor, message_ids):
@@ -166,12 +171,10 @@ def mark_messages_read(manor: Manor, message_ids):
         manor: 庄园对象
         message_ids: 消息ID列表
     """
-    from django.core.cache import cache
-
     manor.messages.filter(id__in=message_ids).update(is_read=True)
 
     # 清除未读消息数缓存
-    cache.delete(CacheKeys.unread_count(manor.id))
+    _invalidate_unread_count_cache(manor.id)
 
 
 def mark_all_messages_read(manor: Manor):
@@ -181,12 +184,10 @@ def mark_all_messages_read(manor: Manor):
     Args:
         manor: 庄园对象
     """
-    from django.core.cache import cache
-
     manor.messages.filter(is_read=False).update(is_read=True)
 
     # 清除未读消息数缓存
-    cache.delete(CacheKeys.unread_count(manor.id))
+    _invalidate_unread_count_cache(manor.id)
 
 
 def unread_message_count(manor: Manor) -> int:
@@ -201,8 +202,6 @@ def unread_message_count(manor: Manor) -> int:
     Returns:
         未读消息数量
     """
-    from django.core.cache import cache
-
     cache_key = CacheKeys.unread_count(manor.id)
     count = cache.get(cache_key)
 
@@ -252,12 +251,12 @@ def claim_message_attachments(message: Message) -> Dict:
         raise AttachmentAlreadyClaimedError()
 
     manor = Manor.objects.select_for_update().get(pk=locked_message.manor_id)
-    attachments = locked_message.attachments
+    attachments = dict(locked_message.attachments or {})
     claimed_summary = {}
 
     # 发放资源
     resources = attachments.get("resources", {})
-    claimed_resources = grant_resources(
+    claimed_resources, _overflow = grant_resources_locked(
         manor,
         resources,
         note=f"邮件附件：{locked_message.title}",
@@ -287,7 +286,7 @@ def claim_message_attachments(message: Message) -> Dict:
             # 获取或创建库存记录（明确指定存储位置为仓库）
             # Use select_for_update for get_or_create to prevent race conditions
             # IMPORTANT: Must explicitly specify manor in get_or_create lookup to avoid NULL manor_id
-            inventory_item, created = (
+            inventory_item, _created = (
                 InventoryItem.objects.select_for_update()
                 .get_or_create(
                     manor=manor,
@@ -306,17 +305,15 @@ def claim_message_attachments(message: Message) -> Dict:
             claimed_summary[f"item_{item_key}"] = quantity
             claimed_items[item_key] = quantity
 
-    # Refresh manor to get updated resource values
-    manor.refresh_from_db()
-
     # 标记为已领取
-    message.is_claimed = True
-    message.is_read = True
+    locked_message.is_claimed = True
+    locked_message.is_read = True
     attachments["claimed"] = {
         "resources": claimed_resources,
         "items": claimed_items,
     }
-    message.attachments = attachments
-    message.save(update_fields=["is_claimed", "is_read", "attachments"])
+    locked_message.attachments = attachments
+    locked_message.save(update_fields=["is_claimed", "is_read", "attachments"])
+    _invalidate_unread_count_cache(manor.id)
 
     return claimed_summary

@@ -1,9 +1,19 @@
+from datetime import timedelta
+
 import pytest
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.utils import timezone
 
 from gameplay.models import ItemTemplate, Message, ResourceEvent, ResourceType
+from gameplay.services.cache import CacheKeys
 from gameplay.services.manor import ensure_manor
-from gameplay.services.messages import claim_message_attachments
+from gameplay.services.messages import (
+    claim_message_attachments,
+    cleanup_old_messages,
+    delete_all_messages,
+    delete_messages,
+)
 
 User = get_user_model()
 
@@ -58,3 +68,65 @@ def test_claim_message_attachments_records_actual_and_stores_claimed():
     assert event.delta == 5
 
     assert message.get_attachment_summary() == "银两×5、1种道具"
+
+
+@pytest.mark.django_db
+def test_claim_message_attachments_invalidates_unread_cache():
+    user = User.objects.create_user(username="mail_user_cache", password="pass123")
+    manor = ensure_manor(user)
+    ItemTemplate.objects.create(key="mail_test_item_cache", name="测试道具")
+    message = Message.objects.create(
+        manor=manor,
+        kind=Message.Kind.REWARD,
+        title="测试邮件缓存",
+        attachments={"items": {"mail_test_item_cache": 1}},
+    )
+
+    cache_key = CacheKeys.unread_count(manor.id)
+    cache.set(cache_key, 999, timeout=60)
+    assert cache.get(cache_key) == 999
+
+    claim_message_attachments(message)
+    assert cache.get(cache_key) is None
+
+
+@pytest.mark.django_db
+def test_delete_messages_invalidates_unread_cache():
+    user = User.objects.create_user(username="mail_user_del", password="pass123")
+    manor = ensure_manor(user)
+    msg = Message.objects.create(manor=manor, kind=Message.Kind.SYSTEM, title="t1")
+
+    cache_key = CacheKeys.unread_count(manor.id)
+    cache.set(cache_key, 999, timeout=60)
+    delete_messages(manor, [msg.id])
+    assert cache.get(cache_key) is None
+
+
+@pytest.mark.django_db
+def test_delete_all_messages_invalidates_unread_cache():
+    user = User.objects.create_user(username="mail_user_del_all", password="pass123")
+    manor = ensure_manor(user)
+    Message.objects.create(manor=manor, kind=Message.Kind.SYSTEM, title="t2")
+    Message.objects.create(manor=manor, kind=Message.Kind.SYSTEM, title="t3")
+
+    cache_key = CacheKeys.unread_count(manor.id)
+    cache.set(cache_key, 999, timeout=60)
+    delete_all_messages(manor)
+    assert cache.get(cache_key) is None
+
+
+@pytest.mark.django_db
+def test_cleanup_old_messages_invalidates_unread_cache_when_deleting():
+    user = User.objects.create_user(username="mail_user_cleanup", password="pass123")
+    manor = ensure_manor(user)
+    message = Message.objects.create(manor=manor, kind=Message.Kind.SYSTEM, title="old_msg")
+    Message.objects.filter(pk=message.pk).update(created_at=timezone.now() - timedelta(days=30))
+
+    cache_key = CacheKeys.unread_count(manor.id)
+    cache.set(cache_key, 999, timeout=60)
+    assert cache.get(cache_key) == 999
+
+    cleanup_old_messages(manor)
+
+    assert Message.objects.filter(pk=message.pk).exists() is False
+    assert cache.get(cache_key) is None

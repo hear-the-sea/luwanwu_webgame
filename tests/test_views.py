@@ -6,6 +6,7 @@ import pytest
 from django.test import Client
 from django.urls import reverse
 
+from gameplay.models import ItemTemplate, Message
 from gameplay.services.manor import ensure_manor
 
 
@@ -139,6 +140,63 @@ class TestMessageViews:
         manor, client = manor_with_user
         response = client.post(reverse("gameplay:mark_all_messages_read"))
         assert response.status_code == 302  # 重定向回消息列表
+
+    def test_claim_attachment_handles_game_error(self, manor_with_user):
+        """领取无附件消息时应优雅失败而不是500。"""
+        manor, client = manor_with_user
+        message = Message.objects.create(
+            manor=manor,
+            kind=Message.Kind.SYSTEM,
+            title="无附件测试",
+            attachments={},
+        )
+
+        response = client.post(reverse("gameplay:claim_attachment", kwargs={"pk": message.pk}))
+
+        assert response.status_code == 302
+
+    def test_claim_attachment_json_success(self, manor_with_user):
+        """JSON 请求领取附件成功返回结构化结果。"""
+        manor, client = manor_with_user
+        ItemTemplate.objects.create(key="msg_json_item", name="测试道具")
+        message = Message.objects.create(
+            manor=manor,
+            kind=Message.Kind.REWARD,
+            title="json附件",
+            attachments={"items": {"msg_json_item": 2}},
+        )
+
+        response = client.post(
+            reverse("gameplay:claim_attachment", kwargs={"pk": message.pk}),
+            HTTP_ACCEPT="application/json",
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["success"] is True
+        assert payload["message_id"] == message.pk
+        assert payload["claimed"][0]["kind"] == "item"
+
+    def test_claim_attachment_json_error(self, manor_with_user):
+        """JSON 请求领取无附件时返回400错误。"""
+        manor, client = manor_with_user
+        message = Message.objects.create(
+            manor=manor,
+            kind=Message.Kind.SYSTEM,
+            title="json无附件",
+            attachments={},
+        )
+
+        response = client.post(
+            reverse("gameplay:claim_attachment", kwargs={"pk": message.pk}),
+            HTTP_ACCEPT="application/json",
+        )
+
+        assert response.status_code == 400
+        payload = response.json()
+        assert payload["success"] is False
+        assert payload["message_id"] == message.pk
+        assert "error" in payload
 
 
 # ============ 科技系统测试 ============

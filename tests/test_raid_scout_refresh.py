@@ -52,3 +52,25 @@ def test_refresh_scout_records_prefers_async_dispatch(monkeypatch):
 
     assert set(dispatched) == {(11, "outbound"), (12, "outbound"), (13, "return")}
     assert called == {"scout": 0, "return": 0}
+
+
+def test_send_scout_success_message_tolerates_invalid_intel_shape(monkeypatch):
+    sent = {}
+
+    def _create_message(*, manor, kind, title, body):
+        sent.update({"manor": manor, "kind": kind, "title": title, "body": body})
+
+    monkeypatch.setattr(scout_service, "create_message", _create_message)
+
+    record = SimpleNamespace(
+        intel_data=["bad-shape"],
+        attacker=SimpleNamespace(id=1),
+        defender=SimpleNamespace(display_name="目标庄园"),
+    )
+
+    scout_service._send_scout_success_message(record)
+
+    assert sent["manor"].id == 1
+    assert sent["kind"] == "system"
+    assert "侦察报告" in sent["title"]
+    assert "未知" in sent["body"]

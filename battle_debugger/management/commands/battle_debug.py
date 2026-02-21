@@ -208,6 +208,7 @@ class Command(BaseCommand):
         results = self._run_simulations(config, options)
         if options.get('repeat', 1) > 1:
             self.print_statistics(results)
+
     def handle_presets(self, options):
         """处理presets子命令"""
         loader = ConfigLoader()

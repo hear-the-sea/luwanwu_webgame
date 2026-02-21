@@ -45,6 +45,50 @@ SUPPLY_STALE_CACHE_KEY = "gold_bar:effective_supply:stale"
 SUPPLY_STALE_CACHE_TTL = 3600  # 过期缓存保留1小时，用于降级
 
 
+def _safe_int(value, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _normalize_positive_quantity(quantity) -> int:
+    normalized = _safe_int(quantity, 0)
+    if normalized <= 0:
+        raise ValueError("兑换数量必须大于0")
+    return normalized
+
+
+def _safe_cache_get(key: str, default=None):
+    try:
+        return cache.get(key, default)
+    except Exception:
+        logger.warning("Failed to read cache key: %s", key, exc_info=True)
+        return default
+
+
+def _safe_cache_set(key: str, value, timeout: int) -> None:
+    try:
+        cache.set(key, value, timeout=timeout)
+    except Exception:
+        logger.warning("Failed to write cache key: %s", key, exc_info=True)
+
+
+def _safe_cache_add(key: str, value, timeout: int) -> bool:
+    try:
+        return bool(cache.add(key, value, timeout=timeout))
+    except Exception:
+        logger.warning("Failed to add cache key: %s", key, exc_info=True)
+        return False
+
+
+def _safe_cache_delete(key: str) -> None:
+    try:
+        cache.delete(key)
+    except Exception:
+        logger.warning("Failed to delete cache key: %s", key, exc_info=True)
+
+
 def get_today_exchange_count(manor: Manor) -> int:
     """获取今日已兑换金条数量"""
     # 安全修复：使用 timezone.now().date() 保持时区一致性
@@ -52,7 +96,7 @@ def get_today_exchange_count(manor: Manor) -> int:
     count = GoldBarExchangeLog.objects.filter(
         manor=manor, exchange_date=today
     ).aggregate(total=Sum("quantity"))["total"]
-    return count or 0
+    return max(0, _safe_int(count, 0))
 
 
 # ============ 动态汇率计算 ============
@@ -74,21 +118,22 @@ def get_effective_gold_supply() -> int:
     Returns:
         int: 活跃玩家持有的金条总量
     """
-    cached = cache.get(SUPPLY_CACHE_KEY)
+    cached = _safe_cache_get(SUPPLY_CACHE_KEY)
     if cached is not None:
-        return cached
+        return max(0, _safe_int(cached, GOLD_BAR_TARGET_SUPPLY))
 
     # 缓存击穿保护：使用分布式锁防止并发查询
     lock_key = f"{SUPPLY_CACHE_KEY}:lock"
-    lock_acquired = cache.add(lock_key, "1", timeout=10)  # 10秒锁超时
+    lock_acquired = _safe_cache_add(lock_key, "1", timeout=10)  # 10秒锁超时
 
     if not lock_acquired:
         # 未获取到锁：直接降级到过期缓存，避免 sleep 放大高并发延迟。
         # 降级策略：使用过期缓存（stale cache），避免使用硬编码默认值
-        stale = cache.get(SUPPLY_STALE_CACHE_KEY)
+        stale = _safe_cache_get(SUPPLY_STALE_CACHE_KEY)
         if stale is not None:
-            logger.info("Gold supply cache miss, using stale cache value: %d", stale)
-            return stale
+            stale_value = max(0, _safe_int(stale, GOLD_BAR_TARGET_SUPPLY))
+            logger.info("Gold supply cache miss, using stale cache value: %d", stale_value)
+            return stale_value
         # 过期缓存也没有，返回默认值
         logger.warning("Gold supply cache miss and no stale cache, using default")
         return GOLD_BAR_TARGET_SUPPLY
@@ -101,20 +146,20 @@ def get_effective_gold_supply() -> int:
             manor__user__last_login__gte=cutoff,
         ).aggregate(total=Sum("quantity"))
 
-        total = result["total"] or 0
+        total = max(0, _safe_int(result["total"], 0))
         # 同时更新主缓存和过期缓存（过期缓存TTL更长，用于降级）
-        cache.set(SUPPLY_CACHE_KEY, total, SUPPLY_CACHE_TTL)
-        cache.set(SUPPLY_STALE_CACHE_KEY, total, SUPPLY_STALE_CACHE_TTL)
+        _safe_cache_set(SUPPLY_CACHE_KEY, total, SUPPLY_CACHE_TTL)
+        _safe_cache_set(SUPPLY_STALE_CACHE_KEY, total, SUPPLY_STALE_CACHE_TTL)
         return total
     except Exception as e:
         logger.warning("Failed to query gold supply: %s", e, exc_info=True)
         # 降级策略：优先使用过期缓存
-        stale = cache.get(SUPPLY_STALE_CACHE_KEY)
+        stale = _safe_cache_get(SUPPLY_STALE_CACHE_KEY)
         if stale is not None:
-            return stale
+            return max(0, _safe_int(stale, GOLD_BAR_TARGET_SUPPLY))
         return GOLD_BAR_TARGET_SUPPLY
     finally:
-        cache.delete(lock_key)
+        _safe_cache_delete(lock_key)
 
 
 def calculate_supply_factor() -> float:
@@ -155,7 +200,8 @@ def calculate_progressive_factor(today_count: int) -> float:
     Returns:
         float: 累进系数，范围 1.0 ~ 1.60
     """
-    factor = 1 + GOLD_BAR_PROGRESSIVE_FACTOR * today_count
+    normalized_count = max(0, _safe_int(today_count, 0))
+    factor = 1 + GOLD_BAR_PROGRESSIVE_FACTOR * normalized_count
     return min(factor, 1.60)
 
 
@@ -213,8 +259,9 @@ def calculate_gold_bar_cost(manor: Manor, quantity: int) -> dict:
     Returns:
         dict: 包含各项费用明细
     """
+    quantity = _normalize_positive_quantity(quantity)
     supply_factor = calculate_supply_factor()
-    today_count = get_today_exchange_count(manor)
+    today_count = max(0, _safe_int(get_today_exchange_count(manor), 0))
 
     base_cost = 0
     rate_details: list[int] = []
@@ -293,8 +340,7 @@ def exchange_gold_bar(manor: Manor, quantity: int) -> dict:
     Raises:
         ValueError: 参数错误、银两不足等
     """
-    if quantity <= 0:
-        raise ValueError("兑换数量必须大于0")
+    quantity = _normalize_positive_quantity(quantity)
 
     # 检查金条物品模板是否存在
     try:
@@ -358,7 +404,7 @@ def exchange_gold_bar(manor: Manor, quantity: int) -> dict:
         )
 
     # 清除供应量缓存，让下次查询获取最新数据
-    cache.delete(SUPPLY_CACHE_KEY)
+    _safe_cache_delete(SUPPLY_CACHE_KEY)
 
     return {
         "quantity": quantity,

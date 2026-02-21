@@ -138,6 +138,74 @@ def test_market_purchase_view_success(monkeypatch, client, django_user_model):
 
 
 @pytest.mark.django_db
+def test_market_purchase_view_unexpected_error_uses_generic_message(monkeypatch, client, django_user_model):
+    monkeypatch.setattr("trade.views.purchase_listing", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    user = django_user_model.objects.create_user(username="market_buy_unexpected", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    resp = client.post(reverse("trade:market_purchase", args=[1]))
+    assert resp.status_code == 302
+    msgs = [m.message for m in get_messages(resp.wsgi_request)]
+    assert any("操作失败，请稍后重试" in m for m in msgs)
+
+
+@pytest.mark.django_db
+def test_market_purchase_view_tolerates_missing_threshold_setting(monkeypatch, client, django_user_model):
+    class _DummyListing:
+        quantity = 2
+
+        class _Template:
+            name = "物品"
+
+        item_template = _Template()
+
+    class _DummyTransaction:
+        total_price = 100
+        listing = _DummyListing()
+
+    monkeypatch.setattr("trade.views.purchase_listing", lambda *_args, **_kwargs: _DummyTransaction())
+    monkeypatch.setattr("trade.views.settings.TRADE_HIGH_VALUE_SILVER_THRESHOLD", None, raising=False)
+
+    user = django_user_model.objects.create_user(username="market_buy_missing_threshold", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    resp = client.post(reverse("trade:market_purchase", args=[1]))
+    assert resp.status_code == 302
+    msgs = [m.message for m in get_messages(resp.wsgi_request)]
+    assert any("成功购买" in m for m in msgs)
+
+
+@pytest.mark.django_db
+def test_market_purchase_view_tolerates_invalid_threshold_setting(monkeypatch, client, django_user_model):
+    class _DummyListing:
+        quantity = 2
+
+        class _Template:
+            name = "物品"
+
+        item_template = _Template()
+
+    class _DummyTransaction:
+        total_price = 100
+        listing = _DummyListing()
+
+    monkeypatch.setattr("trade.views.purchase_listing", lambda *_args, **_kwargs: _DummyTransaction())
+    monkeypatch.setattr("trade.views.settings.TRADE_HIGH_VALUE_SILVER_THRESHOLD", "invalid", raising=False)
+
+    user = django_user_model.objects.create_user(username="market_buy_invalid_threshold", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    resp = client.post(reverse("trade:market_purchase", args=[1]))
+    assert resp.status_code == 302
+    msgs = [m.message for m in get_messages(resp.wsgi_request)]
+    assert any("成功购买" in m for m in msgs)
+
+
+@pytest.mark.django_db
 def test_market_cancel_view_success(monkeypatch, client, django_user_model):
     monkeypatch.setattr(
         "trade.views.cancel_listing",
@@ -168,3 +236,33 @@ def test_auction_bid_view_messages_first_and_raise(monkeypatch, client, django_u
     resp = client.post(reverse("trade:auction_bid", args=[1]), {"amount": "6"})
     msgs = [m.message for m in get_messages(resp.wsgi_request)]
     assert any("成功加价" in m for m in msgs)
+
+
+@pytest.mark.django_db
+def test_auction_bid_view_tolerates_missing_threshold_setting(monkeypatch, client, django_user_model):
+    user = django_user_model.objects.create_user(username="auction_bid_missing_threshold", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    monkeypatch.setattr("trade.views.place_bid", lambda *_args, **_kwargs: (object(), True))
+    monkeypatch.setattr("trade.views.settings.AUCTION_HIGH_BID_THRESHOLD", None, raising=False)
+
+    resp = client.post(reverse("trade:auction_bid", args=[1]), {"amount": "5"})
+    assert resp.status_code == 302
+    msgs = [m.message for m in get_messages(resp.wsgi_request)]
+    assert any("成功出价" in m for m in msgs)
+
+
+@pytest.mark.django_db
+def test_auction_bid_view_tolerates_invalid_threshold_setting(monkeypatch, client, django_user_model):
+    user = django_user_model.objects.create_user(username="auction_bid_invalid_threshold", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    monkeypatch.setattr("trade.views.place_bid", lambda *_args, **_kwargs: (object(), True))
+    monkeypatch.setattr("trade.views.settings.AUCTION_HIGH_BID_THRESHOLD", "invalid", raising=False)
+
+    resp = client.post(reverse("trade:auction_bid", args=[1]), {"amount": "5"})
+    assert resp.status_code == 302
+    msgs = [m.message for m in get_messages(resp.wsgi_request)]
+    assert any("成功出价" in m for m in msgs)

@@ -6,6 +6,8 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
+from core.config import GUEST
+
 if TYPE_CHECKING:
     from .managers import GuestManager as GuestManagerType
 
@@ -15,28 +17,18 @@ GENDER_CHOICES = [
     ("unknown", "未知"),
 ]
 
-MAX_GUEST_SKILL_SLOTS = 3
-MAX_GUEST_LEVEL = 100
-
-# ============ 门客属性常量 ============
-
-# 防御属性转换HP的倍率
-# 每点防御提供50点额外血量上限
-DEFENSE_TO_HP_MULTIPLIER = 50
-
-# 最低HP下限（保底值）
-MIN_HP_FLOOR = 200
-
-# 带兵相关常量
-BASE_TROOP_CAPACITY = 200       # 基础带兵数量
-BONUS_TROOP_CAPACITY = 50       # 满级门客额外带兵数
-TROOP_CAPACITY_LEVEL_THRESHOLD = 70  # 获得额外带兵的等级门槛
-
-# 战斗属性计算：文武门客攻击力权重
-CIVIL_FORCE_WEIGHT = 0.8        # 文官武力权重
-CIVIL_INTELLECT_WEIGHT = 0.3    # 文官智力权重
-MILITARY_FORCE_WEIGHT = 1.0     # 武将武力权重
-MILITARY_INTELLECT_WEIGHT = 0.2  # 武将智力权重
+# 从 core.config 导入配置，保持向后兼容
+MAX_GUEST_SKILL_SLOTS = GUEST.MAX_SKILL_SLOTS
+MAX_GUEST_LEVEL = GUEST.MAX_LEVEL
+DEFENSE_TO_HP_MULTIPLIER = GUEST.DEFENSE_TO_HP_MULTIPLIER
+MIN_HP_FLOOR = GUEST.MIN_HP_FLOOR
+BASE_TROOP_CAPACITY = GUEST.BASE_TROOP_CAPACITY
+BONUS_TROOP_CAPACITY = GUEST.BONUS_TROOP_CAPACITY
+TROOP_CAPACITY_LEVEL_THRESHOLD = GUEST.TROOP_CAPACITY_LEVEL_THRESHOLD
+CIVIL_FORCE_WEIGHT = GUEST.CIVIL_FORCE_WEIGHT
+CIVIL_INTELLECT_WEIGHT = GUEST.CIVIL_INTELLECT_WEIGHT
+MILITARY_FORCE_WEIGHT = GUEST.MILITARY_FORCE_WEIGHT
+MILITARY_INTELLECT_WEIGHT = GUEST.MILITARY_INTELLECT_WEIGHT
 
 
 class GuestRarity(models.TextChoices):
@@ -341,8 +333,8 @@ class Guest(models.Model):
         战斗属性计算（直接使用真实属性，不再乘倍率）
 
         - 攻击力：文武门客使用不同公式
-          * 文官（civil）：武力80% + 智力30%
-          * 武将（military）：武力100% + 智力20%
+          * 文官（civil）：武力×CIVIL_FORCE_WEIGHT + 智力×CIVIL_INTELLECT_WEIGHT
+          * 武将（military）：武力×MILITARY_FORCE_WEIGHT + 智力×MILITARY_INTELLECT_WEIGHT
         - 防御力：由防御属性决定
         - 智力：在技能伤害公式中生效
         """

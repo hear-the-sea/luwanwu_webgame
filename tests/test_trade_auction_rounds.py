@@ -104,6 +104,41 @@ def test_rounds_module_create_auction_round_can_create_slots(monkeypatch):
 
 
 @pytest.mark.django_db
+def test_rounds_module_create_auction_round_tolerates_cache_add_failure(monkeypatch):
+    from trade.services.auction.rounds import create_auction_round as create_round_impl
+
+    item_key = "auction_rounds_cache_add_fail_create"
+    _create_auction_item_template(item_key)
+
+    monkeypatch.setattr(
+        "trade.services.auction.rounds.cache.add",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+    )
+    monkeypatch.setattr(
+        "trade.services.auction.rounds.get_auction_settings",
+        lambda: AuctionSettings(cycle_days=3, min_increment_ratio=0.1, default_min_increment=1),
+    )
+    monkeypatch.setattr(
+        "trade.services.auction.rounds.get_enabled_auction_items",
+        lambda: [
+            AuctionItemConfig(
+                item_key=item_key,
+                slots=1,
+                quantity_per_slot=1,
+                starting_price=10,
+                min_increment=1,
+                enabled=True,
+            )
+        ],
+    )
+
+    created = create_round_impl()
+
+    assert created is not None
+    assert created.slots.count() == 1
+
+
+@pytest.mark.django_db
 def test_auction_round_db_constraint_allows_only_one_active_round():
     now = timezone.now()
     AuctionRound.objects.create(
@@ -218,6 +253,85 @@ def test_rounds_module_settle_auction_round_marks_completed_when_no_slots():
 
 
 @pytest.mark.django_db
+def test_settle_auction_round_without_round_id_skips_settling_round():
+    auction_round = AuctionRound.objects.create(
+        round_number=10011,
+        status=AuctionRound.Status.SETTLING,
+        start_at=timezone.now() - timedelta(days=2),
+        end_at=timezone.now() - timedelta(minutes=1),
+    )
+
+    stats = auction_service.settle_auction_round()
+
+    auction_round.refresh_from_db()
+    assert stats["settled"] == 0
+    assert stats["sold"] == 0
+    assert stats["unsold"] == 0
+    assert auction_round.status == AuctionRound.Status.SETTLING
+
+
+@pytest.mark.django_db
+def test_rounds_module_settle_slot_skips_non_active_slot():
+    from trade.services.auction.rounds import _settle_slot
+
+    item_tpl = _create_auction_item_template("auction_settle_skip_non_active_item")
+    auction_round = AuctionRound.objects.create(
+        round_number=10012,
+        status=AuctionRound.Status.ACTIVE,
+        start_at=timezone.now() - timedelta(days=2),
+        end_at=timezone.now() - timedelta(minutes=1),
+    )
+    slot = AuctionSlot.objects.create(
+        round=auction_round,
+        item_template=item_tpl,
+        quantity=1,
+        starting_price=10,
+        current_price=10,
+        min_increment=1,
+        status=AuctionSlot.Status.SOLD,
+        config_key=item_tpl.key,
+        slot_index=0,
+    )
+
+    result = _settle_slot(slot)
+    slot.refresh_from_db()
+
+    assert result.get("skipped") is True
+    assert slot.status == AuctionSlot.Status.SOLD
+
+
+@pytest.mark.django_db
+def test_rounds_module_settle_auction_round_keeps_settling_when_active_slots_remain():
+    from trade.services.auction.rounds import settle_auction_round as settle_round_impl
+
+    item_template = _create_auction_item_template("auction_rounds_keep_settling_when_active")
+    auction_round = AuctionRound.objects.create(
+        round_number=10013,
+        status=AuctionRound.Status.ACTIVE,
+        start_at=timezone.now() - timedelta(days=2),
+        end_at=timezone.now() - timedelta(minutes=1),
+    )
+    AuctionSlot.objects.create(
+        round=auction_round,
+        item_template=item_template,
+        quantity=1,
+        starting_price=10,
+        current_price=10,
+        min_increment=1,
+        status=AuctionSlot.Status.ACTIVE,
+        config_key=item_template.key,
+        slot_index=0,
+    )
+
+    stats = settle_round_impl(round_id=auction_round.id, settle_slot_func=lambda _slot: {"skipped": True})
+
+    auction_round.refresh_from_db()
+    assert stats["settled"] == 0
+    assert auction_round.status == AuctionRound.Status.SETTLING
+    assert auction_round.settled_at is None
+
+
+@pytest.mark.django_db
 def test_rounds_module_settle_auction_round_keeps_settling_on_slot_failure():
     from trade.services.auction.rounds import settle_auction_round as settle_round_impl
 
@@ -279,6 +393,56 @@ def test_rounds_module_settle_slot_marks_unsold_when_no_bids():
 
 
 @pytest.mark.django_db
+def test_rounds_module_settle_slot_invalid_winner_count_refunds_all_bids(monkeypatch, django_user_model):
+    from trade.services.auction.rounds import _settle_slot
+
+    user = django_user_model.objects.create_user(username="auction_settle_invalid_winner_count", password="pass123")
+    manor = ensure_manor(user)
+
+    item_tpl = _create_auction_item_template("auction_settle_invalid_winner_item")
+    auction_round = AuctionRound.objects.create(
+        round_number=10009,
+        status=AuctionRound.Status.ACTIVE,
+        start_at=timezone.now() - timedelta(days=2),
+        end_at=timezone.now() - timedelta(minutes=1),
+    )
+    slot = AuctionSlot.objects.create(
+        round=auction_round,
+        item_template=item_tpl,
+        quantity=0,
+        starting_price=10,
+        current_price=10,
+        min_increment=1,
+        status=AuctionSlot.Status.ACTIVE,
+        config_key=item_tpl.key,
+        slot_index=0,
+    )
+    bid = AuctionBid.objects.create(slot=slot, manor=manor, amount=20, status=AuctionBid.Status.ACTIVE, frozen_gold_bars=20)
+    frozen = FrozenGoldBar.objects.create(
+        manor=manor,
+        amount=20,
+        reason=FrozenGoldBar.Reason.AUCTION_BID,
+        auction_bid=bid,
+        is_frozen=True,
+    )
+
+    monkeypatch.setattr("trade.services.auction.rounds.create_message", lambda *a, **k: None)
+    monkeypatch.setattr("trade.services.auction.rounds.notify_user", lambda *a, **k: True)
+
+    result = _settle_slot(slot)
+
+    bid.refresh_from_db()
+    frozen.refresh_from_db()
+    slot.refresh_from_db()
+
+    assert result["sold"] is False
+    assert result["price"] == 0
+    assert slot.status == AuctionSlot.Status.UNSOLD
+    assert bid.status == AuctionBid.Status.REFUNDED
+    assert frozen.is_frozen is False
+
+
+@pytest.mark.django_db
 def test_rounds_module_settle_slot_partial_refund_flow(monkeypatch, django_user_model):
     from trade.services.auction.rounds import _settle_slot
 
@@ -329,6 +493,57 @@ def test_rounds_module_settle_slot_partial_refund_flow(monkeypatch, django_user_
 
 
 @pytest.mark.django_db
+def test_rounds_module_settle_slot_ignores_notify_failure(monkeypatch, django_user_model):
+    from trade.services.auction.rounds import _settle_slot
+
+    user = django_user_model.objects.create_user(username="auction_rounds_notify_fail", password="pass123")
+    manor = ensure_manor(user)
+
+    item_tpl = _create_auction_item_template("auction_settle_notify_fail_item")
+    auction_round = AuctionRound.objects.create(
+        round_number=10008,
+        status=AuctionRound.Status.ACTIVE,
+        start_at=timezone.now() - timedelta(days=2),
+        end_at=timezone.now() - timedelta(minutes=1),
+    )
+    slot = AuctionSlot.objects.create(
+        round=auction_round,
+        item_template=item_tpl,
+        quantity=1,
+        starting_price=10,
+        current_price=10,
+        min_increment=1,
+        status=AuctionSlot.Status.ACTIVE,
+        config_key=item_tpl.key,
+        slot_index=0,
+    )
+    bid = AuctionBid.objects.create(slot=slot, manor=manor, amount=20, status=AuctionBid.Status.ACTIVE, frozen_gold_bars=20)
+
+    FrozenGoldBar.objects.create(
+        manor=manor,
+        amount=20,
+        reason=FrozenGoldBar.Reason.AUCTION_BID,
+        auction_bid=bid,
+        is_frozen=True,
+    )
+
+    monkeypatch.setattr("gameplay.services.inventory.consume_inventory_item_for_manor_locked", lambda *a, **k: None)
+    monkeypatch.setattr("trade.services.auction.rounds.create_message", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "trade.services.auction.rounds.notify_user",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("ws unavailable")),
+    )
+
+    result = _settle_slot(slot)
+
+    bid.refresh_from_db()
+    slot.refresh_from_db()
+    assert result["sold"] is True
+    assert slot.status == AuctionSlot.Status.SOLD
+    assert bid.status == AuctionBid.Status.WON
+
+
+@pytest.mark.django_db
 def test_settle_auction_round_can_resume_from_settling_status():
     auction_round = AuctionRound.objects.create(
         round_number=10003,
@@ -343,6 +558,28 @@ def test_settle_auction_round_can_resume_from_settling_status():
     assert stats["settled"] == 1
     assert auction_round.status == AuctionRound.Status.COMPLETED
     assert auction_round.settled_at is not None
+
+
+@pytest.mark.django_db
+def test_rounds_module_settle_auction_round_tolerates_cache_add_failure(monkeypatch):
+    from trade.services.auction.rounds import settle_auction_round as settle_round_impl
+
+    auction_round = AuctionRound.objects.create(
+        round_number=10010,
+        status=AuctionRound.Status.ACTIVE,
+        start_at=timezone.now() - timedelta(days=2),
+        end_at=timezone.now() - timedelta(minutes=1),
+    )
+
+    monkeypatch.setattr(
+        "trade.services.auction.rounds.cache.add",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+    )
+    stats = settle_round_impl(round_id=auction_round.id)
+
+    auction_round.refresh_from_db()
+    assert stats["settled"] == 1
+    assert auction_round.status == AuctionRound.Status.COMPLETED
 
 
 @pytest.mark.django_db

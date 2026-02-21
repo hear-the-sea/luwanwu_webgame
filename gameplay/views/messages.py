@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -14,6 +16,9 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
+from core.exceptions import GameError
+from core.utils import sanitize_error_message
+from core.utils.validation import safe_redirect_url
 from gameplay.constants import UIConstants
 from gameplay.models import ResourceType
 from gameplay.services import (
@@ -27,6 +32,8 @@ from gameplay.services import (
     refresh_manor_state,
     unread_message_count,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _is_json_request(request: HttpRequest) -> bool:
@@ -79,6 +86,55 @@ def _build_attachment_details(message) -> dict:
         )
 
     return attachment_details
+
+
+def _resolve_message_action_redirect(request: HttpRequest, default_url_name: str, **kwargs) -> HttpResponse:
+    default_url = reverse(default_url_name, kwargs=kwargs) if kwargs else reverse(default_url_name)
+    next_url = safe_redirect_url(request, request.POST.get("next"), "")
+    if next_url:
+        return redirect(next_url)
+
+    referer_url = safe_redirect_url(request, request.META.get("HTTP_REFERER"), "")
+    if referer_url:
+        return redirect(referer_url)
+
+    return redirect(default_url)
+
+
+def _format_claimed_summary(claimed_summary: dict) -> tuple[str, list[dict]]:
+    resource_labels = dict(ResourceType.choices)
+    parts: list[str] = []
+    claimed_payload: list[dict] = []
+
+    # 收集所有物品 key，批量查询
+    item_keys_to_lookup = [
+        key[5:] for key in claimed_summary.keys() if key.startswith("item_")
+    ]
+    if item_keys_to_lookup:
+        from gameplay.utils.template_loader import get_item_templates_by_keys
+
+        item_templates_map = get_item_templates_by_keys(item_keys_to_lookup)
+    else:
+        item_templates_map = {}
+
+    for key, value in claimed_summary.items():
+        if key.startswith("item_"):
+            item_key = key[5:]  # 移除 "item_" 前缀
+            item_template = item_templates_map.get(item_key)
+            item_name = item_template.name if item_template else item_key
+            parts.append(f"{item_name}×{value}")
+            claimed_payload.append(
+                {"kind": "item", "key": item_key, "name": item_name, "amount": value}
+            )
+        else:
+            label = resource_labels.get(key, key)
+            parts.append(f"{label}×{value}")
+            claimed_payload.append(
+                {"kind": "resource", "key": key, "name": label, "amount": value}
+            )
+
+    summary_text = "、".join(parts) if parts else "附件"
+    return summary_text, claimed_payload
 
 
 class MessageListView(LoginRequiredMixin, TemplateView):
@@ -227,42 +283,50 @@ def claim_attachment_view(request: HttpRequest, pk: int) -> HttpResponse:
         manor.messages,
         pk=pk,
     )
+    is_json_request = _is_json_request(request)
 
     try:
         claimed_summary = claim_message_attachments(message)
+        summary_text, claimed_payload = _format_claimed_summary(claimed_summary)
+        unread_count = unread_message_count(manor)
 
-        # 格式化领取摘要
-        resource_labels = dict(ResourceType.choices)
-        parts = []
+        if is_json_request:
+            return JsonResponse(
+                {
+                    "success": True,
+                    "message_id": pk,
+                    "summary": summary_text,
+                    "claimed": claimed_payload,
+                    "unread_count": unread_count,
+                }
+            )
 
-        # 收集所有物品 key，批量查询
-        item_keys_to_lookup = [
-            key[5:] for key in claimed_summary.keys() if key.startswith("item_")
-        ]
-        if item_keys_to_lookup:
-            from gameplay.utils.template_loader import get_item_templates_by_keys
-            item_templates_map = get_item_templates_by_keys(item_keys_to_lookup)
-        else:
-            item_templates_map = {}
-
-        for key, value in claimed_summary.items():
-            if key.startswith("item_"):
-                item_key = key[5:]  # 移除 "item_" 前缀
-                item_template = item_templates_map.get(item_key)
-                if item_template:
-                    parts.append(f"{item_template.name}×{value}")
-            else:
-                label = resource_labels.get(key, key)
-                parts.append(f"{label}×{value}")
-
-        summary_text = "、".join(parts) if parts else "附件"
         messages.success(request, f"附件领取成功：{summary_text}")
-    except ValueError as exc:
-        messages.error(request, str(exc))
+    except (GameError, ValueError) as exc:
+        error_message = sanitize_error_message(exc)
+        if is_json_request:
+            return JsonResponse(
+                {
+                    "success": False,
+                    "message_id": pk,
+                    "error": error_message,
+                    "unread_count": unread_message_count(manor),
+                },
+                status=400,
+            )
+        messages.error(request, error_message)
+    except Exception:
+        logger.exception("Unexpected error in claim_attachment_view: message_id=%s", pk)
+        if is_json_request:
+            return JsonResponse(
+                {
+                    "success": False,
+                    "message_id": pk,
+                    "error": "操作失败，请稍后重试",
+                    "unread_count": unread_message_count(manor),
+                },
+                status=500,
+            )
+        messages.error(request, "操作失败，请稍后重试")
 
-    # Check the referer to decide where to redirect
-    referer = request.META.get('HTTP_REFERER', '')
-    if 'messages/' in referer and 'view' not in referer:
-        return redirect("gameplay:messages")
-    else:
-        return redirect("gameplay:view_message", pk=pk)
+    return _resolve_message_action_redirect(request, "gameplay:view_message", pk=pk)

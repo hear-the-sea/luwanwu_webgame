@@ -119,3 +119,30 @@ def test_refresh_mission_runs_falls_back_to_sync_for_failed_dispatch(monkeypatch
     mission_execution.refresh_mission_runs(manor, prefer_async=True)
 
     assert finalized == [22]
+
+
+def test_build_defender_setup_and_drop_table_sanitizes_invalid_mission_json():
+    mission = SimpleNamespace(
+        is_defense=False,
+        enemy_guests="bad-guests",
+        enemy_troops="bad-troops",
+        enemy_technology="bad-tech",
+        drop_table="bad-drops",
+    )
+
+    defender_setup, drop_table = mission_execution._build_defender_setup_and_drop_table(mission, loadout={})
+
+    assert defender_setup["guest_keys"] == []
+    assert defender_setup["troop_loadout"] == {}
+    assert defender_setup["technology"] == {}
+    assert drop_table == {}
+
+
+def test_build_defender_setup_and_drop_table_for_defense_keeps_runtime_loadout():
+    mission = SimpleNamespace(is_defense=True)
+    loadout = {"archer": 10}
+
+    defender_setup, drop_table = mission_execution._build_defender_setup_and_drop_table(mission, loadout=loadout)
+
+    assert defender_setup == {"troop_loadout": loadout}
+    assert drop_table == {}

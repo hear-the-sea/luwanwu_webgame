@@ -151,7 +151,6 @@ KEYWORDS = [
 ]
 
 
-
 def _append_unique_token(tokens: list[str], token: str, limit: int = 3) -> bool:
     if token not in tokens:
         tokens.append(token)

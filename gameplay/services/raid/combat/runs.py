@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from django.db import IntegrityError, transaction
 from django.db.models import F, Q
@@ -25,6 +25,33 @@ logger = logging.getLogger(__name__)
 
 
 _REFRESH_DISPATCH_DEDUP_SECONDS = 5
+
+
+def _normalize_mapping(raw: Any) -> Dict[str, Any]:
+    if isinstance(raw, dict):
+        return raw
+    return {}
+
+
+def _coerce_positive_int(raw: Any, default: int = 0) -> int:
+    try:
+        parsed = int(raw)
+    except (TypeError, ValueError):
+        parsed = default
+    return parsed if parsed > 0 else 0
+
+
+def _normalize_positive_int_mapping(raw: Any) -> Dict[str, int]:
+    data = _normalize_mapping(raw)
+    normalized: Dict[str, int] = {}
+    for key, value in data.items():
+        normalized_key = str(key or "").strip()
+        if not normalized_key:
+            continue
+        normalized_value = _coerce_positive_int(value, 0)
+        if normalized_value > 0:
+            normalized[normalized_key] = normalized_value
+    return normalized
 
 
 def _try_dispatch_raid_refresh_task(task, run_id: int, stage: str) -> bool:
@@ -151,21 +178,27 @@ def _extract_raid_troops_lost(loadout: Dict[str, int], battle_report) -> Dict[st
     if not battle_report:
         return {}
 
-    attacker_losses = (battle_report.losses or {}).get("attacker", {}) or {}
-    casualties = attacker_losses.get("casualties", []) or []
+    normalized_loadout = _normalize_positive_int_mapping(loadout)
+    if not normalized_loadout:
+        return {}
+
+    losses = _normalize_mapping(getattr(battle_report, "losses", {}))
+    attacker_losses = _normalize_mapping(losses.get("attacker"))
+    casualties = attacker_losses.get("casualties")
+    if not isinstance(casualties, list):
+        return {}
 
     from battle.troops import load_troop_templates
 
     troop_definitions = load_troop_templates()
     troops_lost: Dict[str, int] = {}
     for entry in casualties:
-        key = entry.get("key")
-        if key not in loadout or key not in troop_definitions:
+        if not isinstance(entry, dict):
             continue
-        try:
-            lost = int(entry.get("lost", 0) or 0)
-        except (TypeError, ValueError):
+        key = str(entry.get("key") or "").strip()
+        if key not in normalized_loadout or key not in troop_definitions:
             continue
+        lost = _coerce_positive_int(entry.get("lost", 0), 0)
         if lost > 0:
             troops_lost[key] = troops_lost.get(key, 0) + lost
     return troops_lost
@@ -181,7 +214,7 @@ def _calculate_surviving_raid_troops(loadout: Dict[str, int], troops_lost: Dict[
 
 
 def _normalize_troops_for_addition(troops_to_add: Dict[str, int]) -> Dict[str, int]:
-    return {k: v for k, v in troops_to_add.items() if v > 0}
+    return _normalize_positive_int_mapping(troops_to_add)
 
 
 def _collect_troop_upserts(
@@ -325,11 +358,8 @@ def start_raid(
 
 def _deduct_troops(manor: Manor, loadout: Dict[str, int]) -> None:
     """从庄园批量扣除指定数量的护院"""
-    if not loadout:
-        return
-
-    # 过滤掉数量为0的
-    loadout = {k: v for k, v in loadout.items() if v > 0}
+    # 过滤掉数量无效的配置
+    loadout = _normalize_positive_int_mapping(loadout)
     if not loadout:
         return
 
@@ -421,15 +451,17 @@ def finalize_raid(run: RaidRun, now=None) -> None:
             from gameplay.services.resources import grant_resources_locked
 
             attacker_locked = ManorModel.objects.select_for_update().get(pk=locked_run.attacker_id)
-            if locked_run.loot_resources:
+            loot_resources = _normalize_positive_int_mapping(locked_run.loot_resources)
+            if loot_resources:
                 grant_resources_locked(
                     attacker_locked,
-                    locked_run.loot_resources,
+                    loot_resources,
                     note="踢馆掠夺",
                     reason=ResourceEvent.Reason.BATTLE_REWARD,
                 )
-            if locked_run.loot_items:
-                _grant_loot_items(attacker_locked, locked_run.loot_items)
+            loot_items = _normalize_positive_int_mapping(locked_run.loot_items)
+            if loot_items:
+                _grant_loot_items(attacker_locked, loot_items)
 
         locked_run.status = RaidRun.Status.COMPLETED
         locked_run.completed_at = now
@@ -438,7 +470,7 @@ def finalize_raid(run: RaidRun, now=None) -> None:
 
 def _return_surviving_troops(run: RaidRun) -> None:
     """批量归还存活的护院"""
-    loadout = run.troop_loadout or {}
+    loadout = _normalize_positive_int_mapping(getattr(run, "troop_loadout", {}))
     if not loadout:
         return
 
@@ -561,7 +593,7 @@ def _finalize_raid_retreat(run: RaidRun, now=None) -> None:
         Guest.objects.bulk_update(guests_to_update, ["status"])
 
     # 批量全额归还护院
-    loadout = run.troop_loadout or {}
+    loadout = _normalize_positive_int_mapping(getattr(run, "troop_loadout", {}))
     if loadout:
         _add_troops_batch(run.attacker, loadout)
 

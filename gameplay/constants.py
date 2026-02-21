@@ -4,31 +4,43 @@
 
 from common.constants.resources import ResourceType, ResourceTypes  # noqa: F401
 from common.constants.time import TimeConstants  # noqa: F401
+from core.config import BUILDING_KEYS
 
-# 建筑类型键值
+# 为了向后兼容，重新导出 BuildingKeys
+BuildingKeys = BUILDING_KEYS
 
+# 建筑最高等级限制（未配置则无限制）
+BUILDING_MAX_LEVELS = {
+    # 特殊建筑
+    BUILDING_KEYS.CITANG: 5,           # 祠堂：避免缩时达到100%
+    BUILDING_KEYS.YOUXIA_BAOTA: 15,    # 悠嘻宝塔：出战上限在15级封顶（SQUAD_SIZE_MAX=18）
+    BUILDING_KEYS.TREASURY: 20,        # 藏宝阁：容量函数按20级封顶（平衡时间消耗）
+    BUILDING_KEYS.JAIL: 5,             # 监牢：满级5人
+    BUILDING_KEYS.OATH_GROVE: 5,       # 结义林：满级5人
 
-class BuildingKeys:
-    """建筑类型常量"""
+    # 仓储设施
+    BUILDING_KEYS.SILVER_VAULT: 30,    # 银库：满级4000万两
+    BUILDING_KEYS.GRANARY: 20,         # 粮仓：满级1050万石
 
-    JUXIAN_ZHUANG = "juxianzhuang"  # 聚贤庄
-    JIADING_FANG = "jiadingfang"  # 家丁房
-    YOUXIA_BAOTA = "youxibaota"  # 游侠宝塔
-    LIANBING_DAYING = "lianbingdaying"  # 练兵大营
-    LIANGGONG_CHANG = "lianggongchang"  # 练功场
-    TREASURY = "treasury"  # 藏宝阁
-    BATHHOUSE = "bathhouse"  # 澡堂
-    LATRINE = "latrine"  # 茅厕
-    SILVER_VAULT = "silver_vault"  # 银库
-    GRANARY = "granary"  # 粮仓
-    RANCH = "ranch"  # 畜牧场
-    SMITHY = "smithy"  # 冶炼坊
-    STABLE = "stable"  # 马房
-    TAVERN = "tavern"  # 酒馆
-    FORGE = "forge"  # 铁匠铺
-    CITANG = "citang"  # 祠堂
-    JAIL = "jail"  # 监牢
-    OATH_GROVE = "oath_grove"  # 结义林
+    # 资源产出建筑
+    BUILDING_KEYS.BATHHOUSE: 20,       # 澡堂：满级每小时产银1000两+门客回血200%
+    BUILDING_KEYS.LATRINE: 20,         # 茅厕：满级每小时产粮1000+产银1000两
+    BUILDING_KEYS.TAVERN: 10,          # 酒馆：满级每小时产银1000两+候选人数+10
+
+    # 人员管理建筑
+    BUILDING_KEYS.JUXIAN_ZHUANG: 15,   # 聚贤庄：满级容量18位门客
+    BUILDING_KEYS.JIADING_FANG: 30,    # 家丁房：满级容量3050个位置
+    BUILDING_KEYS.LIANGGONG_CHANG: 10,  # 练功场：满级护院训练速度提升30%
+
+    # 生产加工建筑
+    BUILDING_KEYS.RANCH: 10,           # 畜牧场：满级家畜制造速度提升50%
+    BUILDING_KEYS.SMITHY: 10,          # 冶炼坊：满级物资制造速度提升50%
+    BUILDING_KEYS.STABLE: 10,          # 马房：满级马匹制造速度提升50%
+
+    # 战斗相关建筑
+    BUILDING_KEYS.LIANBING_DAYING: 10,  # 练兵大营：满级护院训练速度提升50%
+    BUILDING_KEYS.FORGE: 10,           # 铁匠铺：满级装备制造速度提升50%
+}
 
 
 # 建筑最高等级限制（未配置则无限制）

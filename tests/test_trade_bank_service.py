@@ -24,6 +24,7 @@ def _ensure_gold_bar_template() -> ItemTemplate:
 
 @pytest.mark.django_db
 def test_calculate_progressive_factor_caps():
+    assert bank_service.calculate_progressive_factor(-5) == 1.0
     assert bank_service.calculate_progressive_factor(0) == 1.0
     assert bank_service.calculate_progressive_factor(1) == 1.05
     assert bank_service.calculate_progressive_factor(100) == 1.60
@@ -79,6 +80,29 @@ def test_calculate_gold_bar_cost_includes_fee(monkeypatch, django_user_model):
 
 
 @pytest.mark.django_db
+def test_calculate_gold_bar_cost_rejects_invalid_quantity(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="bank_cost_invalid_qty", password="pass12345")
+    manor = ensure_manor(user)
+    monkeypatch.setattr(bank_service, "calculate_supply_factor", lambda: 1.0)
+    monkeypatch.setattr(bank_service, "get_today_exchange_count", lambda *_args, **_kwargs: 0)
+
+    with pytest.raises(ValueError, match="兑换数量必须大于0"):
+        bank_service.calculate_gold_bar_cost(manor, "invalid")
+
+
+@pytest.mark.django_db
+def test_calculate_gold_bar_cost_clamps_negative_today_count(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="bank_cost_negative_today", password="pass12345")
+    manor = ensure_manor(user)
+
+    monkeypatch.setattr(bank_service, "calculate_supply_factor", lambda: 1.0)
+    monkeypatch.setattr(bank_service, "get_today_exchange_count", lambda *_args, **_kwargs: -20)
+
+    cost = bank_service.calculate_gold_bar_cost(manor, 1)
+    assert cost["avg_rate"] == 1_000_000
+
+
+@pytest.mark.django_db
 def test_exchange_gold_bar_deducts_silver_and_creates_inventory(monkeypatch, django_user_model):
     cache.clear()
 
@@ -120,3 +144,77 @@ def test_exchange_gold_bar_deducts_silver_and_creates_inventory(monkeypatch, dja
     log = GoldBarExchangeLog.objects.get(manor=manor)
     assert log.quantity == 2
     assert log.silver_cost == 110
+
+
+@pytest.mark.django_db
+def test_get_effective_gold_supply_falls_back_when_cache_errors(monkeypatch):
+    monkeypatch.setattr(
+        bank_service.cache,
+        "get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache read failed")),
+    )
+    monkeypatch.setattr(
+        bank_service.cache,
+        "add",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache add failed")),
+    )
+
+    value = bank_service.get_effective_gold_supply()
+    assert value == bank_service.GOLD_BAR_TARGET_SUPPLY
+
+
+@pytest.mark.django_db
+def test_get_effective_gold_supply_handles_corrupted_stale_cache(monkeypatch):
+    def fake_get(key, default=None):
+        if key == bank_service.SUPPLY_CACHE_KEY:
+            return None
+        if key == bank_service.SUPPLY_STALE_CACHE_KEY:
+            return "not-an-int"
+        return default
+
+    monkeypatch.setattr(bank_service.cache, "get", fake_get)
+    monkeypatch.setattr(bank_service.cache, "add", lambda *_args, **_kwargs: False)
+
+    value = bank_service.get_effective_gold_supply()
+    assert value == bank_service.GOLD_BAR_TARGET_SUPPLY
+
+
+@pytest.mark.django_db
+def test_exchange_gold_bar_tolerates_cache_delete_failure(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="bank_cache_delete", password="pass12345")
+    manor = ensure_manor(user)
+    manor.silver = 1_000_000_000
+    manor.save(update_fields=["silver"])
+
+    _ = _ensure_gold_bar_template()
+
+    monkeypatch.setattr(
+        bank_service,
+        "calculate_gold_bar_cost",
+        lambda *_args, **_kwargs: {
+            "base_cost": 100,
+            "fee": 10,
+            "total_cost": 110,
+            "rate_details": [50],
+            "avg_rate": 50,
+        },
+    )
+    monkeypatch.setattr(bank_service, "calculate_next_rate", lambda *_args, **_kwargs: 123)
+    monkeypatch.setattr(
+        bank_service.cache,
+        "delete",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache delete failed")),
+    )
+
+    result = bank_service.exchange_gold_bar(manor, 1)
+    assert result["quantity"] == 1
+    assert result["total_cost"] == 110
+
+
+@pytest.mark.django_db
+def test_exchange_gold_bar_rejects_invalid_quantity(django_user_model):
+    user = django_user_model.objects.create_user(username="bank_exchange_invalid_qty", password="pass12345")
+    manor = ensure_manor(user)
+
+    with pytest.raises(ValueError, match="兑换数量必须大于0"):
+        bank_service.exchange_gold_bar(manor, "invalid")

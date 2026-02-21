@@ -99,6 +99,28 @@ def test_selectors_module_bid_info_and_batch_info(django_user_model):
 
 
 @pytest.mark.django_db
+def test_selectors_module_batch_cutoff_price_matches_single_slot_logic(django_user_model):
+    u1 = django_user_model.objects.create_user(username="sel_cutoff_u1", password="pass")
+    u2 = django_user_model.objects.create_user(username="sel_cutoff_u2", password="pass")
+    m1 = ensure_manor(u1)
+    m2 = ensure_manor(u2)
+
+    slot = _create_round_and_slot(item_key="sel_item_cutoff")
+    slot.quantity = 3
+    slot.starting_price = 10
+    slot.save(update_fields=["quantity", "starting_price"])
+
+    AuctionBid.objects.create(slot=slot, manor=m1, amount=15, status=AuctionBid.Status.ACTIVE)
+    AuctionBid.objects.create(slot=slot, manor=m2, amount=11, status=AuctionBid.Status.ACTIVE)
+
+    single_info = get_slot_bid_info(slot, manor=m1)
+    batch_info = get_slots_bid_info_batch([slot], manor=m1)[slot.id]
+
+    assert single_info["cutoff_price"] == 11
+    assert batch_info["cutoff_price"] == single_info["cutoff_price"]
+
+
+@pytest.mark.django_db
 def test_selectors_module_auction_stats_includes_gold_bar_numbers(django_user_model):
     user = django_user_model.objects.create_user(username="sel_u4", password="pass")
     manor = ensure_manor(user)

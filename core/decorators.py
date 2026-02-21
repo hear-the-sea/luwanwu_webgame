@@ -24,31 +24,41 @@ logger = logging.getLogger(__name__)
 
 
 def _resolve_returned_url(request: HttpRequest, result: str) -> str | None:
-    safe_result = safe_redirect_url(request, result, "")
-    if safe_result:
-        return safe_result
-
     result_str = str(result)
-    if re.match(r"^[a-zA-Z0-9_:-]+$", result_str) and ":" in result_str:
+    if re.match(r"^[a-zA-Z0-9_:-]+$", result_str):
         try:
             return reverse(result_str)
         except NoReverseMatch:
             logger.warning("无法解析视图返回的 URL: %s", result)
 
+    safe_result = safe_redirect_url(request, result, "")
+    if safe_result:
+        return safe_result
+
     logger.warning("视图返回不安全的 URL: %s，回退到 default", result)
     return None
 
 
-def _resolve_default_url(default: str | None) -> str | None:
+def _resolve_default_url(request: HttpRequest, default: str | None) -> str | None:
     if not default:
         return None
 
-    if ":" in str(default):
+    default_str = str(default).strip()
+    if not default_str:
+        return None
+
+    if re.match(r"^[a-zA-Z0-9_:-]+$", default_str):
         try:
-            return reverse(default)
-        except Exception:
+            return reverse(default_str)
+        except NoReverseMatch:
             logger.warning("无法解析 redirect_url: %s", default)
-    return str(default)
+
+    safe_default = safe_redirect_url(request, default_str, "")
+    if safe_default:
+        return safe_default
+
+    logger.warning("redirect_url 不安全，回退到根路径: %s", default)
+    return None
 
 
 def _add_success_message(
@@ -63,6 +73,7 @@ def _add_success_message(
         try:
             msg = success_message(result)
         except Exception:
+            logger.warning("success_message callable failed, using fallback message", exc_info=True)
             msg = "操作成功"
     else:
         msg = success_message
@@ -142,7 +153,7 @@ def get_next_url(request: HttpRequest, default: Optional[str] = None, result: Op
         if safe_url:
             return safe_url
 
-    default_url = _resolve_default_url(default)
+    default_url = _resolve_default_url(request, default)
     return default_url or "/"
 
 

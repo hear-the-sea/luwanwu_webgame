@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 
 from django.conf import settings
 from django.contrib.sessions.models import Session
@@ -19,6 +20,10 @@ USER_SESSION_CACHE_TTL = getattr(settings, "SESSION_COOKIE_AGE", 1209600)
 LOGIN_LOCK_TIMEOUT = 5
 
 
+def _session_key_prefix(session_key: str | None) -> str:
+    return (str(session_key) if session_key is not None else "<none>")[:8]
+
+
 def purge_other_sessions(user_id: int, current_session_key: str | None) -> None:
     """
     Enforce single active session per user by removing all other sessions.
@@ -35,11 +40,12 @@ def purge_other_sessions(user_id: int, current_session_key: str | None) -> None:
 
     cache_key = f"{USER_SESSION_CACHE_PREFIX}{user_id}"
     lock_key = f"{USER_LOGIN_LOCK_PREFIX}{user_id}"
+    lock_token = uuid.uuid4().hex
 
     try:
         # 安全修复：使用分布式锁防止并发登录竞态条件
         # 如果无法获取锁，直接跳过（非阻塞），避免阻塞 worker
-        lock_acquired = cache.add(lock_key, "1", timeout=LOGIN_LOCK_TIMEOUT)
+        lock_acquired = cache.add(lock_key, lock_token, timeout=LOGIN_LOCK_TIMEOUT)
         if not lock_acquired:
             # 非阻塞处理：无法获取锁时直接返回，session 清理不是关键路径
             # 避免使用 time.sleep 阻塞 worker，防止高并发下 worker 耗尽
@@ -61,9 +67,9 @@ def purge_other_sessions(user_id: int, current_session_key: str | None) -> None:
             # 记录当前 session key 到缓存
             cache.set(cache_key, current_session_key, timeout=USER_SESSION_CACHE_TTL)
         finally:
-            # 释放锁
+            # 仅释放自己持有的锁，避免锁过期后误删其他并发请求新获取的锁
             if lock_acquired:
-                cache.delete(lock_key)
+                _release_login_lock(lock_key, lock_token)
 
     except Exception as e:
         # 缓存不可用时降级为原始逻辑（但仅在必要时）
@@ -96,7 +102,7 @@ def _purge_sessions_fallback(user_id: int, current_session_key: str) -> None:
             # 安全修复：明确捕获特定的解码异常类型，而非所有异常
             logger.debug(
                 "Failed to decode session %s...: %s",
-                session.session_key[:8],
+                _session_key_prefix(getattr(session, "session_key", None)),
                 type(e).__name__,
                 exc_info=True
             )
@@ -105,7 +111,7 @@ def _purge_sessions_fallback(user_id: int, current_session_key: str) -> None:
             # 其他未预期的异常记录为警告级别
             logger.warning(
                 "Unexpected error processing session %s...: %s",
-                session.session_key[:8],
+                _session_key_prefix(getattr(session, "session_key", None)),
                 e,
                 exc_info=True
             )
@@ -113,3 +119,13 @@ def _purge_sessions_fallback(user_id: int, current_session_key: str) -> None:
 
     if deleted_count > 0:
         logger.info("Fallback purged %d sessions for user %s", deleted_count, user_id)
+
+
+def _release_login_lock(lock_key: str, lock_token: str) -> None:
+    """Best-effort lock release with ownership check."""
+    try:
+        current_token = cache.get(lock_key)
+        if current_token == lock_token:
+            cache.delete(lock_key)
+    except Exception:
+        logger.debug("Failed to release login lock %s", lock_key, exc_info=True)

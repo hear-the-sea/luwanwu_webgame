@@ -2,17 +2,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import List
+from typing import Any, List
 
 import yaml
 
 from django.conf import settings
 
+from core.config import TRADE
 from gameplay.models import ItemTemplate
 
 
 SHOP_CONFIG_PATH = settings.BASE_DIR / "data" / "shop_items.yaml"
-BUY_PRICE_MULTIPLIER = 2  # 购买价 = 基准价 * 2
+
+# 从 core.config 导入配置
+BUY_PRICE_MULTIPLIER = TRADE.BUY_PRICE_MULTIPLIER
 
 
 @dataclass
@@ -29,6 +32,43 @@ class ShopItemConfig:
         return self.stock == -1
 
 
+def _coerce_int(raw: Any, default: int = 0) -> int:
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+def _coerce_optional_non_negative_int(raw: Any) -> int | None:
+    if raw is None:
+        return None
+    parsed = _coerce_int(raw, -1)
+    if parsed < 0:
+        return None
+    return parsed
+
+
+def _coerce_stock(raw: Any) -> int:
+    if raw is None:
+        return -1
+    parsed = _coerce_int(raw, -2)
+    if parsed == -2:
+        return 0
+    if parsed == -1:
+        return -1
+    return max(0, parsed)
+
+
+def _coerce_bool(raw: Any) -> bool:
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, str):
+        return raw.strip().lower() in {"1", "true", "yes", "on"}
+    if isinstance(raw, (int, float)):
+        return raw != 0
+    return False
+
+
 def load_shop_config() -> List[ShopItemConfig]:
     """加载商铺配置"""
     if not SHOP_CONFIG_PATH.exists():
@@ -37,18 +77,26 @@ def load_shop_config() -> List[ShopItemConfig]:
     with open(SHOP_CONFIG_PATH, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
 
-    items = data.get("items") or []
+    if not isinstance(data, dict):
+        return []
+    items = data.get("items")
+    if not isinstance(items, list):
+        return []
     result = []
 
     for item in items:
+        if not isinstance(item, dict):
+            continue
+        item_key = str(item.get("item_key") or "").strip()
+        if not item_key:
+            continue
         config = ShopItemConfig(
-            item_key=item.get("item_key", ""),
-            price=item.get("price"),
-            stock=item.get("stock", -1),
-            daily_refresh=item.get("daily_refresh", False),
+            item_key=item_key,
+            price=_coerce_optional_non_negative_int(item.get("price")),
+            stock=_coerce_stock(item.get("stock", -1)),
+            daily_refresh=_coerce_bool(item.get("daily_refresh", False)),
         )
-        if config.item_key:
-            result.append(config)
+        result.append(config)
 
     return result
 
@@ -84,11 +132,11 @@ def get_base_price(item_key: str) -> int | None:
     """
     config = get_shop_item_config(item_key)
     if config and config.price is not None:
-        return config.price
+        return max(0, _coerce_int(config.price, 0))
 
     try:
         template = ItemTemplate.objects.only("price").get(key=item_key)
-        return template.price
+        return _coerce_optional_non_negative_int(template.price)
     except ItemTemplate.DoesNotExist:
         return None
 
@@ -119,5 +167,5 @@ def get_sell_price_by_template(template: ItemTemplate) -> int:
     """
     config = get_shop_item_config(template.key)
     if config and config.price is not None:
-        return config.price
-    return template.price
+        return max(0, _coerce_int(config.price, 0))
+    return max(0, _coerce_int(template.price, 0))

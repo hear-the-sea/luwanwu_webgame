@@ -14,7 +14,7 @@ from django.db import transaction
 from core.exceptions import GuestCapacityFullError, ItemNotConfiguredError, ItemNotUsableError
 from gameplay.models import InventoryItem, ItemTemplate, Manor, ResourceEvent
 from guests.models import Guest, GuestStatus
-from gameplay.services.resources import grant_resources
+from gameplay.services.resources import grant_resources, grant_resources_locked
 
 from .core import add_item_to_inventory, consume_inventory_item_locked
 
@@ -69,12 +69,19 @@ def _ensure_guest_capacity(manor: Manor) -> None:
         raise GuestCapacityFullError()
 
 
+def _grant_item_resources(manor: Manor, payload: dict[str, int], note: str) -> dict[str, int]:
+    if transaction.get_connection().in_atomic_block:
+        credited, _overflow = grant_resources_locked(manor, payload, note, ResourceEvent.Reason.ITEM_USE)
+        return credited
+    return grant_resources(manor, payload, note, ResourceEvent.Reason.ITEM_USE)
+
+
 def _apply_resource_pack(item: InventoryItem) -> Dict[str, Any]:
     """使用资源包，发放资源奖励。"""
     payload = item.template.effect_payload or {}
     if not payload:
         raise ItemNotConfiguredError()
-    result = grant_resources(item.manor, payload, item.template.name, ResourceEvent.Reason.ITEM_USE)
+    result = _grant_item_resources(item.manor, payload, item.template.name)
     parts = [f"{key}+{value}" for key, value in result.items()]
     result["_message"] = f"获得 {'、'.join(parts)}"
     return result
@@ -177,7 +184,7 @@ def _apply_loot_box(item: InventoryItem) -> Dict[str, Any]:
     # 1. 资源掉落（必定）
     resources = payload.get("resources") or {}
     if resources:
-        result = grant_resources(manor, resources, item.template.name, ResourceEvent.Reason.ITEM_USE)
+        result = _grant_item_resources(manor, resources, item.template.name)
         parts = [f"{k}+{v}" for k, v in result.items()]
         rewards.append("资源：" + "、".join(parts))
 
