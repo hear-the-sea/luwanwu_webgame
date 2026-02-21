@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import random
-from typing import Dict, List, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List, Tuple
 
 from .constants import BASE_CRIT_CHANCE
 

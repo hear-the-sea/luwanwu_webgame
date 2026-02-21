@@ -17,14 +17,16 @@ from typing import Any, Dict, List, Optional
 import yaml
 
 # 安全常量：预设名称白名单正则（仅允许字母、数字、下划线、连字符）
-PRESET_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9_-]+$')
+PRESET_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 
 # ============ 配置数据类 ============
 
+
 @dataclass
 class GuestConfig:
     """门客配置"""
+
     template: str
     level: int
     force: Optional[int] = None
@@ -39,6 +41,7 @@ class GuestConfig:
 @dataclass
 class PartyConfig:
     """阵营配置"""
+
     guests: List[GuestConfig] = field(default_factory=list)
     troops: Dict[str, int] = field(default_factory=dict)
     technology_level: int = 0
@@ -48,6 +51,7 @@ class PartyConfig:
 @dataclass
 class BattleConfig:
     """战斗配置"""
+
     name: str
     description: str = ""
     attacker: PartyConfig = field(default_factory=PartyConfig)
@@ -58,6 +62,7 @@ class BattleConfig:
 
 
 # ============ 配置加载器 ============
+
 
 class ConfigLoader:
     """配置加载器"""
@@ -120,7 +125,7 @@ class ConfigLoader:
         Returns:
             BattleConfig对象
         """
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
         return self._parse_config(data)
@@ -142,11 +147,7 @@ class ConfigLoader:
         tunable_params = data.get("tunable_params", {})
 
         return BattleConfig(
-            name=name,
-            description=description,
-            attacker=attacker,
-            defender=defender,
-            tunable_params=tunable_params
+            name=name, description=description, attacker=attacker, defender=defender, tunable_params=tunable_params
         )
 
     def _parse_party(self, data: dict) -> PartyConfig:
@@ -163,7 +164,7 @@ class ConfigLoader:
                 agility=guest_data.get("agility"),
                 luck=guest_data.get("luck"),
                 skills=guest_data.get("skills", []),
-                archetype=guest_data.get("archetype")
+                archetype=guest_data.get("archetype"),
             )
             guests.append(guest)
 
@@ -172,10 +173,7 @@ class ConfigLoader:
         technology_levels = data.get("technology_levels", {})
 
         return PartyConfig(
-            guests=guests,
-            troops=troops,
-            technology_level=technology_level,
-            technology_levels=technology_levels
+            guests=guests, troops=troops, technology_level=technology_level, technology_levels=technology_levels
         )
 
     def merge_config(self, base: BattleConfig, overrides: Dict[str, Any]) -> BattleConfig:
@@ -191,6 +189,7 @@ class ConfigLoader:
         """
         # 深拷贝基础配置
         import copy
+
         merged = copy.deepcopy(base)
 
         # 应用覆盖
@@ -302,10 +301,7 @@ class ConfigLoader:
         """
         try:
             config = self.load_preset(preset_name)
-            return {
-                "name": config.name,
-                "description": config.description
-            }
+            return {"name": config.name, "description": config.description}
         except FileNotFoundError:
             return {}
 
@@ -315,33 +311,25 @@ class ConfigLoader:
 DEFAULT_TUNABLE_PARAMS = {
     # 屠戮倍率
     "slaughter_multiplier": 30,
-
     # 攻击倍率
     "troop_attack_divisor_vs_guest": 4.0,
     "troop_attack_divisor_vs_troop": 1.0,
-
     # 防御倍率
     "troop_defense_divisor": 2.0,
-
     # 减伤公式
     "guest_vs_troop_reduction_coeff": 0.005,
     "guest_vs_troop_reduction_cap": 0.75,
     "other_reduction_base": 120,
     "other_reduction_coeff": 0.85,
-
     # 五行相克
     "counter_multiplier": 1.5,
-
     # 暴击
     "crit_chance": 0.05,
     "crit_multiplier": 1.5,
-
     # 先锋惩罚
     "preemptive_penalty": 0.8,
-
     # 目标选择
     "priority_target_weight": 0.6,
-
     # 回合上限
     "max_rounds": 16,
 }

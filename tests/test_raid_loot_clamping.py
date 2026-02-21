@@ -3,9 +3,13 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 
 from gameplay.models import InventoryItem, ItemTemplate, ResourceEvent
-from gameplay.services.manor import ensure_manor
-from gameplay.services.raid.combat import _apply_loot
-from gameplay.services.raid.combat import _format_battle_rewards_description, _format_loot_description, _grant_loot_items
+from gameplay.services.manor.core import ensure_manor
+from gameplay.services.raid.combat import (
+    _apply_loot,
+    _format_battle_rewards_description,
+    _format_loot_description,
+    _grant_loot_items,
+)
 
 User = get_user_model()
 

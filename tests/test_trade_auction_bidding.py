@@ -6,7 +6,7 @@ import pytest
 from django.utils import timezone
 
 from gameplay.models import InventoryItem, ItemTemplate
-from gameplay.services.manor import ensure_manor
+from gameplay.services.manor.core import ensure_manor
 from trade.models import AuctionBid, AuctionRound, AuctionSlot
 from trade.services import auction_service
 
@@ -188,8 +188,14 @@ def test_place_bid_succeeds_when_outbid_notification_fails(monkeypatch, django_u
     slot = _create_active_round_and_slot(item_key="auction_notify_fail_item", quantity=1)
 
     auction_service.place_bid(manor1, slot.id, 5)
-    monkeypatch.setattr("trade.services.auction.bidding.create_message", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("msg down")))
-    monkeypatch.setattr("trade.services.auction.bidding.notify_user", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("ws down")))
+    monkeypatch.setattr(
+        "trade.services.auction.bidding.create_message",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("msg down")),
+    )
+    monkeypatch.setattr(
+        "trade.services.auction.bidding.notify_user",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("ws down")),
+    )
 
     bid2, _ = auction_service.place_bid(manor2, slot.id, 6)
     bid2.refresh_from_db()

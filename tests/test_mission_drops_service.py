@@ -4,11 +4,11 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
-from django.db import IntegrityError
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError
 
 from gameplay.models import InventoryItem, ItemTemplate, ResourceEvent, ResourceType
-from gameplay.services.manor import ensure_manor
+from gameplay.services.manor.core import ensure_manor
 from gameplay.services.missions_impl.drops import (
     _get_or_create_skill_book_template,
     award_mission_drops,

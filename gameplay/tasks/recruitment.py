@@ -19,15 +19,10 @@ def complete_troop_recruitment(self, recruitment_id: int):
     Complete troop recruitment background task.
     """
     from gameplay.models import TroopRecruitment
-    from gameplay.services.recruitment import finalize_troop_recruitment
+    from gameplay.services.recruitment.recruitment import finalize_troop_recruitment
 
     try:
-        recruitment = (
-            TroopRecruitment.objects
-            .select_related("manor", "manor__user")
-            .filter(pk=recruitment_id)
-            .first()
-        )
+        recruitment = TroopRecruitment.objects.select_related("manor", "manor__user").filter(pk=recruitment_id).first()
         if not recruitment:
             logger.warning("TroopRecruitment %d not found", recruitment_id)
             return "not_found"
@@ -60,12 +55,11 @@ def scan_troop_recruitments(limit: int = 200):
     Scan and complete all overdue troop recruitments (for worker downtime recovery).
     """
     from gameplay.models import TroopRecruitment
-    from gameplay.services.recruitment import finalize_troop_recruitment
+    from gameplay.services.recruitment.recruitment import finalize_troop_recruitment
 
     now = timezone.now()
     qs = (
-        TroopRecruitment.objects
-        .select_related("manor", "manor__user")
+        TroopRecruitment.objects.select_related("manor", "manor__user")
         .filter(status=TroopRecruitment.Status.RECRUITING, complete_at__lte=now)
         .order_by("complete_at")[:limit]
     )

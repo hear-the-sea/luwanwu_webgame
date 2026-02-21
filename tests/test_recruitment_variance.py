@@ -5,14 +5,13 @@ from __future__ import annotations
 import random
 
 from guests.utils.recruitment_variance import (
-    apply_recruitment_variance,
-    calculate_talent_grade,
     ATTRIBUTE_VARIANCE_CONFIG,
     MAX_GROWABLE_ATTRIBUTE,
-    MIN_RATIO,
     MAX_RATIO,
+    MIN_RATIO,
+    apply_recruitment_variance,
+    calculate_talent_grade,
 )
-
 
 # ============ apply_recruitment_variance tests ============
 
@@ -54,7 +53,9 @@ def test_apply_recruitment_variance_respects_min_max_ratio():
             base = template_attrs[attr]
             min_val = max(1, int(base * MIN_RATIO))
             max_val = min(int(base * MAX_RATIO), MAX_GROWABLE_ATTRIBUTE)
-            assert min_val <= result[attr] <= max_val, f"Seed {seed}: {attr}={result[attr]} not in [{min_val}, {max_val}]"
+            assert (
+                min_val <= result[attr] <= max_val
+            ), f"Seed {seed}: {attr}={result[attr]} not in [{min_val}, {max_val}]"
 
 
 def test_apply_recruitment_variance_luck_independent():

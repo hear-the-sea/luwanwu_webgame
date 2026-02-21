@@ -1,10 +1,10 @@
 import pytest
 
+from core.exceptions import GuestCapacityFullError
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.inventory import use_inventory_item
-from gameplay.services.manor import ensure_manor
+from gameplay.services.manor.core import ensure_manor
 from guests.models import Guest, GuestTemplate
-from core.exceptions import GuestCapacityFullError
 
 
 def _make_pubayi_template(key: str, rarity: str) -> GuestTemplate:

@@ -11,9 +11,7 @@ from functools import lru_cache
 from typing import Dict, List
 
 import yaml
-
 from django.conf import settings
-
 
 WAREHOUSE_PRODUCTION_PATH = settings.BASE_DIR / "data" / "warehouse_production.yaml"
 

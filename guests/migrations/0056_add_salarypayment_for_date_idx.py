@@ -14,4 +14,3 @@ class Migration(migrations.Migration):
             index=models.Index(fields=["for_date"], name="guests_salar_for_date_idx"),
         ),
     ]
-

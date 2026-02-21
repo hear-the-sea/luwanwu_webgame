@@ -13,8 +13,6 @@ from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
 from core.exceptions import GameError
-from guests.models import Guest, GuestStatus
-
 from gameplay.models import WorkAssignment, WorkTemplate
 from gameplay.services import (
     assign_guest_to_work,
@@ -23,6 +21,7 @@ from gameplay.services import (
     recall_guest_from_work,
     refresh_work_assignments,
 )
+from guests.models import Guest, GuestStatus
 
 
 class WorkView(LoginRequiredMixin, TemplateView):
@@ -42,9 +41,24 @@ class WorkView(LoginRequiredMixin, TemplateView):
 
         # 工作区选项
         work_tiers = [
-            {"key": "junior", "name": "初级工作区", "tier": WorkTemplate.Tier.JUNIOR, "desc": "适合新手门客的基础工作，2小时完成"},
-            {"key": "intermediate", "name": "中级工作区", "tier": WorkTemplate.Tier.INTERMEDIATE, "desc": "需要一定经验的工作，3小时完成"},
-            {"key": "senior", "name": "高级工作区", "tier": WorkTemplate.Tier.SENIOR, "desc": "高难度工作，回报丰厚，4小时完成"},
+            {
+                "key": "junior",
+                "name": "初级工作区",
+                "tier": WorkTemplate.Tier.JUNIOR,
+                "desc": "适合新手门客的基础工作，2小时完成",
+            },
+            {
+                "key": "intermediate",
+                "name": "中级工作区",
+                "tier": WorkTemplate.Tier.INTERMEDIATE,
+                "desc": "需要一定经验的工作，3小时完成",
+            },
+            {
+                "key": "senior",
+                "name": "高级工作区",
+                "tier": WorkTemplate.Tier.SENIOR,
+                "desc": "高难度工作，回报丰厚，4小时完成",
+            },
         ]
 
         # 获取当前工作区的配置
@@ -54,24 +68,32 @@ class WorkView(LoginRequiredMixin, TemplateView):
         works = WorkTemplate.objects.filter(tier=current_tier_config["tier"]).order_by("display_order")
 
         # 获取所有空闲的门客
-        idle_guests = manor.guests.filter(status=GuestStatus.IDLE).select_related("template").order_by("-level", "template__name")
+        idle_guests = (
+            manor.guests.filter(status=GuestStatus.IDLE).select_related("template").order_by("-level", "template__name")
+        )
 
         # 获取所有打工记录（包括打工中和可领取报酬的）
-        working_assignments = WorkAssignment.objects.filter(
-            manor=manor,
-            status__in=[WorkAssignment.Status.WORKING, WorkAssignment.Status.COMPLETED],
-            reward_claimed=False  # 只显示未领取报酬的
-        ).select_related("guest", "work_template").order_by("status", "complete_at")
+        working_assignments = (
+            WorkAssignment.objects.filter(
+                manor=manor,
+                status__in=[WorkAssignment.Status.WORKING, WorkAssignment.Status.COMPLETED],
+                reward_claimed=False,  # 只显示未领取报酬的
+            )
+            .select_related("guest", "work_template")
+            .order_by("status", "complete_at")
+        )
 
-        context.update({
-            "manor": manor,
-            "work_tiers": work_tiers,
-            "current_tier": current_tier,
-            "current_tier_config": current_tier_config,
-            "works": works,
-            "idle_guests": idle_guests,
-            "working_assignments": working_assignments,
-        })
+        context.update(
+            {
+                "manor": manor,
+                "work_tiers": work_tiers,
+                "current_tier": current_tier,
+                "current_tier_config": current_tier_config,
+                "works": works,
+                "idle_guests": idle_guests,
+                "working_assignments": working_assignments,
+            }
+        )
 
         return context
 
@@ -107,16 +129,13 @@ def assign_work_view(request: HttpRequest) -> HttpResponse:
 def recall_work_view(request: HttpRequest, pk: int) -> HttpResponse:
     """召回打工中的门客"""
     manor = ensure_manor(request.user)
-    assignment = get_object_or_404(
-        WorkAssignment,
-        id=pk,
-        manor=manor,
-        status=WorkAssignment.Status.WORKING
-    )
+    assignment = get_object_or_404(WorkAssignment, id=pk, manor=manor, status=WorkAssignment.Status.WORKING)
 
     try:
         recall_guest_from_work(assignment)
-        messages.success(request, f"{assignment.guest.display_name} 已从 {assignment.work_template.name} 召回（无报酬）")
+        messages.success(
+            request, f"{assignment.guest.display_name} 已从 {assignment.work_template.name} 召回（无报酬）"
+        )
     except ValueError as e:
         messages.error(request, str(e))
 
@@ -128,11 +147,7 @@ def recall_work_view(request: HttpRequest, pk: int) -> HttpResponse:
 def claim_work_reward_view(request: HttpRequest, pk: int) -> HttpResponse:
     """领取打工报酬"""
     manor = ensure_manor(request.user)
-    assignment = get_object_or_404(
-        WorkAssignment,
-        id=pk,
-        manor=manor
-    )
+    assignment = get_object_or_404(WorkAssignment, id=pk, manor=manor)
 
     try:
         reward = claim_work_reward(assignment)

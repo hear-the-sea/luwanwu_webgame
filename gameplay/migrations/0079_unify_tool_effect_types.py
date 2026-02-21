@@ -10,9 +10,9 @@ def unify_tool_effect_types(apps, schema_editor):
     """
     ItemTemplate = apps.get_model("gameplay", "ItemTemplate")
 
-    updated = ItemTemplate.objects.filter(
-        effect_type__in=["magnifying_glass", "peace_shield"]
-    ).update(effect_type="tool")
+    updated = ItemTemplate.objects.filter(effect_type__in=["magnifying_glass", "peace_shield"]).update(
+        effect_type="tool"
+    )
 
     if updated:
         print(f"\n  Updated {updated} item template(s) to effect_type='tool'")

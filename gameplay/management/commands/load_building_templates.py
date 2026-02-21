@@ -8,7 +8,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from gameplay.models import BuildingType
-from gameplay.services.template_cache import clear_building_template_cache
+from gameplay.services.utils.template_cache import clear_building_template_cache
 
 
 class Command(BaseCommand):
@@ -73,7 +73,5 @@ class Command(BaseCommand):
 
         clear_building_template_cache()
         self.stdout.write(
-            self.style.SUCCESS(
-                f"Building templates synced. created={created} updated={updated} skipped={skipped}"
-            )
+            self.style.SUCCESS(f"Building templates synced. created={created} updated={updated} skipped={skipped}")
         )

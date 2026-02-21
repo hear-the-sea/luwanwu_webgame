@@ -18,6 +18,7 @@ pytestmark = pytest.mark.django_db
 def test_gold_bar_item_key_constant():
     """Test that GOLD_BAR_ITEM_KEY is correctly defined."""
     from trade.services.auction.constants import GOLD_BAR_ITEM_KEY
+
     assert GOLD_BAR_ITEM_KEY == "gold_bar"
 
 
@@ -137,7 +138,9 @@ def test_freeze_gold_bars_rejects_insufficient():
     inventory_item = SimpleNamespace(quantity=50)
 
     with patch.object(gold_bars.InventoryItem, "objects") as mock_inv_qs:
-        mock_inv_qs.select_for_update.return_value.filter.return_value.select_related.return_value.first.return_value = inventory_item
+        mock_inv_qs.select_for_update.return_value.filter.return_value.select_related.return_value.first.return_value = (
+            inventory_item
+        )
 
         with patch.object(gold_bars.FrozenGoldBar, "objects") as mock_frozen_qs:
             mock_frozen_qs.filter.return_value.aggregate.return_value = {"total": 30}
@@ -171,7 +174,9 @@ def test_unfreeze_gold_bars_skips_if_not_frozen():
     locked_record.is_frozen = False
 
     with patch.object(gold_bars.FrozenGoldBar, "objects") as mock_qs:
-        mock_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = locked_record
+        mock_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = (
+            locked_record
+        )
 
         # Should not raise, just return
         gold_bars.unfreeze_gold_bars(frozen_record)
@@ -206,7 +211,9 @@ def test_consume_frozen_gold_bars_skips_already_unfrozen():
     locked_record.is_frozen = False
 
     with patch.object(gold_bars.FrozenGoldBar, "objects") as mock_qs:
-        mock_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = locked_record
+        mock_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = (
+            locked_record
+        )
 
         # Should not raise
         gold_bars.consume_frozen_gold_bars(frozen_record, manor)
@@ -234,9 +241,7 @@ def test_try_get_frozen_record_returns_none_on_does_not_exist():
     bid = MagicMock()
 
     # Simulate DoesNotExist exception
-    type(bid).frozen_record = property(
-        lambda self: (_ for _ in ()).throw(gold_bars.FrozenGoldBar.DoesNotExist())
-    )
+    type(bid).frozen_record = property(lambda self: (_ for _ in ()).throw(gold_bars.FrozenGoldBar.DoesNotExist()))
 
     result = gold_bars.try_get_frozen_record(bid)
 

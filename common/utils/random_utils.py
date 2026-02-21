@@ -3,6 +3,7 @@
 
 提供跨应用共享的随机数相关工具函数，包括加权选择、累计权重抽取、二项分布采样等。
 """
+
 from __future__ import annotations
 
 import math

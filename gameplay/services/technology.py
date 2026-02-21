@@ -3,6 +3,7 @@
 
 提供技术配置加载、玩家技术管理和加成计算功能。
 """
+
 from __future__ import annotations
 
 import logging
@@ -16,18 +17,18 @@ from django.core.cache import cache
 from django.db import transaction
 from django.db.models import F
 
-from core.utils.time_scale import scale_duration
-from .cache import invalidate_home_stats_cache
-from .notifications import notify_user
 from core.exceptions import (
     InsufficientResourceError,
-    TechnologyNotFoundError,
     TechnologyConcurrentUpgradeLimitError,
-    TechnologyUpgradeInProgressError,
     TechnologyMaxLevelError,
+    TechnologyNotFoundError,
+    TechnologyUpgradeInProgressError,
 )
+from core.utils.time_scale import scale_duration
 
 from ..constants import MAX_CONCURRENT_TECH_UPGRADES
+from .utils.cache import invalidate_home_stats_cache
+from .utils.notifications import notify_user
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +156,11 @@ def get_technologies_by_category(category: str) -> List[Dict[str, Any]]:
         技术配置列表
     """
     data = load_technology_templates()
-    return [tech for tech in (data.get("technologies", []) or []) if isinstance(tech, dict) and tech.get("category") == category]
+    return [
+        tech
+        for tech in (data.get("technologies", []) or [])
+        if isinstance(tech, dict) and tech.get("category") == category
+    ]
 
 
 def get_categories() -> List[Dict[str, Any]]:
@@ -201,7 +206,7 @@ def calculate_upgrade_cost(tech_key: str, current_level: int) -> int:
         return 0
     base_cost = _coerce_int(template.get("base_cost", 8000), 8000)
     growth = 1.5  # 指数增长系数
-    return int(base_cost * (growth ** current_level))
+    return int(base_cost * (growth**current_level))
 
 
 def get_troop_class_for_key(troop_key: str) -> Optional[str]:
@@ -231,6 +236,7 @@ def get_player_technology_level(manor, tech_key: str) -> int:
         技术等级，未研究返回 0
     """
     from ..models import PlayerTechnology
+
     try:
         tech = manor.technologies.get(tech_key=tech_key)
         return tech.level
@@ -266,10 +272,7 @@ def get_technology_display_data(manor, category: str) -> List[Dict[str, Any]]:
     technologies = get_technologies_by_category(category)
 
     # 获取玩家技术记录（包含升级状态）
-    player_techs = {
-        pt.tech_key: pt
-        for pt in manor.technologies.all()
-    }
+    player_techs = {pt.tech_key: pt for pt in manor.technologies.all()}
 
     result = []
     for tech in technologies:
@@ -287,7 +290,7 @@ def get_technology_display_data(manor, category: str) -> List[Dict[str, Any]]:
         # 计算升级时间（支持从配置读取 base_time）
         if level < max_level:
             base_time = tech.get("base_time", 60)  # 默认60秒，特殊技能可配置更长
-            upgrade_duration = scale_duration(base_time * (1.4 ** level), minimum=1)
+            upgrade_duration = scale_duration(base_time * (1.4**level), minimum=1)
         else:
             upgrade_duration = None
 
@@ -301,25 +304,27 @@ def get_technology_display_data(manor, category: str) -> List[Dict[str, Any]]:
         current_effect = level * effect_per_level * 100
         next_effect = (level + 1) * effect_per_level * 100 if level < max_level else None
 
-        result.append({
-            "key": tech_key,
-            "name": tech["name"],
-            "description": tech.get("description", ""),
-            "category": tech.get("category"),
-            "troop_class": tech.get("troop_class"),
-            "effect_type": tech.get("effect_type"),
-            "level": level,
-            "max_level": max_level,
-            "upgrade_cost": upgrade_cost,
-            "upgrade_duration": upgrade_duration,
-            "current_effect": current_effect,
-            "next_effect": next_effect,
-            "effect_per_level": effect_per_level,
-            "can_upgrade": level < max_level and not is_upgrading,
-            "is_upgrading": is_upgrading,
-            "upgrade_complete_at": upgrade_complete_at,
-            "time_remaining": time_remaining,
-        })
+        result.append(
+            {
+                "key": tech_key,
+                "name": tech["name"],
+                "description": tech.get("description", ""),
+                "category": tech.get("category"),
+                "troop_class": tech.get("troop_class"),
+                "effect_type": tech.get("effect_type"),
+                "level": level,
+                "max_level": max_level,
+                "upgrade_cost": upgrade_cost,
+                "upgrade_duration": upgrade_duration,
+                "current_effect": current_effect,
+                "next_effect": next_effect,
+                "effect_per_level": effect_per_level,
+                "can_upgrade": level < max_level and not is_upgrading,
+                "is_upgrading": is_upgrading,
+                "upgrade_complete_at": upgrade_complete_at,
+                "time_remaining": time_remaining,
+            }
+        )
 
     return result
 
@@ -392,8 +397,10 @@ def upgrade_technology(manor, tech_key: str) -> Dict[str, Any]:
     Raises:
         ValueError: 升级失败时抛出异常
     """
-    from django.utils import timezone
     from datetime import timedelta
+
+    from django.utils import timezone
+
     from ..models import PlayerTechnology
     from .resources import spend_resources_locked
 
@@ -406,13 +413,12 @@ def upgrade_technology(manor, tech_key: str) -> Dict[str, Any]:
     with transaction.atomic():
         # 锁住庄园行，确保并发上限校验在并发请求下仍然可靠
         from ..models import Manor
+
         locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
 
         # 获取或创建玩家技术记录
         tech, created = PlayerTechnology.objects.get_or_create(
-            manor=locked_manor,
-            tech_key=tech_key,
-            defaults={"level": 0}
+            manor=locked_manor, tech_key=tech_key, defaults={"level": 0}
         )
 
         # 检查是否正在升级
@@ -436,7 +442,8 @@ def upgrade_technology(manor, tech_key: str) -> Dict[str, Any]:
         spend_resources_locked(locked_manor, {"silver": cost}, reason="tech_upgrade", note=f"升级{template['name']}")
 
         # 累计银两花费，计算声望
-        from .prestige import add_prestige_silver_locked
+        from .manor.prestige import add_prestige_silver_locked
+
         add_prestige_silver_locked(locked_manor, cost)
 
         # 计算升级时间并开始升级
@@ -467,23 +474,22 @@ def finalize_technology_upgrade(tech, send_notification: bool = False) -> bool:
         是否成功完成升级
     """
     from django.utils import timezone
+
     from ..models import Message
 
     if not getattr(tech, "pk", None):
         return False
     now = timezone.now()
-    updated = (
-        tech.__class__.objects.filter(
-            pk=tech.pk,
-            is_upgrading=True,
-            upgrade_complete_at__isnull=False,
-            upgrade_complete_at__lte=now,
-        ).update(
-            level=F("level") + 1,
-            is_upgrading=False,
-            upgrade_complete_at=None,
-            updated_at=now,
-        )
+    updated = tech.__class__.objects.filter(
+        pk=tech.pk,
+        is_upgrading=True,
+        upgrade_complete_at__isnull=False,
+        upgrade_complete_at__lte=now,
+    ).update(
+        level=F("level") + 1,
+        is_upgrading=False,
+        upgrade_complete_at=None,
+        updated_at=now,
     )
     if updated != 1:
         return False
@@ -495,7 +501,7 @@ def finalize_technology_upgrade(tech, send_notification: bool = False) -> bool:
     tech_name = template["name"] if template else tech.tech_key
 
     if send_notification:
-        from .messages import create_message
+        from .utils.messages import create_message
 
         create_message(
             manor=tech.manor,
@@ -541,12 +547,7 @@ def refresh_technology_upgrades(manor) -> int:
             logger.debug("Technology refresh throttle cache unavailable: %s", exc, exc_info=True)
 
     completed = 0
-    upgrading_techs = list(
-        manor.technologies.filter(
-            is_upgrading=True,
-            upgrade_complete_at__lte=timezone.now()
-        )
-    )
+    upgrading_techs = list(manor.technologies.filter(is_upgrading=True, upgrade_complete_at__lte=timezone.now()))
 
     for tech in upgrading_techs:
         if finalize_technology_upgrade(tech, send_notification=True):
@@ -737,9 +738,7 @@ def get_resource_production_bonus_from_levels(
     return total_bonus
 
 
-def get_resource_production_bonus(
-    manor, resource_type: str, building_key: Optional[str] = None
-) -> float:
+def get_resource_production_bonus(manor, resource_type: str, building_key: Optional[str] = None) -> float:
     """
     获取资源产出加成。
 

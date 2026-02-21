@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import random
-from typing import Callable, List, Literal, TYPE_CHECKING, overload
+from typing import TYPE_CHECKING, Callable, List, Literal, overload
 
 from .constants import (
     BASE_CRIT_CHANCE,
@@ -233,11 +233,7 @@ def calculate_attack_damage(
 
     该函数不直接修改 actor/target 的血量或兵力，专注于"伤害数值"的计算。
     """
-    from ..combat_math import (
-        calculate_slaughter_multiplier,
-        effective_attack_value,
-        effective_defense_value,
-    )
+    from ..combat_math import calculate_slaughter_multiplier, effective_attack_value, effective_defense_value
     from ..skills import skill_damage_bonus
 
     attack_value = effective_attack_value(actor, target)

@@ -1,6 +1,7 @@
 """
 Tech effects builder for combat units.
 """
+
 from __future__ import annotations
 
 from typing import Callable, Dict

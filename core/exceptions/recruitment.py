@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from .base import GameError
 
-
 # ============ 招募相关异常 ============
 
 

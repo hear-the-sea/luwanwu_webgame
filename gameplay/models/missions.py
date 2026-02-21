@@ -20,7 +20,7 @@ class MissionTemplate(models.Model):
         choices=Difficulty.choices,
         default=Difficulty.JUNIOR,
         verbose_name="难度",
-        help_text="任务难度分级"
+        help_text="任务难度分级",
     )
     battle_type = models.CharField(max_length=32, default="task")
     is_defense = models.BooleanField(default=False, help_text="敌方主动来袭，玩家为防守方")

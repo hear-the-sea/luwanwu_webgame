@@ -3,28 +3,26 @@
 
 提供升级时的属性随机分配功能。
 """
+
 from __future__ import annotations
 
 import random
-from typing import Dict, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict
 
 if TYPE_CHECKING:
     from ..models import Guest
 
-from ..models import (
-    GuestArchetype,
-)
-
+from ..models import GuestArchetype
 
 # 每个稀有度每升1级可获得的基础成长点区间（最小值, 最大值）
 # 基础成长点数会在区间内随机生成，然后按职业权重分配到各个属性
 # 稀有度越高，每级成长点数的区间越大，成长潜力越高
 RARITY_ATTRIBUTE_GROWTH_RANGE = {
-    "black": (1, 3),    # 黑色：1-3点基础成长
-    "gray": (2, 5),     # 灰色：2-5点基础成长
-    "green": (3, 7),    # 绿色：3-7点基础成长
-    "red": (4, 7),      # 红色：4-7点基础成长（调整：避免与绿色下限重叠，期望5.5）
-    "blue": (5, 9),     # 蓝色：5-9点基础成长
+    "black": (1, 3),  # 黑色：1-3点基础成长
+    "gray": (2, 5),  # 灰色：2-5点基础成长
+    "green": (3, 7),  # 绿色：3-7点基础成长
+    "red": (4, 7),  # 红色：4-7点基础成长（调整：避免与绿色下限重叠，期望5.5）
+    "blue": (5, 9),  # 蓝色：5-9点基础成长
     "purple": (6, 11),  # 紫色：6-11点基础成长
     "orange": (6, 14),  # 橙色：6-14点基础成长
 }

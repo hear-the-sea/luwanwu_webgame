@@ -7,29 +7,36 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0030_add_training_ground'),
+        ("gameplay", "0030_add_training_ground"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='message',
-            name='kind',
-            field=models.CharField(choices=[('battle', '战报'), ('system', '系统'), ('reward', '奖励')], default='system', max_length=16),
+            model_name="message",
+            name="kind",
+            field=models.CharField(
+                choices=[("battle", "战报"), ("system", "系统"), ("reward", "奖励")], default="system", max_length=16
+            ),
         ),
         migrations.CreateModel(
-            name='PlayerTechnology',
+            name="PlayerTechnology",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('tech_key', models.CharField(max_length=64, verbose_name='技术标识')),
-                ('level', models.PositiveIntegerField(default=0, verbose_name='等级')),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('manor', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='technologies', to='gameplay.manor')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("tech_key", models.CharField(max_length=64, verbose_name="技术标识")),
+                ("level", models.PositiveIntegerField(default=0, verbose_name="等级")),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "manor",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="technologies", to="gameplay.manor"
+                    ),
+                ),
             ],
             options={
-                'verbose_name': '玩家技术',
-                'verbose_name_plural': '玩家技术',
-                'unique_together': {('manor', 'tech_key')},
+                "verbose_name": "玩家技术",
+                "verbose_name_plural": "玩家技术",
+                "unique_together": {("manor", "tech_key")},
             },
         ),
     ]

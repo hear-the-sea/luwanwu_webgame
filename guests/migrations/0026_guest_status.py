@@ -6,13 +6,17 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('guests', '0025_skill_targets'),
+        ("guests", "0025_skill_targets"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='guest',
-            name='status',
-            field=models.CharField(choices=[('idle', '空闲'), ('working', '打工中'), ('deployed', '出征中'), ('injured', '重伤')], default='idle', max_length=16),
+            model_name="guest",
+            name="status",
+            field=models.CharField(
+                choices=[("idle", "空闲"), ("working", "打工中"), ("deployed", "出征中"), ("injured", "重伤")],
+                default="idle",
+                max_length=16,
+            ),
         ),
     ]

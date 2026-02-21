@@ -10,9 +10,11 @@
     python scripts/audit_mission_troop_loadout.py --dry-run  # 仅检查，不修复
     python scripts/audit_mission_troop_loadout.py --fix       # 自动修复
 """
+
 import sys
-import django
 from pathlib import Path
+
+import django
 
 # 添加项目根目录到 Python 路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -195,10 +197,10 @@ def _print_report(issues):
     _print_active_runs(issues)
 
     total_issues = (
-        len(issues["format_errors"]) +
-        len(issues["invalid_keys"]) +
-        len(issues["completed_runs"]) +
-        len(issues["active_runs"])
+        len(issues["format_errors"])
+        + len(issues["invalid_keys"])
+        + len(issues["completed_runs"])
+        + len(issues["active_runs"])
     )
 
     print("\n" + "=" * 60)
@@ -237,17 +239,8 @@ def _fix_issues(issues):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="护院配置数据巡检脚本")
-    parser.add_argument(
-        "--fix",
-        action="store_true",
-        help="自动修复问题（默认仅检查）"
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=True,
-        help="仅检查，不修复（默认）"
-    )
+    parser.add_argument("--fix", action="store_true", help="自动修复问题（默认仅检查）")
+    parser.add_argument("--dry-run", action="store_true", default=True, help="仅检查，不修复（默认）")
 
     args = parser.parse_args()
 
@@ -258,5 +251,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n❌ 错误: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

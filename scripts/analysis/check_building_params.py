@@ -1,25 +1,26 @@
 #!/usr/bin/env python3
-import yaml
 import math
 
-with open('data/building_templates.yaml', 'r', encoding='utf-8') as f:
+import yaml
+
+with open("data/building_templates.yaml", "r", encoding="utf-8") as f:
     data = yaml.safe_load(f)
 
-buildings = data['buildings']
+buildings = data["buildings"]
 
 # 最大等级配置
 max_levels = {
-    'treasury': 20,  # 调整后
-    'juxianzhuang': 20,
-    'youxibaota': 6,
+    "treasury": 20,  # 调整后
+    "juxianzhuang": 20,
+    "youxibaota": 6,
 }
 
 # 查看三个关键建筑
-targets = ['treasury', 'juxianzhuang', 'youxibaota']
+targets = ["treasury", "juxianzhuang", "youxibaota"]
 
 for b in buildings:
-    if b['key'] in targets:
-        max_level = max_levels.get(b['key'], 20)
+    if b["key"] in targets:
+        max_level = max_levels.get(b["key"], 20)
 
         print(f"═══ {b['name']} ({b['key']}) ═══")
         print(f"类型: {b['category']}")
@@ -36,17 +37,17 @@ for b in buildings:
 
         for level in range(1, max_level + 1):
             # 成本
-            cost_multiplier = b['cost_growth'] ** (level - 1)
-            for resource, amount in b['base_cost'].items():
+            cost_multiplier = b["cost_growth"] ** (level - 1)
+            for resource, amount in b["base_cost"].items():
                 cost = math.ceil(amount * cost_multiplier)
-                if resource == 'silver':
+                if resource == "silver":
                     total_silver += cost
-                elif resource == 'grain':
+                elif resource == "grain":
                     total_grain += cost
 
             # 时间
-            time_multiplier = b['time_growth'] ** (level - 1)
-            duration = math.ceil(b['base_upgrade_time'] * time_multiplier)
+            time_multiplier = b["time_growth"] ** (level - 1)
+            duration = math.ceil(b["base_upgrade_time"] * time_multiplier)
             total_time += duration
 
         print(f"\n1→Lv{max_level} 总消耗:")

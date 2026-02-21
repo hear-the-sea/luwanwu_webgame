@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django import forms
 
-from .models import GearItem, Guest, RecruitmentPool, MAX_GUEST_LEVEL
+from .models import MAX_GUEST_LEVEL, GearItem, Guest, RecruitmentPool
 
 
 class RecruitForm(forms.Form):

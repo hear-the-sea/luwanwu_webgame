@@ -2,7 +2,9 @@
 生成占位图片用于测试图片功能
 需要安装 Pillow: pip install Pillow
 """
+
 from pathlib import Path
+
 from PIL import Image, ImageDraw, ImageFont
 
 # 项目根目录
@@ -59,19 +61,10 @@ def generate_item_icon(name, color, size=96):
 
     # 绘制圆角矩形背景
     radius = 10
-    draw.rounded_rectangle(
-        [0, 0, size, size],
-        radius=radius,
-        fill=COLORS.get(color, "#8B8B8B")
-    )
+    draw.rounded_rectangle([0, 0, size, size], radius=radius, fill=COLORS.get(color, "#8B8B8B"))
 
     # 添加边框
-    draw.rounded_rectangle(
-        [2, 2, size - 2, size - 2],
-        radius=radius - 2,
-        outline="white",
-        width=3
-    )
+    draw.rounded_rectangle([2, 2, size - 2, size - 2], radius=radius - 2, outline="white", width=3)
 
     # 绘制物品名称首字母
     try:

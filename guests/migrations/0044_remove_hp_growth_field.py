@@ -6,12 +6,12 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('guests', '0043_add_base_intellect'),
+        ("guests", "0043_add_base_intellect"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='guesttemplate',
-            name='hp_growth',
+            model_name="guesttemplate",
+            name="hp_growth",
         ),
     ]

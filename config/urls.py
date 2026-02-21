@@ -4,6 +4,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
 from core.views.health import health_live, health_ready
 from gameplay.views import HomeView
@@ -20,6 +21,9 @@ urlpatterns = [
     path("battle/", include(("battle.urls", "battle"), namespace="battle")),
     path("trade/", include(("trade.urls", "trade"), namespace="trade")),
     path("guilds/", include(("guilds.urls", "guilds"), namespace="guilds")),
+    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+    path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+    path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
     path(
         "",
         HomeView.as_view(),

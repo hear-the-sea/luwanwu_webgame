@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import random
-from typing import Callable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from .constants import PRIORITY_TARGET_WEIGHT, TROOP_COUNTERS
 from .types import AttackSkill, _SelectedAttackTargets
@@ -23,11 +23,7 @@ def is_ranged_attack(actor: "Combatant", round_priority: int) -> bool:
     return round_priority < 0
 
 
-def select_target_with_priority(
-    actor: "Combatant",
-    opponents: list["Combatant"],
-    rng: random.Random
-) -> "Combatant":
+def select_target_with_priority(actor: "Combatant", opponents: list["Combatant"], rng: random.Random) -> "Combatant":
     """
     加权概率选择攻击目标。
 
@@ -53,17 +49,11 @@ def select_target_with_priority(
     if actor.kind == "troop":
         counter_class = TROOP_COUNTERS.get(actor.troop_class)
         if counter_class:
-            priority_targets = [
-                unit for unit in opponents
-                if unit.troop_class == counter_class
-            ]
+            priority_targets = [unit for unit in opponents if unit.troop_class == counter_class]
 
     # 门客：优先攻击敌方门客
     elif actor.kind == "guest":
-        priority_targets = [
-            unit for unit in opponents
-            if unit.kind == "guest"
-        ]
+        priority_targets = [unit for unit in opponents if unit.kind == "guest"]
 
     # 加权概率判定
     if priority_targets and rng.random() < PRIORITY_TARGET_WEIGHT:

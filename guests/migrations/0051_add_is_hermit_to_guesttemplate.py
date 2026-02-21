@@ -6,13 +6,13 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('guests', '0050_add_template_growth_config'),
+        ("guests", "0050_add_template_growth_config"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='guesttemplate',
-            name='is_hermit',
-            field=models.BooleanField(default=False, verbose_name='隐士'),
+            model_name="guesttemplate",
+            name="is_hermit",
+            field=models.BooleanField(default=False, verbose_name="隐士"),
         ),
     ]

@@ -18,13 +18,13 @@ from core.decorators import handle_game_errors
 from core.exceptions import GameError
 from core.utils.validation import safe_redirect_url, sanitize_error_message
 
-from ..models import Guest, GuestSkill, MAX_GUEST_SKILL_SLOTS, Skill
+from ..models import MAX_GUEST_SKILL_SLOTS, Guest, GuestSkill, Skill
 
 logger = logging.getLogger(__name__)
 
 
 def _get_guest_and_next_url(request, pk: int):
-    from gameplay.services.manor import ensure_manor
+    from gameplay.services.manor.core import ensure_manor
 
     manor = ensure_manor(request.user)
     guest = get_object_or_404(Guest.objects.for_manor(manor).with_template(), pk=pk)
@@ -161,7 +161,7 @@ def forget_skill_view(request, pk: int):
 
     使用统一装饰器处理错误
     """
-    from gameplay.services.manor import ensure_manor
+    from gameplay.services.manor.core import ensure_manor
 
     # 使用 manager 方法获取门客，避免重复的 select_related
     guest = get_object_or_404(Guest.objects.for_manor(ensure_manor(request.user)).with_template(), pk=pk)

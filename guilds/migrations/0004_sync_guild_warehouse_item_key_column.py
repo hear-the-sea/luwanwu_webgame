@@ -86,9 +86,7 @@ def forwards(apps, schema_editor):
                 """
             )
         else:
-            cursor.execute(
-                "UPDATE guild_warehouse SET item_key = CONCAT('unknown_', id) WHERE item_key IS NULL;"
-            )
+            cursor.execute("UPDATE guild_warehouse SET item_key = CONCAT('unknown_', id) WHERE item_key IS NULL;")
 
         # 3) 转为 NOT NULL（模型需要）
         cursor.execute("ALTER TABLE guild_warehouse MODIFY COLUMN item_key VARCHAR(100) NOT NULL;")
@@ -96,8 +94,7 @@ def forwards(apps, schema_editor):
         # 4) 尽可能补上 unique(guild_id, item_key)（如果已有则跳过）
         if not _has_unique_index_on_columns(cursor, "guild_warehouse", "guild_id,item_key"):
             cursor.execute(
-                "ALTER TABLE guild_warehouse "
-                "ADD UNIQUE INDEX guildwh_guild_item_key_uniq (guild_id, item_key);"
+                "ALTER TABLE guild_warehouse " "ADD UNIQUE INDEX guildwh_guild_item_key_uniq (guild_id, item_key);"
             )
 
 

@@ -6,38 +6,38 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('guests', '0023_recompute_guest_hp'),
+        ("guests", "0023_recompute_guest_hp"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='skill',
-            name='damage_formula',
+            model_name="skill",
+            name="damage_formula",
             field=models.JSONField(blank=True, default=dict),
         ),
         migrations.AddField(
-            model_name='skill',
-            name='required_agility',
+            model_name="skill",
+            name="required_agility",
             field=models.PositiveIntegerField(default=0),
         ),
         migrations.AddField(
-            model_name='skill',
-            name='required_defense',
+            model_name="skill",
+            name="required_defense",
             field=models.PositiveIntegerField(default=0),
         ),
         migrations.AddField(
-            model_name='skill',
-            name='required_force',
+            model_name="skill",
+            name="required_force",
             field=models.PositiveIntegerField(default=0),
         ),
         migrations.AddField(
-            model_name='skill',
-            name='required_intellect',
+            model_name="skill",
+            name="required_intellect",
             field=models.PositiveIntegerField(default=0),
         ),
         migrations.AddField(
-            model_name='skill',
-            name='required_level',
+            model_name="skill",
+            name="required_level",
             field=models.PositiveIntegerField(default=0),
         ),
     ]

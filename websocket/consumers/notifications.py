@@ -4,6 +4,8 @@ import logging
 
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
+from ..utils import filter_payload
+
 logger = logging.getLogger(__name__)
 
 
@@ -35,12 +37,5 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
 
     async def notify_message(self, event):
         payload = event.get("payload", {})
-        safe_payload = {
-            "type": payload.get("type"),
-            "title": payload.get("title"),
-            "message": payload.get("message"),
-            "data": payload.get("data"),
-            "timestamp": payload.get("timestamp"),
-        }
-        safe_payload = {k: v for k, v in safe_payload.items() if v is not None}
+        safe_payload = filter_payload(payload, ["type", "title", "message", "data", "timestamp"])
         await self.send_json(safe_payload)

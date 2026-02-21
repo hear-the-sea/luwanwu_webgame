@@ -41,65 +41,59 @@ print("-" * 80)
 
 juxian_scenarios = [
     {
-        'name': '方案1：低增长型',
-        'base_time': 3600,  # 1小时
-        'time_growth': 1.35,
-        'base_cost': 5000,
-        'cost_growth': 1.42,
-        'max_level': 20,
+        "name": "方案1：低增长型",
+        "base_time": 3600,  # 1小时
+        "time_growth": 1.35,
+        "base_cost": 5000,
+        "cost_growth": 1.42,
+        "max_level": 20,
     },
     {
-        'name': '方案2：中等增长',
-        'base_time': 7200,  # 2小时
-        'time_growth': 1.32,
-        'base_cost': 8000,
-        'cost_growth': 1.40,
-        'max_level': 20,
+        "name": "方案2：中等增长",
+        "base_time": 7200,  # 2小时
+        "time_growth": 1.32,
+        "base_cost": 8000,
+        "cost_growth": 1.40,
+        "max_level": 20,
     },
     {
-        'name': '方案3：平衡型',
-        'base_time': 10800,  # 3小时
-        'time_growth': 1.30,
-        'base_cost': 10000,
-        'cost_growth': 1.38,
-        'max_level': 20,
+        "name": "方案3：平衡型",
+        "base_time": 10800,  # 3小时
+        "time_growth": 1.30,
+        "base_cost": 10000,
+        "cost_growth": 1.38,
+        "max_level": 20,
     },
     {
-        'name': '方案4：高基础极低增长',
-        'base_time': 21600,  # 6小时
-        'time_growth': 1.28,
-        'base_cost': 15000,
-        'cost_growth': 1.35,
-        'max_level': 20,
+        "name": "方案4：高基础极低增长",
+        "base_time": 21600,  # 6小时
+        "time_growth": 1.28,
+        "base_cost": 15000,
+        "cost_growth": 1.35,
+        "max_level": 20,
     },
     {
-        'name': '方案5：超高基础微增长',
-        'base_time': 43200,  # 12小时
-        'time_growth': 1.25,
-        'base_cost': 20000,
-        'cost_growth': 1.32,
-        'max_level': 20,
+        "name": "方案5：超高基础微增长",
+        "base_time": 43200,  # 12小时
+        "time_growth": 1.25,
+        "base_cost": 20000,
+        "cost_growth": 1.32,
+        "max_level": 20,
     },
 ]
 
 for scenario in juxian_scenarios:
-    total_time = calculate_total_time(
-        scenario['base_time'],
-        scenario['time_growth'],
-        scenario['max_level']
-    )
-    total_cost = calculate_total_cost(
-        scenario['base_cost'],
-        scenario['cost_growth'],
-        scenario['max_level']
-    )
+    total_time = calculate_total_time(scenario["base_time"], scenario["time_growth"], scenario["max_level"])
+    total_cost = calculate_total_cost(scenario["base_cost"], scenario["cost_growth"], scenario["max_level"])
     days = total_time / 86400
 
     print(f"\n{scenario['name']}")
-    print(f"  参数: base_time={scenario['base_time']}s ({scenario['base_time']/3600:.1f}h), "
-          f"time_growth={scenario['time_growth']}, "
-          f"base_cost={scenario['base_cost']}, "
-          f"cost_growth={scenario['cost_growth']}")
+    print(
+        f"  参数: base_time={scenario['base_time']}s ({scenario['base_time']/3600:.1f}h), "
+        f"time_growth={scenario['time_growth']}, "
+        f"base_cost={scenario['base_cost']}, "
+        f"cost_growth={scenario['cost_growth']}"
+    )
     print(f"  总时长: {days:.1f}天 ({total_time/3600:.1f}小时)")
     print(f"  总成本: {total_cost:,}银两")
 
@@ -116,61 +110,57 @@ print("-" * 80)
 
 youxi_scenarios = [
     {
-        'name': '方案1：极高指数增长',
-        'base_time': 86400,  # 1天
-        'time_growth': 2.0,
-        'base_cost': 50000,
-        'cost_growth': 2.0,
-        'max_level': 6,
+        "name": "方案1：极高指数增长",
+        "base_time": 86400,  # 1天
+        "time_growth": 2.0,
+        "base_cost": 50000,
+        "cost_growth": 2.0,
+        "max_level": 6,
     },
     {
-        'name': '方案2：超高基础时间',
-        'base_time': 172800,  # 2天
-        'time_growth': 1.9,
-        'base_cost': 80000,
-        'cost_growth': 1.9,
-        'max_level': 6,
+        "name": "方案2：超高基础时间",
+        "base_time": 172800,  # 2天
+        "time_growth": 1.9,
+        "base_cost": 80000,
+        "cost_growth": 1.9,
+        "max_level": 6,
     },
     {
-        'name': '方案3：平衡型',
-        'base_time': 259200,  # 3天
-        'time_growth': 1.8,
-        'base_cost': 100000,
-        'cost_growth': 1.8,
-        'max_level': 6,
+        "name": "方案3：平衡型",
+        "base_time": 259200,  # 3天
+        "time_growth": 1.8,
+        "base_cost": 100000,
+        "cost_growth": 1.8,
+        "max_level": 6,
     },
     {
-        'name': '方案4：低增长高基础',
-        'base_time': 432000,  # 5天
-        'time_growth': 1.7,
-        'base_cost': 150000,
-        'cost_growth': 1.7,
-        'max_level': 6,
+        "name": "方案4：低增长高基础",
+        "base_time": 432000,  # 5天
+        "time_growth": 1.7,
+        "base_cost": 150000,
+        "cost_growth": 1.7,
+        "max_level": 6,
     },
 ]
 
 for scenario in youxi_scenarios:
-    total_time = calculate_total_time(
-        scenario['base_time'],
-        scenario['time_growth'],
-        scenario['max_level']
-    )
+    total_time = calculate_total_time(scenario["base_time"], scenario["time_growth"], scenario["max_level"])
     # 悠嘻宝塔需要粮食和银两
-    total_silver = calculate_total_cost(
-        scenario['base_cost'],
-        scenario['cost_growth'],
-        scenario['max_level']
-    )
+    total_silver = calculate_total_cost(scenario["base_cost"], scenario["cost_growth"], scenario["max_level"])
     # 假设粮食成本是银两的20%
     total_grain = int(total_silver * 0.2)
 
     days = total_time / 86400
 
     print(f"\n{scenario['name']}")
-    print(f"  参数: base_time={scenario['base_time']}s ({scenario['base_time']/86400:.1f}天), "
-          f"time_growth={scenario['time_growth']}")
-    print(f"        base_cost={{silver: {scenario['base_cost']}, grain: {int(scenario['base_cost']*0.2)}}}, "
-          f"cost_growth={scenario['cost_growth']}")
+    print(
+        f"  参数: base_time={scenario['base_time']}s ({scenario['base_time']/86400:.1f}天), "
+        f"time_growth={scenario['time_growth']}"
+    )
+    print(
+        f"        base_cost={{silver: {scenario['base_cost']}, grain: {int(scenario['base_cost']*0.2)}}}, "
+        f"cost_growth={scenario['cost_growth']}"
+    )
     print(f"  总时长: {days:.1f}天 ({total_time/3600:.1f}小时)")
     print(f"  总成本: {total_silver:,}银两 + {total_grain:,}粮食")
 

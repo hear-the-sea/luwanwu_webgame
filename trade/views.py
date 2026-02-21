@@ -18,20 +18,11 @@ from core.exceptions import GameError
 from core.utils import safe_int, sanitize_error_message
 from core.utils.rate_limit import rate_limit_redirect
 
-from .services.auction_service import (
-    place_bid,
-)
-from .services.bank_service import exchange_gold_bar
-from .services.market_service import (
-    cancel_listing,
-    create_listing,
-    purchase_listing,
-)
-from .services.shop_service import (
-    buy_item,
-    sell_item,
-)
 from .selectors import get_trade_context
+from .services.auction_service import place_bid
+from .services.bank_service import exchange_gold_bar
+from .services.market_service import cancel_listing, create_listing, purchase_listing
+from .services.shop_service import buy_item, sell_item
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +44,9 @@ def _handle_trade_error(request, exc: Exception) -> None:
 
 
 def _handle_unexpected_trade_error(request, exc: Exception, *, op: str) -> None:
-    logger.exception("trade view unexpected error: op=%s user_id=%s error=%s", op, getattr(request.user, "id", None), exc)
+    logger.exception(
+        "trade view unexpected error: op=%s user_id=%s error=%s", op, getattr(request.user, "id", None), exc
+    )
     _handle_trade_error(request, exc)
 
 

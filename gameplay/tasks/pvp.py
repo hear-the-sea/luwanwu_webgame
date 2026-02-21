@@ -25,12 +25,7 @@ def complete_scout_task(self, record_id: int):
     from gameplay.services.raid import finalize_scout
 
     try:
-        record = (
-            ScoutRecord.objects
-            .select_related("attacker", "defender")
-            .filter(pk=record_id)
-            .first()
-        )
+        record = ScoutRecord.objects.select_related("attacker", "defender").filter(pk=record_id).first()
         if not record:
             logger.warning("ScoutRecord %d not found", record_id)
             return "not_found"
@@ -72,12 +67,7 @@ def complete_scout_return_task(self, record_id: int):
     from gameplay.services.raid import finalize_scout_return
 
     try:
-        record = (
-            ScoutRecord.objects
-            .select_related("attacker", "defender")
-            .filter(pk=record_id)
-            .first()
-        )
+        record = ScoutRecord.objects.select_related("attacker", "defender").filter(pk=record_id).first()
         if not record:
             logger.warning("ScoutRecord %d not found", record_id)
             return "not_found"
@@ -125,8 +115,7 @@ def scan_scout_records(limit: int = 200):
 
     # Handle outbound arrival (SCOUTING -> RETURNING)
     scouting_qs = (
-        ScoutRecord.objects
-        .select_related("attacker", "defender")
+        ScoutRecord.objects.select_related("attacker", "defender")
         .filter(status=ScoutRecord.Status.SCOUTING, complete_at__lte=now)
         .order_by("complete_at")[:limit]
     )
@@ -139,8 +128,7 @@ def scan_scout_records(limit: int = 200):
 
     # Handle return complete (RETURNING -> SUCCESS/FAILED)
     returning_qs = (
-        ScoutRecord.objects
-        .select_related("attacker", "defender")
+        ScoutRecord.objects.select_related("attacker", "defender")
         .filter(status=ScoutRecord.Status.RETURNING, return_at__lte=now)
         .order_by("return_at")[:limit]
     )
@@ -167,11 +155,7 @@ def process_raid_battle_task(self, run_id: int):
 
     try:
         run = (
-            RaidRun.objects
-            .select_related("attacker", "defender")
-            .prefetch_related("guests")
-            .filter(pk=run_id)
-            .first()
+            RaidRun.objects.select_related("attacker", "defender").prefetch_related("guests").filter(pk=run_id).first()
         )
         if not run:
             logger.warning("RaidRun %d not found", run_id)
@@ -238,8 +222,7 @@ def complete_raid_task(self, run_id: int):
 
     try:
         run = (
-            RaidRun.objects
-            .select_related("attacker", "defender", "battle_report")
+            RaidRun.objects.select_related("attacker", "defender", "battle_report")
             .prefetch_related("guests")
             .filter(pk=run_id)
             .first()
@@ -300,15 +283,14 @@ def scan_raid_runs(limit: int = 200):
     Scan and process all overdue raid tasks (for worker downtime recovery).
     """
     from gameplay.models import RaidRun
-    from gameplay.services.raid import process_raid_battle, finalize_raid
+    from gameplay.services.raid import finalize_raid, process_raid_battle
 
     now = timezone.now()
     count = 0
 
     # Handle marching but battle time arrived
     marching_qs = (
-        RaidRun.objects
-        .select_related("attacker", "defender")
+        RaidRun.objects.select_related("attacker", "defender")
         .prefetch_related("guests")
         .filter(status=RaidRun.Status.MARCHING, battle_at__lte=now)
         .order_by("battle_at")[:limit]
@@ -322,8 +304,7 @@ def scan_raid_runs(limit: int = 200):
 
     # Handle returning but completed
     returning_qs = (
-        RaidRun.objects
-        .select_related("attacker", "defender", "battle_report")
+        RaidRun.objects.select_related("attacker", "defender", "battle_report")
         .prefetch_related("guests")
         .filter(status=RaidRun.Status.RETURNING, return_at__lte=now)
         .order_by("return_at")[:limit]
@@ -337,8 +318,7 @@ def scan_raid_runs(limit: int = 200):
 
     # Handle retreated but completed
     retreated_qs = (
-        RaidRun.objects
-        .select_related("attacker", "defender")
+        RaidRun.objects.select_related("attacker", "defender")
         .prefetch_related("guests")
         .filter(status=RaidRun.Status.RETREATED, return_at__lte=now)
         .order_by("return_at")[:limit]

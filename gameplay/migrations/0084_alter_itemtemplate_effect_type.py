@@ -6,13 +6,25 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0083_raidrun_defender_started_at_index'),
+        ("gameplay", "0083_raidrun_defender_started_at_index"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='itemtemplate',
-            name='effect_type',
-            field=models.CharField(choices=[('resource_pack', '资源补给'), ('resource', '资源'), ('skill_book', '技能书'), ('experience_items', '经验道具'), ('medicine', '药品'), ('tool', '道具'), ('loot_box', '宝箱')], default='resource_pack', max_length=32),
+            model_name="itemtemplate",
+            name="effect_type",
+            field=models.CharField(
+                choices=[
+                    ("resource_pack", "资源补给"),
+                    ("resource", "资源"),
+                    ("skill_book", "技能书"),
+                    ("experience_items", "经验道具"),
+                    ("medicine", "药品"),
+                    ("tool", "道具"),
+                    ("loot_box", "宝箱"),
+                ],
+                default="resource_pack",
+                max_length=32,
+            ),
         ),
     ]

@@ -6,18 +6,50 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0079_unify_tool_effect_types'),
+        ("gameplay", "0079_unify_tool_effect_types"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='itemtemplate',
-            name='effect_type',
-            field=models.CharField(choices=[('resource_pack', '资源补给'), ('resource', '资源'), ('skill_book', '技能书'), ('experience_items', '经验道具'), ('medicine', '药品'), ('tool', '道具')], default='resource_pack', max_length=32),
+            model_name="itemtemplate",
+            name="effect_type",
+            field=models.CharField(
+                choices=[
+                    ("resource_pack", "资源补给"),
+                    ("resource", "资源"),
+                    ("skill_book", "技能书"),
+                    ("experience_items", "经验道具"),
+                    ("medicine", "药品"),
+                    ("tool", "道具"),
+                ],
+                default="resource_pack",
+                max_length=32,
+            ),
         ),
         migrations.AlterField(
-            model_name='resourceevent',
-            name='reason',
-            field=models.CharField(choices=[('produce', '自动产出'), ('upgrade_cost', '建筑升级'), ('task_reward', '任务奖励'), ('battle_reward', '战斗掉落'), ('admin_adjust', '运营调整'), ('recruit_cost', '门客招募'), ('training_cost', '门客培养'), ('item_use', '道具使用'), ('shop_purchase', '商铺购买'), ('shop_sell', '商铺出售'), ('work_reward', '打工报酬'), ('guild_donation', '帮会捐献'), ('market_listing_fee', '交易行挂单手续费'), ('market_purchase', '交易行购买'), ('market_sold', '交易行出售'), ('item_sold', '物品出售'), ('tech_upgrade', '科技升级')], max_length=32),
+            model_name="resourceevent",
+            name="reason",
+            field=models.CharField(
+                choices=[
+                    ("produce", "自动产出"),
+                    ("upgrade_cost", "建筑升级"),
+                    ("task_reward", "任务奖励"),
+                    ("battle_reward", "战斗掉落"),
+                    ("admin_adjust", "运营调整"),
+                    ("recruit_cost", "门客招募"),
+                    ("training_cost", "门客培养"),
+                    ("item_use", "道具使用"),
+                    ("shop_purchase", "商铺购买"),
+                    ("shop_sell", "商铺出售"),
+                    ("work_reward", "打工报酬"),
+                    ("guild_donation", "帮会捐献"),
+                    ("market_listing_fee", "交易行挂单手续费"),
+                    ("market_purchase", "交易行购买"),
+                    ("market_sold", "交易行出售"),
+                    ("item_sold", "物品出售"),
+                    ("tech_upgrade", "科技升级"),
+                ],
+                max_length=32,
+            ),
         ),
     ]

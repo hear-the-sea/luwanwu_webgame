@@ -5,77 +5,78 @@ from django.db import migrations, models
 
 def populate_initial_attributes(apps, schema_editor):
     """为已有门客填充初始属性（使用模板基础值作为近似）"""
-    Guest = apps.get_model('guests', 'Guest')
-    for guest in Guest.objects.select_related('template').iterator():
+    Guest = apps.get_model("guests", "Guest")
+    for guest in Guest.objects.select_related("template").iterator():
         template = guest.template
         # 用模板基础值作为初始属性的近似值
         guest.initial_force = template.base_attack
         guest.initial_intellect = template.base_intellect
         guest.initial_defense = template.base_defense
         guest.initial_agility = template.base_agility
-        guest.save(update_fields=[
-            'initial_force', 'initial_intellect',
-            'initial_defense', 'initial_agility'
-        ])
+        guest.save(update_fields=["initial_force", "initial_intellect", "initial_defense", "initial_agility"])
 
 
 def reverse_populate(apps, schema_editor):
     """回滚时清空初始属性"""
-    Guest = apps.get_model('guests', 'Guest')
+    Guest = apps.get_model("guests", "Guest")
     Guest.objects.update(
-        initial_force=0, initial_intellect=0,
-        initial_defense=0, initial_agility=0,
-        allocated_force=0, allocated_intellect=0,
-        allocated_defense=0, allocated_agility=0
+        initial_force=0,
+        initial_intellect=0,
+        initial_defense=0,
+        initial_agility=0,
+        allocated_force=0,
+        allocated_intellect=0,
+        allocated_defense=0,
+        allocated_agility=0,
     )
 
 
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('guests', '0052_expand_flavor_length'),
+        ("guests", "0052_expand_flavor_length"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='guest',
-            name='allocated_agility',
-            field=models.PositiveIntegerField(default=0, verbose_name='已分配敏捷'),
+            model_name="guest",
+            name="allocated_agility",
+            field=models.PositiveIntegerField(default=0, verbose_name="已分配敏捷"),
         ),
         migrations.AddField(
-            model_name='guest',
-            name='allocated_defense',
-            field=models.PositiveIntegerField(default=0, verbose_name='已分配防御'),
+            model_name="guest",
+            name="allocated_defense",
+            field=models.PositiveIntegerField(default=0, verbose_name="已分配防御"),
         ),
         migrations.AddField(
-            model_name='guest',
-            name='allocated_force',
-            field=models.PositiveIntegerField(default=0, verbose_name='已分配武力'),
+            model_name="guest",
+            name="allocated_force",
+            field=models.PositiveIntegerField(default=0, verbose_name="已分配武力"),
         ),
         migrations.AddField(
-            model_name='guest',
-            name='allocated_intellect',
-            field=models.PositiveIntegerField(default=0, verbose_name='已分配智力'),
+            model_name="guest",
+            name="allocated_intellect",
+            field=models.PositiveIntegerField(default=0, verbose_name="已分配智力"),
         ),
         migrations.AddField(
-            model_name='guest',
-            name='initial_agility',
-            field=models.PositiveIntegerField(default=0, verbose_name='初始敏捷'),
+            model_name="guest",
+            name="initial_agility",
+            field=models.PositiveIntegerField(default=0, verbose_name="初始敏捷"),
         ),
         migrations.AddField(
-            model_name='guest',
-            name='initial_defense',
-            field=models.PositiveIntegerField(default=0, verbose_name='初始防御'),
+            model_name="guest",
+            name="initial_defense",
+            field=models.PositiveIntegerField(default=0, verbose_name="初始防御"),
         ),
         migrations.AddField(
-            model_name='guest',
-            name='initial_force',
-            field=models.PositiveIntegerField(default=0, verbose_name='初始武力'),
+            model_name="guest",
+            name="initial_force",
+            field=models.PositiveIntegerField(default=0, verbose_name="初始武力"),
         ),
         migrations.AddField(
-            model_name='guest',
-            name='initial_intellect',
-            field=models.PositiveIntegerField(default=0, verbose_name='初始智力'),
+            model_name="guest",
+            name="initial_intellect",
+            field=models.PositiveIntegerField(default=0, verbose_name="初始智力"),
         ),
         # 填充老数据
         migrations.RunPython(populate_initial_attributes, reverse_populate),

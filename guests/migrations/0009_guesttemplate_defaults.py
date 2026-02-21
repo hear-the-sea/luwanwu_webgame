@@ -11,7 +11,9 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="guesttemplate",
             name="default_gender",
-            field=models.CharField(choices=[("male", "男"), ("female", "女"), ("unknown", "未知")], default="unknown", max_length=16),
+            field=models.CharField(
+                choices=[("male", "男"), ("female", "女"), ("unknown", "未知")], default="unknown", max_length=16
+            ),
         ),
         migrations.AddField(
             model_name="guesttemplate",

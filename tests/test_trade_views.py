@@ -4,7 +4,7 @@ import pytest
 from django.contrib.messages import get_messages
 from django.urls import reverse
 
-from gameplay.services.manor import ensure_manor
+from gameplay.services.manor.core import ensure_manor
 
 
 @pytest.mark.django_db
@@ -139,7 +139,9 @@ def test_market_purchase_view_success(monkeypatch, client, django_user_model):
 
 @pytest.mark.django_db
 def test_market_purchase_view_unexpected_error_uses_generic_message(monkeypatch, client, django_user_model):
-    monkeypatch.setattr("trade.views.purchase_listing", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr(
+        "trade.views.purchase_listing", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom"))
+    )
 
     user = django_user_model.objects.create_user(username="market_buy_unexpected", password="pass12345")
     _ = ensure_manor(user)

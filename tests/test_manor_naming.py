@@ -2,12 +2,7 @@
 
 from __future__ import annotations
 
-from gameplay.services.manor import (
-    validate_manor_name,
-    MANOR_NAME_MIN_LENGTH,
-    MANOR_NAME_MAX_LENGTH,
-    BANNED_WORDS,
-)
+from gameplay.services.manor.core import BANNED_WORDS, MANOR_NAME_MAX_LENGTH, MANOR_NAME_MIN_LENGTH, validate_manor_name
 
 
 def test_validate_manor_name_rejects_empty():

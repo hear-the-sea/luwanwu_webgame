@@ -2,11 +2,12 @@
 交易系统测试
 """
 
-import pytest
-from django.utils import timezone
 from datetime import timedelta
 
-from gameplay.models import Manor, ItemTemplate, InventoryItem
+import pytest
+from django.utils import timezone
+
+from gameplay.models import InventoryItem, ItemTemplate, Manor
 from trade.models import MarketListing, MarketTransaction
 from trade.services import market_service
 
@@ -15,13 +16,13 @@ from trade.services import market_service
 def tradeable_item_template(db):
     """创建可交易的物品模板"""
     template, _ = ItemTemplate.objects.get_or_create(
-        key='test_tradeable_item',
+        key="test_tradeable_item",
         defaults={
-            'name': '测试可交易物品',
-            'effect_type': 'none',
-            'tradeable': True,
-            'price': 1000,
-        }
+            "name": "测试可交易物品",
+            "effect_type": "none",
+            "tradeable": True,
+            "price": 1000,
+        },
     )
     return template
 
@@ -30,13 +31,13 @@ def tradeable_item_template(db):
 def untradeable_item_template(db):
     """创建不可交易的物品模板"""
     template, _ = ItemTemplate.objects.get_or_create(
-        key='test_untradeable_item',
+        key="test_untradeable_item",
         defaults={
-            'name': '测试不可交易物品',
-            'effect_type': 'none',
-            'tradeable': False,
-            'price': 500,
-        }
+            "name": "测试不可交易物品",
+            "effect_type": "none",
+            "tradeable": False,
+            "price": 500,
+        },
     )
     return template
 
@@ -45,7 +46,8 @@ def untradeable_item_template(db):
 def seller_manor(django_user_model, tradeable_item_template):
     """创建卖家庄园，拥有物品和银两"""
     user = django_user_model.objects.create_user(username="seller", password="pass12345")
-    from gameplay.services.manor import ensure_manor
+    from gameplay.services.manor.core import ensure_manor
+
     manor = ensure_manor(user)
     manor.silver = 100000
     manor.silver_capacity = 200000  # 设置足够大的银库容量
@@ -53,10 +55,7 @@ def seller_manor(django_user_model, tradeable_item_template):
 
     # 添加可交易物品到仓库
     InventoryItem.objects.create(
-        manor=manor,
-        template=tradeable_item_template,
-        quantity=100,
-        storage_location='warehouse'
+        manor=manor, template=tradeable_item_template, quantity=100, storage_location="warehouse"
     )
     return manor
 
@@ -65,7 +64,8 @@ def seller_manor(django_user_model, tradeable_item_template):
 def buyer_manor(django_user_model):
     """创建买家庄园，拥有足够银两"""
     user = django_user_model.objects.create_user(username="buyer", password="pass12345")
-    from gameplay.services.manor import ensure_manor
+    from gameplay.services.manor.core import ensure_manor
+
     manor = ensure_manor(user)
     manor.silver = 500000
     manor.silver_capacity = 1000000  # 设置足够大的银库容量
@@ -81,14 +81,12 @@ class TestMarketListing:
         """测试成功创建挂单"""
         initial_silver = seller_manor.silver
         initial_quantity = InventoryItem.objects.get(
-            manor=seller_manor,
-            template=tradeable_item_template,
-            storage_location='warehouse'
+            manor=seller_manor, template=tradeable_item_template, storage_location="warehouse"
         ).quantity
 
         listing = market_service.create_listing(
             manor=seller_manor,
-            item_key='test_tradeable_item',
+            item_key="test_tradeable_item",
             quantity=10,
             unit_price=2000,
             duration=7200,  # 2小时
@@ -106,9 +104,7 @@ class TestMarketListing:
 
         # 验证物品已扣除
         inventory = InventoryItem.objects.filter(
-            manor=seller_manor,
-            template=tradeable_item_template,
-            storage_location='warehouse'
+            manor=seller_manor, template=tradeable_item_template, storage_location="warehouse"
         ).first()
         assert inventory.quantity == initial_quantity - 10
 
@@ -116,16 +112,13 @@ class TestMarketListing:
         """测试上架不可交易物品"""
         # 添加不可交易物品
         InventoryItem.objects.create(
-            manor=seller_manor,
-            template=untradeable_item_template,
-            quantity=10,
-            storage_location='warehouse'
+            manor=seller_manor, template=untradeable_item_template, quantity=10, storage_location="warehouse"
         )
 
         with pytest.raises(ValueError, match="不可交易"):
             market_service.create_listing(
                 manor=seller_manor,
-                item_key='test_untradeable_item',
+                item_key="test_untradeable_item",
                 quantity=5,
                 unit_price=1000,
                 duration=7200,
@@ -136,7 +129,7 @@ class TestMarketListing:
         with pytest.raises(ValueError, match="数量不足"):
             market_service.create_listing(
                 manor=seller_manor,
-                item_key='test_tradeable_item',
+                item_key="test_tradeable_item",
                 quantity=1000,  # 超过库存
                 unit_price=2000,
                 duration=7200,
@@ -150,7 +143,7 @@ class TestMarketListing:
         with pytest.raises(ValueError, match="资源不足"):
             market_service.create_listing(
                 manor=seller_manor,
-                item_key='test_tradeable_item',
+                item_key="test_tradeable_item",
                 quantity=10,
                 unit_price=2000,
                 duration=7200,
@@ -162,7 +155,7 @@ class TestMarketListing:
         with pytest.raises(ValueError, match="不能低于"):
             market_service.create_listing(
                 manor=seller_manor,
-                item_key='test_tradeable_item',
+                item_key="test_tradeable_item",
                 quantity=10,
                 unit_price=500,  # 低于最低价格
                 duration=7200,
@@ -178,7 +171,7 @@ class TestMarketPurchase:
         # 先创建挂单
         listing = market_service.create_listing(
             manor=seller_manor,
-            item_key='test_tradeable_item',
+            item_key="test_tradeable_item",
             quantity=10,
             unit_price=2000,
             duration=7200,
@@ -207,9 +200,7 @@ class TestMarketPurchase:
 
         # 验证买家获得物品
         buyer_inventory = InventoryItem.objects.filter(
-            manor=buyer_manor,
-            template=tradeable_item_template,
-            storage_location='warehouse'
+            manor=buyer_manor, template=tradeable_item_template, storage_location="warehouse"
         ).first()
         assert buyer_inventory is not None
         assert buyer_inventory.quantity == 10
@@ -222,7 +213,7 @@ class TestMarketPurchase:
         """测试购买自己的挂单"""
         listing = market_service.create_listing(
             manor=seller_manor,
-            item_key='test_tradeable_item',
+            item_key="test_tradeable_item",
             quantity=10,
             unit_price=2000,
             duration=7200,
@@ -235,7 +226,7 @@ class TestMarketPurchase:
         """测试银两不足购买"""
         listing = market_service.create_listing(
             manor=seller_manor,
-            item_key='test_tradeable_item',
+            item_key="test_tradeable_item",
             quantity=10,
             unit_price=100000,  # 高价
             duration=7200,
@@ -251,7 +242,7 @@ class TestMarketPurchase:
         """测试购买过期挂单"""
         listing = market_service.create_listing(
             manor=seller_manor,
-            item_key='test_tradeable_item',
+            item_key="test_tradeable_item",
             quantity=10,
             unit_price=2000,
             duration=7200,
@@ -270,7 +261,7 @@ class TestMarketPurchase:
         """测试交易成功后消息失败不会导致购买接口报错"""
         listing = market_service.create_listing(
             manor=seller_manor,
-            item_key='test_tradeable_item',
+            item_key="test_tradeable_item",
             quantity=10,
             unit_price=2000,
             duration=7200,
@@ -287,9 +278,7 @@ class TestMarketPurchase:
         assert listing.status == MarketListing.Status.SOLD
 
         buyer_inventory = InventoryItem.objects.filter(
-            manor=buyer_manor,
-            template=tradeable_item_template,
-            storage_location='warehouse'
+            manor=buyer_manor, template=tradeable_item_template, storage_location="warehouse"
         ).first()
         assert buyer_inventory is not None
         assert buyer_inventory.quantity == 10
@@ -306,14 +295,12 @@ class TestMarketCancel:
     def test_cancel_listing_success(self, seller_manor, tradeable_item_template):
         """测试成功取消挂单"""
         initial_quantity = InventoryItem.objects.get(
-            manor=seller_manor,
-            template=tradeable_item_template,
-            storage_location='warehouse'
+            manor=seller_manor, template=tradeable_item_template, storage_location="warehouse"
         ).quantity
 
         listing = market_service.create_listing(
             manor=seller_manor,
-            item_key='test_tradeable_item',
+            item_key="test_tradeable_item",
             quantity=10,
             unit_price=2000,
             duration=7200,
@@ -322,13 +309,11 @@ class TestMarketCancel:
         # 取消挂单
         result = market_service.cancel_listing(seller_manor, listing.id)
 
-        assert result['quantity'] == 10
+        assert result["quantity"] == 10
 
         # 验证物品已退回
         inventory = InventoryItem.objects.get(
-            manor=seller_manor,
-            template=tradeable_item_template,
-            storage_location='warehouse'
+            manor=seller_manor, template=tradeable_item_template, storage_location="warehouse"
         )
         assert inventory.quantity == initial_quantity  # 物品已退回
 
@@ -340,7 +325,7 @@ class TestMarketCancel:
         """测试取消他人挂单"""
         listing = market_service.create_listing(
             manor=seller_manor,
-            item_key='test_tradeable_item',
+            item_key="test_tradeable_item",
             quantity=10,
             unit_price=2000,
             duration=7200,
@@ -358,7 +343,7 @@ class TestMarketExpire:
         """测试过期挂单处理 - 验证挂单被删除并通过邮件退回物品"""
         listing = market_service.create_listing(
             manor=seller_manor,
-            item_key='test_tradeable_item',
+            item_key="test_tradeable_item",
             quantity=10,
             unit_price=2000,
             duration=7200,
@@ -379,11 +364,8 @@ class TestMarketExpire:
 
         # 验证卖家收到了退回物品的邮件
         from gameplay.models import Message
-        message = Message.objects.filter(
-            manor=seller_manor,
-            kind="system",
-            title__contains="交易过期"
-        ).first()
+
+        message = Message.objects.filter(manor=seller_manor, kind="system", title__contains="交易过期").first()
         assert message is not None
         assert message.attachments.get("items", {}).get("test_tradeable_item") == 10
 
@@ -391,7 +373,7 @@ class TestMarketExpire:
         """测试过期处理过程中推送失败不会回滚主流程"""
         listing = market_service.create_listing(
             manor=seller_manor,
-            item_key='test_tradeable_item',
+            item_key="test_tradeable_item",
             quantity=10,
             unit_price=2000,
             duration=7200,
@@ -421,7 +403,7 @@ class TestMarketQueries:
         for i in range(3):
             market_service.create_listing(
                 manor=seller_manor,
-                item_key='test_tradeable_item',
+                item_key="test_tradeable_item",
                 quantity=10,
                 unit_price=2000 + i * 100,
                 duration=7200,
@@ -434,7 +416,7 @@ class TestMarketQueries:
         """测试获取我的挂单"""
         market_service.create_listing(
             manor=seller_manor,
-            item_key='test_tradeable_item',
+            item_key="test_tradeable_item",
             quantity=10,
             unit_price=2000,
             duration=7200,
@@ -447,10 +429,7 @@ class TestMarketQueries:
         """测试获取可交易物品"""
         # 添加不可交易物品
         InventoryItem.objects.create(
-            manor=seller_manor,
-            template=untradeable_item_template,
-            quantity=10,
-            storage_location='warehouse'
+            manor=seller_manor, template=untradeable_item_template, quantity=10, storage_location="warehouse"
         )
 
         tradeable = market_service.get_tradeable_inventory(seller_manor)

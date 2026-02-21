@@ -40,7 +40,7 @@ def reverse_migration(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0053_remove_wood_stone_iron'),
+        ("gameplay", "0053_remove_wood_stone_iron"),
     ]
 
     operations = [

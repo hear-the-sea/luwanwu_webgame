@@ -27,13 +27,13 @@ def reverse_backfill(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('guests', '0042_adjust_red_rarity_config'),
+        ("guests", "0042_adjust_red_rarity_config"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='guesttemplate',
-            name='base_intellect',
+            model_name="guesttemplate",
+            name="base_intellect",
             field=models.PositiveIntegerField(default=100),
         ),
         migrations.RunPython(

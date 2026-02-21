@@ -5,8 +5,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.test import RequestFactory
 
 from gameplay.context_processors import notifications
-from gameplay.services.manor import ensure_manor
-
+from gameplay.services.manor.core import ensure_manor
 
 pytestmark = pytest.mark.django_db
 

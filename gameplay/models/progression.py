@@ -37,7 +37,7 @@ class PlayerTechnology(models.Model):
 
         template = get_technology_template(self.tech_key)
         base_time = template.get("base_time", 60) if template else 60
-        raw = base_time * (1.4 ** self.level)
+        raw = base_time * (1.4**self.level)
         return scale_duration(raw, minimum=1)
 
     @property
@@ -99,9 +99,15 @@ class WorkAssignment(models.Model):
         COMPLETED = "completed", "已完成"
         RECALLED = "recalled", "已召回"
 
-    manor = models.ForeignKey("gameplay.Manor", on_delete=models.CASCADE, related_name="work_assignments", verbose_name="庄园")
-    guest = models.ForeignKey("guests.Guest", on_delete=models.CASCADE, related_name="work_assignments", verbose_name="门客")
-    work_template = models.ForeignKey(WorkTemplate, on_delete=models.CASCADE, related_name="assignments", verbose_name="工作地点")
+    manor = models.ForeignKey(
+        "gameplay.Manor", on_delete=models.CASCADE, related_name="work_assignments", verbose_name="庄园"
+    )
+    guest = models.ForeignKey(
+        "guests.Guest", on_delete=models.CASCADE, related_name="work_assignments", verbose_name="门客"
+    )
+    work_template = models.ForeignKey(
+        WorkTemplate, on_delete=models.CASCADE, related_name="assignments", verbose_name="工作地点"
+    )
 
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.WORKING, verbose_name="状态")
 

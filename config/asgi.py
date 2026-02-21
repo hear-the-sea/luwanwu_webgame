@@ -22,7 +22,7 @@ try:
     from websocket import routing as websocket_routing
 except Exception as exc:  # pragma: no cover - fallback if apps not ready
     logger.exception("Failed to import websocket routing; WebSocket endpoints disabled: %s", exc)
-    websocket_routing = None
+    websocket_routing = None  # type: ignore[assignment]
 
 websocket_urlpatterns = []
 if websocket_routing and getattr(websocket_routing, "websocket_urlpatterns", None):
@@ -44,8 +44,6 @@ if settings.DEBUG:
 application = ProtocolTypeRouter(
     {
         "http": http_app,
-        "websocket": AllowedHostsOriginValidator(
-            AuthMiddlewareStack(URLRouter(websocket_urlpatterns))
-        ),
+        "websocket": AllowedHostsOriginValidator(AuthMiddlewareStack(URLRouter(websocket_urlpatterns))),
     }
 )

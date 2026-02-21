@@ -1,6 +1,7 @@
 """
 交易行服务层
 """
+
 from __future__ import annotations
 
 import logging
@@ -13,9 +14,9 @@ from django.utils import timezone
 
 from core.config import TRADE
 from gameplay.models import InventoryItem, ItemTemplate, Manor, ResourceEvent
-from gameplay.services.messages import create_message
-from gameplay.services.notifications import notify_user
 from gameplay.services.resources import grant_resources_locked, spend_resources_locked
+from gameplay.services.utils.messages import create_message
+from gameplay.services.utils.notifications import notify_user
 from trade.models import MarketListing, MarketTransaction
 
 logger = logging.getLogger(__name__)
@@ -180,7 +181,7 @@ def create_listing(
             locked_manor,
             {"silver": listing_fee},
             note="交易行挂单手续费",
-            reason=ResourceEvent.Reason.MARKET_LISTING_FEE
+            reason=ResourceEvent.Reason.MARKET_LISTING_FEE,
         )
 
         # 步骤2：锁定物品库存行并验证数量
@@ -209,9 +210,9 @@ def create_listing(
 
         # 步骤3：使用F()表达式+条件约束原子性扣减库存
         # quantity__gte条件确保不会扣成负数（双重保险）
-        updated_rows = InventoryItem.objects.filter(
-            pk=inventory_item.pk, quantity__gte=quantity
-        ).update(quantity=F("quantity") - quantity, updated_at=timezone.now())
+        updated_rows = InventoryItem.objects.filter(pk=inventory_item.pk, quantity__gte=quantity).update(
+            quantity=F("quantity") - quantity, updated_at=timezone.now()
+        )
 
         if not updated_rows:
             raise ValueError("物品数量不足或已被其他操作占用")
@@ -356,7 +357,7 @@ def purchase_listing(buyer: Manor, listing_id: int) -> MarketTransaction:
             buyer_locked,
             {"silver": listing.total_price},
             note=f"购买{listing.item_template.name}",
-            reason=ResourceEvent.Reason.MARKET_PURCHASE
+            reason=ResourceEvent.Reason.MARKET_PURCHASE,
         )
 
         # 步骤4：计算税费和卖家实收，发放卖家收益
@@ -369,7 +370,7 @@ def purchase_listing(buyer: Manor, listing_id: int) -> MarketTransaction:
                 seller_locked,
                 {"silver": seller_received},
                 note=f"出售{listing.item_template.name}",
-                reason=ResourceEvent.Reason.ITEM_SOLD
+                reason=ResourceEvent.Reason.ITEM_SOLD,
             )
 
         # 步骤5：更新挂单状态
@@ -569,11 +570,7 @@ def _expire_listings_queryset(expired_listings: QuerySet, log_label: str, limit:
                 # 在事务内重新获取并锁定记录，防止并发处理
                 # 使用 select_for_update(skip_locked=True) 进一步优化并发，
                 # 如果其他进程正在处理该行，直接跳过而不是等待
-                listing = (
-                    MarketListing.objects.select_for_update(skip_locked=True)
-                    .filter(pk=listing.pk)
-                    .first()
-                )
+                listing = MarketListing.objects.select_for_update(skip_locked=True).filter(pk=listing.pk).first()
 
                 if not listing:
                     # 已经被其他进程处理或删除
@@ -686,9 +683,7 @@ def get_my_listings(manor: Manor, status: str = None) -> QuerySet:
     Returns:
         挂单查询集
     """
-    queryset = MarketListing.objects.filter(seller=manor).select_related(
-        "item_template", "buyer__user"
-    )
+    queryset = MarketListing.objects.filter(seller=manor).select_related("item_template", "buyer__user")
 
     if status and status != "all":
         queryset = queryset.filter(status=status)
@@ -703,13 +698,9 @@ def get_market_stats() -> Dict:
     Returns:
         统计信息字典
     """
-    active_count = MarketListing.objects.filter(
-        status=MarketListing.Status.ACTIVE
-    ).count()
+    active_count = MarketListing.objects.filter(status=MarketListing.Status.ACTIVE).count()
 
-    sold_today = MarketTransaction.objects.filter(
-        transaction_at__date=timezone.now().date()
-    ).count()
+    sold_today = MarketTransaction.objects.filter(transaction_at__date=timezone.now().date()).count()
 
     return {
         "active_count": active_count,

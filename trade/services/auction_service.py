@@ -17,6 +17,7 @@ from typing import Dict, Optional, Tuple
 from gameplay.models import Manor
 from trade.models import AuctionBid, AuctionRound
 
+from .auction.bidding import _notify_outbid_vickrey as _default_notify_outbid_vickrey
 from .auction.bidding import (  # noqa: F401
     get_cutoff_price,
     get_my_rank,
@@ -32,7 +33,6 @@ from .auction.constants import (  # noqa: F401
     AUCTION_SETTLE_LOCK_TIMEOUT,
     GOLD_BAR_ITEM_KEY,
 )
-from .auction.bidding import _notify_outbid_vickrey as _default_notify_outbid_vickrey
 from .auction.gold_bars import (  # noqa: F401
     consume_frozen_gold_bars,
     freeze_gold_bars,
@@ -55,9 +55,7 @@ from .auction.selectors import (  # noqa: F401
     get_slot_bid_info,
     get_slots_bid_info_batch,
 )
-
 from .auction_config import get_auction_settings, get_enabled_auction_items
-
 
 # These are intentionally module globals so tests can monkeypatch them via
 # `monkeypatch.setattr(trade.services.auction_service, ...)`.

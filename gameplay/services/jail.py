@@ -15,13 +15,7 @@ from typing import List
 from django.db import transaction
 
 from core.exceptions import GuestCapacityFullError
-
-from guests.models import (
-    DEFENSE_TO_HP_MULTIPLIER,
-    MIN_HP_FLOOR,
-    Guest,
-    GuestTemplate,
-)
+from guests.models import DEFENSE_TO_HP_MULTIPLIER, MIN_HP_FLOOR, Guest, GuestTemplate
 from guests.services.recruitment import grant_template_skills
 from guests.utils.recruitment_variance import apply_recruitment_variance
 
@@ -41,11 +35,7 @@ def list_held_prisoners(manor: Manor) -> List[JailPrisoner]:
 
 
 def list_oath_bonds(manor: Manor) -> List[OathBond]:
-    return list(
-        OathBond.objects.filter(manor=manor)
-        .select_related("guest", "guest__template")
-        .order_by("-created_at")
-    )
+    return list(OathBond.objects.filter(manor=manor).select_related("guest", "guest__template").order_by("-created_at"))
 
 
 @transaction.atomic
@@ -53,12 +43,7 @@ def add_oath_bond(manor: Manor, guest_id: int) -> OathBond:
     # Lock manor to serialize oath bond additions and prevent capacity bypass
     locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
 
-    guest = (
-        Guest.objects.select_for_update()
-        .select_related("template")
-        .filter(pk=guest_id, manor=manor)
-        .first()
-    )
+    guest = Guest.objects.select_for_update().select_related("template").filter(pk=guest_id, manor=manor).first()
     if not guest:
         raise ValueError("门客不存在")
 
@@ -105,6 +90,7 @@ def draw_pie(manor: Manor, prisoner_id: int) -> JailPrisoner:
     画饼：消耗1金条，随机降低囚徒5-10点忠诚度
     """
     from django.db.models import F
+
     from gameplay.models import InventoryItem  # 修复：补充缺失的导入
 
     prisoner = (
@@ -118,19 +104,23 @@ def draw_pie(manor: Manor, prisoner_id: int) -> JailPrisoner:
     # 检查金条
     cost = 1
     # 使用 select_for_update 锁定库存行
-    gold_bar_item = InventoryItem.objects.select_for_update().filter(
-        manor=manor,
-        template__key=GOLD_BAR_ITEM_KEY,
-        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-        quantity__gte=cost
-    ).first()
+    gold_bar_item = (
+        InventoryItem.objects.select_for_update()
+        .filter(
+            manor=manor,
+            template__key=GOLD_BAR_ITEM_KEY,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+            quantity__gte=cost,
+        )
+        .first()
+    )
 
     if not gold_bar_item:
         have = get_item_quantity(manor, GOLD_BAR_ITEM_KEY)
         raise ValueError(f"金条不足，需要 {cost} 个（当前 {have} 个）")
 
     # 原子消耗金条
-    InventoryItem.objects.filter(pk=gold_bar_item.pk).update(quantity=F('quantity') - cost)
+    InventoryItem.objects.filter(pk=gold_bar_item.pk).update(quantity=F("quantity") - cost)
     # 清理零库存
     InventoryItem.objects.filter(pk=gold_bar_item.pk, quantity__lte=0).delete()
 

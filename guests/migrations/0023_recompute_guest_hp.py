@@ -22,7 +22,7 @@ def recompute_hp(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('guests', '0022_guest_current_hp_guest_hp_bonus_guest_skill_points_and_more'),
+        ("guests", "0022_guest_current_hp_guest_hp_bonus_guest_skill_points_and_more"),
     ]
 
     operations = [

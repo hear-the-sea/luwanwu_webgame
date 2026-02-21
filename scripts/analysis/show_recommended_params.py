@@ -75,10 +75,10 @@ def show_level_details(name, base_cost, cost_growth, base_time, time_growth, max
     print(f"  最后一级成本: {cost:,} 银两")
 
     return {
-        'total_cost': total_cost,
-        'total_grain': total_grain,
-        'total_time_days': total_time / 86400,
-        'last_level_cost': cost,
+        "total_cost": total_cost,
+        "total_grain": total_grain,
+        "total_time_days": total_time / 86400,
+        "last_level_cost": cost,
     }
 
 
@@ -92,12 +92,7 @@ print()
 
 # 聚贤庄推荐方案
 juxian_result = show_level_details(
-    "聚贤庄 (Lv20) - 推荐方案",
-    base_cost=800,
-    cost_growth=1.70,
-    base_time=3600,
-    time_growth=1.46,
-    max_level=20
+    "聚贤庄 (Lv20) - 推荐方案", base_cost=800, cost_growth=1.70, base_time=3600, time_growth=1.46, max_level=20
 )
 
 # 悠嘻宝塔推荐方案
@@ -108,7 +103,7 @@ youxi_result = show_level_details(
     base_time=129600,
     time_growth=2.3,
     max_level=6,
-    grain_ratio=0.2
+    grain_ratio=0.2,
 )
 
 # 综合评估

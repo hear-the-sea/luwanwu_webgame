@@ -3,14 +3,16 @@
 
 用于调试护院归还问题，显示详细的执行流程
 """
+
+import argparse
 import os
 import sys
-import django
-import argparse
 from pathlib import Path
 
+import django
+
 # 设置 Django settings
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
 # 添加项目根目录到 Python 路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -44,9 +46,9 @@ def _print_casualties(casualties: list[dict], loadout: dict) -> None:
         return
 
     for entry in casualties:
-        key = entry.get('key')
+        key = entry.get("key")
         if key in loadout and loadout[key] > 0:
-            lost = entry.get('lost', 0)
+            lost = entry.get("lost", 0)
             print(f"   {key}: 损失 {lost}")
 
 
@@ -137,7 +139,7 @@ def trace_troop_return(run_id: int):
     print(f"追踪任务 {run_id} 的护院归还逻辑")
     print("=" * 80)
 
-    run = MissionRun.objects.select_related('manor', 'battle_report', 'mission').get(pk=run_id)
+    run = MissionRun.objects.select_related("manor", "battle_report", "mission").get(pk=run_id)
     manor = run.manor
     report = run.battle_report
 
@@ -150,7 +152,7 @@ def trace_troop_return(run_id: int):
         print("\n❌ 无战报，无法追踪")
         return
 
-    casualties = ((report.losses or {}).get('attacker', {}) or {}).get('casualties', [])
+    casualties = ((report.losses or {}).get("attacker", {}) or {}).get("casualties", [])
     _print_casualties(casualties, loadout)
 
     surviving_troops = _compute_surviving_troops(loadout, casualties)

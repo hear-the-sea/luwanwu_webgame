@@ -3,9 +3,9 @@ from datetime import timedelta
 import pytest
 from django.utils import timezone
 
+import gameplay.services.manor.core as manor_service
 from gameplay.models import MissionTemplate
-from gameplay.services.manor import ensure_manor, refresh_manor_state, start_upgrade
-import gameplay.services.manor as manor_service
+from gameplay.services.manor.core import ensure_manor, refresh_manor_state, start_upgrade
 from gameplay.services.missions import launch_mission, refresh_mission_runs
 from guests.models import GuestStatus
 from guests.services import finalize_candidate, recruit_guest
@@ -55,8 +55,8 @@ def test_mission_launch_and_return(game_data, mission_templates, manor_with_troo
     guests = list(manor.guests.all()[:3])
 
     # 验证出征前护院数量
-    from gameplay.models import PlayerTroop
     from battle.models import TroopTemplate
+    from gameplay.models import PlayerTroop
 
     archer_template = TroopTemplate.objects.get(key="archer")
     troop_before = PlayerTroop.objects.get(manor=manor, troop_template=archer_template)
@@ -105,24 +105,17 @@ def test_mission_launch_with_invalid_troop_type(game_data, mission_templates, ma
 
     # 创建测试门客（直接创建，不需要通过招募系统）
     from guests.models import GuestTemplate
+
     template = GuestTemplate.objects.first()
     if template:
-        guest = Guest.objects.create(
-            manor=manor,
-            template=template,
-            level=50,
-            status=GuestStatus.IDLE
-        )
+        guest = Guest.objects.create(manor=manor, template=template, level=50, status=GuestStatus.IDLE)
     else:
         # 如果没有模板，跳过此测试
         pytest.skip("No guest template available")
 
     # 确认不存在某个护院类型
     fake_troop_key = "nonexistent_troop_xxx"
-    assert not PlayerTroop.objects.filter(
-        manor=manor,
-        troop_template__key=fake_troop_key
-    ).exists()
+    assert not PlayerTroop.objects.filter(manor=manor, troop_template__key=fake_troop_key).exists()
 
     # 尝试出征包含不存在的护院类型
     with pytest.raises(ValueError) as exc:
@@ -131,10 +124,7 @@ def test_mission_launch_with_invalid_troop_type(game_data, mission_templates, ma
     assert "不存在的类型" in str(exc.value)
 
     # 确保没有创建该护院记录
-    assert not PlayerTroop.objects.filter(
-        manor=manor,
-        troop_template__key=fake_troop_key
-    ).exists()
+    assert not PlayerTroop.objects.filter(manor=manor, troop_template__key=fake_troop_key).exists()
 
 
 @pytest.mark.django_db
@@ -146,13 +136,23 @@ def test_refresh_manor_state_local_fallback_throttles_when_cache_unavailable(dja
 
     manor_service._LOCAL_REFRESH_FALLBACK.clear()
 
-    monkeypatch.setattr(manor_service.cache, "add", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("cache down")))
+    monkeypatch.setattr(
+        manor_service.cache, "add", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("cache down"))
+    )
 
     calls = {"finalize": 0, "resource": 0, "mission": 0}
 
-    monkeypatch.setattr(manor_service, "finalize_upgrades", lambda _manor: calls.__setitem__("finalize", calls["finalize"] + 1))
-    monkeypatch.setattr("gameplay.services.resources.sync_resource_production", lambda _manor: calls.__setitem__("resource", calls["resource"] + 1))
-    monkeypatch.setattr("gameplay.services.missions.refresh_mission_runs", lambda _manor: calls.__setitem__("mission", calls["mission"] + 1))
+    monkeypatch.setattr(
+        manor_service, "finalize_upgrades", lambda _manor: calls.__setitem__("finalize", calls["finalize"] + 1)
+    )
+    monkeypatch.setattr(
+        "gameplay.services.resources.sync_resource_production",
+        lambda _manor: calls.__setitem__("resource", calls["resource"] + 1),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.missions.refresh_mission_runs",
+        lambda _manor: calls.__setitem__("mission", calls["mission"] + 1),
+    )
 
     refresh_manor_state(manor)
     refresh_manor_state(manor)
@@ -169,16 +169,26 @@ def test_refresh_manor_state_local_fallback_allows_after_interval(django_user_mo
 
     manor_service._LOCAL_REFRESH_FALLBACK.clear()
 
-    monkeypatch.setattr(manor_service.cache, "add", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("cache down")))
+    monkeypatch.setattr(
+        manor_service.cache, "add", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("cache down"))
+    )
 
     monotonic_values = iter([100.0, 102.0, 106.1])
     monkeypatch.setattr(manor_service.time, "monotonic", lambda: next(monotonic_values))
 
     calls = {"finalize": 0, "resource": 0, "mission": 0}
 
-    monkeypatch.setattr(manor_service, "finalize_upgrades", lambda _manor: calls.__setitem__("finalize", calls["finalize"] + 1))
-    monkeypatch.setattr("gameplay.services.resources.sync_resource_production", lambda _manor: calls.__setitem__("resource", calls["resource"] + 1))
-    monkeypatch.setattr("gameplay.services.missions.refresh_mission_runs", lambda _manor: calls.__setitem__("mission", calls["mission"] + 1))
+    monkeypatch.setattr(
+        manor_service, "finalize_upgrades", lambda _manor: calls.__setitem__("finalize", calls["finalize"] + 1)
+    )
+    monkeypatch.setattr(
+        "gameplay.services.resources.sync_resource_production",
+        lambda _manor: calls.__setitem__("resource", calls["resource"] + 1),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.missions.refresh_mission_runs",
+        lambda _manor: calls.__setitem__("mission", calls["mission"] + 1),
+    )
 
     refresh_manor_state(manor)
     refresh_manor_state(manor)

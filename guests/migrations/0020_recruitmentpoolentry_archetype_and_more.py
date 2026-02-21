@@ -7,27 +7,45 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('guests', '0019_remove_guesttemplate_skill_summary'),
+        ("guests", "0019_remove_guesttemplate_skill_summary"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='recruitmentpoolentry',
-            name='archetype',
-            field=models.CharField(blank=True, choices=[('civil', '文'), ('military', '武')], max_length=16, null=True),
+            model_name="recruitmentpoolentry",
+            name="archetype",
+            field=models.CharField(blank=True, choices=[("civil", "文"), ("military", "武")], max_length=16, null=True),
         ),
         migrations.AddField(
-            model_name='recruitmentpoolentry',
-            name='rarity',
-            field=models.CharField(blank=True, choices=[('black', '黑'), ('gray', '灰'), ('green', '绿'), ('blue', '蓝'), ('red', '红'), ('purple', '紫'), ('orange', '橙')], max_length=16, null=True),
+            model_name="recruitmentpoolentry",
+            name="rarity",
+            field=models.CharField(
+                blank=True,
+                choices=[
+                    ("black", "黑"),
+                    ("gray", "灰"),
+                    ("green", "绿"),
+                    ("blue", "蓝"),
+                    ("red", "红"),
+                    ("purple", "紫"),
+                    ("orange", "橙"),
+                ],
+                max_length=16,
+                null=True,
+            ),
         ),
         migrations.AlterField(
-            model_name='recruitmentpoolentry',
-            name='template',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='guests.guesttemplate'),
+            model_name="recruitmentpoolentry",
+            name="template",
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to="guests.guesttemplate"
+            ),
         ),
         migrations.AddConstraint(
-            model_name='recruitmentpoolentry',
-            constraint=models.CheckConstraint(condition=models.Q(('template__isnull', False), ('rarity__isnull', False), _connector='OR'), name='pool_entry_template_or_category'),
+            model_name="recruitmentpoolentry",
+            constraint=models.CheckConstraint(
+                condition=models.Q(("template__isnull", False), ("rarity__isnull", False), _connector="OR"),
+                name="pool_entry_template_or_category",
+            ),
         ),
     ]

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import gameplay.services.manor as manor_service
+import gameplay.services.manor.core as manor_service
 
 
 def test_cleanup_local_fallback_cache_removes_stale_entries():
@@ -14,8 +14,8 @@ def test_cleanup_local_fallback_cache_removes_stale_entries():
 
     # Add stale entries (older than threshold)
     manor_service._LOCAL_REFRESH_FALLBACK[1] = now - 100  # stale
-    manor_service._LOCAL_REFRESH_FALLBACK[2] = now - 80   # stale
-    manor_service._LOCAL_REFRESH_FALLBACK[3] = now - 30   # fresh
+    manor_service._LOCAL_REFRESH_FALLBACK[2] = now - 80  # stale
+    manor_service._LOCAL_REFRESH_FALLBACK[3] = now - 30  # fresh
 
     manor_service._cleanup_local_fallback_cache(now, stale_threshold)
 

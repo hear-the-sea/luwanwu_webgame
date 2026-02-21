@@ -4,17 +4,12 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
-from guests.models import GuestStatus, RARITY_SALARY
+from guests.models import RARITY_SALARY, GuestStatus
 
 from ..models import MissionRun, ResourceType
-from ..services import (
-    can_retreat,
-    get_technology_template,
-    refresh_manor_state,
-    refresh_technology_upgrades,
-)
-from ..services.cache import CacheKeys
-from ..services.query_optimization import optimize_guest_queryset
+from ..services import can_retreat, get_technology_template, refresh_manor_state, refresh_technology_upgrades
+from ..services.utils.cache import CacheKeys
+from ..services.utils.query_optimization import optimize_guest_queryset
 
 
 def get_home_context(manor) -> dict:
@@ -27,10 +22,7 @@ def get_home_context(manor) -> dict:
         ("retainer", "家丁", f"{manor.retainer_count} / {manor.retainer_capacity}"),
     ]
 
-    guests = list(
-        optimize_guest_queryset(manor.guests.all())
-        .order_by("template__name")
-    )
+    guests = list(optimize_guest_queryset(manor.guests.all()).order_by("template__name"))
     guest_status_display = dict(GuestStatus.choices)
     for guest in guests:
         guest.status_display = guest_status_display.get(guest.status, guest.status)
@@ -51,10 +43,7 @@ def get_home_context(manor) -> dict:
     )
 
     upgrading_techs = list(
-        manor.technologies.filter(
-            is_upgrading=True,
-            upgrade_complete_at__isnull=False
-        ).order_by("upgrade_complete_at")
+        manor.technologies.filter(is_upgrading=True, upgrade_complete_at__isnull=False).order_by("upgrade_complete_at")
     )
     for tech in upgrading_techs:
         tpl = get_technology_template(tech.tech_key) or {}
@@ -77,17 +66,15 @@ def get_home_context(manor) -> dict:
             building_income.append({"resource": res_type, "label": label, "rate": int(rate)})
 
     player_troops = list(
-        manor.troops.select_related("troop_template")
-        .filter(count__gt=0)
-        .order_by("troop_template__priority")
+        manor.troops.select_related("troop_template").filter(count__gt=0).order_by("troop_template__priority")
     )
 
     from ..services.raid import (
-        get_active_scouts,
         get_active_raids,
+        get_active_scouts,
         get_incoming_raids,
-        refresh_scout_records,
         refresh_raid_runs,
+        refresh_scout_records,
     )
 
     refresh_scout_records(manor, prefer_async=True)

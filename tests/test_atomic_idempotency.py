@@ -3,8 +3,8 @@ from django.utils import timezone
 
 from core.exceptions import InsufficientStockError
 from gameplay.models import InventoryItem, ItemTemplate, PlayerTechnology
-from gameplay.services.manor import ensure_manor, finalize_building_upgrade
 from gameplay.services.inventory import add_item_to_inventory, consume_inventory_item
+from gameplay.services.manor.core import ensure_manor, finalize_building_upgrade
 from gameplay.services.technology import finalize_technology_upgrade
 
 

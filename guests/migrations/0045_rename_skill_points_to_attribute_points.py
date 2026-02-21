@@ -6,26 +6,26 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0041_add_player_troop'),
-        ('guests', '0044_remove_hp_growth_field'),
+        ("gameplay", "0041_add_player_troop"),
+        ("guests", "0044_remove_hp_growth_field"),
     ]
 
     operations = [
         migrations.RenameField(
-            model_name='guest',
-            old_name='skill_points',
-            new_name='attribute_points',
+            model_name="guest",
+            old_name="skill_points",
+            new_name="attribute_points",
         ),
         migrations.AddIndex(
-            model_name='gearitem',
-            index=models.Index(fields=['manor', 'guest'], name='gearitem_manor_guest_idx'),
+            model_name="gearitem",
+            index=models.Index(fields=["manor", "guest"], name="gearitem_manor_guest_idx"),
         ),
         migrations.AddIndex(
-            model_name='guest',
-            index=models.Index(fields=['manor', 'status'], name='guest_manor_status_idx'),
+            model_name="guest",
+            index=models.Index(fields=["manor", "status"], name="guest_manor_status_idx"),
         ),
         migrations.AddIndex(
-            model_name='guest',
-            index=models.Index(fields=['manor', '-created_at'], name='guest_manor_created_idx'),
+            model_name="guest",
+            index=models.Index(fields=["manor", "-created_at"], name="guest_manor_created_idx"),
         ),
     ]

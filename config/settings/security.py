@@ -1,12 +1,12 @@
 """
 Security configuration - CSRF, CORS, SSL, HSTS, etc.
 """
+
 from __future__ import annotations
 
 import os
 
 from .base import DEBUG, env
-
 
 # Security: SECRET_KEY must be set via environment variable in production
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY")
@@ -17,23 +17,21 @@ if not SECRET_KEY:
             "Generate one with: python -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())'"
         )
     import warnings
+
     from django.core.management.utils import get_random_secret_key
+
     SECRET_KEY = get_random_secret_key()
     warnings.warn(
         "DJANGO_SECRET_KEY not set. Using temporary random key for development only. "
         "Run 'python -c \"from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())\"' to generate one.",
-        RuntimeWarning
+        RuntimeWarning,
     )
 
 # ALLOWED_HOSTS configuration
 allowed_hosts_str = env("DJANGO_ALLOWED_HOSTS", "")
 ALLOWED_HOSTS = []
 if allowed_hosts_str:
-    ALLOWED_HOSTS = [
-        host.strip()
-        for host in allowed_hosts_str.split(",")
-        if host.strip() and host.strip() != "*"
-    ]
+    ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_str.split(",") if host.strip() and host.strip() != "*"]
 
 if not DEBUG and not ALLOWED_HOSTS:
     raise RuntimeError(
@@ -55,11 +53,7 @@ CSRF_COOKIE_HTTPONLY = False  # Allow frontend JavaScript to read CSRF token
 CSRF_COOKIE_SAMESITE = "Lax"
 
 csrf_origins_str = env("DJANGO_CSRF_TRUSTED_ORIGINS", "")
-CSRF_TRUSTED_ORIGINS = [
-    origin.strip()
-    for origin in csrf_origins_str.split(",")
-    if origin.strip()
-]
+CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in csrf_origins_str.split(",") if origin.strip()]
 
 # SSL/HTTPS Configuration
 SECURE_SSL_REDIRECT = env("DJANGO_SECURE_SSL_REDIRECT", "1" if not DEBUG else "0") == "1"
@@ -91,11 +85,7 @@ SECURE_REFERRER_POLICY = "same-origin"
 CORS_ALLOW_CREDENTIALS = True
 
 cors_allowed_origins_str = env("DJANGO_CORS_ALLOWED_ORIGINS", "")
-CORS_ALLOWED_ORIGINS = [
-    origin.strip()
-    for origin in cors_allowed_origins_str.split(",")
-    if origin.strip()
-]
+CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_allowed_origins_str.split(",") if origin.strip()]
 
 if DEBUG and not CORS_ALLOWED_ORIGINS:
     CORS_ALLOWED_ORIGINS = [

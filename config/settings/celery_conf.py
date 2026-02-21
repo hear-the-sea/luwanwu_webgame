@@ -1,6 +1,7 @@
 """
 Celery configuration - queues, routes, and beat schedule.
 """
+
 from __future__ import annotations
 
 import os
@@ -10,7 +11,6 @@ from kombu import Queue
 
 from .base import env
 from .database import REDIS_BROKER_URL, REDIS_PASSWORD, REDIS_RESULT_URL, _redis_url_with_password
-
 
 CELERY_BROKER_URL = _redis_url_with_password(env("CELERY_BROKER_URL", REDIS_BROKER_URL), REDIS_PASSWORD)
 CELERY_RESULT_BACKEND = env(

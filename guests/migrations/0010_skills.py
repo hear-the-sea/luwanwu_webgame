@@ -1,5 +1,5 @@
-from django.db import migrations, models
 import django.utils.timezone
+from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
@@ -47,7 +47,10 @@ class Migration(migrations.Migration):
                 ("key", models.SlugField(unique=True)),
                 ("name", models.CharField(max_length=64)),
                 ("description", models.TextField(blank=True)),
-                ("skill", models.ForeignKey(on_delete=models.deletion.CASCADE, related_name="books", to="guests.skill")),
+                (
+                    "skill",
+                    models.ForeignKey(on_delete=models.deletion.CASCADE, related_name="books", to="guests.skill"),
+                ),
             ],
             options={
                 "verbose_name": "技能书",
@@ -58,9 +61,19 @@ class Migration(migrations.Migration):
             name="GuestSkill",
             fields=[
                 ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
-                ("source", models.CharField(choices=[("template", "模板"), ("book", "技能书")], default="template", max_length=16)),
+                (
+                    "source",
+                    models.CharField(
+                        choices=[("template", "模板"), ("book", "技能书")], default="template", max_length=16
+                    ),
+                ),
                 ("learned_at", models.DateTimeField(default=django.utils.timezone.now)),
-                ("guest", models.ForeignKey(on_delete=models.deletion.CASCADE, related_name="guest_skills", to="guests.guest")),
+                (
+                    "guest",
+                    models.ForeignKey(
+                        on_delete=models.deletion.CASCADE, related_name="guest_skills", to="guests.guest"
+                    ),
+                ),
                 ("skill", models.ForeignKey(on_delete=models.deletion.CASCADE, to="guests.skill")),
             ],
             options={
@@ -71,12 +84,16 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name="guesttemplate",
             name="default_gender",
-            field=models.CharField(choices=[("male", "男"), ("female", "女"), ("unknown", "未知")], default="unknown", max_length=16),
+            field=models.CharField(
+                choices=[("male", "男"), ("female", "女"), ("unknown", "未知")], default="unknown", max_length=16
+            ),
         ),
         migrations.AlterField(
             model_name="guest",
             name="gender",
-            field=models.CharField(choices=[("male", "男"), ("female", "女"), ("unknown", "未知")], default="unknown", max_length=16),
+            field=models.CharField(
+                choices=[("male", "男"), ("female", "女"), ("unknown", "未知")], default="unknown", max_length=16
+            ),
         ),
         migrations.AddField(
             model_name="guest",

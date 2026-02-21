@@ -12,7 +12,7 @@ from typing import Optional, Tuple
 from django.db import transaction
 from django.utils import timezone
 
-from ...constants import PVPConstants, REGION_DICT
+from ...constants import REGION_DICT, PVPConstants
 from ...models import Manor
 from .combat import get_active_raid_count, get_incoming_raids
 from .utils import get_asset_level
@@ -74,6 +74,7 @@ def relocate_manor(manor: Manor, new_region: str) -> Tuple[int, int]:
     # 检查金条（需要考虑拍卖冻结的金条）
     cost = get_relocation_cost(manor)
     from trade.services.auction_service import get_available_gold_bars
+
     from ..inventory import consume_inventory_item_for_manor_locked
 
     available_gold = get_available_gold_bars(manor)

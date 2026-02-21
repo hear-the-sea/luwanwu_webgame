@@ -84,7 +84,9 @@ def generate_sync_battle_report(
 
         tech_conf = _normalize_enemy_technology_config(mission.enemy_technology)
         attacker_guest_level = _coerce_enemy_guest_level(tech_conf)
-        attacker_guests = build_named_ai_guests(_normalize_guest_configs(mission.enemy_guests), level=attacker_guest_level)
+        attacker_guests = build_named_ai_guests(
+            _normalize_guest_configs(mission.enemy_guests), level=attacker_guest_level
+        )
         attacker_tech_levels = resolve_enemy_tech_levels(tech_conf)
         attacker_guest_bonuses = get_guest_stat_bonuses(tech_conf)
         attacker_guest_skills = _normalize_guest_skills(tech_conf)

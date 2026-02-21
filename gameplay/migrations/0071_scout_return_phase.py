@@ -6,33 +6,43 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0070_add_battle_rewards_to_raidrun'),
+        ("gameplay", "0070_add_battle_rewards_to_raidrun"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='scoutrecord',
-            name='is_success',
-            field=models.BooleanField(blank=True, null=True, verbose_name='是否成功'),
+            model_name="scoutrecord",
+            name="is_success",
+            field=models.BooleanField(blank=True, null=True, verbose_name="是否成功"),
         ),
         migrations.AddField(
-            model_name='scoutrecord',
-            name='return_at',
-            field=models.DateTimeField(blank=True, null=True, verbose_name='返程完成时间'),
+            model_name="scoutrecord",
+            name="return_at",
+            field=models.DateTimeField(blank=True, null=True, verbose_name="返程完成时间"),
         ),
         migrations.AlterField(
-            model_name='scoutrecord',
-            name='complete_at',
-            field=models.DateTimeField(verbose_name='到达时间'),
+            model_name="scoutrecord",
+            name="complete_at",
+            field=models.DateTimeField(verbose_name="到达时间"),
         ),
         migrations.AlterField(
-            model_name='scoutrecord',
-            name='status',
-            field=models.CharField(choices=[('scouting', '侦察中'), ('returning', '返程中'), ('success', '侦察成功'), ('failed', '侦察失败')], default='scouting', max_length=16, verbose_name='状态'),
+            model_name="scoutrecord",
+            name="status",
+            field=models.CharField(
+                choices=[
+                    ("scouting", "侦察中"),
+                    ("returning", "返程中"),
+                    ("success", "侦察成功"),
+                    ("failed", "侦察失败"),
+                ],
+                default="scouting",
+                max_length=16,
+                verbose_name="状态",
+            ),
         ),
         migrations.AlterField(
-            model_name='scoutrecord',
-            name='travel_time',
-            field=models.PositiveIntegerField(default=60, verbose_name='单程时间(秒)'),
+            model_name="scoutrecord",
+            name="travel_time",
+            field=models.PositiveIntegerField(default=60, verbose_name="单程时间(秒)"),
         ),
     ]

@@ -30,7 +30,7 @@ def _collect_all_casualties(report) -> List[Dict[str, Any]]:
 
 
 def _calculate_troop_recovery(casualties: List[Dict[str, Any]], rng: random.Random) -> Tuple[float, Dict[str, int]]:
-    from gameplay.services.recruitment import get_troop_template
+    from gameplay.services.recruitment.recruitment import get_troop_template
 
     troop_exp_fruit = 0.0
     equipment_recovery: Dict[str, int] = {}

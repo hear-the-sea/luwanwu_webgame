@@ -6,13 +6,13 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0077_building_building_upgrade_idx_and_more'),
-        ('guests', '0047_add_pvp_raid_system'),
+        ("gameplay", "0077_building_building_upgrade_idx_and_more"),
+        ("guests", "0047_add_pvp_raid_system"),
     ]
 
     operations = [
         migrations.AddIndex(
-            model_name='guest',
-            index=models.Index(fields=['training_complete_at'], name='guest_training_idx'),
+            model_name="guest",
+            index=models.Index(fields=["training_complete_at"], name="guest_training_idx"),
         ),
     ]

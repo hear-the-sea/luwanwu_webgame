@@ -18,7 +18,6 @@ from core.utils.time_scale import scale_duration
 from gameplay.models import Manor, ResourceEvent, ResourceType, WorkAssignment, WorkTemplate
 from guests.models import Guest, GuestStatus
 
-
 MAX_CONCURRENT_WORKERS = 3  # 最多同时打工人数
 
 
@@ -41,17 +40,11 @@ def assign_guest_to_work(guest: Guest, work_template: WorkTemplate) -> WorkAssig
 
     # 检查门客是否满足工作要求
     if guest.level < work_template.required_level:
-        raise GuestNotRequirementError(
-            guest, "level", work_template.required_level, guest.level
-        )
+        raise GuestNotRequirementError(guest, "level", work_template.required_level, guest.level)
     if guest.force < work_template.required_force:
-        raise GuestNotRequirementError(
-            guest, "force", work_template.required_force, guest.force
-        )
+        raise GuestNotRequirementError(guest, "force", work_template.required_force, guest.force)
     if guest.intellect < work_template.required_intellect:
-        raise GuestNotRequirementError(
-            guest, "intellect", work_template.required_intellect, guest.intellect
-        )
+        raise GuestNotRequirementError(guest, "intellect", work_template.required_intellect, guest.intellect)
 
     # 使用事务确保原子性
     with transaction.atomic():
@@ -63,10 +56,7 @@ def assign_guest_to_work(guest: Guest, work_template: WorkTemplate) -> WorkAssig
             raise GuestNotIdleError(guest)
 
         # 在事务内检查打工人数限制，防止并发超限
-        current_working = WorkAssignment.objects.filter(
-            manor=guest.manor,
-            status=WorkAssignment.Status.WORKING
-        ).count()
+        current_working = WorkAssignment.objects.filter(manor=guest.manor, status=WorkAssignment.Status.WORKING).count()
         if current_working >= MAX_CONCURRENT_WORKERS:
             raise WorkLimitExceededError(MAX_CONCURRENT_WORKERS)
 
@@ -102,10 +92,11 @@ def complete_work_assignments() -> int:
 
     with transaction.atomic():
         # 查找所有到期的打工任务
-        assignments = list(WorkAssignment.objects.filter(
-            status=WorkAssignment.Status.WORKING,
-            complete_at__lte=now
-        ).select_related("guest"))
+        assignments = list(
+            WorkAssignment.objects.filter(status=WorkAssignment.Status.WORKING, complete_at__lte=now).select_related(
+                "guest"
+            )
+        )
 
         if not assignments:
             return 0
@@ -116,8 +107,7 @@ def complete_work_assignments() -> int:
 
         # 批量更新任务状态（1次查询）
         WorkAssignment.objects.filter(id__in=assignment_ids).update(
-            status=WorkAssignment.Status.COMPLETED,
-            finished_at=now
+            status=WorkAssignment.Status.COMPLETED, finished_at=now
         )
 
         # 批量更新门客状态（1次查询）
@@ -173,7 +163,7 @@ def claim_work_reward(assignment: WorkAssignment) -> Dict[str, int]:
             resource_type=ResourceType.SILVER,
             delta=reward_silver,
             reason=ResourceEvent.Reason.WORK_REWARD,
-            note=f"{assignment.guest.display_name} 在 {assignment.work_template.name} 打工获得报酬"
+            note=f"{assignment.guest.display_name} 在 {assignment.work_template.name} 打工获得报酬",
         )
 
         # 标记为已领取
@@ -194,11 +184,9 @@ def refresh_work_assignments(manor: Manor) -> None:
 
     with transaction.atomic():
         # 查找该庄园所有到期的打工任务
-        assignments = list(WorkAssignment.objects.filter(
-            manor=manor,
-            status=WorkAssignment.Status.WORKING,
-            complete_at__lte=now
-        ))
+        assignments = list(
+            WorkAssignment.objects.filter(manor=manor, status=WorkAssignment.Status.WORKING, complete_at__lte=now)
+        )
 
         if not assignments:
             return
@@ -209,8 +197,7 @@ def refresh_work_assignments(manor: Manor) -> None:
 
         # 批量更新任务状态（1次查询）
         WorkAssignment.objects.filter(id__in=assignment_ids).update(
-            status=WorkAssignment.Status.COMPLETED,
-            finished_at=now
+            status=WorkAssignment.Status.COMPLETED, finished_at=now
         )
 
         # 批量更新门客状态（1次查询）

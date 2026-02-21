@@ -134,11 +134,13 @@ def generate_report_task(
 
         if mission and mission.is_defense:
             from battle.combatants import build_named_ai_guests
-            from core.game_data.technology import resolve_enemy_tech_levels, get_guest_stat_bonuses
+            from core.game_data.technology import get_guest_stat_bonuses, resolve_enemy_tech_levels
 
             tech_conf = _normalize_enemy_technology_config(mission.enemy_technology)
             attacker_guest_level = _coerce_enemy_guest_level(tech_conf)
-            attacker_guests = build_named_ai_guests(_normalize_guest_configs(mission.enemy_guests), level=attacker_guest_level)
+            attacker_guests = build_named_ai_guests(
+                _normalize_guest_configs(mission.enemy_guests), level=attacker_guest_level
+            )
             attacker_tech_levels = resolve_enemy_tech_levels(tech_conf)
             attacker_guest_bonuses = get_guest_stat_bonuses(tech_conf)
             attacker_guest_skills = _normalize_guest_skills(tech_conf)
@@ -208,7 +210,7 @@ def generate_report_task(
     except Exception as exc:
         logger.exception(
             f"Battle report generation failed for manor {manor_id}: {exc}",
-            extra={"manor_id": manor_id, "run_id": run_id, "mission_id": mission_id}
+            extra={"manor_id": manor_id, "run_id": run_id, "mission_id": mission_id},
         )
         # Retry on unexpected errors
         raise self.retry(exc=exc)

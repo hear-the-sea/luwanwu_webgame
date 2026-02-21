@@ -9,52 +9,62 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('gameplay', '0032_add_technology_upgrade_fields'),
+        ("gameplay", "0032_add_technology_upgrade_fields"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='ShopStock',
+            name="ShopStock",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('item_key', models.CharField(max_length=64, unique=True)),
-                ('current_stock', models.IntegerField()),
-                ('last_refresh', models.DateField(auto_now_add=True)),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("item_key", models.CharField(max_length=64, unique=True)),
+                ("current_stock", models.IntegerField()),
+                ("last_refresh", models.DateField(auto_now_add=True)),
             ],
             options={
-                'db_table': 'trade_shop_stock',
+                "db_table": "trade_shop_stock",
             },
         ),
         migrations.CreateModel(
-            name='ShopPurchaseLog',
+            name="ShopPurchaseLog",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('item_key', models.CharField(max_length=64)),
-                ('quantity', models.PositiveIntegerField()),
-                ('unit_price', models.PositiveIntegerField()),
-                ('total_cost', models.PositiveIntegerField()),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('manor', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='shop_purchases', to='gameplay.manor')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("item_key", models.CharField(max_length=64)),
+                ("quantity", models.PositiveIntegerField()),
+                ("unit_price", models.PositiveIntegerField()),
+                ("total_cost", models.PositiveIntegerField()),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "manor",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="shop_purchases", to="gameplay.manor"
+                    ),
+                ),
             ],
             options={
-                'db_table': 'trade_shop_purchase_log',
-                'ordering': ['-created_at'],
+                "db_table": "trade_shop_purchase_log",
+                "ordering": ["-created_at"],
             },
         ),
         migrations.CreateModel(
-            name='ShopSellLog',
+            name="ShopSellLog",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('item_key', models.CharField(max_length=64)),
-                ('quantity', models.PositiveIntegerField()),
-                ('unit_price', models.PositiveIntegerField()),
-                ('total_income', models.PositiveIntegerField()),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('manor', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='shop_sells', to='gameplay.manor')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("item_key", models.CharField(max_length=64)),
+                ("quantity", models.PositiveIntegerField()),
+                ("unit_price", models.PositiveIntegerField()),
+                ("total_income", models.PositiveIntegerField()),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "manor",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="shop_sells", to="gameplay.manor"
+                    ),
+                ),
             ],
             options={
-                'db_table': 'trade_shop_sell_log',
-                'ordering': ['-created_at'],
+                "db_table": "trade_shop_sell_log",
+                "ordering": ["-created_at"],
             },
         ),
     ]

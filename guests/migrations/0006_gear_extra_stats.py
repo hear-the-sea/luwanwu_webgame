@@ -14,4 +14,3 @@ class Migration(migrations.Migration):
             field=models.JSONField(blank=True, default=dict),
         ),
     ]
-

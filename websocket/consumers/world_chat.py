@@ -5,6 +5,7 @@ import html
 import json
 import logging
 import re
+import threading
 
 from asgiref.sync import sync_to_async
 from channels.db import database_sync_to_async
@@ -14,6 +15,8 @@ from django.core.cache import cache
 from django.db import DatabaseError
 from django_redis import get_redis_connection
 from redis.exceptions import RedisError
+
+from ..utils import filter_payload
 
 User = get_user_model()
 
@@ -49,9 +52,16 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
 
     # Fallback in-memory rate limiting when Redis is unavailable
     _fallback_rate_limits: dict[int, list[float]] = {}
+    _fallback_rate_limits_last_seen: dict[int, float] = {}
+    FALLBACK_RATE_LIMIT_CLEANUP_THRESHOLD = 1000
 
     # Display name cache TTL (5 minutes)
     DISPLAY_NAME_CACHE_TTL = 300
+
+    # Fallback message-id state when Redis INCR is unavailable.
+    _fallback_next_id_lock = threading.Lock()
+    _fallback_next_id_last_ms = 0
+    _fallback_next_id_seq = 0
 
     # Lua script for batch history trimming (O(1) per removed message vs O(n) round trips)
     TRIM_HISTORY_SCRIPT = """
@@ -177,15 +187,12 @@ return removed
 
     async def chat_message(self, event):
         payload = event.get("payload", {})
-        safe_payload = {
-            "type": payload.get("type"),
-            "channel": payload.get("channel"),
-            "id": payload.get("id"),
-            "ts": payload.get("ts", payload.get("timestamp")),
-            "sender": payload.get("sender"),
-            "text": payload.get("text", payload.get("message")),
-        }
-        safe_payload = {k: v for k, v in safe_payload.items() if v is not None}
+        safe_payload = filter_payload(payload, ["type", "channel", "id", "ts", "sender", "text"])
+        # 兼容旧字段名
+        if "ts" not in safe_payload and "timestamp" in payload:
+            safe_payload["ts"] = payload["timestamp"]
+        if "text" not in safe_payload and "message" in payload:
+            safe_payload["text"] = payload["message"]
         await self.send_json(safe_payload)
 
     def _normalize_text(self, text: str) -> str:
@@ -230,6 +237,7 @@ return removed
     @database_sync_to_async
     def _consume_trumpet(self) -> tuple[bool, str]:
         from gameplay.services.chat import consume_trumpet
+
         if self.user_id is None:
             return False, "未登录，无法发言"
         return consume_trumpet(self.user_id)
@@ -277,13 +285,7 @@ return removed
         """Trim expired messages from history using Lua script for O(1) performance."""
         redis = self._get_redis()
         try:
-            redis.eval(
-                self.TRIM_HISTORY_SCRIPT,
-                1,
-                self.HISTORY_KEY,
-                cutoff_ms,
-                self.HISTORY_LIMIT
-            )
+            redis.eval(self.TRIM_HISTORY_SCRIPT, 1, self.HISTORY_KEY, cutoff_ms, self.HISTORY_LIMIT)
         except (RedisError, AttributeError) as exc:
             # Fallback to Python-based trimming when Lua is unavailable (e.g., in tests)
             logger.debug("Lua script unavailable, using Python fallback: %s", exc)
@@ -353,28 +355,41 @@ return removed
     def _fallback_rate_limit(self, user_id: int) -> tuple[bool, int | None]:
         """Fallback in-memory rate limiting when Redis is unavailable."""
         import time
+
         now = time.time()
         window = self.RATE_LIMIT_WINDOW_SECONDS
+        cls = self.__class__
 
-        if user_id not in self._fallback_rate_limits:
-            self._fallback_rate_limits[user_id] = []
+        if user_id not in cls._fallback_rate_limits:
+            cls._fallback_rate_limits[user_id] = []
 
         # Clean up expired records for current user
-        timestamps = self._fallback_rate_limits[user_id]
+        timestamps = cls._fallback_rate_limits[user_id]
         timestamps[:] = [t for t in timestamps if now - t < window]
+        cls._fallback_rate_limits_last_seen[user_id] = now
 
-        # Memory leak protection: periodically cleanup inactive users
-        # Simple heuristic: if dictionary grows too large, scan and purge empty entries
-        if len(self._fallback_rate_limits) > 1000:
-            empty_keys = [uid for uid, ts in self._fallback_rate_limits.items() if not ts]
-            for uid in empty_keys:
-                del self._fallback_rate_limits[uid]
+        # Memory pressure guard: purge stale fallback users once the map grows.
+        if len(cls._fallback_rate_limits) > int(self.FALLBACK_RATE_LIMIT_CLEANUP_THRESHOLD):
+            self._cleanup_fallback_rate_limits(now, window)
 
         if len(timestamps) >= self.RATE_LIMIT_MAX_MESSAGES:
             return False, int(window - (now - timestamps[0]))
 
         timestamps.append(now)
         return True, None
+
+    def _cleanup_fallback_rate_limits(self, now: float, window: int) -> None:
+        cls = self.__class__
+        stale_after_seconds = max(60, int(window) * 10)
+        stale_users = []
+        for uid, ts in cls._fallback_rate_limits.items():
+            last_seen = cls._fallback_rate_limits_last_seen.get(uid, 0.0)
+            if not ts or (now - last_seen) > stale_after_seconds:
+                stale_users.append(uid)
+
+        for uid in stale_users:
+            cls._fallback_rate_limits.pop(uid, None)
+            cls._fallback_rate_limits_last_seen.pop(uid, None)
 
     async def _rate_limit(self, user_id: int | None) -> tuple[bool, int | None]:
         return await sync_to_async(self._rate_limit_sync, thread_sensitive=True)(user_id)
@@ -384,8 +399,22 @@ return removed
         try:
             return int(redis.incr(self.NEXT_ID_KEY) or 0)
         except RedisError as exc:
-            logger.debug("World chat next_id Redis error; falling back to timestamp: %s", exc)
-            return int(_now_ts() * 1000)
+            logger.debug("World chat next_id Redis error; falling back to local sequencer: %s", exc)
+            cls = self.__class__
+            with cls._fallback_next_id_lock:
+                now_ms = int(_now_ts() * 1000)
+                if now_ms > cls._fallback_next_id_last_ms:
+                    cls._fallback_next_id_last_ms = now_ms
+                    cls._fallback_next_id_seq = 0
+                else:
+                    # Clock rollback / same-millisecond burst: keep monotonic IDs.
+                    now_ms = cls._fallback_next_id_last_ms
+                    cls._fallback_next_id_seq += 1
+                    if cls._fallback_next_id_seq >= 1_000_000:
+                        cls._fallback_next_id_last_ms += 1
+                        now_ms = cls._fallback_next_id_last_ms
+                        cls._fallback_next_id_seq = 0
+                return now_ms * 1_000_000 + cls._fallback_next_id_seq
 
     async def _build_message(self, text: str) -> dict:
         msg_id = await sync_to_async(self._next_id_sync, thread_sensitive=True)()

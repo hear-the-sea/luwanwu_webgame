@@ -3,6 +3,7 @@
 
 统一的模板加载函数，避免在多处重复 `{t.key: t for t in XxxTemplate.objects.all()}`
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Dict, Iterable, TypeVar, cast

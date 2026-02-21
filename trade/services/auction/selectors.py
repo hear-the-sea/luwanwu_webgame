@@ -25,9 +25,8 @@ def get_active_slots(
     if not current_round:
         return AuctionSlot.objects.none()
 
-    queryset = (
-        AuctionSlot.objects.filter(round=current_round, status=AuctionSlot.Status.ACTIVE)
-        .select_related("item_template", "highest_bidder", "round")
+    queryset = AuctionSlot.objects.filter(round=current_round, status=AuctionSlot.Status.ACTIVE).select_related(
+        "item_template", "highest_bidder", "round"
     )
 
     if category and category != "all":
@@ -85,8 +84,7 @@ def get_my_leading_bids(manor: Manor) -> List[AuctionSlot]:
             status=AuctionBid.Status.ACTIVE,
             slot__round=current_round,
             slot__status=AuctionSlot.Status.ACTIVE,
-        )
-        .select_related("slot", "slot__item_template")
+        ).select_related("slot", "slot__item_template")
     )
 
     if not my_active_bids:
@@ -98,10 +96,7 @@ def get_my_leading_bids(manor: Manor) -> List[AuctionSlot]:
     # We need to sort by amount DESC, created_at ASC to determine rank
     # Fetching slot_id and manor_id is enough to determine position
     competitor_bids = (
-        AuctionBid.objects.filter(
-            slot_id__in=slot_ids,
-            status=AuctionBid.Status.ACTIVE
-        )
+        AuctionBid.objects.filter(slot_id__in=slot_ids, status=AuctionBid.Status.ACTIVE)
         .values_list("slot_id", "manor_id")
         .order_by("slot_id", "-amount", "created_at")
     )

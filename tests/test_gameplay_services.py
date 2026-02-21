@@ -1,17 +1,13 @@
 """
 测试 gameplay.services 模块重构后的功能
 """
+
 import pytest
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 from gameplay.models import ResourceEvent, ResourceType
-from gameplay.services import (
-    ensure_manor,
-    grant_resources,
-    spend_resources,
-    sync_resource_production,
-)
+from gameplay.services import ensure_manor, grant_resources, spend_resources, sync_resource_production
 
 User = get_user_model()
 

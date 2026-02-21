@@ -264,7 +264,9 @@ def _update_market_context(request, manor, context: dict) -> None:
     try:
         expire_user_listings(manor)
     except Exception as exc:
-        logger.warning("expire user market listings failed: manor_id=%s error=%s", getattr(manor, "id", None), exc, exc_info=True)
+        logger.warning(
+            "expire user market listings failed: manor_id=%s error=%s", getattr(manor, "id", None), exc, exc_info=True
+        )
     market_view = request.GET.get("view", "buy")
     context["market_view"] = market_view
 
@@ -280,7 +282,12 @@ def get_trade_context(request, manor) -> dict:
     try:
         sync_resource_production(manor)
     except Exception as exc:
-        logger.warning("sync resource production for trade view failed: manor_id=%s error=%s", getattr(manor, "id", None), exc, exc_info=True)
+        logger.warning(
+            "sync resource production for trade view failed: manor_id=%s error=%s",
+            getattr(manor, "id", None),
+            exc,
+            exc_info=True,
+        )
     tab = request.GET.get("tab", "shop")
     context = _base_trade_context(tab, manor)
 

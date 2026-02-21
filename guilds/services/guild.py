@@ -1,4 +1,3 @@
-
 from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.utils import timezone
@@ -41,7 +40,7 @@ def validate_guild_name(name: str) -> None:
         raise ValueError("帮会名称只能包含中文、英文、数字和下划线")
 
 
-def create_guild(user, name, description='', emblem='default'):
+def create_guild(user, name, description="", emblem="default"):
     """
     创建帮会
 
@@ -63,7 +62,7 @@ def create_guild(user, name, description='', emblem='default'):
     name = name.strip() if name else ""
     validate_guild_name(name)
 
-    required_gold_bars = GUILD_CREATION_COST['gold_bar']
+    required_gold_bars = GUILD_CREATION_COST["gold_bar"]
 
     with transaction.atomic():
         # 并发安全：锁定并校验当前用户的帮会成员记录（OneToOneField 防止重复入帮）
@@ -78,7 +77,7 @@ def create_guild(user, name, description='', emblem='default'):
 
         # 锁定并扣减金条库存（仓库）
         try:
-            gold_bar_template = ItemTemplate.objects.get(key='gold_bar')
+            gold_bar_template = ItemTemplate.objects.get(key="gold_bar")
         except ItemTemplate.DoesNotExist:
             raise ValueError("金条物品不存在，请联系管理员")
 
@@ -94,9 +93,9 @@ def create_guild(user, name, description='', emblem='default'):
         if not gold_bar_item or gold_bar_item.quantity < required_gold_bars:
             raise ValueError(f"金条不足，需要{required_gold_bars}金条")
 
-        updated = InventoryItem.objects.filter(
-            pk=gold_bar_item.pk, quantity__gte=required_gold_bars
-        ).update(quantity=F("quantity") - required_gold_bars)
+        updated = InventoryItem.objects.filter(pk=gold_bar_item.pk, quantity__gte=required_gold_bars).update(
+            quantity=F("quantity") - required_gold_bars
+        )
         if not updated:
             raise ValueError(f"金条不足，需要{required_gold_bars}金条")
         gold_bar_item.refresh_from_db(fields=["quantity"])
@@ -121,7 +120,7 @@ def create_guild(user, name, description='', emblem='default'):
             GuildMember.objects.create(
                 guild=guild,
                 user=user,
-                position='leader',
+                position="leader",
             )
         except IntegrityError:
             raise ValueError("您已加入帮会，无法创建新帮会")
@@ -132,7 +131,7 @@ def create_guild(user, name, description='', emblem='default'):
         # 发布系统公告
         create_announcement(
             guild,
-            'system',
+            "system",
             f"帮会成立！帮主{manor.display_name}创建了{name}！",
         )
 
@@ -175,9 +174,7 @@ def upgrade_guild(guild, operator):
             raise ValueError(f"帮会金条不足，需要{cost}金条")
 
         # 步骤3：使用F()表达式原子性地扣除金条并提升等级
-        Guild.objects.filter(pk=guild_locked.pk).update(
-            gold_bar=F("gold_bar") - cost, level=F("level") + 1
-        )
+        Guild.objects.filter(pk=guild_locked.pk).update(gold_bar=F("gold_bar") - cost, level=F("level") + 1)
 
         # 刷新对象以获取更新后的值（用于日志和公告）
         guild_locked.refresh_from_db(fields=["level", "gold_bar"])
@@ -187,7 +184,7 @@ def upgrade_guild(guild, operator):
 
         GuildResourceLog.objects.create(
             guild=guild_locked,
-            action='guild_upgrade',
+            action="guild_upgrade",
             gold_bar_change=-cost,
             related_user=operator,
             note=f"帮会升级至{guild_locked.level}级",
@@ -197,7 +194,7 @@ def upgrade_guild(guild, operator):
         operator_manor = Manor.objects.get(user=operator)
         create_announcement(
             guild_locked,
-            'system',
+            "system",
             f"{operator_manor.display_name}将帮会提升至{guild_locked.level}级！成员上限增加至{guild_locked.member_capacity}人。",
         )
 
@@ -213,15 +210,15 @@ def initialize_guild_technologies(guild):
     """初始化帮会科技"""
     tech_configs = [
         # 生产类
-        ('equipment_forge', 'production', 5),
-        ('experience_refine', 'production', 5),
-        ('resource_supply', 'production', 5),
+        ("equipment_forge", "production", 5),
+        ("experience_refine", "production", 5),
+        ("resource_supply", "production", 5),
         # 战斗类
-        ('military_study', 'combat', 5),
-        ('troop_tactics', 'combat', 5),
+        ("military_study", "combat", 5),
+        ("troop_tactics", "combat", 5),
         # 福利类
-        ('resource_boost', 'welfare', 5),
-        ('march_speed', 'welfare', 5),
+        ("resource_boost", "welfare", 5),
+        ("march_speed", "welfare", 5),
     ]
 
     technologies_to_create = [
@@ -254,19 +251,14 @@ def disband_guild(guild, operator):
         raise ValueError("只有帮主可以解散帮会")
 
     # 预加载成员 user_id 和对应的 manor（避免事务中的 N+1 查询）
-    member_user_ids = list(
-        guild.members.filter(is_active=True).values_list('user_id', flat=True)
-    )
-    user_to_manor = {
-        m.user_id: m
-        for m in Manor.objects.filter(user_id__in=member_user_ids)
-    }
+    member_user_ids = list(guild.members.filter(is_active=True).values_list("user_id", flat=True))
+    user_to_manor = {m.user_id: m for m in Manor.objects.filter(user_id__in=member_user_ids)}
     guild_name = guild.name  # 缓存名称，事务外使用
 
     with transaction.atomic():
         # 标记帮会为不活跃
         guild.is_active = False
-        guild.save(update_fields=['is_active'])
+        guild.save(update_fields=["is_active"])
 
         # 标记所有成员为离开
         guild.members.filter(is_active=True).update(
@@ -275,24 +267,26 @@ def disband_guild(guild, operator):
         )
 
     # 发送解散通知（移到事务外，避免长事务）
-    from gameplay.services.messages import bulk_create_messages
+    from gameplay.services.utils.messages import bulk_create_messages
 
     messages_data = []
     for user_id in member_user_ids:
         manor = user_to_manor.get(user_id)
         if manor:
-            messages_data.append({
-                "manor": manor,
-                "kind": "system",
-                "title": "帮会解散通知",
-                "body": f"您所在的帮会【{guild_name}】已被帮主解散。",
-            })
+            messages_data.append(
+                {
+                    "manor": manor,
+                    "kind": "system",
+                    "title": "帮会解散通知",
+                    "body": f"您所在的帮会【{guild_name}】已被帮主解散。",
+                }
+            )
 
     if messages_data:
         bulk_create_messages(messages_data)
 
 
-def get_guild_list(ordering='-level', search=None, page=1, page_size=20):
+def get_guild_list(ordering="-level", search=None, page=1, page_size=20):
     """
     获取帮会列表
 
@@ -312,11 +306,11 @@ def get_guild_list(ordering='-level', search=None, page=1, page_size=20):
         queryset = queryset.filter(name__icontains=search)
 
     # 如果按成员数排序，使用预加载的 _member_count
-    if ordering in ['-current_member_count', 'current_member_count']:
-        if ordering == '-current_member_count':
-            queryset = queryset.order_by('-_member_count')
+    if ordering in ["-current_member_count", "current_member_count"]:
+        if ordering == "-current_member_count":
+            queryset = queryset.order_by("-_member_count")
         else:
-            queryset = queryset.order_by('_member_count')
+            queryset = queryset.order_by("_member_count")
     else:
         queryset = queryset.order_by(ordering)
 
@@ -346,9 +340,6 @@ def create_announcement(guild, type, content, author=None):
 
     # 性能优化：保留最近30条公告，使用数据库层面的高效删除
     # 先获取需要保留的公告ID（前30条），然后删除不在列表中的
-    keep_ids = list(
-        guild.announcements.order_by('-created_at')
-        .values_list('id', flat=True)[:30]
-    )
+    keep_ids = list(guild.announcements.order_by("-created_at").values_list("id", flat=True)[:30])
     if keep_ids:
         guild.announcements.exclude(id__in=keep_ids).delete()

@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from core.exceptions import GuestFullHpError, InvalidHealAmountError
 from core.utils.time_scale import scale_value
+
 from ..constants import TimeConstants
 from ..models import Guest, GuestStatus
 
@@ -45,7 +46,7 @@ def recover_guest_hp(guest: Guest, now: timezone.datetime | None = None) -> None
 
     # 应用澡堂加成
     hp_multiplier = 1.0
-    if hasattr(guest, 'manor') and guest.manor:
+    if hasattr(guest, "manor") and guest.manor:
         hp_multiplier = guest.manor.hp_recovery_multiplier
 
     recovered = int(scale_value(per_second) * intervals * TimeConstants.HP_RECOVERY_INTERVAL * hp_multiplier)

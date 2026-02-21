@@ -51,7 +51,7 @@ def test_trigger_skills_allows_only_one_active():
             {"name": "Active A", "kind": "active"},
             {"name": "Active B", "kind": "active"},
             {"name": "Passive Spur", "kind": "passive"},
-        ]
+        ],
     )
     rng = random.Random(0)
 
@@ -120,6 +120,7 @@ def test_effective_defense_value_guest_vs_troop_uses_unit_stat():
     guest = make_unit(kind="guest")
     value = effective_defense_value(troop, guest)
     import math
+
     expected = max(1, int(30 * max(1.0, math.sqrt(180) / 2.0)))
     assert value == expected
 
@@ -129,6 +130,7 @@ def test_effective_defense_value_troop_vs_troop_scales():
     attacker = make_unit(kind="troop", troop_strength=120, initial_troop_strength=120)
     value = effective_defense_value(troop, attacker)
     import math
+
     expected = max(1, int(30 * max(1.0, math.sqrt(180) / 2.0)))
     assert value == expected
 

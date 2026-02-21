@@ -3,21 +3,24 @@
 
 用于诊断 arrow_god 护院归还失败的问题
 """
+
+import argparse
 import os
 import sys
-import django
-import argparse
 from pathlib import Path
 
+import django
+
 # 设置 Django settings
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
 # 添加项目根目录到 Python 路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 django.setup()
 
-from battle.models import TroopTemplate  # noqa: E402
 from django.db import transaction  # noqa: E402
+
+from battle.models import TroopTemplate  # noqa: E402
 from gameplay.models import MissionRun, PlayerTroop  # noqa: E402
 
 
@@ -49,10 +52,10 @@ def _compute_surviving_troops(loadout: dict, troops_lost: dict[str, int]) -> dic
 
 
 def _print_recent_runs(manor) -> None:
-    recent_runs = MissionRun.objects.filter(manor=manor, troop_loadout__arrow_god__gt=0).order_by('-started_at')[:5]
+    recent_runs = MissionRun.objects.filter(manor=manor, troop_loadout__arrow_god__gt=0).order_by("-started_at")[:5]
     print("   最近的 arrow_god 出征记录:")
     for recent_run in recent_runs:
-        arrow_count = recent_run.troop_loadout.get('arrow_god', 0)
+        arrow_count = recent_run.troop_loadout.get("arrow_god", 0)
         print(f"     任务 {recent_run.id}: 出征 {arrow_count}, 时间 {recent_run.started_at}, 状态 {recent_run.status}")
 
 
@@ -103,24 +106,24 @@ def diagnose_arrow_god_return(run_id: int):
     print(f"诊断任务 {run_id} 的 arrow_god 归还问题")
     print("=" * 60)
 
-    run = MissionRun.objects.select_related('manor', 'battle_report', 'mission').get(pk=run_id)
+    run = MissionRun.objects.select_related("manor", "battle_report", "mission").get(pk=run_id)
     manor = run.manor
     report = run.battle_report
 
     loadout = run.troop_loadout or {}
     print("\n1. 出征配置:")
-    arrow_deployed = loadout.get('arrow_god', 0)
+    arrow_deployed = loadout.get("arrow_god", 0)
     print(f"   arrow_god: {arrow_deployed}")
 
     print("\n2. 战报损失:")
     losses = report.losses or {}
-    casualties = (losses.get('attacker', {}) or {}).get('casualties', [])
+    casualties = (losses.get("attacker", {}) or {}).get("casualties", [])
 
     arrow_lost = 0
     for entry in casualties:
-        if entry.get('key') != 'arrow_god':
+        if entry.get("key") != "arrow_god":
             continue
-        lost = entry.get('lost', 0)
+        lost = entry.get("lost", 0)
         arrow_lost += lost
         print(f"   arrow_god: 损失 {lost}")
 
@@ -128,7 +131,7 @@ def diagnose_arrow_god_return(run_id: int):
     print(f"   应该剩余: {arrow_deployed - arrow_lost}")
 
     print("\n3. 当前库存:")
-    arrow_troop = PlayerTroop.objects.filter(manor=manor, troop_template__key='arrow_god').first()
+    arrow_troop = PlayerTroop.objects.filter(manor=manor, troop_template__key="arrow_god").first()
     if not arrow_troop:
         print("   ❌ 没有 arrow_god 的 PlayerTroop 记录")
     else:

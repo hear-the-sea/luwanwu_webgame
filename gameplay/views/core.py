@@ -14,8 +14,8 @@ from django.views.generic import TemplateView
 
 from common.constants.resources import ResourceType
 from gameplay.models import BuildingCategory
-from gameplay.services import ensure_manor, refresh_manor_state
 from gameplay.selectors.home import get_home_context
+from gameplay.services import ensure_manor, refresh_manor_state
 
 
 class DashboardView(LoginRequiredMixin, TemplateView):
@@ -109,8 +109,8 @@ class RankingView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         manor = ensure_manor(self.request.user)
 
+        from gameplay.services.manor.prestige import get_prestige_progress
         from gameplay.services.ranking import get_ranking_with_player_context
-        from gameplay.services.prestige import get_prestige_progress
 
         ranking_data = get_ranking_with_player_context(manor)
         prestige_info = get_prestige_progress(manor)

@@ -1,12 +1,12 @@
 """
 Database and cache configuration.
 """
+
 from __future__ import annotations
 
 from urllib.parse import quote, urlparse, urlunparse
 
 from .base import BASE_DIR, DEBUG, env
-
 
 # Redis configuration
 REDIS_URL = env("REDIS_URL", "redis://127.0.0.1:6379")
@@ -35,10 +35,10 @@ def _redis_url_with_password(url: str, password: str) -> str:
 # Production security: warn if Redis password is not set
 if not DEBUG and not REDIS_PASSWORD:
     import warnings
+
     warnings.warn(
-        "REDIS_PASSWORD is not set in production. "
-        "This is a security risk. Set REDIS_PASSWORD environment variable.",
-        RuntimeWarning
+        "REDIS_PASSWORD is not set in production. " "This is a security risk. Set REDIS_PASSWORD environment variable.",
+        RuntimeWarning,
     )
 
 REDIS_BROKER_URL = _redis_url_with_password(env("REDIS_BROKER_URL", f"{REDIS_URL}/0"), REDIS_PASSWORD)

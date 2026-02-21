@@ -8,12 +8,8 @@ from celery import shared_task
 from django.utils import timezone
 
 from .models import Guild, GuildDonationLog, GuildExchangeLog, GuildResourceLog
-from .services.warehouse import (
-    produce_equipment,
-    produce_experience_items,
-    produce_resource_packs
-)
 from .services.contribution import reset_weekly_contributions
+from .services.warehouse import produce_equipment, produce_experience_items, produce_resource_packs
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +89,7 @@ def guild_tech_daily_production(self):
                 process_single_guild_production,
                 args=[guild_id],
                 logger=logger,
-                log_message=f"Failed to dispatch daily production for guild {guild_id}"
+                log_message=f"Failed to dispatch daily production for guild {guild_id}",
             )
             if dispatched:
                 dispatched_count += 1
@@ -135,7 +131,10 @@ def cleanup_old_guild_logs(self):
         total = donation_deleted + exchange_deleted + resource_deleted
         logger.info(
             "Cleaned up %d old guild logs (donation=%d, exchange=%d, resource=%d)",
-            total, donation_deleted, exchange_deleted, resource_deleted
+            total,
+            donation_deleted,
+            exchange_deleted,
+            resource_deleted,
         )
         return f"cleaned up {total} logs"
     except Exception as exc:

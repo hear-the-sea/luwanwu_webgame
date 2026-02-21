@@ -17,7 +17,6 @@ from django.views.generic import TemplateView
 from core.utils import safe_int
 from core.utils.rate_limit import rate_limit_json
 from core.utils.validation import sanitize_error_message
-
 from gameplay.constants import PVPConstants
 from gameplay.services import (
     add_oath_bond,
@@ -25,8 +24,8 @@ from gameplay.services import (
     ensure_manor,
     list_held_prisoners,
     list_oath_bonds,
-    release_prisoner,
     recruit_prisoner,
+    release_prisoner,
     remove_oath_bond,
 )
 

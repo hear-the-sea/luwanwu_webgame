@@ -7,13 +7,13 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('trade', '0007_auctionround_uniq_trade_auction_round_active_and_more'),
+        ("trade", "0007_auctionround_uniq_trade_auction_round_active_and_more"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='shopstock',
-            name='last_refresh',
+            model_name="shopstock",
+            name="last_refresh",
             field=models.DateField(default=django.utils.timezone.localdate),
         ),
     ]

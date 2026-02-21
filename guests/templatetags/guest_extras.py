@@ -197,7 +197,7 @@ def attribute_icons(value: int) -> str:
     icons = []
     remaining = int(value)
 
-    for icon, divisor in [('crown', 64), ('sun', 16), ('moon', 4), ('star', 1)]:
+    for icon, divisor in [("crown", 64), ("sun", 16), ("moon", 4), ("star", 1)]:
         count = remaining // divisor
         remaining %= divisor
         icons.extend([icon] * count)

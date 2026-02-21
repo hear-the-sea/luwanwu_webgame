@@ -95,21 +95,15 @@ class MarketListing(models.Model):
         related_name="market_listings",
         verbose_name="卖家",
     )
-    item_template = models.ForeignKey(
-        "gameplay.ItemTemplate", on_delete=models.CASCADE, verbose_name="物品模板"
-    )
+    item_template = models.ForeignKey("gameplay.ItemTemplate", on_delete=models.CASCADE, verbose_name="物品模板")
     quantity = models.PositiveIntegerField(verbose_name="数量")
 
     # 定价信息
     unit_price = models.PositiveIntegerField(verbose_name="单价")
-    total_price = models.PositiveIntegerField(
-        verbose_name="总价", help_text="单价 × 数量"
-    )
+    total_price = models.PositiveIntegerField(verbose_name="总价", help_text="单价 × 数量")
 
     # 时间信息
-    duration = models.IntegerField(
-        choices=Duration.choices, verbose_name="上架时长（秒）"
-    )
+    duration = models.IntegerField(choices=Duration.choices, verbose_name="上架时长（秒）")
     listing_fee = models.PositiveIntegerField(verbose_name="手续费")
     listed_at = models.DateTimeField(auto_now_add=True, verbose_name="上架时间")
     expires_at = models.DateTimeField(verbose_name="过期时间")
@@ -178,12 +172,8 @@ class MarketTransaction(models.Model):
 
     # 交易金额
     total_price = models.PositiveIntegerField(verbose_name="成交价")
-    tax_amount = models.PositiveIntegerField(
-        verbose_name="税费", help_text="卖家支付的10%税费"
-    )
-    seller_received = models.PositiveIntegerField(
-        verbose_name="卖家实收", help_text="成交价 - 税费"
-    )
+    tax_amount = models.PositiveIntegerField(verbose_name="税费", help_text="卖家支付的10%税费")
+    seller_received = models.PositiveIntegerField(verbose_name="卖家实收", help_text="成交价 - 税费")
 
     # 时间
     transaction_at = models.DateTimeField(auto_now_add=True, verbose_name="成交时间")

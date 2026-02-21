@@ -100,7 +100,10 @@ def consume_inventory_item_locked(locked_item: InventoryItem, amount: int = 1) -
     new_qty = int(locked_item.quantity) - int(consume_amount)
 
     # 粮食从仓库消耗时，同步更新 Manor.grain
-    if locked_item.template.key == GRAIN_ITEM_KEY and locked_item.storage_location == InventoryItem.StorageLocation.WAREHOUSE:
+    if (
+        locked_item.template.key == GRAIN_ITEM_KEY
+        and locked_item.storage_location == InventoryItem.StorageLocation.WAREHOUSE
+    ):
         Manor.objects.filter(pk=locked_item.manor_id).update(grain=F("grain") - int(consume_amount))
 
     if new_qty <= 0:

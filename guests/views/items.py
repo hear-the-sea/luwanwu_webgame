@@ -27,17 +27,15 @@ def use_medicine_item_view(request, pk: int):
     注意：此视图有自定义的 AJAX 响应格式，不使用统一装饰器
     但使用 manager 方法简化查询
     """
-    from ..services import heal_guest
     from gameplay.models import InventoryItem, ItemTemplate
     from gameplay.services.inventory import consume_inventory_item
-    from gameplay.services.manor import ensure_manor
+    from gameplay.services.manor.core import ensure_manor
+
+    from ..services import heal_guest
 
     manor = ensure_manor(request.user)
     # 使用 manager 方法获取门客，避免重复的 select_related
-    guest = get_object_or_404(
-        Guest.objects.for_manor(manor).with_template(),
-        pk=pk
-    )
+    guest = get_object_or_404(Guest.objects.for_manor(manor).with_template(), pk=pk)
     item_id = request.POST.get("item_id")
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
     default_url = reverse("guests:detail", args=[guest.pk])
@@ -64,17 +62,19 @@ def use_medicine_item_view(request, pk: int):
         if is_ajax:
             # 刷新门客数据以获取最新HP和状态
             guest.refresh_from_db()
-            return JsonResponse({
-                "success": True,
-                "message": msg,
-                "item_id": item_id,
-                "new_quantity": new_quantity,
-                "guest_id": guest.pk,
-                "current_hp": guest.current_hp,
-                "max_hp": guest.max_hp,
-                "status": guest.status,
-                "status_display": guest.get_status_display(),
-            })
+            return JsonResponse(
+                {
+                    "success": True,
+                    "message": msg,
+                    "item_id": item_id,
+                    "new_quantity": new_quantity,
+                    "guest_id": guest.pk,
+                    "current_hp": guest.current_hp,
+                    "max_hp": guest.max_hp,
+                    "status": guest.status,
+                    "status_display": guest.get_status_display(),
+                }
+            )
         messages.success(request, msg)
     except (GameError, ValueError) as exc:
         error_msg = sanitize_error_message(exc)
@@ -84,10 +84,12 @@ def use_medicine_item_view(request, pk: int):
     except ObjectDoesNotExist:
         # 物品可能已被删除（refresh_from_db 时）
         if is_ajax:
-            return JsonResponse({
-                "success": True,
-                "message": "药品已使用",
-                "item_id": item_id,
-                "new_quantity": 0,
-            })
+            return JsonResponse(
+                {
+                    "success": True,
+                    "message": "药品已使用",
+                    "item_id": item_id,
+                    "new_quantity": 0,
+                }
+            )
     return redirect(next_url)

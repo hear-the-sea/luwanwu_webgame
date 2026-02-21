@@ -13,13 +13,13 @@ from django.db import transaction
 
 from core.exceptions import GuestCapacityFullError, ItemNotConfiguredError, ItemNotUsableError
 from gameplay.models import InventoryItem, ItemTemplate, Manor, ResourceEvent
-from guests.models import Guest, GuestStatus
-from gameplay.services.resources import grant_resources, grant_resources_locked
-
-from .core import add_item_to_inventory, consume_inventory_item_locked
 
 # Do NOT `import random` here: tests monkeypatch `gameplay.services.inventory.random.random`.
 from gameplay.services import inventory as inventory_pkg
+from gameplay.services.resources import grant_resources, grant_resources_locked
+from guests.models import Guest, GuestStatus
+
+from .core import add_item_to_inventory, consume_inventory_item_locked
 
 logger = logging.getLogger(__name__)
 
@@ -261,10 +261,7 @@ def use_inventory_item(item: InventoryItem, manor: Manor | None = None) -> Dict[
         query_filter["manor"] = manor
 
     locked_item = (
-        InventoryItem.objects.select_for_update()
-        .select_related("template", "manor")
-        .filter(**query_filter)
-        .first()
+        InventoryItem.objects.select_for_update().select_related("template", "manor").filter(**query_filter).first()
     )
     if not locked_item:
         if manor is not None:
@@ -322,12 +319,7 @@ def _validate_guest_item_use(
     if locked_item.quantity <= 0:
         raise InsufficientStockError(locked_item.template.name, 1, locked_item.quantity)
 
-    guest = (
-        Guest.objects.select_for_update()
-        .select_related("template")
-        .filter(id=guest_id, manor=manor)
-        .first()
-    )
+    guest = Guest.objects.select_for_update().select_related("template").filter(id=guest_id, manor=manor).first()
     if not guest:
         raise ValueError("门客不存在或不属于您的庄园")
     if guest.status == GuestStatus.DEPLOYED:
@@ -368,9 +360,7 @@ def use_guest_rebirth_card(manor: Manor, item: InventoryItem, guest_id: int) -> 
             unequipped_count += 1
         except (ValueError, TypeError) as e:
             # 记录装备卸载失败的具体错误，避免装备丢失
-            logger.warning(
-                f"门客重生时装备卸载失败: guest_id={guest.pk}, gear_id={gear.pk}, error={e}"
-            )
+            logger.warning(f"门客重生时装备卸载失败: guest_id={guest.pk}, gear_id={gear.pk}, error={e}")
             unequip_errors.append({"gear_id": gear.pk, "error": str(e)})
         except Exception as e:
             logger.exception(
@@ -490,6 +480,7 @@ def use_xisuidan(manor: Manor, item: InventoryItem, guest_id: int) -> Dict[str, 
     Manor.objects.select_for_update().get(pk=manor.pk)
 
     from guests.utils.attribute_growth import generate_growth_points
+
     locked_item, guest = _validate_guest_item_use(
         manor,
         item,
@@ -580,10 +571,7 @@ def use_xidianka(manor: Manor, item: InventoryItem, guest_id: int) -> Dict[str, 
     guest_name = guest.display_name
 
     total_allocated = (
-        guest.allocated_force
-        + guest.allocated_intellect
-        + guest.allocated_defense
-        + guest.allocated_agility
+        guest.allocated_force + guest.allocated_intellect + guest.allocated_defense + guest.allocated_agility
     )
     if total_allocated == 0:
         raise ValueError("该门客没有分配过属性点，无需使用洗点卡")

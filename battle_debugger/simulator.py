@@ -3,6 +3,7 @@
 
 负责构造战斗单位、参数覆盖、执行战斗模拟。
 """
+
 from __future__ import annotations
 
 import logging
@@ -183,16 +184,12 @@ class BattleSimulator:
             - losses: 损失统计
             - combat_log: 战斗日志
         """
-        from battle.simulation_core import simulate_battle, build_rng
         from battle.combatants import assign_agility_based_priorities
+        from battle.simulation_core import build_rng, simulate_battle
 
         # 构造双方战斗单位
-        attacker_guests, attacker_troops = self._build_party(
-            self.config.attacker, "attacker"
-        )
-        defender_guests, defender_troops = self._build_party(
-            self.config.defender, "defender"
-        )
+        attacker_guests, attacker_troops = self._build_party(self.config.attacker, "attacker")
+        defender_guests, defender_troops = self._build_party(self.config.defender, "defender")
 
         # 合并单位列表
         attacker_units = attacker_guests + attacker_troops
@@ -213,7 +210,7 @@ class BattleSimulator:
                 seed=actual_seed,
                 travel_seconds=None,
                 config={},
-                drop_table=None
+                drop_table=None,
             )
 
         # 返回格式化的报告
@@ -247,27 +244,21 @@ class BattleSimulator:
         # 构造小兵
         if party_cfg.troops:
             troop_combatants = self._build_troops(
-                party_cfg.troops,
-                party_cfg.technology_level,
-                party_cfg.technology_levels,
-                side
+                party_cfg.troops, party_cfg.technology_level, party_cfg.technology_levels, side
             )
 
         return guest_combatants, troop_combatants
 
     def _build_guests(self, guests_cfg: List[GuestConfig], side: str) -> List:
         """构造门客战斗单位"""
-        from battle.combatants import build_named_ai_guests, Combatant
+        from battle.combatants import Combatant, build_named_ai_guests
         from guests.models import Skill
 
         guest_combatants = []
 
         for guest_cfg in guests_cfg:
             # 使用AI门客构造器（只接受 guest_keys 和 level 参数）
-            ai_guests = build_named_ai_guests(
-                guest_keys=[guest_cfg.template],
-                level=guest_cfg.level
-            )
+            ai_guests = build_named_ai_guests(guest_keys=[guest_cfg.template], level=guest_cfg.level)
 
             if not ai_guests:
                 logger.warning(f"无法创建门客 {guest_cfg.template}")
@@ -349,11 +340,7 @@ class BattleSimulator:
         return guest_combatants
 
     def _build_troops(
-        self,
-        troops_cfg: Dict[str, int],
-        tech_level: int,
-        tech_levels: Dict[str, int],
-        side: str
+        self, troops_cfg: Dict[str, int], tech_level: int, tech_levels: Dict[str, int], side: str
     ) -> List:
         """构造小兵战斗单位"""
         from battle.combatants import build_troop_combatants
@@ -366,19 +353,12 @@ class BattleSimulator:
 
         # 构造小兵单位（新API：使用 loadout, side, tech_levels）
         troop_units = build_troop_combatants(
-            loadout=troops_cfg,
-            side=side,
-            manor=None,  # 不使用Manor，使用tech_levels
-            tech_levels=final_tech_levels
+            loadout=troops_cfg, side=side, manor=None, tech_levels=final_tech_levels  # 不使用Manor，使用tech_levels
         )
 
         return troop_units
 
-    def _build_tech_levels(
-        self,
-        tech_level: int,
-        tech_levels: Dict[str, int]
-    ) -> Dict[str, int]:
+    def _build_tech_levels(self, tech_level: int, tech_levels: Dict[str, int]) -> Dict[str, int]:
         """
         构造科技等级字典
 
@@ -396,6 +376,7 @@ class BattleSimulator:
         # 否则使用统一等级
         if tech_level > 0:
             from gameplay.services.technology import build_uniform_tech_levels
+
             return build_uniform_tech_levels(tech_level)
 
         return {}

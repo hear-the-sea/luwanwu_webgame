@@ -6,22 +6,22 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0056_equipment_production'),
+        ("gameplay", "0056_equipment_production"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='smeltingproduction',
-            name='silver_cost',
+            model_name="smeltingproduction",
+            name="silver_cost",
         ),
         migrations.AddField(
-            model_name='smeltingproduction',
-            name='cost_amount',
-            field=models.PositiveIntegerField(default=0, verbose_name='消耗数量'),
+            model_name="smeltingproduction",
+            name="cost_amount",
+            field=models.PositiveIntegerField(default=0, verbose_name="消耗数量"),
         ),
         migrations.AddField(
-            model_name='smeltingproduction',
-            name='cost_type',
-            field=models.CharField(default='silver', max_length=32, verbose_name='消耗类型'),
+            model_name="smeltingproduction",
+            name="cost_type",
+            field=models.CharField(default="silver", max_length=32, verbose_name="消耗类型"),
         ),
     ]

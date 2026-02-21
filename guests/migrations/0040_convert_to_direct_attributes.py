@@ -45,7 +45,7 @@ def convert_growth_multiplier_to_attributes(apps, schema_editor):
     converted_count = 0
 
     # 遍历所有门客
-    for guest in Guest.objects.select_related('template').all():
+    for guest in Guest.objects.select_related("template").all():
         multiplier = calculate_old_multiplier(guest.level, guest.template.rarity)
 
         # 将倍率效果固化到属性上
@@ -54,7 +54,7 @@ def convert_growth_multiplier_to_attributes(apps, schema_editor):
         guest.defense_stat = int(guest.defense_stat * multiplier)
         guest.agility = int(guest.agility * multiplier)
 
-        guest.save(update_fields=['force', 'intellect', 'defense_stat', 'agility'])
+        guest.save(update_fields=["force", "intellect", "defense_stat", "agility"])
         converted_count += 1
 
     if converted_count > 0:
@@ -80,7 +80,7 @@ def reverse_migration(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('guests', '0039_guesttemplate_avatar'),
+        ("guests", "0039_guesttemplate_avatar"),
     ]
 
     operations = [

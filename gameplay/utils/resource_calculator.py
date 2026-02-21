@@ -3,10 +3,11 @@
 
 提供资源检查、产量计算等工具函数。
 """
+
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import DefaultDict, Dict, TYPE_CHECKING
+from typing import TYPE_CHECKING, DefaultDict, Dict
 
 from core.utils import safe_int
 from core.utils.time_scale import scale_duration
@@ -14,9 +15,8 @@ from core.utils.time_scale import scale_duration
 if TYPE_CHECKING:
     from ..models import Manor
 
-from ..models import ResourceType
 from ..constants import BuildingKeys
-
+from ..models import ResourceType
 
 # 资源字段列表
 RESOURCE_FIELDS = [
@@ -60,10 +60,7 @@ def get_hourly_rates(manor: "Manor") -> Dict[str, float]:
     Returns:
         资源产量字典 {"grain": 120.0, "silver": 95.0, ...}
     """
-    from ..services.technology import (
-        get_player_technologies,
-        get_resource_production_bonus_from_levels,
-    )
+    from ..services.technology import get_player_technologies, get_resource_production_bonus_from_levels
 
     rates: DefaultDict[str, float] = defaultdict(float)
     tech_levels = get_player_technologies(manor)
@@ -126,9 +123,9 @@ def normalize_mission_loadout(raw: Dict[str, int] | None, troop_templates: Dict[
 
 # 旅行时间计算常量
 AGILITY_SPEED_FACTOR = 0.5  # 敏捷转换速度系数（每点敏捷减免0.5秒）
-TROOP_SPEED_FACTOR = 0.5    # 兵种速度加成系数
-DEFAULT_TROOP_SPEED = 60    # 默认兵种速度加成
-MIN_TRAVEL_TIME = 10        # 最小旅行时间（秒）
+TROOP_SPEED_FACTOR = 0.5  # 兵种速度加成系数
+DEFAULT_TROOP_SPEED = 60  # 默认兵种速度加成
+MIN_TRAVEL_TIME = 10  # 最小旅行时间（秒）
 
 
 def calculate_travel_time(base_time: int, guests, troop_loadout: Dict[str, int], troop_templates: Dict) -> int:

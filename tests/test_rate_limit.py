@@ -10,7 +10,6 @@ from redis.exceptions import RedisError
 
 from core.utils.rate_limit import rate_limit_redirect
 
-
 User = get_user_model()
 
 

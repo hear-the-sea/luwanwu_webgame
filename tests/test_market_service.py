@@ -45,12 +45,18 @@ def test_price_limits():
 def test_allowed_listing_order_by_fields():
     """Test that allowed order by fields are defined."""
     expected_fields = {
-        "listed_at", "-listed_at",
-        "unit_price", "-unit_price",
-        "price", "-price",
-        "total_price", "-total_price",
-        "quantity", "-quantity",
-        "expires_at", "-expires_at",
+        "listed_at",
+        "-listed_at",
+        "unit_price",
+        "-unit_price",
+        "price",
+        "-price",
+        "total_price",
+        "-total_price",
+        "quantity",
+        "-quantity",
+        "expires_at",
+        "-expires_at",
     }
     assert market_service.ALLOWED_LISTING_ORDER_BY == expected_fields
 

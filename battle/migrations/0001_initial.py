@@ -9,29 +9,40 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('gameplay', '0003_backfill_manors'),
+        ("gameplay", "0003_backfill_manors"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='BattleReport',
+            name="BattleReport",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('opponent_name', models.CharField(max_length=64)),
-                ('attacker_team', models.JSONField(default=list)),
-                ('defender_team', models.JSONField(default=list)),
-                ('rounds', models.JSONField(default=list)),
-                ('winner', models.CharField(choices=[('attacker', '进攻方胜利'), ('defender', '防守方胜利'), ('draw', '平局')], max_length=16)),
-                ('starts_at', models.DateTimeField()),
-                ('completed_at', models.DateTimeField()),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('seed', models.PositiveIntegerField(default=0)),
-                ('manor', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='battle_reports', to='gameplay.manor')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("opponent_name", models.CharField(max_length=64)),
+                ("attacker_team", models.JSONField(default=list)),
+                ("defender_team", models.JSONField(default=list)),
+                ("rounds", models.JSONField(default=list)),
+                (
+                    "winner",
+                    models.CharField(
+                        choices=[("attacker", "进攻方胜利"), ("defender", "防守方胜利"), ("draw", "平局")],
+                        max_length=16,
+                    ),
+                ),
+                ("starts_at", models.DateTimeField()),
+                ("completed_at", models.DateTimeField()),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("seed", models.PositiveIntegerField(default=0)),
+                (
+                    "manor",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="battle_reports", to="gameplay.manor"
+                    ),
+                ),
             ],
             options={
-                'verbose_name': '战报',
-                'verbose_name_plural': '战报',
-                'ordering': ('-created_at',),
+                "verbose_name": "战报",
+                "verbose_name_plural": "战报",
+                "ordering": ("-created_at",),
             },
         ),
     ]

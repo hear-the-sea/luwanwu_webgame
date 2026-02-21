@@ -3,7 +3,7 @@ from django import template
 register = template.Library()
 
 
-@register.filter(name='get_item')
+@register.filter(name="get_item")
 def get_item(dictionary, key):
     """
     Get item from dictionary by key
@@ -14,7 +14,7 @@ def get_item(dictionary, key):
     return dictionary.get(key, key)
 
 
-@register.filter(name='mul')
+@register.filter(name="mul")
 def mul(value, arg):
     """
     Multiply value by arg
@@ -26,7 +26,7 @@ def mul(value, arg):
         return 0
 
 
-@register.filter(name='add')
+@register.filter(name="add")
 def add_filter(value, arg):
     """
     Add arg to value (override default add filter if needed)

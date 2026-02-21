@@ -6,26 +6,31 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0033_worktemplate_alter_resourceevent_reason_and_more'),
+        ("gameplay", "0033_worktemplate_alter_resourceevent_reason_and_more"),
     ]
 
     operations = [
         migrations.AlterUniqueTogether(
-            name='inventoryitem',
+            name="inventoryitem",
             unique_together=set(),
         ),
         migrations.AddField(
-            model_name='inventoryitem',
-            name='storage_location',
-            field=models.CharField(choices=[('warehouse', '仓库'), ('treasury', '藏宝阁')], default='warehouse', max_length=16, verbose_name='存储位置'),
+            model_name="inventoryitem",
+            name="storage_location",
+            field=models.CharField(
+                choices=[("warehouse", "仓库"), ("treasury", "藏宝阁")],
+                default="warehouse",
+                max_length=16,
+                verbose_name="存储位置",
+            ),
         ),
         migrations.AddField(
-            model_name='itemtemplate',
-            name='storage_space',
-            field=models.PositiveIntegerField(default=1, verbose_name='占用空间'),
+            model_name="itemtemplate",
+            name="storage_space",
+            field=models.PositiveIntegerField(default=1, verbose_name="占用空间"),
         ),
         migrations.AlterUniqueTogether(
-            name='inventoryitem',
-            unique_together={('manor', 'template', 'storage_location')},
+            name="inventoryitem",
+            unique_together={("manor", "template", "storage_location")},
         ),
     ]

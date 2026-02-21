@@ -69,7 +69,9 @@ def test_add_oath_bond_raises_when_capacity_full(mock_manor_model):
     guest = SimpleNamespace(pk=10)
 
     with patch.object(jail_service.Guest, "objects") as mock_guest_qs:
-        mock_guest_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = guest
+        mock_guest_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = (
+            guest
+        )
 
         with patch.object(jail_service.OathBond, "objects") as mock_bond_qs:
             mock_bond_qs.filter.return_value.count.return_value = 2  # At capacity
@@ -88,7 +90,9 @@ def test_add_oath_bond_raises_when_already_bonded(mock_manor_model):
     existing_bond = SimpleNamespace(pk=1)
 
     with patch.object(jail_service.Guest, "objects") as mock_guest_qs:
-        mock_guest_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = guest
+        mock_guest_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = (
+            guest
+        )
 
         with patch.object(jail_service.OathBond, "objects") as mock_bond_qs:
             mock_bond_qs.filter.return_value.count.return_value = 1
@@ -203,7 +207,9 @@ def test_draw_pie_reduces_loyalty_and_consumes_gold(mock_manor_model):
             mock_item_instance = MagicMock()
             mock_item_instance.pk = 100
             mock_item_instance.quantity = 5
-            mock_inventory_item.objects.select_for_update.return_value.filter.return_value.first.return_value = mock_item_instance
+            mock_inventory_item.objects.select_for_update.return_value.filter.return_value.first.return_value = (
+                mock_item_instance
+            )
 
             # Mock atomic update
             mock_inventory_item.objects.filter.return_value.update.return_value = 1
@@ -234,7 +240,9 @@ def test_draw_pie_loyalty_cannot_go_below_zero(mock_manor_model):
             mock_item_instance = MagicMock()
             mock_item_instance.pk = 100
             mock_item_instance.quantity = 5
-            mock_inventory_item.objects.select_for_update.return_value.filter.return_value.first.return_value = mock_item_instance
+            mock_inventory_item.objects.select_for_update.return_value.filter.return_value.first.return_value = (
+                mock_item_instance
+            )
 
             with patch.object(random, "randint", return_value=10):
                 result = jail_service.draw_pie(manor, prisoner_id=1)
@@ -288,7 +296,9 @@ def test_recruit_prisoner_raises_when_already_processed(mock_manor_model):
     prisoner.status = jail_service.JailPrisoner.Status.RELEASED
 
     with patch.object(jail_service.JailPrisoner, "objects") as mock_qs:
-        mock_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = prisoner
+        mock_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = (
+            prisoner
+        )
 
         with pytest.raises(ValueError, match="囚徒已处理"):
             jail_service.recruit_prisoner(manor, prisoner_id=1)
@@ -305,7 +315,9 @@ def test_recruit_prisoner_raises_when_loyalty_too_high(mock_manor_model):
     prisoner.loyalty = 50  # Above threshold (30)
 
     with patch.object(jail_service.JailPrisoner, "objects") as mock_qs:
-        mock_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = prisoner
+        mock_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = (
+            prisoner
+        )
 
         with pytest.raises(ValueError, match="忠诚度过高"):
             jail_service.recruit_prisoner(manor, prisoner_id=1)
@@ -325,7 +337,9 @@ def test_recruit_prisoner_raises_when_guest_capacity_full(mock_manor_model):
     prisoner.loyalty = 20  # Below threshold
 
     with patch.object(jail_service.JailPrisoner, "objects") as mock_qs:
-        mock_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = prisoner
+        mock_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = (
+            prisoner
+        )
 
         with pytest.raises(jail_service.GuestCapacityFullError):
             jail_service.recruit_prisoner(manor, prisoner_id=1)
@@ -344,7 +358,9 @@ def test_recruit_prisoner_raises_when_gold_insufficient(mock_manor_model):
     prisoner.loyalty = 20
 
     with patch.object(jail_service.JailPrisoner, "objects") as mock_qs:
-        mock_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = prisoner
+        mock_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = (
+            prisoner
+        )
 
         # 修复：Mock InventoryItem 查询链，使其返回 None
         with patch("gameplay.models.InventoryItem") as mock_inventory_item:

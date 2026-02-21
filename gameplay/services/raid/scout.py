@@ -15,12 +15,11 @@ from django.db import models, transaction
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async, safe_apply_async_with_dedup
-
 from core.utils.time_scale import scale_duration
 
 from ...constants import PVPConstants
 from ...models import Manor, PlayerTroop, ScoutCooldown, ScoutRecord
-from ..messages import create_message
+from ..utils.messages import create_message
 from .utils import calculate_distance, can_attack_target, get_asset_level, get_troop_description
 
 logger = logging.getLogger(__name__)
@@ -113,6 +112,7 @@ def _finalize_due_scout_records(now, scouting_ids: list[int], returning_ids: lis
 def get_scout_tech_level(manor: Manor) -> int:
     """获取庄园的侦察术等级"""
     from ..technology import get_player_technology_level
+
     return get_player_technology_level(manor, "scout_art")
 
 
@@ -132,10 +132,7 @@ def calculate_scout_success_rate(attacker: Manor, defender: Manor) -> float:
     rate_modifier = (attacker_level - defender_level) * PVPConstants.SCOUT_TECH_RATE_PER_LEVEL
 
     final_rate = base_rate + rate_modifier
-    return max(
-        PVPConstants.SCOUT_MIN_SUCCESS_RATE,
-        min(PVPConstants.SCOUT_MAX_SUCCESS_RATE, final_rate)
-    )
+    return max(PVPConstants.SCOUT_MIN_SUCCESS_RATE, min(PVPConstants.SCOUT_MAX_SUCCESS_RATE, final_rate))
 
 
 def calculate_scout_travel_time(attacker: Manor, defender: Manor) -> int:
@@ -145,10 +142,7 @@ def calculate_scout_travel_time(attacker: Manor, defender: Manor) -> int:
     公式：侦察时间 = 距离 × 2 + 60
     """
     distance = calculate_distance(attacker, defender)
-    raw = int(
-        distance * PVPConstants.SCOUT_TRAVEL_TIME_PER_DISTANCE
-        + PVPConstants.SCOUT_BASE_TRAVEL_TIME
-    )
+    raw = int(distance * PVPConstants.SCOUT_TRAVEL_TIME_PER_DISTANCE + PVPConstants.SCOUT_BASE_TRAVEL_TIME)
     return scale_duration(raw, minimum=1)
 
 
@@ -160,11 +154,7 @@ def check_scout_cooldown(attacker: Manor, defender: Manor) -> Tuple[bool, Option
         (是否在冷却中, 剩余冷却秒数)
     """
     now = timezone.now()
-    cooldown = ScoutCooldown.objects.filter(
-        attacker=attacker,
-        defender=defender,
-        cooldown_until__gt=now
-    ).first()
+    cooldown = ScoutCooldown.objects.filter(attacker=attacker, defender=defender, cooldown_until__gt=now).first()
 
     if cooldown:
         remaining = int((cooldown.cooldown_until - now).total_seconds())
@@ -177,8 +167,7 @@ def get_scout_count(manor: Manor) -> int:
     """获取庄园的探子数量"""
     try:
         troop = PlayerTroop.objects.select_related("troop_template").get(
-            manor=manor,
-            troop_template__key=PVPConstants.SCOUT_TROOP_KEY
+            manor=manor, troop_template__key=PVPConstants.SCOUT_TROOP_KEY
         )
         return troop.count
     except PlayerTroop.DoesNotExist:
@@ -223,8 +212,7 @@ def start_scout(attacker: Manor, defender: Manor) -> ScoutRecord:
     with transaction.atomic():
         # 扣除探子
         troop = PlayerTroop.objects.select_for_update().get(
-            manor=attacker,
-            troop_template__key=PVPConstants.SCOUT_TROOP_KEY
+            manor=attacker, troop_template__key=PVPConstants.SCOUT_TROOP_KEY
         )
         if troop.count < 1:
             raise ValueError("探子不足，无法发起侦察")
@@ -286,9 +274,9 @@ def finalize_scout(record: ScoutRecord, now=None) -> None:
     now = now or timezone.now()
 
     with transaction.atomic():
-        locked_record = ScoutRecord.objects.select_for_update().select_related(
-            "attacker", "defender"
-        ).filter(pk=record.pk).first()
+        locked_record = (
+            ScoutRecord.objects.select_for_update().select_related("attacker", "defender").filter(pk=record.pk).first()
+        )
 
         if not locked_record or locked_record.status != ScoutRecord.Status.SCOUTING:
             return
@@ -314,7 +302,7 @@ def finalize_scout(record: ScoutRecord, now=None) -> None:
         ScoutCooldown.objects.update_or_create(
             attacker=locked_record.attacker,
             defender=locked_record.defender,
-            defaults={"cooldown_until": cooldown_until}
+            defaults={"cooldown_until": cooldown_until},
         )
 
     # 调度返程完成任务
@@ -348,9 +336,9 @@ def finalize_scout_return(record: ScoutRecord, now=None) -> None:
     now = now or timezone.now()
 
     with transaction.atomic():
-        locked_record = ScoutRecord.objects.select_for_update().select_related(
-            "attacker", "defender"
-        ).filter(pk=record.pk).first()
+        locked_record = (
+            ScoutRecord.objects.select_for_update().select_related("attacker", "defender").filter(pk=record.pk).first()
+        )
 
         if not locked_record or locked_record.status != ScoutRecord.Status.RETURNING:
             return
@@ -361,8 +349,7 @@ def finalize_scout_return(record: ScoutRecord, now=None) -> None:
             # 归还探子（成功时探子安全返回）
             try:
                 troop = PlayerTroop.objects.select_for_update().get(
-                    manor=locked_record.attacker,
-                    troop_template__key=PVPConstants.SCOUT_TROOP_KEY
+                    manor=locked_record.attacker, troop_template__key=PVPConstants.SCOUT_TROOP_KEY
                 )
                 troop.count += locked_record.scout_cost
                 troop.save(update_fields=["count"])
@@ -382,9 +369,7 @@ def finalize_scout_return(record: ScoutRecord, now=None) -> None:
 def _gather_scout_intel(defender: Manor) -> Dict[str, Any]:
     """收集目标庄园的情报"""
     # 护院数量（模糊）
-    total_troops = PlayerTroop.objects.filter(manor=defender).aggregate(
-        total=models.Sum("count")
-    )["total"] or 0
+    total_troops = PlayerTroop.objects.filter(manor=defender).aggregate(total=models.Sum("count"))["total"] or 0
 
     # 门客数量和平均等级
     guests = defender.guests.all()
@@ -480,19 +465,16 @@ def get_active_scouts(manor: Manor) -> List[ScoutRecord]:
     """获取进行中的侦察列表（包括去程和返程）"""
     return list(
         ScoutRecord.objects.filter(
-            attacker=manor,
-            status__in=[ScoutRecord.Status.SCOUTING, ScoutRecord.Status.RETURNING]
-        ).select_related("defender").order_by("-started_at")
+            attacker=manor, status__in=[ScoutRecord.Status.SCOUTING, ScoutRecord.Status.RETURNING]
+        )
+        .select_related("defender")
+        .order_by("-started_at")
     )
 
 
 def get_scout_history(manor: Manor, limit: int = 20) -> List[ScoutRecord]:
     """获取侦察历史记录"""
-    return list(
-        ScoutRecord.objects.filter(
-            attacker=manor
-        ).select_related("defender").order_by("-started_at")[:limit]
-    )
+    return list(ScoutRecord.objects.filter(attacker=manor).select_related("defender").order_by("-started_at")[:limit])
 
 
 def can_scout_retreat(record: ScoutRecord) -> bool:
@@ -519,9 +501,7 @@ def request_scout_retreat(record: ScoutRecord) -> None:
     elapsed = max(0, int((now - record.started_at).total_seconds()))
 
     with transaction.atomic():
-        locked_record = ScoutRecord.objects.select_for_update().select_related(
-            "attacker"
-        ).filter(pk=record.pk).first()
+        locked_record = ScoutRecord.objects.select_for_update().select_related("attacker").filter(pk=record.pk).first()
 
         if not locked_record or locked_record.status != ScoutRecord.Status.SCOUTING:
             raise ValueError("当前状态无法撤退")
@@ -535,8 +515,7 @@ def request_scout_retreat(record: ScoutRecord) -> None:
         # 归还探子（撤退不消耗探子）
         try:
             troop = PlayerTroop.objects.select_for_update().get(
-                manor=locked_record.attacker,
-                troop_template__key=PVPConstants.SCOUT_TROOP_KEY
+                manor=locked_record.attacker, troop_template__key=PVPConstants.SCOUT_TROOP_KEY
             )
             troop.count += locked_record.scout_cost
             troop.save(update_fields=["count"])

@@ -65,14 +65,11 @@ def _upsert_warehouse_items_locked(manor: Manor, item_keys: Dict[str, int], temp
         if not template:
             continue
 
-        inventory_item, _created = (
-            InventoryItem.objects.select_for_update()
-            .get_or_create(
-                manor=manor,
-                template=template,
-                storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-                defaults={"quantity": 0},
-            )
+        inventory_item, _created = InventoryItem.objects.select_for_update().get_or_create(
+            manor=manor,
+            template=template,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+            defaults={"quantity": 0},
         )
         InventoryItem.objects.filter(pk=inventory_item.pk).update(quantity=F("quantity") + amount)
 

@@ -6,18 +6,30 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0069_add_pvp_raid_system'),
+        ("gameplay", "0069_add_pvp_raid_system"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='raidrun',
-            name='battle_rewards',
-            field=models.JSONField(blank=True, default=dict, verbose_name='战斗奖励'),
+            model_name="raidrun",
+            name="battle_rewards",
+            field=models.JSONField(blank=True, default=dict, verbose_name="战斗奖励"),
         ),
         migrations.AlterField(
-            model_name='itemtemplate',
-            name='effect_type',
-            field=models.CharField(choices=[('resource_pack', '资源补给'), ('resource', '资源'), ('skill_book', '技能书'), ('experience_items', '经验道具'), ('medicine', '药品'), ('magnifying_glass', '放大镜'), ('peace_shield', '免战牌')], default='resource_pack', max_length=32),
+            model_name="itemtemplate",
+            name="effect_type",
+            field=models.CharField(
+                choices=[
+                    ("resource_pack", "资源补给"),
+                    ("resource", "资源"),
+                    ("skill_book", "技能书"),
+                    ("experience_items", "经验道具"),
+                    ("medicine", "药品"),
+                    ("magnifying_glass", "放大镜"),
+                    ("peace_shield", "免战牌"),
+                ],
+                default="resource_pack",
+                max_length=32,
+            ),
         ),
     ]

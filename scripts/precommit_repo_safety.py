@@ -5,7 +5,6 @@ from __future__ import annotations
 import subprocess
 import sys
 
-
 ALLOWED_ENV_EXAMPLES = {
     ".env.example",
     ".env.docker.example",
@@ -45,9 +44,7 @@ def main() -> int:
     sys.stderr.write("\nBlocked files in commit (repo safety):\n")
     for item in sorted(set(blocked)):
         sys.stderr.write(f"  - {item}\n")
-    sys.stderr.write(
-        "\nUse example files like .env.example, and keep local DB/media out of git.\n"
-    )
+    sys.stderr.write("\nUse example files like .env.example, and keep local DB/media out of git.\n")
     return 1
 
 

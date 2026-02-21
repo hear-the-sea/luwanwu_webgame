@@ -6,18 +6,18 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0031_alter_message_kind_playertechnology'),
+        ("gameplay", "0031_alter_message_kind_playertechnology"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='playertechnology',
-            name='is_upgrading',
-            field=models.BooleanField(default=False, verbose_name='升级中'),
+            model_name="playertechnology",
+            name="is_upgrading",
+            field=models.BooleanField(default=False, verbose_name="升级中"),
         ),
         migrations.AddField(
-            model_name='playertechnology',
-            name='upgrade_complete_at',
-            field=models.DateTimeField(blank=True, null=True, verbose_name='升级完成时间'),
+            model_name="playertechnology",
+            name="upgrade_complete_at",
+            field=models.DateTimeField(blank=True, null=True, verbose_name="升级完成时间"),
         ),
     ]

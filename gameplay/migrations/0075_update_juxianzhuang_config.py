@@ -15,9 +15,7 @@ def update_juxianzhuang_config(apps, schema_editor):
         description="天下英雄，入我彀中。广纳贤才，礼贤下士，方能成就一番霸业。升级提升门客容纳上限（14→15级需要2000W银两）",
         base_upgrade_time=3107,
         time_growth=1.5,
-        base_cost={
-            "silver": 20193
-        },
+        base_cost={"silver": 20193},
         cost_growth=1.7,
     )
 
@@ -30,9 +28,7 @@ def revert_juxianzhuang_config(apps, schema_editor):
         description="天下英雄，入我彀中。广纳贤才，礼贤下士，方能成就一番霸业。升级提升门客容纳上限",
         base_upgrade_time=3600,
         time_growth=1.46,
-        base_cost={
-            "silver": 800
-        },
+        base_cost={"silver": 800},
         cost_growth=1.70,
     )
 
@@ -40,7 +36,7 @@ def revert_juxianzhuang_config(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0074_update_silver_vault_capacity'),
+        ("gameplay", "0074_update_silver_vault_capacity"),
     ]
 
     operations = [

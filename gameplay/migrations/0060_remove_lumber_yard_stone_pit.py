@@ -8,10 +8,10 @@ def remove_lumber_yard_and_stone_pit(apps, schema_editor):
     删除伐木场和采石场建筑类型及其关联的建筑实例。
     这些建筑生产的 wood/stone 资源已被移除。
     """
-    BuildingType = apps.get_model('gameplay', 'BuildingType')
-    Building = apps.get_model('gameplay', 'Building')
+    BuildingType = apps.get_model("gameplay", "BuildingType")
+    Building = apps.get_model("gameplay", "Building")
 
-    keys_to_remove = ['lumber_yard', 'stone_pit']
+    keys_to_remove = ["lumber_yard", "stone_pit"]
 
     # 先删除关联的建筑实例
     Building.objects.filter(building_type__key__in=keys_to_remove).delete()
@@ -22,34 +22,34 @@ def remove_lumber_yard_and_stone_pit(apps, schema_editor):
 
 def restore_lumber_yard_and_stone_pit(apps, schema_editor):
     """恢复伐木场和采石场（用于回滚）"""
-    BuildingType = apps.get_model('gameplay', 'BuildingType')
+    BuildingType = apps.get_model("gameplay", "BuildingType")
 
     BuildingType.objects.get_or_create(
-        key='lumber_yard',
+        key="lumber_yard",
         defaults={
-            'name': '伐木场',
-            'description': '生产木材的建筑',
-            'resource_type': 'grain',
-            'base_rate': 20,
-            'base_cost': {'silver': 180},
-        }
+            "name": "伐木场",
+            "description": "生产木材的建筑",
+            "resource_type": "grain",
+            "base_rate": 20,
+            "base_cost": {"silver": 180},
+        },
     )
     BuildingType.objects.get_or_create(
-        key='stone_pit',
+        key="stone_pit",
         defaults={
-            'name': '采石场',
-            'description': '生产石材的建筑',
-            'resource_type': 'grain',
-            'base_rate': 20,
-            'base_cost': {'silver': 220},
-        }
+            "name": "采石场",
+            "description": "生产石材的建筑",
+            "resource_type": "grain",
+            "base_rate": 20,
+            "base_cost": {"silver": 220},
+        },
     )
 
 
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0059_add_forge_building'),
+        ("gameplay", "0059_add_forge_building"),
     ]
 
     operations = [

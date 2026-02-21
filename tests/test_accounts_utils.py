@@ -82,3 +82,45 @@ def test_session_key_prefix_handles_none():
 
 def test_session_key_prefix_truncates_value():
     assert account_utils._session_key_prefix("abcdefghi") == "abcdefgh"
+
+
+def test_purge_sessions_fallback_scans_beyond_1000_records(monkeypatch):
+    class _FakeSession:
+        def __init__(self, session_key: str, user_id: str):
+            self.session_key = session_key
+            self._user_id = user_id
+            self.deleted = False
+
+        def get_decoded(self):
+            return {"_auth_user_id": self._user_id}
+
+        def delete(self):
+            self.deleted = True
+
+    class _FakeQuerySet:
+        def __init__(self, sessions):
+            self._sessions = sessions
+
+        def iterator(self, chunk_size=1000):
+            return iter(self._sessions)
+
+    class _FakeManager:
+        def __init__(self, sessions):
+            self._sessions = sessions
+
+        def filter(self, **kwargs):
+            return _FakeQuerySet(self._sessions)
+
+    target_user = "42"
+    current_session = "keep-current"
+    sessions = [_FakeSession(f"other-{i}", "1") for i in range(1005)]
+    far_session = _FakeSession("far-target", target_user)
+    sessions.append(far_session)
+    sessions.append(_FakeSession(current_session, target_user))
+
+    fake_session_model = type("FakeSessionModel", (), {"objects": _FakeManager(sessions)})
+    monkeypatch.setattr(account_utils, "Session", fake_session_model)
+
+    account_utils._purge_sessions_fallback(int(target_user), current_session)
+
+    assert far_session.deleted is True

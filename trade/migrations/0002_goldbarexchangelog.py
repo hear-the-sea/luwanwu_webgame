@@ -7,25 +7,32 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0035_add_treasury_building'),
-        ('trade', '0001_initial'),
+        ("gameplay", "0035_add_treasury_building"),
+        ("trade", "0001_initial"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='GoldBarExchangeLog',
+            name="GoldBarExchangeLog",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('quantity', models.PositiveIntegerField(verbose_name='兑换数量')),
-                ('silver_cost', models.PositiveIntegerField(verbose_name='消耗银两')),
-                ('exchange_date', models.DateField(auto_now_add=True, verbose_name='兑换日期')),
-                ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='创建时间')),
-                ('manor', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='gold_bar_exchanges', to='gameplay.manor')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("quantity", models.PositiveIntegerField(verbose_name="兑换数量")),
+                ("silver_cost", models.PositiveIntegerField(verbose_name="消耗银两")),
+                ("exchange_date", models.DateField(auto_now_add=True, verbose_name="兑换日期")),
+                ("created_at", models.DateTimeField(auto_now_add=True, verbose_name="创建时间")),
+                (
+                    "manor",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="gold_bar_exchanges",
+                        to="gameplay.manor",
+                    ),
+                ),
             ],
             options={
-                'db_table': 'trade_gold_bar_exchange_log',
-                'ordering': ['-created_at'],
-                'indexes': [models.Index(fields=['manor', 'exchange_date'], name='trade_gold__manor_i_682188_idx')],
+                "db_table": "trade_gold_bar_exchange_log",
+                "ordering": ["-created_at"],
+                "indexes": [models.Index(fields=["manor", "exchange_date"], name="trade_gold__manor_i_682188_idx")],
             },
         ),
     ]

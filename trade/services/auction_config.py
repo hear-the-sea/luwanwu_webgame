@@ -11,9 +11,7 @@ from functools import lru_cache
 from typing import List, Optional
 
 import yaml
-
 from django.conf import settings
-
 
 AUCTION_CONFIG_PATH = settings.BASE_DIR / "data" / "auction_items.yaml"
 
@@ -83,9 +81,7 @@ def load_auction_config() -> AuctionConfig:
             slots=item.get("slots", 1),
             quantity_per_slot=item.get("quantity_per_slot", 1),
             starting_price=item.get("starting_price", 1),
-            min_increment=item.get(
-                "min_increment", auction_settings.default_min_increment
-            ),
+            min_increment=item.get("min_increment", auction_settings.default_min_increment),
             enabled=item.get("enabled", True),
         )
         items.append(config)

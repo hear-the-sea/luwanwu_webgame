@@ -27,4 +27,3 @@
 - `data/guests/gulong.yaml:1221`：李坏（定位/情节表述较概括，建议核对原著简介）。
 - `data/guests/gulong.yaml:1296`：小楼（人物身份/定位描述较概括，建议核对原著）。
 - `data/guests/gulong.yaml:1927`：日后（“当世巅峰/理想化”等评价较强，建议核对原著描写）。
-

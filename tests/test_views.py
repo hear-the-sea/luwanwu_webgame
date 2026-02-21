@@ -7,16 +7,13 @@ from django.test import Client
 from django.urls import reverse
 
 from gameplay.models import ItemTemplate, Message
-from gameplay.services.manor import ensure_manor
+from gameplay.services.manor.core import ensure_manor
 
 
 @pytest.fixture
 def authenticated_client(django_user_model):
     """返回已登录的测试客户端"""
-    user = django_user_model.objects.create_user(
-        username="testplayer",
-        password="testpass123"
-    )
+    user = django_user_model.objects.create_user(username="testplayer", password="testpass123")
     client = Client()
     client.login(username="testplayer", password="testpass123")
     client.user = user
@@ -31,6 +28,7 @@ def manor_with_user(authenticated_client):
 
 
 # ============ 核心页面测试 ============
+
 
 @pytest.mark.django_db
 class TestCoreViews:
@@ -76,6 +74,7 @@ class TestCoreViews:
 
 # ============ 任务系统测试 ============
 
+
 @pytest.mark.django_db
 class TestMissionViews:
     """任务系统视图测试"""
@@ -95,6 +94,7 @@ class TestMissionViews:
 
 
 # ============ 仓库系统测试 ============
+
 
 @pytest.mark.django_db
 class TestInventoryViews:
@@ -123,6 +123,7 @@ class TestInventoryViews:
 
 
 # ============ 消息系统测试 ============
+
 
 @pytest.mark.django_db
 class TestMessageViews:
@@ -201,6 +202,7 @@ class TestMessageViews:
 
 # ============ 科技系统测试 ============
 
+
 @pytest.mark.django_db
 class TestTechnologyViews:
     """科技系统视图测试"""
@@ -221,6 +223,7 @@ class TestTechnologyViews:
 
 
 # ============ 生产系统测试 ============
+
 
 @pytest.mark.django_db
 class TestProductionViews:
@@ -257,6 +260,7 @@ class TestProductionViews:
 
 # ============ 打工系统测试 ============
 
+
 @pytest.mark.django_db
 class TestWorkViews:
     """打工系统视图测试"""
@@ -278,6 +282,7 @@ class TestWorkViews:
 
 # ============ 募兵系统测试 ============
 
+
 @pytest.mark.django_db
 class TestRecruitmentViews:
     """募兵系统视图测试"""
@@ -291,6 +296,7 @@ class TestRecruitmentViews:
 
 
 # ============ 地图系统测试 ============
+
 
 @pytest.mark.django_db
 class TestMapViews:
@@ -313,6 +319,7 @@ class TestMapViews:
 
 # ============ API 测试 ============
 
+
 @pytest.mark.django_db
 class TestMapAPI:
     """地图API测试"""
@@ -320,10 +327,7 @@ class TestMapAPI:
     def test_map_search_by_region(self, manor_with_user):
         """按地区搜索API"""
         manor, client = manor_with_user
-        response = client.get(
-            reverse("gameplay:map_search_api"),
-            {"type": "region", "region": manor.region}
-        )
+        response = client.get(reverse("gameplay:map_search_api"), {"type": "region", "region": manor.region})
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
@@ -332,10 +336,7 @@ class TestMapAPI:
     def test_map_search_by_name(self, manor_with_user):
         """按名称搜索API"""
         manor, client = manor_with_user
-        response = client.get(
-            reverse("gameplay:map_search_api"),
-            {"type": "name", "q": "test"}
-        )
+        response = client.get(reverse("gameplay:map_search_api"), {"type": "name", "q": "test"})
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
@@ -361,9 +362,7 @@ class TestMapAPI:
     def test_manor_detail_api(self, manor_with_user):
         """庄园详情API"""
         manor, client = manor_with_user
-        response = client.get(
-            reverse("gameplay:manor_detail_api", kwargs={"manor_id": manor.id})
-        )
+        response = client.get(reverse("gameplay:manor_detail_api", kwargs={"manor_id": manor.id}))
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
@@ -372,13 +371,12 @@ class TestMapAPI:
     def test_manor_detail_api_not_found(self, manor_with_user):
         """庄园详情API - 不存在"""
         manor, client = manor_with_user
-        response = client.get(
-            reverse("gameplay:manor_detail_api", kwargs={"manor_id": 99999})
-        )
+        response = client.get(reverse("gameplay:manor_detail_api", kwargs={"manor_id": 99999}))
         assert response.status_code == 404
 
 
 # ============ POST 操作测试 ============
+
 
 @pytest.mark.django_db
 class TestPostOperations:
@@ -390,9 +388,7 @@ class TestPostOperations:
         manor.grain = manor.silver = 100000
         manor.save()
         building = manor.buildings.first()
-        response = client.post(
-            reverse("gameplay:upgrade_building", kwargs={"pk": building.pk})
-        )
+        response = client.post(reverse("gameplay:upgrade_building", kwargs={"pk": building.pk}))
         assert response.status_code == 302  # 重定向
 
     def test_delete_messages_empty(self, manor_with_user):
@@ -403,6 +399,7 @@ class TestPostOperations:
 
 
 # ============ 权限测试 ============
+
 
 @pytest.mark.django_db
 class TestPermissions:

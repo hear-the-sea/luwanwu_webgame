@@ -66,9 +66,7 @@ def apply_battle_heal(
         if rng.random() < heal_chance:
             # 拳系恢复比例：从tech_effects读取，默认10%
             # 配合小兵vs小兵攻击倍率1.0，让治疗效果可通过科技升级调整
-            heal_amount_ratio = float(
-                tech_effects.get("battle_heal_amount", DEFAULT_BATTLE_HEAL_RATIO)
-            )
+            heal_amount_ratio = float(tech_effects.get("battle_heal_amount", DEFAULT_BATTLE_HEAL_RATIO))
             # 防守方强化：拳系【五气朝元】恢复比例提升至13%
             if getattr(unit, "side", "") == "defender" and getattr(unit, "troop_class", "") == "quan":
                 heal_amount_ratio = max(heal_amount_ratio, DEFENDER_QUAN_BATTLE_HEAL_RATIO)
@@ -96,27 +94,31 @@ def apply_battle_heal(
                     max_hp = getattr(unit, "max_hp", unit.hp)
                     unit.hp = min(max_hp, unit.hp + healed_hp)
 
-                    heals.append({
-                        "unit": unit.name,
-                        "side": unit.side,
-                        "healed": healed_hp,
-                        "heal_strength": heal_strength,
-                        "new_hp": unit.hp,
-                        "new_strength": unit.troop_strength,
-                        "effect": "五气朝元",
-                    })
+                    heals.append(
+                        {
+                            "unit": unit.name,
+                            "side": unit.side,
+                            "healed": healed_hp,
+                            "heal_strength": heal_strength,
+                            "new_hp": unit.hp,
+                            "new_strength": unit.troop_strength,
+                            "effect": "五气朝元",
+                        }
+                    )
             # 门客：恢复HP
             else:
                 healed = int(unit.hp * heal_amount_ratio)
                 max_hp = getattr(unit, "max_hp", unit.hp)
                 unit.hp = min(max_hp, unit.hp + healed)
-                heals.append({
-                    "unit": unit.name,
-                    "side": unit.side,
-                    "healed": healed,
-                    "new_hp": unit.hp,
-                    "effect": "五气朝元",
-                })
+                heals.append(
+                    {
+                        "unit": unit.name,
+                        "side": unit.side,
+                        "healed": healed,
+                        "new_hp": unit.hp,
+                        "effect": "五气朝元",
+                    }
+                )
     return heals
 
 

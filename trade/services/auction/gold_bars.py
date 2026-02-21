@@ -74,10 +74,7 @@ def unfreeze_gold_bars(frozen_record: FrozenGoldBar) -> None:
     """解冻金条（落选时调用）"""
     with transaction.atomic():
         locked = (
-            FrozenGoldBar.objects.select_for_update()
-            .select_related("auction_bid")
-            .filter(pk=frozen_record.pk)
-            .first()
+            FrozenGoldBar.objects.select_for_update().select_related("auction_bid").filter(pk=frozen_record.pk).first()
         )
         if not locked or not locked.is_frozen:
             return
@@ -88,9 +85,10 @@ def unfreeze_gold_bars(frozen_record: FrozenGoldBar) -> None:
 
         if locked.auction_bid_id:
             bid = locked.auction_bid
-            bid.status = AuctionBid.Status.REFUNDED
-            bid.refunded_at = timezone.now()
-            bid.save(update_fields=["status", "refunded_at"])
+            if bid:
+                bid.status = AuctionBid.Status.REFUNDED
+                bid.refunded_at = timezone.now()
+                bid.save(update_fields=["status", "refunded_at"])
 
 
 def consume_frozen_gold_bars(frozen_record: FrozenGoldBar, manor: Manor) -> None:
@@ -99,10 +97,7 @@ def consume_frozen_gold_bars(frozen_record: FrozenGoldBar, manor: Manor) -> None
 
     with transaction.atomic():
         locked = (
-            FrozenGoldBar.objects.select_for_update()
-            .select_related("auction_bid")
-            .filter(pk=frozen_record.pk)
-            .first()
+            FrozenGoldBar.objects.select_for_update().select_related("auction_bid").filter(pk=frozen_record.pk).first()
         )
         if not locked or not locked.is_frozen:
             return
@@ -115,8 +110,9 @@ def consume_frozen_gold_bars(frozen_record: FrozenGoldBar, manor: Manor) -> None
 
         if locked.auction_bid_id:
             bid = locked.auction_bid
-            bid.status = AuctionBid.Status.WON
-            bid.save(update_fields=["status"])
+            if bid:
+                bid.status = AuctionBid.Status.WON
+                bid.save(update_fields=["status"])
 
 
 def try_get_frozen_record(bid: AuctionBid) -> Optional[FrozenGoldBar]:

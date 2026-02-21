@@ -1,16 +1,18 @@
 # guilds/services/member.py
 
 from django.db import transaction
-from django.utils import timezone
 from django.db.utils import IntegrityError
-from ..models import Guild, GuildMember, GuildApplication
+from django.utils import timezone
+
 from gameplay.models import Manor
-from gameplay.services.messages import create_message
+from gameplay.services.utils.messages import create_message
+
+from ..models import Guild, GuildApplication, GuildMember
 from .guild import create_announcement
 from .utils import get_active_membership
 
 
-def apply_to_guild(user, guild, message=''):
+def apply_to_guild(user, guild, message=""):
     """
     申请加入帮会
 
@@ -26,7 +28,7 @@ def apply_to_guild(user, guild, message=''):
         ValueError: 验证失败
     """
     # 验证用户是否已加入帮会
-    if hasattr(user, 'guild_membership') and user.guild_membership.is_active:
+    if hasattr(user, "guild_membership") and user.guild_membership.is_active:
         raise ValueError("您已加入帮会")
 
     # 验证帮会是否已满员
@@ -34,11 +36,7 @@ def apply_to_guild(user, guild, message=''):
         raise ValueError("帮会已满员")
 
     # 验证是否已有待审批的申请
-    existing = GuildApplication.objects.filter(
-        guild=guild,
-        applicant=user,
-        status='pending'
-    ).exists()
+    existing = GuildApplication.objects.filter(guild=guild, applicant=user, status="pending").exists()
     if existing:
         raise ValueError("您已有待审批的申请")
 
@@ -47,7 +45,7 @@ def apply_to_guild(user, guild, message=''):
         guild=guild,
         applicant=user,
         message=message,
-        status='pending',
+        status="pending",
     )
 
     # 如果设置了自动接受，直接通过
@@ -72,9 +70,7 @@ def approve_application(application, reviewer, auto=False):
     with transaction.atomic():
         # 锁定申请行，避免并发重复处理
         application_locked = (
-            GuildApplication.objects.select_for_update()
-            .select_related("guild", "applicant")
-            .get(pk=application.pk)
+            GuildApplication.objects.select_for_update().select_related("guild", "applicant").get(pk=application.pk)
         )
         if application_locked.status != "pending":
             raise ValueError("申请已被处理")
@@ -97,9 +93,7 @@ def approve_application(application, reviewer, auto=False):
 
         # 验证申请人是否已加入其他帮会
         existing_membership = (
-            GuildMember.objects.select_for_update()
-            .filter(user=application_locked.applicant, is_active=True)
-            .first()
+            GuildMember.objects.select_for_update().filter(user=application_locked.applicant, is_active=True).first()
         )
         if existing_membership:
             raise ValueError("申请人已加入其他帮会")
@@ -140,20 +134,20 @@ def approve_application(application, reviewer, auto=False):
     applicant_manor = Manor.objects.get(user_id=applicant_user_id)
     create_message(
         manor=applicant_manor,
-        kind='system',
-        title='入帮申请通过',
+        kind="system",
+        title="入帮申请通过",
         body=f"您的入帮申请已通过，欢迎加入【{guild_name}】！",
     )
 
     # 发布帮会公告
     create_announcement(
         guild_locked,
-        'system',
+        "system",
         f"欢迎新成员{applicant_manor.display_name}加入帮会！",
     )
 
 
-def reject_application(application, reviewer, note=''):
+def reject_application(application, reviewer, note=""):
     """
     拒绝申请
 
@@ -167,9 +161,7 @@ def reject_application(application, reviewer, note=''):
     """
     with transaction.atomic():
         application_locked = (
-            GuildApplication.objects.select_for_update()
-            .select_related("guild", "applicant")
-            .get(pk=application.pk)
+            GuildApplication.objects.select_for_update().select_related("guild", "applicant").get(pk=application.pk)
         )
         if application_locked.status != "pending":
             raise ValueError("申请已被处理")
@@ -189,8 +181,8 @@ def reject_application(application, reviewer, note=''):
         # 发送系统消息给申请人
         create_message(
             manor=Manor.objects.get(user=application_locked.applicant),
-            kind='system',
-            title='入帮申请被拒绝',
+            kind="system",
+            title="入帮申请被拒绝",
             body=f"您的入帮申请被拒绝。\n拒绝原因：{note if note else '无'}",
         )
 
@@ -224,12 +216,12 @@ def leave_guild(member):
 
         member_locked.is_active = False
         member_locked.left_at = timezone.now()
-        member_locked.save(update_fields=['is_active', 'left_at'])
+        member_locked.save(update_fields=["is_active", "left_at"])
 
         # 发布公告
         create_announcement(
             guild,
-            'system',
+            "system",
             f"成员{display_name}离开了帮会。",
         )
 
@@ -251,7 +243,7 @@ def kick_member(target_member, operator):
         raise ValueError("您没有辞退权限")
 
     # 不能辞退帮主和管理员
-    if target_member.position in ['leader', 'admin']:
+    if target_member.position in ["leader", "admin"]:
         raise ValueError("无法辞退帮主或管理员")
 
     # 不能辞退自己
@@ -272,20 +264,20 @@ def kick_member(target_member, operator):
 
         target_locked.is_active = False
         target_locked.left_at = timezone.now()
-        target_locked.save(update_fields=['is_active', 'left_at'])
+        target_locked.save(update_fields=["is_active", "left_at"])
 
         # 发送系统消息
         create_message(
             manor=target_manor,
-            kind='system',
-            title='被移出帮会',
+            kind="system",
+            title="被移出帮会",
             body=f"您已被移出帮会【{guild.name}】。",
         )
 
         # 发布公告
         create_announcement(
             guild,
-            'system',
+            "system",
             f"成员{display_name}被移出帮会。",
         )
 
@@ -309,7 +301,7 @@ def appoint_admin(target_member, operator):
         raise ValueError("只有帮主可以任命管理员")
 
     # 验证目标成员
-    if target_member.position != 'member':
+    if target_member.position != "member":
         raise ValueError("该成员已是管理人员")
 
     # 获取庄园名称
@@ -319,31 +311,31 @@ def appoint_admin(target_member, operator):
     with transaction.atomic():
         # 锁定帮会后重新检查管理员数量，防止并发超限
         guild_locked = Guild.objects.select_for_update().get(pk=target_member.guild_id)
-        admin_count = guild_locked.members.filter(is_active=True, position='admin').count()
+        admin_count = guild_locked.members.filter(is_active=True, position="admin").count()
         if admin_count >= 2:
             raise ValueError("管理员数量已达上限（2人）")
 
         # 锁定目标成员并重新验证状态
         target_locked = GuildMember.objects.select_for_update().get(pk=target_member.pk)
-        if target_locked.position != 'member':
+        if target_locked.position != "member":
             raise ValueError("该成员已是管理人员")
 
         # 任命为管理员
-        target_locked.position = 'admin'
-        target_locked.save(update_fields=['position'])
+        target_locked.position = "admin"
+        target_locked.save(update_fields=["position"])
 
         # 发送系统消息
         create_message(
             manor=target_manor,
-            kind='system',
-            title='职位变更',
+            kind="system",
+            title="职位变更",
             body=f"您已被任命为帮会【{target_member.guild.name}】的管理员！",
         )
 
         # 发布公告
         create_announcement(
             target_member.guild,
-            'system',
+            "system",
             f"{operator_manor.display_name}任命{target_manor.display_name}为管理员。",
         )
 
@@ -365,7 +357,7 @@ def demote_admin(target_member, operator):
         raise ValueError("只有帮主可以罢免管理员")
 
     # 验证目标成员
-    if target_member.position != 'admin':
+    if target_member.position != "admin":
         raise ValueError("该成员不是管理员")
 
     # 获取庄园名称
@@ -373,21 +365,21 @@ def demote_admin(target_member, operator):
 
     with transaction.atomic():
         # 降为普通成员
-        target_member.position = 'member'
-        target_member.save(update_fields=['position'])
+        target_member.position = "member"
+        target_member.save(update_fields=["position"])
 
         # 发送系统消息
         create_message(
             manor=target_manor,
-            kind='system',
-            title='职位变更',
+            kind="system",
+            title="职位变更",
             body="您已被罢免管理员职位，降为普通成员。",
         )
 
         # 发布公告
         create_announcement(
             target_member.guild,
-            'system',
+            "system",
             f"{target_manor.display_name}卸任管理员职位。",
         )
 
@@ -433,30 +425,30 @@ def transfer_leadership(current_leader_member, new_leader_member):
             raise ValueError("该成员已离开帮会")
 
         # 原帮主降为普通成员
-        current_locked.position = 'member'
-        current_locked.save(update_fields=['position'])
+        current_locked.position = "member"
+        current_locked.save(update_fields=["position"])
 
         # 新帮主上任
-        new_locked.position = 'leader'
-        new_locked.save(update_fields=['position'])
+        new_locked.position = "leader"
+        new_locked.save(update_fields=["position"])
 
         # 发送系统消息
         create_message(
             manor=new_leader_manor,
-            kind='system',
-            title='职位变更',
+            kind="system",
+            title="职位变更",
             body=f"您已成为帮会【{new_leader_member.guild.name}】的新任帮主！",
         )
 
         # 发布公告
         create_announcement(
             new_leader_member.guild,
-            'system',
+            "system",
             f"{current_leader_manor.display_name}将帮主之位传给了{new_leader_manor.display_name}！",
         )
 
 
-def get_member_rankings(guild, ranking_type='total'):
+def get_member_rankings(guild, ranking_type="total"):
     """
     获取成员排行榜
 
@@ -467,9 +459,9 @@ def get_member_rankings(guild, ranking_type='total'):
     Returns:
         QuerySet
     """
-    members = guild.members.filter(is_active=True).select_related('user')
+    members = guild.members.filter(is_active=True).select_related("user", "user__manor")
 
-    if ranking_type == 'weekly':
-        return members.order_by('-weekly_contribution', '-total_contribution')[:10]
+    if ranking_type == "weekly":
+        return members.order_by("-weekly_contribution", "-total_contribution")[:10]
     else:
-        return members.order_by('-total_contribution', '-joined_at')[:10]
+        return members.order_by("-total_contribution", "-joined_at")[:10]

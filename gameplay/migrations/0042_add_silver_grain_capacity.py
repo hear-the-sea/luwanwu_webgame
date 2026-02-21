@@ -6,18 +6,18 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0041_add_player_troop'),
+        ("gameplay", "0041_add_player_troop"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='manor',
-            name='grain_capacity',
-            field=models.PositiveIntegerField(default=20000, verbose_name='粮仓上限'),
+            model_name="manor",
+            name="grain_capacity",
+            field=models.PositiveIntegerField(default=20000, verbose_name="粮仓上限"),
         ),
         migrations.AddField(
-            model_name='manor',
-            name='silver_capacity',
-            field=models.PositiveIntegerField(default=20000, verbose_name='银库上限'),
+            model_name="manor",
+            name="silver_capacity",
+            field=models.PositiveIntegerField(default=20000, verbose_name="银库上限"),
         ),
     ]

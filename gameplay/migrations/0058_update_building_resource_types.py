@@ -12,14 +12,14 @@ def update_building_resource_types(apps, schema_editor):
     iron_mine (铁矿) -> silver (银两)
     smithy (铁匠铺) -> silver (锻造收银)
     """
-    BuildingType = apps.get_model('gameplay', 'BuildingType')
+    BuildingType = apps.get_model("gameplay", "BuildingType")
 
     # 更新映射
     updates = {
-        'lumber_yard': 'grain',
-        'stone_pit': 'grain',
-        'iron_mine': 'silver',
-        'smithy': 'silver',
+        "lumber_yard": "grain",
+        "stone_pit": "grain",
+        "iron_mine": "silver",
+        "smithy": "silver",
     }
 
     for key, new_resource_type in updates.items():
@@ -28,13 +28,13 @@ def update_building_resource_types(apps, schema_editor):
 
 def reverse_update(apps, schema_editor):
     """恢复原来的资源类型"""
-    BuildingType = apps.get_model('gameplay', 'BuildingType')
+    BuildingType = apps.get_model("gameplay", "BuildingType")
 
     updates = {
-        'lumber_yard': 'wood',
-        'stone_pit': 'stone',
-        'iron_mine': 'iron',
-        'smithy': 'iron',
+        "lumber_yard": "wood",
+        "stone_pit": "stone",
+        "iron_mine": "iron",
+        "smithy": "iron",
     }
 
     for key, old_resource_type in updates.items():
@@ -44,7 +44,7 @@ def reverse_update(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0057_update_smelting_production_cost_fields'),
+        ("gameplay", "0057_update_smelting_production_cost_fields"),
     ]
 
     operations = [

@@ -6,13 +6,25 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0012_message'),
+        ("gameplay", "0012_message"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='resourceevent',
-            name='reason',
-            field=models.CharField(choices=[('produce', '自动产出'), ('upgrade_cost', '建筑升级'), ('task_reward', '任务奖励'), ('battle_reward', '战斗掉落'), ('admin_adjust', '运营调整'), ('recruit_cost', '门客招募'), ('training_cost', '门客培养'), ('item_use', '道具使用')], max_length=32),
+            model_name="resourceevent",
+            name="reason",
+            field=models.CharField(
+                choices=[
+                    ("produce", "自动产出"),
+                    ("upgrade_cost", "建筑升级"),
+                    ("task_reward", "任务奖励"),
+                    ("battle_reward", "战斗掉落"),
+                    ("admin_adjust", "运营调整"),
+                    ("recruit_cost", "门客招募"),
+                    ("training_cost", "门客培养"),
+                    ("item_use", "道具使用"),
+                ],
+                max_length=32,
+            ),
         ),
     ]

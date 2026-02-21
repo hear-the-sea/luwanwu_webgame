@@ -16,7 +16,6 @@ from django.views.generic import TemplateView
 from core.exceptions import GameError
 from core.utils import safe_int, sanitize_error_message
 from core.utils.rate_limit import rate_limit_redirect
-
 from gameplay.constants import UIConstants
 from gameplay.models import InventoryItem
 from gameplay.selectors.recruitment import get_recruitment_hall_context
@@ -26,8 +25,8 @@ from gameplay.services import (
     refresh_manor_state,
     use_guest_rebirth_card,
     use_inventory_item,
-    use_xisuidan,
     use_xidianka,
+    use_xisuidan,
 )
 
 
@@ -80,7 +79,9 @@ def use_item_view(request: HttpRequest, pk: int) -> HttpResponse:
         if "_message" in payload:
             summary = payload["_message"]
         else:
-            summary = "、".join(f"{key}+{value}" for key, value in payload.items() if not key.startswith("_")) or "效果已生效"
+            summary = (
+                "、".join(f"{key}+{value}" for key, value in payload.items() if not key.startswith("_")) or "效果已生效"
+            )
         if is_ajax:
             return JsonResponse({"success": True, "message": f"{item.template.name} 使用成功：{summary}"})
         messages.success(request, f"{item.template.name} 使用成功：{summary}")
@@ -102,6 +103,7 @@ def move_item_to_treasury_view(request: HttpRequest, pk: int) -> HttpResponse:
 
     try:
         from gameplay.services import move_item_to_treasury
+
         move_item_to_treasury(manor, pk, quantity)
         if is_ajax:
             return JsonResponse({"success": True, "message": f"已将 {quantity} 个物品移动到藏宝阁"})
@@ -125,6 +127,7 @@ def move_item_to_warehouse_view(request: HttpRequest, pk: int) -> HttpResponse:
 
     try:
         from gameplay.services import move_item_to_warehouse
+
         move_item_to_warehouse(manor, pk, quantity)
         if is_ajax:
             return JsonResponse({"success": True, "message": f"已将 {quantity} 个物品移动到仓库"})
@@ -167,6 +170,7 @@ def use_guest_rebirth_card_view(request: HttpRequest, pk: int) -> HttpResponse:
 
     # 获取目标门客ID
     from core.utils import safe_int
+
     guest_id = safe_int(request.POST.get("guest_id"), default=0)
     if not guest_id:
         if is_ajax:

@@ -78,5 +78,6 @@ def building_desc(building_key):
 
     用法: {{ building.building_type.key|building_desc }}
     """
-    from gameplay.services.building import get_building_description
+    from gameplay.services.buildings.base import get_building_description
+
     return get_building_description(building_key)

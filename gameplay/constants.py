@@ -12,65 +12,56 @@ BuildingKeys = BUILDING_KEYS
 # 建筑最高等级限制（未配置则无限制）
 BUILDING_MAX_LEVELS = {
     # 特殊建筑
-    BUILDING_KEYS.CITANG: 5,           # 祠堂：避免缩时达到100%
-    BUILDING_KEYS.YOUXIA_BAOTA: 15,    # 悠嘻宝塔：出战上限在15级封顶（SQUAD_SIZE_MAX=18）
-    BUILDING_KEYS.TREASURY: 20,        # 藏宝阁：容量函数按20级封顶（平衡时间消耗）
-    BUILDING_KEYS.JAIL: 5,             # 监牢：满级5人
-    BUILDING_KEYS.OATH_GROVE: 5,       # 结义林：满级5人
-
+    BUILDING_KEYS.CITANG: 5,  # 祠堂：避免缩时达到100%
+    BUILDING_KEYS.YOUXIA_BAOTA: 15,  # 悠嘻宝塔：出战上限在15级封顶（SQUAD_SIZE_MAX=18）
+    BUILDING_KEYS.TREASURY: 20,  # 藏宝阁：容量函数按20级封顶（平衡时间消耗）
+    BUILDING_KEYS.JAIL: 5,  # 监牢：满级5人
+    BUILDING_KEYS.OATH_GROVE: 5,  # 结义林：满级5人
     # 仓储设施
-    BUILDING_KEYS.SILVER_VAULT: 30,    # 银库：满级4000万两
-    BUILDING_KEYS.GRANARY: 20,         # 粮仓：满级1050万石
-
+    BUILDING_KEYS.SILVER_VAULT: 30,  # 银库：满级4000万两
+    BUILDING_KEYS.GRANARY: 20,  # 粮仓：满级1050万石
     # 资源产出建筑
-    BUILDING_KEYS.BATHHOUSE: 20,       # 澡堂：满级每小时产银1000两+门客回血200%
-    BUILDING_KEYS.LATRINE: 20,         # 茅厕：满级每小时产粮1000+产银1000两
-    BUILDING_KEYS.TAVERN: 10,          # 酒馆：满级每小时产银1000两+候选人数+10
-
+    BUILDING_KEYS.BATHHOUSE: 20,  # 澡堂：满级每小时产银1000两+门客回血200%
+    BUILDING_KEYS.LATRINE: 20,  # 茅厕：满级每小时产粮1000+产银1000两
+    BUILDING_KEYS.TAVERN: 10,  # 酒馆：满级每小时产银1000两+候选人数+10
     # 人员管理建筑
-    BUILDING_KEYS.JUXIAN_ZHUANG: 15,   # 聚贤庄：满级容量18位门客
-    BUILDING_KEYS.JIADING_FANG: 30,    # 家丁房：满级容量3050个位置
+    BUILDING_KEYS.JUXIAN_ZHUANG: 15,  # 聚贤庄：满级容量18位门客
+    BUILDING_KEYS.JIADING_FANG: 30,  # 家丁房：满级容量3050个位置
     BUILDING_KEYS.LIANGGONG_CHANG: 10,  # 练功场：满级护院训练速度提升30%
-
     # 生产加工建筑
-    BUILDING_KEYS.RANCH: 10,           # 畜牧场：满级家畜制造速度提升50%
-    BUILDING_KEYS.SMITHY: 10,          # 冶炼坊：满级物资制造速度提升50%
-    BUILDING_KEYS.STABLE: 10,          # 马房：满级马匹制造速度提升50%
-
+    BUILDING_KEYS.RANCH: 10,  # 畜牧场：满级家畜制造速度提升50%
+    BUILDING_KEYS.SMITHY: 10,  # 冶炼坊：满级物资制造速度提升50%
+    BUILDING_KEYS.STABLE: 10,  # 马房：满级马匹制造速度提升50%
     # 战斗相关建筑
     BUILDING_KEYS.LIANBING_DAYING: 10,  # 练兵大营：满级护院训练速度提升50%
-    BUILDING_KEYS.FORGE: 10,           # 铁匠铺：满级装备制造速度提升50%
+    BUILDING_KEYS.FORGE: 10,  # 铁匠铺：满级装备制造速度提升50%
 }
 
 
 # 建筑最高等级限制（未配置则无限制）
 BUILDING_MAX_LEVELS = {
     # 特殊建筑
-    BuildingKeys.CITANG: 5,           # 祠堂：避免缩时达到100%
-    BuildingKeys.YOUXIA_BAOTA: 15,    # 悠嘻宝塔：出战上限在15级封顶（SQUAD_SIZE_MAX=18）
-    BuildingKeys.TREASURY: 20,        # 藏宝阁：容量函数按20级封顶（平衡时间消耗）
-    BuildingKeys.JAIL: 5,             # 监牢：满级5人
-    BuildingKeys.OATH_GROVE: 5,       # 结义林：满级5人
-
+    BuildingKeys.CITANG: 5,  # 祠堂：避免缩时达到100%
+    BuildingKeys.YOUXIA_BAOTA: 15,  # 悠嘻宝塔：出战上限在15级封顶（SQUAD_SIZE_MAX=18）
+    BuildingKeys.TREASURY: 20,  # 藏宝阁：容量函数按20级封顶（平衡时间消耗）
+    BuildingKeys.JAIL: 5,  # 监牢：满级5人
+    BuildingKeys.OATH_GROVE: 5,  # 结义林：满级5人
     # 仓储设施
-    BuildingKeys.SILVER_VAULT: 30,    # 银库：满级4000万两
-    BuildingKeys.GRANARY: 20,         # 粮仓：满级1050万石
-
+    BuildingKeys.SILVER_VAULT: 30,  # 银库：满级4000万两
+    BuildingKeys.GRANARY: 20,  # 粮仓：满级1050万石
     # 资源产出建筑
-    BuildingKeys.BATHHOUSE: 20,       # 澡堂：满级每小时产银1000两+门客回血200%
-    BuildingKeys.LATRINE: 20,         # 茅厕：满级每小时产粮1000+产银1000两
-    BuildingKeys.TAVERN: 10,          # 酒馆：满级每小时产银1000两+候选人数+10
-
+    BuildingKeys.BATHHOUSE: 20,  # 澡堂：满级每小时产银1000两+门客回血200%
+    BuildingKeys.LATRINE: 20,  # 茅厕：满级每小时产粮1000+产银1000两
+    BuildingKeys.TAVERN: 10,  # 酒馆：满级每小时产银1000两+候选人数+10
     # 人员管理建筑
-    BuildingKeys.JUXIAN_ZHUANG: 15,   # 聚贤庄：满级容量18位门客
-    BuildingKeys.JIADING_FANG: 30,    # 家丁房：满级容量3050个位置
+    BuildingKeys.JUXIAN_ZHUANG: 15,  # 聚贤庄：满级容量18位门客
+    BuildingKeys.JIADING_FANG: 30,  # 家丁房：满级容量3050个位置
     BuildingKeys.LIANGGONG_CHANG: 10,  # 练功场：满级护院训练速度提升30%
-
     # 生产加工建筑
-    BuildingKeys.RANCH: 10,           # 畜牧场：满级家畜制造速度提升50%
-    BuildingKeys.SMITHY: 10,          # 冶炼坊：满级物资制造速度提升50%
-    BuildingKeys.STABLE: 10,          # 马房：满级马匹制造速度提升50%
-    BuildingKeys.FORGE: 10,           # 铁匠铺：满级装备锻造速度提升50%
+    BuildingKeys.RANCH: 10,  # 畜牧场：满级家畜制造速度提升50%
+    BuildingKeys.SMITHY: 10,  # 冶炼坊：满级物资制造速度提升50%
+    BuildingKeys.STABLE: 10,  # 马房：满级马匹制造速度提升50%
+    BuildingKeys.FORGE: 10,  # 铁匠铺：满级装备锻造速度提升50%
 }
 
 # 同时升级限制
@@ -147,6 +138,7 @@ REGION_DICT = dict(REGION_CHOICES)
 
 
 # ============ PVP 系统常量 ============
+
 
 class PVPConstants:
     """PVP系统常量"""
@@ -240,6 +232,7 @@ class PVPConstants:
 
 # ============ UI/分页常量 ============
 
+
 class UIConstants:
     """UI显示相关常量"""
 
@@ -258,6 +251,7 @@ class UIConstants:
 
 # ============ 庄园名称验证常量 ============
 
+
 class ManorNameConstants:
     """庄园名称验证相关常量"""
 
@@ -265,10 +259,19 @@ class ManorNameConstants:
     MAX_LENGTH = 12  # 最大长度
 
     # 敏感词列表（可扩展，支持中英文）
-    BANNED_WORDS = frozenset([
-        'admin', 'gm', '管理员', '客服', '官方',
-        'system', '系统', 'test', '测试',
-    ])
+    BANNED_WORDS = frozenset(
+        [
+            "admin",
+            "gm",
+            "管理员",
+            "客服",
+            "官方",
+            "system",
+            "系统",
+            "test",
+            "测试",
+        ]
+    )
 
     # 任务扫描批量大小
     SCAN_BATCH_SIZE = 200  # Celery任务扫描批量大小

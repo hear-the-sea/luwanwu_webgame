@@ -1,4 +1,5 @@
 """图片处理工具"""
+
 import hashlib
 from io import BytesIO
 from pathlib import Path
@@ -45,19 +46,19 @@ def compress_and_resize_image(
     """
     with Image.open(image_path) as img:
         # 转换为 RGB 模式（WebP 不支持 RGBA 某些情况）
-        if img.mode in ('RGBA', 'LA', 'P'):
+        if img.mode in ("RGBA", "LA", "P"):
             # 如果有透明通道，保留它
-            if img.mode == 'P':
-                img = img.convert('RGBA')
+            if img.mode == "P":
+                img = img.convert("RGBA")
             # 创建白色背景
-            background = Image.new('RGB', img.size, (255, 255, 255))
-            if img.mode == 'RGBA' or img.mode == 'LA':
+            background = Image.new("RGB", img.size, (255, 255, 255))
+            if img.mode == "RGBA" or img.mode == "LA":
                 background.paste(img, mask=img.split()[-1])  # 使用 alpha 通道作为 mask
             else:
                 background.paste(img)
             img = background
-        elif img.mode != 'RGB':
-            img = img.convert('RGB')
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
 
         # 保持宽高比缩放
         img.thumbnail(max_size, Image.Resampling.LANCZOS)
@@ -67,13 +68,13 @@ def compress_and_resize_image(
 
         if convert_to_webp:
             # 转换为 WebP 格式
-            img.save(buffer, format='WEBP', quality=quality, method=6)
+            img.save(buffer, format="WEBP", quality=quality, method=6)
             # 修改文件扩展名
             original_name = image_path.stem
             new_filename = f"{original_name}.webp"
         else:
             # 保持原格式
-            img_format = img.format or 'JPEG'
+            img_format = img.format or "JPEG"
             img.save(buffer, format=img_format, quality=quality, optimize=True)
             new_filename = image_path.name
 
@@ -93,9 +94,9 @@ def get_image_info(image_path: Path) -> dict:
     """
     with Image.open(image_path) as img:
         return {
-            'width': img.width,
-            'height': img.height,
-            'format': img.format,
-            'mode': img.mode,
-            'size_bytes': image_path.stat().st_size,
+            "width": img.width,
+            "height": img.height,
+            "format": img.format,
+            "mode": img.mode,
+            "size_bytes": image_path.stat().st_size,
         }

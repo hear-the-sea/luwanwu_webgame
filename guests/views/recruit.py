@@ -50,7 +50,7 @@ class RecruitView(LoginRequiredMixin, TemplateView):
     http_method_names = ["post"]
 
     def post(self, request, *args, **kwargs):
-        from gameplay.services.manor import ensure_manor
+        from gameplay.services.manor.core import ensure_manor
 
         manor = ensure_manor(request.user)
         form = RecruitForm(request.POST)
@@ -70,7 +70,7 @@ class RecruitView(LoginRequiredMixin, TemplateView):
 @require_POST
 @rate_limit_redirect("recruit_accept", limit=10, window_seconds=60)
 def accept_candidate_view(request):
-    from gameplay.services.manor import ensure_manor
+    from gameplay.services.manor.core import ensure_manor
 
     manor = ensure_manor(request.user)
     candidate_ids = request.POST.getlist("candidate_ids")
@@ -115,7 +115,7 @@ def use_magnifying_glass_view(request):
     """使用放大镜显现候选门客的稀有度"""
     from gameplay.models import InventoryItem
     from gameplay.services.inventory import consume_inventory_item
-    from gameplay.services.manor import ensure_manor
+    from gameplay.services.manor.core import ensure_manor
 
     manor = ensure_manor(request.user)
     item_id = request.POST.get("item_id")

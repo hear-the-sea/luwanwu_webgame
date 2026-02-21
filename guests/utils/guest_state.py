@@ -4,7 +4,7 @@ from typing import Iterable
 
 from django.utils import timezone
 
-from guests.models import Guest, MAX_GUEST_LEVEL
+from guests.models import MAX_GUEST_LEVEL, Guest
 from guests.services.equipment import apply_set_bonuses
 from guests.services.health import recover_guest_hp
 from guests.services.training import ensure_auto_training, finalize_guest_training

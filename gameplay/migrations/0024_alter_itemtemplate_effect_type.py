@@ -6,13 +6,22 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0023_merge_20251123_1131'),
+        ("gameplay", "0023_merge_20251123_1131"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='itemtemplate',
-            name='effect_type',
-            field=models.CharField(choices=[('resource_pack', '资源补给'), ('skill_book', '技能书'), ('experience_items', '经验道具'), ('medicine', '药品')], default='resource_pack', max_length=32),
+            model_name="itemtemplate",
+            name="effect_type",
+            field=models.CharField(
+                choices=[
+                    ("resource_pack", "资源补给"),
+                    ("skill_book", "技能书"),
+                    ("experience_items", "经验道具"),
+                    ("medicine", "药品"),
+                ],
+                default="resource_pack",
+                max_length=32,
+            ),
         ),
     ]

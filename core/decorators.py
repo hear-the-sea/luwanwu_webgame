@@ -15,10 +15,10 @@ from django.contrib import messages
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect
-from django.urls import reverse, NoReverseMatch
+from django.urls import NoReverseMatch, reverse
 
 from core.exceptions import GameError
-from core.utils.validation import sanitize_error_message, safe_redirect_url
+from core.utils.validation import safe_redirect_url, sanitize_error_message
 
 logger = logging.getLogger(__name__)
 
@@ -221,6 +221,7 @@ def handle_game_errors(
         - 如果视图使用 @transaction.atomic，装饰器应放在它之前（外层）
         - success_message 为可调用对象时，会接收视图函数的返回值作为参数
     """
+
     def decorator(view_func: Callable) -> Callable:
         @wraps(view_func)
         def wrapper(request: HttpRequest, *args, **kwargs) -> HttpResponse:
@@ -263,6 +264,7 @@ def atomic_handle_game_errors(
             train_guest(guest, levels=1)
             # ...
     """
+
     def decorator(view_func: Callable) -> Callable:
         # 先应用事务装饰器（内层）- 让异常先触发回滚
         atomic_view = transaction.atomic(view_func)

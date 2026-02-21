@@ -6,7 +6,7 @@ from celery import shared_task
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async_with_dedup
-from gameplay.services.manor import finalize_building_upgrade
+from gameplay.services.manor.core import finalize_building_upgrade
 
 logger = logging.getLogger(__name__)
 

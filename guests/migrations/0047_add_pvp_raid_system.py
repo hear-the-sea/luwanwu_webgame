@@ -6,43 +6,125 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('guests', '0046_alter_guest_attribute_points'),
+        ("guests", "0046_alter_guest_attribute_points"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='geartemplate',
-            name='rarity',
-            field=models.CharField(choices=[('black', '黑'), ('gray', '灰'), ('green', '绿'), ('red', '红'), ('blue', '蓝'), ('purple', '紫'), ('orange', '橙')], default='gray', max_length=16),
+            model_name="geartemplate",
+            name="rarity",
+            field=models.CharField(
+                choices=[
+                    ("black", "黑"),
+                    ("gray", "灰"),
+                    ("green", "绿"),
+                    ("red", "红"),
+                    ("blue", "蓝"),
+                    ("purple", "紫"),
+                    ("orange", "橙"),
+                ],
+                default="gray",
+                max_length=16,
+            ),
         ),
         migrations.AlterField(
-            model_name='guestdefection',
-            name='guest_rarity',
-            field=models.CharField(choices=[('black', '黑'), ('gray', '灰'), ('green', '绿'), ('red', '红'), ('blue', '蓝'), ('purple', '紫'), ('orange', '橙')], max_length=16, verbose_name='稀有度'),
+            model_name="guestdefection",
+            name="guest_rarity",
+            field=models.CharField(
+                choices=[
+                    ("black", "黑"),
+                    ("gray", "灰"),
+                    ("green", "绿"),
+                    ("red", "红"),
+                    ("blue", "蓝"),
+                    ("purple", "紫"),
+                    ("orange", "橙"),
+                ],
+                max_length=16,
+                verbose_name="稀有度",
+            ),
         ),
         migrations.AlterField(
-            model_name='guesttemplate',
-            name='rarity',
-            field=models.CharField(choices=[('black', '黑'), ('gray', '灰'), ('green', '绿'), ('red', '红'), ('blue', '蓝'), ('purple', '紫'), ('orange', '橙')], max_length=16),
+            model_name="guesttemplate",
+            name="rarity",
+            field=models.CharField(
+                choices=[
+                    ("black", "黑"),
+                    ("gray", "灰"),
+                    ("green", "绿"),
+                    ("red", "红"),
+                    ("blue", "蓝"),
+                    ("purple", "紫"),
+                    ("orange", "橙"),
+                ],
+                max_length=16,
+            ),
         ),
         migrations.AlterField(
-            model_name='recruitmentcandidate',
-            name='rarity',
-            field=models.CharField(choices=[('black', '黑'), ('gray', '灰'), ('green', '绿'), ('red', '红'), ('blue', '蓝'), ('purple', '紫'), ('orange', '橙')], max_length=16),
+            model_name="recruitmentcandidate",
+            name="rarity",
+            field=models.CharField(
+                choices=[
+                    ("black", "黑"),
+                    ("gray", "灰"),
+                    ("green", "绿"),
+                    ("red", "红"),
+                    ("blue", "蓝"),
+                    ("purple", "紫"),
+                    ("orange", "橙"),
+                ],
+                max_length=16,
+            ),
         ),
         migrations.AlterField(
-            model_name='recruitmentpoolentry',
-            name='rarity',
-            field=models.CharField(blank=True, choices=[('black', '黑'), ('gray', '灰'), ('green', '绿'), ('red', '红'), ('blue', '蓝'), ('purple', '紫'), ('orange', '橙')], max_length=16, null=True),
+            model_name="recruitmentpoolentry",
+            name="rarity",
+            field=models.CharField(
+                blank=True,
+                choices=[
+                    ("black", "黑"),
+                    ("gray", "灰"),
+                    ("green", "绿"),
+                    ("red", "红"),
+                    ("blue", "蓝"),
+                    ("purple", "紫"),
+                    ("orange", "橙"),
+                ],
+                max_length=16,
+                null=True,
+            ),
         ),
         migrations.AlterField(
-            model_name='recruitmentrecord',
-            name='rarity',
-            field=models.CharField(choices=[('black', '黑'), ('gray', '灰'), ('green', '绿'), ('red', '红'), ('blue', '蓝'), ('purple', '紫'), ('orange', '橙')], max_length=16),
+            model_name="recruitmentrecord",
+            name="rarity",
+            field=models.CharField(
+                choices=[
+                    ("black", "黑"),
+                    ("gray", "灰"),
+                    ("green", "绿"),
+                    ("red", "红"),
+                    ("blue", "蓝"),
+                    ("purple", "紫"),
+                    ("orange", "橙"),
+                ],
+                max_length=16,
+            ),
         ),
         migrations.AlterField(
-            model_name='skill',
-            name='rarity',
-            field=models.CharField(choices=[('black', '黑'), ('gray', '灰'), ('green', '绿'), ('red', '红'), ('blue', '蓝'), ('purple', '紫'), ('orange', '橙')], default='gray', max_length=16),
+            model_name="skill",
+            name="rarity",
+            field=models.CharField(
+                choices=[
+                    ("black", "黑"),
+                    ("gray", "灰"),
+                    ("green", "绿"),
+                    ("red", "红"),
+                    ("blue", "蓝"),
+                    ("purple", "紫"),
+                    ("orange", "橙"),
+                ],
+                default="gray",
+                max_length=16,
+            ),
         ),
     ]

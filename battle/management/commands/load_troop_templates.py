@@ -7,8 +7,8 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from battle.models import TroopTemplate
-from gameplay.services.template_cache import clear_troop_template_caches
 from core.utils.image_utils import compress_and_resize_image
+from gameplay.services.utils.template_cache import clear_troop_template_caches
 
 
 def _build_troop_defaults(data: dict) -> dict:
@@ -29,7 +29,9 @@ def _log_info(command: BaseCommand, verbosity: int, message: str) -> None:
         command.stdout.write(message)
 
 
-def _load_avatar_for_troop(command: BaseCommand, obj: TroopTemplate, data: dict, image_source_dir: Path, verbosity: int) -> None:
+def _load_avatar_for_troop(
+    command: BaseCommand, obj: TroopTemplate, data: dict, image_source_dir: Path, verbosity: int
+) -> None:
     avatar_filename = data.get("avatar")
     if not avatar_filename:
         return

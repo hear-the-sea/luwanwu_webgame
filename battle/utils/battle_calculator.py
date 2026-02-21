@@ -3,10 +3,11 @@
 
 提供战斗中的属性解析、技能加成、伤亡概率等纯数值计算函数。
 """
+
 from __future__ import annotations
 
 import random
-from typing import Any, Dict, List, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from common.utils.random_utils import binomial_sample
 
@@ -155,10 +156,7 @@ def calculate_team_losses(
     # 被击败的护院损失概率：进攻方80%，防守方70%
     defeated_troop_loss_rate = 0.8 if side == "attacker" else 0.7
 
-    total_troops = sum(
-        getattr(c, "initial_troop_strength", c.troop_strength)
-        for c in team if c.kind == "troop"
-    )
+    total_troops = sum(getattr(c, "initial_troop_strength", c.troop_strength) for c in team if c.kind == "troop")
     troops_deployed = total_troops
     casualties = []
     total_lost = 0

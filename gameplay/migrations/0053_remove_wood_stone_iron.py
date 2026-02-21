@@ -6,30 +6,30 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0052_livestock_production'),
+        ("gameplay", "0052_livestock_production"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='manor',
-            name='iron',
+            model_name="manor",
+            name="iron",
         ),
         migrations.RemoveField(
-            model_name='manor',
-            name='stone',
+            model_name="manor",
+            name="stone",
         ),
         migrations.RemoveField(
-            model_name='manor',
-            name='wood',
+            model_name="manor",
+            name="wood",
         ),
         migrations.AlterField(
-            model_name='buildingtype',
-            name='resource_type',
-            field=models.CharField(choices=[('grain', '粮食'), ('silver', '银两')], max_length=16),
+            model_name="buildingtype",
+            name="resource_type",
+            field=models.CharField(choices=[("grain", "粮食"), ("silver", "银两")], max_length=16),
         ),
         migrations.AlterField(
-            model_name='resourceevent',
-            name='resource_type',
-            field=models.CharField(choices=[('grain', '粮食'), ('silver', '银两')], max_length=16),
+            model_name="resourceevent",
+            name="resource_type",
+            field=models.CharField(choices=[("grain", "粮食"), ("silver", "银两")], max_length=16),
         ),
     ]

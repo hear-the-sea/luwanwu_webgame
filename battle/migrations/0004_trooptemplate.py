@@ -6,29 +6,29 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('battle', '0003_battlereport_attacker_troops_and_more'),
+        ("battle", "0003_battlereport_attacker_troops_and_more"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='TroopTemplate',
+            name="TroopTemplate",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('key', models.SlugField(unique=True, verbose_name='兵种标识')),
-                ('name', models.CharField(max_length=64, verbose_name='兵种名称')),
-                ('description', models.TextField(blank=True, verbose_name='描述')),
-                ('base_attack', models.PositiveIntegerField(default=30, verbose_name='基础攻击')),
-                ('base_defense', models.PositiveIntegerField(default=20, verbose_name='基础防御')),
-                ('base_hp', models.PositiveIntegerField(default=80, verbose_name='基础生命')),
-                ('speed_bonus', models.PositiveIntegerField(default=10, verbose_name='速度加成')),
-                ('priority', models.IntegerField(default=0, verbose_name='显示优先级')),
-                ('default_count', models.PositiveIntegerField(default=120, verbose_name='默认数量')),
-                ('avatar', models.ImageField(blank=True, null=True, upload_to='troops/', verbose_name='兵种形象')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("key", models.SlugField(unique=True, verbose_name="兵种标识")),
+                ("name", models.CharField(max_length=64, verbose_name="兵种名称")),
+                ("description", models.TextField(blank=True, verbose_name="描述")),
+                ("base_attack", models.PositiveIntegerField(default=30, verbose_name="基础攻击")),
+                ("base_defense", models.PositiveIntegerField(default=20, verbose_name="基础防御")),
+                ("base_hp", models.PositiveIntegerField(default=80, verbose_name="基础生命")),
+                ("speed_bonus", models.PositiveIntegerField(default=10, verbose_name="速度加成")),
+                ("priority", models.IntegerField(default=0, verbose_name="显示优先级")),
+                ("default_count", models.PositiveIntegerField(default=120, verbose_name="默认数量")),
+                ("avatar", models.ImageField(blank=True, null=True, upload_to="troops/", verbose_name="兵种形象")),
             ],
             options={
-                'verbose_name': '兵种模板',
-                'verbose_name_plural': '兵种模板',
-                'ordering': ['priority', 'key'],
+                "verbose_name": "兵种模板",
+                "verbose_name_plural": "兵种模板",
+                "ordering": ["priority", "key"],
             },
         ),
     ]

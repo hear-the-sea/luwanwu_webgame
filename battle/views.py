@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.apps import apps
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Q
 from django.views.generic import DetailView
 
@@ -25,16 +25,13 @@ class BattleReportDetailView(LoginRequiredMixin, DetailView):
     context_object_name = "report"
 
     def get_queryset(self):
-        from gameplay.services.manor import ensure_manor
+        from gameplay.services.manor.core import ensure_manor
 
         manor = ensure_manor(self.request.user)
         # 允许查看：
         # 1) 自己作为战报归属方（report.manor）
         # 2) 通过站内信收到的战报（Message.battle_report）
-        return (
-            BattleReport.objects.filter(Q(manor=manor) | Q(messages__manor=manor))
-            .distinct()
-        )
+        return BattleReport.objects.filter(Q(manor=manor) | Q(messages__manor=manor)).distinct()
 
     @staticmethod
     def _collect_template_keys(attacker_team: list[dict[str, Any]], defender_team: list[dict[str, Any]]) -> set[str]:
@@ -84,7 +81,9 @@ class BattleReportDetailView(LoginRequiredMixin, DetailView):
         )
 
     @staticmethod
-    def _serialize_troops(troops_raw: dict[str, int], troop_definitions: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    def _serialize_troops(
+        troops_raw: dict[str, int], troop_definitions: dict[str, dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         return [
             {
                 "key": key,
@@ -144,7 +143,7 @@ class BattleReportDetailView(LoginRequiredMixin, DetailView):
         ]
 
     def get_context_data(self, **kwargs):
-        from gameplay.services.manor import ensure_manor
+        from gameplay.services.manor.core import ensure_manor
         from gameplay.utils.template_loader import get_item_template_names_by_keys
 
         context = super().get_context_data(**kwargs)

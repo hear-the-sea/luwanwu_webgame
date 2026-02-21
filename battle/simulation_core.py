@@ -6,8 +6,8 @@
 
 # Re-export all public APIs for backward compatibility
 from .simulation import build_rng, simulate_battle
-from .simulation.battle_flow import resolve_priority_phases
 from .simulation.attack_execution import perform_attack
+from .simulation.battle_flow import resolve_priority_phases
 from .simulation.constants import (
     BASE_CRIT_CHANCE,
     COUNTER_DAMAGE_MULTIPLIER,
@@ -39,13 +39,7 @@ from .simulation.types import (
     _DamageCalculation,
     _SelectedAttackTargets,
 )
-from .simulation.utils import (
-    alive,
-    calculate_crit_chance,
-    calculate_dodge_chance,
-    roll_loot,
-    summarize_losses,
-)
+from .simulation.utils import alive, calculate_crit_chance, calculate_dodge_chance, roll_loot, summarize_losses
 
 __all__ = [
     # Main functions

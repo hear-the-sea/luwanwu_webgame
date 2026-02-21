@@ -4,22 +4,22 @@
 
 import pytest
 
-from gameplay.models import Manor, ItemTemplate, InventoryItem
+from gameplay.models import InventoryItem, ItemTemplate, Manor
 from guilds.models import GuildMember
+from guilds.services import contribution as contribution_service
 from guilds.services import guild as guild_service
 from guilds.services import member as member_service
-from guilds.services import contribution as contribution_service
 
 
 @pytest.fixture
 def gold_bar_template(db):
     """确保金条模板存在"""
     template, _ = ItemTemplate.objects.get_or_create(
-        key='gold_bar',
+        key="gold_bar",
         defaults={
-            'name': '金条',
-            'effect_type': 'none',
-        }
+            "name": "金条",
+            "effect_type": "none",
+        },
     )
     return template
 
@@ -28,16 +28,12 @@ def gold_bar_template(db):
 def user_with_gold_bars(django_user_model, gold_bar_template):
     """创建一个拥有金条的用户"""
     user = django_user_model.objects.create_user(username="guild_test_user", password="pass12345")
-    from gameplay.services.manor import ensure_manor
+    from gameplay.services.manor.core import ensure_manor
+
     manor = ensure_manor(user)
 
     # 添加金条到仓库
-    InventoryItem.objects.create(
-        manor=manor,
-        template=gold_bar_template,
-        quantity=10,
-        storage_location='warehouse'
-    )
+    InventoryItem.objects.create(manor=manor, template=gold_bar_template, quantity=10, storage_location="warehouse")
     return user
 
 
@@ -45,7 +41,8 @@ def user_with_gold_bars(django_user_model, gold_bar_template):
 def second_user(django_user_model):
     """创建第二个用户用于测试申请加入"""
     user = django_user_model.objects.create_user(username="guild_test_user2", password="pass12345")
-    from gameplay.services.manor import ensure_manor
+    from gameplay.services.manor.core import ensure_manor
+
     ensure_manor(user)
     return user
 
@@ -56,11 +53,7 @@ class TestGuildCreation:
 
     def test_create_guild_success(self, user_with_gold_bars):
         """测试成功创建帮会"""
-        guild = guild_service.create_guild(
-            user=user_with_gold_bars,
-            name="测试帮会",
-            description="这是一个测试帮会"
-        )
+        guild = guild_service.create_guild(user=user_with_gold_bars, name="测试帮会", description="这是一个测试帮会")
 
         assert guild is not None
         assert guild.name == "测试帮会"
@@ -69,7 +62,7 @@ class TestGuildCreation:
 
         # 验证创建者成为帮主
         membership = GuildMember.objects.get(user=user_with_gold_bars, guild=guild)
-        assert membership.position == 'leader'
+        assert membership.position == "leader"
         assert membership.is_active is True
 
         # 验证科技初始化
@@ -77,62 +70,41 @@ class TestGuildCreation:
 
     def test_create_guild_duplicate_name(self, user_with_gold_bars, django_user_model, gold_bar_template):
         """测试重复帮会名称"""
-        guild_service.create_guild(
-            user=user_with_gold_bars,
-            name="唯一帮会",
-            description=""
-        )
+        guild_service.create_guild(user=user_with_gold_bars, name="唯一帮会", description="")
 
         # 创建第二个用户
         user2 = django_user_model.objects.create_user(username="user2", password="pass12345")
-        from gameplay.services.manor import ensure_manor
+        from gameplay.services.manor.core import ensure_manor
+
         manor2 = ensure_manor(user2)
 
         # 给第二个用户金条
         InventoryItem.objects.create(
-            manor=manor2,
-            template=gold_bar_template,
-            quantity=10,
-            storage_location='warehouse'
+            manor=manor2, template=gold_bar_template, quantity=10, storage_location="warehouse"
         )
 
         with pytest.raises(ValueError, match="帮会名称已存在"):
-            guild_service.create_guild(
-                user=user2,
-                name="唯一帮会",
-                description=""
-            )
+            guild_service.create_guild(user=user2, name="唯一帮会", description="")
 
     def test_create_guild_invalid_name(self, user_with_gold_bars):
         """测试无效帮会名称"""
         # 名称太短
         with pytest.raises(ValueError, match="至少需要"):
-            guild_service.create_guild(
-                user=user_with_gold_bars,
-                name="A",
-                description=""
-            )
+            guild_service.create_guild(user=user_with_gold_bars, name="A", description="")
 
         # 名称包含特殊字符
         with pytest.raises(ValueError, match="只能包含"):
-            guild_service.create_guild(
-                user=user_with_gold_bars,
-                name="帮会@#$",
-                description=""
-            )
+            guild_service.create_guild(user=user_with_gold_bars, name="帮会@#$", description="")
 
     def test_create_guild_insufficient_gold(self, django_user_model, gold_bar_template):
         """测试金条不足"""
         user = django_user_model.objects.create_user(username="poor_user", password="pass12345")
-        from gameplay.services.manor import ensure_manor
+        from gameplay.services.manor.core import ensure_manor
+
         ensure_manor(user)
 
         with pytest.raises(ValueError, match="金条不足"):
-            guild_service.create_guild(
-                user=user,
-                name="穷人帮会",
-                description=""
-            )
+            guild_service.create_guild(user=user, name="穷人帮会", description="")
 
 
 @pytest.mark.django_db
@@ -141,44 +113,34 @@ class TestGuildMembership:
 
     def test_apply_and_approve(self, user_with_gold_bars, second_user):
         """测试申请并通过"""
-        guild = guild_service.create_guild(
-            user=user_with_gold_bars,
-            name="招人帮会",
-            description=""
-        )
+        guild = guild_service.create_guild(user=user_with_gold_bars, name="招人帮会", description="")
 
         # 申请加入
         application = member_service.apply_to_guild(second_user, guild, "请收留我")
-        assert application.status == 'pending'
+        assert application.status == "pending"
 
         # 批准申请
         member_service.approve_application(application, user_with_gold_bars)
         application.refresh_from_db()
 
-        assert application.status == 'approved'
+        assert application.status == "approved"
 
         # 验证成员已加入
         membership = GuildMember.objects.get(user=second_user, guild=guild)
         assert membership.is_active is True
-        assert membership.position == 'member'
+        assert membership.position == "member"
 
     def test_apply_to_full_guild(self, user_with_gold_bars, second_user, django_user_model):
         """测试申请已满员帮会"""
-        guild = guild_service.create_guild(
-            user=user_with_gold_bars,
-            name="小帮会",
-            description=""
-        )
+        guild = guild_service.create_guild(user=user_with_gold_bars, name="小帮会", description="")
 
         # 创建足够成员让帮会满员（1级帮会容量10人）
         for i in range(9):  # 已有帮主1人，再加9人
-            user = django_user_model.objects.create_user(
-                username=f"filler_{i}",
-                password="pass12345"
-            )
-            from gameplay.services.manor import ensure_manor
+            user = django_user_model.objects.create_user(username=f"filler_{i}", password="pass12345")
+            from gameplay.services.manor.core import ensure_manor
+
             ensure_manor(user)
-            GuildMember.objects.create(guild=guild, user=user, position='member')
+            GuildMember.objects.create(guild=guild, user=user, position="member")
 
         # 申请加入已满帮会
         with pytest.raises(ValueError, match="已满员"):
@@ -186,14 +148,10 @@ class TestGuildMembership:
 
     def test_kick_member(self, user_with_gold_bars, second_user):
         """测试踢出成员"""
-        guild = guild_service.create_guild(
-            user=user_with_gold_bars,
-            name="踢人帮会",
-            description=""
-        )
+        guild = guild_service.create_guild(user=user_with_gold_bars, name="踢人帮会", description="")
 
         # 添加成员
-        target_member = GuildMember.objects.create(guild=guild, user=second_user, position='member')
+        target_member = GuildMember.objects.create(guild=guild, user=second_user, position="member")
 
         # 踢出成员（参数是GuildMember对象，不是guild和user）
         member_service.kick_member(target_member, user_with_gold_bars)
@@ -205,14 +163,10 @@ class TestGuildMembership:
 
     def test_leave_guild(self, user_with_gold_bars, second_user):
         """测试主动退出帮会"""
-        guild = guild_service.create_guild(
-            user=user_with_gold_bars,
-            name="退出帮会",
-            description=""
-        )
+        guild = guild_service.create_guild(user=user_with_gold_bars, name="退出帮会", description="")
 
         # 添加成员
-        member = GuildMember.objects.create(guild=guild, user=second_user, position='member')
+        member = GuildMember.objects.create(guild=guild, user=second_user, position="member")
 
         # 退出帮会（参数是GuildMember对象）
         member_service.leave_guild(member)
@@ -224,11 +178,7 @@ class TestGuildMembership:
 
     def test_leader_cannot_leave(self, user_with_gold_bars):
         """测试帮主不能直接退出"""
-        guild = guild_service.create_guild(
-            user=user_with_gold_bars,
-            name="帮主帮会",
-            description=""
-        )
+        guild = guild_service.create_guild(user=user_with_gold_bars, name="帮主帮会", description="")
 
         leader_member = GuildMember.objects.get(user=user_with_gold_bars, guild=guild)
 
@@ -242,11 +192,7 @@ class TestGuildContribution:
 
     def test_donate_resource(self, user_with_gold_bars):
         """测试捐赠资源"""
-        guild = guild_service.create_guild(
-            user=user_with_gold_bars,
-            name="捐赠帮会",
-            description=""
-        )
+        guild = guild_service.create_guild(user=user_with_gold_bars, name="捐赠帮会", description="")
 
         # 给用户一些银两
         manor = Manor.objects.get(user=user_with_gold_bars)
@@ -257,7 +203,7 @@ class TestGuildContribution:
         initial_contribution = member.total_contribution
 
         # 捐赠银两
-        contribution_service.donate_resource(member, 'silver', 10000)
+        contribution_service.donate_resource(member, "silver", 10000)
 
         member.refresh_from_db()
         guild.refresh_from_db()
@@ -272,11 +218,7 @@ class TestGuildContribution:
 
     def test_donate_exceeds_daily_limit(self, user_with_gold_bars):
         """测试超出每日捐赠限制"""
-        guild = guild_service.create_guild(
-            user=user_with_gold_bars,
-            name="限制帮会",
-            description=""
-        )
+        guild = guild_service.create_guild(user=user_with_gold_bars, name="限制帮会", description="")
 
         manor = Manor.objects.get(user=user_with_gold_bars)
         manor.silver = 10000000  # 足够多的银两
@@ -285,10 +227,10 @@ class TestGuildContribution:
         member = GuildMember.objects.get(user=user_with_gold_bars, guild=guild)
 
         # 尝试捐赠超过每日限制
-        daily_limit = contribution_service.DAILY_DONATION_LIMITS.get('silver', 100000)
+        daily_limit = contribution_service.DAILY_DONATION_LIMITS.get("silver", 100000)
 
         with pytest.raises(ValueError, match="已达上限"):
-            contribution_service.donate_resource(member, 'silver', daily_limit + 1)
+            contribution_service.donate_resource(member, "silver", daily_limit + 1)
 
 
 @pytest.mark.django_db
@@ -297,11 +239,7 @@ class TestGuildUpgrade:
 
     def test_upgrade_guild(self, user_with_gold_bars):
         """测试升级帮会"""
-        guild = guild_service.create_guild(
-            user=user_with_gold_bars,
-            name="升级帮会",
-            description=""
-        )
+        guild = guild_service.create_guild(user=user_with_gold_bars, name="升级帮会", description="")
 
         # 给帮会足够金条
         guild.gold_bar = 100
@@ -318,11 +256,7 @@ class TestGuildUpgrade:
 
     def test_upgrade_max_level(self, user_with_gold_bars):
         """测试升级已满级帮会"""
-        guild = guild_service.create_guild(
-            user=user_with_gold_bars,
-            name="满级帮会",
-            description=""
-        )
+        guild = guild_service.create_guild(user=user_with_gold_bars, name="满级帮会", description="")
 
         guild.level = 10
         guild.gold_bar = 10000
@@ -338,14 +272,10 @@ class TestGuildDisband:
 
     def test_disband_guild(self, user_with_gold_bars, second_user):
         """测试解散帮会"""
-        guild = guild_service.create_guild(
-            user=user_with_gold_bars,
-            name="解散帮会",
-            description=""
-        )
+        guild = guild_service.create_guild(user=user_with_gold_bars, name="解散帮会", description="")
 
         # 添加成员
-        GuildMember.objects.create(guild=guild, user=second_user, position='member')
+        GuildMember.objects.create(guild=guild, user=second_user, position="member")
 
         # 解散帮会
         guild_service.disband_guild(guild, user_with_gold_bars)
@@ -359,13 +289,9 @@ class TestGuildDisband:
 
     def test_non_leader_cannot_disband(self, user_with_gold_bars, second_user):
         """测试非帮主不能解散帮会"""
-        guild = guild_service.create_guild(
-            user=user_with_gold_bars,
-            name="安全帮会",
-            description=""
-        )
+        guild = guild_service.create_guild(user=user_with_gold_bars, name="安全帮会", description="")
 
-        GuildMember.objects.create(guild=guild, user=second_user, position='member')
+        GuildMember.objects.create(guild=guild, user=second_user, position="member")
 
         with pytest.raises(ValueError, match="帮主"):
             guild_service.disband_guild(guild, second_user)

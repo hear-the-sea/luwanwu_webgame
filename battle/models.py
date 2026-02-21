@@ -6,6 +6,7 @@ from django.utils import timezone
 
 class TroopTemplate(models.Model):
     """兵种模板"""
+
     key = models.SlugField(unique=True, verbose_name="兵种标识")
     name = models.CharField(max_length=64, verbose_name="兵种名称")
     description = models.TextField(blank=True, verbose_name="描述")
@@ -15,7 +16,7 @@ class TroopTemplate(models.Model):
     speed_bonus = models.PositiveIntegerField(default=10, verbose_name="速度加成")
     priority = models.IntegerField(default=0, verbose_name="显示优先级")
     default_count = models.PositiveIntegerField(default=120, verbose_name="默认数量")
-    avatar = models.ImageField(upload_to='troops/', blank=True, null=True, verbose_name="兵种形象")
+    avatar = models.ImageField(upload_to="troops/", blank=True, null=True, verbose_name="兵种形象")
 
     class Meta:
         verbose_name = "兵种模板"

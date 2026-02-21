@@ -15,10 +15,7 @@ from django.views.generic import TemplateView
 from core.exceptions import GameError
 from core.utils import sanitize_error_message
 from gameplay.constants import BuildingKeys
-from gameplay.services import (
-    ensure_manor,
-    refresh_manor_state,
-)
+from gameplay.services import ensure_manor, refresh_manor_state
 
 
 class TroopRecruitmentView(LoginRequiredMixin, TemplateView):
@@ -31,12 +28,12 @@ class TroopRecruitmentView(LoginRequiredMixin, TemplateView):
         manor = ensure_manor(self.request.user)
         refresh_manor_state(manor)
 
-        from gameplay.services.recruitment import (
-            get_recruitment_options,
+        from gameplay.services.recruitment.recruitment import (
             get_active_recruitments,
-            refresh_troop_recruitments,
-            has_active_recruitment,
             get_player_troops,
+            get_recruitment_options,
+            has_active_recruitment,
+            refresh_troop_recruitments,
         )
 
         # 刷新募兵状态
@@ -87,10 +84,13 @@ def start_troop_recruitment_view(request: HttpRequest) -> HttpResponse:
         return redirect("gameplay:troop_recruitment")
 
     try:
-        from gameplay.services.recruitment import start_troop_recruitment
+        from gameplay.services.recruitment.recruitment import start_troop_recruitment
+
         recruitment = start_troop_recruitment(manor, troop_key, quantity)
         quantity_text = f"x{recruitment.quantity}" if recruitment.quantity > 1 else ""
-        messages.success(request, f"{recruitment.troop_name}{quantity_text} 开始募兵，预计 {recruitment.actual_duration} 秒后完成")
+        messages.success(
+            request, f"{recruitment.troop_name}{quantity_text} 开始募兵，预计 {recruitment.actual_duration} 秒后完成"
+        )
     except (GameError, ValueError) as e:
         messages.error(request, sanitize_error_message(e))
 

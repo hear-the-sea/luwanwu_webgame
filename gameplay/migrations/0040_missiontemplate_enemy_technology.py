@@ -6,13 +6,13 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0039_message_gameplay_me_manor_i_fdc256_idx_and_more'),
+        ("gameplay", "0039_message_gameplay_me_manor_i_fdc256_idx_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='missiontemplate',
-            name='enemy_technology',
-            field=models.JSONField(blank=True, default=dict, help_text='敌方护院科技配置'),
+            model_name="missiontemplate",
+            name="enemy_technology",
+            field=models.JSONField(blank=True, default=dict, help_text="敌方护院科技配置"),
         ),
     ]

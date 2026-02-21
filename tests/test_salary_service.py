@@ -6,7 +6,7 @@ import pytest
 from django.contrib.auth import get_user_model
 
 from core.exceptions import InsufficientResourceError, SalaryAlreadyPaidError
-from gameplay.services.manor import ensure_manor
+from gameplay.services.manor.core import ensure_manor
 from guests.models import Guest, GuestRarity, GuestTemplate, SalaryPayment
 from guests.services.salary import pay_all_salaries, pay_guest_salary
 

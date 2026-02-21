@@ -6,7 +6,7 @@ import pytest
 from django.utils import timezone
 
 from gameplay.models import InventoryItem, ItemTemplate
-from gameplay.services.manor import ensure_manor
+from gameplay.services.manor.core import ensure_manor
 from trade.models import AuctionBid, AuctionRound, AuctionSlot
 from trade.services.auction.selectors import (
     get_active_slots,

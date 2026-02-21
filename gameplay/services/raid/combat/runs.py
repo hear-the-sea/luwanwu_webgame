@@ -11,13 +11,11 @@ from django.db.models import F, Q
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async, safe_apply_async_with_dedup
-
 from gameplay.services.raid import combat as combat_pkg
-
 from guests.models import Guest, GuestStatus
 
 from ....models import Manor, PlayerTroop, RaidRun, ResourceEvent
-from ...messages import create_message
+from ...utils.messages import create_message
 from .loot import _grant_loot_items
 from .travel import calculate_raid_travel_time, get_active_raid_count
 
@@ -255,13 +253,19 @@ def _bulk_create_troops_with_fallback(to_create: list[PlayerTroop], now) -> None
 
 def _collect_due_raid_run_ids(manor: Manor, now) -> tuple[list[int], list[int], list[int]]:
     marching_ids = list(
-        RaidRun.objects.filter(attacker=manor, status=RaidRun.Status.MARCHING, battle_at__lte=now).values_list("id", flat=True)
+        RaidRun.objects.filter(attacker=manor, status=RaidRun.Status.MARCHING, battle_at__lte=now).values_list(
+            "id", flat=True
+        )
     )
     returning_ids = list(
-        RaidRun.objects.filter(attacker=manor, status=RaidRun.Status.RETURNING, return_at__lte=now).values_list("id", flat=True)
+        RaidRun.objects.filter(attacker=manor, status=RaidRun.Status.RETURNING, return_at__lte=now).values_list(
+            "id", flat=True
+        )
     )
     retreated_ids = list(
-        RaidRun.objects.filter(attacker=manor, status=RaidRun.Status.RETREATED, return_at__lte=now).values_list("id", flat=True)
+        RaidRun.objects.filter(attacker=manor, status=RaidRun.Status.RETREATED, return_at__lte=now).values_list(
+            "id", flat=True
+        )
     )
     return marching_ids, returning_ids, retreated_ids
 
@@ -506,7 +510,9 @@ def _add_troops_batch(manor: Manor, troops_to_add: Dict[str, int]) -> None:
         return
 
     # 预加载模板
-    templates = {t.key: t for t in TroopTemplate.objects.filter(key__in=troops_to_add.keys())}
+    from core.utils.template_loader import load_templates_by_key
+
+    templates = load_templates_by_key(TroopTemplate, keys=troops_to_add.keys())
 
     if not templates:
         return

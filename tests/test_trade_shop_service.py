@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from gameplay.models import InventoryItem, ItemTemplate
-from gameplay.services.manor import ensure_manor
+from gameplay.services.manor.core import ensure_manor
 from trade.models import ShopPurchaseLog, ShopSellLog, ShopStock
 from trade.services.shop_config import ShopItemConfig
 from trade.services.shop_service import (

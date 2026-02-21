@@ -3,14 +3,16 @@
 
 用于修复因并发冲突导致护院未正确归还的历史数据
 """
+
+import argparse
 import os
 import sys
-import django
-import argparse
 from pathlib import Path
 
+import django
+
 # 设置 Django settings
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
 # 添加项目根目录到 Python 路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -26,11 +28,11 @@ from gameplay.models import MissionRun, PlayerTroop  # noqa: E402
 def _compute_troops_lost(casualties: list[dict], loadout: dict) -> dict[str, int]:
     troops_lost: dict[str, int] = {}
     for entry in casualties:
-        key = entry.get('key')
+        key = entry.get("key")
         if key not in loadout:
             continue
         try:
-            lost = int(entry.get('lost', 0) or 0)
+            lost = int(entry.get("lost", 0) or 0)
         except (TypeError, ValueError):
             continue
         if lost > 0:
@@ -71,7 +73,7 @@ def _resolve_target_troops(run) -> dict[str, int]:
 
     print("\n有战报，将按损失归还")
     losses = report.losses or {}
-    casualties = (losses.get('attacker', {}) or {}).get('casualties', []) or []
+    casualties = (losses.get("attacker", {}) or {}).get("casualties", []) or []
     troops_lost = _compute_troops_lost(casualties, loadout)
     return _compute_target_troops(loadout, troops_lost)
 
@@ -85,7 +87,7 @@ def _apply_troop_return(manor, target_troops: dict[str, int]) -> None:
             pt.troop_template.key: pt
             for pt in PlayerTroop.objects.select_for_update()
             .filter(manor=manor, troop_template__key__in=target_troops.keys())
-            .select_related('troop_template')
+            .select_related("troop_template")
         }
 
         now = timezone.now()
@@ -128,7 +130,7 @@ def fix_mission_troop_return(run_id: int):
     print(f"修复任务 {run_id} 的护院归还")
     print("=" * 60)
 
-    run = MissionRun.objects.select_related('manor', 'battle_report', 'mission').get(pk=run_id)
+    run = MissionRun.objects.select_related("manor", "battle_report", "mission").get(pk=run_id)
     if not _print_run_meta(run):
         return
 
@@ -145,7 +147,7 @@ def fix_mission_troop_return(run_id: int):
 
 
 def _dry_run_preview(run_id: int) -> None:
-    run = MissionRun.objects.select_related('manor', 'battle_report', 'mission').get(pk=run_id)
+    run = MissionRun.objects.select_related("manor", "battle_report", "mission").get(pk=run_id)
     loadout = run.troop_loadout or {}
 
     print("\n出征配置:")
@@ -161,7 +163,7 @@ def _dry_run_preview(run_id: int) -> None:
                 print(f"  {key}: {count}")
         return
 
-    casualties = ((report.losses or {}).get('attacker', {}) or {}).get('casualties', []) or []
+    casualties = ((report.losses or {}).get("attacker", {}) or {}).get("casualties", []) or []
     troops_lost = _compute_troops_lost(casualties, loadout)
 
     print("\n应归还:")

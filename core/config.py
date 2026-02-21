@@ -16,7 +16,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, FrozenSet
 
-
 # ============ 时间配置 ============
 
 
@@ -166,24 +165,32 @@ class RarityConfig:
 
     def __post_init__(self):
         # 由于 frozen=True，需要通过 object.__setattr__ 设置
-        object.__setattr__(self, "HP_PROFILES", {
-            "black": 900,
-            "gray": 1100,
-            "green": 1400,
-            "red": 1550,
-            "blue": 1700,
-            "purple": 2400,
-            "orange": 2800,
-        })
-        object.__setattr__(self, "SALARY", {
-            "black": 500,
-            "gray": 1000,
-            "green": 2000,
-            "red": 3000,
-            "blue": 4000,
-            "purple": 15000,
-            "orange": 30000,
-        })
+        object.__setattr__(
+            self,
+            "HP_PROFILES",
+            {
+                "black": 900,
+                "gray": 1100,
+                "green": 1400,
+                "red": 1550,
+                "blue": 1700,
+                "purple": 2400,
+                "orange": 2800,
+            },
+        )
+        object.__setattr__(
+            self,
+            "SALARY",
+            {
+                "black": 500,
+                "gray": 1000,
+                "green": 2000,
+                "red": 3000,
+                "blue": 4000,
+                "purple": 15000,
+                "orange": 30000,
+            },
+        )
 
 
 # ============ 装备槽位配置 ============
@@ -200,15 +207,19 @@ class EquipmentConfig:
     MULTI_EQUIP_SLOTS: FrozenSet[str] = frozenset({"device", "ornament"})
 
     def __post_init__(self):
-        object.__setattr__(self, "SLOT_CAPACITY", {
-            "helmet": 1,
-            "armor": 1,
-            "weapon": 1,
-            "shoes": 1,
-            "mount": 1,
-            "device": 3,
-            "ornament": 3,
-        })
+        object.__setattr__(
+            self,
+            "SLOT_CAPACITY",
+            {
+                "helmet": 1,
+                "armor": 1,
+                "weapon": 1,
+                "shoes": 1,
+                "mount": 1,
+                "device": 3,
+                "ornament": 3,
+            },
+        )
 
 
 # ============ 招募配置 ============

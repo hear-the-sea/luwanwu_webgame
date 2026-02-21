@@ -7,7 +7,7 @@ import yaml
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
-from gameplay.services.template_cache import clear_technology_template_cache
+from gameplay.services.utils.template_cache import clear_technology_template_cache
 
 
 class Command(BaseCommand):
@@ -45,6 +45,4 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING(f"Duplicate technology keys found: {sorted(duplicate_keys)}"))
 
         clear_technology_template_cache()
-        self.stdout.write(
-            self.style.SUCCESS(f"Technology templates loaded. count={len(technologies)}")
-        )
+        self.stdout.write(self.style.SUCCESS(f"Technology templates loaded. count={len(technologies)}"))

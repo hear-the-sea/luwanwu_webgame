@@ -5,12 +5,10 @@ from functools import lru_cache
 from typing import Any, List
 
 import yaml
-
 from django.conf import settings
 
 from core.config import TRADE
 from gameplay.models import ItemTemplate
-
 
 SHOP_CONFIG_PATH = settings.BASE_DIR / "data" / "shop_items.yaml"
 

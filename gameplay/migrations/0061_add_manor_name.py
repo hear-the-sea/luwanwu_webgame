@@ -6,13 +6,13 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0060_remove_lumber_yard_stone_pit'),
+        ("gameplay", "0060_remove_lumber_yard_stone_pit"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='manor',
-            name='name',
-            field=models.CharField(blank=True, max_length=20, null=True, unique=True, verbose_name='庄园名称'),
+            model_name="manor",
+            name="name",
+            field=models.CharField(blank=True, max_length=20, null=True, unique=True, verbose_name="庄园名称"),
         ),
     ]

@@ -86,7 +86,9 @@ def seed_templates(apps, schema_editor):
         entries = pool_data.pop("entries")
         pool, _ = RecruitmentPool.objects.update_or_create(key=pool_data["key"], defaults=pool_data)
         for key, weight in entries:
-            RecruitmentPoolEntry.objects.update_or_create(pool=pool, template=templates[key], defaults={"weight": weight})
+            RecruitmentPoolEntry.objects.update_or_create(
+                pool=pool, template=templates[key], defaults={"weight": weight}
+            )
 
 
 class Migration(migrations.Migration):

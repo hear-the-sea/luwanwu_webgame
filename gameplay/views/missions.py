@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -14,27 +16,25 @@ from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
-from typing import Any
 
 from core.exceptions import GameError
 from core.utils import safe_int_list, sanitize_error_message
-from guests.models import Guest, GuestStatus, GuestTemplate, SkillBook
-
 from gameplay.constants import UIConstants
 from gameplay.models import MissionRun, MissionTemplate, ResourceType
 from gameplay.services import (
-    bulk_mission_attempts_today,
+    add_mission_extra_attempt,
     bulk_get_mission_extra_attempts,
+    bulk_mission_attempts_today,
     ensure_manor,
+    get_item_quantity,
     launch_mission,
     normalize_mission_loadout,
     refresh_manor_state,
     refresh_mission_runs,
     request_retreat,
-    add_mission_extra_attempt,
-    get_item_quantity,
 )
-from gameplay.services.recruitment import get_player_troops
+from gameplay.services.recruitment.recruitment import get_player_troops
+from guests.models import Guest, GuestStatus, GuestTemplate, SkillBook
 
 # 任务卡道具 key
 MISSION_CARD_KEY = "mission_card"
@@ -208,14 +208,20 @@ class TaskBoardView(LoginRequiredMixin, TemplateView):
         attempts = bulk_mission_attempts_today(manor, missions)
         extra_attempts = bulk_get_mission_extra_attempts(manor, missions)
         enemy_keys, troop_keys, drop_keys = _collect_mission_asset_keys(missions)
-        guest_templates = {tpl.key: tpl for tpl in GuestTemplate.objects.filter(key__in=enemy_keys).only('key', 'name', 'avatar')}
+        guest_templates = {
+            tpl.key: tpl for tpl in GuestTemplate.objects.filter(key__in=enemy_keys).only("key", "name", "avatar")
+        }
         guest_labels = {key: tpl.name for key, tpl in guest_templates.items()}
 
         # 加载士兵模板
         from battle.models import TroopTemplate
-        troop_templates_objs = {tpl.key: tpl for tpl in TroopTemplate.objects.filter(key__in=troop_keys).only('key', 'name')}
+
+        troop_templates_objs = {
+            tpl.key: tpl for tpl in TroopTemplate.objects.filter(key__in=troop_keys).only("key", "name")
+        }
 
         from gameplay.utils.template_loader import get_item_templates_by_keys
+
         item_templates = get_item_templates_by_keys(drop_keys)
         loot_labels = {key: tpl.name for key, tpl in item_templates.items()}
         loot_rarities = {key: (tpl.rarity or "default") for key, tpl in item_templates.items()}
@@ -230,10 +236,23 @@ class TaskBoardView(LoginRequiredMixin, TemplateView):
             attempts,
             extra_attempts,
         )
-        available_guests = manor.guests.filter(status=GuestStatus.IDLE).select_related("template").only(
-            'id', 'level', 'current_hp', 'status', 'custom_name',
-            'hp_bonus', 'defense_stat',  # max_hp 计算所需
-            'template__id', 'template__key', 'template__name', 'template__avatar', 'template__rarity'
+        available_guests = (
+            manor.guests.filter(status=GuestStatus.IDLE)
+            .select_related("template")
+            .only(
+                "id",
+                "level",
+                "current_hp",
+                "status",
+                "custom_name",
+                "hp_bonus",
+                "defense_stat",  # max_hp 计算所需
+                "template__id",
+                "template__key",
+                "template__name",
+                "template__avatar",
+                "template__rarity",
+            )
         )
 
         # 获取任务卡数量
@@ -244,7 +263,7 @@ class TaskBoardView(LoginRequiredMixin, TemplateView):
             manor.mission_runs.select_related("mission", "battle_report")
             .prefetch_related(Prefetch("guests", queryset=Guest.objects.select_related("template")))
             .filter(status=MissionRun.Status.ACTIVE)
-            .order_by("-started_at")[:UIConstants.ACTIVE_RUNS_DISPLAY]
+            .order_by("-started_at")[: UIConstants.ACTIVE_RUNS_DISPLAY]
         )
         context["manor"] = manor
         context["missions"] = missions
@@ -311,6 +330,7 @@ class AcceptMissionView(LoginRequiredMixin, TemplateView):
             else:
                 raw_loadout = {}
                 from battle.troops import troop_template_list
+
                 for item in troop_template_list():
                     raw_loadout[item["key"]] = request.POST.get(f"troop_{item['key']}", 0)
         try:
@@ -390,6 +410,7 @@ def use_mission_card_view(request: HttpRequest) -> HttpResponse:
         with transaction.atomic():
             # 消耗任务卡（内部会检查数量并抛出异常）
             from gameplay.services.inventory import consume_inventory_item_for_manor_locked
+
             consume_inventory_item_for_manor_locked(manor, MISSION_CARD_KEY, 1)
             # 增加额外次数
             add_mission_extra_attempt(manor, mission, 1)

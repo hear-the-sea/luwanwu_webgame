@@ -11,12 +11,12 @@ from .models import (
     Message,
     MissionRun,
     MissionTemplate,
-    ResourceEvent,
-    WorkTemplate,
-    WorkAssignment,
-    ScoutRecord,
-    ScoutCooldown,
     RaidRun,
+    ResourceEvent,
+    ScoutCooldown,
+    ScoutRecord,
+    WorkAssignment,
+    WorkTemplate,
 )
 from .services import create_message
 
@@ -31,23 +31,25 @@ class ManorAdmin(admin.ModelAdmin):
     autocomplete_fields = ("user",)
     readonly_fields = ("created_at", "resource_updated_at", "last_active_at")
     fieldsets = (
-        ("基本信息", {
-            "fields": ("user", "name", "prestige", "prestige_silver_spent")
-        }),
-        ("位置信息", {
-            "fields": ("region", "coordinate_x", "coordinate_y", "last_active_at")
-        }),
-        ("资源", {
-            "fields": ("grain", "silver", "grain_capacity", "silver_capacity", "storage_capacity", "retainer_count")
-        }),
-        ("保护状态", {
-            "fields": ("newbie_protection_until", "defeat_protection_until", "peace_shield_until", "last_relocation_at"),
-            "classes": ("collapse",)
-        }),
-        ("时间", {
-            "fields": ("created_at", "resource_updated_at"),
-            "classes": ("collapse",)
-        }),
+        ("基本信息", {"fields": ("user", "name", "prestige", "prestige_silver_spent")}),
+        ("位置信息", {"fields": ("region", "coordinate_x", "coordinate_y", "last_active_at")}),
+        (
+            "资源",
+            {"fields": ("grain", "silver", "grain_capacity", "silver_capacity", "storage_capacity", "retainer_count")},
+        ),
+        (
+            "保护状态",
+            {
+                "fields": (
+                    "newbie_protection_until",
+                    "defeat_protection_until",
+                    "peace_shield_until",
+                    "last_relocation_at",
+                ),
+                "classes": ("collapse",),
+            },
+        ),
+        ("时间", {"fields": ("created_at", "resource_updated_at"), "classes": ("collapse",)}),
     )
 
 
@@ -66,7 +68,15 @@ class BuildingAdmin(admin.ModelAdmin):
 
 @admin.register(ResourceEvent)
 class ResourceEventAdmin(admin.ModelAdmin):
-    list_display = ("id", "manor_link", "resource_type_display", "delta_display", "reason_display", "note", "created_at")
+    list_display = (
+        "id",
+        "manor_link",
+        "resource_type_display",
+        "delta_display",
+        "reason_display",
+        "note",
+        "created_at",
+    )
     list_filter = (
         "resource_type",
         "reason",
@@ -89,8 +99,10 @@ class ResourceEventAdmin(admin.ModelAdmin):
         """显示庄园链接"""
         from django.urls import reverse
         from django.utils.html import format_html
+
         url = reverse("admin:gameplay_manor_change", args=[obj.manor_id])
         return format_html('<a href="{}">{}</a>', url, obj.manor.name or obj.manor.user.username)
+
     manor_link.short_description = "庄园"
     manor_link.admin_order_field = "manor__user__username"
 
@@ -98,17 +110,20 @@ class ResourceEventAdmin(admin.ModelAdmin):
         """资源类型中文显示"""
         type_map = {"grain": "🌾 粮食", "silver": "💰 银两"}
         return type_map.get(obj.resource_type, obj.resource_type)
+
     resource_type_display.short_description = "资源类型"
     resource_type_display.admin_order_field = "resource_type"
 
     def delta_display(self, obj):
         """数量显示（带颜色）"""
         from django.utils.html import format_html
+
         if obj.delta > 0:
             return format_html('<span style="color: green;">+{}</span>', obj.delta)
         elif obj.delta < 0:
             return format_html('<span style="color: red;">{}</span>', obj.delta)
         return obj.delta
+
     delta_display.short_description = "变化量"
     delta_display.admin_order_field = "delta"
 
@@ -134,6 +149,7 @@ class ResourceEventAdmin(admin.ModelAdmin):
             "tech_upgrade": "📚 科技升级",
         }
         return reason_map.get(obj.reason, obj.reason)
+
     reason_display.short_description = "原因"
     reason_display.admin_order_field = "reason"
 
@@ -174,7 +190,7 @@ class SendMessageForm(forms.ModelForm):
         required=False,
         widget=admin.widgets.FilteredSelectMultiple("玩家", False),
         label="指定玩家（不选则发送给所有人）",
-        help_text="按住 Ctrl 多选"
+        help_text="按住 Ctrl 多选",
     )
 
     attachment_resources = forms.JSONField(
@@ -182,7 +198,7 @@ class SendMessageForm(forms.ModelForm):
         initial={},
         label="附件资源",
         help_text='格式：{"grain": 100, "silver": 200}',
-        widget=forms.Textarea(attrs={"rows": 3, "cols": 60})
+        widget=forms.Textarea(attrs={"rows": 3, "cols": 60}),
     )
 
     attachment_items = forms.JSONField(
@@ -190,7 +206,7 @@ class SendMessageForm(forms.ModelForm):
         initial={},
         label="附件道具",
         help_text='格式：{"item_key": 数量}，例如：{"experience_peach": 5}',
-        widget=forms.Textarea(attrs={"rows": 3, "cols": 60})
+        widget=forms.Textarea(attrs={"rows": 3, "cols": 60}),
     )
 
     class Meta:
@@ -208,6 +224,7 @@ class MessageAdmin(admin.ModelAdmin):
 
     def has_attachments(self, obj):
         return obj.has_attachments
+
     has_attachments.boolean = True
     has_attachments.short_description = "有附件"
 
@@ -304,22 +321,25 @@ class ScoutCooldownAdmin(admin.ModelAdmin):
 
     def is_active(self, obj):
         return obj.is_active
+
     is_active.boolean = True
     is_active.short_description = "冷却中"
 
 
 @admin.register(RaidRun)
 class RaidRunAdmin(admin.ModelAdmin):
-    list_display = (
-        "attacker", "defender", "status", "is_attacker_victory",
-        "started_at", "battle_at", "return_at"
-    )
+    list_display = ("attacker", "defender", "status", "is_attacker_victory", "started_at", "battle_at", "return_at")
     list_filter = ("status", "is_attacker_victory")
     search_fields = ("attacker__user__username", "defender__user__username")
     readonly_fields = (
-        "started_at", "battle_at", "return_at", "completed_at",
-        "loot_resources", "loot_items",
-        "attacker_prestige_change", "defender_prestige_change"
+        "started_at",
+        "battle_at",
+        "return_at",
+        "completed_at",
+        "loot_resources",
+        "loot_items",
+        "attacker_prestige_change",
+        "defender_prestige_change",
     )
     date_hierarchy = "started_at"
     filter_horizontal = ("guests",)

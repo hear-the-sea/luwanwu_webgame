@@ -31,7 +31,7 @@ def reverse_change_key(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0028_rename_juyi_to_jiading'),
+        ("gameplay", "0028_rename_juyi_to_jiading"),
     ]
 
     operations = [

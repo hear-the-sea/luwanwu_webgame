@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import pytest
 from django.test import RequestFactory
 
-from gameplay.services.manor import ensure_manor
+from gameplay.services.manor.core import ensure_manor
 from trade.selectors import get_trade_context
 from trade.services.shop_service import ShopItemDisplay
 
@@ -339,7 +339,9 @@ def test_get_trade_context_market_buy_tolerates_active_listings_error(monkeypatc
 
 
 @pytest.mark.django_db
-def test_get_trade_context_market_sell_negative_page_clamped_and_tolerates_inventory_error(monkeypatch, django_user_model):
+def test_get_trade_context_market_sell_negative_page_clamped_and_tolerates_inventory_error(
+    monkeypatch, django_user_model
+):
     monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("trade.selectors.expire_user_listings", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(

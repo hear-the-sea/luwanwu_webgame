@@ -13,106 +13,33 @@ gameplay views package
 - map: 地图和踢馆系统
 """
 
-# Core views
-from .core import (
-    DashboardView,
-    HomeView,
-    SettingsView,
-    RankingView,
-    rename_manor_view,
-)
+# Building views
+from .buildings import UpgradeBuildingView
 
-# Mission views
-from .missions import (
-    TaskBoardView,
-    AcceptMissionView,
-    retreat_mission_view,
-    retreat_scout_view,
-    use_mission_card_view,
-)
+# Core views
+from .core import DashboardView, HomeView, RankingView, SettingsView, rename_manor_view
 
 # Inventory views
 from .inventory import (
     RecruitmentHallView,
     WarehouseView,
-    use_item_view,
-    use_guest_rebirth_card_view,
-    use_xisuidan_view,
-    use_xidianka_view,
     move_item_to_treasury_view,
     move_item_to_warehouse_view,
-)
-
-# Message views
-from .messages import (
-    MessageListView,
-    view_message,
-    delete_messages_view,
-    delete_all_messages_view,
-    mark_messages_read_view,
-    mark_all_messages_read_view,
-    claim_attachment_view,
-)
-
-# Building views
-from .buildings import (
-    UpgradeBuildingView,
-)
-
-# Technology views
-from .technology import (
-    TechnologyView,
-    upgrade_technology_view,
-)
-
-# Work views
-from .work import (
-    WorkView,
-    assign_work_view,
-    recall_work_view,
-    claim_work_reward_view,
-)
-
-# Production views
-from .production import (
-    StableView,
-    RanchView,
-    SmithyView,
-    ForgeView,
-    start_horse_production_view,
-    start_livestock_production_view,
-    start_smelting_production_view,
-    start_equipment_forging_view,
-)
-
-# Recruitment views
-from .recruitment import (
-    TroopRecruitmentView,
-    start_troop_recruitment_view,
-)
-
-# Map views
-from .map import (
-    MapView,
-    RaidConfigView,
-    map_search_api,
-    manor_detail_api,
-    start_scout_api,
-    start_raid_api,
-    retreat_raid_api,
-    raid_status_api,
-    protection_status_api,
+    use_guest_rebirth_card_view,
+    use_item_view,
+    use_xidianka_view,
+    use_xisuidan_view,
 )
 
 # Jail / Oath grove
 from .jail import (
+    JailView,
+    OathGroveView,
     add_oath_bond_api,
     add_oath_bond_view,
     draw_pie_api,
     draw_pie_view,
-    JailView,
     jail_status_api,
-    OathGroveView,
     oath_status_api,
     recruit_prisoner_api,
     recruit_prisoner_view,
@@ -121,6 +48,54 @@ from .jail import (
     remove_oath_bond_api,
     remove_oath_bond_view,
 )
+
+# Map views
+from .map import (
+    MapView,
+    RaidConfigView,
+    manor_detail_api,
+    map_search_api,
+    protection_status_api,
+    raid_status_api,
+    retreat_raid_api,
+    start_raid_api,
+    start_scout_api,
+)
+
+# Message views
+from .messages import (
+    MessageListView,
+    claim_attachment_view,
+    delete_all_messages_view,
+    delete_messages_view,
+    mark_all_messages_read_view,
+    mark_messages_read_view,
+    view_message,
+)
+
+# Mission views
+from .missions import AcceptMissionView, TaskBoardView, retreat_mission_view, retreat_scout_view, use_mission_card_view
+
+# Production views
+from .production import (
+    ForgeView,
+    RanchView,
+    SmithyView,
+    StableView,
+    start_equipment_forging_view,
+    start_horse_production_view,
+    start_livestock_production_view,
+    start_smelting_production_view,
+)
+
+# Recruitment views
+from .recruitment import TroopRecruitmentView, start_troop_recruitment_view
+
+# Technology views
+from .technology import TechnologyView, upgrade_technology_view
+
+# Work views
+from .work import WorkView, assign_work_view, claim_work_reward_view, recall_work_view
 
 __all__ = [
     # Core

@@ -7,25 +7,38 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('battle', '0005_add_player_troop'),
-        ('gameplay', '0040_missiontemplate_enemy_technology'),
+        ("battle", "0005_add_player_troop"),
+        ("gameplay", "0040_missiontemplate_enemy_technology"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='PlayerTroop',
+            name="PlayerTroop",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('count', models.PositiveIntegerField(default=0, verbose_name='数量')),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('manor', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='troops', to='gameplay.manor')),
-                ('troop_template', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='player_troops', to='battle.trooptemplate', verbose_name='兵种模板')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("count", models.PositiveIntegerField(default=0, verbose_name="数量")),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "manor",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="troops", to="gameplay.manor"
+                    ),
+                ),
+                (
+                    "troop_template",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="player_troops",
+                        to="battle.trooptemplate",
+                        verbose_name="兵种模板",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': '玩家护院',
-                'verbose_name_plural': '玩家护院',
-                'unique_together': {('manor', 'troop_template')},
+                "verbose_name": "玩家护院",
+                "verbose_name_plural": "玩家护院",
+                "unique_together": {("manor", "troop_template")},
             },
         ),
     ]

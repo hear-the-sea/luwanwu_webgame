@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from ..models import InventoryItem
 from guests.services import list_candidates, list_pools
 
+from ..models import InventoryItem
 from ..services import refresh_manor_state
-from ..services.query_optimization import optimize_guest_queryset
+from ..services.utils.query_optimization import optimize_guest_queryset
 
 
 def get_recruitment_hall_context(manor, records_limit: int) -> dict:

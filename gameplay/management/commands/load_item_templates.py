@@ -7,8 +7,8 @@ import yaml
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
-from gameplay.models import ItemTemplate
 from core.utils.image_utils import compress_and_resize_image
+from gameplay.models import ItemTemplate
 
 
 def _load_payload(file_path: Path):
@@ -55,7 +55,9 @@ def _load_item_image(command: BaseCommand, obj: ItemTemplate, entry: dict, image
         if obj.image:
             obj.image.delete(save=False)
         obj.image.save(new_filename, compressed_file, save=True)
-        command.stdout.write(command.style.SUCCESS(f"  [OK] Compressed and loaded image: {image_filename} -> {new_filename}"))
+        command.stdout.write(
+            command.style.SUCCESS(f"  [OK] Compressed and loaded image: {image_filename} -> {new_filename}")
+        )
     except Exception as exc:
         command.stdout.write(command.style.WARNING(f"  [FAIL] Failed to load image {image_filename}: {exc}"))
 

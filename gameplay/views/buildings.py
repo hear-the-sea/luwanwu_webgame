@@ -16,10 +16,7 @@ from django.views.generic import TemplateView
 from core.exceptions import GameError
 from core.utils import sanitize_error_message
 from gameplay.models import Building
-from gameplay.services import (
-    refresh_manor_state,
-    start_upgrade,
-)
+from gameplay.services import refresh_manor_state, start_upgrade
 
 
 @method_decorator(require_POST, name="dispatch")

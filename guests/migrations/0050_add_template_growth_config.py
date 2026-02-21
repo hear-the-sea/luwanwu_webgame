@@ -6,18 +6,18 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('guests', '0049_seed_pubayi_templates'),
+        ("guests", "0049_seed_pubayi_templates"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='guesttemplate',
-            name='attribute_weights',
-            field=models.JSONField(blank=True, default=dict, verbose_name='属性分配权重'),
+            model_name="guesttemplate",
+            name="attribute_weights",
+            field=models.JSONField(blank=True, default=dict, verbose_name="属性分配权重"),
         ),
         migrations.AddField(
-            model_name='guesttemplate',
-            name='growth_range',
-            field=models.JSONField(blank=True, default=list, verbose_name='成长点数区间'),
+            model_name="guesttemplate",
+            name="growth_range",
+            field=models.JSONField(blank=True, default=list, verbose_name="成长点数区间"),
         ),
     ]

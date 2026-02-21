@@ -129,7 +129,15 @@ class MarketTransactionAdmin(admin.ModelAdmin):
 class AuctionSlotInline(admin.TabularInline):
     model = AuctionSlot
     extra = 0
-    readonly_fields = ("item_template", "quantity", "starting_price", "current_price", "bid_count", "highest_bidder", "status")
+    readonly_fields = (
+        "item_template",
+        "quantity",
+        "starting_price",
+        "current_price",
+        "bid_count",
+        "highest_bidder",
+        "status",
+    )
     can_delete = False
 
 
@@ -152,10 +160,12 @@ class AuctionRoundAdmin(admin.ModelAdmin):
 
     def get_slot_count(self, obj):
         return obj.slots.count()
+
     get_slot_count.short_description = "拍卖位数"
 
     def get_sold_count(self, obj):
         return obj.slots.filter(status="sold").count()
+
     get_sold_count.short_description = "售出数"
 
 

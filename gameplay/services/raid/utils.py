@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 from datetime import timedelta
-from typing import Tuple, Optional
+from typing import Optional, Tuple
 
 from django.db.models import F, Sum
 from django.utils import timezone
@@ -102,10 +102,7 @@ def can_attack_target(
     # 检查目标24小时内被攻击次数（防止小号集群攻击）
     now = now or timezone.now()
     if recent_attacks is None:
-        recent_attacks = RaidRun.objects.filter(
-            defender=defender,
-            started_at__gte=now - timedelta(hours=24)
-        ).count()
+        recent_attacks = RaidRun.objects.filter(defender=defender, started_at__gte=now - timedelta(hours=24)).count()
     if recent_attacks >= PVPConstants.RAID_MAX_DAILY_ATTACKS_RECEIVED:
         return False, "该目标今日已被多次攻击，暂时无法攻击"
 
@@ -126,12 +123,12 @@ def get_asset_level(manor: Manor) -> Tuple[str, int]:
     total_assets = manor.grain + manor.silver
 
     # 使用聚合查询计算仓库物品总价值（优化：避免循环查询）
-    item_value = InventoryItem.objects.filter(
-        manor=manor,
-        storage_location=InventoryItem.StorageLocation.WAREHOUSE
-    ).aggregate(
-        total=Sum(F("quantity") * F("template__price"))
-    )["total"] or 0
+    item_value = (
+        InventoryItem.objects.filter(manor=manor, storage_location=InventoryItem.StorageLocation.WAREHOUSE).aggregate(
+            total=Sum(F("quantity") * F("template__price"))
+        )["total"]
+        or 0
+    )
 
     total_assets += item_value
 

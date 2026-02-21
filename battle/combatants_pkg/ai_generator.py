@@ -1,6 +1,7 @@
 """
 AI guest generator.
 """
+
 from __future__ import annotations
 
 import random
@@ -15,6 +16,7 @@ def _get_max_squad() -> int:
     """Get MAX_SQUAD from constants, with fallback."""
     try:
         from battle.constants import MAX_SQUAD as SQUAD
+
         return SQUAD
     except ImportError:
         return 5
@@ -31,7 +33,7 @@ def allocate_ai_attribute_points(guest: Guest, total_points: int) -> Dict[str, i
     Returns:
         Allocation dict {"force": X, "intellect": Y, "defense": Z, "agility": W}
     """
-    from guests.utils.attribute_growth import MILITARY_ATTRIBUTE_WEIGHTS, CIVIL_ATTRIBUTE_WEIGHTS
+    from guests.utils.attribute_growth import CIVIL_ATTRIBUTE_WEIGHTS, MILITARY_ATTRIBUTE_WEIGHTS
 
     if guest.archetype == "military":
         weights = MILITARY_ATTRIBUTE_WEIGHTS
@@ -50,10 +52,7 @@ def allocate_ai_attribute_points(guest: Guest, total_points: int) -> Dict[str, i
     return allocation
 
 
-def build_named_ai_guests(
-    guest_keys: List[str | Dict[str, Any]],
-    level: int = 50
-) -> List[Guest]:
+def build_named_ai_guests(guest_keys: List[str | Dict[str, Any]], level: int = 50) -> List[Guest]:
     """
     Build AI guests from specified templates with random attribute growth.
 

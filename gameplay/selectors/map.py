@@ -36,9 +36,7 @@ def get_raid_config_context(manor, target_manor) -> dict:
     target_info = get_manor_public_info(target_manor, viewer=manor)
     can_attack, attack_reason = can_attack_target(manor, target_manor)
     available_guests = list(
-        manor.guests.filter(status=GuestStatus.IDLE)
-        .select_related("template")
-        .order_by("-level", "template__name")
+        manor.guests.filter(status=GuestStatus.IDLE).select_related("template").order_by("-level", "template__name")
     )
     return {
         "manor": manor,

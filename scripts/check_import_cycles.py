@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
-
 PROJECT_PACKAGES = {
     "accounts",
     "battle",

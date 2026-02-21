@@ -6,9 +6,8 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0022_alter_itemtemplate_effect_type'),
-        ('gameplay', '0022_itemtemplate_medicine'),
+        ("gameplay", "0022_alter_itemtemplate_effect_type"),
+        ("gameplay", "0022_itemtemplate_medicine"),
     ]
 
-    operations = [
-    ]
+    operations = []

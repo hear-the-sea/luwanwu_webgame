@@ -9,14 +9,12 @@ from django.db import transaction
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
-
 from gameplay.services.raid import combat as combat_pkg
-
 from guests.models import Guest, GuestStatus
 
 from ....models import JailPrisoner, Manor, OathBond, PlayerTroop, RaidRun
-from ...messages import create_message
-from ...troops import apply_defender_troop_losses
+from ...recruitment.troops import apply_defender_troop_losses
+from ...utils.messages import create_message
 from .loot import (
     _apply_loot,
     _calculate_loot,
@@ -178,7 +176,10 @@ def process_raid_battle(run: RaidRun, now=None) -> None:
         # 修复：在战斗计算前显式锁定攻守双方 Manor
         # 确保后续的声望计算、俘虏容量检查等都是基于最新状态，防止并发陈旧读
         from gameplay.models import Manor as ManorModel
-        ManorModel.objects.select_for_update().filter(pk__in=[locked_run.attacker_id, locked_run.defender_id]).order_by("pk").count()
+
+        ManorModel.objects.select_for_update().filter(pk__in=[locked_run.attacker_id, locked_run.defender_id]).order_by(
+            "pk"
+        ).count()
 
         report = _execute_raid_battle(locked_run)
         apply_defender_troop_losses(locked_run.defender, report)
@@ -248,7 +249,10 @@ def _filter_capture_candidates(losing_guest_ids: List[int]) -> List[int]:
 def _select_capture_target(candidates: List[int], loser: Manor) -> Optional[Guest]:
     target_guest_id = combat_pkg.random.choice(candidates)
     target = (
-        Guest.objects.select_for_update().select_related("template", "manor").filter(pk=target_guest_id, manor=loser).first()
+        Guest.objects.select_for_update()
+        .select_related("template", "manor")
+        .filter(pk=target_guest_id, manor=loser)
+        .first()
     )
     if not target:
         return None
@@ -274,7 +278,9 @@ def _delete_captured_guest_gear(run: RaidRun, target: Guest) -> None:
         )
 
 
-def _capture_guest_payload(captured_name: str, captured_rarity: str, captured_template_key: str, is_attacker_victory: bool) -> Dict[str, Any]:
+def _capture_guest_payload(
+    captured_name: str, captured_rarity: str, captured_template_key: str, is_attacker_victory: bool
+) -> Dict[str, Any]:
     return {
         "guest_name": captured_name,
         "rarity": captured_rarity,
@@ -353,9 +359,7 @@ def _execute_raid_battle(run: RaidRun):
 
     defender_troops: Dict[str, int] = {}
     for troop in (
-        PlayerTroop.objects.select_for_update()
-        .filter(manor=defender, count__gt=0)
-        .select_related("troop_template")
+        PlayerTroop.objects.select_for_update().filter(manor=defender, count__gt=0).select_related("troop_template")
     ):
         defender_troops[troop.troop_template.key] = troop.count
 
@@ -386,8 +390,9 @@ def _execute_raid_battle(run: RaidRun):
 
 def _apply_prestige_changes(run: RaidRun, is_attacker_victory: bool) -> None:
     """应用声望变化"""
-    from ...prestige import PRESTIGE_SILVER_THRESHOLD
     from gameplay.models import Manor as ManorModel
+
+    from ...manor.prestige import PRESTIGE_SILVER_THRESHOLD
 
     if is_attacker_victory:
         attacker_change = combat_pkg.PVPConstants.RAID_ATTACKER_WIN_PRESTIGE

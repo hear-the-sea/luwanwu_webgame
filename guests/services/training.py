@@ -10,11 +10,7 @@ from typing import TYPE_CHECKING, Dict
 from django.db import transaction
 from django.utils import timezone
 
-from core.exceptions import (
-    GuestError,
-    GuestMaxLevelError,
-    GuestTrainingInProgressError,
-)
+from core.exceptions import GuestError, GuestMaxLevelError, GuestTrainingInProgressError
 
 if TYPE_CHECKING:
     from gameplay.models import Manor
@@ -28,8 +24,10 @@ logger = logging.getLogger(__name__)
 try:
     from celery.exceptions import CeleryError
 except ImportError:  # pragma: no cover
+
     class CeleryError(Exception):
         pass
+
 
 try:
     from kombu.exceptions import OperationalError as KombuOperationalError
@@ -49,6 +47,7 @@ def _try_enqueue_complete_guest_training(guest: Guest, *, countdown: int, source
         # 仅在开发/测试环境下允许瞬间完成训练
         # 生产环境应该保持 training_complete_at，依赖定时任务结算
         from django.conf import settings
+
         if settings.DEBUG:
             logger.debug("DEBUG模式：允许瞬间完成训练")
             finalize_guest_training(guest, now=guest.training_complete_at)
@@ -67,6 +66,7 @@ def _try_enqueue_complete_guest_training(guest: Guest, *, countdown: int, source
         )
         # 仅在开发/测试环境下允许瞬间完成训练
         from django.conf import settings
+
         if settings.DEBUG:
             logger.debug("DEBUG模式：允许瞬间完成训练")
             finalize_guest_training(guest, now=guest.training_complete_at)
@@ -236,13 +236,10 @@ def train_guest(guest: Guest, levels: int = 1) -> Guest:
     # 死锁预防：统一锁顺序 Manor -> Guest
     # 全局规则是先锁 Manor (资源扣除) 再锁 Guest (状态变更)
     from gameplay.models import Manor
+
     Manor.objects.select_for_update().get(pk=guest.manor_id)
 
-    locked_guest = (
-        Guest.objects.select_for_update()
-        .select_related("manor", "template")
-        .get(pk=guest.pk)
-    )
+    locked_guest = Guest.objects.select_for_update().select_related("manor", "template").get(pk=guest.pk)
     if locked_guest.level >= MAX_GUEST_LEVEL:
         raise GuestMaxLevelError(locked_guest, max_level=MAX_GUEST_LEVEL)
     if locked_guest.training_complete_at:
@@ -289,21 +286,14 @@ def finalize_guest_training(guest: Guest, now=None) -> bool:
     Returns:
         是否成功完成训练
     """
-    from guests.utils.attribute_growth import (
-        allocate_level_up_attributes,
-        apply_attribute_growth,
-    )
+    from guests.utils.attribute_growth import allocate_level_up_attributes, apply_attribute_growth
 
     now = now or timezone.now()
     if not getattr(guest, "pk", None):
         return False
 
     with transaction.atomic():
-        locked_guest = (
-            Guest.objects.select_for_update()
-            .select_related("manor", "template")
-            .get(pk=guest.pk)
-        )
+        locked_guest = Guest.objects.select_for_update().select_related("manor", "template").get(pk=guest.pk)
         if not locked_guest.training_complete_at or locked_guest.training_complete_at > now:
             return False
 
@@ -332,10 +322,10 @@ def finalize_guest_training(guest: Guest, now=None) -> bool:
         locked_guest.save(
             update_fields=[
                 "level",
-                "force",           # 新增：属性会改变
-                "intellect",       # 新增：属性会改变
-                "defense_stat",    # 新增：属性会改变
-                "agility",         # 新增：属性会改变
+                "force",  # 新增：属性会改变
+                "intellect",  # 新增：属性会改变
+                "defense_stat",  # 新增：属性会改变
+                "agility",  # 新增：属性会改变
                 "training_complete_at",
                 "training_target_level",
                 "attribute_points",

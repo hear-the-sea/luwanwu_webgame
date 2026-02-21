@@ -26,9 +26,9 @@ def calculate_total(base_cost, cost_growth, base_time, time_growth, max_level):
             last_cost = cost
 
     return {
-        'total_cost': total_cost,
-        'total_time_days': total_time / 86400,
-        'last_level_cost': last_cost,
+        "total_cost": total_cost,
+        "total_time_days": total_time / 86400,
+        "last_level_cost": last_cost,
     }
 
 
@@ -43,24 +43,26 @@ def find_best_params(base_costs, cost_growths, base_times, time_growths, max_lev
                     result = calculate_total(base_cost, cost_growth, base_time, time_growth, max_level)
 
                     # 计算偏差
-                    cost_diff = abs(result['last_level_cost'] - target_last_cost) / target_last_cost
-                    time_diff = abs(result['total_time_days'] - target_days) / target_days
+                    cost_diff = abs(result["last_level_cost"] - target_last_cost) / target_last_cost
+                    time_diff = abs(result["total_time_days"] - target_days) / target_days
 
                     # 筛选：最后一级成本在目标±20%，总时长在目标±30%
                     if cost_diff <= 0.2 and time_diff <= 0.3:
-                        best_scenarios.append({
-                            'base_cost': base_cost,
-                            'cost_growth': cost_growth,
-                            'base_time': base_time,
-                            'time_growth': time_growth,
-                            'result': result,
-                            'cost_diff': cost_diff,
-                            'time_diff': time_diff,
-                            'score': cost_diff + time_diff,  # 综合得分，越小越好
-                        })
+                        best_scenarios.append(
+                            {
+                                "base_cost": base_cost,
+                                "cost_growth": cost_growth,
+                                "base_time": base_time,
+                                "time_growth": time_growth,
+                                "result": result,
+                                "cost_diff": cost_diff,
+                                "time_diff": time_diff,
+                                "score": cost_diff + time_diff,  # 综合得分，越小越好
+                            }
+                        )
 
     # 按综合得分排序
-    best_scenarios.sort(key=lambda x: x['score'])
+    best_scenarios.sort(key=lambda x: x["score"])
     return best_scenarios[:5]  # 返回前5个最佳方案
 
 
@@ -85,13 +87,7 @@ juxian_base_times = [1800, 3600, 7200, 10800, 14400]
 juxian_time_growths = [1.38, 1.40, 1.42, 1.44, 1.46]
 
 juxian_best = find_best_params(
-    juxian_base_costs,
-    juxian_cost_growths,
-    juxian_base_times,
-    juxian_time_growths,
-    20,
-    TARGET_LAST_COST,
-    TARGET_DAYS
+    juxian_base_costs, juxian_cost_growths, juxian_base_times, juxian_time_growths, 20, TARGET_LAST_COST, TARGET_DAYS
 )
 
 if juxian_best:
@@ -128,13 +124,7 @@ youxi_base_times = [14400, 28800, 43200, 86400, 129600]
 youxi_time_growths = [2.0, 2.1, 2.2, 2.3, 2.4]
 
 youxi_best = find_best_params(
-    youxi_base_costs,
-    youxi_cost_growths,
-    youxi_base_times,
-    youxi_time_growths,
-    6,
-    TARGET_LAST_COST,
-    TARGET_DAYS
+    youxi_base_costs, youxi_cost_growths, youxi_base_times, youxi_time_growths, 6, TARGET_LAST_COST, TARGET_DAYS
 )
 
 if youxi_best:
@@ -144,7 +134,9 @@ if youxi_best:
         print("  参数配置:")
         print(f"    base_cost: {scenario['base_cost']:,}")
         print(f"    cost_growth: {scenario['cost_growth']}")
-        print(f"    base_time: {scenario['base_time']}s ({scenario['base_time']/3600:.1f}小时 / {scenario['base_time']/86400:.1f}天)")
+        print(
+            f"    base_time: {scenario['base_time']}s ({scenario['base_time']/3600:.1f}小时 / {scenario['base_time']/86400:.1f}天)"
+        )
         print(f"    time_growth: {scenario['time_growth']}")
         print()
         print("  预期效果:")

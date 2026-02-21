@@ -16,7 +16,7 @@ from __future__ import annotations
 from .equipment import apply_set_bonuses, ensure_inventory_gears, equip_guest, give_gear, unequip_guest_item
 
 # 生命值管理
-from .health import heal_guest, recover_guest_hp, INJURY_RECOVERY_THRESHOLD
+from .health import INJURY_RECOVERY_THRESHOLD, heal_guest, recover_guest_hp
 
 # 招募系统
 from .recruitment import (

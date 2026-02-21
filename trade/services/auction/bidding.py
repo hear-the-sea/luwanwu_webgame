@@ -9,8 +9,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from gameplay.models import Manor
-from gameplay.services.messages import create_message
-from gameplay.services.notifications import notify_user
+from gameplay.services.utils.messages import create_message
+from gameplay.services.utils.notifications import notify_user
 from trade.models import AuctionBid, AuctionRound, AuctionSlot, FrozenGoldBar
 
 from .gold_bars import freeze_gold_bars, unfreeze_gold_bars
@@ -74,12 +74,7 @@ def _get_player_active_bid(ranking: list[AuctionBid], manor: Manor) -> AuctionBi
 
 
 def _load_locked_slot(slot_id: int) -> AuctionSlot:
-    slot = (
-        AuctionSlot.objects.select_for_update()
-        .select_related("round", "item_template")
-        .filter(id=slot_id)
-        .first()
-    )
+    slot = AuctionSlot.objects.select_for_update().select_related("round", "item_template").filter(id=slot_id).first()
     if not slot:
         raise ValueError("拍卖位不存在")
     return slot
@@ -96,9 +91,7 @@ def _validate_slot_active(slot: AuctionSlot) -> None:
 
 def _load_previous_active_bid(slot: AuctionSlot, manor: Manor) -> AuctionBid | None:
     return (
-        AuctionBid.objects.select_for_update()
-        .filter(slot=slot, manor=manor, status=AuctionBid.Status.ACTIVE)
-        .first()
+        AuctionBid.objects.select_for_update().filter(slot=slot, manor=manor, status=AuctionBid.Status.ACTIVE).first()
     )
 
 
@@ -161,7 +154,9 @@ def _kick_out_player_if_needed(
     return outbid_player
 
 
-def _update_slot_snapshot(slot: AuctionSlot, ranking_after: list[AuctionBid], winner_count: int, bidder_manor: Manor) -> None:
+def _update_slot_snapshot(
+    slot: AuctionSlot, ranking_after: list[AuctionBid], winner_count: int, bidder_manor: Manor
+) -> None:
     if len(ranking_after) >= winner_count:
         slot.current_price = ranking_after[winner_count - 1].amount
     elif ranking_after:
@@ -311,7 +306,9 @@ def place_bid(
     return new_bid, is_first_bid
 
 
-def _notify_outbid_vickrey(manor: Manor, slot: AuctionSlot, new_price: int, new_bidder: Manor, winner_count: int) -> None:
+def _notify_outbid_vickrey(
+    manor: Manor, slot: AuctionSlot, new_price: int, new_bidder: Manor, winner_count: int
+) -> None:
     """通知玩家被挤出中标范围（维克里拍卖）。"""
     _safe_create_message(
         manor=manor,

@@ -6,13 +6,19 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0088_missiontemplate_guest_only'),
+        ("gameplay", "0088_missiontemplate_guest_only"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='missiontemplate',
-            name='difficulty',
-            field=models.CharField(choices=[('junior', '初级'), ('intermediate', '中级'), ('advanced', '高级')], default='junior', help_text='任务难度分级', max_length=16, verbose_name='难度'),
+            model_name="missiontemplate",
+            name="difficulty",
+            field=models.CharField(
+                choices=[("junior", "初级"), ("intermediate", "中级"), ("advanced", "高级")],
+                default="junior",
+                help_text="任务难度分级",
+                max_length=16,
+                verbose_name="难度",
+            ),
         ),
     ]

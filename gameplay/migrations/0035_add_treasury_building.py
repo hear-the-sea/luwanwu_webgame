@@ -38,7 +38,7 @@ def remove_treasury_building(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0034_alter_inventoryitem_unique_together_and_more'),
+        ("gameplay", "0034_alter_inventoryitem_unique_together_and_more"),
     ]
 
     operations = [

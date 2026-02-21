@@ -7,44 +7,79 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0035_add_treasury_building'),
-        ('guests', '0040_convert_to_direct_attributes'),
+        ("gameplay", "0035_add_treasury_building"),
+        ("guests", "0040_convert_to_direct_attributes"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='GuestDefection',
+            name="GuestDefection",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('guest_name', models.CharField(max_length=64, verbose_name='门客名称')),
-                ('guest_level', models.PositiveIntegerField(verbose_name='门客等级')),
-                ('guest_rarity', models.CharField(choices=[('black', '黑'), ('gray', '灰'), ('green', '绿'), ('blue', '蓝'), ('red', '红'), ('purple', '紫'), ('orange', '橙')], max_length=16, verbose_name='稀有度')),
-                ('loyalty_at_defection', models.PositiveIntegerField(verbose_name='叛逃时忠诚度')),
-                ('defected_at', models.DateTimeField(auto_now_add=True, verbose_name='叛逃时间')),
-                ('manor', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='guest_defections', to='gameplay.manor')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("guest_name", models.CharField(max_length=64, verbose_name="门客名称")),
+                ("guest_level", models.PositiveIntegerField(verbose_name="门客等级")),
+                (
+                    "guest_rarity",
+                    models.CharField(
+                        choices=[
+                            ("black", "黑"),
+                            ("gray", "灰"),
+                            ("green", "绿"),
+                            ("blue", "蓝"),
+                            ("red", "红"),
+                            ("purple", "紫"),
+                            ("orange", "橙"),
+                        ],
+                        max_length=16,
+                        verbose_name="稀有度",
+                    ),
+                ),
+                ("loyalty_at_defection", models.PositiveIntegerField(verbose_name="叛逃时忠诚度")),
+                ("defected_at", models.DateTimeField(auto_now_add=True, verbose_name="叛逃时间")),
+                (
+                    "manor",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="guest_defections",
+                        to="gameplay.manor",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': '门客叛逃记录',
-                'verbose_name_plural': '门客叛逃记录',
-                'ordering': ('-defected_at',),
+                "verbose_name": "门客叛逃记录",
+                "verbose_name_plural": "门客叛逃记录",
+                "ordering": ("-defected_at",),
             },
         ),
         migrations.CreateModel(
-            name='SalaryPayment',
+            name="SalaryPayment",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('amount', models.PositiveIntegerField(verbose_name='工资金额')),
-                ('paid_at', models.DateTimeField(auto_now_add=True, verbose_name='支付时间')),
-                ('for_date', models.DateField(help_text='为哪一天支付的工资', verbose_name='支付日期')),
-                ('guest', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='salary_payments', to='guests.guest')),
-                ('manor', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='salary_payments', to='gameplay.manor')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("amount", models.PositiveIntegerField(verbose_name="工资金额")),
+                ("paid_at", models.DateTimeField(auto_now_add=True, verbose_name="支付时间")),
+                ("for_date", models.DateField(help_text="为哪一天支付的工资", verbose_name="支付日期")),
+                (
+                    "guest",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="salary_payments", to="guests.guest"
+                    ),
+                ),
+                (
+                    "manor",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="salary_payments", to="gameplay.manor"
+                    ),
+                ),
             ],
             options={
-                'verbose_name': '工资支付记录',
-                'verbose_name_plural': '工资支付记录',
-                'ordering': ('-paid_at',),
-                'indexes': [models.Index(fields=['guest', 'for_date'], name='guests_sala_guest_i_4d7687_idx'), models.Index(fields=['manor', 'for_date'], name='guests_sala_manor_i_c304ab_idx')],
-                'unique_together': {('guest', 'for_date')},
+                "verbose_name": "工资支付记录",
+                "verbose_name_plural": "工资支付记录",
+                "ordering": ("-paid_at",),
+                "indexes": [
+                    models.Index(fields=["guest", "for_date"], name="guests_sala_guest_i_4d7687_idx"),
+                    models.Index(fields=["manor", "for_date"], name="guests_sala_manor_i_c304ab_idx"),
+                ],
+                "unique_together": {("guest", "for_date")},
             },
         ),
     ]

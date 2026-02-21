@@ -91,9 +91,9 @@ def test_apply_guild_bonus_to_guest_and_troop(django_user_model):
 
 @pytest.mark.django_db
 def test_upgrade_technology_happy_path(monkeypatch, django_user_model):
+    from gameplay.services.manor.core import ensure_manor
     from guilds.models import Guild, GuildResourceLog, GuildTechnology
     from guilds.services.technology import upgrade_technology
-    from gameplay.services.manor import ensure_manor
 
     # Make permission check deterministic.
     monkeypatch.setattr(
@@ -153,7 +153,9 @@ def test_upgrade_technology_insufficient_resources(monkeypatch, django_user_mode
         lambda *_a, **_k: SimpleNamespace(can_manage=True),
     )
     monkeypatch.setattr("guilds.services.technology.create_announcement", lambda *_a, **_k: None)
-    monkeypatch.setattr("guilds.services.technology.Manor.objects.get", lambda *_a, **_k: SimpleNamespace(display_name="X"))
+    monkeypatch.setattr(
+        "guilds.services.technology.Manor.objects.get", lambda *_a, **_k: SimpleNamespace(display_name="X")
+    )
 
     operator = django_user_model.objects.create_user(username="tech_operator3", password="pass")
     founder = django_user_model.objects.create_user(username="tech_founder6", password="pass")

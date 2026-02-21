@@ -7,35 +7,58 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0051_horse_production_quantity'),
+        ("gameplay", "0051_horse_production_quantity"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='itemtemplate',
-            name='effect_type',
-            field=models.CharField(choices=[('resource_pack', '资源补给'), ('resource', '资源'), ('skill_book', '技能书'), ('experience_items', '经验道具'), ('medicine', '药品'), ('magnifying_glass', '放大镜')], default='resource_pack', max_length=32),
+            model_name="itemtemplate",
+            name="effect_type",
+            field=models.CharField(
+                choices=[
+                    ("resource_pack", "资源补给"),
+                    ("resource", "资源"),
+                    ("skill_book", "技能书"),
+                    ("experience_items", "经验道具"),
+                    ("medicine", "药品"),
+                    ("magnifying_glass", "放大镜"),
+                ],
+                default="resource_pack",
+                max_length=32,
+            ),
         ),
         migrations.CreateModel(
-            name='LivestockProduction',
+            name="LivestockProduction",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('livestock_key', models.CharField(max_length=64, verbose_name='家畜key')),
-                ('livestock_name', models.CharField(max_length=64, verbose_name='家畜名称')),
-                ('quantity', models.PositiveIntegerField(default=1, verbose_name='养殖数量')),
-                ('grain_cost', models.PositiveIntegerField(verbose_name='粮食消耗')),
-                ('base_duration', models.PositiveIntegerField(verbose_name='基础时长(秒)')),
-                ('actual_duration', models.PositiveIntegerField(verbose_name='实际时长(秒)')),
-                ('status', models.CharField(choices=[('producing', '养殖中'), ('completed', '已完成')], default='producing', max_length=16)),
-                ('started_at', models.DateTimeField(auto_now_add=True, verbose_name='开始时间')),
-                ('complete_at', models.DateTimeField(verbose_name='完成时间')),
-                ('finished_at', models.DateTimeField(blank=True, null=True, verbose_name='实际完成时间')),
-                ('manor', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='livestock_productions', to='gameplay.manor')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("livestock_key", models.CharField(max_length=64, verbose_name="家畜key")),
+                ("livestock_name", models.CharField(max_length=64, verbose_name="家畜名称")),
+                ("quantity", models.PositiveIntegerField(default=1, verbose_name="养殖数量")),
+                ("grain_cost", models.PositiveIntegerField(verbose_name="粮食消耗")),
+                ("base_duration", models.PositiveIntegerField(verbose_name="基础时长(秒)")),
+                ("actual_duration", models.PositiveIntegerField(verbose_name="实际时长(秒)")),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[("producing", "养殖中"), ("completed", "已完成")], default="producing", max_length=16
+                    ),
+                ),
+                ("started_at", models.DateTimeField(auto_now_add=True, verbose_name="开始时间")),
+                ("complete_at", models.DateTimeField(verbose_name="完成时间")),
+                ("finished_at", models.DateTimeField(blank=True, null=True, verbose_name="实际完成时间")),
+                (
+                    "manor",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="livestock_productions",
+                        to="gameplay.manor",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': '家畜养殖',
-                'verbose_name_plural': '家畜养殖',
-                'ordering': ['-started_at'],
+                "verbose_name": "家畜养殖",
+                "verbose_name_plural": "家畜养殖",
+                "ordering": ["-started_at"],
             },
         ),
     ]

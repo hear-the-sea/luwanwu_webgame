@@ -3,6 +3,7 @@
 
 提供安全的用户输入解析和验证函数。
 """
+
 from __future__ import annotations
 
 from typing import Any, List, Optional, TypeVar
@@ -17,16 +18,32 @@ T = TypeVar("T")
 # 允许的排序字段白名单（防止 SQL 注入）
 ALLOWED_ORDERING_FIELDS = {
     # guilds
-    "-level", "level", "-created_at", "created_at", "name", "-name",
-    "-total_contribution", "total_contribution",
+    "-level",
+    "level",
+    "-created_at",
+    "created_at",
+    "name",
+    "-name",
+    "-total_contribution",
+    "total_contribution",
     # trade
-    "-listed_at", "listed_at", "-price", "price", "-expires_at", "expires_at",
+    "-listed_at",
+    "listed_at",
+    "-price",
+    "price",
+    "-expires_at",
+    "expires_at",
     # common
-    "-id", "id", "-updated_at", "updated_at",
+    "-id",
+    "id",
+    "-updated_at",
+    "updated_at",
 }
 
 
-def safe_int(value: Any, default: Optional[int] = 0, min_val: Optional[int] = None, max_val: Optional[int] = None) -> Optional[int]:
+def safe_int(
+    value: Any, default: Optional[int] = 0, min_val: Optional[int] = None, max_val: Optional[int] = None
+) -> Optional[int]:
     """
     安全地将值转换为整数。
 
@@ -54,7 +71,9 @@ def safe_int(value: Any, default: Optional[int] = 0, min_val: Optional[int] = No
     return result
 
 
-def safe_float(value: Any, default: Optional[float] = 0.0, min_val: Optional[float] = None, max_val: Optional[float] = None) -> Optional[float]:
+def safe_float(
+    value: Any, default: Optional[float] = 0.0, min_val: Optional[float] = None, max_val: Optional[float] = None
+) -> Optional[float]:
     """
     安全地将值转换为浮点数。
 

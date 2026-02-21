@@ -22,7 +22,6 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-
 ROW_RE = re.compile(
     r"^(?P<prefix>\|\s*)(?P<name>[^|]+?)(?P<mid1>\s*\|\s*)(?P<bio>[^|]+?)"
     r"(?P<mid2>\s*\|\s*)(?P<typ>[^|]+?)(?P<mid3>\s*\|\s*)(?P<rarity>[^|]+?)"
@@ -46,7 +45,7 @@ def sha_pick(key: str, options: list[str], salt: str) -> str:
 # Exact template sentences (the main source of "模板化" feeling).
 TEMPLATE_SENTENCES = [
     "其生平与作为多散见于《史记》《汉书》及《后汉书》等正史相关传记，细节或简或繁；但其在秦汉政治制度、士人风气与社会运行中的位置清晰可辨，足以作为理解时代的一扇窗口。",
-    "相关事迹主要见于正史与诸家注疏，个别轶闻宜以\"史载\"\"相传\"分辨；综合其言行与处世，可见秦汉之际权力结构与治道取舍的复杂性，颇具典型意义。",
+    '相关事迹主要见于正史与诸家注疏，个别轶闻宜以"史载""相传"分辨；综合其言行与处世，可见秦汉之际权力结构与治道取舍的复杂性，颇具典型意义。',
     "相关事迹主要见于正史与诸家注疏，个别轶闻宜以“史载”“相传”分辨；综合其言行与处世，可见秦汉之际权力结构与治道取舍的复杂性，颇具典型意义。",
     "正史对其记述或详或略，后世又多有文学化的再叙；今据较可靠的史料脉络梳理其功过得失，更便于把握秦汉国家治理与社会变迁的真实面向。",
     "其军旅经历与战场抉择常与当时的边防形势、补给交通与朝局决策相互牵连；史书记功亦记失，透过其成败沉浮，可见秦汉军事运作的现实与代价。",
@@ -227,7 +226,11 @@ def build_custom_sentences(row: Row, ngram_counts: dict[str, int]) -> list[str]:
 
     role = infer_role(row.bio)
     kws = extract_keywords(row.bio, limit=2)
-    kw = "、".join(kws) if kws else sha_pick(row.name, ["制度与人事", "边疆经略", "财政与军需", "礼法与学术", "权力更替与秩序重建"], "kw")
+    kw = (
+        "、".join(kws)
+        if kws
+        else sha_pick(row.name, ["制度与人事", "边疆经略", "财政与军需", "礼法与学术", "权力更替与秩序重建"], "kw")
+    )
     feats = extract_feature_tokens(row.bio)
     rare = pick_rare_ngram(row.bio, ngram_counts)
 

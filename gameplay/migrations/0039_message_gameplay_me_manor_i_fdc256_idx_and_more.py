@@ -6,42 +6,42 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('battle', '0004_trooptemplate'),
-        ('gameplay', '0038_add_composite_indexes'),
-        ('guests', '0043_add_base_intellect'),
+        ("battle", "0004_trooptemplate"),
+        ("gameplay", "0038_add_composite_indexes"),
+        ("guests", "0043_add_base_intellect"),
     ]
 
     operations = [
         migrations.AddIndex(
-            model_name='message',
-            index=models.Index(fields=['manor', 'is_read', '-created_at'], name='gameplay_me_manor_i_fdc256_idx'),
+            model_name="message",
+            index=models.Index(fields=["manor", "is_read", "-created_at"], name="gameplay_me_manor_i_fdc256_idx"),
         ),
         migrations.AddIndex(
-            model_name='message',
-            index=models.Index(fields=['manor', 'is_claimed'], name='gameplay_me_manor_i_b0a912_idx'),
+            model_name="message",
+            index=models.Index(fields=["manor", "is_claimed"], name="gameplay_me_manor_i_b0a912_idx"),
         ),
         migrations.AddIndex(
-            model_name='message',
-            index=models.Index(fields=['manor', 'kind', '-created_at'], name='gameplay_me_manor_i_f09dd3_idx'),
+            model_name="message",
+            index=models.Index(fields=["manor", "kind", "-created_at"], name="gameplay_me_manor_i_f09dd3_idx"),
         ),
         migrations.AddIndex(
-            model_name='missionrun',
-            index=models.Index(fields=['status', 'return_at'], name='gameplay_mi_status_4af7c7_idx'),
+            model_name="missionrun",
+            index=models.Index(fields=["status", "return_at"], name="gameplay_mi_status_4af7c7_idx"),
         ),
         migrations.AddIndex(
-            model_name='missionrun',
-            index=models.Index(fields=['manor', 'status'], name='gameplay_mi_manor_i_31d653_idx'),
+            model_name="missionrun",
+            index=models.Index(fields=["manor", "status"], name="gameplay_mi_manor_i_31d653_idx"),
         ),
         migrations.AddIndex(
-            model_name='missionrun',
-            index=models.Index(fields=['manor', '-started_at'], name='gameplay_mi_manor_i_1cd121_idx'),
+            model_name="missionrun",
+            index=models.Index(fields=["manor", "-started_at"], name="gameplay_mi_manor_i_1cd121_idx"),
         ),
         migrations.AddIndex(
-            model_name='resourceevent',
-            index=models.Index(fields=['manor', '-created_at'], name='gameplay_re_manor_i_6e1eb8_idx'),
+            model_name="resourceevent",
+            index=models.Index(fields=["manor", "-created_at"], name="gameplay_re_manor_i_6e1eb8_idx"),
         ),
         migrations.AddIndex(
-            model_name='resourceevent',
-            index=models.Index(fields=['manor', 'reason', '-created_at'], name='gameplay_re_manor_i_935556_idx'),
+            model_name="resourceevent",
+            index=models.Index(fields=["manor", "reason", "-created_at"], name="gameplay_re_manor_i_935556_idx"),
         ),
     ]

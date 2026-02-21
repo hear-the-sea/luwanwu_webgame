@@ -44,4 +44,3 @@ Docker (MySQL + Redis + web/worker/beat):
 - Existing history uses short, imperative subjects (e.g. “Add …”). Keep commits focused and descriptive.
 - PRs should include: what/why, how to verify (commands + expected result), and screenshots for UI changes.
 - If you change YAML templates in `data/`, note any required management commands (e.g. `python manage.py load_guest_templates`) and include relevant tests/fixtures.
-

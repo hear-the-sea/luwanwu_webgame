@@ -8,10 +8,11 @@ import yaml
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
+from core.utils.image_utils import compress_and_resize_image
 from guests.models import (
+    RARITY_HP_PROFILES,
     GuestRarity,
     GuestTemplate,
-    RARITY_HP_PROFILES,
     RecruitmentPool,
     RecruitmentPoolEntry,
     Skill,
@@ -19,7 +20,6 @@ from guests.models import (
     SkillKind,
 )
 from guests.services.recruitment import clear_template_cache
-from core.utils.image_utils import compress_and_resize_image
 
 
 class Command(BaseCommand):
@@ -190,7 +190,9 @@ class Command(BaseCommand):
                 stats = hero.get("custom_stats") or profiles.get(archetype)
                 if not stats:
                     self.stdout.write(
-                        self.style.WARNING(f"Skip hero {hero['key']}: missing attribute profile for {rarity}/{archetype}")
+                        self.style.WARNING(
+                            f"Skip hero {hero['key']}: missing attribute profile for {rarity}/{archetype}"
+                        )
                     )
                     continue
                 template_data.append(self._build_template_from_stats(hero, rarity, archetype, stats))
@@ -263,9 +265,13 @@ class Command(BaseCommand):
             "attribute_weights": data.get("attribute_weights") or {},
         }
 
-    def _prepare_avatar_context(self, assign_missing_avatars: bool, skip_images: bool) -> tuple[Path, dict, dict[str, str]]:
+    def _prepare_avatar_context(
+        self, assign_missing_avatars: bool, skip_images: bool
+    ) -> tuple[Path, dict, dict[str, str]]:
         image_source_dir = Path(settings.BASE_DIR) / "data" / "images" / "guests"
-        avatar_catalog = self._build_avatar_catalog(image_source_dir) if assign_missing_avatars and not skip_images else {}
+        avatar_catalog = (
+            self._build_avatar_catalog(image_source_dir) if assign_missing_avatars and not skip_images else {}
+        )
         return image_source_dir, avatar_catalog, {}
 
     def _ensure_avatar_saved(
@@ -362,13 +368,17 @@ class Command(BaseCommand):
         skip_images: bool,
         verbosity: int,
     ) -> tuple[set[str], dict[str, list[str]], int]:
-        image_source_dir, avatar_catalog, avatar_cache = self._prepare_avatar_context(assign_missing_avatars, skip_images)
+        image_source_dir, avatar_catalog, avatar_cache = self._prepare_avatar_context(
+            assign_missing_avatars, skip_images
+        )
         template_keys: set[str] = set()
         template_skill_keys: dict[str, list[str]] = {}
         fallback_avatar_count = 0
 
         for data in template_data:
-            obj, created = GuestTemplate.objects.update_or_create(key=data["key"], defaults=self._template_defaults(data))
+            obj, created = GuestTemplate.objects.update_or_create(
+                key=data["key"], defaults=self._template_defaults(data)
+            )
             if not skip_images:
                 fallback_avatar_count += self._sync_template_avatar(
                     obj,
@@ -394,10 +404,7 @@ class Command(BaseCommand):
         skill_map: dict[str, Skill],
     ) -> None:
         unresolved_skill_keys = {
-            skill_key
-            for keys in template_skill_keys.values()
-            for skill_key in keys
-            if skill_key not in skill_map
+            skill_key for keys in template_skill_keys.values() for skill_key in keys if skill_key not in skill_map
         }
         if unresolved_skill_keys:
             skill_map.update({skill.key: skill for skill in Skill.objects.filter(key__in=unresolved_skill_keys)})
@@ -414,7 +421,9 @@ class Command(BaseCommand):
             for skill_key in skill_keys:
                 skill_obj = skill_map.get(skill_key)
                 if not skill_obj:
-                    self.stdout.write(self.style.WARNING(f"Skip template skill {skill_key} for {template_key}: skill not found"))
+                    self.stdout.write(
+                        self.style.WARNING(f"Skip template skill {skill_key} for {template_key}: skill not found")
+                    )
                     continue
                 skill_objs.append(skill_obj)
             tpl.initial_skills.set(skill_objs)
@@ -460,7 +469,9 @@ class Command(BaseCommand):
                 if template_key:
                     tpl = key_to_template.get(template_key)
                     if not tpl:
-                        self.stdout.write(self.style.WARNING(f"Skip pool {pool_obj.key} entry {template_key}: template not found"))
+                        self.stdout.write(
+                            self.style.WARNING(f"Skip pool {pool_obj.key} entry {template_key}: template not found")
+                        )
                         continue
                 elif not rarity:
                     self.stdout.write(

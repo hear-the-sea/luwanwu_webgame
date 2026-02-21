@@ -49,9 +49,7 @@ def forwards(apps, schema_editor):
             return
 
         # 1) 先添加可空列，回填后再改 NOT NULL
-        cursor.execute(
-            "ALTER TABLE guild_exchange_logs ADD COLUMN item_key VARCHAR(100) NULL;"
-        )
+        cursor.execute("ALTER TABLE guild_exchange_logs ADD COLUMN item_key VARCHAR(100) NULL;")
 
         # 2) 尝试从旧列回填（历史版本可能是 ForeignKey -> ItemTemplate）
         template_id_column = None
@@ -71,15 +69,11 @@ def forwards(apps, schema_editor):
             )
         else:
             cursor.execute(
-                "UPDATE guild_exchange_logs "
-                "SET item_key = CONCAT('unknown_', id) "
-                "WHERE item_key IS NULL;"
+                "UPDATE guild_exchange_logs " "SET item_key = CONCAT('unknown_', id) " "WHERE item_key IS NULL;"
             )
 
         # 3) 转为 NOT NULL（模型需要）
-        cursor.execute(
-            "ALTER TABLE guild_exchange_logs MODIFY COLUMN item_key VARCHAR(100) NOT NULL;"
-        )
+        cursor.execute("ALTER TABLE guild_exchange_logs MODIFY COLUMN item_key VARCHAR(100) NOT NULL;")
 
 
 def backwards(apps, schema_editor):
@@ -118,4 +112,3 @@ class Migration(migrations.Migration):
             atomic=False,
         ),
     ]
-

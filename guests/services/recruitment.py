@@ -37,13 +37,15 @@ from ..utils.recruitment_utils import HERMIT_RARITY, RARITY_ORDER, choose_rarity
 from ..utils.recruitment_variance import apply_recruitment_variance
 
 # 不可重复招募的稀有度（绿色及以上）
-NON_REPEATABLE_RARITIES = frozenset({
-    GuestRarity.GREEN,
-    GuestRarity.BLUE,
-    GuestRarity.RED,
-    GuestRarity.PURPLE,
-    GuestRarity.ORANGE,
-})
+NON_REPEATABLE_RARITIES = frozenset(
+    {
+        GuestRarity.GREEN,
+        GuestRarity.BLUE,
+        GuestRarity.RED,
+        GuestRarity.PURPLE,
+        GuestRarity.ORANGE,
+    }
+)
 
 CORE_POOL_TIERS = (
     RecruitmentPool.Tier.TONGSHI,
@@ -54,6 +56,7 @@ CORE_POOL_TIERS = (
 
 
 # ============ 模板缓存 ============
+
 
 def _get_recruitable_templates_by_rarity() -> Dict[str, List[GuestTemplate]]:
     """
@@ -66,7 +69,8 @@ def _get_recruitable_templates_by_rarity() -> Dict[str, List[GuestTemplate]]:
         按稀有度分组的模板字典
     """
     from django.core.cache import cache
-    from gameplay.services.cache import CacheKeys, CACHE_TIMEOUT_CONFIG
+
+    from gameplay.services.utils.cache import CACHE_TIMEOUT_CONFIG, CacheKeys
 
     cache_key = CacheKeys.GUEST_TEMPLATES_BY_RARITY
     cached = cache.get(cache_key)
@@ -109,7 +113,8 @@ def _get_hermit_templates() -> List[GuestTemplate]:
         隐士模板列表
     """
     from django.core.cache import cache
-    from gameplay.services.cache import CacheKeys, CACHE_TIMEOUT_CONFIG
+
+    from gameplay.services.utils.cache import CACHE_TIMEOUT_CONFIG, CacheKeys
 
     cache_key = CacheKeys.HERMIT_TEMPLATES
     cached = cache.get(cache_key)
@@ -118,11 +123,13 @@ def _get_hermit_templates() -> List[GuestTemplate]:
         return list(GuestTemplate.objects.filter(id__in=cached))
 
     # 缓存未命中，查询数据库
-    templates = list(GuestTemplate.objects.filter(
-        rarity=GuestRarity.BLACK,
-        is_hermit=True,
-        recruitable=True,
-    ))
+    templates = list(
+        GuestTemplate.objects.filter(
+            rarity=GuestRarity.BLACK,
+            is_hermit=True,
+            recruitable=True,
+        )
+    )
     template_ids = [t.id for t in templates]
     cache.set(cache_key, template_ids, timeout=CACHE_TIMEOUT_CONFIG)
     return templates
@@ -135,12 +142,15 @@ def clear_template_cache() -> None:
     当 GuestTemplate 数据变更时调用此函数刷新缓存。
     """
     from django.core.cache import cache
-    from gameplay.services.cache import CacheKeys
 
-    cache.delete_many([
-        CacheKeys.GUEST_TEMPLATES_BY_RARITY,
-        CacheKeys.HERMIT_TEMPLATES,
-    ])
+    from gameplay.services.utils.cache import CacheKeys
+
+    cache.delete_many(
+        [
+            CacheKeys.GUEST_TEMPLATES_BY_RARITY,
+            CacheKeys.HERMIT_TEMPLATES,
+        ]
+    )
 
 
 def _filter_templates(
@@ -169,9 +179,7 @@ def get_excluded_template_ids(manor: Manor) -> set[int]:
         需要排除的模板ID集合
     """
     # 直接使用 values_list 获取需要的字段，无需 select_related
-    owned_templates = manor.guests.values_list(
-        "template_id", "template__rarity", "template__is_hermit"
-    )
+    owned_templates = manor.guests.values_list("template_id", "template__rarity", "template__is_hermit")
 
     excluded = set()
     for template_id, rarity, is_hermit in owned_templates:
@@ -293,10 +301,7 @@ def choose_template_from_entries(
         return _choose_template_by_rarity_cached(rarity, excluded_ids, rng)
 
     # 有 entries 配置时，使用原有逻辑（但使用缓存的模板数据）
-    filtered_entries = [
-        e for e in entries
-        if not e.template_id or e.template_id not in excluded_ids
-    ]
+    filtered_entries = [e for e in entries if not e.template_id or e.template_id not in excluded_ids]
 
     explicit_template_ids = {entry.template_id for entry in filtered_entries if entry.template_id}
     # 获取缓存的模板数据
@@ -564,9 +569,7 @@ def recruit_guest(manor: Manor, pool: RecruitmentPool, seed: int | None = None) 
             )
         )
         # 同一次招募中，也不能出现重复的需排除门客
-        if template.rarity in NON_REPEATABLE_RARITIES or (
-            template.rarity == GuestRarity.BLACK and template.is_hermit
-        ):
+        if template.rarity in NON_REPEATABLE_RARITIES or (template.rarity == GuestRarity.BLACK and template.is_hermit):
             excluded_ids.add(template.id)
 
     # 批量创建候选门客
@@ -600,10 +603,7 @@ def finalize_candidate(candidate: RecruitmentCandidate) -> Guest:
     template = candidate.template
 
     # 确定是否需要使用自定义名称（普通黑/灰门客使用随机名，隐士使用原名）
-    use_custom_name = (
-        candidate.rarity in (GuestRarity.BLACK, GuestRarity.GRAY)
-        and not template.is_hermit
-    )
+    use_custom_name = candidate.rarity in (GuestRarity.BLACK, GuestRarity.GRAY) and not template.is_hermit
 
     guest = create_guest_from_template(
         manor=manor,
@@ -645,10 +645,7 @@ def _prepare_guest_objects(
     for candidate in candidates:
         template = template_map.get(candidate.template_id) or candidate.template
 
-        use_custom_name = (
-            candidate.rarity in (GuestRarity.BLACK, GuestRarity.GRAY)
-            and not template.is_hermit
-        )
+        use_custom_name = candidate.rarity in (GuestRarity.BLACK, GuestRarity.GRAY) and not template.is_hermit
 
         guest = create_guest_from_template(
             manor=manor,

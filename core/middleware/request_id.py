@@ -12,7 +12,6 @@ import uuid
 
 from django.utils.deprecation import MiddlewareMixin
 
-
 _REQUEST_ID_VAR: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
 _MAX_REQUEST_ID_LENGTH = 64
 _REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")

@@ -9,6 +9,7 @@ This package organizes settings into logical modules:
 - logging_conf: Logging configuration
 - testing: Test environment overrides
 """
+
 from __future__ import annotations
 
 import sys
@@ -17,17 +18,17 @@ import warnings
 # Base configuration
 from .base import *  # noqa: F401, F403
 
-# Database and cache configuration
-from .database import *  # noqa: F401, F403
-
-# Security configuration
-from .security import *  # noqa: F401, F403
-
 # Celery configuration
 from .celery_conf import *  # noqa: F401, F403
 
+# Database and cache configuration
+from .database import *  # noqa: F401, F403
+
 # Logging configuration
 from .logging_conf import *  # noqa: F401, F403
+
+# Security configuration
+from .security import *  # noqa: F401, F403
 
 # Test environment overrides
 # mypy sees differing dict literal shapes between prod and testing settings; this is OK.
@@ -39,7 +40,6 @@ if DEBUG and not RUNNING_TESTS and env("DJANGO_WARN_DEBUG", "1") == "1":  # noqa
     argv = " ".join(sys.argv)
     if any(token in argv for token in ("runserver", "daphne", "celery", "gunicorn", "uvicorn")):
         warnings.warn(
-            "Running in DEBUG mode. Security features are relaxed. "
-            "DO NOT use DEBUG=True in production!",
+            "Running in DEBUG mode. Security features are relaxed. " "DO NOT use DEBUG=True in production!",
             RuntimeWarning,
         )

@@ -33,6 +33,7 @@ MILITARY_INTELLECT_WEIGHT = GUEST.MILITARY_INTELLECT_WEIGHT
 
 class GuestRarity(models.TextChoices):
     """稀有度枚举（从低到高排列）"""
+
     BLACK = "black", "黑"
     GRAY = "gray", "灰"
     GREEN = "green", "绿"
@@ -94,7 +95,7 @@ class GuestTemplate(models.Model):
     base_agility = models.PositiveIntegerField(default=80)
     base_luck = models.PositiveIntegerField(default=50)
     base_hp = models.PositiveIntegerField(default=1200)
-    avatar = models.ImageField(upload_to='guests/', blank=True, null=True, verbose_name="门客头像")
+    avatar = models.ImageField(upload_to="guests/", blank=True, null=True, verbose_name="门客头像")
     flavor = models.CharField(max_length=512, blank=True)
     default_gender = models.CharField(max_length=16, choices=GENDER_CHOICES, default="unknown")
     default_morality = models.PositiveIntegerField(default=50)
@@ -468,11 +469,7 @@ class GuestSkill(models.Model):
     def _ensure_capacity(self):
         if not self.guest_id:
             return
-        current = (
-            GuestSkill.objects.filter(guest_id=self.guest_id)
-            .exclude(pk=self.pk)
-            .count()
-        )
+        current = GuestSkill.objects.filter(guest_id=self.guest_id).exclude(pk=self.pk).count()
         if current >= MAX_GUEST_SKILL_SLOTS:
             raise ValidationError("技能位已满，无法继续学习新的技能。")
 
@@ -507,6 +504,7 @@ RARITY_SALARY = {
 
 class SalaryPayment(models.Model):
     """工资支付记录"""
+
     manor = models.ForeignKey("gameplay.Manor", on_delete=models.CASCADE, related_name="salary_payments")
     guest = models.ForeignKey(Guest, on_delete=models.CASCADE, related_name="salary_payments")
     amount = models.PositiveIntegerField("工资金额")
@@ -530,6 +528,7 @@ class SalaryPayment(models.Model):
 
 class GuestDefection(models.Model):
     """门客叛逃记录"""
+
     manor = models.ForeignKey("gameplay.Manor", on_delete=models.CASCADE, related_name="guest_defections")
     guest_name = models.CharField(max_length=64, verbose_name="门客名称")
     guest_level = models.PositiveIntegerField("门客等级")

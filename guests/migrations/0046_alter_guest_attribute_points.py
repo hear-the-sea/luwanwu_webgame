@@ -6,13 +6,13 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('guests', '0045_rename_skill_points_to_attribute_points'),
+        ("guests", "0045_rename_skill_points_to_attribute_points"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='guest',
-            name='attribute_points',
-            field=models.PositiveIntegerField(default=0, verbose_name='属性点'),
+            model_name="guest",
+            name="attribute_points",
+            field=models.PositiveIntegerField(default=0, verbose_name="属性点"),
         ),
     ]

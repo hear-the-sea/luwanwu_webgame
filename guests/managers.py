@@ -103,11 +103,7 @@ class GuestQuerySet(models.QuerySet):
 
         包含模板预加载，按稀有度和等级排序
         """
-        return (
-            self.filter(status="idle")
-            .select_related("template")
-            .order_by("-template__rarity", "-level")
-        )
+        return self.filter(status="idle").select_related("template").order_by("-template__rarity", "-level")
 
     def by_rarity(self, rarity: str) -> "GuestQuerySet":
         """

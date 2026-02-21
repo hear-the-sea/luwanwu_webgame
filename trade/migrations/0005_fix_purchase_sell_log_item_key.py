@@ -4,9 +4,8 @@ import re
 
 from django.db import migrations
 
-
 # 安全修复：合法的 MySQL 标识符正则（防止 SQL 注入）
-VALID_IDENTIFIER_PATTERN = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
+VALID_IDENTIFIER_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
 
 def _validate_identifier(name: str) -> bool:
@@ -25,23 +24,27 @@ def forwards(apps, schema_editor):
         return
     with conn.cursor() as cursor:
         # 修复 trade_shop_purchase_log
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COUNT(*) FROM information_schema.columns
             WHERE table_schema = DATABASE()
               AND table_name = 'trade_shop_purchase_log'
               AND column_name = 'item_template_id'
-        """)
+        """
+        )
         if cursor.fetchone()[0]:
             # 检查并删除外键约束
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT constraint_name FROM information_schema.table_constraints
                 WHERE table_schema = DATABASE()
                   AND table_name = 'trade_shop_purchase_log'
                   AND constraint_type = 'FOREIGN KEY'
-            """)
+            """
+            )
             fk_names = [row[0] for row in cursor.fetchall()]
             for fk_name in fk_names:
-                if 'item_template' in fk_name:
+                if "item_template" in fk_name:
                     # 安全修复：验证标识符防止 SQL 注入
                     if not _validate_identifier(fk_name):
                         raise ValueError(f"Invalid foreign key name: {fk_name}")
@@ -52,23 +55,27 @@ def forwards(apps, schema_editor):
             cursor.execute("ALTER TABLE trade_shop_purchase_log ADD COLUMN item_key VARCHAR(64) NOT NULL;")
 
         # 修复 trade_shop_sell_log
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COUNT(*) FROM information_schema.columns
             WHERE table_schema = DATABASE()
               AND table_name = 'trade_shop_sell_log'
               AND column_name = 'item_template_id'
-        """)
+        """
+        )
         if cursor.fetchone()[0]:
             # 检查并删除外键约束
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT constraint_name FROM information_schema.table_constraints
                 WHERE table_schema = DATABASE()
                   AND table_name = 'trade_shop_sell_log'
                   AND constraint_type = 'FOREIGN KEY'
-            """)
+            """
+            )
             fk_names = [row[0] for row in cursor.fetchall()]
             for fk_name in fk_names:
-                if 'item_template' in fk_name:
+                if "item_template" in fk_name:
                     # 安全修复：验证标识符防止 SQL 注入
                     if not _validate_identifier(fk_name):
                         raise ValueError(f"Invalid foreign key name: {fk_name}")
@@ -88,23 +95,27 @@ def backwards(apps, schema_editor):
         return
     with conn.cursor() as cursor:
         # 回滚 trade_shop_purchase_log
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COUNT(*) FROM information_schema.columns
             WHERE table_schema = DATABASE()
               AND table_name = 'trade_shop_purchase_log'
               AND column_name = 'item_key'
-        """)
+        """
+        )
         if cursor.fetchone()[0]:
             cursor.execute("ALTER TABLE trade_shop_purchase_log DROP COLUMN item_key;")
             cursor.execute("ALTER TABLE trade_shop_purchase_log ADD COLUMN item_template_id BIGINT;")
 
         # 回滚 trade_shop_sell_log
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COUNT(*) FROM information_schema.columns
             WHERE table_schema = DATABASE()
               AND table_name = 'trade_shop_sell_log'
               AND column_name = 'item_key'
-        """)
+        """
+        )
         if cursor.fetchone()[0]:
             cursor.execute("ALTER TABLE trade_shop_sell_log DROP COLUMN item_key;")
             cursor.execute("ALTER TABLE trade_shop_sell_log ADD COLUMN item_template_id BIGINT;")
@@ -118,7 +129,7 @@ class Migration(migrations.Migration):
     """
 
     dependencies = [
-        ('trade', '0004_sync_item_key_column'),
+        ("trade", "0004_sync_item_key_column"),
     ]
 
     operations = [

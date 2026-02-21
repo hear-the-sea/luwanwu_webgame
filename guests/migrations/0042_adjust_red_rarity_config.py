@@ -2,7 +2,6 @@
 
 from django.db import migrations
 
-
 NEW_BASE_HP = 1550
 NEW_HP_GROWTH = 100
 OLD_BASE_HP = 2000
@@ -111,7 +110,7 @@ def reverse_adjustment(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('guests', '0041_guestdefection_salarypayment'),
+        ("guests", "0041_guestdefection_salarypayment"),
     ]
 
     operations = [

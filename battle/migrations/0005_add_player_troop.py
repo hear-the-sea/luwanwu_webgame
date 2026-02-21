@@ -6,13 +6,13 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('battle', '0004_trooptemplate'),
-        ('gameplay', '0040_missiontemplate_enemy_technology'),
+        ("battle", "0004_trooptemplate"),
+        ("gameplay", "0040_missiontemplate_enemy_technology"),
     ]
 
     operations = [
         migrations.AddIndex(
-            model_name='battlereport',
-            index=models.Index(fields=['manor', '-created_at'], name='battlereport_manor_cr_idx'),
+            model_name="battlereport",
+            index=models.Index(fields=["manor", "-created_at"], name="battlereport_manor_cr_idx"),
         ),
     ]

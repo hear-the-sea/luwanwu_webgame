@@ -101,9 +101,9 @@ def get_today_exchange_count(manor: Manor) -> int:
     """获取今日已兑换金条数量"""
     # 安全修复：使用 timezone.now().date() 保持时区一致性
     today = timezone.now().date()
-    count = GoldBarExchangeLog.objects.filter(
-        manor=manor, exchange_date=today
-    ).aggregate(total=Sum("quantity"))["total"]
+    count = GoldBarExchangeLog.objects.filter(manor=manor, exchange_date=today).aggregate(total=Sum("quantity"))[
+        "total"
+    ]
     return max(0, _safe_int(count, 0))
 
 
@@ -395,9 +395,7 @@ def exchange_gold_bar(manor: Manor, quantity: int) -> dict:
 
         if inventory_item:
             # 已有金条，使用F()表达式增加数量
-            InventoryItem.objects.filter(pk=inventory_item.pk).update(
-                quantity=F("quantity") + quantity
-            )
+            InventoryItem.objects.filter(pk=inventory_item.pk).update(quantity=F("quantity") + quantity)
         else:
             # 首次获得金条，创建新记录
             InventoryItem.objects.create(
@@ -408,9 +406,7 @@ def exchange_gold_bar(manor: Manor, quantity: int) -> dict:
             )
 
         # 步骤3：记录兑换日志
-        GoldBarExchangeLog.objects.create(
-            manor=manor_locked, quantity=quantity, silver_cost=total_cost
-        )
+        GoldBarExchangeLog.objects.create(manor=manor_locked, quantity=quantity, silver_cost=total_cost)
 
     # 清除供应量缓存，让下次查询获取最新数据
     _safe_cache_delete(SUPPLY_CACHE_KEY)

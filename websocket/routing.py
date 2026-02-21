@@ -8,6 +8,7 @@ Routes:
     ws/online-stats/: Real-time online user statistics broadcasting
     ws/chat/world/: World chat channel
 """
+
 from __future__ import annotations
 
 from django.urls import path

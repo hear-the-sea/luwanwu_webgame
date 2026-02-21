@@ -4,7 +4,7 @@ from django.utils import timezone
 
 from core.exceptions import GuestTrainingInProgressError
 from gameplay.models import ResourceEvent, ResourceType
-from gameplay.services.manor import ensure_manor
+from gameplay.services.manor.core import ensure_manor
 from guests.models import Guest, GuestArchetype, GuestRarity, GuestTemplate
 from guests.services import finalize_guest_training, train_guest
 

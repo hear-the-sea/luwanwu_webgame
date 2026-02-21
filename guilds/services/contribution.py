@@ -70,18 +70,14 @@ def donate_resource(member, resource_type, amount):
             current_daily_grain = 0
 
         # 验证每日捐赠上限
-        if resource_type == 'silver':
-            if current_daily_silver + amount > DAILY_DONATION_LIMITS['silver']:
-                raise ValueError(
-                    f"今日银两捐赠已达上限（{DAILY_DONATION_LIMITS['silver']}）"
-                )
+        if resource_type == "silver":
+            if current_daily_silver + amount > DAILY_DONATION_LIMITS["silver"]:
+                raise ValueError(f"今日银两捐赠已达上限（{DAILY_DONATION_LIMITS['silver']}）")
             new_daily_silver = current_daily_silver + amount
             new_daily_grain = current_daily_grain
         else:  # grain
-            if current_daily_grain + amount > DAILY_DONATION_LIMITS['grain']:
-                raise ValueError(
-                    f"今日粮食捐赠已达上限（{DAILY_DONATION_LIMITS['grain']}）"
-                )
+            if current_daily_grain + amount > DAILY_DONATION_LIMITS["grain"]:
+                raise ValueError(f"今日粮食捐赠已达上限（{DAILY_DONATION_LIMITS['grain']}）")
             new_daily_silver = current_daily_silver
             new_daily_grain = current_daily_grain + amount
 
@@ -94,23 +90,18 @@ def donate_resource(member, resource_type, amount):
 
         # 步骤3：使用统一的资源消费函数扣除玩家资源（已包含并发安全检查）
         spend_resources_locked(
-            manor,
-            {resource_type: amount},
-            note="帮会捐献",
-            reason=ResourceEvent.Reason.GUILD_DONATION
+            manor, {resource_type: amount}, note="帮会捐献", reason=ResourceEvent.Reason.GUILD_DONATION
         )
 
         # 步骤4：使用F()表达式原子性地增加帮会资源
-        Guild.objects.filter(pk=guild_locked.pk).update(
-            **{resource_type: F(resource_type) + amount}
-        )
+        Guild.objects.filter(pk=guild_locked.pk).update(**{resource_type: F(resource_type) + amount})
 
         # 步骤5：使用F()表达式原子性地更新成员贡献和每日统计
         # 注意：每日计数不能用F()表达式，因为需要在重置后再累加
         GuildMember.objects.filter(pk=member_locked.pk).update(
-            total_contribution=F('total_contribution') + contribution,
-            current_contribution=F('current_contribution') + contribution,
-            weekly_contribution=F('weekly_contribution') + contribution,
+            total_contribution=F("total_contribution") + contribution,
+            current_contribution=F("current_contribution") + contribution,
+            weekly_contribution=F("weekly_contribution") + contribution,
             daily_donation_silver=new_daily_silver,
             daily_donation_grain=new_daily_grain,
             daily_donation_reset_at=today,
@@ -128,9 +119,9 @@ def donate_resource(member, resource_type, amount):
         # 步骤7：记录资源流水
         GuildResourceLog.objects.create(
             guild=guild_locked,
-            action='donation',
-            silver_change=amount if resource_type == 'silver' else 0,
-            grain_change=amount if resource_type == 'grain' else 0,
+            action="donation",
+            silver_change=amount if resource_type == "silver" else 0,
+            grain_change=amount if resource_type == "grain" else 0,
             related_user=member_locked.user,
             note=f"捐赠{amount}{resource_type}，获得{contribution}贡献",
         )
@@ -139,20 +130,17 @@ def donate_resource(member, resource_type, amount):
 def reset_weekly_contributions():
     """重置所有帮会成员的本周贡献（每周一执行）"""
     from datetime import date
+
     today = date.today()
 
     # 性能优化：使用批量更新替代循环中的逐个 save()
     # 避免 N 次数据库写入，改为 1 次批量更新
-    GuildMember.objects.filter(
-        is_active=True,
-        weekly_reset_at__lt=today
-    ).update(
-        weekly_contribution=0,
-        weekly_reset_at=today
+    GuildMember.objects.filter(is_active=True, weekly_reset_at__lt=today).update(
+        weekly_contribution=0, weekly_reset_at=today
     )
 
 
-def get_contribution_ranking(guild, ranking_type='total', limit=10):
+def get_contribution_ranking(guild, ranking_type="total", limit=10):
     """
     获取贡献排行榜
 
@@ -164,19 +152,19 @@ def get_contribution_ranking(guild, ranking_type='total', limit=10):
     Returns:
         QuerySet
     """
-    members = guild.members.filter(is_active=True).select_related('user')
+    members = guild.members.filter(is_active=True).select_related("user", "user__manor")
 
-    if ranking_type == 'weekly':
-        members = members.order_by('-weekly_contribution', '-total_contribution')
+    if ranking_type == "weekly":
+        members = members.order_by("-weekly_contribution", "-total_contribution")
     else:
-        members = members.order_by('-total_contribution', '-weekly_contribution')
+        members = members.order_by("-total_contribution", "-weekly_contribution")
 
     if limit is not None:
         return members[:limit]
     return members
 
 
-def get_my_contribution_rank(member, ranking_type='total'):
+def get_my_contribution_rank(member, ranking_type="total"):
     """
     获取我的贡献排名
 
@@ -190,18 +178,11 @@ def get_my_contribution_rank(member, ranking_type='total'):
     guild = member.guild
     members = guild.members.filter(is_active=True)
 
-    if ranking_type == 'weekly':
-        higher_ranked = members.filter(
-            weekly_contribution__gt=member.weekly_contribution
-        ).count()
+    if ranking_type == "weekly":
+        higher_ranked = members.filter(weekly_contribution__gt=member.weekly_contribution).count()
         contribution = member.weekly_contribution
     else:
-        higher_ranked = members.filter(
-            total_contribution__gt=member.total_contribution
-        ).count()
+        higher_ranked = members.filter(total_contribution__gt=member.total_contribution).count()
         contribution = member.total_contribution
 
-    return {
-        'rank': higher_ranked + 1,
-        'contribution': contribution
-    }
+    return {"rank": higher_ranked + 1, "contribution": contribution}

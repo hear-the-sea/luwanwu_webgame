@@ -1,6 +1,7 @@
 """
 Base Django settings - core configuration.
 """
+
 from __future__ import annotations
 
 import math
@@ -9,7 +10,6 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "drf_spectacular",
     "corsheaders",
     "channels",
     "accounts",
@@ -137,6 +138,15 @@ REST_FRAMEWORK = {
         "battle": "100/hour",
         "claim": "50/hour",
     },
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "春秋乱世庄园主 API",
+    "DESCRIPTION": "Django 游戏项目 API 文档",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "SCHEMA_PATH_PREFIX": r"/api/",
 }
 
 # Trusted reverse proxy addresses (exact IPs or CIDR), comma-separated.
@@ -149,9 +159,7 @@ if ACCESS_LOG_TRUST_PROXY and not TRUSTED_PROXY_IPS:
     ACCESS_LOG_TRUST_PROXY = False
 
 # Minimum intervals for resource sync and manor state refresh
-RESOURCE_SYNC_MIN_INTERVAL_SECONDS = int(
-    env("DJANGO_RESOURCE_SYNC_MIN_INTERVAL_SECONDS", "1" if DEBUG else "5")
-)
+RESOURCE_SYNC_MIN_INTERVAL_SECONDS = int(env("DJANGO_RESOURCE_SYNC_MIN_INTERVAL_SECONDS", "1" if DEBUG else "5"))
 MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS = int(
     env("DJANGO_MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS", "1" if DEBUG else "5")
 )
@@ -164,8 +172,4 @@ TRADE_HIGH_VALUE_SILVER_THRESHOLD = int(env("DJANGO_TRADE_HIGH_VALUE_SILVER_THRE
 AUCTION_HIGH_BID_THRESHOLD = int(env("DJANGO_AUCTION_HIGH_BID_THRESHOLD", "200"))
 
 # Detect test runs
-RUNNING_TESTS = (
-    ("pytest" in sys.modules)
-    or ("test" in sys.argv)
-    or ("pytest" in os.path.basename(sys.argv[0] or ""))
-)
+RUNNING_TESTS = ("pytest" in sys.modules) or ("test" in sys.argv) or ("pytest" in os.path.basename(sys.argv[0] or ""))

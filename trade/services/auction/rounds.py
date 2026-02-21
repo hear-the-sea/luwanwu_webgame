@@ -5,19 +5,24 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import timedelta
-from typing import Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from gameplay.models import ItemTemplate, Manor
-from gameplay.services.messages import create_message
-from gameplay.services.notifications import notify_user
+from gameplay.services.utils.messages import create_message
+from gameplay.services.utils.notifications import notify_user
 from trade.models import AuctionBid, AuctionRound, AuctionSlot, FrozenGoldBar
+from trade.services.auction_config import (
+    AuctionItemConfig,
+    AuctionSettings,
+    get_auction_settings,
+    get_enabled_auction_items,
+)
 
-from trade.services.auction_config import get_auction_settings, get_enabled_auction_items
-
+from .bidding import get_slot_ranking
 from .constants import (
     AUCTION_CREATE_LOCK_KEY,
     AUCTION_CREATE_LOCK_TIMEOUT,
@@ -25,7 +30,6 @@ from .constants import (
     AUCTION_SETTLE_LOCK_TIMEOUT,
     GOLD_BAR_ITEM_KEY,
 )
-from .bidding import get_slot_ranking
 from .gold_bars import consume_frozen_gold_bars, unfreeze_gold_bars
 
 logger = logging.getLogger(__name__)
@@ -42,9 +46,9 @@ def _safe_cache_add(key: str, value: str, timeout: int) -> bool:
     try:
         return bool(cache.add(key, value, timeout=timeout))
     except Exception as exc:
-        logger.warning("cache.add failed for key=%s, fallback to unlocked mode: %s", key, exc, exc_info=True)
-        # 降级为“无分布式锁”模式，避免缓存故障导致功能不可用。
-        return True
+        logger.error("cache.add failed for key=%s, fail-closed lock path: %s", key, exc, exc_info=True)
+        # 安全优先：缓存异常时不放行，避免无锁并发导致重复创建/结算。
+        return False
 
 
 def _safe_cache_get(key: str, default=None):
@@ -87,8 +91,8 @@ def get_next_round_number() -> int:
 
 def create_auction_round(
     *,
-    get_settings_func: Callable[[], object] | None = None,
-    get_enabled_items_func: Callable[[], list] | None = None,
+    get_settings_func: Callable[[], AuctionSettings] | None = None,
+    get_enabled_items_func: Callable[[], List[AuctionItemConfig]] | None = None,
 ) -> Optional[AuctionRound]:
     """创建新的拍卖轮次（若已有进行中则跳过）。
 
@@ -137,7 +141,9 @@ def create_auction_round(
                 return None
 
             item_keys = [item_config.item_key for item_config in enabled_items]
-            templates_map = {t.key: t for t in ItemTemplate.objects.filter(key__in=item_keys)}
+            from core.utils.template_loader import load_templates_by_key
+
+            templates_map = load_templates_by_key(ItemTemplate, keys=item_keys)
 
             slots_to_create = []
             for item_config in enabled_items:
@@ -176,14 +182,14 @@ def settle_auction_round(
     round_id: int = None,
     *,
     settle_slot_func: Callable[[AuctionSlot], Dict] | None = None,
-) -> Dict:
+) -> Dict[str, Any]:
     """结算拍卖轮次。
 
     Args:
         settle_slot_func: Optional dependency injection for settling a single slot.
             Defaults to internal `_settle_slot`.
     """
-    stats = {"settled": 0, "sold": 0, "unsold": 0, "total_gold_bars": 0}
+    stats: Dict[str, Any] = {"settled": 0, "sold": 0, "unsold": 0, "total_gold_bars": 0}
 
     lock_value = str(uuid.uuid4())
     lock_acquired = _safe_cache_add(AUCTION_SETTLE_LOCK_KEY, lock_value, timeout=AUCTION_SETTLE_LOCK_TIMEOUT)
@@ -218,9 +224,8 @@ def settle_auction_round(
                 auction_round.status = AuctionRound.Status.SETTLING
                 auction_round.save(update_fields=["status"])
 
-        slots = (
-            AuctionSlot.objects.filter(round=auction_round, status=AuctionSlot.Status.ACTIVE)
-            .select_related("item_template", "highest_bidder")
+        slots = AuctionSlot.objects.filter(round=auction_round, status=AuctionSlot.Status.ACTIVE).select_related(
+            "item_template", "highest_bidder"
         )
 
         failed_slots = []
@@ -377,10 +382,7 @@ def _partial_consume_frozen_gold_bars(bid: AuctionBid, manor: Manor, consume_amo
         locked_record.unfrozen_at = timezone.now()
         locked_record.save(update_fields=["is_frozen", "unfrozen_at"])
 
-    logger.info(
-        f"维克里拍卖结算: 庄园 {manor.id} 实际扣除 {consume_amount} 金条，"
-        f"退还 {refund_amount} 金条"
-    )
+    logger.info(f"维克里拍卖结算: 庄园 {manor.id} 实际扣除 {consume_amount} 金条，" f"退还 {refund_amount} 金条")
 
 
 def _send_winning_notification_vickrey(

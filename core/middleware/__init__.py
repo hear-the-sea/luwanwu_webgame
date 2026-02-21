@@ -3,8 +3,8 @@
 """
 
 from .access_log import AccessLogMiddleware
-from .request_id import RequestIDMiddleware, get_current_request_id
 from .logging_filters import RequestIDFilter
+from .request_id import RequestIDMiddleware, get_current_request_id
 
 __all__ = [
     "AccessLogMiddleware",

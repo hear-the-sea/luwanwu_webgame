@@ -1,0 +1,7 @@
+openapi: 3.0.3
+info:
+  title: 春秋乱世庄园主 API
+  version: 1.0.0
+  description: Django 游戏项目 API 文档
+paths: {}
+components: {}

@@ -1,7 +1,7 @@
+from django.contrib.auth import get_user_model
+from django.core.validators import MaxLengthValidator, MinLengthValidator
 from django.db import models
 from django.db.models import Count, Q
-from django.contrib.auth import get_user_model
-from django.core.validators import MinLengthValidator, MaxLengthValidator
 
 User = get_user_model()
 
@@ -21,9 +21,7 @@ class GuildManager(models.Manager):
             for guild in guilds:
                 print(guild.current_member_count)  # 无额外查询
         """
-        return self.annotate(
-            _member_count=Count('members', filter=Q(members__is_active=True))
-        )
+        return self.annotate(_member_count=Count("members", filter=Q(members__is_active=True)))
 
 
 class Guild(models.Model):
@@ -35,71 +33,37 @@ class Guild(models.Model):
         unique=True,
         validators=[MinLengthValidator(2), MaxLengthValidator(12)],
         verbose_name="帮会名称",
-        help_text="2-12个字符"
+        help_text="2-12个字符",
     )
-    description = models.TextField(
-        max_length=200,
-        blank=True,
-        verbose_name="帮会简介"
-    )
-    emblem = models.CharField(
-        max_length=50,
-        default='default',
-        verbose_name="帮会徽章",
-        help_text="徽章图标key"
-    )
+    description = models.TextField(max_length=200, blank=True, verbose_name="帮会简介")
+    emblem = models.CharField(max_length=50, default="default", verbose_name="帮会徽章", help_text="徽章图标key")
 
     # 创建信息
     founder = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        related_name='founded_guilds',
-        verbose_name="创建者"
+        User, on_delete=models.SET_NULL, null=True, related_name="founded_guilds", verbose_name="创建者"
     )
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name="创建时间"
-    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
 
     # 等级与容量
-    level = models.PositiveIntegerField(
-        default=1,
-        verbose_name="帮会等级"
-    )
+    level = models.PositiveIntegerField(default=1, verbose_name="帮会等级")
 
     # 资源池
-    silver = models.PositiveIntegerField(
-        default=0,
-        verbose_name="银两"
-    )
-    grain = models.PositiveIntegerField(
-        default=0,
-        verbose_name="粮食"
-    )
-    gold_bar = models.PositiveIntegerField(
-        default=0,
-        verbose_name="金条"
-    )
+    silver = models.PositiveIntegerField(default=0, verbose_name="银两")
+    grain = models.PositiveIntegerField(default=0, verbose_name="粮食")
+    gold_bar = models.PositiveIntegerField(default=0, verbose_name="金条")
 
     # 状态
-    is_active = models.BooleanField(
-        default=True,
-        verbose_name="是否活跃"
-    )
-    auto_accept = models.BooleanField(
-        default=False,
-        verbose_name="自动接受申请"
-    )
+    is_active = models.BooleanField(default=True, verbose_name="是否活跃")
+    auto_accept = models.BooleanField(default=False, verbose_name="自动接受申请")
 
     # 自定义管理器
     objects = GuildManager()
 
     class Meta:
-        db_table = 'guilds'
-        verbose_name = '帮会'
-        verbose_name_plural = '帮会'
-        ordering = ['-level', '-created_at']
+        db_table = "guilds"
+        verbose_name = "帮会"
+        verbose_name_plural = "帮会"
+        ordering = ["-level", "-created_at"]
 
     def __str__(self):
         return f"{self.name} (Lv.{self.level})"
@@ -119,7 +83,7 @@ class Guild(models.Model):
         - 否则会执行一次 count() 查询（用于单个对象或未预加载的情况）
         """
         # 优先使用预加载的注解值
-        if hasattr(self, '_member_count'):
+        if hasattr(self, "_member_count"):
             return self._member_count
         # 降级为直接查询
         return self.members.filter(is_active=True).count()
@@ -131,17 +95,11 @@ class Guild(models.Model):
 
     def get_leader(self):
         """获取帮主"""
-        return self.members.filter(
-            is_active=True,
-            position='leader'
-        ).select_related('user__manor').first()
+        return self.members.filter(is_active=True, position="leader").select_related("user__manor").first()
 
     def get_admins(self):
         """获取管理员列表"""
-        return self.members.filter(
-            is_active=True,
-            position='admin'
-        ).select_related('user__manor')
+        return self.members.filter(is_active=True, position="admin").select_related("user__manor")
 
     def can_appoint_admin(self):
         """是否可以任命管理员"""

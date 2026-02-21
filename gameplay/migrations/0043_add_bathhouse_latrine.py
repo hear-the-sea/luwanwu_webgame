@@ -61,7 +61,7 @@ def remove_bathhouse_latrine(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0042_add_silver_grain_capacity'),
+        ("gameplay", "0042_add_silver_grain_capacity"),
     ]
 
     operations = [

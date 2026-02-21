@@ -1,10 +1,11 @@
 """
 门客装备系统单元测试
 """
-from django.test import TestCase
-from django.contrib.auth import get_user_model
 
-from guests.models import Guest, GuestTemplate, GuestRarity, GuestArchetype, GearTemplate, GearSlot, GearItem
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+
+from guests.models import GearItem, GearSlot, GearTemplate, Guest, GuestArchetype, GuestRarity, GuestTemplate
 from guests.services.equipment import equip_guest, unequip_guest_item
 
 User = get_user_model()
@@ -73,11 +74,7 @@ class TestEquipmentHealthManagement(TestCase):
         gear = GearItem.objects.create(manor=self.manor, template=self.gear_template)
 
         # 添加到背包（模拟装备来源）
-        self.InventoryItem.objects.create(
-            manor=self.manor,
-            template=self.item_template,
-            quantity=1
-        )
+        self.InventoryItem.objects.create(manor=self.manor, template=self.item_template, quantity=1)
 
         # 装备前的最大生命值（新系统：1000 + 180×50 = 10,000）
         max_hp_before = self.guest.max_hp
@@ -112,11 +109,7 @@ class TestEquipmentHealthManagement(TestCase):
         """测试：卸下装备时，如果当前生命值低于新的最大生命值，则不改变"""
         # 1. 创建装备并装备
         gear = GearItem.objects.create(manor=self.manor, template=self.gear_template)
-        self.InventoryItem.objects.create(
-            manor=self.manor,
-            template=self.item_template,
-            quantity=1
-        )
+        self.InventoryItem.objects.create(manor=self.manor, template=self.item_template, quantity=1)
 
         gear = equip_guest(gear, self.guest)
         self.guest.refresh_from_db()
@@ -136,11 +129,7 @@ class TestEquipmentHealthManagement(TestCase):
         """测试：卸下装备时处理0生命值的情况"""
         # 1. 创建装备并装备
         gear = GearItem.objects.create(manor=self.manor, template=self.gear_template)
-        self.InventoryItem.objects.create(
-            manor=self.manor,
-            template=self.item_template,
-            quantity=1
-        )
+        self.InventoryItem.objects.create(manor=self.manor, template=self.item_template, quantity=1)
 
         gear = equip_guest(gear, self.guest)
         self.guest.refresh_from_db()

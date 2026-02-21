@@ -17,19 +17,10 @@ from core.utils.time_scale import scale_duration
 
 from ...constants import PVPConstants
 from ...models import Manor, RaidRun
-from .utils import (
-    calculate_distance,
-    can_attack_target,
-    get_prestige_color,
-    is_same_region,
-)
+from .utils import calculate_distance, can_attack_target, get_prestige_color, is_same_region
 
 
-def search_manors_by_name(
-    searcher: Manor,
-    name_query: str,
-    limit: int = 20
-) -> List[Dict[str, Any]]:
+def search_manors_by_name(searcher: Manor, name_query: str, limit: int = 20) -> List[Dict[str, Any]]:
     """
     按庄园名称搜索。
 
@@ -41,24 +32,18 @@ def search_manors_by_name(
     Returns:
         庄园列表（包含距离和声望颜色）
     """
-    manors = Manor.objects.filter(
-        name__icontains=name_query
-    ).exclude(
-        id=searcher.id
-    ).select_related("user").only(
-        "id", "name", "prestige", "region",
-        "coordinate_x", "coordinate_y",
-        "user__username"
-    )[:limit]
+    manors = (
+        Manor.objects.filter(name__icontains=name_query)
+        .exclude(id=searcher.id)
+        .select_related("user")
+        .only("id", "name", "prestige", "region", "coordinate_x", "coordinate_y", "user__username")[:limit]
+    )
 
     return _format_manor_list(searcher, manors)
 
 
 def search_manors_by_region(
-    searcher: Manor,
-    region: str,
-    page: int = 1,
-    page_size: int = 20
+    searcher: Manor, region: str, page: int = 1, page_size: int = 20
 ) -> Tuple[List[Dict[str, Any]], int]:
     """
     按地区查询庄园列表。
@@ -72,30 +57,22 @@ def search_manors_by_region(
     Returns:
         (庄园列表, 总数)
     """
-    queryset = Manor.objects.filter(
-        region=region
-    ).exclude(
-        id=searcher.id
-    ).select_related("user").only(
-        "id", "name", "prestige", "region",
-        "coordinate_x", "coordinate_y",
-        "user__username"
+    queryset = (
+        Manor.objects.filter(region=region)
+        .exclude(id=searcher.id)
+        .select_related("user")
+        .only("id", "name", "prestige", "region", "coordinate_x", "coordinate_y", "user__username")
     )
 
     total = queryset.count()
     offset = (page - 1) * page_size
-    manors = queryset[offset:offset + page_size]
+    manors = queryset[offset : offset + page_size]
 
     return _format_manor_list(searcher, manors), total
 
 
 def search_manors_by_coordinate(
-    searcher: Manor,
-    center_x: int,
-    center_y: int,
-    radius: float,
-    region: Optional[str] = None,
-    limit: int = 50
+    searcher: Manor, center_x: int, center_y: int, radius: float, region: Optional[str] = None, limit: int = 50
 ) -> List[Dict[str, Any]]:
     """
     按坐标范围搜索庄园。
@@ -119,15 +96,17 @@ def search_manors_by_coordinate(
     min_y = max(1, int(center_y - radius))
     max_y = min(999, int(center_y + radius))
 
-    manors = Manor.objects.filter(
-        region=target_region,
-        coordinate_x__gte=min_x,
-        coordinate_x__lte=max_x,
-        coordinate_y__gte=min_y,
-        coordinate_y__lte=max_y,
-    ).exclude(
-        id=searcher.id
-    ).select_related("user")
+    manors = (
+        Manor.objects.filter(
+            region=target_region,
+            coordinate_x__gte=min_x,
+            coordinate_x__lte=max_x,
+            coordinate_y__gte=min_y,
+            coordinate_y__lte=max_y,
+        )
+        .exclude(id=searcher.id)
+        .select_related("user")
+    )
 
     # 精确过滤圆形范围
     result = []
@@ -175,21 +154,23 @@ def _format_manor_list(searcher: Manor, manors) -> List[Dict[str, Any]]:
             now=now,
         )
 
-        result.append({
-            "id": manor.id,
-            "name": manor.display_name,
-            "region": manor.region,
-            "region_display": manor.region_display,
-            "coordinate_x": manor.coordinate_x,
-            "coordinate_y": manor.coordinate_y,
-            "location_display": manor.location_display,
-            "prestige": manor.prestige,
-            "prestige_color": color,
-            "distance": round(distance, 1),
-            "can_attack": can_attack,
-            "attack_reason": reason,
-            "is_protected": manor.is_protected,
-        })
+        result.append(
+            {
+                "id": manor.id,
+                "name": manor.display_name,
+                "region": manor.region,
+                "region_display": manor.region_display,
+                "coordinate_x": manor.coordinate_x,
+                "coordinate_y": manor.coordinate_y,
+                "location_display": manor.location_display,
+                "prestige": manor.prestige,
+                "prestige_color": color,
+                "distance": round(distance, 1),
+                "can_attack": can_attack,
+                "attack_reason": reason,
+                "is_protected": manor.is_protected,
+            }
+        )
 
     # 按距离排序
     result.sort(key=lambda x: x["distance"])

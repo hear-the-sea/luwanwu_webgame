@@ -32,8 +32,10 @@ def equip_view(request):
 
     使用统一装饰器处理错误，表单验证失败时抛出 ValueError
     """
-    from ..services import ensure_inventory_gears, equip_guest as equip_guest_service
-    from gameplay.services.manor import ensure_manor
+    from gameplay.services.manor.core import ensure_manor
+
+    from ..services import ensure_inventory_gears
+    from ..services import equip_guest as equip_guest_service
 
     manor = ensure_manor(request.user)
 
@@ -52,10 +54,7 @@ def equip_view(request):
 
     # AJAX 请求返回 JSON 响应
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-        return JsonResponse({
-            "success": True,
-            "message": f"{guest.display_name} 已装备 {gear.template.name}"
-        })
+        return JsonResponse({"success": True, "message": f"{guest.display_name} 已装备 {gear.template.name}"})
 
     messages.success(request, f"{guest.display_name} 已装备 {gear.template.name}")
     return redirect("guests:detail", pk=guest.pk)
@@ -71,8 +70,9 @@ def unequip_view(request):
     由于有复杂的验证逻辑，保持手动错误处理
     但使用 manager 方法简化查询
     """
+    from gameplay.services.manor.core import ensure_manor
+
     from ..services import unequip_guest_item
-    from gameplay.services.manor import ensure_manor
 
     manor = ensure_manor(request.user)
     guest_id = request.POST.get("guest")
@@ -83,10 +83,7 @@ def unequip_view(request):
         next_url = safe_redirect_url(request, request.META.get("HTTP_REFERER"), default_url)
 
     # 使用 manager 方法获取门客，避免重复的 select_related
-    guest = get_object_or_404(
-        Guest.objects.for_manor(manor).with_template(),
-        pk=guest_id
-    )
+    guest = get_object_or_404(Guest.objects.for_manor(manor).with_template(), pk=guest_id)
 
     if not gear_ids:
         messages.warning(request, "请先勾选需要卸下的装备")
@@ -122,8 +119,8 @@ def unequip_view(request):
 @login_required
 @require_GET
 def gear_options_view(request):
-    from gameplay.services.cache import CACHE_TIMEOUT_SHORT
-    from gameplay.services.manor import ensure_manor
+    from gameplay.services.manor.core import ensure_manor
+    from gameplay.services.utils.cache import CACHE_TIMEOUT_SHORT
 
     manor = ensure_manor(request.user)
     slot = request.GET.get("slot")
@@ -175,8 +172,8 @@ def gear_options_view(request):
                 "rarity_class": rarity_class(rarity),
                 "count": row["count"],
                 "title": gear_summary(template),
-                }
-            )
+            }
+        )
     payload = {
         "slot": slot,
         "slot_label": slot_label_map.get(slot, ""),

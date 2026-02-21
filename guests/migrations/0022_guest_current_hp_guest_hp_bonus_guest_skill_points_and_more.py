@@ -2,7 +2,6 @@
 
 from django.db import migrations, models
 
-
 RARITY_POWER = {
     "black": 0.8,
     "gray": 1.0,
@@ -32,39 +31,39 @@ def set_initial_hp(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('guests', '0021_guesttemplate_recruitable'),
+        ("guests", "0021_guesttemplate_recruitable"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='guest',
-            name='current_hp',
+            model_name="guest",
+            name="current_hp",
             field=models.PositiveIntegerField(default=0),
         ),
         migrations.AddField(
-            model_name='guest',
-            name='hp_bonus',
+            model_name="guest",
+            name="hp_bonus",
             field=models.IntegerField(default=0),
         ),
         migrations.AddField(
-            model_name='guest',
-            name='skill_points',
+            model_name="guest",
+            name="skill_points",
             field=models.PositiveIntegerField(default=0),
         ),
         migrations.AddField(
-            model_name='guesttemplate',
-            name='base_hp',
+            model_name="guesttemplate",
+            name="base_hp",
             field=models.PositiveIntegerField(default=1200),
         ),
         migrations.AddField(
-            model_name='guesttemplate',
-            name='hp_growth',
+            model_name="guesttemplate",
+            name="hp_growth",
             field=models.PositiveIntegerField(default=80),
         ),
         migrations.AddField(
-            model_name='guesttemplate',
-            name='initial_skills',
-            field=models.ManyToManyField(blank=True, related_name='template_initials', to='guests.skill'),
+            model_name="guesttemplate",
+            name="initial_skills",
+            field=models.ManyToManyField(blank=True, related_name="template_initials", to="guests.skill"),
         ),
         migrations.RunPython(set_initial_hp, migrations.RunPython.noop),
     ]

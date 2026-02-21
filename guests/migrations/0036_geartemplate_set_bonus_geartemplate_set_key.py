@@ -6,18 +6,18 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('guests', '0035_guest_gear_set_bonus'),
+        ("guests", "0035_guest_gear_set_bonus"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='geartemplate',
-            name='set_bonus',
+            model_name="geartemplate",
+            name="set_bonus",
             field=models.JSONField(blank=True, default=dict),
         ),
         migrations.AddField(
-            model_name='geartemplate',
-            name='set_key',
-            field=models.CharField(blank=True, default='', max_length=64),
+            model_name="geartemplate",
+            name="set_key",
+            field=models.CharField(blank=True, default="", max_length=64),
         ),
     ]

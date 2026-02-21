@@ -9,21 +9,21 @@ from typing import Dict, List
 from django.db import transaction
 from django.utils import timezone
 
+from common.utils.celery import safe_apply_async
 from core.utils.time_scale import scale_duration
+from gameplay.services.raid import combat as combat_pkg
 from guests.models import Guest
 
-from common.utils.celery import safe_apply_async
-
-from gameplay.services.raid import combat as combat_pkg
-
 from ....models import Manor, RaidRun
-from ...messages import create_message
+from ...utils.messages import create_message
 from ..utils import calculate_distance, is_same_region
 
 logger = logging.getLogger(__name__)
 
 
-def calculate_raid_travel_time(attacker: Manor, defender: Manor, guests: List[Guest], troop_loadout: Dict[str, int]) -> int:
+def calculate_raid_travel_time(
+    attacker: Manor, defender: Manor, guests: List[Guest], troop_loadout: Dict[str, int]
+) -> int:
     """
     计算踢馆行军时间（单程，秒）。
 
@@ -45,7 +45,7 @@ def calculate_raid_travel_time(attacker: Manor, defender: Manor, guests: List[Gu
     if guests:
         avg_agility = sum(g.agility for g in guests) / len(guests)
         agility_reduction = min(0.5, avg_agility / 1000)  # 最多减少50%
-        total_time *= (1 - agility_reduction)
+        total_time *= 1 - agility_reduction
 
     # 骑兵加成：检查是否有骑兵类兵种
     from ...recruitment import load_troop_templates
@@ -164,6 +164,8 @@ def _dismiss_marching_raids_if_protected(defender: Manor) -> int:
         dismissed_count += 1
 
     if dismissed_count > 0:
-        logger.info("Dismissed %s marching raids to %s due to protection trigger", dismissed_count, defender.display_name)
+        logger.info(
+            "Dismissed %s marching raids to %s due to protection trigger", dismissed_count, defender.display_name
+        )
 
     return dismissed_count

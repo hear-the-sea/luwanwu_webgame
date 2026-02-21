@@ -6,13 +6,13 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('guests', '0036_geartemplate_set_bonus_geartemplate_set_key'),
+        ("guests", "0036_geartemplate_set_bonus_geartemplate_set_key"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='geartemplate',
-            name='set_description',
-            field=models.CharField(blank=True, default='', max_length=128),
+            model_name="geartemplate",
+            name="set_description",
+            field=models.CharField(blank=True, default="", max_length=128),
         ),
     ]

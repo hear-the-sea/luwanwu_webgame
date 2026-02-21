@@ -6,13 +6,13 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0036_itemtemplate_is_usable'),
+        ("gameplay", "0036_itemtemplate_is_usable"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='missiontemplate',
-            name='probability_drop_table',
-            field=models.JSONField(blank=True, default=dict, help_text='概率掉落表'),
+            model_name="missiontemplate",
+            name="probability_drop_table",
+            field=models.JSONField(blank=True, default=dict, help_text="概率掉落表"),
         ),
     ]

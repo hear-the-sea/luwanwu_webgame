@@ -18,13 +18,12 @@ from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-
 # 清理配置：模型 -> (默认保留天数, 时间字段名)
 CLEANUP_CONFIG = {
-    "gameplay.ResourceEvent": (30, "created_at"),       # 资源流水保留30天
-    "guilds.GuildResourceLog": (30, "created_at"),      # 帮会资源流水保留30天
-    "guilds.GuildDonationLog": (60, "donated_at"),      # 帮会捐献记录保留60天
-    "guilds.GuildExchangeLog": (60, "exchanged_at"),    # 帮会兑换记录保留60天
+    "gameplay.ResourceEvent": (30, "created_at"),  # 资源流水保留30天
+    "guilds.GuildResourceLog": (30, "created_at"),  # 帮会资源流水保留30天
+    "guilds.GuildDonationLog": (60, "donated_at"),  # 帮会捐献记录保留60天
+    "guilds.GuildExchangeLog": (60, "exchanged_at"),  # 帮会兑换记录保留60天
 }
 
 
@@ -104,19 +103,14 @@ class Command(BaseCommand):
             return 0
 
         if dry_run:
-            self.stdout.write(
-                self.style.WARNING(f"[{model_path}] 将删除 {count} 条 {days} 天前的记录")
-            )
+            self.stdout.write(self.style.WARNING(f"[{model_path}] 将删除 {count} 条 {days} 天前的记录"))
             return count
 
         # 批量删除，避免锁表
         deleted_total = 0
         while True:
             # 获取一批要删除的 ID
-            ids_to_delete = list(
-                model.objects.filter(**filter_kwargs)
-                .values_list("id", flat=True)[:batch_size]
-            )
+            ids_to_delete = list(model.objects.filter(**filter_kwargs).values_list("id", flat=True)[:batch_size])
             if not ids_to_delete:
                 break
 
@@ -126,13 +120,12 @@ class Command(BaseCommand):
             if deleted < batch_size:
                 break
 
-        self.stdout.write(
-            self.style.SUCCESS(f"[{model_path}] 已删除 {deleted_total} 条 {days} 天前的记录")
-        )
+        self.stdout.write(self.style.SUCCESS(f"[{model_path}] 已删除 {deleted_total} 条 {days} 天前的记录"))
         return deleted_total
 
     def _get_model(self, model_path: str):
         """根据路径获取模型类"""
         from django.apps import apps
+
         app_label, model_name = model_path.rsplit(".", 1)
         return apps.get_model(app_label, model_name)

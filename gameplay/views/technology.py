@@ -15,7 +15,6 @@ from django.views.generic import TemplateView
 
 from core.exceptions import GameError
 from core.utils import sanitize_error_message
-
 from gameplay.services import (
     ensure_manor,
     get_categories,
@@ -71,9 +70,7 @@ class TechnologyView(LoginRequiredMixin, TemplateView):
             context["current_troop_class"] = current_troop_class
 
             # 只显示当前选中兵种的技术
-            context["martial_groups"] = [
-                g for g in all_groups if g["class_key"] == current_troop_class
-            ]
+            context["martial_groups"] = [g for g in all_groups if g["class_key"] == current_troop_class]
             context["technologies"] = []
         else:
             context["martial_groups"] = []

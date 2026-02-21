@@ -7,6 +7,7 @@
     python manage.py test_recruitment --batch      # 批次测试
     python manage.py test_recruitment --seed 42    # 指定随机种子
 """
+
 from __future__ import annotations
 
 import random
@@ -18,13 +19,7 @@ from typing import Dict
 from django.core.management.base import BaseCommand
 
 from guests.models import GuestRarity
-from guests.utils.recruitment_utils import (
-    RARITY_DISTRIBUTION,
-    RARITY_ORDER,
-    TOTAL_WEIGHT,
-    choose_rarity,
-)
-
+from guests.utils.recruitment_utils import RARITY_DISTRIBUTION, RARITY_ORDER, TOTAL_WEIGHT, choose_rarity
 
 RARITY_NAMES = {
     GuestRarity.BLACK: "黑",
@@ -46,7 +41,8 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            "-n", "--iterations",
+            "-n",
+            "--iterations",
             type=int,
             default=1000000,
             help="模拟次数（默认: 1000000）",
@@ -199,7 +195,9 @@ class Command(BaseCommand):
                 batch_results[rarity].append(rate)
 
         if verbose:
-            self.stdout.write(f"\n{'稀有度':<8} {'预期概率':>12} {'平均值':>12} {'最小值':>12} {'最大值':>12} {'标准差':>10}")
+            self.stdout.write(
+                f"\n{'稀有度':<8} {'预期概率':>12} {'平均值':>12} {'最小值':>12} {'最大值':>12} {'标准差':>10}"
+            )
             self.stdout.write("-" * 70)
 
             display_order = list(reversed(RARITY_ORDER))

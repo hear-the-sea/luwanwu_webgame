@@ -66,4 +66,3 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunPython(create_buildings, remove_buildings),
     ]
-

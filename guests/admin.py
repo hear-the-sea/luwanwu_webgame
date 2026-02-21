@@ -4,20 +4,29 @@ from .models import (
     GearItem,
     GearTemplate,
     Guest,
+    GuestDefection,
     GuestTemplate,
     RecruitmentCandidate,
     RecruitmentPool,
     RecruitmentPoolEntry,
     RecruitmentRecord,
-    TrainingLog,
     SalaryPayment,
-    GuestDefection,
+    TrainingLog,
 )
 
 
 @admin.register(GuestTemplate)
 class GuestTemplateAdmin(admin.ModelAdmin):
-    list_display = ("name", "key", "rarity", "archetype", "recruitable", "base_attack", "base_intellect", "base_defense")
+    list_display = (
+        "name",
+        "key",
+        "rarity",
+        "archetype",
+        "recruitable",
+        "base_attack",
+        "base_intellect",
+        "base_defense",
+    )
     list_filter = ("rarity", "archetype", "recruitable")
     search_fields = ("name", "key")
     list_editable = ("recruitable",)

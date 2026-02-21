@@ -1,6 +1,7 @@
 """
 Guest template cache management.
 """
+
 from __future__ import annotations
 
 import logging
@@ -27,17 +28,11 @@ def get_all_guest_templates() -> Dict[str, GuestTemplate]:
     """
     cached_keys = cache.get(GUEST_TEMPLATE_CACHE_KEY)
     if cached_keys is not None:
-        return {
-            t.key: t
-            for t in GuestTemplate.objects.filter(key__in=cached_keys).prefetch_related("initial_skills")
-        }
+        return {t.key: t for t in GuestTemplate.objects.filter(key__in=cached_keys).prefetch_related("initial_skills")}
 
     from core.utils.template_loader import load_templates_by_key
-    templates = load_templates_by_key(
-        GuestTemplate,
-        keys=None,  # 加载全部
-        prefetch=["initial_skills"]
-    )
+
+    templates = load_templates_by_key(GuestTemplate, keys=None, prefetch=["initial_skills"])  # 加载全部
     cache.set(GUEST_TEMPLATE_CACHE_KEY, list(templates.keys()), timeout=GUEST_TEMPLATE_CACHE_TTL)
     return templates
 

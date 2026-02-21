@@ -4,36 +4,31 @@ Backward compatibility shim for battle.combatants module.
 All functionality has been moved to battle.combatants_pkg package.
 This module re-exports everything for backward compatibility.
 """
+
 from __future__ import annotations
 
 # Re-export everything from the new package
-from .combatants_pkg import (
-    # Core data classes
-    BattleSimulationResult,
-    Combatant,
-    # Cache management
-    clear_guest_template_cache,
-    get_all_guest_templates,
-    # Tech effects
-    build_tech_effects,
-    # Guest builder
+from .combatants_pkg import (  # Core data classes; Cache management; Tech effects; Guest builder; Troop builder; AI generator
     DEFAULT_GUEST_AGILITY,
     DEFAULT_LUCK,
     INTELLECT_TO_SPEED_DIVISOR,
     MIN_SPEED_BONUS,
     VANGUARD_RATIO,
+    BattleSimulationResult,
+    Combatant,
+    allocate_ai_attribute_points,
     assign_agility_based_priorities,
+    build_ai_guests,
     build_guest_combatants,
+    build_named_ai_guests,
+    build_tech_effects,
+    build_troop_combatants,
+    clear_guest_template_cache,
+    generate_ai_loadout,
+    get_all_guest_templates,
+    normalize_troop_loadout,
     serialize_guest_for_report,
     serialize_skills,
-    # Troop builder
-    build_troop_combatants,
-    normalize_troop_loadout,
-    # AI generator
-    allocate_ai_attribute_points,
-    build_ai_guests,
-    build_named_ai_guests,
-    generate_ai_loadout,
 )
 
 # Backward compatibility aliases

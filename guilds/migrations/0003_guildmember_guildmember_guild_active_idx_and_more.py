@@ -7,17 +7,17 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('guilds', '0002_add_composite_indexes'),
+        ("guilds", "0002_add_composite_indexes"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AddIndex(
-            model_name='guildmember',
-            index=models.Index(fields=['guild', 'is_active'], name='guildmember_guild_active_idx'),
+            model_name="guildmember",
+            index=models.Index(fields=["guild", "is_active"], name="guildmember_guild_active_idx"),
         ),
         migrations.AddIndex(
-            model_name='guildmember',
-            index=models.Index(fields=['guild', 'position', 'is_active'], name='guildmember_guild_pos_idx'),
+            model_name="guildmember",
+            index=models.Index(fields=["guild", "position", "is_active"], name="guildmember_guild_pos_idx"),
         ),
     ]

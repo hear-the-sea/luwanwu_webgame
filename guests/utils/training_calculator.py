@@ -3,16 +3,17 @@
 
 提供门客训练相关的成本和时间计算函数。
 """
+
 from __future__ import annotations
 
-from typing import Dict, TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Dict, cast
 
 if TYPE_CHECKING:
     from ..models import Guest
 
 from core.utils.time_scale import scale_duration
-from ..models import GuestRarity, MAX_GUEST_LEVEL
 
+from ..models import MAX_GUEST_LEVEL, GuestRarity
 
 # 稀有度训练时间系数
 RARITY_TIME_COEFFICIENT = {
@@ -30,7 +31,7 @@ BASE_TRAINING_TIME = 120  # 黑色品质1→2级需要120秒
 
 # 成本配置
 GRAIN_COST_PER_LEVEL = 120  # 每级粮食基础消耗
-SILVER_COST_PER_LEVEL = 50   # 每级银两消耗
+SILVER_COST_PER_LEVEL = 50  # 每级银两消耗
 
 
 def calculate_level_up_cost(current_level: int, target_levels: int = 1) -> Dict[str, int]:

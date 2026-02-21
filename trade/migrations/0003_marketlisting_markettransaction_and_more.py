@@ -7,73 +7,130 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0035_add_treasury_building'),
-        ('trade', '0002_goldbarexchangelog'),
+        ("gameplay", "0035_add_treasury_building"),
+        ("trade", "0002_goldbarexchangelog"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='MarketListing',
+            name="MarketListing",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('quantity', models.PositiveIntegerField(verbose_name='数量')),
-                ('unit_price', models.PositiveIntegerField(verbose_name='单价')),
-                ('total_price', models.PositiveIntegerField(help_text='单价 × 数量', verbose_name='总价')),
-                ('duration', models.IntegerField(choices=[(7200, '2小时'), (28800, '8小时'), (86400, '24小时')], verbose_name='上架时长（秒）')),
-                ('listing_fee', models.PositiveIntegerField(verbose_name='手续费')),
-                ('listed_at', models.DateTimeField(auto_now_add=True, verbose_name='上架时间')),
-                ('expires_at', models.DateTimeField(verbose_name='过期时间')),
-                ('status', models.CharField(choices=[('active', '在售'), ('sold', '已售出'), ('expired', '已过期'), ('cancelled', '已取消')], default='active', max_length=16, verbose_name='状态')),
-                ('sold_at', models.DateTimeField(blank=True, null=True, verbose_name='成交时间')),
-                ('buyer', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='market_purchases', to='gameplay.manor', verbose_name='买家')),
-                ('item_template', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='gameplay.itemtemplate', verbose_name='物品模板')),
-                ('seller', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='market_listings', to='gameplay.manor', verbose_name='卖家')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("quantity", models.PositiveIntegerField(verbose_name="数量")),
+                ("unit_price", models.PositiveIntegerField(verbose_name="单价")),
+                ("total_price", models.PositiveIntegerField(help_text="单价 × 数量", verbose_name="总价")),
+                (
+                    "duration",
+                    models.IntegerField(
+                        choices=[(7200, "2小时"), (28800, "8小时"), (86400, "24小时")], verbose_name="上架时长（秒）"
+                    ),
+                ),
+                ("listing_fee", models.PositiveIntegerField(verbose_name="手续费")),
+                ("listed_at", models.DateTimeField(auto_now_add=True, verbose_name="上架时间")),
+                ("expires_at", models.DateTimeField(verbose_name="过期时间")),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("active", "在售"),
+                            ("sold", "已售出"),
+                            ("expired", "已过期"),
+                            ("cancelled", "已取消"),
+                        ],
+                        default="active",
+                        max_length=16,
+                        verbose_name="状态",
+                    ),
+                ),
+                ("sold_at", models.DateTimeField(blank=True, null=True, verbose_name="成交时间")),
+                (
+                    "buyer",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="market_purchases",
+                        to="gameplay.manor",
+                        verbose_name="买家",
+                    ),
+                ),
+                (
+                    "item_template",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, to="gameplay.itemtemplate", verbose_name="物品模板"
+                    ),
+                ),
+                (
+                    "seller",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="market_listings",
+                        to="gameplay.manor",
+                        verbose_name="卖家",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': '交易行挂单',
-                'verbose_name_plural': '交易行挂单',
-                'db_table': 'trade_market_listing',
-                'ordering': ['-listed_at'],
+                "verbose_name": "交易行挂单",
+                "verbose_name_plural": "交易行挂单",
+                "db_table": "trade_market_listing",
+                "ordering": ["-listed_at"],
             },
         ),
         migrations.CreateModel(
-            name='MarketTransaction',
+            name="MarketTransaction",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('total_price', models.PositiveIntegerField(verbose_name='成交价')),
-                ('tax_amount', models.PositiveIntegerField(help_text='卖家支付的10%税费', verbose_name='税费')),
-                ('seller_received', models.PositiveIntegerField(help_text='成交价 - 税费', verbose_name='卖家实收')),
-                ('transaction_at', models.DateTimeField(auto_now_add=True, verbose_name='成交时间')),
-                ('buyer_mail_sent', models.BooleanField(default=False, verbose_name='买家邮件已发送')),
-                ('seller_mail_sent', models.BooleanField(default=False, verbose_name='卖家邮件已发送')),
-                ('buyer', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='market_transactions', to='gameplay.manor', verbose_name='买家')),
-                ('listing', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='transaction', to='trade.marketlisting', verbose_name='挂单')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("total_price", models.PositiveIntegerField(verbose_name="成交价")),
+                ("tax_amount", models.PositiveIntegerField(help_text="卖家支付的10%税费", verbose_name="税费")),
+                ("seller_received", models.PositiveIntegerField(help_text="成交价 - 税费", verbose_name="卖家实收")),
+                ("transaction_at", models.DateTimeField(auto_now_add=True, verbose_name="成交时间")),
+                ("buyer_mail_sent", models.BooleanField(default=False, verbose_name="买家邮件已发送")),
+                ("seller_mail_sent", models.BooleanField(default=False, verbose_name="卖家邮件已发送")),
+                (
+                    "buyer",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="market_transactions",
+                        to="gameplay.manor",
+                        verbose_name="买家",
+                    ),
+                ),
+                (
+                    "listing",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="transaction",
+                        to="trade.marketlisting",
+                        verbose_name="挂单",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': '交易记录',
-                'verbose_name_plural': '交易记录',
-                'db_table': 'trade_market_transaction',
-                'ordering': ['-transaction_at'],
+                "verbose_name": "交易记录",
+                "verbose_name_plural": "交易记录",
+                "db_table": "trade_market_transaction",
+                "ordering": ["-transaction_at"],
             },
         ),
         migrations.AddIndex(
-            model_name='marketlisting',
-            index=models.Index(fields=['status', '-listed_at'], name='trade_marke_status_458ae5_idx'),
+            model_name="marketlisting",
+            index=models.Index(fields=["status", "-listed_at"], name="trade_marke_status_458ae5_idx"),
         ),
         migrations.AddIndex(
-            model_name='marketlisting',
-            index=models.Index(fields=['item_template', 'status'], name='trade_marke_item_te_732981_idx'),
+            model_name="marketlisting",
+            index=models.Index(fields=["item_template", "status"], name="trade_marke_item_te_732981_idx"),
         ),
         migrations.AddIndex(
-            model_name='marketlisting',
-            index=models.Index(fields=['seller', 'status'], name='trade_marke_seller__ce722a_idx'),
+            model_name="marketlisting",
+            index=models.Index(fields=["seller", "status"], name="trade_marke_seller__ce722a_idx"),
         ),
         migrations.AddIndex(
-            model_name='marketlisting',
-            index=models.Index(fields=['expires_at', 'status'], name='trade_marke_expires_587f65_idx'),
+            model_name="marketlisting",
+            index=models.Index(fields=["expires_at", "status"], name="trade_marke_expires_587f65_idx"),
         ),
         migrations.AddIndex(
-            model_name='markettransaction',
-            index=models.Index(fields=['-transaction_at'], name='trade_marke_transac_04bcd4_idx'),
+            model_name="markettransaction",
+            index=models.Index(fields=["-transaction_at"], name="trade_marke_transac_04bcd4_idx"),
         ),
     ]

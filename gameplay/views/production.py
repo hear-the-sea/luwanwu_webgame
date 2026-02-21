@@ -17,11 +17,7 @@ from django.views.generic import TemplateView
 from core.exceptions import GameError
 from core.utils import sanitize_error_message
 from gameplay.constants import UIConstants
-from gameplay.services import (
-    ensure_manor,
-    get_player_technology_level,
-    refresh_manor_state,
-)
+from gameplay.services import ensure_manor, get_player_technology_level, refresh_manor_state
 
 
 class StableView(LoginRequiredMixin, TemplateView):
@@ -35,12 +31,12 @@ class StableView(LoginRequiredMixin, TemplateView):
         refresh_manor_state(manor)
 
         from gameplay.services import (
-            get_horse_options,
             get_active_productions,
-            refresh_horse_productions,
+            get_horse_options,
             get_stable_speed_bonus,
+            refresh_horse_productions,
         )
-        from gameplay.services.stable import get_max_production_quantity, has_active_production
+        from gameplay.services.buildings.stable import get_max_production_quantity, has_active_production
 
         # 刷新马匹生产状态
         refresh_horse_productions(manor)
@@ -81,9 +77,12 @@ def start_horse_production_view(request: HttpRequest) -> HttpResponse:
 
     try:
         from gameplay.services import start_horse_production
+
         production = start_horse_production(manor, horse_key, quantity)
         quantity_text = f"x{production.quantity}" if production.quantity > 1 else ""
-        messages.success(request, f"{production.horse_name}{quantity_text} 开始生产，预计 {production.actual_duration} 秒后完成")
+        messages.success(
+            request, f"{production.horse_name}{quantity_text} 开始生产，预计 {production.actual_duration} 秒后完成"
+        )
     except (GameError, ValueError) as e:
         messages.error(request, sanitize_error_message(e))
 
@@ -100,13 +99,13 @@ class RanchView(LoginRequiredMixin, TemplateView):
         manor = ensure_manor(self.request.user)
         refresh_manor_state(manor)
 
-        from gameplay.services.ranch import (
-            get_livestock_options,
+        from gameplay.services.buildings.ranch import (
             get_active_livestock_productions,
-            refresh_livestock_productions,
-            get_ranch_speed_bonus,
+            get_livestock_options,
             get_max_livestock_quantity,
+            get_ranch_speed_bonus,
             has_active_livestock_production,
+            refresh_livestock_productions,
         )
 
         # 刷新家畜养殖状态
@@ -147,10 +146,13 @@ def start_livestock_production_view(request: HttpRequest) -> HttpResponse:
         return redirect("gameplay:ranch")
 
     try:
-        from gameplay.services.ranch import start_livestock_production
+        from gameplay.services.buildings.ranch import start_livestock_production
+
         production = start_livestock_production(manor, livestock_key, quantity)
         quantity_text = f"x{production.quantity}" if production.quantity > 1 else ""
-        messages.success(request, f"{production.livestock_name}{quantity_text} 开始养殖，预计 {production.actual_duration} 秒后完成")
+        messages.success(
+            request, f"{production.livestock_name}{quantity_text} 开始养殖，预计 {production.actual_duration} 秒后完成"
+        )
     except (GameError, ValueError) as e:
         messages.error(request, sanitize_error_message(e))
 
@@ -167,13 +169,13 @@ class SmithyView(LoginRequiredMixin, TemplateView):
         manor = ensure_manor(self.request.user)
         refresh_manor_state(manor)
 
-        from gameplay.services.smithy import (
-            get_metal_options,
+        from gameplay.services.buildings.smithy import (
             get_active_smelting_productions,
-            refresh_smelting_productions,
-            get_smithy_speed_bonus,
             get_max_smelting_quantity,
+            get_metal_options,
+            get_smithy_speed_bonus,
             has_active_smelting_production,
+            refresh_smelting_productions,
         )
 
         # 刷新金属冶炼状态
@@ -214,10 +216,13 @@ def start_smelting_production_view(request: HttpRequest) -> HttpResponse:
         return redirect("gameplay:smithy")
 
     try:
-        from gameplay.services.smithy import start_smelting_production
+        from gameplay.services.buildings.smithy import start_smelting_production
+
         production = start_smelting_production(manor, metal_key, quantity)
         quantity_text = f"x{production.quantity}" if production.quantity > 1 else ""
-        messages.success(request, f"{production.metal_name}{quantity_text} 开始冶炼，预计 {production.actual_duration} 秒后完成")
+        messages.success(
+            request, f"{production.metal_name}{quantity_text} 开始冶炼，预计 {production.actual_duration} 秒后完成"
+        )
     except (GameError, ValueError) as e:
         messages.error(request, sanitize_error_message(e))
 
@@ -235,14 +240,14 @@ class ForgeView(LoginRequiredMixin, TemplateView):
         manor = ensure_manor(self.request.user)
         refresh_manor_state(manor)
 
-        from gameplay.services.forge import (
+        from gameplay.services.buildings.forge import (
             EQUIPMENT_CATEGORIES,
-            get_equipment_options,
             get_active_forgings,
-            refresh_equipment_forgings,
+            get_equipment_options,
             get_forge_speed_bonus,
             get_max_forging_quantity,
             has_active_forging,
+            refresh_equipment_forgings,
         )
 
         # 刷新装备锻造状态
@@ -308,10 +313,13 @@ def start_equipment_forging_view(request: HttpRequest) -> HttpResponse:
         return redirect(f"{reverse('gameplay:forge')}?category={category}")
 
     try:
-        from gameplay.services.forge import start_equipment_forging
+        from gameplay.services.buildings.forge import start_equipment_forging
+
         production = start_equipment_forging(manor, equipment_key, quantity)
         quantity_text = f"x{production.quantity}" if production.quantity > 1 else ""
-        messages.success(request, f"{production.equipment_name}{quantity_text} 开始锻造，预计 {production.actual_duration} 秒后完成")
+        messages.success(
+            request, f"{production.equipment_name}{quantity_text} 开始锻造，预计 {production.actual_duration} 秒后完成"
+        )
     except (GameError, ValueError) as e:
         messages.error(request, sanitize_error_message(e))
 

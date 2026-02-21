@@ -3,20 +3,16 @@
 
 提供庄园声望排名功能。
 """
+
 from __future__ import annotations
 
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 from django.core.cache import cache
 from django.db.models import Q
 
 from ..models import Manor
-from .cache import (
-    CacheKeys,
-    CACHE_TIMEOUT_RANKING,
-    CACHE_TIMEOUT_MEDIUM,
-    get_or_set,
-)
+from .utils.cache import CACHE_TIMEOUT_MEDIUM, CACHE_TIMEOUT_RANKING, CacheKeys, get_or_set
 
 
 def get_prestige_ranking(limit: int = 50) -> List[Dict[str, Any]]:
@@ -37,21 +33,19 @@ def get_prestige_ranking(limit: int = 50) -> List[Dict[str, Any]]:
     cache_key = f"{CacheKeys.RANKING_PRESTIGE}:{limit}"
 
     def compute_ranking():
-        manors = (
-            Manor.objects.select_related("user")
-            .filter(prestige__gt=0)
-            .order_by("-prestige", "created_at")[:limit]
-        )
+        manors = Manor.objects.select_related("user").filter(prestige__gt=0).order_by("-prestige", "created_at")[:limit]
 
         ranking = []
         for idx, manor in enumerate(manors, start=1):
-            ranking.append({
-                "rank": idx,
-                "manor_id": manor.id,
-                "manor_name": manor.display_name,
-                "username": manor.user.username,
-                "prestige": manor.prestige,
-            })
+            ranking.append(
+                {
+                    "rank": idx,
+                    "manor_id": manor.id,
+                    "manor_name": manor.display_name,
+                    "username": manor.user.username,
+                    "prestige": manor.prestige,
+                }
+            )
         return ranking
 
     return get_or_set(cache_key, compute_ranking, timeout=CACHE_TIMEOUT_RANKING)
@@ -111,11 +105,7 @@ def get_ranking_with_player_context(manor: Manor, limit: int = 50) -> Dict[str, 
     def compute_total():
         return Manor.objects.filter(prestige__gt=0).count()
 
-    total_players = get_or_set(
-        CacheKeys.RANKING_TOTAL_PLAYERS,
-        compute_total,
-        timeout=CACHE_TIMEOUT_RANKING
-    )
+    total_players = get_or_set(CacheKeys.RANKING_TOTAL_PLAYERS, compute_total, timeout=CACHE_TIMEOUT_RANKING)
 
     # 检查玩家是否在排行榜内
     player_in_ranking = any(r["manor_id"] == manor.id for r in ranking)

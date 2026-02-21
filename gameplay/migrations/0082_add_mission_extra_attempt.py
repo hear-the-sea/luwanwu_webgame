@@ -7,26 +7,40 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0081_missiontemplate_is_defense'),
+        ("gameplay", "0081_missiontemplate_is_defense"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='MissionExtraAttempt',
+            name="MissionExtraAttempt",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('date', models.DateField(help_text='额外次数生效的日期')),
-                ('extra_count', models.PositiveIntegerField(default=0, help_text='已使用任务卡增加的次数')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('manor', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='mission_extra_attempts', to='gameplay.manor')),
-                ('mission', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='extra_attempts', to='gameplay.missiontemplate')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("date", models.DateField(help_text="额外次数生效的日期")),
+                ("extra_count", models.PositiveIntegerField(default=0, help_text="已使用任务卡增加的次数")),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "manor",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="mission_extra_attempts",
+                        to="gameplay.manor",
+                    ),
+                ),
+                (
+                    "mission",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="extra_attempts",
+                        to="gameplay.missiontemplate",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': '任务额外次数',
-                'verbose_name_plural': '任务额外次数',
-                'indexes': [models.Index(fields=['manor', 'date'], name='gameplay_mi_manor_i_5519ea_idx')],
-                'unique_together': {('manor', 'mission', 'date')},
+                "verbose_name": "任务额外次数",
+                "verbose_name_plural": "任务额外次数",
+                "indexes": [models.Index(fields=["manor", "date"], name="gameplay_mi_manor_i_5519ea_idx")],
+                "unique_together": {("manor", "mission", "date")},
             },
         ),
     ]

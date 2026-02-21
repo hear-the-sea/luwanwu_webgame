@@ -6,13 +6,13 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0035_add_treasury_building'),
+        ("gameplay", "0035_add_treasury_building"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='itemtemplate',
-            name='is_usable',
-            field=models.BooleanField(default=True, verbose_name='可在仓库使用'),
+            model_name="itemtemplate",
+            name="is_usable",
+            field=models.BooleanField(default=True, verbose_name="可在仓库使用"),
         ),
     ]

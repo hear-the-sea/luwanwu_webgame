@@ -1,6 +1,7 @@
 """
 商铺和拍卖行定时任务
 """
+
 from __future__ import annotations
 
 import logging
@@ -131,15 +132,8 @@ def settle_auction_round_task(self):
                 create_auction_round_task.delay()
             except Exception as exc:
                 logger.warning("拍卖结算后触发新轮次任务失败: %s", exc, exc_info=True)
-            logger.info(
-                f"拍卖轮次结算完成：售出 {sold} 件，"
-                f"流拍 {unsold} 件，"
-                f"共收取 {total_gold_bars} 金条"
-            )
-            return (
-                f"结算完成：售出 {sold} 件，流拍 {unsold} 件，"
-                f"共 {total_gold_bars} 金条"
-            )
+            logger.info(f"拍卖轮次结算完成：售出 {sold} 件，" f"流拍 {unsold} 件，" f"共收取 {total_gold_bars} 金条")
+            return f"结算完成：售出 {sold} 件，流拍 {unsold} 件，" f"共 {total_gold_bars} 金条"
         else:
             return "没有需要结算的拍卖轮次"
     except Exception as exc:
@@ -179,14 +173,8 @@ def create_auction_round_task(self):
                     exc_info=True,
                 )
                 slot_count = 0
-            logger.info(
-                f"创建拍卖轮次 #{round_number}，"
-                f"共 {slot_count} 个拍卖位"
-            )
-            return (
-                f"创建拍卖轮次 #{round_number}，"
-                f"拍卖位数量: {slot_count}"
-            )
+            logger.info(f"创建拍卖轮次 #{round_number}，" f"共 {slot_count} 个拍卖位")
+            return f"创建拍卖轮次 #{round_number}，" f"拍卖位数量: {slot_count}"
         else:
             return "已有进行中的拍卖轮次或无可用商品，跳过创建"
     except Exception as exc:

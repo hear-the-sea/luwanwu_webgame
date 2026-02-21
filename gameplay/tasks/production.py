@@ -22,15 +22,10 @@ def complete_horse_production(self, production_id: int):
     Complete horse production background task.
     """
     from gameplay.models import HorseProduction
-    from gameplay.services.stable import finalize_horse_production
+    from gameplay.services.buildings.stable import finalize_horse_production
 
     try:
-        production = (
-            HorseProduction.objects
-            .select_related("manor", "manor__user")
-            .filter(pk=production_id)
-            .first()
-        )
+        production = HorseProduction.objects.select_related("manor", "manor__user").filter(pk=production_id).first()
         if not production:
             logger.warning("HorseProduction %d not found", production_id)
             return "not_found"
@@ -63,12 +58,11 @@ def scan_horse_productions(limit: int = 200):
     Scan and complete all overdue horse productions (for worker downtime recovery).
     """
     from gameplay.models import HorseProduction
-    from gameplay.services.stable import finalize_horse_production
+    from gameplay.services.buildings.stable import finalize_horse_production
 
     now = timezone.now()
     qs = (
-        HorseProduction.objects
-        .select_related("manor", "manor__user")
+        HorseProduction.objects.select_related("manor", "manor__user")
         .filter(status=HorseProduction.Status.PRODUCING, complete_at__lte=now)
         .order_by("complete_at")[:limit]
     )
@@ -92,15 +86,10 @@ def complete_livestock_production(self, production_id: int):
     Complete livestock production background task.
     """
     from gameplay.models import LivestockProduction
-    from gameplay.services.ranch import finalize_livestock_production
+    from gameplay.services.buildings.ranch import finalize_livestock_production
 
     try:
-        production = (
-            LivestockProduction.objects
-            .select_related("manor", "manor__user")
-            .filter(pk=production_id)
-            .first()
-        )
+        production = LivestockProduction.objects.select_related("manor", "manor__user").filter(pk=production_id).first()
         if not production:
             logger.warning("LivestockProduction %d not found", production_id)
             return "not_found"
@@ -133,12 +122,11 @@ def scan_livestock_productions(limit: int = 200):
     Scan and complete all overdue livestock productions (for worker downtime recovery).
     """
     from gameplay.models import LivestockProduction
-    from gameplay.services.ranch import finalize_livestock_production
+    from gameplay.services.buildings.ranch import finalize_livestock_production
 
     now = timezone.now()
     qs = (
-        LivestockProduction.objects
-        .select_related("manor", "manor__user")
+        LivestockProduction.objects.select_related("manor", "manor__user")
         .filter(status=LivestockProduction.Status.PRODUCING, complete_at__lte=now)
         .order_by("complete_at")[:limit]
     )
@@ -162,15 +150,10 @@ def complete_smelting_production(self, production_id: int):
     Complete metal smelting background task.
     """
     from gameplay.models import SmeltingProduction
-    from gameplay.services.smithy import finalize_smelting_production
+    from gameplay.services.buildings.smithy import finalize_smelting_production
 
     try:
-        production = (
-            SmeltingProduction.objects
-            .select_related("manor", "manor__user")
-            .filter(pk=production_id)
-            .first()
-        )
+        production = SmeltingProduction.objects.select_related("manor", "manor__user").filter(pk=production_id).first()
         if not production:
             logger.warning("SmeltingProduction %d not found", production_id)
             return "not_found"
@@ -203,12 +186,11 @@ def scan_smelting_productions(limit: int = 200):
     Scan and complete all overdue metal smelting (for worker downtime recovery).
     """
     from gameplay.models import SmeltingProduction
-    from gameplay.services.smithy import finalize_smelting_production
+    from gameplay.services.buildings.smithy import finalize_smelting_production
 
     now = timezone.now()
     qs = (
-        SmeltingProduction.objects
-        .select_related("manor", "manor__user")
+        SmeltingProduction.objects.select_related("manor", "manor__user")
         .filter(status=SmeltingProduction.Status.PRODUCING, complete_at__lte=now)
         .order_by("complete_at")[:limit]
     )
@@ -232,15 +214,10 @@ def complete_equipment_forging(self, production_id: int):
     Complete equipment forging background task.
     """
     from gameplay.models import EquipmentProduction
-    from gameplay.services.forge import finalize_equipment_forging
+    from gameplay.services.buildings.forge import finalize_equipment_forging
 
     try:
-        production = (
-            EquipmentProduction.objects
-            .select_related("manor", "manor__user")
-            .filter(pk=production_id)
-            .first()
-        )
+        production = EquipmentProduction.objects.select_related("manor", "manor__user").filter(pk=production_id).first()
         if not production:
             logger.warning("EquipmentProduction %d not found", production_id)
             return "not_found"
@@ -273,12 +250,11 @@ def scan_equipment_forgings(limit: int = 200):
     Scan and complete all overdue equipment forging (for worker downtime recovery).
     """
     from gameplay.models import EquipmentProduction
-    from gameplay.services.forge import finalize_equipment_forging
+    from gameplay.services.buildings.forge import finalize_equipment_forging
 
     now = timezone.now()
     qs = (
-        EquipmentProduction.objects
-        .select_related("manor", "manor__user")
+        EquipmentProduction.objects.select_related("manor", "manor__user")
         .filter(status=EquipmentProduction.Status.FORGING, complete_at__lte=now)
         .order_by("complete_at")[:limit]
     )
@@ -303,6 +279,7 @@ def complete_work_assignments_task():
     Runs every minute.
     """
     from gameplay.services.work import complete_work_assignments
+
     try:
         count = complete_work_assignments()
         return f"完成 {count} 个打工任务"

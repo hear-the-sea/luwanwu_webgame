@@ -1,6 +1,7 @@
 """
 Guest combatant builder.
 """
+
 from __future__ import annotations
 
 import logging
@@ -29,6 +30,7 @@ def _get_max_squad() -> int:
     """Get MAX_SQUAD from constants, with fallback."""
     try:
         from battle.constants import MAX_SQUAD as SQUAD
+
         return SQUAD
     except ImportError:
         return 5
@@ -198,9 +200,7 @@ def build_guest_combatants(
             hp = max_hp
 
         base_agility = getattr(guest, "agility", DEFAULT_GUEST_AGILITY)
-        intellect_value = stats.get(
-            "intellect", getattr(guest, "intellect", DEFAULT_GUEST_AGILITY)
-        )
+        intellect_value = stats.get("intellect", getattr(guest, "intellect", DEFAULT_GUEST_AGILITY))
         troop_speed = max(MIN_SPEED_BONUS, intellect_value // INTELLECT_TO_SPEED_DIVISOR)
         agility = int((base_agility + troop_speed) * agility_mult)
 

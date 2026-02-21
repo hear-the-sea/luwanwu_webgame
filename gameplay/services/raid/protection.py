@@ -11,7 +11,6 @@ from typing import Any, Dict, List, Tuple
 
 from django.utils import timezone
 
-
 from ...models import Manor
 from .combat import get_active_raid_count, get_incoming_raids
 
@@ -57,6 +56,7 @@ def get_protection_status(manor: Manor) -> Dict[str, Any]:
     Returns:
         保护状态信息
     """
+
     def _format_remaining(seconds: int) -> str:
         seconds = max(0, int(seconds))
         hours = seconds // 3600

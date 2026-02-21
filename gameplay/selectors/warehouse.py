@@ -21,26 +21,33 @@ def get_warehouse_context(manor, current_tab: str, selected_category: str, page:
         "current_tab": current_tab,
     }
 
-    guests_for_rebirth = manor.guests.select_related("template").filter(
-        status__in=[GuestStatus.IDLE, GuestStatus.INJURED]
-    ).order_by("-level", "template__name")
+    guests_for_rebirth = (
+        manor.guests.select_related("template")
+        .filter(status__in=[GuestStatus.IDLE, GuestStatus.INJURED])
+        .order_by("-level", "template__name")
+    )
     context["guests_for_rebirth"] = list(guests_for_rebirth)
 
-    guests_for_xisuidan = manor.guests.select_related("template").filter(
-        status__in=[GuestStatus.IDLE, GuestStatus.INJURED],
-        level=100,
-        xisuidan_used__lt=10
-    ).order_by("xisuidan_used", "template__name")
+    guests_for_xisuidan = (
+        manor.guests.select_related("template")
+        .filter(status__in=[GuestStatus.IDLE, GuestStatus.INJURED], level=100, xisuidan_used__lt=10)
+        .order_by("xisuidan_used", "template__name")
+    )
     context["guests_for_xisuidan"] = list(guests_for_xisuidan)
 
-    guests_for_xidianka = manor.guests.select_related("template").filter(
-        status__in=[GuestStatus.IDLE, GuestStatus.INJURED],
-    ).exclude(
-        allocated_force=0,
-        allocated_intellect=0,
-        allocated_defense=0,
-        allocated_agility=0,
-    ).order_by("-level", "template__name")
+    guests_for_xidianka = (
+        manor.guests.select_related("template")
+        .filter(
+            status__in=[GuestStatus.IDLE, GuestStatus.INJURED],
+        )
+        .exclude(
+            allocated_force=0,
+            allocated_intellect=0,
+            allocated_defense=0,
+            allocated_agility=0,
+        )
+        .order_by("-level", "template__name")
+    )
     context["guests_for_xidianka"] = list(guests_for_xidianka)
 
     tool_effect_types = {"tool", "magnifying_glass", "peace_shield", "manor_rename"}
@@ -49,10 +56,11 @@ def get_warehouse_context(manor, current_tab: str, selected_category: str, page:
         selected_category = tool_category_key
 
     if current_tab == "treasury":
-        items = manor.inventory_items.filter(
-            storage_location=InventoryItem.StorageLocation.TREASURY,
-            quantity__gt=0
-        ).select_related("template").order_by("template__name")
+        items = (
+            manor.inventory_items.filter(storage_location=InventoryItem.StorageLocation.TREASURY, quantity__gt=0)
+            .select_related("template")
+            .order_by("template__name")
+        )
 
         treasury_capacity = get_treasury_capacity(manor)
         treasury_used = get_treasury_used_space(manor)
@@ -60,10 +68,11 @@ def get_warehouse_context(manor, current_tab: str, selected_category: str, page:
         context["treasury_used"] = treasury_used
         context["treasury_remaining"] = treasury_capacity - treasury_used
     else:
-        items = manor.inventory_items.filter(
-            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-            quantity__gt=0
-        ).select_related("template").order_by("template__name")
+        items = (
+            manor.inventory_items.filter(storage_location=InventoryItem.StorageLocation.WAREHOUSE, quantity__gt=0)
+            .select_related("template")
+            .order_by("template__name")
+        )
 
     all_items = items
     if selected_category != "all":

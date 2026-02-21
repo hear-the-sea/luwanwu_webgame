@@ -2,9 +2,9 @@ import pytest
 from django.core.management import call_command
 from django.utils import timezone
 
-from gameplay.services.manor import ensure_manor
+from gameplay.services.manor.core import ensure_manor
 from guests.models import MAX_GUEST_LEVEL, Guest, RecruitmentPool
-from guests.services import finalize_candidate, recruit_guest, train_guest, reveal_candidate_rarity
+from guests.services import finalize_candidate, recruit_guest, reveal_candidate_rarity, train_guest
 from guests.services.training import finalize_guest_training
 
 

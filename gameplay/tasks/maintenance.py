@@ -43,9 +43,7 @@ def decay_prisoner_loyalty_task():
     decay_amount = int(getattr(PVPConstants, "JAIL_LOYALTY_DAILY_DECAY", 5) or 5)
 
     # Batch update all held prisoners, reduce loyalty but not below 0
-    updated = JailPrisoner.objects.filter(
-        status=JailPrisoner.Status.HELD
-    ).update(
+    updated = JailPrisoner.objects.filter(status=JailPrisoner.Status.HELD).update(
         loyalty=Greatest(F("loyalty") - decay_amount, 0)
     )
 

@@ -9,9 +9,11 @@
 使用方法:
     python scripts/check_battle_report_troops.py <mission_run_id>
 """
+
 import sys
-import django
 from pathlib import Path
+
+import django
 
 # 添加项目根目录到 Python 路径
 sys.path.insert(0, str(Path(__file__).parent.parent))

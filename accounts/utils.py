@@ -51,7 +51,7 @@ def purge_other_sessions(user_id: int, current_session_key: str | None) -> None:
         lock_acquired = _acquire_login_lock(lock_key, lock_token)
         if not lock_acquired:
             # 在短暂重试后仍未拿到锁时，走降级清理，尽量保持单活跃 session 语义。
-            logger.warning("Login lock busy for user %s, falling back to bounded session scan", user_id)
+            logger.warning("Login lock busy for user %s, falling back to full session scan", user_id)
             _purge_sessions_fallback(user_id, current_session_key)
             cache.set(cache_key, current_session_key, timeout=USER_SESSION_CACHE_TTL)
             return
@@ -85,12 +85,11 @@ def _purge_sessions_fallback(user_id: int, current_session_key: str) -> None:
     """
     降级方案：当缓存不可用时的 session 清理。
 
-    注意：此方法会遍历部分 session，仅在缓存故障时使用。
-    限制扫描数量以避免性能问题。
+    注意：此方法会遍历有效 session，仅在缓存故障时使用。
+    为了保持“单活跃 session”的语义一致性，这里不再截断扫描。
     """
     now = timezone.now()
-    # 限制扫描数量，避免在用户量大时阻塞
-    sessions = Session.objects.filter(expire_date__gt=now)[:1000]
+    sessions = Session.objects.filter(expire_date__gt=now).iterator(chunk_size=1000)
     deleted_count = 0
 
     for session in sessions:
@@ -108,7 +107,7 @@ def _purge_sessions_fallback(user_id: int, current_session_key: str) -> None:
                 "Failed to decode session %s...: %s",
                 _session_key_prefix(getattr(session, "session_key", None)),
                 type(e).__name__,
-                exc_info=True
+                exc_info=True,
             )
             continue
         except Exception as e:
@@ -117,7 +116,7 @@ def _purge_sessions_fallback(user_id: int, current_session_key: str) -> None:
                 "Unexpected error processing session %s...: %s",
                 _session_key_prefix(getattr(session, "session_key", None)),
                 e,
-                exc_info=True
+                exc_info=True,
             )
             continue
 

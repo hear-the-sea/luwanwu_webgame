@@ -7,9 +7,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from guests.services import recruitment as recruitment_service
 from guests.models import GuestRarity
-
+from guests.services import recruitment as recruitment_service
 
 # ============ get_excluded_template_ids tests ============
 
@@ -34,7 +33,7 @@ def test_get_excluded_template_ids_excludes_black_hermit():
     """Test that black hermit templates are excluded."""
     manor = MagicMock()
     manor.guests.values_list.return_value = [
-        (1, GuestRarity.BLACK, True),   # Hermit - excluded
+        (1, GuestRarity.BLACK, True),  # Hermit - excluded
         (2, GuestRarity.BLACK, False),  # Not hermit - not excluded
     ]
 

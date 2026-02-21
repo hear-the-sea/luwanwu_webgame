@@ -6,18 +6,28 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0025_itemtemplate_tradeable_price'),
+        ("gameplay", "0025_itemtemplate_tradeable_price"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='itemtemplate',
-            name='image',
-            field=models.ImageField(blank=True, null=True, upload_to='items/', verbose_name='物品图片'),
+            model_name="itemtemplate",
+            name="image",
+            field=models.ImageField(blank=True, null=True, upload_to="items/", verbose_name="物品图片"),
         ),
         migrations.AlterField(
-            model_name='itemtemplate',
-            name='effect_type',
-            field=models.CharField(choices=[('resource_pack', '资源补给'), ('skill_book', '技能书'), ('experience_items', '经验道具'), ('medicine', '药品'), ('magnifying_glass', '放大镜')], default='resource_pack', max_length=32),
+            model_name="itemtemplate",
+            name="effect_type",
+            field=models.CharField(
+                choices=[
+                    ("resource_pack", "资源补给"),
+                    ("skill_book", "技能书"),
+                    ("experience_items", "经验道具"),
+                    ("medicine", "药品"),
+                    ("magnifying_glass", "放大镜"),
+                ],
+                default="resource_pack",
+                max_length=32,
+            ),
         ),
     ]

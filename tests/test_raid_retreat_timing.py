@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 from gameplay.models import RaidRun
-from gameplay.services.manor import ensure_manor
+from gameplay.services.manor.core import ensure_manor
 from gameplay.services.raid.combat import process_raid_battle
 from guests.models import Guest, GuestStatus, GuestTemplate
 

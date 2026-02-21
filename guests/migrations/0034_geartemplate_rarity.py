@@ -6,13 +6,25 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('guests', '0033_guest_hp_recovery'),
+        ("guests", "0033_guest_hp_recovery"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='geartemplate',
-            name='rarity',
-            field=models.CharField(choices=[('black', '黑'), ('gray', '灰'), ('green', '绿'), ('blue', '蓝'), ('red', '红'), ('purple', '紫'), ('orange', '橙')], default='gray', max_length=16),
+            model_name="geartemplate",
+            name="rarity",
+            field=models.CharField(
+                choices=[
+                    ("black", "黑"),
+                    ("gray", "灰"),
+                    ("green", "绿"),
+                    ("blue", "蓝"),
+                    ("red", "红"),
+                    ("purple", "紫"),
+                    ("orange", "橙"),
+                ],
+                default="gray",
+                max_length=16,
+            ),
         ),
     ]

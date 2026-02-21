@@ -9,5 +9,5 @@ from .services import ensure_manor
 def create_manor_for_user(sender, instance, created, **kwargs):
     if created:
         # 从用户的注册数据中获取地区（在RegisterView中设置）
-        region = getattr(instance, '_signup_region', 'overseas')
+        region = getattr(instance, "_signup_region", "overseas")
         ensure_manor(instance, region=region)

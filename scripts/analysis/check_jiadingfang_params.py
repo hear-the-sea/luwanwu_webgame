@@ -2,16 +2,17 @@
 """
 检查家丁房升级参数和总成本
 """
-import yaml
 import math
 
-with open('data/building_templates.yaml', 'r', encoding='utf-8') as f:
+import yaml
+
+with open("data/building_templates.yaml", "r", encoding="utf-8") as f:
     data = yaml.safe_load(f)
 
 # 找到家丁房
 jiading = None
-for b in data['buildings']:
-    if b['key'] == 'jiadingfang':
+for b in data["buildings"]:
+    if b["key"] == "jiadingfang":
         jiading = b
         break
 
@@ -45,23 +46,23 @@ print("-" * 90)
 
 for level in range(1, max_level + 1):
     # 成本
-    cost_multiplier = jiading['cost_growth'] ** (level - 1)
-    for resource, amount in jiading['base_cost'].items():
+    cost_multiplier = jiading["cost_growth"] ** (level - 1)
+    for resource, amount in jiading["base_cost"].items():
         cost = math.ceil(amount * cost_multiplier)
-        if resource == 'silver':
+        if resource == "silver":
             total_silver += cost
-        elif resource == 'grain':
+        elif resource == "grain":
             total_grain += cost
 
     # 时间
-    time_multiplier = jiading['time_growth'] ** (level - 1)
-    duration = math.ceil(jiading['base_upgrade_time'] * time_multiplier)
+    time_multiplier = jiading["time_growth"] ** (level - 1)
+    duration = math.ceil(jiading["base_upgrade_time"] * time_multiplier)
     total_time += duration
 
     # 只显示关键等级
     if level in [1, 2, 5, 10, 15, 20, 25, 30]:
         # 格式化成本
-        silver = math.ceil(jiading['base_cost']['silver'] * cost_multiplier)
+        silver = math.ceil(jiading["base_cost"]["silver"] * cost_multiplier)
         cost_str = f"{silver:,}银"
 
         # 格式化时间
@@ -86,13 +87,17 @@ print("📊 总计（1→Lv30）:")
 print(f"  - 总银两: {total_silver:,}")
 print(f"  - 总粮食: {total_grain:,}")
 print(f"  - 总时长: {total_time/86400:.1f}天 ({total_time/3600:.0f}小时)")
-print(f"  - 最后一级成本: {math.ceil(jiading['base_cost']['silver'] * (jiading['cost_growth'] ** (max_level - 1))):,}银")
+print(
+    f"  - 最后一级成本: {math.ceil(jiading['base_cost']['silver'] * (jiading['cost_growth'] ** (max_level - 1))):,}银"
+)
 print()
 
 # 评估
 print("⚖️ 平衡性评估:")
-print(f"  - 前期体验: Lv1升级仅需{jiading['base_cost']['silver']}银两 + {jiading['base_upgrade_time']/60:.0f}分钟 (非常友好)")
-last_cost = math.ceil(jiading['base_cost']['silver'] * (jiading['cost_growth'] ** (max_level - 1)))
+print(
+    f"  - 前期体验: Lv1升级仅需{jiading['base_cost']['silver']}银两 + {jiading['base_upgrade_time']/60:.0f}分钟 (非常友好)"
+)
+last_cost = math.ceil(jiading["base_cost"]["silver"] * (jiading["cost_growth"] ** (max_level - 1)))
 print(f"  - 后期挑战: Lv30升级需要{last_cost:,}银两 (适中)")
 print(f"  - 总时长: {total_time/86400:.1f}天 (合理)")
 print()

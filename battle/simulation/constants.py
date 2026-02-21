@@ -15,11 +15,11 @@ PRIORITY_TARGET_WEIGHT = 0.60
 # 五行相克关系：护院攻击时优先选择克制兵种
 # 克制关系：刀→剑→拳→弓→枪→刀
 TROOP_COUNTERS: Dict[str, str] = {
-    "dao": "jian",    # 刀克剑
-    "jian": "quan",   # 剑克拳
-    "quan": "gong",   # 拳克弓
+    "dao": "jian",  # 刀克剑
+    "jian": "quan",  # 剑克拳
+    "quan": "gong",  # 拳克弓
     "gong": "qiang",  # 弓克枪
-    "qiang": "dao",   # 枪克刀
+    "qiang": "dao",  # 枪克刀
 }
 
 # 克制伤害倍率：攻击被克制目标时的额外伤害

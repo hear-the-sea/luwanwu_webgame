@@ -3,18 +3,15 @@
 
 提供门客招募相关的计算和工具函数，包括稀有度抽取、权重选择等。
 """
+
 from __future__ import annotations
 
 import random
 from typing import List
 
-from common.utils.random_utils import (
-    cumulative_choice,
-    weighted_random_choice,
-)
+from common.utils.random_utils import cumulative_choice, weighted_random_choice
 
 from ..models import GuestRarity, RecruitmentPoolEntry
-
 
 # 稀有度排序（从低到高）
 RARITY_ORDER = [
@@ -32,13 +29,13 @@ HERMIT_RARITY = "hermit"
 
 # 稀有度权重配置（累计概率抽卡）
 RARITY_WEIGHTS = [
-    (GuestRarity.ORANGE, 200),   # 0.02%
-    (HERMIT_RARITY, 300),        # 0.03% 隐士（隐藏在民间的高手）
-    (GuestRarity.PURPLE, 500),   # 0.05%
-    (GuestRarity.RED, 3000),     # 0.3%
-    (GuestRarity.BLUE, 1000),    # 0.1%
+    (GuestRarity.ORANGE, 200),  # 0.02%
+    (HERMIT_RARITY, 300),  # 0.03% 隐士（隐藏在民间的高手）
+    (GuestRarity.PURPLE, 500),  # 0.05%
+    (GuestRarity.RED, 3000),  # 0.3%
+    (GuestRarity.BLUE, 1000),  # 0.1%
     (GuestRarity.GREEN, 10000),  # 1%
-    (GuestRarity.GRAY, 50000),   # 5%
+    (GuestRarity.GRAY, 50000),  # 5%
 ]
 
 TOTAL_WEIGHT = 1_000_000

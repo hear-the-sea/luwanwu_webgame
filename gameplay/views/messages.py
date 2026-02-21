@@ -107,9 +107,7 @@ def _format_claimed_summary(claimed_summary: dict) -> tuple[str, list[dict]]:
     claimed_payload: list[dict] = []
 
     # 收集所有物品 key，批量查询
-    item_keys_to_lookup = [
-        key[5:] for key in claimed_summary.keys() if key.startswith("item_")
-    ]
+    item_keys_to_lookup = [key[5:] for key in claimed_summary.keys() if key.startswith("item_")]
     if item_keys_to_lookup:
         from gameplay.utils.template_loader import get_item_templates_by_keys
 
@@ -123,15 +121,11 @@ def _format_claimed_summary(claimed_summary: dict) -> tuple[str, list[dict]]:
             item_template = item_templates_map.get(item_key)
             item_name = item_template.name if item_template else item_key
             parts.append(f"{item_name}×{value}")
-            claimed_payload.append(
-                {"kind": "item", "key": item_key, "name": item_name, "amount": value}
-            )
+            claimed_payload.append({"kind": "item", "key": item_key, "name": item_name, "amount": value})
         else:
             label = resource_labels.get(key, key)
             parts.append(f"{label}×{value}")
-            claimed_payload.append(
-                {"kind": "resource", "key": key, "name": label, "amount": value}
-            )
+            claimed_payload.append({"kind": "resource", "key": key, "name": label, "amount": value})
 
     summary_text = "、".join(parts) if parts else "附件"
     return summary_text, claimed_payload
@@ -201,10 +195,7 @@ def view_message(request: HttpRequest, pk: int) -> HttpResponse:
         }
 
         if message.battle_report_id:
-            response_data["redirect_url"] = reverse(
-                "battle:report_detail",
-                kwargs={"pk": message.battle_report_id}
-            )
+            response_data["redirect_url"] = reverse("battle:report_detail", kwargs={"pk": message.battle_report_id})
 
         return JsonResponse(response_data)
 
@@ -215,11 +206,11 @@ def view_message(request: HttpRequest, pk: int) -> HttpResponse:
     attachment_details = _build_attachment_details(message)
 
     context = {
-        'message': message,
-        'attachment_details': attachment_details,
+        "message": message,
+        "attachment_details": attachment_details,
     }
 
-    return render(request, 'gameplay/message_detail.html', context)
+    return render(request, "gameplay/message_detail.html", context)
 
 
 @login_required

@@ -6,9 +6,9 @@ from django.core.cache import cache
 from django.utils import timezone
 
 from gameplay.models import ItemTemplate, Message, ResourceEvent, ResourceType
-from gameplay.services.cache import CacheKeys
-from gameplay.services.manor import ensure_manor
-from gameplay.services.messages import (
+from gameplay.services.manor.core import ensure_manor
+from gameplay.services.utils.cache import CacheKeys
+from gameplay.services.utils.messages import (
     claim_message_attachments,
     cleanup_old_messages,
     delete_all_messages,
@@ -140,11 +140,11 @@ def test_unread_message_count_tolerates_cache_errors(monkeypatch):
     Message.objects.create(manor=manor, kind=Message.Kind.SYSTEM, title="cache fail msg")
 
     monkeypatch.setattr(
-        "gameplay.services.messages.cache.get",
+        "gameplay.services.utils.messages.cache.get",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache get failed")),
     )
     monkeypatch.setattr(
-        "gameplay.services.messages.cache.set",
+        "gameplay.services.utils.messages.cache.set",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache set failed")),
     )
 
@@ -159,7 +159,7 @@ def test_cleanup_old_messages_tolerates_cache_add_error(monkeypatch):
     Message.objects.filter(pk=message.pk).update(created_at=timezone.now() - timedelta(days=30))
 
     monkeypatch.setattr(
-        "gameplay.services.messages.cache.add",
+        "gameplay.services.utils.messages.cache.add",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache add failed")),
     )
 

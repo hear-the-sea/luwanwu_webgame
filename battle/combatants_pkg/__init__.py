@@ -9,16 +9,17 @@ This package contains modules for building combat units:
 - troop_builder: Troop combatant construction
 - ai_generator: AI guest/loadout generation
 """
+
 from __future__ import annotations
 
-# Core data classes
-from .core import BattleSimulationResult, Combatant
+# AI generator
+from .ai_generator import allocate_ai_attribute_points, build_ai_guests, build_named_ai_guests, generate_ai_loadout
 
 # Cache management
 from .cache import clear_guest_template_cache, get_all_guest_templates
 
-# Tech effects
-from .tech_effects import build_tech_effects
+# Core data classes
+from .core import BattleSimulationResult, Combatant
 
 # Guest builder
 from .guest_builder import (
@@ -33,19 +34,11 @@ from .guest_builder import (
     serialize_skills,
 )
 
-# Troop builder
-from .troop_builder import (
-    build_troop_combatants,
-    normalize_troop_loadout,
-)
+# Tech effects
+from .tech_effects import build_tech_effects
 
-# AI generator
-from .ai_generator import (
-    allocate_ai_attribute_points,
-    build_ai_guests,
-    build_named_ai_guests,
-    generate_ai_loadout,
-)
+# Troop builder
+from .troop_builder import build_troop_combatants, normalize_troop_loadout
 
 __all__ = [
     # Core

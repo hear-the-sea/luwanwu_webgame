@@ -58,7 +58,7 @@ def _in_atomic_block() -> bool:
 
 
 def _create_message(manor, opponent_label: str, report) -> None:
-    from gameplay.services.messages import create_message
+    from gameplay.services.utils.messages import create_message
 
     create_message(
         manor=manor,

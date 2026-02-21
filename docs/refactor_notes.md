@@ -48,4 +48,3 @@ Run `python scripts/check_import_cycles.py` to detect **top-level** (module impo
 - Django checks: `python manage.py check`
 - Import cycles: `python scripts/check_import_cycles.py`
 - Tests: `pytest`
-

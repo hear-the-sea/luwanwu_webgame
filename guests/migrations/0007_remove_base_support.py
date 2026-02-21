@@ -13,4 +13,3 @@ class Migration(migrations.Migration):
             name="base_support",
         ),
     ]
-

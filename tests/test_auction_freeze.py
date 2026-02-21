@@ -2,7 +2,7 @@ import pytest
 from django.db import transaction
 
 from gameplay.models import InventoryItem, ItemTemplate
-from gameplay.services.manor import ensure_manor
+from gameplay.services.manor.core import ensure_manor
 from trade.models import AuctionBid, AuctionRound, AuctionSlot
 from trade.services.auction_service import freeze_gold_bars
 

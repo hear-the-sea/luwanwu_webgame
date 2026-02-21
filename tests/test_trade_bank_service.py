@@ -4,7 +4,7 @@ import pytest
 from django.core.cache import cache
 
 from gameplay.models import InventoryItem, ItemTemplate
-from gameplay.services.manor import ensure_manor
+from gameplay.services.manor.core import ensure_manor
 from trade.models import GoldBarExchangeLog
 from trade.services import bank_service
 

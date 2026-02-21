@@ -129,11 +129,7 @@ def apply_damage_results(
 
     该函数会直接修改 `actor` 和 `target` 的状态（HP、兵力等）。
     """
-    from ..combat_math import (
-        calculate_slaughter_multiplier,
-        effective_attack_value,
-        troop_unit_hp,
-    )
+    from ..combat_math import calculate_slaughter_multiplier, effective_attack_value, troop_unit_hp
 
     kills, target_defeated, display_damage = _apply_target_damage(target, damage, troop_unit_hp)
     reflect_damage, reflect_kills, reflect_defeated = _apply_reflect(

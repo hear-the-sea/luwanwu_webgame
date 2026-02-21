@@ -4,11 +4,7 @@ import random
 from typing import Dict, List
 
 from .utils.battle_calculator import calculate_skill_bonus
-from .utils.status_effects import (
-    apply_status_effect,
-    get_status_label,
-    CONTROL_STATUS_EFFECTS,
-)
+from .utils.status_effects import CONTROL_STATUS_EFFECTS, apply_status_effect, get_status_label
 
 
 def trigger_skills(attacker, rng: random.Random) -> List[Dict]:

@@ -55,7 +55,10 @@ def test_grant_battle_rewards_uses_handler(monkeypatch):
         called["drops"] = payload
 
     # Patch the default grant to ensure it would fail if invoked
-    monkeypatch.setattr("battle.rewards._grant_resources", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("should not grant")))
+    monkeypatch.setattr(
+        "battle.rewards._grant_resources",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("should not grant")),
+    )
 
     grant_battle_rewards(manor, drops, "test opponent", drop_handler=handler)
 

@@ -21,9 +21,7 @@ def add_item_to_warehouse(guild, item_key, quantity, contribution_cost):
         contribution_cost: 兑换成本（贡献度）
     """
     warehouse_item, created = GuildWarehouse.objects.get_or_create(
-        guild=guild,
-        item_key=item_key,
-        defaults={'contribution_cost': contribution_cost}
+        guild=guild, item_key=item_key, defaults={"contribution_cost": contribution_cost}
     )
 
     # 使用 F() 表达式避免并发下读-改-写丢失更新
@@ -76,9 +74,7 @@ def exchange_item(member, item_key, quantity=1):
 
         # 步骤2：锁定仓库物品并验证库存
         warehouse_item = (
-            GuildWarehouse.objects.select_for_update()
-            .filter(guild=member_locked.guild, item_key=item_key)
-            .first()
+            GuildWarehouse.objects.select_for_update().filter(guild=member_locked.guild, item_key=item_key).first()
         )
 
         if not warehouse_item:
@@ -103,9 +99,7 @@ def exchange_item(member, item_key, quantity=1):
 
         # 步骤4：使用F()表达式扣除仓库库存并记录兑换量
         # quantity__gte条件确保不会扣成负数
-        updated_wh = GuildWarehouse.objects.filter(
-            pk=warehouse_item.pk, quantity__gte=quantity
-        ).update(
+        updated_wh = GuildWarehouse.objects.filter(pk=warehouse_item.pk, quantity__gte=quantity).update(
             quantity=F("quantity") - quantity,
             total_exchanged=F("total_exchanged") + quantity,
         )
@@ -135,9 +129,7 @@ def exchange_item(member, item_key, quantity=1):
 
         if inventory_item:
             # 已有该物品，使用F()表达式增加数量
-            InventoryItem.objects.filter(pk=inventory_item.pk).update(
-                quantity=F("quantity") + quantity
-            )
+            InventoryItem.objects.filter(pk=inventory_item.pk).update(quantity=F("quantity") + quantity)
         else:
             # 首次获得该物品，创建新记录
             InventoryItem.objects.create(
@@ -228,12 +220,13 @@ def get_warehouse_items(guild, page=1, per_page=50):
             - has_next: 是否有下一页
     """
     from django.core.paginator import Paginator
+
     from gameplay.utils.template_loader import get_item_templates_by_keys
 
     # 查询1：获取所有仓库物品（QuerySet，延迟执行）
-    warehouse_queryset = GuildWarehouse.objects.filter(
-        guild=guild, quantity__gt=0
-    ).order_by('-contribution_cost', 'item_key')
+    warehouse_queryset = GuildWarehouse.objects.filter(guild=guild, quantity__gt=0).order_by(
+        "-contribution_cost", "item_key"
+    )
 
     # 分页处理
     paginator = Paginator(warehouse_queryset, per_page)
@@ -254,14 +247,14 @@ def get_warehouse_items(guild, page=1, per_page=50):
         item.is_usable = template.is_usable if template else False
 
     return {
-        'items': warehouse_items,
-        'page': page_obj.number,
-        'total_pages': paginator.num_pages,
-        'total_count': paginator.count,
-        'has_previous': page_obj.has_previous(),
-        'has_next': page_obj.has_next(),
-        'previous_page': page_obj.previous_page_number() if page_obj.has_previous() else None,
-        'next_page': page_obj.next_page_number() if page_obj.has_next() else None,
+        "items": warehouse_items,
+        "page": page_obj.number,
+        "total_pages": paginator.num_pages,
+        "total_count": paginator.count,
+        "has_previous": page_obj.has_previous(),
+        "has_next": page_obj.has_next(),
+        "previous_page": page_obj.previous_page_number() if page_obj.has_previous() else None,
+        "next_page": page_obj.next_page_number() if page_obj.has_next() else None,
     }
 
 
@@ -276,6 +269,8 @@ def get_exchange_logs(guild, limit=50):
     Returns:
         QuerySet
     """
-    return GuildExchangeLog.objects.filter(
-        guild=guild
-    ).select_related('member__user__manor').order_by('-exchanged_at')[:limit]
+    return (
+        GuildExchangeLog.objects.filter(guild=guild)
+        .select_related("member__user__manor")
+        .order_by("-exchanged_at")[:limit]
+    )

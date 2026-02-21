@@ -127,7 +127,7 @@ def test_complete_horse_production_reschedules(monkeypatch):
         objects = _Chain(first_result=production)
 
     monkeypatch.setattr("gameplay.models.HorseProduction", _HorseProduction)
-    monkeypatch.setattr("gameplay.services.stable.finalize_horse_production", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr("gameplay.services.buildings.stable.finalize_horse_production", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(tasks.timezone, "now", lambda: now)
 
     called = {}
@@ -155,7 +155,7 @@ def test_scan_troop_recruitments_counts(monkeypatch):
 
     monkeypatch.setattr("gameplay.models.TroopRecruitment", _TroopRecruitment)
     monkeypatch.setattr(
-        "gameplay.services.recruitment.finalize_troop_recruitment",
+        "gameplay.services.recruitment.recruitment.finalize_troop_recruitment",
         lambda recruitment, **_kwargs: recruitment.id == 2,
     )
 
@@ -204,7 +204,9 @@ def test_scan_technology_upgrades_counts(monkeypatch):
 @pytest.mark.django_db
 def test_complete_livestock_production_not_found(monkeypatch):
     _patch_model(monkeypatch, "gameplay.models.LivestockProduction", first_result=None)
-    monkeypatch.setattr("gameplay.services.ranch.finalize_livestock_production", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        "gameplay.services.buildings.ranch.finalize_livestock_production", lambda *_args, **_kwargs: True
+    )
     assert tasks.complete_livestock_production.run(1) == "not_found"
 
 
@@ -217,7 +219,7 @@ def test_scan_smelting_productions_counts(monkeypatch):
 
     _patch_model(monkeypatch, "gameplay.models.SmeltingProduction", slice_result=productions, status_cls=_Status)
     monkeypatch.setattr(
-        "gameplay.services.smithy.finalize_smelting_production",
+        "gameplay.services.buildings.smithy.finalize_smelting_production",
         lambda production, **_kwargs: production.id == 2,
     )
 

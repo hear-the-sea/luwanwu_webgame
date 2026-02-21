@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 
 from gameplay.models import InventoryItem, ItemTemplate, TroopRecruitment
-from gameplay.services.manor import ensure_manor
-from gameplay.services.recruitment import _consume_equipment_for_recruitment, start_troop_recruitment
+from gameplay.services.manor.core import ensure_manor
+from gameplay.services.recruitment.recruitment import _consume_equipment_for_recruitment, start_troop_recruitment
 
 
 @pytest.fixture
@@ -107,11 +107,11 @@ def test_start_troop_recruitment_deducts_inventory_and_retainers(monkeypatch, re
     schedule_calls = []
 
     monkeypatch.setattr(
-        "gameplay.services.recruitment._validate_start_recruitment_inputs",
+        "gameplay.services.recruitment.recruitment._validate_start_recruitment_inputs",
         lambda current_manor, troop_key, quantity: troop_data,
     )
     monkeypatch.setattr(
-        "gameplay.services.recruitment._schedule_recruitment_completion",
+        "gameplay.services.recruitment.recruitment._schedule_recruitment_completion",
         lambda recruitment, eta_seconds: schedule_calls.append((recruitment.id, eta_seconds)),
     )
 
@@ -155,7 +155,7 @@ def test_start_troop_recruitment_rollback_on_insufficient_equipment(monkeypatch,
     }
 
     monkeypatch.setattr(
-        "gameplay.services.recruitment._validate_start_recruitment_inputs",
+        "gameplay.services.recruitment.recruitment._validate_start_recruitment_inputs",
         lambda current_manor, troop_key, quantity: troop_data,
     )
 

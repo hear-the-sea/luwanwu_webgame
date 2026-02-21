@@ -106,9 +106,7 @@ class WorldChatConsumerTests(SimpleTestCase):
 
         asyncio.run(consumer.receive_json({"type": "send", "text": "hello"}))
 
-        consumer.send_json.assert_awaited_once_with(
-            {"type": "error", "code": "no_trumpet", "message": "小喇叭不足"}
-        )
+        consumer.send_json.assert_awaited_once_with({"type": "error", "code": "no_trumpet", "message": "小喇叭不足"})
 
     def test_receive_json_success_broadcasts_to_group(self):
         consumer = self._build_consumer()

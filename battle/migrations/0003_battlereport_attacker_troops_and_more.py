@@ -6,18 +6,18 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('battle', '0002_battlereport_battle_type_battlereport_drops_and_more'),
+        ("battle", "0002_battlereport_battle_type_battlereport_drops_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='battlereport',
-            name='attacker_troops',
+            model_name="battlereport",
+            name="attacker_troops",
             field=models.JSONField(default=dict),
         ),
         migrations.AddField(
-            model_name='battlereport',
-            name='defender_troops',
+            model_name="battlereport",
+            name="defender_troops",
             field=models.JSONField(default=dict),
         ),
     ]

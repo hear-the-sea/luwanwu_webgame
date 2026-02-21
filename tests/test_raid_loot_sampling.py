@@ -2,7 +2,7 @@ import pytest
 from django.contrib.auth import get_user_model
 
 from gameplay.models import InventoryItem, ItemTemplate
-from gameplay.services.manor import ensure_manor
+from gameplay.services.manor.core import ensure_manor
 from gameplay.services.raid import combat as raid_combat
 
 

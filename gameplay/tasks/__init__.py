@@ -10,64 +10,53 @@ This package contains all Celery tasks for the gameplay module, organized by dom
 - pvp: Raid and scout tasks
 - maintenance: Data cleanup and prisoner loyalty decay tasks
 """
+
 from __future__ import annotations
 
 # Re-export commonly used imports for backward compatibility
 from django.utils import timezone
 
 from gameplay.models import MissionRun
-from gameplay.services.manor import finalize_building_upgrade
+from gameplay.services.manor.core import finalize_building_upgrade
 from gameplay.services.technology import finalize_technology_upgrade
+
+# Buildings
+from gameplay.tasks.buildings import complete_building_upgrade, scan_building_upgrades
+
+# Maintenance
+from gameplay.tasks.maintenance import cleanup_old_data_task, decay_prisoner_loyalty_task
 
 # Missions
 from gameplay.tasks.missions import complete_mission_task
 
-# Buildings
-from gameplay.tasks.buildings import (
-    complete_building_upgrade,
-    scan_building_upgrades,
-)
-
-# Technology
-from gameplay.tasks.technology import (
-    complete_technology_upgrade,
-    scan_technology_upgrades,
-)
-
 # Production (horse, livestock, smelting, equipment, work)
 from gameplay.tasks.production import (
-    complete_horse_production,
-    scan_horse_productions,
-    complete_livestock_production,
-    scan_livestock_productions,
-    complete_smelting_production,
-    scan_smelting_productions,
     complete_equipment_forging,
-    scan_equipment_forgings,
+    complete_horse_production,
+    complete_livestock_production,
+    complete_smelting_production,
     complete_work_assignments_task,
-)
-
-# Recruitment
-from gameplay.tasks.recruitment import (
-    complete_troop_recruitment,
-    scan_troop_recruitments,
+    scan_equipment_forgings,
+    scan_horse_productions,
+    scan_livestock_productions,
+    scan_smelting_productions,
 )
 
 # PvP (raid, scout)
 from gameplay.tasks.pvp import (
-    complete_scout_task,
-    complete_scout_return_task,
-    scan_scout_records,
-    process_raid_battle_task,
     complete_raid_task,
+    complete_scout_return_task,
+    complete_scout_task,
+    process_raid_battle_task,
     scan_raid_runs,
+    scan_scout_records,
 )
 
-# Maintenance
-from gameplay.tasks.maintenance import (
-    cleanup_old_data_task,
-    decay_prisoner_loyalty_task,
-)
+# Recruitment
+from gameplay.tasks.recruitment import complete_troop_recruitment, scan_troop_recruitments
+
+# Technology
+from gameplay.tasks.technology import complete_technology_upgrade, scan_technology_upgrades
 
 __all__ = [
     # Backward compatibility

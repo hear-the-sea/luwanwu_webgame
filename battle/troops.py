@@ -116,10 +116,7 @@ def load_troop_templates(file_path: str | None = None) -> Dict[str, dict]:
 
 def troop_template_list() -> List[dict]:
     templates = load_troop_templates()
-    return [
-        {"key": key, **value}
-        for key, value in sorted(templates.items(), key=lambda item: item[1]["priority"])
-    ]
+    return [{"key": key, **value} for key, value in sorted(templates.items(), key=lambda item: item[1]["priority"])]
 
 
 def default_troop_loadout() -> Dict[str, int]:

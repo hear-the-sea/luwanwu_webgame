@@ -7,36 +7,48 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0062_add_citang_building'),
+        ("gameplay", "0062_add_citang_building"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='itemtemplate',
-            name='is_usable',
-            field=models.BooleanField(default=False, verbose_name='可在仓库使用'),
+            model_name="itemtemplate",
+            name="is_usable",
+            field=models.BooleanField(default=False, verbose_name="可在仓库使用"),
         ),
         migrations.CreateModel(
-            name='TroopRecruitment',
+            name="TroopRecruitment",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('troop_key', models.CharField(max_length=64, verbose_name='兵种key')),
-                ('troop_name', models.CharField(max_length=64, verbose_name='兵种名称')),
-                ('quantity', models.PositiveIntegerField(default=1, verbose_name='募兵数量')),
-                ('equipment_costs', models.JSONField(default=dict, verbose_name='装备消耗')),
-                ('retainer_cost', models.PositiveIntegerField(default=1, verbose_name='家丁消耗')),
-                ('base_duration', models.PositiveIntegerField(verbose_name='基础时长(秒)')),
-                ('actual_duration', models.PositiveIntegerField(verbose_name='实际时长(秒)')),
-                ('status', models.CharField(choices=[('recruiting', '募兵中'), ('completed', '已完成')], default='recruiting', max_length=16)),
-                ('started_at', models.DateTimeField(auto_now_add=True, verbose_name='开始时间')),
-                ('complete_at', models.DateTimeField(verbose_name='完成时间')),
-                ('finished_at', models.DateTimeField(blank=True, null=True, verbose_name='实际完成时间')),
-                ('manor', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='troop_recruitments', to='gameplay.manor')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("troop_key", models.CharField(max_length=64, verbose_name="兵种key")),
+                ("troop_name", models.CharField(max_length=64, verbose_name="兵种名称")),
+                ("quantity", models.PositiveIntegerField(default=1, verbose_name="募兵数量")),
+                ("equipment_costs", models.JSONField(default=dict, verbose_name="装备消耗")),
+                ("retainer_cost", models.PositiveIntegerField(default=1, verbose_name="家丁消耗")),
+                ("base_duration", models.PositiveIntegerField(verbose_name="基础时长(秒)")),
+                ("actual_duration", models.PositiveIntegerField(verbose_name="实际时长(秒)")),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[("recruiting", "募兵中"), ("completed", "已完成")], default="recruiting", max_length=16
+                    ),
+                ),
+                ("started_at", models.DateTimeField(auto_now_add=True, verbose_name="开始时间")),
+                ("complete_at", models.DateTimeField(verbose_name="完成时间")),
+                ("finished_at", models.DateTimeField(blank=True, null=True, verbose_name="实际完成时间")),
+                (
+                    "manor",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="troop_recruitments",
+                        to="gameplay.manor",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': '护院募兵',
-                'verbose_name_plural': '护院募兵',
-                'ordering': ['-started_at'],
+                "verbose_name": "护院募兵",
+                "verbose_name_plural": "护院募兵",
+                "ordering": ["-started_at"],
             },
         ),
     ]

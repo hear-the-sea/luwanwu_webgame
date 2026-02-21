@@ -1,7 +1,7 @@
 import pytest
 
 from core.exceptions import TechnologyConcurrentUpgradeLimitError
-from gameplay.services.manor import ensure_manor, start_upgrade
+from gameplay.services.manor.core import ensure_manor, start_upgrade
 from gameplay.services.technology import upgrade_technology
 
 

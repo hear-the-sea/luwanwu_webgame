@@ -22,13 +22,13 @@ def calculate_tech_upgrade_cost(tech_key, current_level):
     Returns:
         dict: {'silver': xxx, 'grain': xxx, 'gold_bar': xxx}
     """
-    base = TECH_UPGRADE_COSTS.get(tech_key, {'silver': 5000, 'grain': 2000, 'gold_bar': 1})
-    multiplier = 2 ** current_level  # 指数增长
+    base = TECH_UPGRADE_COSTS.get(tech_key, {"silver": 5000, "grain": 2000, "gold_bar": 1})
+    multiplier = 2**current_level  # 指数增长
 
     return {
-        'silver': base['silver'] * multiplier,
-        'grain': base['grain'] * multiplier,
-        'gold_bar': base['gold_bar'] * multiplier,
+        "silver": base["silver"] * multiplier,
+        "grain": base["grain"] * multiplier,
+        "gold_bar": base["gold_bar"] * multiplier,
     }
 
 
@@ -72,18 +72,18 @@ def upgrade_technology(guild, tech_key, operator):
         if not tech_locked.can_upgrade:
             raise ValueError("科技已达最高等级")
 
-        if guild_locked.silver < cost['silver']:
+        if guild_locked.silver < cost["silver"]:
             raise ValueError(f"帮会银两不足，需要{cost['silver']}")
-        if guild_locked.grain < cost['grain']:
+        if guild_locked.grain < cost["grain"]:
             raise ValueError(f"帮会粮食不足，需要{cost['grain']}")
-        if guild_locked.gold_bar < cost['gold_bar']:
+        if guild_locked.gold_bar < cost["gold_bar"]:
             raise ValueError(f"帮会金条不足，需要{cost['gold_bar']}")
 
         # 步骤3：使用F()表达式原子性地扣除帮会资源
         Guild.objects.filter(pk=guild_locked.pk).update(
-            silver=F("silver") - cost['silver'],
-            grain=F("grain") - cost['grain'],
-            gold_bar=F("gold_bar") - cost['gold_bar'],
+            silver=F("silver") - cost["silver"],
+            grain=F("grain") - cost["grain"],
+            gold_bar=F("gold_bar") - cost["gold_bar"],
         )
 
         # 步骤4：使用F()表达式原子性地升级科技
@@ -95,10 +95,10 @@ def upgrade_technology(guild, tech_key, operator):
         # 步骤5：记录资源流水
         GuildResourceLog.objects.create(
             guild=guild_locked,
-            action='tech_upgrade',
-            silver_change=-cost['silver'],
-            grain_change=-cost['grain'],
-            gold_bar_change=-cost['gold_bar'],
+            action="tech_upgrade",
+            silver_change=-cost["silver"],
+            grain_change=-cost["grain"],
+            gold_bar_change=-cost["gold_bar"],
             related_user=operator,
             note=f"升级{TECH_NAMES.get(tech_key, tech_key)}至{tech_locked.level}级",
         )
@@ -112,7 +112,7 @@ def upgrade_technology(guild, tech_key, operator):
     operator_manor = Manor.objects.get(user_id=operator_user_id)
     create_announcement(
         guild_locked,
-        'system',
+        "system",
         f"{operator_manor.display_name}将{tech_name}升至{tech_level}级！",
     )
 
@@ -136,7 +136,7 @@ def get_guild_tech_level(guild, tech_key):
 
 
 def _calc_military_study_bonus(level: int, bonus_type: str) -> float:
-    if bonus_type == 'guest_force':
+    if bonus_type == "guest_force":
         bonus = 0.0
         if level >= 1:
             bonus += 0.02 * min(level, 2)
@@ -144,23 +144,23 @@ def _calc_military_study_bonus(level: int, bonus_type: str) -> float:
             bonus += 0.02 * (level - 2)
         return bonus
 
-    if bonus_type == 'guest_intellect':
+    if bonus_type == "guest_intellect":
         return 0.02 * (level - 2) if level >= 3 else 0.0
 
-    if bonus_type == 'guest_defense':
+    if bonus_type == "guest_defense":
         return 0.02 if level >= 5 else 0.0
 
     return 0.0
 
 
 def _calc_troop_tactics_bonus(level: int, bonus_type: str) -> float:
-    if bonus_type == 'troop_attack':
+    if bonus_type == "troop_attack":
         return 0.03 * level
 
-    if bonus_type == 'troop_defense':
+    if bonus_type == "troop_defense":
         return 0.03 * (level - 2) if level >= 3 else 0.0
 
-    if bonus_type == 'troop_hp':
+    if bonus_type == "troop_hp":
         return 0.05 if level >= 5 else 0.0
 
     return 0.0
@@ -177,20 +177,20 @@ def get_tech_bonus(guild, bonus_type):
     Returns:
         float: 加成系数（如0.1表示10%加成）
     """
-    if bonus_type in {'guest_force', 'guest_intellect', 'guest_defense'}:
-        level = get_guild_tech_level(guild, 'military_study')
+    if bonus_type in {"guest_force", "guest_intellect", "guest_defense"}:
+        level = get_guild_tech_level(guild, "military_study")
         return _calc_military_study_bonus(level, bonus_type)
 
-    if bonus_type in {'troop_attack', 'troop_defense', 'troop_hp'}:
-        level = get_guild_tech_level(guild, 'troop_tactics')
+    if bonus_type in {"troop_attack", "troop_defense", "troop_hp"}:
+        level = get_guild_tech_level(guild, "troop_tactics")
         return _calc_troop_tactics_bonus(level, bonus_type)
 
-    if bonus_type == 'resource_production':
-        level = get_guild_tech_level(guild, 'resource_boost')
+    if bonus_type == "resource_production":
+        level = get_guild_tech_level(guild, "resource_boost")
         return 0.05 * level
 
-    if bonus_type == 'march_speed':
-        level = get_guild_tech_level(guild, 'march_speed')
+    if bonus_type == "march_speed":
+        level = get_guild_tech_level(guild, "march_speed")
         return 0.05 * level
 
     return 0.0
@@ -208,24 +208,24 @@ def apply_guild_bonus_to_guest(guest):
     """
     # 检查玩家是否在帮会中
     user = guest.manor.user
-    if not hasattr(user, 'guild_membership') or not user.guild_membership.is_active:
+    if not hasattr(user, "guild_membership") or not user.guild_membership.is_active:
         return {
-            'force': guest.force,
-            'intellect': guest.intellect,
-            'defense': guest.defense,
+            "force": guest.force,
+            "intellect": guest.intellect,
+            "defense": guest.defense,
         }
 
     guild = user.guild_membership.guild
 
     # 应用加成
-    force_bonus = get_tech_bonus(guild, 'guest_force')
-    intellect_bonus = get_tech_bonus(guild, 'guest_intellect')
-    defense_bonus = get_tech_bonus(guild, 'guest_defense')
+    force_bonus = get_tech_bonus(guild, "guest_force")
+    intellect_bonus = get_tech_bonus(guild, "guest_intellect")
+    defense_bonus = get_tech_bonus(guild, "guest_defense")
 
     return {
-        'force': int(guest.force * (1 + force_bonus)),
-        'intellect': int(guest.intellect * (1 + intellect_bonus)),
-        'defense': int(guest.defense * (1 + defense_bonus)),
+        "force": int(guest.force * (1 + force_bonus)),
+        "intellect": int(guest.intellect * (1 + intellect_bonus)),
+        "defense": int(guest.defense * (1 + defense_bonus)),
     }
 
 
@@ -241,18 +241,18 @@ def apply_guild_bonus_to_troop(troop_stats, user):
         dict: 加成后的兵种属性
     """
     # 检查玩家是否在帮会中
-    if not hasattr(user, 'guild_membership') or not user.guild_membership.is_active:
+    if not hasattr(user, "guild_membership") or not user.guild_membership.is_active:
         return troop_stats
 
     guild = user.guild_membership.guild
 
     # 应用加成
-    attack_bonus = get_tech_bonus(guild, 'troop_attack')
-    defense_bonus = get_tech_bonus(guild, 'troop_defense')
-    hp_bonus = get_tech_bonus(guild, 'troop_hp')
+    attack_bonus = get_tech_bonus(guild, "troop_attack")
+    defense_bonus = get_tech_bonus(guild, "troop_defense")
+    hp_bonus = get_tech_bonus(guild, "troop_hp")
 
     return {
-        'attack': int(troop_stats.get('attack', 0) * (1 + attack_bonus)),
-        'defense': int(troop_stats.get('defense', 0) * (1 + defense_bonus)),
-        'hp': int(troop_stats.get('hp', 0) * (1 + hp_bonus)),
+        "attack": int(troop_stats.get("attack", 0) * (1 + attack_bonus)),
+        "defense": int(troop_stats.get("defense", 0) * (1 + defense_bonus)),
+        "hp": int(troop_stats.get("hp", 0) * (1 + hp_bonus)),
     }

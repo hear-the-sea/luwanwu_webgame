@@ -15,11 +15,7 @@ from gameplay.services.resources import grant_resources_locked, spend_resources_
 from gameplay.utils.template_loader import get_item_templates_by_keys
 
 from ..models import ShopPurchaseLog, ShopSellLog, ShopStock
-from .shop_config import (
-    get_sell_price_by_template,
-    get_shop_config,
-    get_shop_item_config,
-)
+from .shop_config import get_sell_price_by_template, get_shop_config, get_shop_item_config
 
 
 @dataclass
@@ -170,8 +166,7 @@ def get_sellable_inventory(manor: Manor, category: str = None) -> List[SellableI
         category: 分类筛选（可选），使用 normalized effect_type
     """
     items = manor.inventory_items.select_related("template").filter(
-        quantity__gt=0,
-        storage_location=InventoryItem.StorageLocation.WAREHOUSE
+        quantity__gt=0, storage_location=InventoryItem.StorageLocation.WAREHOUSE
     )
 
     # 数据库层面的分类筛选
@@ -199,11 +194,15 @@ def get_sellable_effect_types(manor: Manor) -> set:
 
     使用 values_list + distinct 避免加载全部对象
     """
-    effect_types = manor.inventory_items.filter(
-        quantity__gt=0,
-        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-        template__price__gt=0,  # 只有有价格的物品才能出售
-    ).values_list("template__effect_type", flat=True).distinct()
+    effect_types = (
+        manor.inventory_items.filter(
+            quantity__gt=0,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+            template__price__gt=0,  # 只有有价格的物品才能出售
+        )
+        .values_list("template__effect_type", flat=True)
+        .distinct()
+    )
 
     return {_normalize_effect_type(et or "other") for et in effect_types}
 
@@ -270,9 +269,9 @@ def buy_item(manor: Manor, item_key: str, quantity: int) -> Dict:
     # 扣除库存（原子操作，防止并发超卖）
     if not config.is_unlimited:
         # Use atomic update with validation to prevent race conditions
-        updated = ShopStock.objects.filter(
-            pk=stock.pk, current_stock__gte=quantity
-        ).update(current_stock=F("current_stock") - quantity)
+        updated = ShopStock.objects.filter(pk=stock.pk, current_stock__gte=quantity).update(
+            current_stock=F("current_stock") - quantity
+        )
         if not updated:
             raise ValueError("库存不足")
 
@@ -283,12 +282,10 @@ def buy_item(manor: Manor, item_key: str, quantity: int) -> Dict:
         manor=locked_manor,
         template=template,
         storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-        defaults={"quantity": 0}
+        defaults={"quantity": 0},
     )
     # Use atomic F() expression to increment quantity
-    InventoryItem.objects.filter(pk=inventory_item.pk).update(
-        quantity=F("quantity") + quantity
-    )
+    InventoryItem.objects.filter(pk=inventory_item.pk).update(quantity=F("quantity") + quantity)
 
     # 记录购买日志
     ShopPurchaseLog.objects.create(
@@ -340,9 +337,7 @@ def sell_item(manor: Manor, item_key: str, quantity: int) -> Dict:
     # when the same template exists in both warehouse and treasury
     try:
         inventory_item = InventoryItem.objects.get(
-            manor=manor,
-            template=template,
-            storage_location=InventoryItem.StorageLocation.WAREHOUSE
+            manor=manor, template=template, storage_location=InventoryItem.StorageLocation.WAREHOUSE
         )
     except InventoryItem.DoesNotExist:
         raise ValueError("您没有该物品")
@@ -368,9 +363,9 @@ def sell_item(manor: Manor, item_key: str, quantity: int) -> Dict:
 
     # 扣除背包物品（使用原子操作，在 Manor 锁之后）
     # Use atomic F() expression to prevent race conditions
-    updated = InventoryItem.objects.filter(
-        pk=inventory_item.pk, quantity__gte=quantity
-    ).update(quantity=F("quantity") - quantity)
+    updated = InventoryItem.objects.filter(pk=inventory_item.pk, quantity__gte=quantity).update(
+        quantity=F("quantity") - quantity
+    )
     if not updated:
         raise ValueError("物品数量不足")
 

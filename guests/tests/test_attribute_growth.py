@@ -1,9 +1,12 @@
 """
 门客属性成长系统单元测试
 """
+
 import random
-from django.test import TestCase
+
 from django.contrib.auth import get_user_model
+from django.test import TestCase
+
 from guests.models import (
     CIVIL_FORCE_WEIGHT,
     CIVIL_INTELLECT_WEIGHT,
@@ -15,10 +18,10 @@ from guests.models import (
     GuestTemplate,
 )
 from guests.utils.attribute_growth import (
+    RARITY_ATTRIBUTE_GROWTH_RANGE,
     allocate_level_up_attributes,
     apply_attribute_growth,
     get_expected_growth,
-    RARITY_ATTRIBUTE_GROWTH_RANGE,
 )
 
 User = get_user_model()
@@ -104,21 +107,9 @@ class TestAttributeGrowth(TestCase):
         allocation = allocate_level_up_attributes(guest, levels=100, rng=rng)
 
         # 武将权重：force 40% > defense 23% > agility 22% > intellect 15%
-        self.assertGreater(
-            allocation["force"],
-            allocation["defense"],
-            "武将的武力应该最高（权重40%）"
-        )
-        self.assertGreater(
-            allocation["defense"],
-            allocation["intellect"],
-            "武将的防御应该高于智力"
-        )
-        self.assertGreater(
-            allocation["agility"],
-            allocation["intellect"],
-            "武将的敏捷应该高于智力"
-        )
+        self.assertGreater(allocation["force"], allocation["defense"], "武将的武力应该最高（权重40%）")
+        self.assertGreater(allocation["defense"], allocation["intellect"], "武将的防御应该高于智力")
+        self.assertGreater(allocation["agility"], allocation["intellect"], "武将的敏捷应该高于智力")
 
     def test_civil_bias_toward_intellect(self):
         """测试：文官倾向智力"""
@@ -133,21 +124,9 @@ class TestAttributeGrowth(TestCase):
 
         # 文官权重：intellect 40% > force 20% = defense 20% = agility 20%
         # 智力应该是最高的
-        self.assertGreater(
-            allocation["intellect"],
-            allocation["force"],
-            "文官的智力应该高于武力"
-        )
-        self.assertGreater(
-            allocation["intellect"],
-            allocation["defense"],
-            "文官的智力应该高于防御"
-        )
-        self.assertGreater(
-            allocation["intellect"],
-            allocation["agility"],
-            "文官的智力应该高于敏捷"
-        )
+        self.assertGreater(allocation["intellect"], allocation["force"], "文官的智力应该高于武力")
+        self.assertGreater(allocation["intellect"], allocation["defense"], "文官的智力应该高于防御")
+        self.assertGreater(allocation["intellect"], allocation["agility"], "文官的智力应该高于敏捷")
 
     def test_apply_growth(self):
         """测试：属性增长应用正确"""
@@ -175,10 +154,10 @@ class TestAttributeGrowth(TestCase):
 
         # 橙色6-14点，均值10点，武将权重：force 40%, intellect 15%, defense 23%, agility 22%
         # 总权重 100，每点期望 = 9 * weight / 100
-        self.assertAlmostEqual(expected["force"], 10 * 0.40, places=1)       # 4.0
-        self.assertAlmostEqual(expected["intellect"], 10 * 0.15, places=2)   # 1.50
-        self.assertAlmostEqual(expected["defense"], 10 * 0.23, places=2)     # 2.30
-        self.assertAlmostEqual(expected["agility"], 10 * 0.22, places=2)     # 2.20
+        self.assertAlmostEqual(expected["force"], 10 * 0.40, places=1)  # 4.0
+        self.assertAlmostEqual(expected["intellect"], 10 * 0.15, places=2)  # 1.50
+        self.assertAlmostEqual(expected["defense"], 10 * 0.23, places=2)  # 2.30
+        self.assertAlmostEqual(expected["agility"], 10 * 0.22, places=2)  # 2.20
 
     def test_expected_growth_civil(self):
         """测试：文官期望值计算正确（基于区间均值）"""
@@ -186,10 +165,10 @@ class TestAttributeGrowth(TestCase):
 
         # 紫色6-11点，均值8.5点，文官权重：force 20%, intellect 40%, defense 20%, agility 20%
         # 总权重 100，每点期望 = 8 * weight / 100
-        self.assertAlmostEqual(expected["force"], 8.5 * 0.20, places=2)       # 1.70
-        self.assertAlmostEqual(expected["intellect"], 8.5 * 0.40, places=1)   # 3.40
-        self.assertAlmostEqual(expected["defense"], 8.5 * 0.20, places=1)     # 1.70
-        self.assertAlmostEqual(expected["agility"], 8.5 * 0.20, places=2)     # 1.70
+        self.assertAlmostEqual(expected["force"], 8.5 * 0.20, places=2)  # 1.70
+        self.assertAlmostEqual(expected["intellect"], 8.5 * 0.40, places=1)  # 3.40
+        self.assertAlmostEqual(expected["defense"], 8.5 * 0.20, places=1)  # 1.70
+        self.assertAlmostEqual(expected["agility"], 8.5 * 0.20, places=2)  # 1.70
 
     def test_rarity_differences(self):
         """测试：不同稀有度属性点差异（区间成长）"""
@@ -251,10 +230,7 @@ class TestAttributeGrowth(TestCase):
 
         # 平均值应在期望值±10%范围内
         self.assertAlmostEqual(
-            avg_force,
-            expected,
-            delta=expected * 0.1,
-            msg=f"100次测试平均值{avg_force}应接近期望值{expected}"
+            avg_force, expected, delta=expected * 0.1, msg=f"100次测试平均值{avg_force}应接近期望值{expected}"
         )
 
 
@@ -336,11 +312,7 @@ class TestStatBlockWithoutMultiplier(TestCase):
         stats_level_100 = guest.stat_block()
 
         # 战斗属性应该相同（因为属性值没变）
-        self.assertEqual(
-            stats_level_1["attack"],
-            stats_level_100["attack"],
-            "属性值不变，战斗属性也应不变"
-        )
+        self.assertEqual(stats_level_1["attack"], stats_level_100["attack"], "属性值不变，战斗属性也应不变")
 
 
 class TestCustomTemplateGrowthConfig(TestCase):
@@ -420,21 +392,9 @@ class TestCustomTemplateGrowthConfig(TestCase):
 
         # 自定义权重敏捷70%，其他各10%
         # 敏捷应该远高于其他属性
-        self.assertGreater(
-            allocation["agility"],
-            allocation["force"],
-            "自定义敏捷权重70%，应该远高于武力10%"
-        )
-        self.assertGreater(
-            allocation["agility"],
-            allocation["intellect"],
-            "自定义敏捷权重70%，应该远高于智力10%"
-        )
-        self.assertGreater(
-            allocation["agility"],
-            allocation["defense"],
-            "自定义敏捷权重70%，应该远高于防御10%"
-        )
+        self.assertGreater(allocation["agility"], allocation["force"], "自定义敏捷权重70%，应该远高于武力10%")
+        self.assertGreater(allocation["agility"], allocation["intellect"], "自定义敏捷权重70%，应该远高于智力10%")
+        self.assertGreater(allocation["agility"], allocation["defense"], "自定义敏捷权重70%，应该远高于防御10%")
 
         # 敏捷应该占总量的大约70%
         total = sum(allocation.values())

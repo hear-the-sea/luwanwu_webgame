@@ -100,11 +100,6 @@ module = [
     "guests.utils.training_timer",
     "trade.models",
     "trade.selectors",
-    "trade.services.auction.rounds",
-    "trade.services.auction.gold_bars",
     "trade.services.market_service",
-    "websocket.consumers",
-    "accounts.forms",
-    "config.asgi",
 ]
 ignore_errors = true

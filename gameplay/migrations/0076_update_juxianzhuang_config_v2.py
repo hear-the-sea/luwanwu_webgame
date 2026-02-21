@@ -14,10 +14,7 @@ def update_juxianzhuang_config_v2(apps, schema_editor):
 
     BuildingType.objects.filter(key="juxianzhuang").update(
         description="天下英雄，入我彀中。广纳贤才，礼贤下士，方能成就一番霸业。升级提升门客容纳上限（14→15级需要1700W银两+340W粮食，成本略低于悠嘻宝塔）",
-        base_cost={
-            "silver": 17164,
-            "grain": 3432
-        },
+        base_cost={"silver": 17164, "grain": 3432},
         cost_growth=1.7,
     )
 
@@ -28,9 +25,7 @@ def revert_juxianzhuang_config_v2(apps, schema_editor):
 
     BuildingType.objects.filter(key="juxianzhuang").update(
         description="天下英雄，入我彀中。广纳贤才，礼贤下士，方能成就一番霸业。升级提升门客容纳上限（14→15级需要2000W银两）",
-        base_cost={
-            "silver": 20193
-        },
+        base_cost={"silver": 20193},
         cost_growth=1.7,
     )
 
@@ -38,7 +33,7 @@ def revert_juxianzhuang_config_v2(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0075_update_juxianzhuang_config'),
+        ("gameplay", "0075_update_juxianzhuang_config"),
     ]
 
     operations = [

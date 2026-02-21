@@ -1,12 +1,12 @@
-import pytest
 from unittest.mock import Mock
+
+import pytest
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import RequestFactory
 from django.urls import reverse
 
 from accounts import views as account_views
-
 
 User = get_user_model()
 
@@ -110,7 +110,9 @@ def test_increment_attempt_counter_fallback_resets_on_non_numeric_cache_value(mo
     set_mock = Mock()
 
     monkeypatch.setattr(account_views.cache, "add", lambda *args, **kwargs: False)
-    monkeypatch.setattr(account_views.cache, "incr", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("no incr")))
+    monkeypatch.setattr(
+        account_views.cache, "incr", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("no incr"))
+    )
     monkeypatch.setattr(account_views.cache, "get", lambda *_args, **_kwargs: "not-a-number")
     monkeypatch.setattr(account_views.cache, "set", set_mock)
 
@@ -125,9 +127,15 @@ def test_increment_attempt_counter_fallback_tolerates_cache_read_write_errors(mo
     key = "login_attempts:test-cache-error"
 
     monkeypatch.setattr(account_views.cache, "add", lambda *args, **kwargs: False)
-    monkeypatch.setattr(account_views.cache, "incr", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("no incr")))
-    monkeypatch.setattr(account_views.cache, "get", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("read fail")))
-    monkeypatch.setattr(account_views.cache, "set", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("write fail")))
+    monkeypatch.setattr(
+        account_views.cache, "incr", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("no incr"))
+    )
+    monkeypatch.setattr(
+        account_views.cache, "get", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("read fail"))
+    )
+    monkeypatch.setattr(
+        account_views.cache, "set", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("write fail"))
+    )
 
     attempts = account_views._increment_attempt_counter(key)
     assert attempts == 1

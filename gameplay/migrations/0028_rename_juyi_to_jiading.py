@@ -31,7 +31,7 @@ def reverse_rename(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0027_add_message_attachments'),
+        ("gameplay", "0027_add_message_attachments"),
     ]
 
     operations = [

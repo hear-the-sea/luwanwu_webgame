@@ -8,6 +8,7 @@ public model classes/constants here to preserve the historical import style:
     from gameplay.models import Manor, InventoryItem, RaidRun, ...
 """
 
+from .items import InventoryItem, ItemTemplate, Message, ResourceEvent
 from .manor import (
     CITANG_BUILDING_TIME_REDUCTION_PER_LEVEL,
     CITANG_RECRUITMENT_SPEED_BONUS_PER_LEVEL,
@@ -26,7 +27,6 @@ from .manor import (
     Manor,
     ResourceType,
 )
-from .items import InventoryItem, ItemTemplate, Message, ResourceEvent
 from .missions import MissionExtraAttempt, MissionRun, MissionTemplate
 from .progression import (
     EquipmentProduction,

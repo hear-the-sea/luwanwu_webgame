@@ -1,6 +1,7 @@
 """
 蒲巴乙门客模板种子数据
 """
+
 from django.db import migrations
 
 
@@ -44,10 +45,7 @@ def seed_pubayi_templates(apps, schema_editor):
     ]
 
     for data in templates:
-        GuestTemplate.objects.update_or_create(
-            key=data["key"],
-            defaults=data
-        )
+        GuestTemplate.objects.update_or_create(key=data["key"], defaults=data)
 
 
 def reverse_pubayi_templates(apps, schema_editor):

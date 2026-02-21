@@ -274,9 +274,7 @@ def _format_loot_description(resources: Dict[str, int], items: Dict[str, int]) -
         parts.append(f"银两 {resources['silver']}")
 
     if items:
-        templates = {
-            t.key: t.name for t in ItemTemplate.objects.filter(key__in=items.keys()).only("key", "name")
-        }
+        templates = {t.key: t.name for t in ItemTemplate.objects.filter(key__in=items.keys()).only("key", "name")}
         for key, qty in items.items():
             name = templates.get(key, key)
             parts.append(f"{name} x{qty}")
@@ -298,9 +296,7 @@ def _format_battle_rewards_description(battle_rewards: Dict[str, Any]) -> str:
         parts.append(f"经验果 x{exp_fruit}")
 
     if equipment:
-        templates = {
-            t.key: t.name for t in ItemTemplate.objects.filter(key__in=equipment.keys()).only("key", "name")
-        }
+        templates = {t.key: t.name for t in ItemTemplate.objects.filter(key__in=equipment.keys()).only("key", "name")}
         for key, qty in equipment.items():
             name = templates.get(key, key)
             parts.append(f"{name} x{qty}")
@@ -323,7 +319,9 @@ def _grant_loot_items(manor: Manor, items: Dict[str, int]) -> None:
     if not items:
         return
 
-    templates = {t.key: t for t in ItemTemplate.objects.filter(key__in=items.keys()).only("id", "key")}
+    from core.utils.template_loader import load_templates_by_key
+
+    templates = load_templates_by_key(ItemTemplate, keys=items.keys(), only_fields=["id", "key"])
 
     if not templates:
         return

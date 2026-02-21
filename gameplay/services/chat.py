@@ -1,13 +1,14 @@
 """
 聊天服务层
 """
+
 from __future__ import annotations
 
 import logging
 from typing import Tuple
 
-from gameplay.models import Manor
 from core.exceptions import InsufficientStockError
+from gameplay.models import Manor
 from gameplay.services.inventory import consume_inventory_item
 
 logger = logging.getLogger(__name__)

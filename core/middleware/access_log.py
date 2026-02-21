@@ -7,7 +7,6 @@ from django.conf import settings
 
 from core.utils.network import get_client_ip
 
-
 logger = logging.getLogger("access")
 
 

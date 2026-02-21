@@ -18,10 +18,10 @@ from core.exceptions import (
 if TYPE_CHECKING:
     from gameplay.models import Manor
 
-from ..models import GearItem, GearSlot, GearTemplate, Guest, GuestRarity
-from ..utils.equipment_utils import EQUIP_SLOT_MAP, SET_STAT_FIELD_MAP, compute_set_bonus
 from django.db import transaction
 
+from ..models import GearItem, GearSlot, GearTemplate, Guest, GuestRarity
+from ..utils.equipment_utils import EQUIP_SLOT_MAP, SET_STAT_FIELD_MAP, compute_set_bonus
 
 _GEAR_EXTRA_STAT_FIELDS = {
     "hp": "hp_bonus",
@@ -51,9 +51,11 @@ def _apply_template_stats_to_guest(guest: Guest, template, sign: int, updates: s
 
 
 def _clear_replaced_items(guest: Guest, existing_items: list[GearItem]) -> None:
-    from gameplay.models import InventoryItem, ItemTemplate
-    from django.db.models import F
     import logging
+
+    from django.db.models import F
+
+    from gameplay.models import InventoryItem, ItemTemplate
 
     logger = logging.getLogger(__name__)
 
@@ -76,10 +78,8 @@ def _clear_replaced_items(guest: Guest, existing_items: list[GearItem]) -> None:
 
         # 2. 使用原子更新增加库存
         updated = InventoryItem.objects.filter(
-            manor=guest.manor,
-            template=item_template,
-            storage_location=InventoryItem.StorageLocation.WAREHOUSE
-        ).update(quantity=F('quantity') + 1)
+            manor=guest.manor, template=item_template, storage_location=InventoryItem.StorageLocation.WAREHOUSE
+        ).update(quantity=F("quantity") + 1)
 
         if updated == 0:
             # 3. 如果不存在则创建
@@ -87,34 +87,37 @@ def _clear_replaced_items(guest: Guest, existing_items: list[GearItem]) -> None:
                 manor=guest.manor,
                 template=item_template,
                 storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-                quantity=1
+                quantity=1,
             )
 
 
 def _consume_warehouse_item_for_gear(guest: Guest, gear: GearItem) -> None:
-    from gameplay.models import InventoryItem
     from django.db.models import F
 
+    from gameplay.models import InventoryItem
+
     # 修复：使用 select_for_update 锁定库存行，防止并发双重消费
-    inv_item = InventoryItem.objects.select_for_update().filter(
-        manor=guest.manor,
-        template__key=gear.template.key,
-        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-        quantity__gt=0,  # 确保有库存
-    ).order_by("id").first()
+    inv_item = (
+        InventoryItem.objects.select_for_update()
+        .filter(
+            manor=guest.manor,
+            template__key=gear.template.key,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+            quantity__gt=0,  # 确保有库存
+        )
+        .order_by("id")
+        .first()
+    )
 
     if not inv_item:
         # 理论上 equip_guest 之前应该校验过，但并发下可能被抢占
         raise EquipmentError("装备库存不足")
 
     # 使用原子更新扣减库存
-    InventoryItem.objects.filter(pk=inv_item.pk).update(quantity=F('quantity') - 1)
+    InventoryItem.objects.filter(pk=inv_item.pk).update(quantity=F("quantity") - 1)
 
     # 清理零库存记录（再次检查以确保安全）
-    InventoryItem.objects.filter(
-        pk=inv_item.pk,
-        quantity__lte=0
-    ).delete()
+    InventoryItem.objects.filter(pk=inv_item.pk, quantity__lte=0).delete()
 
 
 def apply_set_bonuses(guest: Guest) -> Dict[str, int]:
@@ -171,9 +174,7 @@ def ensure_inventory_gears(manor: Manor, *, slot: str | None = None) -> None:
         if not effect_types:
             return
     items = InventoryItem.objects.filter(
-        manor=manor,
-        template__effect_type__in=effect_types,
-        storage_location=InventoryItem.StorageLocation.WAREHOUSE
+        manor=manor, template__effect_type__in=effect_types, storage_location=InventoryItem.StorageLocation.WAREHOUSE
     ).select_related("template")
     if not items:
         return
@@ -314,10 +315,8 @@ def unequip_guest_item(gear: GearItem, guest: Guest) -> GearItem:
     # 使用原子更新增加库存，防止并发覆盖
     # 先尝试更新现有记录
     updated = InventoryItem.objects.filter(
-        manor=guest.manor,
-        template=item_template,
-        storage_location=InventoryItem.StorageLocation.WAREHOUSE
-    ).update(quantity=F('quantity') + 1)
+        manor=guest.manor, template=item_template, storage_location=InventoryItem.StorageLocation.WAREHOUSE
+    ).update(quantity=F("quantity") + 1)
 
     if updated == 0:
         # 如果不存在，则创建（加锁防止并发创建冲突）
@@ -328,7 +327,7 @@ def unequip_guest_item(gear: GearItem, guest: Guest) -> GearItem:
             manor=guest.manor,
             template=item_template,
             storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-            quantity=1
+            quantity=1,
         )
 
     return gear

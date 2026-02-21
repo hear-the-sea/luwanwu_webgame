@@ -8,6 +8,7 @@ from typing import Any, Callable, Dict, Generator, List
 
 from django.db import transaction
 from django.utils import timezone
+
 from guests.models import Guest, GuestStatus
 
 from .combatants import (
@@ -23,8 +24,8 @@ from .combatants import (
 )
 from .constants import DEFAULT_BATTLE_TYPE, MAX_SQUAD, get_battle_config
 from .models import BattleReport
-from .simulation_core import build_rng, simulate_battle
 from .rewards import dispatch_battle_message, grant_battle_rewards
+from .simulation_core import build_rng, simulate_battle
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ class BattleOptions:
     """
     Encapsulates configuration and optional parameters for battle execution.
     """
+
     battle_type: str = DEFAULT_BATTLE_TYPE
     seed: int | None = None
     troop_loadout: Dict[str, int] | None = None
@@ -357,10 +359,7 @@ def simulate_report(
         guest_qs = manor.guests.select_related("template").prefetch_related("skills")
         total_guests = guest_qs.count()
         # 仅空闲门客可出征，重伤门客无法出征
-        guests = list(
-            guest_qs.filter(status=GuestStatus.IDLE)
-            .order_by("-template__rarity", "-level")[:limit]
-        )
+        guests = list(guest_qs.filter(status=GuestStatus.IDLE).order_by("-template__rarity", "-level")[:limit])
         if not guests:
             if total_guests > 0:
                 injured_count = guest_qs.filter(status=GuestStatus.INJURED).count()
@@ -416,10 +415,7 @@ def _prepare_battle_environment(
     now = timezone.now()
     _recover_guest_hp_batch(active_guests, now)
 
-    normalized_loadout = normalize_troop_loadout(
-        options.troop_loadout,
-        default_if_empty=options.fill_default_troops
-    )
+    normalized_loadout = normalize_troop_loadout(options.troop_loadout, default_if_empty=options.fill_default_troops)
     validate_troop_capacity(active_guests, normalized_loadout)
     return normalized_loadout
 
@@ -456,8 +452,8 @@ def _build_defender_units(
     now,
 ) -> tuple[List[Combatant], List[Combatant], Dict[str, int]]:
     """构建防守方战斗单位（门客+小兵）"""
-    defender_tech_levels, defender_guest_level, defender_guest_bonuses, defender_guest_skills = _extract_defender_tech_profile(
-        options.defender_setup
+    defender_tech_levels, defender_guest_level, defender_guest_bonuses, defender_guest_skills = (
+        _extract_defender_tech_profile(options.defender_setup)
     )
 
     defender_guests_comb, defender_loadout = _build_defender_guest_and_loadout(
@@ -473,9 +469,7 @@ def _build_defender_units(
     )
 
     defender_troops = build_troop_combatants(
-        defender_loadout,
-        side="defender",
-        tech_levels=defender_tech_levels or None
+        defender_loadout, side="defender", tech_levels=defender_tech_levels or None
     )
 
     return defender_guests_comb, defender_troops, defender_loadout
@@ -577,22 +571,16 @@ def _execute_battle(
     final_seed, rng = _resolve_battle_rng(options.seed, options.rng_source)
 
     # 3. 构建攻击方单位
-    attacker_guests_comb, attacker_troops = _build_attacker_units(
-        guests, normalized_loadout, options, manor
-    )
+    attacker_guests_comb, attacker_troops = _build_attacker_units(guests, normalized_loadout, options, manor)
 
     # 4. 构建防守方单位
     now = timezone.now()
-    defender_guests_comb, defender_troops, defender_loadout = _build_defender_units(
-        options, rng, now
-    )
+    defender_guests_comb, defender_troops, defender_loadout = _build_defender_units(options, rng, now)
 
     # 5. 执行战斗模拟
     attacker_units = attacker_guests_comb + attacker_troops
     defender_units = defender_guests_comb + defender_troops
-    simulation, opponent_label = _execute_simulation(
-        attacker_units, defender_units, options, config, rng, final_seed
-    )
+    simulation, opponent_label = _execute_simulation(attacker_units, defender_units, options, config, rng, final_seed)
 
     # 6. 处理战斗结果
     report = _finalize_battle_results(

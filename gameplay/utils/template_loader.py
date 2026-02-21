@@ -7,12 +7,13 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Dict, Iterable, List, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, Iterable, List
 
 if TYPE_CHECKING:
-    from ..models import ItemTemplate
-    from guests.models import GuestTemplate, Skill
     from battle.models import TroopTemplate
+    from guests.models import GuestTemplate, Skill
+
+    from ..models import ItemTemplate
 
 
 def get_item_templates_by_keys(keys: Iterable[str]) -> Dict[str, "ItemTemplate"]:
@@ -56,10 +57,7 @@ def get_item_template_names_by_keys(keys: Iterable[str]) -> Dict[str, str]:
     key_list = list(keys)
     if not key_list:
         return {}
-    return {
-        tpl.key: tpl.name
-        for tpl in ItemTemplate.objects.filter(key__in=key_list).only("key", "name")
-    }
+    return {tpl.key: tpl.name for tpl in ItemTemplate.objects.filter(key__in=key_list).only("key", "name")}
 
 
 def get_guest_templates_by_keys(keys: Iterable[str]) -> Dict[str, "GuestTemplate"]:

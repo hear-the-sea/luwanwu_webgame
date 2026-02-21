@@ -21,15 +21,7 @@ from core.utils import sanitize_error_message
 
 from ..constants import TimeConstants
 from ..forms import AllocateSkillPointsForm
-from ..models import (
-    GearItem,
-    GearSlot,
-    GearTemplate,
-    GuestSkill,
-    GuestStatus,
-    MAX_GUEST_SKILL_SLOTS,
-    Skill,
-)
+from ..models import MAX_GUEST_SKILL_SLOTS, GearItem, GearSlot, GearTemplate, GuestSkill, GuestStatus, Skill
 from ..services import available_guests, finalize_guest_training, recover_guest_hp
 from ..utils.guest_state import refresh_guests_state
 
@@ -189,9 +181,9 @@ class RosterView(LoginRequiredMixin, TemplateView):
     template_name = "guests/roster.html"
 
     def get_context_data(self, **kwargs):
-        from guests.services.salary import get_guest_salary, bulk_check_salary_paid, get_unpaid_guests
         from gameplay.models import InventoryItem, ItemTemplate
-        from gameplay.services.manor import ensure_manor, refresh_manor_state
+        from gameplay.services.manor.core import ensure_manor, refresh_manor_state
+        from guests.services.salary import bulk_check_salary_paid, get_guest_salary, get_unpaid_guests
 
         context = super().get_context_data(**kwargs)
         manor = ensure_manor(self.request.user)
@@ -220,11 +212,13 @@ class RosterView(LoginRequiredMixin, TemplateView):
         for guest in guests:
             guest_salary = get_guest_salary(guest)
             guest_paid = guest.id in paid_ids
-            guests_with_salary.append({
-                "guest": guest,
-                "salary": guest_salary,
-                "paid_today": guest_paid,
-            })
+            guests_with_salary.append(
+                {
+                    "guest": guest,
+                    "salary": guest_salary,
+                    "paid_today": guest_paid,
+                }
+            )
 
         unpaid_guests = get_unpaid_guests(manor, today)
         total_unpaid_salary = sum(get_guest_salary(g) for g in unpaid_guests)
@@ -243,7 +237,7 @@ class GuestDetailView(LoginRequiredMixin, TemplateView):
     template_name = "guests/detail.html"
 
     def get_context_data(self, **kwargs):
-        from gameplay.services.manor import ensure_manor
+        from gameplay.services.manor.core import ensure_manor
 
         context = super().get_context_data(**kwargs)
         manor = ensure_manor(self.request.user)
@@ -299,7 +293,8 @@ class GuestDetailView(LoginRequiredMixin, TemplateView):
 @require_POST
 def dismiss_guest_view(request, pk: int):
     from django.db import transaction
-    from gameplay.services.manor import ensure_manor
+
+    from gameplay.services.manor.core import ensure_manor
 
     manor = ensure_manor(request.user)
     guest = get_object_or_404(manor.guests, pk=pk)
@@ -322,9 +317,7 @@ def dismiss_guest_view(request, pk: int):
         return redirect("guests:detail", pk=pk)
 
     if gear_items:
-        readable = "、".join(
-            f"{name} x{count}" if count > 1 else name for name, count in gear_summary.items()
-        )
+        readable = "、".join(f"{name} x{count}" if count > 1 else name for name, count in gear_summary.items())
         messages.success(request, f"已辞退 {guest_name}，装备已归还仓库（{readable}）")
     else:
         messages.info(request, f"已辞退 {guest_name}。")

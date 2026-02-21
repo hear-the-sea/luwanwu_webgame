@@ -411,7 +411,10 @@ class Building(models.Model):
     def next_level_cost(self) -> Dict[str, int]:
         target_level = self.level + 1
         multiplier = self.building_type.cost_growth ** (target_level - 1)
-        return {resource: math.ceil(amount * multiplier) for resource, amount in (self.building_type.base_cost or {}).items()}
+        return {
+            resource: math.ceil(amount * multiplier)
+            for resource, amount in (self.building_type.base_cost or {}).items()
+        }
 
     def next_level_duration(self) -> int:
         target_level = self.level + 1

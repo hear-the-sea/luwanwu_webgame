@@ -1,14 +1,13 @@
-import pytest
 import random
+
+import pytest
 from django.utils import timezone
 
-from gameplay.services.manor import ensure_manor
+from battle.models import BattleReport
+from battle.services import _build_defender_guest_and_loadout, _extract_defender_tech_profile, simulate_report
+from gameplay.services.manor.core import ensure_manor
 from guests.models import GuestStatus, RecruitmentPool
 from guests.services import finalize_candidate, recruit_guest
-
-from battle.services import simulate_report
-from battle.services import _build_defender_guest_and_loadout, _extract_defender_tech_profile
-from battle.models import BattleReport
 
 
 def _recruit_frontline(manor, draws: int = 3) -> None:
@@ -67,7 +66,9 @@ def test_simulate_report_rewards_on_victory(game_data, django_user_model):
     before = manor.resource_dict()
     # 4名门客可带800人，配置合理的兵力
     troop_loadout = {"dao_jie": 150, "qiang_ling": 150, "archer": 150, "fist_master": 150, "jian_shi": 150}
-    report = simulate_report(manor, seed=1, max_squad=getattr(manor, "max_squad_size", None), troop_loadout=troop_loadout)
+    report = simulate_report(
+        manor, seed=1, max_squad=getattr(manor, "max_squad_size", None), troop_loadout=troop_loadout
+    )
     assert report.winner == "attacker"
     assert report.drops
     manor.refresh_from_db()
@@ -143,7 +144,7 @@ def test_injured_guest_cannot_deploy(django_user_model):
 @pytest.mark.django_db
 def test_heal_guest_cures_injury(django_user_model):
     """药品治疗可解除重伤状态（HP>=30%时）"""
-    from guests.services import heal_guest, INJURY_RECOVERY_THRESHOLD
+    from guests.services import INJURY_RECOVERY_THRESHOLD, heal_guest
 
     user = django_user_model.objects.create_user(username="healer", password="pass123")
     manor = ensure_manor(user)

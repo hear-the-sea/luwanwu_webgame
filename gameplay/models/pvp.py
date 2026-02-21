@@ -36,7 +36,9 @@ class ScoutRecord(models.Model):
     is_success = models.BooleanField("是否成功", null=True, blank=True)
 
     # 侦察结果（成功时填充）
-    intel_data = models.JSONField("情报数据", default=dict, blank=True, help_text="包含目标庄园的门客、兵力、资源等信息")
+    intel_data = models.JSONField(
+        "情报数据", default=dict, blank=True, help_text="包含目标庄园的门客、兵力、资源等信息"
+    )
 
     class Meta:
         verbose_name = "侦察记录"
@@ -106,8 +108,12 @@ class RaidRun(models.Model):
         COMPLETED = "completed", "已完成"
         RETREATED = "retreated", "已撤退"
 
-    attacker = models.ForeignKey("gameplay.Manor", on_delete=models.CASCADE, related_name="raid_runs_sent", verbose_name="进攻方")
-    defender = models.ForeignKey("gameplay.Manor", on_delete=models.CASCADE, related_name="raid_runs_received", verbose_name="防守方")
+    attacker = models.ForeignKey(
+        "gameplay.Manor", on_delete=models.CASCADE, related_name="raid_runs_sent", verbose_name="进攻方"
+    )
+    defender = models.ForeignKey(
+        "gameplay.Manor", on_delete=models.CASCADE, related_name="raid_runs_received", verbose_name="防守方"
+    )
     guests = models.ManyToManyField("guests.Guest", related_name="raid_runs", blank=True, verbose_name="出征门客")
     troop_loadout = models.JSONField("兵种配置", default=dict, blank=True)
     status = models.CharField("状态", max_length=16, choices=Status.choices, default=Status.MARCHING)
@@ -197,8 +203,12 @@ class RaidRun(models.Model):
 class OathBond(models.Model):
     """结义关系：结义门客不可被俘获。"""
 
-    manor = models.ForeignKey("gameplay.Manor", on_delete=models.CASCADE, related_name="oath_bonds", verbose_name="庄园")
-    guest = models.OneToOneField("guests.Guest", on_delete=models.CASCADE, related_name="oath_bond", verbose_name="门客")
+    manor = models.ForeignKey(
+        "gameplay.Manor", on_delete=models.CASCADE, related_name="oath_bonds", verbose_name="庄园"
+    )
+    guest = models.OneToOneField(
+        "guests.Guest", on_delete=models.CASCADE, related_name="oath_bond", verbose_name="门客"
+    )
     created_at = models.DateTimeField("结义时间", auto_now_add=True)
 
     class Meta:
@@ -221,7 +231,9 @@ class JailPrisoner(models.Model):
         RECRUITED = "recruited", "已招募"
         RELEASED = "released", "已释放"
 
-    captor = models.ForeignKey("gameplay.Manor", on_delete=models.CASCADE, related_name="jail_prisoners", verbose_name="俘获方")
+    captor = models.ForeignKey(
+        "gameplay.Manor", on_delete=models.CASCADE, related_name="jail_prisoners", verbose_name="俘获方"
+    )
     original_manor = models.ForeignKey(
         "gameplay.Manor",
         on_delete=models.CASCADE,

@@ -189,12 +189,12 @@ class LoginView(DjangoLoginView):
         if is_locked:
             # 安全修复：使用模糊的提示信息，不泄露精确的锁定时间
             messages.error(request, "登录尝试次数过多，请稍后再试")
-            return render(request, self.template_name, {'form': self.form_class()})
+            return render(request, self.template_name, {"form": self.form_class()})
         return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form):
         # 登录成功，清除失败记录（同时清除 IP 和用户名的记录）
-        username = form.cleaned_data.get('username', '')
+        username = form.cleaned_data.get("username", "")
         _clear_login_attempts(self.request, username)
         messages.success(self.request, "欢迎回来，指挥官。")
         response = super().form_valid(form)
@@ -205,7 +205,7 @@ class LoginView(DjangoLoginView):
 
     def form_invalid(self, form):
         # 登录失败，记录尝试次数（基于 IP + 用户名双重限制）
-        username = form.cleaned_data.get('username', '')
+        username = form.cleaned_data.get("username", "")
         attempts = _record_failed_attempt(self.request, username)
         remaining = LOGIN_ATTEMPT_LIMIT - attempts
         if remaining > 0:
@@ -225,7 +225,7 @@ class RegisterView(CreateView):
     def form_valid(self, form):
         # 在保存用户前，将地区信息附加到用户对象
         user = form.save(commit=False)
-        user._signup_region = form.cleaned_data.get('region', 'overseas')
+        user._signup_region = form.cleaned_data.get("region", "overseas")
         user.save()
         self.object = user
 

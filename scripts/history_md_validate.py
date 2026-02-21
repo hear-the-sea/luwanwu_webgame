@@ -21,7 +21,6 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
-
 ROW_RE = re.compile(r"^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*$")
 
 

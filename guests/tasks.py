@@ -83,7 +83,7 @@ def process_daily_loyalty(self) -> str:
     from django.db.models import F, Q
     from django.db.models.functions import Greatest, Least
 
-    from gameplay.services.messages import create_message
+    from gameplay.services.utils.messages import create_message
     from guests.models import Guest, SalaryPayment
 
     try:
@@ -91,7 +91,9 @@ def process_daily_loyalty(self) -> str:
         yesterday = today - timedelta(days=1)
 
         paid_guest_ids_qs = SalaryPayment.objects.filter(for_date=yesterday).values_list("guest_id", flat=True)
-        base_qs = Guest.objects.filter(Q(loyalty_processed_for_date__lt=today) | Q(loyalty_processed_for_date__isnull=True))
+        base_qs = Guest.objects.filter(
+            Q(loyalty_processed_for_date__lt=today) | Q(loyalty_processed_for_date__isnull=True)
+        )
 
         paid_qs = base_qs.filter(id__in=paid_guest_ids_qs)
         unpaid_qs = base_qs.exclude(id__in=paid_guest_ids_qs)

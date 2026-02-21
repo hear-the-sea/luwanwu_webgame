@@ -1201,4 +1201,3 @@ python manage.py loaddata backup.json
 | earth | 土 | 水 | 木 |
 
 **克制效果**：造成/受到 +20% 伤害
-

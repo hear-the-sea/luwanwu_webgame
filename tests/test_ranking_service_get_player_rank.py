@@ -3,7 +3,7 @@ import pytest
 
 @pytest.mark.django_db
 def test_get_player_rank_matches_expected_order(django_user_model):
-    from gameplay.services.manor import ensure_manor
+    from gameplay.services.manor.core import ensure_manor
     from gameplay.services.ranking import get_player_rank
 
     # Create manors in a deterministic order; created_at should reflect insertion order.

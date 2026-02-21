@@ -1,6 +1,7 @@
 """
 Pytest 配置和共享 fixtures
 """
+
 import os
 from pathlib import Path
 
@@ -59,7 +60,7 @@ def manor_with_troops(django_user_model, django_db_blocker):
     创建拥有基础护院的庄园和用户
     用于测试需要护院的场景（如出征）
     """
-    from gameplay.services.manor import ensure_manor
+    from gameplay.services.manor.core import ensure_manor
     from guests.models import GuestTemplate
 
     user = django_user_model.objects.create_user(username="troop_player", password="pass123")
@@ -78,9 +79,7 @@ def manor_with_troops(django_user_model, django_db_blocker):
                 troop_template = TroopTemplate.objects.filter(key=troop_key).first()
                 if troop_template:
                     PlayerTroop.objects.get_or_create(
-                        manor=manor,
-                        troop_template=troop_template,
-                        defaults={"count": 1000}
+                        manor=manor, troop_template=troop_template, defaults={"count": 1000}
                     )
 
         # 确保至少有一个门客模板（用于测试）

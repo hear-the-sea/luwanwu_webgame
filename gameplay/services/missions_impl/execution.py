@@ -10,13 +10,12 @@ from django.db import transaction
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async, safe_apply_async_with_dedup
-
-from ...models import Manor, MissionRun, MissionTemplate
-from ..messages import create_message
-from ..notifications import notify_user
-from ..troops import apply_defender_troop_losses
 from core.utils.time_scale import scale_duration
 
+from ...models import Manor, MissionRun, MissionTemplate
+from ..recruitment.troops import apply_defender_troop_losses
+from ..utils.messages import create_message
+from ..utils.notifications import notify_user
 from .attempts import get_mission_daily_limit, mission_attempts_today
 from .drops import award_mission_drops_locked, resolve_defense_drops_if_missing
 from .loadout import normalize_mission_loadout, travel_time_seconds
@@ -115,8 +114,9 @@ def _build_defense_report_if_needed(locked_run: MissionRun) -> Any:
     if report or locked_run.is_retreating or not locked_run.mission.is_defense:
         return report
 
-    from ...models import PlayerTroop
     from guests.models import GuestStatus
+
+    from ...models import PlayerTroop
 
     defender_guests = list(
         locked_run.manor.guests.select_for_update()
@@ -225,7 +225,7 @@ def _return_attacker_troops_after_mission(locked_run: MissionRun, report: Any) -
     if locked_run.mission.is_defense:
         return
 
-    from ..troops import _return_surviving_troops_batch
+    from ..recruitment.troops import _return_surviving_troops_batch
 
     loadout = locked_run.troop_loadout or {}
     if not loadout:
@@ -372,10 +372,7 @@ def _prepare_offense_launch_inputs(
     from guests.models import GuestStatus
 
     guests = list(
-        manor.guests.select_for_update()
-        .filter(id__in=guest_ids)
-        .select_related("template")
-        .prefetch_related("skills")
+        manor.guests.select_for_update().filter(id__in=guest_ids).select_related("template").prefetch_related("skills")
     )
     if len(guests) != len(set(guest_ids)):
         raise ValueError("部分门客不可用或已离开庄园")
@@ -393,7 +390,7 @@ def _prepare_offense_launch_inputs(
         validate_troop_capacity(guests, loadout)
 
     if loadout:
-        from ..troops import _deduct_troops_batch
+        from ..recruitment.troops import _deduct_troops_batch
 
         _deduct_troops_batch(manor, loadout)
 
@@ -444,7 +441,9 @@ def _create_mission_run_record(
     return run
 
 
-def _build_defender_setup_and_drop_table(mission: MissionTemplate, loadout: Dict[str, int]) -> Tuple[dict, Dict[str, object]]:
+def _build_defender_setup_and_drop_table(
+    mission: MissionTemplate, loadout: Dict[str, int]
+) -> Tuple[dict, Dict[str, object]]:
     if mission.is_defense:
         return {"troop_loadout": loadout}, {}
 

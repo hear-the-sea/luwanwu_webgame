@@ -1,7 +1,8 @@
-import pytest
 from types import SimpleNamespace
 
-from gameplay.services.manor import ensure_manor
+import pytest
+
+from gameplay.services.manor.core import ensure_manor
 
 
 @pytest.mark.django_db
@@ -33,20 +34,27 @@ def test_generate_report_task_returns_none_when_manor_missing(monkeypatch, djang
 @pytest.mark.django_db
 def test_generate_report_task_skips_when_run_already_has_report(monkeypatch, django_user_model):
     """If MissionRun already has a battle_report, the task should short-circuit."""
-    from battle.tasks import generate_report_task
-    from battle.models import BattleReport
-    from gameplay.models import MissionRun, MissionTemplate
     from django.utils import timezone
+
+    from battle.models import BattleReport
+    from battle.tasks import generate_report_task
+    from gameplay.models import MissionRun, MissionTemplate
 
     user = django_user_model.objects.create_user(username="task_skip", password="pass")
     manor = ensure_manor(user)
     mission = MissionTemplate.objects.create(key="m_task", name="Task", guest_only=True)
 
     now = timezone.now()
-    report = BattleReport.objects.create(manor=manor, opponent_name="d", winner="attacker", starts_at=now, completed_at=now)
+    report = BattleReport.objects.create(
+        manor=manor, opponent_name="d", winner="attacker", starts_at=now, completed_at=now
+    )
     run = MissionRun.objects.create(manor=manor, mission=mission, battle_report=report)
 
-    monkeypatch.setattr(generate_report_task, "retry", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("retry should not be called")))
+    monkeypatch.setattr(
+        generate_report_task,
+        "retry",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("retry should not be called")),
+    )
 
     got = generate_report_task.run(
         manor_id=manor.id,
@@ -159,7 +167,11 @@ def test_generate_report_task_defense_tolerates_invalid_enemy_technology(monkeyp
 
     monkeypatch.setattr("battle.combatants.build_named_ai_guests", _build_named_ai_guests)
     monkeypatch.setattr("battle.tasks.simulate_report", _fake_simulate_report)
-    monkeypatch.setattr(generate_report_task, "retry", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("retry should not be called")))
+    monkeypatch.setattr(
+        generate_report_task,
+        "retry",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("retry should not be called")),
+    )
 
     got = generate_report_task.run(
         manor_id=manor.id,

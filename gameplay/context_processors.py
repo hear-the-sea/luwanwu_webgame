@@ -94,9 +94,7 @@ def notifications(request):
                 # 2. 最后手段：查询数据库（仅在完全无缓存时）
                 time_threshold = timezone.now() - timedelta(minutes=30)
                 online_count = User.objects.filter(
-                    is_staff=False,
-                    is_superuser=False,
-                    last_login__gte=time_threshold
+                    is_staff=False, is_superuser=False, last_login__gte=time_threshold
                 ).count()
                 context["online_user_count"] = online_count
                 # 缓存1分钟，避免Redis宕机期间频繁查询数据库
@@ -112,6 +110,7 @@ def notifications(request):
 
         # 声望和排名数据 - 排名查询使用30秒缓存
         from .services.ranking import get_player_rank
+
         context["sidebar_prestige"] = manor.prestige
 
         cache_key_rank = f"sidebar:rank:{manor_id}"
@@ -124,11 +123,7 @@ def notifications(request):
             context["sidebar_rank"] = rank
 
         # 侦察和出征状态数据 - 使用10秒缓存减少数据库查询
-        from .services.raid import (
-            get_active_raids,
-            get_active_scouts,
-            get_incoming_raids,
-        )
+        from .services.raid import get_active_raids, get_active_scouts, get_incoming_raids
 
         cache_key_raids = f"sidebar:raids:{manor_id}"
         cached_raids = _safe_cache_get(cache_key_raids)

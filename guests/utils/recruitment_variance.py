@@ -3,11 +3,12 @@
 
 在模板属性基础上应用随机波动，为每个招募的门客创造独特性。
 """
+
 from __future__ import annotations
 
 import random
-from typing import Dict, Optional, TYPE_CHECKING
 from collections.abc import Mapping
+from typing import TYPE_CHECKING, Dict, Optional
 
 if TYPE_CHECKING:
     pass
@@ -15,10 +16,10 @@ if TYPE_CHECKING:
 
 # 波动参数配置
 ATTRIBUTE_VARIANCE_CONFIG: Dict[str, object] = {
-    "min_ratio": 0.88,      # 单项最低不低于模板的88%
-    "max_ratio": 1.12,      # 单项最高不超过模板的112%
-    "max_deviation": 3,     # 单次偏移最多±3点
-    "luck_deviation": 5,    # 运势偏移范围±5点
+    "min_ratio": 0.88,  # 单项最低不低于模板的88%
+    "max_ratio": 1.12,  # 单项最高不超过模板的112%
+    "max_deviation": 3,  # 单次偏移最多±3点
+    "luck_deviation": 5,  # 运势偏移范围±5点
 }
 
 
@@ -41,10 +42,7 @@ MAX_GROWABLE_ATTRIBUTE = 99  # 可成长属性硬上限
 
 
 def apply_recruitment_variance(
-    template_attrs: Dict[str, int],
-    rarity: str,
-    archetype: str,
-    rng: Optional[random.Random] = None
+    template_attrs: Dict[str, int], rarity: str, archetype: str, rng: Optional[random.Random] = None
 ) -> Dict[str, int]:
     """
     为招募的门客应用属性随机波动。
@@ -119,11 +117,7 @@ def apply_recruitment_variance(
     return result
 
 
-def _generate_balanced_deviations(
-    template_attrs: Dict[str, int],
-    growable: list,
-    rng: random.Random
-) -> Dict[str, int]:
+def _generate_balanced_deviations(template_attrs: Dict[str, int], growable: list, rng: random.Random) -> Dict[str, int]:
     """
     生成平衡的偏移量（总和为0）。
 
@@ -164,10 +158,7 @@ def _generate_balanced_deviations(
         if total > 0:
             # 总和为正，需要减少某个属性
             # 找一个还有减少空间的属性
-            candidates = [
-                attr for attr in growable
-                if deviations[attr] > -attr_max_devs[attr]
-            ]
+            candidates = [attr for attr in growable if deviations[attr] > -attr_max_devs[attr]]
             if not candidates:
                 break
             attr_to_adjust = rng.choice(candidates)
@@ -175,10 +166,7 @@ def _generate_balanced_deviations(
             total -= 1
         else:
             # 总和为负，需要增加某个属性
-            candidates = [
-                attr for attr in growable
-                if deviations[attr] < attr_max_devs[attr]
-            ]
+            candidates = [attr for attr in growable if deviations[attr] < attr_max_devs[attr]]
             if not candidates:
                 break
             attr_to_adjust = rng.choice(candidates)
@@ -190,10 +178,7 @@ def _generate_balanced_deviations(
 
 
 def _adjust_to_target_total(
-    attrs: Dict[str, int],
-    target_total: int,
-    template_attrs: Dict[str, int],
-    growable: list
+    attrs: Dict[str, int], target_total: int, template_attrs: Dict[str, int], growable: list
 ) -> Dict[str, int]:
     """
     微调属性使总和等于目标值。
@@ -222,32 +207,26 @@ def _adjust_to_target_total(
         if diff > 0:
             # 需要增加：选择最低的且还有余量的属性
             candidates = [
-                attr for attr in growable
-                if adjusted[attr] < MAX_GROWABLE_ATTRIBUTE
-                and adjusted[attr] < int(template_attrs[attr] * MAX_RATIO)
+                attr
+                for attr in growable
+                if adjusted[attr] < MAX_GROWABLE_ATTRIBUTE and adjusted[attr] < int(template_attrs[attr] * MAX_RATIO)
             ]
             if candidates:
                 attr_to_adjust = min(candidates, key=lambda k: adjusted[k])
                 adjusted[attr_to_adjust] = min(
                     adjusted[attr_to_adjust] + min(diff, 1),
                     MAX_GROWABLE_ATTRIBUTE,
-                    int(template_attrs[attr_to_adjust] * MAX_RATIO)
+                    int(template_attrs[attr_to_adjust] * MAX_RATIO),
                 )
             else:
                 break  # 无法继续增加
         else:
             # 需要减少：选择最高的且还有余量的属性
-            candidates = [
-                attr for attr in growable
-                if adjusted[attr] > max(1, int(template_attrs[attr] * MIN_RATIO))
-            ]
+            candidates = [attr for attr in growable if adjusted[attr] > max(1, int(template_attrs[attr] * MIN_RATIO))]
             if candidates:
                 attr_to_adjust = max(candidates, key=lambda k: adjusted[k])
                 min_value = max(1, int(template_attrs[attr_to_adjust] * MIN_RATIO))
-                adjusted[attr_to_adjust] = max(
-                    adjusted[attr_to_adjust] + max(diff, -1),
-                    min_value
-                )
+                adjusted[attr_to_adjust] = max(adjusted[attr_to_adjust] + max(diff, -1), min_value)
             else:
                 break  # 无法继续减少
 
@@ -256,10 +235,7 @@ def _adjust_to_target_total(
     return adjusted
 
 
-def calculate_talent_grade(
-    guest_attrs: Dict[str, int],
-    base_total: int
-) -> str:
+def calculate_talent_grade(guest_attrs: Dict[str, int], base_total: int) -> str:
     """
     计算门客的资质评级。
 

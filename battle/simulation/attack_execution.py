@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import random
-from typing import Any, TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from .damage_application import apply_damage_results
 from .damage_calculation import calculate_attack_damage, process_status_effects
@@ -131,7 +131,9 @@ def perform_attack(
             "actor_defeated": actor_defeated,
         }
 
-        entry["status_inflicted"] = process_status_effects(actor, current_target, selection.skills, rng, phase="inflict")
+        entry["status_inflicted"] = process_status_effects(
+            actor, current_target, selection.skills, rng, phase="inflict"
+        )
         action_logs.append(entry)
 
         if actor_defeated:

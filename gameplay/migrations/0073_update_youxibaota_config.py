@@ -17,10 +17,7 @@ def update_youxibaota_config(apps, schema_editor):
         description="登高望远，运筹帷幄。立于塔顶，可观四方风云，调兵遣将，决胜千里。升级提升同时出征门客上限（0级3人，每级+1人，满级15级18人）",
         base_upgrade_time=3107,
         time_growth=1.5,
-        base_cost={
-            "grain": 4038,
-            "silver": 20193
-        },
+        base_cost={"grain": 4038, "silver": 20193},
         cost_growth=1.7,
     )
 
@@ -33,10 +30,7 @@ def revert_youxibaota_config(apps, schema_editor):
         description="登高望远，运筹帷幄。立于塔顶，可观四方风云，调兵遣将，决胜千里。升级提升同时出征门客上限",
         base_upgrade_time=129600,
         time_growth=2.3,
-        base_cost={
-            "grain": 10000,
-            "silver": 50000
-        },
+        base_cost={"grain": 10000, "silver": 50000},
         cost_growth=3.3,
     )
 
@@ -44,7 +38,7 @@ def revert_youxibaota_config(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0072_update_juxianzhuang_params'),
+        ("gameplay", "0072_update_juxianzhuang_params"),
     ]
 
     operations = [

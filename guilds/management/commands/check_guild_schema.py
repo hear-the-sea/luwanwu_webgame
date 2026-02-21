@@ -60,12 +60,16 @@ class Command(BaseCommand):
                 issues.append(TableIssue(table=table, message=f"missing columns: {', '.join(missing)}"))
 
         if not issues:
-            self.stdout.write(self.style.SUCCESS(f"OK: {app_label} schema looks consistent ({len(checked_tables)} tables checked)."))
+            self.stdout.write(
+                self.style.SUCCESS(f"OK: {app_label} schema looks consistent ({len(checked_tables)} tables checked).")
+            )
             return
 
         self.stdout.write(self.style.ERROR(f"Found {len(issues)} schema issue(s) in app '{app_label}':"))
         for issue in issues:
             self.stdout.write(f"- {issue.table}: {issue.message}")
 
-        self.stdout.write("Suggested next step: run `python manage.py migrate` (or app-specific migrate) to sync schema.")
+        self.stdout.write(
+            "Suggested next step: run `python manage.py migrate` (or app-specific migrate) to sync schema."
+        )
         raise SystemExit(1)

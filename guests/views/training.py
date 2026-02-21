@@ -21,11 +21,7 @@ from core.utils.validation import safe_redirect_url, sanitize_error_message
 
 from ..forms import AllocateSkillPointsForm, TrainGuestForm
 from ..models import Guest
-from ..services import (
-    allocate_attribute_points,
-    train_guest,
-    reduce_training_time_for_guest,
-)
+from ..services import allocate_attribute_points, reduce_training_time_for_guest, train_guest
 
 
 @method_decorator(require_POST, name="dispatch")
@@ -35,10 +31,11 @@ class TrainView(LoginRequiredMixin, TemplateView):
 
     注意：类视图使用手动错误处理，但使用 manager 方法简化查询
     """
+
     http_method_names = ["post"]
 
     def post(self, request, *args, **kwargs):
-        from gameplay.services.manor import ensure_manor
+        from gameplay.services.manor.core import ensure_manor
 
         manor = ensure_manor(request.user)
         form = TrainGuestForm(request.POST, manor=manor)
@@ -69,16 +66,14 @@ def use_experience_item_view(request, pk: int):
     但使用 manager 方法简化查询
     """
     from django.core.exceptions import ObjectDoesNotExist
+
     from gameplay.models import InventoryItem, ItemTemplate
     from gameplay.services.inventory import consume_inventory_item
-    from gameplay.services.manor import ensure_manor
+    from gameplay.services.manor.core import ensure_manor
 
     manor = ensure_manor(request.user)
     # 使用 manager 方法获取门客，避免重复的 select_related
-    guest = get_object_or_404(
-        Guest.objects.for_manor(manor).with_template(),
-        pk=pk
-    )
+    guest = get_object_or_404(Guest.objects.for_manor(manor).with_template(), pk=pk)
     item_id = request.POST.get("item_id")
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
     default_url = reverse("guests:detail", args=[guest.pk])
@@ -107,17 +102,19 @@ def use_experience_item_view(request, pk: int):
         eta_str = eta.strftime("%H:%M:%S") if eta else "已完成升级"
         msg = f"{item.template.name} 已使用，缩短 {reduced_hours} 小时。预计完成：{eta_str}"
         if is_ajax:
-            return JsonResponse({
-                "success": True,
-                "message": msg,
-                "item_id": item_id,
-                "new_quantity": new_quantity,
-                "guest_id": guest.pk,
-                "new_level": guest.level,
-                "current_hp": guest.current_hp,
-                "max_hp": guest.max_hp,
-                "training_eta": eta.isoformat() if eta else None,
-            })
+            return JsonResponse(
+                {
+                    "success": True,
+                    "message": msg,
+                    "item_id": item_id,
+                    "new_quantity": new_quantity,
+                    "guest_id": guest.pk,
+                    "new_level": guest.level,
+                    "current_hp": guest.current_hp,
+                    "max_hp": guest.max_hp,
+                    "training_eta": eta.isoformat() if eta else None,
+                }
+            )
         messages.success(request, msg)
     except (GameError, ValueError) as exc:
         error_msg = sanitize_error_message(exc)
@@ -127,12 +124,14 @@ def use_experience_item_view(request, pk: int):
     except ObjectDoesNotExist:
         # 物品可能已被删除（refresh_from_db 时）
         if is_ajax:
-            return JsonResponse({
-                "success": True,
-                "message": "道具已使用",
-                "item_id": item_id,
-                "new_quantity": 0,
-            })
+            return JsonResponse(
+                {
+                    "success": True,
+                    "message": "道具已使用",
+                    "item_id": item_id,
+                    "new_quantity": 0,
+                }
+            )
     return redirect(next_url)
 
 
@@ -146,31 +145,31 @@ def check_training_view(request, pk: int):
     用于前端倒计时结束后主动检查，避免页面刷新时数据未更新的问题。
     使用 manager 方法简化查询
     """
+    from gameplay.services.manor.core import ensure_manor
+
     from ..services import finalize_guest_training
-    from gameplay.services.manor import ensure_manor
 
     manor = ensure_manor(request.user)
     # 使用 manager 方法获取门客，避免重复的 select_related
-    guest = get_object_or_404(
-        Guest.objects.for_manor(manor).with_template(),
-        pk=pk
-    )
+    guest = get_object_or_404(Guest.objects.for_manor(manor).with_template(), pk=pk)
 
     # 尝试完成训练（如果时间已到）
     finalize_guest_training(guest)
     guest.refresh_from_db()
 
     # 返回最新的门客状态
-    return JsonResponse({
-        "success": True,
-        "guest_id": guest.pk,
-        "level": guest.level,
-        "current_hp": guest.current_hp,
-        "max_hp": guest.max_hp,
-        "training_eta": guest.training_complete_at.isoformat() if guest.training_complete_at else None,
-        "status": guest.status,
-        "attribute_points": guest.attribute_points,
-    })
+    return JsonResponse(
+        {
+            "success": True,
+            "guest_id": guest.pk,
+            "level": guest.level,
+            "current_hp": guest.current_hp,
+            "max_hp": guest.max_hp,
+            "training_eta": guest.training_complete_at.isoformat() if guest.training_complete_at else None,
+            "status": guest.status,
+            "attribute_points": guest.attribute_points,
+        }
+    )
 
 
 @login_required
@@ -182,14 +181,11 @@ def allocate_points_view(request, pk: int):
 
     使用统一的错误处理装饰器，减少样板代码
     """
-    from gameplay.services.manor import ensure_manor
+    from gameplay.services.manor.core import ensure_manor
 
     manor = ensure_manor(request.user)
     # 使用 manager 方法获取门客，避免重复的 select_related
-    guest = get_object_or_404(
-        Guest.objects.for_manor(manor).with_template(),
-        pk=pk
-    )
+    guest = get_object_or_404(Guest.objects.for_manor(manor).with_template(), pk=pk)
     form = AllocateSkillPointsForm(request.POST, manor=manor)
 
     if not form.is_valid():

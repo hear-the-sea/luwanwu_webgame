@@ -6,13 +6,24 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('guests', '0006_guest_extended_attrs'),
+        ("guests", "0006_guest_extended_attrs"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='geartemplate',
-            name='slot',
-            field=models.CharField(choices=[('helmet', '头盔'), ('armor', '衣甲'), ('weapon', '武器'), ('shoes', '鞋子'), ('device', '器械'), ('mount', '坐骑'), ('ornament', '饰品')], max_length=16),
+            model_name="geartemplate",
+            name="slot",
+            field=models.CharField(
+                choices=[
+                    ("helmet", "头盔"),
+                    ("armor", "衣甲"),
+                    ("weapon", "武器"),
+                    ("shoes", "鞋子"),
+                    ("device", "器械"),
+                    ("mount", "坐骑"),
+                    ("ornament", "饰品"),
+                ],
+                max_length=16,
+            ),
         ),
     ]

@@ -14,6 +14,15 @@ repos:
     hooks:
       - id: flake8
         args: ["--jobs=1", "accounts", "battle", "gameplay", "guests", "guilds", "trade", "core", "websocket", "config", "tests"]
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: mypy
+        language: system
+        types: [python]
+        args: ["--config-file=pyproject.toml"]
+        files: ^(accounts|battle|common|config|core|gameplay|guests|guilds|tasks|trade|websocket)/.*\.py$
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:

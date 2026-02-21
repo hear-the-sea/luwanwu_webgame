@@ -3,9 +3,11 @@
 
 提供装备套装加成计算等功能。
 """
+
 from __future__ import annotations
 
-from typing import Dict, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict
+
 from ..models import GearSlot
 
 if TYPE_CHECKING:

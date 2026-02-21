@@ -14,24 +14,28 @@ def forwards(apps, schema_editor):
         return
     with conn.cursor() as cursor:
         # 1) 检查是否存在 item_template_id 列
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COUNT(*) FROM information_schema.columns
             WHERE table_schema = DATABASE()
               AND table_name = 'trade_shop_stock'
               AND column_name = 'item_template_id'
-        """)
+        """
+        )
         if cursor.fetchone()[0]:
             # 2) 清空表（数据可丢弃）
             cursor.execute("TRUNCATE TABLE trade_shop_stock;")
 
             # 3) 如果存在对应的外键约束，先删除外键
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT COUNT(*) FROM information_schema.table_constraints
                 WHERE table_schema = DATABASE()
                   AND table_name = 'trade_shop_stock'
                   AND constraint_name = 'trade_shop_stock_item_template_id_8549f92e_fk_gameplay_'
                   AND constraint_type = 'FOREIGN KEY'
-            """)
+            """
+            )
             if cursor.fetchone()[0]:
                 cursor.execute(
                     "ALTER TABLE trade_shop_stock "
@@ -54,22 +58,26 @@ def backwards(apps, schema_editor):
         return
     with conn.cursor() as cursor:
         # 检查是否存在 item_key 列
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COUNT(*) FROM information_schema.columns
             WHERE table_schema = DATABASE()
               AND table_name = 'trade_shop_stock'
               AND column_name = 'item_key'
-        """)
+        """
+        )
         if cursor.fetchone()[0]:
             # 清空表并回滚结构
             cursor.execute("TRUNCATE TABLE trade_shop_stock;")
             # 检查索引是否存在再删除
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT COUNT(*) FROM information_schema.statistics
                 WHERE table_schema = DATABASE()
                   AND table_name = 'trade_shop_stock'
                   AND index_name = 'item_key_unique'
-            """)
+            """
+            )
             if cursor.fetchone()[0]:
                 cursor.execute("ALTER TABLE trade_shop_stock DROP INDEX item_key_unique;")
             cursor.execute("ALTER TABLE trade_shop_stock DROP COLUMN item_key;")
@@ -86,7 +94,7 @@ class Migration(migrations.Migration):
     """
 
     dependencies = [
-        ('trade', '0003_marketlisting_markettransaction_and_more'),
+        ("trade", "0003_marketlisting_markettransaction_and_more"),
     ]
 
     operations = [

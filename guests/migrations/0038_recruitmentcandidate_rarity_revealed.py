@@ -6,13 +6,13 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('guests', '0037_geartemplate_set_description'),
+        ("guests", "0037_geartemplate_set_description"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='recruitmentcandidate',
-            name='rarity_revealed',
-            field=models.BooleanField(default=False, verbose_name='稀有度已显示'),
+            model_name="recruitmentcandidate",
+            name="rarity_revealed",
+            field=models.BooleanField(default=False, verbose_name="稀有度已显示"),
         ),
     ]

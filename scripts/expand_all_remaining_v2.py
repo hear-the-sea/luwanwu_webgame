@@ -1,6 +1,4 @@
-
-
-file_path = 'docs/门客数据库-历史人物-秦汉.md'
+file_path = "docs/门客数据库-历史人物-秦汉.md"
 
 # Specific enhancements for key figures to ensure high quality
 specific_updates = {
@@ -44,20 +42,20 @@ specific_updates = {
     "主父偃": "他的一生大起大落，充满了传奇色彩。他的“推恩令”兵不血刃地解决了诸侯王问题，堪称千古奇谋。他的悲剧结局，也警示了后世：才高震主，性格张狂，必遭横祸。",
     "吕嘉": "他作为南越国的权臣，为了维护南越的独立地位，不惜与强大的汉朝对抗。虽然最终失败，但他在南越民众中拥有极高的威望。他的反抗是南越历史上的重要事件。",
     "滇王": "他审时度势，归顺汉朝，不仅保全了自己的地位，也使滇国百姓免受战争之苦。他的归附促进了云南地区与中原的经济文化交流，加速了多民族国家的统一进程。",
-    "翁归靡": "他在位期间，是乌孙与汉朝关系的蜜月期。他与解忧公主的结合，不仅是政治联姻，也包含了深厚的感情。他多次上书请求与汉朝联合抗击匈奴，是汉朝最可靠的盟友。"
+    "翁归靡": "他在位期间，是乌孙与汉朝关系的蜜月期。他与解忧公主的结合，不仅是政治联姻，也包含了深厚的感情。他多次上书请求与汉朝联合抗击匈奴，是汉朝最可靠的盟友。",
 }
 
 
 def process_file(filepath):
-    with open(filepath, 'r', encoding='utf-8') as f:
+    with open(filepath, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
     new_lines = []
 
     count = 0
     for line in lines:
-        if line.strip().startswith('|') and '姓名' not in line and '---' not in line:
-            parts = [p.strip() for p in line.split('|') if p]
+        if line.strip().startswith("|") and "姓名" not in line and "---" not in line:
+            parts = [p.strip() for p in line.split("|") if p]
             if len(parts) >= 4:
                 name = parts[0]
                 bio = parts[1]
@@ -88,7 +86,7 @@ def process_file(filepath):
 
         new_lines.append(line)
 
-    with open(filepath, 'w', encoding='utf-8') as f:
+    with open(filepath, "w", encoding="utf-8") as f:
         f.writelines(new_lines)
 
     print(f"Expanded {count} bios.")

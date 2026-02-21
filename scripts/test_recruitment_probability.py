@@ -34,14 +34,10 @@ except Exception as exc:
         print("Hint: run via `python manage.py shell < scripts/test_recruitment_probability.py`")
         raise SystemExit(1) from exc
 
-# 导入招募系统模块
-from guests.utils.recruitment_utils import (  # noqa: E402
-    RARITY_DISTRIBUTION,
-    RARITY_ORDER,
-    TOTAL_WEIGHT,
-    choose_rarity,
-)
 from guests.models import GuestRarity  # noqa: E402
+
+# 导入招募系统模块
+from guests.utils.recruitment_utils import RARITY_DISTRIBUTION, RARITY_ORDER, TOTAL_WEIGHT, choose_rarity  # noqa: E402
 
 # 稀有度中文名称映射
 RARITY_NAMES = {
@@ -159,9 +155,7 @@ def analyze_results(
             deviation_str = f"{deviation:+.4f}%"
             if abs(relative_deviation) > 20:
                 deviation_str += " ⚠️"
-            print(
-                f"{name:<8} {count:>12,} {actual_rate:>11.4f}% {expected_rate:>11.4f}% {deviation_str:>10}"
-            )
+            print(f"{name:<8} {count:>12,} {actual_rate:>11.4f}% {expected_rate:>11.4f}% {deviation_str:>10}")
 
     if verbose:
         print("-" * 60)
@@ -220,9 +214,7 @@ def run_batch_test(
             std_dev = (sum((r - avg) ** 2 for r in rates) / len(rates)) ** 0.5
 
             name = RARITY_NAMES.get(rarity, rarity)
-            print(
-                f"{name:<8} {expected:>11.4f}% {avg:>11.4f}% {min_val:>11.4f}% {max_val:>11.4f}% {std_dev:>9.4f}%"
-            )
+            print(f"{name:<8} {expected:>11.4f}% {avg:>11.4f}% {min_val:>11.4f}% {max_val:>11.4f}% {std_dev:>9.4f}%")
 
         print("-" * 70)
         print()

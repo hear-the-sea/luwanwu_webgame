@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from .base import GameError
 
-
 # ============ 建筑相关异常 ============
 
 

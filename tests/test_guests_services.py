@@ -1,18 +1,14 @@
 """
 测试 guests.services 模块重构后的功能
 """
+
 import pytest
 from django.contrib.auth import get_user_model
 
 from core.exceptions import InvalidAllocationError
-from gameplay.services.manor import ensure_manor
+from gameplay.services.manor.core import ensure_manor
 from guests.models import Guest, GuestTemplate
-from guests.services import (
-    allocate_attribute_points,
-    available_guests,
-    list_pools,
-    recover_guest_hp,
-)
+from guests.services import allocate_attribute_points, available_guests, list_pools, recover_guest_hp
 
 User = get_user_model()
 
@@ -93,9 +89,7 @@ def test_allocate_attribute_points():
     template = GuestTemplate.objects.create(
         key="test_guest", name="测试门客", rarity="gray", base_attack=50, base_defense=50
     )
-    guest = Guest.objects.create(
-        manor=manor, template=template, force=50, intellect=50, attribute_points=10
-    )
+    guest = Guest.objects.create(manor=manor, template=template, force=50, intellect=50, attribute_points=10)
 
     initial_force = guest.force
     allocate_attribute_points(guest, "force", 5)
@@ -114,9 +108,7 @@ def test_allocate_attribute_points_insufficient():
     template = GuestTemplate.objects.create(
         key="test_guest", name="测试门客", rarity="gray", base_attack=50, base_defense=50
     )
-    guest = Guest.objects.create(
-        manor=manor, template=template, force=50, intellect=50, attribute_points=3
-    )
+    guest = Guest.objects.create(manor=manor, template=template, force=50, intellect=50, attribute_points=3)
 
     with pytest.raises(InvalidAllocationError, match="属性点不足"):
         allocate_attribute_points(guest, "force", 5)

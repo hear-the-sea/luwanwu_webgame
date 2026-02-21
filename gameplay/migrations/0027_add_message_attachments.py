@@ -6,18 +6,18 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gameplay', '0026_itemtemplate_image_alter_itemtemplate_effect_type'),
+        ("gameplay", "0026_itemtemplate_image_alter_itemtemplate_effect_type"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='message',
-            name='attachments',
-            field=models.JSONField(blank=True, default=dict, verbose_name='附件数据'),
+            model_name="message",
+            name="attachments",
+            field=models.JSONField(blank=True, default=dict, verbose_name="附件数据"),
         ),
         migrations.AddField(
-            model_name='message',
-            name='is_claimed',
-            field=models.BooleanField(default=False, verbose_name='已领取'),
+            model_name="message",
+            name="is_claimed",
+            field=models.BooleanField(default=False, verbose_name="已领取"),
         ),
     ]

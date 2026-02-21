@@ -14,13 +14,8 @@ from typing import TYPE_CHECKING, Dict, List, Set
 from django.db import transaction
 from django.utils import timezone
 
-from core.exceptions import (
-    GuestOwnershipError,
-    InsufficientResourceError,
-    NoGuestsError,
-    SalaryAlreadyPaidError,
-)
-from guests.models import Guest, GuestRarity, RARITY_SALARY, SalaryPayment
+from core.exceptions import GuestOwnershipError, InsufficientResourceError, NoGuestsError, SalaryAlreadyPaidError
+from guests.models import RARITY_SALARY, Guest, GuestRarity, SalaryPayment
 
 if TYPE_CHECKING:
     from gameplay.models import Manor
@@ -59,10 +54,7 @@ def check_salary_paid(guest: Guest, for_date: date = None) -> bool:
     if for_date is None:
         for_date = timezone.now().date()
 
-    return SalaryPayment.objects.filter(
-        guest=guest,
-        for_date=for_date
-    ).exists()
+    return SalaryPayment.objects.filter(guest=guest, for_date=for_date).exists()
 
 
 def bulk_check_salary_paid(guest_ids: List[int], for_date: date = None) -> Set[int]:
@@ -82,10 +74,9 @@ def bulk_check_salary_paid(guest_ids: List[int], for_date: date = None) -> Set[i
     if not guest_ids:
         return set()
 
-    paid_guest_ids = SalaryPayment.objects.filter(
-        guest_id__in=guest_ids,
-        for_date=for_date
-    ).values_list("guest_id", flat=True)
+    paid_guest_ids = SalaryPayment.objects.filter(guest_id__in=guest_ids, for_date=for_date).values_list(
+        "guest_id", flat=True
+    )
 
     return set(paid_guest_ids)
 
@@ -136,10 +127,7 @@ def pay_guest_salary(manor: Manor, guest: Guest, for_date: date = None) -> Salar
 
     # 创建支付记录
     payment = SalaryPayment.objects.create(
-        manor=manor_locked,
-        guest=guest_locked,
-        amount=salary_amount,
-        for_date=for_date
+        manor=manor_locked, guest=guest_locked, amount=salary_amount, for_date=for_date
     )
 
     # Keep caller's instance reasonably up to date.
@@ -199,12 +187,7 @@ def pay_all_salaries(manor: Manor, for_date: date = None) -> Dict:
     payments = []
     for guest in unpaid_guests:
         salary_amount = get_guest_salary(guest)
-        payment = SalaryPayment(
-            manor=manor,
-            guest=guest,
-            amount=salary_amount,
-            for_date=for_date
-        )
+        payment = SalaryPayment(manor=manor, guest=guest, amount=salary_amount, for_date=for_date)
         payments.append(payment)
 
     # 批量创建记录
@@ -216,7 +199,7 @@ def pay_all_salaries(manor: Manor, for_date: date = None) -> Dict:
     return {
         "paid_count": len(unpaid_guests),
         "total_amount": total_salary,
-        "guest_names": [guest.display_name for guest in unpaid_guests]
+        "guest_names": [guest.display_name for guest in unpaid_guests],
     }
 
 

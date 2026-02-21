@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 import random
 from datetime import timedelta
-from typing import Any, Dict, List, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 from django.utils import timezone
 
@@ -48,11 +48,7 @@ def _iter_phase_attackers(
     rng: random.Random,
     priority: int,
 ) -> list["Combatant"]:
-    return [
-        actor
-        for actor in determine_turn_order(attacker_team, defender_team, rng)
-        if actor.priority <= priority
-    ]
+    return [actor for actor in determine_turn_order(attacker_team, defender_team, rng) if actor.priority <= priority]
 
 
 def _append_heal_event(events: List[Dict[str, Any]], heal_event: Dict[str, Any] | None) -> None:
@@ -63,7 +59,9 @@ def _append_heal_event(events: List[Dict[str, Any]], heal_event: Dict[str, Any] 
     events.append(heal_event)
 
 
-def _append_attack_event(events: List[Dict[str, Any]], event: Dict[str, Any] | None, priority: int | None = None) -> None:
+def _append_attack_event(
+    events: List[Dict[str, Any]], event: Dict[str, Any] | None, priority: int | None = None
+) -> None:
     if not event:
         return
     event["order"] = len(events) + 1
@@ -80,9 +78,7 @@ def _append_waiting_units(
     priority: int,
 ) -> None:
     waiting_units = [
-        unit
-        for unit in alive(attacker_team) + alive(defender_team)
-        if unit.priority > priority and unit.hp > 0
+        unit for unit in alive(attacker_team) + alive(defender_team) if unit.priority > priority and unit.hp > 0
     ]
     for unit in waiting_units:
         events.append(
