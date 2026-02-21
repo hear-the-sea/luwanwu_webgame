@@ -240,7 +240,8 @@ def _add_troops_batch(manor: "Manor", troops_to_add: Dict[str, int]) -> None:
         return
 
     # 预加载模板
-    templates = {t.key: t for t in TroopTemplate.objects.filter(key__in=troops_to_add.keys())}
+    from core.utils.template_loader import load_templates_by_key
+    templates = load_templates_by_key(TroopTemplate, keys=troops_to_add.keys())
 
     if not templates:
         return
