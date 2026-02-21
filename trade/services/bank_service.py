@@ -10,6 +10,7 @@
 
 import logging
 import math
+import uuid
 from datetime import timedelta
 from decimal import Decimal
 
@@ -89,6 +90,13 @@ def _safe_cache_delete(key: str) -> None:
         logger.warning("Failed to delete cache key: %s", key, exc_info=True)
 
 
+def _release_cache_lock_if_owner(lock_key: str, lock_token: str) -> None:
+    """Best-effort lock release with ownership check."""
+    current_token = _safe_cache_get(lock_key)
+    if current_token == lock_token:
+        _safe_cache_delete(lock_key)
+
+
 def get_today_exchange_count(manor: Manor) -> int:
     """获取今日已兑换金条数量"""
     # 安全修复：使用 timezone.now().date() 保持时区一致性
@@ -124,7 +132,8 @@ def get_effective_gold_supply() -> int:
 
     # 缓存击穿保护：使用分布式锁防止并发查询
     lock_key = f"{SUPPLY_CACHE_KEY}:lock"
-    lock_acquired = _safe_cache_add(lock_key, "1", timeout=10)  # 10秒锁超时
+    lock_token = uuid.uuid4().hex
+    lock_acquired = _safe_cache_add(lock_key, lock_token, timeout=10)  # 10秒锁超时
 
     if not lock_acquired:
         # 未获取到锁：直接降级到过期缓存，避免 sleep 放大高并发延迟。
@@ -159,7 +168,7 @@ def get_effective_gold_supply() -> int:
             return max(0, _safe_int(stale, GOLD_BAR_TARGET_SUPPLY))
         return GOLD_BAR_TARGET_SUPPLY
     finally:
-        _safe_cache_delete(lock_key)
+        _release_cache_lock_if_owner(lock_key, lock_token)
 
 
 def calculate_supply_factor() -> float:

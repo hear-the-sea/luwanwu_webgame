@@ -5,18 +5,28 @@
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, Iterable
+from typing import TYPE_CHECKING, Dict, Iterable, TypeVar, cast
 
 if TYPE_CHECKING:
-    from django.db.models import Model, QuerySet
+    from django.db.models import Manager, Model, QuerySet
+
+
+TModel = TypeVar("TModel", bound="Model")
+
+
+def _get_model_manager(model_class: type[TModel]) -> "Manager[TModel]":
+    manager = getattr(model_class, "objects", None)
+    if manager is None:
+        raise AttributeError(f"{model_class.__name__} has no objects manager")
+    return cast("Manager[TModel]", manager)
 
 
 def load_templates_by_key(
-    model_class: type[Model],
+    model_class: type[TModel],
     keys: Iterable[str] | None = None,
     prefetch: list[str] | None = None,
     only_fields: list[str] | None = None,
-) -> Dict[str, Any]:
+) -> Dict[str, TModel]:
     """
     加载模板对象并以key为键构建字典
 
@@ -29,7 +39,7 @@ def load_templates_by_key(
     Returns:
         {key: template_object} 字典
     """
-    qs: QuerySet = model_class.objects.all()
+    qs: "QuerySet[TModel]" = _get_model_manager(model_class).all()
 
     if keys is not None:
         qs = qs.filter(key__in=keys)
@@ -40,14 +50,19 @@ def load_templates_by_key(
     if only_fields:
         qs = qs.only(*only_fields)
 
-    return {t.key: t for t in qs}
+    templates: Dict[str, TModel] = {}
+    for template in qs:
+        template_key = str(getattr(template, "key", "") or "").strip()
+        if template_key:
+            templates[template_key] = template
+    return templates
 
 
 def load_templates_by_id(
-    model_class: type[Model],
+    model_class: type[TModel],
     ids: Iterable[int],
     prefetch: list[str] | None = None,
-) -> Dict[int, Any]:
+) -> Dict[int, TModel]:
     """
     加载模板对象并以id为键构建字典
 
@@ -59,9 +74,15 @@ def load_templates_by_id(
     Returns:
         {id: template_object} 字典
     """
-    qs: QuerySet = model_class.objects.filter(id__in=ids)
+    qs: "QuerySet[TModel]" = _get_model_manager(model_class).filter(id__in=ids)
 
     if prefetch:
         qs = qs.prefetch_related(*prefetch)
 
-    return {t.id: t for t in qs}
+    templates: Dict[int, TModel] = {}
+    for template in qs:
+        template_id = getattr(template, "id", None)
+        if template_id is None:
+            continue
+        templates[int(template_id)] = template
+    return templates

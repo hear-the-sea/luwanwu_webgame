@@ -59,17 +59,21 @@ def test_purge_other_sessions_releases_owned_lock(monkeypatch):
     delete_mock.assert_called_once_with(lock_key)
 
 
-def test_purge_other_sessions_skips_when_lock_busy(monkeypatch):
+def test_purge_other_sessions_falls_back_when_lock_busy(monkeypatch):
     set_mock = Mock()
     fallback_mock = Mock()
+    user_id = 777
+    current_session_key = "current-session"
+    cache_key = f"{account_utils.USER_SESSION_CACHE_PREFIX}{user_id}"
 
+    monkeypatch.setattr(account_utils, "LOGIN_LOCK_MAX_WAIT_SECONDS", 0.0)
     monkeypatch.setattr(account_utils.cache, "add", lambda *args, **kwargs: False)
     monkeypatch.setattr(account_utils.cache, "set", set_mock)
     monkeypatch.setattr(account_utils, "_purge_sessions_fallback", fallback_mock)
 
-    account_utils.purge_other_sessions(777, "current-session")
-    set_mock.assert_not_called()
-    fallback_mock.assert_not_called()
+    account_utils.purge_other_sessions(user_id, current_session_key)
+    fallback_mock.assert_called_once_with(user_id, current_session_key)
+    set_mock.assert_called_once_with(cache_key, current_session_key, timeout=account_utils.USER_SESSION_CACHE_TTL)
 
 
 def test_session_key_prefix_handles_none():

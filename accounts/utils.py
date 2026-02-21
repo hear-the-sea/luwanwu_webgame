@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 
 from django.conf import settings
@@ -18,6 +19,8 @@ USER_LOGIN_LOCK_PREFIX = "login_lock:"
 USER_SESSION_CACHE_TTL = getattr(settings, "SESSION_COOKIE_AGE", 1209600)
 # 登录锁超时时间（秒）
 LOGIN_LOCK_TIMEOUT = 5
+LOGIN_LOCK_RETRY_INTERVAL_SECONDS = 0.05
+LOGIN_LOCK_MAX_WAIT_SECONDS = 0.30
 
 
 def _session_key_prefix(session_key: str | None) -> str:
@@ -45,11 +48,12 @@ def purge_other_sessions(user_id: int, current_session_key: str | None) -> None:
     try:
         # 安全修复：使用分布式锁防止并发登录竞态条件
         # 如果无法获取锁，直接跳过（非阻塞），避免阻塞 worker
-        lock_acquired = cache.add(lock_key, lock_token, timeout=LOGIN_LOCK_TIMEOUT)
+        lock_acquired = _acquire_login_lock(lock_key, lock_token)
         if not lock_acquired:
-            # 非阻塞处理：无法获取锁时直接返回，session 清理不是关键路径
-            # 避免使用 time.sleep 阻塞 worker，防止高并发下 worker 耗尽
-            logger.debug("Login lock busy for user %s, skipping session purge", user_id)
+            # 在短暂重试后仍未拿到锁时，走降级清理，尽量保持单活跃 session 语义。
+            logger.warning("Login lock busy for user %s, falling back to bounded session scan", user_id)
+            _purge_sessions_fallback(user_id, current_session_key)
+            cache.set(cache_key, current_session_key, timeout=USER_SESSION_CACHE_TTL)
             return
 
         try:
@@ -129,3 +133,14 @@ def _release_login_lock(lock_key: str, lock_token: str) -> None:
             cache.delete(lock_key)
     except Exception:
         logger.debug("Failed to release login lock %s", lock_key, exc_info=True)
+
+
+def _acquire_login_lock(lock_key: str, lock_token: str) -> bool:
+    """Try to acquire login lock with a short bounded retry window."""
+    deadline = time.monotonic() + LOGIN_LOCK_MAX_WAIT_SECONDS
+    while True:
+        if cache.add(lock_key, lock_token, timeout=LOGIN_LOCK_TIMEOUT):
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(LOGIN_LOCK_RETRY_INTERVAL_SECONDS)

@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 from typing import Dict
 
@@ -24,11 +25,50 @@ from .resources import grant_resources_locked
 
 # 从 core.config 导入配置
 MESSAGE_RETENTION_DAYS = MESSAGE.RETENTION_DAYS
+logger = logging.getLogger(__name__)
+
+
+def _safe_cache_get(key: str, default=None):
+    try:
+        return cache.get(key, default)
+    except Exception:
+        logger.warning("messages cache.get failed: key=%s", key, exc_info=True)
+        return default
+
+
+def _safe_cache_set(key: str, value, timeout: int) -> None:
+    try:
+        cache.set(key, value, timeout=timeout)
+    except Exception:
+        logger.warning("messages cache.set failed: key=%s", key, exc_info=True)
+
+
+def _safe_cache_add(key: str, value, timeout: int) -> bool:
+    try:
+        return bool(cache.add(key, value, timeout=timeout))
+    except Exception:
+        logger.warning("messages cache.add failed: key=%s", key, exc_info=True)
+        # cleanup gate fail-open: still allow cleanup path to proceed
+        return True
+
+
+def _safe_cache_delete(key: str) -> None:
+    try:
+        cache.delete(key)
+    except Exception:
+        logger.warning("messages cache.delete failed: key=%s", key, exc_info=True)
+
+
+def _safe_cache_delete_many(keys: list[str]) -> None:
+    try:
+        cache.delete_many(keys)
+    except Exception:
+        logger.warning("messages cache.delete_many failed: keys_count=%s", len(keys), exc_info=True)
 
 
 def _invalidate_unread_count_cache(manor_id: int) -> None:
     """Invalidate unread-count cache for a manor."""
-    cache.delete(CacheKeys.unread_count(manor_id))
+    _safe_cache_delete(CacheKeys.unread_count(manor_id))
 
 
 def create_message(
@@ -102,7 +142,7 @@ def bulk_create_messages(messages_data: list) -> list:
     # 批量清除相关庄园的未读消息缓存
     manor_ids = {data["manor"].id for data in messages_data}
     cache_keys = [CacheKeys.unread_count(manor_id) for manor_id in manor_ids]
-    cache.delete_many(cache_keys)
+    _safe_cache_delete_many(cache_keys)
 
     return created_messages
 
@@ -117,7 +157,7 @@ def cleanup_old_messages(manor: Manor) -> None:
     # 性能优化：避免每次打开消息列表都触发一次 DELETE 扫描。
     # 保留期以“天”为单位，清理无需高频执行；这里对每个庄园做节流（默认 6 小时一次）。
     cleanup_gate_key = f"messages:cleanup_old:{manor.id}"
-    if not cache.add(cleanup_gate_key, "1", timeout=6 * 60 * 60):
+    if not _safe_cache_add(cleanup_gate_key, "1", timeout=6 * 60 * 60):
         return
 
     threshold = timezone.now() - timedelta(days=MESSAGE_RETENTION_DAYS)
@@ -203,11 +243,11 @@ def unread_message_count(manor: Manor) -> int:
         未读消息数量
     """
     cache_key = CacheKeys.unread_count(manor.id)
-    count = cache.get(cache_key)
+    count = _safe_cache_get(cache_key)
 
     if count is None:
         count = manor.messages.filter(is_read=False).count()
-        cache.set(cache_key, count, timeout=CACHE_TIMEOUT_SHORT)
+        _safe_cache_set(cache_key, count, timeout=CACHE_TIMEOUT_SHORT)
 
     return count
 

@@ -218,3 +218,57 @@ def test_exchange_gold_bar_rejects_invalid_quantity(django_user_model):
 
     with pytest.raises(ValueError, match="兑换数量必须大于0"):
         bank_service.exchange_gold_bar(manor, "invalid")
+
+
+@pytest.mark.django_db
+def test_get_effective_gold_supply_does_not_release_foreign_lock(monkeypatch):
+    lock_key = f"{bank_service.SUPPLY_CACHE_KEY}:lock"
+    lock_token_holder: dict[str, str] = {}
+    delete_calls: list[str] = []
+
+    def fake_safe_cache_get(key, default=None):
+        if key == bank_service.SUPPLY_CACHE_KEY:
+            return None
+        if key == lock_key:
+            return "foreign-lock-token"
+        return default
+
+    def fake_safe_cache_add(key, value, timeout):
+        assert key == lock_key
+        lock_token_holder["token"] = value
+        return True
+
+    monkeypatch.setattr(bank_service, "_safe_cache_get", fake_safe_cache_get)
+    monkeypatch.setattr(bank_service, "_safe_cache_add", fake_safe_cache_add)
+    monkeypatch.setattr(bank_service, "_safe_cache_set", lambda *args, **kwargs: None)
+    monkeypatch.setattr(bank_service, "_safe_cache_delete", lambda key: delete_calls.append(key))
+
+    bank_service.get_effective_gold_supply()
+    assert lock_key not in delete_calls
+
+
+@pytest.mark.django_db
+def test_get_effective_gold_supply_releases_owned_lock(monkeypatch):
+    lock_key = f"{bank_service.SUPPLY_CACHE_KEY}:lock"
+    lock_token_holder: dict[str, str] = {}
+    delete_calls: list[str] = []
+
+    def fake_safe_cache_get(key, default=None):
+        if key == bank_service.SUPPLY_CACHE_KEY:
+            return None
+        if key == lock_key:
+            return lock_token_holder.get("token")
+        return default
+
+    def fake_safe_cache_add(key, value, timeout):
+        assert key == lock_key
+        lock_token_holder["token"] = value
+        return True
+
+    monkeypatch.setattr(bank_service, "_safe_cache_get", fake_safe_cache_get)
+    monkeypatch.setattr(bank_service, "_safe_cache_add", fake_safe_cache_add)
+    monkeypatch.setattr(bank_service, "_safe_cache_set", lambda *args, **kwargs: None)
+    monkeypatch.setattr(bank_service, "_safe_cache_delete", lambda key: delete_calls.append(key))
+
+    bank_service.get_effective_gold_supply()
+    assert delete_calls == [lock_key]

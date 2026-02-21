@@ -13,6 +13,7 @@ from gameplay.services.messages import (
     cleanup_old_messages,
     delete_all_messages,
     delete_messages,
+    unread_message_count,
 )
 
 User = get_user_model()
@@ -130,3 +131,37 @@ def test_cleanup_old_messages_invalidates_unread_cache_when_deleting():
 
     assert Message.objects.filter(pk=message.pk).exists() is False
     assert cache.get(cache_key) is None
+
+
+@pytest.mark.django_db
+def test_unread_message_count_tolerates_cache_errors(monkeypatch):
+    user = User.objects.create_user(username="mail_user_cache_fail", password="pass123")
+    manor = ensure_manor(user)
+    Message.objects.create(manor=manor, kind=Message.Kind.SYSTEM, title="cache fail msg")
+
+    monkeypatch.setattr(
+        "gameplay.services.messages.cache.get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache get failed")),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.messages.cache.set",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache set failed")),
+    )
+
+    assert unread_message_count(manor) == 1
+
+
+@pytest.mark.django_db
+def test_cleanup_old_messages_tolerates_cache_add_error(monkeypatch):
+    user = User.objects.create_user(username="mail_user_cleanup_cache_fail", password="pass123")
+    manor = ensure_manor(user)
+    message = Message.objects.create(manor=manor, kind=Message.Kind.SYSTEM, title="old_msg_cache_fail")
+    Message.objects.filter(pk=message.pk).update(created_at=timezone.now() - timedelta(days=30))
+
+    monkeypatch.setattr(
+        "gameplay.services.messages.cache.add",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache add failed")),
+    )
+
+    cleanup_old_messages(manor)
+    assert Message.objects.filter(pk=message.pk).exists() is False
