@@ -8,7 +8,7 @@ from gameplay.services.technology import upgrade_technology
 @pytest.mark.django_db
 def test_building_upgrade_concurrency_limit(django_user_model, monkeypatch):
     monkeypatch.setattr(
-        "gameplay.services.manor.schedule_building_completion",
+        "gameplay.services.manor.core.schedule_building_completion",
         lambda *args, **kwargs: None,
     )
 

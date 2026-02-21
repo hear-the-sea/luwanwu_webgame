@@ -19,27 +19,30 @@ from gameplay.services import ensure_manor, grant_resources
 ## 模块列表
 
 ### 核心模块
-- `building.py`: 建筑配置加载（YAML）
-- `manor.py`: 庄园核心管理
+- `manor/core.py`: 庄园核心管理
+- `manor/prestige.py`: 声望系统
+- `manor/treasury.py`: 藏宝阁服务
 - `resources.py`: 资源管理
 - `inventory/`: 背包物品管理（模块包）
-- `messages.py`: 消息系统
-- `missions.py`: 任务系统
 - `technology.py`: 技术研究
-- `notifications.py`: WebSocket通知封装
-- `template_cache.py`: 模板缓存统一管理
 
-### 生产模块
-- `smithy.py`: 冶炼坊服务
-- `forge.py`: 铁匠铺服务
-- `ranch.py`: 畜牧场服务
-- `stable.py`: 马房服务
+### 建筑模块 (`buildings/`)
+- `buildings/base.py`: 建筑配置加载（YAML）
+- `buildings/forge.py`: 铁匠铺服务
+- `buildings/smithy.py`: 冶炼坊服务
+- `buildings/ranch.py`: 畜牧场服务
+- `buildings/stable.py`: 马房服务
 
-### 其他模块
-- `prestige.py`: 声望系统
-- `cache.py`: 缓存工具
-- `query_optimization.py`: 查询优化工具
-- `troops.py`: 护院管理
+### 招募模块 (`recruitment/`)
+- `recruitment/recruitment.py`: 护院募兵服务
+- `recruitment/troops.py`: 护院管理
+
+### 工具模块 (`utils/`)
+- `utils/cache.py`: 缓存工具
+- `utils/messages.py`: 消息系统
+- `utils/notifications.py`: WebSocket通知封装
+- `utils/query_optimization.py`: 查询优化工具
+- `utils/template_cache.py`: 模板缓存统一管理
 
 ## 最佳实践
 
@@ -55,9 +58,9 @@ from ..services.manor import ensure_manor
 ```
 
 ### 2. WebSocket 通知
-统一使用 `notifications.py` 中的 `notify_user()` 函数：
+统一使用 `utils/notifications.py` 中的 `notify_user()` 函数：
 ```python
-from gameplay.services.notifications import notify_user
+from gameplay.services.utils.notifications import notify_user
 
 notify_user(
     user_id=manor.user_id,
@@ -70,9 +73,9 @@ notify_user(
 ```
 
 ### 3. 模板缓存
-使用 `template_cache.py` 中的缓存工具：
+使用 `utils/template_cache.py` 中的缓存工具：
 ```python
-from gameplay.services.template_cache import get_template_cache
+from gameplay.services.utils.template_cache import clear_all_template_caches
 
 # 获取缓存的模板数据
 templates = get_template_cache()
