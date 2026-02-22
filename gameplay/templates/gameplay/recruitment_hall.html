@@ -5,6 +5,27 @@
 
 {% block extra_head %}
 <style>
+    .pool-card-responsive {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+
+    .pool-content {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .pool-desc {
+        min-height: 0;
+        overflow: visible;
+    }
+
+    .recruit-action {
+        margin-top: auto;
+    }
+
     /* 响应式卡片布局：移动端垂直，PC端水平 */
     .pool-img-container {
         height: 8rem; /* 128px (mobile) - 增加高度以显示更多图片内容 */
@@ -35,6 +56,11 @@
             padding: 0.5rem 0 0.5rem 0 !important;
             width: 100%;
         }
+        .pool-desc {
+            min-height: 2.75rem;
+            max-height: 2.75rem;
+            overflow: hidden;
+        }
     }
 </style>
 {% endblock %}
@@ -61,15 +87,15 @@
                     </div>
 
                     <div class="p-2 pool-content">
-                        <p class="text-xs text-text-muted mb-2 h-8 overflow-hidden text-ellipsis leading-tight">{{ pool.description }}</p>
-                        <form method="post" action="{% url 'guests:recruit' %}" class="recruit-form"
+                        <p class="text-sm text-text-muted mb-2 leading-snug pool-desc">{{ pool.description }}</p>
+                        <form method="post" action="{% url 'guests:recruit' %}" class="recruit-form recruit-action"
                               data-pool-name="{{ pool.name }}"
                               data-pool-cost="{% for key,val in pool.cost.items %}{{ key }} {{ val }}{% empty %}免费{% endfor %}"
                               data-pool-base="{{ pool.draw_count }}"
                               data-pool-bonus="{{ manor.tavern_recruitment_bonus }}">
                             {% csrf_token %}
                             <input type="hidden" name="pool" value="{{ pool.id }}">
-                            <button type="submit" class="tw-btn-primary w-full py-1">招募</button>
+                            <button type="submit" class="tw-btn-primary tw-btn-sm">招募</button>
                         </form>
                     </div>
                 </article>

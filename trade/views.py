@@ -17,6 +17,7 @@ from django.views.generic import TemplateView
 from core.exceptions import GameError
 from core.utils import safe_int, sanitize_error_message
 from core.utils.rate_limit import rate_limit_redirect
+from gameplay.services import ensure_manor
 
 from .selectors import get_trade_context
 from .services.auction_service import place_bid
@@ -25,6 +26,7 @@ from .services.market_service import cancel_listing, create_listing, purchase_li
 from .services.shop_service import buy_item, sell_item
 
 logger = logging.getLogger(__name__)
+ALLOWED_MARKET_DURATIONS = frozenset({7200, 28800, 86400})
 
 
 def _trade_redirect(tab: str | None = None, view: str | None = None):
@@ -57,6 +59,29 @@ def _get_positive_int_setting(name: str, default: int) -> int:
     return value
 
 
+def _parse_positive_post_int(request, field: str) -> int | None:
+    value = safe_int(request.POST.get(field), default=None)
+    if value is None or value <= 0:
+        return None
+    return value
+
+
+def _parse_non_negative_post_int(request, field: str) -> int | None:
+    value = safe_int(request.POST.get(field), default=None)
+    if value is None or value < 0:
+        return None
+    return value
+
+
+def _parse_market_duration(request) -> int | None:
+    duration = safe_int(request.POST.get("duration"), default=None)
+    if duration is None:
+        return None
+    if duration not in ALLOWED_MARKET_DURATIONS:
+        return None
+    return duration
+
+
 class TradeView(LoginRequiredMixin, TemplateView):
     """交易主页面"""
 
@@ -64,7 +89,7 @@ class TradeView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        manor = self.request.user.manor
+        manor = ensure_manor(self.request.user)
         context.update(get_trade_context(self.request, manor))
 
         return context
@@ -75,9 +100,15 @@ class TradeView(LoginRequiredMixin, TemplateView):
 @rate_limit_redirect("shop_buy", limit=10, window_seconds=60)
 def shop_buy_view(request):
     """购买商品"""
-    manor = request.user.manor
-    item_key = request.POST.get("item_key", "")
-    quantity = safe_int(request.POST.get("quantity", 1), default=1, min_val=1)
+    manor = ensure_manor(request.user)
+    item_key = (request.POST.get("item_key") or "").strip()
+    if not item_key:
+        messages.error(request, "请选择商品")
+        return _trade_redirect()
+    quantity = _parse_positive_post_int(request, "quantity")
+    if quantity is None:
+        messages.error(request, "数量参数无效")
+        return _trade_redirect()
 
     try:
         result = buy_item(manor, item_key, quantity)
@@ -97,9 +128,15 @@ def shop_buy_view(request):
 @rate_limit_redirect("shop_sell", limit=10, window_seconds=60)
 def shop_sell_view(request):
     """出售物品"""
-    manor = request.user.manor
-    item_key = request.POST.get("item_key", "")
-    quantity = safe_int(request.POST.get("quantity", 1), default=1, min_val=1)
+    manor = ensure_manor(request.user)
+    item_key = (request.POST.get("item_key") or "").strip()
+    if not item_key:
+        messages.error(request, "请选择商品")
+        return _trade_redirect()
+    quantity = _parse_positive_post_int(request, "quantity")
+    if quantity is None:
+        messages.error(request, "数量参数无效")
+        return _trade_redirect()
 
     try:
         result = sell_item(manor, item_key, quantity)
@@ -119,8 +156,11 @@ def shop_sell_view(request):
 @rate_limit_redirect("bank_exchange", limit=5, window_seconds=60)
 def exchange_gold_bar_view(request):
     """兑换金条"""
-    manor = request.user.manor
-    quantity = safe_int(request.POST.get("quantity", 1), default=1, min_val=1)
+    manor = ensure_manor(request.user)
+    quantity = _parse_positive_post_int(request, "quantity")
+    if quantity is None:
+        messages.error(request, "数量参数无效")
+        return _trade_redirect(tab="bank")
 
     try:
         result = exchange_gold_bar(manor, quantity)
@@ -139,14 +179,84 @@ def exchange_gold_bar_view(request):
 
 @login_required
 @require_POST
+@rate_limit_redirect("bank_troop_deposit", limit=30, window_seconds=60)
+def deposit_troop_to_bank_view(request):
+    """钱庄存入护院"""
+    manor = ensure_manor(request.user)
+    troop_key = (request.POST.get("troop_key") or "").strip()
+    quantity = _parse_positive_post_int(request, "quantity")
+
+    if not troop_key:
+        messages.error(request, "请选择护院类型")
+        return _trade_redirect(tab="bank")
+    if quantity is None:
+        messages.error(request, "数量参数无效")
+        return _trade_redirect(tab="bank")
+
+    try:
+        from gameplay.services.manor.troop_bank import deposit_troops_to_bank
+
+        result = deposit_troops_to_bank(manor, troop_key, quantity)
+        messages.success(request, f"已存入 {result['quantity']} 名{result['troop_name']}到钱庄")
+    except (GameError, ValueError) as exc:
+        _handle_trade_error(request, exc)
+    except Exception as exc:
+        _handle_unexpected_trade_error(request, exc, op="bank_troop_deposit")
+
+    return _trade_redirect(tab="bank")
+
+
+@login_required
+@require_POST
+@rate_limit_redirect("bank_troop_withdraw", limit=30, window_seconds=60)
+def withdraw_troop_from_bank_view(request):
+    """钱庄取出护院"""
+    manor = ensure_manor(request.user)
+    troop_key = (request.POST.get("troop_key") or "").strip()
+    quantity = _parse_positive_post_int(request, "quantity")
+
+    if not troop_key:
+        messages.error(request, "请选择护院类型")
+        return _trade_redirect(tab="bank")
+    if quantity is None:
+        messages.error(request, "数量参数无效")
+        return _trade_redirect(tab="bank")
+
+    try:
+        from gameplay.services.manor.troop_bank import withdraw_troops_from_bank
+
+        result = withdraw_troops_from_bank(manor, troop_key, quantity)
+        messages.success(request, f"已从钱庄取出 {result['quantity']} 名{result['troop_name']}")
+    except (GameError, ValueError) as exc:
+        _handle_trade_error(request, exc)
+    except Exception as exc:
+        _handle_unexpected_trade_error(request, exc, op="bank_troop_withdraw")
+
+    return _trade_redirect(tab="bank")
+
+
+@login_required
+@require_POST
 @rate_limit_redirect("market_create", limit=10, window_seconds=60)
 def market_create_listing_view(request):
     """创建交易行挂单"""
-    manor = request.user.manor
-    item_key = request.POST.get("item_key", "")
-    quantity = safe_int(request.POST.get("quantity", 1), default=1, min_val=1)
-    unit_price = safe_int(request.POST.get("unit_price", 0), default=0, min_val=0)
-    duration = safe_int(request.POST.get("duration", 7200), default=7200, min_val=7200, max_val=86400)
+    manor = ensure_manor(request.user)
+    item_key = (request.POST.get("item_key") or "").strip()
+    if not item_key:
+        messages.error(request, "请选择商品")
+        return _trade_redirect(tab="market", view="sell")
+    quantity = _parse_positive_post_int(request, "quantity")
+    unit_price = _parse_non_negative_post_int(request, "unit_price")
+    duration = _parse_market_duration(request)
+    if quantity is None:
+        messages.error(request, "数量参数无效")
+        return _trade_redirect(tab="market", view="sell")
+    if unit_price is None:
+        messages.error(request, "单价参数无效")
+        return _trade_redirect(tab="market", view="sell")
+    if duration is None:
+        messages.error(request, "时长参数无效")
+        return _trade_redirect(tab="market", view="sell")
 
     try:
         listing = create_listing(manor, item_key, quantity, unit_price, duration)
@@ -168,7 +278,7 @@ def market_create_listing_view(request):
 @rate_limit_redirect("market_purchase", limit=10, window_seconds=60)
 def market_purchase_view(request, listing_id: int):
     """购买交易行物品"""
-    manor = request.user.manor
+    manor = ensure_manor(request.user)
 
     try:
         transaction = purchase_listing(manor, listing_id)
@@ -198,7 +308,7 @@ def market_purchase_view(request, listing_id: int):
 @rate_limit_redirect("market_cancel", limit=20, window_seconds=60)
 def market_cancel_view(request, listing_id: int):
     """取消交易行挂单"""
-    manor = request.user.manor
+    manor = ensure_manor(request.user)
 
     try:
         result = cancel_listing(manor, listing_id)
@@ -219,8 +329,11 @@ def market_cancel_view(request, listing_id: int):
 @rate_limit_redirect("auction_bid", limit=15, window_seconds=60)
 def auction_bid_view(request, slot_id: int):
     """拍卖行出价"""
-    manor = request.user.manor
-    amount = safe_int(request.POST.get("amount", 0), default=0, min_val=1)
+    manor = ensure_manor(request.user)
+    amount = _parse_positive_post_int(request, "amount")
+    if amount is None:
+        messages.error(request, "出价参数无效")
+        return _trade_redirect(tab="auction")
 
     try:
         _bid, is_first_bid = place_bid(manor, slot_id, amount)

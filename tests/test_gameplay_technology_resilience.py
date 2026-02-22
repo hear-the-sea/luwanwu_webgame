@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from unittest.mock import mock_open
-
 from gameplay.services import technology as tech_service
 
 
@@ -100,8 +98,7 @@ def test_get_categories_and_troop_classes_return_safe_defaults(monkeypatch):
 
 def test_load_technology_templates_returns_empty_when_yaml_root_not_mapping(monkeypatch):
     tech_service.clear_technology_cache()
-    monkeypatch.setattr("builtins.open", mock_open(read_data="[]"))
-    monkeypatch.setattr(tech_service.yaml, "safe_load", lambda _stream: ["invalid-root"])
+    monkeypatch.setattr(tech_service, "load_yaml_data", lambda *args, **kwargs: ["invalid-root"])
 
     data = tech_service.load_technology_templates()
     assert data == {}
@@ -112,3 +109,87 @@ def test_load_technology_templates_returns_empty_when_yaml_root_not_mapping(monk
 def test_get_guest_stat_bonuses_tolerates_invalid_guest_bonus():
     bonuses = tech_service.get_guest_stat_bonuses({"guest_bonus": "bad-value"})
     assert bonuses == {"attack": 0.0, "defense": 0.0, "hp": 0.0, "agility": 0.0}
+
+
+def test_refresh_technology_upgrades_local_fallback_throttles_when_cache_unavailable(monkeypatch, settings):
+    settings.MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS = 5
+    tech_service._LOCAL_TECH_REFRESH_FALLBACK.clear()
+
+    monkeypatch.setattr(
+        tech_service.cache,
+        "add",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+    )
+
+    calls = {"finalize": 0}
+
+    def _finalize(_tech, send_notification=True):
+        calls["finalize"] += 1
+        return True
+
+    monkeypatch.setattr(tech_service, "finalize_technology_upgrade", _finalize)
+
+    class _TechManager:
+        def __init__(self, items):
+            self._items = items
+
+        def filter(self, **kwargs):
+            return list(self._items)
+
+    class _Manor:
+        def __init__(self, pk, items):
+            self.pk = pk
+            self.technologies = _TechManager(items)
+
+    manor = _Manor(1, [object(), object()])
+    first = tech_service.refresh_technology_upgrades(manor)
+    second = tech_service.refresh_technology_upgrades(manor)
+
+    assert first == 2
+    assert second == 0
+    assert calls["finalize"] == 2
+    tech_service._LOCAL_TECH_REFRESH_FALLBACK.clear()
+
+
+def test_refresh_technology_upgrades_local_fallback_allows_after_interval(monkeypatch, settings):
+    settings.MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS = 5
+    tech_service._LOCAL_TECH_REFRESH_FALLBACK.clear()
+
+    monkeypatch.setattr(
+        tech_service.cache,
+        "add",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+    )
+    monotonic_values = iter([100.0, 102.0, 106.1])
+    monkeypatch.setattr(tech_service.time, "monotonic", lambda: next(monotonic_values))
+
+    calls = {"finalize": 0}
+
+    def _finalize(_tech, send_notification=True):
+        calls["finalize"] += 1
+        return True
+
+    monkeypatch.setattr(tech_service, "finalize_technology_upgrade", _finalize)
+
+    class _TechManager:
+        def __init__(self, items):
+            self._items = items
+
+        def filter(self, **kwargs):
+            return list(self._items)
+
+    class _Manor:
+        def __init__(self, pk, items):
+            self.pk = pk
+            self.technologies = _TechManager(items)
+
+    manor = _Manor(2, [object()])
+    first = tech_service.refresh_technology_upgrades(manor)
+    second = tech_service.refresh_technology_upgrades(manor)
+    third = tech_service.refresh_technology_upgrades(manor)
+
+    assert first == 1
+    assert second == 0
+    assert third == 1
+    assert calls["finalize"] == 2
+    tech_service._LOCAL_TECH_REFRESH_FALLBACK.clear()

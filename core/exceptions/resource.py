@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from common.constants.resources import ResourceType
+
 from .base import GameError
 
 # ============ 资源相关异常 ============
@@ -31,10 +33,7 @@ class InsufficientResourceError(ResourceError):
         self.required = required
         self.available = available
         if message is None:
-            labels = {
-                "grain": "粮食",
-                "silver": "银两",
-            }
+            labels = dict(ResourceType.choices)
             label = labels.get(resource_type, resource_type)
             message = f"{label}不足，需要 {required}，当前 {available}"
         super().__init__(

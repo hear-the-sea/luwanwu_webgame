@@ -4,13 +4,20 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any, Dict
+
+from django.db import transaction
 from django.utils import timezone
 
-from core.exceptions import GuestFullHpError, InvalidHealAmountError
+from core.exceptions import GuestFullHpError, InsufficientStockError, InvalidHealAmountError
+from core.utils import safe_int
 from core.utils.time_scale import scale_value
 
 from ..constants import TimeConstants
 from ..models import Guest, GuestStatus
+
+if TYPE_CHECKING:
+    from gameplay.models import Manor
 
 # 重伤恢复阈值：HP达到此比例时解除重伤状态
 INJURY_RECOVERY_THRESHOLD = 0.20
@@ -105,4 +112,63 @@ def heal_guest(guest: Guest, heal_amount: int) -> dict:
         "healed": healed,
         "new_hp": new_hp,
         "injury_cured": injury_cured,
+    }
+
+
+def _load_locked_medicine_item(manor: Manor, item_id: int):
+    from gameplay.models import InventoryItem, ItemTemplate
+
+    locked_item = (
+        InventoryItem.objects.select_for_update()
+        .select_related("template")
+        .filter(
+            pk=item_id,
+            manor=manor,
+            template__effect_type=ItemTemplate.EffectType.MEDICINE,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        )
+        .first()
+    )
+    if not locked_item:
+        raise ValueError("道具不存在或不属于您的庄园")
+    if locked_item.quantity <= 0:
+        raise InsufficientStockError(locked_item.template.name, 1, locked_item.quantity)
+    return locked_item
+
+
+@transaction.atomic
+def use_medicine_item_for_guest(manor: Manor, guest: Guest, item_id: int, heal_amount: int) -> Dict[str, Any]:
+    """
+    对单个门客使用药品（原子化版本）。
+
+    关键保证：
+    - 治疗效果与道具扣减在同一事务中完成
+    - 任一步失败都会整体回滚，避免“先生效后扣失败”导致状态不一致
+    - 锁顺序统一为 Manor -> InventoryItem -> Guest
+    """
+    from gameplay.models import Manor as ManorModel
+    from gameplay.services.inventory.core import consume_inventory_item_locked
+
+    ManorModel.objects.select_for_update().get(pk=manor.pk)
+    locked_item = _load_locked_medicine_item(manor, item_id)
+
+    locked_guest = Guest.objects.select_for_update().select_related("template").filter(pk=guest.pk, manor=manor).first()
+    if not locked_guest:
+        raise ValueError("门客不存在或不属于您的庄园")
+
+    result = heal_guest(locked_guest, heal_amount)
+    consume_inventory_item_locked(locked_item, 1)
+
+    remaining_quantity = 0
+    if locked_item.pk:
+        remaining_quantity = safe_int(locked_item.quantity, default=0, min_val=0) or 0
+
+    return {
+        "healed": safe_int(result.get("healed"), default=0, min_val=0) or 0,
+        "new_hp": safe_int(locked_guest.current_hp, default=0, min_val=0) or 0,
+        "max_hp": safe_int(locked_guest.max_hp, default=1, min_val=1) or 1,
+        "status": locked_guest.status,
+        "status_display": locked_guest.get_status_display(),
+        "injury_cured": bool(result.get("injury_cured", False)),
+        "remaining_item_quantity": remaining_quantity,
     }

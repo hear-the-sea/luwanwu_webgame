@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, JsonResponse
@@ -11,7 +13,9 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
-from core.utils import json_error, json_success, parse_json_object, safe_int, safe_positive_int
+from core.exceptions import GameError
+from core.utils import json_error, json_success, parse_json_object, safe_int, safe_positive_int, sanitize_error_message
+from core.utils.cache_lock import acquire_best_effort_lock, release_best_effort_lock
 from core.utils.rate_limit import rate_limit_json
 from gameplay.constants import REGION_CHOICES, UIConstants
 from gameplay.models import Manor as ManorModel
@@ -33,6 +37,10 @@ from gameplay.services.raid import (
 from gameplay.services.raid.map_search import get_manor_public_info
 from gameplay.services.raid.protection import get_protection_status
 from gameplay.services.raid.utils import can_attack_target
+
+MAP_ACTION_LOCK_SECONDS = 5
+_LOCAL_LOCK_PREFIX = "local:"
+logger = logging.getLogger(__name__)
 
 
 def _resolve_attack_fields_from_info(info: dict, viewer_manor, target_manor) -> tuple[bool, str]:
@@ -66,12 +74,52 @@ def _request_target_manor_or_error(
     data, error = _request_json_object_or_error(request)
     if error is not None:
         return None, None, error
-    assert data is not None
+    if data is None:
+        return None, None, json_error("无效的请求数据")
     target_manor, error = _target_manor_or_error(data)
     if error is not None:
         return None, None, error
-    assert target_manor is not None
+    if target_manor is None:
+        return data, None, json_error("目标庄园不存在", status=404)
     return data, target_manor, None
+
+
+def _map_action_lock_key(action: str, manor_id: int, scope: str) -> str:
+    return f"map:view_lock:{action}:{manor_id}:{scope}"
+
+
+def _acquire_map_action_lock(action: str, manor_id: int, scope: str) -> tuple[bool, str]:
+    key = _map_action_lock_key(action, manor_id, scope)
+    acquired, from_cache = acquire_best_effort_lock(
+        key,
+        timeout_seconds=MAP_ACTION_LOCK_SECONDS,
+        logger=logger,
+        log_context="map action lock",
+    )
+    if not acquired:
+        return False, ""
+    if from_cache:
+        return True, key
+    return True, f"{_LOCAL_LOCK_PREFIX}{key}"
+
+
+def _release_map_action_lock(lock_key: str) -> None:
+    if not lock_key:
+        return
+    if lock_key.startswith(_LOCAL_LOCK_PREFIX):
+        release_best_effort_lock(
+            lock_key[len(_LOCAL_LOCK_PREFIX) :],
+            from_cache=False,
+            logger=logger,
+            log_context="map action lock",
+        )
+        return
+    release_best_effort_lock(
+        lock_key,
+        from_cache=True,
+        logger=logger,
+        log_context="map action lock",
+    )
 
 
 class MapView(LoginRequiredMixin, TemplateView):
@@ -168,18 +216,34 @@ def start_scout_api(request: HttpRequest) -> JsonResponse:
     _data, target_manor, error = _request_target_manor_or_error(request)
     if error is not None:
         return error
-    assert target_manor is not None
+    if target_manor is None:
+        return json_error("目标庄园不存在", status=404)
+
+    lock_ok, lock_key = _acquire_map_action_lock("start_scout", int(manor.id), str(target_manor.id))
+    if not lock_ok:
+        return json_error("请求处理中，请稍候重试", status=409)
 
     try:
-        record = start_scout(manor, target_manor)
-        return json_success(
-            message=f"已派出探子前往 {target_manor.display_name}",
-            scout_id=record.id,
-            travel_time=record.travel_time,
-            success_rate=round(record.success_rate * 100),
-        )
-    except ValueError as e:
-        return json_error(str(e))
+        try:
+            record = start_scout(manor, target_manor)
+            return json_success(
+                message=f"已派出探子前往 {target_manor.display_name}",
+                scout_id=record.id,
+                travel_time=record.travel_time,
+                success_rate=round(record.success_rate * 100),
+            )
+        except (GameError, ValueError) as exc:
+            return json_error(sanitize_error_message(exc))
+        except Exception as exc:
+            logger.exception(
+                "Unexpected scout start error: manor_id=%s user_id=%s target_id=%s",
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                getattr(target_manor, "id", None),
+            )
+            return json_error(sanitize_error_message(exc), status=500)
+    finally:
+        _release_map_action_lock(lock_key)
 
 
 @login_required
@@ -192,8 +256,10 @@ def start_raid_api(request: HttpRequest) -> JsonResponse:
     data, target_manor, error = _request_target_manor_or_error(request)
     if error is not None:
         return error
-    assert data is not None
-    assert target_manor is not None
+    if data is None:
+        return json_error("无效的请求数据")
+    if target_manor is None:
+        return json_error("目标庄园不存在", status=404)
 
     guest_ids = data.get("guest_ids", [])
     troop_loadout = data.get("troop_loadout", {})
@@ -201,15 +267,30 @@ def start_raid_api(request: HttpRequest) -> JsonResponse:
     if not guest_ids:
         return json_error("请选择出征门客")
 
+    lock_ok, lock_key = _acquire_map_action_lock("start_raid", int(manor.id), str(target_manor.id))
+    if not lock_ok:
+        return json_error("请求处理中，请稍候重试", status=409)
+
     try:
-        run = start_raid(manor, target_manor, guest_ids, troop_loadout)
-        return json_success(
-            message=f"已向 {target_manor.display_name} 发起进攻",
-            raid_id=run.id,
-            travel_time=run.travel_time,
-        )
-    except ValueError as e:
-        return json_error(str(e))
+        try:
+            run = start_raid(manor, target_manor, guest_ids, troop_loadout)
+            return json_success(
+                message=f"已向 {target_manor.display_name} 发起进攻",
+                raid_id=run.id,
+                travel_time=run.travel_time,
+            )
+        except (GameError, ValueError) as exc:
+            return json_error(sanitize_error_message(exc))
+        except Exception as exc:
+            logger.exception(
+                "Unexpected raid start error: manor_id=%s user_id=%s target_id=%s",
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                getattr(target_manor, "id", None),
+            )
+            return json_error(sanitize_error_message(exc), status=500)
+    finally:
+        _release_map_action_lock(lock_key)
 
 
 @login_required
@@ -224,11 +305,26 @@ def retreat_raid_api(request: HttpRequest, raid_id: int) -> JsonResponse:
     except RaidRun.DoesNotExist:
         return json_error("出征记录不存在", status=404)
 
+    lock_ok, lock_key = _acquire_map_action_lock("retreat_raid", int(manor.id), str(raid_id))
+    if not lock_ok:
+        return json_error("请求处理中，请稍候重试", status=409)
+
     try:
-        request_raid_retreat(run)
-        return json_success(message="已开始撤退")
-    except ValueError as e:
-        return json_error(str(e))
+        try:
+            request_raid_retreat(run)
+            return json_success(message="已开始撤退")
+        except (GameError, ValueError) as exc:
+            return json_error(sanitize_error_message(exc))
+        except Exception as exc:
+            logger.exception(
+                "Unexpected raid retreat error: manor_id=%s user_id=%s raid_id=%s",
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                raid_id,
+            )
+            return json_error(sanitize_error_message(exc), status=500)
+    finally:
+        _release_map_action_lock(lock_key)
 
 
 @login_required

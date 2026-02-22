@@ -11,6 +11,12 @@ from django.db import transaction
 from django.db.models import F
 
 from gameplay.models import InventoryItem, ItemTemplate, Manor, ResourceEvent
+from gameplay.models.items import (
+    ITEM_EFFECT_TYPE_LABELS,
+    LEGACY_TOOL_EFFECT_TYPES,
+    get_item_effect_type_label,
+    normalize_item_effect_type,
+)
 from gameplay.services.resources import grant_resources_locked, spend_resources_locked
 from gameplay.utils.template_loader import get_item_templates_by_keys
 
@@ -45,21 +51,8 @@ class SellableItemDisplay:
     sell_price: int
 
 
-# 效果类型到种类名称的映射
-EFFECT_TYPE_CATEGORY = {
-    "resource_pack": "资源",
-    "skill_book": "技能书",
-    "experience_items": "经验",
-    "medicine": "药品",
-    "tool": "道具",
-    "equip_helmet": "头盔",
-    "equip_armor": "衣服",
-    "equip_shoes": "鞋子",
-    "equip_weapon": "武器",
-    "equip_mount": "坐骑",
-    "equip_ornament": "饰品",
-    "equip_device": "器械",
-}
+# 效果类型到种类名称映射（单一来源，来自 gameplay.models.items）
+EFFECT_TYPE_CATEGORY = ITEM_EFFECT_TYPE_LABELS
 
 
 def _coerce_int(raw: Any, default: int = 0) -> int:
@@ -82,18 +75,12 @@ def _normalize_mapping(raw: Any) -> dict:
 
 def _normalize_effect_type(effect_type: Any) -> str:
     """统一工具类 effect_type，兼容旧数据。"""
-    effect_type = str(effect_type or "").strip()
-    if effect_type in {"magnifying_glass", "peace_shield", "manor_rename"}:
-        return ItemTemplate.EffectType.TOOL
-    return effect_type
+    return normalize_item_effect_type(str(effect_type or "").strip())
 
 
 def _get_category(effect_type: Any) -> str:
     """获取种类显示名称"""
-    effect_type = _normalize_effect_type(effect_type)
-    if effect_type.startswith("equip_"):
-        return EFFECT_TYPE_CATEGORY.get(effect_type, "装备")
-    return EFFECT_TYPE_CATEGORY.get(effect_type, "其他")
+    return get_item_effect_type_label(str(effect_type or "").strip())
 
 
 def get_shop_items_for_display() -> List[ShopItemDisplay]:
@@ -172,7 +159,7 @@ def get_sellable_inventory(manor: Manor, category: str = None) -> List[SellableI
     # 数据库层面的分类筛选
     normalized_category = _normalize_effect_type(category or "all")
     if normalized_category and normalized_category != "all":
-        tool_effect_types = {"tool", "magnifying_glass", "peace_shield", "manor_rename"}
+        tool_effect_types = LEGACY_TOOL_EFFECT_TYPES
         if normalized_category in tool_effect_types:
             items = items.filter(template__effect_type__in=tool_effect_types)
         else:

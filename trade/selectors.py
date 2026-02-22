@@ -5,6 +5,13 @@ import logging
 from django.core.paginator import Paginator
 
 from core.utils import safe_int, safe_ordering
+from gameplay.models.items import LEGACY_TOOL_EFFECT_TYPES
+from gameplay.services.manor.troop_bank import (
+    get_troop_bank_capacity,
+    get_troop_bank_remaining_space,
+    get_troop_bank_rows,
+    get_troop_bank_used_space,
+)
 from gameplay.services.resources import sync_resource_production
 
 from .services.auction_service import get_active_slots, get_auction_stats, get_my_bids, get_my_leading_bids
@@ -17,7 +24,7 @@ from .services.shop_service import (
     get_shop_items_for_display,
 )
 
-_TOOL_EFFECT_TYPES = {"tool", "magnifying_glass", "peace_shield", "manor_rename"}
+_TOOL_EFFECT_TYPES = LEGACY_TOOL_EFFECT_TYPES
 logger = logging.getLogger(__name__)
 
 
@@ -306,6 +313,22 @@ def get_trade_context(request, manor) -> dict:
                 exc_info=True,
             )
             context["bank_info"] = {}
+        try:
+            context["troop_bank_capacity"] = get_troop_bank_capacity(manor)
+            context["troop_bank_used"] = get_troop_bank_used_space(manor)
+            context["troop_bank_remaining"] = get_troop_bank_remaining_space(manor)
+            context["troop_bank_rows"] = get_troop_bank_rows(manor)
+        except Exception as exc:
+            logger.warning(
+                "load troop bank info failed: manor_id=%s error=%s",
+                getattr(manor, "id", None),
+                exc,
+                exc_info=True,
+            )
+            context["troop_bank_capacity"] = 5000
+            context["troop_bank_used"] = 0
+            context["troop_bank_remaining"] = 5000
+            context["troop_bank_rows"] = []
     elif tab == "market":
         _update_market_context(request, manor, context)
 

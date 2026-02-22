@@ -1,0 +1,152 @@
+from __future__ import annotations
+
+import threading
+
+import pytest
+from django.db import connection
+from django.utils import timezone
+
+from core.exceptions import WorkLimitExceededError, WorkNotInProgressError, WorkRewardClaimedError
+from gameplay.models import WorkAssignment, WorkTemplate
+from gameplay.services.manor.core import ensure_manor
+from gameplay.services.work import assign_guest_to_work, claim_work_reward, recall_guest_from_work
+from guests.models import Guest, GuestArchetype, GuestRarity, GuestStatus, GuestTemplate
+
+
+@pytest.mark.django_db
+def test_claim_work_reward_rechecks_locked_assignment_state(django_user_model):
+    user = django_user_model.objects.create_user(username="work_claim_lock_user", password="pass123")
+    manor = ensure_manor(user)
+    manor.silver = 0
+    manor.save(update_fields=["silver"])
+
+    guest_template = GuestTemplate.objects.create(
+        key=f"work_claim_lock_tpl_{user.id}",
+        name="并发领取模板",
+        archetype=GuestArchetype.CIVIL,
+        rarity=GuestRarity.GRAY,
+    )
+    guest = Guest.objects.create(manor=manor, template=guest_template, status=GuestStatus.IDLE)
+    work_template = WorkTemplate.objects.create(
+        key=f"work_claim_lock_work_{user.id}",
+        name="并发领取工作",
+        reward_silver=123,
+        work_duration=60,
+    )
+    assignment = WorkAssignment.objects.create(
+        manor=manor,
+        guest=guest,
+        work_template=work_template,
+        status=WorkAssignment.Status.COMPLETED,
+        complete_at=timezone.now(),
+    )
+
+    stale_a = WorkAssignment.objects.get(pk=assignment.pk)
+    stale_b = WorkAssignment.objects.get(pk=assignment.pk)
+
+    result = claim_work_reward(stale_a)
+    assert result == {"silver": 123}
+
+    with pytest.raises(WorkRewardClaimedError):
+        claim_work_reward(stale_b)
+
+    manor.refresh_from_db()
+    assignment.refresh_from_db()
+    assert manor.silver == 123
+    assert assignment.reward_claimed is True
+
+
+@pytest.mark.django_db
+def test_recall_guest_from_work_rechecks_locked_assignment_state(django_user_model):
+    user = django_user_model.objects.create_user(username="work_recall_lock_user", password="pass123")
+    manor = ensure_manor(user)
+
+    guest_template = GuestTemplate.objects.create(
+        key=f"work_recall_lock_tpl_{user.id}",
+        name="并发召回模板",
+        archetype=GuestArchetype.CIVIL,
+        rarity=GuestRarity.GRAY,
+    )
+    guest = Guest.objects.create(manor=manor, template=guest_template, status=GuestStatus.WORKING)
+    work_template = WorkTemplate.objects.create(
+        key=f"work_recall_lock_work_{user.id}",
+        name="并发召回工作",
+        reward_silver=88,
+        work_duration=60,
+    )
+    assignment = WorkAssignment.objects.create(
+        manor=manor,
+        guest=guest,
+        work_template=work_template,
+        status=WorkAssignment.Status.WORKING,
+        complete_at=timezone.now(),
+    )
+
+    stale_assignment = WorkAssignment.objects.get(pk=assignment.pk)
+    WorkAssignment.objects.filter(pk=assignment.pk).update(
+        status=WorkAssignment.Status.COMPLETED,
+        finished_at=timezone.now(),
+    )
+    Guest.objects.filter(pk=guest.pk).update(status=GuestStatus.IDLE)
+
+    with pytest.raises(WorkNotInProgressError):
+        recall_guest_from_work(stale_assignment)
+
+    assignment.refresh_from_db()
+    guest.refresh_from_db()
+    assert assignment.status == WorkAssignment.Status.COMPLETED
+    assert guest.status == GuestStatus.IDLE
+
+
+@pytest.mark.django_db(transaction=True)
+def test_assign_guest_to_work_concurrent_requests_respect_limit_inside_lock(monkeypatch, django_user_model):
+    if connection.vendor == "sqlite":
+        pytest.skip("SQLite does not provide row-level select_for_update semantics for this concurrency scenario")
+
+    user = django_user_model.objects.create_user(username="work_concurrent_user", password="pass123")
+    manor = ensure_manor(user)
+
+    guest_template = GuestTemplate.objects.create(
+        key=f"work_concurrent_tpl_{user.id}",
+        name="并发打工模板",
+        archetype=GuestArchetype.CIVIL,
+        rarity=GuestRarity.GRAY,
+    )
+    guest1 = Guest.objects.create(manor=manor, template=guest_template, status=GuestStatus.IDLE)
+    guest2 = Guest.objects.create(manor=manor, template=guest_template, status=GuestStatus.IDLE)
+    work_template = WorkTemplate.objects.create(
+        key=f"work_concurrent_work_{user.id}",
+        name="并发打工工作",
+        reward_silver=50,
+        work_duration=60,
+        required_level=1,
+        required_force=0,
+        required_intellect=0,
+    )
+
+    monkeypatch.setattr("gameplay.services.work.MAX_CONCURRENT_WORKERS", 1)
+
+    barrier = threading.Barrier(2)
+    results: list[int] = []
+    errors: list[Exception] = []
+
+    def _worker(guest_id: int):
+        try:
+            local_guest = Guest.objects.get(pk=guest_id)
+            local_work_template = WorkTemplate.objects.get(pk=work_template.pk)
+            barrier.wait(timeout=5)
+            assignment = assign_guest_to_work(local_guest, local_work_template)
+            results.append(assignment.pk)
+        except Exception as exc:  # pragma: no cover - validated by assertions below
+            errors.append(exc)
+
+    threads = [threading.Thread(target=_worker, args=(guest1.pk,)), threading.Thread(target=_worker, args=(guest2.pk,))]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+
+    assert len(results) == 1
+    assert len(errors) == 1
+    assert isinstance(errors[0], WorkLimitExceededError)
+    assert WorkAssignment.objects.filter(manor=manor, status=WorkAssignment.Status.WORKING).count() == 1

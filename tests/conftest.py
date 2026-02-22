@@ -87,3 +87,30 @@ def manor_with_troops(django_user_model, django_db_blocker):
             call_command("load_guest_templates", verbosity=0, skip_images=True)
 
     return manor
+
+
+@pytest.fixture(scope="session")
+def require_env_services():
+    """Skip integration tests unless external DB/cache services are enabled."""
+    if os.environ.get("DJANGO_TEST_USE_ENV_SERVICES", "0") != "1":
+        pytest.skip("integration tests require DJANGO_TEST_USE_ENV_SERVICES=1")
+
+    from django.conf import settings
+    from django.core.cache import cache
+
+    db_engine = str(settings.DATABASES["default"].get("ENGINE", ""))
+    if "sqlite" in db_engine:
+        pytest.skip("integration tests require non-sqlite database backend")
+
+    cache_backend = str(settings.CACHES["default"].get("BACKEND", "")).lower()
+    if "locmem" in cache_backend:
+        pytest.skip("integration tests require external cache backend")
+
+    probe_key = "integration:services:probe"
+    try:
+        cache.set(probe_key, "1", timeout=5)
+        if cache.get(probe_key) != "1":
+            pytest.skip("integration tests require a writable external cache backend")
+        cache.delete(probe_key)
+    except Exception as exc:
+        pytest.skip(f"integration tests require reachable external cache backend: {exc}")

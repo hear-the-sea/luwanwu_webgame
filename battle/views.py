@@ -7,15 +7,16 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Q
 from django.views.generic import DetailView
 
+from common.constants.resources import ResourceType
 from guests.models import GuestTemplate, SkillBook
 
 from .models import BattleReport
 from .troops import load_troop_templates
 
 _RESOURCE_LABELS = {
-    # Mirror gameplay.models.ResourceType labels but avoid importing gameplay at import-time (reduces app coupling).
-    "grain": "粮食",
-    "silver": "银两",
+    # Use shared resource enum labels to avoid duplicated hard-coded mappings.
+    key: label
+    for key, label in ResourceType.choices
 }
 
 

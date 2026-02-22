@@ -238,7 +238,7 @@ class UIConstants:
 
     # 分页设置
     MESSAGES_PER_PAGE = 5  # 消息列表每页显示数量
-    FORGE_ITEMS_PER_PAGE = 5  # 锻造页面每页显示数量
+    FORGE_ITEMS_PER_PAGE = 6  # 锻造页面每页显示数量
     MAP_SEARCH_PAGE_SIZE = 5  # 地图搜索每页数量
     MAP_SEARCH_NAME_LIMIT = 50  # 按名称搜索最大结果数
     RANKING_DEFAULT_LIMIT = 50  # 排行榜默认显示数量

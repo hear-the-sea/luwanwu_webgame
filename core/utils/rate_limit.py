@@ -92,10 +92,16 @@ def _build_cache_key(scope: str, identifier: str) -> str:
 
 
 def _increment_cache_counter(cache_key: str, window_seconds: int) -> int:
-    try:
-        if cache.add(cache_key, 1, timeout=window_seconds):
-            return 1
+    def _safe_cache_add() -> bool:
+        return bool(cache.add(cache_key, 1, timeout=window_seconds))
+
+    def _safe_cache_incr() -> int:
         return int(cache.incr(cache_key))
+
+    try:
+        if _safe_cache_add():
+            return 1
+        return _safe_cache_incr()
     except ValueError:
         cache.set(cache_key, 1, timeout=window_seconds)
         return 1

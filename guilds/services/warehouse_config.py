@@ -6,14 +6,18 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Dict, List
+from typing import Any, Dict, List
 
-import yaml
 from django.conf import settings
 
+from core.utils import safe_int
+from core.utils.yaml_loader import ensure_list, ensure_mapping, load_yaml_data
+
 WAREHOUSE_PRODUCTION_PATH = settings.BASE_DIR / "data" / "warehouse_production.yaml"
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -37,31 +41,65 @@ class TechProduction:
         return self.levels.get(level, [])
 
 
+def _coerce_non_negative_int(value: Any, default: int = 0) -> int:
+    parsed = safe_int(value, default=default)
+    if parsed is None:
+        return default
+    return max(0, parsed)
+
+
+def _coerce_positive_int(value: Any, default: int = 1) -> int:
+    parsed = safe_int(value, default=default)
+    if parsed is None:
+        return default
+    return max(1, parsed)
+
+
 def load_warehouse_production() -> Dict[str, TechProduction]:
     """加载仓库产出配置"""
-    if not WAREHOUSE_PRODUCTION_PATH.exists():
-        return {}
+    raw = load_yaml_data(
+        WAREHOUSE_PRODUCTION_PATH,
+        logger=logger,
+        context="guild warehouse production config",
+        default={},
+    )
+    data = ensure_mapping(raw, logger=logger, context="warehouse production root")
 
-    with open(WAREHOUSE_PRODUCTION_PATH, "r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
+    result: Dict[str, TechProduction] = {}
 
-    result = {}
+    for tech_key_raw, tech_data_raw in data.items():
+        tech_key = str(tech_key_raw or "").strip()
+        if not tech_key:
+            continue
+        tech_data = ensure_mapping(tech_data_raw, logger=logger, context=f"warehouse production [{tech_key}]")
+        levels_data = ensure_mapping(tech_data.get("levels"), logger=logger, context=f"{tech_key}.levels")
+        levels: Dict[int, List[ProductionItem]] = {}
 
-    for tech_key, tech_data in data.items():
-        levels_data = tech_data.get("levels", {})
-        levels = {}
+        for level_raw, items_raw in levels_data.items():
+            level_int = safe_int(level_raw, default=None)
+            if level_int is None or level_int < 0:
+                logger.warning("Skip invalid warehouse production level: tech_key=%s level=%r", tech_key, level_raw)
+                continue
 
-        for level, items in levels_data.items():
-            level_int = int(level)
-            levels[level_int] = [
-                ProductionItem(
-                    item_key=item.get("item_key", ""),
-                    quantity=item.get("quantity", 1),
-                    contribution_cost=item.get("contribution_cost", 0),
+            items_list = ensure_list(items_raw, logger=logger, context=f"{tech_key}.levels[{level_int}]")
+            normalized_items: List[ProductionItem] = []
+            for item_raw in items_list:
+                item = ensure_mapping(item_raw, logger=logger, context=f"{tech_key}.levels[{level_int}].item")
+                if not item:
+                    continue
+                item_key = str(item.get("item_key") or "").strip()
+                if not item_key:
+                    continue
+                quantity = _coerce_positive_int(item.get("quantity"), 1)
+                contribution_cost = _coerce_non_negative_int(item.get("contribution_cost"), 0)
+                normalized_items.append(
+                    ProductionItem(
+                        item_key=item_key,
+                        quantity=quantity,
+                        contribution_cost=contribution_cost,
+                    )
                 )
-                for item in items
-                if item.get("item_key")
-            ]
+            levels[level_int] = normalized_items
 
         result[tech_key] = TechProduction(tech_key=tech_key, levels=levels)
 

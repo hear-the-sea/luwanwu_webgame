@@ -249,6 +249,7 @@
   /* ========== 建筑卡片网格 ========== */
   .tw-building-grid {
     @apply grid gap-4;
+    margin-top: 10px;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   }
 

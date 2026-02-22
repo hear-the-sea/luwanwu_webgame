@@ -26,8 +26,10 @@ from .views import (
     assign_work_view,
     claim_attachment_view,
     claim_work_reward_view,
+    decompose_equipment_view,
     delete_all_messages_view,
     delete_messages_view,
+    deposit_troop_to_bank_view,
     draw_pie_api,
     draw_pie_view,
     jail_status_api,
@@ -58,6 +60,7 @@ from .views import (
     start_scout_api,
     start_smelting_production_view,
     start_troop_recruitment_view,
+    synthesize_blueprint_equipment_view,
     upgrade_technology_view,
     use_guest_rebirth_card_view,
     use_item_view,
@@ -65,6 +68,7 @@ from .views import (
     use_xidianka_view,
     use_xisuidan_view,
     view_message,
+    withdraw_troop_from_bank_view,
 )
 
 app_name = "gameplay"
@@ -106,6 +110,8 @@ urlpatterns = [
     path("smithy/produce/", start_smelting_production_view, name="start_smelting_production"),
     path("forge/", ForgeView.as_view(), name="forge"),
     path("forge/start/", start_equipment_forging_view, name="start_equipment_forging"),
+    path("forge/synthesize/", synthesize_blueprint_equipment_view, name="synthesize_blueprint_equipment"),
+    path("forge/decompose/", decompose_equipment_view, name="decompose_equipment"),
     path("settings/", SettingsView.as_view(), name="settings"),
     path("settings/rename/", rename_manor_view, name="rename_manor"),
     path("jail/", JailView.as_view(), name="jail"),
@@ -118,6 +124,8 @@ urlpatterns = [
     path("ranking/", RankingView.as_view(), name="ranking"),
     path("troop-recruitment/", TroopRecruitmentView.as_view(), name="troop_recruitment"),
     path("troop-recruitment/start/", start_troop_recruitment_view, name="start_troop_recruitment"),
+    path("troop-recruitment/bank/deposit/", deposit_troop_to_bank_view, name="deposit_troop_to_bank"),
+    path("troop-recruitment/bank/withdraw/", withdraw_troop_from_bank_view, name="withdraw_troop_from_bank"),
     # 地图与踢馆系统
     path("map/", MapView.as_view(), name="map"),
     path("map/raid/<int:target_id>/", RaidConfigView.as_view(), name="raid_config"),

@@ -20,24 +20,29 @@ from ...models import HorseProduction, Manor
 # 马匹配置
 HORSE_CONFIG: Dict[str, Dict[str, Any]] = {
     "equip_zaohongma": {
-        "name": "枣红马",
         "grain_cost": 500,
         "base_duration": 120,  # 2分钟
         "required_horsemanship": 1,  # 需要驯马术1级
     },
     "equip_huangbiaoma": {
-        "name": "黄骠马",
         "grain_cost": 800,
         "base_duration": 180,  # 3分钟
         "required_horsemanship": 3,  # 需要驯马术3级
     },
     "equip_dawanma": {
-        "name": "大宛马",
         "grain_cost": 1200,
         "base_duration": 240,  # 4分钟
         "required_horsemanship": 5,  # 需要驯马术5级
     },
 }
+
+
+def _get_item_name_map(keys: set[str]) -> Dict[str, str]:
+    if not keys:
+        return {}
+    from ...models import ItemTemplate
+
+    return {tpl.key: tpl.name for tpl in ItemTemplate.objects.filter(key__in=keys).only("key", "name")}
 
 
 def get_stable_speed_bonus(manor: Manor) -> float:
@@ -121,16 +126,18 @@ def get_horse_options(manor: Manor) -> List[Dict[str, Any]]:
     horsemanship_level = get_player_technology_level(manor, "horsemanship")
     max_quantity = get_max_production_quantity(manor)
     is_producing = has_active_production(manor)
+    horse_name_map = _get_item_name_map(set(HORSE_CONFIG.keys()))
 
     options = []
     for horse_key, config in HORSE_CONFIG.items():
         actual_duration = calculate_production_duration(config["base_duration"], manor)
         required_level = config.get("required_horsemanship", 1)
         is_unlocked = horsemanship_level >= required_level
+        horse_name = horse_name_map.get(horse_key, horse_key)
         options.append(
             {
                 "key": horse_key,
-                "name": config["name"],
+                "name": horse_name,
                 "grain_cost": config["grain_cost"],
                 "base_duration": config["base_duration"],
                 "actual_duration": actual_duration,
@@ -164,13 +171,15 @@ def start_horse_production(manor: Manor, horse_key: str, quantity: int = 1) -> H
 
     config = HORSE_CONFIG[horse_key]
     required_level = config.get("required_horsemanship", 1)
+    horse_name_map = _get_item_name_map({horse_key})
+    horse_name = horse_name_map.get(horse_key, horse_key)
 
     # 检查驯马术等级
     from ..technology import get_player_technology_level
 
     horsemanship_level = get_player_technology_level(manor, "horsemanship")
     if horsemanship_level < required_level:
-        raise ValueError(f"需要驯马术{required_level}级才能生产{config['name']}")
+        raise ValueError(f"需要驯马术{required_level}级才能生产{horse_name}")
 
     # 验证生产数量
     max_quantity = get_max_production_quantity(manor)
@@ -200,7 +209,7 @@ def start_horse_production(manor: Manor, horse_key: str, quantity: int = 1) -> H
         spend_resources_locked(
             locked_manor,
             {"grain": total_grain_cost},
-            note=f"生产{config['name']}x{quantity}",
+            note=f"生产{horse_name}x{quantity}",
             reason=ResourceEvent.Reason.UPGRADE_COST,
         )
 
@@ -211,7 +220,7 @@ def start_horse_production(manor: Manor, horse_key: str, quantity: int = 1) -> H
         production = HorseProduction.objects.create(
             manor=locked_manor,
             horse_key=horse_key,
-            horse_name=config["name"],
+            horse_name=horse_name,
             quantity=quantity,
             grain_cost=total_grain_cost,
             base_duration=config["base_duration"],

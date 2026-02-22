@@ -36,6 +36,19 @@ from gameplay.services import (
 logger = logging.getLogger(__name__)
 
 
+def _safe_unread_message_count(manor) -> int:
+    try:
+        return int(unread_message_count(manor))
+    except Exception as exc:
+        logger.warning(
+            "Failed to read unread_message_count: manor_id=%s error=%s",
+            getattr(manor, "id", None),
+            exc,
+            exc_info=True,
+        )
+        return 0
+
+
 def _build_attachment_details(message) -> dict:
     attachment_details = {"resources": [], "items": []}
     if not message.has_attachments:
@@ -149,7 +162,7 @@ class MessageListView(LoginRequiredMixin, TemplateView):
 
         context["message_list"] = page_obj
         context["page_obj"] = page_obj
-        context["unread_count"] = unread_message_count(manor)
+        context["unread_count"] = _safe_unread_message_count(manor)
         return context
 
 
@@ -183,7 +196,7 @@ def view_message(request: HttpRequest, pk: int) -> HttpResponse:
         response_data = {
             "message_id": message.pk,
             "was_unread": was_unread,
-            "unread_count": unread_message_count(manor),
+            "unread_count": _safe_unread_message_count(manor),
         }
 
         if message.battle_report_id:
@@ -271,7 +284,7 @@ def claim_attachment_view(request: HttpRequest, pk: int) -> HttpResponse:
     try:
         claimed_summary = claim_message_attachments(message)
         summary_text, claimed_payload = _format_claimed_summary(claimed_summary)
-        unread_count = unread_message_count(manor)
+        unread_count = _safe_unread_message_count(manor)
 
         if is_json:
             return json_success(
@@ -289,18 +302,24 @@ def claim_attachment_view(request: HttpRequest, pk: int) -> HttpResponse:
                 error_message,
                 status=400,
                 message_id=pk,
-                unread_count=unread_message_count(manor),
+                unread_count=_safe_unread_message_count(manor),
             )
         messages.error(request, error_message)
-    except Exception:
-        logger.exception("Unexpected error in claim_attachment_view: message_id=%s", pk)
+    except Exception as exc:
+        logger.exception(
+            "Unexpected error in claim_attachment_view: manor_id=%s user_id=%s message_id=%s",
+            getattr(manor, "id", None),
+            getattr(request.user, "id", None),
+            pk,
+        )
+        error_message = sanitize_error_message(exc)
         if is_json:
             return json_error(
-                "操作失败，请稍后重试",
+                error_message,
                 status=500,
                 message_id=pk,
-                unread_count=unread_message_count(manor),
+                unread_count=_safe_unread_message_count(manor),
             )
-        messages.error(request, "操作失败，请稍后重试")
+        messages.error(request, error_message)
 
     return _resolve_message_action_redirect(request, "gameplay:view_message", pk=pk)

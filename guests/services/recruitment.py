@@ -11,6 +11,7 @@ from django.db import transaction
 
 from core.exceptions import (
     GuestCapacityFullError,
+    InsufficientStockError,
     InvalidAllocationError,
     NoTemplateAvailableError,
     RetainerCapacityFullError,
@@ -507,6 +508,46 @@ def reveal_candidate_rarity(manor: Manor) -> int:
 
 
 @transaction.atomic
+def use_magnifying_glass_for_candidates(manor: Manor, item_id: int) -> int:
+    """
+    使用放大镜显示所有未显现候选门客稀有度（原子化版本）。
+
+    关键保证：
+    - 稀有度显现与道具扣减在同一事务中完成
+    - 任一步失败都会整体回滚，避免“显现成功但扣道具失败”导致可重复白嫖
+    - 锁顺序统一为 Manor -> InventoryItem -> RecruitmentCandidate
+    """
+    from gameplay.models import InventoryItem
+    from gameplay.models import Manor as ManorModel
+    from gameplay.services.inventory.core import consume_inventory_item_locked
+
+    ManorModel.objects.select_for_update().get(pk=manor.pk)
+
+    locked_item = (
+        InventoryItem.objects.select_for_update()
+        .select_related("template")
+        .filter(
+            pk=item_id,
+            manor=manor,
+            template__key="fangdajing",
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        )
+        .first()
+    )
+    if not locked_item:
+        raise ValueError("道具不存在或不属于您的庄园")
+    if locked_item.quantity <= 0:
+        raise InsufficientStockError(locked_item.template.name, 1, locked_item.quantity)
+
+    count = manor.candidates.filter(rarity_revealed=False).update(rarity_revealed=True)
+    if count <= 0:
+        return 0
+
+    consume_inventory_item_locked(locked_item, 1)
+    return int(count)
+
+
+@transaction.atomic
 def recruit_guest(manor: Manor, pool: RecruitmentPool, seed: int | None = None) -> List[RecruitmentCandidate]:
     """
     从指定卡池招募门客。
@@ -760,14 +801,28 @@ def convert_candidate_to_retainer(candidate: RecruitmentCandidate) -> None:
     Raises:
         ValueError: 家丁房容量已满时抛出
     """
-    manor = candidate.manor
+    candidate_id = getattr(candidate, "pk", None)
+    manor_id = getattr(candidate, "manor_id", None)
+    if not candidate_id or not manor_id:
+        raise ValueError("候选门客不存在或已处理")
+
+    from gameplay.models import Manor
+
+    # 锁顺序统一为 Manor -> RecruitmentCandidate，避免与其他招募流程死锁
+    manor = Manor.objects.select_for_update().get(pk=manor_id)
+    locked_candidate = (
+        RecruitmentCandidate.objects.select_for_update().filter(pk=candidate_id, manor_id=manor_id).first()
+    )
+    if locked_candidate is None:
+        raise ValueError("候选门客不存在或已处理")
+
     capacity = manor.retainer_capacity
     if manor.retainer_count >= capacity:
         raise RetainerCapacityFullError()
 
     manor.retainer_count += 1
     manor.save(update_fields=["retainer_count"])
-    candidate.delete()
+    locked_candidate.delete()
 
 
 def allocate_attribute_points(guest: Guest, attribute: str, points: int) -> Guest:

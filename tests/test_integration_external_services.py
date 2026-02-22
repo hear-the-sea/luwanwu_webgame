@@ -1,0 +1,249 @@
+from __future__ import annotations
+
+import time
+import uuid
+from datetime import timedelta
+
+import pytest
+from django.core.cache import cache
+from django.utils import timezone
+
+from battle.models import TroopTemplate
+from gameplay.models import InventoryItem, ItemTemplate, Message, PlayerTroop, RaidRun, ResourceEvent, ResourceType
+from gameplay.services.manor.core import ensure_manor
+from gameplay.services.raid import request_raid_retreat, start_raid
+from gameplay.services.utils.cache import CacheKeys
+from gameplay.services.utils.messages import claim_message_attachments
+from guests.models import RecruitmentPool
+from guests.services import finalize_candidate, recruit_guest
+from trade.models import AuctionBid, AuctionRound, AuctionSlot, MarketListing
+from trade.services.auction_service import place_bid, settle_auction_round
+from trade.services.market_service import create_listing, purchase_listing
+
+pytestmark = [pytest.mark.integration]
+
+
+@pytest.mark.django_db(transaction=True)
+def test_integration_market_purchase_flow(require_env_services, django_user_model):
+    seller_user = django_user_model.objects.create_user(
+        username=f"intg_seller_{uuid.uuid4().hex[:8]}", password="pass123"
+    )
+    buyer_user = django_user_model.objects.create_user(
+        username=f"intg_buyer_{uuid.uuid4().hex[:8]}", password="pass123"
+    )
+    seller = ensure_manor(seller_user)
+    buyer = ensure_manor(buyer_user)
+
+    seller.silver = 100000
+    buyer.silver = 200000
+    seller.save(update_fields=["silver"])
+    buyer.save(update_fields=["silver"])
+
+    item_key = f"intg_market_item_{uuid.uuid4().hex[:8]}"
+    template = ItemTemplate.objects.create(
+        key=item_key,
+        name="集成测试交易物品",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=False,
+        tradeable=True,
+        price=1000,
+    )
+    InventoryItem.objects.create(
+        manor=seller,
+        template=template,
+        quantity=5,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    listing = create_listing(seller, item_key, quantity=2, unit_price=3000, duration=7200)
+    transaction_record = purchase_listing(buyer, listing.id)
+
+    listing.refresh_from_db()
+    buyer_item = InventoryItem.objects.get(
+        manor=buyer,
+        template=template,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    assert listing.status == MarketListing.Status.SOLD
+    assert transaction_record.total_price == 6000
+    assert buyer_item.quantity == 2
+
+
+@pytest.mark.django_db(transaction=True)
+def test_integration_auction_bid_and_settlement_flow(require_env_services, django_user_model):
+    bidder_user = django_user_model.objects.create_user(
+        username=f"intg_bidder_{uuid.uuid4().hex[:8]}",
+        password="pass123",
+    )
+    bidder = ensure_manor(bidder_user)
+
+    gold_bar_tpl, _ = ItemTemplate.objects.get_or_create(
+        key="gold_bar",
+        defaults={
+            "name": "金条",
+            "effect_type": ItemTemplate.EffectType.TOOL,
+            "is_usable": False,
+            "tradeable": False,
+        },
+    )
+    InventoryItem.objects.update_or_create(
+        manor=bidder,
+        template=gold_bar_tpl,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        defaults={"quantity": 10},
+    )
+
+    auction_item = ItemTemplate.objects.create(
+        key=f"intg_auction_item_{uuid.uuid4().hex[:8]}",
+        name="集成测试拍卖物品",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=False,
+        tradeable=False,
+        price=5000,
+    )
+    round_number = int(time.time() * 1000)
+    auction_round = AuctionRound.objects.create(
+        round_number=round_number,
+        status=AuctionRound.Status.ACTIVE,
+        start_at=timezone.now() - timedelta(minutes=1),
+        end_at=timezone.now() + timedelta(minutes=5),
+    )
+    slot = AuctionSlot.objects.create(
+        round=auction_round,
+        item_template=auction_item,
+        quantity=1,
+        starting_price=2,
+        current_price=2,
+        min_increment=1,
+        status=AuctionSlot.Status.ACTIVE,
+        config_key=auction_item.key,
+        slot_index=0,
+    )
+
+    bid, _is_first = place_bid(bidder, slot.id, 5)
+    stats = settle_auction_round(round_id=auction_round.id)
+
+    bid.refresh_from_db()
+    bid_item = InventoryItem.objects.get(
+        manor=bidder,
+        template=gold_bar_tpl,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    assert bid.status == AuctionBid.Status.WON
+    assert stats["settled"] == 1
+    assert stats["sold"] == 1
+    assert bid_item.quantity == 5
+
+
+@pytest.mark.django_db(transaction=True)
+def test_integration_raid_start_and_retreat_flow(require_env_services, game_data, django_user_model):
+    attacker_user = django_user_model.objects.create_user(
+        username=f"intg_raider_{uuid.uuid4().hex[:8]}",
+        password="pass123",
+    )
+    defender_user = django_user_model.objects.create_user(
+        username=f"intg_defender_{uuid.uuid4().hex[:8]}",
+        password="pass123",
+    )
+    attacker = ensure_manor(attacker_user)
+    defender = ensure_manor(defender_user)
+
+    for manor in (attacker, defender):
+        manor.newbie_protection_until = timezone.now() - timedelta(days=1)
+        manor.peace_shield_until = None
+        manor.defeat_protection_until = None
+        manor.prestige = 100
+        manor.grain = 500000
+        manor.silver = 500000
+        manor.save(
+            update_fields=[
+                "newbie_protection_until",
+                "peace_shield_until",
+                "defeat_protection_until",
+                "prestige",
+                "grain",
+                "silver",
+            ]
+        )
+
+    pool = RecruitmentPool.objects.get(key="tongshi")
+    candidate = recruit_guest(attacker, pool, seed=3)[0]
+    guest = finalize_candidate(candidate)
+
+    troop_template = TroopTemplate.objects.filter(key="archer").first() or TroopTemplate.objects.first()
+    assert troop_template is not None
+
+    PlayerTroop.objects.update_or_create(
+        manor=attacker,
+        troop_template=troop_template,
+        defaults={"count": 200},
+    )
+
+    run = start_raid(attacker, defender, [guest.id], {troop_template.key: 10})
+    run.refresh_from_db()
+    assert run.status == RaidRun.Status.MARCHING
+
+    request_raid_retreat(run)
+    run.refresh_from_db()
+
+    assert run.status == RaidRun.Status.RETREATED
+    assert run.is_retreating is True
+
+
+@pytest.mark.django_db(transaction=True)
+def test_integration_message_attachment_claim_flow(require_env_services, django_user_model):
+    user = django_user_model.objects.create_user(
+        username=f"intg_mail_{uuid.uuid4().hex[:8]}",
+        password="pass123",
+    )
+    manor = ensure_manor(user)
+
+    item_key = f"intg_mail_item_{uuid.uuid4().hex[:8]}"
+    ItemTemplate.objects.create(
+        key=item_key,
+        name="集成测试邮件道具",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=False,
+        tradeable=False,
+    )
+
+    message = Message.objects.create(
+        manor=manor,
+        kind=Message.Kind.REWARD,
+        title="集成测试邮件",
+        attachments={
+            "resources": {ResourceType.SILVER: 50},
+            "items": {item_key: 2},
+        },
+    )
+
+    cache_key = CacheKeys.unread_count(manor.id)
+    cache.set(cache_key, 999, timeout=30)
+
+    claimed = claim_message_attachments(message)
+
+    message.refresh_from_db()
+    manor.refresh_from_db()
+    item = InventoryItem.objects.get(
+        manor=manor,
+        template__key=item_key,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    assert claimed["silver"] == 50
+    assert claimed[f"item_{item_key}"] == 2
+    assert message.is_claimed is True
+    assert message.is_read is True
+    assert manor.silver >= 50
+    assert item.quantity == 2
+    assert cache.get(cache_key) is None
+
+    event_exists = ResourceEvent.objects.filter(
+        manor=manor,
+        resource_type=ResourceType.SILVER,
+        reason=ResourceEvent.Reason.ADMIN_ADJUST,
+        note="邮件附件：集成测试邮件",
+    ).exists()
+    assert event_exists is True

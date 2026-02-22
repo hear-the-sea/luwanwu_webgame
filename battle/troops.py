@@ -1,18 +1,54 @@
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
 
-import yaml
 from django.conf import settings
 from django.core.cache import cache
 
+from core.utils import safe_int
+from core.utils.yaml_loader import ensure_list, ensure_mapping, load_yaml_data
+
 DEFAULT_TROOP_FILE = Path(settings.BASE_DIR) / "data" / "troop_templates.yaml"
+logger = logging.getLogger(__name__)
 
 # 兵种模板缓存键和过期时间
 TROOP_TEMPLATES_CACHE_KEY = "troop_templates:db"
 TROOP_TEMPLATES_CACHE_TIMEOUT = 300  # 5分钟
+
+
+def _coerce_non_negative_int(value: Any, default: int = 0) -> int:
+    parsed = safe_int(value, default=default)
+    if parsed is None:
+        return default
+    return max(0, parsed)
+
+
+def _normalize_troop_template_item(raw: Any) -> tuple[str, dict] | None:
+    item = ensure_mapping(raw, logger=logger, context="troop_templates.troops[]")
+    if not item:
+        return None
+    key = str(item.get("key") or "").strip()
+    if not key:
+        logger.warning("Skip troop template without key: %r", item)
+        return None
+
+    return (
+        key,
+        {
+            "label": str(item.get("name") or key),
+            "description": str(item.get("description") or ""),
+            "base_attack": _coerce_non_negative_int(item.get("base_attack"), 30),
+            "base_defense": _coerce_non_negative_int(item.get("base_defense"), 20),
+            "base_hp": _coerce_non_negative_int(item.get("base_hp"), 80),
+            "speed_bonus": _coerce_non_negative_int(item.get("speed_bonus"), 10),
+            "priority": _coerce_non_negative_int(item.get("priority"), 0),
+            "default_count": _coerce_non_negative_int(item.get("default_count"), 120),
+            "avatar": None,
+        },
+    )
 
 
 def load_troop_templates_from_db() -> Dict[str, dict]:
@@ -74,23 +110,16 @@ def load_troop_templates_from_yaml(file_path: str | None = None) -> Dict[str, di
         兵种模板字典 {key: data}
     """
     path = Path(file_path or DEFAULT_TROOP_FILE)
-    if not path.exists():
-        return {}
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    raw = load_yaml_data(path, logger=logger, context="troop templates (yaml fallback)", default={})
+    data = ensure_mapping(raw, logger=logger, context="troop_templates root")
+    troops = ensure_list(data.get("troops"), logger=logger, context="troop_templates.troops")
     templates = {}
-    for item in data.get("troops", []):
-        key = item["key"]
-        templates[key] = {
-            "label": item.get("name", key),
-            "description": item.get("description", ""),
-            "base_attack": item.get("base_attack", 30),
-            "base_defense": item.get("base_defense", 20),
-            "base_hp": item.get("base_hp", 80),
-            "speed_bonus": item.get("speed_bonus", 10),
-            "priority": int(item.get("priority", 0)),
-            "default_count": int(item.get("default_count", 120)),
-            "avatar": None,
-        }
+    for raw_item in troops:
+        normalized = _normalize_troop_template_item(raw_item)
+        if normalized is None:
+            continue
+        key, payload = normalized
+        templates[key] = payload
     return templates
 
 
@@ -123,5 +152,5 @@ def default_troop_loadout() -> Dict[str, int]:
     templates = load_troop_templates()
     loadout = {}
     for key, data in templates.items():
-        loadout[key] = int(data.get("default_count", 120))
+        loadout[key] = _coerce_non_negative_int(data.get("default_count"), 120)
     return loadout

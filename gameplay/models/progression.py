@@ -164,6 +164,29 @@ class PlayerTroop(models.Model):
         return f"{self.manor.user.username} - {self.troop_template.name} x{self.count}"
 
 
+class TroopBankStorage(models.Model):
+    """钱庄护院存储"""
+
+    manor = models.ForeignKey("gameplay.Manor", on_delete=models.CASCADE, related_name="troop_bank_storages")
+    troop_template = models.ForeignKey(
+        "battle.TroopTemplate",
+        on_delete=models.CASCADE,
+        related_name="troop_bank_storages",
+        verbose_name="兵种模板",
+    )
+    count = models.PositiveIntegerField("数量", default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "钱庄护院"
+        verbose_name_plural = "钱庄护院"
+        unique_together = ("manor", "troop_template")
+
+    def __str__(self) -> str:
+        return f"{self.manor.user.username} - 钱庄{self.troop_template.name} x{self.count}"
+
+
 class HorseProduction(models.Model):
     """马匹生产队列"""
 

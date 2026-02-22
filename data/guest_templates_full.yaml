@@ -51,7 +51,7 @@ attribute_profiles:
       intellect: 22
       defense: 11
       agility: 23
-      luck: 60
+      luck: 80
   gray:
     # 文91点，武97点
     military:
@@ -65,7 +65,7 @@ attribute_profiles:
       intellect: 27
       defense: 13
       agility: 28
-      luck: 75
+      luck: 95
   green:
     # 文109点，武117点
     military:
@@ -79,7 +79,7 @@ attribute_profiles:
       intellect: 32
       defense: 15
       agility: 33
-      luck: 85
+      luck: 105
   red:
     # 文122点，武131点
     military:
@@ -93,7 +93,7 @@ attribute_profiles:
       intellect: 36
       defense: 17
       agility: 37
-      luck: 92
+      luck: 112
   blue:
     # 文137点（基准），武147点
     military:
@@ -107,7 +107,7 @@ attribute_profiles:
       intellect: 40
       defense: 19
       agility: 42
-      luck: 100
+      luck: 120
   purple:
     # 文158点，武169点
     military:
@@ -121,7 +121,7 @@ attribute_profiles:
       intellect: 46
       defense: 22
       agility: 48
-      luck: 115
+      luck: 135
   orange:
     # 文171点，武183点
     military:
@@ -135,7 +135,7 @@ attribute_profiles:
       intellect: 50
       defense: 24
       agility: 52
-      luck: 125
+      luck: 145
 
 heroes:
   black:

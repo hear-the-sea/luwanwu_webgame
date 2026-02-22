@@ -5,6 +5,7 @@ from django.core.paginator import Paginator
 from guests.models import GuestStatus
 
 from ..models import InventoryItem
+from ..models.items import LEGACY_TOOL_EFFECT_TYPES, get_item_effect_type_label
 from ..services import get_treasury_capacity, get_treasury_used_space
 
 # 每页显示的物品数量
@@ -49,7 +50,7 @@ def get_warehouse_context(manor, current_tab: str, selected_category: str, page:
         )
     ]
 
-    tool_effect_types = {"tool", "magnifying_glass", "peace_shield", "manor_rename"}
+    tool_effect_types = LEGACY_TOOL_EFFECT_TYPES
     tool_category_key = "tool"
     if selected_category == "tools":  # 兼容旧参数
         selected_category = tool_category_key
@@ -85,22 +86,6 @@ def get_warehouse_context(manor, current_tab: str, selected_category: str, page:
     # 并清除既有排序，避免 PostgreSQL 下 DISTINCT + 非选择列 ORDER BY 的兼容性问题。
     effect_types = _distinct_effect_types(all_items)
 
-    category_map = {
-        "resource_pack": "资源包",
-        "resource": "资源",
-        "skill_book": "技能书",
-        "experience_items": "经验",
-        "medicine": "药品",
-        "tool": "道具",
-        "equip_helmet": "头盔",
-        "equip_armor": "衣服",
-        "equip_shoes": "鞋子",
-        "equip_weapon": "武器",
-        "equip_mount": "坐骑",
-        "equip_ornament": "饰品",
-        "equip_device": "器械",
-    }
-
     categories = []
     has_tools = False
     for effect_type in effect_types:
@@ -108,7 +93,7 @@ def get_warehouse_context(manor, current_tab: str, selected_category: str, page:
         if key in tool_effect_types:
             has_tools = True
             continue
-        label = category_map.get(key, "装备" if key.startswith("equip_") else "其他")
+        label = get_item_effect_type_label(key)
         categories.append({"key": key, "label": label})
     if has_tools:
         categories.append({"key": tool_category_key, "label": "道具"})

@@ -76,6 +76,26 @@ def test_purge_other_sessions_falls_back_when_lock_busy(monkeypatch):
     set_mock.assert_called_once_with(cache_key, current_session_key, timeout=account_utils.USER_SESSION_CACHE_TTL)
 
 
+def test_acquire_login_lock_falls_back_to_local_when_cache_add_errors(monkeypatch):
+    lock_key = "login_lock:local_fallback"
+    token = "token-a"
+
+    account_utils._LOCAL_LOGIN_LOCKS.clear()
+    monkeypatch.setattr(
+        account_utils.cache,
+        "add",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+    )
+    monkeypatch.setattr(account_utils, "LOGIN_LOCK_MAX_WAIT_SECONDS", 0.0)
+
+    assert account_utils._acquire_login_lock(lock_key, token) is True
+    assert account_utils._acquire_login_lock(lock_key, "token-b") is False
+
+    account_utils._release_login_lock(lock_key, token)
+    assert account_utils._acquire_login_lock(lock_key, "token-b") is True
+    account_utils._release_login_lock(lock_key, "token-b")
+
+
 def test_session_key_prefix_handles_none():
     assert account_utils._session_key_prefix(None) == "<none>"
 

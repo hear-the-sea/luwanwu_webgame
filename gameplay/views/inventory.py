@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Callable, Mapping
 
 from django.contrib import messages
@@ -31,6 +32,8 @@ from gameplay.services import (
     use_xisuidan,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def _parse_positive_quantity(raw_quantity: str | None, default: int = 1) -> int | None:
     """Parse quantity from user input, allowing empty to fall back to default."""
@@ -48,10 +51,15 @@ def _warehouse_item(manor, pk: int) -> InventoryItem:
 
 
 def _error_response(
-    request: HttpRequest, is_ajax: bool, error: str, redirect_url: str = "gameplay:warehouse"
+    request: HttpRequest,
+    is_ajax: bool,
+    error: str,
+    redirect_url: str = "gameplay:warehouse",
+    *,
+    status: int = 400,
 ) -> HttpResponse:
     if is_ajax:
-        return json_error(error, status=200)
+        return json_error(error, status=status)
     messages.error(request, error)
     return redirect(redirect_url)
 
@@ -76,8 +84,17 @@ def _move_item_between_storage(
         if is_ajax:
             return json_success(message=message)
         messages.success(request, message)
-    except ValueError as exc:
+    except (GameError, ValueError) as exc:
         return _error_response(request, is_ajax, sanitize_error_message(exc), redirect_url=redirect_url)
+    except Exception as exc:
+        logger.exception(
+            "Unexpected storage move view error: manor_id=%s user_id=%s item_id=%s quantity=%s",
+            getattr(manor, "id", None),
+            getattr(request.user, "id", None),
+            pk,
+            quantity,
+        )
+        return _error_response(request, is_ajax, sanitize_error_message(exc), redirect_url=redirect_url, status=500)
 
     return redirect(redirect_url)
 
@@ -111,6 +128,15 @@ def _use_target_guest_item(
         messages.success(request, message)
     except (GameError, ValueError) as exc:
         return _error_response(request, is_ajax, sanitize_error_message(exc))
+    except Exception as exc:
+        logger.exception(
+            "Unexpected target-guest item use view error: manor_id=%s user_id=%s item_id=%s guest_id=%s",
+            getattr(manor, "id", None),
+            getattr(request.user, "id", None),
+            pk,
+            guest_id,
+        )
+        return _error_response(request, is_ajax, sanitize_error_message(exc), status=500)
 
     return redirect("gameplay:warehouse")
 

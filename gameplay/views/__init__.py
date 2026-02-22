@@ -82,14 +82,21 @@ from .production import (
     RanchView,
     SmithyView,
     StableView,
+    decompose_equipment_view,
     start_equipment_forging_view,
     start_horse_production_view,
     start_livestock_production_view,
     start_smelting_production_view,
+    synthesize_blueprint_equipment_view,
 )
 
 # Recruitment views
-from .recruitment import TroopRecruitmentView, start_troop_recruitment_view
+from .recruitment import (
+    TroopRecruitmentView,
+    deposit_troop_to_bank_view,
+    start_troop_recruitment_view,
+    withdraw_troop_from_bank_view,
+)
 
 # Technology views
 from .technology import TechnologyView, upgrade_technology_view
@@ -146,9 +153,13 @@ __all__ = [
     "start_livestock_production_view",
     "start_smelting_production_view",
     "start_equipment_forging_view",
+    "decompose_equipment_view",
+    "synthesize_blueprint_equipment_view",
     # Recruitment
     "TroopRecruitmentView",
     "start_troop_recruitment_view",
+    "deposit_troop_to_bank_view",
+    "withdraw_troop_from_bank_view",
     # Map
     "MapView",
     "RaidConfigView",

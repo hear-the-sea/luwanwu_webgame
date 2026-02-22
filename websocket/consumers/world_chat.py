@@ -205,10 +205,23 @@ return removed
     def _get_redis(self):
         return get_redis_connection("default")
 
+    def _safe_cache_get(self, key: str):
+        try:
+            return cache.get(key)
+        except Exception as exc:
+            logger.warning("World chat cache.get failed: key=%s error=%s", key, exc, exc_info=True)
+            return None
+
+    def _safe_cache_set(self, key: str, value: str, timeout: int) -> None:
+        try:
+            cache.set(key, value, timeout=timeout)
+        except Exception as exc:
+            logger.warning("World chat cache.set failed: key=%s error=%s", key, exc, exc_info=True)
+
     @database_sync_to_async
     def _get_display_name(self, user_id: int) -> str:
         cache_key = f"user:display_name:{user_id}"
-        cached = cache.get(cache_key)
+        cached = self._safe_cache_get(cache_key)
         if cached is not None:
             return cached
 
@@ -231,7 +244,7 @@ return removed
         else:
             display_name = user.get_full_name() or user.username or "玩家"
 
-        cache.set(cache_key, display_name, timeout=self.DISPLAY_NAME_CACHE_TTL)
+        self._safe_cache_set(cache_key, display_name, timeout=self.DISPLAY_NAME_CACHE_TTL)
         return display_name
 
     @database_sync_to_async

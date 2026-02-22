@@ -4,6 +4,7 @@ import pytest
 from django.contrib.messages import get_messages
 from django.urls import reverse
 
+from gameplay.models import Manor
 from gameplay.services.manor.core import ensure_manor
 
 
@@ -17,6 +18,18 @@ def test_trade_view_renders(monkeypatch, client, django_user_model):
 
     resp = client.get(reverse("trade:trade"))
     assert resp.status_code == 200
+
+
+@pytest.mark.django_db
+def test_trade_view_creates_manor_when_missing(monkeypatch, client, django_user_model):
+    monkeypatch.setattr("trade.views.get_trade_context", lambda *_args, **_kwargs: {"current_tab": "shop"})
+
+    user = django_user_model.objects.create_user(username="trade_view_create_manor", password="pass12345")
+    client.force_login(user)
+
+    resp = client.get(reverse("trade:trade"))
+    assert resp.status_code == 200
+    assert Manor.objects.filter(user=user).exists()
 
 
 @pytest.mark.django_db
@@ -51,6 +64,48 @@ def test_shop_buy_view_error(monkeypatch, client, django_user_model):
 
 
 @pytest.mark.django_db
+def test_shop_buy_view_rejects_invalid_quantity_without_service_call(monkeypatch, client, django_user_model):
+    called = {"count": 0}
+
+    def _unexpected_buy(*_args, **_kwargs):
+        called["count"] += 1
+        return {"item_name": "测试物品", "quantity": 1, "total_cost": 1}
+
+    monkeypatch.setattr("trade.views.buy_item", _unexpected_buy)
+
+    user = django_user_model.objects.create_user(username="shop_buy_invalid_qty", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    resp = client.post(reverse("trade:shop_buy"), {"item_key": "k", "quantity": "bad"})
+    assert resp.status_code == 302
+    msgs = [m.message for m in get_messages(resp.wsgi_request)]
+    assert any("数量参数无效" in m for m in msgs)
+    assert called["count"] == 0
+
+
+@pytest.mark.django_db
+def test_shop_buy_view_rejects_missing_item_key_without_service_call(monkeypatch, client, django_user_model):
+    called = {"count": 0}
+
+    def _unexpected_buy(*_args, **_kwargs):
+        called["count"] += 1
+        return {"item_name": "测试物品", "quantity": 1, "total_cost": 1}
+
+    monkeypatch.setattr("trade.views.buy_item", _unexpected_buy)
+
+    user = django_user_model.objects.create_user(username="shop_buy_missing_item_key", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    resp = client.post(reverse("trade:shop_buy"), {"item_key": "   ", "quantity": "1"})
+    assert resp.status_code == 302
+    msgs = [m.message for m in get_messages(resp.wsgi_request)]
+    assert any("请选择商品" in m for m in msgs)
+    assert called["count"] == 0
+
+
+@pytest.mark.django_db
 def test_shop_sell_view_success(monkeypatch, client, django_user_model):
     monkeypatch.setattr(
         "trade.views.sell_item",
@@ -68,6 +123,27 @@ def test_shop_sell_view_success(monkeypatch, client, django_user_model):
 
 
 @pytest.mark.django_db
+def test_shop_sell_view_rejects_missing_item_key_without_service_call(monkeypatch, client, django_user_model):
+    called = {"count": 0}
+
+    def _unexpected_sell(*_args, **_kwargs):
+        called["count"] += 1
+        return {"item_name": "测试物品", "quantity": 1, "total_income": 1}
+
+    monkeypatch.setattr("trade.views.sell_item", _unexpected_sell)
+
+    user = django_user_model.objects.create_user(username="shop_sell_missing_item_key", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    resp = client.post(reverse("trade:shop_sell"), {"item_key": " ", "quantity": "1"})
+    assert resp.status_code == 302
+    msgs = [m.message for m in get_messages(resp.wsgi_request)]
+    assert any("请选择商品" in m for m in msgs)
+    assert called["count"] == 0
+
+
+@pytest.mark.django_db
 def test_exchange_gold_bar_view_redirects_to_bank_tab(monkeypatch, client, django_user_model):
     monkeypatch.setattr(
         "trade.views.exchange_gold_bar",
@@ -81,6 +157,64 @@ def test_exchange_gold_bar_view_redirects_to_bank_tab(monkeypatch, client, djang
     resp = client.post(reverse("trade:exchange_gold_bar"), {"quantity": "1"})
     assert resp.status_code == 302
     assert resp["Location"].endswith("?tab=bank")
+
+
+@pytest.mark.django_db
+def test_exchange_gold_bar_view_rejects_invalid_quantity_without_service_call(monkeypatch, client, django_user_model):
+    called = {"count": 0}
+
+    def _unexpected_exchange(*_args, **_kwargs):
+        called["count"] += 1
+        return {"quantity": 1, "total_cost": 100, "fee": 10, "next_rate": 123}
+
+    monkeypatch.setattr("trade.views.exchange_gold_bar", _unexpected_exchange)
+
+    user = django_user_model.objects.create_user(username="bank_exchange_invalid_qty", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    resp = client.post(reverse("trade:exchange_gold_bar"), {"quantity": "bad"})
+    assert resp.status_code == 302
+    assert resp["Location"].endswith("?tab=bank")
+    msgs = [m.message for m in get_messages(resp.wsgi_request)]
+    assert any("数量参数无效" in m for m in msgs)
+    assert called["count"] == 0
+
+
+@pytest.mark.django_db
+def test_deposit_troop_to_bank_view_redirects_to_bank_tab(monkeypatch, client, django_user_model):
+    monkeypatch.setattr(
+        "gameplay.services.manor.troop_bank.deposit_troops_to_bank",
+        lambda *_args, **_kwargs: {"quantity": 5, "troop_name": "刀手"},
+    )
+
+    user = django_user_model.objects.create_user(username="bank_troop_deposit_view", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    resp = client.post(reverse("trade:deposit_troop_to_bank"), {"troop_key": "dao_jie", "quantity": "5"})
+    assert resp.status_code == 302
+    assert resp["Location"].endswith("?tab=bank")
+    msgs = [m.message for m in get_messages(resp.wsgi_request)]
+    assert any("已存入" in m for m in msgs)
+
+
+@pytest.mark.django_db
+def test_withdraw_troop_from_bank_view_redirects_to_bank_tab(monkeypatch, client, django_user_model):
+    monkeypatch.setattr(
+        "gameplay.services.manor.troop_bank.withdraw_troops_from_bank",
+        lambda *_args, **_kwargs: {"quantity": 3, "troop_name": "刀手"},
+    )
+
+    user = django_user_model.objects.create_user(username="bank_troop_withdraw_view", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    resp = client.post(reverse("trade:withdraw_troop_from_bank"), {"troop_key": "dao_jie", "quantity": "3"})
+    assert resp.status_code == 302
+    assert resp["Location"].endswith("?tab=bank")
+    msgs = [m.message for m in get_messages(resp.wsgi_request)]
+    assert any("已从钱庄取出" in m for m in msgs)
 
 
 @pytest.mark.django_db
@@ -109,6 +243,201 @@ def test_market_create_listing_view_success(monkeypatch, client, django_user_mod
     assert resp.status_code == 302
     assert "tab=market" in resp["Location"]
     assert "view=sell" in resp["Location"]
+
+
+@pytest.mark.django_db
+def test_market_create_listing_view_rejects_invalid_quantity_without_service_call(
+    monkeypatch, client, django_user_model
+):
+    called = {"count": 0}
+
+    class _DummyListing:
+        total_price = 100
+
+        class _Template:
+            name = "物品"
+
+        item_template = _Template()
+
+        def get_duration_display(self):
+            return "2小时"
+
+    def _unexpected_create(*_args, **_kwargs):
+        called["count"] += 1
+        return _DummyListing()
+
+    monkeypatch.setattr("trade.views.create_listing", _unexpected_create)
+
+    user = django_user_model.objects.create_user(username="market_create_invalid_qty", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    resp = client.post(
+        reverse("trade:market_create_listing"),
+        {"item_key": "k", "quantity": "bad", "unit_price": "10", "duration": "7200"},
+    )
+    assert resp.status_code == 302
+    assert "tab=market" in resp["Location"]
+    assert "view=sell" in resp["Location"]
+    msgs = [m.message for m in get_messages(resp.wsgi_request)]
+    assert any("数量参数无效" in m for m in msgs)
+    assert called["count"] == 0
+
+
+@pytest.mark.django_db
+def test_market_create_listing_view_rejects_missing_item_key_without_service_call(
+    monkeypatch, client, django_user_model
+):
+    called = {"count": 0}
+
+    class _DummyListing:
+        total_price = 100
+
+        class _Template:
+            name = "物品"
+
+        item_template = _Template()
+
+        def get_duration_display(self):
+            return "2小时"
+
+    def _unexpected_create(*_args, **_kwargs):
+        called["count"] += 1
+        return _DummyListing()
+
+    monkeypatch.setattr("trade.views.create_listing", _unexpected_create)
+
+    user = django_user_model.objects.create_user(username="market_create_missing_item_key", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    resp = client.post(
+        reverse("trade:market_create_listing"),
+        {"item_key": " ", "quantity": "1", "unit_price": "10", "duration": "7200"},
+    )
+    assert resp.status_code == 302
+    assert "tab=market" in resp["Location"]
+    assert "view=sell" in resp["Location"]
+    msgs = [m.message for m in get_messages(resp.wsgi_request)]
+    assert any("请选择商品" in m for m in msgs)
+    assert called["count"] == 0
+
+
+@pytest.mark.django_db
+def test_market_create_listing_view_rejects_invalid_unit_price_without_service_call(
+    monkeypatch, client, django_user_model
+):
+    called = {"count": 0}
+
+    class _DummyListing:
+        total_price = 100
+
+        class _Template:
+            name = "物品"
+
+        item_template = _Template()
+
+        def get_duration_display(self):
+            return "2小时"
+
+    def _unexpected_create(*_args, **_kwargs):
+        called["count"] += 1
+        return _DummyListing()
+
+    monkeypatch.setattr("trade.views.create_listing", _unexpected_create)
+
+    user = django_user_model.objects.create_user(username="market_create_invalid_price", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    resp = client.post(
+        reverse("trade:market_create_listing"),
+        {"item_key": "k", "quantity": "1", "unit_price": "bad", "duration": "7200"},
+    )
+    assert resp.status_code == 302
+    assert "tab=market" in resp["Location"]
+    assert "view=sell" in resp["Location"]
+    msgs = [m.message for m in get_messages(resp.wsgi_request)]
+    assert any("单价参数无效" in m for m in msgs)
+    assert called["count"] == 0
+
+
+@pytest.mark.django_db
+def test_market_create_listing_view_rejects_invalid_duration_without_service_call(
+    monkeypatch, client, django_user_model
+):
+    called = {"count": 0}
+
+    class _DummyListing:
+        total_price = 100
+
+        class _Template:
+            name = "物品"
+
+        item_template = _Template()
+
+        def get_duration_display(self):
+            return "2小时"
+
+    def _unexpected_create(*_args, **_kwargs):
+        called["count"] += 1
+        return _DummyListing()
+
+    monkeypatch.setattr("trade.views.create_listing", _unexpected_create)
+
+    user = django_user_model.objects.create_user(username="market_create_invalid_duration", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    resp = client.post(
+        reverse("trade:market_create_listing"),
+        {"item_key": "k", "quantity": "1", "unit_price": "10", "duration": "bad"},
+    )
+    assert resp.status_code == 302
+    assert "tab=market" in resp["Location"]
+    assert "view=sell" in resp["Location"]
+    msgs = [m.message for m in get_messages(resp.wsgi_request)]
+    assert any("时长参数无效" in m for m in msgs)
+    assert called["count"] == 0
+
+
+@pytest.mark.django_db
+def test_market_create_listing_view_rejects_out_of_range_duration_without_service_call(
+    monkeypatch, client, django_user_model
+):
+    called = {"count": 0}
+
+    class _DummyListing:
+        total_price = 100
+
+        class _Template:
+            name = "物品"
+
+        item_template = _Template()
+
+        def get_duration_display(self):
+            return "2小时"
+
+    def _unexpected_create(*_args, **_kwargs):
+        called["count"] += 1
+        return _DummyListing()
+
+    monkeypatch.setattr("trade.views.create_listing", _unexpected_create)
+
+    user = django_user_model.objects.create_user(username="market_create_out_of_range_duration", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    resp = client.post(
+        reverse("trade:market_create_listing"),
+        {"item_key": "k", "quantity": "1", "unit_price": "10", "duration": "1"},
+    )
+    assert resp.status_code == 302
+    assert "tab=market" in resp["Location"]
+    assert "view=sell" in resp["Location"]
+    msgs = [m.message for m in get_messages(resp.wsgi_request)]
+    assert any("时长参数无效" in m for m in msgs)
+    assert called["count"] == 0
 
 
 @pytest.mark.django_db
@@ -238,6 +567,28 @@ def test_auction_bid_view_messages_first_and_raise(monkeypatch, client, django_u
     resp = client.post(reverse("trade:auction_bid", args=[1]), {"amount": "6"})
     msgs = [m.message for m in get_messages(resp.wsgi_request)]
     assert any("成功加价" in m for m in msgs)
+
+
+@pytest.mark.django_db
+def test_auction_bid_view_rejects_invalid_amount_without_service_call(monkeypatch, client, django_user_model):
+    called = {"count": 0}
+
+    def _unexpected_bid(*_args, **_kwargs):
+        called["count"] += 1
+        return object(), True
+
+    monkeypatch.setattr("trade.views.place_bid", _unexpected_bid)
+
+    user = django_user_model.objects.create_user(username="auction_bid_invalid_amount", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    resp = client.post(reverse("trade:auction_bid", args=[1]), {"amount": "bad"})
+    assert resp.status_code == 302
+    assert resp["Location"].endswith("?tab=auction")
+    msgs = [m.message for m in get_messages(resp.wsgi_request)]
+    assert any("出价参数无效" in m for m in msgs)
+    assert called["count"] == 0
 
 
 @pytest.mark.django_db

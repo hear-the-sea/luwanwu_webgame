@@ -1,22 +1,34 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
-import yaml
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from core.utils.image_utils import compress_and_resize_image
+from core.utils.yaml_loader import ensure_mapping, load_yaml_data
 from gameplay.models import ItemTemplate
+
+logger = logging.getLogger(__name__)
 
 
 def _load_payload(file_path: Path):
+    if file_path.suffix.lower() in {".yaml", ".yml"}:
+        raw = load_yaml_data(
+            file_path,
+            logger=logger,
+            context="item templates import file",
+            default={},
+        )
+        return ensure_mapping(raw, logger=logger, context="item templates import root")
     with file_path.open("r", encoding="utf-8") as fh:
-        if file_path.suffix.lower() in {".yaml", ".yml"}:
-            return yaml.safe_load(fh)
         if file_path.suffix.lower() == ".json":
-            return json.load(fh)
+            payload = json.load(fh)
+            if isinstance(payload, dict):
+                return payload
+            raise CommandError("JSON payload root must be an object.")
     raise CommandError("Unsupported file type. Use .yaml/.yml/.json")
 
 

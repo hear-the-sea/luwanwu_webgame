@@ -658,6 +658,7 @@
 .tw-building-grid {
   display: grid;
   gap: 1rem;
+  margin-top: 10px;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 }
 

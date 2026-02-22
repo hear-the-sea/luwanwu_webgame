@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -24,6 +26,8 @@ from gameplay.services import (
     refresh_technology_upgrades,
     upgrade_technology,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class TechnologyView(LoginRequiredMixin, TemplateView):
@@ -93,6 +97,14 @@ def upgrade_technology_view(request: HttpRequest, tech_key: str) -> HttpResponse
         result = upgrade_technology(manor, tech_key)
         messages.success(request, result["message"])
     except (GameError, ValueError) as exc:
+        messages.error(request, sanitize_error_message(exc))
+    except Exception as exc:
+        logger.exception(
+            "Unexpected technology upgrade view error: manor_id=%s user_id=%s tech_key=%s",
+            getattr(manor, "id", None),
+            getattr(request.user, "id", None),
+            tech_key,
+        )
         messages.error(request, sanitize_error_message(exc))
 
     # 构建重定向URL，保留子分类参数

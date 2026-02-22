@@ -13,6 +13,8 @@ from django.db import DatabaseError
 from django_redis import get_redis_connection
 from redis.exceptions import RedisError
 
+from core.utils.cache_lock import acquire_best_effort_lock
+
 User = get_user_model()
 
 logger = logging.getLogger(__name__)
@@ -86,15 +88,15 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
 
     async def _broadcast_stats_best_effort(self, stats: dict) -> None:
         if int(self.BROADCAST_DEBOUNCE_SECONDS) > 0:
-            try:
-                if not cache.add(
-                    self.BROADCAST_DEBOUNCE_CACHE_KEY,
-                    "1",
-                    timeout=int(self.BROADCAST_DEBOUNCE_SECONDS),
-                ):
-                    return
-            except Exception as exc:
-                logger.debug("Online stats broadcast debounce cache unavailable: %s", exc, exc_info=True)
+            debounce_seconds = max(1, int(self.BROADCAST_DEBOUNCE_SECONDS))
+            acquired, _from_cache = acquire_best_effort_lock(
+                self.BROADCAST_DEBOUNCE_CACHE_KEY,
+                timeout_seconds=debounce_seconds,
+                logger=logger,
+                log_context="online stats broadcast debounce",
+            )
+            if not acquired:
+                return
 
         await self.channel_layer.group_send(
             self.STATS_GROUP,

@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+from threading import Lock
 
 from django.conf import settings
 from django.contrib.sessions.models import Session
@@ -21,6 +22,10 @@ USER_SESSION_CACHE_TTL = getattr(settings, "SESSION_COOKIE_AGE", 1209600)
 LOGIN_LOCK_TIMEOUT = 5
 LOGIN_LOCK_RETRY_INTERVAL_SECONDS = 0.05
 LOGIN_LOCK_MAX_WAIT_SECONDS = 0.30
+
+_LOCAL_LOGIN_LOCKS: dict[str, tuple[str, float]] = {}
+_LOCAL_LOGIN_LOCKS_GUARD = Lock()
+_LOCAL_LOGIN_LOCKS_MAX_SIZE = 5000
 
 
 def _session_key_prefix(session_key: str | None) -> str:
@@ -132,14 +137,55 @@ def _release_login_lock(lock_key: str, lock_token: str) -> None:
             cache.delete(lock_key)
     except Exception:
         logger.debug("Failed to release login lock %s", lock_key, exc_info=True)
+    finally:
+        _release_local_login_lock(lock_key, lock_token)
+
+
+def _acquire_local_login_lock(lock_key: str, lock_token: str, deadline: float) -> bool:
+    while True:
+        now = time.monotonic()
+        with _LOCAL_LOGIN_LOCKS_GUARD:
+            existing = _LOCAL_LOGIN_LOCKS.get(lock_key)
+            if existing is None or existing[1] <= now:
+                _LOCAL_LOGIN_LOCKS[lock_key] = (lock_token, now + LOGIN_LOCK_TIMEOUT)
+                _cleanup_local_login_locks(now)
+                return True
+
+        if now >= deadline:
+            return False
+        time.sleep(LOGIN_LOCK_RETRY_INTERVAL_SECONDS)
+
+
+def _release_local_login_lock(lock_key: str, lock_token: str) -> None:
+    with _LOCAL_LOGIN_LOCKS_GUARD:
+        existing = _LOCAL_LOGIN_LOCKS.get(lock_key)
+        if existing and existing[0] == lock_token:
+            _LOCAL_LOGIN_LOCKS.pop(lock_key, None)
+
+
+def _cleanup_local_login_locks(now: float) -> None:
+    expired = [key for key, (_token, expire_at) in _LOCAL_LOGIN_LOCKS.items() if expire_at <= now]
+    for key in expired[:1000]:
+        _LOCAL_LOGIN_LOCKS.pop(key, None)
+
+    if len(_LOCAL_LOGIN_LOCKS) <= _LOCAL_LOGIN_LOCKS_MAX_SIZE:
+        return
+
+    for key, _value in sorted(_LOCAL_LOGIN_LOCKS.items(), key=lambda item: item[1][1])[:500]:
+        _LOCAL_LOGIN_LOCKS.pop(key, None)
 
 
 def _acquire_login_lock(lock_key: str, lock_token: str) -> bool:
     """Try to acquire login lock with a short bounded retry window."""
     deadline = time.monotonic() + LOGIN_LOCK_MAX_WAIT_SECONDS
     while True:
-        if cache.add(lock_key, lock_token, timeout=LOGIN_LOCK_TIMEOUT):
-            return True
+        try:
+            if cache.add(lock_key, lock_token, timeout=LOGIN_LOCK_TIMEOUT):
+                return True
+        except Exception:
+            logger.warning("Login lock cache unavailable, fallback to local lock: key=%s", lock_key, exc_info=True)
+            return _acquire_local_login_lock(lock_key, lock_token, deadline)
+
         if time.monotonic() >= deadline:
             return False
         time.sleep(LOGIN_LOCK_RETRY_INTERVAL_SECONDS)

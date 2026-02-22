@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -15,13 +17,15 @@ from django.views.generic import TemplateView
 
 from core.decorators import handle_game_errors
 from core.exceptions import GameError
-from core.utils import is_ajax_request, json_error, json_success
+from core.utils import is_ajax_request, json_error, json_success, safe_int, safe_positive_int
 from core.utils.rate_limit import rate_limit_json
 from core.utils.validation import safe_redirect_url, sanitize_error_message
 
 from ..forms import AllocateSkillPointsForm, TrainGuestForm
 from ..models import Guest
-from ..services import allocate_attribute_points, reduce_training_time_for_guest, train_guest
+from ..services import allocate_attribute_points, train_guest, use_experience_item_for_guest
+
+logger = logging.getLogger(__name__)
 
 
 @method_decorator(require_POST, name="dispatch")
@@ -53,6 +57,15 @@ class TrainView(LoginRequiredMixin, TemplateView):
             messages.success(request, f"{guest.display_name} 正在升级，预计 {eta_str} 完成")
         except (GameError, ValueError) as exc:
             messages.error(request, sanitize_error_message(exc))
+        except Exception as exc:
+            logger.exception(
+                "Unexpected guest train view error: manor_id=%s user_id=%s guest_id=%s levels=%s",
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                getattr(guest, "id", None),
+                levels,
+            )
+            messages.error(request, sanitize_error_message(exc))
         return redirect(next_url)
 
 
@@ -65,10 +78,7 @@ def use_experience_item_view(request, pk: int):
     注意：此视图有自定义的 AJAX 响应格式，不使用统一装饰器
     但使用 manager 方法简化查询
     """
-    from django.core.exceptions import ObjectDoesNotExist
-
     from gameplay.models import InventoryItem, ItemTemplate
-    from gameplay.services.inventory import consume_inventory_item
     from gameplay.services.manor.core import ensure_manor
 
     manor = ensure_manor(request.user)
@@ -78,27 +88,30 @@ def use_experience_item_view(request, pk: int):
     is_ajax = is_ajax_request(request)
     default_url = reverse("guests:detail", args=[guest.pk])
     next_url = safe_redirect_url(request, request.POST.get("next"), default_url)
+    item_id_int = safe_positive_int(item_id, default=None)
+    if item_id_int is None:
+        error_msg = "请选择经验道具"
+        if is_ajax:
+            return json_error(error_msg, status=400, include_message=True)
+        messages.error(request, error_msg)
+        return redirect(next_url)
 
     item = get_object_or_404(
         manor.inventory_items.select_related("template"),
-        pk=item_id,
+        pk=item_id_int,
         template__effect_type=ItemTemplate.EffectType.EXPERIENCE_ITEM,
         storage_location=InventoryItem.StorageLocation.WAREHOUSE,
     )
     try:
         payload = item.template.effect_payload or {}
-        reduce_seconds = int(payload.get("time", 0))
-        if reduce_seconds <= 0:
+        reduce_seconds = safe_int(payload.get("time"), default=None)
+        if reduce_seconds is None or reduce_seconds <= 0:
             raise ValueError("道具未配置有效时间")
-        result = reduce_training_time_for_guest(guest, reduce_seconds)
-        # consume item
-        consume_inventory_item(item)
-        # 重新获取物品数量和门客最新状态
-        item.refresh_from_db()
-        guest.refresh_from_db()
-        new_quantity = item.quantity if item.pk else 0
-        reduced_hours = round(result.get("time_reduced", 0) / 3600, 2)
-        eta = guest.training_complete_at
+        result = use_experience_item_for_guest(manor, guest, item.pk, reduce_seconds)
+        new_quantity = safe_int(result.get("remaining_item_quantity"), default=0, min_val=0)
+        reduced_seconds = safe_int(result.get("time_reduced"), default=0, min_val=0)
+        reduced_hours = round(reduced_seconds / 3600, 2)
+        eta = result.get("next_eta")
         eta_str = eta.strftime("%H:%M:%S") if eta else "已完成升级"
         msg = f"{item.template.name} 已使用，缩短 {reduced_hours} 小时。预计完成：{eta_str}"
         if is_ajax:
@@ -107,25 +120,29 @@ def use_experience_item_view(request, pk: int):
                 item_id=item_id,
                 new_quantity=new_quantity,
                 guest_id=guest.pk,
-                new_level=guest.level,
-                current_hp=guest.current_hp,
-                max_hp=guest.max_hp,
+                new_level=safe_int(result.get("new_level"), default=guest.level, min_val=1),
+                current_hp=safe_int(result.get("current_hp"), default=guest.current_hp, min_val=0),
+                max_hp=safe_int(result.get("max_hp"), default=guest.max_hp, min_val=1),
                 training_eta=eta.isoformat() if eta else None,
             )
         messages.success(request, msg)
     except (GameError, ValueError) as exc:
         error_msg = sanitize_error_message(exc)
         if is_ajax:
-            return json_error(error_msg, status=200, include_message=True)
+            return json_error(error_msg, status=400, include_message=True)
         messages.error(request, error_msg)
-    except ObjectDoesNotExist:
-        # 物品可能已被删除（refresh_from_db 时）
+    except Exception as exc:
+        logger.exception(
+            "Unexpected experience-item use view error: manor_id=%s user_id=%s guest_id=%s item_id=%s",
+            getattr(manor, "id", None),
+            getattr(request.user, "id", None),
+            pk,
+            item_id_int,
+        )
+        error_msg = sanitize_error_message(exc)
         if is_ajax:
-            return json_success(
-                message="道具已使用",
-                item_id=item_id,
-                new_quantity=0,
-            )
+            return json_error(error_msg, status=500, include_message=True)
+        messages.error(request, error_msg)
     return redirect(next_url)
 
 

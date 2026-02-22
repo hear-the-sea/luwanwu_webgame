@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from unittest.mock import mock_open
-
 from core.game_data import technology as tech
 
 
@@ -86,8 +84,7 @@ def test_resolve_enemy_tech_levels_clamps_invalid_values(monkeypatch):
 
 def test_load_technology_templates_returns_empty_when_yaml_root_not_mapping(monkeypatch):
     tech.clear_technology_cache()
-    monkeypatch.setattr("builtins.open", mock_open(read_data="[]"))
-    monkeypatch.setattr(tech.yaml, "safe_load", lambda _stream: ["invalid-root"])
+    monkeypatch.setattr(tech, "load_yaml_data", lambda *args, **kwargs: ["invalid-root"])
 
     data = tech.load_technology_templates()
     assert data == {}

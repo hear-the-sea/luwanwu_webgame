@@ -87,7 +87,7 @@
                         </div>
                         {% endif %}
                     </dl>
-                    <form method="post" action="{% url 'gameplay:upgrade_technology' tech.key %}">
+                    <form method="post" action="{% url 'gameplay:upgrade_technology' tech.key %}" class="tw-card-actions mt-4 pt-4 border-t border-border-light">
                         {% csrf_token %}
                         <input type="hidden" name="tab" value="{{ current_tab }}">
                         <input type="hidden" name="troop" value="{{ current_troop_class }}">
@@ -162,7 +162,7 @@
                     </div>
                     {% endif %}
                 </dl>
-                <form method="post" action="{% url 'gameplay:upgrade_technology' tech.key %}">
+                <form method="post" action="{% url 'gameplay:upgrade_technology' tech.key %}" class="tw-card-actions mt-4 pt-4 border-t border-border-light">
                     {% csrf_token %}
                     <input type="hidden" name="tab" value="{{ current_tab }}">
                     {% if tech.is_upgrading %}

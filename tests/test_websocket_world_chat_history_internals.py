@@ -232,3 +232,37 @@ def test_world_chat_fallback_rate_limit_cleanup_drops_stale_users():
     assert 1 not in WorldChatConsumer._fallback_rate_limits
     assert 1 not in WorldChatConsumer._fallback_rate_limits_last_seen
     assert 2 in WorldChatConsumer._fallback_rate_limits
+
+
+def test_world_chat_get_display_name_tolerates_cache_errors(monkeypatch):
+    consumer = _build_consumer(_FakeRedis())
+
+    def _raise_cache_error(*_args, **_kwargs):
+        raise RuntimeError("cache down")
+
+    monkeypatch.setattr("websocket.consumers.world_chat.cache.get", _raise_cache_error)
+    monkeypatch.setattr("websocket.consumers.world_chat.cache.set", _raise_cache_error)
+
+    class _FakeUser:
+        def __init__(self):
+            self.manor = type("_Manor", (), {"display_name": "测试庄园"})()
+            self.username = "tester"
+
+        def get_full_name(self):
+            return ""
+
+    class _FakeManager:
+        def select_related(self, *_args, **_kwargs):
+            return self
+
+        def get(self, **_kwargs):
+            return _FakeUser()
+
+    class _FakeUserModel:
+        DoesNotExist = type("DoesNotExist", (Exception,), {})
+        objects = _FakeManager()
+
+    monkeypatch.setattr("websocket.consumers.world_chat.User", _FakeUserModel)
+
+    resolved = consumer._get_display_name.__wrapped__(consumer, 1)
+    assert resolved == "测试庄园"

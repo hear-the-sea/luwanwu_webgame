@@ -1,26 +1,36 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
-import yaml
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from battle.models import TroopTemplate
+from core.utils import safe_int
 from core.utils.image_utils import compress_and_resize_image
+from core.utils.yaml_loader import ensure_list, ensure_mapping, load_yaml_data
 from gameplay.services.utils.template_cache import clear_troop_template_caches
+
+logger = logging.getLogger(__name__)
 
 
 def _build_troop_defaults(data: dict) -> dict:
+    priority = safe_int(data.get("priority"), default=0)
+    default_count = safe_int(data.get("default_count"), default=120)
+    if priority is None:
+        priority = 0
+    if default_count is None or default_count <= 0:
+        default_count = 120
     return {
-        "name": data["name"],
-        "description": data.get("description", ""),
+        "name": str(data.get("name") or ""),
+        "description": str(data.get("description") or ""),
         "base_attack": data.get("base_attack", 30),
         "base_defense": data.get("base_defense", 20),
         "base_hp": data.get("base_hp", 80),
         "speed_bonus": data.get("speed_bonus", 10),
-        "priority": int(data.get("priority", 0)),
-        "default_count": int(data.get("default_count", 120)),
+        "priority": priority,
+        "default_count": default_count,
     }
 
 
@@ -80,8 +90,13 @@ class Command(BaseCommand):
         if not file_path.exists():
             raise CommandError(f"File {file_path} does not exist.")
 
-        with file_path.open("r", encoding="utf-8") as f:
-            payload = yaml.safe_load(f)
+        raw = load_yaml_data(
+            file_path,
+            logger=logger,
+            context="troop templates import file",
+            default={},
+        )
+        payload = ensure_mapping(raw, logger=logger, context="troop templates import root")
 
         if not payload:
             self.stdout.write(self.style.WARNING("Empty payload, nothing to import."))
@@ -102,9 +117,21 @@ class Command(BaseCommand):
             return
 
         troop_data = payload.get("troops") or []
+        troop_data = ensure_list(troop_data, logger=logger, context="troop templates import entries")
         image_source_dir = Path(settings.BASE_DIR) / "data" / "images" / "troops"
 
-        for data in troop_data:
+        for raw_data in troop_data:
+            data = ensure_mapping(raw_data, logger=logger, context="troop templates import entry")
+            if not data:
+                _log_info(self, verbosity, self.style.WARNING(f"Skip entry {raw_data!r}: invalid entry format"))
+                continue
+            key = str(data.get("key") or "").strip()
+            name = str(data.get("name") or "").strip()
+            if not key or not name:
+                _log_info(self, verbosity, self.style.WARNING(f"Skip entry {data}: missing key or name"))
+                continue
+            data["key"] = key
+            data["name"] = name
             obj, created = self._upsert_troop(data)
             if not skip_images:
                 _load_avatar_for_troop(self, obj, data, image_source_dir, verbosity)

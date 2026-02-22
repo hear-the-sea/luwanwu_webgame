@@ -2,7 +2,7 @@
 # image 字段（可选）：指定物品图片相对路径，相对于 data/images/items/ 目录
 #
 # 物品分类说明：
-# - 资源类：grain(粮食)、tong(铜)、xi(锡)、tie(铁)、gold_bar(金条)
+# - 资源类：grain(粮食)、tong(铜)、xi(锡)、tie(铁)、gold_bar(金条)、zitanmu(紫檀木)等
 # - 畜牧类：ji(鸡)、ya(鸭)、e(鹅)、zhu(猪)、niu(牛)
 # - 药品类：止血散、金创药、白芨丸、白草丹、丁香丹、天香玉露丸、补血丹
 # - 经验道具：经验桃子、经验果
@@ -77,6 +77,166 @@ items:
     image: golden.png
     rarity: green
     storage_space: 20
+    is_usable: false
+
+  - key: wood_essence
+    name: 木质精华
+    description: 经林间灵气缓慢凝成的晶质碎片，色泽温润如新木，握在掌心时会透出淡淡草木清香与细微暖意。
+    effect_type: resource
+    rarity: green
+    tradeable: true
+    price: 800
+    storage_space: 1
+    is_usable: false
+
+  - key: copper_essence
+    name: 铜质精华
+    description: 由高纯铜矿反复凝练而成，表面泛着柔和赤金色光泽，轻轻敲击时会发出清亮短促的金鸣之声。
+    effect_type: resource
+    rarity: green
+    tradeable: true
+    price: 1200
+    storage_space: 1
+    is_usable: false
+
+  - key: iron_essence
+    name: 铁质精华
+    description: 精炼铁华沉淀后的核心结晶，质地沉稳厚重，边缘隐约泛冷光，入手便能感到一股坚实而安定的力量。
+    effect_type: resource
+    rarity: blue
+    tradeable: true
+    price: 3000
+    storage_space: 1
+    is_usable: false
+
+  - key: xuan_tie_essence
+    name: 玄铁精华
+    description: 取自深层玄铁矿脉的稀有精华，色泽幽暗却内蕴微芒，静置时如夜色沉水，细看又有星点般流光游走。
+    effect_type: resource
+    rarity: blue
+    tradeable: true
+    price: 5000
+    storage_space: 1
+    is_usable: false
+
+  - key: fire_stone
+    name: 火焰之石
+    description: 蕴含炽烈火元之力的矿石，触手微烫，石纹间常有赤红光泽流转，靠近时仿佛能听见细碎火星噼啪作响。
+    effect_type: resource
+    rarity: blue
+    tradeable: true
+    price: 4000
+    storage_space: 1
+    is_usable: false
+
+  - key: water_stone
+    name: 纯水之石
+    description: 蕴有澄澈水元之力的矿石，触感清凉如晨露，石心常见淡蓝纹理，仿佛能映出静水涟漪般的光影。
+    effect_type: resource
+    rarity: blue
+    tradeable: true
+    price: 4000
+    storage_space: 1
+    is_usable: false
+
+  - key: earth_stone
+    name: 大地之石
+    description: 承载厚重大地气息的矿石，纹路粗朴而古拙，置于案上自有沉稳气场，仿佛山岳余脉被凝进了石中。
+    effect_type: resource
+    rarity: blue
+    tradeable: true
+    price: 4000
+    storage_space: 1
+    is_usable: false
+
+  - key: air_stone
+    name: 空气之石
+    description: 汇聚流动风元之力而生的矿石，质地轻灵通透，转动时可见细微银线游移，如同风痕在石面悄然掠过。
+    effect_type: resource
+    rarity: blue
+    tradeable: true
+    price: 4000
+    storage_space: 1
+    is_usable: false
+
+  - key: zitanmu
+    name: 紫檀木
+    description: 质地致密、纹理细腻的名贵硬木，是打造高阶装备木质结构的优质原料。
+    effect_type: resource
+    rarity: green
+    tradeable: true
+    price: 900
+    storage_space: 1
+    is_usable: false
+
+  - key: heiyuanshi
+    name: 黑原石
+    description: 含有高密度矿质的粗矿原石，常用于锻造核心部件的初步冶炼。
+    effect_type: resource
+    rarity: green
+    tradeable: true
+    price: 950
+    storage_space: 1
+    is_usable: false
+
+  - key: jingangmei
+    name: 金刚煤
+    description: 耐烧且热值极高的燃料煤块，可稳定提供高温锻造所需火力。
+    effect_type: resource
+    rarity: green
+    tradeable: true
+    price: 1200
+    storage_space: 1
+    is_usable: false
+
+  - key: tiemu
+    name: 铁木
+    description: 兼具韧性与强度的特种木材，适合制作承力结构与复合装备框架。
+    effect_type: resource
+    rarity: green
+    tradeable: true
+    price: 850
+    storage_space: 1
+    is_usable: false
+
+  - key: shuiqumu
+    name: 水曲木
+    description: 富有弹性且易加工的木材，常用于中阶装备的柄部与护件制作。
+    effect_type: resource
+    rarity: black
+    tradeable: true
+    price: 300
+    storage_space: 1
+    is_usable: false
+
+  - key: paozi
+    name: 刨子
+    description: 木工精修常用工具，可用于处理木材表面与接缝，提高部件契合度。
+    effect_type: resource
+    rarity: black
+    tradeable: true
+    price: 320
+    storage_space: 1
+    is_usable: false
+
+  - key: zaozi
+    name: 凿子
+    description: 用于开槽与雕刻金石结构的基础工具，是装备细部加工的必备用具。
+    effect_type: resource
+    rarity: black
+    tradeable: true
+    price: 350
+    storage_space: 1
+    is_usable: false
+
+  - key: gaolu
+    name: 高炉
+    description: 小型锻造高炉组件，可用于高温熔炼与进阶装备制作流程。
+    effect_type: resource
+    rarity: blue
+    tradeable: true
+    price: 5000
+    storage_space: 2
     is_usable: false
 
   # ══════════════════════════════════════════════════════════════════════════════
@@ -225,7 +385,7 @@ items:
     tradeable: true
     price: 50
     storage_space: 1
-    is_usable: true
+    is_usable: false
     effect_payload:
       time: 60  # 减少60秒
 

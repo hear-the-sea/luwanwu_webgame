@@ -1,16 +1,18 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, List
 
-import yaml
 from django.conf import settings
 
 from core.config import TRADE
+from core.utils.yaml_loader import ensure_list, ensure_mapping, load_yaml_data
 from gameplay.models import ItemTemplate
 
 SHOP_CONFIG_PATH = settings.BASE_DIR / "data" / "shop_items.yaml"
+logger = logging.getLogger(__name__)
 
 # 从 core.config 导入配置
 BUY_PRICE_MULTIPLIER = TRADE.BUY_PRICE_MULTIPLIER
@@ -69,21 +71,19 @@ def _coerce_bool(raw: Any) -> bool:
 
 def load_shop_config() -> List[ShopItemConfig]:
     """加载商铺配置"""
-    if not SHOP_CONFIG_PATH.exists():
-        return []
-
-    with open(SHOP_CONFIG_PATH, "r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
-
-    if not isinstance(data, dict):
-        return []
-    items = data.get("items")
-    if not isinstance(items, list):
-        return []
+    raw = load_yaml_data(
+        SHOP_CONFIG_PATH,
+        logger=logger,
+        context="shop config",
+        default={},
+    )
+    payload = ensure_mapping(raw, logger=logger, context="shop config root")
+    items = ensure_list(payload.get("items"), logger=logger, context="shop config items")
     result = []
 
-    for item in items:
-        if not isinstance(item, dict):
+    for raw_item in items:
+        item = ensure_mapping(raw_item, logger=logger, context="shop config item")
+        if not item:
             continue
         item_key = str(item.get("item_key") or "").strip()
         if not item_key:

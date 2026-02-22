@@ -24,7 +24,7 @@ attribute_profiles:
       intellect: 22
       defense: 11
       agility: 23
-      luck: 60
+      luck: 80
   gray:
     military:
       force: 34
@@ -37,7 +37,7 @@ attribute_profiles:
       intellect: 27
       defense: 13
       agility: 28
-      luck: 75
+      luck: 95
   green:
     military:
       force: 41
@@ -50,7 +50,7 @@ attribute_profiles:
       intellect: 32
       defense: 15
       agility: 33
-      luck: 92
+      luck: 112
   red:
     military:
       force: 46
@@ -63,7 +63,7 @@ attribute_profiles:
       intellect: 36
       defense: 17
       agility: 37
-      luck: 92
+      luck: 112
   blue:
     military:
       force: 51
@@ -76,7 +76,7 @@ attribute_profiles:
       intellect: 40
       defense: 19
       agility: 42
-      luck: 100
+      luck: 120
   purple:
     military:
       force: 59
@@ -89,7 +89,7 @@ attribute_profiles:
       intellect: 46
       defense: 22
       agility: 48
-      luck: 121
+      luck: 141
   orange:
     military:
       force: 64
@@ -102,7 +102,7 @@ attribute_profiles:
       intellect: 50
       defense: 24
       agility: 52
-      luck: 145
+      luck: 165
 pools:
 - key: tongshi
   name: 村募

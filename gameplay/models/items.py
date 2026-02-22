@@ -74,6 +74,39 @@ class ItemTemplate(models.Model):
         return self.name
 
 
+LEGACY_TOOL_EFFECT_TYPES = {"tool", "magnifying_glass", "peace_shield", "manor_rename"}
+
+ITEM_EFFECT_TYPE_LABELS = {
+    ItemTemplate.EffectType.RESOURCE_PACK: "资源包",
+    ItemTemplate.EffectType.RESOURCE: "资源",
+    ItemTemplate.EffectType.SKILL_BOOK: "技能书",
+    ItemTemplate.EffectType.EXPERIENCE_ITEM: "经验",
+    ItemTemplate.EffectType.MEDICINE: "药品",
+    ItemTemplate.EffectType.TOOL: "道具",
+    "equip_helmet": "头盔",
+    "equip_armor": "衣服",
+    "equip_shoes": "鞋子",
+    "equip_weapon": "武器",
+    "equip_mount": "坐骑",
+    "equip_ornament": "饰品",
+    "equip_device": "器械",
+}
+
+
+def normalize_item_effect_type(effect_type: str | None) -> str:
+    normalized = str(effect_type or "").strip()
+    if normalized in LEGACY_TOOL_EFFECT_TYPES:
+        return ItemTemplate.EffectType.TOOL
+    return normalized
+
+
+def get_item_effect_type_label(effect_type: str | None) -> str:
+    normalized = normalize_item_effect_type(effect_type)
+    if normalized.startswith("equip_"):
+        return ITEM_EFFECT_TYPE_LABELS.get(normalized, "装备")
+    return ITEM_EFFECT_TYPE_LABELS.get(normalized, "其他")
+
+
 _ITEM_EFFECT_STAT_LABELS = {
     "hp": "生命",
     "force": "武力",
@@ -205,25 +238,7 @@ class InventoryItem(models.Model):
     @property
     def category_display(self) -> str:
         """获取物品种类显示名称"""
-        effect_type = self.template.effect_type or ""
-        category_map = {
-            "resource_pack": "资源包",
-            "resource": "资源",
-            "skill_book": "技能书",
-            "experience_items": "经验",
-            "medicine": "药品",
-            "tool": "道具",
-            "equip_helmet": "头盔",
-            "equip_armor": "衣服",
-            "equip_shoes": "鞋子",
-            "equip_weapon": "武器",
-            "equip_mount": "坐骑",
-            "equip_ornament": "饰品",
-            "equip_device": "器械",
-        }
-        if effect_type.startswith("equip_"):
-            return category_map.get(effect_type, "装备")
-        return category_map.get(effect_type, "其他")
+        return get_item_effect_type_label(self.template.effect_type)
 
 
 class Message(models.Model):

@@ -26,7 +26,7 @@
             <a href="{% url 'home' %}"
                 class="nav-tab {% if request.resolver_match.url_name == 'home' %}active{% endif %}">首页</a>
             <a href="{% url 'gameplay:dashboard' %}"
-                class="nav-tab {% if 'dashboard' in request.path %}active{% endif %}">庄园</a>
+                class="nav-tab {% if request.resolver_match.url_name == 'dashboard' or request.resolver_match.url_name == 'buildings_category' %}active{% endif %}">庄园</a>
             <a href="{% url 'guests:roster' %}"
                 class="nav-tab {% if 'guests' in request.path %}active{% endif %}">门客</a>
             <a href="{% url 'gameplay:warehouse' %}"
@@ -56,7 +56,11 @@
             <span>
                 当前在线: <span id="online-user-count">{{ online_user_count }}</span> 人
                 用户总数: <span id="total-user-count">{{ total_user_count }}</span>
-                您的状态: 受保护(截止日期 2025-12-31)
+                {% if header_protection_status.is_protected %}
+                您的状态: 受保护{% if header_protection_status.type_display or header_protection_status.remaining_display %}（{% if header_protection_status.type_display %}{{ header_protection_status.type_display }}{% endif %}{% if header_protection_status.type_display and header_protection_status.remaining_display %}，{% endif %}{% if header_protection_status.remaining_display %}剩余{{ header_protection_status.remaining_display }}{% endif %}）{% endif %}
+                {% else %}
+                您的状态: 未受保护
+                {% endif %}
             </span>
         </div>
         {% endif %}

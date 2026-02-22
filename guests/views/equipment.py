@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
@@ -16,11 +18,13 @@ from core.decorators import handle_game_errors
 from core.exceptions import GameError
 from core.utils import is_ajax_request, json_success
 from core.utils.rate_limit import rate_limit_redirect
-from core.utils.validation import safe_redirect_url, sanitize_error_message
+from core.utils.validation import safe_positive_int, safe_redirect_url, sanitize_error_message
 
 from ..forms import EquipForm
 from ..models import GearSlot, GearTemplate, Guest
 from ..templatetags.guest_extras import gear_summary, rarity_class, rarity_label
+
+logger = logging.getLogger(__name__)
 
 
 @login_required
@@ -76,19 +80,35 @@ def unequip_view(request):
     from ..services import unequip_guest_item
 
     manor = ensure_manor(request.user)
-    guest_id = request.POST.get("guest")
-    gear_ids = request.POST.getlist("gear")
+    guest_id = safe_positive_int(request.POST.get("guest"), default=None)
+    raw_gear_ids = request.POST.getlist("gear")
     default_url = "guests:roster"
     next_url = safe_redirect_url(request, request.POST.get("next"), default_url)
     if next_url == default_url:
         next_url = safe_redirect_url(request, request.META.get("HTTP_REFERER"), default_url)
 
+    if guest_id is None:
+        messages.error(request, "参数错误")
+        return redirect(next_url)
+
     # 使用 manager 方法获取门客，避免重复的 select_related
     guest = get_object_or_404(Guest.objects.for_manor(manor).with_template(), pk=guest_id)
 
-    if not gear_ids:
+    if not raw_gear_ids:
         messages.warning(request, "请先勾选需要卸下的装备")
         return redirect(next_url)
+
+    gear_ids: list[int] = []
+    seen: set[int] = set()
+    for raw_gear_id in raw_gear_ids:
+        gear_id = safe_positive_int(raw_gear_id, default=None)
+        if gear_id is None:
+            messages.error(request, "装备选择有误")
+            return redirect(next_url)
+        if gear_id in seen:
+            continue
+        seen.add(gear_id)
+        gear_ids.append(gear_id)
 
     gears = list(manor.gears.select_related("template", "guest").filter(pk__in=gear_ids))
     if not gears:
@@ -113,6 +133,15 @@ def unequip_view(request):
         else:
             messages.info(request, "没有可卸下的装备")
     except (GameError, ValueError) as exc:
+        messages.error(request, sanitize_error_message(exc))
+    except Exception as exc:
+        logger.exception(
+            "Unexpected unequip view error: manor_id=%s user_id=%s guest_id=%s gear_count=%s",
+            getattr(manor, "id", None),
+            getattr(request.user, "id", None),
+            guest_id,
+            len(gear_ids),
+        )
         messages.error(request, sanitize_error_message(exc))
     return redirect(next_url)
 

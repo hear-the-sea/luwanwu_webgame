@@ -1,16 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}护院募兵{% endblock %}
+{% block title %}护院招募{% endblock %}
 
 {% block content %}
 <section class="dashboard">
     <div class="tw-section-header">
-        <div>
-            <h1>护院募兵</h1>
-            <p class="caption">训练护院卫队{% if speed_bonus_percent > 0 %}，综合加成：<span class="text-accent-green font-semibold">+{{ speed_bonus_percent }}%</span> 募兵速度{% endif %}</p>
-            <p class="caption">练功场等级：{{ training_level }}{% if citang_level > 1 %}，祠堂等级：{{ citang_level }}{% endif %}，当前家丁：<strong>{{ manor.retainer_count }}</strong> / {{ manor.retainer_capacity }}</p>
-        </div>
-        <a class="tw-btn-secondary" href="{% url 'gameplay:troop_recruitment' %}">刷新</a>
+        <h1>护院招募</h1>
     </div>
 
     {% if not can_recruit %}
@@ -18,7 +13,7 @@
         <div class="tw-panel-content">
             <div class="tw-alert-warning">
                 <h2 class="text-lg font-semibold mb-2">功能未解锁</h2>
-                <p class="mb-4">练功场等级不足，需要升级到1级才能进行募兵。</p>
+                <p class="mb-4">练功场等级不足，需要升级到1级才能进行招募。</p>
                 <a href="{% url 'gameplay:dashboard' %}" class="tw-btn-primary">前往升级</a>
             </div>
         </div>
@@ -27,7 +22,7 @@
 
     {% if active_recruitments %}
     <section class="tw-panel mb-6">
-        <div class="tw-panel-header">募兵中</div>
+        <div class="tw-panel-header">招募中</div>
         <div class="tw-panel-content">
             <div class="flex flex-col gap-4">
                 {% for recruitment in active_recruitments %}
@@ -50,12 +45,25 @@
     </section>
     {% endif %}
 
+    <section class="tw-panel mb-6">
+        <div class="tw-panel-content">
+            <div class="tw-category-tabs mb-0">
+                {% for category in recruitment_categories %}
+                <a href="{% url 'gameplay:troop_recruitment' %}?category={{ category.key }}"
+                   class="tw-tab-item {% if category.key == current_category %}active{% endif %}">
+                    {{ category.name }}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+
     <section class="tw-panel">
-        <div class="tw-panel-header">可募兵种</div>
+        <div class="tw-panel-header">可招募护院</div>
         <div class="tw-panel-content">
             <p class="text-sm text-text-muted mb-4">
                 提升相关武艺科技等级可解锁更高级的护院
-                {% if is_recruiting %}<br><span class="text-accent-red font-medium">当前有护院正在募兵中，同时只能募兵一种</span>{% endif %}
+                {% if is_recruiting %}<br><span class="text-accent-red font-medium">当前有护院正在招募中，同时只能招募一种</span>{% endif %}
             </p>
 
             <div class="tw-building-grid">
@@ -74,9 +82,8 @@
                     </header>
 
                     <dl class="m-0 p-0">
-                        <!-- 募兵需求 -->
                         <div class="p-3 mb-3 rounded bg-yellow-50 border border-yellow-200">
-                            <dt class="text-xs text-yellow-700 font-medium mb-1">募兵需求</dt>
+                            <dt class="text-xs text-yellow-700 font-medium mb-1">招募需求</dt>
                             <dd class="m-0 text-sm text-yellow-800 flex flex-wrap gap-2">
                                 <span class="{% if not troop.retainer_satisfied %}text-accent-red font-semibold{% endif %}">
                                     家丁×{{ troop.retainer_cost }}({{ manor.retainer_count }})
@@ -89,7 +96,6 @@
                             </dd>
                         </div>
 
-                        <!-- 时间信息 -->
                         <div class="grid grid-cols-2 gap-3 p-3 rounded bg-bg-secondary">
                             <div class="text-center">
                                 <dt class="text-xs text-text-muted mb-1">基础时间</dt>
@@ -105,10 +111,11 @@
                     <form method="post" action="{% url 'gameplay:start_troop_recruitment' %}" class="tw-card-actions mt-4 pt-4 border-t border-border-light">
                         {% csrf_token %}
                         <input type="hidden" name="troop_key" value="{{ troop.key }}">
+                        <input type="hidden" name="category" value="{{ current_category }}">
                         {% if not troop.is_unlocked %}
                             <button type="button" class="tw-btn-secondary w-full opacity-60" disabled>未解锁</button>
                         {% elif is_recruiting %}
-                            <button type="button" class="tw-btn-secondary w-full opacity-60" disabled>募兵中</button>
+                            <button type="button" class="tw-btn-secondary w-full opacity-60" disabled>招募中</button>
                         {% elif troop.is_unlocked %}
                             <div class="flex items-center justify-center gap-2 mb-3">
                                 <label for="quantity-{{ troop.key }}" class="text-sm text-text-secondary">数量：</label>
@@ -117,7 +124,7 @@
                                        class="tw-quantity-input">
                             </div>
                             {% if troop.can_afford %}
-                                <button type="submit" class="tw-btn-primary w-full">募兵</button>
+                                <button type="submit" class="tw-btn-primary w-full">招募</button>
                             {% else %}
                                 <button type="button" class="tw-btn-secondary w-full opacity-60" disabled>资源不足</button>
                             {% endif %}
@@ -125,7 +132,7 @@
                     </form>
                 </article>
                 {% empty %}
-                <p class="tw-empty-hint">暂无可募兵种</p>
+                <p class="tw-empty-hint">该分类暂无可招募护院</p>
                 {% endfor %}
             </div>
         </div>

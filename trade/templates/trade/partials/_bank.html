@@ -67,4 +67,50 @@
             <li><strong>累进系数：</strong>当日兑换越多，单价越贵（每根+5%）</li>
         </ul>
     </div>
+
+    <div class="tw-bank-tips mt-6">
+        <h4>护院存取</h4>
+        <p class="text-sm text-text-muted mb-3">
+            已存放 <strong>{{ troop_bank_used }}</strong> / {{ troop_bank_capacity }}，剩余可存 <strong>{{ troop_bank_remaining }}</strong>
+        </p>
+
+        {% if troop_bank_rows %}
+        <div class="flex flex-col gap-3">
+            {% for troop in troop_bank_rows %}
+            <article class="tw-card">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                        <h5 class="font-semibold text-text-primary">{{ troop.name }}</h5>
+                        <p class="text-sm text-text-muted">庄园: {{ troop.player_count }} | 钱庄: {{ troop.bank_count }}</p>
+                    </div>
+                    <div class="flex gap-2 flex-wrap">
+                        <form method="post" action="{% url 'trade:deposit_troop_to_bank' %}" class="flex items-center gap-2">
+                            {% csrf_token %}
+                            <input type="hidden" name="troop_key" value="{{ troop.key }}">
+                            <input type="number" name="quantity" value="1" min="1" max="{{ troop.player_count }}" class="tw-input" style="width: 90px;">
+                            {% if troop.player_count > 0 and troop_bank_remaining > 0 %}
+                                <button type="submit" class="tw-btn-secondary">存入</button>
+                            {% else %}
+                                <button type="button" class="tw-btn-secondary opacity-60" disabled>存入</button>
+                            {% endif %}
+                        </form>
+                        <form method="post" action="{% url 'trade:withdraw_troop_from_bank' %}" class="flex items-center gap-2">
+                            {% csrf_token %}
+                            <input type="hidden" name="troop_key" value="{{ troop.key }}">
+                            <input type="number" name="quantity" value="1" min="1" max="{{ troop.bank_count }}" class="tw-input" style="width: 90px;">
+                            {% if troop.bank_count > 0 %}
+                                <button type="submit" class="tw-btn-primary">取出</button>
+                            {% else %}
+                                <button type="button" class="tw-btn-secondary opacity-60" disabled>取出</button>
+                            {% endif %}
+                        </form>
+                    </div>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-sm text-text-muted">暂无可存取护院，先招募护院后再存入钱庄。</p>
+        {% endif %}
+    </div>
 </div>

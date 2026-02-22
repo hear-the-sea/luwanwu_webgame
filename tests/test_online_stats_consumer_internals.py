@@ -10,6 +10,7 @@ from django.db import DatabaseError
 from django.test import SimpleTestCase
 from redis.exceptions import RedisError
 
+from core.utils import cache_lock as cache_lock_module
 from websocket.consumers import OnlineStatsConsumer
 
 
@@ -118,6 +119,23 @@ class OnlineStatsConsumerInternalTests(SimpleTestCase):
             asyncio.run(consumer._broadcast_stats_best_effort({"online_count": 1}))
         finally:
             cache.add = original_add
+
+        consumer.channel_layer.group_send.assert_awaited_once()
+
+    def test_broadcast_debounce_local_fallback_gates_when_cache_errors(self):
+        consumer = self._build_consumer()
+        consumer.BROADCAST_DEBOUNCE_SECONDS = 1
+        consumer.channel_layer.group_send = AsyncMock()
+
+        cache_lock_module._LOCAL_LOCKS.clear()
+        original_add = cache.add
+        cache.add = lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down"))
+        try:
+            asyncio.run(consumer._broadcast_stats_best_effort({"online_count": 1}))
+            asyncio.run(consumer._broadcast_stats_best_effort({"online_count": 2}))
+        finally:
+            cache.add = original_add
+            cache_lock_module._LOCAL_LOCKS.clear()
 
         consumer.channel_layer.group_send.assert_awaited_once()
 

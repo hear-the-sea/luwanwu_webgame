@@ -2,9 +2,16 @@ import pytest
 from django.core.management import call_command
 from django.utils import timezone
 
+from core.exceptions import RetainerCapacityFullError
 from gameplay.services.manor.core import ensure_manor
-from guests.models import MAX_GUEST_LEVEL, Guest, RecruitmentPool
-from guests.services import finalize_candidate, recruit_guest, reveal_candidate_rarity, train_guest
+from guests.models import MAX_GUEST_LEVEL, Guest, RecruitmentCandidate, RecruitmentPool
+from guests.services import (
+    convert_candidate_to_retainer,
+    finalize_candidate,
+    recruit_guest,
+    reveal_candidate_rarity,
+    train_guest,
+)
 from guests.services.training import finalize_guest_training
 
 
@@ -99,3 +106,44 @@ def test_reveal_candidate_rarity_marks_all(game_data, django_user_model, load_gu
     assert updated == len(candidates)
     for candidate in manor.candidates.all():
         assert candidate.rarity_revealed is True
+
+
+@pytest.mark.django_db
+def test_convert_candidate_to_retainer_rejects_missing_candidate(game_data, django_user_model, load_guest_data):
+    user = django_user_model.objects.create_user(username="player_retainer_missing_candidate", password="pass123")
+    manor = ensure_manor(user)
+    manor.grain = manor.silver = 500000
+    manor.save(update_fields=["grain", "silver"])
+
+    pool = RecruitmentPool.objects.get(key="tongshi")
+    candidate = recruit_guest(manor, pool, seed=1)[0]
+    candidate_id = candidate.pk
+    before_count = manor.retainer_count
+
+    candidate.delete()
+
+    with pytest.raises(ValueError, match="候选门客不存在或已处理"):
+        convert_candidate_to_retainer(candidate)
+
+    manor.refresh_from_db()
+    assert manor.retainer_count == before_count
+    assert RecruitmentCandidate.objects.filter(pk=candidate_id).exists() is False
+
+
+@pytest.mark.django_db
+def test_convert_candidate_to_retainer_rejects_when_capacity_full(game_data, django_user_model, load_guest_data):
+    user = django_user_model.objects.create_user(username="player_retainer_capacity_full", password="pass123")
+    manor = ensure_manor(user)
+    manor.grain = manor.silver = 500000
+    manor.retainer_count = manor.retainer_capacity
+    manor.save(update_fields=["grain", "silver", "retainer_count"])
+
+    pool = RecruitmentPool.objects.get(key="tongshi")
+    candidate = recruit_guest(manor, pool, seed=1)[0]
+
+    with pytest.raises(RetainerCapacityFullError):
+        convert_candidate_to_retainer(candidate)
+
+    manor.refresh_from_db()
+    assert manor.retainer_count == manor.retainer_capacity
+    assert RecruitmentCandidate.objects.filter(pk=candidate.pk).exists()

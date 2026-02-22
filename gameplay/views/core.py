@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -13,9 +15,13 @@ from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
 from common.constants.resources import ResourceType
+from core.exceptions import GameError
+from core.utils import sanitize_error_message
 from gameplay.models import BuildingCategory
 from gameplay.selectors.home import get_home_context
 from gameplay.services import ensure_manor, refresh_manor_state
+
+logger = logging.getLogger(__name__)
 
 
 class DashboardView(LoginRequiredMixin, TemplateView):
@@ -94,8 +100,15 @@ def rename_manor_view(request: HttpRequest) -> HttpResponse:
     try:
         rename_manor(manor, new_name)
         messages.success(request, f"庄园已成功更名为「{new_name}」")
-    except ValueError as e:
-        messages.error(request, str(e))
+    except (GameError, ValueError) as exc:
+        messages.error(request, sanitize_error_message(exc))
+    except Exception as exc:
+        logger.exception(
+            "Unexpected manor rename error: manor_id=%s user_id=%s",
+            getattr(manor, "id", None),
+            getattr(request.user, "id", None),
+        )
+        messages.error(request, sanitize_error_message(exc))
 
     return redirect("gameplay:settings")
 

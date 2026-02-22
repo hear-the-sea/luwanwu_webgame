@@ -106,21 +106,35 @@ def _normalize_lock_ttl(lock_key: str) -> int:
 
 
 def _increment_attempt_counter(key: str) -> int:
+    added: bool | None = None
     try:
-        if cache.add(key, 1, timeout=LOGIN_ATTEMPT_WINDOW):
-            return 1
-        return int(cache.incr(key))
+        added = bool(cache.add(key, 1, timeout=LOGIN_ATTEMPT_WINDOW))
     except Exception:
-        # 降级路径：对于不支持 incr 的缓存后端，使用 get/set 近似计数
-        attempts = 1
-        try:
-            raw_attempts = _safe_cache_get(key, 0)
-            attempts = int(raw_attempts or 0) + 1
-        except (TypeError, ValueError):
-            attempts = 1
+        logger.warning("Failed to add login attempts cache key: %s", key, exc_info=True)
+        added = None
 
-        _safe_cache_set(key, attempts, timeout=LOGIN_ATTEMPT_WINDOW)
-        return attempts
+    if added is True:
+        return 1
+
+    if added is False:
+        try:
+            return int(cache.incr(key))
+        except Exception:
+            logger.warning("Failed to increment login attempts cache key: %s", key, exc_info=True)
+
+    if added is None:
+        logger.warning("Fallback to local login attempt counter path: key=%s", key)
+
+    # added is None (cache.add failed) or incr path failed
+    attempts = 1
+    try:
+        raw_attempts = _safe_cache_get(key, 0)
+        attempts = int(raw_attempts or 0) + 1
+    except (TypeError, ValueError):
+        attempts = 1
+
+    _safe_cache_set(key, attempts, timeout=LOGIN_ATTEMPT_WINDOW)
+    return attempts
 
 
 def _record_failed_attempt(request, username: str = None) -> int:

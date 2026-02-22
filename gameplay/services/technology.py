@@ -7,11 +7,11 @@
 from __future__ import annotations
 
 import logging
-import os
+import time
 from functools import lru_cache
+from threading import Lock
 from typing import Any, Dict, List, Optional
 
-import yaml
 from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
@@ -25,12 +25,41 @@ from core.exceptions import (
     TechnologyUpgradeInProgressError,
 )
 from core.utils.time_scale import scale_duration
+from core.utils.yaml_loader import ensure_mapping, load_yaml_data
 
 from ..constants import MAX_CONCURRENT_TECH_UPGRADES
 from .utils.cache import invalidate_home_stats_cache
 from .utils.notifications import notify_user
 
 logger = logging.getLogger(__name__)
+TECHNOLOGY_TEMPLATES_PATH = settings.BASE_DIR / "data" / "technology_templates.yaml"
+
+_LOCAL_TECH_REFRESH_FALLBACK: dict[int, float] = {}
+_LOCAL_TECH_REFRESH_FALLBACK_LOCK = Lock()
+_LOCAL_TECH_REFRESH_FALLBACK_MAX_SIZE = 5000
+
+
+def _should_skip_tech_refresh_by_local_fallback(manor_id: int, min_interval: int) -> bool:
+    if manor_id <= 0 or min_interval <= 0:
+        return False
+
+    now_monotonic = time.monotonic()
+    stale_before = now_monotonic - max(min_interval * 2, 60)
+
+    with _LOCAL_TECH_REFRESH_FALLBACK_LOCK:
+        last_refresh = _LOCAL_TECH_REFRESH_FALLBACK.get(manor_id)
+        if last_refresh is not None and now_monotonic - last_refresh < min_interval:
+            return True
+
+        _LOCAL_TECH_REFRESH_FALLBACK[manor_id] = now_monotonic
+        if len(_LOCAL_TECH_REFRESH_FALLBACK) > _LOCAL_TECH_REFRESH_FALLBACK_MAX_SIZE:
+            stale_keys = [key for key, ts in _LOCAL_TECH_REFRESH_FALLBACK.items() if ts < stale_before]
+            for key in stale_keys[:1000]:
+                _LOCAL_TECH_REFRESH_FALLBACK.pop(key, None)
+            if len(_LOCAL_TECH_REFRESH_FALLBACK) > _LOCAL_TECH_REFRESH_FALLBACK_MAX_SIZE:
+                for key, _ in sorted(_LOCAL_TECH_REFRESH_FALLBACK.items(), key=lambda item: item[1])[:500]:
+                    _LOCAL_TECH_REFRESH_FALLBACK.pop(key, None)
+    return False
 
 
 def _coerce_int(value: Any, default: int = 0) -> int:
@@ -47,15 +76,6 @@ def _coerce_float(value: Any, default: float = 0.0) -> float:
         return default
 
 
-def _normalize_templates_data(raw: Any, *, path: str) -> Dict[str, Any]:
-    if raw is None:
-        return {}
-    if isinstance(raw, dict):
-        return raw
-    logger.error("technology templates root must be a mapping: path=%s type=%s", path, type(raw).__name__)
-    return {}
-
-
 @lru_cache(maxsize=1)
 def load_technology_templates() -> Dict[str, Any]:
     """
@@ -64,18 +84,13 @@ def load_technology_templates() -> Dict[str, Any]:
     Returns:
         包含 categories, technologies, troop_classes 的字典
     """
-
-    path = os.path.join(settings.BASE_DIR, "data", "technology_templates.yaml")
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            raw = yaml.safe_load(f)
-        return _normalize_templates_data(raw, path=path)
-    except FileNotFoundError:
-        logger.error("technology_templates.yaml not found: %s", path)
-        return {}
-    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
-        logger.exception("Failed to load technology templates from %s: %s", path, exc)
-        return {}
+    raw = load_yaml_data(
+        TECHNOLOGY_TEMPLATES_PATH,
+        logger=logger,
+        context="technology templates",
+        default={},
+    )
+    return ensure_mapping(raw, logger=logger, context="technology templates root")
 
 
 @lru_cache(maxsize=1)
@@ -128,6 +143,8 @@ def clear_technology_cache() -> None:
     load_technology_templates.cache_clear()
     _build_technology_index.cache_clear()
     _build_troop_to_class_index.cache_clear()
+    with _LOCAL_TECH_REFRESH_FALLBACK_LOCK:
+        _LOCAL_TECH_REFRESH_FALLBACK.clear()
 
 
 def get_technology_template(tech_key: str) -> Optional[Dict[str, Any]]:
@@ -544,7 +561,9 @@ def refresh_technology_upgrades(manor) -> int:
             if not cache.add(cache_key, "1", timeout=min_interval):
                 return 0
         except Exception as exc:
-            logger.debug("Technology refresh throttle cache unavailable: %s", exc, exc_info=True)
+            logger.warning("Technology refresh cache unavailable, fallback to local throttle: %s", exc, exc_info=True)
+            if _should_skip_tech_refresh_by_local_fallback(int(manor.pk), min_interval):
+                return 0
 
     completed = 0
     upgrading_techs = list(manor.technologies.filter(is_upgrading=True, upgrade_complete_at__lte=timezone.now()))

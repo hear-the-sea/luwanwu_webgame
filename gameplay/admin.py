@@ -2,6 +2,8 @@ from django import forms
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 
+from common.constants.resources import ResourceType
+
 from .models import (
     Building,
     BuildingType,
@@ -108,8 +110,11 @@ class ResourceEventAdmin(admin.ModelAdmin):
 
     def resource_type_display(self, obj):
         """资源类型中文显示"""
-        type_map = {"grain": "🌾 粮食", "silver": "💰 银两"}
-        return type_map.get(obj.resource_type, obj.resource_type)
+        labels = dict(ResourceType.choices)
+        icons = {"grain": "🌾", "silver": "💰"}
+        label = labels.get(obj.resource_type, obj.resource_type)
+        icon = icons.get(obj.resource_type, "")
+        return f"{icon} {label}".strip()
 
     resource_type_display.short_description = "资源类型"
     resource_type_display.admin_order_field = "resource_type"

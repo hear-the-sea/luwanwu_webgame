@@ -4,12 +4,25 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
+from core.utils import safe_int
 from guests.models import RARITY_SALARY, GuestStatus
 
 from ..models import MissionRun, ResourceType
 from ..services import can_retreat, get_technology_template, refresh_manor_state, refresh_technology_upgrades
 from ..services.utils.cache import CacheKeys
 from ..services.utils.query_optimization import optimize_guest_queryset
+
+
+def _normalize_hourly_rates(hourly_rates) -> dict[str, int]:
+    if not isinstance(hourly_rates, dict):
+        return {}
+
+    normalized: dict[str, int] = {}
+    for key, value in hourly_rates.items():
+        if not isinstance(key, str) or not key:
+            continue
+        normalized[key] = safe_int(value, default=0, min_val=0) or 0
+    return normalized
 
 
 def get_home_context(manor) -> dict:
@@ -58,12 +71,13 @@ def get_home_context(manor) -> dict:
     if hourly_rates is None:
         hourly_rates = get_hourly_rates(manor)
         cache.set(cache_key, hourly_rates, timeout=settings.HOME_STATS_CACHE_TTL_SECONDS)
+    hourly_rates = _normalize_hourly_rates(hourly_rates)
     resource_labels = dict(ResourceType.choices)
     building_income = []
     for res_type, rate in hourly_rates.items():
         if rate > 0:
             label = resource_labels.get(res_type, res_type)
-            building_income.append({"resource": res_type, "label": label, "rate": int(rate)})
+            building_income.append({"resource": res_type, "label": label, "rate": rate})
 
     player_troops = list(
         manor.troops.select_related("troop_template").filter(count__gt=0).order_by("troop_template__priority")
@@ -91,7 +105,7 @@ def get_home_context(manor) -> dict:
         "upgrading_technologies": upgrading_techs,
         "total_guest_salary": total_guest_salary,
         "building_income": building_income,
-        "grain_production": int(hourly_rates.get("grain", 0)),
+        "grain_production": hourly_rates.get("grain", 0),
         "personnel_grain_cost": manor.retainer_count,
         "player_troops": player_troops,
         "active_scouts": get_active_scouts(manor),

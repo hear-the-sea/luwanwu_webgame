@@ -82,6 +82,13 @@ def test_get_trade_context_shop_builds_categories_and_filters(monkeypatch, djang
 def test_get_trade_context_bank_includes_bank_info(monkeypatch, django_user_model):
     monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("trade.selectors.get_bank_info", lambda *_args, **_kwargs: {"current_rate": 123})
+    monkeypatch.setattr("trade.selectors.get_troop_bank_capacity", lambda *_args, **_kwargs: 5000)
+    monkeypatch.setattr("trade.selectors.get_troop_bank_used_space", lambda *_args, **_kwargs: 100)
+    monkeypatch.setattr("trade.selectors.get_troop_bank_remaining_space", lambda *_args, **_kwargs: 4900)
+    monkeypatch.setattr(
+        "trade.selectors.get_troop_bank_rows",
+        lambda *_args, **_kwargs: [{"key": "dao_jie", "name": "刀手", "player_count": 10, "bank_count": 5}],
+    )
 
     user = django_user_model.objects.create_user(username="trade_ctx_bank", password="pass12345")
     manor = ensure_manor(user)
@@ -90,6 +97,10 @@ def test_get_trade_context_bank_includes_bank_info(monkeypatch, django_user_mode
     context = get_trade_context(request, manor)
     assert context["current_tab"] == "bank"
     assert context["bank_info"] == {"current_rate": 123}
+    assert context["troop_bank_capacity"] == 5000
+    assert context["troop_bank_used"] == 100
+    assert context["troop_bank_remaining"] == 4900
+    assert len(context["troop_bank_rows"]) == 1
 
 
 @pytest.mark.django_db

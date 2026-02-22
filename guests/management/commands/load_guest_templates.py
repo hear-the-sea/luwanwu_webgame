@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import random
 from pathlib import Path
 
-import yaml
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from core.utils.image_utils import compress_and_resize_image
+from core.utils.yaml_loader import ensure_mapping, load_yaml_data
 from guests.models import (
     RARITY_HP_PROFILES,
     GuestRarity,
@@ -20,6 +21,8 @@ from guests.models import (
     SkillKind,
 )
 from guests.services.recruitment import clear_template_cache
+
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
@@ -97,12 +100,21 @@ class Command(BaseCommand):
         self._finish_sync(verbosity, fallback_avatar_count)
 
     def _load_payload(self, path: Path) -> dict:
+        if path.suffix.lower() in {".yaml", ".yml"}:
+            raw = load_yaml_data(
+                path,
+                logger=logger,
+                context="guest templates import file",
+                default={},
+            )
+            return ensure_mapping(raw, logger=logger, context="guest templates import root")
         with path.open("r", encoding="utf-8") as f:
-            if path.suffix.lower() in {".yaml", ".yml"}:
-                return yaml.safe_load(f) or {}
             if path.suffix.lower() == ".json":
-                return json.load(f) or {}
-            raise CommandError("Unsupported file type. Use .yaml/.yml/.json")
+                payload = json.load(f) or {}
+                if isinstance(payload, dict):
+                    return payload
+                raise CommandError("JSON payload root must be an object.")
+        raise CommandError("Unsupported file type. Use .yaml/.yml/.json")
 
     def _load_main_payload(self, file_path: Path) -> dict:
         if not file_path.exists():

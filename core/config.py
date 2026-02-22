@@ -61,8 +61,8 @@ class GuestConfig:
     TROOP_CAPACITY_LEVEL_THRESHOLD: int = 70  # 获得额外带兵的等级门槛
 
     # 战斗属性权重
-    CIVIL_FORCE_WEIGHT: float = 0.4  # 文官武力权重
-    CIVIL_INTELLECT_WEIGHT: float = 0.6  # 文官智力权重
+    CIVIL_FORCE_WEIGHT: float = 0.5  # 文官武力权重
+    CIVIL_INTELLECT_WEIGHT: float = 0.5  # 文官智力权重
     MILITARY_FORCE_WEIGHT: float = 0.7  # 武将武力权重
     MILITARY_INTELLECT_WEIGHT: float = 0.3  # 武将智力权重
 

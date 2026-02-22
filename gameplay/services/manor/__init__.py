@@ -36,6 +36,15 @@ from .treasury import (
     move_item_to_treasury,
     move_item_to_warehouse,
 )
+from .troop_bank import (
+    TROOP_BANK_CAPACITY,
+    deposit_troops_to_bank,
+    get_troop_bank_capacity,
+    get_troop_bank_remaining_space,
+    get_troop_bank_rows,
+    get_troop_bank_used_space,
+    withdraw_troops_from_bank,
+)
 
 __all__ = [
     # core
@@ -57,6 +66,13 @@ __all__ = [
     "get_warehouse_used_space",
     "move_item_to_treasury",
     "move_item_to_warehouse",
+    "TROOP_BANK_CAPACITY",
+    "get_troop_bank_capacity",
+    "get_troop_bank_used_space",
+    "get_troop_bank_remaining_space",
+    "get_troop_bank_rows",
+    "deposit_troops_to_bank",
+    "withdraw_troops_from_bank",
     # prestige
     "PRESTIGE_SILVER_THRESHOLD",
     "add_prestige_silver",

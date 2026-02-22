@@ -26,6 +26,38 @@ items:
     price: 500
     stock: -1
 
+  - item_key: zitanmu
+    price: 900
+    stock: -1
+
+  - item_key: heiyuanshi
+    price: 950
+    stock: -1
+
+  - item_key: jingangmei
+    price: 1200
+    stock: -1
+
+  - item_key: tiemu
+    price: 850
+    stock: -1
+
+  - item_key: shuiqumu
+    price: 300
+    stock: -1
+
+  - item_key: paozi
+    price: 320
+    stock: -1
+
+  - item_key: zaozi
+    price: 350
+    stock: -1
+
+  - item_key: gaolu
+    price: 5000
+    stock: -1
+
   # ============ 畜牧类 ============
   - item_key: ji
     price: 100

@@ -22,36 +22,39 @@ from ..utils.notifications import notify_user
 # 养殖术等级需求：1级鸡，3级鸭，5级鹅，7级猪，9级牛
 LIVESTOCK_CONFIG: Dict[str, Dict[str, Any]] = {
     "ji": {
-        "name": "鸡",
         "grain_cost": 50,
         "base_duration": 120,  # 2分钟
         "required_animal_husbandry": 1,
     },
     "ya": {
-        "name": "鸭",
         "grain_cost": 100,
         "base_duration": 180,  # 3分钟
         "required_animal_husbandry": 3,
     },
     "e": {
-        "name": "鹅",
         "grain_cost": 200,
         "base_duration": 240,  # 4分钟
         "required_animal_husbandry": 5,
     },
     "zhu": {
-        "name": "猪",
         "grain_cost": 400,
         "base_duration": 300,  # 5分钟
         "required_animal_husbandry": 7,
     },
     "niu": {
-        "name": "牛",
         "grain_cost": 750,
         "base_duration": 360,  # 6分钟
         "required_animal_husbandry": 9,
     },
 }
+
+
+def _get_item_name_map(keys: set[str]) -> Dict[str, str]:
+    if not keys:
+        return {}
+    from ...models import ItemTemplate
+
+    return {tpl.key: tpl.name for tpl in ItemTemplate.objects.filter(key__in=keys).only("key", "name")}
 
 
 def get_ranch_speed_bonus(manor: Manor) -> float:
@@ -134,16 +137,18 @@ def get_livestock_options(manor: Manor) -> List[Dict[str, Any]]:
     animal_husbandry_level = get_player_technology_level(manor, "animal_husbandry")
     max_quantity = get_max_livestock_quantity(manor)
     is_producing = has_active_livestock_production(manor)
+    livestock_name_map = _get_item_name_map(set(LIVESTOCK_CONFIG.keys()))
 
     options = []
     for livestock_key, config in LIVESTOCK_CONFIG.items():
         actual_duration = calculate_livestock_duration(config["base_duration"], manor)
         required_level = config.get("required_animal_husbandry", 1)
         is_unlocked = animal_husbandry_level >= required_level
+        livestock_name = livestock_name_map.get(livestock_key, livestock_key)
         options.append(
             {
                 "key": livestock_key,
-                "name": config["name"],
+                "name": livestock_name,
                 "grain_cost": config["grain_cost"],
                 "base_duration": config["base_duration"],
                 "actual_duration": actual_duration,
@@ -177,13 +182,15 @@ def start_livestock_production(manor: Manor, livestock_key: str, quantity: int =
 
     config = LIVESTOCK_CONFIG[livestock_key]
     required_level = config.get("required_animal_husbandry", 1)
+    livestock_name_map = _get_item_name_map({livestock_key})
+    livestock_name = livestock_name_map.get(livestock_key, livestock_key)
 
     # 检查养殖术等级
     from ..technology import get_player_technology_level
 
     animal_husbandry_level = get_player_technology_level(manor, "animal_husbandry")
     if animal_husbandry_level < required_level:
-        raise ValueError(f"需要养殖术{required_level}级才能养殖{config['name']}")
+        raise ValueError(f"需要养殖术{required_level}级才能养殖{livestock_name}")
 
     # 验证养殖数量
     max_quantity = get_max_livestock_quantity(manor)
@@ -212,7 +219,7 @@ def start_livestock_production(manor: Manor, livestock_key: str, quantity: int =
         spend_resources_locked(
             locked_manor,
             {"grain": total_grain_cost},
-            note=f"养殖{config['name']}x{quantity}",
+            note=f"养殖{livestock_name}x{quantity}",
             reason=ResourceEvent.Reason.UPGRADE_COST,
         )
 
@@ -223,7 +230,7 @@ def start_livestock_production(manor: Manor, livestock_key: str, quantity: int =
         production = LivestockProduction.objects.create(
             manor=locked_manor,
             livestock_key=livestock_key,
-            livestock_name=config["name"],
+            livestock_name=livestock_name,
             quantity=quantity,
             grain_cost=total_grain_cost,
             base_duration=config["base_duration"],

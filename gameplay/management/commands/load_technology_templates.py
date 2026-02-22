@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
-import yaml
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
+from core.utils.yaml_loader import ensure_mapping, load_yaml_data
 from gameplay.services.utils.template_cache import clear_technology_template_cache
+
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
@@ -26,13 +29,21 @@ class Command(BaseCommand):
         if not file_path.exists():
             raise CommandError(f"File {file_path} does not exist.")
 
-        with file_path.open("r", encoding="utf-8") as fh:
-            if file_path.suffix.lower() in {".yaml", ".yml"}:
-                payload = yaml.safe_load(fh)
-            elif file_path.suffix.lower() == ".json":
+        if file_path.suffix.lower() in {".yaml", ".yml"}:
+            raw = load_yaml_data(
+                file_path,
+                logger=logger,
+                context="technology templates import file",
+                default={},
+            )
+            payload = ensure_mapping(raw, logger=logger, context="technology templates import root")
+        elif file_path.suffix.lower() == ".json":
+            with file_path.open("r", encoding="utf-8") as fh:
                 payload = json.load(fh)
-            else:
-                raise CommandError("Unsupported file type. Use .yaml/.yml/.json")
+            if not isinstance(payload, dict):
+                raise CommandError("JSON payload root must be an object.")
+        else:
+            raise CommandError("Unsupported file type. Use .yaml/.yml/.json")
 
         technologies = payload.get("technologies") if isinstance(payload, dict) else None
         if not technologies:

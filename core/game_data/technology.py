@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import logging
-import os
 from functools import lru_cache
 from typing import Any, Dict, Optional
 
-import yaml
 from django.conf import settings
 
+from core.utils.yaml_loader import ensure_mapping, load_yaml_data
+
 logger = logging.getLogger(__name__)
+TECHNOLOGY_TEMPLATES_PATH = settings.BASE_DIR / "data" / "technology_templates.yaml"
 
 
 def _coerce_int(value: Any, default: int = 0) -> int:
@@ -25,15 +26,6 @@ def _coerce_float(value: Any, default: float = 0.0) -> float:
         return default
 
 
-def _normalize_templates_data(raw: Any, *, path: str) -> Dict[str, Any]:
-    if raw is None:
-        return {}
-    if isinstance(raw, dict):
-        return raw
-    logger.error("technology templates root must be a mapping: path=%s type=%s", path, type(raw).__name__)
-    return {}
-
-
 @lru_cache(maxsize=1)
 def load_technology_templates() -> Dict[str, Any]:
     """
@@ -42,20 +34,13 @@ def load_technology_templates() -> Dict[str, Any]:
     Kept in core to allow multiple apps (battle/gameplay/...) to share the same
     read-only calculations without creating cross-app import cycles.
     """
-    path = os.path.join(settings.BASE_DIR, "data", "technology_templates.yaml")
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            raw = yaml.safe_load(f)
-        return _normalize_templates_data(raw, path=path)
-    except FileNotFoundError:
-        logger.error("technology_templates.yaml not found: %s", path)
-        return {}
-    except yaml.YAMLError:
-        logger.exception("Failed to parse technology templates YAML from %s", path)
-        return {}
-    except Exception:
-        logger.exception("Failed to load technology templates from %s", path)
-        return {}
+    raw = load_yaml_data(
+        TECHNOLOGY_TEMPLATES_PATH,
+        logger=logger,
+        context="technology templates",
+        default={},
+    )
+    return ensure_mapping(raw, logger=logger, context="technology templates root")
 
 
 @lru_cache(maxsize=1)

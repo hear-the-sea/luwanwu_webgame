@@ -5,12 +5,13 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Dict
+from typing import TYPE_CHECKING, Any, Dict
 
 from django.db import transaction
 from django.utils import timezone
 
-from core.exceptions import GuestError, GuestMaxLevelError, GuestTrainingInProgressError
+from core.exceptions import GuestError, GuestMaxLevelError, GuestTrainingInProgressError, InsufficientStockError
+from core.utils import safe_int
 
 if TYPE_CHECKING:
     from gameplay.models import Manor
@@ -143,6 +144,68 @@ def _reschedule_guest_training_if_needed(guest: Guest, source: str) -> None:
         )
 
     transaction.on_commit(enqueue_training)
+
+
+def _load_locked_experience_item(manor: Manor, item_id: int):
+    from gameplay.models import InventoryItem, ItemTemplate
+
+    locked_item = (
+        InventoryItem.objects.select_for_update()
+        .select_related("template")
+        .filter(
+            pk=item_id,
+            manor=manor,
+            template__effect_type=ItemTemplate.EffectType.EXPERIENCE_ITEM,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        )
+        .first()
+    )
+    if not locked_item:
+        raise ValueError("道具不存在或不属于您的庄园")
+    if locked_item.quantity <= 0:
+        raise InsufficientStockError(locked_item.template.name, 1, locked_item.quantity)
+    return locked_item
+
+
+@transaction.atomic
+def use_experience_item_for_guest(manor: Manor, guest: Guest, item_id: int, reduce_seconds: int) -> Dict[str, Any]:
+    """
+    对单个门客使用经验道具（原子化版本）。
+
+    关键保证：
+    - 缩短训练进度与道具扣减在同一事务中完成
+    - 任一步失败都会整体回滚，避免“先生效后扣失败”导致状态不一致
+    - 锁顺序统一为 Manor -> InventoryItem -> Guest
+    """
+    if reduce_seconds <= 0:
+        raise ValueError("道具未配置有效时间")
+
+    from gameplay.models import Manor as ManorModel
+    from gameplay.services.inventory.core import consume_inventory_item_locked
+
+    ManorModel.objects.select_for_update().get(pk=manor.pk)
+    locked_item = _load_locked_experience_item(manor, item_id)
+
+    locked_guest = Guest.objects.select_for_update().select_related("template").filter(pk=guest.pk, manor=manor).first()
+    if not locked_guest:
+        raise ValueError("门客不存在或不属于您的庄园")
+
+    result = reduce_training_time_for_guest(locked_guest, reduce_seconds)
+    consume_inventory_item_locked(locked_item, 1)
+
+    remaining_quantity = 0
+    if locked_item.pk:
+        remaining_quantity = safe_int(locked_item.quantity, default=0, min_val=0) or 0
+
+    return {
+        "time_reduced": safe_int(result.get("time_reduced"), default=0, min_val=0) or 0,
+        "applied_levels": safe_int(result.get("applied_levels"), default=0, min_val=0) or 0,
+        "next_eta": locked_guest.training_complete_at,
+        "new_level": safe_int(locked_guest.level, default=1, min_val=1) or 1,
+        "current_hp": safe_int(locked_guest.current_hp, default=0, min_val=0) or 0,
+        "max_hp": safe_int(locked_guest.max_hp, default=1, min_val=1) or 1,
+        "remaining_item_quantity": remaining_quantity,
+    }
 
 
 def reduce_training_time(manor: Manor, seconds: int) -> Dict[str, int]:

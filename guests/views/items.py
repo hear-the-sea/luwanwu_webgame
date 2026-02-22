@@ -4,18 +4,22 @@
 
 from __future__ import annotations
 
+import logging
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from core.exceptions import GameError
-from core.utils import is_ajax_request, json_error, json_success
+from core.utils import is_ajax_request, json_error, json_success, safe_int, safe_positive_int
 from core.utils.validation import safe_redirect_url, sanitize_error_message
 
 from ..models import Guest
+from ..services import use_medicine_item_for_guest
+
+logger = logging.getLogger(__name__)
 
 
 @login_required
@@ -28,10 +32,7 @@ def use_medicine_item_view(request, pk: int):
     但使用 manager 方法简化查询
     """
     from gameplay.models import InventoryItem, ItemTemplate
-    from gameplay.services.inventory import consume_inventory_item
     from gameplay.services.manor.core import ensure_manor
-
-    from ..services import heal_guest
 
     manor = ensure_manor(request.user)
     # 使用 manager 方法获取门客，避免重复的 select_related
@@ -40,50 +41,58 @@ def use_medicine_item_view(request, pk: int):
     is_ajax = is_ajax_request(request)
     default_url = reverse("guests:detail", args=[guest.pk])
     next_url = safe_redirect_url(request, request.POST.get("next"), default_url)
+    item_id_int = safe_positive_int(item_id, default=None)
+    if item_id_int is None:
+        error_msg = "请选择药品道具"
+        if is_ajax:
+            return json_error(error_msg, status=400, include_message=True)
+        messages.error(request, error_msg)
+        return redirect(next_url)
 
     item = get_object_or_404(
         manor.inventory_items.select_related("template"),
-        pk=item_id,
+        pk=item_id_int,
         template__effect_type=ItemTemplate.EffectType.MEDICINE,
         storage_location=InventoryItem.StorageLocation.WAREHOUSE,
     )
     try:
         payload = item.template.effect_payload or {}
-        heal_amount = int(payload.get("hp", 0))
-        result = heal_guest(guest, heal_amount)
-        # consume item
-        consume_inventory_item(item)
-        # 重新获取物品数量
-        item.refresh_from_db()
-        new_quantity = item.quantity if item.pk else 0
-        msg = f"{guest.display_name} 恢复生命 {result['healed']} 点"
-        if result["injury_cured"]:
+        heal_amount = safe_int(payload.get("hp"), default=None)
+        if heal_amount is None or heal_amount <= 0:
+            raise ValueError("道具未配置有效恢复值")
+        result = use_medicine_item_for_guest(manor, guest, item.pk, heal_amount)
+        new_quantity = safe_int(result.get("remaining_item_quantity"), default=0, min_val=0)
+        healed = safe_int(result.get("healed"), default=0, min_val=0)
+        msg = f"{guest.display_name} 恢复生命 {healed} 点"
+        if bool(result.get("injury_cured")):
             msg += "，重伤状态已解除"
         if is_ajax:
-            # 刷新门客数据以获取最新HP和状态
-            guest.refresh_from_db()
             return json_success(
                 message=msg,
                 item_id=item_id,
                 new_quantity=new_quantity,
                 guest_id=guest.pk,
-                current_hp=guest.current_hp,
-                max_hp=guest.max_hp,
-                status=guest.status,
-                status_display=guest.get_status_display(),
+                current_hp=safe_int(result.get("new_hp"), default=guest.current_hp, min_val=0),
+                max_hp=safe_int(result.get("max_hp"), default=guest.max_hp, min_val=1),
+                status=result.get("status", guest.status),
+                status_display=result.get("status_display", guest.get_status_display()),
             )
         messages.success(request, msg)
     except (GameError, ValueError) as exc:
         error_msg = sanitize_error_message(exc)
         if is_ajax:
-            return json_error(error_msg, status=200, include_message=True)
+            return json_error(error_msg, status=400, include_message=True)
         messages.error(request, error_msg)
-    except ObjectDoesNotExist:
-        # 物品可能已被删除（refresh_from_db 时）
+    except Exception as exc:
+        logger.exception(
+            "Unexpected medicine use view error: manor_id=%s user_id=%s guest_id=%s item_id=%s",
+            getattr(manor, "id", None),
+            getattr(request.user, "id", None),
+            pk,
+            item_id_int,
+        )
+        error_msg = sanitize_error_message(exc)
         if is_ajax:
-            return json_success(
-                message="药品已使用",
-                item_id=item_id,
-                new_quantity=0,
-            )
+            return json_error(error_msg, status=500, include_message=True)
+        messages.error(request, error_msg)
     return redirect(next_url)

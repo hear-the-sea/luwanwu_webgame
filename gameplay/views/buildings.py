@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
@@ -17,6 +19,8 @@ from core.exceptions import GameError
 from core.utils import sanitize_error_message
 from gameplay.models import Building
 from gameplay.services import refresh_manor_state, start_upgrade
+
+logger = logging.getLogger(__name__)
 
 
 @method_decorator(require_POST, name="dispatch")
@@ -38,5 +42,13 @@ class UpgradeBuildingView(LoginRequiredMixin, TemplateView):
             eta = building.upgrade_complete_at.strftime("%H:%M:%S") if building.upgrade_complete_at else ""
             messages.success(request, f"{building.building_type.name} 开始升级，完成时间 {eta}")
         except (GameError, ValueError) as exc:
+            messages.error(request, sanitize_error_message(exc))
+        except Exception as exc:
+            logger.exception(
+                "Unexpected building upgrade view error: manor_id=%s user_id=%s building_id=%s",
+                getattr(building.manor, "id", None),
+                getattr(request.user, "id", None),
+                getattr(building, "id", None),
+            )
             messages.error(request, sanitize_error_message(exc))
         return redirect("gameplay:dashboard")

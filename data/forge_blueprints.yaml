@@ -1,0 +1,46 @@
+# 铁匠铺图纸合成配置
+#
+# 字段说明：
+# - blueprint_key: 图纸物品 key（玩家仓库中有该物品才显示卡片）
+# - result_item_key: 合成产物（需为装备）
+# - required_forging: 所需锻造技等级
+# - quantity_out: 每次合成产出数量
+# - costs: 每次合成消耗（支持资源与道具）
+
+recipes:
+  - blueprint_key: blueprint_qingmangjian
+    result_item_key: equip_qingmangjian
+    required_forging: 5
+    quantity_out: 1
+    description: 青芒剑图纸，偏向中阶锻造。
+    costs:
+      tong: 20
+      xi: 12
+      tie: 8
+      wood_essence: 2
+      copper_essence: 1
+
+  - blueprint_key: blueprint_duanmajian
+    result_item_key: equip_duanmajian
+    required_forging: 7
+    quantity_out: 1
+    description: 断马剑图纸，需求更高，材料更重。
+    costs:
+      tong: 28
+      xi: 18
+      tie: 14
+      xuan_tie_essence: 1
+      fire_stone: 1
+
+  - blueprint_key: blueprint_mingshejiebian
+    result_item_key: equip_mingshejiebian
+    required_forging: 9
+    quantity_out: 1
+    description: 冥蛇节鞭图纸，顶阶锻造配方之一。
+    costs:
+      tong: 36
+      xi: 24
+      tie: 20
+      xuan_tie_essence: 2
+      air_stone: 1
+      earth_stone: 1

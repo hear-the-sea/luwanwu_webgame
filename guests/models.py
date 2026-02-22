@@ -341,7 +341,7 @@ class Guest(models.Model):
         """
         # 直接使用门客的真实属性，不再乘成长倍率
         if self.archetype == GuestArchetype.CIVIL:
-            # 文官：更依赖智力
+            # 文官：武智均衡
             raw_attack = self.force * CIVIL_FORCE_WEIGHT + self.intellect * CIVIL_INTELLECT_WEIGHT
         else:
             # 武将：更依赖武力

@@ -52,7 +52,12 @@ def notifications(request):
     - Sidebar raid/scout data cached for 10 seconds per user
     - Player rank cached for 30 seconds per user
     """
-    context = {"message_unread_count": 0, "online_user_count": 0, "total_user_count": 0}
+    context = {
+        "message_unread_count": 0,
+        "online_user_count": 0,
+        "total_user_count": 0,
+        "header_protection_status": {"is_protected": False, "type_display": "", "remaining_display": ""},
+    }
 
     # 计算真实用户统计（排除管理员） - 使用缓存避免每次请求查询
     cache_key_total = "stats:total_users_count"
@@ -107,6 +112,10 @@ def notifications(request):
         manor = request.user.manor
         manor_id = manor.id
         context["message_unread_count"] = unread_message_count(manor)
+
+        from .services.raid import get_protection_status
+
+        context["header_protection_status"] = get_protection_status(manor)
 
         # 声望和排名数据 - 排名查询使用30秒缓存
         from .services.ranking import get_player_rank

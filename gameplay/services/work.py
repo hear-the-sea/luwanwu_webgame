@@ -21,6 +21,16 @@ from guests.models import Guest, GuestStatus
 MAX_CONCURRENT_WORKERS = 3  # 最多同时打工人数
 
 
+def _ensure_guest_meets_work_requirements(guest: Guest, work_template: WorkTemplate) -> None:
+    """校验门客满足打工要求。"""
+    if guest.level < work_template.required_level:
+        raise GuestNotRequirementError(guest, "level", work_template.required_level, guest.level)
+    if guest.force < work_template.required_force:
+        raise GuestNotRequirementError(guest, "force", work_template.required_force, guest.force)
+    if guest.intellect < work_template.required_intellect:
+        raise GuestNotRequirementError(guest, "intellect", work_template.required_intellect, guest.intellect)
+
+
 def get_available_works_for_guest(guest: Guest) -> List[WorkTemplate]:
     """获取门客可接受的工作列表"""
     return list(
@@ -38,25 +48,29 @@ def assign_guest_to_work(guest: Guest, work_template: WorkTemplate) -> WorkAssig
     if guest.status != GuestStatus.IDLE:
         raise GuestNotIdleError(guest)
 
-    # 检查门客是否满足工作要求
-    if guest.level < work_template.required_level:
-        raise GuestNotRequirementError(guest, "level", work_template.required_level, guest.level)
-    if guest.force < work_template.required_force:
-        raise GuestNotRequirementError(guest, "force", work_template.required_force, guest.force)
-    if guest.intellect < work_template.required_intellect:
-        raise GuestNotRequirementError(guest, "intellect", work_template.required_intellect, guest.intellect)
+    # 检查门客是否满足工作要求（事务内会再次验证）
+    _ensure_guest_meets_work_requirements(guest, work_template)
 
     # 使用事务确保原子性
     with transaction.atomic():
+        # 先锁庄园，再锁门客，保证同庄园派遣上限检查串行化
+        locked_manor = Manor.objects.select_for_update().get(pk=guest.manor_id)
+
         # 锁定门客，防止并发问题
-        guest = Guest.objects.select_for_update().get(pk=guest.pk)
+        guest = Guest.objects.select_for_update().get(pk=guest.pk, manor=locked_manor)
 
         # 再次检查状态
         if guest.status != GuestStatus.IDLE:
             raise GuestNotIdleError(guest)
 
+        # 锁内再次检查要求，避免并发更新属性后绕过验证
+        _ensure_guest_meets_work_requirements(guest, work_template)
+
         # 在事务内检查打工人数限制，防止并发超限
-        current_working = WorkAssignment.objects.filter(manor=guest.manor, status=WorkAssignment.Status.WORKING).count()
+        current_working = WorkAssignment.objects.filter(
+            manor=locked_manor,
+            status=WorkAssignment.Status.WORKING,
+        ).count()
         if current_working >= MAX_CONCURRENT_WORKERS:
             raise WorkLimitExceededError(MAX_CONCURRENT_WORKERS)
 
@@ -66,7 +80,7 @@ def assign_guest_to_work(guest: Guest, work_template: WorkTemplate) -> WorkAssig
 
         # 创建打工记录
         assignment = WorkAssignment.objects.create(
-            manor=guest.manor,
+            manor=locked_manor,
             guest=guest,
             work_template=work_template,
             status=WorkAssignment.Status.WORKING,
@@ -105,15 +119,16 @@ def complete_work_assignments() -> int:
         guest_ids = [a.guest_id for a in assignments]
         assignment_ids = [a.id for a in assignments]
 
-        # 批量更新任务状态（1次查询）
-        WorkAssignment.objects.filter(id__in=assignment_ids).update(
-            status=WorkAssignment.Status.COMPLETED, finished_at=now
-        )
+        # 仅更新仍处于 WORKING 的记录，避免并发召回时覆盖状态
+        updated_count = WorkAssignment.objects.filter(
+            id__in=assignment_ids,
+            status=WorkAssignment.Status.WORKING,
+        ).update(status=WorkAssignment.Status.COMPLETED, finished_at=now)
 
         # 批量更新门客状态（1次查询）
         Guest.objects.filter(id__in=guest_ids).update(status=GuestStatus.IDLE)
 
-        return len(assignments)
+        return updated_count
 
 
 def recall_guest_from_work(assignment: WorkAssignment) -> bool:
@@ -121,18 +136,27 @@ def recall_guest_from_work(assignment: WorkAssignment) -> bool:
     召回打工中的门客
     不发放任何报酬
     """
-    if assignment.status != WorkAssignment.Status.WORKING:
-        raise WorkNotInProgressError()
-
     with transaction.atomic():
+        locked_assignment = (
+            WorkAssignment.objects.select_for_update().select_related("guest").filter(pk=assignment.pk).first()
+        )
+        if not locked_assignment or locked_assignment.status != WorkAssignment.Status.WORKING:
+            raise WorkNotInProgressError()
+
         # 更新任务状态
-        assignment.status = WorkAssignment.Status.RECALLED
-        assignment.finished_at = timezone.now()
-        assignment.save(update_fields=["status", "finished_at"])
+        finished_at = timezone.now()
+        locked_assignment.status = WorkAssignment.Status.RECALLED
+        locked_assignment.finished_at = finished_at
+        locked_assignment.save(update_fields=["status", "finished_at"])
 
         # 更新门客状态
-        assignment.guest.status = GuestStatus.IDLE
-        assignment.guest.save(update_fields=["status"])
+        locked_assignment.guest.status = GuestStatus.IDLE
+        locked_assignment.guest.save(update_fields=["status"])
+
+    # 同步传入对象状态，避免调用方使用旧值
+    assignment.status = WorkAssignment.Status.RECALLED
+    assignment.finished_at = finished_at
+    assignment.guest.status = GuestStatus.IDLE
 
     return True
 
@@ -142,18 +166,22 @@ def claim_work_reward(assignment: WorkAssignment) -> Dict[str, int]:
     领取打工报酬
     返回获得的资源
     """
-    # 检查任务状态
-    if assignment.status != WorkAssignment.Status.COMPLETED:
-        raise WorkNotCompletedError()
-
-    if assignment.reward_claimed:
-        raise WorkRewardClaimedError()
-
-    reward_silver = assignment.work_template.reward_silver
-
     with transaction.atomic():
+        locked_assignment = (
+            WorkAssignment.objects.select_for_update()
+            .select_related("manor", "guest", "work_template")
+            .filter(pk=assignment.pk)
+            .first()
+        )
+        if not locked_assignment or locked_assignment.status != WorkAssignment.Status.COMPLETED:
+            raise WorkNotCompletedError()
+        if locked_assignment.reward_claimed:
+            raise WorkRewardClaimedError()
+
+        reward_silver = locked_assignment.work_template.reward_silver
+
         # 增加庄园银两
-        manor = Manor.objects.select_for_update().get(pk=assignment.manor.pk)
+        manor = Manor.objects.select_for_update().get(pk=locked_assignment.manor_id)
         manor.silver += reward_silver
         manor.save(update_fields=["silver"])
 
@@ -163,12 +191,15 @@ def claim_work_reward(assignment: WorkAssignment) -> Dict[str, int]:
             resource_type=ResourceType.SILVER,
             delta=reward_silver,
             reason=ResourceEvent.Reason.WORK_REWARD,
-            note=f"{assignment.guest.display_name} 在 {assignment.work_template.name} 打工获得报酬",
+            note=f"{locked_assignment.guest.display_name} 在 {locked_assignment.work_template.name} 打工获得报酬",
         )
 
         # 标记为已领取
-        assignment.reward_claimed = True
-        assignment.save(update_fields=["reward_claimed"])
+        locked_assignment.reward_claimed = True
+        locked_assignment.save(update_fields=["reward_claimed"])
+
+    # 让传入对象状态保持同步，避免调用方误判
+    assignment.reward_claimed = True
 
     return {"silver": reward_silver}
 
@@ -195,10 +226,11 @@ def refresh_work_assignments(manor: Manor) -> None:
         guest_ids = [a.guest_id for a in assignments]
         assignment_ids = [a.id for a in assignments]
 
-        # 批量更新任务状态（1次查询）
-        WorkAssignment.objects.filter(id__in=assignment_ids).update(
-            status=WorkAssignment.Status.COMPLETED, finished_at=now
-        )
+        # 仅更新仍处于 WORKING 的记录，避免并发召回时覆盖状态
+        WorkAssignment.objects.filter(
+            id__in=assignment_ids,
+            status=WorkAssignment.Status.WORKING,
+        ).update(status=WorkAssignment.Status.COMPLETED, finished_at=now)
 
         # 批量更新门客状态（1次查询）
         Guest.objects.filter(id__in=guest_ids).update(status=GuestStatus.IDLE)

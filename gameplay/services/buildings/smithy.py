@@ -24,27 +24,32 @@ from ..utils.notifications import notify_user
 # 时间：1、3、5分钟
 METAL_CONFIG: Dict[str, Dict[str, Any]] = {
     "tong": {
-        "name": "铜",
         "cost_type": "silver",  # 消耗类型
         "cost_amount": 1,  # 单个消耗数量
         "base_duration": 60,  # 1分钟
         "required_smelting": 1,
     },
     "xi": {
-        "name": "锡",
         "cost_type": "tong",  # 消耗铜
         "cost_amount": 5,  # 5铜→1锡
         "base_duration": 180,  # 3分钟
         "required_smelting": 2,
     },
     "tie": {
-        "name": "铁",
         "cost_type": "xi",  # 消耗锡
         "cost_amount": 3,  # 3锡→1铁
         "base_duration": 300,  # 5分钟
         "required_smelting": 3,
     },
 }
+
+
+def _get_item_name_map(keys: set[str]) -> Dict[str, str]:
+    if not keys:
+        return {}
+    from ...models import ItemTemplate
+
+    return {tpl.key: tpl.name for tpl in ItemTemplate.objects.filter(key__in=keys).only("key", "name")}
 
 
 def get_smithy_speed_bonus(manor: Manor) -> float:
@@ -129,13 +134,9 @@ def get_metal_options(manor: Manor) -> List[Dict[str, Any]]:
     max_quantity = get_max_smelting_quantity(manor)
     is_producing = has_active_smelting_production(manor)
 
-    # 消耗类型的中文名称
-    cost_type_names = {
-        "silver": "银两",
-        "tong": "铜",
-        "xi": "锡",
-        "tie": "铁",
-    }
+    cost_types = {str(cfg.get("cost_type") or "") for cfg in METAL_CONFIG.values()}
+    name_keys = set(METAL_CONFIG.keys()) | {key for key in cost_types if key and key != "silver"}
+    item_name_map = _get_item_name_map(name_keys)
 
     options = []
     for metal_key, config in METAL_CONFIG.items():
@@ -144,7 +145,8 @@ def get_metal_options(manor: Manor) -> List[Dict[str, Any]]:
         is_unlocked = smelting_level >= required_level
         cost_type = config["cost_type"]
         cost_amount = config["cost_amount"]
-        cost_type_name = cost_type_names.get(cost_type, cost_type)
+        metal_name = item_name_map.get(metal_key, metal_key)
+        cost_type_name = "银两" if cost_type == "silver" else item_name_map.get(cost_type, cost_type)
 
         # 检查是否有足够的材料
         if cost_type == "silver":
@@ -155,7 +157,7 @@ def get_metal_options(manor: Manor) -> List[Dict[str, Any]]:
         options.append(
             {
                 "key": metal_key,
-                "name": config["name"],
+                "name": metal_name,
                 "cost_type": cost_type,
                 "cost_type_name": cost_type_name,
                 "cost_amount": cost_amount,
@@ -198,7 +200,9 @@ def start_smelting_production(manor: Manor, metal_key: str, quantity: int = 1) -
 
     smelting_level = get_player_technology_level(manor, "smelting")
     if smelting_level < required_level:
-        raise ValueError(f"需要冶炼技{required_level}级才能冶炼{config['name']}")
+        item_name_map_for_level = _get_item_name_map({metal_key})
+        metal_name_for_level = item_name_map_for_level.get(metal_key, metal_key)
+        raise ValueError(f"需要冶炼技{required_level}级才能冶炼{metal_name_for_level}")
 
     # 验证冶炼数量
     max_quantity = get_max_smelting_quantity(manor)
@@ -212,14 +216,9 @@ def start_smelting_production(manor: Manor, metal_key: str, quantity: int = 1) -
     cost_amount = config["cost_amount"]
     total_cost = cost_amount * quantity
 
-    # 消耗类型的中文名称
-    cost_type_names = {
-        "silver": "银两",
-        "tong": "铜",
-        "xi": "锡",
-        "tie": "铁",
-    }
-    cost_name = cost_type_names.get(cost_type, cost_type)
+    item_name_map = _get_item_name_map({metal_key, cost_type} - {"silver"})
+    metal_name = item_name_map.get(metal_key, metal_key)
+    cost_name = "银两" if cost_type == "silver" else item_name_map.get(cost_type, cost_type)
 
     with transaction.atomic():
         from gameplay.models import Manor as ManorModel
@@ -241,7 +240,7 @@ def start_smelting_production(manor: Manor, metal_key: str, quantity: int = 1) -
             spend_resources_locked(
                 locked_manor,
                 {"silver": total_cost},
-                note=f"冶炼{config['name']}x{quantity}",
+                note=f"冶炼{metal_name}x{quantity}",
                 reason=ResourceEvent.Reason.UPGRADE_COST,
             )
         else:
@@ -267,7 +266,7 @@ def start_smelting_production(manor: Manor, metal_key: str, quantity: int = 1) -
         production = SmeltingProduction.objects.create(
             manor=locked_manor,
             metal_key=metal_key,
-            metal_name=config["name"],
+            metal_name=metal_name,
             quantity=quantity,
             cost_type=cost_type,
             cost_amount=total_cost,
