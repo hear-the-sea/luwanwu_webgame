@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import random
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Literal, Tuple
 
 from guests.models import Guest
 
@@ -18,23 +18,34 @@ def _safe_int(value, default: int = 0) -> int:
         return default
 
 
-def _collect_all_casualties(report) -> List[Dict[str, Any]]:
+def _normalize_side(side: str | None) -> Literal["attacker", "defender"] | None:
+    normalized = str(side or "").strip().lower()
+    if normalized == "attacker":
+        return "attacker"
+    if normalized == "defender":
+        return "defender"
+    return None
+
+
+def _collect_casualties(report, side: str | None = None) -> List[Dict[str, Any]]:
     losses = getattr(report, "losses", None) or {}
+    normalized_side = _normalize_side(side)
+    if normalized_side:
+        side_losses = losses.get(normalized_side, {}) or {}
+        return list(side_losses.get("casualties", []) or [])
+
     attacker_losses = losses.get("attacker", {}) or {}
     defender_losses = losses.get("defender", {}) or {}
+    casualties: List[Dict[str, Any]] = []
+    casualties.extend(attacker_losses.get("casualties", []) or [])
+    casualties.extend(defender_losses.get("casualties", []) or [])
+    return casualties
 
-    all_casualties: List[Dict[str, Any]] = []
-    all_casualties.extend(attacker_losses.get("casualties", []) or [])
-    all_casualties.extend(defender_losses.get("casualties", []) or [])
-    return all_casualties
 
-
-def _calculate_troop_recovery(casualties: List[Dict[str, Any]], rng: random.Random) -> Tuple[float, Dict[str, int]]:
+def _calculate_troop_exp_fruit(casualties: List[Dict[str, Any]]) -> float:
     from gameplay.services.recruitment.recruitment import get_troop_template
 
     troop_exp_fruit = 0.0
-    equipment_recovery: Dict[str, int] = {}
-
     for entry in casualties:
         key = entry.get("key", "")
         lost = _safe_int(entry.get("lost", 0), 0)
@@ -48,7 +59,24 @@ def _calculate_troop_recovery(casualties: List[Dict[str, Any]], rng: random.Rand
         recruit = troop_config.get("recruit", {}) or {}
         base_duration = _safe_int(recruit.get("base_duration", 60), 60) or 60
         troop_exp_fruit += lost * (base_duration / 3600) * 0.1
+    return troop_exp_fruit
 
+
+def _calculate_equipment_recovery(casualties: List[Dict[str, Any]], rng: random.Random) -> Dict[str, int]:
+    from gameplay.services.recruitment.recruitment import get_troop_template
+
+    equipment_recovery: Dict[str, int] = {}
+    for entry in casualties:
+        key = entry.get("key", "")
+        lost = _safe_int(entry.get("lost", 0), 0)
+        if lost <= 0:
+            continue
+
+        troop_config = get_troop_template(key)
+        if not troop_config:
+            continue
+
+        recruit = troop_config.get("recruit", {}) or {}
         equipment_list = recruit.get("equipment", []) or []
         for equip_key in equipment_list:
             recovered = 0
@@ -58,7 +86,7 @@ def _calculate_troop_recovery(casualties: List[Dict[str, Any]], rng: random.Rand
             if recovered > 0:
                 equipment_recovery[equip_key] = equipment_recovery.get(equip_key, 0) + recovered
 
-    return troop_exp_fruit, equipment_recovery
+    return equipment_recovery
 
 
 def _member_exp_fruit(member: Dict[str, Any]) -> float:
@@ -88,22 +116,31 @@ def calculate_battle_salvage(
     report,
     attacker_guests: List[Guest] | None = None,
     defender_guests: List[Guest] | None = None,
+    *,
+    equipment_casualty_side: str | None = None,
 ) -> Tuple[int, Dict[str, int]]:
     """
     根据战报计算“胜利方战斗回收”奖励（经验果 + 护院装备回收）。
 
     规则参考《踢馆功能设定书》5.5（双方通用奖励）。
+    `equipment_casualty_side` 仅用于限定“装备回收”所依据的阵亡方，不影响经验果计算。
     """
     if not report:
         return 0, {}
 
-    attacker_guests = attacker_guests or []
-    defender_guests = defender_guests or []
+    # 历史兼容参数，当前不参与计算。
+    _ = attacker_guests, defender_guests
 
     rng = random.Random(_safe_int(getattr(report, "seed", 0), 0))
 
-    casualties = _collect_all_casualties(report)
-    troop_exp_fruit, equipment_recovery = _calculate_troop_recovery(casualties, rng)
+    all_casualties = _collect_casualties(report)
+    troop_exp_fruit = _calculate_troop_exp_fruit(all_casualties)
+    normalized_equipment_side = _normalize_side(equipment_casualty_side)
+    if not normalized_equipment_side:
+        equipment_casualties = all_casualties
+    else:
+        equipment_casualties = _collect_casualties(report, side=normalized_equipment_side)
+    equipment_recovery = _calculate_equipment_recovery(equipment_casualties, rng)
     guest_exp_fruit = _calculate_guest_recovery(report)
 
     total_exp_fruit = int(troop_exp_fruit + guest_exp_fruit)

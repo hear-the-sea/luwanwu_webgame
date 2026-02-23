@@ -104,31 +104,35 @@ attribute_profiles:
       agility: 52
       luck: 165
 pools:
-- key: tongshi
+- key: cunmu
   name: 村募
-  tier: tongshi
+  tier: cunmu
   description: 在地方由村长主持的初级招募，寻找有潜力的年轻人。
   cost:
-    silver: 120
+    silver: 500
+  cooldown_seconds: 600
   draw_count: 1
 - key: xiangshi
   name: 乡试
   tier: xiangshi
   description: 各省贡院三年一科的大型考试，通过者称举人。
   cost:
-    silver: 450
+    silver: 1500
+  cooldown_seconds: 1200
   draw_count: 5
 - key: huishi
   name: 会试
   tier: huishi
   description: 在京城由礼部主持的统考举人考试，通过者称贡士。
   cost:
-    silver: 900
+    silver: 5000
+  cooldown_seconds: 1800
   draw_count: 8
 - key: dianshi
   name: 殿试
   tier: dianshi
   description: 皇帝在宫殿亲自主持的最高等级考试，对会试贡士排定名次，取进士。
   cost:
-    silver: 0
+    silver: 10000
+  cooldown_seconds: 3600
   draw_count: 10

@@ -24,6 +24,50 @@ RESOURCE_FIELDS = [
     ResourceType.SILVER,
 ]
 
+# 人员耗粮规则（每小时）
+RETAINER_GRAIN_COST_PER_HOUR = 1
+TROOP_GRAIN_COST_PER_HOUR = 1
+GUEST_GRAIN_COST_PER_HOUR = 100
+
+
+def get_personnel_grain_cost_per_hour(manor: "Manor") -> int:
+    """
+    计算人员每小时耗粮。
+
+    规则：
+    - 每位家丁：1 粮食/小时
+    - 每位护院：1 粮食/小时（含庄园与钱庄中的护院）
+    - 每名门客：100 粮食/小时
+    """
+    from django.db.models import Sum
+    from django.db.models.functions import Coalesce
+
+    retainer_count = safe_int(getattr(manor, "retainer_count", 0), default=0, min_val=0) or 0
+    guest_count = safe_int(manor.guests.count(), default=0, min_val=0) or 0
+    troop_count = (
+        safe_int(
+            manor.troops.aggregate(total=Coalesce(Sum("count"), 0)).get("total"),
+            default=0,
+            min_val=0,
+        )
+        or 0
+    )
+    bank_troop_count = (
+        safe_int(
+            manor.troop_bank_storages.aggregate(total=Coalesce(Sum("count"), 0)).get("total"),
+            default=0,
+            min_val=0,
+        )
+        or 0
+    )
+
+    total_troops = troop_count + bank_troop_count
+    return int(
+        retainer_count * RETAINER_GRAIN_COST_PER_HOUR
+        + total_troops * TROOP_GRAIN_COST_PER_HOUR
+        + guest_count * GUEST_GRAIN_COST_PER_HOUR
+    )
+
 
 def has_resources(manor: "Manor", cost: Dict[str, int]) -> bool:
     """

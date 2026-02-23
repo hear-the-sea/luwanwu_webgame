@@ -266,6 +266,156 @@
     border-color: var(--accent-gold);
   }
 
+  .tw-manor-building-grid {
+    grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+  }
+
+  .tw-building-card--manor {
+    @apply flex-row items-stretch;
+    min-height: 188px;
+  }
+
+  .tw-building-card--manor .tw-building-media {
+    @apply flex items-center justify-center;
+    flex: 0 0 236px;
+    padding: 8px;
+    background: var(--bg-secondary);
+    border-right: 2px solid var(--border-light);
+  }
+
+  .tw-building-card--manor .tw-building-corner-frame {
+    position: relative;
+    --corner-size: 24px;
+    --corner-notch: 32%;
+    width: 220px;
+    height: 220px;
+    max-width: 100%;
+    max-height: 100%;
+    border: 1px solid rgba(107, 62, 28, 0.65);
+    background: linear-gradient(180deg, #f4e3be 0%, #e6cfa1 100%);
+    box-shadow:
+      0 2px 7px rgba(74, 38, 18, 0.22),
+      inset 0 0 0 1px rgba(255, 248, 231, 0.28);
+  }
+
+  .tw-building-card--manor .tw-corner-piece {
+    position: absolute;
+    width: var(--corner-size);
+    height: var(--corner-size);
+    background: linear-gradient(145deg, #aa763d 0%, #7d4c26 48%, #5d3516 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(245, 223, 182, 0.35),
+      0 1px 2px rgba(58, 31, 10, 0.28);
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  .tw-building-card--manor .tw-corner-tl {
+    top: 0;
+    left: 0;
+    clip-path: polygon(
+      0 0,
+      100% 0,
+      82% 18%,
+      24% 18%,
+      24% 76%,
+      0 100%
+    );
+  }
+
+  .tw-building-card--manor .tw-corner-tr {
+    top: 0;
+    right: 0;
+    clip-path: polygon(
+      0 0,
+      100% 0,
+      100% 100%,
+      76% 76%,
+      76% 18%,
+      18% 18%
+    );
+  }
+
+  .tw-building-card--manor .tw-corner-bl {
+    bottom: 0;
+    left: 0;
+    clip-path: polygon(
+      0 0,
+      0 100%,
+      100% 100%,
+      82% 82%,
+      24% 82%,
+      24% 24%
+    );
+  }
+
+  .tw-building-card--manor .tw-corner-br {
+    bottom: 0;
+    right: 0;
+    clip-path: polygon(
+      100% 0,
+      100% 100%,
+      0 100%,
+      18% 82%,
+      76% 82%,
+      76% 24%
+    );
+  }
+
+  .tw-building-card--manor .tw-building-corner-frame::after {
+    content: "";
+    position: absolute;
+    inset: 4px;
+    border: 1px solid rgba(123, 78, 34, 0.6);
+    pointer-events: none;
+  }
+
+  .tw-building-card--manor .tw-building-corner-frame img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 0;
+    border: 1px solid rgba(86, 50, 23, 0.45);
+    object-fit: contain;
+    background: linear-gradient(180deg, #f7ecd3 0%, #efe2c5 100%);
+  }
+
+  .tw-building-card--manor .tw-building-main {
+    @apply flex flex-col flex-1 min-w-0;
+  }
+
+  .tw-building-card--manor .tw-card-actions {
+    @apply mt-auto;
+  }
+
+  .tw-building-card--manor dd span + span {
+    @apply ml-2;
+  }
+
+  .tw-building-card--manor header {
+    @apply flex-col items-stretch;
+    gap: 4px;
+  }
+
+  .tw-building-card--manor .tw-building-headline {
+    @apply flex items-center justify-between;
+    gap: 10px;
+  }
+
+  .tw-building-card--manor .tw-building-headline h3 {
+    @apply m-0;
+  }
+
+  .tw-building-card--manor .tw-level-badge {
+    flex-shrink: 0;
+  }
+
+  .tw-building-card--manor .tw-building-desc {
+    @apply mt-0;
+  }
+
   .tw-building-card header {
     @apply flex justify-between items-start p-4
            border-b-2;
@@ -331,6 +481,65 @@
 
   .tw-empty-hint {
     @apply text-text-muted text-center py-8;
+  }
+
+  @media (max-width: 900px) {
+    .tw-manor-building-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .tw-building-card--manor .tw-building-media {
+      flex: 0 0 176px;
+      padding: 6px;
+    }
+
+    .tw-building-card--manor .tw-building-corner-frame {
+      --corner-size: 20px;
+      --corner-notch: 34%;
+      width: 160px;
+      height: 160px;
+    }
+
+    .tw-building-card--manor .tw-next-cost-list {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
+    }
+
+    .tw-building-card--manor .tw-next-cost-list span + span {
+      margin-left: 0;
+    }
+
+    .tw-building-card .tw-btn-row {
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .tw-building-card .tw-btn-row form,
+    .tw-building-card .tw-btn-row > a.tw-btn-primary {
+      width: 100%;
+      min-width: 0;
+      flex: none;
+    }
+
+    .tw-building-card .tw-btn-row .tw-btn-primary,
+    .tw-building-card .tw-btn-row a.tw-btn-primary {
+      white-space: normal;
+    }
+
+    .tw-work-card .tw-card-actions > .flex {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .tw-work-card .tw-card-actions .tw-form-select,
+    .tw-work-card .tw-card-actions .tw-btn-primary {
+      width: 100%;
+      min-width: 0;
+    }
   }
 
   /* ========== 仓库/藏宝阁标签导航 ========== */
@@ -428,7 +637,7 @@
 
   /* ========== 仓库表格 ========== */
   .tw-table-wrapper {
-    @apply flex-1 overflow-y-auto overflow-x-hidden mt-2;
+    @apply flex-1 overflow-y-auto overflow-x-auto mt-2;
     min-height: 300px;
   }
 
@@ -2175,6 +2384,12 @@
 
 /* ========== 移动端响应式样式 ========== */
 @media (max-width: 768px) {
+  .main-layout,
+  .full-layout,
+  .content-area {
+    overflow-x: visible;
+  }
+
   /* 仓库/藏宝阁移动端适配 */
   .tw-storage-tabs {
     flex-wrap: wrap;
@@ -2193,7 +2408,8 @@
   }
 
   .tw-table-wrapper {
-    overflow-x: visible;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
     min-height: auto;
   }
 

@@ -135,8 +135,7 @@ def to_plain(value):
 
 def _resolve_paths(base_dir: Path) -> tuple[Path, Path, Path]:
     data_dir = base_dir / "data"
-    backup_file = data_dir / "guest_templates_full.yaml"
-    input_file = backup_file if backup_file.exists() else data_dir / "guest_templates.yaml"
+    input_file = data_dir / "guest_templates.yaml"
     output_dir = data_dir / "guests"
     output_dir.mkdir(exist_ok=True)
     return data_dir, input_file, output_dir

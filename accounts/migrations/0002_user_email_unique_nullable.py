@@ -30,6 +30,12 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        # 先放开 NULL 约束，避免后续数据清洗把空邮箱写成 NULL 时触发 MySQL IntegrityError
+        migrations.AlterField(
+            model_name="user",
+            name="email",
+            field=models.EmailField(blank=True, max_length=254, null=True, verbose_name="email address"),
+        ),
         migrations.RunPython(normalize_and_dedupe_emails, migrations.RunPython.noop),
         migrations.AlterField(
             model_name="user",

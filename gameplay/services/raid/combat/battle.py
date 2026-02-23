@@ -9,6 +9,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
+from gameplay.services.battle_snapshots import build_guest_battle_snapshots, build_guest_snapshot_proxies
 from gameplay.services.raid import combat as combat_pkg
 from guests.models import Guest, GuestStatus
 
@@ -339,14 +340,97 @@ def _try_capture_guest(run: RaidRun, report, is_attacker_victory: bool) -> Optio
     return _capture_guest_payload(captured_name, captured_rarity, captured_template_key, is_attacker_victory)
 
 
+def _extract_side_guest_state(report, side: str) -> tuple[Dict[int, int], set[int]]:
+    hp_updates: Dict[int, int] = {}
+    defeated_guest_ids: set[int] = set()
+
+    if not report:
+        return hp_updates, defeated_guest_ids
+
+    team_entries = report.attacker_team if side == "attacker" else report.defender_team
+    for entry in team_entries or []:
+        if not isinstance(entry, dict):
+            continue
+        guest_id_raw = entry.get("guest_id")
+        remaining_hp_raw = entry.get("remaining_hp")
+        try:
+            guest_id = int(guest_id_raw)
+            remaining_hp = int(remaining_hp_raw)
+        except (TypeError, ValueError):
+            continue
+        hp_updates[guest_id] = remaining_hp
+        if remaining_hp <= 0:
+            defeated_guest_ids.add(guest_id)
+
+    raw_hp_updates = ((report.losses or {}).get(side) or {}).get("hp_updates") or {}
+    for guest_id_raw, hp_raw in raw_hp_updates.items():
+        try:
+            guest_id = int(guest_id_raw)
+            hp = int(hp_raw)
+        except (TypeError, ValueError):
+            continue
+        hp_updates.setdefault(guest_id, hp)
+
+    return hp_updates, defeated_guest_ids
+
+
+def _apply_guest_damage_from_report(
+    report,
+    *,
+    attacker_guest_ids: set[int],
+    defender_guest_ids: set[int],
+) -> None:
+    attacker_hp_updates, attacker_defeated_ids = _extract_side_guest_state(report, "attacker")
+    defender_hp_updates, defender_defeated_ids = _extract_side_guest_state(report, "defender")
+
+    target_ids = (attacker_guest_ids | defender_guest_ids) & (
+        set(attacker_hp_updates.keys()) | set(defender_hp_updates.keys())
+    )
+    if not target_ids:
+        return
+
+    guests = list(Guest.objects.select_for_update().filter(id__in=target_ids))
+    if not guests:
+        return
+
+    now = timezone.now()
+    dirty_guests: list[Guest] = []
+    for guest in guests:
+        if guest.id in attacker_guest_ids:
+            hp = attacker_hp_updates.get(guest.id)
+            is_defeated = guest.id in attacker_defeated_ids
+        else:
+            hp = defender_hp_updates.get(guest.id)
+            is_defeated = guest.id in defender_defeated_ids
+        if hp is None:
+            continue
+
+        guest.current_hp = max(1, min(guest.max_hp, int(hp)))
+        guest.last_hp_recovery_at = now
+        if is_defeated:
+            guest.status = GuestStatus.INJURED
+        dirty_guests.append(guest)
+
+    if dirty_guests:
+        Guest.objects.bulk_update(dirty_guests, ["current_hp", "last_hp_recovery_at", "status"])
+
+
 def _execute_raid_battle(run: RaidRun):
     """执行踢馆战斗"""
     from battle.services import simulate_report
 
     attacker = run.attacker
     defender = run.defender
-    guests = list(run.guests.select_for_update().select_related("template").prefetch_related("skills"))
+    attacker_guests = list(run.guests.select_for_update().select_related("template").prefetch_related("skills"))
     loadout = _normalize_positive_int_mapping(run.troop_loadout)
+    attacker_guest_ids = {guest.id for guest in attacker_guests}
+
+    attacker_snapshots = list(run.guest_snapshots or [])
+    if not attacker_snapshots and attacker_guests:
+        attacker_snapshots = build_guest_battle_snapshots(attacker_guests, include_identity=True)
+    attacker_combat_guests = build_guest_snapshot_proxies(attacker_snapshots, include_guest_identity=True)
+    if not attacker_combat_guests:
+        attacker_combat_guests = attacker_guests
 
     # 到达时刻快照：防守方为庄园中未出征的门客与护院（仅取空闲门客）
     defender_guests = list(
@@ -362,6 +446,7 @@ def _execute_raid_battle(run: RaidRun):
         PlayerTroop.objects.select_for_update().filter(manor=defender, count__gt=0).select_related("troop_template")
     ):
         defender_troops[troop.troop_template.key] = troop.count
+    defender_guest_ids = {guest.id for guest in defender_guests}
 
     defender_setup = {
         "troop_loadout": defender_troops,
@@ -373,7 +458,7 @@ def _execute_raid_battle(run: RaidRun):
         battle_type="raid",
         troop_loadout=loadout,
         fill_default_troops=False,
-        attacker_guests=guests,
+        attacker_guests=attacker_combat_guests,
         defender_setup=defender_setup,
         defender_guests=defender_guests,
         defender_max_squad=getattr(defender, "max_squad_size", None),
@@ -381,8 +466,13 @@ def _execute_raid_battle(run: RaidRun):
         travel_seconds=0,
         send_message=False,
         auto_reward=False,
-        apply_damage=True,
+        apply_damage=False,
         use_lock=False,
+    )
+    _apply_guest_damage_from_report(
+        report,
+        attacker_guest_ids=attacker_guest_ids,
+        defender_guest_ids=defender_guest_ids,
     )
 
     return report

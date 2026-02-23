@@ -2,29 +2,53 @@
 
 heroes:
   black:
-  - key: base_black_civil
-    name: 黑阶学士
-    archetype: civil
-    flavor: 默默无闻的寒门学子，家境清贫却勤学不辍，白日耕读，夜里挑灯抄书，只盼一朝金榜题名。性情谨慎内敛，善于观察人心与局势，在庄园里默默积累才学与人脉，甘于寂寞也不失清骨。
+  - key: base_black_military
+    name: 布衣百姓
+    archetype: military
+    flavor: 茫茫人海中的普通一员，面朝黄土背朝天。虽然不懂江湖恩怨，却是这乱世中纳粮纳税、支撑天下的基石。默默无闻，生生不息。
     default_gender: unknown
     default_morality: 60
-  - key: base_black_military
-    name: 黑阶武徒
+    avatar: buyi.png
+  - key: base_black_military_2
+    name: 布衣百姓
     archetype: military
-    flavor: 赶考途中暂居庄园的游侠，行走江湖多见不平事，剑术虽不张扬却出手稳准。为躲追兵与风雪而落脚此地，白天以护院为生，夜里仍记书卷志向，侠义与求名交织于心。
+    flavor: 市井间的寻常路人，每日为柴米油盐奔波。神仙打架，凡人遭殃，他们唯一的愿望不过是风调雨顺，一家平安。虽然卑微，却有着最顽强的生命力。
     default_gender: unknown
-    default_morality: 45
+    default_morality: 60
+    avatar: buyi.png
+  - key: base_black_military_3
+    name: 布衣百姓
+    archetype: military
+    flavor: 无名无姓的乡野村民。在刀光剑影的江湖之外，过着日出而作、日落而息的生活。不仅能提供粮草赋税，危急时刻也能拿起农具保卫家园。
+    default_gender: unknown
+    default_morality: 60
+    avatar: buyi.png
+  - key: base_black_military_4
+    name: 布衣百姓
+    archetype: civil
+    flavor: 繁华闹市里的匆匆过客，或许是小贩，或许是工匠。他们见证了无数英雄的崛起与陨落，自己却始终是这幅江湖画卷中最不起眼的底色。
+    default_gender: unknown
+    default_morality: 60
+    avatar: buyi.png
+  - key: base_black_military_5
+    name: 布衣百姓
+    archetype: military
+    flavor: 流离失所的难民，渴望一方安身立命之所。只要给一口饱饭，便愿意付出全部的忠诚与劳力。人多力量大，聚沙可成塔。
+    default_gender: unknown
+    default_morality: 60
+
+    avatar: buyi.png
   gray:
   - key: base_gray_civil
     name: 灰阶谋士
     archetype: civil
-    flavor: 熟读兵书，擅长后勤调度，能将粮草、车马与人手安排得井井有条。为人谨慎稳重，善于计算损耗与行军节奏，遇事不慌，常以细致的筹划补足主帅的锋芒，是队伍里最可靠的内务骨干。
+    flavor: 默默无闻的寒门学子，家境清贫却勤学不辍，白日耕读，夜里挑灯抄书，只盼一朝金榜题名。性情谨慎内敛，善于观察人心与局势，在庄园里默默积累才学与人脉，甘于寂寞也不失清骨。
     default_gender: unknown
     default_morality: 65
   - key: base_gray_military
     name: 灰阶兵长
     archetype: military
-    flavor: 身经百战的基层军官，起于伍长，历经多次前线血战，懂得以最小代价换取胜利。对士卒体恤有加，善于鼓舞士气，战阵中能稳住军心，退守时亦不忘保全伤兵，深得部下信服。
+    flavor: 赶考途中暂居庄园的游侠，行走江湖多见不平事，剑术虽不张扬却出手稳准。为躲追兵与风雪而落脚此地，白天以护院为生，夜里仍记书卷志向，侠义与求名交织于心。
     default_gender: unknown
     default_morality: 50
   red:

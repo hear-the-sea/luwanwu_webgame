@@ -4,6 +4,7 @@ import uuid
 
 import pytest
 
+from core.exceptions import GuestNotIdleError
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.manor.core import ensure_manor
 from guests.models import GuestStatus, RecruitmentPool
@@ -16,7 +17,7 @@ def _bootstrap_injured_guest(game_data, django_user_model, *, username: str):
     manor.grain = manor.silver = 500000
     manor.save(update_fields=["grain", "silver"])
 
-    pool = RecruitmentPool.objects.get(key="tongshi")
+    pool = RecruitmentPool.objects.get(key="cunmu")
     candidate = recruit_guest(manor, pool, seed=1)[0]
     guest = finalize_candidate(candidate)
 
@@ -103,3 +104,20 @@ def test_use_medicine_item_for_guest_sanitizes_malformed_heal_result(monkeypatch
     assert result["healed"] == 0
     assert result["remaining_item_quantity"] == 0
     assert InventoryItem.objects.filter(pk=item.pk).exists() is False
+
+
+@pytest.mark.django_db
+def test_use_medicine_item_for_guest_rejects_non_idle_busy_status(game_data, django_user_model):
+    manor, guest = _bootstrap_injured_guest(game_data, django_user_model, username="medicine_item_busy_reject")
+    guest.status = GuestStatus.WORKING
+    guest.save(update_fields=["status"])
+    heal_amount = max(1, int(guest.max_hp * 0.2))
+    item = _create_medicine_item(manor, heal_amount=heal_amount)
+
+    with pytest.raises(GuestNotIdleError):
+        use_medicine_item_for_guest(manor, guest, item.pk, heal_amount)
+
+    guest.refresh_from_db()
+    item.refresh_from_db()
+    assert guest.status == GuestStatus.WORKING
+    assert item.quantity == 1

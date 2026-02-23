@@ -10,7 +10,13 @@ from typing import TYPE_CHECKING, Any, Dict
 from django.db import transaction
 from django.utils import timezone
 
-from core.exceptions import GuestError, GuestMaxLevelError, GuestTrainingInProgressError, InsufficientStockError
+from core.exceptions import (
+    GuestError,
+    GuestMaxLevelError,
+    GuestNotIdleError,
+    GuestTrainingInProgressError,
+    InsufficientStockError,
+)
 from core.utils import safe_int
 
 if TYPE_CHECKING:
@@ -81,6 +87,8 @@ def ensure_auto_training(guest: Guest) -> None:
     如果没有训练计划且门客未达到最高等级，则自动开始训练到下一级。
     """
     if guest.level >= MAX_GUEST_LEVEL:
+        return
+    if guest.status != GuestStatus.IDLE:
         return
     if guest.training_complete_at:
         return
@@ -189,6 +197,8 @@ def use_experience_item_for_guest(manor: Manor, guest: Guest, item_id: int, redu
     locked_guest = Guest.objects.select_for_update().select_related("template").filter(pk=guest.pk, manor=manor).first()
     if not locked_guest:
         raise ValueError("门客不存在或不属于您的庄园")
+    if locked_guest.status != GuestStatus.IDLE:
+        raise GuestNotIdleError(locked_guest)
 
     result = reduce_training_time_for_guest(locked_guest, reduce_seconds)
     consume_inventory_item_locked(locked_item, 1)
@@ -225,7 +235,9 @@ def reduce_training_time(manor: Manor, seconds: int) -> Dict[str, int]:
     if seconds <= 0:
         return {"time_reduced": 0, "applied_guests": 0}
     guests = list(
-        manor.guests.select_related("template").filter(level__lt=MAX_GUEST_LEVEL).order_by("training_complete_at", "id")
+        manor.guests.select_related("template")
+        .filter(level__lt=MAX_GUEST_LEVEL, status=GuestStatus.IDLE)
+        .order_by("training_complete_at", "id")
     )
     if not guests:
         raise GuestError("所有门客已达等级上限，无法使用该道具。")
@@ -263,6 +275,8 @@ def reduce_training_time_for_guest(guest: Guest, seconds: int) -> Dict[str, int]
     """
     if seconds <= 0:
         return {"time_reduced": 0, "applied_levels": 0}
+    if guest.status != GuestStatus.IDLE:
+        raise GuestNotIdleError(guest)
     now = timezone.now()
     if not ensure_training_timer(guest, now=now):
         if guest.level >= MAX_GUEST_LEVEL:
@@ -303,6 +317,8 @@ def train_guest(guest: Guest, levels: int = 1) -> Guest:
     Manor.objects.select_for_update().get(pk=guest.manor_id)
 
     locked_guest = Guest.objects.select_for_update().select_related("manor", "template").get(pk=guest.pk)
+    if locked_guest.status != GuestStatus.IDLE:
+        raise GuestNotIdleError(locked_guest)
     if locked_guest.level >= MAX_GUEST_LEVEL:
         raise GuestMaxLevelError(locked_guest, max_level=MAX_GUEST_LEVEL)
     if locked_guest.training_complete_at:
@@ -359,6 +375,8 @@ def finalize_guest_training(guest: Guest, now=None) -> bool:
         locked_guest = Guest.objects.select_for_update().select_related("manor", "template").get(pk=guest.pk)
         if not locked_guest.training_complete_at or locked_guest.training_complete_at > now:
             return False
+        if locked_guest.status != GuestStatus.IDLE:
+            return False
 
         target_level = max(locked_guest.level, locked_guest.training_target_level or locked_guest.level)
         levels_gained = max(0, target_level - locked_guest.level)
@@ -378,10 +396,6 @@ def finalize_guest_training(guest: Guest, now=None) -> bool:
         locked_guest.experience = 0
         locked_guest.current_hp = locked_guest.max_hp
 
-        # 训练完成恢复满血时，解除重伤状态
-        if locked_guest.status == GuestStatus.INJURED:
-            locked_guest.status = GuestStatus.IDLE
-
         locked_guest.save(
             update_fields=[
                 "level",
@@ -394,7 +408,6 @@ def finalize_guest_training(guest: Guest, now=None) -> bool:
                 "attribute_points",
                 "experience",
                 "current_hp",
-                "status",
             ]
         )
 

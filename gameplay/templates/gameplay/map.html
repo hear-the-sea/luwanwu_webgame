@@ -84,6 +84,8 @@
 {% endblock %}
 
 {% block extra_scripts %}
+{{ block.super }}
+<script src="{% static 'js/dashboard.js' %}"></script>
 <script>
 (function() {
     const mapApiBase = '{% url "gameplay:map_search_api" %}';

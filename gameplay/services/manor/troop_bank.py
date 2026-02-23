@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.db.models import Sum
 
 from ...models import Manor, PlayerTroop, TroopBankStorage
@@ -29,8 +29,12 @@ def get_troop_bank_capacity(_manor: Manor | None = None) -> int:
 
 
 def get_troop_bank_used_space(manor: Manor) -> int:
-    used = TroopBankStorage.objects.filter(manor=manor).aggregate(total=Sum("count")).get("total") or 0
-    return max(0, int(used))
+    try:
+        used = TroopBankStorage.objects.filter(manor=manor).aggregate(total=Sum("count")).get("total") or 0
+        return max(0, int(used))
+    except DatabaseError:
+        # 兼容迁移尚未完成/表异常场景：不阻断页面渲染。
+        return 0
 
 
 def get_troop_bank_remaining_space(manor: Manor) -> int:
@@ -40,16 +44,24 @@ def get_troop_bank_remaining_space(manor: Manor) -> int:
 def get_troop_bank_rows(manor: Manor) -> list[dict[str, Any]]:
     rows_by_key: dict[str, dict[str, Any]] = {}
 
-    player_troops = (
-        PlayerTroop.objects.filter(manor=manor, count__gt=0)
-        .select_related("troop_template")
-        .order_by("troop_template__priority")
-    )
-    bank_troops = (
-        TroopBankStorage.objects.filter(manor=manor, count__gt=0)
-        .select_related("troop_template")
-        .order_by("troop_template__priority")
-    )
+    try:
+        player_troops = list(
+            PlayerTroop.objects.filter(manor=manor, count__gt=0)
+            .select_related("troop_template")
+            .order_by("troop_template__priority")
+        )
+    except DatabaseError:
+        player_troops = []
+
+    try:
+        bank_troops = list(
+            TroopBankStorage.objects.filter(manor=manor, count__gt=0)
+            .select_related("troop_template")
+            .order_by("troop_template__priority")
+        )
+    except DatabaseError:
+        # 钱庄表异常时，仍展示庄园已有护院，避免误导为“暂无可存取护院”。
+        bank_troops = []
 
     for player_troop in player_troops:
         template = player_troop.troop_template

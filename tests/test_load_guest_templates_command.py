@@ -148,3 +148,47 @@ def test_load_guest_templates_replaces_pool_entries_on_reimport(tmp_path: Path) 
     assert entries[0].template is None
     assert entries[0].rarity == "blue"
     assert entries[0].archetype == "civil"
+
+
+@pytest.mark.django_db
+def test_load_guest_templates_pool_cooldown_defaults_to_zero_when_missing(tmp_path: Path) -> None:
+    payload = {
+        "templates": [
+            {
+                "key": "tpl_loader_c",
+                "name": "模板丙",
+                "archetype": "civil",
+                "rarity": "gray",
+            }
+        ],
+        "pools": [
+            {
+                "key": "pool_loader_c",
+                "name": "无冷却配置卡池",
+                "entries": [
+                    {"template": "tpl_loader_c", "weight": 1},
+                ],
+            }
+        ],
+    }
+
+    main_file = tmp_path / "guest_templates_c.json"
+    main_file.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    skills_file = tmp_path / "skills_empty.json"
+    skills_file.write_text("{}", encoding="utf-8")
+
+    heroes_dir = tmp_path / "heroes"
+    heroes_dir.mkdir()
+
+    call_command(
+        "load_guest_templates",
+        file=str(main_file),
+        skills_file=str(skills_file),
+        heroes_dir=str(heroes_dir),
+        skip_images=True,
+        verbosity=0,
+    )
+
+    pool = RecruitmentPool.objects.get(key="pool_loader_c")
+    assert pool.cooldown_seconds == 0

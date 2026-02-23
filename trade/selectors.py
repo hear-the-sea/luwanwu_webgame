@@ -13,6 +13,7 @@ from gameplay.services.manor.troop_bank import (
     get_troop_bank_used_space,
 )
 from gameplay.services.resources import sync_resource_production
+from gameplay.services.technology import get_troop_class_for_key
 
 from .services.auction_service import get_active_slots, get_auction_stats, get_my_bids, get_my_leading_bids
 from .services.bank_service import get_bank_info
@@ -25,6 +26,15 @@ from .services.shop_service import (
 )
 
 _TOOL_EFFECT_TYPES = LEGACY_TOOL_EFFECT_TYPES
+_TROOP_CATEGORY_LABELS: dict[str, str] = {
+    "dao": "刀系",
+    "qiang": "枪系",
+    "jian": "剑系",
+    "quan": "拳系",
+    "gong": "弓系",
+    "scout": "探子",
+    "other": "其他",
+}
 logger = logging.getLogger(__name__)
 
 
@@ -53,6 +63,22 @@ def _normalize_effect_type(effect_type: str) -> str:
     if normalized_effect_type in _TOOL_EFFECT_TYPES:
         return "tool"
     return normalized_effect_type
+
+
+def _build_troop_bank_categories(available_classes: set[str]) -> list[dict[str, str]]:
+    categories: list[dict[str, str]] = [{"key": "all", "name": "全部"}]
+    ordered = ["dao", "qiang", "jian", "quan", "gong", "scout", "other"]
+    used = {"all"}
+
+    for class_key in ordered:
+        if class_key in available_classes:
+            categories.append({"key": class_key, "name": _TROOP_CATEGORY_LABELS.get(class_key, class_key)})
+            used.add(class_key)
+
+    for class_key in sorted(available_classes):
+        if class_key not in used:
+            categories.append({"key": class_key, "name": _TROOP_CATEGORY_LABELS.get(class_key, class_key)})
+    return categories
 
 
 def _update_auction_browse_context(request, manor, context: dict) -> None:
@@ -303,6 +329,7 @@ def get_trade_context(request, manor) -> dict:
     elif tab == "shop":
         _update_shop_context(request, manor, context)
     elif tab == "bank":
+        selected_troop_category = (request.GET.get("troop_category") or "all").strip() or "all"
         try:
             context["bank_info"] = get_bank_info(manor)
         except Exception as exc:
@@ -313,22 +340,60 @@ def get_trade_context(request, manor) -> dict:
                 exc_info=True,
             )
             context["bank_info"] = {}
+        context["troop_bank_capacity"] = 5000
+        context["troop_bank_used"] = 0
+        context["troop_bank_remaining"] = 5000
+        context["troop_bank_rows"] = []
+
         try:
             context["troop_bank_capacity"] = get_troop_bank_capacity(manor)
-            context["troop_bank_used"] = get_troop_bank_used_space(manor)
-            context["troop_bank_remaining"] = get_troop_bank_remaining_space(manor)
-            context["troop_bank_rows"] = get_troop_bank_rows(manor)
         except Exception as exc:
             logger.warning(
-                "load troop bank info failed: manor_id=%s error=%s",
+                "load troop bank capacity failed: manor_id=%s error=%s",
                 getattr(manor, "id", None),
                 exc,
                 exc_info=True,
             )
-            context["troop_bank_capacity"] = 5000
-            context["troop_bank_used"] = 0
-            context["troop_bank_remaining"] = 5000
-            context["troop_bank_rows"] = []
+
+        try:
+            context["troop_bank_used"] = get_troop_bank_used_space(manor)
+            context["troop_bank_remaining"] = get_troop_bank_remaining_space(manor)
+        except Exception as exc:
+            logger.warning(
+                "load troop bank usage failed: manor_id=%s error=%s",
+                getattr(manor, "id", None),
+                exc,
+                exc_info=True,
+            )
+
+        try:
+            context["troop_bank_rows"] = get_troop_bank_rows(manor)
+        except Exception as exc:
+            logger.warning(
+                "load troop bank rows failed: manor_id=%s error=%s",
+                getattr(manor, "id", None),
+                exc,
+                exc_info=True,
+            )
+
+        troop_bank_rows = context.get("troop_bank_rows", [])
+        available_classes: set[str] = set()
+        for row in troop_bank_rows:
+            troop_key = str(row.get("key") or "").strip()
+            troop_class = get_troop_class_for_key(troop_key) or "other"
+            row["troop_class"] = troop_class
+            available_classes.add(troop_class)
+
+        troop_bank_categories = _build_troop_bank_categories(available_classes)
+        valid_category_keys = {item["key"] for item in troop_bank_categories}
+        if selected_troop_category not in valid_category_keys:
+            selected_troop_category = "all"
+        if selected_troop_category != "all":
+            troop_bank_rows = [row for row in troop_bank_rows if row.get("troop_class") == selected_troop_category]
+
+        context["troop_bank_rows"] = troop_bank_rows
+        context["troop_bank_categories"] = troop_bank_categories
+        context["troop_bank_current_category"] = selected_troop_category
     elif tab == "market":
         _update_market_context(request, manor, context)
 

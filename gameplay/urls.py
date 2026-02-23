@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     AcceptMissionView,
+    ArenaView,
     DashboardView,
     ForgeView,
     JailView,
@@ -23,6 +24,8 @@ from .views import (
     WorkView,
     add_oath_bond_api,
     add_oath_bond_view,
+    arena_exchange_view,
+    arena_register_view,
     assign_work_view,
     claim_attachment_view,
     claim_work_reward_view,
@@ -77,6 +80,9 @@ urlpatterns = [
     path("", DashboardView.as_view(), name="dashboard"),
     path("buildings/<str:category>/", DashboardView.as_view(), name="buildings_category"),
     path("tasks/", TaskBoardView.as_view(), name="tasks"),
+    path("arena/", ArenaView.as_view(), name="arena"),
+    path("arena/register/", arena_register_view, name="arena_register"),
+    path("arena/exchange/", arena_exchange_view, name="arena_exchange"),
     path("messages/", MessageListView.as_view(), name="messages"),
     path("messages/view/<int:pk>/", view_message, name="view_message"),
     path("messages/<int:pk>/claim/", claim_attachment_view, name="claim_attachment"),

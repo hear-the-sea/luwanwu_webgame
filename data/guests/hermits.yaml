@@ -18,6 +18,7 @@ heroes:
       intellect: 30
       defense: 10
       agility: 20
+    avatar: buyi.png
   - key: hero_xie_xiaofeng
     name: 谢晓峰
     archetype: military
@@ -34,6 +35,7 @@ heroes:
       intellect: 5
       defense: 15
       agility: 35
+    avatar: buyi.png
   - key: hero_shen_lang
     name: 沈浪
     archetype: military
@@ -50,6 +52,7 @@ heroes:
       intellect: 25
       defense: 20
       agility: 25
+    avatar: buyi.png
   - key: hero_yan_guang
     name: 严光
     archetype: civil
@@ -66,6 +69,7 @@ heroes:
       intellect: 45
       defense: 20
       agility: 25
+    avatar: buyi.png
   - key: hero_wang_xu
     name: 王诩
     archetype: civil
@@ -82,6 +86,7 @@ heroes:
       intellect: 60
       defense: 15
       agility: 20
+    avatar: buyi.png
   - key: hero_fan_li
     name: 范蠡
     archetype: civil
@@ -98,6 +103,7 @@ heroes:
       intellect: 50
       defense: 15
       agility: 20
+    avatar: buyi.png
   - key: hero_huang_shigong
     name: 黄石公
     archetype: civil
@@ -114,6 +120,7 @@ heroes:
       intellect: 55
       defense: 15
       agility: 20
+    avatar: buyi.png
   - key: hero_zhang_zhihe
     name: 张志和
     archetype: civil
@@ -130,6 +137,7 @@ heroes:
       intellect: 45
       defense: 20
       agility: 25
+    avatar: buyi.png
   - key: hero_yan_hui
     name: 颜回
     archetype: civil
@@ -146,6 +154,7 @@ heroes:
       intellect: 55
       defense: 20
       agility: 20
+    avatar: buyi.png
   - key: hero_jie_yu
     name: 接舆
     archetype: civil
@@ -162,6 +171,7 @@ heroes:
       intellect: 45
       defense: 15
       agility: 25
+    avatar: buyi.png
   - key: hero_chao_fu
     name: 巢父
     archetype: civil
@@ -178,6 +188,7 @@ heroes:
       intellect: 40
       defense: 25
       agility: 20
+    avatar: buyi.png
   - key: hero_bo_yi
     name: 伯夷
     archetype: civil
@@ -194,6 +205,7 @@ heroes:
       intellect: 45
       defense: 25
       agility: 20
+    avatar: buyi.png
   - key: hero_shu_qi
     name: 叔齐
     archetype: civil
@@ -210,6 +222,7 @@ heroes:
       intellect: 45
       defense: 25
       agility: 20
+    avatar: buyi.png
   - key: hero_dong_feng
     name: 董奉
     archetype: civil
@@ -226,6 +239,7 @@ heroes:
       intellect: 50
       defense: 20
       agility: 20
+    avatar: buyi.png
   - key: hero_sun_simiao
     name: 孙思邈
     archetype: civil
@@ -242,6 +256,7 @@ heroes:
       intellect: 55
       defense: 25
       agility: 15
+    avatar: buyi.png
   - key: hero_tao_yuanming
     name: 陶渊明
     archetype: civil
@@ -258,6 +273,7 @@ heroes:
       intellect: 45
       defense: 20
       agility: 25
+    avatar: buyi.png
   - key: hero_meng_haoran
     name: 孟浩然
     archetype: civil
@@ -274,6 +290,7 @@ heroes:
       intellect: 45
       defense: 20
       agility: 25
+    avatar: buyi.png
   - key: hero_jiang_ziya
     name: 姜尚
     archetype: civil
@@ -290,6 +307,7 @@ heroes:
       intellect: 45
       defense: 15
       agility: 15
+    avatar: buyi.png
   - key: hero_yan_zun
     name: 严遵
     archetype: civil
@@ -306,6 +324,7 @@ heroes:
       intellect: 55
       defense: 20
       agility: 20
+    avatar: buyi.png
   - key: hero_sima_hui
     name: 司马徽
     archetype: civil
@@ -322,3 +341,4 @@ heroes:
       intellect: 60
       defense: 15
       agility: 20
+    avatar: buyi.png

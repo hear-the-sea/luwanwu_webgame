@@ -11,7 +11,11 @@ gameplay views package
 - work: 打工系统
 - recruitment: 募兵系统
 - map: 地图和踢馆系统
+- arena: 竞技场系统
 """
+
+# Arena views
+from .arena import ArenaView, arena_exchange_view, arena_register_view
 
 # Building views
 from .buildings import UpgradeBuildingView
@@ -136,6 +140,10 @@ __all__ = [
     "claim_attachment_view",
     # Buildings
     "UpgradeBuildingView",
+    # Arena
+    "ArenaView",
+    "arena_register_view",
+    "arena_exchange_view",
     # Technology
     "TechnologyView",
     "upgrade_technology_view",

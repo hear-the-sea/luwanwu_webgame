@@ -15,73 +15,94 @@
     </nav>
 
     <section class="building-section">
-        <div class="tw-building-grid">
+        <div class="tw-building-grid tw-manor-building-grid">
         {% for building in buildings %}
-            <article class="tw-building-card">
-                <header>
-                    <div>
-                        <h3>{{ building.building_type.name }}</h3>
+            <article class="tw-building-card tw-building-card--manor">
+                {% with image_path=building.building_type.key|building_image %}
+                {% static image_path as building_image_url %}
+                <div class="tw-building-media">
+                    <div class="tw-building-corner-frame">
+                        <span class="tw-corner-piece tw-corner-tl" aria-hidden="true"></span>
+                        <span class="tw-corner-piece tw-corner-tr" aria-hidden="true"></span>
+                        <span class="tw-corner-piece tw-corner-bl" aria-hidden="true"></span>
+                        <span class="tw-corner-piece tw-corner-br" aria-hidden="true"></span>
+                        <img
+                            src="{{ building_image_url }}"
+                            alt="{{ building.building_type.name }}"
+                            loading="lazy"
+                            decoding="async"
+                            width="512"
+                            height="512"
+                        >
+                    </div>
+                </div>
+                {% endwith %}
+                <div class="tw-building-main">
+                    <header>
+                        <div class="tw-building-headline">
+                            <h3>{{ building.building_type.name }}</h3>
+                            <span class="tw-level-badge">Lv {{ building.level }}</span>
+                        </div>
                         <p class="tw-building-desc">{{ building.building_type.key|building_desc }}</p>
-                    </div>
-                    <span class="tw-level-badge">Lv {{ building.level }}</span>
-                </header>
-                <dl>
-                    <div>
-                        <dt>当前产能</dt>
-                        <dd>{{ building.hourly_rate|floatformat:0 }} / 小时</dd>
-                    </div>
-                    {% if building.is_upgrading %}
+                    </header>
+                    <dl>
                         <div>
-                            <dt>升级完成</dt>
-                            <dd>
-                                <span class="countdown" data-countdown="{{ building.upgrade_complete_at|date:'c' }}">
-                                    {{ building.upgrade_complete_at|date:"H:i:s" }}
-                                </span>
-                            </dd>
+                            <dt>当前产能</dt>
+                            <dd>{{ building.hourly_rate|floatformat:0 }} / 小时</dd>
                         </div>
-                    {% else %}
-                        {% with cost=building.next_level_cost %}
-                        <div>
-                            <dt>下级所需</dt>
-                            <dd>
-                                {% for key,val in cost.items %}
-                                    <span>{{ resource_labels|get_label:key }} {{ val }}</span>
-                                {% endfor %}
-                            </dd>
-                        </div>
-                        {% endwith %}
-                    {% endif %}
-                </dl>
-                <div class="tw-card-actions">
-                    {% if building.building_type.key == 'juxianzhuang' %}
-                        <p>门客容量：{{ manor.guests.count }} / {{ manor.guest_capacity }}</p>
-                    {% endif %}
-                    <div class="tw-btn-row">
-                        <form method="post" action="{% url 'gameplay:upgrade_building' building.pk %}">
-                            {% csrf_token %}
-                            {% if building.is_upgrading %}
-                                <button type="button" class="tw-btn-primary" disabled>升级进行中</button>
-                            {% else %}
-                                <button type="submit" class="tw-btn-primary">升级</button>
-                            {% endif %}
-                        </form>
-                        {% if building.building_type.key == 'juxianzhuang' %}
-                            <a class="tw-btn-primary" href="{% url 'gameplay:recruitment_hall' %}">招募门客</a>
-                        {% elif building.building_type.key == 'stable' %}
-                            <a class="tw-btn-primary" href="{% url 'gameplay:stable' %}">生产马匹</a>
-                        {% elif building.building_type.key == 'ranch' %}
-                            <a class="tw-btn-primary" href="{% url 'gameplay:ranch' %}">养殖家畜</a>
-                        {% elif building.building_type.key == 'smithy' %}
-                            <a class="tw-btn-primary" href="{% url 'gameplay:smithy' %}">冶炼金属</a>
-                        {% elif building.building_type.key == 'forge' %}
-                            <a class="tw-btn-primary" href="{% url 'gameplay:forge' %}">锻造装备</a>
-                        {% elif building.building_type.key == 'lianggongchang' %}
-                            <a class="tw-btn-primary" href="{% url 'gameplay:troop_recruitment' %}">护院招募</a>
-                        {% elif building.building_type.key == 'jail' %}
-                            <a class="tw-btn-primary" href="{% url 'gameplay:jail' %}">查看</a>
-                        {% elif building.building_type.key == 'oath_grove' %}
-                            <a class="tw-btn-primary" href="{% url 'gameplay:oath_grove' %}">查看</a>
+                        {% if building.is_upgrading %}
+                            <div>
+                                <dt>升级完成</dt>
+                                <dd>
+                                    <span class="countdown" data-countdown="{{ building.upgrade_complete_at|date:'c' }}">
+                                        {{ building.upgrade_complete_at|date:"H:i:s" }}
+                                    </span>
+                                </dd>
+                            </div>
+                        {% else %}
+                            {% with cost=building.next_level_cost %}
+                            <div>
+                                <dt>下级所需</dt>
+                                <dd class="tw-next-cost-list">
+                                    {% for key,val in cost.items %}
+                                        <span>{{ resource_labels|get_label:key }} {{ val }}</span>
+                                    {% endfor %}
+                                </dd>
+                            </div>
+                            {% endwith %}
                         {% endif %}
+                    </dl>
+                    <div class="tw-card-actions">
+                        {% if building.building_type.key == 'juxianzhuang' %}
+                            <p>门客容量：{{ manor.guests.count }} / {{ manor.guest_capacity }}</p>
+                        {% endif %}
+                        <div class="tw-btn-row">
+                            <form method="post" action="{% url 'gameplay:upgrade_building' building.pk %}">
+                                {% csrf_token %}
+                                {% if building.is_upgrading %}
+                                    <button type="button" class="tw-btn-primary" disabled>升级进行中</button>
+                                {% else %}
+                                    <button type="submit" class="tw-btn-primary">升级</button>
+                                {% endif %}
+                            </form>
+                            {% if building.building_type.key == 'juxianzhuang' %}
+                                <a class="tw-btn-primary" href="{% url 'gameplay:recruitment_hall' %}">招募门客</a>
+                            {% elif building.building_type.key == 'stable' %}
+                                <a class="tw-btn-primary" href="{% url 'gameplay:stable' %}">生产马匹</a>
+                            {% elif building.building_type.key == 'ranch' %}
+                                <a class="tw-btn-primary" href="{% url 'gameplay:ranch' %}">养殖家畜</a>
+                            {% elif building.building_type.key == 'smithy' %}
+                                <a class="tw-btn-primary" href="{% url 'gameplay:smithy' %}">冶炼金属</a>
+                            {% elif building.building_type.key == 'forge' %}
+                                <a class="tw-btn-primary" href="{% url 'gameplay:forge' %}">锻造装备</a>
+                            {% elif building.building_type.key == 'lianggongchang' %}
+                                <a class="tw-btn-primary" href="{% url 'gameplay:troop_recruitment' %}">护院招募</a>
+                            {% elif building.building_type.key == 'jail' %}
+                                <a class="tw-btn-primary" href="{% url 'gameplay:jail' %}">查看</a>
+                            {% elif building.building_type.key == 'oath_grove' %}
+                                <a class="tw-btn-primary" href="{% url 'gameplay:oath_grove' %}">查看</a>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             </article>

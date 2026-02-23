@@ -8,6 +8,7 @@ public model classes/constants here to preserve the historical import style:
     from gameplay.models import Manor, InventoryItem, RaidRun, ...
 """
 
+from .arena import ArenaEntry, ArenaEntryGuest, ArenaExchangeRecord, ArenaMatch, ArenaTournament
 from .items import InventoryItem, ItemTemplate, Message, ResourceEvent
 from .manor import (
     CITANG_BUILDING_TIME_REDUCTION_PER_LEVEL,
@@ -65,6 +66,12 @@ __all__ = [
     "ItemTemplate",
     "InventoryItem",
     "Message",
+    # arena
+    "ArenaTournament",
+    "ArenaEntry",
+    "ArenaEntryGuest",
+    "ArenaMatch",
+    "ArenaExchangeRecord",
     # missions
     "MissionTemplate",
     "MissionRun",

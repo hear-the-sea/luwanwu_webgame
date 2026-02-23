@@ -44,11 +44,13 @@ def test_mission_launch_and_return(game_data, mission_templates, manor_with_troo
     if not mission:
         pytest.skip("No mission available that allows troops")
     manor = manor_with_troops
+    manor.silver = max(int(manor.silver or 0), 5_000)
+    manor.save(update_fields=["silver"])
 
     # Recruit frontline guests
     from guests.models import RecruitmentPool
 
-    pool = RecruitmentPool.objects.get(key="tongshi")
+    pool = RecruitmentPool.objects.get(key="cunmu")
     for seed in range(3):
         candidates = recruit_guest(manor, pool, seed=seed)
         finalize_candidate(candidates[0])

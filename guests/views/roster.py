@@ -16,7 +16,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
-from core.exceptions import GameError
+from core.exceptions import GameError, GuestNotIdleError
 from core.utils import sanitize_error_message
 
 from ..constants import TimeConstants
@@ -298,20 +298,26 @@ def dismiss_guest_view(request, pk: int):
 
     manor = ensure_manor(request.user)
     guest = get_object_or_404(manor.guests, pk=pk)
-    gear_items = list(guest.gear_items.select_related("template"))
-    gear_summary = Counter(gear.template.name for gear in gear_items)
     guest_name = guest.display_name
 
     # 使用事务确保装备卸下和门客删除的原子性
     try:
         with transaction.atomic():
+            locked_guest = manor.guests.select_for_update().filter(pk=pk).first()
+            if not locked_guest:
+                raise ValueError("门客不存在")
+            if locked_guest.status != GuestStatus.IDLE:
+                raise GuestNotIdleError(locked_guest)
+
+            gear_items = list(locked_guest.gear_items.select_related("template"))
+            gear_summary = Counter(gear.template.name for gear in gear_items)
             if gear_items:
                 from ..services import unequip_guest_item
 
                 for gear in gear_items:
                     # 如果任何装备卸下失败，整个事务回滚
-                    unequip_guest_item(gear, guest)
-            guest.delete()
+                    unequip_guest_item(gear, locked_guest)
+            locked_guest.delete()
     except (GameError, ValueError) as exc:
         messages.error(request, f"辞退失败：{sanitize_error_message(exc)}")
         return redirect("guests:detail", pk=pk)

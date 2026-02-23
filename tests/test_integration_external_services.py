@@ -168,7 +168,7 @@ def test_integration_raid_start_and_retreat_flow(require_env_services, game_data
             ]
         )
 
-    pool = RecruitmentPool.objects.get(key="tongshi")
+    pool = RecruitmentPool.objects.get(key="cunmu")
     candidate = recruit_guest(attacker, pool, seed=3)[0]
     guest = finalize_candidate(candidate)
 

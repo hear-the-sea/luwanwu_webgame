@@ -459,11 +459,18 @@ class Command(BaseCommand):
         pool_keys: set[str] = set()
         for pool in pool_data:
             entries = pool.get("entries") or []
+            tier = pool.get("tier", RecruitmentPool.Tier.CUNMU)
+            raw_cooldown = pool.get("cooldown_seconds")
+            try:
+                cooldown_seconds = max(0, int(raw_cooldown or 0))
+            except (TypeError, ValueError):
+                cooldown_seconds = 0
             defaults = {
                 "name": pool["name"],
-                "tier": pool.get("tier", RecruitmentPool.Tier.TONGSHI),
+                "tier": tier,
                 "description": pool.get("description", ""),
                 "cost": pool.get("cost", {}),
+                "cooldown_seconds": cooldown_seconds,
                 "draw_count": pool.get("draw_count", 1),
             }
             pool_obj, _ = RecruitmentPool.objects.update_or_create(key=pool["key"], defaults=defaults)

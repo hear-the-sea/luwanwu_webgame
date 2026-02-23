@@ -22,6 +22,11 @@ BATTLE_TYPES: Dict[str, dict] = {
         "description": "任务华山论剑",
         "loot_pool": {},
     },
+    "arena": {
+        "name": "竞技场对战",
+        "description": "玩家间竞技场比武",
+        "loot_pool": {},
+    },
 }
 
 

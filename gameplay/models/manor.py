@@ -42,6 +42,7 @@ class Manor(models.Model):
     name = models.CharField("庄园名称", max_length=20, unique=True, blank=True, null=True)
     grain = models.PositiveIntegerField("粮食", default=1200)
     silver = models.PositiveIntegerField("银两", default=500)
+    arena_coins = models.PositiveIntegerField("角斗币", default=0)
     storage_capacity = models.PositiveIntegerField("仓储上限", default=20000)
     silver_capacity = models.PositiveIntegerField("银库上限", default=20000)
     grain_capacity = models.PositiveIntegerField("粮仓上限", default=20000)

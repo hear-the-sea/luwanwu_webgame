@@ -107,3 +107,16 @@ def test_use_xisuidan_applies_better_growth(monkeypatch, django_user_model):
     assert guest.agility == 170
     assert guest.xisuidan_used == 1
     assert not InventoryItem.objects.filter(pk=item.pk).exists()
+
+
+@pytest.mark.django_db
+def test_use_xisuidan_rejects_non_idle_guest(django_user_model):
+    manor, guest, item = _prepare_xisuidan_case(django_user_model, "non_idle")
+    guest.status = GuestStatus.WORKING
+    guest.save(update_fields=["status"])
+
+    with pytest.raises(ValueError, match="非空闲状态"):
+        use_xisuidan(manor, item, guest.id)
+
+    item.refresh_from_db()
+    assert item.quantity == 1

@@ -331,6 +331,13 @@
   color: var(--text-primary);
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-auth-card form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-auth-card form {
   margin-top: 1.5rem;
   display: flex;
@@ -353,6 +360,13 @@
 }
 
 /* ========== 表单组件 ========== */
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-form-field {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
 
 .tw-form-field {
   display: flex;
@@ -538,6 +552,13 @@
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-status-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-status-item {
   display: flex;
 }
@@ -588,6 +609,13 @@
 
 /* ========== 弹性列表 ========== */
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-flex-list {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-flex-list {
   display: flex;
   flex-wrap: wrap;
@@ -610,6 +638,13 @@
 }
 
 /* ========== 分类标签导航 ========== */
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-category-tabs {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
 
 .tw-category-tabs {
   margin-bottom: 1.5rem;
@@ -662,6 +697,13 @@
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-building-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-building-card {
   display: flex;
   flex-direction: column;
@@ -677,6 +719,194 @@
   box-shadow: 0 4px 12px rgba(74, 38, 18, 0.25);
   transform: translateY(-2px);
   border-color: var(--accent-gold);
+}
+
+.tw-manor-building-grid {
+  grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+}
+
+.tw-building-card--manor {
+  flex-direction: row;
+  align-items: stretch;
+  min-height: 188px;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-building-card--manor .tw-building-media {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+.tw-building-card--manor .tw-building-media {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 236px;
+  padding: 8px;
+  background: var(--bg-secondary);
+  border-right: 2px solid var(--border-light);
+}
+
+.tw-building-card--manor .tw-building-corner-frame {
+  position: relative;
+  --corner-size: 24px;
+  --corner-notch: 32%;
+  width: 220px;
+  height: 220px;
+  max-width: 100%;
+  max-height: 100%;
+  border: 1px solid rgba(107, 62, 28, 0.65);
+  background: linear-gradient(180deg, #f4e3be 0%, #e6cfa1 100%);
+  box-shadow:
+      0 2px 7px rgba(74, 38, 18, 0.22),
+      inset 0 0 0 1px rgba(255, 248, 231, 0.28);
+}
+
+.tw-building-card--manor .tw-corner-piece {
+  position: absolute;
+  width: var(--corner-size);
+  height: var(--corner-size);
+  background: linear-gradient(145deg, #aa763d 0%, #7d4c26 48%, #5d3516 100%);
+  box-shadow:
+      inset 0 1px 0 rgba(245, 223, 182, 0.35),
+      0 1px 2px rgba(58, 31, 10, 0.28);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.tw-building-card--manor .tw-corner-tl {
+  top: 0;
+  left: 0;
+  clip-path: polygon(
+      0 0,
+      100% 0,
+      82% 18%,
+      24% 18%,
+      24% 76%,
+      0 100%
+    );
+}
+
+.tw-building-card--manor .tw-corner-tr {
+  top: 0;
+  right: 0;
+  clip-path: polygon(
+      0 0,
+      100% 0,
+      100% 100%,
+      76% 76%,
+      76% 18%,
+      18% 18%
+    );
+}
+
+.tw-building-card--manor .tw-corner-bl {
+  bottom: 0;
+  left: 0;
+  clip-path: polygon(
+      0 0,
+      0 100%,
+      100% 100%,
+      82% 82%,
+      24% 82%,
+      24% 24%
+    );
+}
+
+.tw-building-card--manor .tw-corner-br {
+  bottom: 0;
+  right: 0;
+  clip-path: polygon(
+      100% 0,
+      100% 100%,
+      0 100%,
+      18% 82%,
+      76% 82%,
+      76% 24%
+    );
+}
+
+.tw-building-card--manor .tw-building-corner-frame::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border: 1px solid rgba(123, 78, 34, 0.6);
+  pointer-events: none;
+}
+
+.tw-building-card--manor .tw-building-corner-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 0;
+  border: 1px solid rgba(86, 50, 23, 0.45);
+  -o-object-fit: contain;
+     object-fit: contain;
+  background: linear-gradient(180deg, #f7ecd3 0%, #efe2c5 100%);
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-building-card--manor .tw-building-main {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+.tw-building-card--manor .tw-building-main {
+  display: flex;
+  min-width: 0px;
+  flex: 1 1 0%;
+  flex-direction: column;
+}
+
+.tw-building-card--manor .tw-card-actions {
+  margin-top: auto;
+}
+
+.tw-building-card--manor dd span + span {
+  margin-left: 0.5rem;
+}
+
+.tw-building-card--manor header {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-building-card--manor .tw-building-headline {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+.tw-building-card--manor .tw-building-headline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tw-building-card--manor .tw-building-headline h3 {
+  margin: 0px;
+}
+
+.tw-building-card--manor .tw-level-badge {
+  flex-shrink: 0;
+}
+
+.tw-building-card--manor .tw-building-desc {
+  margin-top: 0px;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-building-card header {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-building-card header {
@@ -723,6 +953,13 @@
   padding: 1rem;
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-building-card dl > div {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-building-card dl > div {
   display: flex;
   justify-content: space-between;
@@ -757,6 +994,13 @@
   font-size: 0.875rem;
   line-height: 1.25rem;
   color: var(--text-muted);
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-building-card .tw-btn-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-building-card .tw-btn-row {
@@ -797,7 +1041,73 @@
   color: var(--text-muted);
 }
 
+@media (max-width: 900px) {
+  .tw-manor-building-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .tw-building-card--manor .tw-building-media {
+    flex: 0 0 176px;
+    padding: 6px;
+  }
+
+  .tw-building-card--manor .tw-building-corner-frame {
+    --corner-size: 20px;
+    --corner-notch: 34%;
+    width: 160px;
+    height: 160px;
+  }
+
+  .tw-building-card--manor .tw-next-cost-list {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+  }
+
+  .tw-building-card--manor .tw-next-cost-list span + span {
+    margin-left: 0;
+  }
+
+  .tw-building-card .tw-btn-row {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .tw-building-card .tw-btn-row form,
+    .tw-building-card .tw-btn-row > a.tw-btn-primary {
+    width: 100%;
+    min-width: 0;
+    flex: none;
+  }
+
+  .tw-building-card .tw-btn-row .tw-btn-primary,
+    .tw-building-card .tw-btn-row a.tw-btn-primary {
+    white-space: normal;
+  }
+
+  .tw-work-card .tw-card-actions > .flex {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tw-work-card .tw-card-actions .tw-form-select,
+    .tw-work-card .tw-card-actions .tw-btn-primary {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
 /* ========== 仓库/藏宝阁标签导航 ========== */
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-storage-tabs {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
 
 .tw-storage-tabs {
   display: flex;
@@ -842,6 +1152,13 @@
 
 /* ========== 仓库卡片容器 ========== */
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-warehouse-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-warehouse-card {
   margin-bottom: 1.5rem;
   display: flex;
@@ -863,6 +1180,13 @@
   padding: 1rem;
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-capacity-info {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-capacity-info {
   margin-bottom: 0.75rem;
   display: flex;
@@ -873,6 +1197,13 @@
 .tw-capacity-label {
   font-weight: 600;
   color: var(--text-primary);
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-capacity-values {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-capacity-values {
@@ -942,8 +1273,8 @@
 .tw-table-wrapper {
   margin-top: 0.5rem;
   flex: 1 1 0%;
+  overflow-x: auto;
   overflow-y: auto;
-  overflow-x: hidden;
   min-height: 300px;
 }
 
@@ -984,12 +1315,26 @@
 
 /* ========== 物品单元格 ========== */
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-item-cell {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-item-cell {
   position: relative;
   display: flex;
   cursor: pointer;
   align-items: center;
   gap: 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-item-icon {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-item-icon {
@@ -1163,6 +1508,13 @@
   margin-bottom: 0.5rem;
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-attr-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-attr-row {
   display: flex;
   justify-content: space-between;
@@ -1227,11 +1579,25 @@
   padding: 0.5rem;
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-action-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-action-row {
   display: flex;
   min-width: 320px;
   align-items: center;
   justify-content: space-between;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-action-use {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-action-use {
@@ -1242,11 +1608,25 @@
   justify-content: flex-start;
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-action-treasury {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-action-treasury {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-action-treasury form {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-action-treasury form {
@@ -1284,6 +1664,13 @@
   white-space: nowrap;
   padding-right: 1rem;
   text-align: right;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-filter-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-filter-form {
@@ -1328,6 +1715,13 @@
 
 /* ========== 通用模态框 ========== */
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-modal-overlay {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-modal-overlay {
   position: fixed;
   inset: 0px;
@@ -1336,6 +1730,13 @@
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.6);
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-modal-content {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-modal-content {
@@ -1352,12 +1753,26 @@
   overflow: hidden;
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-modal-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-modal-form {
   display: flex;
   flex: 1 1 0%;
   flex-direction: column;
   overflow: hidden;
   min-height: 0;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-modal-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-modal-header {
@@ -1414,6 +1829,13 @@
   border-left: 3px solid #f59e0b;
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-modal-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-modal-footer {
   display: flex;
   justify-content: flex-end;
@@ -1428,6 +1850,13 @@
 
 /* ========== 门客选择列表 ========== */
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-guest-list {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-guest-list {
   display: flex;
   max-height: 15rem;
@@ -1436,6 +1865,13 @@
   border-radius: 0.5rem;
   border-width: 1px;
   border-color: var(--border-primary);
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-guest-option {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-guest-option {
@@ -1485,6 +1921,13 @@
   padding-left: calc(1rem - 3px) !important;
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-guest-info {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-guest-info {
   display: flex;
   align-items: center;
@@ -1499,6 +1942,13 @@
   font-size: 0.875rem;
   line-height: 1.25rem;
   color: var(--text-muted);
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-guest-stats {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-guest-stats {
@@ -1641,10 +2091,24 @@
   padding: 1rem;
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-control-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-control-row {
   display: flex;
   flex-wrap: wrap;
   gap: 1.5rem;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-control-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-control-group {
@@ -1663,6 +2127,13 @@
 .tw-search-group {
   min-width: 200px;
   flex: 1 1 0%;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-search-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-search-wrapper {
@@ -1706,6 +2177,13 @@
   padding: 1rem;
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-manor-list-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-manor-list-header {
   margin-bottom: 1rem;
   display: flex;
@@ -1728,10 +2206,24 @@
   color: var(--text-muted);
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-manor-list {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-manor-list {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-manor-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-manor-card {
@@ -1762,10 +2254,24 @@
   border-color: #3b82f6;
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-manor-card-info {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-manor-card-info {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-manor-name {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-manor-name {
@@ -1810,10 +2316,24 @@
   color: var(--text-muted);
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-manor-card-stats {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-manor-card-stats {
   display: flex;
   align-items: center;
   gap: 1rem;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-manor-card-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-manor-card-actions {
@@ -1921,6 +2441,13 @@
 
 /* ========== 分页 ========== */
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-pagination {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-pagination {
   margin-top: 1rem;
   display: flex;
@@ -1968,6 +2495,13 @@
 }
 
 /* ========== 任务标签页 ========== */
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-mission-tabs {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
 
 .tw-mission-tabs {
   margin-bottom: 1.5rem;
@@ -2105,6 +2639,13 @@
 
 /* ========== 敌人情报网格 ========== */
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-enemy-grid {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-enemy-grid {
   display: flex;
   flex-wrap: wrap;
@@ -2159,6 +2700,13 @@
   display: none;
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-guest-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-guest-card {
   display: flex;
   align-items: center;
@@ -2199,6 +2747,13 @@
      object-fit: cover;
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-avatar-placeholder {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-avatar-placeholder {
   display: flex;
   height: 100%;
@@ -2215,6 +2770,13 @@
 .tw-guest-details {
   min-width: 0px;
   flex: 1 1 0%;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-guest-info-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-guest-info-row {
@@ -2263,10 +2825,24 @@
 
 /* ========== 护院选择 ========== */
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-troop-selection {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-troop-selection {
   display: flex;
   flex-direction: column;
   gap: 0.375rem;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-troop-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-troop-row {
@@ -2280,6 +2856,13 @@
   padding-right: 0.625rem;
   padding-top: 0.375rem;
   padding-bottom: 0.375rem;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-troop-info {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-troop-info {
@@ -2305,6 +2888,13 @@
      object-fit: cover;
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-troop-details {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-troop-details {
   display: flex;
   flex-direction: column;
@@ -2321,6 +2911,13 @@
   font-size: 0.75rem;
   line-height: 1rem;
   color: var(--text-muted);
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-troop-slider-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-troop-slider-group {
@@ -2455,6 +3052,13 @@
 
 /* ========== 技术标签页 ========== */
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-tech-tabs {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-tech-tabs {
   display: flex;
   gap: 0.5rem;
@@ -2497,6 +3101,13 @@
 }
 
 /* ========== 兵种子标签页 ========== */
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-troop-subtabs {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
 
 .tw-troop-subtabs {
   display: flex;
@@ -2586,9 +3197,23 @@
 
 /* ========== 消息列表 ========== */
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-message-list {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-message-list {
   display: flex;
   flex-direction: column;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-message-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-message-card {
@@ -2629,6 +3254,13 @@
   align-self: center;
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-message-content {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-message-content {
   display: flex;
   min-width: 0px;
@@ -2637,11 +3269,25 @@
   justify-content: center;
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-message-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-message-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-message-header-left {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-message-header-left {
@@ -2770,6 +3416,13 @@
   color: var(--text-secondary);
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-message-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-message-actions {
   margin-top: 1rem;
   display: flex;
@@ -2779,6 +3432,13 @@
   padding-top: 1rem;
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-section-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-section-actions {
   display: flex;
   gap: 0.5rem;
@@ -2786,12 +3446,26 @@
 
 /* ========== 交易系统组件 ========== */
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-trade-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-trade-header {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   padding-bottom: 0.5rem;
   border-bottom: 3px double var(--border-primary);
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-trade-tabs {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-trade-tabs {
@@ -2837,6 +3511,13 @@
   margin-top: 1rem;
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-trade-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-trade-card {
   margin-bottom: 1.5rem;
   display: flex;
@@ -2857,6 +3538,13 @@
 }
 
 /* 模式切换按钮 */
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-mode-switch {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
 
 .tw-mode-switch {
   display: flex;
@@ -3013,6 +3701,13 @@
   margin-bottom: 1rem;
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-info-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-info-row {
   display: flex;
   justify-content: space-between;
@@ -3051,6 +3746,13 @@
   font-size: 1.125rem;
   line-height: 1.75rem;
   color: #f59e0b;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-rate-factors {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-rate-factors {
@@ -3207,10 +3909,24 @@
   color: #FF6B6B;
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-market-duration-options {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-market-duration-options {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-market-radio-option {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-market-radio-option {
@@ -3271,6 +3987,13 @@
   line-height: 1.25rem;
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-market-form-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-market-form-actions {
   margin-top: 2rem;
   display: flex;
@@ -3283,6 +4006,13 @@
 
 /* 上架弹窗优化样式 */
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-listing-item-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-listing-item-card {
   margin-bottom: 1.5rem;
   display: flex;
@@ -3294,10 +4024,24 @@
   border: 2px solid var(--border-primary);
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-listing-item-card .tw-item-cell {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-listing-item-card .tw-item-cell {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-listing-item-card .tw-item-icon {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-listing-item-card .tw-item-icon {
@@ -3308,6 +4052,13 @@
   justify-content: center;
   border-radius: 0.5rem;
   border-width: 2px;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-listing-item-info {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-listing-item-info {
@@ -3330,6 +4081,13 @@
 
 .tw-listing-item-stock strong {
   color: var(--text-primary);
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-listing-ref-price {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-listing-ref-price {
@@ -3356,6 +4114,13 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-listing-total-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-listing-total-row {
@@ -3403,6 +4168,13 @@
   opacity: 0;
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-listing-duration-content {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-listing-duration-content {
   display: flex;
   flex-direction: column;
@@ -3446,6 +4218,13 @@
   border-color: var(--border-primary);
   background-color: var(--bg-secondary);
   padding: 1rem;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-listing-summary-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-listing-summary-row {
@@ -3512,6 +4291,13 @@
 
 /* 拍卖组件 */
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-auction-info-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-auction-info-bar {
   margin-bottom: 1rem;
   display: flex;
@@ -3522,6 +4308,13 @@
   border-color: var(--border-primary);
   background-color: var(--bg-card);
   padding: 1rem;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-auction-info-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-auction-info-item {
@@ -3728,6 +4521,13 @@
   margin: 0px;
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-guild-dl > div {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-guild-dl > div {
   display: flex;
   justify-content: space-between;
@@ -3815,6 +4615,13 @@
   color: var(--text-secondary);
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-guild-quick-links {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-guild-quick-links {
   display: flex;
   flex-wrap: wrap;
@@ -3855,6 +4662,13 @@
   background: rgba(59, 130, 246, 0.1);
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-guild-announcement-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-guild-announcement-header {
   margin-bottom: 0.5rem;
   display: flex;
@@ -3865,6 +4679,13 @@
 .tw-guild-announcement-title {
   font-weight: 700;
   color: var(--text-primary);
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-guild-member-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-guild-member-actions {
@@ -3956,6 +4777,13 @@
   text-decoration-line: underline;
 }
 
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-guild-search-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .tw-guild-search-form {
   display: flex;
   flex-wrap: wrap;
@@ -3985,6 +4813,13 @@
 
 .tw-guild-cost-dl {
   margin: 0px;
+}
+
+@media (max-width: 640px) {
+  .tw-work-card .tw-card-actions > .tw-guild-cost-dl > div {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .tw-guild-cost-dl > div {
@@ -4443,6 +5278,10 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.flex-row {
+  flex-direction: row;
+}
+
 .flex-col {
   flex-direction: column;
 }
@@ -4539,10 +5378,6 @@
   overflow-y: auto;
 }
 
-.overflow-x-hidden {
-  overflow-x: hidden;
-}
-
 .whitespace-nowrap {
   white-space: nowrap;
 }
@@ -4571,6 +5406,10 @@
   border-width: 1px;
 }
 
+.border-0 {
+  border-width: 0px;
+}
+
 .border-2 {
   border-width: 2px;
 }
@@ -4593,6 +5432,10 @@
 
 .border-t {
   border-top-width: 1px;
+}
+
+.border-dashed {
+  border-style: dashed;
 }
 
 .border-none {
@@ -4854,6 +5697,10 @@
   padding-bottom: 1.5rem;
 }
 
+.pl-2 {
+  padding-left: 0.5rem;
+}
+
 .pl-6 {
   padding-left: 1.5rem;
 }
@@ -4880,6 +5727,18 @@
 
 .text-right {
   text-align: right;
+}
+
+.text-justify {
+  text-align: justify;
+}
+
+.indent-8 {
+  text-indent: 2rem;
+}
+
+.font-serif {
+  font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
 }
 
 .text-2xl {
@@ -4937,8 +5796,16 @@
   font-style: italic;
 }
 
+.leading-loose {
+  line-height: 2;
+}
+
 .leading-none {
   line-height: 1;
+}
+
+.leading-snug {
+  line-height: 1.375;
 }
 
 .text-accent-gold {
@@ -5067,6 +5934,14 @@
   opacity: 0.6;
 }
 
+.opacity-80 {
+  opacity: 0.8;
+}
+
+.opacity-90 {
+  opacity: 0.9;
+}
+
 .outline-none {
   outline: 2px solid transparent;
   outline-offset: 2px;
@@ -5123,6 +5998,12 @@
 /* ========== 移动端响应式样式 ========== */
 
 @media (max-width: 768px) {
+  .main-layout,
+  .full-layout,
+  .content-area {
+    overflow-x: visible;
+  }
+
   /* 仓库/藏宝阁移动端适配 */
 
   .tw-storage-tabs {
@@ -5142,7 +6023,8 @@
   }
 
   .tw-table-wrapper {
-    overflow-x: visible;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
     min-height: auto;
   }
 
@@ -5458,8 +6340,24 @@
   outline-offset: 2px;
 }
 
+@media (min-width: 640px) {
+  .sm\:grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (min-width: 768px) {
   .md\:grid-cols-2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .md\:grid-cols-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .lg\:grid-cols-5 {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }

@@ -5,13 +5,14 @@ from django.utils import timezone
 
 from battle.models import BattleReport
 from battle.services import _build_defender_guest_and_loadout, _extract_defender_tech_profile, simulate_report
+from core.exceptions import GuestNotIdleError
 from gameplay.services.manor.core import ensure_manor
 from guests.models import GuestStatus, RecruitmentPool
 from guests.services import finalize_candidate, recruit_guest
 
 
 def _recruit_frontline(manor, draws: int = 3) -> None:
-    pool = RecruitmentPool.objects.get(key="tongshi")
+    pool = RecruitmentPool.objects.get(key="cunmu")
     for seed in range(draws):
         candidates = recruit_guest(manor, pool, seed=seed + 1)
         finalize_candidate(candidates[0])
@@ -177,6 +178,24 @@ def test_heal_guest_cures_injury(django_user_model):
     guest.refresh_from_db()
     assert guest.status == GuestStatus.IDLE
     assert result["injury_cured"]
+
+
+@pytest.mark.django_db
+def test_heal_guest_rejects_busy_non_injured_status(django_user_model):
+    from guests.services import heal_guest
+
+    user = django_user_model.objects.create_user(username="busy_healer", password="pass123")
+    manor = ensure_manor(user)
+    manor.silver = 3000
+    manor.save(update_fields=["silver"])
+    _recruit_frontline(manor, draws=1)
+    guest = manor.guests.first()
+    guest.status = GuestStatus.WORKING
+    guest.current_hp = max(1, guest.max_hp - 100)
+    guest.save(update_fields=["status", "current_hp"])
+
+    with pytest.raises(GuestNotIdleError):
+        heal_guest(guest, 50)
 
 
 def test_extract_defender_tech_profile_tolerates_invalid_technology_config():

@@ -14,7 +14,7 @@ def _bootstrap_candidates(game_data, django_user_model, *, username: str) -> tup
     manor.grain = manor.silver = 500000
     manor.save(update_fields=["grain", "silver"])
 
-    pool = RecruitmentPool.objects.get(key="tongshi")
+    pool = RecruitmentPool.objects.get(key="cunmu")
     candidates = recruit_guest(manor, pool, seed=1)
     manor.candidates.update(rarity_revealed=False)
     return manor, len(candidates)

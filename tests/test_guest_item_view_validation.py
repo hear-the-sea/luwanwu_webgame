@@ -17,7 +17,7 @@ def _bootstrap_guest_client(game_data, django_user_model, *, username: str):
     manor.grain = manor.silver = 500000
     manor.save(update_fields=["grain", "silver"])
 
-    pool = RecruitmentPool.objects.get(key="tongshi")
+    pool = RecruitmentPool.objects.get(key="cunmu")
     candidate = recruit_guest(manor, pool, seed=1)[0]
     guest = finalize_candidate(candidate)
 
@@ -147,16 +147,16 @@ def test_recruit_view_rejects_when_action_lock_conflicts(game_data, django_user_
     ensure_manor(user)
     client = Client()
     assert client.login(username="view_recruit_lock_conflict", password="pass123")
-    pool = RecruitmentPool.objects.get(key="tongshi")
+    pool = RecruitmentPool.objects.get(key="cunmu")
     called = {"count": 0}
 
     monkeypatch.setattr("guests.views.recruit._acquire_recruit_action_lock", lambda *_a, **_k: (False, ""))
 
     def _unexpected_recruit(*_args, **_kwargs):
         called["count"] += 1
-        return []
+        return None
 
-    monkeypatch.setattr("guests.views.recruit.recruit_guest", _unexpected_recruit)
+    monkeypatch.setattr("guests.views.recruit.start_guest_recruitment", _unexpected_recruit)
 
     response = client.post(reverse("guests:recruit"), {"pool": str(pool.pk)})
 
@@ -173,7 +173,7 @@ def test_candidate_accept_view_rejects_when_action_lock_conflicts(game_data, dja
     manor = ensure_manor(user)
     client = Client()
     assert client.login(username="view_candidate_accept_lock_conflict", password="pass123")
-    pool = RecruitmentPool.objects.get(key="tongshi")
+    pool = RecruitmentPool.objects.get(key="cunmu")
     candidate = recruit_guest(manor, pool, seed=1)[0]
     called = {"count": 0}
 
@@ -215,7 +215,7 @@ def test_candidate_accept_view_rejects_invalid_action(game_data, django_user_mod
     manor = ensure_manor(user)
     client = Client()
     assert client.login(username="view_candidate_accept_invalid_action", password="pass123")
-    pool = RecruitmentPool.objects.get(key="tongshi")
+    pool = RecruitmentPool.objects.get(key="cunmu")
     candidate = recruit_guest(manor, pool, seed=1)[0]
     called = {"finalize": 0, "retain": 0}
 

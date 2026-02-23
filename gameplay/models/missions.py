@@ -49,6 +49,7 @@ class MissionRun(models.Model):
     manor = models.ForeignKey("gameplay.Manor", on_delete=models.CASCADE, related_name="mission_runs")
     mission = models.ForeignKey(MissionTemplate, on_delete=models.CASCADE, related_name="runs")
     guests = models.ManyToManyField("guests.Guest", related_name="mission_runs", blank=True)
+    guest_snapshots = models.JSONField(default=list, blank=True)
     troop_loadout = models.JSONField(default=dict, blank=True)
     battle_report = models.ForeignKey("battle.BattleReport", null=True, blank=True, on_delete=models.SET_NULL)
     travel_time = models.PositiveIntegerField(default=0, help_text="单程耗时（秒）")

@@ -11,6 +11,7 @@ from django.db.models import F, Q
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async, safe_apply_async_with_dedup
+from gameplay.services.battle_snapshots import build_guest_battle_snapshots
 from gameplay.services.raid import combat as combat_pkg
 from guests.models import Guest, GuestStatus
 
@@ -161,9 +162,11 @@ def _create_raid_run_record(
     Guest.objects.bulk_update(guests, ["status"])
 
     now = timezone.now()
+    guest_snapshots = build_guest_battle_snapshots(guests, include_identity=True)
     run = RaidRun.objects.create(
         attacker=attacker,
         defender=defender,
+        guest_snapshots=guest_snapshots,
         troop_loadout=loadout,
         status=RaidRun.Status.MARCHING,
         travel_time=travel_time,

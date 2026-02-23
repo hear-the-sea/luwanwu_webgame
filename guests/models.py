@@ -122,7 +122,7 @@ class GuestTemplate(models.Model):
 
 class RecruitmentPool(models.Model):
     class Tier(models.TextChoices):
-        TONGSHI = "tongshi", "村募"
+        CUNMU = "cunmu", "村募"
         XIANGSHI = "xiangshi", "乡试"
         HUISHI = "huishi", "会试"
         DIANSHI = "dianshi", "殿试"
@@ -132,7 +132,7 @@ class RecruitmentPool(models.Model):
     description = models.TextField(blank=True)
     cost = models.JSONField(default=dict)
     cooldown_seconds = models.PositiveIntegerField(default=0)
-    tier = models.CharField(max_length=16, choices=Tier.choices, default=Tier.TONGSHI)
+    tier = models.CharField(max_length=16, choices=Tier.choices, default=Tier.CUNMU)
     draw_count = models.PositiveIntegerField(default=1)
 
     class Meta:
@@ -428,6 +428,49 @@ class RecruitmentRecord(models.Model):
         verbose_name = "招募记录"
         verbose_name_plural = "招募记录"
         ordering = ("-created_at",)
+
+
+class GuestRecruitment(models.Model):
+    """门客招募队列（异步倒计时）"""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "招募中"
+        COMPLETED = "completed", "已完成"
+        FAILED = "failed", "失败"
+
+    manor = models.ForeignKey("gameplay.Manor", on_delete=models.CASCADE, related_name="guest_recruitments")
+    pool = models.ForeignKey(RecruitmentPool, on_delete=models.SET_NULL, null=True)
+    cost = models.JSONField("招募消耗", default=dict)
+    draw_count = models.PositiveIntegerField("候选数量", default=1)
+    duration_seconds = models.PositiveIntegerField("招募时长(秒)", default=0)
+    seed = models.BigIntegerField("随机种子", default=0)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    started_at = models.DateTimeField("开始时间", auto_now_add=True)
+    complete_at = models.DateTimeField("完成时间")
+    finished_at = models.DateTimeField("实际完成时间", null=True, blank=True)
+    result_count = models.PositiveIntegerField("实际生成候选", default=0)
+    error_message = models.CharField("失败原因", max_length=255, blank=True, default="")
+
+    class Meta:
+        verbose_name = "门客招募队列"
+        verbose_name_plural = "门客招募队列"
+        ordering = ("-started_at",)
+        indexes = [
+            models.Index(fields=["manor", "status", "complete_at"], name="guest_recruit_msc_idx"),
+            models.Index(fields=["status", "complete_at"], name="guest_recruit_sc_idx"),
+        ]
+
+    def __str__(self) -> str:
+        pool_name = self.pool.name if self.pool_id and self.pool else "未知卡池"
+        return f"{self.manor.user.username} - {pool_name} ({self.status})"
+
+    @property
+    def time_remaining(self) -> int:
+        """剩余时间（秒）"""
+        if self.status != self.Status.PENDING:
+            return 0
+        delta = self.complete_at - timezone.now()
+        return max(0, int(delta.total_seconds()))
 
 
 class TrainingLog(models.Model):

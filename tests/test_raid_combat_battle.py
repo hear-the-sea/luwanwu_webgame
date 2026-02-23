@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+from django.utils import timezone
+
+from gameplay.models import RaidRun
+from gameplay.services.manor.core import ensure_manor
 from gameplay.services.raid.combat import battle as combat_battle
+from guests.models import Guest, GuestStatus, GuestTemplate
 
 
 def test_normalize_mapping_returns_dict_when_valid():
@@ -82,3 +88,111 @@ def test_collect_losing_guest_ids_handles_invalid_data():
     report = SimpleNamespace(defender_team=[{"guest_id": "invalid"}, {"guest_id": 999}, {}], attacker_team=[])
     result = combat_battle._collect_losing_guest_ids(report, is_attacker_victory=True)
     assert result == [999]
+
+
+@pytest.mark.django_db
+def test_execute_raid_battle_uses_attacker_snapshot(monkeypatch, django_user_model):
+    attacker_user = django_user_model.objects.create_user(username="raid_snapshot_a", password="pass123")
+    defender_user = django_user_model.objects.create_user(username="raid_snapshot_d", password="pass123")
+    attacker = ensure_manor(attacker_user)
+    defender = ensure_manor(defender_user)
+
+    template = GuestTemplate.objects.create(
+        key="raid_snapshot_tpl",
+        name="踢馆快照门客",
+        archetype="military",
+        rarity="green",
+        base_attack=120,
+        base_intellect=90,
+        base_defense=100,
+        base_agility=90,
+        base_luck=50,
+        base_hp=1500,
+    )
+    attacker_guest = Guest.objects.create(
+        manor=attacker,
+        template=template,
+        status=GuestStatus.DEPLOYED,
+        level=20,
+        force=300,
+        intellect=120,
+        defense_stat=130,
+        agility=110,
+        current_hp=900,
+    )
+    defender_guest = Guest.objects.create(
+        manor=defender,
+        template=template,
+        status=GuestStatus.IDLE,
+        level=10,
+        force=120,
+        intellect=100,
+        defense_stat=110,
+        agility=90,
+        current_hp=700,
+    )
+    attacker_stats = attacker_guest.stat_block()
+    run = RaidRun.objects.create(
+        attacker=attacker,
+        defender=defender,
+        status=RaidRun.Status.MARCHING,
+        troop_loadout={},
+        travel_time=60,
+        battle_at=timezone.now(),
+        return_at=timezone.now(),
+        guest_snapshots=[
+            {
+                "guest_id": attacker_guest.id,
+                "template_key": template.key,
+                "display_name": attacker_guest.display_name,
+                "rarity": attacker_guest.rarity,
+                "status": "deployed",
+                "level": 20,
+                "force": 300,
+                "intellect": 120,
+                "defense_stat": 130,
+                "agility": 110,
+                "luck": 50,
+                "attack": int(attacker_stats["attack"]),
+                "defense": int(attacker_stats["defense"]),
+                "max_hp": attacker_guest.max_hp,
+                "current_hp": 900,
+                "troop_capacity": int(getattr(attacker_guest, "troop_capacity", 0) or 0),
+                "skill_keys": [],
+            }
+        ],
+    )
+    run.guests.add(attacker_guest)
+
+    # 报名后实时属性变化，不应影响战斗结算输入快照
+    attacker_guest.level = 99
+    attacker_guest.force = 9999
+    attacker_guest.save(update_fields=["level", "force"])
+
+    captured = {}
+
+    def _fake_simulate_report(**kwargs):
+        attacker_guests = kwargs.get("attacker_guests") or []
+        assert attacker_guests
+        captured["level"] = attacker_guests[0].level
+        captured["force"] = attacker_guests[0].force
+        captured["guest_id"] = attacker_guests[0].id
+        return SimpleNamespace(
+            winner="attacker",
+            attacker_team=[{"guest_id": attacker_guest.id, "remaining_hp": 500}],
+            defender_team=[{"guest_id": defender_guest.id, "remaining_hp": 300}],
+            losses={
+                "attacker": {"hp_updates": {str(attacker_guest.id): 500}},
+                "defender": {"hp_updates": {str(defender_guest.id): 300}},
+            },
+        )
+
+    monkeypatch.setattr("battle.services.simulate_report", _fake_simulate_report)
+
+    combat_battle._execute_raid_battle(run)
+
+    attacker_guest.refresh_from_db()
+    assert captured["level"] == 20
+    assert captured["force"] == 300
+    assert captured["guest_id"] == attacker_guest.id
+    assert attacker_guest.current_hp == 500

@@ -12,6 +12,7 @@ from core.exceptions import (
     EquipmentError,
     EquipmentNotEquippedError,
     EquipmentSlotFullError,
+    GuestNotIdleError,
     ItemNotFoundError,
 )
 
@@ -20,7 +21,7 @@ if TYPE_CHECKING:
 
 from django.db import transaction
 
-from ..models import GearItem, GearSlot, GearTemplate, Guest, GuestRarity
+from ..models import GearItem, GearSlot, GearTemplate, Guest, GuestRarity, GuestStatus
 from ..utils.equipment_utils import EQUIP_SLOT_MAP, SET_STAT_FIELD_MAP, compute_set_bonus
 
 _GEAR_EXTRA_STAT_FIELDS = {
@@ -225,6 +226,8 @@ def equip_guest(gear: GearItem, guest: Guest) -> GearItem:
     # 使用 select_for_update 锁定装备和门客，防止并发问题
     gear = GearItem.objects.select_for_update().get(pk=gear.pk)
     guest = Guest.objects.select_for_update().get(pk=guest.pk)
+    if guest.status != GuestStatus.IDLE:
+        raise GuestNotIdleError(guest)
 
     slot = gear.template.slot
     capacity = _slot_capacity(slot)
@@ -272,6 +275,8 @@ def unequip_guest_item(gear: GearItem, guest: Guest) -> GearItem:
     # 并发安全：锁定装备和门客，防止并发卸载/穿戴
     gear = GearItem.objects.select_for_update().get(pk=gear.pk)
     guest = Guest.objects.select_for_update().get(pk=guest.pk)
+    if guest.status != GuestStatus.IDLE:
+        raise GuestNotIdleError(guest)
 
     if gear.manor != guest.manor:
         raise EquipmentError("无法卸下其他庄园的装备")

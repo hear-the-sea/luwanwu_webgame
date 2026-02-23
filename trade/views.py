@@ -29,13 +29,16 @@ logger = logging.getLogger(__name__)
 ALLOWED_MARKET_DURATIONS = frozenset({7200, 28800, 86400})
 
 
-def _trade_redirect(tab: str | None = None, view: str | None = None):
+def _trade_redirect(tab: str | None = None, view: str | None = None, troop_category: str | None = None):
     base_url = reverse("trade:trade")
     params = {}
     if tab:
         params["tab"] = tab
     if view:
         params["view"] = view
+    normalized_troop_category = (troop_category or "").strip()
+    if normalized_troop_category and normalized_troop_category != "all":
+        params["troop_category"] = normalized_troop_category
     if not params:
         return redirect(base_url)
     return redirect(f"{base_url}?{urlencode(params)}")
@@ -157,10 +160,11 @@ def shop_sell_view(request):
 def exchange_gold_bar_view(request):
     """兑换金条"""
     manor = ensure_manor(request.user)
+    troop_category = (request.POST.get("troop_category") or "").strip()
     quantity = _parse_positive_post_int(request, "quantity")
     if quantity is None:
         messages.error(request, "数量参数无效")
-        return _trade_redirect(tab="bank")
+        return _trade_redirect(tab="bank", troop_category=troop_category)
 
     try:
         result = exchange_gold_bar(manor, quantity)
@@ -174,7 +178,7 @@ def exchange_gold_bar_view(request):
     except Exception as exc:
         _handle_unexpected_trade_error(request, exc, op="bank_exchange")
 
-    return _trade_redirect(tab="bank")
+    return _trade_redirect(tab="bank", troop_category=troop_category)
 
 
 @login_required
@@ -183,15 +187,16 @@ def exchange_gold_bar_view(request):
 def deposit_troop_to_bank_view(request):
     """钱庄存入护院"""
     manor = ensure_manor(request.user)
+    troop_category = (request.POST.get("troop_category") or "").strip()
     troop_key = (request.POST.get("troop_key") or "").strip()
     quantity = _parse_positive_post_int(request, "quantity")
 
     if not troop_key:
         messages.error(request, "请选择护院类型")
-        return _trade_redirect(tab="bank")
+        return _trade_redirect(tab="bank", troop_category=troop_category)
     if quantity is None:
         messages.error(request, "数量参数无效")
-        return _trade_redirect(tab="bank")
+        return _trade_redirect(tab="bank", troop_category=troop_category)
 
     try:
         from gameplay.services.manor.troop_bank import deposit_troops_to_bank
@@ -203,7 +208,7 @@ def deposit_troop_to_bank_view(request):
     except Exception as exc:
         _handle_unexpected_trade_error(request, exc, op="bank_troop_deposit")
 
-    return _trade_redirect(tab="bank")
+    return _trade_redirect(tab="bank", troop_category=troop_category)
 
 
 @login_required
@@ -212,15 +217,16 @@ def deposit_troop_to_bank_view(request):
 def withdraw_troop_from_bank_view(request):
     """钱庄取出护院"""
     manor = ensure_manor(request.user)
+    troop_category = (request.POST.get("troop_category") or "").strip()
     troop_key = (request.POST.get("troop_key") or "").strip()
     quantity = _parse_positive_post_int(request, "quantity")
 
     if not troop_key:
         messages.error(request, "请选择护院类型")
-        return _trade_redirect(tab="bank")
+        return _trade_redirect(tab="bank", troop_category=troop_category)
     if quantity is None:
         messages.error(request, "数量参数无效")
-        return _trade_redirect(tab="bank")
+        return _trade_redirect(tab="bank", troop_category=troop_category)
 
     try:
         from gameplay.services.manor.troop_bank import withdraw_troops_from_bank
@@ -232,7 +238,7 @@ def withdraw_troop_from_bank_view(request):
     except Exception as exc:
         _handle_unexpected_trade_error(request, exc, op="bank_troop_withdraw")
 
-    return _trade_redirect(tab="bank")
+    return _trade_redirect(tab="bank", troop_category=troop_category)
 
 
 @login_required

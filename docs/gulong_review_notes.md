@@ -10,7 +10,7 @@
 - `data/guests/gulong.yaml:230`：花白凤由“养母/收养”改为“生母”（去掉明确收养情节）。
 - `data/guests/gulong.yaml:1266`：郭嵩阳由“与李寻欢一战/败于小李飞刀”改为“与荆无命一战/败亡”。
 
-同步修正：`data/guest_templates_full.yaml` 与 `docs/门客数据库-其他武侠.md`、`docs/门客数据库-其他武侠 copy.md` 对应条目，避免后续再被生成/复制回错误内容。
+同步修正：`data/guest_templates.yaml` 与 `docs/门客数据库-其他武侠.md`、`docs/门客数据库-其他武侠 copy.md` 对应条目，避免后续再被生成/复制回错误内容。
 
 ## 待你确认（离线无法确保完全符合原著的高风险条目）
 

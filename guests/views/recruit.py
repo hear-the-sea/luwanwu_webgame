@@ -25,7 +25,7 @@ from ..models import RecruitmentCandidate
 from ..services import (
     bulk_finalize_candidates,
     convert_candidate_to_retainer,
-    recruit_guest,
+    start_guest_recruitment,
     use_magnifying_glass_for_candidates,
 )
 
@@ -123,6 +123,20 @@ def _normalize_candidate_action(raw_action: str | None) -> str | None:
     return None
 
 
+def _format_duration(seconds: int) -> str:
+    total = max(0, int(seconds))
+    hours, rem = divmod(total, 3600)
+    minutes, sec = divmod(rem, 60)
+    parts = []
+    if hours:
+        parts.append(f"{hours}小时")
+    if minutes:
+        parts.append(f"{minutes}分钟")
+    if sec or not parts:
+        parts.append(f"{sec}秒")
+    return "".join(parts)
+
+
 @method_decorator(require_POST, name="dispatch")
 @method_decorator(rate_limit_redirect("recruit_draw", limit=10, window_seconds=60), name="dispatch")
 class RecruitView(LoginRequiredMixin, TemplateView):
@@ -144,8 +158,9 @@ class RecruitView(LoginRequiredMixin, TemplateView):
 
         try:
             try:
-                candidates = recruit_guest(manor, pool)
-                messages.success(request, f"{pool.name} 生成 {len(candidates)} 名候选，等待挑选。")
+                recruitment = start_guest_recruitment(manor, pool)
+                eta_text = _format_duration(recruitment.duration_seconds)
+                messages.success(request, f"{pool.name} 已开始招募，预计 {eta_text} 后完成。")
             except (GameError, ValueError) as exc:
                 messages.error(request, sanitize_error_message(exc))
             except Exception as exc:

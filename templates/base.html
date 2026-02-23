@@ -36,6 +36,7 @@
             <a href="{% url 'trade:trade' %}" class="nav-tab {% if 'trade' in request.path %}active{% endif %}">交易</a>
             <a href="{% url 'guilds:hall' %}" class="nav-tab {% if 'guilds' in request.path %}active{% endif %}">帮会</a>
             <a href="{% url 'gameplay:map' %}" class="nav-tab {% if 'map' in request.path %}active{% endif %}">地图</a>
+            <a href="{% url 'gameplay:arena' %}" class="nav-tab {% if 'arena' in request.path %}active{% endif %}">竞技场</a>
             <a href="{% url 'gameplay:work' %}" class="nav-tab {% if 'work' in request.path %}active{% endif %}">打工</a>
             <a href="{% url 'gameplay:tasks' %}" class="nav-tab {% if 'tasks' in request.path %}active{% endif %}">任务</a>
             <a href="{% url 'gameplay:messages' %}" class="nav-tab {% if 'messages' in request.path %}active{% endif %}" id="nav-messages-link-top" style="position: relative;" data-unread="{{ message_unread_count|default:0 }}">

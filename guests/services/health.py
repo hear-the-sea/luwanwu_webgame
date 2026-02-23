@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Dict
 from django.db import transaction
 from django.utils import timezone
 
-from core.exceptions import GuestFullHpError, InsufficientStockError, InvalidHealAmountError
+from core.exceptions import GuestFullHpError, GuestNotIdleError, InsufficientStockError, InvalidHealAmountError
 from core.utils import safe_int
 from core.utils.time_scale import scale_value
 
@@ -83,6 +83,8 @@ def heal_guest(guest: Guest, heal_amount: int) -> dict:
         InvalidHealAmountError: 治疗量无效
         GuestFullHpError: 门客已满血
     """
+    if guest.status not in {GuestStatus.IDLE, GuestStatus.INJURED}:
+        raise GuestNotIdleError(guest)
     if heal_amount <= 0:
         raise InvalidHealAmountError()
     if guest.current_hp >= guest.max_hp:

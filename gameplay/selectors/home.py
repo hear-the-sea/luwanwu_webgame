@@ -64,7 +64,7 @@ def get_home_context(manor) -> dict:
 
     total_guest_salary = sum(RARITY_SALARY.get(g.rarity, 1000) for g in guests)
 
-    from ..utils.resource_calculator import get_hourly_rates
+    from ..utils.resource_calculator import get_hourly_rates, get_personnel_grain_cost_per_hour
 
     cache_key = CacheKeys.home_hourly_rates(manor.pk)
     hourly_rates = cache.get(cache_key)
@@ -106,7 +106,7 @@ def get_home_context(manor) -> dict:
         "total_guest_salary": total_guest_salary,
         "building_income": building_income,
         "grain_production": hourly_rates.get("grain", 0),
-        "personnel_grain_cost": manor.retainer_count,
+        "personnel_grain_cost": get_personnel_grain_cost_per_hour(manor),
         "player_troops": player_troops,
         "active_scouts": get_active_scouts(manor),
         "active_raids": get_active_raids(manor),

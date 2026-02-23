@@ -58,3 +58,35 @@ def test_calculate_battle_salvage_counts_troop_losses_on_both_sides():
 
     # Both sides: (200 + 200) * (180/3600) * 0.1 = 2
     assert exp == 2
+
+
+def test_calculate_battle_salvage_can_limit_equipment_recovery_to_player_side():
+    report = SimpleNamespace(
+        seed=42,
+        losses={
+            "attacker": {"casualties": [{"key": "dao_jie", "lost": 200}]},
+            "defender": {"casualties": [{"key": "qiang_hao", "lost": 200}]},
+        },
+        attacker_team=[],
+        defender_team=[],
+    )
+
+    exp_all, equip_all = calculate_battle_salvage(report)
+    exp_attacker_only, equip_attacker_only = calculate_battle_salvage(report, equipment_casualty_side="attacker")
+
+    # 经验果仍按双方阵亡计算，不受装备过滤影响
+    assert exp_attacker_only == exp_all == 2
+
+    attacker_equipment_keys = {
+        "equip_dakandao",
+        "equip_yangpixue",
+        "equip_shengpijia",
+        "equip_tieyekui",
+        "equip_zaohongma",
+    }
+    # defender 专属装备（qiang_hao）不应出现在 attacker-only 回收里
+    defender_unique_key = "equip_baoweiqiang"
+
+    assert set(equip_attacker_only.keys()).issubset(attacker_equipment_keys)
+    assert defender_unique_key not in equip_attacker_only
+    assert defender_unique_key in equip_all

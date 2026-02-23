@@ -71,6 +71,62 @@ def scan_guest_training(limit: int = 200) -> int:
     return count
 
 
+@shared_task(name="guests.complete_recruitment", bind=True, max_retries=2, default_retry_delay=30)
+def complete_guest_recruitment(self, recruitment_id: int) -> str:
+    from guests.models import GuestRecruitment
+    from guests.services import finalize_guest_recruitment
+
+    try:
+        recruitment = (
+            GuestRecruitment.objects.select_related("manor", "manor__user", "pool").filter(pk=recruitment_id).first()
+        )
+        if not recruitment:
+            logger.warning("GuestRecruitment %d not found", recruitment_id)
+            return "not_found"
+
+        now = timezone.now()
+        if recruitment.complete_at and recruitment.complete_at > now:
+            remaining = int((recruitment.complete_at - now).total_seconds())
+            if remaining > 0:
+                safe_apply_async_with_dedup(
+                    complete_guest_recruitment,
+                    dedup_key=f"guest:recruitment:{recruitment_id}",
+                    dedup_timeout=_TASK_DEDUP_TIMEOUT,
+                    args=[recruitment_id],
+                    countdown=remaining,
+                    logger=logger,
+                    log_message=f"guest recruitment reschedule failed: recruitment_id={recruitment_id}",
+                )
+                return "rescheduled"
+
+        finalized = finalize_guest_recruitment(recruitment, now=now, send_notification=True)
+        return "completed" if finalized else "skipped"
+    except Exception as exc:
+        logger.exception("Failed to complete guest recruitment %d: %s", recruitment_id, exc)
+        raise self.retry(exc=exc)
+
+
+@shared_task(name="guests.scan_recruitments")
+def scan_guest_recruitments(limit: int = 200) -> int:
+    from guests.models import GuestRecruitment
+    from guests.services import finalize_guest_recruitment
+
+    now = timezone.now()
+    qs = (
+        GuestRecruitment.objects.select_related("manor", "manor__user", "pool")
+        .filter(status=GuestRecruitment.Status.PENDING, complete_at__lte=now)
+        .order_by("complete_at")[:limit]
+    )
+    count = 0
+    for recruitment in qs:
+        try:
+            if finalize_guest_recruitment(recruitment, now=now, send_notification=True):
+                count += 1
+        except Exception:
+            logger.exception("Failed to finalize guest recruitment %d", recruitment.id)
+    return count
+
+
 @shared_task(name="guests.process_daily_loyalty", bind=True, max_retries=2, default_retry_delay=60)
 def process_daily_loyalty(self) -> str:
     """

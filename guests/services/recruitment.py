@@ -4,18 +4,23 @@
 
 from __future__ import annotations
 
+import logging
 import random
+from datetime import timedelta
 from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from django.db import transaction
+from django.utils import timezone
 
 from core.exceptions import (
     GuestCapacityFullError,
+    GuestNotIdleError,
     InsufficientStockError,
     InvalidAllocationError,
     NoTemplateAvailableError,
     RetainerCapacityFullError,
 )
+from core.utils.time_scale import scale_duration
 
 if TYPE_CHECKING:
     from gameplay.models import Manor
@@ -26,7 +31,9 @@ from ..models import (
     MIN_HP_FLOOR,
     Guest,
     GuestRarity,
+    GuestRecruitment,
     GuestSkill,
+    GuestStatus,
     GuestTemplate,
     RecruitmentCandidate,
     RecruitmentPool,
@@ -36,6 +43,8 @@ from ..models import (
 from ..utils.name_generator import generate_random_name
 from ..utils.recruitment_utils import HERMIT_RARITY, RARITY_ORDER, choose_rarity, filter_entries, weighted_choice
 from ..utils.recruitment_variance import apply_recruitment_variance
+
+logger = logging.getLogger(__name__)
 
 # 不可重复招募的稀有度（绿色及以上）
 NON_REPEATABLE_RARITIES = frozenset(
@@ -49,7 +58,7 @@ NON_REPEATABLE_RARITIES = frozenset(
 )
 
 CORE_POOL_TIERS = (
-    RecruitmentPool.Tier.TONGSHI,
+    RecruitmentPool.Tier.CUNMU,
     RecruitmentPool.Tier.XIANGSHI,
     RecruitmentPool.Tier.HUISHI,
     RecruitmentPool.Tier.DIANSHI,
@@ -205,12 +214,35 @@ def list_pools(core_only: bool = False) -> Iterable[RecruitmentPool]:
         RecruitmentPool.Tier.DIANSHI: 0,
         RecruitmentPool.Tier.HUISHI: 1,
         RecruitmentPool.Tier.XIANGSHI: 2,
-        RecruitmentPool.Tier.TONGSHI: 3,
+        RecruitmentPool.Tier.CUNMU: 3,
     }
 
     pools = list(qs)
     pools.sort(key=lambda p: tier_priority.get(p.tier, 99))
     return pools
+
+
+def get_pool_recruitment_duration_seconds(pool: RecruitmentPool) -> int:
+    """获取卡池招募倒计时秒数（仅使用 YAML/数据库配置并应用全局时间倍率）。"""
+    base_seconds = int(getattr(pool, "cooldown_seconds", 0) or 0)
+    if base_seconds <= 0:
+        return 0
+    return scale_duration(base_seconds, minimum=1)
+
+
+def has_active_guest_recruitment(manor: Manor) -> bool:
+    """是否存在进行中的门客招募。"""
+    return manor.guest_recruitments.filter(status=GuestRecruitment.Status.PENDING).exists()
+
+
+def get_active_guest_recruitment(manor: Manor) -> GuestRecruitment | None:
+    """获取最早完成的一条进行中门客招募。"""
+    return (
+        manor.guest_recruitments.filter(status=GuestRecruitment.Status.PENDING)
+        .select_related("pool")
+        .order_by("complete_at")
+        .first()
+    )
 
 
 def available_guests(manor: Manor) -> Sequence[Guest]:
@@ -576,20 +608,51 @@ def recruit_guest(manor: Manor, pool: RecruitmentPool, seed: int | None = None) 
             reason=ResourceEvent.Reason.RECRUIT_COST,
         )
 
-    # 资源扣除成功后再清空候选门客（防止玩家绕过前端确认）
-    manor.candidates.all().delete()
+    # 资源扣除成功后再清空候选门客并生成候选（防止玩家绕过前端确认）
+    total_draw_count = pool.draw_count + manor.tavern_recruitment_bonus
+    return _build_recruitment_candidates(
+        manor,
+        pool,
+        seed=seed,
+        total_draw_count=total_draw_count,
+        clear_existing=True,
+    )
+
+
+def _build_recruitment_candidates(
+    manor: Manor,
+    pool: RecruitmentPool,
+    *,
+    seed: int | None = None,
+    total_draw_count: int | None = None,
+    clear_existing: bool = True,
+) -> List[RecruitmentCandidate]:
+    """
+    生成候选门客（不处理资源扣除）。
+
+    Args:
+        manor: 庄园对象
+        pool: 招募卡池
+        seed: 随机种子
+        total_draw_count: 候选数量，不传则按“基础+酒馆加成”
+        clear_existing: 是否清空已有候选
+    """
+    if clear_existing:
+        manor.candidates.all().delete()
+
     pool_entries = list(pool.entries.select_related("template"))
     rng = random.Random(seed)
     candidates_to_create: List[RecruitmentCandidate] = []
 
-    # 计算抽取数量：卡池基础数量 + 酒馆加成
-    tavern_bonus = manor.tavern_recruitment_bonus
-    total_draw_count = pool.draw_count + tavern_bonus
+    resolved_draw_count = total_draw_count
+    if resolved_draw_count is None:
+        resolved_draw_count = pool.draw_count + manor.tavern_recruitment_bonus
+    resolved_draw_count = max(1, int(resolved_draw_count))
 
     # 获取玩家已拥有的需要排除的模板（绿色以上 + 黑色隐士）
     excluded_ids = get_excluded_template_ids(manor)
 
-    for _ in range(total_draw_count):
+    for _ in range(resolved_draw_count):
         template = choose_template_from_entries(pool_entries, rng=rng, excluded_ids=excluded_ids)
         template_to_use = template
         display_name = template.name
@@ -616,6 +679,169 @@ def recruit_guest(manor: Manor, pool: RecruitmentPool, seed: int | None = None) 
     # 批量创建候选门客
     candidates = RecruitmentCandidate.objects.bulk_create(candidates_to_create)
     return candidates
+
+
+def _schedule_guest_recruitment_completion(recruitment: GuestRecruitment, eta_seconds: int) -> None:
+    """调度门客招募完成任务。"""
+    countdown = max(0, int(eta_seconds))
+    try:
+        from guests.tasks import complete_guest_recruitment
+    except Exception:
+        logger.warning("Unable to import complete_guest_recruitment task; skip scheduling", exc_info=True)
+        return
+
+    transaction.on_commit(
+        lambda: complete_guest_recruitment.apply_async(
+            args=[recruitment.id],
+            countdown=countdown,
+            queue="timer",
+        )
+    )
+
+
+@transaction.atomic
+def start_guest_recruitment(manor: Manor, pool: RecruitmentPool, seed: int | None = None) -> GuestRecruitment:
+    """
+    启动异步门客招募：立即扣资源，进入倒计时，完成后生成候选。
+    """
+    from gameplay.models import Manor as ManorModel
+    from gameplay.models import ResourceEvent
+    from gameplay.services.resources import spend_resources
+
+    locked_manor = ManorModel.objects.select_for_update().get(pk=manor.pk)
+
+    if has_active_guest_recruitment(locked_manor):
+        raise ValueError("已有招募正在进行中，请等待当前招募完成。")
+
+    resolved_seed = seed if seed is not None else random.SystemRandom().randint(1, 2**31 - 1)
+    draw_count = pool.draw_count + locked_manor.tavern_recruitment_bonus
+    duration_seconds = get_pool_recruitment_duration_seconds(pool)
+    cost = dict(pool.cost or {})
+
+    if cost:
+        spend_resources(
+            locked_manor,
+            cost,
+            note=f"卡池：{pool.name}",
+            reason=ResourceEvent.Reason.RECRUIT_COST,
+        )
+
+    # 行为与原流程保持一致：开始新招募时清空现有候选
+    locked_manor.candidates.all().delete()
+
+    recruitment = GuestRecruitment.objects.create(
+        manor=locked_manor,
+        pool=pool,
+        cost=cost,
+        draw_count=max(1, int(draw_count)),
+        duration_seconds=max(0, int(duration_seconds)),
+        seed=int(resolved_seed),
+        complete_at=timezone.now() + timedelta(seconds=max(0, int(duration_seconds))),
+    )
+    _schedule_guest_recruitment_completion(recruitment, duration_seconds)
+    return recruitment
+
+
+def finalize_guest_recruitment(
+    recruitment: GuestRecruitment,
+    *,
+    now=None,
+    send_notification: bool = False,
+) -> bool:
+    """
+    完成门客招募：生成候选并更新队列状态。
+    """
+    recruitment_id = getattr(recruitment, "pk", None)
+    if not recruitment_id:
+        return False
+
+    current_time = now or timezone.now()
+
+    with transaction.atomic():
+        from gameplay.models import Manor as ManorModel
+
+        locked = (
+            GuestRecruitment.objects.select_for_update()
+            .select_related("manor", "manor__user", "pool")
+            .filter(pk=recruitment_id)
+            .first()
+        )
+        if not locked or locked.status != GuestRecruitment.Status.PENDING:
+            return False
+        if locked.complete_at > current_time:
+            return False
+        if not locked.pool_id:
+            locked.status = GuestRecruitment.Status.FAILED
+            locked.finished_at = current_time
+            locked.error_message = "招募卡池不存在"
+            locked.save(update_fields=["status", "finished_at", "error_message"])
+            return False
+        ManorModel.objects.select_for_update().filter(pk=locked.manor_id).exists()
+
+        try:
+            candidates = _build_recruitment_candidates(
+                locked.manor,
+                locked.pool,
+                seed=locked.seed,
+                total_draw_count=locked.draw_count,
+                clear_existing=True,
+            )
+        except Exception as exc:
+            logger.exception("Failed to finalize guest recruitment %s: %s", locked.id, exc)
+            locked.status = GuestRecruitment.Status.FAILED
+            locked.finished_at = current_time
+            locked.error_message = str(exc)[:255]
+            locked.save(update_fields=["status", "finished_at", "error_message"])
+            return False
+
+        locked.status = GuestRecruitment.Status.COMPLETED
+        locked.finished_at = current_time
+        locked.result_count = len(candidates)
+        locked.error_message = ""
+        locked.save(update_fields=["status", "finished_at", "result_count", "error_message"])
+        manor = locked.manor
+        pool = locked.pool
+        candidate_count = len(candidates)
+
+    if send_notification and pool:
+        from gameplay.models import Message
+        from gameplay.services.utils.messages import create_message
+        from gameplay.services.utils.notifications import notify_user
+
+        title = f"{pool.name}招募完成"
+        body = f"您的{pool.name}已完成，生成 {candidate_count} 名候选门客，请前往聚贤庄挑选。"
+        create_message(
+            manor=manor,
+            kind=Message.Kind.SYSTEM,
+            title=title,
+            body=body,
+        )
+        notify_user(
+            manor.user_id,
+            {
+                "kind": "system",
+                "title": title,
+                "pool_key": pool.key,
+                "candidate_count": candidate_count,
+            },
+            log_context="guest recruitment notification",
+        )
+    return True
+
+
+def refresh_guest_recruitments(manor: Manor, limit: int = 20) -> int:
+    """兜底刷新门客招募状态（用于 worker 中断场景）。"""
+    now = timezone.now()
+    completed = 0
+    recruitments = (
+        manor.guest_recruitments.filter(status=GuestRecruitment.Status.PENDING, complete_at__lte=now)
+        .select_related("pool", "manor", "manor__user")
+        .order_by("complete_at")[:limit]
+    )
+    for recruitment in recruitments:
+        if finalize_guest_recruitment(recruitment, now=now, send_notification=True):
+            completed += 1
+    return completed
 
 
 @transaction.atomic
@@ -840,49 +1066,59 @@ def allocate_attribute_points(guest: Guest, attribute: str, points: int) -> Gues
     Raises:
         ValueError: 参数不合法时抛出
     """
-    # 安全修复：验证点数范围
-    if points <= 0:
-        raise InvalidAllocationError("zero_points")
-    if guest.attribute_points < points:
-        raise InvalidAllocationError("insufficient")
+    if not getattr(guest, "pk", None):
+        raise ValueError("门客不存在")
 
-    # 属性字段映射
-    attr_map = {
-        "force": "force",
-        "intellect": "intellect",
-        "defense": "defense_stat",
-        "agility": "agility",
-    }
-    # 已分配点数字段映射
-    allocated_map = {
-        "force": "allocated_force",
-        "intellect": "allocated_intellect",
-        "defense": "allocated_defense",
-        "agility": "allocated_agility",
-    }
+    with transaction.atomic():
+        locked_guest = Guest.objects.select_for_update().filter(pk=guest.pk).first()
+        if not locked_guest:
+            raise ValueError("门客不存在")
+        if locked_guest.status != GuestStatus.IDLE:
+            raise GuestNotIdleError(locked_guest)
 
-    target = attr_map.get(attribute)
-    allocated_field = allocated_map.get(attribute)
-    if not target or not allocated_field:
-        raise InvalidAllocationError("unknown_attribute")
+        # 安全修复：验证点数范围
+        if points <= 0:
+            raise InvalidAllocationError("zero_points")
+        if locked_guest.attribute_points < points:
+            raise InvalidAllocationError("insufficient")
 
-    # 安全修复：检查属性上限，防止溢出
-    MAX_ATTRIBUTE_VALUE = 9999  # 属性值安全上限
-    current_value = getattr(guest, target)
-    if current_value + points > MAX_ATTRIBUTE_VALUE:
-        raise InvalidAllocationError("attribute_overflow")
+        # 属性字段映射
+        attr_map = {
+            "force": "force",
+            "intellect": "intellect",
+            "defense": "defense_stat",
+            "agility": "agility",
+        }
+        # 已分配点数字段映射
+        allocated_map = {
+            "force": "allocated_force",
+            "intellect": "allocated_intellect",
+            "defense": "allocated_defense",
+            "agility": "allocated_agility",
+        }
 
-    guest.attribute_points -= points
-    updated_fields = ["attribute_points"]
+        target = attr_map.get(attribute)
+        allocated_field = allocated_map.get(attribute)
+        if not target or not allocated_field:
+            raise InvalidAllocationError("unknown_attribute")
 
-    # 增加属性值
-    setattr(guest, target, getattr(guest, target) + points)
-    updated_fields.append(target)
+        # 安全修复：检查属性上限，防止溢出
+        MAX_ATTRIBUTE_VALUE = 9999  # 属性值安全上限
+        current_value = getattr(locked_guest, target)
+        if current_value + points > MAX_ATTRIBUTE_VALUE:
+            raise InvalidAllocationError("attribute_overflow")
 
-    # 记录已分配点数
-    setattr(guest, allocated_field, getattr(guest, allocated_field) + points)
-    updated_fields.append(allocated_field)
+        locked_guest.attribute_points -= points
+        updated_fields = ["attribute_points"]
 
-    unique_fields = list(dict.fromkeys(updated_fields))
-    guest.save(update_fields=unique_fields)
-    return guest
+        # 增加属性值
+        setattr(locked_guest, target, getattr(locked_guest, target) + points)
+        updated_fields.append(target)
+
+        # 记录已分配点数
+        setattr(locked_guest, allocated_field, getattr(locked_guest, allocated_field) + points)
+        updated_fields.append(allocated_field)
+
+        unique_fields = list(dict.fromkeys(updated_fields))
+        locked_guest.save(update_fields=unique_fields)
+    return locked_guest

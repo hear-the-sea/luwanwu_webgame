@@ -115,6 +115,7 @@ class RaidRun(models.Model):
         "gameplay.Manor", on_delete=models.CASCADE, related_name="raid_runs_received", verbose_name="防守方"
     )
     guests = models.ManyToManyField("guests.Guest", related_name="raid_runs", blank=True, verbose_name="出征门客")
+    guest_snapshots = models.JSONField("出征门客快照", default=list, blank=True)
     troop_loadout = models.JSONField("兵种配置", default=dict, blank=True)
     status = models.CharField("状态", max_length=16, choices=Status.choices, default=Status.MARCHING)
     battle_report = models.ForeignKey(

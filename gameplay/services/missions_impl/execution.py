@@ -13,6 +13,7 @@ from common.utils.celery import safe_apply_async, safe_apply_async_with_dedup
 from core.utils.time_scale import scale_duration
 
 from ...models import Manor, MissionRun, MissionTemplate
+from ..battle_snapshots import build_guest_battle_snapshots, build_guest_snapshot_proxies
 from ..recruitment.troops import apply_defender_troop_losses
 from ..utils.messages import create_message
 from ..utils.notifications import notify_user
@@ -256,7 +257,7 @@ def _return_attacker_troops_after_mission(locked_run: MissionRun, report: Any) -
     _return_surviving_troops_batch(locked_run.manor, loadout, report)
 
 
-def _build_mission_drops_with_salvage(locked_run: MissionRun, report: Any) -> Dict[str, int]:
+def _build_mission_drops_with_salvage(locked_run: MissionRun, report: Any, player_side: str) -> Dict[str, int]:
     drops = dict(report.drops or {})
     if locked_run.mission.is_defense and not drops:
         drops = resolve_defense_drops_if_missing(report, locked_run.mission.drop_table or {})
@@ -264,7 +265,10 @@ def _build_mission_drops_with_salvage(locked_run: MissionRun, report: Any) -> Di
     try:
         from ..battle_salvage import calculate_battle_salvage
 
-        exp_fruit_count, equipment_recovery = calculate_battle_salvage(report)
+        exp_fruit_count, equipment_recovery = calculate_battle_salvage(
+            report,
+            equipment_casualty_side=player_side,
+        )
         if exp_fruit_count > 0:
             drops["experience_fruit"] = drops.get("experience_fruit", 0) + exp_fruit_count
         for equip_key, count in equipment_recovery.items():
@@ -287,7 +291,7 @@ def _apply_mission_rewards_if_won(locked_run: MissionRun, report: Any, player_si
     if locked_run.is_retreating or report.winner != player_side:
         return
 
-    drops = _build_mission_drops_with_salvage(locked_run, report)
+    drops = _build_mission_drops_with_salvage(locked_run, report, player_side)
     if not drops:
         return
 
@@ -425,6 +429,7 @@ def _create_mission_run_record(
     manor: Manor,
     mission: MissionTemplate,
     guests: List[Any],
+    guest_snapshots: List[Dict[str, Any]],
     loadout: Dict[str, int],
     travel_seconds: int,
 ) -> MissionRun:
@@ -432,6 +437,7 @@ def _create_mission_run_record(
     run = MissionRun.objects.create(
         manor=manor,
         mission=mission,
+        guest_snapshots=guest_snapshots,
         troop_loadout=loadout,
         travel_time=travel_seconds,
         return_at=timezone.now() + timedelta(seconds=return_seconds),
@@ -460,7 +466,7 @@ def _build_defender_setup_and_drop_table(
 def _sync_report_for_launch(
     manor: Manor,
     mission: MissionTemplate,
-    guests: List[Any],
+    battle_guests: List[Any],
     loadout: Dict[str, int],
     defender_setup: dict,
     travel_seconds: int,
@@ -469,7 +475,7 @@ def _sync_report_for_launch(
     return generate_sync_battle_report(
         manor=manor,
         mission=mission,
-        guests=guests,
+        guests=battle_guests,
         loadout=loadout,
         defender_setup=defender_setup,
         travel_seconds=travel_seconds,
@@ -492,9 +498,16 @@ def _dispatch_or_sync_launch_report(
     if mission.is_defense:
         return None
 
+    battle_guests = build_guest_snapshot_proxies(
+        run.guest_snapshots or build_guest_battle_snapshots(guests, include_identity=True),
+        include_guest_identity=True,
+    )
+    if not battle_guests:
+        battle_guests = guests
+
     force_sync = bool(getattr(settings, "DEBUG", False) or os.environ.get("PYTEST_CURRENT_TEST"))
     if force_sync:
-        return _sync_report_for_launch(manor, mission, guests, loadout, defender_setup, travel_seconds, seed)
+        return _sync_report_for_launch(manor, mission, battle_guests, loadout, defender_setup, travel_seconds, seed)
 
     ok = safe_apply_async(
         generate_report_task,
@@ -518,7 +531,7 @@ def _dispatch_or_sync_launch_report(
     if ok:
         return None
 
-    return _sync_report_for_launch(manor, mission, guests, loadout, defender_setup, travel_seconds, seed)
+    return _sync_report_for_launch(manor, mission, battle_guests, loadout, defender_setup, travel_seconds, seed)
 
 
 def _attach_run_report_if_empty(run: MissionRun, report: Any) -> None:
@@ -562,7 +575,8 @@ def launch_mission(
 
         guests, loadout, travel_seconds = _prepare_launch_inputs(manor, mission, guest_ids, troop_loadout)
         _mark_guests_deployed_if_needed(mission, guests)
-        run = _create_mission_run_record(manor, mission, guests, loadout, travel_seconds)
+        guest_snapshots = build_guest_battle_snapshots(guests, include_identity=True)
+        run = _create_mission_run_record(manor, mission, guests, guest_snapshots, loadout, travel_seconds)
 
     try:
         from battle.tasks import generate_report_task

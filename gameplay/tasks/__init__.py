@@ -20,6 +20,9 @@ from gameplay.models import MissionRun
 from gameplay.services.manor.core import finalize_building_upgrade
 from gameplay.services.technology import finalize_technology_upgrade
 
+# Arena
+from gameplay.tasks.arena import scan_arena_tournaments
+
 # Buildings
 from gameplay.tasks.buildings import complete_building_upgrade, scan_building_upgrades
 
@@ -69,6 +72,8 @@ __all__ = [
     # Buildings
     "complete_building_upgrade",
     "scan_building_upgrades",
+    # Arena
+    "scan_arena_tournaments",
     # Technology
     "complete_technology_upgrade",
     "scan_technology_upgrades",

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load guest_extras %}
+{% load guest_extras static %}
 
 {% block title %}聚贤庄{% endblock %}
 
@@ -9,17 +9,22 @@
         display: flex;
         flex-direction: column;
         height: 100%;
+        min-width: 0;
     }
 
     .pool-content {
         display: flex;
         flex: 1;
         flex-direction: column;
+        min-width: 0;
+        gap: 0.35rem;
     }
 
     .pool-desc {
         min-height: 0;
         overflow: visible;
+        word-break: break-word;
+        line-height: 1.4;
     }
 
     .recruit-action {
@@ -38,8 +43,8 @@
             display: flex !important;
             flex-direction: column !important; /* 恢复垂直堆叠，但用absolute定位实现特殊效果 */
             position: relative;
-            padding-left: 7rem !important; /* 左侧留出图片空间 112px */
-            min-height: 6rem; /* 确保高度足够 */
+            padding-left: 8.25rem !important; /* 左侧留出更宽图片空间 */
+            min-height: 8.5rem; /* 避免文本与按钮被截断 */
             justify-content: center;
         }
         /* 图片容器绝对定位到左侧 */
@@ -48,18 +53,21 @@
             left: 0;
             top: 0;
             bottom: 0;
-            width: 6.5rem !important; /* 104px宽 */
+            width: 7.5rem !important; /* 提升PC端图片区域宽度 */
             height: 100% !important;  /* 撑满卡片高度 */
             border-right: 2px solid #e5e7eb;
         }
         .pool-content {
-            padding: 0.5rem 0 0.5rem 0 !important;
+            padding: 0.55rem 0.2rem 0.55rem 0 !important;
             width: 100%;
         }
         .pool-desc {
-            min-height: 2.75rem;
-            max-height: 2.75rem;
-            overflow: hidden;
+            min-height: 0;
+            max-height: none;
+            overflow: visible;
+        }
+        .recruit-action {
+            margin-top: 0;
         }
     }
 </style>
@@ -68,14 +76,15 @@
 {% block content %}
 <section class="dashboard">
     <div class="tw-panel-header mb-4 bg-transparent border-0 p-0 text-2xl">聚贤庄</div>
+
     <section class="tw-panel mb-6">
         <div class="tw-panel-header">招募类型</div>
         <div class="tw-panel-content">
-            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {% for pool in pools %}
                 <article class="tw-building-card overflow-hidden text-sm pool-card-responsive">
                     <div class="relative w-full bg-gray-200 pool-img-container">
-                        {% if pool.key == 'tongshi' %}
+                        {% if pool.key == 'cunmu' %}
                         <img src="/static/images/buildings/cunmu.webp" class="w-full h-full object-cover" alt="{{ pool.name }}">
                         {% elif pool.key == 'xiangshi' %}
                         <img src="/static/images/buildings/xiangshi.webp" class="w-full h-full object-cover" alt="{{ pool.name }}">
@@ -92,11 +101,16 @@
                               data-pool-name="{{ pool.name }}"
                               data-pool-cost="{% for key,val in pool.cost.items %}{{ key }} {{ val }}{% empty %}免费{% endfor %}"
                               data-pool-base="{{ pool.draw_count }}"
-                              data-pool-bonus="{{ manor.tavern_recruitment_bonus }}">
+                              data-pool-bonus="{{ manor.tavern_recruitment_bonus }}"
+                              data-pool-duration="{{ pool.recruit_duration_seconds }}">
                             {% csrf_token %}
                             <input type="hidden" name="pool" value="{{ pool.id }}">
-                            <button type="submit" class="tw-btn-primary tw-btn-sm">招募</button>
+                            <button type="submit" class="tw-btn-primary tw-btn-sm"
+                                    {% if active_recruitment %}disabled{% endif %}>
+                                {% if active_recruitment %}招募中{% else %}招募{% endif %}
+                            </button>
                         </form>
+                        <p class="text-xs text-text-muted mt-2">耗时：{{ pool.recruit_duration_display }}</p>
                     </div>
                 </article>
                 {% empty %}
@@ -109,6 +123,25 @@
     <section class="tw-panel mb-6">
         <div class="tw-panel-header">候选区</div>
         <div class="tw-panel-content">
+            {% if active_recruitment %}
+            <div class="mb-4 px-3 py-2 rounded-md bg-bg-hover border border-border-light">
+                <p class="text-sm mb-1">
+                    招募中：
+                    <span class="font-semibold">{{ active_recruitment.pool.name }}</span>
+                    ，预计生成
+                    <span class="font-semibold">{{ active_recruitment.draw_count }}</span>
+                    名候选
+                </p>
+                <p class="text-sm text-text-muted">
+                    剩余时间：
+                    <span class="countdown"
+                          data-countdown="{{ active_recruitment.complete_at|date:'c' }}"
+                          data-refresh="1"
+                          data-complete-text="已完成，正在刷新">计算中</span>
+                </p>
+            </div>
+            {% endif %}
+
             {% if magnifying_glass_items %}
             <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
                 <div class="flex gap-2 flex-wrap">
@@ -139,7 +172,11 @@
                         {% endif %}
                     </label>
                     {% empty %}
+                    {% if active_recruitment %}
+                    <p class="tw-muted">招募进行中，请等待倒计时结束后查看候选门客。</p>
+                    {% else %}
                     <p class="tw-muted">没有待选门客，请先进行招募。</p>
+                    {% endif %}
                     {% endfor %}
                 </div>
                 {% if candidates %}
@@ -175,7 +212,20 @@
 
 {% block extra_scripts %}
 {{ block.super }}
+<script src="{% static 'js/dashboard.js' %}"></script>
 <script>
+    function formatDurationCN(totalSeconds) {
+        const seconds = Math.max(0, parseInt(totalSeconds || 0, 10));
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        const remainSeconds = seconds % 60;
+        const parts = [];
+        if (hours > 0) parts.push(`${hours}小时`);
+        if (minutes > 0) parts.push(`${minutes}分钟`);
+        if (remainSeconds > 0 || parts.length === 0) parts.push(`${remainSeconds}秒`);
+        return parts.join('');
+    }
+
     document.addEventListener("DOMContentLoaded", function () {
         const selectButtons = [
             document.getElementById("candidate-select-all"),
@@ -218,6 +268,7 @@
             const costText = form.dataset.poolCost;
             const baseCount = parseInt(form.dataset.poolBase);
             const bonusCount = parseInt(form.dataset.poolBonus);
+            const durationSeconds = parseInt(form.dataset.poolDuration);
             const totalCount = baseCount + bonusCount;
 
             let countText = `${totalCount}人`;
@@ -227,7 +278,7 @@
 
             try {
                 const confirmed = await gameConfirm(
-                    `确定要进行 ${poolName} 吗？\n预计招募候选：${countText}\n本次消耗：${costText}`,
+                    `确定要进行 ${poolName} 吗？\n预计招募候选：${countText}\n预计耗时：${formatDurationCN(durationSeconds)}\n本次消耗：${costText}`,
                     { title: '招募确认' }
                 );
                 if (confirmed) form.submit();

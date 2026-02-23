@@ -27,8 +27,6 @@ def _validate_guest_item_use(
     item: InventoryItem,
     guest_id: int,
     action: str,
-    deployed_message: str,
-    working_message: str,
 ) -> tuple[InventoryItem, Guest]:
     """Validate guest-target item usage prerequisites and lock related rows."""
     from core.exceptions import InsufficientStockError
@@ -54,10 +52,8 @@ def _validate_guest_item_use(
     guest = Guest.objects.select_for_update().select_related("template").filter(id=guest_id, manor=manor).first()
     if not guest:
         raise ValueError("门客不存在或不属于您的庄园")
-    if guest.status == GuestStatus.DEPLOYED:
-        raise ValueError(deployed_message)
-    if guest.status == GuestStatus.WORKING:
-        raise ValueError(working_message)
+    if guest.status != GuestStatus.IDLE:
+        raise ValueError(f"{guest.display_name} 当前非空闲状态，无法执行该操作")
 
     return locked_item, guest
 
@@ -73,8 +69,6 @@ def use_guest_rebirth_card(manor: Manor, item: InventoryItem, guest_id: int) -> 
         item,
         guest_id,
         "rebirth_guest",
-        "门客正在出征中，无法重生",
-        "门客正在打工中，无法重生",
     )
 
     old_level = guest.level
@@ -212,8 +206,6 @@ def use_xisuidan(manor: Manor, item: InventoryItem, guest_id: int) -> Dict[str, 
         item,
         guest_id,
         "reroll_growth",
-        "门客正在出征中，无法洗髓",
-        "门客正在打工中，无法洗髓",
     )
 
     guest_name = guest.display_name
@@ -306,8 +298,6 @@ def use_xidianka(manor: Manor, item: InventoryItem, guest_id: int) -> Dict[str, 
         item,
         guest_id,
         "reset_allocation",
-        "门客正在出征中，无法使用洗点卡",
-        "门客正在打工中，无法使用洗点卡",
     )
 
     guest_name = guest.display_name

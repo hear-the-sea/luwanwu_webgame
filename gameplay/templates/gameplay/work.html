@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static gameplay_extras %}
 
 {% block title %}打工{% endblock %}
 
@@ -77,25 +77,34 @@
 
     <!-- 当前工作区 -->
     <section class="tw-panel">
-        <div class="tw-panel-header">{{ current_tier_config.name }}</div>
         <div class="tw-panel-content">
             {% if works %}
-            <div class="tw-building-grid">
+            <div class="tw-building-grid tw-manor-building-grid">
                 {% for work in works %}
-                <article class="tw-building-card">
-                    <header>
-                        <div>
-                            <h3>{{ work.name }}</h3>
-                            <p class="tw-building-desc">{{ work.description }}</p>
+                <article class="tw-building-card tw-building-card--manor tw-work-card">
+                    {% with image_path=work.key|work_image %}
+                    {% static image_path as work_image_url %}
+                    <div class="tw-building-media">
+                        <div class="tw-building-corner-frame">
+                            <span class="tw-corner-piece tw-corner-tl" aria-hidden="true"></span>
+                            <span class="tw-corner-piece tw-corner-tr" aria-hidden="true"></span>
+                            <span class="tw-corner-piece tw-corner-bl" aria-hidden="true"></span>
+                            <span class="tw-corner-piece tw-corner-br" aria-hidden="true"></span>
+                            <img src="{{ work_image_url }}" alt="{{ work.name }}" loading="lazy" decoding="async" width="512" height="512">
                         </div>
+                    </div>
+                    {% endwith %}
+                    <div class="tw-building-main">
+                    <header>
+                        <div class="tw-building-headline">
+                            <h3>{{ work.name }}</h3>
+                            <span class="tw-level-badge">Lv {{ work.required_level }}</span>
+                        </div>
+                        <p class="tw-building-desc">{{ work.description }}</p>
                     </header>
 
                     <dl class="m-0 p-0">
-                        <div class="grid grid-cols-3 gap-3 p-3 rounded bg-bg-secondary mb-4">
-                            <div class="text-center">
-                                <dt class="text-xs text-text-muted mb-1">等级要求</dt>
-                                <dd class="m-0 text-sm font-semibold text-text-primary">Lv {{ work.required_level }}</dd>
-                            </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded bg-bg-secondary mb-4">
                             <div class="text-center">
                                 <dt class="text-xs text-text-muted mb-1">报酬</dt>
                                 <dd class="m-0 text-sm font-semibold text-accent-gold">{{ work.reward_silver }} 银两</dd>
@@ -128,6 +137,7 @@
                     {% else %}
                     <p class="tw-muted text-sm mt-4 text-center">暂无空闲门客</p>
                     {% endif %}
+                    </div>
                 </article>
                 {% endfor %}
             </div>

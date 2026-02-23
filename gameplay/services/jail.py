@@ -14,8 +14,8 @@ from typing import List
 
 from django.db import transaction
 
-from core.exceptions import GuestCapacityFullError
-from guests.models import DEFENSE_TO_HP_MULTIPLIER, MIN_HP_FLOOR, Guest, GuestTemplate
+from core.exceptions import GuestCapacityFullError, GuestNotIdleError
+from guests.models import DEFENSE_TO_HP_MULTIPLIER, MIN_HP_FLOOR, Guest, GuestStatus, GuestTemplate
 from guests.services.recruitment import grant_template_skills
 from guests.utils.recruitment_variance import apply_recruitment_variance
 
@@ -43,9 +43,16 @@ def add_oath_bond(manor: Manor, guest_id: int) -> OathBond:
     # Lock manor to serialize oath bond additions and prevent capacity bypass
     locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
 
-    guest = Guest.objects.select_for_update().select_related("template").filter(pk=guest_id, manor=manor).first()
+    guest = (
+        Guest.objects.select_for_update()
+        .select_related("template")
+        .filter(pk=guest_id, manor_id=getattr(locked_manor, "pk", None))
+        .first()
+    )
     if not guest:
         raise ValueError("门客不存在")
+    if guest.status != GuestStatus.IDLE:
+        raise GuestNotIdleError(guest)
 
     # 容量校验：使用锁定后的对象读取容量
     capacity = int(getattr(locked_manor, "oath_capacity", 0) or 0)
@@ -61,6 +68,9 @@ def add_oath_bond(manor: Manor, guest_id: int) -> OathBond:
 
 @transaction.atomic
 def remove_oath_bond(manor: Manor, guest_id: int) -> int:
+    guest = Guest.objects.select_for_update().filter(pk=guest_id, manor_id=getattr(manor, "pk", None)).first()
+    if guest and guest.status != GuestStatus.IDLE:
+        raise GuestNotIdleError(guest)
     deleted, _ = OathBond.objects.filter(manor=manor, guest_id=guest_id).delete()
     return int(deleted)
 

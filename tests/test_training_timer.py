@@ -12,7 +12,7 @@ def _bootstrap_guest(django_user_model):
     manor = ensure_manor(user)
     manor.grain = manor.silver = 5000
     manor.save()
-    pool = RecruitmentPool.objects.get(key="tongshi")
+    pool = RecruitmentPool.objects.get(key="cunmu")
     candidate = recruit_guest(manor, pool, seed=1)[0]
     guest = finalize_candidate(candidate)
     return guest

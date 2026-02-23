@@ -66,7 +66,7 @@ def test_add_oath_bond_raises_when_capacity_full(mock_manor_model):
     manor = SimpleNamespace(pk=1, oath_capacity=2)
     mock_manor_model.objects.select_for_update.return_value.get.return_value = manor
 
-    guest = SimpleNamespace(pk=10)
+    guest = SimpleNamespace(pk=10, status=jail_service.GuestStatus.IDLE)
 
     with patch.object(jail_service.Guest, "objects") as mock_guest_qs:
         mock_guest_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = (
@@ -86,7 +86,7 @@ def test_add_oath_bond_raises_when_already_bonded(mock_manor_model):
     manor = SimpleNamespace(pk=1, oath_capacity=5)
     mock_manor_model.objects.select_for_update.return_value.get.return_value = manor
 
-    guest = SimpleNamespace(pk=10)
+    guest = SimpleNamespace(pk=10, status=jail_service.GuestStatus.IDLE)
     existing_bond = SimpleNamespace(pk=1)
 
     with patch.object(jail_service.Guest, "objects") as mock_guest_qs:
@@ -100,6 +100,22 @@ def test_add_oath_bond_raises_when_already_bonded(mock_manor_model):
 
             with pytest.raises(ValueError, match="该门客已结义"):
                 jail_service.add_oath_bond(manor, guest_id=10)
+
+
+@patch("gameplay.services.jail.Manor")
+def test_add_oath_bond_rejects_non_idle_guest(mock_manor_model):
+    manor = SimpleNamespace(pk=1, oath_capacity=5)
+    mock_manor_model.objects.select_for_update.return_value.get.return_value = manor
+
+    guest = SimpleNamespace(pk=10, status=jail_service.GuestStatus.DEPLOYED, display_name="测试门客")
+
+    with patch.object(jail_service.Guest, "objects") as mock_guest_qs:
+        mock_guest_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = (
+            guest
+        )
+
+        with pytest.raises(jail_service.GuestNotIdleError):
+            jail_service.add_oath_bond(manor, guest_id=10)
 
 
 # ============ remove_oath_bond tests ============
@@ -127,6 +143,16 @@ def test_remove_oath_bond_returns_zero_when_not_found():
         result = jail_service.remove_oath_bond(manor, guest_id=999)
 
         assert result == 0
+
+
+@patch("gameplay.services.jail.Guest")
+def test_remove_oath_bond_rejects_non_idle_guest(mock_guest_model):
+    manor = SimpleNamespace(pk=1)
+    guest = SimpleNamespace(status=jail_service.GuestStatus.WORKING, display_name="测试门客")
+    mock_guest_model.objects.select_for_update.return_value.filter.return_value.first.return_value = guest
+
+    with pytest.raises(jail_service.GuestNotIdleError):
+        jail_service.remove_oath_bond(manor, guest_id=10)
 
 
 # ============ release_prisoner tests ============

@@ -1,0 +1,36 @@
+rewards:
+  - key: grain_pack_small
+    name: 粮草补给（小）
+    description: 适合前期补充粮草。
+    cost_coins: 80
+    daily_limit: 20
+    rewards:
+      resources:
+        grain: 1200
+
+  - key: grain_pack_large
+    name: 粮草补给（大）
+    description: 单次收益更高的粮草补给。
+    cost_coins: 300
+    daily_limit: 8
+    rewards:
+      resources:
+        grain: 5200
+
+  - key: silver_pack_small
+    name: 银两补给（小）
+    description: 快速补充日常银两消耗。
+    cost_coins: 100
+    daily_limit: 15
+    rewards:
+      resources:
+        silver: 800
+
+  - key: silver_pack_large
+    name: 银两补给（大）
+    description: 适合中后期的银两补给。
+    cost_coins: 360
+    daily_limit: 6
+    rewards:
+      resources:
+        silver: 3200

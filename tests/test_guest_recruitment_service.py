@@ -7,7 +7,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from guests.models import GuestRarity
+from core.exceptions import GuestNotIdleError
+from gameplay.services.manor.core import ensure_manor
+from guests.models import Guest, GuestRarity, GuestStatus, GuestTemplate
 from guests.services import recruitment as recruitment_service
 
 # ============ get_excluded_template_ids tests ============
@@ -107,65 +109,112 @@ def test_filter_templates_returns_all_when_no_exclusions():
 # ============ allocate_attribute_points tests ============
 
 
-def test_allocate_attribute_points_rejects_zero_points():
+def _create_guest_for_allocation_tests(django_user_model, suffix: str) -> Guest:
+    user = django_user_model.objects.create_user(
+        username=f"alloc_guest_{suffix}",
+        password="pass123",
+        email=f"alloc_guest_{suffix}@test.local",
+    )
+    manor = ensure_manor(user)
+    template = GuestTemplate.objects.create(
+        key=f"alloc_guest_tpl_{suffix}",
+        name="加点测试门客",
+        archetype="civil",
+        rarity="gray",
+        base_attack=80,
+        base_intellect=80,
+        base_defense=80,
+        base_agility=80,
+        base_luck=50,
+        base_hp=1000,
+    )
+    return Guest.objects.create(
+        manor=manor,
+        template=template,
+        status=GuestStatus.IDLE,
+        attribute_points=10,
+        force=50,
+        intellect=50,
+        defense_stat=50,
+        agility=50,
+        allocated_force=0,
+        allocated_intellect=0,
+        allocated_defense=0,
+        allocated_agility=0,
+    )
+
+
+@pytest.mark.django_db
+def test_allocate_attribute_points_rejects_zero_points(django_user_model):
     """Test that zero points allocation is rejected."""
-    guest = MagicMock()
-    guest.attribute_points = 10
+    guest = _create_guest_for_allocation_tests(django_user_model, "zero")
 
     with pytest.raises(recruitment_service.InvalidAllocationError):
         recruitment_service.allocate_attribute_points(guest, "force", 0)
 
 
-def test_allocate_attribute_points_rejects_negative_points():
+@pytest.mark.django_db
+def test_allocate_attribute_points_rejects_negative_points(django_user_model):
     """Test that negative points allocation is rejected."""
-    guest = MagicMock()
-    guest.attribute_points = 10
+    guest = _create_guest_for_allocation_tests(django_user_model, "negative")
 
     with pytest.raises(recruitment_service.InvalidAllocationError):
         recruitment_service.allocate_attribute_points(guest, "force", -5)
 
 
-def test_allocate_attribute_points_rejects_insufficient_points():
+@pytest.mark.django_db
+def test_allocate_attribute_points_rejects_insufficient_points(django_user_model):
     """Test that allocation fails when not enough points available."""
-    guest = MagicMock()
+    guest = _create_guest_for_allocation_tests(django_user_model, "insufficient")
     guest.attribute_points = 5
+    guest.save(update_fields=["attribute_points"])
 
     with pytest.raises(recruitment_service.InvalidAllocationError):
         recruitment_service.allocate_attribute_points(guest, "force", 10)
 
 
-def test_allocate_attribute_points_rejects_unknown_attribute():
+@pytest.mark.django_db
+def test_allocate_attribute_points_rejects_unknown_attribute(django_user_model):
     """Test that unknown attribute is rejected."""
-    guest = MagicMock()
-    guest.attribute_points = 10
+    guest = _create_guest_for_allocation_tests(django_user_model, "unknown")
 
     with pytest.raises(recruitment_service.InvalidAllocationError):
         recruitment_service.allocate_attribute_points(guest, "unknown_attr", 5)
 
 
-def test_allocate_attribute_points_rejects_overflow():
+@pytest.mark.django_db
+def test_allocate_attribute_points_rejects_overflow(django_user_model):
     """Test that attribute overflow is rejected."""
-    guest = MagicMock()
+    guest = _create_guest_for_allocation_tests(django_user_model, "overflow")
     guest.attribute_points = 100
     guest.force = 9950  # Near max
+    guest.save(update_fields=["attribute_points", "force"])
 
     with pytest.raises(recruitment_service.InvalidAllocationError):
         recruitment_service.allocate_attribute_points(guest, "force", 100)
 
 
-def test_allocate_attribute_points_success():
+@pytest.mark.django_db
+def test_allocate_attribute_points_rejects_non_idle_guest(django_user_model):
+    guest = _create_guest_for_allocation_tests(django_user_model, "non_idle")
+    guest.status = GuestStatus.DEPLOYED
+    guest.save(update_fields=["status"])
+
+    with pytest.raises(GuestNotIdleError):
+        recruitment_service.allocate_attribute_points(guest, "force", 1)
+
+
+@pytest.mark.django_db
+def test_allocate_attribute_points_success(django_user_model):
     """Test successful attribute point allocation."""
-    guest = MagicMock()
-    guest.attribute_points = 10
-    guest.force = 50
-    guest.allocated_force = 0
+    guest = _create_guest_for_allocation_tests(django_user_model, "success")
 
     result = recruitment_service.allocate_attribute_points(guest, "force", 5)
+    result.refresh_from_db()
 
     assert result.attribute_points == 5
     assert result.force == 55
     assert result.allocated_force == 5
-    guest.save.assert_called_once()
 
 
 # ============ clear_template_cache tests ============
@@ -185,7 +234,7 @@ def test_core_pool_tiers_has_expected_tiers():
     from guests.models import RecruitmentPool
 
     expected = (
-        RecruitmentPool.Tier.TONGSHI,
+        RecruitmentPool.Tier.CUNMU,
         RecruitmentPool.Tier.XIANGSHI,
         RecruitmentPool.Tier.HUISHI,
         RecruitmentPool.Tier.DIANSHI,

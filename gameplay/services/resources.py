@@ -15,7 +15,7 @@ from django.utils import timezone
 from core.utils.time_scale import scale_value
 
 from ..models import Manor, ResourceEvent, ResourceType
-from ..utils.resource_calculator import RESOURCE_FIELDS, get_hourly_rates
+from ..utils.resource_calculator import RESOURCE_FIELDS, get_hourly_rates, get_personnel_grain_cost_per_hour
 
 logger = logging.getLogger(__name__)
 
@@ -174,12 +174,14 @@ def sync_resource_production(manor: Manor) -> None:
         if elapsed_seconds > 0:
             elapsed_seconds = scale_value(elapsed_seconds)
             hourly_rates = get_hourly_rates(locked_manor)
+            personnel_grain_cost = get_personnel_grain_cost_per_hour(locked_manor)
+            hourly_rates[ResourceType.GRAIN] = hourly_rates.get(ResourceType.GRAIN, 0) - personnel_grain_cost
             produced = {}
 
             for resource in RESOURCE_FIELDS:
                 per_hour = hourly_rates.get(resource, 0)
-                gain = int(per_hour * (elapsed_seconds / 3600))
-                if gain <= 0:
+                delta = int(per_hour * (elapsed_seconds / 3600))
+                if delta == 0:
                     continue
 
                 current_value = getattr(locked_manor, resource)
@@ -189,12 +191,15 @@ def sync_resource_production(manor: Manor) -> None:
                 if not is_valid:
                     continue
 
-                new_value = min(capacity, current_value + gain)
-                added = max(0, new_value - current_value)
+                if delta > 0:
+                    new_value = min(capacity, current_value + delta)
+                else:
+                    new_value = max(0, current_value + delta)
+                actual_delta = new_value - current_value
 
-                if added > 0:
+                if actual_delta != 0:
                     setattr(locked_manor, resource, new_value)
-                    produced[resource] = added
+                    produced[resource] = actual_delta
 
             # Update timestamp even if no resources produced (prevents repeated checks)
             locked_manor.resource_updated_at = now

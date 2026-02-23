@@ -6,8 +6,11 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
-from gameplay.models import ResourceEvent, ResourceType
+from battle.models import TroopTemplate
+from gameplay.models import PlayerTroop, ResourceEvent, ResourceType, TroopBankStorage
 from gameplay.services import ensure_manor, grant_resources, spend_resources, sync_resource_production
+from gameplay.utils.resource_calculator import get_personnel_grain_cost_per_hour
+from guests.models import Guest, GuestTemplate
 
 User = get_user_model()
 
@@ -120,3 +123,63 @@ def test_sync_resource_production():
 
     # 资源应该有所增加
     assert manor.silver >= initial_silver
+
+
+@pytest.mark.django_db
+def test_get_personnel_grain_cost_per_hour_counts_all_personnel():
+    user = User.objects.create_user(username="personnel_cost_user", password="test123", email="p1@test.local")
+    manor = ensure_manor(user)
+    manor.retainer_count = 5
+    manor.save(update_fields=["retainer_count"])
+
+    guest_template = GuestTemplate.objects.create(
+        key="personnel_cost_guest_tpl",
+        name="耗粮测试门客",
+        archetype="civil",
+        rarity="green",
+    )
+    Guest.objects.create(manor=manor, template=guest_template)
+    Guest.objects.create(manor=manor, template=guest_template)
+
+    troop_template = TroopTemplate.objects.create(key="personnel_cost_guard_tpl", name="耗粮测试护院")
+    PlayerTroop.objects.create(manor=manor, troop_template=troop_template, count=7)
+    TroopBankStorage.objects.create(manor=manor, troop_template=troop_template, count=11)
+
+    # 5家丁 + (7+11)护院 + 2门客*100 = 223
+    assert get_personnel_grain_cost_per_hour(manor) == 223
+
+
+@pytest.mark.django_db
+def test_sync_resource_production_allows_negative_grain_delta_and_clamps_to_zero(monkeypatch):
+    user = User.objects.create_user(username="negative_grain_user", password="test123", email="p2@test.local")
+    manor = ensure_manor(user)
+    manor.grain = 90
+    manor.resource_updated_at = timezone.now() - timezone.timedelta(hours=1)
+    manor.save(update_fields=["grain", "resource_updated_at"])
+
+    monkeypatch.setattr(
+        "gameplay.services.resources.get_hourly_rates",
+        lambda _manor: {ResourceType.GRAIN: 50, ResourceType.SILVER: 0},
+    )
+    monkeypatch.setattr(
+        "gameplay.services.resources.get_personnel_grain_cost_per_hour",
+        lambda _manor: 200,
+    )
+    monkeypatch.setattr("gameplay.services.resources.scale_value", lambda value: value)
+
+    sync_resource_production(manor)
+    manor.refresh_from_db()
+
+    assert manor.grain == 0
+    event = (
+        ResourceEvent.objects.filter(
+            manor=manor,
+            resource_type=ResourceType.GRAIN,
+            reason=ResourceEvent.Reason.PRODUCE,
+            note="离线产出",
+        )
+        .order_by("-id")
+        .first()
+    )
+    assert event is not None
+    assert event.delta == -90

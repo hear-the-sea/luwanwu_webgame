@@ -230,7 +230,7 @@ class RecruitmentConfig:
     """招募系统配置"""
 
     # 核心卡池
-    CORE_POOL_TIERS: tuple = ("tongshi", "xiangshi", "huishi", "dianshi")
+    CORE_POOL_TIERS: tuple = ("cunmu", "xiangshi", "huishi", "dianshi")
 
     # 候选过期时间
     CANDIDATE_EXPIRE_HOURS: int = 24

@@ -38,8 +38,11 @@ CELERY_TASK_ROUTES = {
     "gameplay.complete_work_assignments": {"queue": CELERY_TIMER_QUEUE},
     "guests.complete_training": {"queue": CELERY_TIMER_QUEUE},
     "guests.scan_training": {"queue": CELERY_TIMER_QUEUE},
+    "guests.complete_recruitment": {"queue": CELERY_TIMER_QUEUE},
+    "guests.scan_recruitments": {"queue": CELERY_TIMER_QUEUE},
     "gameplay.complete_scout": {"queue": CELERY_TIMER_QUEUE},
     "gameplay.scan_scout_records": {"queue": CELERY_TIMER_QUEUE},
+    "gameplay.scan_arena_tournaments": {"queue": CELERY_TIMER_QUEUE},
     "gameplay.process_raid_battle": {"queue": CELERY_TIMER_QUEUE},
     "gameplay.complete_raid": {"queue": CELERY_TIMER_QUEUE},
     "gameplay.scan_raid_runs": {"queue": CELERY_TIMER_QUEUE},
@@ -53,6 +56,10 @@ CELERY_BEAT_SCHEDULE = {
     "scan-guest-training": {
         "task": "guests.scan_training",
         "schedule": crontab(minute="*/10"),
+    },
+    "scan-guest-recruitments": {
+        "task": "guests.scan_recruitments",
+        "schedule": crontab(minute="*/5"),
     },
     "complete-work-assignments": {
         "task": "gameplay.complete_work_assignments",
@@ -81,6 +88,10 @@ CELERY_BEAT_SCHEDULE = {
     "scan-raid-runs": {
         "task": "gameplay.scan_raid_runs",
         "schedule": crontab(minute="*/5"),
+    },
+    "scan-arena-tournaments": {
+        "task": "gameplay.scan_arena_tournaments",
+        "schedule": crontab(minute="*/1"),
     },
     "process-expired-market-listings": {
         "task": "trade.process_expired_listings",

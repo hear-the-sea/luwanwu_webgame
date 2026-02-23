@@ -32,7 +32,10 @@ class BattleReportDetailView(LoginRequiredMixin, DetailView):
         # 允许查看：
         # 1) 自己作为战报归属方（report.manor）
         # 2) 通过站内信收到的战报（Message.battle_report）
-        return BattleReport.objects.filter(Q(manor=manor) | Q(messages__manor=manor)).distinct()
+        # 3) 竞技场公开战报（通过 ArenaMatch 关联）
+        return BattleReport.objects.filter(
+            Q(manor=manor) | Q(messages__manor=manor) | Q(arena_matches__isnull=False)
+        ).distinct()
 
     @staticmethod
     def _collect_template_keys(attacker_team: list[dict[str, Any]], defender_team: list[dict[str, Any]]) -> set[str]:

@@ -18,7 +18,7 @@ from core.decorators import handle_game_errors
 from core.exceptions import GameError
 from core.utils.validation import safe_positive_int, safe_redirect_url, sanitize_error_message
 
-from ..models import MAX_GUEST_SKILL_SLOTS, Guest, GuestSkill, Skill
+from ..models import MAX_GUEST_SKILL_SLOTS, Guest, GuestSkill, GuestStatus, Skill
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +68,9 @@ def _collect_unmet_skill_requirements(guest: Guest, skill: Skill) -> List[str]:
 
 
 def _validate_learn_skill_preconditions(guest: Guest, skill: Skill) -> Tuple[str, str] | None:
+    if guest.status != GuestStatus.IDLE:
+        return "error", f"{guest.display_name} 当前非空闲状态，无法学习技能"
+
     if guest.guest_skills.filter(skill=skill).exists():
         return "warning", f"{guest.display_name} 已掌握 {skill.name}"
 
@@ -87,20 +90,22 @@ def _persist_skill_learning(guest: Guest, skill: Skill, inventory_item) -> None:
 
     with transaction.atomic():
         # Lock guest to prevent concurrent skill learning exceeding limits
-        Guest.objects.select_for_update().get(pk=guest.pk)
+        locked_guest = Guest.objects.select_for_update().get(pk=guest.pk)
+        if locked_guest.status != GuestStatus.IDLE:
+            raise ValueError(f"{locked_guest.display_name} 当前非空闲状态，无法学习技能")
 
-        if guest.guest_skills.count() >= MAX_GUEST_SKILL_SLOTS:
+        if locked_guest.guest_skills.count() >= MAX_GUEST_SKILL_SLOTS:
             raise ValueError("技能位已满")
 
-        if guest.guest_skills.filter(skill=skill).exists():
-            raise ValueError(f"{guest.display_name} 已掌握 {skill.name}")
+        if locked_guest.guest_skills.filter(skill=skill).exists():
+            raise ValueError(f"{locked_guest.display_name} 已掌握 {skill.name}")
 
         locked_item = InventoryItem.objects.select_for_update().filter(pk=inventory_item.pk).first()
         if not locked_item or locked_item.quantity < 1:
             raise ValueError("技能书数量不足")
 
         GuestSkill.objects.create(
-            guest=guest,
+            guest=locked_guest,
             skill=skill,
             source=GuestSkill.Source.BOOK,
         )
@@ -181,6 +186,8 @@ def forget_skill_view(request, pk: int):
 
     # 使用 manager 方法获取门客，避免重复的 select_related
     guest = get_object_or_404(Guest.objects.for_manor(ensure_manor(request.user)).with_template(), pk=pk)
+    if guest.status != GuestStatus.IDLE:
+        raise ValueError(f"{guest.display_name} 当前非空闲状态，无法遗忘技能")
 
     guest_skill_id = safe_positive_int(request.POST.get("guest_skill_id"), default=None)
     if guest_skill_id is None:

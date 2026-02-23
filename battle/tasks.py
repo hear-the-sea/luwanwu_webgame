@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import cast
 
 from celery import shared_task
 from django.apps import apps
@@ -108,7 +109,7 @@ def generate_report_task(
         if run_id:
             MissionRun = apps.get_model("gameplay", "MissionRun")
 
-            row = MissionRun.objects.filter(pk=run_id).values("battle_report_id").first()
+            row = MissionRun.objects.filter(pk=run_id).values("battle_report_id", "guest_snapshots").first()
             if row is None:
                 logger.warning("MissionRun %s not found; skipping battle report generation", run_id)
                 return None
@@ -120,6 +121,9 @@ def generate_report_task(
                     existing_report_id,
                 )
                 return int(existing_report_id)
+            guest_snapshots = row.get("guest_snapshots") or []
+        else:
+            guest_snapshots = []
 
         # Fetch manor with error handling
         try:
@@ -130,7 +134,13 @@ def generate_report_task(
             return None
 
         mission = MissionTemplate.objects.filter(pk=mission_id).first() if mission_id else None
-        guests = list(Guest.objects.filter(id__in=guest_ids).select_related("template").prefetch_related("skills"))
+        if guest_snapshots:
+            from gameplay.services.battle_snapshots import build_guest_snapshot_proxies
+
+            guests = build_guest_snapshot_proxies(guest_snapshots, include_guest_identity=True)
+        else:
+            guests = list(Guest.objects.filter(id__in=guest_ids).select_related("template").prefetch_related("skills"))
+        battle_guests = cast(list[Guest], guests)
 
         if mission and mission.is_defense:
             from battle.combatants import build_named_ai_guests
@@ -154,7 +164,7 @@ def generate_report_task(
                 fill_default_troops=False,
                 attacker_guests=attacker_guests,
                 defender_setup={"troop_loadout": troop_loadout},
-                defender_guests=guests,
+                defender_guests=battle_guests,
                 defender_max_squad=len(guests) if guests else None,
                 drop_table={},
                 opponent_name=opponent_name or mission.name,
@@ -177,7 +187,7 @@ def generate_report_task(
                 seed=seed,
                 troop_loadout=troop_loadout,
                 fill_default_troops=fill_default_troops,
-                attacker_guests=guests,
+                attacker_guests=battle_guests,
                 defender_setup=defender_setup,
                 drop_table=_normalize_mapping(drop_table),
                 opponent_name=opponent_name or (mission.name if mission else None),

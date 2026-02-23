@@ -18,7 +18,7 @@ def _bootstrap_training_guest(game_data, django_user_model, *, username: str):
     manor.grain = manor.silver = 500000
     manor.save(update_fields=["grain", "silver"])
 
-    pool = RecruitmentPool.objects.get(key="tongshi")
+    pool = RecruitmentPool.objects.get(key="cunmu")
     candidate = recruit_guest(manor, pool, seed=1)[0]
     guest = finalize_candidate(candidate)
 
