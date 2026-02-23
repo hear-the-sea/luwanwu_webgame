@@ -112,6 +112,23 @@ def _persist_skill_learning(guest: Guest, skill: Skill, inventory_item) -> None:
         consume_inventory_item_locked(locked_item)
 
 
+def _persist_skill_forget(guest: Guest, guest_skill_id: int) -> str:
+    with transaction.atomic():
+        locked_guest = Guest.objects.select_for_update().select_related("template").filter(pk=guest.pk).first()
+        if locked_guest is None:
+            raise ValueError("门客不存在")
+        if locked_guest.status != GuestStatus.IDLE:
+            raise ValueError(f"{locked_guest.display_name} 当前非空闲状态，无法遗忘技能")
+
+        locked_guest_skill = locked_guest.guest_skills.select_related("skill").filter(pk=guest_skill_id).first()
+        if locked_guest_skill is None:
+            raise ValueError("未找到要遗忘的技能")
+
+        skill_name = locked_guest_skill.skill.name
+        locked_guest_skill.delete()
+        return skill_name
+
+
 @login_required
 @require_POST
 def learn_skill_view(request, pk: int):
@@ -186,16 +203,12 @@ def forget_skill_view(request, pk: int):
 
     # 使用 manager 方法获取门客，避免重复的 select_related
     guest = get_object_or_404(Guest.objects.for_manor(ensure_manor(request.user)).with_template(), pk=pk)
-    if guest.status != GuestStatus.IDLE:
-        raise ValueError(f"{guest.display_name} 当前非空闲状态，无法遗忘技能")
 
     guest_skill_id = safe_positive_int(request.POST.get("guest_skill_id"), default=None)
     if guest_skill_id is None:
         raise ValueError("未指定技能")
 
-    guest_skill = get_object_or_404(guest.guest_skills.select_related("skill"), pk=guest_skill_id)
-    skill_name = guest_skill.skill.name
-    guest_skill.delete()
+    skill_name = _persist_skill_forget(guest, guest_skill_id)
 
     messages.info(request, f"{guest.display_name} 已遗忘 {skill_name}")
     return reverse("guests:detail", args=[guest.pk])

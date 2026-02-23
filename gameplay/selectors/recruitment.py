@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from common.constants.resources import ResourceType
 from guests.services import (
     get_active_guest_recruitment,
     get_pool_recruitment_duration_seconds,
@@ -46,6 +47,7 @@ def get_recruitment_hall_context(manor, records_limit: int) -> dict:
 
     return {
         "manor": manor,
+        "resource_labels": dict(ResourceType.choices),
         "pools": pools,
         "candidates": list_candidates(manor),
         "active_recruitment": active_recruitment,

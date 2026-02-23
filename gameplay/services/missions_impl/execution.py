@@ -384,6 +384,9 @@ def _prepare_offense_launch_inputs(
         raise ValueError("部分门客不可用或已离开庄园")
     if not guests:
         raise ValueError("请选择至少一名门客")
+    max_squad_size = getattr(manor, "max_squad_size", None) or 0
+    if max_squad_size and len(guests) > max_squad_size:
+        raise ValueError(f"最多只能派出 {max_squad_size} 名门客出征")
 
     if mission.guest_only:
         loadout: Dict[str, int] = {}
@@ -629,18 +632,27 @@ def schedule_mission_completion(run: MissionRun) -> None:
 
 
 def request_retreat(run: MissionRun) -> None:
-    if run.status != MissionRun.Status.ACTIVE:
-        raise ValueError("任务已结束，无法撤退")
     now = timezone.now()
-    outbound_finish = run.started_at + timedelta(seconds=run.travel_time)
-    if now >= outbound_finish:
-        raise ValueError("已进入返程，无法撤退")
-    elapsed = max(0, int((now - run.started_at).total_seconds()))
-    return_time = max(1, elapsed)
+    with transaction.atomic():
+        locked_run = MissionRun.objects.select_for_update().filter(pk=run.pk).first()
+        if not locked_run or locked_run.status != MissionRun.Status.ACTIVE:
+            raise ValueError("任务已结束，无法撤退")
+        if locked_run.is_retreating:
+            raise ValueError("任务已在撤退中")
+
+        outbound_finish = locked_run.started_at + timedelta(seconds=locked_run.travel_time)
+        if now >= outbound_finish:
+            raise ValueError("已进入返程，无法撤退")
+
+        elapsed = max(0, int((now - locked_run.started_at).total_seconds()))
+        return_time = max(1, elapsed)
+        locked_run.is_retreating = True
+        locked_run.return_at = now + timedelta(seconds=return_time)
+        locked_run.save(update_fields=["is_retreating", "return_at"])
+
     run.is_retreating = True
-    run.return_at = now + timedelta(seconds=return_time)
-    run.save(update_fields=["is_retreating", "return_at"])
-    schedule_mission_completion(run)
+    run.return_at = locked_run.return_at
+    schedule_mission_completion(locked_run)
 
 
 def can_retreat(run: MissionRun, now=None) -> bool:

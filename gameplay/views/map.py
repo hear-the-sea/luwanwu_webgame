@@ -333,8 +333,8 @@ def raid_status_api(request: HttpRequest) -> JsonResponse:
     manor = ensure_manor(request.user)
 
     # 刷新状态
-    refresh_raid_runs(manor)
-    refresh_scout_records(manor)
+    refresh_raid_runs(manor, prefer_async=True)
+    refresh_scout_records(manor, prefer_async=True)
 
     active_raids = get_active_raids(manor)
     active_scouts = get_active_scouts(manor)

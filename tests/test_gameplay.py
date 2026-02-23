@@ -129,6 +129,43 @@ def test_mission_launch_with_invalid_troop_type(game_data, mission_templates, ma
     assert not PlayerTroop.objects.filter(manor=manor, troop_template__key=fake_troop_key).exists()
 
 
+@pytest.mark.django_db(transaction=True)
+def test_mission_launch_rejects_when_guest_count_exceeds_max_squad(game_data, mission_templates, manor_with_troops):
+    """服务层应拒绝超出上阵人数上限的任务出征请求。"""
+    from guests.models import Guest, GuestTemplate
+
+    mission = MissionTemplate.objects.filter(is_defense=False).order_by("-guest_only", "id").first()
+    if not mission:
+        pytest.skip("No offense mission available")
+    manor = manor_with_troops
+    template = GuestTemplate.objects.first()
+    if template is None:
+        pytest.skip("No guest template available")
+
+    max_squad_size = getattr(manor, "max_squad_size", 0)
+    if max_squad_size <= 0:
+        pytest.skip("Invalid manor max_squad_size")
+
+    guests = [
+        Guest.objects.create(
+            manor=manor,
+            template=template,
+            level=10,
+            status=GuestStatus.IDLE,
+            custom_name=f"mission_limit_guest_{idx}",
+        )
+        for idx in range(max_squad_size + 1)
+    ]
+
+    with pytest.raises(ValueError) as exc:
+        launch_mission(manor, mission, [guest.id for guest in guests], {})
+    assert f"最多只能派出 {max_squad_size} 名门客出征" in str(exc.value)
+
+    for guest in guests:
+        guest.refresh_from_db()
+        assert guest.status == GuestStatus.IDLE
+
+
 @pytest.mark.django_db
 def test_refresh_manor_state_local_fallback_throttles_when_cache_unavailable(django_user_model, settings, monkeypatch):
     user = django_user_model.objects.create_user(username="player_refresh_fallback", password="pass12345")

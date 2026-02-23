@@ -137,7 +137,7 @@ def _apply_salvage_reward(locked_run: RaidRun, report, is_attacker_victory: bool
     }
 
 
-def _dispatch_complete_raid_task(run: RaidRun) -> None:
+def _dispatch_complete_raid_task(run: RaidRun, *, now=None) -> None:
     try:
         from gameplay.tasks import complete_raid_task
     except Exception as exc:
@@ -149,7 +149,11 @@ def _dispatch_complete_raid_task(run: RaidRun) -> None:
         )
         return
 
-    remaining = run.travel_time
+    current_time = now or timezone.now()
+    if run.return_at:
+        remaining = max(0, int((run.return_at - current_time).total_seconds()))
+    else:
+        remaining = max(0, int(run.travel_time or 0))
     safe_apply_async(
         complete_raid_task,
         args=[run.id],
@@ -199,7 +203,7 @@ def process_raid_battle(run: RaidRun, now=None) -> None:
 
     _send_raid_battle_messages(locked_run)
     _dismiss_marching_raids_if_protected(locked_run.defender)
-    _dispatch_complete_raid_task(locked_run)
+    _dispatch_complete_raid_task(locked_run, now=now)
 
 
 def _resolve_capture_sides(run: RaidRun, is_attacker_victory: bool) -> tuple[Manor, Manor]:

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load guest_extras static %}
+{% load guest_extras gameplay_extras static %}
 
 {% block title %}聚贤庄{% endblock %}
 
@@ -99,7 +99,7 @@
                         <p class="text-sm text-text-muted mb-2 leading-snug pool-desc">{{ pool.description }}</p>
                         <form method="post" action="{% url 'guests:recruit' %}" class="recruit-form recruit-action"
                               data-pool-name="{{ pool.name }}"
-                              data-pool-cost="{% for key,val in pool.cost.items %}{{ key }} {{ val }}{% empty %}免费{% endfor %}"
+                              data-pool-cost="{% for key,val in pool.cost.items %}{{ resource_labels|get_label:key }} {{ val }}{% if not forloop.last %}，{% endif %}{% empty %}免费{% endfor %}"
                               data-pool-base="{{ pool.draw_count }}"
                               data-pool-bonus="{{ manor.tavern_recruitment_bonus }}"
                               data-pool-duration="{{ pool.recruit_duration_seconds }}">

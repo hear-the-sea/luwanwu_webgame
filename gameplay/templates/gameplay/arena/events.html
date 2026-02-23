@@ -1,0 +1,36 @@
+{% extends "gameplay/arena/base.html" %}
+
+{% block arena_body %}
+<section class="tw-panel">
+    <div class="tw-panel-header">进行中的赛事</div>
+    <div class="tw-panel-content text-sm">
+        <div class="space-y-2">
+            {% for row in running_tournaments %}
+            {% with tournament=row.tournament %}
+            <div class="p-3 rounded-md border border-border-light bg-bg-hover">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                    <p>赛事 #{{ tournament.id }} | 第 {{ tournament.current_round }} 轮 | 存活 {{ tournament.active_entries }}/{{ tournament.total_entries }}</p>
+                    {% if row.is_mine %}
+                    <span class="tw-pill rarity-blue">我已参赛</span>
+                    {% endif %}
+                </div>
+                {% if tournament.next_round_at %}
+                <p class="text-text-muted">
+                    下一轮：
+                    <span class="countdown" data-countdown="{{ tournament.next_round_at|date:'c' }}" data-format="zh-no-sec" data-refresh="1">
+                        {{ tournament.next_round_at|date:"m-d H:i:s" }}
+                    </span>
+                </p>
+                {% endif %}
+                <div class="mt-3">
+                    <a href="{% url 'gameplay:arena_event_detail' tournament.id %}" class="tw-btn-secondary tw-btn-sm">查看赛事详情</a>
+                </div>
+            </div>
+            {% endwith %}
+            {% empty %}
+            <p class="tw-empty-hint">暂无进行中的赛事。</p>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endblock %}

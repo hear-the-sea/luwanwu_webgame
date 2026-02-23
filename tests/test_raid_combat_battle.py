@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -88,6 +89,29 @@ def test_collect_losing_guest_ids_handles_invalid_data():
     report = SimpleNamespace(defender_team=[{"guest_id": "invalid"}, {"guest_id": 999}, {}], attacker_team=[])
     result = combat_battle._collect_losing_guest_ids(report, is_attacker_victory=True)
     assert result == [999]
+
+
+def test_dispatch_complete_raid_task_uses_remaining_return_time(monkeypatch):
+    now = timezone.now()
+    captured: dict[str, object] = {}
+
+    def _fake_safe_apply_async(task, args, countdown, logger, log_message):
+        captured["task"] = task
+        captured["args"] = args
+        captured["countdown"] = countdown
+
+    import gameplay.tasks as gameplay_tasks
+
+    fake_complete_task = object()
+    monkeypatch.setattr(gameplay_tasks, "complete_raid_task", fake_complete_task, raising=False)
+    monkeypatch.setattr(combat_battle, "safe_apply_async", _fake_safe_apply_async)
+
+    run = SimpleNamespace(id=42, return_at=now + timedelta(seconds=37), travel_time=600)
+    combat_battle._dispatch_complete_raid_task(run, now=now)
+
+    assert captured["task"] is fake_complete_task
+    assert captured["args"] == [42]
+    assert captured["countdown"] == 37
 
 
 @pytest.mark.django_db

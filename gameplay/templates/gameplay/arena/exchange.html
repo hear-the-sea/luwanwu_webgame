@@ -1,0 +1,67 @@
+{% extends "gameplay/arena/base.html" %}
+{% load gameplay_extras %}
+
+{% block arena_body %}
+<section class="tw-panel mb-6">
+    <div class="tw-panel-header">奖励兑换</div>
+    <div class="tw-panel-content">
+        <div class="tw-arena-reward-grid">
+            {% for reward in reward_rows %}
+            <article class="tw-arena-reward-card {% if not reward.can_afford %}tw-arena-reward-card--disabled{% endif %}">
+                <div class="tw-arena-reward-head">
+                    <p class="tw-arena-reward-name">{{ reward.name }}</p>
+                    <span class="tw-arena-reward-cost">{{ reward.cost_coins }} 币</span>
+                </div>
+                {% if reward.description %}
+                <p class="tw-arena-reward-desc">{{ reward.description }}</p>
+                {% endif %}
+                {% if reward.daily_limit %}
+                <p class="tw-arena-reward-limit">日限 {{ reward.daily_limit }}</p>
+                {% endif %}
+                <div>
+                    <p class="tw-arena-reward-subtitle">奖励</p>
+                    <ul class="tw-arena-reward-list">
+                        {% for resource in reward.resource_rows %}
+                        <li class="tw-arena-reward-item">{{ resource.label }} x{{ resource.amount }}</li>
+                        {% endfor %}
+                        {% for item in reward.item_rows %}
+                        <li class="tw-arena-reward-item">{{ item.label }} x{{ item.amount }}</li>
+                        {% endfor %}
+                        {% if not reward.resource_rows and not reward.item_rows %}
+                        <li class="tw-arena-reward-item">无奖励配置</li>
+                        {% endif %}
+                    </ul>
+                </div>
+                <form method="post" action="{% url 'gameplay:arena_exchange' %}" class="tw-arena-reward-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="reward_key" value="{{ reward.key }}">
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <input type="number" name="quantity" value="1" min="1" max="99" class="tw-arena-qty-input">
+                    <button type="submit" class="tw-btn-secondary tw-btn-sm" {% if not reward.can_afford %}disabled{% endif %}>
+                        兑换
+                    </button>
+                </form>
+            </article>
+            {% empty %}
+            <p class="tw-empty-hint">暂无可兑换奖励配置。</p>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<section class="tw-panel">
+    <div class="tw-panel-header">最近兑换记录</div>
+    <div class="tw-panel-content text-sm">
+        <div class="space-y-2">
+            {% for record in recent_exchange_records %}
+            <div class="p-3 rounded-md border border-border-light bg-bg-hover">
+                <p>{{ record.reward_name }} x{{ record.quantity }}（消耗 {{ record.cost_coins }} 角斗币）</p>
+                <p class="text-text-muted">{{ record.created_at|date:"m-d H:i:s" }}</p>
+            </div>
+            {% empty %}
+            <p class="tw-empty-hint">暂无兑换记录。</p>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endblock %}

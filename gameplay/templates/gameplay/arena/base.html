@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}竞技场{% endblock %}
+
+{% block content %}
+<section class="dashboard">
+    <div class="tw-section-header">
+        <div>
+            <h1>竞技场</h1>
+            <p class="caption">
+                参与 <strong>{{ arena_event.name }}</strong>，赢取角斗币并兑换奖励。
+                当前角斗币：<strong>{{ manor.arena_coins }}</strong>，
+                今日已参与：<strong>{{ today_participations }}/{{ daily_limit }}</strong>，
+                今日剩余：<strong>{{ remaining_daily }}</strong>
+            </p>
+        </div>
+    </div>
+
+    <nav class="tw-troop-subtabs mb-6">
+        {% for tab in arena_tabs %}
+        <a href="{{ tab.url }}" class="tw-troop-subtab {% if tab.active %}active{% endif %}">
+            {{ tab.label }}
+        </a>
+        {% endfor %}
+    </nav>
+
+    {% if show_arena_hero_card %}
+    <article class="tw-building-card tw-building-card--manor tw-arena-hero-card mb-6">
+        <div class="tw-building-media">
+            <div class="tw-building-corner-frame">
+                <span class="tw-corner-piece tw-corner-tl" aria-hidden="true"></span>
+                <span class="tw-corner-piece tw-corner-tr" aria-hidden="true"></span>
+                <span class="tw-corner-piece tw-corner-bl" aria-hidden="true"></span>
+                <span class="tw-corner-piece tw-corner-br" aria-hidden="true"></span>
+                <img
+                    src="{% static 'images/buildings/竞技场.webp' %}"
+                    alt="竞技场"
+                    loading="lazy"
+                    decoding="async"
+                    width="512"
+                    height="512"
+                >
+            </div>
+        </div>
+        <div class="tw-building-main">
+            <header>
+                <div class="tw-building-headline">
+                    <h3>{{ arena_event.name }}</h3>
+                    <span class="tw-level-badge">{{ arena_event.subtitle }}</span>
+                </div>
+                <p class="tw-building-desc">{{ arena_event.description }}</p>
+            </header>
+            <dl class="tw-arena-rule-list">
+                <div>
+                    <dt>报名人数</dt>
+                    <dd>{{ arena_event.player_limit }} 人满员开赛</dd>
+                </div>
+                <div>
+                    <dt>回合频率</dt>
+                    <dd>每 {{ arena_event.round_interval_label }} 1 轮</dd>
+                </div>
+                <div>
+                    <dt>每日次数</dt>
+                    <dd>{{ daily_limit }} 次</dd>
+                </div>
+            </dl>
+            {% block arena_event_action %}{% endblock %}
+        </div>
+    </article>
+    {% endif %}
+
+    {% block arena_body %}{% endblock %}
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+{{ block.super }}
+{% block arena_scripts %}{% endblock %}
+{% endblock %}

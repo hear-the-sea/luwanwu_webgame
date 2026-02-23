@@ -36,6 +36,8 @@ ARENA_DAILY_PARTICIPATION_LIMIT = 3
 ARENA_MAX_GUESTS_PER_ENTRY = 10
 ARENA_TOURNAMENT_PLAYER_LIMIT = 10
 ARENA_ROUND_INTERVAL_SECONDS = 600
+ARENA_COMPLETED_RETENTION_SECONDS = 600
+ARENA_REGISTRATION_SILVER_COST = 5000
 ARENA_BASE_PARTICIPATION_COINS = 30
 ARENA_RANK_BONUS_COINS = {
     1: 280,
@@ -178,9 +180,44 @@ def _round_interval_seconds() -> int:
     return max(1, scale_duration(ARENA_ROUND_INTERVAL_SECONDS, minimum=1))
 
 
-def _today_participation_count(manor: Manor) -> int:
-    today = timezone.localdate()
-    return ArenaEntry.objects.filter(manor=manor, joined_at__date=today).count()
+def _today_bounds(*, now=None):
+    current_time = timezone.localtime(now or timezone.now())
+    start = current_time.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start + timedelta(days=1)
+    return start, end
+
+
+def _today_local_date(*, now=None):
+    return timezone.localdate(now or timezone.now())
+
+
+def _sync_daily_participation_counter_locked(locked_manor: Manor, *, now=None) -> int:
+    """
+    同步庄园侧的竞技场日计数。
+
+    说明：
+    - 计数以 Manor 字段为准，避免赛事记录被清理后次数“回收”。
+    - 当天首次访问且字段未初始化时，回填为当日现存 ArenaEntry 数量，兼容历史数据。
+    """
+    today = _today_local_date(now=now)
+    if locked_manor.arena_participation_date == today:
+        return max(0, int(locked_manor.arena_participations_today or 0))
+
+    day_start, day_end = _today_bounds(now=now)
+    today_count = ArenaEntry.objects.filter(manor=locked_manor, joined_at__gte=day_start, joined_at__lt=day_end).count()
+    locked_manor.arena_participation_date = today
+    locked_manor.arena_participations_today = max(0, int(today_count))
+    locked_manor.save(update_fields=["arena_participation_date", "arena_participations_today"])
+    return locked_manor.arena_participations_today
+
+
+def _update_daily_participation_counter_locked(locked_manor: Manor, *, delta: int, now=None) -> int:
+    current = _sync_daily_participation_counter_locked(locked_manor, now=now)
+    updated = max(0, int(current) + int(delta))
+    locked_manor.arena_participation_date = _today_local_date(now=now)
+    locked_manor.arena_participations_today = updated
+    locked_manor.save(update_fields=["arena_participation_date", "arena_participations_today"])
+    return updated
 
 
 def _get_or_create_recruiting_tournament_locked() -> ArenaTournament:
@@ -249,9 +286,68 @@ def _start_tournament_locked(tournament: ArenaTournament, *, now=None) -> bool:
     current_time = now or timezone.now()
     tournament.status = ArenaTournament.Status.RUNNING
     tournament.started_at = current_time
-    tournament.next_round_at = current_time
     tournament.current_round = 0
-    tournament.save(update_fields=["status", "started_at", "next_round_at", "current_round", "updated_at"])
+    tournament.save(update_fields=["status", "started_at", "current_round", "updated_at"])
+    _schedule_round_locked(tournament, round_number=1, now=current_time)
+    return True
+
+
+def _round_interval_delta(tournament: ArenaTournament) -> timedelta:
+    return timedelta(seconds=max(1, int(tournament.round_interval_seconds)))
+
+
+def _build_round_pairings(entry_ids: list[int]) -> list[tuple[int, int | None]]:
+    shuffled_ids = entry_ids[:]
+    random.SystemRandom().shuffle(shuffled_ids)
+    pairings: list[tuple[int, int | None]] = []
+    iterator = iter(shuffled_ids)
+    for attacker_id in iterator:
+        defender_id = next(iterator, None)
+        pairings.append((attacker_id, defender_id))
+    return pairings
+
+
+def _schedule_round_locked(tournament: ArenaTournament, *, round_number: int, now) -> bool:
+    if tournament.status != ArenaTournament.Status.RUNNING:
+        return False
+    if round_number <= 0:
+        return False
+    if ArenaMatch.objects.filter(tournament=tournament, round_number=round_number).exists():
+        return False
+
+    active_entry_ids = list(
+        tournament.entries.filter(status=ArenaEntry.Status.REGISTERED).order_by("id").values_list("id", flat=True)
+    )
+    if len(active_entry_ids) <= 1:
+        winner = None
+        if active_entry_ids:
+            winner = (
+                ArenaEntry.objects.select_related("manor", "manor__user")
+                .select_for_update()
+                .filter(pk=active_entry_ids[0])
+                .first()
+            )
+        _finalize_tournament_locked(tournament, winner_entry=winner, now=now)
+        return False
+
+    pairings = _build_round_pairings(active_entry_ids)
+    ArenaMatch.objects.bulk_create(
+        [
+            ArenaMatch(
+                tournament=tournament,
+                round_number=round_number,
+                match_index=match_index,
+                attacker_entry_id=attacker_id,
+                defender_entry_id=defender_id,
+                status=ArenaMatch.Status.SCHEDULED,
+            )
+            for match_index, (attacker_id, defender_id) in enumerate(pairings)
+        ]
+    )
+
+    tournament.current_round = round_number
+    tournament.next_round_at = now + _round_interval_delta(tournament)
+    tournament.save(update_fields=["current_round", "next_round_at", "updated_at"])
     return True
 
 
@@ -260,7 +356,7 @@ def register_arena_entry(manor: Manor, guest_ids: Iterable[int]) -> ArenaRegistr
     selected_guest_ids = _normalize_guest_ids(guest_ids)
     locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
 
-    if _today_participation_count(locked_manor) >= ARENA_DAILY_PARTICIPATION_LIMIT:
+    if _sync_daily_participation_counter_locked(locked_manor) >= ARENA_DAILY_PARTICIPATION_LIMIT:
         raise ValueError(f"每日最多参加 {ARENA_DAILY_PARTICIPATION_LIMIT} 次竞技场")
 
     if ArenaEntry.objects.filter(
@@ -283,6 +379,10 @@ def register_arena_entry(manor: Manor, guest_ids: Iterable[int]) -> ArenaRegistr
     if non_idle_guests:
         raise ValueError("仅空闲门客可报名竞技场")
 
+    if locked_manor.silver < ARENA_REGISTRATION_SILVER_COST:
+        raise ValueError(f"银两不足，报名需要 {ARENA_REGISTRATION_SILVER_COST} 银两")
+
+    Manor.objects.filter(pk=locked_manor.pk).update(silver=F("silver") - ARENA_REGISTRATION_SILVER_COST)
     selected_guest_order = {guest_id: index for index, guest_id in enumerate(selected_guest_ids)}
     selected_guests = sorted(all_selected_guests, key=lambda guest: selected_guest_order[guest.id])
     tournament = _get_or_create_recruiting_tournament_locked()
@@ -301,6 +401,7 @@ def register_arena_entry(manor: Manor, guest_ids: Iterable[int]) -> ArenaRegistr
     auto_started = False
     if entry_count >= tournament.player_limit:
         auto_started = _start_tournament_locked(tournament)
+    _update_daily_participation_counter_locked(locked_manor, delta=1)
 
     return ArenaRegistrationResult(
         entry=entry,
@@ -308,6 +409,40 @@ def register_arena_entry(manor: Manor, guest_ids: Iterable[int]) -> ArenaRegistr
         auto_started=auto_started,
         entry_count=entry_count,
     )
+
+
+@transaction.atomic
+def cancel_arena_entry(manor: Manor) -> int:
+    locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
+    recruiting_entries = list(
+        ArenaEntry.objects.select_for_update()
+        .select_related("tournament")
+        .filter(
+            manor=locked_manor,
+            status=ArenaEntry.Status.REGISTERED,
+            tournament__status=ArenaTournament.Status.RECRUITING,
+        )
+        .order_by("-joined_at", "-id")
+    )
+    if not recruiting_entries:
+        raise ValueError("当前没有可撤销的报名")
+
+    entry_ids = [entry.id for entry in recruiting_entries]
+    tournament_ids = {entry.tournament_id for entry in recruiting_entries}
+    locked_tournaments = list(ArenaTournament.objects.select_for_update().filter(id__in=tournament_ids))
+    if any(tournament.status != ArenaTournament.Status.RECRUITING for tournament in locked_tournaments):
+        raise ValueError("赛事已开赛，当前不可撤销报名")
+
+    participant_guest_ids = list(
+        ArenaEntryGuest.objects.filter(entry_id__in=entry_ids).values_list("guest_id", flat=True).distinct()
+    )
+
+    ArenaEntry.objects.filter(id__in=entry_ids).delete()
+    if participant_guest_ids:
+        Guest.objects.filter(id__in=participant_guest_ids, status=GuestStatus.DEPLOYED).update(status=GuestStatus.IDLE)
+
+    _update_daily_participation_counter_locked(locked_manor, delta=-len(entry_ids))
+    return len(entry_ids)
 
 
 @transaction.atomic
@@ -338,7 +473,7 @@ def start_ready_tournaments(limit: int = 20) -> int:
 
 def _load_entry_guests(entry: ArenaEntry) -> list[ArenaGuestSnapshotProxy]:
     proxies: list[ArenaGuestSnapshotProxy] = []
-    links = list(entry.entry_guests.all()[:ARENA_MAX_GUESTS_PER_ENTRY])
+    links = list(entry.entry_guests.order_by("created_at", "id")[:ARENA_MAX_GUESTS_PER_ENTRY])
     for link in links:
         snapshot = dict(link.snapshot or {})
         if not snapshot and getattr(link, "guest", None):
@@ -413,6 +548,26 @@ def _create_forfeit_match(
     )
 
 
+def _save_resolved_match(
+    *,
+    match: ArenaMatch,
+    winner_entry: ArenaEntry,
+    status: str,
+    now,
+    note: str = "",
+    report=None,
+) -> None:
+    match.winner_entry = winner_entry
+    match.status = status
+    match.notes = note[:255]
+    match.resolved_at = now
+    if report is not None:
+        match.battle_report = report
+        match.save(update_fields=["winner_entry", "status", "notes", "battle_report", "resolved_at"])
+        return
+    match.save(update_fields=["winner_entry", "status", "notes", "resolved_at"])
+
+
 def _resolve_match_locked(
     *,
     tournament: ArenaTournament,
@@ -421,51 +576,79 @@ def _resolve_match_locked(
     attacker_entry: ArenaEntry,
     defender_entry: ArenaEntry,
     now,
+    match: ArenaMatch | None = None,
 ) -> ArenaEntry:
     attacker_guests = _load_entry_guests(attacker_entry)
     defender_guests = _load_entry_guests(defender_entry)
 
     if not attacker_guests and not defender_guests:
         winner_entry = random.choice([attacker_entry, defender_entry])
-        _create_forfeit_match(
-            tournament=tournament,
-            round_number=round_number,
-            match_index=match_index,
-            attacker_entry=attacker_entry,
-            defender_entry=defender_entry,
-            winner_entry=winner_entry,
-            status=ArenaMatch.Status.FORFEIT,
-            note="双方均无可用门客，随机判定胜者",
-            now=now,
-        )
+        if match:
+            _save_resolved_match(
+                match=match,
+                winner_entry=winner_entry,
+                status=ArenaMatch.Status.FORFEIT,
+                note="双方均无可用门客，随机判定胜者",
+                now=now,
+            )
+        else:
+            _create_forfeit_match(
+                tournament=tournament,
+                round_number=round_number,
+                match_index=match_index,
+                attacker_entry=attacker_entry,
+                defender_entry=defender_entry,
+                winner_entry=winner_entry,
+                status=ArenaMatch.Status.FORFEIT,
+                note="双方均无可用门客，随机判定胜者",
+                now=now,
+            )
         return winner_entry
 
     if not attacker_guests:
-        _create_forfeit_match(
-            tournament=tournament,
-            round_number=round_number,
-            match_index=match_index,
-            attacker_entry=attacker_entry,
-            defender_entry=defender_entry,
-            winner_entry=defender_entry,
-            status=ArenaMatch.Status.FORFEIT,
-            note="攻击方无可用门客，判负",
-            now=now,
-        )
+        if match:
+            _save_resolved_match(
+                match=match,
+                winner_entry=defender_entry,
+                status=ArenaMatch.Status.FORFEIT,
+                note="攻击方无可用门客，判负",
+                now=now,
+            )
+        else:
+            _create_forfeit_match(
+                tournament=tournament,
+                round_number=round_number,
+                match_index=match_index,
+                attacker_entry=attacker_entry,
+                defender_entry=defender_entry,
+                winner_entry=defender_entry,
+                status=ArenaMatch.Status.FORFEIT,
+                note="攻击方无可用门客，判负",
+                now=now,
+            )
         return defender_entry
 
     if not defender_guests:
-        _create_forfeit_match(
-            tournament=tournament,
-            round_number=round_number,
-            match_index=match_index,
-            attacker_entry=attacker_entry,
-            defender_entry=defender_entry,
-            winner_entry=attacker_entry,
-            status=ArenaMatch.Status.FORFEIT,
-            note="防守方无可用门客，判负",
-            now=now,
-        )
+        if match:
+            _save_resolved_match(
+                match=match,
+                winner_entry=attacker_entry,
+                status=ArenaMatch.Status.FORFEIT,
+                note="防守方无可用门客，判负",
+                now=now,
+            )
+        else:
+            _create_forfeit_match(
+                tournament=tournament,
+                round_number=round_number,
+                match_index=match_index,
+                attacker_entry=attacker_entry,
+                defender_entry=defender_entry,
+                winner_entry=attacker_entry,
+                status=ArenaMatch.Status.FORFEIT,
+                note="防守方无可用门客，判负",
+                now=now,
+            )
         return attacker_entry
 
     attacker_battle_guests = cast(list[Guest], attacker_guests)
@@ -494,17 +677,26 @@ def _resolve_match_locked(
             defender_entry.id,
         )
         winner_entry = random.choice([attacker_entry, defender_entry])
-        _create_forfeit_match(
-            tournament=tournament,
-            round_number=round_number,
-            match_index=match_index,
-            attacker_entry=attacker_entry,
-            defender_entry=defender_entry,
-            winner_entry=winner_entry,
-            status=ArenaMatch.Status.FORFEIT,
-            note="战斗模拟异常，已随机判定胜者",
-            now=now,
-        )
+        if match:
+            _save_resolved_match(
+                match=match,
+                winner_entry=winner_entry,
+                status=ArenaMatch.Status.FORFEIT,
+                note="战斗模拟异常，已随机判定胜者",
+                now=now,
+            )
+        else:
+            _create_forfeit_match(
+                tournament=tournament,
+                round_number=round_number,
+                match_index=match_index,
+                attacker_entry=attacker_entry,
+                defender_entry=defender_entry,
+                winner_entry=winner_entry,
+                status=ArenaMatch.Status.FORFEIT,
+                note="战斗模拟异常，已随机判定胜者",
+                now=now,
+            )
         return winner_entry
 
     if report.winner == "attacker":
@@ -514,17 +706,26 @@ def _resolve_match_locked(
     else:
         winner_entry = random.choice([attacker_entry, defender_entry])
 
-    ArenaMatch.objects.create(
-        tournament=tournament,
-        round_number=round_number,
-        match_index=match_index,
-        attacker_entry=attacker_entry,
-        defender_entry=defender_entry,
-        winner_entry=winner_entry,
-        battle_report=report,
-        status=ArenaMatch.Status.COMPLETED,
-        resolved_at=now,
-    )
+    if match:
+        _save_resolved_match(
+            match=match,
+            winner_entry=winner_entry,
+            status=ArenaMatch.Status.COMPLETED,
+            report=report,
+            now=now,
+        )
+    else:
+        ArenaMatch.objects.create(
+            tournament=tournament,
+            round_number=round_number,
+            match_index=match_index,
+            attacker_entry=attacker_entry,
+            defender_entry=defender_entry,
+            winner_entry=winner_entry,
+            battle_report=report,
+            status=ArenaMatch.Status.COMPLETED,
+            resolved_at=now,
+        )
 
     _send_arena_battle_messages(
         report=report,
@@ -609,40 +810,42 @@ def _run_tournament_round(tournament_id: int, *, now) -> bool:
             return False
         if not tournament.next_round_at or tournament.next_round_at > now:
             return False
-
-        active_entry_ids = list(
-            tournament.entries.filter(status=ArenaEntry.Status.REGISTERED).order_by("id").values_list("id", flat=True)
+        pending_matches = list(
+            ArenaMatch.objects.select_for_update()
+            .filter(
+                tournament=tournament,
+                round_number=tournament.current_round,
+                status=ArenaMatch.Status.SCHEDULED,
+            )
+            .order_by("match_index", "id")
         )
-        if len(active_entry_ids) <= 1:
-            winner = None
-            if active_entry_ids:
-                winner = (
-                    ArenaEntry.objects.select_related("manor", "manor__user")
-                    .select_for_update()
-                    .filter(pk=active_entry_ids[0])
-                    .first()
-                )
-            _finalize_tournament_locked(tournament, winner_entry=winner, now=now)
-            return True
 
-        round_number = tournament.current_round + 1
-        shuffled_ids = active_entry_ids[:]
-        random.SystemRandom().shuffle(shuffled_ids)
-        pairings: list[tuple[int, int | None]] = []
-        iterator = iter(shuffled_ids)
-        for attacker_id in iterator:
-            defender_id = next(iterator, None)
-            pairings.append((attacker_id, defender_id))
+        if not pending_matches:
+            next_round_number = max(1, tournament.current_round + 1)
+            return _schedule_round_locked(tournament, round_number=next_round_number, now=now)
 
-        # 先推进轮次时间戳，避免长耗时战斗期间重复被其他 worker 扫描。
-        tournament.current_round = round_number
-        tournament.next_round_at = now + timedelta(seconds=max(1, int(tournament.round_interval_seconds)))
-        tournament.save(update_fields=["current_round", "next_round_at", "updated_at"])
+        round_number = tournament.current_round
+        pending_match_ids = [match.id for match in pending_matches]
+        # 避免并发 worker 重复处理本轮，先把下次扫描时间推后。
+        tournament.next_round_at = now + _round_interval_delta(tournament)
+        tournament.save(update_fields=["next_round_at", "updated_at"])
 
-    entry_ids = {entry_id for pairing in pairings for entry_id in pairing if entry_id is not None}
-    round_tournament = ArenaTournament.objects.filter(pk=tournament_id).first()
-    if not round_tournament:
-        return False
+    pending_matches = list(
+        ArenaMatch.objects.select_related(
+            "attacker_entry__manor",
+            "attacker_entry__manor__user",
+            "defender_entry__manor",
+            "defender_entry__manor__user",
+        )
+        .filter(id__in=pending_match_ids)
+        .order_by("match_index", "id")
+    )
+    entry_ids = {
+        entry_id
+        for match in pending_matches
+        for entry_id in [match.attacker_entry_id, match.defender_entry_id]
+        if entry_id is not None
+    }
     entries = (
         ArenaEntry.objects.select_related("manor", "manor__user")
         .prefetch_related("entry_guests__guest__template", "entry_guests__guest__skills")
@@ -652,58 +855,46 @@ def _run_tournament_round(tournament_id: int, *, now) -> bool:
 
     winner_ids: list[int] = []
     loser_ids: list[int] = []
-    match_index = 0
-    for attacker_id, defender_id in pairings:
-        attacker_entry = entry_map.get(attacker_id)
+    for pending in pending_matches:
+        attacker_entry = entry_map.get(pending.attacker_entry_id)
         if not attacker_entry:
-            match_index += 1
             continue
 
-        if defender_id is None:
+        if pending.defender_entry_id is None:
             winner_ids.append(attacker_entry.id)
-            _create_forfeit_match(
-                tournament=round_tournament,
-                round_number=round_number,
-                match_index=match_index,
-                attacker_entry=attacker_entry,
-                defender_entry=None,
+            _save_resolved_match(
+                match=pending,
                 winner_entry=attacker_entry,
                 status=ArenaMatch.Status.BYE,
                 note="本轮轮空直接晋级",
                 now=now,
             )
-            match_index += 1
             continue
 
-        defender_entry = entry_map.get(defender_id)
+        defender_entry = entry_map.get(pending.defender_entry_id)
         if not defender_entry:
             winner_ids.append(attacker_entry.id)
-            _create_forfeit_match(
-                tournament=round_tournament,
-                round_number=round_number,
-                match_index=match_index,
-                attacker_entry=attacker_entry,
-                defender_entry=None,
+            _save_resolved_match(
+                match=pending,
                 winner_entry=attacker_entry,
                 status=ArenaMatch.Status.FORFEIT,
                 note="对手报名数据缺失，自动晋级",
                 now=now,
             )
-            match_index += 1
             continue
 
         winner_entry = _resolve_match_locked(
-            tournament=round_tournament,
+            tournament=pending.tournament,
             round_number=round_number,
-            match_index=match_index,
+            match_index=pending.match_index,
             attacker_entry=attacker_entry,
             defender_entry=defender_entry,
             now=now,
+            match=pending,
         )
         winner_ids.append(winner_entry.id)
         loser_id = defender_entry.id if winner_entry.id == attacker_entry.id else attacker_entry.id
         loser_ids.append(loser_id)
-        match_index += 1
 
     winner_ids = list(dict.fromkeys(winner_ids))
     loser_ids = list(dict.fromkeys(loser_ids))
@@ -734,6 +925,9 @@ def _run_tournament_round(tournament_id: int, *, now) -> bool:
                     .first()
                 )
             _finalize_tournament_locked(tournament, winner_entry=winner, now=now)
+            return True
+
+        _schedule_round_locked(tournament, round_number=round_number + 1, now=now)
     return True
 
 
@@ -759,6 +953,28 @@ def run_due_arena_rounds(*, now=None, limit: int = 20) -> int:
     return processed
 
 
+def cleanup_expired_tournaments(
+    *, now=None, grace_seconds: int = ARENA_COMPLETED_RETENTION_SECONDS, limit: int = 50
+) -> int:
+    current_time = now or timezone.now()
+    retention_seconds = max(0, int(grace_seconds))
+    cutoff_time = current_time - timedelta(seconds=retention_seconds)
+    stale_ids = list(
+        ArenaTournament.objects.filter(
+            status__in=[ArenaTournament.Status.COMPLETED, ArenaTournament.Status.CANCELLED],
+            ended_at__isnull=False,
+            ended_at__lte=cutoff_time,
+        )
+        .order_by("ended_at", "id")
+        .values_list("id", flat=True)[: max(1, int(limit))]
+    )
+    if not stale_ids:
+        return 0
+
+    ArenaTournament.objects.filter(id__in=stale_ids).delete()
+    return len(stale_ids)
+
+
 @transaction.atomic
 def exchange_arena_reward(manor: Manor, reward_key: str, quantity: int = 1) -> ArenaExchangeResult:
     reward = get_arena_reward_definition(reward_key)
@@ -774,13 +990,14 @@ def exchange_arena_reward(manor: Manor, reward_key: str, quantity: int = 1) -> A
     if locked_manor.arena_coins < total_cost:
         raise ValueError("角斗币不足")
 
-    today = timezone.localdate()
+    day_start, day_end = _today_bounds()
     if reward.daily_limit is not None:
         today_exchanged = (
             ArenaExchangeRecord.objects.filter(
                 manor=locked_manor,
                 reward_key=reward.key,
-                created_at__date=today,
+                created_at__gte=day_start,
+                created_at__lt=day_end,
             ).aggregate(total=Sum("quantity"))["total"]
             or 0
         )

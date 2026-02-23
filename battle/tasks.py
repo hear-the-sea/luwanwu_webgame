@@ -5,6 +5,7 @@ from typing import cast
 
 from celery import shared_task
 from django.apps import apps
+from django.db import transaction
 
 from guests.models import Guest
 
@@ -69,6 +70,35 @@ def _normalize_guest_skills(config: dict) -> list[str] | None:
         return None
     skills = [str(item).strip() for item in raw if str(item).strip()]
     return skills or None
+
+
+def _attach_report_to_mission_run(run_id: int, report_id: int) -> int | None:
+    """Attach report atomically and return the effective report id on run."""
+    MissionRun = apps.get_model("gameplay", "MissionRun")
+
+    with transaction.atomic():
+        row = MissionRun.objects.select_for_update().filter(pk=run_id).values("battle_report_id").first()
+        if row is None:
+            return None
+
+        existing_report_id = row.get("battle_report_id")
+        if existing_report_id:
+            return int(existing_report_id)
+
+        updated = MissionRun.objects.filter(pk=run_id, battle_report_id__isnull=True).update(battle_report_id=report_id)
+        if updated:
+            return int(report_id)
+
+        fallback_report_id = MissionRun.objects.filter(pk=run_id).values_list("battle_report_id", flat=True).first()
+        return int(fallback_report_id) if fallback_report_id else None
+
+
+def _delete_report_if_unattached(report_id: int) -> None:
+    MissionRun = apps.get_model("gameplay", "MissionRun")
+    if MissionRun.objects.filter(battle_report_id=report_id).exists():
+        return
+    BattleReport = apps.get_model("battle", "BattleReport")
+    BattleReport.objects.filter(pk=report_id).delete()
 
 
 @shared_task(
@@ -201,9 +231,19 @@ def generate_report_task(
             )
 
         if run_id:
-            MissionRun = apps.get_model("gameplay", "MissionRun")
-            # 保留原始出征时间，仅写入战报
-            MissionRun.objects.filter(pk=run_id, battle_report__isnull=True).update(battle_report=report)
+            effective_report_id = _attach_report_to_mission_run(run_id, int(report.pk))
+            if effective_report_id != int(report.pk):
+                _delete_report_if_unattached(int(report.pk))
+                if effective_report_id is None:
+                    logger.warning("MissionRun %s disappeared before attaching battle_report", run_id)
+                    return None
+                logger.info(
+                    "MissionRun %s already attached report %s; dropping duplicate report %s",
+                    run_id,
+                    effective_report_id,
+                    report.pk,
+                )
+                return int(effective_report_id)
 
         logger.info("Battle report %d generated successfully for manor %d", report.pk, manor_id)
         return report.pk

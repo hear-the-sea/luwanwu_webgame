@@ -1,0 +1,85 @@
+{% extends "gameplay/arena/base.html" %}
+
+{% block arena_body %}
+<section class="tw-panel">
+    <div class="tw-panel-header">赛事 #{{ tournament.id }} 对阵与战报</div>
+    <div class="tw-panel-content text-sm">
+        {% if round_pages %}
+        <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <p class="text-text-muted">每轮单独一页，共 {{ round_pages|length }} 轮。</p>
+            <div class="flex items-center gap-2 flex-wrap">
+                {% if previous_round_number %}
+                <a href="?round={{ previous_round_number }}" class="tw-btn-secondary tw-btn-sm">上一轮</a>
+                {% endif %}
+                {% for page in round_pages %}
+                <a href="?round={{ page.round }}" class="{% if page.is_active %}tw-btn-primary{% else %}tw-btn-secondary{% endif %} tw-btn-sm">
+                    第{{ page.round }}轮
+                </a>
+                {% endfor %}
+                {% if next_round_number %}
+                <a href="?round={{ next_round_number }}" class="tw-btn-secondary tw-btn-sm">下一轮</a>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="p-3 rounded-md border border-border-light bg-bg-hover">
+            <p class="font-semibold mb-2">第 {{ current_round_number }} 轮对阵</p>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-text-muted border-b border-border-light">
+                            <th class="py-2 text-left">左侧</th>
+                            <th class="py-2 text-center">对阵</th>
+                            <th class="py-2 text-right">右侧</th>
+                            <th class="py-2 text-right">战报</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in current_round_match_rows %}
+                        <tr class="border-b border-border-light" data-round="{{ current_round_number }}">
+                            <td class="py-2">
+                                <span class="font-medium {% if row.left_is_loser %}tw-arena-loser text-text-muted{% endif %}">
+                                    {{ row.left_name }}
+                                </span>
+                                {% if row.left_is_mine %}
+                                <span class="tw-pill rarity-blue ml-1">我</span>
+                                {% endif %}
+                                {% if row.left_outcome %}
+                                <span class="tw-pill {% if row.left_outcome == '胜利' %}rarity-green{% else %}rarity-red{% endif %} ml-1">{{ row.left_outcome }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-2 text-center text-text-muted">VS</td>
+                            <td class="py-2 text-right">
+                                <span class="font-medium {% if row.right_is_loser %}tw-arena-loser text-text-muted{% endif %}">
+                                    {{ row.right_name }}
+                                </span>
+                                {% if row.right_is_mine %}
+                                <span class="tw-pill rarity-blue ml-1">我</span>
+                                {% endif %}
+                                {% if row.right_outcome %}
+                                <span class="tw-pill {% if row.right_outcome == '胜利' %}rarity-green{% else %}rarity-red{% endif %} ml-1">{{ row.right_outcome }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-2 text-right">
+                                {% if row.report_id %}
+                                <a href="{% url 'battle:report_detail' row.report_id %}" class="tw-btn-secondary tw-btn-sm">查看战报</a>
+                                {% else %}
+                                <span class="text-text-muted">-</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="py-3 text-text-muted text-center">本轮暂无对阵记录。</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <p class="tw-empty-hint">当前尚无对阵记录。</p>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

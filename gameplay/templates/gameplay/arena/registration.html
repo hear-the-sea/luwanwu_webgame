@@ -1,0 +1,99 @@
+{% extends "gameplay/arena/base.html" %}
+
+{% block arena_event_action %}
+<section class="tw-arena-signup-panel">
+    {% if recruiting_tournament %}
+    <p class="text-sm text-text-muted mb-3">
+        当前报名池：赛事 #{{ recruiting_tournament.id }}（{{ recruiting_tournament.entry_count }}/{{ recruiting_tournament.player_limit }}）
+    </p>
+    {% else %}
+    <p class="text-sm text-text-muted mb-3">当前无报名池，首次报名将自动创建新赛事。</p>
+    {% endif %}
+
+    {% if active_entry %}
+    <div class="p-3 rounded-md border border-border-light bg-bg-hover">
+        <p class="font-semibold">您已报名赛事 #{{ active_entry.tournament_id }}（{{ active_entry.tournament.get_status_display }}）</p>
+        {% if active_entry.tournament.status == 'running' and active_entry.tournament.next_round_at %}
+        <p class="text-text-muted mt-1">
+            下一轮开始于：
+            <span class="countdown" data-countdown="{{ active_entry.tournament.next_round_at|date:'c' }}" data-format="zh-no-sec" data-refresh="1">
+                {{ active_entry.tournament.next_round_at|date:"m-d H:i:s" }}
+            </span>
+        </p>
+        {% endif %}
+        <div class="mt-2 flex flex-wrap gap-2">
+            {% for link in active_entry.entry_guests.all %}
+            <span class="px-2 py-1 rounded text-xs border border-border-light bg-bg-secondary">
+                {{ link.guest.display_name }} Lv{{ link.guest.level }}
+            </span>
+            {% empty %}
+            <span class="text-text-muted">无报名门客</span>
+            {% endfor %}
+        </div>
+        <div class="mt-3">
+            {% if active_entry.tournament.status == 'recruiting' %}
+            <form method="post" action="{% url 'gameplay:arena_cancel' %}" class="inline">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button type="submit" class="tw-btn-secondary tw-btn-sm">撤销报名</button>
+            </form>
+            <p class="text-xs text-text-muted mt-1">撤销后不计入今日参与次数，可立即重新报名（报名费不返还）。</p>
+            {% else %}
+            <p class="text-xs text-text-muted">赛事已开赛，当前不可撤销报名。</p>
+            {% endif %}
+        </div>
+    </div>
+    {% elif remaining_daily <= 0 %}
+    <p class="text-sm text-rose-700">今日参与次数已用完，请明日再来。</p>
+    {% elif not can_afford_registration %}
+    <p class="text-sm text-rose-700">银两不足，报名需要 {{ registration_silver_cost }} 银两（当前 {{ manor.silver }}）。</p>
+    {% else %}
+    <form method="post" action="{% url 'gameplay:arena_register' %}">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <p class="text-sm text-text-muted mb-2">请选择参赛门客（最多 {{ max_guests_per_entry }} 名，报名费 {{ registration_silver_cost }} 银两）</p>
+        <div class="tw-arena-guest-grid mb-3" id="arena-guest-grid">
+            {% for guest in available_guests %}
+            <label class="tw-arena-guest-option">
+                <span class="text-sm truncate">{{ guest.display_name }} Lv{{ guest.level }}</span>
+                <input type="checkbox" name="guest_ids" value="{{ guest.id }}" class="arena-guest-checkbox"
+                       {% if guest.id in selected_guest_ids %}checked{% endif %}>
+            </label>
+            {% empty %}
+            <p class="text-sm text-text-muted">暂无空闲门客可报名。</p>
+            {% endfor %}
+        </div>
+        <div class="flex items-center gap-3 flex-wrap">
+            <button type="submit" class="tw-btn-primary">提交报名</button>
+            <span class="text-xs text-text-muted">达到 {{ arena_event.player_limit }} 人自动开赛，每轮间隔 {{ arena_event.round_interval_label }}。</span>
+        </div>
+    </form>
+    {% endif %}
+</section>
+{% endblock %}
+
+{% block arena_body %}{% endblock %}
+
+{% block arena_scripts %}
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const maxSelected = {{ max_guests_per_entry|default:10 }};
+        const checkboxes = Array.from(document.querySelectorAll(".arena-guest-checkbox"));
+        if (!checkboxes.length) return;
+
+        checkboxes.forEach(function (checkbox) {
+            checkbox.addEventListener("change", function () {
+                const selected = checkboxes.filter(function (item) { return item.checked; });
+                if (selected.length > maxSelected) {
+                    checkbox.checked = false;
+                    if (window.gameDialog && window.gameDialog.error) {
+                        window.gameDialog.error("最多只能选择 " + maxSelected + " 名门客");
+                    } else {
+                        alert("最多只能选择 " + maxSelected + " 名门客");
+                    }
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

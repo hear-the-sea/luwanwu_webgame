@@ -43,6 +43,10 @@ class Manor(models.Model):
     grain = models.PositiveIntegerField("粮食", default=1200)
     silver = models.PositiveIntegerField("银两", default=500)
     arena_coins = models.PositiveIntegerField("角斗币", default=0)
+    arena_participations_today = models.PositiveSmallIntegerField("竞技场今日参与次数", default=0)
+    arena_participation_date = models.DateField(
+        "竞技场参与次数日期", null=True, blank=True, db_index=True, default=None
+    )
     storage_capacity = models.PositiveIntegerField("仓储上限", default=20000)
     silver_capacity = models.PositiveIntegerField("银库上限", default=20000)
     grain_capacity = models.PositiveIntegerField("粮仓上限", default=20000)

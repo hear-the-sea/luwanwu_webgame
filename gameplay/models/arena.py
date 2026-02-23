@@ -100,6 +100,7 @@ class ArenaMatch(models.Model):
     """竞技场每轮对战记录。"""
 
     class Status(models.TextChoices):
+        SCHEDULED = "scheduled", "待结算"
         COMPLETED = "completed", "已完成"
         FORFEIT = "forfeit", "弃权"
         BYE = "bye", "轮空"

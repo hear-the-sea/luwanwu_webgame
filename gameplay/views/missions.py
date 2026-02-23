@@ -285,7 +285,7 @@ class TaskBoardView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         manor = ensure_manor(self.request.user)
         refresh_manor_state(manor)
-        refresh_mission_runs(manor)
+        refresh_mission_runs(manor, prefer_async=True)
         missions = list(MissionTemplate.objects.all().order_by("id"))
         missions_by_key = {mission.key: mission for mission in missions}
         attempts = bulk_mission_attempts_today(manor, missions)

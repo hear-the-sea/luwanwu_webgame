@@ -756,6 +756,7 @@ items:
     name: 斗笠
     description: 由棕叶编织而成的宽边帽，可以简单遮蔽风雨。
     effect_type: equip_helmet
+    image: equip_caomao.png
     rarity: black
     effect_payload:
       hp: 200

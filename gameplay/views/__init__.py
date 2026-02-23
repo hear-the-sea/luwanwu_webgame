@@ -15,7 +15,15 @@ gameplay views package
 """
 
 # Arena views
-from .arena import ArenaView, arena_exchange_view, arena_register_view
+from .arena import (
+    ArenaEventDetailView,
+    ArenaEventsView,
+    ArenaExchangePageView,
+    ArenaView,
+    arena_cancel_view,
+    arena_exchange_view,
+    arena_register_view,
+)
 
 # Building views
 from .buildings import UpgradeBuildingView
@@ -142,7 +150,11 @@ __all__ = [
     "UpgradeBuildingView",
     # Arena
     "ArenaView",
+    "ArenaEventDetailView",
+    "ArenaEventsView",
+    "ArenaExchangePageView",
     "arena_register_view",
+    "arena_cancel_view",
     "arena_exchange_view",
     # Technology
     "TechnologyView",

@@ -209,6 +209,7 @@ class BattleReportDetailView(LoginRequiredMixin, DetailView):
         """
         MissionRun = apps.get_model("gameplay", "MissionRun")
         RaidRun = apps.get_model("gameplay", "RaidRun")
+        ArenaMatch = apps.get_model("gameplay", "ArenaMatch")
 
         # 检查是否为防守任务
         mission_run = MissionRun.objects.filter(battle_report=report).select_related("mission").first()
@@ -222,6 +223,19 @@ class BattleReportDetailView(LoginRequiredMixin, DetailView):
             if raid_run.defender_id == manor.id:
                 return "defender"
             else:
+                return "attacker"
+
+        # 检查是否为竞技场战报
+        arena_match = (
+            ArenaMatch.objects.select_related("attacker_entry", "defender_entry").filter(battle_report=report).first()
+        )
+        if arena_match:
+            if arena_match.defender_entry_id:
+                defender_manor_id = getattr(arena_match.defender_entry, "manor_id", None)
+                if defender_manor_id == manor.id:
+                    return "defender"
+            attacker_manor_id = getattr(arena_match.attacker_entry, "manor_id", None)
+            if attacker_manor_id == manor.id:
                 return "attacker"
 
         # 默认：战报归属方是进攻方（普通任务）
