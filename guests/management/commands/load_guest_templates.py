@@ -91,11 +91,16 @@ class Command(BaseCommand):
             skip_images,
             verbosity,
         )
+        desired_skill_keys = self._collect_desired_skill_keys(skill_data, book_data, template_skill_keys)
+        book_keys = {data["key"] for data in book_data}
 
         key_to_template = {tpl.key: tpl for tpl in GuestTemplate.objects.filter(key__in=template_keys)}
         self._sync_template_skills(template_skill_keys, key_to_template, skill_map)
 
         pool_keys = self._sync_pools(pool_data, key_to_template, verbosity)
+        self._cleanup_removed_templates(template_keys)
+        self._cleanup_removed_books(book_keys)
+        self._cleanup_removed_skills(desired_skill_keys)
         self._cleanup_removed_pools(pool_keys)
         self._finish_sync(verbosity, fallback_avatar_count)
 
@@ -517,10 +522,41 @@ class Command(BaseCommand):
 
         return pool_keys
 
+    def _collect_desired_skill_keys(
+        self,
+        skill_data: list[dict],
+        book_data: list[dict],
+        template_skill_keys: dict[str, list[str]],
+    ) -> set[str]:
+        desired_skill_keys = {data["key"] for data in skill_data}
+        desired_skill_keys.update({data["skill"] for data in book_data})
+        for skill_keys in template_skill_keys.values():
+            desired_skill_keys.update({skill_key for skill_key in skill_keys if skill_key})
+        return desired_skill_keys
+
+    def _cleanup_removed_templates(self, template_keys: set[str]) -> None:
+        queryset = (
+            GuestTemplate.objects.exclude(key__in=template_keys) if template_keys else GuestTemplate.objects.all()
+        )
+        removed, _ = queryset.delete()
+        if removed:
+            self.stdout.write(self.style.WARNING(f"Removed {removed} templates not defined in payload"))
+
+    def _cleanup_removed_books(self, book_keys: set[str]) -> None:
+        queryset = SkillBook.objects.exclude(key__in=book_keys) if book_keys else SkillBook.objects.all()
+        removed, _ = queryset.delete()
+        if removed:
+            self.stdout.write(self.style.WARNING(f"Removed {removed} skill books not defined in payload"))
+
+    def _cleanup_removed_skills(self, skill_keys: set[str]) -> None:
+        queryset = Skill.objects.exclude(key__in=skill_keys) if skill_keys else Skill.objects.all()
+        removed, _ = queryset.delete()
+        if removed:
+            self.stdout.write(self.style.WARNING(f"Removed {removed} skills not defined in payload"))
+
     def _cleanup_removed_pools(self, pool_keys: set[str]) -> None:
-        if not pool_keys:
-            return
-        removed, _ = RecruitmentPool.objects.exclude(key__in=pool_keys).delete()
+        queryset = RecruitmentPool.objects.exclude(key__in=pool_keys) if pool_keys else RecruitmentPool.objects.all()
+        removed, _ = queryset.delete()
         if removed:
             self.stdout.write(self.style.WARNING(f"Removed {removed} pools not defined in payload"))
 

@@ -194,7 +194,7 @@ def attribute_icons(value: int) -> str:
     if not value or value < 0:
         return ""
 
-    icons = []
+    icons: list[str] = []
     remaining = int(value)
 
     for icon, divisor in [("crown", 64), ("sun", 16), ("moon", 4), ("star", 1)]:
@@ -202,8 +202,9 @@ def attribute_icons(value: int) -> str:
         remaining %= divisor
         icons.extend([icon] * count)
 
-    return format_html_join(
+    inner = format_html_join(
         "",
-        '<img src="/static/images/attri/{0}.png" class="attr-icon" alt="{0}">',
+        '<span class="attr-icon attr-{0}" aria-hidden="true"></span>',
         ((icon,) for icon in icons),
     )
+    return format_html('<span class="attr-pack">{}</span>', inner)

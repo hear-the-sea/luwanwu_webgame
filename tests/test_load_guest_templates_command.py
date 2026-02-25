@@ -192,3 +192,104 @@ def test_load_guest_templates_pool_cooldown_defaults_to_zero_when_missing(tmp_pa
 
     pool = RecruitmentPool.objects.get(key="pool_loader_c")
     assert pool.cooldown_seconds == 0
+
+
+@pytest.mark.django_db
+def test_load_guest_templates_removes_records_not_in_latest_payload(tmp_path: Path) -> None:
+    payload_v1 = {
+        "templates": [
+            {
+                "key": "tpl_loader_keep",
+                "name": "保留模板",
+                "archetype": "civil",
+                "rarity": "gray",
+                "skills": ["skill_loader_keep"],
+            },
+            {
+                "key": "tpl_loader_drop",
+                "name": "删除模板",
+                "archetype": "military",
+                "rarity": "green",
+                "skills": ["skill_loader_drop"],
+            },
+        ],
+        "skills": [
+            {"key": "skill_loader_keep", "name": "保留技能"},
+            {"key": "skill_loader_drop", "name": "删除技能"},
+        ],
+        "skill_books": [
+            {"key": "book_loader_keep", "name": "保留秘籍", "skill": "skill_loader_keep"},
+            {"key": "book_loader_drop", "name": "删除秘籍", "skill": "skill_loader_drop"},
+        ],
+        "pools": [
+            {
+                "key": "pool_loader_keep",
+                "name": "保留卡池",
+                "entries": [{"template": "tpl_loader_keep", "weight": 1}],
+            },
+            {
+                "key": "pool_loader_drop",
+                "name": "删除卡池",
+                "entries": [{"template": "tpl_loader_drop", "weight": 1}],
+            },
+        ],
+    }
+
+    payload_v2 = {
+        "templates": [
+            {
+                "key": "tpl_loader_keep",
+                "name": "保留模板",
+                "archetype": "civil",
+                "rarity": "gray",
+                "skills": ["skill_loader_keep"],
+            },
+        ],
+        "skills": [
+            {"key": "skill_loader_keep", "name": "保留技能"},
+        ],
+        "skill_books": [
+            {"key": "book_loader_keep", "name": "保留秘籍", "skill": "skill_loader_keep"},
+        ],
+        "pools": [
+            {
+                "key": "pool_loader_keep",
+                "name": "保留卡池",
+                "entries": [{"template": "tpl_loader_keep", "weight": 1}],
+            },
+        ],
+    }
+
+    file_v1 = tmp_path / "guest_templates_full_rebuild_v1.json"
+    file_v1.write_text(json.dumps(payload_v1, ensure_ascii=False), encoding="utf-8")
+
+    file_v2 = tmp_path / "guest_templates_full_rebuild_v2.json"
+    file_v2.write_text(json.dumps(payload_v2, ensure_ascii=False), encoding="utf-8")
+
+    skills_file = tmp_path / "skills_empty.json"
+    skills_file.write_text("{}", encoding="utf-8")
+
+    heroes_dir = tmp_path / "heroes"
+    heroes_dir.mkdir()
+
+    call_command(
+        "load_guest_templates",
+        file=str(file_v1),
+        skills_file=str(skills_file),
+        heroes_dir=str(heroes_dir),
+        skip_images=True,
+        verbosity=0,
+    )
+    call_command(
+        "load_guest_templates",
+        file=str(file_v2),
+        skills_file=str(skills_file),
+        heroes_dir=str(heroes_dir),
+        skip_images=True,
+        verbosity=0,
+    )
+
+    assert set(GuestTemplate.objects.values_list("key", flat=True)) == {"tpl_loader_keep"}
+    assert set(Skill.objects.values_list("key", flat=True)) == {"skill_loader_keep"}
+    assert set(SkillBook.objects.values_list("key", flat=True)) == {"book_loader_keep"}
+    assert set(RecruitmentPool.objects.values_list("key", flat=True)) == {"pool_loader_keep"}

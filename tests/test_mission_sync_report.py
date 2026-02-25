@@ -46,6 +46,7 @@ def test_generate_sync_battle_report_defense_tolerates_invalid_enemy_technology(
     assert captured["attacker_guest_bonuses"] is None
     assert captured["attacker_guest_skills"] is None
     assert captured["troop_loadout"] == {}
+    assert captured["validate_attacker_troop_capacity"] is False
     assert captured["attacker_guests"][0].level == 50
     assert state["keys"] == []
 

@@ -163,6 +163,7 @@ def test_generate_report_task_defense_tolerates_invalid_enemy_technology(monkeyp
         assert kwargs["attacker_tech_levels"] == {}
         assert kwargs["attacker_guest_bonuses"] is None
         assert kwargs["attacker_guest_skills"] is None
+        assert kwargs["validate_attacker_troop_capacity"] is False
         return SimpleNamespace(pk=321)
 
     monkeypatch.setattr("battle.combatants.build_named_ai_guests", _build_named_ai_guests)

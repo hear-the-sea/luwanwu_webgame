@@ -32,6 +32,8 @@ from ..services import (
 logger = logging.getLogger(__name__)
 RECRUIT_ACTION_LOCK_SECONDS = 5
 ALLOWED_CANDIDATE_ACTIONS = frozenset({"accept", "retain", "discard"})
+ALLOWED_CANDIDATE_SCOPES = frozenset({"selected", "all"})
+RECRUIT_SUCCESS_NAME_PREVIEW_LIMIT = 12
 _LOCAL_LOCK_PREFIX = "local:"
 
 
@@ -69,6 +71,17 @@ def _retain_candidates(candidates) -> tuple[int, str | None]:
 
 def _finalize_candidates(candidates) -> tuple[list, list]:
     return bulk_finalize_candidates(candidates)
+
+
+def _invalidate_recruitment_hall_cache_for_manor(manor_id: int | None) -> None:
+    if not manor_id:
+        return
+    try:
+        from gameplay.services.utils.cache import invalidate_recruitment_hall_cache
+
+        invalidate_recruitment_hall_cache(int(manor_id))
+    except Exception:
+        logger.debug("Failed to invalidate recruitment hall cache from view: manor_id=%s", manor_id, exc_info=True)
 
 
 def _recruit_action_lock_key(action: str, manor_id: int, scope: str) -> str:
@@ -109,9 +122,11 @@ def _release_recruit_action_lock(lock_key: str) -> None:
     )
 
 
-def _candidate_scope_digest(action: str, candidate_ids: list[int]) -> str:
-    normalized = ",".join(str(i) for i in sorted(set(candidate_ids)))
-    payload = f"{action}|{normalized}"
+def _candidate_scope_digest(action: str, scope: str, candidate_ids: list[int] | None = None) -> str:
+    payload = f"{action}|{scope}"
+    if scope == "selected" and candidate_ids:
+        normalized = ",".join(str(i) for i in sorted(set(candidate_ids)))
+        payload = f"{payload}|{normalized}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24]
 
 
@@ -120,6 +135,14 @@ def _normalize_candidate_action(raw_action: str | None) -> str | None:
         return "accept"
     if raw_action in ALLOWED_CANDIDATE_ACTIONS:
         return raw_action
+    return None
+
+
+def _normalize_candidate_scope(raw_scope: str | None) -> str | None:
+    if raw_scope in (None, "", "selected"):
+        return "selected"
+    if raw_scope in ALLOWED_CANDIDATE_SCOPES:
+        return raw_scope
     return None
 
 
@@ -135,6 +158,19 @@ def _format_duration(seconds: int) -> str:
     if sec or not parts:
         parts.append(f"{sec}秒")
     return "".join(parts)
+
+
+def _format_bulk_recruit_success_message(succeeded_guests: list) -> str:
+    total = len(succeeded_guests)
+    if total <= 0:
+        return ""
+
+    preview_names = [guest.display_name for guest in succeeded_guests[:RECRUIT_SUCCESS_NAME_PREVIEW_LIMIT]]
+    preview = ", ".join(preview_names)
+    if total > RECRUIT_SUCCESS_NAME_PREVIEW_LIMIT:
+        remaining = total - RECRUIT_SUCCESS_NAME_PREVIEW_LIMIT
+        return f"成功招募 {total} 名门客：{preview} 等 {remaining} 名"
+    return f"成功招募 {total} 名门客：{preview}"
 
 
 @method_decorator(require_POST, name="dispatch")
@@ -160,6 +196,7 @@ class RecruitView(LoginRequiredMixin, TemplateView):
             try:
                 recruitment = start_guest_recruitment(manor, pool)
                 eta_text = _format_duration(recruitment.duration_seconds)
+                _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
                 messages.success(request, f"{pool.name} 已开始招募，预计 {eta_text} 后完成。")
             except (GameError, ValueError) as exc:
                 messages.error(request, sanitize_error_message(exc))
@@ -183,28 +220,50 @@ def accept_candidate_view(request):
     from gameplay.services.manor.core import ensure_manor
 
     manor = ensure_manor(request.user)
-    raw_candidate_ids = request.POST.getlist("candidate_ids")
-    if not raw_candidate_ids:
-        messages.warning(request, "请先勾选候选门客。")
+    scope = _normalize_candidate_scope(request.POST.get("scope"))
+    if scope is None:
+        messages.error(request, "选择范围无效")
         return redirect("gameplay:recruitment_hall")
 
-    candidate_ids = _parse_positive_candidate_ids(raw_candidate_ids)
-    if candidate_ids is None:
-        messages.error(request, "候选门客选择有误")
-        return redirect("gameplay:recruitment_hall")
+    candidate_ids: list[int] | None = None
+    if scope == "all":
+        queryset = RecruitmentCandidate.objects.filter(manor=manor).order_by("id")
+        candidates = []
+    else:
+        raw_candidate_ids = request.POST.getlist("candidate_ids")
+        if not raw_candidate_ids:
+            messages.warning(request, "请先勾选候选门客。")
+            return redirect("gameplay:recruitment_hall")
+
+        parsed_ids = _parse_positive_candidate_ids(raw_candidate_ids)
+        if parsed_ids is None:
+            messages.error(request, "候选门客选择有误")
+            return redirect("gameplay:recruitment_hall")
+        candidate_ids = parsed_ids
+        queryset, candidates = _load_selected_candidates(manor, candidate_ids)
 
     action = _normalize_candidate_action(request.POST.get("action"))
     if action is None:
         messages.error(request, "操作类型无效")
         return redirect("gameplay:recruitment_hall")
 
-    queryset, candidates = _load_selected_candidates(manor, candidate_ids)
-    if not candidates:
+    if scope == "all":
+        if action == "discard":
+            candidate_total = queryset.count()
+            if candidate_total <= 0:
+                messages.error(request, "当前没有可操作的候选门客。")
+                return redirect("gameplay:recruitment_hall")
+        else:
+            candidates = list(queryset)
+            if not candidates:
+                messages.error(request, "当前没有可操作的候选门客。")
+                return redirect("gameplay:recruitment_hall")
+    elif not candidates:
         messages.error(request, "未找到选中的候选门客。")
         return redirect("gameplay:recruitment_hall")
 
-    scope = _candidate_scope_digest(action, candidate_ids)
-    lock_ok, lock_key = _acquire_recruit_action_lock("accept", int(manor.id), scope)
+    lock_scope = _candidate_scope_digest(action, scope, candidate_ids)
+    lock_ok, lock_key = _acquire_recruit_action_lock("accept", int(manor.id), lock_scope)
     if not lock_ok:
         messages.warning(request, "请求处理中，请稍候重试")
         return redirect("gameplay:recruitment_hall")
@@ -212,21 +271,23 @@ def accept_candidate_view(request):
     try:
         try:
             if action == "discard":
-                deleted = len(candidates)
+                deleted = queryset.count() if scope == "all" else len(candidates)
                 queryset.delete()
                 messages.info(request, f"已放弃 {deleted} 名候选门客。")
+                _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
             elif action == "retain":
                 retained, error_message = _retain_candidates(candidates)
                 if retained:
                     messages.success(request, f"已将 {retained} 名候选收为家丁。")
+                    _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
                 if error_message:
                     messages.error(request, error_message)
             else:
                 # 使用批量确认函数优化性能
                 succeeded, failed = _finalize_candidates(candidates)
                 if succeeded:
-                    names = [g.display_name for g in succeeded]
-                    messages.success(request, f"成功招募 {len(succeeded)} 名门客：{', '.join(names)}")
+                    messages.success(request, _format_bulk_recruit_success_message(succeeded))
+                    _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
                 if failed:
                     messages.warning(request, f"门客容量不足，{len(failed)} 名候选未能招募")
         except (GameError, ValueError) as exc:
@@ -276,6 +337,7 @@ def use_magnifying_glass_view(request):
             count = use_magnifying_glass_for_candidates(manor, item_id_int)
             if count > 0:
                 msg = f"使用放大镜成功：显现 {count} 位候选门客的稀有度"
+                _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
                 if is_ajax:
                     return json_success(message=msg)
                 messages.success(request, msg)

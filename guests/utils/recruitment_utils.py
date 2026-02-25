@@ -6,12 +6,20 @@
 
 from __future__ import annotations
 
+import logging
 import random
+from functools import lru_cache
+from pathlib import Path
 from typing import List
 
+from django.conf import settings
+
 from common.utils.random_utils import cumulative_choice, weighted_random_choice
+from core.utils.yaml_loader import ensure_mapping, load_yaml_data
 
 from ..models import GuestRarity, RecruitmentPoolEntry
+
+logger = logging.getLogger(__name__)
 
 # 稀有度排序（从低到高）
 RARITY_ORDER = [
@@ -27,20 +35,82 @@ RARITY_ORDER = [
 # 隐士类型标识（虽显示为黑色，但有独立抽取概率）
 HERMIT_RARITY = "hermit"
 
-# 稀有度权重配置（累计概率抽卡）
-RARITY_WEIGHTS = [
-    (GuestRarity.ORANGE, 200),  # 0.02%
-    (HERMIT_RARITY, 300),  # 0.03% 隐士（隐藏在民间的高手）
-    (GuestRarity.PURPLE, 500),  # 0.05%
-    (GuestRarity.RED, 3000),  # 0.3%
-    (GuestRarity.BLUE, 1000),  # 0.1%
-    (GuestRarity.GREEN, 10000),  # 1%
-    (GuestRarity.GRAY, 50000),  # 5%
-]
+RECRUITMENT_RARITY_WEIGHTS_PATH = Path(settings.BASE_DIR) / "data" / "recruitment_rarity_weights.yaml"
 
-TOTAL_WEIGHT = 1_000_000
-BLACK_WEIGHT = TOTAL_WEIGHT - sum(weight for _, weight in RARITY_WEIGHTS)
-RARITY_DISTRIBUTION = RARITY_WEIGHTS + [(GuestRarity.BLACK, max(BLACK_WEIGHT, 0))]
+_DEFAULT_TOTAL_WEIGHT = 1_000_000
+_DEFAULT_WEIGHT_MAP = {
+    GuestRarity.ORANGE: 4000,
+    HERMIT_RARITY: 6000,
+    GuestRarity.PURPLE: 10000,
+    GuestRarity.RED: 0,
+    GuestRarity.BLUE: 20000,
+    GuestRarity.GREEN: 200000,
+    GuestRarity.GRAY: 50000,
+}
+_RARITY_WEIGHT_ORDER = (
+    GuestRarity.ORANGE,
+    HERMIT_RARITY,
+    GuestRarity.PURPLE,
+    GuestRarity.RED,
+    GuestRarity.BLUE,
+    GuestRarity.GREEN,
+    GuestRarity.GRAY,
+)
+
+
+def _to_non_negative_int(raw_value, *, default: int = 0) -> int:
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        return max(0, int(default))
+    return max(0, value)
+
+
+@lru_cache(maxsize=1)
+def _load_rarity_distribution() -> tuple[int, tuple[tuple[str, int], ...], tuple[tuple[str, int], ...]]:
+    raw = load_yaml_data(
+        RECRUITMENT_RARITY_WEIGHTS_PATH,
+        logger=logger,
+        context="recruitment rarity weights config",
+        default={},
+    )
+    payload = ensure_mapping(raw, logger=logger, context="recruitment rarity weights root")
+
+    configured_total = _to_non_negative_int(payload.get("total_weight"), default=_DEFAULT_TOTAL_WEIGHT)
+    if configured_total <= 0:
+        configured_total = _DEFAULT_TOTAL_WEIGHT
+
+    weights_payload = ensure_mapping(
+        payload.get("weights"),
+        logger=logger,
+        context="recruitment rarity weights root.weights",
+    )
+    weight_map: dict[str, int] = {}
+    for rarity in _RARITY_WEIGHT_ORDER:
+        weight_map[rarity] = _to_non_negative_int(weights_payload.get(rarity), default=_DEFAULT_WEIGHT_MAP[rarity])
+
+    rarity_weights = tuple((rarity, weight_map[rarity]) for rarity in _RARITY_WEIGHT_ORDER)
+    total_non_black_weight = sum(weight for _, weight in rarity_weights)
+    total_weight = max(configured_total, total_non_black_weight)
+    black_weight = total_weight - total_non_black_weight
+
+    rarity_distribution = rarity_weights + ((GuestRarity.BLACK, black_weight),)
+    return total_weight, rarity_weights, rarity_distribution
+
+
+def clear_recruitment_rarity_cache() -> None:
+    _load_rarity_distribution.cache_clear()
+
+
+def get_recruitment_rarity_distribution() -> tuple[int, list[tuple[str, int]], list[tuple[str, int]]]:
+    total_weight, rarity_weights, rarity_distribution = _load_rarity_distribution()
+    return total_weight, list(rarity_weights), list(rarity_distribution)
+
+
+TOTAL_WEIGHT, _RARITY_WEIGHTS_TUPLE, _RARITY_DISTRIBUTION_TUPLE = _load_rarity_distribution()
+RARITY_WEIGHTS = list(_RARITY_WEIGHTS_TUPLE)
+BLACK_WEIGHT = _RARITY_DISTRIBUTION_TUPLE[-1][1]
+RARITY_DISTRIBUTION = list(_RARITY_DISTRIBUTION_TUPLE)
 
 
 def choose_rarity(rng: random.Random) -> str:
@@ -63,9 +133,10 @@ def choose_rarity(rng: random.Random) -> str:
         True
     """
     # 使用统一的累计权重选择函数
+    total_weight, _rarity_weights, rarity_distribution = _load_rarity_distribution()
     return cumulative_choice(
-        RARITY_DISTRIBUTION,
-        TOTAL_WEIGHT,
+        list(rarity_distribution),
+        total_weight,
         rng,
         default=GuestRarity.BLACK,
     )

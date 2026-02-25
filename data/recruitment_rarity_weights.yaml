@@ -1,0 +1,15 @@
+total_weight: 1000000
+
+# 招募稀有度全局权重（默认用于无 entries 的核心卡池）。
+# 说明：
+# - 概率 = weight / total_weight
+# - black 不需要配置，系统会自动用剩余权重补齐
+# - 当前为测试配置：绿/蓝/紫/橙提升，红色关闭，隐士提升
+weights:
+  orange: 4000
+  hermit: 6000
+  purple: 10000
+  red: 0
+  blue: 20000
+  green: 200000
+  gray: 50000

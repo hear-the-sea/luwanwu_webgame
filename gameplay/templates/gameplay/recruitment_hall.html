@@ -85,13 +85,13 @@
                 <article class="tw-building-card overflow-hidden text-sm pool-card-responsive">
                     <div class="relative w-full bg-gray-200 pool-img-container">
                         {% if pool.key == 'cunmu' %}
-                        <img src="/static/images/buildings/cunmu.webp" class="w-full h-full object-cover" alt="{{ pool.name }}">
+                        <img src="{% static 'images/buildings/cunmu.webp' %}" class="w-full h-full object-cover" alt="{{ pool.name }}" loading="lazy" decoding="async">
                         {% elif pool.key == 'xiangshi' %}
-                        <img src="/static/images/buildings/xiangshi.webp" class="w-full h-full object-cover" alt="{{ pool.name }}">
+                        <img src="{% static 'images/buildings/xiangshi.webp' %}" class="w-full h-full object-cover" alt="{{ pool.name }}" loading="lazy" decoding="async">
                         {% elif pool.key == 'huishi' %}
-                        <img src="/static/images/buildings/huishi.webp" class="w-full h-full object-cover" alt="{{ pool.name }}">
+                        <img src="{% static 'images/buildings/huishi.webp' %}" class="w-full h-full object-cover" alt="{{ pool.name }}" loading="lazy" decoding="async">
                         {% elif pool.key == 'dianshi' %}
-                        <img src="/static/images/buildings/dianshi.webp" class="w-full h-full object-cover" alt="{{ pool.name }}">
+                        <img src="{% static 'images/buildings/dianshi.webp' %}" class="w-full h-full object-cover" alt="{{ pool.name }}" loading="lazy" decoding="async">
                         {% endif %}
                     </div>
 
@@ -142,7 +142,7 @@
             </div>
             {% endif %}
 
-            {% if magnifying_glass_items %}
+            {% if magnifying_glass_items or candidate_count > 0 %}
             <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
                 <div class="flex gap-2 flex-wrap">
                     {% for item in magnifying_glass_items %}
@@ -150,36 +150,36 @@
                         {% csrf_token %}
                         <input type="hidden" name="item_id" value="{{ item.id }}">
                         <button type="submit" class="tw-btn-secondary tw-btn-sm" {% if item.quantity <= 0 %}disabled{% endif %}>
-                            使用{{ item.template.name }} ({{ item.quantity }})
+                            使用{{ item.template_name }} ({{ item.quantity }})
                         </button>
                     </form>
                     {% endfor %}
                 </div>
+                {% if candidate_count > 0 %}
                 <button type="button" class="tw-btn-secondary tw-btn-sm" id="candidate-select-all-top">一键全选</button>
+                {% endif %}
             </div>
             {% endif %}
 
-            <form method="post" action="{% url 'guests:candidate_accept' %}">
+            <form method="post" action="{% url 'guests:candidate_accept' %}" id="candidate-selected-form">
                 {% csrf_token %}
-                <div class="flex flex-wrap gap-3 mb-4">
-                    {% for candidate in candidates %}
-                    <label class="flex items-center gap-2 px-3 py-2 bg-bg-hover rounded-md cursor-pointer hover:bg-bg-secondary border border-border-light">
-                        <input type="checkbox" name="candidate_ids" value="{{ candidate.id }}" class="cursor-pointer">
-                        {% if candidate.rarity_revealed or candidate.rarity == 'gray' or candidate.rarity == 'red' %}
-                        <span class="font-semibold rarity-text-{{ candidate.rarity }}">{{ candidate.display_name }}</span>
-                        {% else %}
-                        <span class="font-semibold">{{ candidate.display_name }}</span>
-                        {% endif %}
-                    </label>
-                    {% empty %}
+                <input type="hidden" name="scope" value="selected">
+                <div id="candidate-selected-ids"></div>
+                <div class="flex flex-wrap gap-3 mb-2" id="candidate-list"></div>
+                <div class="tw-muted mb-4" id="candidate-empty-hint" {% if candidate_count > 0 %}style="display: none;"{% endif %}>
                     {% if active_recruitment %}
-                    <p class="tw-muted">招募进行中，请等待倒计时结束后查看候选门客。</p>
+                    招募进行中，请等待倒计时结束后查看候选门客。
                     {% else %}
-                    <p class="tw-muted">没有待选门客，请先进行招募。</p>
+                    没有待选门客，请先进行招募。
                     {% endif %}
-                    {% endfor %}
                 </div>
-                {% if candidates %}
+
+                {% if candidate_count > 0 %}
+                <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                    <span class="text-xs text-text-muted" id="candidate-render-progress"></span>
+                    <button type="button" class="tw-btn-secondary tw-btn-sm" id="candidate-load-more">加载更多</button>
+                </div>
+                <div id="candidate-sentinel" style="height: 1px;"></div>
                 <div class="flex gap-2 flex-wrap pt-4 border-t border-border-light">
                     <button type="button" class="tw-btn-secondary" id="candidate-select-all">一键全选</button>
                     <button type="submit" name="action" value="accept" class="tw-btn-primary">招募选中门客</button>
@@ -188,6 +188,19 @@
                 </div>
                 {% endif %}
             </form>
+
+            {% if candidate_count > 0 %}
+            <form method="post" action="{% url 'guests:candidate_accept' %}" class="mt-3 pt-3 border-t border-border-light">
+                {% csrf_token %}
+                <input type="hidden" name="scope" value="all">
+                <div class="flex gap-2 flex-wrap">
+                    <button type="submit" name="action" value="accept" class="tw-btn-primary">全部招募</button>
+                    <button type="submit" name="action" value="retain" class="tw-btn-secondary">全部收为家丁</button>
+                    <button type="submit" name="action" value="discard" class="tw-btn-secondary">全部放弃</button>
+                </div>
+            </form>
+            {% endif %}
+            {{ candidates_payload|json_script:"recruit-candidates-data" }}
         </div>
     </section>
 
@@ -199,7 +212,7 @@
                 <li class="flex items-center gap-2">
                     <span class="text-text-muted text-sm">{{ record.created_at|date:"m-d H:i" }}</span>
                     <span>-</span>
-                    <span class="font-semibold rarity-text-{{ record.guest.rarity }}">{{ record.guest.display_name }}</span>
+                    <span class="font-semibold rarity-text-{{ record.guest_rarity }}">{{ record.guest_display_name }}</span>
                 </li>
                 {% empty %}
                 <li class="tw-muted">暂无记录</li>
@@ -227,18 +240,144 @@
     }
 
     document.addEventListener("DOMContentLoaded", function () {
-        const selectButtons = [
-            document.getElementById("candidate-select-all"),
-            document.getElementById("candidate-select-all-top"),
-        ].filter(Boolean);
-        if (selectButtons.length) {
-            selectButtons.forEach(function (btn) {
+        const rawCandidates = document.getElementById("recruit-candidates-data");
+        let candidates = [];
+        try {
+            candidates = JSON.parse(rawCandidates?.textContent || "[]");
+        } catch (_err) {
+            candidates = [];
+        }
+
+        const selectedIds = new Set();
+        const candidateList = document.getElementById("candidate-list");
+        const selectedForm = document.getElementById("candidate-selected-form");
+        const selectedIdsContainer = document.getElementById("candidate-selected-ids");
+        const renderProgress = document.getElementById("candidate-render-progress");
+        const loadMoreBtn = document.getElementById("candidate-load-more");
+        const sentinel = document.getElementById("candidate-sentinel");
+        const CHUNK_SIZE = 96;
+        let renderedCount = 0;
+
+        function isRarityShown(candidate) {
+            return candidate.rarity_revealed || candidate.rarity === "gray" || candidate.rarity === "red";
+        }
+
+        function buildCandidateNode(candidate) {
+            const label = document.createElement("label");
+            label.className =
+                "flex items-center gap-2 px-3 py-2 bg-bg-hover rounded-md cursor-pointer hover:bg-bg-secondary border border-border-light";
+
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.className = "cursor-pointer";
+            checkbox.dataset.candidateId = String(candidate.id);
+            checkbox.checked = selectedIds.has(candidate.id);
+            checkbox.addEventListener("change", function () {
+                if (checkbox.checked) {
+                    selectedIds.add(candidate.id);
+                } else {
+                    selectedIds.delete(candidate.id);
+                }
+            });
+
+            const nameSpan = document.createElement("span");
+            nameSpan.className = "font-semibold";
+            if (isRarityShown(candidate)) {
+                nameSpan.className += ` rarity-text-${candidate.rarity}`;
+            }
+            nameSpan.textContent = candidate.display_name || "未知门客";
+
+            label.appendChild(checkbox);
+            label.appendChild(nameSpan);
+            return label;
+        }
+
+        function syncRenderedSelections() {
+            if (!candidateList) return;
+            candidateList.querySelectorAll("input[data-candidate-id]").forEach((checkbox) => {
+                checkbox.checked = selectedIds.has(Number(checkbox.dataset.candidateId));
+            });
+        }
+
+        function updateRenderProgress() {
+            if (!renderProgress) return;
+            if (!candidates.length) {
+                renderProgress.textContent = "";
+                return;
+            }
+            renderProgress.textContent = `已加载 ${renderedCount}/${candidates.length}，已勾选 ${selectedIds.size}`;
+        }
+
+        function renderNextChunk() {
+            if (!candidateList) return;
+            const nextCount = Math.min(candidates.length, renderedCount + CHUNK_SIZE);
+            if (nextCount <= renderedCount) {
+                if (loadMoreBtn) {
+                    loadMoreBtn.style.display = "none";
+                    loadMoreBtn.disabled = true;
+                }
+                updateRenderProgress();
+                return;
+            }
+
+            const fragment = document.createDocumentFragment();
+            for (let i = renderedCount; i < nextCount; i += 1) {
+                fragment.appendChild(buildCandidateNode(candidates[i]));
+            }
+            candidateList.appendChild(fragment);
+            renderedCount = nextCount;
+
+            if (loadMoreBtn && renderedCount >= candidates.length) {
+                loadMoreBtn.style.display = "none";
+                loadMoreBtn.disabled = true;
+            }
+            updateRenderProgress();
+        }
+
+        if (candidateList && candidates.length) {
+            renderNextChunk();
+        }
+
+        if (loadMoreBtn) {
+            loadMoreBtn.addEventListener("click", function () {
+                renderNextChunk();
+            });
+        }
+
+        if (sentinel && "IntersectionObserver" in window) {
+            const observer = new IntersectionObserver(
+                (entries) => {
+                    entries.forEach((entry) => {
+                        if (entry.isIntersecting) {
+                            renderNextChunk();
+                        }
+                    });
+                },
+                { rootMargin: "200px 0px 200px 0px" }
+            );
+            observer.observe(sentinel);
+        }
+
+        const selectButtons = [document.getElementById("candidate-select-all"), document.getElementById("candidate-select-all-top")].filter(Boolean);
+        if (selectButtons.length && candidates.length) {
+            selectButtons.forEach((btn) => {
                 btn.addEventListener("click", function () {
-                    document
-                        .querySelectorAll('input[name="candidate_ids"]')
-                        .forEach(function (checkbox) {
-                            checkbox.checked = true;
-                        });
+                    candidates.forEach((candidate) => selectedIds.add(candidate.id));
+                    syncRenderedSelections();
+                    updateRenderProgress();
+                });
+            });
+        }
+
+        if (selectedForm && selectedIdsContainer) {
+            selectedForm.addEventListener("submit", function () {
+                selectedIdsContainer.innerHTML = "";
+                selectedIds.forEach((id) => {
+                    const input = document.createElement("input");
+                    input.type = "hidden";
+                    input.name = "candidate_ids";
+                    input.value = String(id);
+                    selectedIdsContainer.appendChild(input);
                 });
             });
         }
@@ -250,7 +389,7 @@
             e.preventDefault();
 
             // 如果有待处理候选，先提示处理
-            {% if candidates %}
+            {% if candidate_count > 0 %}
             try {
                 const confirmed = await gameConfirm(
                     '候选区还有待处理的门客，确定要进行新的招募吗？这将清空当前候选区。',

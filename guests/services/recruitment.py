@@ -10,6 +10,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from django.db import transaction
+from django.db.models import QuerySet
 from django.utils import timezone
 
 from core.exceptions import (
@@ -63,6 +64,17 @@ CORE_POOL_TIERS = (
     RecruitmentPool.Tier.HUISHI,
     RecruitmentPool.Tier.DIANSHI,
 )
+
+
+def _invalidate_recruitment_hall_cache(manor_id: int | None) -> None:
+    if not manor_id:
+        return
+    try:
+        from gameplay.services.utils.cache import invalidate_recruitment_hall_cache
+
+        invalidate_recruitment_hall_cache(int(manor_id))
+    except Exception:
+        logger.debug("Failed to invalidate recruitment hall cache for manor_id=%s", manor_id, exc_info=True)
 
 
 # ============ 模板缓存 ============
@@ -203,9 +215,11 @@ def get_excluded_template_ids(manor: Manor) -> set[int]:
     return excluded
 
 
-def list_pools(core_only: bool = False) -> Iterable[RecruitmentPool]:
+def list_pools(core_only: bool = False, *, include_entries: bool = True) -> Iterable[RecruitmentPool]:
     """列出所有招募卡池，按级别从高到低排序（殿试->村募）"""
-    qs = RecruitmentPool.objects.prefetch_related("entries__template")
+    qs = RecruitmentPool.objects.all()
+    if include_entries:
+        qs = qs.prefetch_related("entries__template")
     if core_only:
         qs = qs.filter(tier__in=CORE_POOL_TIERS)
 
@@ -254,9 +268,9 @@ def available_guests(manor: Manor) -> Sequence[Guest]:
     )
 
 
-def list_candidates(manor: Manor) -> Iterable[RecruitmentCandidate]:
+def list_candidates(manor: Manor) -> QuerySet[RecruitmentCandidate]:
     """列出庄园的招募候选门客"""
-    return manor.candidates.select_related("pool", "template").order_by("created_at")
+    return manor.candidates.only("id", "display_name", "rarity", "rarity_revealed", "created_at").order_by("created_at")
 
 
 def _build_rarity_search_order(rarity: str) -> list[str]:
@@ -299,6 +313,9 @@ def choose_template_from_entries(
     entries: List[RecruitmentPoolEntry],
     rng: random.Random,
     excluded_ids: set[int] | None = None,
+    *,
+    templates_by_rarity: Dict[str, List[GuestTemplate]] | None = None,
+    hermit_templates: List[GuestTemplate] | None = None,
 ) -> GuestTemplate:
     """
     从卡池条目中随机选择一个门客模板。
@@ -323,22 +340,30 @@ def choose_template_from_entries(
 
     # 处理隐士类型：从缓存的隐士模板中选择
     if rarity == HERMIT_RARITY:
-        hermit_templates = _filter_templates(_get_hermit_templates(), excluded_ids)
-        if hermit_templates:
-            return rng.choice(hermit_templates)
+        loaded_hermit_templates = hermit_templates if hermit_templates is not None else _get_hermit_templates()
+        available_hermit_templates = _filter_templates(loaded_hermit_templates, excluded_ids)
+        if available_hermit_templates:
+            return rng.choice(available_hermit_templates)
         # 无可用隐士，降级为普通黑色
         rarity = GuestRarity.BLACK
 
     # 如果没有配置 entries，直接从缓存的模板中选择
     if not entries:
-        return _choose_template_by_rarity_cached(rarity, excluded_ids, rng)
+        return _choose_template_by_rarity_cached(
+            rarity,
+            excluded_ids,
+            rng,
+            templates_by_rarity=templates_by_rarity,
+        )
 
     # 有 entries 配置时，使用原有逻辑（但使用缓存的模板数据）
     filtered_entries = [e for e in entries if not e.template_id or e.template_id not in excluded_ids]
 
     explicit_template_ids = {entry.template_id for entry in filtered_entries if entry.template_id}
     # 获取缓存的模板数据
-    templates_by_rarity = _get_recruitable_templates_by_rarity()
+    loaded_templates_by_rarity = (
+        templates_by_rarity if templates_by_rarity is not None else _get_recruitable_templates_by_rarity()
+    )
     category_cache: Dict[Tuple[str | None, str | None], List[GuestTemplate]] = {}
 
     search_order = _build_rarity_search_order(rarity)
@@ -353,7 +378,7 @@ def choose_template_from_entries(
             rarity_option,
             excluded_ids,
             explicit_template_ids,
-            templates_by_rarity,
+            loaded_templates_by_rarity,
             category_cache,
             rng,
         )
@@ -361,13 +386,20 @@ def choose_template_from_entries(
             return template
 
     # 全局回退（使用缓存版本）
-    return _choose_template_by_rarity_cached(rarity, excluded_ids, rng)
+    return _choose_template_by_rarity_cached(
+        rarity,
+        excluded_ids,
+        rng,
+        templates_by_rarity=loaded_templates_by_rarity,
+    )
 
 
 def _choose_template_by_rarity_cached(
     rarity: str,
     excluded_ids: set[int],
     rng: random.Random,
+    *,
+    templates_by_rarity: Dict[str, List[GuestTemplate]] | None = None,
 ) -> GuestTemplate:
     """
     按稀有度从缓存的模板中随机选择。
@@ -375,13 +407,15 @@ def _choose_template_by_rarity_cached(
     使用预加载的模板缓存，避免数据库查询。
     如果目标稀有度无可用模板，会尝试降级到其他稀有度。
     """
-    templates_by_rarity = _get_recruitable_templates_by_rarity()
+    loaded_templates_by_rarity = (
+        templates_by_rarity if templates_by_rarity is not None else _get_recruitable_templates_by_rarity()
+    )
 
     # 构建搜索顺序：目标稀有度优先，然后按顺序尝试其他稀有度
     search_order = _build_rarity_search_order(rarity)
 
     for rarity_option in search_order:
-        templates = templates_by_rarity.get(rarity_option, [])
+        templates = loaded_templates_by_rarity.get(rarity_option, [])
         available = _filter_templates(templates, excluded_ids)
         if available:
             return rng.choice(available)
@@ -536,6 +570,8 @@ def reveal_candidate_rarity(manor: Manor) -> int:
     """
     candidates = manor.candidates.filter(rarity_revealed=False)
     count = candidates.update(rarity_revealed=True)
+    if count > 0:
+        _invalidate_recruitment_hall_cache(getattr(manor, "id", None))
     return count
 
 
@@ -576,6 +612,7 @@ def use_magnifying_glass_for_candidates(manor: Manor, item_id: int) -> int:
         return 0
 
     consume_inventory_item_locked(locked_item, 1)
+    _invalidate_recruitment_hall_cache(getattr(manor, "id", None))
     return int(count)
 
 
@@ -643,6 +680,8 @@ def _build_recruitment_candidates(
     pool_entries = list(pool.entries.select_related("template"))
     rng = random.Random(seed)
     candidates_to_create: List[RecruitmentCandidate] = []
+    templates_by_rarity = _get_recruitable_templates_by_rarity()
+    hermit_templates = _get_hermit_templates()
 
     resolved_draw_count = total_draw_count
     if resolved_draw_count is None:
@@ -653,7 +692,13 @@ def _build_recruitment_candidates(
     excluded_ids = get_excluded_template_ids(manor)
 
     for _ in range(resolved_draw_count):
-        template = choose_template_from_entries(pool_entries, rng=rng, excluded_ids=excluded_ids)
+        template = choose_template_from_entries(
+            pool_entries,
+            rng=rng,
+            excluded_ids=excluded_ids,
+            templates_by_rarity=templates_by_rarity,
+            hermit_templates=hermit_templates,
+        )
         template_to_use = template
         display_name = template.name
         # 黑色和灰色门客随机生成名字，但隐士除外（隐士保留原名）
@@ -678,6 +723,7 @@ def _build_recruitment_candidates(
 
     # 批量创建候选门客
     candidates = RecruitmentCandidate.objects.bulk_create(candidates_to_create)
+    _invalidate_recruitment_hall_cache(getattr(manor, "id", None))
     return candidates
 
 
@@ -739,6 +785,7 @@ def start_guest_recruitment(manor: Manor, pool: RecruitmentPool, seed: int | Non
         complete_at=timezone.now() + timedelta(seconds=max(0, int(duration_seconds))),
     )
     _schedule_guest_recruitment_completion(recruitment, duration_seconds)
+    _invalidate_recruitment_hall_cache(getattr(locked_manor, "id", None))
     return recruitment
 
 
@@ -775,6 +822,7 @@ def finalize_guest_recruitment(
             locked.finished_at = current_time
             locked.error_message = "招募卡池不存在"
             locked.save(update_fields=["status", "finished_at", "error_message"])
+            _invalidate_recruitment_hall_cache(getattr(locked, "manor_id", None))
             return False
         ManorModel.objects.select_for_update().filter(pk=locked.manor_id).exists()
 
@@ -792,6 +840,7 @@ def finalize_guest_recruitment(
             locked.finished_at = current_time
             locked.error_message = str(exc)[:255]
             locked.save(update_fields=["status", "finished_at", "error_message"])
+            _invalidate_recruitment_hall_cache(getattr(locked, "manor_id", None))
             return False
 
         locked.status = GuestRecruitment.Status.COMPLETED
@@ -802,6 +851,7 @@ def finalize_guest_recruitment(
         manor = locked.manor
         pool = locked.pool
         candidate_count = len(candidates)
+        _invalidate_recruitment_hall_cache(getattr(manor, "id", None))
 
     if send_notification and pool:
         from gameplay.models import Message
@@ -887,6 +937,7 @@ def finalize_candidate(candidate: RecruitmentCandidate) -> Guest:
         rarity=candidate.rarity,
     )
     candidate.delete()
+    _invalidate_recruitment_hall_cache(getattr(manor, "id", None))
     return guest
 
 
@@ -1012,6 +1063,7 @@ def bulk_finalize_candidates(
 
     # 批量删除候选
     RecruitmentCandidate.objects.filter(id__in=candidate_ids_to_delete).delete()
+    _invalidate_recruitment_hall_cache(getattr(manor, "id", None))
 
     return created_guests, failed
 
@@ -1049,6 +1101,7 @@ def convert_candidate_to_retainer(candidate: RecruitmentCandidate) -> None:
     manor.retainer_count += 1
     manor.save(update_fields=["retainer_count"])
     locked_candidate.delete()
+    _invalidate_recruitment_hall_cache(getattr(manor, "id", None))
 
 
 def allocate_attribute_points(guest: Guest, attribute: str, points: int) -> Guest:

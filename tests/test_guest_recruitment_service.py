@@ -11,6 +11,7 @@ from core.exceptions import GuestNotIdleError
 from gameplay.services.manor.core import ensure_manor
 from guests.models import Guest, GuestRarity, GuestStatus, GuestTemplate
 from guests.services import recruitment as recruitment_service
+from guests.utils.recruitment_utils import HERMIT_RARITY, RARITY_DISTRIBUTION, RARITY_WEIGHTS, TOTAL_WEIGHT
 
 # ============ get_excluded_template_ids tests ============
 
@@ -74,6 +75,16 @@ def test_non_repeatable_rarities_excludes_gray_and_black():
     """Test that gray and black are not in NON_REPEATABLE_RARITIES."""
     assert GuestRarity.GRAY not in recruitment_service.NON_REPEATABLE_RARITIES
     assert GuestRarity.BLACK not in recruitment_service.NON_REPEATABLE_RARITIES
+
+
+def test_recruitment_weights_raise_hermit_and_disable_red_for_testing():
+    weight_map = dict(RARITY_WEIGHTS)
+    assert weight_map[HERMIT_RARITY] == 6000
+    assert weight_map[GuestRarity.RED] == 0
+
+
+def test_recruitment_rarity_distribution_keeps_total_weight():
+    assert sum(weight for _, weight in RARITY_DISTRIBUTION) == TOTAL_WEIGHT
 
 
 # ============ _filter_templates tests ============

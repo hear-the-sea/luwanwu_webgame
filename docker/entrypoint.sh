@@ -55,6 +55,25 @@ if [[ "${DJANGO_RUN_MIGRATIONS:-0}" == "1" ]]; then
   python manage.py migrate --noinput
 fi
 
+if [[ "${DJANGO_SYNC_GUEST_TEMPLATES:-0}" == "1" && "${1:-}" != "celery" ]]; then
+  guest_templates_file="${DJANGO_GUEST_TEMPLATES_FILE:-data/guest_templates.yaml}"
+  load_args=(python manage.py load_guest_templates --file "$guest_templates_file")
+
+  if [[ -n "${DJANGO_GUEST_SKILLS_FILE:-}" ]]; then
+    load_args+=(--skills-file "$DJANGO_GUEST_SKILLS_FILE")
+  fi
+
+  if [[ -n "${DJANGO_GUEST_HEROES_DIR:-}" ]]; then
+    load_args+=(--heroes-dir "$DJANGO_GUEST_HEROES_DIR")
+  fi
+
+  if [[ "${DJANGO_GUEST_TEMPLATES_SKIP_IMAGES:-0}" == "1" ]]; then
+    load_args+=(--skip-images)
+  fi
+
+  "${load_args[@]}"
+fi
+
 if [[ "${DJANGO_COLLECTSTATIC:-0}" == "1" ]]; then
   python manage.py collectstatic --noinput
 fi

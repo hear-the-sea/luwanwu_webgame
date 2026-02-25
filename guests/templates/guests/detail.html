@@ -179,6 +179,47 @@
   font-weight: 700;
 }
 
+.guest-detail .stat-row strong .attr-pack {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  align-content: flex-start;
+  gap: 0.08rem;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.guest-detail .attr-icon {
+  width: 16px;
+  height: 16px;
+  display: inline-block;
+  vertical-align: middle;
+  margin: 0;
+  background-image: url("{% static 'images/attri/sprite.png' %}");
+  background-image: image-set(
+    url("{% static 'images/attri/sprite.webp' %}") type("image/webp"),
+    url("{% static 'images/attri/sprite.png' %}") type("image/png")
+  );
+  background-repeat: no-repeat;
+  background-size: 64px 16px;
+}
+
+.guest-detail .attr-icon.attr-crown {
+  background-position: 0 0;
+}
+
+.guest-detail .attr-icon.attr-sun {
+  background-position: -16px 0;
+}
+
+.guest-detail .attr-icon.attr-moon {
+  background-position: -32px 0;
+}
+
+.guest-detail .attr-icon.attr-star {
+  background-position: -48px 0;
+}
+
 .guest-detail .stat-row .muted-text {
   margin-left: 0.4rem;
 }

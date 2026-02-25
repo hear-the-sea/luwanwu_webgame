@@ -115,6 +115,7 @@ def generate_sync_battle_report(
             attacker_guest_bonuses=attacker_guest_bonuses or None,
             attacker_guest_skills=attacker_guest_skills,
             attacker_manor=None,
+            validate_attacker_troop_capacity=False,
         )
 
     return simulate_report(

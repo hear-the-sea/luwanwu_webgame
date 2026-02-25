@@ -107,6 +107,26 @@ STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "static", BASE_DIR / "data" / "images"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
+# Default storage backends.
+# In production (DEBUG=0), static assets can use manifest hashing to enable immutable caching.
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+}
+
+if (
+    not DEBUG
+    and env("DJANGO_STATIC_USE_MANIFEST", "1") == "1"
+    and not (("pytest" in sys.modules) or ("test" in sys.argv) or ("pytest" in os.path.basename(sys.argv[0] or "")))
+):
+    STORAGES["staticfiles"] = {
+        "BACKEND": "django.contrib.staticfiles.storage.ManifestStaticFilesStorage",
+    }
+
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 

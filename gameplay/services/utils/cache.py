@@ -40,6 +40,7 @@ class CacheKeys:
     # 门客模板相关
     GUEST_TEMPLATES_BY_RARITY = "guest_templates:by_rarity"
     HERMIT_TEMPLATES = "guest_templates:hermit"
+    RECRUITMENT_HALL_CONTEXT_PREFIX = "recruitment_hall:context"
 
     @staticmethod
     def player_rank(manor_id: int, prestige: int) -> str:
@@ -66,10 +67,20 @@ class CacheKeys:
         """首页建筑产出缓存键"""
         return f"{CacheKeys.HOME_HOURLY_RATES_PREFIX}:{manor_id}"
 
+    @staticmethod
+    def recruitment_hall_context(manor_id: int) -> str:
+        """聚贤庄页面上下文缓存键。"""
+        return f"{CacheKeys.RECRUITMENT_HALL_CONTEXT_PREFIX}:{manor_id}"
+
 
 def invalidate_home_stats_cache(manor_id: int) -> None:
     """清除首页统计类缓存。"""
     cache.delete(CacheKeys.home_hourly_rates(manor_id))
+
+
+def invalidate_recruitment_hall_cache(manor_id: int) -> None:
+    """清除聚贤庄页面上下文缓存。"""
+    cache.delete(CacheKeys.recruitment_hall_context(manor_id))
 
 
 def invalidate_manor_cache(manor_id: int) -> None:

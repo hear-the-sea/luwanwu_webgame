@@ -56,6 +56,7 @@ class BattleOptions:
     attacker_guest_bonuses: Dict[str, float] | None = None
     attacker_guest_skills: List[str] | None = None
     attacker_manor: Any | None = None
+    validate_attacker_troop_capacity: bool = True
 
 
 def _normalize_mapping(raw: Any) -> Dict[str, Any]:
@@ -319,6 +320,7 @@ def simulate_report(
     attacker_guest_bonuses: Dict[str, float] | None = None,
     attacker_guest_skills: List[str] | None = None,
     attacker_manor=None,
+    validate_attacker_troop_capacity: bool = True,
 ) -> BattleReport:
     """
     Top-level entry point for simulating a battle and producing reports/messages.
@@ -347,6 +349,7 @@ def simulate_report(
         attacker_guest_bonuses: 攻击方门客属性加成（可选）
         attacker_guest_skills: 攻击方门客临时技能覆盖（可选）
         attacker_manor: 攻击方科技来源庄园（可选，默认为 manor）
+        validate_attacker_troop_capacity: 是否校验攻击方带兵上限（默认开启）
 
     Returns:
         BattleReport: 战斗报告实例
@@ -397,6 +400,7 @@ def simulate_report(
         attacker_guest_bonuses=attacker_guest_bonuses,
         attacker_guest_skills=attacker_guest_skills,
         attacker_manor=attacker_manor,
+        validate_attacker_troop_capacity=validate_attacker_troop_capacity,
     )
 
     if use_lock:
@@ -416,7 +420,8 @@ def _prepare_battle_environment(
     _recover_guest_hp_batch(active_guests, now)
 
     normalized_loadout = normalize_troop_loadout(options.troop_loadout, default_if_empty=options.fill_default_troops)
-    validate_troop_capacity(active_guests, normalized_loadout)
+    if options.validate_attacker_troop_capacity:
+        validate_troop_capacity(active_guests, normalized_loadout)
     return normalized_loadout
 
 
