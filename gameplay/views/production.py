@@ -18,6 +18,7 @@ from django.views.generic import TemplateView
 
 from core.exceptions import GameError
 from core.utils import safe_positive_int, sanitize_error_message
+from core.utils.rate_limit import rate_limit_redirect
 from gameplay.constants import UIConstants
 from gameplay.services import ensure_manor, get_player_technology_level, refresh_manor_state
 
@@ -67,6 +68,7 @@ class StableView(LoginRequiredMixin, TemplateView):
 
 @login_required
 @require_POST
+@rate_limit_redirect("horse_production", limit=10, window_seconds=60)
 def start_horse_production_view(request: HttpRequest) -> HttpResponse:
     """开始马匹生产"""
     manor = ensure_manor(request.user)
@@ -143,6 +145,7 @@ class RanchView(LoginRequiredMixin, TemplateView):
 
 @login_required
 @require_POST
+@rate_limit_redirect("livestock_production", limit=10, window_seconds=60)
 def start_livestock_production_view(request: HttpRequest) -> HttpResponse:
     """开始家畜养殖"""
     manor = ensure_manor(request.user)
@@ -219,14 +222,15 @@ class SmithyView(LoginRequiredMixin, TemplateView):
 
 @login_required
 @require_POST
+@rate_limit_redirect("smelting_production", limit=10, window_seconds=60)
 def start_smelting_production_view(request: HttpRequest) -> HttpResponse:
-    """开始金属冶炼"""
+    """开始冶炼坊制作"""
     manor = ensure_manor(request.user)
     metal_key = (request.POST.get("metal_key") or "").strip()
     quantity = _parse_positive_quantity(request.POST.get("quantity"))
 
     if not metal_key:
-        messages.error(request, "请选择金属类型")
+        messages.error(request, "请选择物品类型")
         return redirect("gameplay:smithy")
     if quantity is None:
         messages.error(request, "无效的数量")
@@ -238,7 +242,7 @@ def start_smelting_production_view(request: HttpRequest) -> HttpResponse:
         production = start_smelting_production(manor, metal_key, quantity)
         quantity_text = f"x{production.quantity}" if production.quantity > 1 else ""
         messages.success(
-            request, f"{production.metal_name}{quantity_text} 开始冶炼，预计 {production.actual_duration} 秒后完成"
+            request, f"{production.metal_name}{quantity_text} 开始制作，预计 {production.actual_duration} 秒后完成"
         )
     except (GameError, ValueError) as exc:
         messages.error(request, sanitize_error_message(exc))
@@ -379,6 +383,7 @@ def _forge_redirect_url(category: str, mode: str) -> str:
 
 @login_required
 @require_POST
+@rate_limit_redirect("equipment_forging", limit=10, window_seconds=60)
 def start_equipment_forging_view(request: HttpRequest) -> HttpResponse:
     """开始装备锻造"""
     manor = ensure_manor(request.user)
@@ -421,6 +426,7 @@ def start_equipment_forging_view(request: HttpRequest) -> HttpResponse:
 
 @login_required
 @require_POST
+@rate_limit_redirect("equipment_decompose", limit=10, window_seconds=60)
 def decompose_equipment_view(request: HttpRequest) -> HttpResponse:
     """分解装备"""
     manor = ensure_manor(request.user)
@@ -470,6 +476,7 @@ def decompose_equipment_view(request: HttpRequest) -> HttpResponse:
 
 @login_required
 @require_POST
+@rate_limit_redirect("blueprint_synthesize", limit=10, window_seconds=60)
 def synthesize_blueprint_equipment_view(request: HttpRequest) -> HttpResponse:
     """按图纸合成装备"""
     manor = ensure_manor(request.user)

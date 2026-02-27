@@ -1,8 +1,14 @@
+import json
+
 from django import forms
 from django.contrib import admin
 from django.contrib.auth import get_user_model
+from django.db.models import Count, Q
+from django.utils import timezone
+from django.utils.html import format_html
 
 from common.constants.resources import ResourceType
+from core.admin_i18n import apply_common_field_labels
 
 from .models import (
     ArenaEntry,
@@ -12,6 +18,8 @@ from .models import (
     ArenaTournament,
     Building,
     BuildingType,
+    GlobalMailCampaign,
+    GlobalMailDelivery,
     InventoryItem,
     ItemTemplate,
     Manor,
@@ -26,8 +34,43 @@ from .models import (
     WorkTemplate,
 )
 from .services import create_message
+from .tasks.global_mail import enqueue_global_mail_backfill
 
 User = get_user_model()
+
+apply_common_field_labels(
+    Manor,
+    BuildingType,
+    Building,
+    ResourceEvent,
+    MissionTemplate,
+    MissionRun,
+    ItemTemplate,
+    InventoryItem,
+    GlobalMailCampaign,
+    GlobalMailDelivery,
+    Message,
+    WorkTemplate,
+    WorkAssignment,
+    ArenaTournament,
+    ArenaEntry,
+    ArenaEntryGuest,
+    ArenaMatch,
+    ArenaExchangeRecord,
+    ScoutRecord,
+    ScoutCooldown,
+    RaidRun,
+    labels={
+        "region": "地区",
+        "prestige": "声望",
+        "grain": "粮食",
+        "silver": "银两",
+        "arena_coins": "角斗币",
+        "base_rate_per_hour": "基础时产",
+        "rate_growth": "成长系数",
+        "deliveries_count": "投递数量",
+    },
+)
 
 
 @admin.register(Manor)
@@ -242,6 +285,237 @@ class SendMessageForm(forms.ModelForm):
     class Meta:
         model = Message
         fields = ["kind", "title", "body"]
+
+
+class GlobalMailCampaignForm(forms.ModelForm):
+    attachment_resources = forms.JSONField(
+        required=False,
+        initial={},
+        label="附件资源",
+        help_text='格式：{"grain": 100, "silver": 200}',
+        widget=forms.Textarea(attrs={"rows": 3, "cols": 60}),
+    )
+    attachment_items = forms.JSONField(
+        required=False,
+        initial={},
+        label="附件道具",
+        help_text='格式：{"item_key": 数量}，例如：{"peace_shield_small": 1}',
+        widget=forms.Textarea(attrs={"rows": 3, "cols": 60}),
+    )
+    send_to_existing_now = forms.BooleanField(
+        required=False,
+        label="保存后补发给现有玩家",
+        help_text="仅补发当前生效活动，已收到过的玩家不会重复收到。",
+    )
+    backfill_batch_size = forms.IntegerField(
+        required=False,
+        min_value=50,
+        max_value=5000,
+        initial=500,
+        label="补发批大小",
+        help_text="仅在勾选“保存后补发给现有玩家”时生效，推荐 200~1000。",
+    )
+
+    class Meta:
+        model = GlobalMailCampaign
+        fields = ["key", "kind", "title", "body", "is_active", "start_at", "end_at"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        attachments = self.instance.attachments if getattr(self.instance, "pk", None) else {}
+        if isinstance(attachments, dict):
+            self.fields["attachment_resources"].initial = attachments.get("resources") or {}
+            self.fields["attachment_items"].initial = attachments.get("items") or {}
+
+    @staticmethod
+    def _normalize_attachment_bucket(value, field_name: str) -> dict[str, int]:
+        bucket = value or {}
+        if not isinstance(bucket, dict):
+            raise forms.ValidationError({field_name: f"{field_name} 必须为对象"})
+
+        normalized: dict[str, int] = {}
+        for raw_key, raw_amount in bucket.items():
+            key = str(raw_key).strip()
+            if not key:
+                raise forms.ValidationError({field_name: f"{field_name} 的 key 必须为非空字符串"})
+            try:
+                amount = int(raw_amount)
+            except (TypeError, ValueError) as exc:
+                raise forms.ValidationError({field_name: f"{field_name}.{key} 必须为整数"}) from exc
+            if amount <= 0:
+                raise forms.ValidationError({field_name: f"{field_name}.{key} 必须大于 0"})
+            normalized[key] = amount
+        return normalized
+
+    def clean(self):
+        cleaned_data = super().clean()
+        resources = self._normalize_attachment_bucket(cleaned_data.get("attachment_resources"), "attachment_resources")
+        items = self._normalize_attachment_bucket(cleaned_data.get("attachment_items"), "attachment_items")
+
+        attachments = {}
+        if resources:
+            attachments["resources"] = resources
+        if items:
+            attachments["items"] = items
+        cleaned_data["attachments"] = attachments
+        return cleaned_data
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        instance.attachments = self.cleaned_data.get("attachments", {})
+        if commit:
+            instance.save()
+        return instance
+
+
+class CampaignRuntimeStatusFilter(admin.SimpleListFilter):
+    title = "运行状态"
+    parameter_name = "runtime_status"
+
+    def lookups(self, request, model_admin):
+        return (
+            ("active", "进行中"),
+            ("pending", "未开始"),
+            ("ended", "已结束"),
+            ("inactive", "已停用"),
+        )
+
+    def queryset(self, request, queryset):
+        now = timezone.now()
+        value = self.value()
+        if value == "inactive":
+            return queryset.filter(is_active=False)
+        if value == "pending":
+            return queryset.filter(is_active=True, start_at__isnull=False, start_at__gt=now)
+        if value == "active":
+            return (
+                queryset.filter(is_active=True)
+                .filter(Q(start_at__isnull=True) | Q(start_at__lte=now))
+                .filter(Q(end_at__isnull=True) | Q(end_at__gte=now))
+            )
+        if value == "ended":
+            return queryset.filter(is_active=True, end_at__isnull=False, end_at__lt=now)
+        return queryset
+
+
+@admin.register(GlobalMailCampaign)
+class GlobalMailCampaignAdmin(admin.ModelAdmin):
+    form = GlobalMailCampaignForm
+    list_display = (
+        "key",
+        "title",
+        "kind",
+        "runtime_status_badge",
+        "is_active",
+        "start_at",
+        "end_at",
+        "attachments_summary",
+        "deliveries_count",
+        "created_at",
+    )
+    list_filter = ("kind", "is_active", CampaignRuntimeStatusFilter)
+    search_fields = ("key", "title", "body")
+    readonly_fields = ("runtime_status_badge", "attachments_preview", "deliveries_count", "created_at", "updated_at")
+    date_hierarchy = "created_at"
+    save_on_top = True
+    actions = ["backfill_selected_campaigns", "activate_selected_campaigns", "deactivate_selected_campaigns"]
+    fieldsets = (
+        ("基础信息", {"fields": ("key", "kind", "title", "body", "runtime_status_badge")}),
+        ("生效时间", {"fields": ("is_active", "start_at", "end_at")}),
+        ("附件配置", {"fields": ("attachment_resources", "attachment_items", "attachments_preview")}),
+        ("补发操作", {"fields": ("send_to_existing_now", "backfill_batch_size")}),
+        ("统计", {"fields": ("deliveries_count", "created_at", "updated_at"), "classes": ("collapse",)}),
+    )
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).annotate(_deliveries_count=Count("deliveries"))
+
+    def deliveries_count(self, obj):
+        if obj is None or not getattr(obj, "pk", None):
+            return 0
+        return int(getattr(obj, "_deliveries_count", obj.deliveries.count()))
+
+    deliveries_count.short_description = "已投递"
+    deliveries_count.admin_order_field = "_deliveries_count"
+
+    def runtime_status_badge(self, obj):
+        if obj is None or not getattr(obj, "pk", None):
+            return format_html('<span style="color:#6b7280;">{}</span>', "未保存")
+        now = timezone.now()
+        if not obj.is_active:
+            return format_html('<span style="color:#6b7280;">{}</span>', "已停用")
+        if obj.start_at and obj.start_at > now:
+            return format_html('<span style="color:#d97706;">{}</span>', "未开始")
+        if obj.end_at and obj.end_at < now:
+            return format_html('<span style="color:#2563eb;">{}</span>', "已结束")
+        return format_html('<span style="color:#059669;font-weight:600;">{}</span>', "进行中")
+
+    runtime_status_badge.short_description = "运行状态"
+
+    def attachments_summary(self, obj):
+        attachments = obj.attachments if isinstance(obj.attachments, dict) else {}
+        resources = attachments.get("resources") if isinstance(attachments.get("resources"), dict) else {}
+        items = attachments.get("items") if isinstance(attachments.get("items"), dict) else {}
+        resource_total = sum(int(v) for v in resources.values()) if resources else 0
+        item_total = sum(int(v) for v in items.values()) if items else 0
+        if not resources and not items:
+            return "无附件"
+        return f"资源 {len(resources)} 类/{resource_total}，道具 {len(items)} 类/{item_total}"
+
+    attachments_summary.short_description = "附件摘要"
+
+    def attachments_preview(self, obj):
+        attachments = obj.attachments if obj and isinstance(obj.attachments, dict) else {}
+        pretty = json.dumps(attachments or {}, ensure_ascii=False, indent=2)
+        return format_html("<pre style='max-width:760px;white-space:pre-wrap;'>{}</pre>", pretty)
+
+    attachments_preview.short_description = "附件预览"
+
+    @admin.action(description="批量启用活动")
+    def activate_selected_campaigns(self, request, queryset):
+        updated = queryset.update(is_active=True)
+        self.message_user(request, f"已启用 {updated} 个活动")
+
+    @admin.action(description="批量停用活动")
+    def deactivate_selected_campaigns(self, request, queryset):
+        updated = queryset.update(is_active=False)
+        self.message_user(request, f"已停用 {updated} 个活动")
+
+    @admin.action(description="补发给当前所有玩家（幂等）")
+    def backfill_selected_campaigns(self, request, queryset):
+        queued = 0
+        for campaign in queryset:
+            async_result = enqueue_global_mail_backfill(campaign.id)
+            queued += 1
+            self.message_user(request, f"活动 {campaign.key} 已提交补发任务（task_id={async_result.id}）")
+        if queued > 1:
+            self.message_user(request, f"已提交 {queued} 个补发任务")
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        if form.cleaned_data.get("send_to_existing_now"):
+            batch_size = int(form.cleaned_data.get("backfill_batch_size") or 500)
+            async_result = enqueue_global_mail_backfill(obj.id, batch_size=batch_size)
+            self.message_user(
+                request,
+                f"已提交补发任务（task_id={async_result.id}，batch_size={batch_size}）",
+            )
+
+
+@admin.register(GlobalMailDelivery)
+class GlobalMailDeliveryAdmin(admin.ModelAdmin):
+    list_display = ("campaign", "manor", "message", "created_at")
+    list_filter = ("campaign", ("created_at", admin.DateFieldListFilter))
+    search_fields = ("campaign__key", "campaign__title", "manor__user__username", "manor__name", "message__title")
+    readonly_fields = ("created_at",)
+    autocomplete_fields = ("campaign", "manor", "message")
+    list_select_related = ("campaign", "manor__user", "message")
+    ordering = ("-created_at",)
+    date_hierarchy = "created_at"
+    list_per_page = 50
+
+    def has_add_permission(self, request):
+        return False
 
 
 @admin.register(Message)

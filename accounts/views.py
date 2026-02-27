@@ -14,6 +14,8 @@ from django.views.generic import CreateView, TemplateView
 
 from core.config import SECURITY
 from core.utils.network import get_client_ip
+from gameplay.models import Manor
+from gameplay.services.manor.core import ManorNameConflictError
 
 from .forms import LoginForm, SignUpForm
 from .models import User
@@ -211,7 +213,7 @@ class LoginView(DjangoLoginView):
         # 登录成功，清除失败记录（同时清除 IP 和用户名的记录）
         username = form.cleaned_data.get("username", "")
         _clear_login_attempts(self.request, username)
-        messages.success(self.request, "欢迎回来，指挥官。")
+        messages.success(self.request, "欢迎回来，领主大人！")
         response = super().form_valid(form)
         # 仅保留当前登录的 session，实现顶号
         self.request.session.save()
@@ -238,21 +240,28 @@ class RegisterView(CreateView):
     success_url = reverse_lazy("home")
 
     def form_valid(self, form):
-        # 在保存用户前，将地区信息附加到用户对象
+        # 在保存用户前，将地区与庄园名附加到用户对象
         user = form.save(commit=False)
         user._signup_region = form.cleaned_data.get("region", "overseas")
+        user._signup_manor_name = (form.cleaned_data.get("manor_name") or "").strip()
         try:
             # 在可能存在外层事务（如测试事务）时，使用 savepoint 隔离唯一约束冲突
             # 避免 IntegrityError 污染当前连接，导致后续模板渲染触发 TransactionManagementError。
             with transaction.atomic():
                 user.save()
+        except ManorNameConflictError:
+            form.add_error("manor_name", "该庄园名称已被使用")
+            return self.form_invalid(form)
         except IntegrityError:
             normalized_email = (form.cleaned_data.get("email") or "").strip().lower()
             username = (form.cleaned_data.get("username") or "").strip()
+            manor_name = (form.cleaned_data.get("manor_name") or "").strip()
             if normalized_email and User.objects.filter(email__iexact=normalized_email).exists():
                 form.add_error("email", "该邮箱已注册")
             elif username and User.objects.filter(username=username).exists():
                 form.add_error("username", "该用户名已存在")
+            elif manor_name and Manor.objects.filter(name__iexact=manor_name).exists():
+                form.add_error("manor_name", "该庄园名称已被使用")
             else:
                 form.add_error(None, "注册失败，请稍后重试")
             return self.form_invalid(form)

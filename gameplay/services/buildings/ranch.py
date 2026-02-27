@@ -6,17 +6,21 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 from typing import Any, Dict, List
 
 from django.db import transaction
 from django.utils import timezone
 
+from common.utils.celery import safe_apply_async
 from core.utils.time_scale import scale_duration
 
 from ...constants import BuildingKeys
 from ...models import LivestockProduction, Manor
 from ..utils.notifications import notify_user
+
+logger = logging.getLogger(__name__)
 
 # 家畜配置
 # 养殖术等级需求：1级鸡，3级鸭，5级鹅，7级猪，9级牛
@@ -252,11 +256,8 @@ def _schedule_livestock_completion(production: LivestockProduction, eta_seconds:
         production: LivestockProduction实例
         eta_seconds: 预计完成时间（秒）
     """
-    import logging
-
     from django.db import transaction as db_transaction
 
-    logger = logging.getLogger(__name__)
     countdown = max(0, int(eta_seconds))
 
     try:
@@ -266,7 +267,13 @@ def _schedule_livestock_completion(production: LivestockProduction, eta_seconds:
         return
 
     db_transaction.on_commit(
-        lambda: complete_livestock_production.apply_async(args=[production.id], countdown=countdown)
+        lambda: safe_apply_async(
+            complete_livestock_production,
+            args=[production.id],
+            countdown=countdown,
+            logger=logger,
+            log_message="complete_livestock_production dispatch failed",
+        )
     )
 
 
@@ -304,23 +311,32 @@ def finalize_livestock_production(production: LivestockProduction, send_notifica
         from ..utils.messages import create_message
 
         quantity_text = f"x{production.quantity}" if production.quantity > 1 else ""
-        create_message(
-            manor=production.manor,
-            kind=Message.Kind.SYSTEM,
-            title=f"{production.livestock_name}{quantity_text}养殖完成",
-            body=f"您的{production.livestock_name}{quantity_text}已养殖完成，请到仓库查收。",
-        )
+        try:
+            create_message(
+                manor=production.manor,
+                kind=Message.Kind.SYSTEM,
+                title=f"{production.livestock_name}{quantity_text}养殖完成",
+                body=f"您的{production.livestock_name}{quantity_text}已养殖完成，请到仓库查收。",
+            )
 
-        notify_user(
-            production.manor.user_id,
-            {
-                "kind": "system",
-                "title": f"{production.livestock_name}{quantity_text}养殖完成",
-                "livestock_key": production.livestock_key,
-                "quantity": production.quantity,
-            },
-            log_context="livestock production notification",
-        )
+            notify_user(
+                production.manor.user_id,
+                {
+                    "kind": "system",
+                    "title": f"{production.livestock_name}{quantity_text}养殖完成",
+                    "livestock_key": production.livestock_key,
+                    "quantity": production.quantity,
+                },
+                log_context="livestock production notification",
+            )
+        except Exception as exc:
+            logger.warning(
+                "livestock production notification failed: production_id=%s manor_id=%s error=%s",
+                production.id,
+                production.manor_id,
+                exc,
+                exc_info=True,
+            )
 
     return True
 

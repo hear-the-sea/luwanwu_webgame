@@ -6,7 +6,7 @@ import pytest
 from django.db import connection
 from django.utils import timezone
 
-from core.exceptions import WorkLimitExceededError, WorkNotInProgressError, WorkRewardClaimedError
+from core.exceptions import WorkError, WorkLimitExceededError, WorkNotInProgressError, WorkRewardClaimedError
 from gameplay.models import WorkAssignment, WorkTemplate
 from gameplay.services.manor.core import ensure_manor
 from gameplay.services.work import assign_guest_to_work, claim_work_reward, recall_guest_from_work
@@ -98,6 +98,37 @@ def test_recall_guest_from_work_rechecks_locked_assignment_state(django_user_mod
     assert guest.status == GuestStatus.IDLE
 
 
+@pytest.mark.django_db
+def test_assign_guest_to_work_rejects_when_same_work_template_is_busy(django_user_model):
+    user = django_user_model.objects.create_user(username="work_same_template_user", password="pass123")
+    manor = ensure_manor(user)
+
+    guest_template = GuestTemplate.objects.create(
+        key=f"work_same_tpl_{user.id}",
+        name="同工位测试模板",
+        archetype=GuestArchetype.CIVIL,
+        rarity=GuestRarity.GRAY,
+    )
+    guest1 = Guest.objects.create(manor=manor, template=guest_template, status=GuestStatus.IDLE)
+    guest2 = Guest.objects.create(manor=manor, template=guest_template, status=GuestStatus.IDLE)
+    work_template = WorkTemplate.objects.create(
+        key=f"work_same_template_{user.id}",
+        name="同工位测试工作",
+        reward_silver=80,
+        work_duration=60,
+        required_level=1,
+        required_force=0,
+        required_intellect=0,
+    )
+
+    assignment = assign_guest_to_work(guest1, work_template)
+    assert assignment.status == WorkAssignment.Status.WORKING
+
+    with pytest.raises(WorkError, match="当前已有门客在打工"):
+        assign_guest_to_work(guest2, work_template)
+
+
+@pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
 def test_assign_guest_to_work_concurrent_requests_respect_limit_inside_lock(monkeypatch, django_user_model):
     if connection.vendor == "sqlite":
@@ -114,9 +145,18 @@ def test_assign_guest_to_work_concurrent_requests_respect_limit_inside_lock(monk
     )
     guest1 = Guest.objects.create(manor=manor, template=guest_template, status=GuestStatus.IDLE)
     guest2 = Guest.objects.create(manor=manor, template=guest_template, status=GuestStatus.IDLE)
-    work_template = WorkTemplate.objects.create(
+    work_template_1 = WorkTemplate.objects.create(
         key=f"work_concurrent_work_{user.id}",
-        name="并发打工工作",
+        name="并发打工工作A",
+        reward_silver=50,
+        work_duration=60,
+        required_level=1,
+        required_force=0,
+        required_intellect=0,
+    )
+    work_template_2 = WorkTemplate.objects.create(
+        key=f"work_concurrent_work_b_{user.id}",
+        name="并发打工工作B",
         reward_silver=50,
         work_duration=60,
         required_level=1,
@@ -130,17 +170,20 @@ def test_assign_guest_to_work_concurrent_requests_respect_limit_inside_lock(monk
     results: list[int] = []
     errors: list[Exception] = []
 
-    def _worker(guest_id: int):
+    def _worker(guest_id: int, work_template_id: int):
         try:
             local_guest = Guest.objects.get(pk=guest_id)
-            local_work_template = WorkTemplate.objects.get(pk=work_template.pk)
+            local_work_template = WorkTemplate.objects.get(pk=work_template_id)
             barrier.wait(timeout=5)
             assignment = assign_guest_to_work(local_guest, local_work_template)
             results.append(assignment.pk)
         except Exception as exc:  # pragma: no cover - validated by assertions below
             errors.append(exc)
 
-    threads = [threading.Thread(target=_worker, args=(guest1.pk,)), threading.Thread(target=_worker, args=(guest2.pk,))]
+    threads = [
+        threading.Thread(target=_worker, args=(guest1.pk, work_template_1.pk)),
+        threading.Thread(target=_worker, args=(guest2.pk, work_template_2.pk)),
+    ]
     for thread in threads:
         thread.start()
     for thread in threads:

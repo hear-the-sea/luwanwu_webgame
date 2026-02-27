@@ -88,28 +88,29 @@ def _map_action_lock_key(action: str, manor_id: int, scope: str) -> str:
     return f"map:view_lock:{action}:{manor_id}:{scope}"
 
 
-def _acquire_map_action_lock(action: str, manor_id: int, scope: str) -> tuple[bool, str]:
+def _acquire_map_action_lock(action: str, manor_id: int, scope: str) -> tuple[bool, str, str | None]:
     key = _map_action_lock_key(action, manor_id, scope)
-    acquired, from_cache = acquire_best_effort_lock(
+    acquired, from_cache, lock_token = acquire_best_effort_lock(
         key,
         timeout_seconds=MAP_ACTION_LOCK_SECONDS,
         logger=logger,
         log_context="map action lock",
     )
     if not acquired:
-        return False, ""
+        return False, "", None
     if from_cache:
-        return True, key
-    return True, f"{_LOCAL_LOCK_PREFIX}{key}"
+        return True, key, lock_token
+    return True, f"{_LOCAL_LOCK_PREFIX}{key}", lock_token
 
 
-def _release_map_action_lock(lock_key: str) -> None:
+def _release_map_action_lock(lock_key: str, lock_token: str | None) -> None:
     if not lock_key:
         return
     if lock_key.startswith(_LOCAL_LOCK_PREFIX):
         release_best_effort_lock(
             lock_key[len(_LOCAL_LOCK_PREFIX) :],
             from_cache=False,
+            lock_token=lock_token,
             logger=logger,
             log_context="map action lock",
         )
@@ -117,6 +118,7 @@ def _release_map_action_lock(lock_key: str) -> None:
     release_best_effort_lock(
         lock_key,
         from_cache=True,
+        lock_token=lock_token,
         logger=logger,
         log_context="map action lock",
     )
@@ -219,7 +221,7 @@ def start_scout_api(request: HttpRequest) -> JsonResponse:
     if target_manor is None:
         return json_error("目标庄园不存在", status=404)
 
-    lock_ok, lock_key = _acquire_map_action_lock("start_scout", int(manor.id), str(target_manor.id))
+    lock_ok, lock_key, lock_token = _acquire_map_action_lock("start_scout", int(manor.id), str(target_manor.id))
     if not lock_ok:
         return json_error("请求处理中，请稍候重试", status=409)
 
@@ -243,7 +245,7 @@ def start_scout_api(request: HttpRequest) -> JsonResponse:
             )
             return json_error(sanitize_error_message(exc), status=500)
     finally:
-        _release_map_action_lock(lock_key)
+        _release_map_action_lock(lock_key, lock_token)
 
 
 @login_required
@@ -267,7 +269,7 @@ def start_raid_api(request: HttpRequest) -> JsonResponse:
     if not guest_ids:
         return json_error("请选择出征门客")
 
-    lock_ok, lock_key = _acquire_map_action_lock("start_raid", int(manor.id), str(target_manor.id))
+    lock_ok, lock_key, lock_token = _acquire_map_action_lock("start_raid", int(manor.id), str(target_manor.id))
     if not lock_ok:
         return json_error("请求处理中，请稍候重试", status=409)
 
@@ -290,7 +292,7 @@ def start_raid_api(request: HttpRequest) -> JsonResponse:
             )
             return json_error(sanitize_error_message(exc), status=500)
     finally:
-        _release_map_action_lock(lock_key)
+        _release_map_action_lock(lock_key, lock_token)
 
 
 @login_required
@@ -305,7 +307,7 @@ def retreat_raid_api(request: HttpRequest, raid_id: int) -> JsonResponse:
     except RaidRun.DoesNotExist:
         return json_error("出征记录不存在", status=404)
 
-    lock_ok, lock_key = _acquire_map_action_lock("retreat_raid", int(manor.id), str(raid_id))
+    lock_ok, lock_key, lock_token = _acquire_map_action_lock("retreat_raid", int(manor.id), str(raid_id))
     if not lock_ok:
         return json_error("请求处理中，请稍候重试", status=409)
 
@@ -324,7 +326,7 @@ def retreat_raid_api(request: HttpRequest, raid_id: int) -> JsonResponse:
             )
             return json_error(sanitize_error_message(exc), status=500)
     finally:
-        _release_map_action_lock(lock_key)
+        _release_map_action_lock(lock_key, lock_token)
 
 
 @login_required

@@ -1,65 +1,13 @@
 heroes:
-  green:
-  - key: hist_sljnbc_0151
-    name: 钟繇
-    default_gender: male
-    archetype: civil
-    flavor: （151年—230年）楷书鼻祖，书法宗师。颍川长社人，出身名门。他早年追随曹操，镇守关中多年，安抚民众、稳定边防，政绩卓著。曹魏建国后官至太傅，是开国元勋。然而他更以书法名世，小楷书法独步当时，开创楷书先河。后世将他与王羲之并称"钟王"，尊为书法史上的双子星座。他的楷书端庄典雅，笔法精妙，影响深远。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 8
-      intellect: 64
-      defense: 18
-      agility: 10
-  - key: hist_sljnbc_0152
-    name: 满宠
-    default_gender: male
-    archetype: military
-    flavor: （？—242年5月）合肥守护者，抗吴名将。山阳昌邑人，早年为郡吏，以执法严明著称。他追随曹操多年，平定诸多叛乱。曹魏建国后镇守合肥，统领扬州军事三十余年。孙权亲率十万大军来犯，他临危不惧，以数千守军坚守新城，击退来敌，创下以少胜多的战绩。他善于修筑防御工事，所建新城坚如磐石，令东吴望而生畏。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 34
-      intellect: 12
-      defense: 40
-      agility: 14
-  - key: hist_sljnbc_0153
-    name: 文聘
-    default_gender: male
-    archetype: military
-    flavor: （？—？）镇守江夏，忠诚可靠。南阳宛县人，原为刘表麾下大将，深受器重。刘表死后刘琮降曹，文聘因主投降而惭愧，独自留守不去。曹操亲自召见，问其不来之由，他泣曰"不能全荆州，愧见明公"。曹操感其忠义，令其镇守江夏。他在江夏数十年，多次击退东吴孙权、关羽的进犯。有一次孙权亲率大军来攻，他镇定自若，以火攻破敌，孙权望城叹息而退。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 40
-      intellect: 15
-      defense: 23
-      agility: 22
-  - key: hist_sljnbc_0154
-    name: 曹彰
-    default_gender: male
-    archetype: military
-    flavor: （189年—223年）黄须儿，任城威王。沛国谯县人，曹操第三子，因黄色须发被曹操戏称"黄须儿"。他自幼好武不好文，善骑射击剑，膂力过人，能与猛兽搏斗。曹操曾问诸子志向，他朗声答曰"好为将，愿效卫青、霍去病之功"。曹操北征乌桓时他为先锋，亲率精骑深入敌境，大破乌桓叛军，斩首甚众，威震塞北。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 44
-      intellect: 8
-      defense: 18
-      agility: 30
+  blue:
   - key: hist_sljnbc_0155
     name: 曹植
     default_gender: male
     archetype: civil
     flavor: （192年—232年12月27日）才高八斗，七步成诗。沛国谯县人，曹操第四子。他天资聪颖，十岁便能诵诗书，下笔成章。曹操曾有意立其为嗣，然他恃才放旷、任性使酒，在与曹丕的夺嫡之争中落败。曹丕即位后对其百般猜忌，令其七步成诗否则处死，他应声吟出"煮豆燃豆萁，豆在釜中泣。本是同根生，相煎何太急"，令曹丕惭愧不已。
     growth_range:
-    - 3
-    - 6
+    - 5
+    - 9
     attribute_weights:
       force: 8
       intellect: 64
@@ -71,21 +19,60 @@ heroes:
     archetype: civil
     flavor: （187年—226年6月29日）魏文帝，篡汉开魏。沛国谯县人，曹操次子。他博学多才，善诗文骑射，在与曹植的夺嫡之争中凭借权谋胜出。曹操死后他继承魏王之位，旋即逼迫汉献帝禅让，建立曹魏政权，结束了汉朝四百年统治。在位期间他推行九品中正制，三次伐吴皆无功而返。他著《典论·论文》，开创中国文学批评之先河。
     growth_range:
-    - 3
-    - 7
+    - 5
+    - 9
     attribute_weights:
       force: 8
       intellect: 64
       defense: 18
       agility: 10
+  - key: hist_sljnbc_0151
+    name: 钟繇
+    default_gender: male
+    archetype: civil
+    flavor: （151年—230年）楷书鼻祖，书法宗师。颍川长社人，出身名门。他早年追随曹操，镇守关中多年，安抚民众、稳定边防，政绩卓著。曹魏建国后官至太傅，是开国元勋。然而他更以书法名世，小楷书法独步当时，开创楷书先河。后世将他与王羲之并称"钟王"，尊为书法史上的双子星座。他的楷书端庄典雅，笔法精妙，影响深远。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 64
+      defense: 18
+      agility: 10
+  - key: hist_sljnbc_0152
+    name: 满宠
+    default_gender: male
+    archetype: military
+    flavor: （？—242年5月）合肥守护者，抗吴名将。山阳昌邑人，早年为郡吏，以执法严明著称。他追随曹操多年，平定诸多叛乱。曹魏建国后镇守合肥，统领扬州军事三十余年。孙权亲率十万大军来犯，他临危不惧，以数千守军坚守新城，击退来敌，创下以少胜多的战绩。他善于修筑防御工事，所建新城坚如磐石，令东吴望而生畏。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 34
+      intellect: 12
+      defense: 40
+      agility: 14
+  - key: hist_sljnbc_0154
+    name: 曹彰
+    default_gender: male
+    archetype: military
+    flavor: （189年—223年）黄须儿，任城威王。沛国谯县人，曹操第三子，因黄色须发被曹操戏称"黄须儿"。他自幼好武不好文，善骑射击剑，膂力过人，能与猛兽搏斗。曹操曾问诸子志向，他朗声答曰"好为将，愿效卫青、霍去病之功"。曹操北征乌桓时他为先锋，亲率精骑深入敌境，大破乌桓叛军，斩首甚众，威震塞北。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 44
+      intellect: 8
+      defense: 18
+      agility: 30
   - key: hist_sljnbc_0157
     name: 曹叡
     default_gender: male
     archetype: civil
     flavor: （204年—239年1月22日）魏明帝，守成之主。曹丕长子，母为甄姬。他沉毅果断，在位期间多次击退蜀汉诸葛亮、东吴孙权的进犯，识人善任，曹真、司马懿皆受其重用。他亲自主持军国大事，对外战争胜多败少，维持了曹魏的强盛国势。然他晚年大兴土木，修建洛阳宫殿，劳民伤财。临终托孤于曹爽、司马懿二人，本欲令其互相制衡，却因曹爽无能。
     growth_range:
-    - 3
     - 6
+    - 9
     attribute_weights:
       force: 20
       intellect: 40
@@ -97,8 +84,8 @@ heroes:
     archetype: military
     flavor: （208年—255年3月23日）司马懿长子，权倾朝野。河内温县人，少有威望。其父司马懿发动高平陵之变时，他统领三千死士奇袭曹爽，事成后掌控朝廷禁军。司马懿死后他继承父业，废黜魏帝曹芳另立曹髦，权倾朝野。毌丘俭、文钦起兵勤王时，他亲自领兵平叛，途中旧创发作，眼球迸出仍坚持指挥，最终击溃叛军。
     growth_range:
-    - 3
     - 6
+    - 9
     attribute_weights:
       force: 40
       intellect: 15
@@ -110,8 +97,74 @@ heroes:
     archetype: military
     flavor: （211年—265年9月6日）曹魏权臣，司马懿次子。河内温县人，继承兄长司马师之权后主导曹魏朝政。他平定诸葛诞叛乱，派钟会、邓艾灭亡蜀汉，功业震主。魏帝曹髦愤其专权，亲率侍卫讨伐，于阊阖门前被司马昭手下成济弑杀。"司马昭之心路人皆知"的典故由此而来。他被封晋王，加九锡，受禅让之位已在眼前，却在称帝前夕病逝。
     growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 40
+      intellect: 15
+      defense: 23
+      agility: 22
+  - key: hist_sljnbc_0161
+    name: 蔡琰
+    default_gender: female
+    archetype: civil
+    flavor: （约177年—？）文姬归汉，才女传世。陈留圉县人，蔡邕之女。她自幼饱读诗书，精通音律，嫁河东卫仲道后不久便守寡。东汉末年天下大乱，她被南匈奴掳走塞外，嫁与左贤王为妻，生育二子，流落胡地十二年。曹操念及与蔡邕旧交，遣使以重金赎回。她忍痛别子归汉，嫁与董祀。《悲愤诗》《胡笳十八拍》道尽颠沛流离之苦、骨肉分离之痛，字字泣血。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 64
+      defense: 18
+      agility: 10
+  - key: hist_sljnbc_0167
+    name: 甄姬
+    default_gender: female
+    archetype: civil
+    flavor: （183年—221年）洛神原型，乱世红颜。中山无极人，原为袁绍次子袁熙之妻。曹操攻破邺城时，曹丕闯入袁府见其姿貌绝伦，遂纳为夫人。她生育曹叡，贤德有才，深得曹操喜爱。曹丕称帝后册封她为皇后，然郭女王得宠，甄姬日渐失宠。她忧愤作《塘上行》抒发哀怨，触怒曹丕被赐死，死后"以发覆面、以糠塞口"下葬。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 20
+      intellect: 40
+      defense: 20
+      agility: 20
+  - key: hist_sljnbc_0168
+    name: 孔融
+    default_gender: male
+    archetype: civil
+    flavor: （153年—208年）建安七子之首，名门之后。鲁国人，孔子二十世孙。他少时便以才思敏捷闻名，"小时了了，大未必佳"的典故源于他的机智应答。他任北海相时开仓赈济，兴办学校，深得民心。后归曹操帐下为官，名列建安七子之首，文采风流冠绝一时。然他性情刚直，屡犯曹操之忌，多次当面讥讽。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 20
+      intellect: 40
+      defense: 20
+      agility: 20
+  - key: hist_sljnbc_0188
+    name: 左慈
+    default_gender: male
+    archetype: civil
+    flavor: （156年—289年）东汉末方士，乌角先生。庐江人，精通道术，据说能够变化形貌、分身隐遁。《三国志》裴注及《后汉书·方术传》皆有记载。传说他曾戏弄曹操，变化莫测令曹操大怒而不能捕获。他与华佗、于吉并称汉末三大方士。其事迹多带神异色彩，真假难辨，但反映了当时社会对神仙方术的信仰。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 20
+      intellect: 40
+      defense: 20
+      agility: 20
+  green:
+  - key: hist_sljnbc_0153
+    name: 文聘
+    default_gender: male
+    archetype: military
+    flavor: （？—？）镇守江夏，忠诚可靠。南阳宛县人，原为刘表麾下大将，深受器重。刘表死后刘琮降曹，文聘因主投降而惭愧，独自留守不去。曹操亲自召见，问其不来之由，他泣曰"不能全荆州，愧见明公"。曹操感其忠义，令其镇守江夏。他在江夏数十年，多次击退东吴孙权、关羽的进犯。有一次孙权亲率大军来攻，他镇定自若，以火攻破敌，孙权望城叹息而退。
+    growth_range:
     - 3
-    - 7
+    - 6
     attribute_weights:
       force: 40
       intellect: 15
@@ -130,19 +183,6 @@ heroes:
       intellect: 15
       defense: 23
       agility: 22
-  - key: hist_sljnbc_0161
-    name: 蔡琰
-    default_gender: female
-    archetype: civil
-    flavor: （约177年—？）文姬归汉，才女传世。陈留圉县人，蔡邕之女。她自幼饱读诗书，精通音律，嫁河东卫仲道后不久便守寡。东汉末年天下大乱，她被南匈奴掳走塞外，嫁与左贤王为妻，生育二子，流落胡地十二年。曹操念及与蔡邕旧交，遣使以重金赎回。她忍痛别子归汉，嫁与董祀。《悲愤诗》《胡笳十八拍》道尽颠沛流离之苦、骨肉分离之痛，字字泣血。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 8
-      intellect: 64
-      defense: 18
-      agility: 10
   - key: hist_sljnbc_0162
     name: 蒋济
     default_gender: male
@@ -208,35 +248,9 @@ heroes:
       intellect: 40
       defense: 20
       agility: 20
-  - key: hist_sljnbc_0167
-    name: 甄姬
-    default_gender: female
-    archetype: civil
-    flavor: （183年—221年）洛神原型，乱世红颜。中山无极人，原为袁绍次子袁熙之妻。曹操攻破邺城时，曹丕闯入袁府见其姿貌绝伦，遂纳为夫人。她生育曹叡，贤德有才，深得曹操喜爱。曹丕称帝后册封她为皇后，然郭女王得宠，甄姬日渐失宠。她忧愤作《塘上行》抒发哀怨，触怒曹丕被赐死，死后"以发覆面、以糠塞口"下葬。
-    growth_range:
-    - 3
-    - 7
-    attribute_weights:
-      force: 20
-      intellect: 40
-      defense: 20
-      agility: 20
-  - key: hist_sljnbc_0168
-    name: 孔融
-    default_gender: male
-    archetype: civil
-    flavor: （153年—208年）建安七子之首，名门之后。鲁国人，孔子二十世孙。他少时便以才思敏捷闻名，"小时了了，大未必佳"的典故源于他的机智应答。他任北海相时开仓赈济，兴办学校，深得民心。后归曹操帐下为官，名列建安七子之首，文采风流冠绝一时。然他性情刚直，屡犯曹操之忌，多次当面讥讽。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 20
-      intellect: 40
-      defense: 20
-      agility: 20
   - key: hist_sljnbc_0169
     name: 吴懿
-    default_gender: female
+    default_gender: male
     archetype: military
     flavor: （？—237年）国戚大将，镇守汉中。陈留人，其妹吴氏为刘备穆皇后。他原仕刘璋，刘备入川后归降。他随军征战，刘备称帝后受封关内侯。诸葛亮北伐期间他多次随军出征，屡立战功，官至车骑将军。诸葛亮去世后，他接替魏延镇守汉中，负责蜀汉北境防务。他为人沉稳持重，不求冒进但求稳妥，在汉中数年边境安宁。
     growth_range:
@@ -301,7 +315,7 @@ heroes:
       agility: 14
   - key: hist_sljnbc_0174
     name: 独孤信
-    default_gender: female
+    default_gender: male
     archetype: military
     flavor: （502年—557年）三朝国亲，侧帽风流。云中人，鲜卑族，本名独孤如愿。他仪表俊美，风度翩翩，有"侧帽风流"之典故——据说他某日出行帽子被风吹歪，翌日京城少年竞相效仿侧戴帽子。他是西魏八柱国之一，战功赫赫。更令人称奇的是他的三个女儿：长女为北周明帝皇后，四女为隋文帝皇后独孤伽罗，七女为唐高祖李渊之母。
     growth_range:
@@ -481,19 +495,6 @@ heroes:
       intellect: 15
       defense: 23
       agility: 22
-  - key: hist_sljnbc_0188
-    name: 左慈
-    default_gender: male
-    archetype: civil
-    flavor: （156年—289年）东汉末方士，乌角先生。庐江人，精通道术，据说能够变化形貌、分身隐遁。《三国志》裴注及《后汉书·方术传》皆有记载。传说他曾戏弄曹操，变化莫测令曹操大怒而不能捕获。他与华佗、于吉并称汉末三大方士。其事迹多带神异色彩，真假难辨，但反映了当时社会对神仙方术的信仰。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 20
-      intellect: 40
-      defense: 20
-      agility: 20
   - key: hist_sljnbc_0189
     name: 于谨
     default_gender: male

@@ -12,18 +12,31 @@ from django.utils import timezone
 
 from core.exceptions import GameError
 from gameplay.models import (
+    EquipmentProduction,
+    HorseProduction,
     InventoryItem,
     ItemTemplate,
+    LivestockProduction,
     Message,
     MissionRun,
     MissionTemplate,
     RaidRun,
     ScoutRecord,
+    SmeltingProduction,
     WorkAssignment,
     WorkTemplate,
 )
 from gameplay.services.manor.core import ensure_manor
-from guests.models import Guest, GuestArchetype, GuestRarity, GuestStatus, GuestTemplate
+from guests.models import (
+    GearItem,
+    GearSlot,
+    GearTemplate,
+    Guest,
+    GuestArchetype,
+    GuestRarity,
+    GuestStatus,
+    GuestTemplate,
+)
 
 
 @pytest.fixture
@@ -73,6 +86,41 @@ class TestCoreViews:
         response = client.get(reverse("gameplay:dashboard"))
         assert response.status_code == 200
         assert "buildings" in response.context
+
+    def test_authenticated_layout_contains_partial_nav_markers(self, manor_with_user):
+        """认证页面应包含局部导航刷新容器与脚本。"""
+        _manor, client = manor_with_user
+        response = client.get(reverse("gameplay:dashboard"))
+        assert response.status_code == 200
+        body = response.content.decode("utf-8")
+        assert 'id="main-nav"' in body
+        assert 'id="info-bar"' in body
+        assert 'id="page-shell"' in body
+        assert 'id="page-extra-scripts"' in body
+        assert "js/nav_partial.js" in body
+        assert body.count('data-partial-nav="1"') >= 12
+        assert f'href="{reverse("gameplay:warehouse")}" data-partial-nav="1"' in body
+        assert f'href="{reverse("trade:trade")}" data-partial-nav="1"' in body
+
+    def test_dashboard_upgrading_building_has_auto_refresh_countdown(self, manor_with_user):
+        """建筑升级倒计时应携带自动刷新标记。"""
+        manor, client = manor_with_user
+        building = manor.buildings.select_related("building_type").first()
+        assert building is not None
+        building.is_upgrading = True
+        building.upgrade_complete_at = timezone.now() + timezone.timedelta(minutes=5)
+        building.save(update_fields=["is_upgrading", "upgrade_complete_at"])
+
+        response = client.get(
+            reverse(
+                "gameplay:buildings_category",
+                kwargs={"category": building.building_type.category},
+            )
+        )
+        assert response.status_code == 200
+        body = response.content.decode("utf-8")
+        assert 'data-countdown="' in body
+        assert 'data-refresh="1"' in body
 
     def test_settings_page(self, manor_with_user):
         """设置页面"""
@@ -164,7 +212,7 @@ class TestMissionViews:
         )
         called = {"count": 0}
 
-        monkeypatch.setattr("gameplay.views.missions._acquire_mission_action_lock", lambda *_a, **_k: (False, ""))
+        monkeypatch.setattr("gameplay.views.missions._acquire_mission_action_lock", lambda *_a, **_k: (False, "", None))
 
         def _unexpected_launch(*_args, **_kwargs):
             called["count"] += 1
@@ -186,7 +234,7 @@ class TestMissionViews:
         )
         called = {"count": 0}
 
-        monkeypatch.setattr("gameplay.views.missions._acquire_mission_action_lock", lambda *_a, **_k: (False, ""))
+        monkeypatch.setattr("gameplay.views.missions._acquire_mission_action_lock", lambda *_a, **_k: (False, "", None))
 
         def _unexpected_add(*_args, **_kwargs):
             called["count"] += 1
@@ -210,7 +258,7 @@ class TestMissionViews:
         run = MissionRun.objects.create(manor=manor, mission=mission, status=MissionRun.Status.ACTIVE)
         called = {"count": 0}
 
-        monkeypatch.setattr("gameplay.views.missions._acquire_mission_action_lock", lambda *_a, **_k: (False, ""))
+        monkeypatch.setattr("gameplay.views.missions._acquire_mission_action_lock", lambda *_a, **_k: (False, "", None))
 
         def _unexpected_retreat(*_args, **_kwargs):
             called["count"] += 1
@@ -239,7 +287,7 @@ class TestMissionViews:
         )
         called = {"count": 0}
 
-        monkeypatch.setattr("gameplay.views.missions._acquire_mission_action_lock", lambda *_a, **_k: (False, ""))
+        monkeypatch.setattr("gameplay.views.missions._acquire_mission_action_lock", lambda *_a, **_k: (False, "", None))
 
         def _unexpected_retreat(*_args, **_kwargs):
             called["count"] += 1
@@ -407,12 +455,47 @@ class TestInventoryViews:
         assert response.status_code == 200
         assert response.context["current_tab"] == "treasury"
 
+    def test_warehouse_page_syncs_grain_item_with_manor_grain(self, manor_with_user):
+        manor, client = manor_with_user
+        grain_template, _ = ItemTemplate.objects.get_or_create(
+            key="grain",
+            defaults={"name": "粮食"},
+        )
+        if not grain_template.name:
+            grain_template.name = "粮食"
+            grain_template.save(update_fields=["name"])
+
+        manor.grain = 777
+        manor.resource_updated_at = timezone.now()
+        manor.save(update_fields=["grain", "resource_updated_at"])
+        InventoryItem.objects.filter(
+            manor=manor,
+            template=grain_template,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        ).delete()
+
+        response = client.get(reverse("gameplay:warehouse"))
+        assert response.status_code == 200
+
+        warehouse_grain = InventoryItem.objects.filter(
+            manor=manor,
+            template=grain_template,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        ).first()
+        assert warehouse_grain is not None
+        assert warehouse_grain.quantity == 777
+
     def test_recruitment_hall_page(self, manor_with_user):
         """招募大厅页面"""
         manor, client = manor_with_user
         response = client.get(reverse("gameplay:recruitment_hall"))
         assert response.status_code == 200
         assert "pools" in response.context
+        assert "candidates_payload" in response.context
+        assert "candidate_count" in response.context
+        assert "guests" not in response.context
+        assert "capacity" not in response.context
+        assert "available_gears" not in response.context
 
     def test_use_rebirth_card_rejects_non_positive_guest_id(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
@@ -495,6 +578,33 @@ class TestInventoryViews:
         assert "请选择要洗点的门客" in payload["error"]
         assert called["count"] == 0
 
+    def test_use_guest_rarity_upgrade_rejects_non_positive_guest_id(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        template = ItemTemplate.objects.create(
+            key="view_rarity_upgrade_item",
+            name="《上将的自我修养》残卷1",
+            effect_payload={"action": "upgrade_guest_rarity"},
+        )
+        item = InventoryItem.objects.create(manor=manor, template=template, quantity=1)
+        called = {"count": 0}
+
+        def _unexpected_call(*args, **kwargs):
+            called["count"] += 1
+            return {}
+
+        monkeypatch.setattr("gameplay.views.inventory.use_guest_rarity_upgrade_item", _unexpected_call)
+
+        response = client.post(
+            reverse("gameplay:use_guest_rarity_upgrade", kwargs={"pk": item.pk}),
+            {"guest_id": -1},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        assert response.status_code == 400
+        payload = response.json()
+        assert payload["success"] is False
+        assert "请选择要升阶的门客" in payload["error"]
+        assert called["count"] == 0
+
     def test_use_rebirth_card_unexpected_error_returns_500(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
         template = ItemTemplate.objects.create(
@@ -550,6 +660,48 @@ class TestInventoryViews:
         assert response.status_code == 302
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("装备选择有误" in m for m in messages)
+
+    def test_dismiss_guest_allows_injured_status_and_returns_equipped_gear(self, manor_with_user):
+        manor, client = manor_with_user
+        guest_template = GuestTemplate.objects.create(
+            key=f"view_dismiss_injured_guest_tpl_{manor.id}",
+            name="重伤辞退门客模板",
+            archetype=GuestArchetype.CIVIL,
+            rarity=GuestRarity.GRAY,
+        )
+        guest = Guest.objects.create(
+            manor=manor,
+            template=guest_template,
+            status=GuestStatus.INJURED,
+        )
+        gear_template = GearTemplate.objects.create(
+            key=f"view_dismiss_injured_gear_tpl_{manor.id}",
+            name="重伤辞退测试装备",
+            slot=GearSlot.WEAPON,
+            rarity=GuestRarity.GRAY,
+        )
+        item_template = ItemTemplate.objects.create(
+            key=gear_template.key,
+            name="重伤辞退测试装备道具",
+            effect_type=ItemTemplate.EffectType.TOOL,
+            effect_payload={},
+            is_usable=True,
+        )
+        GearItem.objects.create(manor=manor, template=gear_template, guest=guest)
+
+        response = client.post(reverse("guests:dismiss", kwargs={"pk": guest.pk}))
+
+        assert response.status_code == 302
+        assert response.url == reverse("guests:roster")
+        assert not Guest.objects.filter(pk=guest.pk).exists()
+        returned_item = InventoryItem.objects.get(
+            manor=manor,
+            template=item_template,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        )
+        assert returned_item.quantity == 1
+        messages = [str(m) for m in get_messages(response.wsgi_request)]
+        assert any("已辞退" in m for m in messages)
 
     def test_move_item_to_treasury_rejects_invalid_quantity(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
@@ -878,6 +1030,37 @@ class TestTechnologyViews:
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("操作失败，请稍后重试" in m for m in messages)
 
+    def test_upgrade_technology_redirects_to_safe_next_url(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.views.technology.upgrade_technology",
+            lambda *_args, **_kwargs: {"message": "ok"},
+        )
+        next_url = f"{reverse('gameplay:technology')}?tab=martial&troop=dao#tech-dao_attack"
+
+        response = client.post(
+            reverse("gameplay:upgrade_technology", kwargs={"tech_key": "dao_attack"}),
+            {"tab": "basic", "next": next_url},
+        )
+        assert response.status_code == 302
+        assert response.url == next_url
+
+    def test_upgrade_technology_rejects_unsafe_next_url(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.views.technology.upgrade_technology",
+            lambda *_args, **_kwargs: {"message": "ok"},
+        )
+
+        response = client.post(
+            reverse("gameplay:upgrade_technology", kwargs={"tech_key": "dao_attack"}),
+            {"tab": "martial", "troop": "dao", "next": "https://evil.example/phish"},
+        )
+        assert response.status_code == 302
+        assert response.url == f"{reverse('gameplay:technology')}?tab=martial&troop=dao"
+
 
 # ============ 生产系统测试 ============
 
@@ -893,6 +1076,26 @@ class TestProductionViews:
         assert response.status_code == 200
         assert "horse_options" in response.context
 
+    def test_stable_page_active_production_has_refresh_countdown(self, manor_with_user):
+        manor, client = manor_with_user
+        HorseProduction.objects.create(
+            manor=manor,
+            horse_key="test_horse",
+            horse_name="测试马",
+            quantity=1,
+            grain_cost=10,
+            base_duration=60,
+            actual_duration=60,
+            complete_at=timezone.now() + timezone.timedelta(minutes=1),
+            status=HorseProduction.Status.PRODUCING,
+        )
+
+        response = client.get(reverse("gameplay:stable"))
+        assert response.status_code == 200
+        body = response.content.decode("utf-8")
+        assert "js/dashboard.js" in body
+        assert 'data-refresh="1"' in body
+
     def test_ranch_page(self, manor_with_user):
         """畜牧场页面"""
         manor, client = manor_with_user
@@ -900,12 +1103,53 @@ class TestProductionViews:
         assert response.status_code == 200
         assert "livestock_options" in response.context
 
+    def test_ranch_page_active_production_has_refresh_countdown(self, manor_with_user):
+        manor, client = manor_with_user
+        LivestockProduction.objects.create(
+            manor=manor,
+            livestock_key="test_livestock",
+            livestock_name="测试家畜",
+            quantity=1,
+            grain_cost=8,
+            base_duration=60,
+            actual_duration=60,
+            complete_at=timezone.now() + timezone.timedelta(minutes=1),
+            status=LivestockProduction.Status.PRODUCING,
+        )
+
+        response = client.get(reverse("gameplay:ranch"))
+        assert response.status_code == 200
+        body = response.content.decode("utf-8")
+        assert "js/dashboard.js" in body
+        assert 'data-refresh="1"' in body
+
     def test_smithy_page(self, manor_with_user):
         """冶炼坊页面"""
         manor, client = manor_with_user
         response = client.get(reverse("gameplay:smithy"))
         assert response.status_code == 200
         assert "metal_options" in response.context
+
+    def test_smithy_page_active_production_has_refresh_countdown(self, manor_with_user):
+        manor, client = manor_with_user
+        SmeltingProduction.objects.create(
+            manor=manor,
+            metal_key="test_metal",
+            metal_name="测试物品",
+            quantity=1,
+            cost_type="silver",
+            cost_amount=10,
+            base_duration=60,
+            actual_duration=60,
+            complete_at=timezone.now() + timezone.timedelta(minutes=1),
+            status=SmeltingProduction.Status.PRODUCING,
+        )
+
+        response = client.get(reverse("gameplay:smithy"))
+        assert response.status_code == 200
+        body = response.content.decode("utf-8")
+        assert "js/dashboard.js" in body
+        assert 'data-refresh="1"' in body
 
     def test_start_horse_production_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
@@ -1045,6 +1289,26 @@ class TestProductionViews:
         assert response.status_code == 200
         assert "equipment_list" in response.context
         assert "device" in response.context["equipment_categories"]
+
+    def test_forge_page_active_production_has_refresh_countdown(self, manor_with_user):
+        manor, client = manor_with_user
+        EquipmentProduction.objects.create(
+            manor=manor,
+            equipment_key="test_equipment",
+            equipment_name="测试装备",
+            quantity=1,
+            material_costs={"iron": 1},
+            base_duration=60,
+            actual_duration=60,
+            complete_at=timezone.now() + timezone.timedelta(minutes=1),
+            status=EquipmentProduction.Status.FORGING,
+        )
+
+        response = client.get(reverse("gameplay:forge"))
+        assert response.status_code == 200
+        body = response.content.decode("utf-8")
+        assert "js/dashboard.js" in body
+        assert 'data-refresh="1"' in body
 
     def test_decompose_equipment_view_redirects_with_category(self, manor_with_user, monkeypatch):
         """分解装备后返回当前分类。"""
@@ -1445,6 +1709,24 @@ class TestWorkViews:
         assert response.status_code == 200
         assert "works" in response.context
 
+    def test_work_page_shows_assignment_in_matching_work_card(self, manor_with_user):
+        manor, client = manor_with_user
+        guest, work_template = self._create_work_data(manor, "inline_assignment")
+        WorkAssignment.objects.create(
+            manor=manor,
+            guest=guest,
+            work_template=work_template,
+            status=WorkAssignment.Status.WORKING,
+            complete_at=timezone.now() + timezone.timedelta(minutes=30),
+        )
+
+        response = client.get(reverse("gameplay:work"))
+        assert response.status_code == 200
+        body = response.content.decode("utf-8")
+        assert "执行门客" in body
+        assert guest.display_name in body
+        assert "打工中 (" not in body
+
     def test_work_tier_filter(self, manor_with_user):
         """打工等级过滤"""
         manor, client = manor_with_user
@@ -1634,6 +1916,16 @@ class TestMapAPI:
         assert data["success"] is True
         assert "results" in data
 
+    def test_map_search_by_region_includes_self(self, manor_with_user):
+        """按地区搜索应包含自己庄园，避免单人地区显示为空"""
+        manor, client = manor_with_user
+        response = client.get(reverse("gameplay:map_search_api"), {"type": "region", "region": manor.region})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        ids = {row.get("id") for row in data.get("results", [])}
+        assert manor.id in ids
+
     def test_map_search_by_name(self, manor_with_user):
         """按名称搜索API"""
         manor, client = manor_with_user
@@ -1802,7 +2094,7 @@ class TestMapAPI:
         defender = ensure_manor(defender_user)
         called = {"count": 0}
 
-        monkeypatch.setattr("gameplay.views.map._acquire_map_action_lock", lambda *_a, **_k: (False, ""))
+        monkeypatch.setattr("gameplay.views.map._acquire_map_action_lock", lambda *_a, **_k: (False, "", None))
 
         def _unexpected_start(*_args, **_kwargs):
             called["count"] += 1
@@ -1829,7 +2121,7 @@ class TestMapAPI:
         defender = ensure_manor(defender_user)
         called = {"count": 0}
 
-        monkeypatch.setattr("gameplay.views.map._acquire_map_action_lock", lambda *_a, **_k: (False, ""))
+        monkeypatch.setattr("gameplay.views.map._acquire_map_action_lock", lambda *_a, **_k: (False, "", None))
 
         def _unexpected_start(*_args, **_kwargs):
             called["count"] += 1
@@ -1857,7 +2149,7 @@ class TestMapAPI:
         run = RaidRun.objects.create(attacker=attacker, defender=defender, status=RaidRun.Status.MARCHING)
         called = {"count": 0}
 
-        monkeypatch.setattr("gameplay.views.map._acquire_map_action_lock", lambda *_a, **_k: (False, ""))
+        monkeypatch.setattr("gameplay.views.map._acquire_map_action_lock", lambda *_a, **_k: (False, "", None))
 
         def _unexpected_retreat(*_args, **_kwargs):
             called["count"] += 1
@@ -1969,6 +2261,39 @@ class TestPostOperations:
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("操作失败，请稍后重试" in m for m in messages)
 
+    def test_upgrade_building_redirects_to_safe_next_url(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        building = manor.buildings.first()
+
+        monkeypatch.setattr(
+            "gameplay.views.buildings.start_upgrade",
+            lambda *_args, **_kwargs: None,
+        )
+        next_url = f"{reverse('gameplay:dashboard')}#building-{building.pk}"
+
+        response = client.post(
+            reverse("gameplay:upgrade_building", kwargs={"pk": building.pk}),
+            {"next": next_url},
+        )
+        assert response.status_code == 302
+        assert response.url == next_url
+
+    def test_upgrade_building_rejects_unsafe_next_url(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        building = manor.buildings.first()
+
+        monkeypatch.setattr(
+            "gameplay.views.buildings.start_upgrade",
+            lambda *_args, **_kwargs: None,
+        )
+
+        response = client.post(
+            reverse("gameplay:upgrade_building", kwargs={"pk": building.pk}),
+            {"next": "https://evil.example/phish"},
+        )
+        assert response.status_code == 302
+        assert response.url == reverse("gameplay:dashboard")
+
     def test_delete_messages_empty(self, manor_with_user):
         """删除消息 - 空选择"""
         manor, client = manor_with_user
@@ -2058,7 +2383,7 @@ class TestJailAndOathAPI:
         _manor, client = manor_with_user
         called = {"count": 0}
 
-        monkeypatch.setattr("gameplay.views.jail._acquire_jail_action_lock", lambda *_a, **_k: (False, ""))
+        monkeypatch.setattr("gameplay.views.jail._acquire_jail_action_lock", lambda *_a, **_k: (False, "", None))
 
         def _unexpected_recruit(*_args, **_kwargs):
             called["count"] += 1
@@ -2076,7 +2401,7 @@ class TestJailAndOathAPI:
         _manor, client = manor_with_user
         called = {"count": 0}
 
-        monkeypatch.setattr("gameplay.views.jail._acquire_jail_action_lock", lambda *_a, **_k: (False, ""))
+        monkeypatch.setattr("gameplay.views.jail._acquire_jail_action_lock", lambda *_a, **_k: (False, "", None))
 
         def _unexpected_draw(*_args, **_kwargs):
             called["count"] += 1
@@ -2094,7 +2419,7 @@ class TestJailAndOathAPI:
         _manor, client = manor_with_user
         called = {"count": 0}
 
-        monkeypatch.setattr("gameplay.views.jail._acquire_jail_action_lock", lambda *_a, **_k: (False, ""))
+        monkeypatch.setattr("gameplay.views.jail._acquire_jail_action_lock", lambda *_a, **_k: (False, "", None))
 
         def _unexpected_release(*_args, **_kwargs):
             called["count"] += 1
@@ -2112,7 +2437,7 @@ class TestJailAndOathAPI:
         _manor, client = manor_with_user
         called = {"count": 0}
 
-        monkeypatch.setattr("gameplay.views.jail._acquire_jail_action_lock", lambda *_a, **_k: (False, ""))
+        monkeypatch.setattr("gameplay.views.jail._acquire_jail_action_lock", lambda *_a, **_k: (False, "", None))
 
         def _unexpected_add(*_args, **_kwargs):
             called["count"] += 1
@@ -2134,7 +2459,7 @@ class TestJailAndOathAPI:
         _manor, client = manor_with_user
         called = {"count": 0}
 
-        monkeypatch.setattr("gameplay.views.jail._acquire_jail_action_lock", lambda *_a, **_k: (False, ""))
+        monkeypatch.setattr("gameplay.views.jail._acquire_jail_action_lock", lambda *_a, **_k: (False, "", None))
 
         def _unexpected_remove(*_args, **_kwargs):
             called["count"] += 1

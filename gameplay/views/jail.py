@@ -19,7 +19,7 @@ from core.utils import json_error, json_success, parse_json_object, safe_positiv
 from core.utils.cache_lock import acquire_best_effort_lock, release_best_effort_lock
 from core.utils.rate_limit import rate_limit_json
 from core.utils.validation import sanitize_error_message
-from gameplay.constants import PVPConstants
+from gameplay.constants import PVPConstants, get_raid_capture_guest_rate
 from gameplay.services import (
     add_oath_bond,
     draw_pie,
@@ -40,28 +40,29 @@ def _jail_action_lock_key(action: str, manor_id: int, scope: str) -> str:
     return f"jail:view_lock:{action}:{manor_id}:{scope}"
 
 
-def _acquire_jail_action_lock(action: str, manor_id: int, scope: str) -> tuple[bool, str]:
+def _acquire_jail_action_lock(action: str, manor_id: int, scope: str) -> tuple[bool, str, str | None]:
     key = _jail_action_lock_key(action, manor_id, scope)
-    acquired, from_cache = acquire_best_effort_lock(
+    acquired, from_cache, lock_token = acquire_best_effort_lock(
         key,
         timeout_seconds=JAIL_ACTION_LOCK_SECONDS,
         logger=logger,
         log_context="jail action lock",
     )
     if not acquired:
-        return False, ""
+        return False, "", None
     if from_cache:
-        return True, key
-    return True, f"{_LOCAL_LOCK_PREFIX}{key}"
+        return True, key, lock_token
+    return True, f"{_LOCAL_LOCK_PREFIX}{key}", lock_token
 
 
-def _release_jail_action_lock(lock_key: str) -> None:
+def _release_jail_action_lock(lock_key: str, lock_token: str | None) -> None:
     if not lock_key:
         return
     if lock_key.startswith(_LOCAL_LOCK_PREFIX):
         release_best_effort_lock(
             lock_key[len(_LOCAL_LOCK_PREFIX) :],
             from_cache=False,
+            lock_token=lock_token,
             logger=logger,
             log_context="jail action lock",
         )
@@ -69,6 +70,7 @@ def _release_jail_action_lock(lock_key: str) -> None:
     release_best_effort_lock(
         lock_key,
         from_cache=True,
+        lock_token=lock_token,
         logger=logger,
         log_context="jail action lock",
     )
@@ -96,7 +98,7 @@ class JailView(LoginRequiredMixin, TemplateView):
                 "manor": manor,
                 "jail_capacity": int(getattr(manor, "jail_capacity", 0) or 0),
                 "prisoners": prisoners,
-                "capture_rate_percent": int(round(float(PVPConstants.RAID_CAPTURE_GUEST_RATE) * 100)),
+                "capture_rate_percent": int(round(get_raid_capture_guest_rate() * 100)),
                 "recruit_loyalty_threshold": int(PVPConstants.JAIL_RECRUIT_LOYALTY_THRESHOLD),
                 "recruit_cost_gold_bar": int(PVPConstants.JAIL_RECRUIT_GOLD_BAR_COST),
             }
@@ -178,7 +180,7 @@ def oath_status_api(request: HttpRequest) -> JsonResponse:
 @require_POST
 def recruit_prisoner_view(request: HttpRequest, prisoner_id: int):
     manor = ensure_manor(request.user)
-    lock_ok, lock_key = _acquire_jail_action_lock("recruit_view", int(manor.id), str(prisoner_id))
+    lock_ok, lock_key, lock_token = _acquire_jail_action_lock("recruit_view", int(manor.id), str(prisoner_id))
     if not lock_ok:
         messages.warning(request, "请求处理中，请稍候重试")
         return redirect("gameplay:jail")
@@ -197,7 +199,7 @@ def recruit_prisoner_view(request: HttpRequest, prisoner_id: int):
             )
             messages.error(request, sanitize_error_message(exc))
     finally:
-        _release_jail_action_lock(lock_key)
+        _release_jail_action_lock(lock_key, lock_token)
     return redirect("gameplay:jail")
 
 
@@ -205,7 +207,7 @@ def recruit_prisoner_view(request: HttpRequest, prisoner_id: int):
 @require_POST
 def draw_pie_view(request: HttpRequest, prisoner_id: int):
     manor = ensure_manor(request.user)
-    lock_ok, lock_key = _acquire_jail_action_lock("draw_pie_view", int(manor.id), str(prisoner_id))
+    lock_ok, lock_key, lock_token = _acquire_jail_action_lock("draw_pie_view", int(manor.id), str(prisoner_id))
     if not lock_ok:
         messages.warning(request, "请求处理中，请稍候重试")
         return redirect("gameplay:jail")
@@ -227,7 +229,7 @@ def draw_pie_view(request: HttpRequest, prisoner_id: int):
             )
             messages.error(request, sanitize_error_message(exc))
     finally:
-        _release_jail_action_lock(lock_key)
+        _release_jail_action_lock(lock_key, lock_token)
     return redirect("gameplay:jail")
 
 
@@ -235,7 +237,7 @@ def draw_pie_view(request: HttpRequest, prisoner_id: int):
 @require_POST
 def release_prisoner_view(request: HttpRequest, prisoner_id: int):
     manor = ensure_manor(request.user)
-    lock_ok, lock_key = _acquire_jail_action_lock("release_view", int(manor.id), str(prisoner_id))
+    lock_ok, lock_key, lock_token = _acquire_jail_action_lock("release_view", int(manor.id), str(prisoner_id))
     if not lock_ok:
         messages.warning(request, "请求处理中，请稍候重试")
         return redirect("gameplay:jail")
@@ -254,7 +256,7 @@ def release_prisoner_view(request: HttpRequest, prisoner_id: int):
             )
             messages.error(request, sanitize_error_message(exc))
     finally:
-        _release_jail_action_lock(lock_key)
+        _release_jail_action_lock(lock_key, lock_token)
     return redirect("gameplay:jail")
 
 
@@ -266,7 +268,7 @@ def add_oath_bond_view(request: HttpRequest):
     if guest_id is None:
         messages.error(request, "请指定门客")
         return redirect("gameplay:oath_grove")
-    lock_ok, lock_key = _acquire_jail_action_lock("oath_add_view", int(manor.id), str(guest_id))
+    lock_ok, lock_key, lock_token = _acquire_jail_action_lock("oath_add_view", int(manor.id), str(guest_id))
     if not lock_ok:
         messages.warning(request, "请求处理中，请稍候重试")
         return redirect("gameplay:oath_grove")
@@ -285,7 +287,7 @@ def add_oath_bond_view(request: HttpRequest):
             )
             messages.error(request, sanitize_error_message(exc))
     finally:
-        _release_jail_action_lock(lock_key)
+        _release_jail_action_lock(lock_key, lock_token)
     return redirect("gameplay:oath_grove")
 
 
@@ -293,7 +295,7 @@ def add_oath_bond_view(request: HttpRequest):
 @require_POST
 def remove_oath_bond_view(request: HttpRequest, guest_id: int):
     manor = ensure_manor(request.user)
-    lock_ok, lock_key = _acquire_jail_action_lock("oath_remove_view", int(manor.id), str(guest_id))
+    lock_ok, lock_key, lock_token = _acquire_jail_action_lock("oath_remove_view", int(manor.id), str(guest_id))
     if not lock_ok:
         messages.warning(request, "请求处理中，请稍候重试")
         return redirect("gameplay:oath_grove")
@@ -315,7 +317,7 @@ def remove_oath_bond_view(request: HttpRequest, guest_id: int):
             )
             messages.error(request, sanitize_error_message(exc))
     finally:
-        _release_jail_action_lock(lock_key)
+        _release_jail_action_lock(lock_key, lock_token)
     return redirect("gameplay:oath_grove")
 
 
@@ -324,7 +326,7 @@ def remove_oath_bond_view(request: HttpRequest, guest_id: int):
 @rate_limit_json("jail_recruit", limit=10, window_seconds=60, error_message="操作过于频繁，请稍后再试")
 def recruit_prisoner_api(request: HttpRequest, prisoner_id: int) -> JsonResponse:
     manor = ensure_manor(request.user)
-    lock_ok, lock_key = _acquire_jail_action_lock("recruit_api", int(manor.id), str(prisoner_id))
+    lock_ok, lock_key, lock_token = _acquire_jail_action_lock("recruit_api", int(manor.id), str(prisoner_id))
     if not lock_ok:
         return json_error("请求处理中，请稍候重试", status=409)
 
@@ -342,7 +344,7 @@ def recruit_prisoner_api(request: HttpRequest, prisoner_id: int) -> JsonResponse
             )
             return json_error(sanitize_error_message(exc), status=500)
     finally:
-        _release_jail_action_lock(lock_key)
+        _release_jail_action_lock(lock_key, lock_token)
 
 
 @login_required
@@ -350,7 +352,7 @@ def recruit_prisoner_api(request: HttpRequest, prisoner_id: int) -> JsonResponse
 @rate_limit_json("jail_draw_pie", limit=30, window_seconds=60, error_message="操作过于频繁，请稍后再试")
 def draw_pie_api(request: HttpRequest, prisoner_id: int) -> JsonResponse:
     manor = ensure_manor(request.user)
-    lock_ok, lock_key = _acquire_jail_action_lock("draw_pie_api", int(manor.id), str(prisoner_id))
+    lock_ok, lock_key, lock_token = _acquire_jail_action_lock("draw_pie_api", int(manor.id), str(prisoner_id))
     if not lock_ok:
         return json_error("请求处理中，请稍候重试", status=409)
 
@@ -374,7 +376,7 @@ def draw_pie_api(request: HttpRequest, prisoner_id: int) -> JsonResponse:
             )
             return json_error(sanitize_error_message(exc), status=500)
     finally:
-        _release_jail_action_lock(lock_key)
+        _release_jail_action_lock(lock_key, lock_token)
 
 
 @login_required
@@ -382,7 +384,7 @@ def draw_pie_api(request: HttpRequest, prisoner_id: int) -> JsonResponse:
 @rate_limit_json("jail_release", limit=20, window_seconds=60, error_message="操作过于频繁，请稍后再试")
 def release_prisoner_api(request: HttpRequest, prisoner_id: int) -> JsonResponse:
     manor = ensure_manor(request.user)
-    lock_ok, lock_key = _acquire_jail_action_lock("release_api", int(manor.id), str(prisoner_id))
+    lock_ok, lock_key, lock_token = _acquire_jail_action_lock("release_api", int(manor.id), str(prisoner_id))
     if not lock_ok:
         return json_error("请求处理中，请稍候重试", status=409)
 
@@ -400,7 +402,7 @@ def release_prisoner_api(request: HttpRequest, prisoner_id: int) -> JsonResponse
             )
             return json_error(sanitize_error_message(exc), status=500)
     finally:
-        _release_jail_action_lock(lock_key)
+        _release_jail_action_lock(lock_key, lock_token)
 
 
 @login_required
@@ -414,7 +416,7 @@ def add_oath_bond_api(request: HttpRequest) -> JsonResponse:
     if guest_id is None:
         return json_error("请指定门客")
 
-    lock_ok, lock_key = _acquire_jail_action_lock("oath_add_api", int(manor.id), str(guest_id))
+    lock_ok, lock_key, lock_token = _acquire_jail_action_lock("oath_add_api", int(manor.id), str(guest_id))
     if not lock_ok:
         return json_error("请求处理中，请稍候重试", status=409)
 
@@ -432,7 +434,7 @@ def add_oath_bond_api(request: HttpRequest) -> JsonResponse:
             )
             return json_error(sanitize_error_message(exc), status=500)
     finally:
-        _release_jail_action_lock(lock_key)
+        _release_jail_action_lock(lock_key, lock_token)
 
 
 @login_required
@@ -446,7 +448,7 @@ def remove_oath_bond_api(request: HttpRequest) -> JsonResponse:
     if guest_id is None:
         return json_error("请指定门客")
 
-    lock_ok, lock_key = _acquire_jail_action_lock("oath_remove_api", int(manor.id), str(guest_id))
+    lock_ok, lock_key, lock_token = _acquire_jail_action_lock("oath_remove_api", int(manor.id), str(guest_id))
     if not lock_ok:
         return json_error("请求处理中，请稍候重试", status=409)
 
@@ -466,4 +468,4 @@ def remove_oath_bond_api(request: HttpRequest) -> JsonResponse:
             )
             return json_error(sanitize_error_message(exc), status=500)
     finally:
-        _release_jail_action_lock(lock_key)
+        _release_jail_action_lock(lock_key, lock_token)

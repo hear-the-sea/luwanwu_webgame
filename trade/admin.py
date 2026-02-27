@@ -1,5 +1,7 @@
 from django.contrib import admin
 
+from core.admin_i18n import apply_common_field_labels
+
 from .models import (
     AuctionBid,
     AuctionRound,
@@ -11,6 +13,19 @@ from .models import (
     ShopPurchaseLog,
     ShopSellLog,
     ShopStock,
+)
+
+apply_common_field_labels(
+    ShopStock,
+    ShopPurchaseLog,
+    ShopSellLog,
+    GoldBarExchangeLog,
+    MarketListing,
+    MarketTransaction,
+    AuctionRound,
+    AuctionSlot,
+    AuctionBid,
+    FrozenGoldBar,
 )
 
 

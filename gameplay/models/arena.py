@@ -4,7 +4,7 @@ from django.db import models
 
 
 class ArenaTournament(models.Model):
-    """竞技场赛事（10人满员自动开赛）。"""
+    """竞技场赛事（满员自动开赛）。"""
 
     class Status(models.TextChoices):
         RECRUITING = "recruiting", "报名中"

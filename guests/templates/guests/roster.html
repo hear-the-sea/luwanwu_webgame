@@ -43,37 +43,46 @@
                 <tbody>
                     {% for item in guests_with_salary %}
                     {% with guest=item.guest %}
-                    <tr data-guest-id="{{ guest.id }}">
-                        <td>
+                    <tr class="guest-row" data-guest-id="{{ guest.id }}">
+                        <td class="guest-col-name">
                             <a href="{% url 'guests:detail' guest.id %}"
-                                class="rarity-text {{ guest.rarity|rarity_class }}">
+                                class="guest-name-link rarity-text {{ guest.rarity|rarity_class }}">
                                 {{ guest.display_name }}
                             </a>
+                            <a href="{% url 'guests:detail' guest.id %}"
+                               class="guest-mobile-header-link"
+                               aria-label="查看 {{ guest.display_name }} 详情"></a>
                         </td>
-                        <td>
-                            <div class="guest-avatar" title="{{ guest.display_name }}">
-                                {% if guest.template.avatar %}
-                                <img src="{{ guest.template.avatar.url }}" alt="{{ guest.display_name }}" loading="lazy" width="48" height="48">
-                                {% else %}
-                                {{ guest.display_name|first|default:"?" }}
-                                {% endif %}
-                            </div>
+                        <td class="guest-col-avatar">
+                            <a href="{% url 'guests:detail' guest.id %}"
+                               class="guest-avatar-link"
+                               title="查看 {{ guest.display_name }} 详情"
+                               aria-label="查看 {{ guest.display_name }} 详情">
+                                <div class="guest-avatar">
+                                    {% if guest.template.avatar %}
+                                    <img src="{{ guest.template.avatar.url }}" alt="{{ guest.display_name }}" loading="lazy" width="48" height="48">
+                                    {% else %}
+                                    {{ guest.display_name|first|default:"?" }}
+                                    {% endif %}
+                                </div>
+                            </a>
                         </td>
-                        <td>
+                        <td class="guest-col-level">
                             <div class="guest-level">Lv {{ guest.level }}</div>
                             <div class="tw-muted guest-status" data-guest-id="{{ guest.id }}">{{ guest.get_status_display }}</div>
                         </td>
-                        <td>
+                        <td class="guest-col-loyalty">
                             <div
                                 style="{% if guest.loyalty < 30 %}color: #FF6B6B;{% elif guest.loyalty < 60 %}color: #FFA500;{% else %}color: #4ADE80;{% endif %}">
                                 {{ guest.loyalty }}
                             </div>
                         </td>
-                        <td>
+                        <td class="guest-col-salary">
+                            <span class="guest-mobile-inline-label">工资:</span>
                             {% if item.paid_today %}
                             <span style="color: #4ADE80;">✓ 已支付</span>
                             {% else %}
-                            <button type="button" class="tw-btn-primary tw-btn-sm open-salary-modal"
+                            <button type="button" class="tw-btn-secondary tw-btn-sm open-salary-modal"
                                 data-guest-id="{{ guest.id }}"
                                 data-guest-name="{{ guest.display_name }}"
                                 data-salary="{{ item.salary }}"
@@ -83,10 +92,10 @@
                             </button>
                             {% endif %}
                         </td>
-                        <td>
+                        <td class="guest-col-hp">
                             <div class="guest-hp" data-guest-id="{{ guest.id }}">HP {{ guest.current_hp }}/{{ guest.max_hp }}</div>
                         </td>
-                        <td>
+                        <td class="guest-col-upgrade">
                             {% if guest.training_complete_at %}
                             <span class="countdown" data-countdown="{{ guest.training_complete_at|date:'c' }}"
                                 data-format="zh" data-check-url="{% url 'guests:check_training' guest.id %}"
@@ -95,7 +104,7 @@
                             <span class="tw-muted">自动升级</span>
                             {% endif %}
                         </td>
-                        <td>
+                        <td class="guest-col-actions">
                             <button type="button" class="tw-btn-secondary tw-btn-sm open-exp-modal"
                                 data-guest="{{ guest.id }}" data-guest-name="{{ guest.display_name }}"
                                 data-url="{% url 'guests:use_exp_item' guest.id %}" {% if not exp_items %}disabled{% endif %}>
@@ -136,7 +145,7 @@
                     <label>选择道具</label>
                     <select name="item_id" class="tw-input">
                         {% for item in exp_items %}
-                        <option value="{{ item.id }}">{{ item.template.name }}（x{{ item.quantity }}）</option>
+                        <option value="{{ item.id }}" data-item-name="{{ item.template.name }}">{{ item.template.name }}（x{{ item.quantity }}）</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -167,7 +176,7 @@
                     <label>选择药品</label>
                     <select name="item_id" class="tw-input">
                         {% for item in medicine_items %}
-                        <option value="{{ item.id }}">{{ item.template.name }}（x{{ item.quantity }}）</option>
+                        <option value="{{ item.id }}" data-item-name="{{ item.template.name }}">{{ item.template.name }}（x{{ item.quantity }}）</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -246,6 +255,32 @@
         border-bottom: 2px solid var(--border-primary);
     }
 
+    .guest-name-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.2rem;
+        line-height: 1.2;
+    }
+
+    .guest-avatar-link {
+        display: inline-flex;
+        border-radius: 10px;
+        text-decoration: none;
+    }
+
+    .guest-avatar-link:focus-visible {
+        outline: 2px solid var(--border-primary);
+        outline-offset: 2px;
+    }
+
+    .guest-col-actions .tw-btn-sm + .tw-btn-sm {
+        margin-left: 0.4rem;
+    }
+
+    .guest-mobile-inline-label {
+        display: none;
+    }
+
     /* 滚动条样式优化 - 与仓库保持一致 */
     .guest-table-wrapper::-webkit-scrollbar {
         width: 8px;
@@ -305,65 +340,175 @@
             flex-direction: column;
             gap: 0.75rem;
         }
-        .guest-roster-card .tw-table tbody tr {
+        .guest-roster-card .tw-table tbody .guest-row {
             display: grid;
-            grid-template-columns: auto 1fr;
-            gap: 0.5rem 1rem;
-            padding: 1rem;
+            grid-template-columns: 72px minmax(0, 1fr);
+            grid-template-areas:
+                "avatar name"
+                "avatar level"
+                "avatar loyalty"
+                "avatar hp"
+                "salary salary"
+                "upgrade upgrade"
+                "actions actions";
+            gap: 0.45rem 0.85rem;
+            padding: 0.95rem;
             border: 1px solid var(--border-light);
-            border-radius: 8px;
-            background: var(--bg-panel);
+            border-radius: 12px;
+            background: linear-gradient(180deg, var(--bg-panel) 0%, var(--bg-card) 100%);
+            box-shadow: 0 4px 14px rgba(42, 28, 18, 0.08);
+            position: relative;
         }
-        .guest-roster-card .tw-table tbody tr td {
+        .guest-roster-card .tw-table tbody .guest-row td {
             border-bottom: none !important;
             padding: 0;
+            min-width: 0;
         }
-        /* 形象列：左侧大头像 */
-        .guest-roster-card .tw-table tbody tr td:nth-child(2) {
-            grid-row: 1 / 5;
+
+        .guest-mobile-header-link {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 84px;
+            border-radius: 12px 12px 0 0;
+            z-index: 2;
+            display: block;
+        }
+
+        .guest-col-name {
+            grid-area: name;
+            font-size: 1.08rem;
+            font-weight: 700;
+            line-height: 1.25;
+            position: relative;
+            z-index: 3;
+        }
+
+        .guest-col-avatar {
+            grid-area: avatar;
             display: flex;
             align-items: center;
+            justify-content: center;
+            position: relative;
+            z-index: 3;
+            padding-top: 0.25rem;
         }
-        .guest-roster-card .tw-table tbody tr td:nth-child(2) .guest-avatar {
-            width: 64px;
-            height: 64px;
+        .guest-col-avatar .guest-avatar-link {
+            width: 72px;
+            height: 72px;
+            border-radius: 12px;
         }
-        /* 门客名称 */
-        .guest-roster-card .tw-table tbody tr td:nth-child(1) {
-            font-size: 1.1rem;
-            font-weight: bold;
+        .guest-col-avatar .guest-avatar {
+            width: 72px;
+            height: 72px;
         }
-        /* 等级/状态、忠诚度、工资、生命 */
-        .guest-roster-card .tw-table tbody tr td:nth-child(3),
-        .guest-roster-card .tw-table tbody tr td:nth-child(4),
-        .guest-roster-card .tw-table tbody tr td:nth-child(5),
-        .guest-roster-card .tw-table tbody tr td:nth-child(6) {
+
+        .guest-col-level {
+            grid-area: level;
+        }
+        .guest-col-loyalty {
+            grid-area: loyalty;
+        }
+        .guest-col-hp {
+            grid-area: hp;
+        }
+        .guest-col-level,
+        .guest-col-loyalty,
+        .guest-col-hp {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.45rem;
+            line-height: 1.3;
+            font-size: 0.92rem;
         }
-        .guest-roster-card .tw-table tbody tr td:nth-child(3)::before { content: "等级: "; color: var(--text-muted); }
-        .guest-roster-card .tw-table tbody tr td:nth-child(4)::before { content: "忠诚: "; color: var(--text-muted); }
-        .guest-roster-card .tw-table tbody tr td:nth-child(5)::before { content: "工资: "; color: var(--text-muted); }
-        .guest-roster-card .tw-table tbody tr td:nth-child(6)::before { content: "生命: "; color: var(--text-muted); }
-        /* 升级倒计时 */
-        .guest-roster-card .tw-table tbody tr td:nth-child(7) {
-            grid-column: 1 / -1;
+        .guest-col-level::before,
+        .guest-col-loyalty::before,
+        .guest-col-hp::before,
+        .guest-col-upgrade::before {
+            color: var(--text-muted);
+            flex-shrink: 0;
+            font-size: 0.82rem;
+            min-width: 3.4em;
         }
-        .guest-roster-card .tw-table tbody tr td:nth-child(7)::before { content: "升级: "; color: var(--text-muted); }
-        /* 操作按钮 */
-        .guest-roster-card .tw-table tbody tr td:nth-child(8) {
-            grid-column: 1 / -1;
+        .guest-col-level::before { content: "等级: "; }
+        .guest-col-loyalty::before { content: "忠诚: "; }
+        .guest-col-hp::before { content: "生命: "; }
+
+        .guest-col-salary {
+            grid-area: salary;
+            display: grid;
+            grid-template-columns: max-content max-content;
+            align-items: start;
+            justify-content: start;
+            column-gap: 0.55rem;
+            margin-top: 0.65rem;
+            padding-top: 1.45rem;
+            border-top: 1px dashed var(--border-light);
+            font-size: 0.92rem;
+        }
+        .guest-col-salary > * {
+            margin-top: 0.32rem;
+        }
+        .guest-col-salary .guest-mobile-inline-label {
+            display: block;
+            color: var(--text-muted);
+            font-size: 0.82rem;
+            line-height: 1.2;
+            white-space: nowrap;
+        }
+        .guest-col-salary .open-salary-modal {
+            font-size: 0.68rem;
+            line-height: 1.05;
+            padding: 0.16rem 0.34rem;
+            min-height: 0;
+            border-radius: 0.33rem;
+            width: auto;
+            justify-self: start;
+            white-space: nowrap;
+        }
+
+        .guest-col-upgrade {
+            grid-area: upgrade;
             display: flex;
-            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.45rem;
+            font-size: 0.9rem;
+        }
+        .guest-col-upgrade::before { content: "升级: "; }
+
+        .guest-col-actions {
+            grid-area: actions;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
             gap: 0.5rem;
             margin-top: 0.5rem;
             padding-top: 0.5rem;
             border-top: 1px dashed var(--border-light);
         }
-        .guest-roster-card .tw-table tbody tr td:nth-child(8) button {
-            flex: 1;
-            min-width: 100px;
+        .guest-col-actions button {
+            width: 100%;
+            min-width: 0;
+        }
+        .guest-col-actions .tw-btn-sm + .tw-btn-sm {
+            margin-left: 0;
+        }
+    }
+
+    @media (max-width: 420px) {
+        .guest-roster-card .tw-table tbody .guest-row {
+            grid-template-columns: 64px minmax(0, 1fr);
+        }
+        .guest-col-avatar .guest-avatar-link {
+            width: 64px;
+            height: 64px;
+        }
+        .guest-col-avatar .guest-avatar {
+            width: 64px;
+            height: 64px;
+        }
+        .guest-col-actions {
+            grid-template-columns: 1fr;
         }
     }
 </style>
@@ -458,18 +603,34 @@
 
         // 更新下拉框中的道具数量
         function updateItemQuantity(selectElem, itemId, newQuantity) {
-            const option = selectElem.querySelector(`option[value="${itemId}"]`);
+            const targetId = String(itemId ?? "");
+            const option = Array.from(selectElem.options).find((opt) => String(opt.value) === targetId)
+                || selectElem.selectedOptions?.[0]
+                || null;
             if (!option) return;
-            if (newQuantity <= 0) {
+
+            const submitBtn = selectElem.closest("form")?.querySelector('button[type="submit"]');
+            const parsed = Number.parseInt(newQuantity, 10);
+            const quantity = Number.isFinite(parsed) ? Math.max(parsed, 0) : 0;
+
+            if (quantity <= 0) {
+                const wasSelected = option.selected;
                 option.remove();
                 if (selectElem.options.length === 0) {
-                    const submitBtn = selectElem.closest('form')?.querySelector('button[type="submit"]');
                     if (submitBtn) submitBtn.disabled = true;
+                    return;
                 }
-            } else {
-                const text = option.textContent;
-                option.textContent = text.replace(/（x\d+）/, `（x${newQuantity}）`);
+                if (wasSelected) {
+                    selectElem.selectedIndex = 0;
+                }
+                if (submitBtn) submitBtn.disabled = false;
+                return;
             }
+
+            const itemName = option.dataset.itemName || option.textContent.replace(/（x\d+）/, "").trim();
+            option.dataset.itemName = itemName;
+            option.textContent = `${itemName}（x${quantity}）`;
+            if (submitBtn) submitBtn.disabled = false;
         }
 
         // 更新门客行的等级、HP和训练倒计时

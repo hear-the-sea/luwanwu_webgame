@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -59,7 +60,8 @@ def create_icon(key, name, output_dir):
 
 
 if __name__ == "__main__":
-    out_dir = "/home/daniel/code/web_game_v5/data/images/items"
+    project_root = Path(__file__).resolve().parents[1]
+    out_dir = str(project_root / "data" / "images" / "items")
     os.makedirs(out_dir, exist_ok=True)
 
     # just create a single test icon

@@ -4,6 +4,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Count, F
@@ -117,6 +118,11 @@ class Command(BaseCommand):
             default=None,
             help="--finish 模式下每步推进秒数（默认按赛事轮次间隔推进）。",
         )
+        parser.add_argument(
+            "--force",
+            action="store_true",
+            help="在非 DEBUG 且非测试环境下强制执行（请谨慎）。",
+        )
 
     def handle(self, *args, **options):
         requested_players = options["players"]
@@ -127,6 +133,10 @@ class Command(BaseCommand):
         finish = bool(options["finish"])
         max_steps = int(options["max_steps"] or 0)
         step_seconds_option = options["step_seconds"]
+        force = bool(options["force"])
+
+        if not force and not settings.DEBUG and not getattr(settings, "RUNNING_TESTS", False):
+            raise CommandError("arena_quick_test 仅允许在 DEBUG/测试环境执行；如需继续请显式传入 --force")
 
         if requested_players is not None and requested_players <= 0:
             raise CommandError("--players 必须为正整数")
@@ -178,7 +188,7 @@ class Command(BaseCommand):
 
             user = User.objects.create_user(
                 username=username,
-                password="pass123456",
+                password=None,
                 email=email,
             )
             manor = ensure_manor(user)

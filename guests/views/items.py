@@ -69,12 +69,12 @@ def use_medicine_item_view(request, pk: int):
         if is_ajax:
             return json_success(
                 message=msg,
-                item_id=item_id,
+                item_id=item.pk,
                 new_quantity=new_quantity,
                 guest_id=guest.pk,
                 current_hp=safe_int(result.get("new_hp"), default=guest.current_hp, min_val=0),
                 max_hp=safe_int(result.get("max_hp"), default=guest.max_hp, min_val=1),
-                status=result.get("status", guest.status),
+                guest_status=result.get("status", guest.status),
                 status_display=result.get("status_display", guest.get_status_display()),
             )
         messages.success(request, msg)

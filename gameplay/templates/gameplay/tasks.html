@@ -189,7 +189,7 @@
                                 {% with label=entry|guest_label:guest_labels %}
                                 <div class="tw-enemy-entry">
                                     {% if template and template.avatar %}
-                                        <img src="{{ template.avatar.url }}" alt="{{ label }}" title="{{ label }}" class="tw-enemy-avatar">
+                                        <img src="{{ template.avatar.url }}" alt="{{ label }}" title="{{ label }}" class="tw-enemy-avatar" loading="lazy" decoding="async">
                                     {% else %}
                                         <span class="tw-badge">{{ label }}</span>
                                     {% endif %}
@@ -204,7 +204,7 @@
                                 {% with troop=troop_templates_objs|get_item:troop_key %}
                                 <div class="tw-enemy-entry" title="{{ troop_labels|get_label:troop_key }}">
                                     {% if troop and troop.avatar %}
-                                        <img src="{{ troop.avatar.url }}" alt="{{ troop_labels|get_label:troop_key }}" class="tw-enemy-avatar">
+                                        <img src="{{ troop.avatar.url }}" alt="{{ troop_labels|get_label:troop_key }}" class="tw-enemy-avatar" loading="lazy" decoding="async">
                                         <span class="tw-enemy-count">×{{ count }}</span>
                                     {% else %}
                                         <span class="tw-badge">{{ troop_labels|get_label:troop_key }} x{{ count }}</span>
@@ -271,7 +271,7 @@
                                             <div class="tw-guest-card">
                                                 <div class="tw-guest-avatar">
                                                     {% if guest.template.avatar %}
-                                                    <img src="{{ guest.template.avatar.url }}" alt="{{ guest.display_name }}">
+                                                    <img src="{{ guest.template.avatar.url }}" alt="{{ guest.display_name }}" loading="lazy" decoding="async">
                                                     {% else %}
                                                     <div class="tw-avatar-placeholder">{{ guest.display_name|slice:":1" }}</div>
                                                     {% endif %}
@@ -305,7 +305,7 @@
                                         <div class="tw-troop-info">
                                             <div class="tw-troop-avatar">
                                                 {% if troop.avatar %}
-                                                <img src="{{ troop.avatar }}" alt="{{ troop.name }}">
+                                                <img src="{{ troop.avatar }}" alt="{{ troop.name }}" loading="lazy" decoding="async">
                                                 {% else %}
                                                 <div class="tw-avatar-placeholder">{{ troop.name|slice:":1" }}</div>
                                                 {% endif %}

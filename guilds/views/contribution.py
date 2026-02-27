@@ -7,6 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 
 from core.utils import safe_int, sanitize_error_message
+from core.utils.rate_limit import rate_limit_redirect
 from gameplay.models import Manor
 
 from ..constants import CONTRIBUTION_RATES, DAILY_DONATION_LIMITS
@@ -16,6 +17,7 @@ from ..services import contribution as contribution_service
 
 @login_required
 @require_guild_member
+@rate_limit_redirect("guild_donate", limit=10, window_seconds=60)
 def donate_resource(request):
     """捐赠资源"""
     member = request.guild_member

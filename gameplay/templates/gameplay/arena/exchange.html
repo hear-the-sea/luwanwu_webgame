@@ -27,7 +27,14 @@
                         {% for item in reward.item_rows %}
                         <li class="tw-arena-reward-item">{{ item.label }} x{{ item.amount }}</li>
                         {% endfor %}
-                        {% if not reward.resource_rows and not reward.item_rows %}
+                        {% if reward.random_item_rows %}
+                        {% if reward.key == "gladiator_chest" %}
+                        <li class="tw-arena-reward-item">随机角斗士装备</li>
+                        {% else %}
+                        <li class="tw-arena-reward-item">随机奖励</li>
+                        {% endif %}
+                        {% endif %}
+                        {% if not reward.resource_rows and not reward.item_rows and not reward.random_item_rows %}
                         <li class="tw-arena-reward-item">无奖励配置</li>
                         {% endif %}
                     </ul>
@@ -49,19 +56,4 @@
     </div>
 </section>
 
-<section class="tw-panel">
-    <div class="tw-panel-header">最近兑换记录</div>
-    <div class="tw-panel-content text-sm">
-        <div class="space-y-2">
-            {% for record in recent_exchange_records %}
-            <div class="p-3 rounded-md border border-border-light bg-bg-hover">
-                <p>{{ record.reward_name }} x{{ record.quantity }}（消耗 {{ record.cost_coins }} 角斗币）</p>
-                <p class="text-text-muted">{{ record.created_at|date:"m-d H:i:s" }}</p>
-            </div>
-            {% empty %}
-            <p class="tw-empty-hint">暂无兑换记录。</p>
-            {% endfor %}
-        </div>
-    </div>
-</section>
 {% endblock %}

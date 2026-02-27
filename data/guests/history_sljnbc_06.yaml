@@ -1,13 +1,13 @@
 heroes:
-  green:
+  blue:
   - key: hist_sljnbc_0251
     name: 孟获
     default_gender: male
     archetype: military
     flavor: （？—？）七擒七纵，南中归心。南中蛮族首领，在当地各部落中威望极高。建兴三年南中诸郡叛乱，他被推为首领与蜀汉对抗。诸葛亮亲率大军南征，采纳马谡"攻心为上"的策略，决心收服其心而非仅取其地。诸葛亮七次设计擒获孟获，每次都给予优待并释放，问他服不服。孟获前六次皆不服，声称"来时不知虚实，今知矣，再战必胜"。
     growth_range:
-    - 3
-    - 6
+    - 5
+    - 9
     attribute_weights:
       force: 40
       intellect: 15
@@ -19,13 +19,118 @@ heroes:
     archetype: civil
     flavor: （207年—271年）乐不思蜀，亡国之君。涿郡涿县人，刘备之子，蜀汉第二任也是末代皇帝，在位四十一年。长坂坡之战时他尚在襁褓，由赵云怀抱杀出重围得以保全。他在诸葛亮辅佐下度过前半生，诸葛亮事无巨细皆亲力亲为，他只需无为而治。诸葛亮去世后他逐渐重用宦官黄皓，朝政日非。魏将邓艾偷渡阴平直逼成都，他在谯周劝说下不战而降，蜀汉灭亡。
     growth_range:
-    - 3
-    - 7
+    - 5
+    - 9
     attribute_weights:
       force: 20
       intellect: 40
       defense: 20
       agility: 20
+  - key: hist_sljnbc_0258
+    name: 邓芝
+    default_gender: male
+    archetype: civil
+    flavor: （178年—251年）刚正不阿，重修吴盟。义阳新野人，汉光武帝刘秀的后裔。他早年入蜀避乱，刘备入蜀后他历任县令，政绩卓著。刘备驾崩后蜀吴关系紧张，他奉诸葛亮之命出使东吴。面对孙权的犹豫和威胁，他从容不迫，晓以利害，言辞恳切却不卑不亢。孙权问他若吴蜀联军灭魏后天下当如何处置，他坦然答曰"各安其分"，以坦诚赢得了孙权的敬重。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 56
+      defense: 22
+      agility: 10
+  - key: hist_sljnbc_0260
+    name: 孙尚香
+    default_gender: female
+    archetype: military
+    flavor: （？—？）东汉末年至三国时期女性人物，吴郡富春人，孙权之妹，刘备之妻。史书记载她名不详，后世多以“孙尚香”称之。她性格刚烈尚武，有其父兄之风，左右侍婢百余人皆执刀侍立。赤壁之战后为巩固孙刘联盟，孙权将她嫁给刘备。刘备每次入内寝都心怀畏惧，诸葛亮也认为"主公在公安，北畏曹操之强，东惮孙权之逼，近则惧孙夫人生变于肘腋之下"。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 40
+      intellect: 15
+      defense: 23
+      agility: 22
+  - key: hist_sljnbc_0279
+    name: 刘璋
+    default_gender: male
+    archetype: civil
+    flavor: （？—220年）东汉末年益州牧，江夏竟陵人，字季玉，刘焉幼子。他继承父亲刘焉之位统治益州，在位期间政务宽和，百姓得以休养。建安十六年（211年）他惧怕汉中张鲁的威胁，听从张松建议迎刘备入川。刘备入蜀后反客为主，围攻成都。建安十九年（214年）他开城投降，益州遂归刘备所有。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 20
+      intellect: 40
+      defense: 20
+      agility: 20
+  - key: hist_sljnbc_0293
+    name: 张松
+    default_gender: male
+    archetype: civil
+    flavor: （？—212年）益州别驾，蜀郡成都人，字子乔。他身材矮小、相貌丑陋，但才华过人，尤以过目不忘著称。曹操平定荆州后，刘璋派他出使曹营。他因受曹操冷遇而心怀怨恨，归来后劝说刘璋迎接刘备入川。他暗中与法正、孟达联络，为刘备绘制益州地图并提供军事情报。刘备入川后与刘璋反目，他的兄长张肃告发其通敌之事，刘璋遂将其处死。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 56
+      defense: 22
+      agility: 10
+  - key: hist_sljnbc_0295
+    name: 孙坚
+    default_gender: male
+    archetype: military
+    flavor: （155年—191年）江东猛虎，孙氏奠基人。吴郡富春人，据说是孙武后裔。他少年时便以勇武闻名，曾单枪匹马追击海盗，斩首而还。黄巾之乱时他募兵讨贼，屡建功勋；讨伐董卓时他担任先锋，威震诸侯，是联军中唯一击败董卓军的将领。他在洛阳废墟的井中得到传国玉玺，引发了后来无数纷争。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 40
+      intellect: 15
+      defense: 23
+      agility: 22
+  - key: hist_sljnbc_0297
+    name: 孙皓
+    default_gender: male
+    archetype: civil
+    flavor: （242年—284年）东吴末帝，暴虐亡国。字元宗，孙权之孙，废太子孙和之子。他即位之初励精图治，颇有明君气象，朝野期望甚高。然而不久他便露出暴虐本性，大肆杀戮宗室重臣，酷刑滥用，宫中常闻惨叫之声。他迷信巫术，穷奢极欲，大修宫殿，耗尽民力。他喜欢让群臣饮酒，醉后令侍从相互揭发过失，有言辄诛，朝臣人人自危。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 20
+      intellect: 40
+      defense: 20
+      agility: 20
+  - key: hist_sljnbc_0298
+    name: 大乔
+    default_gender: female
+    archetype: civil
+    flavor: （？—？）江东二乔之姐，孙策之妻。庐江皖县人，与妹妹小乔并称"江东二乔"，国色天香名动江南。孙策攻破皖城后，将二乔姐妹纳入府中，孙策娶大乔为妻，周瑜娶小乔为妻，一时传为佳话。然而好景不长，仅仅两年后孙策便遇刺身亡，年仅二十六岁，而大乔当时也不过二十岁左右。她年纪轻轻便守寡，此后的人生史书再无记载，只知她育有一子孙绍。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_sljnbc_0300
+    name: 步骘
+    default_gender: male
+    archetype: civil
+    flavor: （？—247年）宽弘长者，平定交州。临淮淮阴人，与诸葛瑾、严畯齐名，并称"东吴三友"。他年轻时家贫却志向远大，以才学闻名。他追随孙权后历任要职，以宽厚仁慈、处事稳重著称。他最大的功绩是平定交州。交州刺史士燮死后其子士徽据城自立不服东吴，他奉命率军南下。他先礼后兵，遣使晓谕利害，士徽不听，他便挥军进攻。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 20
+      intellect: 40
+      defense: 20
+      agility: 20
+  green:
   - key: hist_sljnbc_0253
     name: 糜竺
     default_gender: male
@@ -91,19 +196,6 @@ heroes:
       intellect: 56
       defense: 22
       agility: 10
-  - key: hist_sljnbc_0258
-    name: 邓芝
-    default_gender: male
-    archetype: civil
-    flavor: （178年—251年）刚正不阿，重修吴盟。义阳新野人，汉光武帝刘秀的后裔。他早年入蜀避乱，刘备入蜀后他历任县令，政绩卓著。刘备驾崩后蜀吴关系紧张，他奉诸葛亮之命出使东吴。面对孙权的犹豫和威胁，他从容不迫，晓以利害，言辞恳切却不卑不亢。孙权问他若吴蜀联军灭魏后天下当如何处置，他坦然答曰"各安其分"，以坦诚赢得了孙权的敬重。
-    growth_range:
-    - 3
-    - 7
-    attribute_weights:
-      force: 12
-      intellect: 56
-      defense: 22
-      agility: 10
   - key: hist_sljnbc_0259
     name: 霍峻
     default_gender: male
@@ -117,19 +209,6 @@ heroes:
       intellect: 12
       defense: 40
       agility: 14
-  - key: hist_sljnbc_0260
-    name: 孙尚香
-    default_gender: female
-    archetype: military
-    flavor: （？—？）东汉末年至三国时期女性人物，吴郡富春人，孙权之妹，刘备之妻。史书记载她名不详，"孙尚香"之名出自戏曲小说。她性格刚烈尚武，有其父兄之风，左右侍婢百余人皆执刀侍立。赤壁之战后为巩固孙刘联盟，孙权将她嫁给刘备。刘备每次入内寝都心怀畏惧，诸葛亮也认为"主公在公安，北畏曹操之强，东惮孙权之逼，近则惧孙夫人生变于肘腋之下"。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 40
-      intellect: 15
-      defense: 23
-      agility: 22
   - key: hist_sljnbc_0261
     name: 邓忠
     default_gender: male
@@ -364,19 +443,6 @@ heroes:
       intellect: 15
       defense: 23
       agility: 22
-  - key: hist_sljnbc_0279
-    name: 刘璋
-    default_gender: male
-    archetype: civil
-    flavor: （？—220年）东汉末年益州牧，江夏竟陵人，字季玉，刘焉幼子。他继承父亲刘焉之位统治益州，在位期间政务宽和，百姓得以休养。建安十六年（211年）他惧怕汉中张鲁的威胁，听从张松建议迎刘备入川。刘备入蜀后反客为主，围攻成都。建安十九年（214年）他开城投降，益州遂归刘备所有。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 20
-      intellect: 40
-      defense: 20
-      agility: 20
   - key: hist_sljnbc_0280
     name: 张温
     default_gender: male
@@ -521,7 +587,7 @@ heroes:
       defense: 23
       agility: 22
   - key: hist_sljnbc_0291
-    name: 王濬
+    name: 王浚
     default_gender: male
     archetype: military
     flavor: （206年—286年2月）西晋将领，弘农湖县人，字士治。他博学多才，性格果断。任益州刺史期间，他奉命在蜀中建造大型战船，史称"舟楫之盛，自古未有"。太康元年（280年）晋武帝发动灭吴之战，他率水师顺江而下，沿途攻克西陵、夏口、武昌等重镇，势如破竹。三月他的舰队抵达建业，吴主孙皓出降，东吴灭亡，三国归晋。
@@ -546,19 +612,6 @@ heroes:
       intellect: 40
       defense: 20
       agility: 20
-  - key: hist_sljnbc_0293
-    name: 张松
-    default_gender: male
-    archetype: civil
-    flavor: （？—212年）益州别驾，蜀郡成都人，字子乔。他身材矮小、相貌丑陋，但才华过人，尤以过目不忘著称。曹操平定荆州后，刘璋派他出使曹营。他因受曹操冷遇而心怀怨恨，归来后劝说刘璋迎接刘备入川。他暗中与法正、孟达联络，为刘备绘制益州地图并提供军事情报。刘备入川后与刘璋反目，他的兄长张肃告发其通敌之事，刘璋遂将其处死。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 12
-      intellect: 56
-      defense: 22
-      agility: 10
   - key: hist_sljnbc_0294
     name: 来敏
     default_gender: male
@@ -572,19 +625,6 @@ heroes:
       intellect: 40
       defense: 20
       agility: 20
-  - key: hist_sljnbc_0295
-    name: 孙坚
-    default_gender: male
-    archetype: military
-    flavor: （155年—191年）江东猛虎，孙氏奠基人。吴郡富春人，据说是孙武后裔。他少年时便以勇武闻名，曾单枪匹马追击海盗，斩首而还。黄巾之乱时他募兵讨贼，屡建功勋；讨伐董卓时他担任先锋，威震诸侯，是联军中唯一击败董卓军的将领。他在洛阳废墟的井中得到传国玉玺，引发了后来无数纷争。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 40
-      intellect: 15
-      defense: 23
-      agility: 22
   - key: hist_sljnbc_0296
     name: 潘璋
     default_gender: male
@@ -598,32 +638,6 @@ heroes:
       intellect: 15
       defense: 23
       agility: 22
-  - key: hist_sljnbc_0297
-    name: 孙皓
-    default_gender: male
-    archetype: civil
-    flavor: （242年—284年）东吴末帝，暴虐亡国。字元宗，孙权之孙，废太子孙和之子。他即位之初励精图治，颇有明君气象，朝野期望甚高。然而不久他便露出暴虐本性，大肆杀戮宗室重臣，酷刑滥用，宫中常闻惨叫之声。他迷信巫术，穷奢极欲，大修宫殿，耗尽民力。他喜欢让群臣饮酒，醉后令侍从相互揭发过失，有言辄诛，朝臣人人自危。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 20
-      intellect: 40
-      defense: 20
-      agility: 20
-  - key: hist_sljnbc_0298
-    name: 大乔
-    default_gender: female
-    archetype: civil
-    flavor: （？—？）江东二乔之姐，孙策之妻。庐江皖县人，与妹妹小乔并称"江东二乔"，国色天香名动江南。孙策攻破皖城后，将二乔姐妹纳入府中，孙策娶大乔为妻，周瑜娶小乔为妻，一时传为佳话。然而好景不长，仅仅两年后孙策便遇刺身亡，年仅二十六岁，而大乔当时也不过二十岁左右。她年纪轻轻便守寡，此后的人生史书再无记载，只知她育有一子孙绍。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 12
-      intellect: 58
-      defense: 18
-      agility: 12
   - key: hist_sljnbc_0299
     name: 陈登
     default_gender: male
@@ -637,16 +651,3 @@ heroes:
       intellect: 22
       defense: 24
       agility: 18
-  - key: hist_sljnbc_0300
-    name: 步骘
-    default_gender: male
-    archetype: civil
-    flavor: （？—247年）宽弘长者，平定交州。临淮淮阴人，与诸葛瑾、严畯齐名，并称"东吴三友"。他年轻时家贫却志向远大，以才学闻名。他追随孙权后历任要职，以宽厚仁慈、处事稳重著称。他最大的功绩是平定交州。交州刺史士燮死后其子士徽据城自立不服东吴，他奉命率军南下。他先礼后兵，遣使晓谕利害，士徽不听，他便挥军进攻。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 20
-      intellect: 40
-      defense: 20
-      agility: 20

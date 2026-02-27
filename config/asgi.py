@@ -21,8 +21,12 @@ django_asgi_app = get_asgi_application()
 try:
     from websocket import routing as websocket_routing
 except Exception as exc:  # pragma: no cover - fallback if apps not ready
-    logger.exception("Failed to import websocket routing; WebSocket endpoints disabled: %s", exc)
-    websocket_routing = None  # type: ignore[assignment]
+    if settings.DEBUG:
+        logger.exception("Failed to import websocket routing in DEBUG mode; WebSocket endpoints disabled: %s", exc)
+        websocket_routing = None  # type: ignore[assignment]
+    else:
+        logger.exception("Failed to import websocket routing; refusing to start in production: %s", exc)
+        raise
 
 websocket_urlpatterns = []
 if websocket_routing and getattr(websocket_routing, "websocket_urlpatterns", None):

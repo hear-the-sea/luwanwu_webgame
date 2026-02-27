@@ -138,6 +138,7 @@ def can_attack_target(
     recent_attacks: Optional[int] = None,
     now: Optional[timezone.datetime] = None,
     use_cached_recent_attacks: bool = True,
+    check_defeat_protection: bool = True,
 ) -> Tuple[bool, str]:
     """
     检查是否可以攻击目标庄园。
@@ -148,6 +149,7 @@ def can_attack_target(
         recent_attacks: 可选的“目标24小时内被攻击次数”预计算值；提供时将跳过数据库 COUNT
         now: 可选的当前时间（用于批量计算时复用）
         use_cached_recent_attacks: 是否允许使用短TTL缓存读取被攻击次数
+        check_defeat_protection: 是否检查防守方战败保护（侦察逻辑可关闭）
 
     Returns:
         (是否可攻击, 原因说明)
@@ -165,6 +167,8 @@ def can_attack_target(
     # 检查防守方保护状态
     if defender.is_under_newbie_protection:
         return False, "对方处于新手保护期"
+    if check_defeat_protection and defender.is_under_defeat_protection:
+        return False, "对方处于战败保护期"
     if defender.is_under_peace_shield:
         return False, "对方处于免战牌保护期"
 

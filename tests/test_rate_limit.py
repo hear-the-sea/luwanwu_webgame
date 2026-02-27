@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from django.contrib.auth import get_user_model
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.sessions.middleware import SessionMiddleware
@@ -105,3 +107,46 @@ class RateLimitRedirectTests(TestCase):
         self.assertEqual(first.status_code, 200)
         self.assertEqual(second.status_code, 302)
         self.assertEqual(second["Location"], "/rate-limit")
+
+    def test_rate_limit_redirect_ajax_returns_json_when_limited(self):
+        request = self.factory.post(
+            "/test",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            HTTP_ACCEPT="application/json",
+        )
+        request.user = self.user
+        _attach_session_and_messages(request)
+
+        first = _limited_view(request)
+        second = _limited_view(request)
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 429)
+        payload = json.loads(second.content.decode("utf-8"))
+        self.assertEqual(payload["success"], False)
+        self.assertIn("频繁", payload["error"])
+
+    def test_rate_limit_redirect_ajax_returns_json_when_cache_down(self):
+        request = self.factory.post(
+            "/test",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            HTTP_ACCEPT="application/json",
+        )
+        request.user = self.user
+        _attach_session_and_messages(request)
+
+        original_add = cache.add
+
+        def raise_redis_error(*args, **kwargs):
+            raise RedisError("cache unavailable")
+
+        try:
+            cache.add = raise_redis_error
+            response = _limited_view(request)
+        finally:
+            cache.add = original_add
+
+        self.assertEqual(response.status_code, 503)
+        payload = json.loads(response.content.decode("utf-8"))
+        self.assertEqual(payload["success"], False)
+        self.assertIn("繁忙", payload["error"])

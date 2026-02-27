@@ -78,6 +78,9 @@ patch_*.py
 *.log
 logs/
 
+# Runtime bind-mount directories (production data)
+runtime/
+
 # OS
 Thumbs.db
 *:Zone.Identifier

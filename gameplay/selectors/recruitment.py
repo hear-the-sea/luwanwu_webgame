@@ -13,13 +13,15 @@ from guests.services import (
 
 from ..models import InventoryItem
 from ..services import refresh_manor_state
-from ..services.utils.cache import CACHE_TIMEOUT_SHORT, CacheKeys, invalidate_recruitment_hall_cache
-
-RECRUITMENT_HALL_CACHE_VERSION = 1
+from ..services.utils.cache import (
+    CACHE_TIMEOUT_SHORT,
+    invalidate_recruitment_hall_cache,
+    recruitment_hall_context_cache_key,
+)
 
 
 def _recruitment_hall_cache_key(manor_id: int) -> str:
-    return f"{CacheKeys.recruitment_hall_context(manor_id)}:v{RECRUITMENT_HALL_CACHE_VERSION}"
+    return recruitment_hall_context_cache_key(manor_id)
 
 
 def _format_duration_cn(seconds: int) -> str:

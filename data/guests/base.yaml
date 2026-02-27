@@ -5,56 +5,120 @@ heroes:
   - key: base_black_military
     name: 布衣百姓
     archetype: military
-    flavor: 茫茫人海中的普通一员，面朝黄土背朝天。虽然不懂江湖恩怨，却是这乱世中纳粮纳税、支撑天下的基石。默默无闻，生生不息。
+    flavor: 茫茫人海中的普通一员，面朝黄土背朝天。虽然不懂江湖恩怨，却要在税赋、徭役与战乱间艰难求生。他们也许没有姓名被史书记下，却以日复一日的劳作供养城池与军伍，是乱世中最沉默也最不可替代的根基力量。庄园兴衰，往往先从他们的生计冷暖上体现出来。
     default_gender: unknown
     default_morality: 60
     avatar: buyi.png
+    growth_range:
+    - 1
+    - 3
+    attribute_weights:
+      force: 45
+      intellect: 15
+      defense: 25
+      agility: 15
   - key: base_black_military_2
     name: 布衣百姓
     archetype: military
-    flavor: 市井间的寻常路人，每日为柴米油盐奔波。神仙打架，凡人遭殃，他们唯一的愿望不过是风调雨顺，一家平安。虽然卑微，却有着最顽强的生命力。
+    flavor: 市井间的寻常路人，每日为柴米油盐奔波。神仙打架，凡人遭殃，他们唯一的愿望不过是风调雨顺、一家平安。即便命运多舛，仍会在灾年后重建摊铺、在废墟上重新开火做饭，这份韧性正是民间秩序得以延续的关键。看似平凡的耐心，正是最持久的社会稳定器。
     default_gender: unknown
     default_morality: 60
     avatar: buyi.png
+    growth_range:
+    - 1
+    - 3
+    attribute_weights:
+      force: 45
+      intellect: 15
+      defense: 25
+      agility: 15
   - key: base_black_military_3
     name: 布衣百姓
     archetype: military
-    flavor: 无名无姓的乡野村民。在刀光剑影的江湖之外，过着日出而作、日落而息的生活。不仅能提供粮草赋税，危急时刻也能拿起农具保卫家园。
+    flavor: 无名无姓的乡野村民，在刀光剑影之外过着日出而作、日落而息的生活。平日耕田纳粮，灾时修堤赈邻，战乱逼近时也会抄起农具守住村口。看似微不足道的每一次坚持，最终共同构成了地方社会最朴实却最可靠的防线，也让流离者仍有归乡的可能。
     default_gender: unknown
     default_morality: 60
     avatar: buyi.png
+    growth_range:
+    - 1
+    - 3
+    attribute_weights:
+      force: 45
+      intellect: 15
+      defense: 25
+      agility: 15
   - key: base_black_military_4
     name: 布衣百姓
     archetype: civil
-    flavor: 繁华闹市里的匆匆过客，或许是小贩，或许是工匠。他们见证了无数英雄的崛起与陨落，自己却始终是这幅江湖画卷中最不起眼的底色。
+    flavor: 繁华闹市里的匆匆过客，或许是小贩，或许是工匠。他们见证了无数英雄的崛起与陨落，自己却始终站在舞台边缘。正是这些不起眼的人维持着集市流通、街巷手艺与邻里互助，让“天下大势”最终能落到每一顿饭、每一盏灯上。
     default_gender: unknown
     default_morality: 60
     avatar: buyi.png
+    growth_range:
+    - 1
+    - 3
+    attribute_weights:
+      force: 15
+      intellect: 45
+      defense: 20
+      agility: 20
   - key: base_black_military_5
     name: 布衣百姓
     archetype: military
-    flavor: 流离失所的难民，渴望一方安身立命之所。只要给一口饱饭，便愿意付出全部的忠诚与劳力。人多力量大，聚沙可成塔。
+    flavor: 流离失所的难民，背井离乡后最盼望的只是有一处安身立命之地。为了活下去，他们会在最短时间学会新的营生，也愿在组织中承担最辛苦的杂役与守备。若能被公平对待，这群人往往会爆发出惊人的凝聚力与执行力，成为重建秩序的重要起点。
     default_gender: unknown
     default_morality: 60
 
     avatar: buyi.png
+    growth_range:
+    - 1
+    - 3
+    attribute_weights:
+      force: 45
+      intellect: 15
+      defense: 25
+      agility: 15
   gray:
   - key: base_gray_civil
     name: 灰阶谋士
     archetype: civil
-    flavor: 默默无闻的寒门学子，家境清贫却勤学不辍，白日耕读，夜里挑灯抄书，只盼一朝金榜题名。性情谨慎内敛，善于观察人心与局势，在庄园里默默积累才学与人脉，甘于寂寞也不失清骨。
+    flavor: 默默无闻的寒门学子，家境清贫却勤学不辍，白日耕读，夜里挑灯抄书，只盼一朝金榜题名。性情谨慎内敛，善于观察人心与局势，在庄园里默默积累才学与人脉。其策论不见锋芒却常能补位应急，是基层治理中稳定而耐用的智力储备。
     default_gender: unknown
     default_morality: 65
+    growth_range:
+    - 2
+    - 5
+    attribute_weights:
+      force: 15
+      intellect: 45
+      defense: 20
+      agility: 20
   - key: base_gray_military
     name: 灰阶兵长
     archetype: military
-    flavor: 赶考途中暂居庄园的游侠，行走江湖多见不平事，剑术虽不张扬却出手稳准。为躲追兵与风雪而落脚此地，白天以护院为生，夜里仍记书卷志向，侠义与求名交织于心。
+    flavor: 赶考途中暂居庄园的游侠，行走江湖多见不平事，剑术虽不张扬却出手稳准。为躲追兵与风雪而落脚此地，白天以护院为生，夜里仍记书卷志向。其人兼具江湖应变与军伍纪律，适合承担巡防、押运与临时统领等高压力岗位，在乱局中尤显实用价值。
     default_gender: unknown
     default_morality: 50
+    growth_range:
+    - 2
+    - 5
+    attribute_weights:
+      force: 45
+      intellect: 15
+      defense: 25
+      agility: 15
   red:
   - key: base_red_military
     name: 占位
     archetype: military
-    flavor: 身经百战的基层军官，久历沙场，熟悉各类阵势与敌军习性。做事干脆果断，不尚空谈，常以身先士卒树立威信。虽非名将，却是战线中最坚硬的一环，关键时刻能顶住最凶的冲击。
+    flavor: 身经百战的基层军官，久历沙场，熟悉各类阵势与敌军习性。做事干脆果断，不尚空谈，常以身先士卒树立威信。虽非名将，却擅长在混战中稳定队形、维持补给与传令链路，是战线里最容易被忽视却最难替代的骨干，往往决定一场硬仗能否扛到最后。
     default_gender: unknown
     default_morality: 50
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 45
+      intellect: 15
+      defense: 25
+      agility: 15

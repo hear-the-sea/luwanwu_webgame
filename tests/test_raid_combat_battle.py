@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from datetime import timedelta
 from types import SimpleNamespace
 
@@ -112,6 +113,74 @@ def test_dispatch_complete_raid_task_uses_remaining_return_time(monkeypatch):
     assert captured["task"] is fake_complete_task
     assert captured["args"] == [42]
     assert captured["countdown"] == 37
+
+
+def test_process_raid_battle_ignores_post_commit_failures(monkeypatch):
+    now = timezone.now()
+    attacker = SimpleNamespace(id=1, location_display="江南", display_name="进攻方")
+    defender = SimpleNamespace(id=2, location_display="塞北", display_name="防守方")
+    saved = {"count": 0}
+    dispatched = {"count": 0}
+    run = SimpleNamespace(
+        pk=7,
+        id=7,
+        attacker_id=1,
+        defender_id=2,
+        attacker=attacker,
+        defender=defender,
+        status=RaidRun.Status.MARCHING,
+        save=lambda **_kwargs: saved.__setitem__("count", saved["count"] + 1),
+    )
+    report = SimpleNamespace(winner="attacker")
+
+    monkeypatch.setattr(combat_battle.transaction, "atomic", contextlib.nullcontext)
+    monkeypatch.setattr(combat_battle, "_prepare_run_for_battle", lambda *_args, **_kwargs: run)
+    monkeypatch.setattr(combat_battle, "_lock_battle_manors", lambda *_args, **_kwargs: (attacker, defender))
+    monkeypatch.setattr(combat_battle, "_execute_raid_battle", lambda *_args, **_kwargs: report)
+    monkeypatch.setattr(combat_battle, "apply_defender_troop_losses", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_apply_raid_loot_if_needed", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_apply_prestige_changes", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_apply_defeat_protection", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_apply_capture_reward", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_apply_salvage_reward", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        combat_battle,
+        "_send_raid_battle_messages",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("messages down")),
+    )
+    monkeypatch.setattr(
+        combat_battle,
+        "_dismiss_marching_raids_if_protected",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("dismiss down")),
+    )
+    monkeypatch.setattr(
+        combat_battle,
+        "_dispatch_complete_raid_task",
+        lambda *_args, **_kwargs: dispatched.__setitem__("count", dispatched["count"] + 1),
+    )
+
+    combat_battle.process_raid_battle(run, now=now)
+
+    assert run.status == RaidRun.Status.RETURNING
+    assert saved["count"] == 1
+    assert dispatched["count"] == 1
+
+
+@pytest.mark.django_db
+def test_apply_defeat_protection_sets_defender_until(django_user_model):
+    attacker_user = django_user_model.objects.create_user(username="raid_defeat_attacker", password="pass123")
+    defender_user = django_user_model.objects.create_user(username="raid_defeat_defender", password="pass123")
+    attacker = ensure_manor(attacker_user)
+    defender = ensure_manor(defender_user)
+
+    run = RaidRun.objects.create(attacker=attacker, defender=defender)
+    now = timezone.now()
+    combat_battle._apply_defeat_protection(run, is_attacker_victory=True, now=now)
+
+    defender.refresh_from_db()
+    expected = now + timedelta(seconds=combat_battle.combat_pkg.PVPConstants.RAID_DEFEAT_PROTECTION_SECONDS)
+    assert defender.defeat_protection_until is not None
+    assert abs((defender.defeat_protection_until - expected).total_seconds()) <= 1
 
 
 @pytest.mark.django_db

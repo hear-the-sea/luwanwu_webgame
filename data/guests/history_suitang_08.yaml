@@ -289,18 +289,6 @@ green:
     defense: 15
     agility: 16
 
-- key: hist_suitang_0271_liye
-  name: 李冶
-  default_gender: female
-  archetype: civil
-  flavor: （730年-784年）唐代女诗人，亦被称为女冠诗人，才名在当时文人圈中颇为显著。李冶作品多写情思、离别与自我处境，语言清丽而含克制，不少篇章透露女性在礼法与才情之间的张力。关于她的生活经历，后世记载夹杂评价与传闻，容易被道德化叙述覆盖，因此更稳妥的理解方式是回到诗本身：她把女性经验写得有锋利度，不仅是儿女情长，也包含对命运的自问。她让唐代文学史不再只由男性书写：以才情争取可见性，也让后世看到女性如何在有限空间里创造自己的语言。
-  growth_range: [4, 7]
-  attribute_weights:
-    force: 11
-    intellect: 40
-    defense: 16
-    agility: 17
-
 - key: hist_suitang_0272_lisi
   name: 李思训
   default_gender: male

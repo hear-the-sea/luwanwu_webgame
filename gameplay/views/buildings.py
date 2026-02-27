@@ -16,7 +16,7 @@ from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
 from core.exceptions import GameError
-from core.utils import sanitize_error_message
+from core.utils import safe_redirect_url, sanitize_error_message
 from gameplay.models import Building
 from gameplay.services import refresh_manor_state, start_upgrade
 
@@ -31,6 +31,11 @@ class UpgradeBuildingView(LoginRequiredMixin, TemplateView):
     success_url = reverse_lazy("gameplay:dashboard")
 
     def post(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
+        redirect_url = safe_redirect_url(
+            request,
+            (request.POST.get("next") or "").strip(),
+            str(self.success_url),
+        )
         building = get_object_or_404(
             Building.objects.select_related("manor", "manor__user"),
             pk=kwargs["pk"],
@@ -51,4 +56,4 @@ class UpgradeBuildingView(LoginRequiredMixin, TemplateView):
                 getattr(building, "id", None),
             )
             messages.error(request, sanitize_error_message(exc))
-        return redirect("gameplay:dashboard")
+        return redirect(redirect_url)

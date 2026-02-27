@@ -24,7 +24,7 @@ from guests.models import GuestStatus
 ARENA_PRIMARY_EVENT = {
     "key": "tianxia_buwu",
     "name": "天下布武",
-    "subtitle": "10 人门客淘汰赛",
+    "subtitle": f"{ARENA_TOURNAMENT_PLAYER_LIMIT} 人门客淘汰赛",
     "description": "报名满员后自动开赛，每 10 分钟推进一轮，直到决出最终胜者。",
 }
 
@@ -32,7 +32,10 @@ ARENA_PRIMARY_EVENT = {
 def _build_reward_rows(manor: Manor) -> list[dict]:
     catalog = load_arena_reward_catalog()
     resource_labels = dict(ResourceType.choices)
-    all_item_keys = {item_key for reward in catalog.values() for item_key in reward.items.keys()}
+    all_item_keys: set[str] = set()
+    for reward in catalog.values():
+        all_item_keys.update(reward.items.keys())
+        all_item_keys.update(option.item_key for option in reward.random_items)
     item_labels = get_item_template_names_by_keys(all_item_keys)
     rows: list[dict] = []
     for reward in catalog.values():
@@ -52,6 +55,21 @@ def _build_reward_rows(manor: Manor) -> list[dict]:
             }
             for key, amount in reward.items.items()
         ]
+        total_random_weight = sum(option.weight for option in reward.random_items)
+        random_item_rows = []
+        for option in reward.random_items:
+            chance = (option.weight * 100 / total_random_weight) if total_random_weight > 0 else 0
+            chance_float = float(chance)
+            chance_text = f"{int(chance_float)}%" if chance_float.is_integer() else f"{chance_float:.2f}%"
+            random_item_rows.append(
+                {
+                    "key": option.item_key,
+                    "label": item_labels.get(option.item_key, option.item_key),
+                    "amount": option.amount,
+                    "weight": option.weight,
+                    "chance_text": chance_text,
+                }
+            )
         rows.append(
             {
                 "key": reward.key,
@@ -63,6 +81,7 @@ def _build_reward_rows(manor: Manor) -> list[dict]:
                 "items": reward.items,
                 "resource_rows": resource_rows,
                 "item_rows": item_rows,
+                "random_item_rows": random_item_rows,
                 "can_afford": manor.arena_coins >= reward.cost_coins,
             }
         )

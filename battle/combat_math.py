@@ -7,8 +7,8 @@ from typing import Any
 
 # 门客对小兵的屠戮倍率
 # 设计理由：让门客对小兵有压倒性优势，配合单兵防御系统保持合理战斗节奏
-# 效果示例：600伤害门客 vs 弓箭手(单位HP13)，击杀数从46人提升到1384人
-SLAUGHTER_MULTIPLIER = 30
+# 效果示例：600伤害门客 vs 弓箭手(单位HP13)，击杀数从46人提升到692人
+SLAUGHTER_MULTIPLIER = 15
 
 # 小兵对门客的攻击除数
 # 公式：effective_attack = unit_attack * (strength / divisor)
@@ -90,19 +90,19 @@ def calculate_slaughter_multiplier(attacker: Any, target: Any) -> float:
     设计目标：让门客对小兵有明显优势，配合单兵防御系统保持合理战斗节奏
 
     计算公式：
-    - 固定倍率：30倍
+    - 固定倍率：15倍
     - 在结算时将门客对小兵的最终伤害乘以该倍率
       （见 simulation_core.perform_attack），击杀数按
       kills = int(final_damage / per_unit_hp) 计算。
 
     效果示例（600伤害 vs 弓箭手单位HP13）：
     - 基础击杀：600 / 13 ≈ 46人
-    - 屠戮加成：final_damage = 600 * 30 = 18000
-      kills = 18000 / 13 ≈ 1384人
-    - 倍率效果：30x击杀速度
+    - 屠戮加成：final_damage = 600 * 15 = 9000
+      kills = 9000 / 13 ≈ 692人
+    - 倍率效果：15x击杀速度
 
     战斗预期（配合单兵防御系统）：
-    - 600攻击门客 vs 2000满科技小兵（单兵防御12）：约11回合
+    - 600攻击门客 vs 2000满科技小兵（单兵防御12）：约20回合
     - 门客有压倒性优势但需要合理回合数
     - 小兵防御提升（科技）能延长战斗时间
     """

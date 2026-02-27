@@ -71,7 +71,7 @@
                         <div class="tw-guest-card">
                             <div class="tw-guest-avatar">
                                 {% if guest.template.avatar %}
-                                <img src="{{ guest.template.avatar.url }}" alt="{{ guest.display_name }}">
+                                <img src="{{ guest.template.avatar.url }}" alt="{{ guest.display_name }}" loading="lazy" decoding="async">
                                 {% else %}
                                 <div class="tw-avatar-placeholder">{{ guest.display_name|slice:":1" }}</div>
                                 {% endif %}
@@ -115,7 +115,7 @@
                         <div class="tw-troop-info">
                             <div class="tw-troop-avatar">
                                 {% if troop.avatar %}
-                                <img src="{{ troop.avatar }}" alt="{{ troop.name }}">
+                                <img src="{{ troop.avatar }}" alt="{{ troop.name }}" loading="lazy" decoding="async">
                                 {% else %}
                                 <div class="tw-avatar-placeholder">{{ troop.name|slice:":1" }}</div>
                                 {% endif %}

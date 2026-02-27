@@ -1,4 +1,187 @@
 heroes:
+  blue:
+  - key: hist_xianqin_0255
+    name: 赵盾
+    default_gender: male
+    archetype: civil
+    flavor: （?—前601年）晋国执政，功过参半。他是晋国历史上最有权势的大臣之一，执政二十余年，权倾朝野。他起用贤才、改革内政，使晋国保持了霸主地位。然而他独揽朝政，引起晋灵公的忌恨。灵公荒淫无道，以弹弓射人取乐，赵盾多次劝谏无效，反遭灵公派人刺杀。他被迫出逃，在他离开都城尚未出境时，其族人赵穿刺杀了灵公。史官董狐秉笔直书："赵盾弑其君。"赵盾辩解说他已出逃，董狐答："子为正卿，亡不越竟，反不讨贼，非子而谁？"这段"董狐直笔"的公案，成为千古争议的话题。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 52
+      defense: 20
+      agility: 14
+  - key: hist_xianqin_0269
+    name: 芈八子
+    default_gender: female
+    archetype: civil
+    flavor: （?—前265年）宣太后，铁腕女主。她是楚国公主，嫁给秦惠文王为妃，生下秦昭襄王。惠文王死后，她以太后身份临朝称制三十六年，成为战国时期最有权势的女性。她知人善任，用弟弟魏冉掌军政、用白起为主将，秦国在她的统治下不断扩张，蚕食六国。她外交手腕高超，曾与义渠王私通数年，生下两子，最后设计诱杀义渠王于甘泉宫，吞并义渠国。她晚年恋上面首魏丑夫，临终欲令其殉葬，被大臣庸芮以"地下无知觉"巧言劝止。她的一生，是权力与欲望的传奇。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 56
+      defense: 18
+      agility: 16
+  - key: hist_xianqin_0271
+    name: 嫪毐
+    default_gender: male
+    archetype: military
+    flavor: （?—前238年）秦国巨奸，假宦真乱。他是战国末期最声名狼藉的人物之一。吕不韦为摆脱与赵太后的纠缠，将嫪毐假冒宦官送入宫中侍奉太后。嫪毐与赵太后私通多年，竟生下两个儿子，封侯拜爵，权势熏天。秦始皇二十二岁亲政前夕，嫪毐发动叛乱欲夺权，兵败被擒。秦始皇大怒，将其车裂示众，夷灭三族，两个私生子也被装入麻袋摔死。嫪毐之乱是秦始皇亲政前最大的政治风波，也暴露了秦宫内部的腐败与混乱。他的名字成为乱臣贼子、祸国殃民的代名词。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 38
+      intellect: 14
+      defense: 24
+      agility: 24
+  - key: hist_xianqin_0272
+    name: 赵太后
+    default_gender: female
+    archetype: civil
+    flavor: （?—前228年）秦始皇生母，丑闻缠身。她原名赵姬，本是邯郸富商之女，先为吕不韦姬妾，后被献给在赵国为质的秦公子异人（后来的秦庄襄王）。庄襄王早逝后，她成为太后。她与吕不韦旧情难断，又与嫪毐私通生子，丑闻震惊朝野。嫪毐之乱后，秦始皇一度将她幽禁，后在群臣劝谏下才恢复母子关系。她的放荡行为给年少的秦始皇留下深重的心理阴影，有人认为秦始皇不立皇后、焚书坑儒的极端性格与此有关。她的一生，是秦宫最大的丑闻。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 52
+      defense: 20
+      agility: 20
+  - key: hist_xianqin_0281
+    name: 胡亥
+    default_gender: male
+    archetype: military
+    flavor: （前230年—前207年）秦二世，亡国之君。他是秦始皇的幼子，在赵高的操纵下登上帝位。他即位后沉迷于声色犬马，将朝政大权尽数交给赵高。赵高指鹿为马，铲除异己，他竟然毫无察觉。当陈胜吴广起义的消息传来，他说"鼠窃狗盗，不足忧也"；当项羽攻破函谷关，他仍在宫中饮酒作乐。最终赵高逼他自杀，秦朝名存实亡。他是典型的昏君亡国之君：既无才能又无远见，既无担当又无主见，只知享乐不问政事，终于葬送了父皇的千秋基业。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 32
+      intellect: 18
+      defense: 26
+      agility: 24
+  - key: hist_xianqin_0253
+    name: 张孟谈
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）赵襄子谋士，反间灭智。他是三家分晋的关键人物。智伯联合韩、魏攻赵，水灌晋阳，城中"悬釜而炊，易子而食"，赵氏危在旦夕。他献计赵襄子：智伯骄横，韩、魏是被迫从征，其实心怀不满。他秘密出城，说服韩、魏两家反水，约定共同反杀智伯。那一夜，韩、魏掘开河堤反灌智伯军营，赵军乘势杀出，智伯大败身死，智氏灭族。此战之后，晋国实际上已被赵、韩、魏三家瓜分，三家分晋成为定局。张孟谈以三寸不烂之舌，改写了历史的走向。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 56
+      defense: 18
+      agility: 16
+  - key: hist_xianqin_0254
+    name: 屠岸贾
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）晋国奸臣，赵氏仇敌。他是晋灵公的宠臣，为人阴险狠毒，与正直的赵盾势不两立。晋灵公被赵穿弑杀后，他对赵氏怀恨在心，伺机报复。晋景公时期，他诬告赵氏有谋反之心，带兵围杀赵氏全族，满门老幼三百余口尽被屠戮。唯有赵氏孤儿赵武在程婴、公孙杵臼的舍命保护下幸免于难。十五年后，赵武在韩厥的支持下复仇，屠岸贾被灭族。他的故事因元杂剧《赵氏孤儿》而广为流传，成为中国古代奸臣的典型代表。他的阴狠与程婴的忠义形成鲜明对照，善恶到头终有报。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 36
+      intellect: 20
+      defense: 24
+      agility: 20
+  - key: hist_xianqin_0257
+    name: 姬夷皋
+    default_gender: male
+    archetype: military
+    flavor: （?—前607年）荒淫暴君，咎由自取。他是晋国国君，以荒淫残暴著称于世。他在高台上以弹弓射人，看人躲避取乐；厨师做熊掌不合口味，他竟将其杀死，让宫女用筐抬尸而过朝堂。大臣赵盾屡次进谏，他不仅不听，反而派刺客鉏麑去行刺赵盾。鉏麑见赵盾清晨穿戴整齐准备上朝，感其忠正，不忍下手，撞树而死。灵公又设宴埋伏甲士欲杀赵盾，被赵盾的护卫提弥明舍命救出。他最终被赵穿刺杀于桃园，成为春秋时期昏君暴政的典型。他的故事警示后人：失德丧道，必遭天谴。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 34
+      intellect: 18
+      defense: 26
+      agility: 22
+  - key: hist_xianqin_0258
+    name: 姬周
+    default_gender: male
+    archetype: military
+    flavor: （前586年—前558年）晋国复兴之主，中兴明君。他是晋国历史上最英明的君主之一。他即位时年仅十四岁，却展现出超越年龄的成熟与智慧。他任用贤才，整顿内政：起用魏绛推行和戎政策，使晋国北境安定；任用士会、韩厥等能臣，使朝政清明。在他治下，晋国八年之间九合诸侯，再次成为天下霸主。他为政宽仁，不滥杀戮，善于纳谏，赏罚分明。可惜天不假年，他仅在位十五年便英年早逝，年仅二十九岁。若他能长寿，晋国或许不会走向六卿专政、三家分晋的道路。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 36
+      intellect: 22
+      defense: 24
+      agility: 18
+  - key: hist_xianqin_0263
+    name: 嬴荡
+    default_gender: male
+    archetype: military
+    flavor: （前329年—前307年）举鼎而亡，壮志未酬。他是秦惠文王之子嬴荡，以勇武好力著称。他即位后励精图治，拓展疆土，攻取韩国宜阳，打开了秦国东进中原的门户。他雄心勃勃，欲窥周室以示天下。在周室太庙中，他见到象征天下九州的九鼎，一时兴起，与力士比试举鼎。他勉强举起龙文赤鼎，却因气力耗尽而失手，被鼎压断胫骨，当夜气绝身亡，年仅二十三岁。他英年早逝，无子即位，引发了秦国内部的激烈权力斗争。他的死是秦国历史上最戏剧性的意外之一。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 44
+      intellect: 14
+      defense: 24
+      agility: 18
+  - key: hist_xianqin_0264
+    name: 甘龙
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）秦国老臣，守旧派代表。他是秦孝公时期的老臣，代表秦国世族保守势力。当商鞅入秦提出变法主张时，他与之展开了激烈的辩论。他主张"法古无过，循礼无邪"——遵循古法不会有错，依照旧礼不会有害。商鞅则反驳："治世不一道，便国不法古。"辩论以商鞅完胜告终，秦孝公坚定了变法决心。甘龙虽然辩论失败，但他代表了一种思想立场：每一次变革，必然伴随着守旧势力的反对。改革者需要的不仅是好的方案，更需要推动变革的魄力与时机。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 54
+      defense: 22
+      agility: 14
+  - key: hist_xianqin_0273
+    name: 成蟜
+    default_gender: male
+    archetype: military
+    flavor: （?—前239年）秦始皇异母弟，叛国降赵。他是秦庄襄王之子，秦始皇的异母弟弟。秦始皇八年，他奉命率军攻打赵国，却在军中突然叛变，投降了敌国赵国。关于他叛变的原因，史书记载不详，有人认为与嫪毐之乱、宫廷内斗有关。他投赵后不久便死去，死因成谜。他的叛变说明：即便是如日中天的秦国，内部也并非铁板一块。秦始皇统一天下之前，首先要扫除的是内部的隐患——嫪毐之乱、成蟜叛变，都是这一时期的动荡缩影。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 38
+      intellect: 14
+      defense: 26
+      agility: 22
+  - key: hist_xianqin_0285
+    name: 周市
+    default_gender: male
+    archetype: military
+    flavor: （?—前208年）魏国贵族，复国元勋。他是战国魏国贵族的后裔，在大泽乡起义后趁势而起。他率军攻取魏地，拥立魏咎为魏王，恢复魏国社稷。他本人被封为魏相，实际执掌魏国军政大权。然而复国不久，秦将章邯便率军来攻。魏国兵力单薄，难以抵挡秦军精锐。他在与秦军的战斗中失败身亡，魏国再度覆灭。他代表了六国贵族借反秦浪潮复国的努力，虽然最终失败，却说明秦朝的暴政已使六国遗民怀念故国。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 38
+      intellect: 18
+      defense: 26
+      agility: 18
+  - key: hist_xianqin_0286
+    name: 魏咎
+    default_gender: male
+    archetype: military
+    flavor: （?—前208年）战国魏室后裔，复国短命。他是战国魏国王室的后裔，被周市拥立为魏王，恢复了魏国社稷。然而国祚极为短暂，秦将章邯率军攻来，魏军节节败退。临淄（魏都临济）被围，他坚守孤城，向各路义军求援。田儋率齐军来救，却在战斗中阵亡。城破之际，他不愿受辱，自焚而死。他虽为亡国之后，却有宁死不屈的骨气。他的死说明：六国复国的努力虽然波澜壮阔，却在秦军的强大攻势下难以为继。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 36
+      intellect: 18
+      defense: 26
+      agility: 20
   green:
   - key: hist_xianqin_0250
     name: 颠颉
@@ -39,45 +222,6 @@ heroes:
       intellect: 18
       defense: 26
       agility: 18
-  - key: hist_xianqin_0253
-    name: 张孟谈
-    default_gender: male
-    archetype: civil
-    flavor: （生卒年不详）赵襄子谋士，反间灭智。他是三家分晋的关键人物。智伯联合韩、魏攻赵，水灌晋阳，城中"悬釜而炊，易子而食"，赵氏危在旦夕。他献计赵襄子：智伯骄横，韩、魏是被迫从征，其实心怀不满。他秘密出城，说服韩、魏两家反水，约定共同反杀智伯。那一夜，韩、魏掘开河堤反灌智伯军营，赵军乘势杀出，智伯大败身死，智氏灭族。此战之后，晋国实际上已被赵、韩、魏三家瓜分，三家分晋成为定局。张孟谈以三寸不烂之舌，改写了历史的走向。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 10
-      intellect: 56
-      defense: 18
-      agility: 16
-  - key: hist_xianqin_0254
-    name: 屠岸贾
-    default_gender: male
-    archetype: military
-    flavor: （生卒年不详）晋国奸臣，赵氏仇敌。他是晋灵公的宠臣，为人阴险狠毒，与正直的赵盾势不两立。晋灵公被赵穿弑杀后，他对赵氏怀恨在心，伺机报复。晋景公时期，他诬告赵氏有谋反之心，带兵围杀赵氏全族，满门老幼三百余口尽被屠戮。唯有赵氏孤儿赵武在程婴、公孙杵臼的舍命保护下幸免于难。十五年后，赵武在韩厥的支持下复仇，屠岸贾被灭族。他的故事因元杂剧《赵氏孤儿》而广为流传，成为中国古代奸臣的典型代表。他的阴狠与程婴的忠义形成鲜明对照，善恶到头终有报。
-    growth_range:
-    - 3
-    - 7
-    attribute_weights:
-      force: 36
-      intellect: 20
-      defense: 24
-      agility: 20
-  - key: hist_xianqin_0255
-    name: 赵盾
-    default_gender: male
-    archetype: civil
-    flavor: （?—前601年）晋国执政，功过参半。他是晋国历史上最有权势的大臣之一，执政二十余年，权倾朝野。他起用贤才、改革内政，使晋国保持了霸主地位。然而他独揽朝政，引起晋灵公的忌恨。灵公荒淫无道，以弹弓射人取乐，赵盾多次劝谏无效，反遭灵公派人刺杀。他被迫出逃，在他离开都城尚未出境时，其族人赵穿刺杀了灵公。史官董狐秉笔直书："赵盾弑其君。"赵盾辩解说他已出逃，董狐答："子为正卿，亡不越竟，反不讨贼，非子而谁？"这段"董狐直笔"的公案，成为千古争议的话题。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 14
-      intellect: 52
-      defense: 20
-      agility: 14
   - key: hist_xianqin_0256
     name: 赵穿
     default_gender: male
@@ -91,32 +235,6 @@ heroes:
       intellect: 12
       defense: 26
       agility: 20
-  - key: hist_xianqin_0257
-    name: 姬夷皋
-    default_gender: male
-    archetype: military
-    flavor: （?—前607年）荒淫暴君，咎由自取。他是晋国国君，以荒淫残暴著称于世。他在高台上以弹弓射人，看人躲避取乐；厨师做熊掌不合口味，他竟将其杀死，让宫女用筐抬尸而过朝堂。大臣赵盾屡次进谏，他不仅不听，反而派刺客鉏麑去行刺赵盾。鉏麑见赵盾清晨穿戴整齐准备上朝，感其忠正，不忍下手，撞树而死。灵公又设宴埋伏甲士欲杀赵盾，被赵盾的护卫提弥明舍命救出。他最终被赵穿刺杀于桃园，成为春秋时期昏君暴政的典型。他的故事警示后人：失德丧道，必遭天谴。
-    growth_range:
-    - 3
-    - 7
-    attribute_weights:
-      force: 34
-      intellect: 18
-      defense: 26
-      agility: 22
-  - key: hist_xianqin_0258
-    name: 姬周
-    default_gender: male
-    archetype: military
-    flavor: （前586年—前558年）晋国复兴之主，中兴明君。他是晋国历史上最英明的君主之一。他即位时年仅十四岁，却展现出超越年龄的成熟与智慧。他任用贤才，整顿内政：起用魏绛推行和戎政策，使晋国北境安定；任用士会、韩厥等能臣，使朝政清明。在他治下，晋国八年之间九合诸侯，再次成为天下霸主。他为政宽仁，不滥杀戮，善于纳谏，赏罚分明。可惜天不假年，他仅在位十五年便英年早逝，年仅二十九岁。若他能长寿，晋国或许不会走向六卿专政、三家分晋的道路。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 36
-      intellect: 22
-      defense: 24
-      agility: 18
   - key: hist_xianqin_0259
     name: 鸠摩
     default_gender: male
@@ -169,32 +287,6 @@ heroes:
       intellect: 8
       defense: 26
       agility: 18
-  - key: hist_xianqin_0263
-    name: 嬴荡
-    default_gender: male
-    archetype: military
-    flavor: （前329年—前307年）举鼎而亡，壮志未酬。他是秦惠文王之子嬴荡，以勇武好力著称。他即位后励精图治，拓展疆土，攻取韩国宜阳，打开了秦国东进中原的门户。他雄心勃勃，欲窥周室以示天下。在周室太庙中，他见到象征天下九州的九鼎，一时兴起，与力士比试举鼎。他勉强举起龙文赤鼎，却因气力耗尽而失手，被鼎压断胫骨，当夜气绝身亡，年仅二十三岁。他英年早逝，无子即位，引发了秦国内部的激烈权力斗争。他的死是秦国历史上最戏剧性的意外之一。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 44
-      intellect: 14
-      defense: 24
-      agility: 18
-  - key: hist_xianqin_0264
-    name: 甘龙
-    default_gender: male
-    archetype: civil
-    flavor: （生卒年不详）秦国老臣，守旧派代表。他是秦孝公时期的老臣，代表秦国世族保守势力。当商鞅入秦提出变法主张时，他与之展开了激烈的辩论。他主张"法古无过，循礼无邪"——遵循古法不会有错，依照旧礼不会有害。商鞅则反驳："治世不一道，便国不法古。"辩论以商鞅完胜告终，秦孝公坚定了变法决心。甘龙虽然辩论失败，但他代表了一种思想立场：每一次变革，必然伴随着守旧势力的反对。改革者需要的不仅是好的方案，更需要推动变革的魄力与时机。
-    growth_range:
-    - 3
-    - 7
-    attribute_weights:
-      force: 10
-      intellect: 54
-      defense: 22
-      agility: 14
   - key: hist_xianqin_0265
     name: 杜挚
     default_gender: male
@@ -247,19 +339,6 @@ heroes:
       intellect: 52
       defense: 20
       agility: 18
-  - key: hist_xianqin_0269
-    name: 芈八子
-    default_gender: female
-    archetype: civil
-    flavor: （?—前265年）宣太后，铁腕女主。她是楚国公主，嫁给秦惠文王为妃，生下秦昭襄王。惠文王死后，她以太后身份临朝称制三十六年，成为战国时期最有权势的女性。她知人善任，用弟弟魏冉掌军政、用白起为主将，秦国在她的统治下不断扩张，蚕食六国。她外交手腕高超，曾与义渠王私通数年，生下两子，最后设计诱杀义渠王于甘泉宫，吞并义渠国。她晚年恋上面首魏丑夫，临终欲令其殉葬，被大臣庸芮以"地下无知觉"巧言劝止。她的一生，是权力与欲望的传奇。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 10
-      intellect: 56
-      defense: 18
-      agility: 16
   - key: hist_xianqin_0270
     name: 魏丑夫
     default_gender: male
@@ -273,318 +352,6 @@ heroes:
       intellect: 16
       defense: 24
       agility: 24
-  - key: hist_xianqin_0271
-    name: 嫪毐
-    default_gender: male
-    archetype: military
-    flavor: （?—前238年）秦国巨奸，假宦真乱。他是战国末期最声名狼藉的人物之一。吕不韦为摆脱与赵太后的纠缠，将嫪毐假冒宦官送入宫中侍奉太后。嫪毐与赵太后私通多年，竟生下两个儿子，封侯拜爵，权势熏天。秦始皇二十二岁亲政前夕，嫪毐发动叛乱欲夺权，兵败被擒。秦始皇大怒，将其车裂示众，夷灭三族，两个私生子也被装入麻袋摔死。嫪毐之乱是秦始皇亲政前最大的政治风波，也暴露了秦宫内部的腐败与混乱。他的名字成为乱臣贼子、祸国殃民的代名词。
-    growth_range:
-    - 3
-    - 7
-    attribute_weights:
-      force: 38
-      intellect: 14
-      defense: 24
-      agility: 24
-  - key: hist_xianqin_0272
-    name: 赵太后
-    default_gender: female
-    archetype: civil
-    flavor: （?—前228年）秦始皇生母，丑闻缠身。她原名赵姬，本是邯郸富商之女，先为吕不韦姬妾，后被献给在赵国为质的秦公子异人（后来的秦庄襄王）。庄襄王早逝后，她成为太后。她与吕不韦旧情难断，又与嫪毐私通生子，丑闻震惊朝野。嫪毐之乱后，秦始皇一度将她幽禁，后在群臣劝谏下才恢复母子关系。她的放荡行为给年少的秦始皇留下深重的心理阴影，有人认为秦始皇不立皇后、焚书坑儒的极端性格与此有关。她的一生，是秦宫最大的丑闻。
-    growth_range:
-    - 3
-    - 7
-    attribute_weights:
-      force: 8
-      intellect: 52
-      defense: 20
-      agility: 20
-  - key: hist_xianqin_0273
-    name: 成蟜
-    default_gender: male
-    archetype: military
-    flavor: （?—前239年）秦始皇异母弟，叛国降赵。他是秦庄襄王之子，秦始皇的异母弟弟。秦始皇八年，他奉命率军攻打赵国，却在军中突然叛变，投降了敌国赵国。关于他叛变的原因，史书记载不详，有人认为与嫪毐之乱、宫廷内斗有关。他投赵后不久便死去，死因成谜。他的叛变说明：即便是如日中天的秦国，内部也并非铁板一块。秦始皇统一天下之前，首先要扫除的是内部的隐患——嫪毐之乱、成蟜叛变，都是这一时期的动荡缩影。
-    growth_range:
-    - 3
-    - 7
-    attribute_weights:
-      force: 38
-      intellect: 14
-      defense: 26
-      agility: 22
-  - key: hist_xianqin_0274
-    name: 王绾
-    default_gender: male
-    archetype: civil
-    flavor: （生卒年不详）秦国丞相，分封论者。他是秦统一天下后的第一任丞相，在著名的"分封与郡县之争"中主张分封制。他认为：燕、齐、楚地距离咸阳遥远，不封诸侯难以镇守；应该分封诸公子为王，拱卫中央。李斯则主张全面推行郡县制，由中央直接管辖。秦始皇采纳了李斯的建议，将全国划分为三十六郡，不封一个诸侯王。王绾的主张虽然落败，却代表了一种务实的考量。后来秦朝二世而亡，有人认为若当初采纳分封，或许能避免灭亡，这成为历史的一大假设。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 10
-      intellect: 56
-      defense: 20
-      agility: 14
-  - key: hist_xianqin_0275
-    name: 冯去疾
-    default_gender: male
-    archetype: civil
-    flavor: （?—前208年）秦国丞相，忠贞殉国。他是秦二世时期的丞相，眼见赵高专权、祸乱朝政，多次进谏无效。赵高构陷他们父子谋反，秦二世下令逮捕。他对儿子冯劫说："吾为丞相，当死节以报国恩！"不愿受辱，父子二人一同自杀。他的死是秦朝忠臣的绝唱：当赵高把持朝政、指鹿为马的时候，敢于站出来反对的人已寥寥无几。他以死明志，却无法挽救秦朝的覆亡。他的故事说明：在极端专制下，即便是丞相也难以抵抗权奸的迫害。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 10
-      intellect: 54
-      defense: 22
-      agility: 14
-  - key: hist_xianqin_0276
-    name: 冯劫
-    default_gender: male
-    archetype: military
-    flavor: （?—前208年）秦国将军，随父赴死。他是丞相冯去疾的儿子，担任秦国将军。父子二人同朝为官，也同时遭到赵高的陷害。当赵高诬告他们谋反、秦二世下令逮捕时，冯劫没有逃跑，选择与父亲一同自杀，以死表明清白。"父子同殉"的悲壮场面，是秦末政治黑暗的真实写照。他们的死并未唤醒昏庸的秦二世，赵高依然权倾朝野，直到亲手杀死秦二世。冯氏父子的忠烈，与赵高的奸邪形成鲜明对照，善恶昭彰，令后人叹惋。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 40
-      intellect: 14
-      defense: 26
-      agility: 20
-  - key: hist_xianqin_0277
-    name: 蒙毅
-    default_gender: male
-    archetype: civil
-    flavor: （?—前210年）蒙恬之弟，含冤而死。他是秦始皇最信任的近臣之一，与兄长蒙恬一文一武，共同效忠于秦。蒙恬镇守边疆，蒙毅则在朝中辅政，深得始皇器重。秦始皇死后，赵高与李斯矫诏拥立胡亥，蒙毅被以"先帝欲立胡亥，蒙毅阻谏"的罪名赐死。他至死不肯自杀，痛陈自己的忠心，最终被强行处死。蒙氏兄弟双双被害，是秦朝自毁长城的悲剧。蒙氏三代效忠秦国，最终落得灭门下场，令人扼腕。他的故事是"伴君如伴虎"的最好注脚。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 14
-      intellect: 52
-      defense: 20
-      agility: 14
-  - key: hist_xianqin_0278
-    name: 章邯
-    default_gender: male
-    archetype: military
-    flavor: （?—前205年）秦末名将，投降项羽。他率骊山刑徒击败陈胜吴广起义军，又击杀项梁，是秦末最能打的将领。然而巨鹿之战，他率领的二十万秦军被项羽以破釜沉舟之势击溃。赵高在朝中专权，他进退失据，最终率二十万大军投降项羽。项羽封他为雍王，然而他所率的二十万降卒后来被项羽坑杀，他因此失去了关中民心。楚汉相争时，他被韩信击败，兵败自杀。他虽为叛将，但军事才能卓越，只是生不逢时，成为秦朝覆亡的殉葬品。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 42
-      intellect: 16
-      defense: 24
-      agility: 18
-  - key: hist_xianqin_0279
-    name: 王离
-    default_gender: male
-    archetype: military
-    flavor: （?—前207年）王翦之孙，巨鹿败将。他是秦国名将王翦的孙子，继承了家族的军事传统。秦末农民起义爆发后，他率秦军主力围攻巨鹿。项羽渡河救赵，以破釜沉舟的决心与秦军决战。九战九捷之下，王离兵败被俘，秦军主力被彻底击溃。王氏三代名将，至他而终。他的失败不仅是个人的悲剧，更是秦朝军事力量的终结。祖父王翦灭六国，父亲王贲平天下，到他这一代却沦为阶下囚，王氏家族的荣光黯然落幕。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 40
-      intellect: 16
-      defense: 26
-      agility: 18
-  - key: hist_xianqin_0280
-    name: 扶苏
-    default_gender: male
-    archetype: civil
-    flavor: （?—前210年）秦始皇长子，被矫诏赐死。他仁慈宽厚，与父皇的严刑峻法形成鲜明对比。当秦始皇坑杀方士时，他劝谏父皇不可过于严苛，触怒始皇，被贬至边疆监军蒙恬。秦始皇死后，赵高与李斯矫诏，伪造始皇遗命，赐死扶苏与蒙恬。扶苏接诏后，不听蒙恬"请复请"的建议，自杀身亡。他的死使秦朝失去了最好的继承人，胡亥即位后荒淫无道，秦朝迅速走向灭亡。若扶苏继位，秦朝或许还有延续的可能。他的仁德与悲剧，令后人扼腕。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 12
-      intellect: 52
-      defense: 22
-      agility: 14
-  - key: hist_xianqin_0281
-    name: 胡亥
-    default_gender: male
-    archetype: military
-    flavor: （前230年—前207年）秦二世，亡国之君。他是秦始皇的幼子，在赵高的操纵下登上帝位。他即位后沉迷于声色犬马，将朝政大权尽数交给赵高。赵高指鹿为马，铲除异己，他竟然毫无察觉。当陈胜吴广起义的消息传来，他说"鼠窃狗盗，不足忧也"；当项羽攻破函谷关，他仍在宫中饮酒作乐。最终赵高逼他自杀，秦朝名存实亡。他是典型的昏君亡国之君：既无才能又无远见，既无担当又无主见，只知享乐不问政事，终于葬送了父皇的千秋基业。
-    growth_range:
-    - 3
-    - 7
-    attribute_weights:
-      force: 32
-      intellect: 18
-      defense: 26
-      agility: 24
-  - key: hist_xianqin_0282
-    name: 子婴
-    default_gender: male
-    archetype: military
-    flavor: （?—前206年）秦末君主，诛杀赵高。他的身世有争议，或是扶苏之子，或是秦始皇的弟弟。赵高杀死胡亥后，立他为秦王。他表面顺从，暗中策划，设伏诛杀赵高及其三族。然而此时秦朝已病入膏肓，他在位仅四十六天，刘邦率军攻入咸阳，他白马素车，手捧玉玺出降。他本以为投降可保性命，不料项羽入关后将他杀死，秦朝宗室尽遭屠戮。他虽除掉赵高展现了魄力，却无力回天。秦朝的最后一丝尊严，随他的死而灰飞烟灭。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 36
-      intellect: 22
-      defense: 24
-      agility: 18
-  - key: hist_xianqin_0283
-    name: 吴广
-    default_gender: male
-    archetype: military
-    flavor: （?—前208年）大泽乡起义首领。他与陈胜同为戍卒，因大雨误期当斩，遂在大泽乡揭竿而起。他们假托公子扶苏、项燕之名号召天下，"王侯将相宁有种乎"的口号响彻云霄。起义军迅速壮大，各地纷纷响应。然而他与陈胜很快产生矛盾，内部不和。他被陈胜派去进攻荥阳，久攻不下，又遭部将田臧谋害而死。他的死使起义军陷入内讧，力量大减。他与陈胜共同点燃反秦烈火，却未能亲眼见到秦朝覆灭。他是农民起义的先驱，虽死犹荣。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 40
-      intellect: 16
-      defense: 26
-      agility: 18
-  - key: hist_xianqin_0284
-    name: 周文
-    default_gender: male
-    archetype: military
-    flavor: （?—前209年）义军名将，攻入函谷关。他是陈胜的部将，率领起义军西进关中。他所向披靡，一路攻入函谷关，直逼咸阳，是第一支打进秦朝腹地的起义军。秦二世大惊，急命章邯率骊山刑徒迎战。章邯组建的这支"刑徒军"战斗力极强，周文在曹阳苦战三个月，最终兵败自杀。他虽然功败垂成，却第一个撕开了秦朝的心脏防线，打破了秦军不可战胜的神话。他的进军鼓舞了各地义军的士气，为后来者推翻暴秦开辟了道路。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 42
-      intellect: 14
-      defense: 26
-      agility: 18
-  - key: hist_xianqin_0285
-    name: 周市
-    default_gender: male
-    archetype: military
-    flavor: （?—前208年）魏国贵族，复国元勋。他是战国魏国贵族的后裔，在大泽乡起义后趁势而起。他率军攻取魏地，拥立魏咎为魏王，恢复魏国社稷。他本人被封为魏相，实际执掌魏国军政大权。然而复国不久，秦将章邯便率军来攻。魏国兵力单薄，难以抵挡秦军精锐。他在与秦军的战斗中失败身亡，魏国再度覆灭。他代表了六国贵族借反秦浪潮复国的努力，虽然最终失败，却说明秦朝的暴政已使六国遗民怀念故国。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 38
-      intellect: 18
-      defense: 26
-      agility: 18
-  - key: hist_xianqin_0286
-    name: 魏咎
-    default_gender: male
-    archetype: military
-    flavor: （?—前208年）战国魏室后裔，复国短命。他是战国魏国王室的后裔，被周市拥立为魏王，恢复了魏国社稷。然而国祚极为短暂，秦将章邯率军攻来，魏军节节败退。临淄（魏都临济）被围，他坚守孤城，向各路义军求援。田儋率齐军来救，却在战斗中阵亡。城破之际，他不愿受辱，自焚而死。他虽为亡国之后，却有宁死不屈的骨气。他的死说明：六国复国的努力虽然波澜壮阔，却在秦军的强大攻势下难以为继。
-    growth_range:
-    - 3
-    - 7
-    attribute_weights:
-      force: 36
-      intellect: 18
-      defense: 26
-      agility: 20
-  - key: hist_xianqin_0287
-    name: 田儋
-    default_gender: male
-    archetype: military
-    flavor: （?—前208年）齐国贵族，起义称王。他是战国齐国田氏王族的后裔，趁反秦起义的浪潮自立为齐王，恢复齐国社稷。他率军攻城略地，在齐地站稳脚跟，成为各路义军中的一支重要力量。当魏王咎被秦军围困时，他率军前往救援。然而章邯用兵诡诈，在临济设下埋伏，他中计阵亡。他的死使齐国陷入动荡，其弟田荣继续统领齐军。他代表了六国贵族复国的努力，虽然壮志未酬，却为反秦事业献出了生命。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 40
-      intellect: 16
-      defense: 26
-      agility: 18
-  - key: hist_xianqin_0288
-    name: 田荣
-    default_gender: male
-    archetype: military
-    flavor: （?—前205年）田儋之弟，齐地称雄。他是田儋的弟弟，兄长战死后继续统领齐军。他在齐地拥兵自重，与各路义军若即若离。项梁战死后，他与项羽产生矛盾。项羽分封天下时，故意将他排斥在外。他愤而起兵反项羽，一度控制齐地全境。项羽亲率大军来攻，他兵败被杀，齐地遭到项羽的残酷报复。他的反抗虽然失败，却牵制了项羽大量兵力，为刘邦在西线的发展赢得了时间。他是乱世中桀骜不驯的枭雄。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 40
-      intellect: 18
-      defense: 24
-      agility: 18
-  - key: hist_xianqin_0289
-    name: 武臣
-    default_gender: male
-    archetype: military
-    flavor: （?—前208年）陈胜部将，称王赵地。他受陈胜之命率军北上，攻略赵地。他势如破竹，连下数十城，势力迅速膨胀。在部将张耳、陈馀的劝说下，他自立为赵王，脱离陈胜的控制。陈胜大怒，欲杀其家属，被劝阻。然而他好景不长，很快被部下李良杀害。他的自立说明：在乱世中，部将拥兵自重、称王称霸是常态，陈胜的起义军缺乏有效的组织和纪律，内部矛盾重重，这也是陈胜最终失败的重要原因。
-    growth_range:
-    - 3
-    - 7
-    attribute_weights:
-      force: 38
-      intellect: 16
-      defense: 26
-      agility: 20
-  - key: hist_xianqin_0290
-    name: 韩广
-    default_gender: male
-    archetype: military
-    flavor: （?—前206年）燕地称王，辽东王。他原是赵王武臣的部将，被派往攻略燕地。他攻占燕地后，在当地豪杰的拥戴下自立为燕王，又一个部将称王的案例。项羽分封天下时，将他改封为辽东王，把燕地封给臧荼。他不服这一安排，拒绝迁往辽东。臧荼遂率军攻打他，他兵败被杀。他的命运说明：在楚汉争霸的格局中，中小势力的生存空间极为有限，不服从强者的安排，就只有灭亡一途。
-    growth_range:
-    - 3
-    - 7
-    attribute_weights:
-      force: 38
-      intellect: 16
-      defense: 26
-      agility: 20
-  - key: hist_xianqin_0291
-    name: 臧荼
-    default_gender: male
-    archetype: military
-    flavor: （?—前202年）燕王，汉初功臣。他是燕地豪杰，最初追随项羽，在巨鹿之战中立下战功。项羽分封天下时封他为燕王。楚汉战争中，他审时度势，归附刘邦。汉朝建立后，他是最初被封的异姓诸侯王之一。然而刘邦猜忌功臣，他担心步韩信、彭越的后尘，遂起兵反叛。刘邦亲自率军讨伐，他兵败被俘，不久被处死。他是汉初异姓王中最早反叛的一个，也是最早被消灭的一个。他的命运预示了其他异姓王的结局。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 40
-      intellect: 18
-      defense: 24
-      agility: 18
-  - key: hist_xianqin_0292
-    name: 吴芮
-    default_gender: male
-    archetype: military
-    flavor: （约前241年—前201年）长沙王，汉初异姓王。他是秦末百越地区的首领，号称"番君"，在当地很有威望。反秦起义爆发后，他率领越人响应。楚汉战争中，他追随项羽，后又归附刘邦。汉朝建立后，他被封为长沙王。他是汉初唯一得以善终的异姓诸侯王：韩信被杀、彭越被醢、英布反叛、臧荼伏诛，唯有他安然无恙。他的成功秘诀在于：地处边远，对中央威胁不大；为人低调，不争权不揽利。明哲保身，得以善终。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 38
-      intellect: 22
-      defense: 24
-      agility: 16
-  - key: hist_xianqin_0293
-    name: 赵佗
-    default_gender: male
-    archetype: military
-    flavor: （约前240年—前137年）南越王，岭南始祖。他是秦朝派往岭南的将领，秦亡后据地自立，建立南越国。他在位六十余年，是中国历史上在位时间最长的君主之一。他开发岭南，传播中原文化，被尊为岭南始祖。汉朝建立后，他时降时叛，与汉朝保持着微妙的关系。他曾自称"南越武帝"，与汉朝分庭抗礼；后又去帝号，向汉朝称臣。他活了一百多岁，熬死了汉高祖、吕后、汉文帝，直到汉武帝时代才去世。他是乱世枭雄中最长寿的一位。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 38
-      intellect: 22
-      defense: 24
-      agility: 16
-  - key: hist_xianqin_0294
-    name: 任嚣
-    default_gender: male
-    archetype: military
-    flavor: （?—前206年）南海尉，岭南开拓者。他是秦朝经略岭南的将领，担任南海郡尉。秦末天下大乱，他据守岭南，隔绝与中原的联系。临终前他将权力交给副将赵佗，嘱咐他"秦政无道，中原扰乱，番禺负山险阻，可以立国"。赵佗继承他的遗志，建立了南越国。他为岭南的开发奠定了基础，是将中原文化传入岭南的先驱。虽然他未能亲眼见到南越国的建立，但他的远见卓识和临终托孤，使岭南在乱世中保持了稳定，为赵佗的称王创造了条件。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 40
-      intellect: 18
-      defense: 26
-      agility: 16
   - key: hist_xianqin_0295
     name: 罕虎
     default_gender: male

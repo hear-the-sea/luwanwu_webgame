@@ -89,7 +89,7 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
     async def _broadcast_stats_best_effort(self, stats: dict) -> None:
         if int(self.BROADCAST_DEBOUNCE_SECONDS) > 0:
             debounce_seconds = max(1, int(self.BROADCAST_DEBOUNCE_SECONDS))
-            acquired, _from_cache = acquire_best_effort_lock(
+            acquired, _from_cache, _lock_token = acquire_best_effort_lock(
                 self.BROADCAST_DEBOUNCE_CACHE_KEY,
                 timeout_seconds=debounce_seconds,
                 logger=logger,

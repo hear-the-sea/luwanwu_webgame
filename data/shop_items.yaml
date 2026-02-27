@@ -5,313 +5,960 @@
 # daily_refresh: 是否每日刷新库存（可选，默认 false）
 
 items:
-  # ============ 资源类 ============
-  - item_key: gold_bar
-    price: 1000000
-    stock: -1
-
   - item_key: grain
-    price: 1
-    stock: -1
-
+    stock: 1
+    daily_refresh: false
   - item_key: tong
-    price: 50
-    stock: -1
-
+    stock: 1
+    daily_refresh: false
   - item_key: xi
-    price: 150
-    stock: -1
-
+    stock: 1
+    daily_refresh: false
   - item_key: tie
-    price: 500
-    stock: -1
-
+    stock: 1
+    daily_refresh: false
+  - item_key: gold_bar
+    stock: 1
+    daily_refresh: false
+  - item_key: wood_essence
+    stock: 1
+    daily_refresh: false
+  - item_key: copper_essence
+    stock: 1
+    daily_refresh: false
+  - item_key: iron_essence
+    stock: 1
+    daily_refresh: false
+  - item_key: xuan_tie_essence
+    stock: 1
+    daily_refresh: false
+  - item_key: fire_stone
+    stock: 1
+    daily_refresh: false
+  - item_key: water_stone
+    stock: 1
+    daily_refresh: false
+  - item_key: earth_stone
+    stock: 1
+    daily_refresh: false
+  - item_key: air_stone
+    stock: 1
+    daily_refresh: false
   - item_key: zitanmu
-    price: 900
-    stock: -1
-
+    stock: 1
+    daily_refresh: false
   - item_key: heiyuanshi
-    price: 950
-    stock: -1
-
+    stock: 1
+    daily_refresh: false
   - item_key: jingangmei
-    price: 1200
-    stock: -1
-
+    stock: 1
+    daily_refresh: false
   - item_key: tiemu
-    price: 850
-    stock: -1
-
+    stock: 1
+    daily_refresh: false
   - item_key: shuiqumu
-    price: 300
-    stock: -1
-
+    stock: 1
+    daily_refresh: false
   - item_key: paozi
-    price: 320
-    stock: -1
-
+    stock: 1
+    daily_refresh: false
   - item_key: zaozi
-    price: 350
-    stock: -1
-
+    stock: 1
+    daily_refresh: false
   - item_key: gaolu
-    price: 5000
-    stock: -1
-
-  # ============ 畜牧类 ============
+    stock: 1
+    daily_refresh: false
   - item_key: ji
-    price: 100
-    stock: -1
-
+    stock: 1
+    daily_refresh: false
   - item_key: ya
-    price: 200
-    stock: -1
-
+    stock: 1
+    daily_refresh: false
   - item_key: e
-    price: 400
-    stock: -1
-
+    stock: 1
+    daily_refresh: false
   - item_key: zhu
-    price: 800
-    stock: -1
-
+    stock: 1
+    daily_refresh: false
   - item_key: niu
-    price: 1500
-    stock: -1
-
-  # ============ 功能道具 ============
-  - item_key: manor_rename_card
-    price: 5000
-    stock: -1
-
-  - item_key: fangdajing
-    price: 200
-    stock: 10
-    daily_refresh: true
-
-  - item_key: experience_peach
-    price: 500
-    stock: 5
-    daily_refresh: true
-
-  # ============ 药品类 ============
-  - item_key: buxuedan
-    price: 100
-    stock: 20
-    daily_refresh: true
-
+    stock: 1
+    daily_refresh: false
   - item_key: zhixuesan
-    price: 100
-    stock: -1
-
+    stock: 1
+    daily_refresh: false
   - item_key: jinchuangyao
-    price: 200
-    stock: -1
-
+    stock: 1
+    daily_refresh: false
   - item_key: baijiwan
-    price: 400
-    stock: -1
-
+    stock: 1
+    daily_refresh: false
   - item_key: baicaodan
-    price: 800
-    stock: -1
-
+    stock: 1
+    daily_refresh: false
+  - item_key: buxuedan
+    stock: 1
+    daily_refresh: false
   - item_key: dingxiangdan
-    price: 1500
-    stock: -1
-
+    stock: 1
+    daily_refresh: false
   - item_key: tianxiangyuluwan
-    price: 3000
+    stock: 1
+    daily_refresh: false
+  - item_key: experience_fruit
+    stock: 1
+    daily_refresh: false
+  - item_key: experience_peach
+    stock: 1
+    daily_refresh: false
+  - item_key: experience_pineapple
+    stock: 1
+    daily_refresh: false
+  - item_key: experience_watermelon
+    stock: 1
+    daily_refresh: false
+  - item_key: fangdajing
     stock: -1
-
-  # ============ 技能书 ============
+    daily_refresh: false
+  - item_key: manor_rename_card
+    stock: 1
+    daily_refresh: false
+  - item_key: pubayi_guest_card
+    stock: 1
+    daily_refresh: false
+  - item_key: panfeng_guest_card
+    stock: 1
+    daily_refresh: false
+  - item_key: xingdaorong_guest_card
+    stock: 1
+    daily_refresh: false
+  - item_key: peerless_general_upgrade_token
+    stock: 1
+    daily_refresh: false
+  - item_key: peerless_general_upgrade_token_2
+    stock: 1
+    daily_refresh: false
+  - item_key: small_trumpet
+    stock: 1
+    daily_refresh: false
+  - item_key: peace_shield_small
+    stock: 1
+    daily_refresh: false
+  - item_key: peace_shield_medium
+    stock: 1
+    daily_refresh: false
+  - item_key: peace_shield_large
+    stock: 1
+    daily_refresh: false
+  - item_key: mission_card
+    stock: 1
+    daily_refresh: false
+  - item_key: guest_rebirth_card
+    stock: 1
+    daily_refresh: false
+  - item_key: xisuidan
+    stock: 1
+    daily_refresh: false
+  - item_key: xidianka
+    stock: 1
+    daily_refresh: false
+  - item_key: work_chest_small
+    stock: 1
+    daily_refresh: false
   - item_key: book_dragon_roar
-    price: 10000
     stock: 1
-    daily_refresh: true
-
-  # ============ 装备 - 头盔 ============
+    daily_refresh: false
+  - item_key: book_stratagem_burst
+    stock: 1
+    daily_refresh: false
+  - item_key: book_ice_curse
+    stock: 1
+    daily_refresh: false
+  - item_key: book_thunder_control
+    stock: 1
+    daily_refresh: false
+  - item_key: book_dragon_break_curse
+    stock: 1
+    daily_refresh: false
+  - item_key: book_endless_chatter
+    stock: 1
+    daily_refresh: false
+  - item_key: book_taiyi_wind
+    stock: 1
+    daily_refresh: false
+  - item_key: book_flower_rain
+    stock: 1
+    daily_refresh: false
+  - item_key: book_soul_erode
+    stock: 1
+    daily_refresh: false
+  - item_key: book_red_lotus_dance
+    stock: 1
+    daily_refresh: false
+  - item_key: book_thunder_nine_heavens
+    stock: 1
+    daily_refresh: false
+  - item_key: book_tangseng_sermon
+    stock: 1
+    daily_refresh: false
+  - item_key: book_five_thunder_descent
+    stock: 1
+    daily_refresh: false
+  - item_key: book_brahma_true_fire
+    stock: 1
+    daily_refresh: false
   - item_key: equip_caomao
-    price: 200
-    stock: -1
-
-  - item_key: equip_bumao
-    price: 100
-    stock: -1
-
-  - item_key: equip_niupimao
-    price: 300
-    stock: -1
-
-  - item_key: equip_tieyekui
-    price: 800
-    stock: -1
-
-  - item_key: equip_yulindin
-    price: 1500
-    stock: -1
-
-  - item_key: equip_baihongkui
-    price: 3000
-    stock: -1
-
-  # ============ 装备 - 护甲 ============
-  - item_key: equip_buyi
-    price: 200
-    stock: -1
-
-  - item_key: equip_bupao
-    price: 100
-    stock: -1
-
-  - item_key: equip_shengpijia
-    price: 300
-    stock: -1
-
-  - item_key: equip_housipao
-    price: 800
-    stock: -1
-
-  - item_key: equip_shapijia
-    price: 1500
-    stock: -1
-
-  # ============ 装备 - 鞋子 ============
-  - item_key: equip_caoxie
-    price: 200
-    stock: -1
-
-  - item_key: equip_buxie
-    price: 100
-    stock: -1
-
-  - item_key: equip_yangpixue
-    price: 300
-    stock: -1
-
-  - item_key: equip_gangpianxue
-    price: 800
-    stock: -1
-
-  - item_key: equip_yanyuxue
-    price: 1500
-    stock: -1
-
-  # ============ 装备 - 武器(剑) ============
-  - item_key: equip_tiejian
-    price: 300
-    stock: -1
-
-  - item_key: equip_duanjian
-    price: 100
-    stock: -1
-
-  - item_key: equip_changjian
-    price: 300
-    stock: -1
-
-  - item_key: equip_qingmangjian
-    price: 800
-    stock: -1
-
-  - item_key: equip_duanmajian
-    price: 1500
-    stock: -1
-
-  # ============ 装备 - 武器(刀) ============
-  - item_key: equip_duandao
-    price: 100
-    stock: -1
-
-  - item_key: equip_dakandao
-    price: 300
-    stock: -1
-
-  - item_key: equip_tongchangdao
-    price: 800
-    stock: -1
-
-  - item_key: equip_jingtiedao
-    price: 1500
-    stock: -1
-
-  # ============ 装备 - 武器(枪) ============
-  - item_key: equip_changqiang
-    price: 100
-    stock: -1
-
-  - item_key: equip_baoweiqiang
-    price: 300
-    stock: -1
-
-  - item_key: equip_hutoumao
-    price: 800
-    stock: -1
-
-  - item_key: equip_pansheqiang
-    price: 1500
-    stock: -1
-
-  # ============ 装备 - 武器(弓) ============
-  - item_key: equip_changgong
-    price: 100
-    stock: -1
-
-  - item_key: equip_fanqugong
-    price: 300
-    stock: -1
-
-  - item_key: equip_tietaigong
-    price: 800
-    stock: -1
-
-  - item_key: equip_shenbigong
-    price: 1500
-    stock: -1
-
-  # ============ 装备 - 武器(鞭) ============
-  - item_key: equip_changbian
-    price: 100
-    stock: -1
-
-  - item_key: equip_niupibian
-    price: 300
-    stock: -1
-
-  - item_key: equip_jicibian
-    price: 800
-    stock: -1
-
-  - item_key: equip_jiulonggangbian
-    price: 1500
-    stock: -1
-
-  - item_key: equip_mingshejiebian
-    price: 3000
-    stock: -1
-
-  # ============ 装备 - 坐骑 ============
-  - item_key: equip_zaohongma
-    price: 1000
-    stock: 3
-    daily_refresh: true
-
-  - item_key: equip_huangbiaoma
-    price: 975
-    stock: -1
-
-  - item_key: equip_dawanma
-    price: 1500
-    stock: -1
-
-  # ============ 装备 - 饰品(限量) ============
-  - item_key: equip_zhuyuye
-    price: 3000
-    stock: 2
-    daily_refresh: true
-
-  # ============ 装备 - 器械(限量) ============
-  - item_key: equip_taotieding
-    price: 20000
     stock: 1
-    daily_refresh: true
+    daily_refresh: false
+  - item_key: equip_suoyi
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_caoxie
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_tiejian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_bumao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_niupimao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_tieyekui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_yulindin
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_baihongkui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_zhubiankui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_yemantoukie
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_huwenkui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_baoutoukui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_yanlingmao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_qingtengguan
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xiaoweitoukie
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_jiaodoushitoukui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xuantiekui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_qinglongkui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_hantiekui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_langyakui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_feiyukui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_yunwenkui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_qilinkui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_fenglingguan
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_bawangkui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xuanwukui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_pojunkui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_tianjiguan
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_longhuangguan
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_diwangkui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_taixudiguan
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_bupao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_shengpijia
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_housipao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_shapijia
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_cubujia
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_suozijia
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xuantiejia
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_shanwenjia
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_qingzhujia
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_tiexianjia
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xiaoweikaijia
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_jiaodoushixiongjia
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_qinglongjia
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_wujinjia
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_linwenzhanjia
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_yunwenfayi
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xuanjiazhanbao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_huxianpao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_qilinjia
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xuanwujia
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_tiancanbaoyi
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_pojunzhanjia
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_tianjidaopao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_longlinzhanjia
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_jinsirujia
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_hundunlongpao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_ruanweijia
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_buxie
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_yangpixue
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_gangpianxue
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_yanyuxue
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_mabuxue
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_hupixue
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_tayunxue
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_jifengxue
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_youxiaxue
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_zhuyelu
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xiaoweichangxue
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_jiaodoushizhixue
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_qinglongxue
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_lingboxie
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_zhuifengxue
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_pojunxue
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_yingxingxue
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_jinlinxue
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_huxianxie
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_qilinxue
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xuanwuxue
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_zhurixue
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_tianjilu
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_liekongxue
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_tatianxue
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_shenxingxue
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_wujixingxue
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_duanjian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_changjian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_qingmangjian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_duanmajian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_duandao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_dakandao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_tongchangdao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_jingtiedao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_changqiang
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_baoweiqiang
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_hutoumao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_pansheqiang
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_changgong
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_fanqugong
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_tietaigong
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_shenbigong
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_changbian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_niupibian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_jicibian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_jiulonggangbian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_mingshejiebian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_yemankandao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_tiegugun
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_tongshanchui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_pofengji
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_shushengzhesan
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xiaoweichangjian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_jiaodoushizhichui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_junzijian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_qinglongdao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_pozhenqiang
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_chuanyungong
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_hanyuejian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_lieyandao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_duanhunbian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_zhenyuechui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xuanbinggong
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xingluoshan
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_huxianjian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_bawangqiang
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_qilindao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xuanwuchui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_fenglingshan
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_qixingjian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_tulongdao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_tianjizhang
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_pojunji
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_shuanghuagong
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_jinshejian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_duomingfeidao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_ziweiruanjian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_yuxiao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_jinlun
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xuedao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_yuanyangdao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_jinshezui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_wuqiaojian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_biyudao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_libiegou
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_duoqinghuan
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xiuhuazhen
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_yitianjian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_fangtianhuaji
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xuanyuanjian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_panlonggun
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_zhuxianjian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_qiankunshengong
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xuantiechongjian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_dagoubang
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xiaolifeidao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_kongquelin
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_tianyamingyuedao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_yuanyuewandao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_changshengjian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_zhuyuye
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_tongling
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_yupei
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_hushenfu
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_taomupai
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_fudai
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_tiehufu
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_tanmunianzhu
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_yiqiyaopai
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_longwenyupei
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_fengyuzan
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_huyaxianglian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_linghuzhui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xingshashouchuan
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xueyuzhuo
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xuantiejie
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_liuyunpei
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_qilinzui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_fenghuangyu
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_longjingzhu
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xuanwuyufu
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_tianjiyupei
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_pojunhufu
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_guiyuanzhu
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_shenghuoling
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_heshibi
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_chuanguoyuxi
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_qiankunzhu
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_businiaoyu
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_jianghuling
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_shangshanfaeling
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_taotieding
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_taomujian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_tongjing
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_luopan
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_zhujian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_moyuyan
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_qingtongsuanchou
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xiaoxingjiguanshu
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_tongchanjiguan
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_zhaoyaojing
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_qiankunquan
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_tianjiluopan
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_lingwenyubi
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_guanxingdeng
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_jixiemao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_jiguanchuniao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_kuileimuren
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_qingji
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_baguajing
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_hunyuansan
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_zijinhulu
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_tianyinguqin
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xuanmingdeng
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_jiguanxiong
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_muniuliuma
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_kuileiren
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xuanwujigui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_fengshenbang
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_shanheshejitu
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_zhoutianxingpan
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_taiqingyuce
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_feiyuan
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_chixiaojifeng
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_mojiajiguanren
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_zaohongma
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_huangbiaoma
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_dawanma
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_qingcongma
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xiaomaolv
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xiliangma
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_mengguma
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_taxuema
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_qingzongma
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_chibiao
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_feiyunzui
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_zhaoyeyushizi
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_juanmaochitu
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_qianliju
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_zhuidian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_bailongju
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_wuzhuima
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_jueying
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_zhaohuangfeidian
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_dilu
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_qingshuanglu
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_xuanjiazhanju
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_chituma
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_hanxuebaoma
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_qilin
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_qingluan
+    stock: 1
+    daily_refresh: false
+  - item_key: equip_shendiao
+    stock: 1
+    daily_refresh: false

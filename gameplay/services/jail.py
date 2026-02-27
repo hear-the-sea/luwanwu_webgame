@@ -112,7 +112,7 @@ def draw_pie(manor: Manor, prisoner_id: int) -> JailPrisoner:
         raise ValueError("囚徒不存在或已处理")
 
     # 检查金条
-    cost = 1
+    cost = int(getattr(PVPConstants, "JAIL_PERSUADE_GOLD_BAR_COST", 1) or 1)
     # 使用 select_for_update 锁定库存行
     gold_bar_item = (
         InventoryItem.objects.select_for_update()

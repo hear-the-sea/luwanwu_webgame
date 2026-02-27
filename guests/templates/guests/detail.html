@@ -599,83 +599,7 @@
             </div>
         </div>
 
-        <div class="board-card stats-card">
-            <h3>属性（属性点 {{ guest.attribute_points }}）</h3>
-            <div class="stat-rows">
-                <div class="stat-row">
-                    <div class="stat-left">
-                        <form method="post" action="{% url 'guests:allocate_points' guest.id %}">
-                            {% csrf_token %}
-                            {{ skill_point_form.guest }}
-                            <input type="hidden" name="attribute" value="force">
-                            <input type="hidden" name="points" value="1">
-                            <input type="hidden" name="next" value="{% url 'guests:detail' guest.id %}">
-                            <button type="submit" class="add-btn" title="武力加点" {% if guest.attribute_points <= 0 %}disabled{% endif %}>+</button>
-                        </form>
-                        <span>武力</span>
-                    </div>
-                    <strong>{{ guest.force|attribute_icons }}</strong>
-                </div>
-                <div class="stat-row">
-                    <div class="stat-left">
-                        <form method="post" action="{% url 'guests:allocate_points' guest.id %}">
-                            {% csrf_token %}
-                            {{ skill_point_form.guest }}
-                            <input type="hidden" name="attribute" value="intellect">
-                            <input type="hidden" name="points" value="1">
-                            <input type="hidden" name="next" value="{% url 'guests:detail' guest.id %}">
-                            <button type="submit" class="add-btn" title="智力加点" {% if guest.attribute_points <= 0 %}disabled{% endif %}>+</button>
-                        </form>
-                        <span>智力</span>
-                    </div>
-                    <strong>{{ guest.intellect|attribute_icons }}</strong>
-                </div>
-                <div class="stat-row">
-                    <div class="stat-left">
-                        <form method="post" action="{% url 'guests:allocate_points' guest.id %}">
-                            {% csrf_token %}
-                            {{ skill_point_form.guest }}
-                            <input type="hidden" name="attribute" value="defense">
-                            <input type="hidden" name="points" value="1">
-                            <input type="hidden" name="next" value="{% url 'guests:detail' guest.id %}">
-                            <button type="submit" class="add-btn" title="防御加点" {% if guest.attribute_points <= 0 %}disabled{% endif %}>+</button>
-                        </form>
-                        <span>防御</span>
-                    </div>
-                    <strong>{{ guest.defense_stat|attribute_icons }}</strong>
-                </div>
-                <div class="stat-row">
-                    <div class="stat-left">
-                        <form method="post" action="{% url 'guests:allocate_points' guest.id %}">
-                            {% csrf_token %}
-                            {{ skill_point_form.guest }}
-                            <input type="hidden" name="attribute" value="agility">
-                            <input type="hidden" name="points" value="1">
-                            <input type="hidden" name="next" value="{% url 'guests:detail' guest.id %}">
-                            <button type="submit" class="add-btn" title="敏捷加点" {% if guest.attribute_points <= 0 %}disabled{% endif %}>+</button>
-                        </form>
-                        <span>敏捷</span>
-                    </div>
-                    <strong>{{ guest.agility|attribute_icons }}</strong>
-                </div>
-                <div class="stat-row">
-                    <div class="stat-left">
-                        <span class="add-btn-placeholder"></span>
-                        <span>运势</span>
-                    </div>
-                    <strong>{{ guest.luck|attribute_icons }}</strong>
-                </div>
-                <div class="stat-row">
-                    <span>操作</span>
-                    <div>
-                        <form method="post" action="{% url 'guests:dismiss' guest.id %}" class="dismiss-form" data-guest-name="{{ guest.display_name }}">
-                            {% csrf_token %}
-                            <button type="submit" class="tw-btn-secondary tw-btn-sm">辞退门客</button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
+        {% include "guests/partials/attribute_panel.html" %}
 
         <div class="board-card equip-card">
             <h3>装备</h3>
@@ -933,6 +857,170 @@
 <script src="{% static 'js/dashboard.js' %}"></script>
 <script>
   document.addEventListener("DOMContentLoaded", () => {
+    const attributeResponseFieldMap = {
+      force: "force",
+      intellect: "intellect",
+      defense: "defense",
+      agility: "agility",
+      luck: "luck",
+    };
+
+    const parseNonNegativeInt = (value, fallback = null) => {
+      const parsed = Number.parseInt(value, 10);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        return fallback;
+      }
+      return parsed;
+    };
+
+    const renderAttributeIconsHtml = (value) => {
+      const numeric = parseNonNegativeInt(value, 0);
+      if (!numeric) {
+        return "";
+      }
+      const tiers = [["crown", 64], ["sun", 16], ["moon", 4], ["star", 1]];
+      let remaining = numeric;
+      const icons = [];
+      tiers.forEach(([icon, divisor]) => {
+        const count = Math.floor(remaining / divisor);
+        remaining %= divisor;
+        for (let i = 0; i < count; i += 1) {
+          icons.push(`<span class="attr-icon attr-${icon}" aria-hidden="true"></span>`);
+        }
+      });
+      return `<span class="attr-pack">${icons.join("")}</span>`;
+    };
+
+    const setAllocateButtonsBusy = (busy) => {
+      const panel = document.getElementById("guest-attribute-panel");
+      if (!panel) return;
+      panel.dataset.busy = busy ? "1" : "0";
+      const remaining = parseNonNegativeInt(panel.querySelector(".js-attribute-points")?.textContent, 0) || 0;
+      panel.querySelectorAll(".js-allocate-points-form .add-btn").forEach((button) => {
+        button.disabled = Boolean(busy) || remaining <= 0;
+      });
+    };
+
+    const bindDismissForms = (root = document) => {
+      root.querySelectorAll(".dismiss-form").forEach((form) => {
+        if (form.dataset.confirmBound === "1") {
+          return;
+        }
+        form.dataset.confirmBound = "1";
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const name = form.getAttribute("data-guest-name") || "该门客";
+          const confirmed = await gameDialog.danger(
+            `${name} 将被永久辞退，已穿戴装备会自动归还仓库。确认继续吗？`,
+            { title: "辞退门客" }
+          );
+          if (confirmed) {
+            form.submit();
+          }
+        });
+      });
+    };
+
+    const replaceAttributePanel = (html) => {
+      const currentPanel = document.getElementById("guest-attribute-panel");
+      if (!currentPanel || !html) return;
+      const wrapper = document.createElement("div");
+      wrapper.innerHTML = html.trim();
+      const nextPanel = wrapper.firstElementChild;
+      if (!nextPanel) return;
+      currentPanel.replaceWith(nextPanel);
+      bindAllocateForms();
+      bindDismissForms();
+      setAllocateButtonsBusy(false);
+    };
+
+    const updateAttributePanelFast = (data, form) => {
+      const panel = document.getElementById("guest-attribute-panel");
+      if (!panel || !data || typeof data !== "object") {
+        return false;
+      }
+      const nextPoints = parseNonNegativeInt(data.attribute_points, null);
+      if (nextPoints === null) {
+        return false;
+      }
+
+      const pointsElem = panel.querySelector(".js-attribute-points");
+      if (pointsElem) {
+        pointsElem.textContent = String(nextPoints);
+      }
+
+      const attribute = form?.dataset?.attribute || form?.querySelector("input[name='attribute']")?.value || "";
+      const payloadField = attributeResponseFieldMap[attribute];
+      const nextAttrValue = parseNonNegativeInt(payloadField ? data[payloadField] : null, null);
+      if (payloadField && nextAttrValue !== null) {
+        const attrElem = panel.querySelector(`.js-attribute-icons[data-attribute="${attribute}"]`);
+        if (attrElem) {
+          attrElem.innerHTML = renderAttributeIconsHtml(nextAttrValue);
+        }
+      }
+
+      setAllocateButtonsBusy(false);
+      return true;
+    };
+
+    const bindAllocateForms = (root = document) => {
+      root.querySelectorAll(".js-allocate-points-form").forEach((form) => {
+        if (form.dataset.ajaxBound === "1") {
+          return;
+        }
+        form.dataset.ajaxBound = "1";
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          if (form.dataset.submitting === "1") {
+            return;
+          }
+          const panel = document.getElementById("guest-attribute-panel");
+          if (panel?.dataset.busy === "1") {
+            return;
+          }
+          form.dataset.submitting = "1";
+          setAllocateButtonsBusy(true);
+          const controller = new AbortController();
+          const timeoutId = window.setTimeout(() => controller.abort(), 12000);
+          try {
+            const response = await fetch(form.action, {
+              method: "POST",
+              body: new FormData(form),
+              credentials: "same-origin",
+              signal: controller.signal,
+              headers: {
+                "X-Requested-With": "XMLHttpRequest",
+                "Accept": "application/json"
+              }
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data.success) {
+              throw new Error(data.message || data.error || "属性加点失败");
+            }
+            const updated = updateAttributePanelFast(data, form);
+            if (!updated) {
+              replaceAttributePanel(data.attribute_panel_html || "");
+            }
+          } catch (error) {
+            const message =
+              error?.name === "AbortError" ? "请求超时，请检查网络后重试" : error?.message || "请求失败，请重试";
+            if (window.gameDialog?.error) {
+              window.gameDialog.error(message, { title: "加点失败" });
+            } else {
+              alert(message);
+            }
+          } finally {
+            window.clearTimeout(timeoutId);
+            form.dataset.submitting = "0";
+            setAllocateButtonsBusy(false);
+          }
+        });
+      });
+    };
+
+    bindAllocateForms();
+    bindDismissForms();
+
     const modal = document.getElementById("skill-book-modal");
     const openButtons = document.querySelectorAll(".open-skill-modal");
     const closeButtons = document.querySelectorAll(".close-skill-modal");
@@ -1062,20 +1150,6 @@
       }
     });
     equipModal?.querySelector(".close-equip-modal")?.addEventListener("click", closeEquipModal);
-    // 辞退确认：使用统一对话框组件
-    document.querySelectorAll(".dismiss-form").forEach((form) => {
-      form.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        const name = form.getAttribute("data-guest-name") || "该门客";
-        const confirmed = await gameDialog.danger(
-          `${name} 将被永久辞退，已穿戴装备会自动归还仓库。确认继续吗？`,
-          { title: "辞退门客" }
-        );
-        if (confirmed) {
-          form.submit();
-        }
-      });
-    });
   });
 </script>
 {% endblock %}

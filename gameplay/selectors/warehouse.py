@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from django.core.paginator import Paginator
 
+from core.config import WAREHOUSE
 from guests.models import GuestStatus
 
-from ..models import InventoryItem
+from ..models import InventoryItem, ItemTemplate
 from ..models.items import LEGACY_TOOL_EFFECT_TYPES, get_item_effect_type_label
 from ..services import get_treasury_capacity, get_treasury_used_space
 
@@ -15,6 +16,39 @@ WAREHOUSE_PAGE_SIZE = 50
 def _distinct_effect_types(items):
     """Return distinct effect types without inheriting potentially expensive/invalid ordering."""
     return items.order_by().values_list("template__effect_type", flat=True).distinct()
+
+
+def _collect_rarity_upgrade_source_keys(manor) -> set[str]:
+    """
+    Collect rarity-upgrade source template keys from item template payloads.
+
+    Keep config values as a safe fallback so behavior won't break if template data is incomplete.
+    """
+    source_keys: set[str] = set(WAREHOUSE.RARITY_UPGRADE_SOURCE_TEMPLATE_KEYS)
+    payloads = (
+        manor.inventory_items.filter(
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+            quantity__gt=0,
+            template__effect_type=ItemTemplate.EffectType.TOOL,
+            template__is_usable=True,
+        )
+        .values_list("template__effect_payload", flat=True)
+        .distinct()
+    )
+    for payload in payloads:
+        if not isinstance(payload, dict):
+            continue
+        if payload.get("action") != "upgrade_guest_rarity":
+            continue
+
+        raw_source_keys = payload.get("source_template_keys")
+        if isinstance(raw_source_keys, list):
+            source_keys.update(str(key).strip() for key in raw_source_keys if str(key).strip())
+
+        target_template_map = payload.get("target_template_map")
+        if isinstance(target_template_map, dict):
+            source_keys.update(str(key).strip() for key in target_template_map.keys() if str(key).strip())
+    return source_keys
 
 
 def get_warehouse_context(manor, current_tab: str, selected_category: str, page: int = 1) -> dict:
@@ -48,6 +82,12 @@ def get_warehouse_context(manor, current_tab: str, selected_category: str, page:
             or guest.allocated_defense != 0
             or guest.allocated_agility != 0
         )
+    ]
+    rarity_upgrade_source_keys = _collect_rarity_upgrade_source_keys(manor)
+    context["guests_for_rarity_upgrade"] = [
+        guest
+        for guest in eligible_guests
+        if guest.status == GuestStatus.IDLE and guest.template.key in rarity_upgrade_source_keys
     ]
 
     tool_effect_types = LEGACY_TOOL_EFFECT_TYPES

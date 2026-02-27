@@ -235,6 +235,9 @@ class RecruitmentConfig:
     # 候选过期时间
     CANDIDATE_EXPIRE_HOURS: int = 24
 
+    # 每个卡池每日招募次数上限（按庄园独立统计）
+    DAILY_POOL_DRAW_LIMIT: int = 300
+
 
 # ============ 打工配置 ============
 
@@ -247,6 +250,24 @@ class WorkConfig:
     JUNIOR_DURATION: int = 2 * 3600  # 2小时
     INTERMEDIATE_DURATION: int = 3 * 3600  # 3小时
     SENIOR_DURATION: int = 4 * 3600  # 4小时
+
+
+# ============ 仓库配置 ============
+
+
+@dataclass(frozen=True)
+class WarehouseConfig:
+    """仓库/道具相关配置"""
+
+    # 门客升阶道具可使用的来源门客模板 key
+    RARITY_UPGRADE_SOURCE_TEMPLATE_KEYS: FrozenSet[str] = frozenset(
+        {
+            "hist_sljnbc_0589",
+            "hist_sljnbc_0590",
+            "hist_sljnbc_0589_blue",
+            "hist_sljnbc_0590_blue",
+        }
+    )
 
 
 # ============ 技术配置 ============
@@ -329,6 +350,7 @@ RARITY = RarityConfig()
 EQUIPMENT = EquipmentConfig()
 RECRUITMENT = RecruitmentConfig()
 WORK = WorkConfig()
+WAREHOUSE = WarehouseConfig()
 TECHNOLOGY = TechnologyConfig()
 GUEST_LOYALTY = GuestLoyaltyConfig()
 SECURITY = SecurityConfig()

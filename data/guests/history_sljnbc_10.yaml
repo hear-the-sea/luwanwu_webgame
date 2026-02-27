@@ -1,4 +1,44 @@
 heroes:
+  blue:
+  - key: hist_sljnbc_0465
+    name: 谢脁
+    default_gender: male
+    archetype: civil
+    flavor: （464年—499年）南朝齐诗人，陈郡阳夏人，字玄晖，东晋名将谢安之后。他自幼聪慧，文才卓绝，以山水诗著称于世，与谢灵运并称"大谢小谢"，又称"二谢"。他的诗风清新自然，声律和谐，对唐代诗歌影响极大。李白对他推崇备至，赞曰"蓬莱文章建安骨，中间小谢又清发"，又言"一生低首谢宣城"。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 64
+      defense: 18
+      agility: 10
+  - key: hist_sljnbc_0483
+    name: 宇文宪
+    default_gender: male
+    archetype: military
+    flavor: （544年—578年）北周齐王，代郡武川人，宇文泰第五子，北周武帝宇文邕之弟。他自幼聪慧过人，精通文史典籍，同时武艺超群，擅长骑射，是宇文氏宗室中最杰出的军事人才。北周与北齐的战争中，他多次担任主将率军出征，战功赫赫。建德五年（576年）他随武帝伐齐，在平阳之战中亲率骑兵突击，大破齐军主力，为灭齐立下首功。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 44
+      intellect: 8
+      defense: 18
+      agility: 30
+  - key: hist_sljnbc_0487
+    name: 庾亮
+    default_gender: male
+    archetype: civil
+    flavor: （289年—340年）庾亮，东晋外戚重臣，历任中书令、丞相等职，在成帝朝一度总揽朝政。庾亮出身颍川庾氏，与皇室联姻后进入权力核心，面对北方强敌与内部门阀博弈，推行军政整饬但也因处置失当激化矛盾，苏峻之乱前后的决策长期引发争论。其政治生涯揭示东晋体制的结构困境：中央需要强势执政者，却又受制于士族共治与地方军镇。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 52
+      defense: 20
+      agility: 14
   green:
   - key: hist_sljnbc_0451
     name: 薛道衡
@@ -182,19 +222,6 @@ heroes:
       intellect: 15
       defense: 23
       agility: 22
-  - key: hist_sljnbc_0465
-    name: 谢脁
-    default_gender: male
-    archetype: civil
-    flavor: （464年—499年）南朝齐诗人，陈郡阳夏人，字玄晖，东晋名将谢安之后。他自幼聪慧，文才卓绝，以山水诗著称于世，与谢灵运并称"大谢小谢"，又称"二谢"。他的诗风清新自然，声律和谐，对唐代诗歌影响极大。李白对他推崇备至，赞曰"蓬莱文章建安骨，中间小谢又清发"，又言"一生低首谢宣城"。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 8
-      intellect: 64
-      defense: 18
-      agility: 10
   - key: hist_sljnbc_0466
     name: 何敬容
     default_gender: male
@@ -416,19 +443,6 @@ heroes:
       intellect: 40
       defense: 20
       agility: 20
-  - key: hist_sljnbc_0483
-    name: 宇文宪
-    default_gender: male
-    archetype: military
-    flavor: （544年—578年）北周齐王，代郡武川人，宇文泰第五子，北周武帝宇文邕之弟。他自幼聪慧过人，精通文史典籍，同时武艺超群，擅长骑射，是宇文氏宗室中最杰出的军事人才。北周与北齐的战争中，他多次担任主将率军出征，战功赫赫。建德五年（576年）他随武帝伐齐，在平阳之战中亲率骑兵突击，大破齐军主力，为灭齐立下首功。
-    growth_range:
-    - 3
-    - 7
-    attribute_weights:
-      force: 44
-      intellect: 8
-      defense: 18
-      agility: 30
   - key: hist_sljnbc_0484
     name: 尉迟运
     default_gender: male

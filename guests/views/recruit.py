@@ -16,7 +16,7 @@ from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
 from core.exceptions import GameError
-from core.utils import is_ajax_request, json_error, json_success, safe_positive_int, sanitize_error_message
+from core.utils import is_json_request, json_error, json_success, safe_positive_int, sanitize_error_message
 from core.utils.cache_lock import acquire_best_effort_lock, release_best_effort_lock
 from core.utils.rate_limit import rate_limit_redirect
 
@@ -88,28 +88,29 @@ def _recruit_action_lock_key(action: str, manor_id: int, scope: str) -> str:
     return f"recruit:view_lock:{action}:{manor_id}:{scope}"
 
 
-def _acquire_recruit_action_lock(action: str, manor_id: int, scope: str) -> tuple[bool, str]:
+def _acquire_recruit_action_lock(action: str, manor_id: int, scope: str) -> tuple[bool, str, str | None]:
     key = _recruit_action_lock_key(action, manor_id, scope)
-    acquired, from_cache = acquire_best_effort_lock(
+    acquired, from_cache, lock_token = acquire_best_effort_lock(
         key,
         timeout_seconds=RECRUIT_ACTION_LOCK_SECONDS,
         logger=logger,
         log_context="recruit action lock",
     )
     if not acquired:
-        return False, ""
+        return False, "", None
     if from_cache:
-        return True, key
-    return True, f"{_LOCAL_LOCK_PREFIX}{key}"
+        return True, key, lock_token
+    return True, f"{_LOCAL_LOCK_PREFIX}{key}", lock_token
 
 
-def _release_recruit_action_lock(lock_key: str) -> None:
+def _release_recruit_action_lock(lock_key: str, lock_token: str | None) -> None:
     if not lock_key:
         return
     if lock_key.startswith(_LOCAL_LOCK_PREFIX):
         release_best_effort_lock(
             lock_key[len(_LOCAL_LOCK_PREFIX) :],
             from_cache=False,
+            lock_token=lock_token,
             logger=logger,
             log_context="recruit action lock",
         )
@@ -117,6 +118,7 @@ def _release_recruit_action_lock(lock_key: str) -> None:
     release_best_effort_lock(
         lock_key,
         from_cache=True,
+        lock_token=lock_token,
         logger=logger,
         log_context="recruit action lock",
     )
@@ -173,6 +175,33 @@ def _format_bulk_recruit_success_message(succeeded_guests: list) -> str:
     return f"成功招募 {total} 名门客：{preview}"
 
 
+def _build_recruitment_hall_ajax_payload(request, manor) -> dict:
+    from django.template.loader import render_to_string
+
+    from gameplay.constants import UIConstants
+    from gameplay.selectors.recruitment import get_recruitment_hall_context
+
+    context = get_recruitment_hall_context(manor, UIConstants.RECRUIT_RECORDS_DISPLAY)
+    return {
+        "hall_pools_html": render_to_string(
+            "gameplay/partials/recruitment_pools_section.html", context, request=request
+        ),
+        "hall_candidates_html": render_to_string(
+            "gameplay/partials/recruitment_candidates_section.html", context, request=request
+        ),
+        "hall_records_html": render_to_string(
+            "gameplay/partials/recruitment_records_section.html", context, request=request
+        ),
+        "candidate_count": context.get("candidate_count", 0),
+    }
+
+
+def _json_recruitment_hall_success(request, manor, message: str, *, message_level: str = "success"):
+    return json_success(
+        message=message, message_level=message_level, **_build_recruitment_hall_ajax_payload(request, manor)
+    )
+
+
 @method_decorator(require_POST, name="dispatch")
 @method_decorator(rate_limit_redirect("recruit_draw", limit=10, window_seconds=60), name="dispatch")
 class RecruitView(LoginRequiredMixin, TemplateView):
@@ -182,13 +211,18 @@ class RecruitView(LoginRequiredMixin, TemplateView):
         from gameplay.services.manor.core import ensure_manor
 
         manor = ensure_manor(request.user)
+        is_ajax = is_json_request(request)
         form = RecruitForm(request.POST)
         if not form.is_valid():
+            if is_ajax:
+                return json_error("请选择有效的卡池", status=400)
             messages.error(request, "请选择有效的卡池")
             return redirect("gameplay:recruitment_hall")
         pool = form.cleaned_data["pool"]
-        lock_ok, lock_key = _acquire_recruit_action_lock("draw", int(manor.id), str(pool.key))
+        lock_ok, lock_key, lock_token = _acquire_recruit_action_lock("draw", int(manor.id), str(pool.key))
         if not lock_ok:
+            if is_ajax:
+                return json_error("请求处理中，请稍候重试", status=409)
             messages.warning(request, "请求处理中，请稍候重试")
             return redirect("gameplay:recruitment_hall")
 
@@ -197,8 +231,13 @@ class RecruitView(LoginRequiredMixin, TemplateView):
                 recruitment = start_guest_recruitment(manor, pool)
                 eta_text = _format_duration(recruitment.duration_seconds)
                 _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
+                message = f"{pool.name} 已开始招募，预计 {eta_text} 后完成。"
+                if is_ajax:
+                    return _json_recruitment_hall_success(request, manor, message)
                 messages.success(request, f"{pool.name} 已开始招募，预计 {eta_text} 后完成。")
             except (GameError, ValueError) as exc:
+                if is_ajax:
+                    return json_error(sanitize_error_message(exc), status=400)
                 messages.error(request, sanitize_error_message(exc))
             except Exception as exc:
                 logger.exception(
@@ -207,9 +246,11 @@ class RecruitView(LoginRequiredMixin, TemplateView):
                     getattr(request.user, "id", None),
                     getattr(pool, "key", None),
                 )
+                if is_ajax:
+                    return json_error(sanitize_error_message(exc), status=500)
                 messages.error(request, sanitize_error_message(exc))
         finally:
-            _release_recruit_action_lock(lock_key)
+            _release_recruit_action_lock(lock_key, lock_token)
         return redirect("gameplay:recruitment_hall")
 
 
@@ -220,8 +261,11 @@ def accept_candidate_view(request):
     from gameplay.services.manor.core import ensure_manor
 
     manor = ensure_manor(request.user)
+    is_ajax = is_json_request(request)
     scope = _normalize_candidate_scope(request.POST.get("scope"))
     if scope is None:
+        if is_ajax:
+            return json_error("选择范围无效", status=400)
         messages.error(request, "选择范围无效")
         return redirect("gameplay:recruitment_hall")
 
@@ -232,11 +276,15 @@ def accept_candidate_view(request):
     else:
         raw_candidate_ids = request.POST.getlist("candidate_ids")
         if not raw_candidate_ids:
+            if is_ajax:
+                return json_error("请先勾选候选门客。", status=400)
             messages.warning(request, "请先勾选候选门客。")
             return redirect("gameplay:recruitment_hall")
 
         parsed_ids = _parse_positive_candidate_ids(raw_candidate_ids)
         if parsed_ids is None:
+            if is_ajax:
+                return json_error("候选门客选择有误", status=400)
             messages.error(request, "候选门客选择有误")
             return redirect("gameplay:recruitment_hall")
         candidate_ids = parsed_ids
@@ -244,6 +292,8 @@ def accept_candidate_view(request):
 
     action = _normalize_candidate_action(request.POST.get("action"))
     if action is None:
+        if is_ajax:
+            return json_error("操作类型无效", status=400)
         messages.error(request, "操作类型无效")
         return redirect("gameplay:recruitment_hall")
 
@@ -251,20 +301,28 @@ def accept_candidate_view(request):
         if action == "discard":
             candidate_total = queryset.count()
             if candidate_total <= 0:
+                if is_ajax:
+                    return json_error("当前没有可操作的候选门客。", status=400)
                 messages.error(request, "当前没有可操作的候选门客。")
                 return redirect("gameplay:recruitment_hall")
         else:
             candidates = list(queryset)
             if not candidates:
+                if is_ajax:
+                    return json_error("当前没有可操作的候选门客。", status=400)
                 messages.error(request, "当前没有可操作的候选门客。")
                 return redirect("gameplay:recruitment_hall")
     elif not candidates:
+        if is_ajax:
+            return json_error("未找到选中的候选门客。", status=400)
         messages.error(request, "未找到选中的候选门客。")
         return redirect("gameplay:recruitment_hall")
 
     lock_scope = _candidate_scope_digest(action, scope, candidate_ids)
-    lock_ok, lock_key = _acquire_recruit_action_lock("accept", int(manor.id), lock_scope)
+    lock_ok, lock_key, lock_token = _acquire_recruit_action_lock("accept", int(manor.id), lock_scope)
     if not lock_ok:
+        if is_ajax:
+            return json_error("请求处理中，请稍候重试", status=409)
         messages.warning(request, "请求处理中，请稍候重试")
         return redirect("gameplay:recruitment_hall")
 
@@ -273,10 +331,24 @@ def accept_candidate_view(request):
             if action == "discard":
                 deleted = queryset.count() if scope == "all" else len(candidates)
                 queryset.delete()
+                msg = f"已放弃 {deleted} 名候选门客。"
+                if is_ajax:
+                    _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
+                    return _json_recruitment_hall_success(request, manor, msg, message_level="warning")
                 messages.info(request, f"已放弃 {deleted} 名候选门客。")
                 _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
             elif action == "retain":
                 retained, error_message = _retain_candidates(candidates)
+                if is_ajax:
+                    if retained:
+                        _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
+                        msg = f"已将 {retained} 名候选收为家丁。"
+                        if error_message:
+                            msg = f"{msg} {error_message}"
+                        return _json_recruitment_hall_success(request, manor, msg)
+                    if error_message:
+                        return json_error(error_message, status=400)
+                    return json_error("当前没有可操作的候选门客。", status=400)
                 if retained:
                     messages.success(request, f"已将 {retained} 名候选收为家丁。")
                     _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
@@ -285,12 +357,25 @@ def accept_candidate_view(request):
             else:
                 # 使用批量确认函数优化性能
                 succeeded, failed = _finalize_candidates(candidates)
+                if is_ajax:
+                    if succeeded:
+                        _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
+                        msg = _format_bulk_recruit_success_message(succeeded)
+                        if failed:
+                            msg = f"{msg}；门客容量不足，{len(failed)} 名候选未能招募"
+                        return _json_recruitment_hall_success(request, manor, msg)
+                    if failed:
+                        msg = f"门客容量不足，{len(failed)} 名候选未能招募"
+                        return _json_recruitment_hall_success(request, manor, msg, message_level="warning")
+                    return json_error("当前没有可操作的候选门客。", status=400)
                 if succeeded:
                     messages.success(request, _format_bulk_recruit_success_message(succeeded))
                     _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
                 if failed:
                     messages.warning(request, f"门客容量不足，{len(failed)} 名候选未能招募")
         except (GameError, ValueError) as exc:
+            if is_ajax:
+                return json_error(sanitize_error_message(exc), status=400)
             messages.error(request, sanitize_error_message(exc))
         except Exception as exc:
             logger.exception(
@@ -300,9 +385,11 @@ def accept_candidate_view(request):
                 action,
                 len(candidates),
             )
+            if is_ajax:
+                return json_error(sanitize_error_message(exc), status=500)
             messages.error(request, sanitize_error_message(exc))
     finally:
-        _release_recruit_action_lock(lock_key)
+        _release_recruit_action_lock(lock_key, lock_token)
     return redirect("gameplay:recruitment_hall")
 
 
@@ -316,7 +403,7 @@ def use_magnifying_glass_view(request):
     manor = ensure_manor(request.user)
     item_id = request.POST.get("item_id")
 
-    is_ajax = is_ajax_request(request)
+    is_ajax = is_json_request(request)
     item_id_int = safe_positive_int(item_id, default=None)
     if item_id_int is None:
         error_msg = "未找到放大镜道具"
@@ -325,7 +412,7 @@ def use_magnifying_glass_view(request):
         messages.error(request, error_msg)
         return redirect("gameplay:recruitment_hall")
 
-    lock_ok, lock_key = _acquire_recruit_action_lock("reveal", int(manor.id), str(item_id_int))
+    lock_ok, lock_key, lock_token = _acquire_recruit_action_lock("reveal", int(manor.id), str(item_id_int))
     if not lock_ok:
         if is_ajax:
             return json_error("请求处理中，请稍候重试", status=409)
@@ -339,7 +426,7 @@ def use_magnifying_glass_view(request):
                 msg = f"使用放大镜成功：显现 {count} 位候选门客的稀有度"
                 _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
                 if is_ajax:
-                    return json_success(message=msg)
+                    return _json_recruitment_hall_success(request, manor, msg)
                 messages.success(request, msg)
             else:
                 msg = "当前候选门客的稀有度已全部显现"
@@ -363,6 +450,6 @@ def use_magnifying_glass_view(request):
                 return json_error(error_msg, status=500)
             messages.error(request, error_msg)
     finally:
-        _release_recruit_action_lock(lock_key)
+        _release_recruit_action_lock(lock_key, lock_token)
 
     return redirect("gameplay:recruitment_hall")

@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from .models import Guild, GuildDonationLog, GuildExchangeLog, GuildResourceLog
 from .services.contribution import reset_weekly_contributions
+from .services.hero_pool import cleanup_invalid_hero_pool_entries
 from .services.warehouse import produce_equipment, produce_experience_items, produce_resource_packs
 
 logger = logging.getLogger(__name__)
@@ -139,4 +140,20 @@ def cleanup_old_guild_logs(self):
         return f"cleaned up {total} logs"
     except Exception as exc:
         logger.exception("Failed to cleanup old guild logs: %s", exc)
+        raise self.retry(exc=exc)
+
+
+@shared_task(name="guilds.cleanup_invalid_hero_pool", bind=True, max_retries=2, default_retry_delay=60)
+def cleanup_invalid_guild_hero_pool(self):
+    """
+    清理无效帮会门客池条目（不再拥有门客/离帮/脏数据，级联下阵）。
+    执行时间：每5分钟
+    """
+    try:
+        cleaned = cleanup_invalid_hero_pool_entries(limit=1000)
+        if cleaned:
+            logger.info("Cleaned %d invalid guild hero pool entries", cleaned)
+        return f"cleaned {cleaned} invalid hero pool entries"
+    except Exception as exc:
+        logger.exception("Failed to cleanup invalid guild hero pool entries: %s", exc)
         raise self.retry(exc=exc)

@@ -11,11 +11,15 @@ services:
         exec redis-server --appendonly yes;
     volumes:
       - redis_data:/data
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
 
   db:
     image: mysql:8.4
-    command: ["--default-authentication-plugin=mysql_native_password"]
     environment:
       MYSQL_DATABASE: webgame
       MYSQL_USER: webgame
@@ -23,10 +27,16 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env.docker}
     volumes:
       - db_data:/var/lib/mysql
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
 
   web:
-    build: .
+    image: ${WEBGAME_IMAGE:-webgame:v1}
+    pull_policy: never
     env_file: .env.docker
     read_only: true
     tmpfs:
@@ -47,17 +57,23 @@ services:
         "config.asgi:application",
       ]
     volumes:
-      - media:/app/media
-      - staticfiles:/app/staticfiles
+      - ./runtime/media:/app/media
+      - ./runtime/staticfiles:/app/staticfiles
     depends_on:
       - db
       - redis
     expose:
       - "8000"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
 
   worker:
-    build: .
+    image: ${WEBGAME_IMAGE:-webgame:v1}
+    pull_policy: never
     env_file: .env.docker
     read_only: true
     tmpfs:
@@ -66,16 +82,124 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    command: ["bash", "/app/docker/entrypoint.sh", "celery", "-A", "config", "worker", "-l", "info"]
+    command:
+      [
+        "bash",
+        "/app/docker/entrypoint.sh",
+        "celery",
+        "-A",
+        "config",
+        "worker",
+        "-l",
+        "info",
+        "-Q",
+        "${CELERY_DEFAULT_QUEUE:-default}",
+        "--concurrency",
+        "${CELERY_DEFAULT_CONCURRENCY:-2}",
+        "--prefetch-multiplier",
+        "${CELERY_PREFETCH_MULTIPLIER:-1}",
+        "--max-tasks-per-child",
+        "${CELERY_MAX_TASKS_PER_CHILD:-500}",
+      ]
     volumes:
-      - media:/app/media
+      - ./runtime/media:/app/media
     depends_on:
       - db
       - redis
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+    restart: unless-stopped
+
+  worker_battle:
+    image: ${WEBGAME_IMAGE:-webgame:v1}
+    pull_policy: never
+    env_file: .env.docker
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    command:
+      [
+        "bash",
+        "/app/docker/entrypoint.sh",
+        "celery",
+        "-A",
+        "config",
+        "worker",
+        "-l",
+        "info",
+        "-Q",
+        "${CELERY_BATTLE_QUEUE:-battle}",
+        "--concurrency",
+        "${CELERY_BATTLE_CONCURRENCY:-4}",
+        "--prefetch-multiplier",
+        "${CELERY_PREFETCH_MULTIPLIER:-1}",
+        "--max-tasks-per-child",
+        "${CELERY_MAX_TASKS_PER_CHILD:-500}",
+      ]
+    volumes:
+      - ./runtime/media:/app/media
+    depends_on:
+      - db
+      - redis
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+    restart: unless-stopped
+
+  worker_timer:
+    image: ${WEBGAME_IMAGE:-webgame:v1}
+    pull_policy: never
+    env_file: .env.docker
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    command:
+      [
+        "bash",
+        "/app/docker/entrypoint.sh",
+        "celery",
+        "-A",
+        "config",
+        "worker",
+        "-l",
+        "info",
+        "-Q",
+        "${CELERY_TIMER_QUEUE:-timer}",
+        "--concurrency",
+        "${CELERY_TIMER_CONCURRENCY:-2}",
+        "--prefetch-multiplier",
+        "${CELERY_PREFETCH_MULTIPLIER:-1}",
+        "--max-tasks-per-child",
+        "${CELERY_MAX_TASKS_PER_CHILD:-500}",
+      ]
+    volumes:
+      - ./runtime/media:/app/media
+    depends_on:
+      - db
+      - redis
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
 
   beat:
-    build: .
+    image: ${WEBGAME_IMAGE:-webgame:v1}
+    pull_policy: never
     env_file: .env.docker
     read_only: true
     tmpfs:
@@ -96,10 +220,15 @@ services:
       - --schedule
       - /var/run/celerybeat-schedule
     volumes:
-      - celerybeat_data:/var/run
+      - ./runtime/celerybeat:/var/run
     depends_on:
       - db
       - redis
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
 
   nginx:
@@ -108,15 +237,17 @@ services:
       - "80:80"
     volumes:
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-      - staticfiles:/staticfiles:ro
-      - media:/media:ro
+      - ./runtime/staticfiles:/staticfiles:ro
+      - ./runtime/media:/media:ro
     depends_on:
       - web
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
 
 volumes:
   db_data:
   redis_data:
-  media:
-  staticfiles:
-  celerybeat_data:

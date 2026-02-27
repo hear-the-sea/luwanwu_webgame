@@ -1,10 +1,18 @@
 from __future__ import annotations
 
-import pytest
+from datetime import timedelta
 
-from gameplay.models import InventoryItem, ItemTemplate, TroopRecruitment
+import pytest
+from django.utils import timezone
+
+from battle.models import TroopTemplate
+from gameplay.models import InventoryItem, ItemTemplate, PlayerTroop, TroopRecruitment
 from gameplay.services.manor.core import ensure_manor
-from gameplay.services.recruitment.recruitment import _consume_equipment_for_recruitment, start_troop_recruitment
+from gameplay.services.recruitment.recruitment import (
+    _consume_equipment_for_recruitment,
+    finalize_troop_recruitment,
+    start_troop_recruitment,
+)
 
 
 @pytest.fixture
@@ -178,3 +186,61 @@ def test_start_troop_recruitment_rollback_on_insufficient_equipment(monkeypatch,
     )
     assert spear_item.quantity == 3
     assert shield_item.quantity == 1
+
+
+@pytest.mark.django_db
+def test_finalize_troop_recruitment_auto_creates_missing_troop_template(recruit_manor):
+    manor = recruit_manor
+    TroopTemplate.objects.filter(key="scout").delete()
+
+    recruitment = TroopRecruitment.objects.create(
+        manor=manor,
+        troop_key="scout",
+        troop_name="探子",
+        quantity=3,
+        equipment_costs={},
+        retainer_cost=3,
+        base_duration=60,
+        actual_duration=60,
+        complete_at=timezone.now() - timedelta(seconds=1),
+    )
+
+    assert finalize_troop_recruitment(recruitment, send_notification=False) is True
+
+    recruitment.refresh_from_db()
+    assert recruitment.status == TroopRecruitment.Status.COMPLETED
+
+    template = TroopTemplate.objects.get(key="scout")
+    troop = PlayerTroop.objects.get(manor=manor, troop_template=template)
+    assert troop.count == 3
+
+
+@pytest.mark.django_db
+def test_finalize_troop_recruitment_keeps_success_when_notification_fails(monkeypatch, recruit_manor):
+    manor = recruit_manor
+    TroopTemplate.objects.filter(key="scout").delete()
+
+    recruitment = TroopRecruitment.objects.create(
+        manor=manor,
+        troop_key="scout",
+        troop_name="探子",
+        quantity=2,
+        equipment_costs={},
+        retainer_cost=2,
+        base_duration=60,
+        actual_duration=60,
+        complete_at=timezone.now() - timedelta(seconds=1),
+    )
+
+    monkeypatch.setattr(
+        "gameplay.services.utils.messages.create_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.utils.notifications.notify_user",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("ws backend down")),
+    )
+
+    assert finalize_troop_recruitment(recruitment, send_notification=True) is True
+    recruitment.refresh_from_db()
+    assert recruitment.status == TroopRecruitment.Status.COMPLETED

@@ -1,5 +1,7 @@
 # guilds/services/technology.py
 
+import logging
+
 from django.db import transaction
 from django.db.models import F
 
@@ -9,6 +11,8 @@ from ..constants import TECH_NAMES, TECH_UPGRADE_COSTS
 from ..models import Guild, GuildResourceLog, GuildTechnology
 from .guild import create_announcement
 from .utils import get_active_membership
+
+logger = logging.getLogger(__name__)
 
 
 def calculate_tech_upgrade_cost(tech_key, current_level):
@@ -108,13 +112,29 @@ def upgrade_technology(guild, tech_key, operator):
         tech_name = TECH_NAMES.get(tech_key, tech_key)
         tech_level = tech_locked.level
 
-    # 事务外发布公告，减少锁持有时间
-    operator_manor = Manor.objects.get(user_id=operator_user_id)
-    create_announcement(
-        guild_locked,
-        "system",
-        f"{operator_manor.display_name}将{tech_name}升至{tech_level}级！",
-    )
+    # 事务外发布公告，减少锁持有时间。公告失败不应影响升级结果。
+    operator_manor = Manor.objects.filter(user_id=operator_user_id).first()
+    operator_name = getattr(operator_manor, "display_name", getattr(operator, "username", str(operator_user_id)))
+    if operator_manor is None:
+        logger.warning(
+            "Guild tech upgrade announcement fallback name used because manor missing: user_id=%s guild_id=%s",
+            operator_user_id,
+            guild_locked.id,
+        )
+    try:
+        create_announcement(
+            guild_locked,
+            "system",
+            f"{operator_name}将{tech_name}升至{tech_level}级！",
+        )
+    except Exception:
+        logger.exception(
+            "Guild tech upgrade announcement failed: user_id=%s guild_id=%s tech_key=%s level=%s",
+            operator_user_id,
+            guild_locked.id,
+            tech_key,
+            tech_level,
+        )
 
 
 def get_guild_tech_level(guild, tech_key):
@@ -206,13 +226,18 @@ def apply_guild_bonus_to_guest(guest):
     Returns:
         dict: 加成后的属性
     """
+    base_defense = getattr(guest, "defense_stat", None)
+    if base_defense is None:
+        # 兼容旧调用方（例如历史测试桩）使用 defense 字段
+        base_defense = getattr(guest, "defense", 0)
+
     # 检查玩家是否在帮会中
     user = guest.manor.user
     if not hasattr(user, "guild_membership") or not user.guild_membership.is_active:
         return {
             "force": guest.force,
             "intellect": guest.intellect,
-            "defense": guest.defense,
+            "defense": int(base_defense),
         }
 
     guild = user.guild_membership.guild
@@ -225,7 +250,7 @@ def apply_guild_bonus_to_guest(guest):
     return {
         "force": int(guest.force * (1 + force_bonus)),
         "intellect": int(guest.intellect * (1 + intellect_bonus)),
-        "defense": int(guest.defense * (1 + defense_bonus)),
+        "defense": int(base_defense * (1 + defense_bonus)),
     }
 
 

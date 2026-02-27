@@ -178,11 +178,18 @@ def ensure_inventory_gears(manor: Manor, *, slot: str | None = None) -> None:
         manor=manor, template__effect_type__in=effect_types, storage_location=InventoryItem.StorageLocation.WAREHOUSE
     ).select_related("template")
     if not items:
+        # No warehouse items for these slots — clean up any orphaned free GearItems
+        target_slots = set(EQUIP_SLOT_MAP[et] for et in effect_types if et in EQUIP_SLOT_MAP)
+        if target_slots:
+            GearItem.objects.filter(manor=manor, guest__isnull=True, template__slot__in=target_slots).delete()
         return
+    target_slots = set(EQUIP_SLOT_MAP[et] for et in effect_types if et in EQUIP_SLOT_MAP)
+    synced_slots: set[str] = set()
     for inv in items:
         slot = EQUIP_SLOT_MAP.get(inv.template.effect_type)
         if not slot:
             continue
+        synced_slots.add(slot)
         payload = inv.template.effect_payload or {}
         extra_stats = {k: int(v) for k, v in payload.items() if isinstance(v, (int, float))}
         defaults = {
@@ -206,6 +213,11 @@ def ensure_inventory_gears(manor: Manor, *, slot: str | None = None) -> None:
         elif free_count > target_free:
             to_delete = free_qs[: free_count - target_free]
             GearItem.objects.filter(id__in=[g.id for g in to_delete]).delete()
+
+    # Clean up free GearItems for slots that had no warehouse items
+    orphan_slots = target_slots - synced_slots
+    if orphan_slots:
+        GearItem.objects.filter(manor=manor, guest__isnull=True, template__slot__in=orphan_slots).delete()
 
 
 @transaction.atomic
@@ -266,7 +278,7 @@ def equip_guest(gear: GearItem, guest: Guest) -> GearItem:
 
 
 @transaction.atomic
-def unequip_guest_item(gear: GearItem, guest: Guest) -> GearItem:
+def unequip_guest_item(gear: GearItem, guest: Guest, *, allow_injured: bool = False) -> GearItem:
     """
     卸下门客的装备道具。
     """
@@ -275,7 +287,10 @@ def unequip_guest_item(gear: GearItem, guest: Guest) -> GearItem:
     # 并发安全：锁定装备和门客，防止并发卸载/穿戴
     gear = GearItem.objects.select_for_update().get(pk=gear.pk)
     guest = Guest.objects.select_for_update().get(pk=guest.pk)
-    if guest.status != GuestStatus.IDLE:
+    allowed_statuses = {GuestStatus.IDLE}
+    if allow_injured:
+        allowed_statuses.add(GuestStatus.INJURED)
+    if guest.status not in allowed_statuses:
         raise GuestNotIdleError(guest)
 
     if gear.manor != guest.manor:

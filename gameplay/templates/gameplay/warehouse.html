@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}{% if current_tab == 'treasury' %}藏宝阁{% else %}仓库{% endif %}{% endblock %}
 
@@ -134,6 +135,8 @@
                                     <button type="button" class="tw-btn-primary tw-btn-sm" onclick="openGuestSelectModal({{ entry.id }}, 'xisuidan')" {% if entry.quantity <= 0 %}disabled{% endif %}>使用</button>
                                     {% elif payload.action == 'reset_allocation' %}
                                     <button type="button" class="tw-btn-primary tw-btn-sm" onclick="openGuestSelectModal({{ entry.id }}, 'xidianka')" {% if entry.quantity <= 0 %}disabled{% endif %}>使用</button>
+                                    {% elif payload.action == 'upgrade_guest_rarity' %}
+                                    <button type="button" class="tw-btn-primary tw-btn-sm" onclick="openGuestSelectModal({{ entry.id }}, 'rarity_upgrade')" {% if entry.quantity <= 0 %}disabled{% endif %}>使用</button>
                                     {% else %}
                                     <form method="post" action="{% url 'gameplay:use_item' entry.id %}">
                                         {% csrf_token %}
@@ -154,7 +157,7 @@
                             </div>
                         </div>
                         {% else %}
-                        <form method="post" action="{% url 'gameplay:move_to_warehouse' entry.id %}" class="flex items-center gap-2">
+                        <form method="post" action="{% url 'gameplay:move_to_warehouse' entry.id %}" class="tw-action-return-form flex items-center gap-2">
                             {% csrf_token %}
                             <input type="number" name="quantity" value="1" min="1" max="{{ entry.quantity }}" class="tw-quantity-input" {% if entry.quantity <= 0 %}disabled{% endif %}>
                             <button type="submit" class="tw-btn-secondary tw-btn-sm" {% if entry.quantity <= 0 %}disabled{% endif %}>移回仓库</button>
@@ -163,7 +166,7 @@
                     </td>
                 </tr>
                 {% empty %}
-                <tr>
+                <tr class="tw-empty-row">
                     <td colspan="4" class="tw-empty-hint">{% if current_tab == 'treasury' %}藏宝阁为空{% else %}仓库为空，先通过战斗或任务获取物品吧。{% endif %}</td>
                 </tr>
                 {% endfor %}
@@ -255,6 +258,22 @@
                 <p class="tw-no-guests">没有可用的门客（需有分配过属性点且处于空闲或受伤状态）</p>
                 {% endfor %}
             </div>
+            <!-- 升稀有度门客列表 -->
+            <div id="guest-list-rarity-upgrade" class="tw-guest-list" style="display: none;">
+                {% for guest in guests_for_rarity_upgrade %}
+                <div class="tw-guest-option" data-guest-id="{{ guest.id }}">
+                    <div class="tw-guest-info">
+                        <span class="tw-guest-name rarity-text-{{ guest.template.rarity }}">{{ guest.display_name }}</span>
+                        <span class="tw-guest-level">Lv.{{ guest.level }}</span>
+                    </div>
+                    <div class="tw-guest-stats">
+                        <span>当前稀有度：{{ guest.template.get_rarity_display }}</span>
+                    </div>
+                </div>
+                {% empty %}
+                <p class="tw-no-guests">没有可升阶的门客（需为空闲状态且符合当前升阶道具条件）</p>
+                {% endfor %}
+            </div>
         </div>
         <div class="tw-modal-footer">
             <button type="button" class="tw-btn-secondary" onclick="closeGuestSelectModal()">取消</button>
@@ -264,11 +283,10 @@
 </div>
 {% endblock %}
 
-{% block extra_head %}
-{% load static %}
+{% block extra_scripts %}
 <script src="{% static 'js/tooltip.js' %}"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+(function () {
     // AJAX 表单提交
     document.querySelectorAll('.tw-warehouse-actions form').forEach(form => {
         form.addEventListener('submit', function(e) {
@@ -327,18 +345,21 @@ document.addEventListener('DOMContentLoaded', function() {
         sessionStorage.removeItem('warehouseTableScrollTop');
     }
 
-    // Tooltip 位置调整 - 使用共享模块
+    // Tooltip 位置调整 - 使用共享模块（桌面 hover + 移动端点击）
     if (typeof initItemTooltip === 'function') {
         initItemTooltip({ key: 'warehouse' });
     }
-});
+})();
 
 // 门客选择弹窗
-let currentItemId = null;
-let currentActionType = null;
-let selectedGuestId = null;
+(function () {
+const warehouseModalState = {
+    currentItemId: null,
+    currentActionType: null,
+    selectedGuestId: null,
+};
 
-const MODAL_CONFIG = {
+const WAREHOUSE_MODAL_CONFIG = {
     rebirth: {
         title: '选择要重生的门客',
         hint: '重生后门客将回到1级，属性将重置为模板基础值（有随机浮动）。装备将自动归还仓库，技能将被清空。',
@@ -359,21 +380,28 @@ const MODAL_CONFIG = {
         confirmText: '确认洗点',
         listId: 'guest-list-xidianka',
         urlTemplate: `{% url 'gameplay:use_xidianka' pk=0 %}`
+    },
+    rarity_upgrade: {
+        title: '选择要升阶的门客',
+        hint: '升阶后门客将重置为1级，自动卸下装备，技能将被清空，并重置洗髓丹等计数；具体升阶目标由当前使用的残卷决定。',
+        confirmText: '确认升阶',
+        listId: 'guest-list-rarity-upgrade',
+        urlTemplate: `{% url 'gameplay:use_guest_rarity_upgrade' pk=0 %}`
     }
 };
 
 function openGuestSelectModal(itemId, actionType) {
-    const config = MODAL_CONFIG[actionType];
+    const config = WAREHOUSE_MODAL_CONFIG[actionType];
     if (!config) return;
-    currentItemId = itemId;
-    currentActionType = actionType;
-    selectedGuestId = null;
+    warehouseModalState.currentItemId = itemId;
+    warehouseModalState.currentActionType = actionType;
+    warehouseModalState.selectedGuestId = null;
     document.getElementById('modal-title').textContent = config.title;
     // 安全修复：使用 textContent 替代 innerHTML，防止 XSS
     document.getElementById('modal-hint').textContent = config.hint;
     document.getElementById('modal-confirm-btn').textContent = config.confirmText;
     document.getElementById('modal-confirm-btn').disabled = true;
-    ['guest-list-rebirth', 'guest-list-xisuidan', 'guest-list-xidianka'].forEach(id => {
+    ['guest-list-rebirth', 'guest-list-xisuidan', 'guest-list-xidianka', 'guest-list-rarity-upgrade'].forEach(id => {
         document.getElementById(id).style.display = 'none';
     });
     document.getElementById(config.listId).style.display = 'block';
@@ -383,24 +411,24 @@ function openGuestSelectModal(itemId, actionType) {
 
 function closeGuestSelectModal() {
     document.getElementById('guest-select-modal').style.display = 'none';
-    currentItemId = null;
-    currentActionType = null;
-    selectedGuestId = null;
+    warehouseModalState.currentItemId = null;
+    warehouseModalState.currentActionType = null;
+    warehouseModalState.selectedGuestId = null;
 }
 
 function confirmGuestAction() {
-    if (!selectedGuestId || !currentItemId || !currentActionType) {
+    if (!warehouseModalState.selectedGuestId || !warehouseModalState.currentItemId || !warehouseModalState.currentActionType) {
         gameDialog.error('请先选择门客', { title: '提示' });
         return;
     }
-    const config = MODAL_CONFIG[currentActionType];
+    const config = WAREHOUSE_MODAL_CONFIG[warehouseModalState.currentActionType];
     const confirmBtn = document.getElementById('modal-confirm-btn');
     confirmBtn.disabled = true;
     confirmBtn.textContent = '处理中...';
 
-    const url = config.urlTemplate.replace('/0/', `/${currentItemId}/`);
+    const url = config.urlTemplate.replace('/0/', `/${warehouseModalState.currentItemId}/`);
     const formData = new FormData();
-    formData.append('guest_id', selectedGuestId);
+    formData.append('guest_id', warehouseModalState.selectedGuestId);
     formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
 
     fetch(url, {
@@ -426,22 +454,33 @@ function confirmGuestAction() {
     });
 }
 
-document.addEventListener('click', function(e) {
+const warehouseGuestOptionClickHandler = function(e) {
     const modal = document.getElementById('guest-select-modal');
     const guestOption = e.target.closest('.tw-guest-option');
     if (guestOption && modal && modal.contains(guestOption)) {
         const guestId = guestOption.dataset.guestId;
-        if (!guestId || !currentActionType) return;
-        const activeList = document.getElementById(MODAL_CONFIG[currentActionType]?.listId);
+        if (!guestId || !warehouseModalState.currentActionType) return;
+        const activeList = document.getElementById(WAREHOUSE_MODAL_CONFIG[warehouseModalState.currentActionType]?.listId);
         if (!activeList) return;
         if (!activeList.contains(guestOption)) return;
         activeList.querySelectorAll('.tw-guest-option').forEach(opt => opt.classList.remove('selected'));
         guestOption.classList.add('selected');
-        selectedGuestId = guestId;
+        warehouseModalState.selectedGuestId = guestId;
         const confirmBtn = document.getElementById('modal-confirm-btn');
         if (confirmBtn) confirmBtn.disabled = false;
     }
     if (e.target && e.target.id === 'guest-select-modal') closeGuestSelectModal();
-});
+};
+
+if (window.__warehouseGuestOptionClickHandler) {
+    document.removeEventListener('click', window.__warehouseGuestOptionClickHandler);
+}
+window.__warehouseGuestOptionClickHandler = warehouseGuestOptionClickHandler;
+document.addEventListener('click', warehouseGuestOptionClickHandler);
+
+window.openGuestSelectModal = openGuestSelectModal;
+window.closeGuestSelectModal = closeGuestSelectModal;
+window.confirmGuestAction = confirmGuestAction;
+})();
 </script>
 {% endblock %}

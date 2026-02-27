@@ -1,14 +1,14 @@
-FROM python:3.12-slim
+FROM python:3.12-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app
 
-# System dependencies:
-# - mysqlclient: default-libmysqlclient-dev + build-essential + pkg-config
-# - Pillow: libjpeg/zlib/libpng/libfreetype dev headers
+# Build-time deps for mysqlclient and Pillow.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         pkg-config \
@@ -19,15 +19,36 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libfreetype6-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Create a non-root user for runtime safety.
-RUN useradd -m -u 10001 appuser
+RUN python -m venv "$VIRTUAL_ENV"
 
 COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r /app/requirements.txt
 
-COPY . /app
 
-RUN chown -R appuser:appuser /app
+FROM python:3.12-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:$PATH"
+
+WORKDIR /app
+
+# Runtime shared libs only.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libmariadb3 \
+        libjpeg62-turbo \
+        zlib1g \
+        libpng16-16 \
+        libfreetype6 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd -m -u 10001 appuser
+
+COPY --from=builder /opt/venv /opt/venv
+COPY --chown=appuser:appuser . /app
 
 USER appuser
 

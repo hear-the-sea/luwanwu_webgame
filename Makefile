@@ -4,7 +4,7 @@ LOCAL_STATE_DIR ?= .local
 FLAKE8_TARGETS ?= accounts battle gameplay guests guilds trade core websocket config tests
 MYPY_TARGETS ?= accounts battle common config core gameplay guests guilds tasks trade websocket
 
-.PHONY: install migrate dev dev-ws worker beat test test-integration format lint lint-strict check clean
+.PHONY: install migrate bootstrap-data dev dev-ws worker beat test test-integration format lint lint-strict check clean
 
 install:
 	pip install -r requirements-dev.txt
@@ -20,6 +20,9 @@ precommit:
 
 migrate:
 	$(MANAGE) migrate
+
+bootstrap-data:
+	$(MANAGE) bootstrap_game_data --skip-images
 
 # 传统 HTTP 开发服务器（不支持 WebSocket）
 dev:

@@ -318,6 +318,13 @@ body {
   font-weight: bold;
 }
 
+.user-info-value-region {
+  display: block;
+  flex: 1;
+  margin-left: 8px;
+  text-align: right;
+}
+
 /* 菜单按钮网格 */
 .menu-grid {
   display: grid;

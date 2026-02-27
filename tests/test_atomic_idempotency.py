@@ -105,3 +105,56 @@ def test_finalize_technology_upgrade_is_safe_with_stale_instances(django_user_mo
     assert tech.level == 1
     assert tech.is_upgrading is False
     assert tech.upgrade_complete_at is None
+
+
+@pytest.mark.django_db
+def test_finalize_building_upgrade_keeps_success_when_notification_fails(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="building_finalize_notify_fail", password="pass12345")
+    manor = ensure_manor(user)
+    building = manor.buildings.select_related("building_type").first()
+    assert building is not None
+
+    now = timezone.now()
+    before_level = building.level
+    building.is_upgrading = True
+    building.upgrade_complete_at = now - timezone.timedelta(seconds=1)
+    building.save(update_fields=["is_upgrading", "upgrade_complete_at"])
+
+    monkeypatch.setattr(
+        "gameplay.services.utils.messages.create_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.manor.core.notify_user",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("ws backend down")),
+    )
+
+    assert finalize_building_upgrade(building, now=now, send_notification=True) is True
+    building.refresh_from_db()
+    assert building.level == before_level + 1
+    assert building.is_upgrading is False
+
+
+@pytest.mark.django_db
+def test_finalize_technology_upgrade_keeps_success_when_notification_message_fails(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="tech_finalize_notify_fail", password="pass12345")
+    manor = ensure_manor(user)
+
+    now = timezone.now()
+    tech = PlayerTechnology.objects.create(
+        manor=manor,
+        tech_key="march_art",
+        level=0,
+        is_upgrading=True,
+        upgrade_complete_at=now - timezone.timedelta(seconds=1),
+    )
+
+    def _raise_create_message(*_args, **_kwargs):
+        raise RuntimeError("message backend down")
+
+    monkeypatch.setattr("gameplay.services.utils.messages.create_message", _raise_create_message)
+
+    assert finalize_technology_upgrade(tech, send_notification=True) is True
+    tech.refresh_from_db()
+    assert tech.level == 1
+    assert tech.is_upgrading is False

@@ -13,14 +13,15 @@ from threading import Lock
 
 from django.conf import settings
 from django.core.cache import cache
-from django.db import IntegrityError, transaction
+from django.db import DatabaseError, IntegrityError, transaction
 from django.db.models import F
 from django.utils import timezone
 
+from common.utils.celery import safe_apply_async
 from core.utils.time_scale import scale_duration
 
 from ...constants import BUILDING_MAX_LEVELS, MAX_CONCURRENT_BUILDING_UPGRADES, BuildingKeys, ManorNameConstants
-from ...models import Building, BuildingType, Manor, Message, ResourceEvent
+from ...models import Building, BuildingType, ItemTemplate, Manor, Message, ResourceEvent
 from ..utils.cache import invalidate_home_stats_cache
 from ..utils.notifications import notify_user
 
@@ -43,6 +44,17 @@ def calculate_building_capacity(level: int, is_silver_vault: bool = False) -> in
 
 
 logger = logging.getLogger(__name__)
+
+
+class ManorNameConflictError(ValueError):
+    """Raised when the requested manor name is already occupied."""
+
+
+INITIAL_PEACE_SHIELD_KEYS: tuple[str, ...] = (
+    "peace_shield_small",
+    "peace_shield_medium",
+    "peace_shield_large",
+)
 
 
 _LOCAL_REFRESH_FALLBACK: dict[int, float] = {}
@@ -106,52 +118,110 @@ def _cleanup_local_fallback_cache(now_monotonic: float, stale_threshold: float) 
             _LOCAL_REFRESH_FALLBACK.pop(key, None)
 
 
-def ensure_manor(user, region: str = "overseas") -> Manor:
+def ensure_manor(user, region: str = "overseas", initial_name: str | None = None) -> Manor:
     """
     获取或创建用户的庄园，确保庄园拥有所有建筑。
 
     Args:
         user: 用户对象
         region: 地区编码（仅在创建时使用）
+        initial_name: 初始庄园名称（仅在创建时使用）
 
     Returns:
         庄园对象
     """
+    normalized_name = (initial_name or "").strip() or None
     manor, created = Manor.objects.get_or_create(user=user)
-    if created:
-        # First persist the record (already created by get_or_create), then
-        # assign a unique coordinate under a transaction to avoid races.
-        from ...constants import PVPConstants
-
-        assigned = False
-        for _ in range(5):
-            x, y = generate_unique_coordinate(region)
-            try:
-                with transaction.atomic():
-                    locked = Manor.objects.select_for_update().get(pk=manor.pk)
-                    locked.region = region
-                    locked.coordinate_x = x
-                    locked.coordinate_y = y
-                    locked.newbie_protection_until = timezone.now() + timedelta(
-                        days=PVPConstants.NEWBIE_PROTECTION_DAYS
-                    )
-                    locked.save(update_fields=["region", "coordinate_x", "coordinate_y", "newbie_protection_until"])
-                manor.region = region
-                manor.coordinate_x = x
-                manor.coordinate_y = y
-                manor.newbie_protection_until = locked.newbie_protection_until
-                assigned = True
-                break
-            except IntegrityError:
-                # Retry on unique constraint conflicts.
-                continue
-
+    location_assigned = manor.coordinate_x > 0 and manor.coordinate_y > 0
+    if created or not location_assigned:
+        try:
+            assigned = _assign_manor_location_and_name(manor, region=region, normalized_name=normalized_name)
+        except ManorNameConflictError:
+            if created:
+                Manor.objects.filter(pk=manor.pk, user=user, coordinate_x=0, coordinate_y=0).delete()
+            raise
         if not assigned:
+            if created:
+                # Ensure failed provisioning doesn't leave a half-initialized manor at (0,0).
+                Manor.objects.filter(pk=manor.pk, user=user, coordinate_x=0, coordinate_y=0).delete()
             raise RuntimeError("Failed to allocate a unique manor coordinate after multiple attempts")
+        manor.refresh_from_db(fields=["region", "coordinate_x", "coordinate_y", "name"])
+    if created:
         bootstrap_buildings(manor)
+        _grant_initial_peace_shield(manor)
+        _deliver_active_global_mail_campaigns(manor)
     else:
         ensure_buildings_exist(manor)
     return manor
+
+
+def _assign_manor_location_and_name(manor: Manor, *, region: str, normalized_name: str | None) -> bool:
+    for _ in range(5):
+        x, y = generate_unique_coordinate(region)
+        try:
+            with transaction.atomic():
+                locked = Manor.objects.select_for_update().get(pk=manor.pk)
+                if locked.coordinate_x > 0 and locked.coordinate_y > 0:
+                    if normalized_name and not locked.name:
+                        locked.name = normalized_name
+                        locked.save(update_fields=["name"])
+                    return True
+                locked.region = region
+                locked.coordinate_x = x
+                locked.coordinate_y = y
+                update_fields = ["region", "coordinate_x", "coordinate_y"]
+                if normalized_name and not locked.name:
+                    locked.name = normalized_name
+                    update_fields.append("name")
+                locked.save(update_fields=update_fields)
+            return True
+        except IntegrityError as exc:
+            if normalized_name and not is_manor_name_available(normalized_name, exclude_manor_id=manor.id):
+                raise ManorNameConflictError("该庄园名称已被使用") from exc
+            continue
+    return False
+
+
+def _grant_initial_peace_shield(manor: Manor) -> None:
+    """新庄园初始化赠送一枚免战牌（模板不存在时静默跳过）。"""
+    available_keys = set(ItemTemplate.objects.filter(key__in=INITIAL_PEACE_SHIELD_KEYS).values_list("key", flat=True))
+    shield_key = next((key for key in INITIAL_PEACE_SHIELD_KEYS if key in available_keys), None)
+    if not shield_key:
+        logger.warning("Initial peace shield template not found, skipped: manor_id=%s", manor.pk)
+        return
+
+    try:
+        from ..inventory.core import add_item_to_inventory
+
+        add_item_to_inventory(manor, shield_key, 1)
+    except Exception:
+        logger.exception("Failed to grant initial peace shield: manor_id=%s item_key=%s", manor.pk, shield_key)
+
+
+def _deliver_active_global_mail_campaigns(manor: Manor) -> None:
+    """新庄园创建后，补发当前生效的全服邮件活动。"""
+    try:
+        from ..global_mail import deliver_active_global_mail_campaigns
+
+        deliver_active_global_mail_campaigns(manor)
+    except DatabaseError as exc:
+        if _is_missing_global_mail_schema_error(exc):
+            logger.warning(
+                "Skipped active global mail delivery because schema is unavailable (run migrations): manor_id=%s error=%s",
+                manor.pk,
+                exc,
+            )
+            return
+        logger.exception("Failed to deliver active global mail campaigns: manor_id=%s", manor.pk)
+    except Exception:
+        logger.exception("Failed to deliver active global mail campaigns: manor_id=%s", manor.pk)
+
+
+def _is_missing_global_mail_schema_error(exc: BaseException) -> bool:
+    message = str(exc).lower()
+    if ("globalmailcampaign" not in message) and ("globalmaildelivery" not in message):
+        return False
+    return ("doesn't exist" in message) or ("no such table" in message) or ("undefined table" in message)
 
 
 def generate_unique_coordinate(region: str) -> tuple[int, int]:
@@ -306,24 +376,33 @@ def finalize_building_upgrade(building: Building, now: datetime | None = None, s
     building.manor.invalidate_building_cache()
     invalidate_home_stats_cache(building.manor_id)
     if send_notification:
-        from .messages import create_message
+        from ..utils.messages import create_message
 
-        create_message(
-            manor=building.manor,
-            kind=Message.Kind.SYSTEM,
-            title=f"{building.building_type.name} 升级完成",
-            body=f"等级 Lv{building.level - 1} → Lv{building.level}",
-        )
-        notify_user(
-            building.manor.user_id,
-            {
-                "kind": "system",
-                "title": f"{building.building_type.name} 升级完成",
-                "building_key": building.building_type.key,
-                "level": building.level,
-            },
-            log_context="building upgrade notification",
-        )
+        try:
+            create_message(
+                manor=building.manor,
+                kind=Message.Kind.SYSTEM,
+                title=f"{building.building_type.name} 升级完成",
+                body=f"等级 Lv{building.level - 1} → Lv{building.level}",
+            )
+            notify_user(
+                building.manor.user_id,
+                {
+                    "kind": "system",
+                    "title": f"{building.building_type.name} 升级完成",
+                    "building_key": building.building_type.key,
+                    "level": building.level,
+                },
+                log_context="building upgrade notification",
+            )
+        except Exception as exc:
+            logger.warning(
+                "building upgrade notification failed: building_id=%s manor_id=%s error=%s",
+                building.id,
+                building.manor_id,
+                exc,
+                exc_info=True,
+            )
     return True
 
 
@@ -359,7 +438,15 @@ def schedule_building_completion(building: Building, eta_seconds: int) -> None:
     except Exception:
         logger.warning("Unable to import complete_building_upgrade task; skip scheduling", exc_info=True)
         return
-    transaction.on_commit(lambda: complete_building_upgrade.apply_async(args=[building.id], countdown=countdown))
+    transaction.on_commit(
+        lambda: safe_apply_async(
+            complete_building_upgrade,
+            args=[building.id],
+            countdown=countdown,
+            logger=logger,
+            log_message="complete_building_upgrade dispatch failed",
+        )
+    )
 
 
 def start_upgrade(building: Building) -> None:
@@ -590,14 +677,24 @@ def rename_manor(manor: Manor, new_name: str, consume_item: bool = True) -> None
         raise ValueError("该名称已被使用")
 
     # 发送系统消息
-    from .messages import create_message
+    from ..utils.messages import create_message
 
-    create_message(
-        manor=manor,
-        kind=Message.Kind.SYSTEM,
-        title="庄园更名成功",
-        body=f"您的庄园已从「{old_name}」更名为「{new_name}」",
-    )
+    try:
+        create_message(
+            manor=manor,
+            kind=Message.Kind.SYSTEM,
+            title="庄园更名成功",
+            body=f"您的庄园已从「{old_name}」更名为「{new_name}」",
+        )
+    except Exception as exc:
+        logger.warning(
+            "manor rename message failed: manor_id=%s old_name=%s new_name=%s error=%s",
+            manor.id,
+            old_name,
+            new_name,
+            exc,
+            exc_info=True,
+        )
 
 
 def get_rename_card_count(manor: Manor) -> int:

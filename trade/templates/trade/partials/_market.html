@@ -82,7 +82,9 @@
                                 <div class="tw-item-icon rarity-{{ listing.item_template.rarity }}">
                                     {% if listing.item_template.image %}
                                     <img src="{{ listing.item_template.image.url }}"
-                                         alt="{{ listing.item_template.name }}">
+                                         alt="{{ listing.item_template.name }}"
+                                         loading="lazy"
+                                         decoding="async">
                                     {% else %}
                                     <span class="tw-icon-placeholder">
                                         {{ listing.item_template.name|slice:":1" }}
@@ -201,7 +203,9 @@
                                 <div class="tw-item-icon rarity-{{ item.template.rarity }}">
                                     {% if item.template.image %}
                                     <img src="{{ item.template.image.url }}"
-                                         alt="{{ item.template.name }}">
+                                         alt="{{ item.template.name }}"
+                                         loading="lazy"
+                                         decoding="async">
                                     {% else %}
                                     <span class="tw-icon-placeholder">
                                         {{ item.template.name|slice:":1" }}
@@ -298,7 +302,9 @@
                                 <div class="tw-item-icon rarity-{{ listing.item_template.rarity }}">
                                     {% if listing.item_template.image %}
                                     <img src="{{ listing.item_template.image.url }}"
-                                         alt="{{ listing.item_template.name }}">
+                                         alt="{{ listing.item_template.name }}"
+                                         loading="lazy"
+                                         decoding="async">
                                     {% endif %}
                                 </div>
                                 <span class="tw-item-name rarity-{{ listing.item_template.rarity }}">

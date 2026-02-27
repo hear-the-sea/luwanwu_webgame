@@ -1,0 +1,166 @@
+{
+  "total_guests": 3592,
+  "total_batches": 18,
+  "total_issues": 0,
+  "severity_counts": {},
+  "issue_code_counts": {},
+  "batch_stats": [
+    {
+      "batch_id": 1,
+      "guest_count": 200,
+      "issue_count": 0
+    },
+    {
+      "batch_id": 2,
+      "guest_count": 200,
+      "issue_count": 0
+    },
+    {
+      "batch_id": 3,
+      "guest_count": 200,
+      "issue_count": 0
+    },
+    {
+      "batch_id": 4,
+      "guest_count": 200,
+      "issue_count": 0
+    },
+    {
+      "batch_id": 5,
+      "guest_count": 200,
+      "issue_count": 0
+    },
+    {
+      "batch_id": 6,
+      "guest_count": 200,
+      "issue_count": 0
+    },
+    {
+      "batch_id": 7,
+      "guest_count": 200,
+      "issue_count": 0
+    },
+    {
+      "batch_id": 8,
+      "guest_count": 200,
+      "issue_count": 0
+    },
+    {
+      "batch_id": 9,
+      "guest_count": 200,
+      "issue_count": 0
+    },
+    {
+      "batch_id": 10,
+      "guest_count": 200,
+      "issue_count": 0
+    },
+    {
+      "batch_id": 11,
+      "guest_count": 200,
+      "issue_count": 0
+    },
+    {
+      "batch_id": 12,
+      "guest_count": 200,
+      "issue_count": 0
+    },
+    {
+      "batch_id": 13,
+      "guest_count": 200,
+      "issue_count": 0
+    },
+    {
+      "batch_id": 14,
+      "guest_count": 200,
+      "issue_count": 0
+    },
+    {
+      "batch_id": 15,
+      "guest_count": 200,
+      "issue_count": 0
+    },
+    {
+      "batch_id": 16,
+      "guest_count": 200,
+      "issue_count": 0
+    },
+    {
+      "batch_id": 17,
+      "guest_count": 200,
+      "issue_count": 0
+    },
+    {
+      "batch_id": 18,
+      "guest_count": 192,
+      "issue_count": 0
+    }
+  ],
+  "files_covered": [
+    "gulong.yaml",
+    "hermits.yaml",
+    "history_mingqing_01.yaml",
+    "history_mingqing_02.yaml",
+    "history_mingqing_03.yaml",
+    "history_mingqing_04.yaml",
+    "history_mingqing_05.yaml",
+    "history_mingqing_06.yaml",
+    "history_mingqing_07.yaml",
+    "history_mingqing_08.yaml",
+    "history_mingqing_09.yaml",
+    "history_qinhan_01.yaml",
+    "history_qinhan_02.yaml",
+    "history_qinhan_03.yaml",
+    "history_qinhan_04.yaml",
+    "history_qinhan_05.yaml",
+    "history_qinhan_06.yaml",
+    "history_qinhan_07.yaml",
+    "history_qinhan_08.yaml",
+    "history_qinhan_09.yaml",
+    "history_sljnbc_01.yaml",
+    "history_sljnbc_02.yaml",
+    "history_sljnbc_03.yaml",
+    "history_sljnbc_04.yaml",
+    "history_sljnbc_05.yaml",
+    "history_sljnbc_06.yaml",
+    "history_sljnbc_07.yaml",
+    "history_sljnbc_08.yaml",
+    "history_sljnbc_09.yaml",
+    "history_sljnbc_10.yaml",
+    "history_sljnbc_11.yaml",
+    "history_songliaojinyuan_01.yaml",
+    "history_songliaojinyuan_02.yaml",
+    "history_songliaojinyuan_03.yaml",
+    "history_songliaojinyuan_04.yaml",
+    "history_songliaojinyuan_05.yaml",
+    "history_songliaojinyuan_06.yaml",
+    "history_songliaojinyuan_07.yaml",
+    "history_songliaojinyuan_08.yaml",
+    "history_songliaojinyuan_09.yaml",
+    "history_songliaojinyuan_10.yaml",
+    "history_songliaojinyuan_11.yaml",
+    "history_suitang_01.yaml",
+    "history_suitang_02.yaml",
+    "history_suitang_03.yaml",
+    "history_suitang_04.yaml",
+    "history_suitang_05.yaml",
+    "history_suitang_10.yaml",
+    "history_xianqin_01.yaml",
+    "history_xianqin_02.yaml",
+    "history_xianqin_03.yaml",
+    "history_xianqin_04.yaml",
+    "history_xianqin_05.yaml",
+    "history_xianqin_06.yaml",
+    "history_xianqin_07.yaml",
+    "history_xianqin_08.yaml",
+    "history_xianqin_09.yaml",
+    "history_xianqin_10.yaml",
+    "huangyi.yaml",
+    "jinyong.yaml",
+    "liangyshen.yaml",
+    "original.yaml",
+    "special.yaml",
+    "suitang.yaml",
+    "wenruian.yaml"
+  ]
+}

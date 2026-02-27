@@ -274,32 +274,6 @@ heroes:
       intellect: 58
       defense: 18
       agility: 12
-  - key: hist_songliaojinyuan_0022
-    name: 秦九韶
-    default_gender: male
-    archetype: civil
-    flavor: （1208年-1268年）南宋数学家，《数书九章》作者。他发明的"大衍求一术"比欧洲早五百年。他是中国古代最伟大的数学家之一。其算法体系严谨完备，对后世算法研究影响巨大。其著作成为古代数学的重要教材。
-    growth_range:
-    - 7
-    - 10
-    attribute_weights:
-      force: 12
-      intellect: 58
-      defense: 18
-      agility: 12
-  - key: hist_songliaojinyuan_0023
-    name: 杨辉
-    default_gender: male
-    archetype: civil
-    flavor: （约1238年-约1298年）南宋数学家，杨辉三角的发明者。他的数学著作通俗易懂，推广了数学知识。其整理与普及之功，使数学从专门技术走向士人教育。其算学贡献在东亚数学史上影响长久。后世教材多沿用其编排体例。
-    growth_range:
-    - 7
-    - 10
-    attribute_weights:
-      force: 12
-      intellect: 58
-      defense: 18
-      agility: 12
   - key: hist_songliaojinyuan_0024
     name: 宋慈
     default_gender: male
@@ -352,32 +326,6 @@ heroes:
       intellect: 58
       defense: 18
       agility: 12
-  - key: hist_songliaojinyuan_0028
-    name: 倪瓒
-    default_gender: male
-    archetype: civil
-    flavor: （1301年-1374年）元代画家，"元四家"之一。他的山水画萧疏淡远，意境超凡。他洁癖成性，是文人画的典型代表。其画格清淡高逸，深受后世推崇。其独特气质使其画作极具辨识度。其画论亦被后世画家引为圭臬。
-    growth_range:
-    - 7
-    - 10
-    attribute_weights:
-      force: 12
-      intellect: 58
-      defense: 18
-      agility: 12
-  - key: hist_songliaojinyuan_0029
-    name: 吴镇
-    default_gender: male
-    archetype: civil
-    flavor: （1280年-1354年）元代画家，"元四家"之一。他擅长画竹与山水，笔墨淋漓，气韵生动。其画风豪迈中见精致，影响文人画审美取向。其墨竹尤为著名，后世多有摹写。其画中气韵被誉为元代文人画之精髓。其笔墨气势常被学者称为豪放一格。
-    growth_range:
-    - 7
-    - 10
-    attribute_weights:
-      force: 12
-      intellect: 58
-      defense: 18
-      agility: 12
   - key: hist_songliaojinyuan_0030
     name: 王蒙
     default_gender: male
@@ -391,14 +339,67 @@ heroes:
       intellect: 58
       defense: 18
       agility: 12
+  blue:
+  - key: hist_songliaojinyuan_0022
+    name: 秦九韶
+    default_gender: male
+    archetype: civil
+    flavor: （1208年-1268年）南宋数学家，《数书九章》作者。他发明的"大衍求一术"比欧洲早五百年。他是中国古代最伟大的数学家之一。其算法体系严谨完备，对后世算法研究影响巨大。其著作成为古代数学的重要教材。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0023
+    name: 杨辉
+    default_gender: male
+    archetype: civil
+    flavor: （约1238年-约1298年）南宋数学家，杨辉三角的发明者。他的数学著作通俗易懂，推广了数学知识。其整理与普及之功，使数学从专门技术走向士人教育。其算学贡献在东亚数学史上影响长久。后世教材多沿用其编排体例。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0028
+    name: 倪瓒
+    default_gender: male
+    archetype: civil
+    flavor: （1301年-1374年）元代画家，"元四家"之一。他的山水画萧疏淡远，意境超凡。他洁癖成性，是文人画的典型代表。其画格清淡高逸，深受后世推崇。其独特气质使其画作极具辨识度。其画论亦被后世画家引为圭臬。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_songliaojinyuan_0029
+    name: 吴镇
+    default_gender: male
+    archetype: civil
+    flavor: （1280年-1354年）元代画家，"元四家"之一。他擅长画竹与山水，笔墨淋漓，气韵生动。其画风豪迈中见精致，影响文人画审美取向。其墨竹尤为著名，后世多有摹写。其画中气韵被誉为元代文人画之精髓。其笔墨气势常被学者称为豪放一格。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
   - key: hist_songliaojinyuan_0031
     name: 朱世杰
     default_gender: male
     archetype: civil
     flavor: （约1260年-约1320年）元代数学家。他的《四元玉鉴》是中国古代数学的巅峰之作。其多元方程解法精妙，代表了古代代数学的最高水平。该书被誉为古代数学集大成者之作。其影响延续至后世数学与算法研究。其理论深度使其在世界数学史中占有一席。
     growth_range:
-    - 7
-    - 10
+    - 6
+    - 9
     attribute_weights:
       force: 12
       intellect: 58
@@ -410,8 +411,8 @@ heroes:
     archetype: civil
     flavor: （1148年-1227年）金末元初道士，全真七真之一。成吉思汗西征时，他万里赴召，以“止杀”之言进谏，名震天下；其清修与气节并重，使全真教在乱世中得以广传。其道行与德望兼备，被后世奉为高道楷模。其行迹被后世道门奉为清修典范。
     growth_range:
-    - 7
-    - 10
+    - 6
+    - 9
     attribute_weights:
       force: 12
       intellect: 58
@@ -423,8 +424,8 @@ heroes:
     archetype: civil
     flavor: （1192年-1279年）金元之际数学家。他创立天元术，是中国古代代数学的开创者，著有《测圆海镜》。其方法推动了方程理论的发展，影响后世数学研究。其理论体系为古代代数学奠下坚实基础。其成果被后世数学家广泛引用与发展。
     growth_range:
-    - 7
-    - 10
+    - 6
+    - 9
     attribute_weights:
       force: 12
       intellect: 58
@@ -436,8 +437,8 @@ heroes:
     archetype: civil
     flavor: （约1085年-约1145年）北宋画家，《清明上河图》作者。他的传世名作展现了汴京的繁华，是中国艺术史上的瑰宝。其工笔细致入微，成为宋代风俗画的巅峰。其细节描绘之精，堪称画史罕见。画中市井百态成为研究北宋社会的重要图证。
     growth_range:
-    - 7
-    - 10
+    - 6
+    - 9
     attribute_weights:
       force: 12
       intellect: 58
@@ -449,8 +450,8 @@ heroes:
     archetype: civil
     flavor: （1231年-1316年）元朝天文学家、水利专家。他编制的《授时历》精度极高，比格里高利历早三百年。他主持修建了大都的水利工程，是中国科技史上的巨匠。其科学精神与工程能力并重，影响深远。其成果推动元代天文与水利技术跃升。
     growth_range:
-    - 7
-    - 10
+    - 6
+    - 9
     attribute_weights:
       force: 12
       intellect: 58

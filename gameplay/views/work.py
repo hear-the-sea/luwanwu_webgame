@@ -29,6 +29,16 @@ from guests.models import Guest, GuestStatus
 logger = logging.getLogger(__name__)
 
 
+def _unexpected_work_error(
+    request: HttpRequest,
+    *,
+    log_message: str,
+    log_args: tuple[object, ...],
+) -> None:
+    logger.exception(log_message, *log_args)
+    messages.error(request, "操作失败，请稍后重试")
+
+
 class WorkView(LoginRequiredMixin, TemplateView):
     """打工页面"""
 
@@ -70,23 +80,45 @@ class WorkView(LoginRequiredMixin, TemplateView):
         current_tier_config = next((t for t in work_tiers if t["key"] == current_tier), work_tiers[0])
 
         # 获取当前工作区的工作列表
-        works = WorkTemplate.objects.filter(tier=current_tier_config["tier"]).order_by("display_order")
+        works = list(WorkTemplate.objects.filter(tier=current_tier_config["tier"]).order_by("display_order"))
 
         # 获取所有空闲的门客
-        idle_guests = (
+        idle_guests = list(
             manor.guests.filter(status=GuestStatus.IDLE).select_related("template").order_by("-level", "template__name")
         )
 
-        # 获取所有打工记录（包括打工中和可领取报酬的）
-        working_assignments = (
+        # 获取未结算记录并映射到对应工作卡片（优先显示打工中，其次显示已完成待领取）
+        pending_assignments = list(
             WorkAssignment.objects.filter(
                 manor=manor,
                 status__in=[WorkAssignment.Status.WORKING, WorkAssignment.Status.COMPLETED],
-                reward_claimed=False,  # 只显示未领取报酬的
+                reward_claimed=False,
             )
             .select_related("guest", "work_template")
-            .order_by("status", "complete_at")
+            .order_by("work_template_id", "complete_at", "-started_at", "-id")
         )
+        assignment_by_work_template_id: dict[int, WorkAssignment] = {}
+        for assignment in sorted(
+            pending_assignments,
+            key=lambda item: (
+                0 if item.status == WorkAssignment.Status.WORKING else 1,
+                item.complete_at,
+                -item.id,
+            ),
+        ):
+            assignment_by_work_template_id.setdefault(assignment.work_template_id, assignment)
+
+        for work in works:
+            work.active_assignment = assignment_by_work_template_id.get(work.id)
+            work.eligible_idle_guests = [
+                guest
+                for guest in idle_guests
+                if (
+                    guest.level >= work.required_level
+                    and guest.force >= work.required_force
+                    and guest.intellect >= work.required_intellect
+                )
+            ]
 
         context.update(
             {
@@ -95,8 +127,6 @@ class WorkView(LoginRequiredMixin, TemplateView):
                 "current_tier": current_tier,
                 "current_tier_config": current_tier_config,
                 "works": works,
-                "idle_guests": idle_guests,
-                "working_assignments": working_assignments,
             }
         )
 
@@ -125,15 +155,17 @@ def assign_work_view(request: HttpRequest) -> HttpResponse:
         messages.success(request, f"{guest.display_name} 已前往 {work_template.name} 打工，预计 {hours:.1f} 小时后完成")
     except (GameError, ValueError) as exc:
         messages.error(request, sanitize_error_message(exc))
-    except Exception as exc:
-        logger.exception(
-            "Unexpected work assign error: manor_id=%s user_id=%s guest_id=%s work_key=%s",
-            getattr(manor, "id", None),
-            getattr(request.user, "id", None),
-            guest_id,
-            work_key,
+    except Exception:
+        _unexpected_work_error(
+            request,
+            log_message="Unexpected work assign error: manor_id=%s user_id=%s guest_id=%s work_key=%s",
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                guest_id,
+                work_key,
+            ),
         )
-        messages.error(request, sanitize_error_message(exc))
 
     return redirect("gameplay:work")
 
@@ -152,14 +184,16 @@ def recall_work_view(request: HttpRequest, pk: int) -> HttpResponse:
         )
     except (GameError, ValueError) as exc:
         messages.error(request, sanitize_error_message(exc))
-    except Exception as exc:
-        logger.exception(
-            "Unexpected work recall error: manor_id=%s user_id=%s assignment_id=%s",
-            getattr(manor, "id", None),
-            getattr(request.user, "id", None),
-            pk,
+    except Exception:
+        _unexpected_work_error(
+            request,
+            log_message="Unexpected work recall error: manor_id=%s user_id=%s assignment_id=%s",
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                pk,
+            ),
         )
-        messages.error(request, sanitize_error_message(exc))
 
     return redirect("gameplay:work")
 
@@ -176,13 +210,15 @@ def claim_work_reward_view(request: HttpRequest, pk: int) -> HttpResponse:
         messages.success(request, f"{assignment.guest.display_name} 完成打工，获得银两 {reward['silver']}")
     except (GameError, ValueError) as exc:
         messages.error(request, sanitize_error_message(exc))
-    except Exception as exc:
-        logger.exception(
-            "Unexpected work reward claim error: manor_id=%s user_id=%s assignment_id=%s",
-            getattr(manor, "id", None),
-            getattr(request.user, "id", None),
-            pk,
+    except Exception:
+        _unexpected_work_error(
+            request,
+            log_message="Unexpected work reward claim error: manor_id=%s user_id=%s assignment_id=%s",
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                pk,
+            ),
         )
-        messages.error(request, sanitize_error_message(exc))
 
     return redirect("gameplay:work")

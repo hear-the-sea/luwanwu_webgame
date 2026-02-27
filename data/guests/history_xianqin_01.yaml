@@ -210,7 +210,7 @@ heroes:
       defense: 20
       agility: 12
   - key: hist_xianqin_0017
-    name: 屈平
+    name: 屈原
     default_gender: male
     archetype: civil
     flavor: （约前340年—前278年）行吟泽畔，怀沙自沉。他是楚国贵族，却因谗言被流放；他忧国忧民，却只能在汨罗江畔独自彷徨。《离骚》一篇，开创楚辞一体，香草美人的寄托，浪漫瑰丽的想象，成为中国文学史上的不朽丰碑。举世皆浊我独清，众人皆醉我独醒——这等高洁，这等孤傲，唯屈子能当。五月五日他怀沙投江，后世以龙舟竞渡、粽子祭祀来纪念这位伟大的爱国诗人。楚辞之祖，诗人之宗。
@@ -300,32 +300,6 @@ heroes:
       intellect: 58
       defense: 22
       agility: 12
-  - key: hist_xianqin_0024
-    name: 孔伋
-    default_gender: male
-    archetype: civil
-    flavor: （前483年—前402年）述圣子思，承上启下。他是孔子之孙，著《中庸》阐述至诚之道。他传承祖父学说，创立思孟学派，培养了孟子的老师。中庸之道，不偏不倚，是儒家处世的最高智慧。他一生致力于儒学的传播与发展，使儒家思想在战国时代蓬勃发展。从孔子到曾子到子思到孟子，儒家道统由此确立。
-    growth_range:
-    - 7
-    - 10
-    attribute_weights:
-      force: 8
-      intellect: 58
-      defense: 22
-      agility: 12
-  - key: hist_xianqin_0025
-    name: 端木赐
-    default_gender: male
-    archetype: civil
-    flavor: （前520年—前456年）儒商始祖，外交奇才。他就是子贡，孔门十哲之一，以言语见长。他经商有道，富可敌国，是最早的儒商；他出使诸国，存鲁乱齐破吴强晋霸越，一人之力改变五国格局。孔子称赞他"瑚琏之器"，可堪大用。他为孔子守墓六年，师生之情感天动地。子贡之才，兼具文韬武略，是儒家入世精神的最佳体现。
-    growth_range:
-    - 7
-    - 10
-    attribute_weights:
-      force: 12
-      intellect: 54
-      defense: 20
-      agility: 14
   - key: hist_xianqin_0026
     name: 仲由
     default_gender: male
@@ -352,32 +326,6 @@ heroes:
       intellect: 60
       defense: 18
       agility: 14
-  - key: hist_xianqin_0028
-    name: 百里奚
-    default_gender: male
-    archetype: civil
-    flavor: （约前725年—前621年）五羖大夫，秦相传奇。他本是虞国大夫，晋灭虞后被俘，后作为陪嫁之臣入秦。他逃至楚国牧牛，秦穆公以五张黑羊皮赎回，拜为大夫。他年逾七十始遇明主，辅佐秦穆公称霸西戎。布衣卿相、大器晚成的典范，百里奚的故事激励后世无数寒门士子。
-    growth_range:
-    - 7
-    - 10
-    attribute_weights:
-      force: 10
-      intellect: 56
-      defense: 22
-      agility: 12
-  - key: hist_xianqin_0029
-    name: 蔿敖
-    default_gender: male
-    archetype: civil
-    flavor: （约前630年—前593年）楚国名相，循吏之首。他三为令尹而不喜，三去之而不悔，廉洁奉公，死时家无余财。他兴修芍陂水利，惠泽百姓；他建言庄王，助成霸业。埋蛇之仁、让俸之廉，皆成千古佳话。司马迁将其列为循吏之首，孙叔敖是中国古代廉吏的标杆。
-    growth_range:
-    - 7
-    - 10
-    attribute_weights:
-      force: 10
-      intellect: 56
-      defense: 22
-      agility: 12
   - key: hist_xianqin_0030
     name: 田穰苴
     default_gender: male
@@ -456,14 +404,67 @@ heroes:
       intellect: 20
       defense: 20
       agility: 16
+  blue:
+  - key: hist_xianqin_0024
+    name: 孔伋
+    default_gender: male
+    archetype: civil
+    flavor: （前483年—前402年）述圣子思，承上启下。他是孔子之孙，著《中庸》阐述至诚之道。他传承祖父学说，创立思孟学派，培养了孟子的老师。中庸之道，不偏不倚，是儒家处世的最高智慧。他一生致力于儒学的传播与发展，使儒家思想在战国时代蓬勃发展。从孔子到曾子到子思到孟子，儒家道统由此确立。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 58
+      defense: 22
+      agility: 12
+  - key: hist_xianqin_0025
+    name: 端木赐
+    default_gender: male
+    archetype: civil
+    flavor: （前520年—前456年）儒商始祖，外交奇才。他就是子贡，孔门十哲之一，以言语见长。他经商有道，富可敌国，是最早的儒商；他出使诸国，存鲁乱齐破吴强晋霸越，一人之力改变五国格局。孔子称赞他"瑚琏之器"，可堪大用。他为孔子守墓六年，师生之情感天动地。子贡之才，兼具文韬武略，是儒家入世精神的最佳体现。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 54
+      defense: 20
+      agility: 14
+  - key: hist_xianqin_0028
+    name: 百里奚
+    default_gender: male
+    archetype: civil
+    flavor: （约前725年—前621年）五羖大夫，秦相传奇。他本是虞国大夫，晋灭虞后被俘，后作为陪嫁之臣入秦。他逃至楚国牧牛，秦穆公以五张黑羊皮赎回，拜为大夫。他年逾七十始遇明主，辅佐秦穆公称霸西戎。布衣卿相、大器晚成的典范，百里奚的故事激励后世无数寒门士子。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 56
+      defense: 22
+      agility: 12
+  - key: hist_xianqin_0029
+    name: 蔿敖
+    default_gender: male
+    archetype: civil
+    flavor: （约前630年—前593年）楚国名相，循吏之首。他三为令尹而不喜，三去之而不悔，廉洁奉公，死时家无余财。他兴修芍陂水利，惠泽百姓；他建言庄王，助成霸业。埋蛇之仁、让俸之廉，皆成千古佳话。司马迁将其列为循吏之首，孙叔敖是中国古代廉吏的标杆。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 56
+      defense: 22
+      agility: 12
   - key: hist_xianqin_0036
     name: 秦越人
     default_gender: male
     archetype: civil
     flavor: （约前407年—约前310年）望闻问切，医者仁心。他是中医诊断学的奠基人，望诊可知生死、闻声可辨病邪。他治愈过虢国太子的尸厥之症，令死者复生；也曾面对讳疾忌医的蔡桓公，无奈见其病入膏肓。扁鹊之术，不在药石，而在于对人体的精微洞察。后世尊其为医祖，四诊之法，沿用至今。他的故事，也成为讳疾忌医这一成语的来源。
     growth_range:
-    - 7
-    - 10
+    - 6
+    - 9
     attribute_weights:
       force: 8
       intellect: 60
@@ -475,8 +476,8 @@ heroes:
     archetype: civil
     flavor: （约前507年—约前444年）百工圣人，机关大师。他就是鲁班，木匠的祖师爷。锯子、刨子、曲尺、墨斗，都是他的发明；云梯、钩拒、连弩，也出自他的巧手。他曾为楚国造云梯攻宋，却被墨子以守城之术折服，遂息兵罢战。鲁班之巧，穷尽工艺之极致；而他与墨子的对决，更成为止战传奇。工匠精神的源头，在此。
     growth_range:
-    - 7
-    - 10
+    - 6
+    - 9
     attribute_weights:
       force: 14
       intellect: 54
@@ -488,34 +489,21 @@ heroes:
     archetype: military
     flavor: （?—前484年）一夜白头，鞭尸报仇。他父兄被楚平王杀害，逃亡途中过昭关，一夜须发尽白。后辅佐吴王阖闾，率军攻破楚都，掘墓鞭尸以报大仇。其后又辅佐夫差灭越，功勋卓著。然而他直言进谏、反对北上争霸，触怒夫差，被赐死。临终悬目于东门，欲观越军入吴——果然，吴国不久后亡于越。刚烈决绝，至死不屈，伍子胥的复仇与悲剧，成为千古传奇。
     growth_range:
-    - 7
-    - 10
+    - 6
+    - 9
     attribute_weights:
       force: 44
       intellect: 18
       defense: 22
       agility: 16
-  - key: hist_xianqin_0039
-    name: 范蠡
-    default_gender: male
-    archetype: civil
-    flavor: （约前536年—约前448年）三迁皆有荣名，功成身退典范。他辅佐越王勾践，卧薪尝胆二十年，终灭强吴。然功成之后，他深知勾践可共患难不可共富贵，遂泛舟五湖，相传携西施而去。此后三次经商，三致千金，又三散其财，人称陶朱公。他劝文种同退，文种不听，果然被杀。范蠡的智慧，不仅在于助越灭吴，更在于急流勇退、明哲保身。商圣之名，当之无愧。
-    growth_range:
-    - 7
-    - 10
-    attribute_weights:
-      force: 14
-      intellect: 54
-      defense: 20
-      agility: 12
   - key: hist_xianqin_0040
     name: 勾践
     default_gender: male
     archetype: military
     flavor: （约前520年—前465年）卧薪尝胆，十年生聚。他是越王，曾在会稽之战中惨败于吴国，忍辱负重为夫差牵马执鞭。归国后卧薪尝胆，与民休息，暗中积蓄力量。二十年后终灭吴国，成就霸业。勾践的隐忍与决心，是复仇者的典范；他的故事，激励后世无数身处逆境之人。然功成后诛杀功臣，也为人诟病。
     growth_range:
-    - 7
-    - 10
+    - 6
+    - 9
     attribute_weights:
       force: 36
       intellect: 22
@@ -527,8 +515,8 @@ heroes:
     archetype: civil
     flavor: （约前1649年—前1550年）商汤名相，烹饪始祖。他出身卑微，本是有莘氏的陪嫁奴隶，却胸怀济世之志。他以精湛厨艺接近商汤，借烹饪之道阐述治国之理——"治大国若烹小鲜"，需掌握火候、调和五味。商汤慧眼识才，拜他为相，共同谋划灭夏大业。鸣条之战后，夏桀败亡，商朝建立，伊尹功居首位。他辅佐商朝五代君主，曾放逐不肖之君太甲于桐宫，待其悔过后复位。他是中国历史上第一位布衣卿相，开创了平民跃居高位的先河。伊尹之名，烹饪界与政界共尊，流芳百世。
     growth_range:
-    - 7
-    - 10
+    - 6
+    - 9
     attribute_weights:
       force: 10
       intellect: 58
@@ -540,8 +528,8 @@ heroes:
     archetype: civil
     flavor: （?—前243年）信陵君，战国四公子之首。他是魏昭王少子，安釐王异母弟，封于信陵，故号信陵君。他礼贤下士，门客三千，从市井屠户到隐居高士，无不待以恭敬。他的名声传遍天下，以至于各国不敢侵魏。长平之战后秦围邯郸，赵平原君遣使求救。他矫夺虎符，杀将晋鄙，率八万魏军救赵，击退秦军，这就是"窃符救赵"的千古传奇。门客侯嬴献计、朱亥执椎杀晋鄙，君臣配合，堪称完美。后来他率五国联军再败秦军于河外。然功高震主，魏王猜忌日深，他晚年沉湎酒色，郁郁而终。信陵君的一生，是战国时代贵族侠士精神的巅峰，也是其悲剧的缩影。
     growth_range:
-    - 7
-    - 10
+    - 6
+    - 9
     attribute_weights:
       force: 14
       intellect: 52
@@ -553,23 +541,10 @@ heroes:
     archetype: civil
     flavor: （生卒年不详）沉鱼之貌，亡国妖姬。她本是越国苎萝村浣纱女，据传在溪边浣纱时，鱼儿见其美貌竟忘记游水而沉入水底，故得"沉鱼"之美誉。越王勾践卧薪尝胆图复仇，范蠡献美人计：将西施进贡吴王夫差，以消磨其斗志。她入吴宫后，以绝世容颜令夫差神魂颠倒，荒废国政，疏远忠臣。二十年后越军伐吴，夫差兵败自刎，西施的使命完成。传说吴亡之后，范蠡携西施泛舟五湖，共度余生。也有说法她被沉江祭神。无论结局如何，西施以美貌为武器，以柔弱之躯完成了千军万马难成的使命，是"美人计"的千古标杆。
     growth_range:
-    - 7
-    - 10
+    - 6
+    - 9
     attribute_weights:
       force: 8
       intellect: 54
       defense: 18
       agility: 20
-  - key: hist_xianqin_0044
-    name: 姜尚
-    default_gender: male
-    archetype: civil
-    flavor: （约前1156年—约前1017年）太公望，兴周八百年。传说他年逾七十仍在渭水之滨垂钓，以直钩钓鱼，"愿者上钩"。周文王访贤，与他交谈后大喜曰"吾太公望子久矣"，遂拜为师。他辅佐文王、武王两代，是牧野伐纣的首席军师。《六韬》《太公兵法》皆托其名，后世尊为兵家始祖、百家宗师。齐国始祖，姜氏齐国八百年基业由他开创。他是历史与神话交织的传奇人物，民间尊为神祇。
-    growth_range:
-    - 8
-    - 10
-    attribute_weights:
-      force: 16
-      intellect: 52
-      defense: 20
-      agility: 12

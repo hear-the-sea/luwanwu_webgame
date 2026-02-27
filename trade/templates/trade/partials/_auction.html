@@ -113,7 +113,9 @@
                             <div class="tw-item-icon rarity-{{ slot.item_template.rarity }}">
                                 {% if slot.item_template.image %}
                                 <img src="{{ slot.item_template.image.url }}"
-                                     alt="{{ slot.item_template.name }}">
+                                     alt="{{ slot.item_template.name }}"
+                                     loading="lazy"
+                                     decoding="async">
                                 {% else %}
                                 <span class="tw-icon-placeholder">
                                     {{ slot.item_template.name|slice:":1" }}
@@ -161,7 +163,7 @@
                     </td>
                     <td>
                         <button type="button"
-                                class="tw-btn-bid"
+                                class="tw-btn-trade tw-btn-bid"
                                 onclick="openBidModal({{ slot.id }}, '{{ slot.item_template.name|escapejs }}', {{ slot.bid_info.cutoff_price }}, {{ slot.quantity }}, {{ slot.bid_info.bidder_count }}, {{ slot.bid_info.my_bid_amount|default:'null' }}, {{ slot.starting_price }})">
                             {% if slot.bid_info.my_bid_amount %}加价{% else %}出价{% endif %}
                         </button>
@@ -234,7 +236,9 @@
                                     <div class="tw-item-icon rarity-{{ slot.item_template.rarity }}">
                                         {% if slot.item_template.image %}
                                         <img src="{{ slot.item_template.image.url }}"
-                                             alt="{{ slot.item_template.name }}">
+                                             alt="{{ slot.item_template.name }}"
+                                             loading="lazy"
+                                             decoding="async">
                                         {% else %}
                                         <span class="tw-icon-placeholder">
                                             {{ slot.item_template.name|slice:":1" }}
@@ -281,7 +285,9 @@
                                     <div class="tw-item-icon rarity-{{ bid.slot.item_template.rarity }}">
                                         {% if bid.slot.item_template.image %}
                                         <img src="{{ bid.slot.item_template.image.url }}"
-                                             alt="{{ bid.slot.item_template.name }}">
+                                             alt="{{ bid.slot.item_template.name }}"
+                                             loading="lazy"
+                                             decoding="async">
                                         {% else %}
                                         <span class="tw-icon-placeholder">
                                             {{ bid.slot.item_template.name|slice:":1" }}
@@ -322,50 +328,56 @@
 
 <!-- 出价弹窗 -->
 <div id="bidModal" class="tw-modal-overlay" style="display: none;">
-    <div class="tw-modal-content">
-        <div class="tw-modal-header">
-            <h3>竞拍出价</h3>
+    <div class="tw-modal-content tw-bid-modal">
+        <div class="tw-modal-header tw-bid-modal-header">
+            <div class="tw-bid-modal-title-wrap">
+                <h3>竞拍出价</h3>
+                <p class="tw-bid-modal-subtitle">系统会根据当前局势自动给出最低可出价建议</p>
+            </div>
             <button type="button" class="tw-modal-close" onclick="closeBidModal()">&times;</button>
         </div>
 
-        <form method="post" id="bidForm">
+        <form method="post" id="bidForm" class="tw-modal-form">
             {% csrf_token %}
 
             <div class="tw-modal-body">
-                <div class="tw-market-form-group">
-                    <label>物品名称</label>
-                    <p id="bid-modal-item-name" class="tw-market-form-value"></p>
+                <div class="tw-bid-item-card">
+                    <span class="tw-bid-item-label">竞拍物品</span>
+                    <p id="bid-modal-item-name" class="tw-bid-item-name"></p>
                 </div>
 
-                <div class="tw-market-form-group">
-                    <label>中标名额</label>
-                    <p class="tw-market-form-value" id="bid-modal-winner-count"></p>
+                <div class="tw-bid-kpi-grid">
+                    <div class="tw-bid-kpi">
+                        <span class="tw-bid-kpi-label">中标名额</span>
+                        <p class="tw-bid-kpi-value" id="bid-modal-winner-count"></p>
+                    </div>
+                    <div class="tw-bid-kpi">
+                        <span class="tw-bid-kpi-label">当前最低中标价</span>
+                        <p class="tw-bid-kpi-value tw-price gold" id="bid-modal-cutoff-price"></p>
+                    </div>
+                    <div class="tw-bid-kpi" id="bid-modal-my-bid-group" style="display: none;">
+                        <span class="tw-bid-kpi-label">我的当前出价</span>
+                        <p class="tw-bid-kpi-value tw-price gold" id="bid-modal-my-bid"></p>
+                    </div>
                 </div>
 
-                <div class="tw-market-form-group">
-                    <label>当前最低中标价</label>
-                    <p class="tw-market-form-value tw-price gold" id="bid-modal-cutoff-price"></p>
-                </div>
-
-                <div class="tw-market-form-group" id="bid-modal-my-bid-group" style="display: none;">
-                    <label>我的当前出价</label>
-                    <p class="tw-market-form-value tw-price gold" id="bid-modal-my-bid"></p>
-                </div>
-
-                <div class="tw-market-form-group">
+                <div class="tw-market-form-group tw-bid-amount-group">
                     <label for="bid-modal-amount">出价金额（金条）</label>
-                    <input type="number"
-                           name="amount"
-                           id="bid-modal-amount"
-                           min="1"
-                           required>
-                    <p class="tw-market-form-hint" id="bid-modal-hint"></p>
-                    <p class="tw-market-form-hint">
+                    <div class="tw-bid-input-wrap">
+                        <input type="number"
+                               name="amount"
+                               id="bid-modal-amount"
+                               min="1"
+                               required>
+                        <span class="tw-bid-input-unit">金条</span>
+                    </div>
+                    <p class="tw-market-form-hint tw-bid-dynamic-hint" id="bid-modal-hint"></p>
+                    <p class="tw-market-form-hint tw-bid-wallet-hint">
                         可用金条：<span class="tw-price gold">{{ auction_stats.available_gold_bars }}</span>
                     </p>
                 </div>
 
-                <div class="tw-market-form-summary">
+                <div class="tw-market-form-summary tw-bid-rules-card">
                     <p class="tw-market-form-note">
                         注意：出价后金条将被冻结。如果您被挤出中标范围，冻结的金条将立即退还。
                         <br>所有中标者最终支付统一价格（最低中标价）。
@@ -373,130 +385,10 @@
                 </div>
             </div>
 
-            <div class="tw-market-form-actions">
+            <div class="tw-modal-footer">
                 <button type="button" class="tw-btn-secondary" onclick="closeBidModal()">取消</button>
-                <button type="submit" class="tw-btn-primary">确认出价</button>
+                <button type="submit" class="tw-btn-trade tw-bid-submit-btn">确认出价</button>
             </div>
         </form>
     </div>
 </div>
-
-<script>
-function openBidModal(slotId, itemName, cutoffPrice, winnerCount, bidderCount, myBidAmount, startingPrice) {
-    const modal = document.getElementById('bidModal');
-    if (!modal) return;
-
-    // 设置表单提交地址
-    const form = document.getElementById('bidForm');
-    form.action = "{% url 'trade:auction_bid' 0 %}".replace('0', slotId);
-
-    // 设置显示信息
-    document.getElementById('bid-modal-item-name').textContent = itemName;
-    document.getElementById('bid-modal-winner-count').textContent = winnerCount + ' 人';
-    document.getElementById('bid-modal-cutoff-price').textContent = cutoffPrice + ' 金条';
-
-    // 我的当前出价
-    const myBidGroup = document.getElementById('bid-modal-my-bid-group');
-    if (myBidAmount) {
-        myBidGroup.style.display = 'block';
-        document.getElementById('bid-modal-my-bid').textContent = myBidAmount + ' 金条';
-    } else {
-        myBidGroup.style.display = 'none';
-    }
-
-    // 计算最低出价和提示
-    let minBid;
-    let hintText;
-
-    if (myBidAmount) {
-        // 已有出价，需要高于自己当前出价
-        minBid = myBidAmount + 1;
-        hintText = `需要高于您当前出价 ${myBidAmount} 金条`;
-    } else if (bidderCount >= winnerCount) {
-        // 名额已满，需要高于最低中标价
-        minBid = cutoffPrice + 1;
-        hintText = `名额已满，需要高于最低中标价 ${cutoffPrice} 金条才能进入前 ${winnerCount} 名`;
-    } else {
-        // 名额未满，起拍价即可
-        minBid = startingPrice;
-        hintText = `名额未满，最低 ${startingPrice} 金条即可进入中标范围`;
-    }
-
-    document.getElementById('bid-modal-hint').textContent = hintText;
-
-    // 设置输入框
-    const amountInput = document.getElementById('bid-modal-amount');
-    amountInput.value = minBid;
-    amountInput.min = minBid;
-
-    // 显示模态框
-    modal.style.display = 'flex';
-}
-
-function closeBidModal() {
-    const modal = document.getElementById('bidModal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-}
-
-// 点击模态框外部关闭
-window.addEventListener('click', function(event) {
-    const modal = document.getElementById('bidModal');
-    if (event.target === modal) {
-        closeBidModal();
-    }
-});
-
-// 拍卖倒计时更新
-document.addEventListener('DOMContentLoaded', function() {
-    const countdownElement = document.querySelector('.auction-countdown');
-    if (countdownElement && countdownElement.dataset.remaining) {
-        let remaining = parseInt(countdownElement.dataset.remaining);
-
-        function updateCountdown() {
-            if (remaining <= 0) {
-                countdownElement.textContent = '已结束';
-                countdownElement.style.color = 'var(--text-muted)';
-                return;
-            }
-
-            const days = Math.floor(remaining / 86400);
-            const hours = Math.floor((remaining % 86400) / 3600);
-            const minutes = Math.floor((remaining % 3600) / 60);
-            const seconds = remaining % 60;
-
-            let text = '';
-            if (days > 0) {
-                text = `${days}天${hours}小时`;
-            } else if (hours > 0) {
-                text = `${hours}小时${minutes}分`;
-            } else if (minutes > 0) {
-                text = `${minutes}分${seconds}秒`;
-            } else {
-                text = `${seconds}秒`;
-            }
-
-            countdownElement.textContent = text;
-
-            // 时间少于1小时显示警告色
-            if (remaining < 3600) {
-                countdownElement.style.color = '#FF6B6B';
-            }
-
-            remaining--;
-        }
-
-        updateCountdown();
-        setInterval(updateCountdown, 1000);
-    }
-
-    // Tooltip 位置动态调整 - 使用共享模块
-    if (typeof initItemTooltip === 'function') {
-        initItemTooltip({
-            key: 'auction',
-            cellSelector: '.tw-auction-table .tw-item-cell'
-        });
-    }
-});
-</script>

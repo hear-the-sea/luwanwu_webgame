@@ -130,6 +130,29 @@ class TestGuildMembership:
         assert membership.is_active is True
         assert membership.position == "member"
 
+    def test_approve_keeps_success_when_followup_notification_fails(
+        self, user_with_gold_bars, second_user, monkeypatch
+    ):
+        """审批主流程成功后，后续通知失败不应导致操作报错。"""
+        guild = guild_service.create_guild(user=user_with_gold_bars, name="稳健审批帮会", description="")
+        application = member_service.apply_to_guild(second_user, guild, "请收留我")
+
+        def _raise_message(*_args, **_kwargs):
+            raise RuntimeError("message backend down")
+
+        def _raise_announcement(*_args, **_kwargs):
+            raise RuntimeError("announcement backend down")
+
+        monkeypatch.setattr(member_service, "create_message", _raise_message)
+        monkeypatch.setattr(member_service, "create_announcement", _raise_announcement)
+
+        member_service.approve_application(application, user_with_gold_bars)
+        application.refresh_from_db()
+
+        assert application.status == "approved"
+        membership = GuildMember.objects.get(user=second_user, guild=guild)
+        assert membership.is_active is True
+
     def test_apply_to_full_guild(self, user_with_gold_bars, second_user, django_user_model):
         """测试申请已满员帮会"""
         guild = guild_service.create_guild(user=user_with_gold_bars, name="小帮会", description="")
@@ -286,6 +309,22 @@ class TestGuildDisband:
         # 验证所有成员都被标记为不活跃
         for member in guild.members.all():
             assert member.is_active is False
+
+    def test_disband_guild_keeps_success_when_followup_message_fails(
+        self, user_with_gold_bars, second_user, monkeypatch
+    ):
+        """解散主流程成功后，事务外通知失败不应导致接口报错。"""
+        guild = guild_service.create_guild(user=user_with_gold_bars, name="稳健解散帮会", description="")
+        GuildMember.objects.create(guild=guild, user=second_user, position="member")
+
+        def _raise_bulk(*_args, **_kwargs):
+            raise RuntimeError("message backend down")
+
+        monkeypatch.setattr("gameplay.services.utils.messages.bulk_create_messages", _raise_bulk)
+
+        guild_service.disband_guild(guild, user_with_gold_bars)
+        guild.refresh_from_db()
+        assert guild.is_active is False
 
     def test_non_leader_cannot_disband(self, user_with_gold_bars, second_user):
         """测试非帮主不能解散帮会"""

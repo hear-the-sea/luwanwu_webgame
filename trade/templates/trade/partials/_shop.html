@@ -32,7 +32,7 @@
                         <div class="tw-item-cell" data-tooltip>
                             <div class="tw-item-icon rarity-{{ item.rarity }}">
                                 {% if item.image_url %}
-                                <img src="{{ item.image_url }}" alt="{{ item.name }}">
+                                <img src="{{ item.image_url }}" alt="{{ item.name }}" loading="lazy" decoding="async">
                                 {% else %}
                                 <span class="tw-icon-placeholder">{{ item.name|slice:":1" }}</span>
                                 {% endif %}
@@ -123,7 +123,7 @@
                         <div class="tw-item-cell" data-tooltip>
                             <div class="tw-item-icon rarity-{{ item.inventory_item.template.rarity }}">
                                 {% if item.inventory_item.template.image %}
-                                <img src="{{ item.inventory_item.template.image.url }}" alt="{{ item.inventory_item.template.name }}">
+                                <img src="{{ item.inventory_item.template.image.url }}" alt="{{ item.inventory_item.template.name }}" loading="lazy" decoding="async">
                                 {% else %}
                                 <span class="tw-icon-placeholder">{{ item.inventory_item.template.name|slice:":1" }}</span>
                                 {% endif %}

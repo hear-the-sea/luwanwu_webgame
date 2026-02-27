@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from .manor import ResourceType
@@ -311,3 +312,110 @@ class Message(models.Model):
             parts.append(f"{len(items)}种道具")
 
         return "、".join(parts) if parts else "附件"
+
+
+def _validate_attachment_bucket(value, bucket_name: str) -> None:
+    if value is None:
+        return
+    if not isinstance(value, dict):
+        raise ValidationError({bucket_name: f"{bucket_name} 必须为对象"})
+
+    for key, amount in value.items():
+        if not isinstance(key, str) or not key.strip():
+            raise ValidationError({bucket_name: f"{bucket_name} 的 key 必须为非空字符串"})
+        try:
+            normalized_amount = int(amount)
+        except (TypeError, ValueError):
+            raise ValidationError({bucket_name: f"{bucket_name}.{key} 必须为整数"}) from None
+        if normalized_amount <= 0:
+            raise ValidationError({bucket_name: f"{bucket_name}.{key} 必须大于 0"})
+
+
+class GlobalMailCampaign(models.Model):
+    key = models.SlugField("活动标识", max_length=64, unique=True)
+    kind = models.CharField(max_length=16, choices=Message.Kind.choices, default=Message.Kind.REWARD)
+    title = models.CharField("标题", max_length=128)
+    body = models.TextField("正文", blank=True)
+    attachments = models.JSONField("附件数据", default=dict, blank=True)
+    is_active = models.BooleanField("启用", default=True, db_index=True)
+    start_at = models.DateTimeField("开始时间", null=True, blank=True, db_index=True)
+    end_at = models.DateTimeField("结束时间", null=True, blank=True, db_index=True)
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+    updated_at = models.DateTimeField("更新时间", auto_now=True)
+
+    class Meta:
+        verbose_name = "全服邮件活动"
+        verbose_name_plural = "全服邮件活动"
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=["is_active", "start_at", "end_at"], name="global_mail_active_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.key} - {self.title}"
+
+    def clean(self) -> None:
+        super().clean()
+
+        if self.start_at and self.end_at and self.end_at < self.start_at:
+            raise ValidationError({"end_at": "结束时间不能早于开始时间"})
+
+        attachments = self.attachments or {}
+        if not isinstance(attachments, dict):
+            raise ValidationError({"attachments": "附件数据必须为对象"})
+
+        resources = attachments.get("resources", {})
+        items = attachments.get("items", {})
+        _validate_attachment_bucket(resources, "resources")
+        _validate_attachment_bucket(items, "items")
+
+    def is_active_at(self, dt=None) -> bool:
+        if not self.is_active:
+            return False
+        if dt is None:
+            from django.utils import timezone
+
+            dt = timezone.now()
+        if self.start_at and dt < self.start_at:
+            return False
+        if self.end_at and dt > self.end_at:
+            return False
+        return True
+
+
+class GlobalMailDelivery(models.Model):
+    campaign = models.ForeignKey(
+        "gameplay.GlobalMailCampaign",
+        on_delete=models.CASCADE,
+        related_name="deliveries",
+        verbose_name="活动",
+    )
+    manor = models.ForeignKey(
+        "gameplay.Manor",
+        on_delete=models.CASCADE,
+        related_name="global_mail_deliveries",
+        verbose_name="庄园",
+    )
+    message = models.ForeignKey(
+        "gameplay.Message",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="global_mail_deliveries",
+        verbose_name="消息",
+    )
+    created_at = models.DateTimeField("投递时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "全服邮件投递记录"
+        verbose_name_plural = "全服邮件投递记录"
+        constraints = [
+            models.UniqueConstraint(fields=["campaign", "manor"], name="uniq_global_mail_campaign_manor"),
+        ]
+        indexes = [
+            models.Index(fields=["campaign", "-created_at"], name="global_mail_deliver_c_idx"),
+            models.Index(fields=["manor", "-created_at"], name="global_mail_deliver_m_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.campaign.key} -> {self.manor.display_name}"

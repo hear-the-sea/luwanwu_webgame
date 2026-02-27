@@ -16,7 +16,7 @@ from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
 from core.exceptions import GameError
-from core.utils import sanitize_error_message
+from core.utils import safe_redirect_url, sanitize_error_message
 from gameplay.services import (
     ensure_manor,
     get_categories,
@@ -92,6 +92,7 @@ def upgrade_technology_view(request: HttpRequest, tech_key: str) -> HttpResponse
     manor = ensure_manor(request.user)
     tab = request.POST.get("tab", "basic")
     troop = request.POST.get("troop", "")
+    next_url = (request.POST.get("next") or "").strip()
 
     try:
         result = upgrade_technology(manor, tech_key)
@@ -111,4 +112,5 @@ def upgrade_technology_view(request: HttpRequest, tech_key: str) -> HttpResponse
     redirect_url = f"{reverse('gameplay:technology')}?tab={tab}"
     if tab == "martial" and troop:
         redirect_url += f"&troop={troop}"
+    redirect_url = safe_redirect_url(request, next_url, redirect_url)
     return redirect(redirect_url)

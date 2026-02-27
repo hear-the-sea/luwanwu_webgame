@@ -1,13 +1,66 @@
 heroes:
-  green:
+  purple:
+  - key: hist_suitang_0190_yangyuhuan
+    name: 杨玉环
+    default_gender: female
+    archetype: civil
+    flavor: （719年-756年）唐玄宗贵妃，真实历史身份是宫廷政治的一部分，后世却常被简化为"祸水"符号。她得宠于天宝时期，宫廷奢华与外戚扩张因之更受瞩目，但唐帝国走向危机的根源并不在一位女子。安史之乱后，军心与朝局需要替罪者，马嵬驿赐死使她成为盛唐崩塌的象征。杨玉环的悲剧在于：她无法决定国家大势，却要承担大势崩坏的道德指责；留在诗歌与传说中的她，既是爱情叙事，也是政治责任转移的产物。
+    growth_range:
+    - 6
+    - 11
+    attribute_weights:
+      force: 10
+      intellect: 46
+      defense: 24
+      agility: 20
+  - key: hist_suitang_0200_huangchao
+    name: 黄巢
+    default_gender: male
+    archetype: military
+    flavor: （820年-884年）晚唐大起义领袖，出身盐贩背景并屡试不第，最终以武装反抗席卷山东、河南等地。其军队攻入长安并建立政权，虽短暂却对唐朝统治造成根本打击：财政体系崩坏、地方军阀坐大、社会秩序大幅破裂。黄巢并非单纯"诗人式叛军"，史载其军纪与屠戮亦极为残酷，反映乱世暴力的失控。其败亡后唐室虽存，国家已难回盛唐结构。谈黄巢，不能只看一场攻城，更要看到它揭开的社会裂缝与制度终局。
+    growth_range:
+    - 6
+    - 11
+    attribute_weights:
+      force: 36
+      intellect: 22
+      defense: 30
+      agility: 12
+  - key: hist_suitang_0207_guowei
+    name: 郭威
+    default_gender: male
+    archetype: military
+    flavor: （904年-954年）后周开国皇帝，出身军旅，在五代频繁兵变的环境中凭威望与军功崛起。其入京即位并非单纯夺权，而是旧秩序崩坏后的强人整合：一方面安抚军心、稳定财政与吏治，另一方面为后周的改革打下可操作的基础。郭威用人务实，能容纳不同出身的将吏；又以收养柴荣为继承人，避免了五代常见的宗室内耗。后周能成为五代中"最像国家"的政权之一，郭威的开局与取舍是关键原因。
+    growth_range:
+    - 6
+    - 11
+    attribute_weights:
+      force: 36
+      intellect: 24
+      defense: 32
+      agility: 8
+  - key: hist_suitang_0208_shijingruo
+    name: 石敬瑭
+    default_gender: male
+    archetype: military
+    flavor: （892年-942年）后晋开国皇帝，五代外交与战略困境的代表人物。其起兵夺位时倚重契丹军力，作为交换割让幽云十六州，并以屈辱性的臣属关系换取短期安全。后世称其"儿皇帝"，更多是对这一选择的道德评判；从现实角度看，他是在内斗与外压夹击下用空间换时间。问题在于：失去燕云后中原北门洞开，宋辽长期对峙的格局由此加深。石敬瑭的名字因此常被用来讨论：乱世求存的妥协，究竟能否承受后果。
+    growth_range:
+    - 6
+    - 11
+    attribute_weights:
+      force: 34
+      intellect: 22
+      defense: 30
+      agility: 14
+  blue:
   - key: hist_suitang_0181_mazhou
     name: 马周
     default_gender: male
     archetype: civil
     flavor: （601年-648年）贞观名臣，以"布衣入相"式的上升路径著称。其出身寒微，凭文章与政见被太宗赏识，入朝后屡上奏疏，议论直切时弊，涉及用人、税赋与地方治理。马周并不只是会写奏章，他更懂得把复杂问题说清楚，并提出可操作的改进方案。太宗对其信任显示贞观时期对人才的开放性：出身并非唯一门槛，能力与忠诚同样能改变命运。马周让人看见唐初政治仍保留的一线流动性：才学与政见确实可能为寒门打开通往中枢的门。
     growth_range:
-    - 4
-    - 7
+    - 5
+    - 9
     attribute_weights:
       force: 14
       intellect: 48
@@ -19,8 +72,8 @@ heroes:
     archetype: civil
     flavor: （596年-658年）唐代大臣与书法家，擅楷隶，亦参与朝政。其在太宗、高宗两朝多任要职，尤以直言敢谏闻名；面对废立与后宫政治，他坚持反对立武后，遂遭贬逐，客死岭南。褚遂良的政治命运说明，朝廷的言路并非永远宽阔：当权力结构改变，正直往往要付出代价。作为书法家，他承继初唐法度，墨迹为后世所重；作为谏臣，他留下的不是胜利，而是一种不肯随风改口的姿态。
     growth_range:
-    - 4
-    - 7
+    - 5
+    - 9
     attribute_weights:
       force: 14
       intellect: 48
@@ -32,8 +85,8 @@ heroes:
     archetype: civil
     flavor: （558年-638年）唐初学者与书法家，出身江南士族，入唐后以学识与品行受太宗礼敬。其书法温润雅正，代表初唐以法度与气韵并重的风格；在政治上亦常以文臣身份参与议政，善于以温和之辞进谏。虞世南的魅力不在锋利，而在稳定：他以学问与人格为新王朝提供文化权威，使唐初文治更有底色。对太宗而言，他既是书法名家，也是可倚的儒臣；对后世而言，他把文雅而不软弱的士大夫形象留在史册与墨迹中。
     growth_range:
-    - 4
-    - 7
+    - 5
+    - 9
     attribute_weights:
       force: 12
       intellect: 50
@@ -45,25 +98,12 @@ heroes:
     archetype: civil
     flavor: （557年-641年）唐初书法家，楷书法度严谨，被视为"欧体"之祖。其书风骨力内含、结构精密，强调点画与结体的规范性，成为后世初学楷书的重要范本。《九成宫醴泉铭》尤为著名，几乎成了楷法教科书。欧阳询并非只靠技法取胜，他的书法气质与初唐政治秩序相契合：追求统一标准、强调可复制的规则。也因此，后世谈"法度"常绕不开欧阳询；其作品让人看到文字秩序本身也是一种文化力量。
     growth_range:
-    - 4
-    - 7
+    - 5
+    - 9
     attribute_weights:
       force: 12
       intellect: 50
       defense: 24
-      agility: 14
-  - key: hist_suitang_0185_yanliben
-    name: 阎立本
-    default_gender: male
-    archetype: civil
-    flavor: （约601年-673年）唐代画家与官员，以人物画成就著名，代表作《步辇图》等常被视为宫廷绘画典范。其绘画善于刻画人物神情与礼仪秩序，能把政治场景转化为视觉叙事。阎立本亦曾居要职，甚至入相，但史载其对"以画取进"颇感尴尬，显示艺术才能在官僚体系中的微妙位置。阎立本更像把唐代政治与文化的仪式感固定在画面上的人：他画的不只是人，更是帝国如何呈现自己；画名远超官位，也说明艺术记忆有时比权位更耐久。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 12
-      intellect: 48
-      defense: 26
       agility: 14
   - key: hist_suitang_0186_shangguanwaner
     name: 上官婉儿
@@ -71,12 +111,51 @@ heroes:
     archetype: civil
     flavor: （664年-710年）唐代女官与诗人，出身名门却幼年入掖庭，后因文才被武则天擢用，掌诏命与制诰，成为宫廷政治中罕见的女性文书核心。她在武周与中宗朝之间辗转，既能以文辞服务权力，也能在派系角力中自求生路；其诗作亦为初唐宫廷文学留下重要样本。神龙复唐后，她一度影响中枢人事，终在宫廷政变中被诛。上官婉儿的悲剧在于：才华让她靠近权力，也让她无法真正脱离权力的清算逻辑。
     growth_range:
-    - 4
-    - 7
+    - 5
+    - 9
     attribute_weights:
       force: 12
       intellect: 50
       defense: 24
+      agility: 14
+  - key: hist_suitang_0188_lilifu
+    name: 李林甫
+    default_gender: male
+    archetype: civil
+    flavor: （683年-753年）唐玄宗后期宰相，善于迎合上意而操控人事。其长年把持相权，排斥异己、结党营私，被后世以"口蜜腹剑"概括其外柔内狠的政治风格。李林甫并非无能之辈，他能维持表面秩序、压制公开争论，使开元后期看似安稳；但这种安稳以阻塞言路、放任边镇坐大为代价，最终让危机在暗处积累。评价李林甫，关键不在他做了多少事，而在他如何改变政治生态：让皇帝听不到坏消息，让制度失去自我修复能力。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 16
+      intellect: 46
+      defense: 28
+      agility: 10
+  - key: hist_suitang_0191_gaolishi
+    name: 高力士
+    default_gender: male
+    archetype: civil
+    flavor: （684年-762年）唐代宦官，玄宗朝最有影响力的人物之一。其从内廷小吏升至掌握机要，既能传达圣意，也能筛选信息，成为皇权与官僚之间的关键阀门。高力士在开元盛世中以稳妥著称，亦参与处理重大人事与政务，权力之大引人侧目；安史之乱后随玄宗西逃，晚景漂泊。高力士的意义不在简单善恶评判，而在展示宦官制度如何改变政治：当皇帝愈依赖近侍，朝廷的公开程序便愈容易被内廷节制。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 18
+      intellect: 44
+      defense: 28
+      agility: 10
+  - key: hist_suitang_0185_yanliben
+    name: 阎立本
+    default_gender: male
+    archetype: civil
+    flavor: （约601年-673年）唐代画家与官员，以人物画成就著名，代表作《步辇图》等常被视为宫廷绘画典范。其绘画善于刻画人物神情与礼仪秩序，能把政治场景转化为视觉叙事。阎立本亦曾居要职，甚至入相，但史载其对"以画取进"颇感尴尬，显示艺术才能在官僚体系中的微妙位置。阎立本更像把唐代政治与文化的仪式感固定在画面上的人：他画的不只是人，更是帝国如何呈现自己；画名远超官位，也说明艺术记忆有时比权位更耐久。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 48
+      defense: 26
       agility: 14
   - key: hist_suitang_0187_zhangjianzhi
     name: 张柬之
@@ -84,78 +163,209 @@ heroes:
     archetype: civil
     flavor: （625年-706年）唐代大臣，神龙政变的主要策划者之一。武周末年，张柬之以高龄仍敢发动宫廷政变，联合同党逼迫武则天退位，迎立中宗复唐，显示其政治胆识与对正统的执念。政变成功后，功臣集团迅速卷入新的权力斗争，张柬之反而被排挤贬逐，郁郁而终。其经历像一记冷水：推翻旧秩序并不等于掌控新秩序，功臣往往在胜利之后最快失去安全感。张柬之留下的是一次关键转折，以及功成难保的现实。
     growth_range:
-    - 4
-    - 7
+    - 5
+    - 9
     attribute_weights:
       force: 14
       intellect: 48
       defense: 26
       agility: 12
-  - key: hist_suitang_0188_lilifu
-    name: 李林甫
-    default_gender: male
-    archetype: civil
-    flavor: （683年-753年）唐玄宗后期宰相，善于迎合上意而操控人事。其长年把持相权，排斥异己、结党营私，被后世以"口蜜腹剑"概括其外柔内狠的政治风格。李林甫并非无能之辈，他能维持表面秩序、压制公开争论，使开元后期看似安稳；但这种安稳以阻塞言路、放任边镇坐大为代价，最终让危机在暗处积累。评价李林甫，关键不在他做了多少事，而在他如何改变政治生态：让皇帝听不到坏消息，让制度失去自我修复能力。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 16
-      intellect: 46
-      defense: 28
-      agility: 10
-  - key: hist_suitang_0189_yangguozhong
-    name: 杨国忠
-    default_gender: male
-    archetype: civil
-    flavor: （？-756年）唐玄宗后期外戚权臣，杨贵妃堂兄，凭裙带关系迅速登上权力高位。其处事多以巩固私党为先，与安禄山互相猜疑争权，内耗加剧了边镇危机。安史之乱爆发后，朝廷应对失当，杨国忠成为军心怨恨的集中点，马嵬驿兵变中被杀。杨国忠并非叛乱的唯一原因，却是盛唐政治自信滑向自毁的典型：危机逼近时仍沉迷权力算计，把国家机器变成私人斗争工具；其死带来短暂宣泄，却挽不回崩塌结构。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 16
-      intellect: 44
-      defense: 26
-      agility: 14
-  - key: hist_suitang_0190_yangyuhuan
-    name: 杨玉环
-    default_gender: female
-    archetype: civil
-    flavor: （719年-756年）唐玄宗贵妃，真实历史身份是宫廷政治的一部分，后世却常被简化为"祸水"符号。她得宠于天宝时期，宫廷奢华与外戚扩张因之更受瞩目，但唐帝国走向危机的根源并不在一位女子。安史之乱后，军心与朝局需要替罪者，马嵬驿赐死使她成为盛唐崩塌的象征。杨玉环的悲剧在于：她无法决定国家大势，却要承担大势崩坏的道德指责；留在诗歌与传说中的她，既是爱情叙事，也是政治责任转移的产物。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 10
-      intellect: 46
-      defense: 24
-      agility: 20
-  - key: hist_suitang_0191_gaolishi
-    name: 高力士
-    default_gender: male
-    archetype: civil
-    flavor: （684年-762年）唐代宦官，玄宗朝最有影响力的人物之一。其从内廷小吏升至掌握机要，既能传达圣意，也能筛选信息，成为皇权与官僚之间的关键阀门。高力士在开元盛世中以稳妥著称，亦参与处理重大人事与政务，权力之大引人侧目；安史之乱后随玄宗西逃，晚景漂泊。高力士的意义不在简单善恶评判，而在展示宦官制度如何改变政治：当皇帝愈依赖近侍，朝廷的公开程序便愈容易被内廷节制。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 18
-      intellect: 44
-      defense: 28
-      agility: 10
   - key: hist_suitang_0192_geshuhan
     name: 哥舒翰
     default_gender: male
     archetype: military
     flavor: （？-757年）唐代名将，长期镇守河西，曾以强硬治军与边防经营稳住西北局势，被视为玄宗朝可倚重的边帅。安史之乱爆发后，朝廷仓促调度，他被迫在潼关决战，最终兵败被俘。其失败并非单纯个人无能，而是战略、补给与朝廷指挥混乱共同作用的结果：一名擅守的边将被推上不适合的战场。哥舒翰的悲剧在于盛唐边防体系曾靠他支撑一角，却在危机来临时被政治压力推向必败位置；后世谈潼关失守，常以他为例讨论"用将"与"用兵"的差别。
     growth_range:
-    - 4
-    - 7
+    - 5
+    - 9
     attribute_weights:
       force: 36
       intellect: 20
       defense: 32
       agility: 12
+  - key: hist_suitang_0195_libi
+    name: 李泌
+    default_gender: male
+    archetype: civil
+    flavor: （722年-789年）唐代谋臣与学者，既有隐逸名声，也能入朝运筹。安史之乱后，他曾为肃宗、代宗等提供策略，擅长以大势推演与人心判断辅佐决策；其行事往往不求显位，却能在关键节点影响走向。史载其兼具道家式清静与政治现实感：既谈修身，也谈军国。中唐政局多变、藩镇与宦官掣肘之下，李泌能在不同皇帝之间保持一定话语权，说明其洞察与分寸极高。他像一位把"谋略"藏在学问与性格里的人。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 50
+      defense: 26
+      agility: 10
+  - key: hist_suitang_0196lishu
+    name: 李愬
+    default_gender: male
+    archetype: military
+    flavor: （773年-821年）唐代名将，以平淮西叛镇的蔡州之役名垂史册。其用兵特点在于耐心经营：先整肃军纪、安抚部众、摸清敌情，再择机发动突然袭击，最终攻入蔡州擒获吴元济。此役不仅是一次奇袭，更象征中唐削藩从理念走向可执行的现实路径。李愬的功劳不止在刀锋一刻，而在长期准备与组织能力；在藩镇势力根深蒂固的时代，他证明中央仍能通过精确用兵赢回控制力。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 36
+      intellect: 24
+      defense: 32
+      agility: 8
+  - key: hist_suitang_0197_liuyan
+    name: 刘晏
+    default_gender: male
+    archetype: civil
+    flavor: （716年-780年）唐代财政官员，以理财与行政能力著称。安史乱后国库空虚，他推动盐法、漕运与财政管理的多项整顿，使国家收入与粮运体系得以恢复运转，被称为"理财圣手"。刘晏的改革并不只是数字游戏，而是把税源、运输与地方管理重新接驳起来，让中唐政府在破碎结构中仍能征收与供给。其后因政治风波遭诛，结局与其功绩形成强烈反差。刘晏的经历说明：在财政决定生死的时代，能解决钱粮的人往往也最容易成为权力斗争的靶心。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 50
+      defense: 26
+      agility: 10
+  - key: hist_suitang_0198_yangyan
+    name: 杨炎
+    default_gender: male
+    archetype: civil
+    flavor: （727年-781年）唐代宰相，以推行两税法著称。中唐赋役体系因战争与人口流动而失灵，杨炎主张按资产与土地征收夏秋两税，试图把税制从人身束缚转向财产与生产能力，以恢复财政可持续性。两税法影响深远，成为后世税制演变的重要起点之一。其政治手腕同样强硬，仕途也在党争与权力反复中转为悲剧，最终被害身死。杨炎的功过不在道德标签，而在他对制度病灶的诊断与处方：不完美，却是乱后重建必须面对的选择。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 48
+      defense: 26
+      agility: 12
+  - key: hist_suitang_0199_luzhi
+    name: 陆贽
+    default_gender: male
+    archetype: civil
+    flavor: （754年-805年）唐代宰相与政论家，以奏议著称，文笔峭拔而议论切中时弊。其在德宗朝面临叛乱、财政与藩镇掣肘时，主张以信义凝聚人心、以制度重建秩序，反对一味苛急与猜忌；许多建议带有强烈的"治国方法论"。陆贽并非全能救主，他的理想屡遭现实撞击，终被排挤出朝。正因挫折，他的奏议更显珍贵：它记录了中唐政治如何在危机中寻找可行的治理路径。后世推崇他，往往是推崇那种敢把问题讲透的清醒。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 50
+      defense: 26
+      agility: 10
+  - key: hist_suitang_0204_yixing
+    name: 一行
+    default_gender: male
+    archetype: civil
+    flavor: （683年-727年）唐代高僧，法号一行，同时也是天文学家与历法改革者。其主持编制《大衍历》，并参与子午线测量等工作，体现唐朝把宗教人才纳入国家技术体系的特点。一行既能讲佛法，也能做严谨计算，说明唐代知识分工并不如后世想象那般泾渭分明。其历算成果服务于祭祀、农时与行政，属于"国家工程"。在他身上，僧侣清修与科学实务并存：一面是信仰体系，一面是精确度与数据，最终共同指向治理秩序的稳定。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 52
+      defense: 24
+      agility: 14
+  - key: hist_suitang_0205_yijing
+    name: 义净
+    default_gender: male
+    archetype: civil
+    flavor: （635年-713年）唐代高僧与译经家，选择海路前往南海诸国与天竺求法，行程漫长而艰险。归国后主持翻译佛典，并撰写《南海寄归内法传》等记述，详述海外佛教戒律、僧团生活与航路见闻，为研究印度洋交通与宗教交流提供珍贵材料。义净与玄奘、鉴真不同：玄奘重在学术翻译与地理记录，鉴真重在制度传播，而义净更像把"海上世界"写进唐人的知识地图。他的贡献在于让佛教与海上贸易、外交网络发生更紧密连接。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 52
+      defense: 24
+      agility: 14
+  - key: hist_suitang_0211_libian
+    name: 李昪
+    default_gender: male
+    archetype: civil
+    flavor: （889年-943年）南唐开国者，原名徐知诰，起于吴国权臣体系，后禅位自立并改姓李，建立南唐。其长于经营江南财赋与文教，重视官僚运作，使南唐在十国中呈现较强的行政能力与文化气象。李昪的成功并非靠一战定天下，而是靠长时间的权力布局与制度接管：把一个地方政权从"军阀控制"转成"相对文治"的国家机器。也正因此，南唐的繁华并非纯粹风月，而是江南社会经济成熟的结果。李昪留下的，是十国中最具持续性的南方政权之一。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 18
+      intellect: 46
+      defense: 28
+      agility: 8
+  - key: hist_suitang_0232_laijunchen
+    name: 来俊臣
+    default_gender: male
+    archetype: civil
+    flavor: （651年—697年）来俊臣，武周时期酷吏，长期参与诏狱审理与政治清洗，以罗织罪名、严刑逼供著称。其所编《罗织经》集中呈现了告密政治与恐惧治理的操作逻辑，反映武周权力高压阶段司法被工具化的极端形态。来俊臣一度因“善治狱”而受重用，最终也在权力斗争中被诛，显示酷吏体制本身并不稳定。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 50
+      defense: 24
+      agility: 12
+  - key: hist_suitang_0189_yangguozhong
+    name: 杨国忠
+    default_gender: male
+    archetype: civil
+    flavor: （？-756年）唐玄宗后期外戚权臣，杨贵妃堂兄，凭裙带关系迅速登上权力高位。其处事多以巩固私党为先，与安禄山互相猜疑争权，内耗加剧了边镇危机。安史之乱爆发后，朝廷应对失当，杨国忠成为军心怨恨的集中点，马嵬驿兵变中被杀。杨国忠并非叛乱的唯一原因，却是盛唐政治自信滑向自毁的典型：危机逼近时仍沉迷权力算计，把国家机器变成私人斗争工具；其死带来短暂宣泄，却挽不回崩塌结构。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 16
+      intellect: 44
+      defense: 26
+      agility: 14
+  - key: hist_suitang_0203_yuantian
+    name: 袁天罡
+    default_gender: male
+    archetype: civil
+    flavor: （？-？）隋唐之际相术与天象人物，正史记载有限，却在后世传说中极为活跃。民间多称其善相人、能预言，故事常与武周及名臣将相的命运相连，使其形象介于历史与传奇之间。与李淳风并称的组合，更像后世叙事把天文历算与命运占验捆绑的产物。若取史实角度，袁天罡代表的是当时社会对天象、吉凶与政治正当性的持续需求：制度仍依赖符瑞与占候，人们便需要这样的解释者。了解袁天罡，不必尽信其神，而要看他为何会被不断讲述。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 46
+      defense: 26
+      agility: 16
+  - key: hist_suitang_0206_wangxuance
+    name: 王玄策
+    default_gender: male
+    archetype: military
+    flavor: （？-？）唐代使臣与外交人物，史书载其多次出使天竺，行事果断，擅长在复杂国际环境中借力制衡。关于其遭变故后联合吐蕃、尼婆罗军反击并押解俘虏入唐的记载，细节在不同材料中不尽一致，后世亦多加渲染。但可以确定的是：唐代外交并非单靠礼仪辞令，而常与军事、盟约、边地交通相连。王玄策之名因此成为"以小使节撬动大格局"的象征，既有史实基础，也承载传奇色彩。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 34
+      intellect: 26
+      defense: 28
+      agility: 12
+  - key: hist_suitang_0212_lijing
+    name: 李璟
+    default_gender: male
+    archetype: civil
+    flavor: （916年-961年）南唐第二代君主，文学修养甚高，词作清婉哀丽，常被后世作为"亡国前夜"的情绪载体。但其政治处境比词更艰难：北方强权更替频繁，后周崛起后南唐被迫割地求和，国势由盛转衰。李璟并非全然昏弱，他也试图维持官僚与财赋体系，只是战略空间过小、军事力量不足，使每一次妥协都变成长期亏损。其在词中留下的冷清与惆怅，恰是一个守成者面对大势无法回转的真实心理：有才情，却无胜势。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 48
+      defense: 26
+      agility: 12
+  - key: hist_suitang_0213_hanxizai
+    name: 韩熙载
+    default_gender: male
+    archetype: civil
+    flavor: （902年-970年）南唐重臣与文士，才名显赫，身处政局险峻的江南朝廷。后世最熟悉的他来自《韩熙载夜宴图》，画中放纵与喧闹常被解读为他"以荒唐自保"的姿态；这一解释虽有后人附会，却揭示了南唐政治的紧张：功名与祸患常在一线之间。韩熙载既能处理政务，也能在文坛聚众唱和，是南唐文治氛围的代表人物之一。相比帝王将相的成败，他更像一位在乱世里保持才情与警惕的士大夫：懂得享乐表象背后仍要计算生死。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 48
+      defense: 26
+      agility: 12
+  green:
   - key: hist_suitang_0193_fengchangqing
     name: 封常清
     default_gender: male
@@ -182,84 +392,6 @@ heroes:
       intellect: 22
       defense: 34
       agility: 10
-  - key: hist_suitang_0195_libi
-    name: 李泌
-    default_gender: male
-    archetype: civil
-    flavor: （722年-789年）唐代谋臣与学者，既有隐逸名声，也能入朝运筹。安史之乱后，他曾为肃宗、代宗等提供策略，擅长以大势推演与人心判断辅佐决策；其行事往往不求显位，却能在关键节点影响走向。史载其兼具道家式清静与政治现实感：既谈修身，也谈军国。中唐政局多变、藩镇与宦官掣肘之下，李泌能在不同皇帝之间保持一定话语权，说明其洞察与分寸极高。他像一位把"谋略"藏在学问与性格里的人。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 14
-      intellect: 50
-      defense: 26
-      agility: 10
-  - key: hist_suitang_0196lishu
-    name: 李愬
-    default_gender: male
-    archetype: military
-    flavor: （773年-821年）唐代名将，以平淮西叛镇的蔡州之役名垂史册。其用兵特点在于耐心经营：先整肃军纪、安抚部众、摸清敌情，再择机发动突然袭击，最终攻入蔡州擒获吴元济。此役不仅是一次奇袭，更象征中唐削藩从理念走向可执行的现实路径。李愬的功劳不止在刀锋一刻，而在长期准备与组织能力；在藩镇势力根深蒂固的时代，他证明中央仍能通过精确用兵赢回控制力。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 36
-      intellect: 24
-      defense: 32
-      agility: 8
-  - key: hist_suitang_0197_liuyan
-    name: 刘晏
-    default_gender: male
-    archetype: civil
-    flavor: （716年-780年）唐代财政官员，以理财与行政能力著称。安史乱后国库空虚，他推动盐法、漕运与财政管理的多项整顿，使国家收入与粮运体系得以恢复运转，被称为"理财圣手"。刘晏的改革并不只是数字游戏，而是把税源、运输与地方管理重新接驳起来，让中唐政府在破碎结构中仍能征收与供给。其后因政治风波遭诛，结局与其功绩形成强烈反差。刘晏的经历说明：在财政决定生死的时代，能解决钱粮的人往往也最容易成为权力斗争的靶心。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 14
-      intellect: 50
-      defense: 26
-      agility: 10
-  - key: hist_suitang_0198_yangyan
-    name: 杨炎
-    default_gender: male
-    archetype: civil
-    flavor: （727年-781年）唐代宰相，以推行两税法著称。中唐赋役体系因战争与人口流动而失灵，杨炎主张按资产与土地征收夏秋两税，试图把税制从人身束缚转向财产与生产能力，以恢复财政可持续性。两税法影响深远，成为后世税制演变的重要起点之一。其政治手腕同样强硬，仕途也在党争与权力反复中转为悲剧，最终被害身死。杨炎的功过不在道德标签，而在他对制度病灶的诊断与处方：不完美，却是乱后重建必须面对的选择。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 14
-      intellect: 48
-      defense: 26
-      agility: 12
-  - key: hist_suitang_0199_luzhi
-    name: 陆贽
-    default_gender: male
-    archetype: civil
-    flavor: （754年-805年）唐代宰相与政论家，以奏议著称，文笔峭拔而议论切中时弊。其在德宗朝面临叛乱、财政与藩镇掣肘时，主张以信义凝聚人心、以制度重建秩序，反对一味苛急与猜忌；许多建议带有强烈的"治国方法论"。陆贽并非全能救主，他的理想屡遭现实撞击，终被排挤出朝。正因挫折，他的奏议更显珍贵：它记录了中唐政治如何在危机中寻找可行的治理路径。后世推崇他，往往是推崇那种敢把问题讲透的清醒。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 14
-      intellect: 50
-      defense: 26
-      agility: 10
-  - key: hist_suitang_0200_huangchao
-    name: 黄巢
-    default_gender: male
-    archetype: military
-    flavor: （820年-884年）晚唐大起义领袖，出身盐贩背景并屡试不第，最终以武装反抗席卷山东、河南等地。其军队攻入长安并建立政权，虽短暂却对唐朝统治造成根本打击：财政体系崩坏、地方军阀坐大、社会秩序大幅破裂。黄巢并非单纯"诗人式叛军"，史载其军纪与屠戮亦极为残酷，反映乱世暴力的失控。其败亡后唐室虽存，国家已难回盛唐结构。谈黄巢，不能只看一场攻城，更要看到它揭开的社会裂缝与制度终局。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 36
-      intellect: 22
-      defense: 30
-      agility: 12
   - key: hist_suitang_0201_gaopian
     name: 高骈
     default_gender: male
@@ -286,84 +418,6 @@ heroes:
       intellect: 24
       defense: 32
       agility: 10
-  - key: hist_suitang_0203_yuantian
-    name: 袁天罡
-    default_gender: male
-    archetype: civil
-    flavor: （？-？）隋唐之际相术与天象人物，正史记载有限，却在后世传说中极为活跃。民间多称其善相人、能预言，故事常与武周及名臣将相的命运相连，使其形象介于历史与传奇之间。与李淳风并称的组合，更像后世叙事把天文历算与命运占验捆绑的产物。若取史实角度，袁天罡代表的是当时社会对天象、吉凶与政治正当性的持续需求：制度仍依赖符瑞与占候，人们便需要这样的解释者。了解袁天罡，不必尽信其神，而要看他为何会被不断讲述。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 12
-      intellect: 46
-      defense: 26
-      agility: 16
-  - key: hist_suitang_0204_yixing
-    name: 一行
-    default_gender: male
-    archetype: civil
-    flavor: （683年-727年）唐代高僧，法号一行，同时也是天文学家与历法改革者。其主持编制《大衍历》，并参与子午线测量等工作，体现唐朝把宗教人才纳入国家技术体系的特点。一行既能讲佛法，也能做严谨计算，说明唐代知识分工并不如后世想象那般泾渭分明。其历算成果服务于祭祀、农时与行政，属于"国家工程"。在他身上，僧侣清修与科学实务并存：一面是信仰体系，一面是精确度与数据，最终共同指向治理秩序的稳定。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 10
-      intellect: 52
-      defense: 24
-      agility: 14
-  - key: hist_suitang_0205_yijing
-    name: 义净
-    default_gender: male
-    archetype: civil
-    flavor: （635年-713年）唐代高僧与译经家，选择海路前往南海诸国与天竺求法，行程漫长而艰险。归国后主持翻译佛典，并撰写《南海寄归内法传》等记述，详述海外佛教戒律、僧团生活与航路见闻，为研究印度洋交通与宗教交流提供珍贵材料。义净与玄奘、鉴真不同：玄奘重在学术翻译与地理记录，鉴真重在制度传播，而义净更像把"海上世界"写进唐人的知识地图。他的贡献在于让佛教与海上贸易、外交网络发生更紧密连接。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 10
-      intellect: 52
-      defense: 24
-      agility: 14
-  - key: hist_suitang_0206_wangxuance
-    name: 王玄策
-    default_gender: male
-    archetype: military
-    flavor: （？-？）唐代使臣与外交人物，史书载其多次出使天竺，行事果断，擅长在复杂国际环境中借力制衡。关于其遭变故后联合吐蕃、尼婆罗军反击并押解俘虏入唐的记载，细节在不同材料中不尽一致，后世亦多加渲染。但可以确定的是：唐代外交并非单靠礼仪辞令，而常与军事、盟约、边地交通相连。王玄策之名因此成为"以小使节撬动大格局"的象征，既有史实基础，也承载传奇色彩。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 34
-      intellect: 26
-      defense: 28
-      agility: 12
-  - key: hist_suitang_0207_guowei
-    name: 郭威
-    default_gender: male
-    archetype: military
-    flavor: （904年-954年）后周开国皇帝，出身军旅，在五代频繁兵变的环境中凭威望与军功崛起。其入京即位并非单纯夺权，而是旧秩序崩坏后的强人整合：一方面安抚军心、稳定财政与吏治，另一方面为后周的改革打下可操作的基础。郭威用人务实，能容纳不同出身的将吏；又以收养柴荣为继承人，避免了五代常见的宗室内耗。后周能成为五代中"最像国家"的政权之一，郭威的开局与取舍是关键原因。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 36
-      intellect: 24
-      defense: 32
-      agility: 8
-  - key: hist_suitang_0208_shijingruo
-    name: 石敬瑭
-    default_gender: male
-    archetype: military
-    flavor: （892年-942年）后晋开国皇帝，五代外交与战略困境的代表人物。其起兵夺位时倚重契丹军力，作为交换割让幽云十六州，并以屈辱性的臣属关系换取短期安全。后世称其"儿皇帝"，更多是对这一选择的道德评判；从现实角度看，他是在内斗与外压夹击下用空间换时间。问题在于：失去燕云后中原北门洞开，宋辽长期对峙的格局由此加深。石敬瑭的名字因此常被用来讨论：乱世求存的妥协，究竟能否承受后果。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 34
-      intellect: 22
-      defense: 30
-      agility: 14
   - key: hist_suitang_0209_liuzhiyuan
     name: 刘知远
     default_gender: male
@@ -390,45 +444,6 @@ heroes:
       intellect: 22
       defense: 32
       agility: 10
-  - key: hist_suitang_0211_libian
-    name: 李昪
-    default_gender: male
-    archetype: civil
-    flavor: （889年-943年）南唐开国者，原名徐知诰，起于吴国权臣体系，后禅位自立并改姓李，建立南唐。其长于经营江南财赋与文教，重视官僚运作，使南唐在十国中呈现较强的行政能力与文化气象。李昪的成功并非靠一战定天下，而是靠长时间的权力布局与制度接管：把一个地方政权从"军阀控制"转成"相对文治"的国家机器。也正因此，南唐的繁华并非纯粹风月，而是江南社会经济成熟的结果。李昪留下的，是十国中最具持续性的南方政权之一。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 18
-      intellect: 46
-      defense: 28
-      agility: 8
-  - key: hist_suitang_0212_lijing
-    name: 李璟
-    default_gender: male
-    archetype: civil
-    flavor: （916年-961年）南唐第二代君主，文学修养甚高，词作清婉哀丽，常被后世作为"亡国前夜"的情绪载体。但其政治处境比词更艰难：北方强权更替频繁，后周崛起后南唐被迫割地求和，国势由盛转衰。李璟并非全然昏弱，他也试图维持官僚与财赋体系，只是战略空间过小、军事力量不足，使每一次妥协都变成长期亏损。其在词中留下的冷清与惆怅，恰是一个守成者面对大势无法回转的真实心理：有才情，却无胜势。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 14
-      intellect: 48
-      defense: 26
-      agility: 12
-  - key: hist_suitang_0213_hanxizai
-    name: 韩熙载
-    default_gender: male
-    archetype: civil
-    flavor: （902年-970年）南唐重臣与文士，才名显赫，身处政局险峻的江南朝廷。后世最熟悉的他来自《韩熙载夜宴图》，画中放纵与喧闹常被解读为他"以荒唐自保"的姿态；这一解释虽有后人附会，却揭示了南唐政治的紧张：功名与祸患常在一线之间。韩熙载既能处理政务，也能在文坛聚众唱和，是南唐文治氛围的代表人物之一。相比帝王将相的成败，他更像一位在乱世里保持才情与警惕的士大夫：懂得享乐表象背后仍要计算生死。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 14
-      intellect: 48
-      defense: 26
-      agility: 12
   - key: hist_suitang_0214_fengyanshen
     name: 冯延巳
     default_gender: male

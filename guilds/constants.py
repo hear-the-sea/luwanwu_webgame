@@ -99,3 +99,15 @@ EXCHANGE_COSTS = {
 
 # 每日兑换上限
 DAILY_EXCHANGE_LIMIT = 10
+
+
+# ============ 帮会门客池 ============ #
+
+# 每位成员可提交门客数量
+GUILD_HERO_POOL_SLOT_LIMIT = 2
+
+# 帮会可配置出战名单上限
+GUILD_BATTLE_LINEUP_LIMIT = 20
+
+# 门客池替换冷却（秒）
+GUILD_HERO_POOL_REPLACE_COOLDOWN_SECONDS = 30 * 60

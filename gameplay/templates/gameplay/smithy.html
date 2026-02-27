@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}冶炼坊{% endblock %}
 
@@ -7,15 +8,15 @@
     <div class="tw-section-header">
         <div>
             <h1>冶炼坊</h1>
-            <p class="caption">冶炼金属，当前银两：<strong>{{ manor.silver }}</strong>{% if speed_bonus_percent > 0 %}，冶炼坊加成：<span class="text-accent-green font-semibold">-{{ speed_bonus_percent }}%</span> 冶炼时间{% endif %}</p>
-            <p class="caption">冶炼技等级：{{ smelting_level }}，单次最大冶炼数量：<strong>{{ max_smelting_quantity }}</strong> 个</p>
+            <p class="caption">冶炼坊能够冶炼金属和制作药品。当前银两：<strong>{{ manor.silver }}</strong>{% if speed_bonus_percent > 0 %}，冶炼坊加成：<span class="text-accent-green font-semibold">-{{ speed_bonus_percent }}%</span> 制作时间{% endif %}</p>
+            <p class="caption">冶炼技等级：{{ smelting_level }}，单次最大制作数量：<strong>{{ max_smelting_quantity }}</strong> 个</p>
         </div>
         <a class="tw-btn-secondary" href="{% url 'gameplay:smithy' %}">刷新</a>
     </div>
 
     {% if active_productions %}
     <section class="tw-panel mb-6">
-        <div class="tw-panel-header">冶炼中</div>
+        <div class="tw-panel-header">制作中</div>
         <div class="tw-panel-content">
             <div class="flex flex-col gap-4">
                 {% for production in active_productions %}
@@ -25,7 +26,12 @@
                     </header>
                     <div class="flex gap-2 flex-wrap">
                         {% if production.time_remaining > 0 %}
-                            <span class="tw-chip">剩余时间：{{ production.time_remaining }} 秒</span>
+                            <span class="tw-chip">
+                                剩余时间：
+                                <span class="countdown" data-countdown="{{ production.complete_at|date:'c' }}" data-refresh="1">
+                                    {{ production.time_remaining }} 秒
+                                </span>
+                            </span>
                         {% else %}
                             <span class="tw-badge-green">已完成！</span>
                         {% endif %}
@@ -38,11 +44,12 @@
     {% endif %}
 
     <section class="tw-panel">
-        <div class="tw-panel-header">可冶炼金属</div>
+        <div class="tw-panel-header">可制作物品</div>
         <div class="tw-panel-content">
             <p class="text-sm text-text-muted mb-4">
                 冶炼链：1银两→1铜，5铜→1锡，3锡→1铁
-                {% if is_producing %}<br><span class="text-accent-red font-medium">当前有金属正在冶炼中，同时只能冶炼一种金属</span>{% endif %}
+                <br>药品解锁：冶炼坊Lv1止血散，Lv3金创药，Lv5白芨丸，Lv7白草丹，Lv8补血丹，Lv9丁香丹，Lv10天香玉露丸
+                {% if is_producing %}<br><span class="text-accent-red font-medium">当前有物品正在制作中，同时只能制作一种物品</span>{% endif %}
             </p>
 
             <div class="tw-building-grid">
@@ -51,8 +58,9 @@
                     <header>
                         <div>
                             <h3>{{ metal.name }}</h3>
+                            <p class="text-xs text-text-muted mt-1">{{ metal.category_label }}</p>
                             {% if not metal.is_unlocked %}
-                            <p class="text-sm text-accent-red font-medium">需要冶炼技 {{ metal.required_smelting }} 级</p>
+                            <p class="text-sm text-accent-red font-medium">需要{{ metal.required_type_label }} {{ metal.required_level }} 级</p>
                             {% endif %}
                         </div>
                     </header>
@@ -80,7 +88,7 @@
                         {% if not metal.is_unlocked %}
                             <button type="button" class="tw-btn-secondary w-full opacity-60" disabled>未解锁</button>
                         {% elif is_producing %}
-                            <button type="button" class="tw-btn-secondary w-full opacity-60" disabled>冶炼中</button>
+                            <button type="button" class="tw-btn-secondary w-full opacity-60" disabled>制作中</button>
                         {% elif metal.is_unlocked %}
                             <div class="flex items-center justify-center gap-2 mb-3 flex-wrap">
                                 <label for="quantity-{{ metal.key }}" class="text-sm text-text-secondary">数量：</label>
@@ -93,7 +101,7 @@
                                 <span class="text-xs text-accent-red font-medium" id="total-{{ metal.key }}">总计：{{ metal.cost_amount }} {{ metal.cost_type_name }}</span>
                             </div>
                             {% if metal.can_afford %}
-                                <button type="submit" class="tw-btn-primary w-full">冶炼</button>
+                                <button type="submit" class="tw-btn-primary w-full">制作</button>
                             {% else %}
                                 <button type="button" class="tw-btn-secondary w-full opacity-60" disabled>{{ metal.cost_type_name }}不足</button>
                             {% endif %}
@@ -117,4 +125,8 @@ function updateTotalCost(input) {
     totalSpan.textContent = '总计：' + totalCost.toLocaleString() + ' ' + costTypeName;
 }
 </script>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/dashboard.js' %}"></script>
 {% endblock %}

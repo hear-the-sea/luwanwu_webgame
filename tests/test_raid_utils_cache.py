@@ -79,12 +79,14 @@ def test_can_attack_target_can_bypass_cached_recent_attacks(monkeypatch):
     attacker = SimpleNamespace(
         id=1,
         is_under_newbie_protection=False,
+        is_under_defeat_protection=False,
         is_under_peace_shield=False,
         prestige=1000,
     )
     defender = SimpleNamespace(
         id=2,
         is_under_newbie_protection=False,
+        is_under_defeat_protection=False,
         is_under_peace_shield=False,
         prestige=1000,
     )
@@ -103,3 +105,24 @@ def test_can_attack_target_can_bypass_cached_recent_attacks(monkeypatch):
     assert "多次攻击" in blocked_reason
     assert allowed is True
     assert allowed_reason == ""
+
+
+def test_can_attack_target_blocks_defender_defeat_protection():
+    attacker = SimpleNamespace(
+        id=1,
+        is_under_newbie_protection=False,
+        is_under_defeat_protection=False,
+        is_under_peace_shield=False,
+        prestige=1000,
+    )
+    defender = SimpleNamespace(
+        id=2,
+        is_under_newbie_protection=False,
+        is_under_defeat_protection=True,
+        is_under_peace_shield=False,
+        prestige=1000,
+    )
+
+    allowed, reason = raid_utils.can_attack_target(attacker, defender)
+    assert allowed is False
+    assert "战败保护期" in reason

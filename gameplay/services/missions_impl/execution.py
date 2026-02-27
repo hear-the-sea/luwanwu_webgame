@@ -304,24 +304,34 @@ def _send_mission_report_message(locked_run: MissionRun, report: Any) -> None:
     if not report or locked_run.is_retreating:
         return
 
-    create_message(
-        manor=locked_run.manor,
-        kind="battle",
-        title=f"{locked_run.mission.name} 战报",
-        body="",
-        battle_report=report,
-    )
-    notify_user(
-        locked_run.manor.user_id,
-        {
-            "kind": "battle",
-            "title": f"{locked_run.mission.name} 战报",
-            "report_id": report.id,
-            "mission_key": locked_run.mission.key,
-            "mission_name": locked_run.mission.name,
-        },
-        log_context="mission battle notification",
-    )
+    try:
+        create_message(
+            manor=locked_run.manor,
+            kind="battle",
+            title=f"{locked_run.mission.name} 战报",
+            body="",
+            battle_report=report,
+        )
+        notify_user(
+            locked_run.manor.user_id,
+            {
+                "kind": "battle",
+                "title": f"{locked_run.mission.name} 战报",
+                "report_id": report.id,
+                "mission_key": locked_run.mission.key,
+                "mission_name": locked_run.mission.name,
+            },
+            log_context="mission battle notification",
+        )
+    except Exception as exc:
+        logger.warning(
+            "mission report notification failed: run_id=%s manor_id=%s report_id=%s error=%s",
+            locked_run.id,
+            locked_run.manor_id,
+            getattr(report, "id", None),
+            exc,
+            exc_info=True,
+        )
 
 
 def finalize_mission_run(run: MissionRun, now=None) -> None:

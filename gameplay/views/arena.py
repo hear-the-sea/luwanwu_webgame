@@ -27,6 +27,7 @@ from gameplay.services.arena.core import (
     exchange_arena_reward,
     register_arena_entry,
 )
+from gameplay.utils.template_loader import get_item_template_names_by_keys
 
 logger = logging.getLogger(__name__)
 
@@ -214,9 +215,18 @@ def arena_exchange_view(request: HttpRequest) -> HttpResponse:
 
     try:
         result = exchange_arena_reward(manor, reward_key, quantity=quantity)
+        random_draw_summary = ""
+        if result.random_granted_items:
+            item_names = get_item_template_names_by_keys(result.random_granted_items.keys())
+            parts: list[str] = []
+            for item_key in sorted(result.random_granted_items.keys()):
+                item_name = item_names.get(item_key, item_key)
+                item_amount = result.random_granted_items[item_key]
+                parts.append(f"{item_name}x{item_amount}")
+            random_draw_summary = f" 本次抽到：{'、'.join(parts)}。"
         messages.success(
             request,
-            f"兑换成功：{result.reward.name} x{result.quantity}，消耗角斗币 {result.total_cost}。",
+            f"兑换成功：{result.reward.name} x{result.quantity}，消耗角斗币 {result.total_cost}。{random_draw_summary}",
         )
     except ValueError as exc:
         messages.error(request, sanitize_error_message(exc))

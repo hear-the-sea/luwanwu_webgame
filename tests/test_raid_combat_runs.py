@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import contextlib
-from datetime import datetime
+from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
 from types import SimpleNamespace
 
 import pytest
 from django.db import IntegrityError
+from django.utils import timezone
 
 from gameplay.services.raid.combat import runs as combat_runs
 
@@ -224,7 +225,7 @@ def test_bulk_create_troops_with_fallback_upserts_without_losing_counts(monkeypa
 
 
 def test_start_raid_rechecks_attack_constraints_inside_transaction(monkeypatch):
-    attacker = SimpleNamespace(pk=1, id=1)
+    attacker = SimpleNamespace(pk=1, id=1, defeat_protection_until=None)
     defender = SimpleNamespace(pk=2, id=2)
 
     monkeypatch.setattr(combat_runs.transaction, "atomic", contextlib.nullcontext)
@@ -259,7 +260,7 @@ def test_start_raid_rechecks_attack_constraints_inside_transaction(monkeypatch):
 
 
 def test_start_raid_invalidates_recent_attack_cache_on_commit(monkeypatch):
-    attacker = SimpleNamespace(pk=1, id=1)
+    attacker = SimpleNamespace(pk=1, id=1, defeat_protection_until=None)
     defender = SimpleNamespace(pk=2, id=2)
     invalidated = {"defender_id": None}
 
@@ -292,6 +293,83 @@ def test_start_raid_invalidates_recent_attack_cache_on_commit(monkeypatch):
     combat_runs.start_raid(attacker, defender, [101], {"inf": 1})
 
     assert invalidated["defender_id"] == defender.id
+
+
+def test_start_raid_clears_attacker_defeat_protection_on_success(monkeypatch):
+    now = timezone.now()
+    saved = {"fields": None}
+    attacker = SimpleNamespace(
+        pk=1,
+        id=1,
+        defeat_protection_until=now + timedelta(minutes=15),
+        save=lambda *, update_fields: saved.__setitem__("fields", update_fields),
+    )
+    defender = SimpleNamespace(pk=2, id=2)
+
+    monkeypatch.setattr(combat_runs.transaction, "atomic", contextlib.nullcontext)
+    monkeypatch.setattr(combat_runs.transaction, "on_commit", lambda callback: callback())
+    monkeypatch.setattr(
+        combat_runs,
+        "_validate_and_normalize_raid_inputs",
+        lambda *_args, **_kwargs: ([101], {"inf": 1}),
+    )
+    monkeypatch.setattr(combat_runs, "_lock_manor_pair", lambda *_args, **_kwargs: (attacker, defender))
+    monkeypatch.setattr(combat_runs, "_recheck_can_attack_target", lambda *_args, **_kwargs: (True, ""))
+    monkeypatch.setattr(combat_runs, "get_active_raid_count", lambda *_args, **_kwargs: 0)
+    monkeypatch.setattr(combat_runs, "_load_and_validate_attacker_guests", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(combat_runs, "_normalize_and_validate_raid_loadout", lambda *_args, **_kwargs: {"inf": 1})
+    monkeypatch.setattr(combat_runs, "_deduct_troops", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_runs, "calculate_raid_travel_time", lambda *_args, **_kwargs: 1)
+    monkeypatch.setattr(
+        combat_runs,
+        "_create_raid_run_record",
+        lambda *_args, **_kwargs: SimpleNamespace(id=99, attacker=attacker, defender=defender),
+    )
+    monkeypatch.setattr(combat_runs, "_send_raid_incoming_message", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_runs, "_dispatch_raid_battle_task", lambda *_args, **_kwargs: None)
+
+    combat_runs.start_raid(attacker, defender, [101], {"inf": 1})
+
+    assert attacker.defeat_protection_until is None
+    assert saved["fields"] == ["defeat_protection_until"]
+
+
+def test_start_raid_succeeds_when_incoming_message_fails(monkeypatch):
+    attacker = SimpleNamespace(pk=1, id=1, defeat_protection_until=None)
+    defender = SimpleNamespace(pk=2, id=2)
+    created_run = SimpleNamespace(id=99, attacker=attacker, defender=defender)
+    dispatched = {"run_id": None, "travel_time": None}
+
+    monkeypatch.setattr(combat_runs.transaction, "atomic", contextlib.nullcontext)
+    monkeypatch.setattr(
+        combat_runs,
+        "_validate_and_normalize_raid_inputs",
+        lambda *_args, **_kwargs: ([101], {"inf": 1}),
+    )
+    monkeypatch.setattr(combat_runs, "_lock_manor_pair", lambda *_args, **_kwargs: (attacker, defender))
+    monkeypatch.setattr(combat_runs, "_recheck_can_attack_target", lambda *_args, **_kwargs: (True, ""))
+    monkeypatch.setattr(combat_runs, "get_active_raid_count", lambda *_args, **_kwargs: 0)
+    monkeypatch.setattr(combat_runs, "_load_and_validate_attacker_guests", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(combat_runs, "_normalize_and_validate_raid_loadout", lambda *_args, **_kwargs: {"inf": 1})
+    monkeypatch.setattr(combat_runs, "_deduct_troops", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_runs, "calculate_raid_travel_time", lambda *_args, **_kwargs: 45)
+    monkeypatch.setattr(combat_runs, "_create_raid_run_record", lambda *_args, **_kwargs: created_run)
+    monkeypatch.setattr(combat_runs, "_invalidate_recent_attacks_cache_on_commit", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        combat_runs,
+        "_send_raid_incoming_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("message down")),
+    )
+    monkeypatch.setattr(
+        combat_runs,
+        "_dispatch_raid_battle_task",
+        lambda run, travel_time: dispatched.update({"run_id": run.id, "travel_time": travel_time}),
+    )
+
+    result = combat_runs.start_raid(attacker, defender, [101], {"inf": 1})
+
+    assert result is created_run
+    assert dispatched == {"run_id": 99, "travel_time": 45}
 
 
 def test_validate_and_normalize_raid_inputs_uses_uncached_attack_check(monkeypatch):

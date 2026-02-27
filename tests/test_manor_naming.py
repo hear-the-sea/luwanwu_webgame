@@ -2,7 +2,16 @@
 
 from __future__ import annotations
 
-from gameplay.services.manor.core import BANNED_WORDS, MANOR_NAME_MAX_LENGTH, MANOR_NAME_MIN_LENGTH, validate_manor_name
+import pytest
+
+from gameplay.services.manor.core import (
+    BANNED_WORDS,
+    MANOR_NAME_MAX_LENGTH,
+    MANOR_NAME_MIN_LENGTH,
+    ensure_manor,
+    rename_manor,
+    validate_manor_name,
+)
 
 
 def test_validate_manor_name_rejects_empty():
@@ -117,3 +126,19 @@ def test_validate_manor_name_boundary_lengths():
     max_name = "好" * MANOR_NAME_MAX_LENGTH
     valid, error = validate_manor_name(max_name)
     assert valid is True
+
+
+@pytest.mark.django_db
+def test_rename_manor_succeeds_when_message_fails(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="manor_rename_msg_fail", password="pass12345")
+    manor = ensure_manor(user)
+
+    monkeypatch.setattr(
+        "gameplay.services.utils.messages.create_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+    )
+
+    rename_manor(manor, "Harbor01", consume_item=False)
+
+    manor.refresh_from_db()
+    assert manor.name == "Harbor01"

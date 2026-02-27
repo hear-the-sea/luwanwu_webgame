@@ -13,7 +13,7 @@ from gameplay.models import InventoryItem, Manor
 
 # Keep compatibility with tests monkeypatching `gameplay.services.inventory.random`.
 from gameplay.services import inventory as inventory_pkg
-from guests.models import Guest, GuestStatus
+from guests.models import Guest, GuestStatus, GuestTemplate
 
 from .core import consume_inventory_item_locked
 
@@ -58,6 +58,59 @@ def _validate_guest_item_use(
     return locked_item, guest
 
 
+def _detach_guest_gears_for_reset(guest: Guest, *, action_label: str) -> int:
+    """Best-effort detach all equipped gears for rebirth/rarity-upgrade resets."""
+    from guests.services import unequip_guest_item
+
+    gear_items = list(guest.gear_items.select_related("template"))
+    unequipped_count = 0
+
+    for gear in gear_items:
+        try:
+            # Prefer normal unequip path (returns item to warehouse, updates bonuses).
+            unequip_guest_item(gear, guest)
+            unequipped_count += 1
+            continue
+        except (ValueError, TypeError) as exc:
+            logger.warning(
+                "门客%s时常规卸装失败，改为强制卸下: guest_id=%s, gear_id=%s, error=%s",
+                action_label,
+                guest.pk,
+                gear.pk,
+                exc,
+            )
+        except Exception as exc:
+            logger.exception(
+                "门客%s时常规卸装异常，改为强制卸下: guest_id=%s gear_id=%s error=%s",
+                action_label,
+                guest.pk,
+                gear.pk,
+                exc,
+            )
+
+        try:
+            updated = guest.gear_items.filter(pk=gear.pk, guest_id=guest.pk).update(guest=None)
+            if updated:
+                unequipped_count += 1
+            else:
+                logger.warning(
+                    "门客%s时强制卸装未命中: guest_id=%s, gear_id=%s",
+                    action_label,
+                    guest.pk,
+                    gear.pk,
+                )
+        except Exception as exc:
+            logger.exception(
+                "门客%s时强制卸装异常: guest_id=%s gear_id=%s error=%s",
+                action_label,
+                guest.pk,
+                gear.pk,
+                exc,
+            )
+
+    return unequipped_count
+
+
 @transaction.atomic
 def use_guest_rebirth_card(manor: Manor, item: InventoryItem, guest_id: int) -> Dict[str, Any]:
     """使用门客重生卡，将指定门客重置为1级。"""
@@ -74,24 +127,7 @@ def use_guest_rebirth_card(manor: Manor, item: InventoryItem, guest_id: int) -> 
     old_level = guest.level
     guest_name = guest.display_name
 
-    from guests.services import unequip_guest_item
-
-    gear_items = list(guest.gear_items.select_related("template"))
-    unequipped_count = 0
-
-    for gear in gear_items:
-        try:
-            unequip_guest_item(gear, guest)
-            unequipped_count += 1
-        except (ValueError, TypeError) as exc:
-            logger.warning("门客重生时装备卸载失败: guest_id=%s, gear_id=%s, error=%s", guest.pk, gear.pk, exc)
-        except Exception as exc:
-            logger.exception(
-                "门客重生时装备卸载异常: guest_id=%s gear_id=%s error=%s",
-                guest.pk,
-                gear.pk,
-                exc,
-            )
+    unequipped_count = _detach_guest_gears_for_reset(guest, action_label="重生")
 
     skills_count = guest.guest_skills.count()
     guest.guest_skills.all().delete()
@@ -179,7 +215,7 @@ def use_guest_rebirth_card(manor: Manor, item: InventoryItem, guest_id: int) -> 
 
     extras = []
     if unequipped_count > 0:
-        extras.append(f"装备已归还仓库（{unequipped_count}件）")
+        extras.append(f"装备已卸下（{unequipped_count}件）")
     if skills_count > 0:
         extras.append(f"技能已清空（{skills_count}个）")
     extra_msg = "，" + "，".join(extras) if extras else ""
@@ -351,4 +387,133 @@ def use_xidianka(manor: Manor, item: InventoryItem, guest_id: int) -> Dict[str, 
         "total_returned": total_allocated,
         "details": allocation_details,
         "_message": f"门客 {guest_name} 洗点成功！返还 {total_allocated} 属性点（{', '.join(detail_parts)}）",
+    }
+
+
+@transaction.atomic
+def use_guest_rarity_upgrade_item(manor: Manor, item: InventoryItem, guest_id: int) -> Dict[str, Any]:
+    """使用升阶道具，将指定门客升级到目标稀有度模板。"""
+    # 死锁预防：统一锁顺序 Manor -> InventoryItem -> Guest
+    Manor.objects.select_for_update().get(pk=manor.pk)
+
+    locked_item, guest = _validate_guest_item_use(
+        manor,
+        item,
+        guest_id,
+        "upgrade_guest_rarity",
+    )
+
+    payload = locked_item.template.effect_payload or {}
+    target_template_map = payload.get("target_template_map") or {}
+    if not isinstance(target_template_map, dict):
+        raise ValueError("升阶道具配置错误")
+
+    source_template_key = str(getattr(getattr(guest, "template", None), "key", "") or "")
+    if not source_template_key:
+        raise ValueError("门客模板异常")
+
+    target_template_key = str(target_template_map.get(source_template_key) or "").strip()
+    if not target_template_key:
+        raise ValueError("该门客无法使用此升阶道具")
+
+    target_template = GuestTemplate.objects.select_for_update().filter(key=target_template_key).first()
+    if not target_template:
+        raise ValueError("目标稀有度模板不存在")
+
+    from guests.utils.recruitment_variance import apply_recruitment_variance
+
+    unequipped_count = _detach_guest_gears_for_reset(guest, action_label="升阶")
+    skills_count = guest.guest_skills.count()
+    guest.guest_skills.all().delete()
+
+    old_level = guest.level
+    old_rarity_display = guest.template.get_rarity_display()
+    template_attrs = {
+        "force": target_template.base_attack,
+        "intellect": target_template.base_intellect,
+        "defense": target_template.base_defense,
+        "agility": target_template.base_agility,
+        "luck": target_template.base_luck,
+    }
+    varied_attrs = apply_recruitment_variance(
+        template_attrs,
+        rarity=target_template.rarity,
+        archetype=target_template.archetype,
+        rng=inventory_pkg.random.Random(),
+    )
+
+    guest.template = target_template
+    guest.level = 1
+    guest.experience = 0
+    guest.force = varied_attrs["force"]
+    guest.intellect = varied_attrs["intellect"]
+    guest.defense_stat = varied_attrs["defense"]
+    guest.agility = varied_attrs["agility"]
+    guest.luck = varied_attrs["luck"]
+    guest.attribute_points = 0
+    guest.attack_bonus = 0
+    guest.defense_bonus = 0
+    guest.hp_bonus = 0
+    guest.training_target_level = 0
+    guest.training_complete_at = None
+    guest.status = GuestStatus.IDLE
+    guest.initial_force = varied_attrs["force"]
+    guest.initial_intellect = varied_attrs["intellect"]
+    guest.initial_defense = varied_attrs["defense"]
+    guest.initial_agility = varied_attrs["agility"]
+    guest.allocated_force = 0
+    guest.allocated_intellect = 0
+    guest.allocated_defense = 0
+    guest.allocated_agility = 0
+    guest.xisuidan_used = 0
+    guest.save(
+        update_fields=[
+            "template",
+            "level",
+            "experience",
+            "force",
+            "intellect",
+            "defense_stat",
+            "agility",
+            "luck",
+            "attribute_points",
+            "attack_bonus",
+            "defense_bonus",
+            "hp_bonus",
+            "training_target_level",
+            "training_complete_at",
+            "status",
+            "initial_force",
+            "initial_intellect",
+            "initial_defense",
+            "initial_agility",
+            "allocated_force",
+            "allocated_intellect",
+            "allocated_defense",
+            "allocated_agility",
+            "xisuidan_used",
+        ]
+    )
+    guest.restore_full_hp()
+
+    consume_inventory_item_locked(locked_item, 1)
+
+    extras = ["等级重置为1级", "洗髓丹计数已重置"]
+    if unequipped_count > 0:
+        extras.append(f"装备已卸下（{unequipped_count}件）")
+    if skills_count > 0:
+        extras.append(f"技能已清空（{skills_count}个）")
+
+    return {
+        "guest_name": guest.display_name,
+        "old_level": old_level,
+        "new_level": guest.level,
+        "unequipped_count": unequipped_count,
+        "skills_cleared": skills_count,
+        "old_rarity": old_rarity_display,
+        "new_rarity": target_template.get_rarity_display(),
+        "_message": (
+            f"门客 {guest.display_name} 已从{old_rarity_display}升至{target_template.get_rarity_display()}，"
+            f"{'，'.join(extras)}"
+        ),
     }

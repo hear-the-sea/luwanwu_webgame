@@ -1,5 +1,7 @@
 from django.contrib import admin
 
+from core.admin_i18n import apply_common_field_labels
+
 from .models import (
     GearItem,
     GearTemplate,
@@ -12,6 +14,19 @@ from .models import (
     RecruitmentRecord,
     SalaryPayment,
     TrainingLog,
+)
+
+apply_common_field_labels(
+    GuestTemplate,
+    RecruitmentPool,
+    Guest,
+    GearTemplate,
+    GearItem,
+    RecruitmentRecord,
+    TrainingLog,
+    RecruitmentCandidate,
+    SalaryPayment,
+    GuestDefection,
 )
 
 

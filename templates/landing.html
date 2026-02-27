@@ -630,86 +630,88 @@
 {% block extra_scripts %}
 <script src="{% static 'js/dashboard.js' %}"></script>
 <script>
-// 折叠/展开功能 - 移动端默认收起
-const isMobile = window.innerWidth <= 768;
+(function () {
+    // 折叠/展开功能 - 移动端默认收起
+    const isMobile = window.innerWidth <= 768;
 
-document.querySelectorAll('[data-toggle="collapse"]').forEach(trigger => {
-    trigger.addEventListener('click', function() {
-        // PC端不响应点击
-        if (window.innerWidth > 768) return;
+    document.querySelectorAll('[data-toggle="collapse"]').forEach(trigger => {
+        trigger.addEventListener('click', function() {
+            // PC端不响应点击
+            if (window.innerWidth > 768) return;
 
-        const targetId = this.dataset.target;
-        const target = document.getElementById(targetId);
-        if (!target) return;
+            const targetId = this.dataset.target;
+            const target = document.getElementById(targetId);
+            if (!target) return;
 
-        const isCollapsed = this.classList.toggle('collapsed');
-        target.classList.toggle('collapsed', isCollapsed);
+            const isCollapsed = this.classList.toggle('collapsed');
+            target.classList.toggle('collapsed', isCollapsed);
 
-        // 保存状态到 localStorage
+            // 保存状态到 localStorage
+            const states = JSON.parse(localStorage.getItem('manor-collapse-states') || '{}');
+            states[targetId] = isCollapsed;
+            localStorage.setItem('manor-collapse-states', JSON.stringify(states));
+        });
+
+        // 初始化状态
+        const targetId = trigger.dataset.target;
         const states = JSON.parse(localStorage.getItem('manor-collapse-states') || '{}');
-        states[targetId] = isCollapsed;
-        localStorage.setItem('manor-collapse-states', JSON.stringify(states));
+
+        if (isMobile) {
+            // 移动端：如果有保存的状态则使用，否则默认收起
+            const shouldCollapse = states[targetId] !== undefined ? states[targetId] : true;
+            if (shouldCollapse) {
+                trigger.classList.add('collapsed');
+                document.getElementById(targetId)?.classList.add('collapsed');
+            }
+        }
+        // PC端：不添加任何折叠状态
     });
 
-    // 初始化状态
-    const targetId = trigger.dataset.target;
-    const states = JSON.parse(localStorage.getItem('manor-collapse-states') || '{}');
-
-    if (isMobile) {
-        // 移动端：如果有保存的状态则使用，否则默认收起
-        const shouldCollapse = states[targetId] !== undefined ? states[targetId] : true;
-        if (shouldCollapse) {
-            trigger.classList.add('collapsed');
-            document.getElementById(targetId)?.classList.add('collapsed');
-        }
-    }
-    // PC端：不添加任何折叠状态
-});
-
-document.querySelectorAll('.scout-retreat-form').forEach(form => {
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        try {
-            const confirmed = await gameConfirm('确定要撤退侦察吗？探子将立即返程。', { title: '撤退确认' });
-            if (confirmed) form.submit();
-        } catch (err) {
-            console.error('撤退确认失败:', err);
-        }
-    });
-});
-
-// 踢馆撤退按钮
-document.querySelectorAll('[data-retreat-raid]').forEach(btn => {
-    btn.addEventListener('click', async function() {
-        const raidId = this.dataset.retreatRaid;
-        const confirmed = await gameConfirm('确定要撤退吗？部队将立即返程。', { title: '撤退确认' });
-        if (!confirmed) return;
-
-        btn.disabled = true;
-        btn.textContent = '撤退中...';
-
-        fetch('/manor/api/map/raid/' + raidId + '/retreat/', {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': '{{ csrf_token }}'
+    document.querySelectorAll('.scout-retreat-form').forEach(form => {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                const confirmed = await gameConfirm('确定要撤退侦察吗？探子将立即返程。', { title: '撤退确认' });
+                if (confirmed) form.submit();
+            } catch (err) {
+                console.error('撤退确认失败:', err);
             }
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                location.reload();
-            } else {
-                alert('撤退失败: ' + data.error);
-                btn.disabled = false;
-                btn.textContent = '撤退';
-            }
-        })
-        .catch(err => {
-            alert('请求失败，请稍后重试');
-            btn.disabled = false;
-            btn.textContent = '撤退';
         });
     });
-});
+
+    // 踢馆撤退按钮
+    document.querySelectorAll('[data-retreat-raid]').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            const raidId = this.dataset.retreatRaid;
+            const confirmed = await gameConfirm('确定要撤退吗？部队将立即返程。', { title: '撤退确认' });
+            if (!confirmed) return;
+
+            btn.disabled = true;
+            btn.textContent = '撤退中...';
+
+            fetch('/manor/api/map/raid/' + raidId + '/retreat/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('撤退失败: ' + data.error);
+                    btn.disabled = false;
+                    btn.textContent = '撤退';
+                }
+            })
+            .catch(err => {
+                alert('请求失败，请稍后重试');
+                btn.disabled = false;
+                btn.textContent = '撤退';
+            });
+        });
+    });
+})();
 </script>
 {% endblock %}

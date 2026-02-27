@@ -35,6 +35,8 @@ CELERY_TASK_ROUTES = {
     "gameplay.complete_mission": {"queue": CELERY_TIMER_QUEUE},
     "gameplay.complete_building_upgrade": {"queue": CELERY_TIMER_QUEUE},
     "gameplay.scan_building_upgrades": {"queue": CELERY_TIMER_QUEUE},
+    "gameplay.complete_troop_recruitment": {"queue": CELERY_TIMER_QUEUE},
+    "gameplay.scan_troop_recruitments": {"queue": CELERY_TIMER_QUEUE},
     "gameplay.complete_work_assignments": {"queue": CELERY_TIMER_QUEUE},
     "guests.complete_training": {"queue": CELERY_TIMER_QUEUE},
     "guests.scan_training": {"queue": CELERY_TIMER_QUEUE},
@@ -46,6 +48,8 @@ CELERY_TASK_ROUTES = {
     "gameplay.process_raid_battle": {"queue": CELERY_TIMER_QUEUE},
     "gameplay.complete_raid": {"queue": CELERY_TIMER_QUEUE},
     "gameplay.scan_raid_runs": {"queue": CELERY_TIMER_QUEUE},
+    "gameplay.backfill_global_mail_campaign": {"queue": CELERY_TIMER_QUEUE},
+    "guilds.cleanup_invalid_hero_pool": {"queue": CELERY_TIMER_QUEUE},
 }
 
 CELERY_BEAT_SCHEDULE = {
@@ -59,6 +63,10 @@ CELERY_BEAT_SCHEDULE = {
     },
     "scan-guest-recruitments": {
         "task": "guests.scan_recruitments",
+        "schedule": crontab(minute="*/5"),
+    },
+    "scan-troop-recruitments": {
+        "task": "gameplay.scan_troop_recruitments",
         "schedule": crontab(minute="*/5"),
     },
     "complete-work-assignments": {
@@ -80,6 +88,10 @@ CELERY_BEAT_SCHEDULE = {
     "cleanup-old-guild-logs": {
         "task": "guilds.cleanup_old_logs",
         "schedule": crontab(hour=3, minute=0),
+    },
+    "cleanup-invalid-guild-hero-pool": {
+        "task": "guilds.cleanup_invalid_hero_pool",
+        "schedule": crontab(minute="*/5"),
     },
     "scan-scout-records": {
         "task": "gameplay.scan_scout_records",

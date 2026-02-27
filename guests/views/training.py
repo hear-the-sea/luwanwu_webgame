@@ -10,6 +10,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404, redirect
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_POST
@@ -17,7 +18,7 @@ from django.views.generic import TemplateView
 
 from core.decorators import handle_game_errors
 from core.exceptions import GameError
-from core.utils import is_ajax_request, json_error, json_success, safe_int, safe_positive_int
+from core.utils import is_ajax_request, is_json_request, json_error, json_success, safe_int, safe_positive_int
 from core.utils.rate_limit import rate_limit_json
 from core.utils.validation import safe_redirect_url, sanitize_error_message
 
@@ -117,7 +118,7 @@ def use_experience_item_view(request, pk: int):
         if is_ajax:
             return json_success(
                 message=msg,
-                item_id=item_id,
+                item_id=item.pk,
                 new_quantity=new_quantity,
                 guest_id=guest.pk,
                 new_level=safe_int(result.get("new_level"), default=guest.level, min_val=1),
@@ -195,6 +196,7 @@ def allocate_points_view(request, pk: int):
     # 使用 manager 方法获取门客，避免重复的 select_related
     guest = get_object_or_404(Guest.objects.for_manor(manor).with_template(), pk=pk)
     form = AllocateSkillPointsForm(request.POST, manor=manor)
+    is_ajax = is_json_request(request)
 
     if not form.is_valid():
         # 表单验证失败，抛出 ValueError 让装饰器处理
@@ -214,6 +216,26 @@ def allocate_points_view(request, pk: int):
 
     # 执行加点
     allocate_attribute_points(guest, attribute, points)
+    guest.refresh_from_db(fields=["force", "intellect", "defense_stat", "agility", "luck", "attribute_points"])
+
+    if is_ajax:
+        refreshed_form = AllocateSkillPointsForm(manor=manor, initial={"guest": guest})
+        refreshed_form.fields["guest"].queryset = manor.guests.filter(pk=guest.pk)
+        attribute_panel_html = render_to_string(
+            "guests/partials/attribute_panel.html",
+            {"guest": guest, "skill_point_form": refreshed_form},
+            request=request,
+        )
+        return json_success(
+            message=f"{guest.display_name} 属性加点成功",
+            attribute_points=guest.attribute_points,
+            force=guest.force,
+            intellect=guest.intellect,
+            defense=guest.defense_stat,
+            agility=guest.agility,
+            luck=guest.luck,
+            attribute_panel_html=attribute_panel_html,
+        )
 
     # 成功消息由装饰器的 success_message 参数处理
     messages.success(request, f"{guest.display_name} 属性加点成功")

@@ -77,149 +77,9 @@
 <section class="dashboard">
     <div class="tw-panel-header mb-4 bg-transparent border-0 p-0 text-2xl">聚贤庄</div>
 
-    <section class="tw-panel mb-6">
-        <div class="tw-panel-header">招募类型</div>
-        <div class="tw-panel-content">
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                {% for pool in pools %}
-                <article class="tw-building-card overflow-hidden text-sm pool-card-responsive">
-                    <div class="relative w-full bg-gray-200 pool-img-container">
-                        {% if pool.key == 'cunmu' %}
-                        <img src="{% static 'images/buildings/cunmu.webp' %}" class="w-full h-full object-cover" alt="{{ pool.name }}" loading="lazy" decoding="async">
-                        {% elif pool.key == 'xiangshi' %}
-                        <img src="{% static 'images/buildings/xiangshi.webp' %}" class="w-full h-full object-cover" alt="{{ pool.name }}" loading="lazy" decoding="async">
-                        {% elif pool.key == 'huishi' %}
-                        <img src="{% static 'images/buildings/huishi.webp' %}" class="w-full h-full object-cover" alt="{{ pool.name }}" loading="lazy" decoding="async">
-                        {% elif pool.key == 'dianshi' %}
-                        <img src="{% static 'images/buildings/dianshi.webp' %}" class="w-full h-full object-cover" alt="{{ pool.name }}" loading="lazy" decoding="async">
-                        {% endif %}
-                    </div>
-
-                    <div class="p-2 pool-content">
-                        <p class="text-sm text-text-muted mb-2 leading-snug pool-desc">{{ pool.description }}</p>
-                        <form method="post" action="{% url 'guests:recruit' %}" class="recruit-form recruit-action"
-                              data-pool-name="{{ pool.name }}"
-                              data-pool-cost="{% for key,val in pool.cost.items %}{{ resource_labels|get_label:key }} {{ val }}{% if not forloop.last %}，{% endif %}{% empty %}免费{% endfor %}"
-                              data-pool-base="{{ pool.draw_count }}"
-                              data-pool-bonus="{{ manor.tavern_recruitment_bonus }}"
-                              data-pool-duration="{{ pool.recruit_duration_seconds }}">
-                            {% csrf_token %}
-                            <input type="hidden" name="pool" value="{{ pool.id }}">
-                            <button type="submit" class="tw-btn-primary tw-btn-sm"
-                                    {% if active_recruitment %}disabled{% endif %}>
-                                {% if active_recruitment %}招募中{% else %}招募{% endif %}
-                            </button>
-                        </form>
-                        <p class="text-xs text-text-muted mt-2">耗时：{{ pool.recruit_duration_display }}</p>
-                    </div>
-                </article>
-                {% empty %}
-                <p class="tw-empty-hint">暂无卡池配置。</p>
-                {% endfor %}
-            </div>
-        </div>
-    </section>
-
-    <section class="tw-panel mb-6">
-        <div class="tw-panel-header">候选区</div>
-        <div class="tw-panel-content">
-            {% if active_recruitment %}
-            <div class="mb-4 px-3 py-2 rounded-md bg-bg-hover border border-border-light">
-                <p class="text-sm mb-1">
-                    招募中：
-                    <span class="font-semibold">{{ active_recruitment.pool.name }}</span>
-                    ，预计生成
-                    <span class="font-semibold">{{ active_recruitment.draw_count }}</span>
-                    名候选
-                </p>
-                <p class="text-sm text-text-muted">
-                    剩余时间：
-                    <span class="countdown"
-                          data-countdown="{{ active_recruitment.complete_at|date:'c' }}"
-                          data-refresh="1"
-                          data-complete-text="已完成，正在刷新">计算中</span>
-                </p>
-            </div>
-            {% endif %}
-
-            {% if magnifying_glass_items or candidate_count > 0 %}
-            <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
-                <div class="flex gap-2 flex-wrap">
-                    {% for item in magnifying_glass_items %}
-                    <form method="post" action="{% url 'guests:use_magnifying_glass' %}" class="inline magnifying-glass-form">
-                        {% csrf_token %}
-                        <input type="hidden" name="item_id" value="{{ item.id }}">
-                        <button type="submit" class="tw-btn-secondary tw-btn-sm" {% if item.quantity <= 0 %}disabled{% endif %}>
-                            使用{{ item.template_name }} ({{ item.quantity }})
-                        </button>
-                    </form>
-                    {% endfor %}
-                </div>
-                {% if candidate_count > 0 %}
-                <button type="button" class="tw-btn-secondary tw-btn-sm" id="candidate-select-all-top">一键全选</button>
-                {% endif %}
-            </div>
-            {% endif %}
-
-            <form method="post" action="{% url 'guests:candidate_accept' %}" id="candidate-selected-form">
-                {% csrf_token %}
-                <input type="hidden" name="scope" value="selected">
-                <div id="candidate-selected-ids"></div>
-                <div class="flex flex-wrap gap-3 mb-2" id="candidate-list"></div>
-                <div class="tw-muted mb-4" id="candidate-empty-hint" {% if candidate_count > 0 %}style="display: none;"{% endif %}>
-                    {% if active_recruitment %}
-                    招募进行中，请等待倒计时结束后查看候选门客。
-                    {% else %}
-                    没有待选门客，请先进行招募。
-                    {% endif %}
-                </div>
-
-                {% if candidate_count > 0 %}
-                <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
-                    <span class="text-xs text-text-muted" id="candidate-render-progress"></span>
-                    <button type="button" class="tw-btn-secondary tw-btn-sm" id="candidate-load-more">加载更多</button>
-                </div>
-                <div id="candidate-sentinel" style="height: 1px;"></div>
-                <div class="flex gap-2 flex-wrap pt-4 border-t border-border-light">
-                    <button type="button" class="tw-btn-secondary" id="candidate-select-all">一键全选</button>
-                    <button type="submit" name="action" value="accept" class="tw-btn-primary">招募选中门客</button>
-                    <button type="submit" name="action" value="retain" class="tw-btn-secondary">收为家丁</button>
-                    <button type="submit" name="action" value="discard" class="tw-btn-secondary">放弃选中门客</button>
-                </div>
-                {% endif %}
-            </form>
-
-            {% if candidate_count > 0 %}
-            <form method="post" action="{% url 'guests:candidate_accept' %}" class="mt-3 pt-3 border-t border-border-light">
-                {% csrf_token %}
-                <input type="hidden" name="scope" value="all">
-                <div class="flex gap-2 flex-wrap">
-                    <button type="submit" name="action" value="accept" class="tw-btn-primary">全部招募</button>
-                    <button type="submit" name="action" value="retain" class="tw-btn-secondary">全部收为家丁</button>
-                    <button type="submit" name="action" value="discard" class="tw-btn-secondary">全部放弃</button>
-                </div>
-            </form>
-            {% endif %}
-            {{ candidates_payload|json_script:"recruit-candidates-data" }}
-        </div>
-    </section>
-
-    <section class="tw-panel">
-        <div class="tw-panel-header">最近招募</div>
-        <div class="tw-panel-content">
-            <ul class="space-y-2">
-                {% for record in records %}
-                <li class="flex items-center gap-2">
-                    <span class="text-text-muted text-sm">{{ record.created_at|date:"m-d H:i" }}</span>
-                    <span>-</span>
-                    <span class="font-semibold rarity-text-{{ record.guest_rarity }}">{{ record.guest_display_name }}</span>
-                </li>
-                {% empty %}
-                <li class="tw-muted">暂无记录</li>
-                {% endfor %}
-            </ul>
-        </div>
-    </section>
+    {% include "gameplay/partials/recruitment_pools_section.html" %}
+    {% include "gameplay/partials/recruitment_candidates_section.html" %}
+    {% include "gameplay/partials/recruitment_records_section.html" %}
 </section>
 {% endblock %}
 
@@ -227,42 +87,57 @@
 {{ block.super }}
 <script src="{% static 'js/dashboard.js' %}"></script>
 <script>
-    function formatDurationCN(totalSeconds) {
-        const seconds = Math.max(0, parseInt(totalSeconds || 0, 10));
-        const hours = Math.floor(seconds / 3600);
-        const minutes = Math.floor((seconds % 3600) / 60);
-        const remainSeconds = seconds % 60;
-        const parts = [];
-        if (hours > 0) parts.push(`${hours}小时`);
-        if (minutes > 0) parts.push(`${minutes}分钟`);
-        if (remainSeconds > 0 || parts.length === 0) parts.push(`${remainSeconds}秒`);
-        return parts.join('');
-    }
-
-    document.addEventListener("DOMContentLoaded", function () {
-        const rawCandidates = document.getElementById("recruit-candidates-data");
+    (function () {
+        const CHUNK_SIZE = 96;
+        const CHUNK_RENDER_THRESHOLD = 160;
+        let selectedIds = new Set();
         let candidates = [];
-        try {
-            candidates = JSON.parse(rawCandidates?.textContent || "[]");
-        } catch (_err) {
-            candidates = [];
+        let candidateObserver = null;
+
+        function formatDurationCN(totalSeconds) {
+            const seconds = Math.max(0, Number.parseInt(totalSeconds || 0, 10));
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const remainSeconds = seconds % 60;
+            const parts = [];
+            if (hours > 0) parts.push(`${hours}小时`);
+            if (minutes > 0) parts.push(`${minutes}分钟`);
+            if (remainSeconds > 0 || parts.length === 0) parts.push(`${remainSeconds}秒`);
+            return parts.join("");
         }
 
-        const selectedIds = new Set();
-        const candidateList = document.getElementById("candidate-list");
-        const selectedForm = document.getElementById("candidate-selected-form");
-        const selectedIdsContainer = document.getElementById("candidate-selected-ids");
-        const renderProgress = document.getElementById("candidate-render-progress");
-        const loadMoreBtn = document.getElementById("candidate-load-more");
-        const sentinel = document.getElementById("candidate-sentinel");
-        const CHUNK_SIZE = 96;
-        let renderedCount = 0;
+        async function showMessage(message, level = "success") {
+            if (!message) return;
+            if (!window.gameDialog) {
+                alert(message);
+                return;
+            }
+            if (level === "warning" && typeof window.gameDialog.warning === "function") {
+                await window.gameDialog.warning(message, { title: "提示" });
+                return;
+            }
+            if (level === "error") {
+                await window.gameDialog.error(message, { title: "错误" });
+                return;
+            }
+            await window.gameDialog.success(message, { title: "提示" });
+        }
+
+        function parseCandidatesPayload() {
+            const rawCandidates = document.getElementById("recruit-candidates-data");
+            try {
+                const parsed = JSON.parse(rawCandidates?.textContent || "[]");
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (_err) {
+                return [];
+            }
+        }
 
         function isRarityShown(candidate) {
-            return candidate.rarity_revealed || candidate.rarity === "gray" || candidate.rarity === "red";
+            return Boolean(candidate?.rarity_revealed) || candidate?.rarity === "gray" || candidate?.rarity === "red";
         }
 
-        function buildCandidateNode(candidate) {
+        function buildCandidateNode(candidate, updateRenderProgress) {
             const label = document.createElement("label");
             label.className =
                 "flex items-center gap-2 px-3 py-2 bg-bg-hover rounded-md cursor-pointer hover:bg-bg-secondary border border-border-light";
@@ -270,6 +145,8 @@
             const checkbox = document.createElement("input");
             checkbox.type = "checkbox";
             checkbox.className = "cursor-pointer";
+            checkbox.name = "candidate_ids";
+            checkbox.value = String(candidate.id);
             checkbox.dataset.candidateId = String(candidate.id);
             checkbox.checked = selectedIds.has(candidate.id);
             checkbox.addEventListener("change", function () {
@@ -278,6 +155,7 @@
                 } else {
                     selectedIds.delete(candidate.id);
                 }
+                updateRenderProgress();
             });
 
             const nameSpan = document.createElement("span");
@@ -292,172 +170,317 @@
             return label;
         }
 
-        function syncRenderedSelections() {
+        function syncRenderedSelections(candidateList) {
             if (!candidateList) return;
             candidateList.querySelectorAll("input[data-candidate-id]").forEach((checkbox) => {
                 checkbox.checked = selectedIds.has(Number(checkbox.dataset.candidateId));
             });
         }
 
-        function updateRenderProgress() {
-            if (!renderProgress) return;
-            if (!candidates.length) {
-                renderProgress.textContent = "";
-                return;
+        function getCandidateCount() {
+            const panel = document.getElementById("recruit-candidates-section");
+            const parsed = Number.parseInt(panel?.dataset?.candidateCount || "0", 10);
+            if (!Number.isFinite(parsed) || parsed <= 0) {
+                return 0;
             }
-            renderProgress.textContent = `已加载 ${renderedCount}/${candidates.length}，已勾选 ${selectedIds.size}`;
+            return parsed;
         }
 
-        function renderNextChunk() {
-            if (!candidateList) return;
-            const nextCount = Math.min(candidates.length, renderedCount + CHUNK_SIZE);
-            if (nextCount <= renderedCount) {
-                if (loadMoreBtn) {
+        function initCandidateList() {
+            if (candidateObserver) {
+                candidateObserver.disconnect();
+                candidateObserver = null;
+            }
+            selectedIds = new Set();
+            candidates = parseCandidatesPayload();
+
+            const candidateList = document.getElementById("candidate-list");
+            const renderProgress = document.getElementById("candidate-render-progress");
+            const loadMoreBtn = document.getElementById("candidate-load-more");
+            const sentinel = document.getElementById("candidate-sentinel");
+
+            if (!candidateList) {
+                return;
+            }
+            candidateList.textContent = "";
+
+            let renderedCount = 0;
+            const useChunkedRender = candidates.length > CHUNK_RENDER_THRESHOLD;
+            const stepSize = useChunkedRender ? CHUNK_SIZE : Math.max(candidates.length, 1);
+            const updateRenderProgress = () => {
+                if (!renderProgress) return;
+                if (!candidates.length) {
+                    renderProgress.textContent = "";
+                    return;
+                }
+                if (useChunkedRender) {
+                    renderProgress.textContent = `已加载 ${renderedCount}/${candidates.length}，已勾选 ${selectedIds.size}`;
+                    return;
+                }
+                renderProgress.textContent = `共 ${candidates.length} 名候选，已勾选 ${selectedIds.size}`;
+            };
+
+            const renderNextChunk = () => {
+                const nextCount = Math.min(candidates.length, renderedCount + stepSize);
+                if (nextCount <= renderedCount) {
+                    if (loadMoreBtn) {
+                        loadMoreBtn.style.display = "none";
+                        loadMoreBtn.disabled = true;
+                    }
+                    updateRenderProgress();
+                    return;
+                }
+
+                const fragment = document.createDocumentFragment();
+                for (let i = renderedCount; i < nextCount; i += 1) {
+                    fragment.appendChild(buildCandidateNode(candidates[i], updateRenderProgress));
+                }
+                candidateList.appendChild(fragment);
+                renderedCount = nextCount;
+                if (loadMoreBtn && renderedCount >= candidates.length) {
                     loadMoreBtn.style.display = "none";
                     loadMoreBtn.disabled = true;
                 }
                 updateRenderProgress();
-                return;
-            }
+            };
 
-            const fragment = document.createDocumentFragment();
-            for (let i = renderedCount; i < nextCount; i += 1) {
-                fragment.appendChild(buildCandidateNode(candidates[i]));
-            }
-            candidateList.appendChild(fragment);
-            renderedCount = nextCount;
-
-            if (loadMoreBtn && renderedCount >= candidates.length) {
+            if (candidates.length > 0) {
+                renderNextChunk();
+            } else if (loadMoreBtn) {
                 loadMoreBtn.style.display = "none";
                 loadMoreBtn.disabled = true;
             }
-            updateRenderProgress();
-        }
 
-        if (candidateList && candidates.length) {
-            renderNextChunk();
-        }
+            if (loadMoreBtn && loadMoreBtn.dataset.ajaxBound !== "1") {
+                loadMoreBtn.dataset.ajaxBound = "1";
+                loadMoreBtn.addEventListener("click", renderNextChunk);
+            }
 
-        if (loadMoreBtn) {
-            loadMoreBtn.addEventListener("click", function () {
-                renderNextChunk();
-            });
-        }
+            if (useChunkedRender && sentinel && "IntersectionObserver" in window) {
+                candidateObserver = new IntersectionObserver(
+                    (entries) => {
+                        entries.forEach((entry) => {
+                            if (entry.isIntersecting) {
+                                renderNextChunk();
+                            }
+                        });
+                    },
+                    { rootMargin: "200px 0px 200px 0px" }
+                );
+                candidateObserver.observe(sentinel);
+            }
 
-        if (sentinel && "IntersectionObserver" in window) {
-            const observer = new IntersectionObserver(
-                (entries) => {
-                    entries.forEach((entry) => {
-                        if (entry.isIntersecting) {
-                            renderNextChunk();
-                        }
-                    });
-                },
-                { rootMargin: "200px 0px 200px 0px" }
-            );
-            observer.observe(sentinel);
-        }
-
-        const selectButtons = [document.getElementById("candidate-select-all"), document.getElementById("candidate-select-all-top")].filter(Boolean);
-        if (selectButtons.length && candidates.length) {
+            const selectButtons = [
+                document.getElementById("candidate-select-all"),
+                document.getElementById("candidate-select-all-top"),
+            ].filter(Boolean);
             selectButtons.forEach((btn) => {
+                if (btn.dataset.ajaxBound === "1") return;
+                btn.dataset.ajaxBound = "1";
                 btn.addEventListener("click", function () {
                     candidates.forEach((candidate) => selectedIds.add(candidate.id));
-                    syncRenderedSelections();
+                    syncRenderedSelections(candidateList);
                     updateRenderProgress();
                 });
             });
+
+            updateRenderProgress();
         }
 
-        if (selectedForm && selectedIdsContainer) {
-            selectedForm.addEventListener("submit", function () {
-                selectedIdsContainer.innerHTML = "";
-                selectedIds.forEach((id) => {
-                    const input = document.createElement("input");
-                    input.type = "hidden";
-                    input.name = "candidate_ids";
-                    input.value = String(id);
-                    selectedIdsContainer.appendChild(input);
+        async function parseJsonResponse(resp) {
+            const contentType = (resp.headers.get("content-type") || "").toLowerCase();
+            if (!contentType.includes("application/json")) {
+                return null;
+            }
+            try {
+                return await resp.json();
+            } catch (_err) {
+                return null;
+            }
+        }
+
+        function replaceSectionHtml(sectionId, html) {
+            if (!html || typeof html !== "string") {
+                return;
+            }
+            const current = document.getElementById(sectionId);
+            if (!current) return;
+            const wrapper = document.createElement("div");
+            wrapper.innerHTML = html.trim();
+            const next = wrapper.firstElementChild;
+            if (!next) return;
+            current.replaceWith(next);
+        }
+
+        function applyRecruitmentHallFragments(data) {
+            replaceSectionHtml("recruit-pools-section", data.hall_pools_html);
+            replaceSectionHtml("recruit-candidates-section", data.hall_candidates_html);
+            replaceSectionHtml("recruit-records-section", data.hall_records_html);
+            initRecruitHallUI();
+        }
+
+        function bindSubmitterFallback(form) {
+            if (!form || form.dataset.submitterFallbackBound === "1") {
+                return;
+            }
+            form.dataset.submitterFallbackBound = "1";
+            form.__lastSubmitter = null;
+            form.querySelectorAll("button[type='submit']").forEach((button) => {
+                button.addEventListener("click", () => {
+                    form.__lastSubmitter = button;
                 });
             });
         }
-    });
 
-    // 招募确认
-    document.querySelectorAll('.recruit-form').forEach(form => {
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            // 如果有待处理候选，先提示处理
-            {% if candidate_count > 0 %}
-            try {
-                const confirmed = await gameConfirm(
-                    '候选区还有待处理的门客，确定要进行新的招募吗？这将清空当前候选区。',
-                    { title: '招募确认' }
-                );
-                if (!confirmed) return;
-            } catch (err) {
-                console.error('招募确认失败:', err);
-                return;
-            }
-            {% endif %}
-
-            // 招募前确认消耗
-            const poolName = form.dataset.poolName;
-            const costText = form.dataset.poolCost;
-            const baseCount = parseInt(form.dataset.poolBase);
-            const bonusCount = parseInt(form.dataset.poolBonus);
-            const durationSeconds = parseInt(form.dataset.poolDuration);
-            const totalCount = baseCount + bonusCount;
-
-            let countText = `${totalCount}人`;
-            if (bonusCount > 0) {
-                countText += ` (基础${baseCount} + 酒馆加成${bonusCount})`;
+        function resolveSubmitter(form, event) {
+            const eventSubmitter = event && "submitter" in event ? event.submitter : null;
+            if (eventSubmitter) {
+                return eventSubmitter;
             }
 
-            try {
-                const confirmed = await gameConfirm(
-                    `确定要进行 ${poolName} 吗？\n预计招募候选：${countText}\n预计耗时：${formatDurationCN(durationSeconds)}\n本次消耗：${costText}`,
-                    { title: '招募确认' }
-                );
-                if (confirmed) form.submit();
-            } catch (err) {
-                console.error('招募确认失败:', err);
+            const fallbackSubmitter = form.__lastSubmitter;
+            if (fallbackSubmitter && document.body.contains(fallbackSubmitter)) {
+                return fallbackSubmitter;
             }
-        });
-    });
 
-    // 放大镜 AJAX 提交
-    document.querySelectorAll('.magnifying-glass-form').forEach(form => {
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const btn = form.querySelector('button[type="submit"]');
-            const originalText = btn.textContent;
-            btn.disabled = true;
-            btn.textContent = '使用中...';
+            const active = document.activeElement;
+            if (active && active.tagName === "BUTTON" && active.form === form && active.type === "submit") {
+                return active;
+            }
+
+            return form.querySelector("button[type='submit']");
+        }
+
+        async function submitAjaxForm(form, submitter, options = {}) {
+            const button = submitter || form.querySelector("button[type='submit']");
+            const originalText = button ? button.textContent : "";
+            const loadingText = options.loadingText || "处理中...";
+            if (button) {
+                button.disabled = true;
+                button.textContent = loadingText;
+            }
 
             try {
                 const formData = new FormData(form);
-                const resp = await fetch(form.action, {
-                    method: 'POST',
-                    body: formData,
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                });
-                const data = await resp.json();
-                if (data.success) {
-                    await gameDialog.success(data.message);
-                    location.reload();
-                } else {
-                    gameDialog.error(data.error || '使用失败', { title: '提示' });
-                    btn.disabled = false;
-                    btn.textContent = originalText;
+                if (button?.name) {
+                    formData.append(button.name, button.value);
                 }
+                if (options.includeSelectedCandidates) {
+                    selectedIds.forEach((id) => formData.append("candidate_ids", String(id)));
+                }
+
+                const resp = await fetch(form.action, {
+                    method: "POST",
+                    body: formData,
+                    credentials: "same-origin",
+                    headers: {
+                        "X-Requested-With": "XMLHttpRequest",
+                        Accept: "application/json",
+                    },
+                });
+
+                const data = await parseJsonResponse(resp);
+                if (!data) {
+                    window.location.reload();
+                    return null;
+                }
+                if (!resp.ok || !data.success) {
+                    throw new Error(data.error || data.message || "操作失败");
+                }
+                applyRecruitmentHallFragments(data);
+                await showMessage(data.message, data.message_level || "success");
+                return data;
             } catch (err) {
-                gameDialog.error('请求失败，请重试', { title: '错误' });
-                btn.disabled = false;
-                btn.textContent = originalText;
+                await showMessage(err?.message || "请求失败，请重试", "error");
+                return null;
+            } finally {
+                if (button && document.body.contains(button)) {
+                    button.disabled = false;
+                    button.textContent = originalText;
+                }
+                if (form) {
+                    form.__lastSubmitter = null;
+                }
             }
-        });
-    });
+        }
+
+        function bindRecruitForms() {
+            document.querySelectorAll(".recruit-form").forEach((form) => {
+                if (form.dataset.ajaxBound === "1") return;
+                form.dataset.ajaxBound = "1";
+                bindSubmitterFallback(form);
+                form.addEventListener("submit", async (event) => {
+                    event.preventDefault();
+                    const submitter = resolveSubmitter(form, event);
+                    const candidateCount = getCandidateCount();
+                    if (candidateCount > 0) {
+                        const confirmedHasCandidates = await gameConfirm(
+                            "候选区还有待处理的门客，确定要进行新的招募吗？这将清空当前候选区。",
+                            { title: "招募确认" }
+                        );
+                        if (!confirmedHasCandidates) return;
+                    }
+
+                    const poolName = form.dataset.poolName || "招募";
+                    const costText = form.dataset.poolCost || "免费";
+                    const baseCount = Number.parseInt(form.dataset.poolBase || "0", 10) || 0;
+                    const bonusCount = Number.parseInt(form.dataset.poolBonus || "0", 10) || 0;
+                    const durationSeconds = Number.parseInt(form.dataset.poolDuration || "0", 10) || 0;
+                    const totalCount = baseCount + bonusCount;
+                    let countText = `${totalCount}人`;
+                    if (bonusCount > 0) {
+                        countText += ` (基础${baseCount} + 酒馆加成${bonusCount})`;
+                    }
+
+                    const confirmed = await gameConfirm(
+                        `确定要进行 ${poolName} 吗？\n预计招募候选：${countText}\n预计耗时：${formatDurationCN(durationSeconds)}\n本次消耗：${costText}`,
+                        { title: "招募确认" }
+                    );
+                    if (!confirmed) return;
+                    await submitAjaxForm(form, submitter, { loadingText: "招募中..." });
+                });
+            });
+        }
+
+        function bindMagnifyingGlassForms() {
+            document.querySelectorAll(".magnifying-glass-form").forEach((form) => {
+                if (form.dataset.ajaxBound === "1") return;
+                form.dataset.ajaxBound = "1";
+                bindSubmitterFallback(form);
+                form.addEventListener("submit", async (event) => {
+                    event.preventDefault();
+                    const submitter = resolveSubmitter(form, event);
+                    await submitAjaxForm(form, submitter, { loadingText: "使用中..." });
+                });
+            });
+        }
+
+        function bindCandidateActionForms() {
+            document.querySelectorAll(".candidate-action-form").forEach((form) => {
+                if (form.dataset.ajaxBound === "1") return;
+                form.dataset.ajaxBound = "1";
+                form.addEventListener("submit", async (event) => {
+                    const scope = form.querySelector("input[name='scope']")?.value || "selected";
+                    if (scope !== "selected") {
+                        return;
+                    }
+                    const checkedCount = form.querySelectorAll("input[name='candidate_ids']:checked").length;
+                    if (checkedCount <= 0) {
+                        event.preventDefault();
+                        await showMessage("请先勾选候选门客。", "warning");
+                    }
+                });
+            });
+        }
+
+        function initRecruitHallUI() {
+            initCandidateList();
+            bindRecruitForms();
+            bindMagnifyingGlassForms();
+            bindCandidateActionForms();
+        }
+
+        document.addEventListener("DOMContentLoaded", initRecruitHallUI);
+    })();
 </script>
 {% endblock %}

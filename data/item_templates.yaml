@@ -5,7 +5,7 @@
 # - 资源类：grain(粮食)、tong(铜)、xi(锡)、tie(铁)、gold_bar(金条)、zitanmu(紫檀木)等
 # - 畜牧类：ji(鸡)、ya(鸭)、e(鹅)、zhu(猪)、niu(牛)
 # - 药品类：止血散、金创药、白芨丸、白草丹、丁香丹、天香玉露丸、补血丹
-# - 经验道具：经验桃子、经验果
+# - 经验道具：经验果、经验桃子、经验菠萝、经验西瓜
 # - 功能道具：放大镜、庄园命名卡、免战牌
 # - 技能书：龙吟破阵秘术等
 # - 装备-头盔：斗笠、布帽、牛皮帽、铁叶盔、鱼鳞顶、白虹盔
@@ -37,6 +37,7 @@ items:
     price: 1
     storage_space: 1
     is_usable: false
+    image: grain.png
 
   - key: tong
     name: 铜
@@ -47,6 +48,7 @@ items:
     price: 50
     storage_space: 1
     is_usable: false
+    image: copper.png
 
   - key: xi
     name: 锡
@@ -57,6 +59,7 @@ items:
     price: 150
     storage_space: 1
     is_usable: false
+    image: tin.png
 
   - key: tie
     name: 铁
@@ -67,6 +70,7 @@ items:
     price: 500
     storage_space: 1
     is_usable: false
+    image: iron.png
 
   - key: gold_bar
     name: 金条
@@ -79,6 +83,7 @@ items:
     storage_space: 20
     is_usable: false
 
+
   - key: wood_essence
     name: 木质精华
     description: 经林间灵气缓慢凝成的晶质碎片，色泽温润如新木，握在掌心时会透出淡淡草木清香与细微暖意。
@@ -88,6 +93,7 @@ items:
     price: 800
     storage_space: 1
     is_usable: false
+    image: wood_essence.png
 
   - key: copper_essence
     name: 铜质精华
@@ -98,6 +104,7 @@ items:
     price: 1200
     storage_space: 1
     is_usable: false
+    image: copper_essence.png
 
   - key: iron_essence
     name: 铁质精华
@@ -108,6 +115,7 @@ items:
     price: 3000
     storage_space: 1
     is_usable: false
+    image: iron_essence.png
 
   - key: xuan_tie_essence
     name: 玄铁精华
@@ -118,6 +126,7 @@ items:
     price: 5000
     storage_space: 1
     is_usable: false
+    image: xuan_tie_essence.png
 
   - key: fire_stone
     name: 火焰之石
@@ -128,6 +137,7 @@ items:
     price: 4000
     storage_space: 1
     is_usable: false
+    image: fire_stone.png
 
   - key: water_stone
     name: 纯水之石
@@ -138,6 +148,7 @@ items:
     price: 4000
     storage_space: 1
     is_usable: false
+    image: water_stone.png
 
   - key: earth_stone
     name: 大地之石
@@ -148,6 +159,7 @@ items:
     price: 4000
     storage_space: 1
     is_usable: false
+    image: earth_stone.png
 
   - key: air_stone
     name: 空气之石
@@ -158,6 +170,7 @@ items:
     price: 4000
     storage_space: 1
     is_usable: false
+    image: air_stone.png
 
   - key: zitanmu
     name: 紫檀木
@@ -168,6 +181,7 @@ items:
     price: 900
     storage_space: 1
     is_usable: false
+    image: zitanmu.png
 
   - key: heiyuanshi
     name: 黑原石
@@ -178,6 +192,7 @@ items:
     price: 950
     storage_space: 1
     is_usable: false
+    image: heiyuanshi.png
 
   - key: jingangmei
     name: 金刚煤
@@ -188,6 +203,7 @@ items:
     price: 1200
     storage_space: 1
     is_usable: false
+    image: jingangmei.png
 
   - key: tiemu
     name: 铁木
@@ -198,6 +214,7 @@ items:
     price: 850
     storage_space: 1
     is_usable: false
+    image: tiemu.png
 
   - key: shuiqumu
     name: 水曲木
@@ -208,6 +225,7 @@ items:
     price: 300
     storage_space: 1
     is_usable: false
+    image: shuiqumu.png
 
   - key: paozi
     name: 刨子
@@ -218,6 +236,7 @@ items:
     price: 320
     storage_space: 1
     is_usable: false
+    image: paozi.png
 
   - key: zaozi
     name: 凿子
@@ -228,6 +247,7 @@ items:
     price: 350
     storage_space: 1
     is_usable: false
+    image: zaozi.png
 
   - key: gaolu
     name: 高炉
@@ -238,7 +258,7 @@ items:
     price: 5000
     storage_space: 2
     is_usable: false
-
+    image: gaolu.png
   # ══════════════════════════════════════════════════════════════════════════════
   #                              畜牧类物品
   # ══════════════════════════════════════════════════════════════════════════════
@@ -252,6 +272,7 @@ items:
     price: 100
     storage_space: 10
     is_usable: false
+    image: ji.png
 
   - key: ya
     name: 鸭
@@ -262,6 +283,7 @@ items:
     price: 200
     storage_space: 10
     is_usable: false
+    image: ya.png
 
   - key: e
     name: 鹅
@@ -272,6 +294,7 @@ items:
     price: 400
     storage_space: 10
     is_usable: false
+    image: e.png
 
   - key: zhu
     name: 猪
@@ -282,6 +305,7 @@ items:
     price: 800
     storage_space: 10
     is_usable: false
+    image: zhu.png
 
   - key: niu
     name: 牛
@@ -292,6 +316,7 @@ items:
     price: 1500
     storage_space: 10
     is_usable: false
+    image: niu.png
 
   # ══════════════════════════════════════════════════════════════════════════════
   #                              药品类物品
@@ -307,6 +332,7 @@ items:
     storage_space: 1
     effect_payload:
       hp: 50
+    image: zhixuesan.png
 
   - key: jinchuangyao
     name: 金创药
@@ -318,6 +344,7 @@ items:
     storage_space: 1
     effect_payload:
       hp: 100
+    image: zhixuesan.png
 
   - key: baijiwan
     name: 白芨丸
@@ -388,6 +415,7 @@ items:
     is_usable: false
     effect_payload:
       time: 60  # 减少60秒
+    image: experience_fruit.png
 
   - key: experience_peach
     name: 经验桃子
@@ -398,6 +426,7 @@ items:
       time: 7200
     tradeable: true
     price: 1000
+    image: experience_peach.png
 
   - key: experience_pineapple
     name: 经验菠萝
@@ -405,9 +434,21 @@ items:
     effect_type: experience_items
     rarity: blue
     effect_payload:
-      time: 21600
+      time: 28800
     tradeable: true
     price: 3000
+    image: experience_pineapple.png
+
+  - key: experience_watermelon
+    name: 经验西瓜
+    description: 减少门客升级时间24小时。
+    effect_type: experience_items
+    rarity: purple
+    effect_payload:
+      time: 86400
+    tradeable: true
+    price: 12000
+    image: experience_watermelon.png
 
   # ══════════════════════════════════════════════════════════════════════════════
   #                              功能道具
@@ -420,7 +461,7 @@ items:
     rarity: green
     tradeable: true
     price: 2000
-    # image: magnifier.png  # 可选：物品图片文件名
+    image: magnifier.png  # 可选：物品图片  文件名
 
   - key: manor_rename_card
     name: 庄园命名卡
@@ -433,7 +474,7 @@ items:
 
   - key: pubayi_guest_card
     name: 蒲巴乙门客卡
-    description: 使用后有10%概率招募到蓝色门客「蒲巴乙」，90%概率招募到绿色门客「蒲巴乙」（门客名称相同）。
+    description: 使用后有概率招募到绿色或蓝色门客「蒲巴乙」。
     effect_type: tool
     rarity: blue
     tradeable: true
@@ -447,6 +488,80 @@ items:
           weight: 10
         - template_key: pubayi_green
           weight: 90
+
+  - key: panfeng_guest_card
+    name: 潘凤门客卡
+    description: 使用后可直接招募绿色门客「潘凤」。
+    effect_type: tool
+    rarity: green
+    tradeable: true
+    price: 20000
+    storage_space: 1
+    is_usable: true
+    effect_payload:
+      action: summon_guest
+      exclusive_template_keys:
+        - hist_sljnbc_0590
+        - hist_sljnbc_0590_blue
+        - hist_sljnbc_0590_purple
+      choices:
+        - template_key: hist_sljnbc_0590
+          weight: 100
+
+  - key: xingdaorong_guest_card
+    name: 邢道荣门客卡
+    description: 使用后可直接招募绿色门客「邢道荣」。
+    effect_type: tool
+    rarity: green
+    tradeable: true
+    price: 20000
+    storage_space: 1
+    is_usable: true
+    effect_payload:
+      action: summon_guest
+      exclusive_template_keys:
+        - hist_sljnbc_0589
+        - hist_sljnbc_0589_blue
+        - hist_sljnbc_0589_purple
+      choices:
+        - template_key: hist_sljnbc_0589
+          weight: 100
+
+  - key: peerless_general_upgrade_token
+    name: 《上将的自我修养》残卷1
+    description: 使用后可将潘凤或邢道荣升至蓝色稀有度。升阶后后续成长按蓝色标准成长区间计算。
+    effect_type: tool
+    rarity: blue
+    tradeable: true
+    price: 50000
+    storage_space: 1
+    is_usable: true
+    effect_payload:
+      action: upgrade_guest_rarity
+      source_template_keys:
+        - hist_sljnbc_0589
+        - hist_sljnbc_0590
+      target_template_map:
+        hist_sljnbc_0589: hist_sljnbc_0589_blue
+        hist_sljnbc_0590: hist_sljnbc_0590_blue
+
+  - key: peerless_general_upgrade_token_2
+    name: 《上将的自我修养》残卷2
+    description: 使用后可将潘凤或邢道荣从蓝色升至紫色稀有度。升阶后后续成长按紫色标准成长区间计算。
+    effect_type: tool
+    rarity: purple
+    tradeable: true
+    price: 200000
+    storage_space: 1
+    is_usable: true
+    effect_payload:
+      action: upgrade_guest_rarity
+      source_template_keys:
+        - hist_sljnbc_0589_blue
+        - hist_sljnbc_0590_blue
+      target_template_map:
+        hist_sljnbc_0589_blue: hist_sljnbc_0589_purple
+        hist_sljnbc_0590_blue: hist_sljnbc_0590_purple
 
   - key: small_trumpet
     name: 小喇叭
@@ -594,6 +709,7 @@ items:
     name: 《龙吟破阵》秘术
     description: 以龙吟之势震慑敌军的绝学。
     effect_type: skill_book
+    image: skill3.png
     rarity: orange
     effect_payload:
       skill_key: dragon_roar
@@ -605,6 +721,7 @@ items:
     name: 《奇策突袭》秘术
     description: 随机对敌人造成高额伤害并可能眩晕的武学秘籍。
     effect_type: skill_book
+    image: skill3.png
     rarity: purple
     effect_payload:
       skill_key: stratagem_burst
@@ -617,6 +734,7 @@ items:
     name: 《寒冰咒》秘术
     description: 记载玄冰咒语的古籍，习得后可召唤寒气侵袭敌人。
     effect_type: skill_book
+    image: skill1.png
     rarity: green
     effect_payload:
       skill_key: ice_curse
@@ -628,6 +746,7 @@ items:
     name: 《驭雷术》秘术
     description: 道家秘传的引雷之法，可借天雷之力攻敌。
     effect_type: skill_book
+    image: skill1.png
     rarity: green
     effect_payload:
       skill_key: thunder_control
@@ -639,6 +758,7 @@ items:
     name: 《破龙咒》秘术
     description: 专破护甲坚固之敌的咒法秘籍。
     effect_type: skill_book
+    image: skill1.png
     rarity: green
     effect_payload:
       skill_key: dragon_break_curse
@@ -650,6 +770,7 @@ items:
     name: 《唧唧歪歪》秘术
     description: 以言语扰乱敌心的奇门心法，令人又爱又恨。
     effect_type: skill_book
+    image: skill1.png
     rarity: green
     effect_payload:
       skill_key: endless_chatter
@@ -662,6 +783,7 @@ items:
     name: 《太乙生风》秘术
     description: 太乙门不传之秘，可化真气为狂风席卷战场。
     effect_type: skill_book
+    image: skill2.png
     rarity: blue
     effect_payload:
       skill_key: taiyi_wind
@@ -673,6 +795,7 @@ items:
     name: 《天花乱坠》秘术
     description: 佛门辩经绝学，口吐莲花，舌灿生辉。
     effect_type: skill_book
+    image: skill2.png
     rarity: blue
     effect_payload:
       skill_key: flower_rain
@@ -684,6 +807,7 @@ items:
     name: 《销魂蚀骨》秘术
     description: 阴毒法术秘籍，可侵蚀敌人精魄。
     effect_type: skill_book
+    image: skill2.png
     rarity: blue
     effect_payload:
       skill_key: soul_erode
@@ -695,6 +819,7 @@ items:
     name: 《红莲之舞》秘术
     description: 记载业火红莲召唤之法的珍贵典籍。
     effect_type: skill_book
+    image: skill2.png
     rarity: blue
     effect_payload:
       skill_key: red_lotus_dance
@@ -707,6 +832,7 @@ items:
     name: 《雷动九天》秘术
     description: 九天神雷的召唤秘法，威力惊天动地。
     effect_type: skill_book
+    image: skill3.png
     rarity: purple
     effect_payload:
       skill_key: thunder_nine_heavens
@@ -718,6 +844,7 @@ items:
     name: 《唐僧说禅》秘术
     description: 据说是唐三藏亲传的念经心法，令听者昏昏欲睡。
     effect_type: skill_book
+    image: skill3.png
     rarity: purple
     effect_payload:
       skill_key: tangseng_sermon
@@ -729,6 +856,7 @@ items:
     name: 《五雷降世》秘术
     description: 道家至高雷法，召唤五行雷霆同时降临。
     effect_type: skill_book
+    image: skill3.png
     rarity: purple
     effect_payload:
       skill_key: five_thunder_descent
@@ -740,6 +868,7 @@ items:
     name: 《梵天真火》秘术
     description: 传说中的梵天圣火召唤之法，烈焰滔天。
     effect_type: skill_book
+    image: skill3.png
     rarity: purple
     effect_payload:
       skill_key: brahma_true_fire
@@ -1006,6 +1135,28 @@ items:
           defense: 30
           hp: 500
           troop_capacity: 60
+
+  - key: equip_jiaodoushitoukui
+    name: 角斗士头盔
+    description: 角斗场老兵常用的重盔，面甲刻有胜场纹记，兼顾防护与压迫感。
+    effect_type: equip_helmet
+    rarity: blue
+    tradeable: true
+    price: 6200
+    storage_space: 100
+    effect_payload:
+      hp: 360
+      defense: 32
+      force: 18
+      set_key: jiaodoushi_set
+      set_description: 角斗士套装
+      set_bonus:
+        pieces: 4
+        bonus:
+          force: 78
+          hp: 960
+          agility: 28
+          defense: 35
 
   - key: equip_xuantiekui
     name: 玄铁盔
@@ -1396,6 +1547,28 @@ items:
           defense: 30
           hp: 500
           troop_capacity: 60
+
+  - key: equip_jiaodoushixiongjia
+    name: 角斗士胸甲
+    description: 胸甲以整片锻钢打造，常见于斗技场前排猛士，抗冲击能力出众。
+    effect_type: equip_armor
+    rarity: blue
+    tradeable: true
+    price: 7600
+    storage_space: 100
+    effect_payload:
+      hp: 500
+      defense: 46
+      force: 18
+      set_key: jiaodoushi_set
+      set_description: 角斗士套装
+      set_bonus:
+        pieces: 4
+        bonus:
+          force: 78
+          hp: 960
+          agility: 28
+          defense: 35
 
   - key: equip_qinglongjia
     name: 青龙甲
@@ -1794,6 +1967,29 @@ items:
           defense: 30
           hp: 500
           troop_capacity: 60
+
+  - key: equip_jiaodoushizhixue
+    name: 角斗士之靴
+    description: 靴底嵌有防滑钢钉，专为近身缠斗设计，步法稳定且爆发力更强。
+    effect_type: equip_shoes
+    rarity: blue
+    tradeable: true
+    price: 6000
+    storage_space: 100
+    effect_payload:
+      hp: 260
+      defense: 24
+      agility: 20
+      force: 12
+      set_key: jiaodoushi_set
+      set_description: 角斗士套装
+      set_bonus:
+        pieces: 4
+        bonus:
+          force: 78
+          hp: 960
+          agility: 28
+          defense: 35
 
   - key: equip_qinglongxue
     name: 青龙靴
@@ -2378,6 +2574,28 @@ items:
           defense: 30
           hp: 500
           troop_capacity: 60
+
+  - key: equip_jiaodoushizhichui
+    name: 角斗士之锤
+    description: 角斗场常见的重型战锤，锤头配重厚实，擅长正面破防压制。
+    effect_type: equip_weapon
+    rarity: blue
+    tradeable: true
+    price: 6500
+    storage_space: 100
+    effect_payload:
+      force: 58
+      hp: 250
+      defense: 12
+      set_key: jiaodoushi_set
+      set_description: 角斗士套装
+      set_bonus:
+        pieces: 4
+        bonus:
+          force: 78
+          hp: 960
+          agility: 28
+          defense: 35
 
   - key: equip_junzijian
     name: 君子剑

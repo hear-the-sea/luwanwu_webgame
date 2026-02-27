@@ -1,48 +1,51 @@
 # 隋唐演义门客
 
 heroes:
-  green:
-  - key: hero_zhai_rang
-    name: 翟让
-    archetype: military
-    flavor: 瓦岗军首领之一，早年义气聚众，因不满隋末苛政而揭竿而起。处事果断，善于凝聚草莽之心，能在群雄并起的乱世中稳住人心。虽出身草根，却有统军之才，堪为一代豪杰。出自《隋唐演义》。
-    default_gender: male
-    default_morality: 65
-    recruitable: true
-  - key: hero_dan_xiongxin
-    name: 单雄信
-    archetype: military
-    flavor: 瓦岗豪杰，素以义气闻名，交游广阔、重诺守信。行事敢作敢当，遇事先护同伴后图自身，最为人称道。乱世里他不为名利折腰，却愿为兄弟两肋插刀，是瓦岗阵营的胆气担当。出自《隋唐演义》。
-    default_gender: male
-    default_morality: 70
-    recruitable: true
-  - key: hero_wang_bodang
-    name: 王伯当
-    archetype: military
-    flavor: 瓦岗军神射，弓术百发百中，战场上常以远箭定乾坤。除武艺外，他心思细密，善于侦察与奇袭，既能冲锋也能布计。其人沉稳可靠，在乱军之中总能抓住一线生机为盟友开路。出自《隋唐演义》。
-    default_gender: male
-    default_morality: 72
-    recruitable: true
-  blue:
+  purple:
   - key: hero_qin_shubao
     name: 秦叔宝
     archetype: military
-    flavor: 隋唐名将，勇冠三军，战场上敢为先锋，屡立奇功。其人忠义有节，重视军纪与士气，能令部下信服。传闻他守门护民、为民请命，既是猛将也是仁将，声望遍及军中与民间。出自《隋唐演义》。
+    flavor: 隋唐名将，勇冠三军，战场上敢为先锋，屡立奇功。其人忠义有节，重视军纪与士气，能令部下信服。传闻他守门护民、为民请命，既是猛将也是仁将，声望遍及军中与民间。出自《隋唐演义》。无论成败如何，秦叔宝所面对的战场条件都具有典型性，因此其经验常被后人用作比较案例。
     default_gender: male
     default_morality: 80
     recruitable: true
     avatar: pig_wu_male2.png
+    growth_range:
+    - 6
+    - 11
+    attribute_weights:
+      force: 45
+      intellect: 15
+      defense: 25
+      agility: 15
   - key: hero_luo_cheng
     name: 罗成
     archetype: military
-    flavor: 银枪白马，骁勇善战，身法迅捷如风，冲阵时如银电贯空。年少英气逼人，却又心思谨慎，擅长以奇招克敌。其名号在沙场上令人闻风，亦有侠义之名流传江湖。出自《隋唐演义》。
+    flavor: 银枪白马，骁勇善战，身法迅捷如风，冲阵时如银电贯空。年少英气逼人，却又心思谨慎，擅长以奇招克敌。其名号在沙场上令人闻风，亦有侠义之名流传江湖。出自《隋唐演义》。罗成之所以动人，不只在勇武，更在少年将领对荣誉与情义的执拗守护。
     default_gender: male
     default_morality: 75
     recruitable: true
+    growth_range:
+    - 6
+    - 11
+    attribute_weights:
+      force: 45
+      intellect: 15
+      defense: 25
+      agility: 15
+  blue:
   - key: hero_cheng_yaojin
     name: 程咬金
     archetype: military
-    flavor: 号混世魔王，性格豪爽直率，言行不拘小节，笑骂皆真。其人武力刚猛，冲锋时气势如虹，常凭一股蛮劲破敌阵。虽粗中有细，关键时刻能护住同伴，令人又敬又服。出自《隋唐演义》。
+    flavor: 号混世魔王，性格豪爽直率，言行不拘小节，笑骂皆真。其人武力刚猛，冲锋时气势如虹，常凭一股蛮劲破敌阵。虽粗中有细，关键时刻能护住同伴，令人又敬又服。出自《隋唐演义》。其关键决断对政局节奏产生了放大效应，也因此成为研究隋唐时期政治机制时难以绕开的节点。
     default_gender: male
     default_morality: 70
     recruitable: true
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 45
+      intellect: 15
+      defense: 25
+      agility: 15

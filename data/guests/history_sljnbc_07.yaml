@@ -1,4 +1,174 @@
 heroes:
+  blue:
+  - key: hist_sljnbc_0306
+    name: 凌统
+    default_gender: male
+    archetype: military
+    flavor: （189年—217年）东吴将领，凌操之子。余杭人，其父凌操为孙策部将，在与黄祖交战时被甘宁射杀。凌统年仅十五岁便继承父业统领部曲，随军征战屡立功勋。孙权攻合肥时，他与甘宁共为先锋，大破魏军。合肥之战撤退时，张辽突袭孙权后军，凌统率亲兵拼死护卫孙权突围，亲兵战死殆尽，他身受数十处创伤仍死战不退，直到孙权安全渡河。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 40
+      intellect: 15
+      defense: 23
+      agility: 22
+  - key: hist_sljnbc_0307
+    name: 朱治
+    default_gender: male
+    archetype: civil
+    flavor: （156年—224年）三代老臣，江东基石。丹阳故鄣人，早年为县吏，后投奔孙坚，成为孙氏最早的追随者之一。孙坚战死时他保护孙策脱险，此后尽心辅佐孙策平定江东六郡。孙策遇刺身亡，东吴根基动摇，他稳定局势拥立年幼的孙权继位，是孙权能够顺利接班的关键人物。他曾举荐孙权为孝廉，使孙权获得朝廷认可的官方身份，此举对孙权日后称帝具有重要意义。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_sljnbc_0308
+    name: 吕范
+    default_gender: male
+    archetype: civil
+    flavor: （？—228年）忠亮雅正，军中执法。汝南细阳人，年轻时在家乡为县吏，后避乱江东，投奔孙策。他不仅是谋士，更兼管军中财务钱粮，所有账目清清楚楚，从无差错。他性情豪爽，喜好排场，出行时前呼后拥车马华丽，孙权曾问他为何如此铺张，他答曰"臣为将军效力，当扬我军威仪，使敌人知我东吴有人"。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_sljnbc_0317
+    name: 陆凯
+    default_gender: male
+    archetype: civil
+    flavor: （198年—269年）东吴大臣，吴郡吴县人，字敬风，陆逊族侄。他早年从军，参与多次征战，后转任地方官员，政绩卓著。晚年官至左丞相，成为东吴朝廷的核心人物。孙皓即位后荒淫暴虐，大臣多不敢言。他多次上疏直谏，言辞恳切，不惧触怒暴君。他在临终前仍上疏劝谏孙皓减轻赋税、停止劳役，真正做到了鞠躬尽瘁。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 20
+      intellect: 40
+      defense: 20
+      agility: 20
+  - key: hist_sljnbc_0327
+    name: 孙休
+    default_gender: male
+    archetype: civil
+    flavor: （235年—264年）东吴景帝，字子烈，孙权第六子。他早年被封为琅琊王，远离权力中心。权臣孙綝废黜孙亮后，迎立他为帝。他即位后表面对孙綝恭顺，暗中却与张布、丁奉等密谋除掉权臣。永安元年（258年）腊日宴会上，丁奉趁孙綝不备将其擒获，当场斩杀。他由此夺回皇权，亲理朝政。他在位期间重视文教，设立国学，选拔人才，东吴政局一度好转。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 20
+      intellect: 40
+      defense: 20
+      agility: 20
+  - key: hist_sljnbc_0334
+    name: 陆机
+    default_gender: male
+    archetype: civil
+    flavor: （261年—303年）西晋文学家，吴郡华亭人，字士衡，陆逊之孙。他与弟陆云并称"二陆"，是太康年间最杰出的文学家。东吴灭亡后他入洛阳，以文才名动一时。他的《文赋》是中国文学批评史上的重要著作，系统阐述了文学创作的理论。他的诗赋骈文皆为当时翘楚。八王之乱中他被成都王司马颖任命为后将军，统兵讨伐长沙王司马乂。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 64
+      defense: 18
+      agility: 10
+  - key: hist_sljnbc_0338
+    name: 阮籍
+    default_gender: male
+    archetype: civil
+    flavor: （210年—263年）竹林七贤之一，陈留尉氏人，字嗣宗。他博览群书，尤好老庄，是魏晋玄学的重要代表人物。他以"青白眼"闻名——遇俗人以白眼视之，遇知己则施以青眼。司马氏专权时期，他以醉酒佯狂避祸，对司马昭的征辟多次推辞却无法完全拒绝。他常独自驾车出行，至途穷处恸哭而返。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 20
+      intellect: 40
+      defense: 20
+      agility: 20
+  - key: hist_sljnbc_0339
+    name: 山涛
+    default_gender: male
+    archetype: civil
+    flavor: （205年—283年3月3日）竹林七贤之一，河内怀县人，字巨源。他早年与嵇康、阮籍等交游，为竹林七贤之一。他后入仕司马氏，历任尚书吏部郎、吏部尚书等要职，主持官员选拔三十余年，知人善任，所荐人才多为时用。他曾推荐嵇康出仕，嵇康愤而作《与山巨源绝交书》与之断交。然嵇康被杀时将儿子托付给他，他尽心抚养嵇绍成人。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 64
+      defense: 18
+      agility: 10
+  - key: hist_sljnbc_0340
+    name: 刘伶
+    default_gender: male
+    archetype: civil
+    flavor: （约221年—约300年）竹林七贤之一，沛国人，字伯伦。他身材矮小，容貌丑陋，却放达不羁，以嗜酒闻名于世。他常乘鹿车载酒出行，令人荷锸随后，说"死便埋我"。他曾任建威参军，因无所作为而罢官。他作《酒德颂》，以"惟酒是务，焉知其余"表达人生态度，文中塑造的"大人先生"形象成为后世酒徒自况的典故。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 20
+      intellect: 40
+      defense: 20
+      agility: 20
+  - key: hist_sljnbc_0341
+    name: 向秀
+    default_gender: male
+    archetype: civil
+    flavor: （约227年—272年）竹林七贤之一，河内怀县人，字子期。他清悒有远志，少时即以文章知名。他为《庄子》作注，阐发义理，开创了义理派注庄的先河，其注解大部分被郭象采入己注。嵇康被杀后，他被迫入仕司马氏，然终日沉默寡言。一次经过嵇康、吕安旧居，闻邻人吹笛，悲从中来，作《思旧赋》悼念故友，情真意切，成为千古名篇。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 64
+      defense: 18
+      agility: 10
+  - key: hist_sljnbc_0342
+    name: 左思
+    default_gender: male
+    archetype: civil
+    flavor: （约250年—305年）西晋文学家，齐国临淄人，字太冲。他相貌丑陋，口讷不善言辞，却博学多才，文采斐然。他构思十年写成《三都赋》，初不为人重视，经皇甫谧作序、张载张华等名士推荐后名声大噪，豪贵之家争相传抄，洛阳纸价为之飞涨，"洛阳纸贵"典故由此而来。他的《咏史诗》八首借古讽今，抒发寒门士子的不平之气，对后世咏史诗影响深远。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 64
+      defense: 18
+      agility: 10
+  - key: hist_sljnbc_0343
+    name: 贾南风
+    default_gender: female
+    archetype: civil
+    flavor: （256年—300年4月）西晋惠帝皇后，平阳襄陵人，贾充之女。她貌丑而性妒，凶悍善谋。晋惠帝司马衷即位后，她逐渐掌握朝政大权。她先是联合楚王司马玮诛杀辅政大臣杨骏和汝南王司马亮，随后又杀司马玮灭口。她专权期间诛杀异己，废太子司马遹并将其杀害，引发诸王不满。赵王司马伦以为太子报仇为名起兵，将她废黜赐死。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 20
+      intellect: 40
+      defense: 20
+      agility: 20
+  - key: hist_sljnbc_0344
+    name: 王戎
+    default_gender: male
+    archetype: civil
+    flavor: （234年—305年）竹林七贤之一，琅琊临沂人，字濬冲。他少有神童之名，年幼时见道边李树多子，众人争采，他独不动，言"树在道边而多子，此必苦李"，果如其言。他与阮籍、嵇康等为竹林之游，然入仕后善于谋身保位，历任吏部尚书、司徒等要职，是七贤中官位最高者。他为人吝啬，家有好李，恐人得种，每售必钻核，时人讥之。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 20
+      intellect: 40
+      defense: 20
+      agility: 20
   green:
   - key: hist_sljnbc_0301
     name: 全琮
@@ -65,45 +235,6 @@ heroes:
       intellect: 15
       defense: 23
       agility: 22
-  - key: hist_sljnbc_0306
-    name: 凌统
-    default_gender: male
-    archetype: military
-    flavor: （189年—217年）东吴将领，凌操之子。余杭人，其父凌操为孙策部将，在与黄祖交战时被甘宁射杀。凌统年仅十五岁便继承父业统领部曲，随军征战屡立功勋。孙权攻合肥时，他与甘宁共为先锋，大破魏军。合肥之战撤退时，张辽突袭孙权后军，凌统率亲兵拼死护卫孙权突围，亲兵战死殆尽，他身受数十处创伤仍死战不退，直到孙权安全渡河。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 40
-      intellect: 15
-      defense: 23
-      agility: 22
-  - key: hist_sljnbc_0307
-    name: 朱治
-    default_gender: male
-    archetype: civil
-    flavor: （156年—224年）三代老臣，江东基石。丹阳故鄣人，早年为县吏，后投奔孙坚，成为孙氏最早的追随者之一。孙坚战死时他保护孙策脱险，此后尽心辅佐孙策平定江东六郡。孙策遇刺身亡，东吴根基动摇，他稳定局势拥立年幼的孙权继位，是孙权能够顺利接班的关键人物。他曾举荐孙权为孝廉，使孙权获得朝廷认可的官方身份，此举对孙权日后称帝具有重要意义。
-    growth_range:
-    - 3
-    - 7
-    attribute_weights:
-      force: 12
-      intellect: 58
-      defense: 18
-      agility: 12
-  - key: hist_sljnbc_0308
-    name: 吕范
-    default_gender: male
-    archetype: civil
-    flavor: （？—228年）忠亮雅正，军中执法。汝南细阳人，年轻时在家乡为县吏，后避乱江东，投奔孙策。他不仅是谋士，更兼管军中财务钱粮，所有账目清清楚楚，从无差错。他性情豪爽，喜好排场，出行时前呼后拥车马华丽，孙权曾问他为何如此铺张，他答曰"臣为将军效力，当扬我军威仪，使敌人知我东吴有人"。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 12
-      intellect: 58
-      defense: 18
-      agility: 12
   - key: hist_sljnbc_0309
     name: 吴景
     default_gender: male
@@ -208,19 +339,6 @@ heroes:
       intellect: 15
       defense: 23
       agility: 22
-  - key: hist_sljnbc_0317
-    name: 陆凯
-    default_gender: male
-    archetype: civil
-    flavor: （198年—269年）东吴大臣，吴郡吴县人，字敬风，陆逊族侄。他早年从军，参与多次征战，后转任地方官员，政绩卓著。晚年官至左丞相，成为东吴朝廷的核心人物。孙皓即位后荒淫暴虐，大臣多不敢言。他多次上疏直谏，言辞恳切，不惧触怒暴君。他在临终前仍上疏劝谏孙皓减轻赋税、停止劳役，真正做到了鞠躬尽瘁。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 20
-      intellect: 40
-      defense: 20
-      agility: 20
   - key: hist_sljnbc_0318
     name: 滕胤
     default_gender: male
@@ -338,19 +456,6 @@ heroes:
       intellect: 15
       defense: 23
       agility: 22
-  - key: hist_sljnbc_0327
-    name: 孙休
-    default_gender: male
-    archetype: civil
-    flavor: （235年—264年）东吴景帝，字子烈，孙权第六子。他早年被封为琅琊王，远离权力中心。权臣孙綝废黜孙亮后，迎立他为帝。他即位后表面对孙綝恭顺，暗中却与张布、丁奉等密谋除掉权臣。永安元年（258年）腊日宴会上，丁奉趁孙綝不备将其擒获，当场斩杀。他由此夺回皇权，亲理朝政。他在位期间重视文教，设立国学，选拔人才，东吴政局一度好转。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 20
-      intellect: 40
-      defense: 20
-      agility: 20
   - key: hist_sljnbc_0328
     name: 孙亮
     default_gender: male
@@ -429,19 +534,6 @@ heroes:
       intellect: 15
       defense: 23
       agility: 22
-  - key: hist_sljnbc_0334
-    name: 陆机
-    default_gender: male
-    archetype: civil
-    flavor: （261年—303年）西晋文学家，吴郡华亭人，字士衡，陆逊之孙。他与弟陆云并称"二陆"，是太康年间最杰出的文学家。东吴灭亡后他入洛阳，以文才名动一时。他的《文赋》是中国文学批评史上的重要著作，系统阐述了文学创作的理论。他的诗赋骈文皆为当时翘楚。八王之乱中他被成都王司马颖任命为后将军，统兵讨伐长沙王司马乂。
-    growth_range:
-    - 3
-    - 7
-    attribute_weights:
-      force: 8
-      intellect: 64
-      defense: 18
-      agility: 10
   - key: hist_sljnbc_0335
     name: 刘渊
     default_gender: male
@@ -481,97 +573,6 @@ heroes:
       intellect: 15
       defense: 23
       agility: 22
-  - key: hist_sljnbc_0338
-    name: 阮籍
-    default_gender: male
-    archetype: civil
-    flavor: （210年—263年）竹林七贤之一，陈留尉氏人，字嗣宗。他博览群书，尤好老庄，是魏晋玄学的重要代表人物。他以"青白眼"闻名——遇俗人以白眼视之，遇知己则施以青眼。司马氏专权时期，他以醉酒佯狂避祸，对司马昭的征辟多次推辞却无法完全拒绝。他常独自驾车出行，至途穷处恸哭而返。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 20
-      intellect: 40
-      defense: 20
-      agility: 20
-  - key: hist_sljnbc_0339
-    name: 山涛
-    default_gender: male
-    archetype: civil
-    flavor: （205年—283年3月3日）竹林七贤之一，河内怀县人，字巨源。他早年与嵇康、阮籍等交游，为竹林七贤之一。他后入仕司马氏，历任尚书吏部郎、吏部尚书等要职，主持官员选拔三十余年，知人善任，所荐人才多为时用。他曾推荐嵇康出仕，嵇康愤而作《与山巨源绝交书》与之断交。然嵇康被杀时将儿子托付给他，他尽心抚养嵇绍成人。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 8
-      intellect: 64
-      defense: 18
-      agility: 10
-  - key: hist_sljnbc_0340
-    name: 刘伶
-    default_gender: male
-    archetype: civil
-    flavor: （约221年—约300年）竹林七贤之一，沛国人，字伯伦。他身材矮小，容貌丑陋，却放达不羁，以嗜酒闻名于世。他常乘鹿车载酒出行，令人荷锸随后，说"死便埋我"。他曾任建威参军，因无所作为而罢官。他作《酒德颂》，以"惟酒是务，焉知其余"表达人生态度，文中塑造的"大人先生"形象成为后世酒徒自况的典故。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 20
-      intellect: 40
-      defense: 20
-      agility: 20
-  - key: hist_sljnbc_0341
-    name: 向秀
-    default_gender: male
-    archetype: civil
-    flavor: （约227年—272年）竹林七贤之一，河内怀县人，字子期。他清悒有远志，少时即以文章知名。他为《庄子》作注，阐发义理，开创了义理派注庄的先河，其注解大部分被郭象采入己注。嵇康被杀后，他被迫入仕司马氏，然终日沉默寡言。一次经过嵇康、吕安旧居，闻邻人吹笛，悲从中来，作《思旧赋》悼念故友，情真意切，成为千古名篇。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 8
-      intellect: 64
-      defense: 18
-      agility: 10
-  - key: hist_sljnbc_0342
-    name: 左思
-    default_gender: male
-    archetype: civil
-    flavor: （约250年—305年）西晋文学家，齐国临淄人，字太冲。他相貌丑陋，口讷不善言辞，却博学多才，文采斐然。他构思十年写成《三都赋》，初不为人重视，经皇甫谧作序、张载张华等名士推荐后名声大噪，豪贵之家争相传抄，洛阳纸价为之飞涨，"洛阳纸贵"典故由此而来。他的《咏史诗》八首借古讽今，抒发寒门士子的不平之气，对后世咏史诗影响深远。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 8
-      intellect: 64
-      defense: 18
-      agility: 10
-  - key: hist_sljnbc_0343
-    name: 贾南风
-    default_gender: female
-    archetype: civil
-    flavor: （256年—300年4月）西晋惠帝皇后，平阳襄陵人，贾充之女。她貌丑而性妒，凶悍善谋。晋惠帝司马衷即位后，她逐渐掌握朝政大权。她先是联合楚王司马玮诛杀辅政大臣杨骏和汝南王司马亮，随后又杀司马玮灭口。她专权期间诛杀异己，废太子司马遹并将其杀害，引发诸王不满。赵王司马伦以为太子报仇为名起兵，将她废黜赐死。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 20
-      intellect: 40
-      defense: 20
-      agility: 20
-  - key: hist_sljnbc_0344
-    name: 王戎
-    default_gender: male
-    archetype: civil
-    flavor: （234年—305年）竹林七贤之一，琅琊临沂人，字濬冲。他少有神童之名，年幼时见道边李树多子，众人争采，他独不动，言"树在道边而多子，此必苦李"，果如其言。他与阮籍、嵇康等为竹林之游，然入仕后善于谋身保位，历任吏部尚书、司徒等要职，是七贤中官位最高者。他为人吝啬，家有好李，恐人得种，每售必钻核，时人讥之。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 20
-      intellect: 40
-      defense: 20
-      agility: 20
   - key: hist_sljnbc_0345
     name: 司马亮
     default_gender: male

@@ -19,10 +19,9 @@ from guests.services import (
     finalize_guest_recruitment,
     get_pool_recruitment_duration_seconds,
     recruit_guest,
-    reveal_candidate_rarity,
-    start_guest_recruitment,
-    train_guest,
 )
+from guests.services import recruitment as recruitment_service
+from guests.services import reveal_candidate_rarity, start_guest_recruitment, train_guest
 from guests.services.training import finalize_guest_training
 
 
@@ -46,6 +45,42 @@ def test_recruit_guest_creates_record(game_data, django_user_model, load_guest_d
     assert len(candidates) == expected_count
     guest = finalize_candidate(candidates[0])
     assert Guest.objects.filter(pk=guest.pk).exists()
+
+
+@pytest.mark.django_db
+def test_recruit_guest_preloads_template_data_once_per_batch(
+    game_data, django_user_model, load_guest_data, monkeypatch
+):
+    user = django_user_model.objects.create_user(username="player_guest_cache", password="pass123")
+    manor = ensure_manor(user)
+    manor.silver = 500000
+    manor.grain = 500000
+    manor.save(update_fields=["silver", "grain"])
+
+    pool = RecruitmentPool.objects.get(key="cunmu")
+    pool.draw_count = 30
+    pool.save(update_fields=["draw_count"])
+
+    calls = {"by_rarity": 0, "hermit": 0}
+    original_by_rarity = recruitment_service._get_recruitable_templates_by_rarity
+    original_hermit = recruitment_service._get_hermit_templates
+
+    def _counted_by_rarity():
+        calls["by_rarity"] += 1
+        return original_by_rarity()
+
+    def _counted_hermit():
+        calls["hermit"] += 1
+        return original_hermit()
+
+    monkeypatch.setattr(recruitment_service, "_get_recruitable_templates_by_rarity", _counted_by_rarity)
+    monkeypatch.setattr(recruitment_service, "_get_hermit_templates", _counted_hermit)
+
+    candidates = recruit_guest(manor, pool, seed=3)
+
+    assert len(candidates) == pool.draw_count + manor.tavern_recruitment_bonus
+    assert calls["by_rarity"] == 1
+    assert calls["hermit"] == 1
 
 
 @pytest.mark.django_db
@@ -113,6 +148,78 @@ def test_start_guest_recruitment_rejects_when_active_exists(game_data, django_us
 
     with pytest.raises(ValueError, match="已有招募正在进行中"):
         start_guest_recruitment(manor, pool, seed=2)
+
+
+@pytest.mark.django_db
+def test_start_guest_recruitment_rejects_when_pool_daily_limit_reached(
+    game_data, django_user_model, load_guest_data, monkeypatch
+):
+    user = django_user_model.objects.create_user(username="player_recruit_daily_limit", password="pass123")
+    manor = ensure_manor(user)
+    manor.silver = 500000
+    manor.grain = 500000
+    manor.save(update_fields=["silver", "grain"])
+    pool = RecruitmentPool.objects.get(key="cunmu")
+
+    monkeypatch.setattr(recruitment_service, "_get_pool_daily_draw_limit", lambda: 2)
+    now = timezone.now()
+    GuestRecruitment.objects.create(
+        manor=manor,
+        pool=pool,
+        cost={},
+        draw_count=1,
+        duration_seconds=0,
+        seed=1,
+        status=GuestRecruitment.Status.COMPLETED,
+        complete_at=now,
+        finished_at=now,
+    )
+    GuestRecruitment.objects.create(
+        manor=manor,
+        pool=pool,
+        cost={},
+        draw_count=1,
+        duration_seconds=0,
+        seed=2,
+        status=GuestRecruitment.Status.COMPLETED,
+        complete_at=now,
+        finished_at=now,
+    )
+
+    with pytest.raises(ValueError, match="今日招募次数已达上限"):
+        start_guest_recruitment(manor, pool, seed=3)
+
+
+@pytest.mark.django_db
+def test_start_guest_recruitment_daily_limit_is_per_pool(game_data, django_user_model, load_guest_data, monkeypatch):
+    user = django_user_model.objects.create_user(username="player_recruit_daily_per_pool", password="pass123")
+    manor = ensure_manor(user)
+    manor.silver = 500000
+    manor.grain = 500000
+    manor.save(update_fields=["silver", "grain"])
+    first_pool = RecruitmentPool.objects.get(key="cunmu")
+    second_pool = RecruitmentPool.objects.exclude(pk=first_pool.pk).order_by("id").first()
+    assert second_pool is not None
+    second_pool.cost = {}
+    second_pool.save(update_fields=["cost"])
+
+    monkeypatch.setattr(recruitment_service, "_get_pool_daily_draw_limit", lambda: 1)
+    now = timezone.now()
+    GuestRecruitment.objects.create(
+        manor=manor,
+        pool=first_pool,
+        cost={},
+        draw_count=1,
+        duration_seconds=0,
+        seed=1,
+        status=GuestRecruitment.Status.COMPLETED,
+        complete_at=now,
+        finished_at=now,
+    )
+
+    recruitment = start_guest_recruitment(manor, second_pool, seed=2)
+    assert recruitment.pool_id == second_pool.id
+    assert recruitment.status == GuestRecruitment.Status.PENDING
 
 
 @pytest.mark.django_db

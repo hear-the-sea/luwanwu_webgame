@@ -4,10 +4,12 @@
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 
 from core.utils import safe_int, safe_ordering
+from core.utils.rate_limit import rate_limit_redirect
 from gameplay.models import Manor
 
 from ..constants import GUILD_CREATION_COST, GUILD_HALL_DISPLAY_LIMIT, GUILD_LIST_PAGE_SIZE
@@ -85,6 +87,7 @@ def guild_search(request):
 
 
 @login_required
+@rate_limit_redirect("guild_create", limit=3, window_seconds=60)
 def create_guild(request):
     """创建帮会"""
     if request.method == "POST":
@@ -182,6 +185,7 @@ def guild_detail(request, guild_id):
 
 @login_required
 @require_guild_leader
+@rate_limit_redirect("guild_info", limit=10, window_seconds=60)
 def guild_info(request, guild_id):
     """帮会信息设置"""
     guild = get_object_or_404(Guild, id=guild_id, is_active=True)
@@ -193,12 +197,14 @@ def guild_info(request, guild_id):
         return redirect("guilds:detail", guild_id=member.guild_id)
 
     if request.method == "POST":
-        description = request.POST.get("description", "").strip()
+        description = request.POST.get("description", "").strip()[:200]
         auto_accept = request.POST.get("auto_accept") == "on"
 
-        guild.description = description
-        guild.auto_accept = auto_accept
-        guild.save(update_fields=["description", "auto_accept"])
+        with transaction.atomic():
+            guild = Guild.objects.select_for_update().get(pk=guild.pk)
+            guild.description = description
+            guild.auto_accept = auto_accept
+            guild.save(update_fields=["description", "auto_accept"])
 
         messages.success(request, "帮会信息已更新")
         return redirect("guilds:detail", guild_id=guild.id)

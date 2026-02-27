@@ -32,11 +32,13 @@
                         <p class="text-sm text-text-muted">消耗家丁 {{ recruitment.retainer_cost }}</p>
                     </header>
                     <div class="flex gap-2 flex-wrap">
-                        {% if recruitment.time_remaining > 0 %}
-                            <span class="tw-chip">剩余时间：{{ recruitment.time_remaining }} 秒</span>
-                        {% else %}
-                            <span class="tw-badge-green">已完成！</span>
-                        {% endif %}
+                        <span class="tw-chip">
+                            剩余时间：
+                            <span class="countdown"
+                                  data-countdown="{{ recruitment.complete_at|date:'c' }}"
+                                  data-refresh="1"
+                                  data-complete-text="已完成，正在刷新">计算中</span>
+                        </span>
                     </div>
                 </article>
                 {% endfor %}

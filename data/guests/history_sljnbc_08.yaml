@@ -1,4 +1,161 @@
 heroes:
+  blue:
+  - key: hist_sljnbc_0356
+    name: 刘聪
+    default_gender: male
+    archetype: military
+    flavor: （？—318年）汉赵政权第二任皇帝，新兴匈奴人，字玄明，刘渊第四子。他自幼聪慧，精通汉学，兼习武艺。刘渊死后他夺得帝位，继续对西晋用兵。永嘉五年（311年）他遣大军攻破洛阳，俘虏晋怀帝，迫其为仆从斟酒，后将其杀害。建兴四年（316年）他再遣军攻入长安，俘虏晋愍帝，西晋灭亡。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 40
+      intellect: 15
+      defense: 23
+      agility: 22
+  - key: hist_sljnbc_0359
+    name: 董卓
+    default_gender: male
+    archetype: military
+    flavor: （？—192年5月22日）东汉末年权臣，字仲颖，陇西临洮人。他自幼在凉州长大，与羌人交往密切，后投身军旅，在平定羌乱的战争中屡立战功，逐渐成为拥兵自重的边将。中平六年（189年）大将军何进谋诛宦官，召他率军入京。他兵临洛阳时何进已死，他趁乱控制朝廷，废少帝刘辩，立陈留王刘协为帝（汉献帝），自任相国，独揽朝政。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 40
+      intellect: 15
+      defense: 23
+      agility: 22
+  - key: hist_sljnbc_0381
+    name: 袁术
+    default_gender: male
+    archetype: civil
+    flavor: （？—199年）东汉末年诸侯，汝南汝阳人，袁绍之弟。出身"四世三公"名门，早年任后将军、南阳太守。董卓之乱后他据有淮南，地盘广阔，兵精粮足。他奢侈无度，生活腐化，却野心勃勃。建安二年（197年）他得到孙坚所获传国玉玺后，在寿春僭号称帝，国号"仲氏"，自取灭亡。他称帝后众叛亲离，吕布、孙策、曹操等群起攻之。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 20
+      intellect: 40
+      defense: 20
+      agility: 20
+  - key: hist_sljnbc_0383
+    name: 马谡
+    default_gender: male
+    archetype: military
+    flavor: （190年—228年）蜀汉参军，襄阳宜城人，马良之弟。他才思敏捷，善谈兵法，诸葛亮对其颇为赏识，曾称"马谡言过其实，不可大用"。建兴六年（228年）诸葛亮第一次北伐，命他镇守街亭这一战略要地。他违背诸葛亮"当道扎营"的军令，舍水上山，结果被魏将张郃围困断水，蜀军大败，街亭失守，北伐全盘受挫。诸葛亮挥泪斩马谡，以正军法。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 40
+      intellect: 15
+      defense: 23
+      agility: 22
+  - key: hist_sljnbc_0384
+    name: 黄月英
+    default_gender: female
+    archetype: civil
+    flavor: （？—？）诸葛亮之妻，沔阳名士黄承彦之女。据《襄阳记》载，黄承彦对诸葛亮说"闻君择妇，身有丑女，黄头黑色，而才堪配"，诸葛亮欣然答应迎娶。当时人笑谈"莫作孔明择妇，正得阿承丑女"。她虽容貌不扬，却才华出众，据说精通机械制作，诸葛亮发明木牛流马等器械或受其启发。她与诸葛亮婚后相夫教子，生育一子诸葛瞻。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 20
+      intellect: 40
+      defense: 20
+      agility: 20
+  - key: hist_sljnbc_0386
+    name: 小乔
+    default_gender: female
+    archetype: civil
+    flavor: （？—？）江东二乔之妹，周瑜之妻。庐江皖县人，与姐姐大乔并称"江东二乔"，以绝色著称于世。建安四年（199年）孙策攻破皖城后，周瑜娶她为妻，孙策娶其姐大乔，一时传为佳话。她与周瑜情深意笃，伉俪和谐。周瑜风流倜傥、精通音律，她陪伴丈夫走过了赤壁之战的辉煌岁月。建安十五年（210年）周瑜病逝巴丘，年仅三十六岁，她年纪尚轻便守寡。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_sljnbc_0387
+    name: 潘安
+    default_gender: male
+    archetype: civil
+    flavor: （247年—300年）西晋文学家，荥阳中牟人，字安仁，本名潘岳。他容貌俊美，风度翩翩，少年时驾车出行，洛阳妇女纷纷掷果相赠以致车满，"掷果盈车"典故由此而来，后世遂以"貌比潘安"形容美男子。他文学造诣极高，与陆机并称"潘陆"，为西晋文坛领袖。其《悼亡诗》悼念亡妻，情真意切，开创悼亡诗之先河。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 64
+      defense: 18
+      agility: 10
+  - key: hist_sljnbc_0388
+    name: 王献之
+    default_gender: male
+    archetype: civil
+    flavor: （344年—386年）东晋书法家，琅琊临沂人，字子敬，王羲之第七子。他自幼随父学书，勤奋刻苦，后自创新体，书风疏朗妍媚，与父亲并称"二王"，被后世尊为"小圣"。他的行草书尤为精绝，《鸭头丸帖》《中秋帖》等皆为传世名作。他为人风流蕴藉，曾因新安公主仰慕其才貌而被迫离婚另娶，此事令他郁郁不乐。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 64
+      defense: 18
+      agility: 10
+  - key: hist_sljnbc_0390
+    name: 谢灵运
+    default_gender: male
+    archetype: civil
+    flavor: （385年—433年）南朝宋诗人，陈郡阳夏人，名公义，字灵运，以字行世，东晋名将谢玄之孙。他袭封康乐公，故世称"谢康乐"。他自恃才高，放诞不羁，常率众游山玩水，发明一种可以上下活动的木屐以便登山，后人称为"谢公屐"。他的山水诗描绘自然风光细腻生动，开创山水诗派，对唐代诗人李白、杜甫等影响深远。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 64
+      defense: 18
+      agility: 10
+  - key: hist_sljnbc_0392
+    name: 花木兰
+    default_gender: female
+    archetype: military
+    flavor: （生卒不详）中国古代传说中的女英雄，其事迹主要见于南北朝时期的《木兰辞》。据诗歌记载，她家世代务农，父亲年老体弱，弟弟年幼，当军帖下达征召父亲从军时，她决定女扮男装代父出征。她在军中征战十二年，立下赫赫战功，同伴竟无人识破其女儿身份。凯旋归来后天子论功行赏，她辞去高官厚禄，只愿回乡与家人团聚。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 40
+      intellect: 15
+      defense: 23
+      agility: 22
+  - key: hist_sljnbc_0394
+    name: 王粲
+    default_gender: male
+    archetype: civil
+    flavor: （177年—217年）东汉末年文学家，山阳高平人，字仲宣。他出身名门，少有才名，蔡邕曾倒履相迎。他容貌短小，但博闻强记，过目不忘，能背诵碑文，精通算术。他避乱荆州依附刘表，却因貌陋不获重用，失意十五年。刘表死后他归曹操，深受赏识，任丞相掾、侍中等职。他是建安七子之首，文才冠绝当时。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 64
+      defense: 18
+      agility: 10
+  - key: hist_sljnbc_0397
+    name: 郭璞
+    default_gender: male
+    archetype: civil
+    flavor: （276年—324年）东晋学者、文学家，河东闻喜人，字景纯。他博学多才，精通训诂学和术数。他为《尔雅》《山海经》《穆天子传》等古籍作注，训释名物，考证精详，是训诂学的奠基人之一。他尤擅阴阳五行、风水堪舆之术，据说能预知吉凶祸福，后世尊为风水学鼻祖。王敦镇守荆州时起兵谋反，命他占卜吉凶。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 64
+      defense: 18
+      agility: 10
   green:
   - key: hist_sljnbc_0351
     name: 王衍
@@ -65,19 +222,6 @@ heroes:
       intellect: 15
       defense: 23
       agility: 22
-  - key: hist_sljnbc_0356
-    name: 刘聪
-    default_gender: male
-    archetype: military
-    flavor: （？—318年）汉赵政权第二任皇帝，新兴匈奴人，字玄明，刘渊第四子。他自幼聪慧，精通汉学，兼习武艺。刘渊死后他夺得帝位，继续对西晋用兵。永嘉五年（311年）他遣大军攻破洛阳，俘虏晋怀帝，迫其为仆从斟酒，后将其杀害。建兴四年（316年）他再遣军攻入长安，俘虏晋愍帝，西晋灭亡。
-    growth_range:
-    - 3
-    - 7
-    attribute_weights:
-      force: 40
-      intellect: 15
-      defense: 23
-      agility: 22
   - key: hist_sljnbc_0357
     name: 乐广
     default_gender: male
@@ -104,19 +248,6 @@ heroes:
       intellect: 40
       defense: 20
       agility: 20
-  - key: hist_sljnbc_0359
-    name: 董卓
-    default_gender: male
-    archetype: military
-    flavor: （？—192年5月22日）东汉末年权臣，字仲颖，陇西临洮人。他自幼在凉州长大，与羌人交往密切，后投身军旅，在平定羌乱的战争中屡立战功，逐渐成为拥兵自重的边将。中平六年（189年）大将军何进谋诛宦官，召他率军入京。他兵临洛阳时何进已死，他趁乱控制朝廷，废少帝刘辩，立陈留王刘协为帝（汉献帝），自任相国，独揽朝政。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 40
-      intellect: 15
-      defense: 23
-      agility: 22
   - key: hist_sljnbc_0360
     name: 赫连勃勃
     default_gender: male
@@ -390,19 +521,6 @@ heroes:
       intellect: 15
       defense: 23
       agility: 22
-  - key: hist_sljnbc_0381
-    name: 高顺
-    default_gender: male
-    archetype: military
-    flavor: （？—199年2月7日）东汉末年吕布麾下名将。他为人清白有威严，治军严格，不饮酒、不受馈遗。他所统领的"陷阵营"仅有七百余人，却铠甲精良、训练有素，每战必克，号称"攻无不克"。他与张辽并为吕布帐下双璧，多次立下战功。他曾率军击败夏侯惇、刘备等名将。他多次规劝吕布远离陈宫、疏远妻妾干政，吕布不听。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 40
-      intellect: 15
-      defense: 23
-      agility: 22
   - key: hist_sljnbc_0382
     name: 马谡
     default_gender: male
@@ -416,32 +534,6 @@ heroes:
       intellect: 58
       defense: 18
       agility: 12
-  - key: hist_sljnbc_0383
-    name: 关兴
-    default_gender: male
-    archetype: military
-    flavor: （？—？）蜀汉将领，河东解县人，关羽次子。他少有令名，诸葛亮对其十分器重。他在蜀汉官至侍中、中监军，参与了诸葛亮的北伐战役。《三国演义》中他与张飞之子张苞结为兄弟，并称"小关张"，在伐吴和北伐战争中屡立战功，斩杀潘璋等仇将为父报仇。然而正史中关于他的具体战绩记载甚少。他继承了父亲的汉寿亭侯爵位，年纪轻轻便去世。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 40
-      intellect: 15
-      defense: 23
-      agility: 22
-  - key: hist_sljnbc_0384
-    name: 黄月英
-    default_gender: female
-    archetype: civil
-    flavor: （？—？）诸葛亮之妻，沔阳名士黄承彦之女。据《襄阳记》载，黄承彦对诸葛亮说"闻君择妇，身有丑女，黄头黑色，而才堪配"，诸葛亮欣然答应迎娶。当时人笑谈"莫作孔明择妇，正得阿承丑女"。她虽容貌不扬，却才华出众，据说精通机械制作，诸葛亮发明木牛流马等器械或受其启发。她与诸葛亮婚后相夫教子，生育一子诸葛瞻。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 20
-      intellect: 40
-      defense: 20
-      agility: 20
   - key: hist_sljnbc_0385
     name: 李典
     default_gender: male
@@ -455,71 +547,6 @@ heroes:
       intellect: 15
       defense: 23
       agility: 22
-  - key: hist_sljnbc_0386
-    name: 小乔
-    default_gender: female
-    archetype: civil
-    flavor: （？—？）江东二乔之妹，周瑜之妻。庐江皖县人，与姐姐大乔并称"江东二乔"，以绝色著称于世。建安四年（199年）孙策攻破皖城后，周瑜娶她为妻，孙策娶其姐大乔，一时传为佳话。她与周瑜情深意笃，伉俪和谐。周瑜风流倜傥、精通音律，她陪伴丈夫走过了赤壁之战的辉煌岁月。建安十五年（210年）周瑜病逝巴丘，年仅三十六岁，她年纪尚轻便守寡。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 12
-      intellect: 58
-      defense: 18
-      agility: 12
-  - key: hist_sljnbc_0387
-    name: 潘安
-    default_gender: male
-    archetype: civil
-    flavor: （247年—300年）西晋文学家，荥阳中牟人，字安仁，本名潘岳。他容貌俊美，风度翩翩，少年时驾车出行，洛阳妇女纷纷掷果相赠以致车满，"掷果盈车"典故由此而来，后世遂以"貌比潘安"形容美男子。他文学造诣极高，与陆机并称"潘陆"，为西晋文坛领袖。其《悼亡诗》悼念亡妻，情真意切，开创悼亡诗之先河。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 8
-      intellect: 64
-      defense: 18
-      agility: 10
-  - key: hist_sljnbc_0388
-    name: 王献之
-    default_gender: male
-    archetype: civil
-    flavor: （344年—386年）东晋书法家，琅琊临沂人，字子敬，王羲之第七子。他自幼随父学书，勤奋刻苦，后自创新体，书风疏朗妍媚，与父亲并称"二王"，被后世尊为"小圣"。他的行草书尤为精绝，《鸭头丸帖》《中秋帖》等皆为传世名作。他为人风流蕴藉，曾因新安公主仰慕其才貌而被迫离婚另娶，此事令他郁郁不乐。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 8
-      intellect: 64
-      defense: 18
-      agility: 10
-  - key: hist_sljnbc_0389
-    name: 陶渊明
-    default_gender: male
-    archetype: civil
-    flavor: （约365年—427年）东晋诗人，浔阳柴桑人，字元亮，又名潜，私谥靖节。他出身官宦之家，曾任江州祭酒、彭泽县令等职。任彭泽令时，因不愿为五斗米向督邮折腰，弃官归隐田园。他归隐后亲自躬耕，过着清贫自足的生活。他的《归去来兮辞》《桃花源记》《饮酒》等作品开创田园诗派，"采菊东篱下，悠然见南山"成为千古名句。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 20
-      intellect: 40
-      defense: 20
-      agility: 20
-  - key: hist_sljnbc_0390
-    name: 谢灵运
-    default_gender: male
-    archetype: civil
-    flavor: （385年—433年）南朝宋诗人，陈郡阳夏人，名公义，字灵运，以字行世，东晋名将谢玄之孙。他袭封康乐公，故世称"谢康乐"。他自恃才高，放诞不羁，常率众游山玩水，发明一种可以上下活动的木屐以便登山，后人称为"谢公屐"。他的山水诗描绘自然风光细腻生动，开创山水诗派，对唐代诗人李白、杜甫等影响深远。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 8
-      intellect: 64
-      defense: 18
-      agility: 10
   - key: hist_sljnbc_0391
     name: 冼英
     default_gender: female
@@ -533,37 +560,11 @@ heroes:
       intellect: 40
       defense: 20
       agility: 20
-  - key: hist_sljnbc_0392
-    name: 花木兰
-    default_gender: female
-    archetype: military
-    flavor: （生卒不详）中国古代传说中的女英雄，其事迹主要见于南北朝时期的《木兰辞》。据诗歌记载，她家世代务农，父亲年老体弱，弟弟年幼，当军帖下达征召父亲从军时，她决定女扮男装代父出征。她在军中征战十二年，立下赫赫战功，同伴竟无人识破其女儿身份。凯旋归来后天子论功行赏，她辞去高官厚禄，只愿回乡与家人团聚。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 40
-      intellect: 15
-      defense: 23
-      agility: 22
   - key: hist_sljnbc_0393
     name: 张春华
     default_gender: female
     archetype: civil
     flavor: （189年—247年）晋宣穆皇后，河内平皋人，司马懿正妻。她出身世族，知书达理，性格刚毅果决。司马懿年轻时为躲避曹操征召装病卧床，一日天下暴雨，她见院中晾晒的书籍被淋，情急之下亲自跑出收书，被一婢女撞见。为保守司马懿装病的秘密，她竟亲手杀死婢女灭口。她生育二子司马师、司马昭，皆成大器。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 8
-      intellect: 64
-      defense: 18
-      agility: 10
-  - key: hist_sljnbc_0394
-    name: 王粲
-    default_gender: male
-    archetype: civil
-    flavor: （177年—217年）东汉末年文学家，山阳高平人，字仲宣。他出身名门，少有才名，蔡邕曾倒履相迎。他容貌短小，但博闻强记，过目不忘，能背诵碑文，精通算术。他避乱荆州依附刘表，却因貌陋不获重用，失意十五年。刘表死后他归曹操，深受赏识，任丞相掾、侍中等职。他是建安七子之首，文才冠绝当时。
     growth_range:
     - 3
     - 6
@@ -598,19 +599,6 @@ heroes:
       intellect: 15
       defense: 23
       agility: 22
-  - key: hist_sljnbc_0397
-    name: 郭璞
-    default_gender: male
-    archetype: civil
-    flavor: （276年—324年）东晋学者、文学家，河东闻喜人，字景纯。他博学多才，精通训诂学和术数。他为《尔雅》《山海经》《穆天子传》等古籍作注，训释名物，考证精详，是训诂学的奠基人之一。他尤擅阴阳五行、风水堪舆之术，据说能预知吉凶祸福，后世尊为风水学鼻祖。王敦镇守荆州时起兵谋反，命他占卜吉凶。
-    growth_range:
-    - 3
-    - 6
-    attribute_weights:
-      force: 8
-      intellect: 64
-      defense: 18
-      agility: 10
   - key: hist_sljnbc_0398
     name: 殷浩
     default_gender: male

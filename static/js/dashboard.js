@@ -5,6 +5,8 @@
   const countdownCache = new Map(); // el -> { target, style, shouldRefresh, checkUrl, completeText, removeSelector }
   let missionLists = []; // cached mission list elements
   let cacheInitialized = false;
+  let observerInitialized = false;
+  let tickTimerId = null;
 
   function initCache() {
     if (cacheInitialized) return;
@@ -35,6 +37,7 @@
 
   // Observe DOM changes to update cache automatically
   function setupMutationObserver() {
+    if (observerInitialized) return;
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
         // Handle added nodes
@@ -59,6 +62,14 @@
           }
           if (node.querySelectorAll) {
             node.querySelectorAll("[data-countdown]").forEach(unregisterCountdownElement);
+            const removedLists = node.querySelectorAll(".mission-list");
+            if (removedLists.length > 0) {
+              const removedSet = new Set(Array.from(removedLists));
+              missionLists = missionLists.filter((list) => !removedSet.has(list));
+            }
+            if (node.classList && node.classList.contains("mission-list")) {
+              missionLists = missionLists.filter((list) => list !== node);
+            }
           }
         }
         // Handle attribute changes on data-countdown
@@ -78,6 +89,7 @@
       attributes: true,
       attributeFilter: ["data-countdown"]
     });
+    observerInitialized = true;
   }
 
   function formatCountdown(diffMs, style) {
@@ -250,17 +262,26 @@
     toRemove.forEach((el) => countdownCache.delete(el));
 
     // Use cached mission lists instead of querying DOM
-    missionLists.forEach((listEl) => {
+    missionLists = missionLists.filter((listEl) => {
       if (document.body.contains(listEl)) {
         ensureListPlaceholder(listEl);
+        return true;
       }
+      return false;
     });
   }
 
-  document.addEventListener("DOMContentLoaded", () => {
+  function boot() {
+    if (tickTimerId !== null) return;
     initCache();
     setupMutationObserver();
     tick();
-    setInterval(tick, 1000);
-  });
+    tickTimerId = setInterval(tick, 1000);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot, { once: true });
+  } else {
+    boot();
+  }
 })();

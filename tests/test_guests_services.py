@@ -4,10 +4,13 @@
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.test import override_settings
+from django.utils import timezone
 
 from core.exceptions import InvalidAllocationError
 from gameplay.services.manor.core import ensure_manor
-from guests.models import Guest, GuestTemplate
+from guests.constants import TimeConstants
+from guests.models import Guest, GuestStatus, GuestTemplate
 from guests.services import allocate_attribute_points, available_guests, list_pools, recover_guest_hp
 
 User = get_user_model()
@@ -78,6 +81,89 @@ def test_recover_guest_hp_already_full():
 
     # 生命值不应该超过最大值
     assert guest.current_hp == initial_hp
+
+
+@pytest.mark.django_db
+def test_recover_guest_hp_injured_is_one_tenth_of_normal_speed():
+    user = User.objects.create_user(username="testuser_hp_recover_ratio", password="test123")
+    manor = ensure_manor(user)
+
+    template = GuestTemplate.objects.create(
+        key="test_guest_recover_ratio",
+        name="测试门客恢复比例",
+        rarity="gray",
+        base_attack=50,
+        base_defense=50,
+    )
+    now = timezone.now()
+    last = now - timezone.timedelta(seconds=TimeConstants.HP_RECOVERY_INTERVAL)
+
+    idle_guest = Guest.objects.create(
+        manor=manor,
+        template=template,
+        status=GuestStatus.IDLE,
+        current_hp=1,
+        last_hp_recovery_at=last,
+    )
+    injured_guest = Guest.objects.create(
+        manor=manor,
+        template=template,
+        status=GuestStatus.INJURED,
+        current_hp=1,
+        last_hp_recovery_at=last,
+    )
+
+    with override_settings(GAME_TIME_MULTIPLIER=1):
+        recover_guest_hp(idle_guest, now=now)
+        recover_guest_hp(injured_guest, now=now)
+    idle_guest.refresh_from_db()
+    injured_guest.refresh_from_db()
+
+    idle_gain = idle_guest.current_hp - 1
+    injured_gain = injured_guest.current_hp - 1
+    assert injured_gain > 0
+    assert idle_gain == injured_gain * 10
+
+
+@pytest.mark.django_db
+def test_recover_guest_hp_injured_respects_global_time_multiplier():
+    user = User.objects.create_user(username="testuser_hp_recover_scale", password="test123")
+    manor = ensure_manor(user)
+
+    template = GuestTemplate.objects.create(
+        key="test_guest_recover_scale",
+        name="测试门客恢复倍率",
+        rarity="gray",
+        base_attack=50,
+        base_defense=50,
+    )
+    guest = Guest.objects.create(
+        manor=manor,
+        template=template,
+        status=GuestStatus.INJURED,
+        current_hp=1,
+    )
+    now = timezone.now()
+    last = now - timezone.timedelta(seconds=TimeConstants.HP_RECOVERY_INTERVAL)
+
+    with override_settings(GAME_TIME_MULTIPLIER=1):
+        guest.current_hp = 1
+        guest.last_hp_recovery_at = last
+        guest.save(update_fields=["current_hp", "last_hp_recovery_at"])
+        recover_guest_hp(guest, now=now)
+        guest.refresh_from_db()
+        base_gain = guest.current_hp - 1
+
+    with override_settings(GAME_TIME_MULTIPLIER=5):
+        guest.current_hp = 1
+        guest.last_hp_recovery_at = last
+        guest.save(update_fields=["current_hp", "last_hp_recovery_at"])
+        recover_guest_hp(guest, now=now)
+        guest.refresh_from_db()
+        scaled_gain = guest.current_hp - 1
+
+    assert base_gain > 0
+    assert scaled_gain == base_gain * 5
 
 
 @pytest.mark.django_db

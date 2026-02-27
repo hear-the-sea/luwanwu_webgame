@@ -200,7 +200,12 @@ def start_scout(attacker: Manor, defender: Manor) -> ScoutRecord:
         ValueError: 无法发起侦察时
     """
     # 检查是否可以攻击目标
-    can_attack, reason = can_attack_target(attacker, defender, use_cached_recent_attacks=False)
+    can_attack, reason = can_attack_target(
+        attacker,
+        defender,
+        use_cached_recent_attacks=False,
+        check_defeat_protection=False,
+    )
     if not can_attack:
         raise ValueError(reason)
 
@@ -226,6 +231,7 @@ def start_scout(attacker: Manor, defender: Manor) -> ScoutRecord:
             defender_locked,
             now=now,
             use_cached_recent_attacks=False,
+            check_defeat_protection=False,
         )
         if not can_attack_locked:
             raise ValueError(reason_locked)

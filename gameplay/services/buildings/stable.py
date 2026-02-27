@@ -6,16 +6,20 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 from typing import Any, Dict, List
 
 from django.db import transaction
 from django.utils import timezone
 
+from common.utils.celery import safe_apply_async
 from core.utils.time_scale import scale_duration
 
 from ...constants import BuildingKeys
 from ...models import HorseProduction, Manor
+
+logger = logging.getLogger(__name__)
 
 # 马匹配置
 HORSE_CONFIG: Dict[str, Dict[str, Any]] = {
@@ -242,11 +246,8 @@ def _schedule_production_completion(production: HorseProduction, eta_seconds: in
         production: HorseProduction实例
         eta_seconds: 预计完成时间（秒）
     """
-    import logging
-
     from django.db import transaction as db_transaction
 
-    logger = logging.getLogger(__name__)
     countdown = max(0, int(eta_seconds))
 
     try:
@@ -255,7 +256,15 @@ def _schedule_production_completion(production: HorseProduction, eta_seconds: in
         logger.warning("Unable to import complete_horse_production task; skip scheduling", exc_info=True)
         return
 
-    db_transaction.on_commit(lambda: complete_horse_production.apply_async(args=[production.id], countdown=countdown))
+    db_transaction.on_commit(
+        lambda: safe_apply_async(
+            complete_horse_production,
+            args=[production.id],
+            countdown=countdown,
+            logger=logger,
+            log_message="complete_horse_production dispatch failed",
+        )
+    )
 
 
 def finalize_horse_production(production: HorseProduction, send_notification: bool = False) -> bool:
@@ -293,23 +302,32 @@ def finalize_horse_production(production: HorseProduction, send_notification: bo
         from ..utils.messages import create_message
 
         quantity_text = f"x{production.quantity}" if production.quantity > 1 else ""
-        create_message(
-            manor=production.manor,
-            kind=Message.Kind.SYSTEM,
-            title=f"{production.horse_name}{quantity_text}生产完成",
-            body=f"您的{production.horse_name}{quantity_text}已生产完成，请到仓库查收。",
-        )
+        try:
+            create_message(
+                manor=production.manor,
+                kind=Message.Kind.SYSTEM,
+                title=f"{production.horse_name}{quantity_text}生产完成",
+                body=f"您的{production.horse_name}{quantity_text}已生产完成，请到仓库查收。",
+            )
 
-        notify_user(
-            production.manor.user_id,
-            {
-                "kind": "system",
-                "title": f"{production.horse_name}{quantity_text}生产完成",
-                "horse_key": production.horse_key,
-                "quantity": production.quantity,
-            },
-            log_context="horse production notification",
-        )
+            notify_user(
+                production.manor.user_id,
+                {
+                    "kind": "system",
+                    "title": f"{production.horse_name}{quantity_text}生产完成",
+                    "horse_key": production.horse_key,
+                    "quantity": production.quantity,
+                },
+                log_context="horse production notification",
+            )
+        except Exception as exc:
+            logger.warning(
+                "horse production notification failed: production_id=%s manor_id=%s error=%s",
+                production.id,
+                production.manor_id,
+                exc,
+                exc_info=True,
+            )
 
     return True
 

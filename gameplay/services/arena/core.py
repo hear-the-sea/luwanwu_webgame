@@ -7,6 +7,7 @@ from datetime import timedelta
 from types import SimpleNamespace
 from typing import Any, Iterable, cast
 
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Count, F, Sum
 from django.utils import timezone
@@ -28,15 +29,26 @@ from gameplay.services.resources import grant_resources_locked
 from gameplay.services.utils.messages import create_message
 from guests.models import Guest, GuestStatus
 
-from .rewards import ArenaRewardDefinition, get_arena_reward_definition
+from .rewards import ArenaRandomItemOption, ArenaRewardDefinition, get_arena_reward_definition
 
 logger = logging.getLogger(__name__)
 
-ARENA_DAILY_PARTICIPATION_LIMIT = 3
+
+def _load_positive_int_setting(name: str, default: int, *, minimum: int = 1) -> int:
+    raw_value = getattr(settings, name, default)
+    try:
+        parsed_value = int(raw_value)
+    except (TypeError, ValueError):
+        return default
+    return max(minimum, parsed_value)
+
+
+ARENA_DAILY_PARTICIPATION_LIMIT = _load_positive_int_setting("ARENA_DAILY_PARTICIPATION_LIMIT", 100, minimum=1)
 ARENA_MAX_GUESTS_PER_ENTRY = 10
-ARENA_TOURNAMENT_PLAYER_LIMIT = 10
+ARENA_TOURNAMENT_PLAYER_LIMIT = _load_positive_int_setting("ARENA_TOURNAMENT_PLAYER_LIMIT", 3, minimum=2)
 ARENA_ROUND_INTERVAL_SECONDS = 600
 ARENA_COMPLETED_RETENTION_SECONDS = 600
+ARENA_ROUND_RETRY_SECONDS = 30
 ARENA_REGISTRATION_SILVER_COST = 5000
 ARENA_BASE_PARTICIPATION_COINS = 30
 ARENA_RANK_BONUS_COINS = {
@@ -124,6 +136,11 @@ class ArenaExchangeResult:
     credited_resources: dict[str, int]
     overflow_resources: dict[str, int]
     granted_items: dict[str, int]
+    random_granted_items: dict[str, int]
+
+
+class ArenaMatchResolutionError(RuntimeError):
+    """Raised when a round match cannot be resolved and should be retried."""
 
 
 def _normalize_guest_ids(guest_ids: Iterable[int]) -> list[int]:
@@ -191,6 +208,34 @@ def _today_local_date(*, now=None):
     return timezone.localdate(now or timezone.now())
 
 
+def _choose_random_item_option(options: tuple[ArenaRandomItemOption, ...]) -> ArenaRandomItemOption | None:
+    if not options:
+        return None
+    total_weight = sum(max(0, int(option.weight)) for option in options)
+    if total_weight <= 0:
+        return None
+    roll = random.random() * total_weight
+    chosen = options[-1]
+    cumulative = 0
+    for option in options:
+        cumulative += option.weight
+        if roll < cumulative:
+            chosen = option
+            break
+    return chosen
+
+
+def _resolve_random_reward_items(options: tuple[ArenaRandomItemOption, ...], quantity: int) -> dict[str, int]:
+    grants: dict[str, int] = {}
+    rounds = max(0, int(quantity or 0))
+    for _ in range(rounds):
+        chosen = _choose_random_item_option(options)
+        if chosen is None:
+            break
+        grants[chosen.item_key] = grants.get(chosen.item_key, 0) + chosen.amount
+    return grants
+
+
 def _sync_daily_participation_counter_locked(locked_manor: Manor, *, now=None) -> int:
     """
     同步庄园侧的竞技场日计数。
@@ -232,7 +277,7 @@ def _get_or_create_recruiting_tournament_locked() -> ArenaTournament:
     if tournament:
         return tournament
 
-    acquired, from_cache = acquire_best_effort_lock(
+    acquired, from_cache, lock_token = acquire_best_effort_lock(
         ARENA_RECRUITING_LOCK_KEY,
         timeout_seconds=ARENA_RECRUITING_LOCK_TIMEOUT,
         logger=logger,
@@ -271,6 +316,7 @@ def _get_or_create_recruiting_tournament_locked() -> ArenaTournament:
         release_best_effort_lock(
             ARENA_RECRUITING_LOCK_KEY,
             from_cache=from_cache,
+            lock_token=lock_token,
             logger=logger,
             log_context="arena recruiting tournament lock",
         )
@@ -670,34 +716,16 @@ def _resolve_match_locked(
         )
     except Exception:
         logger.exception(
-            "arena simulate_report failed; fallback to forfeit: tournament_id=%s round=%s attacker=%s defender=%s",
+            "arena simulate_report failed; defer match for retry: tournament_id=%s round=%s attacker=%s defender=%s",
             tournament.id,
             round_number,
             attacker_entry.id,
             defender_entry.id,
         )
-        winner_entry = random.choice([attacker_entry, defender_entry])
         if match:
-            _save_resolved_match(
-                match=match,
-                winner_entry=winner_entry,
-                status=ArenaMatch.Status.FORFEIT,
-                note="战斗模拟异常，已随机判定胜者",
-                now=now,
-            )
-        else:
-            _create_forfeit_match(
-                tournament=tournament,
-                round_number=round_number,
-                match_index=match_index,
-                attacker_entry=attacker_entry,
-                defender_entry=defender_entry,
-                winner_entry=winner_entry,
-                status=ArenaMatch.Status.FORFEIT,
-                note="战斗模拟异常，已随机判定胜者",
-                now=now,
-            )
-        return winner_entry
+            match.notes = "战斗模拟异常，待系统重试"
+            match.save(update_fields=["notes"])
+        raise ArenaMatchResolutionError("战斗模拟异常，已保留待重试")
 
     if report.winner == "attacker":
         winner_entry = attacker_entry
@@ -780,7 +808,17 @@ def _finalize_tournament_locked(tournament: ArenaTournament, *, winner_entry: Ar
         Manor.objects.filter(pk=entry.manor_id).update(arena_coins=F("arena_coins") + entry.coin_reward)
         title = "竞技场结算奖励"
         body = f"本场排名第 {entry.final_rank}，获得角斗币 {entry.coin_reward}。"
-        create_message(manor=entry.manor, kind=Message.Kind.REWARD, title=title, body=body)
+        try:
+            create_message(manor=entry.manor, kind=Message.Kind.REWARD, title=title, body=body)
+        except Exception as exc:
+            logger.warning(
+                "arena settlement message failed: tournament_id=%s entry_id=%s manor_id=%s error=%s",
+                tournament.id,
+                entry.id,
+                entry.manor_id,
+                exc,
+                exc_info=True,
+            )
 
     participating_guest_ids = list(
         ArenaEntryGuest.objects.filter(entry_id__in=[entry.id for entry in entries]).values_list("guest_id", flat=True)
@@ -853,15 +891,13 @@ def _run_tournament_round(tournament_id: int, *, now) -> bool:
     )
     entry_map = {entry.id: entry for entry in entries}
 
-    winner_ids: list[int] = []
-    loser_ids: list[int] = []
+    resolution_failed = False
     for pending in pending_matches:
         attacker_entry = entry_map.get(pending.attacker_entry_id)
         if not attacker_entry:
             continue
 
         if pending.defender_entry_id is None:
-            winner_ids.append(attacker_entry.id)
             _save_resolved_match(
                 match=pending,
                 winner_entry=attacker_entry,
@@ -873,7 +909,6 @@ def _run_tournament_round(tournament_id: int, *, now) -> bool:
 
         defender_entry = entry_map.get(pending.defender_entry_id)
         if not defender_entry:
-            winner_ids.append(attacker_entry.id)
             _save_resolved_match(
                 match=pending,
                 winner_entry=attacker_entry,
@@ -883,25 +918,56 @@ def _run_tournament_round(tournament_id: int, *, now) -> bool:
             )
             continue
 
-        winner_entry = _resolve_match_locked(
-            tournament=pending.tournament,
-            round_number=round_number,
-            match_index=pending.match_index,
-            attacker_entry=attacker_entry,
-            defender_entry=defender_entry,
-            now=now,
-            match=pending,
-        )
-        winner_ids.append(winner_entry.id)
-        loser_id = defender_entry.id if winner_entry.id == attacker_entry.id else attacker_entry.id
-        loser_ids.append(loser_id)
-
-    winner_ids = list(dict.fromkeys(winner_ids))
-    loser_ids = list(dict.fromkeys(loser_ids))
+        try:
+            _resolve_match_locked(
+                tournament=pending.tournament,
+                round_number=round_number,
+                match_index=pending.match_index,
+                attacker_entry=attacker_entry,
+                defender_entry=defender_entry,
+                now=now,
+                match=pending,
+            )
+        except ArenaMatchResolutionError:
+            resolution_failed = True
 
     with transaction.atomic():
         tournament = ArenaTournament.objects.select_for_update().filter(pk=tournament_id).first()
         if not tournament or tournament.status != ArenaTournament.Status.RUNNING:
+            return False
+
+        round_matches = list(
+            ArenaMatch.objects.select_for_update()
+            .filter(tournament=tournament, round_number=round_number)
+            .order_by("match_index", "id")
+        )
+        unresolved_exists = any(match.status == ArenaMatch.Status.SCHEDULED for match in round_matches)
+        if resolution_failed or unresolved_exists:
+            retry_seconds = max(1, min(ARENA_ROUND_RETRY_SECONDS, _round_interval_seconds()))
+            tournament.next_round_at = now + timedelta(seconds=retry_seconds)
+            tournament.save(update_fields=["next_round_at", "updated_at"])
+            return False
+
+        winner_ids: list[int] = []
+        loser_ids: list[int] = []
+        for match in round_matches:
+            winner_id = match.winner_entry_id
+            if not winner_id:
+                continue
+            winner_ids.append(winner_id)
+            if match.defender_entry_id is None:
+                continue
+            if winner_id == match.attacker_entry_id:
+                loser_ids.append(match.defender_entry_id)
+            else:
+                loser_ids.append(match.attacker_entry_id)
+
+        winner_ids = list(dict.fromkeys(winner_ids))
+        loser_ids = list(dict.fromkeys(loser_ids))
+        if not winner_ids:
+            retry_seconds = max(1, min(ARENA_ROUND_RETRY_SECONDS, _round_interval_seconds()))
+            tournament.next_round_at = now + timedelta(seconds=retry_seconds)
+            tournament.save(update_fields=["next_round_at", "updated_at"])
             return False
 
         if loser_ids:
@@ -912,8 +978,7 @@ def _run_tournament_round(tournament_id: int, *, now) -> bool:
                 status=ArenaEntry.Status.ELIMINATED,
                 eliminated_round=round_number,
             )
-        for winner_id in winner_ids:
-            ArenaEntry.objects.filter(pk=winner_id).update(matches_won=F("matches_won") + 1)
+        ArenaEntry.objects.filter(pk__in=winner_ids).update(matches_won=F("matches_won") + 1)
 
         if len(winner_ids) <= 1:
             winner = None
@@ -1020,6 +1085,11 @@ def exchange_arena_reward(manor: Manor, reward_key: str, quantity: int = 1) -> A
         add_item_to_inventory_locked(locked_manor, item_key, total_amount)
         granted_items[item_key] = total_amount
 
+    random_item_grants = _resolve_random_reward_items(reward.random_items, normalized_quantity)
+    for item_key, amount in random_item_grants.items():
+        add_item_to_inventory_locked(locked_manor, item_key, amount)
+        granted_items[item_key] = granted_items.get(item_key, 0) + amount
+
     payload = {
         "resources": credited_resources,
         "resources_overflow": overflow_resources,
@@ -1043,12 +1113,22 @@ def exchange_arena_reward(manor: Manor, reward_key: str, quantity: int = 1) -> A
         summary_parts.append("部分资源因容量上限溢出")
     summary = "，".join(summary_parts) if summary_parts else "奖励已处理"
 
-    create_message(
-        manor=locked_manor,
-        kind=Message.Kind.REWARD,
-        title=f"竞技场兑换成功：{reward.name}",
-        body=f"消耗角斗币 {total_cost}，兑换数量 {normalized_quantity}。{summary}。",
-    )
+    try:
+        create_message(
+            manor=locked_manor,
+            kind=Message.Kind.REWARD,
+            title=f"竞技场兑换成功：{reward.name}",
+            body=f"消耗角斗币 {total_cost}，兑换数量 {normalized_quantity}。{summary}。",
+        )
+    except Exception as exc:
+        logger.warning(
+            "arena exchange message failed: manor_id=%s reward_key=%s quantity=%s error=%s",
+            locked_manor.id,
+            reward.key,
+            normalized_quantity,
+            exc,
+            exc_info=True,
+        )
 
     manor.refresh_from_db(fields=["arena_coins", "grain", "silver"])
     return ArenaExchangeResult(
@@ -1058,4 +1138,5 @@ def exchange_arena_reward(manor: Manor, reward_key: str, quantity: int = 1) -> A
         credited_resources=credited_resources,
         overflow_resources=overflow_resources,
         granted_items=granted_items,
+        random_granted_items=random_item_grants,
     )

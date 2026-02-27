@@ -14,21 +14,28 @@ def scan_arena_tournaments(limit: int = 20) -> dict[str, int]:
     started = 0
     processed = 0
     cleaned = 0
+    failed_stages: list[str] = []
 
     try:
         started = start_ready_tournaments(limit=limit)
     except Exception:
         logger.exception("arena tournament start scan failed")
+        failed_stages.append("start_ready_tournaments")
 
     try:
         processed = run_due_arena_rounds(limit=limit)
     except Exception:
         logger.exception("arena tournament round scan failed")
+        failed_stages.append("run_due_arena_rounds")
 
     try:
         cleaned = cleanup_expired_tournaments(limit=max(20, int(limit)))
     except Exception:
         logger.exception("arena tournament cleanup failed")
+        failed_stages.append("cleanup_expired_tournaments")
+
+    if failed_stages:
+        raise RuntimeError(f"arena scan failed stages: {', '.join(failed_stages)}")
 
     return {
         "started": int(started),

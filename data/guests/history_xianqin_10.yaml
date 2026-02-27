@@ -1,0 +1,888 @@
+heroes:
+  purple:
+  - key: hist_xianqin_0510
+    name: 老子
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）老子，虽以思想家名世，其治理观亦强调“少私寡欲、顺势而治”。在纷争激烈之际，他主张为公共议决保留空间，反对以意气代替制度。其价值不在辞锋，而在提醒统治者敬畏边界、节制干预。
+    growth_range:
+    - 6
+    - 11
+    attribute_weights:
+      force: 12
+      intellect: 52
+      defense: 20
+      agility: 16
+  blue:
+  - key: hist_xianqin_0456
+    name: 卞庄子
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）卞庄子，名声未必最显，却常在艰难时局中承担收束纷争的职责。善把空泛议论落回具体条目，令文书、钱粮与吏责彼此咬合，不致各行其是。其治务不倚猛药，宁以连续修补积累成效，故往往后劲更长。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 51
+      defense: 18
+      agility: 19
+  - key: hist_xianqin_0492
+    name: 韩厥
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）韩厥，素以稳而能断著称，少空论，多实作。处理边地与腹地事务时，他坚持因地制宜，反对粗暴套用同一尺度。其难得处不在高论，而在能把原则化成可执行的日常秩序。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 17
+      intellect: 55
+      defense: 22
+      agility: 6
+  - key: hist_xianqin_0506
+    name: 柳下惠
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）柳下惠，不独以操守闻名，亦见于其处理公务的分寸感。善统筹财政与人力，使紧绷资源仍可支撑基本秩序，不令理想沦为空谈。其贡献并非轰烈，却常在长期治理中稳稳显现。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 56
+      defense: 16
+      agility: 14
+  - key: hist_xianqin_0513
+    name: 吴王僚
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）吴王僚，相关记述虽散，却仍可见其在关键政务上的稳定手腕。其思路重缓急有序，不以短期胜负透支长期承受，故能在波动中维持基本框架。其风格克制而务实，使其影响多属静水深流。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 13
+      intellect: 54
+      defense: 21
+      agility: 12
+  green:
+  - key: hist_xianqin_0452
+    name: 伯舆
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）伯舆，传世记载虽不繁富，却能看出其在地方治务中的沉稳手段。遇到赋役与争讼并起时，他主张先定章程、再安人心，不以苛急求速效。其人不尚虚名，所长正在把零散政令化为可执行的秩序。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 12
+      intellect: 50
+      defense: 16
+      agility: 22
+  - key: hist_xianqin_0453
+    name: 北宫喜
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）北宫喜，在同代士人中以持重闻名，少有激烈辞令，却常能把难事办妥。处理钱粮与转运事务时，尤其强调环环可核、层层可追，避免政令半途失效。其政风看似平实，实则重在长期效果，故能在动荡局面里维持地方筋骨。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 14
+      intellect: 57
+      defense: 23
+      agility: 6
+  - key: hist_xianqin_0454
+    name: 北宫结
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）北宫结，史籍着墨不多，却留下其善断公事的轮廓。面对旧弊，他多从流程与责任入手，不争一时声势，而求制度能久行。其人处世有分寸，既敢言失当之处，也能给出可落地的修补路径。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 12
+      intellect: 51
+      defense: 17
+      agility: 20
+  - key: hist_xianqin_0455
+    name: 北宫遗
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）北宫遗，长于在中枢意志与地方现实之间寻找平衡，不使政令落空。其施政风格重细部而轻夸饰，先厘权责，再定缓急，务求每一步都有承接。即便局势多变，他仍能维持法度连续，减少朝令夕改带来的耗损。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 16
+      intellect: 52
+      defense: 20
+      agility: 12
+  - key: hist_xianqin_0458
+    name: 鲍牵
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）鲍牵，处事以“分次第、明缓急”见长，不轻以急令压垮基层承受。凡涉税赋与仓储，他多先护民生底线，再谋财政恢复，少有一刀切之举。其人重实效而戒浮功，故在同代官吏中颇得“可久”之评。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 11
+      intellect: 53
+      defense: 20
+      agility: 16
+  - key: hist_xianqin_0459
+    name: 长沮
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）长沮，史传多简，然其政务取向颇见章法，重长期而轻虚声。处理水利与转运事务时，他强调持续维护，不使工程止于开端。其功未必耀眼，却能在岁月中稳稳累积，成为地方秩序的一部分。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 56
+      defense: 18
+      agility: 13
+  - key: hist_xianqin_0460
+    name: 陈逆
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）陈逆，擅长在法理与现实冲突处做细密调停，不使矛盾激化。主张文书可核、财赋可稽、责任可追，以此压缩行政中的灰色地带。其治术并不张扬，却能在反复震荡中保持方向，显示出难得定力。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 58
+      defense: 18
+      agility: 13
+  - key: hist_xianqin_0461
+    name: 鉏麑
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）鉏麑，行事不以锋芒示人，却常在棘手关头稳住局面。审事多兼顾法度与乡情，不偏于一端，因此更容易被地方接受。其治务风格讲求稳步推进，宁缓不乱，少见激烈反复。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 16
+      intellect: 51
+      defense: 18
+      agility: 15
+  - key: hist_xianqin_0462
+    name: 杜原款
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）杜原款，史料虽散，仍可见其重视文教与吏治并行的施政脉络。整饬公牍流程，划清属吏职责，使行政链条不再层层失真。其功效并非立见于一时，却常在数年后显出制度收益。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 17
+      intellect: 58
+      defense: 17
+      agility: 8
+  - key: hist_xianqin_0463
+    name: 公之
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）公之，不以高声立名，而以长期可核的实绩取信于众。在政务处理上重“有据可循”，先理文书、再定责权，避免上下扯皮。其人眼光放在制度延续，而不在一任荣辱，故影响虽缓却深。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 11
+      intellect: 53
+      defense: 20
+      agility: 16
+  - key: hist_xianqin_0464
+    name: 公何藐
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）公何藐，擅把复杂议论化为简明条目，使政务能真正落到乡里。其面对积弊不求骤变，往往从可执行的小处着手，逐层纠偏。其行事不尚猛药，却能以持续修补换来秩序回稳，显示出耐烦与定力。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 57
+      defense: 22
+      agility: 10
+  - key: hist_xianqin_0465
+    name: 公父文伯
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）公父文伯，于士林与州县之间屡经磨砺，渐成持重之名。凡涉水利、转运与税粮，他多主张循序推进，不以短期观感换长远亏损。其治务风格看似朴拙，却能减少反复折腾，让地方得以慢慢恢复元气。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 17
+      intellect: 50
+      defense: 23
+      agility: 10
+  - key: hist_xianqin_0466
+    name: 公父穆伯
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）公父穆伯，立身之本在章法与耐心，而非一时口碑。灾荒与迁徙并作时，他多先稳食粮与治安，再议财政与教化，层次分明。其人守底线而知变通，故能在高压情势下维持社会修复能力。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 11
+      intellect: 50
+      defense: 22
+      agility: 17
+  - key: hist_xianqin_0467
+    name: 公鉏极
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）公鉏极，议政时不以辞锋压人，而以可执行方案见长。善把上层决断拆解为基层可操作的次序，减少政令在途中折损。政权更迭频仍之际，他仍尽力维持制度连续，不使新旧法令互相冲撞。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 57
+      defense: 20
+      agility: 7
+  - key: hist_xianqin_0468
+    name: 国佐
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）国佐，重视因地制宜，不轻把一套尺度强施于不同地域。处理边地与腹地事务时，常先辨资源与人情差异，再定施策先后。其可贵处不在宏词，而在能将理念转化为日常秩序，令百务可循。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 15
+      intellect: 54
+      defense: 18
+      agility: 13
+  - key: hist_xianqin_0469
+    name: 国子高
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）国子高，不以锋锐求名，却常在后局最难处被推为主事。面对积弊，他不急于示强，先补制度缝隙，再循序扩展变更范围。其作用如梁木下的榫卯，平时不显，一旦缺失便立见体系松动。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 14
+      intellect: 52
+      defense: 16
+      agility: 18
+  - key: hist_xianqin_0470
+    name: 国昭子
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）国昭子，议论不求响亮，重在可行，故常受托处理棘手事务。治事先厘权责，再定分工，使每一环节都有可核依据。虽无惊人之举，却能在政策摇摆时维持方向，减少地方摩擦与内耗。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 13
+      intellect: 51
+      defense: 21
+      agility: 15
+  - key: hist_xianqin_0471
+    name: 国胜
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）国胜，史料虽碎，仍可看出其治务思路始终围绕“先急后缓、先本后末”。不以短期功名透支地方承受，而更看重制度是否能被持续执行。其政风克制而务实，故常在动荡时期发挥稳压作用。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 55
+      defense: 21
+      agility: 8
+  - key: hist_xianqin_0473
+    name: 国弱
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）国弱，虽不以高位著称，却以善理繁务见长。其施政多从财赋与人力调配入手，重视轻重缓急，不令地方因急令失衡。面对连年压力，他更强调秩序的可持续，而非一时表面繁荣。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 15
+      intellect: 51
+      defense: 23
+      agility: 11
+  - key: hist_xianqin_0474
+    name: 子尾
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）子尾，常在中枢意旨与地方执行之间承担衔接职责。其人办事讲流程与次序，凡遇赋役争议，先明规则，后平情势，不使基层空耗。其名不甚喧赫，却因“可托付”而被反复征引。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 12
+      intellect: 50
+      defense: 17
+      agility: 21
+  - key: hist_xianqin_0475
+    name: 姬亥
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）姬亥，所处时局多变，却能在急务中守住分寸与法度。主张文书可核、钱粮可稽、责任可追，借此压实行政链条，减少推诿与失真。其治术不尚夸耀，重在长效，故往往后劲更显。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 14
+      intellect: 51
+      defense: 19
+      agility: 16
+  - key: hist_xianqin_0476
+    name: 季公鸟
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）季公鸟，史料虽简，仍可见其处事讲轻重、明权责。面对繁杂事务，他先定职责边界，再逐项推进，少走花哨捷径。其风格平稳不激，却能在政策摇摆期守住基本秩序。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 16
+      intellect: 50
+      defense: 18
+      agility: 16
+  - key: hist_xianqin_0477
+    name: 季冶
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）季冶，不以奇功立名，却常在关键节点上承担稳局之责。其治务理念重“缓急有序”，不为短期观感透支地方承受。凡遇积弊，他多循序清理，使改革可持续而不反噬。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 11
+      intellect: 52
+      defense: 23
+      agility: 14
+  - key: hist_xianqin_0478
+    name: 高偃
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）高偃，重制度后效而轻个人声势，是其最鲜明的治务取向。处理积弊时，他常先补流程漏洞，再行政策调整，不求骤然震动。其作用如梁下榫卯，平日不显，关键时却稳住全局。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 16
+      intellect: 53
+      defense: 20
+      agility: 11
+  - key: hist_xianqin_0479
+    name: 高倾子
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）高倾子，处世不露锋芒，却常被推为处理后局的中坚。其应对旧弊不求速断，重在先修制度接口，使新政可长久运行。其政风沉静而有力，往往在喧闹之外完成关键修补。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 58
+      defense: 19
+      agility: 10
+  - key: hist_xianqin_0480
+    name: 高厚
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）高厚，记载虽散，却能勾勒其治务路线始终围绕“先本后末”。处理地方事务时强调承受边界，不以短期政绩换长期亏空。其人克制而务实，故在多变时势下仍能维持政策连贯。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 56
+      defense: 17
+      agility: 16
+  - key: hist_xianqin_0481
+    name: 高固
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）高固，历经士林与州县两端磨砺，最终以稳健处事闻名。派系角力最紧时，他仍尽力保住公议空间，不让决策沦为情绪对撞。其人少夸辞，多兑现，故能同时获得官僚与民间层面的信任。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 12
+      intellect: 54
+      defense: 17
+      agility: 17
+  - key: hist_xianqin_0482
+    name: 高弱
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）高弱，议论不以声量取胜，而以方案能否落地见高下。并重文教与吏治，既整肃文书流程，也明确属吏责任，减少执行漂移。其眼光始终落在制度留下的后效，而非个人得失。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 13
+      intellect: 54
+      defense: 17
+      agility: 16
+  - key: hist_xianqin_0483
+    name: 高无丕
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）高无丕，最可称道处在于能把抽象论辩转为可操作条目。面对疑难事务不避难、不逞强，更多依靠连续修补推进局面。其政绩未必轰然一时，却往往在长期治理中显露分量。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 55
+      defense: 20
+      agility: 13
+  - key: hist_xianqin_0484
+    name: 高止
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）高止，立身所凭并非门望，而是章法、耐心与可验证的结果。逢灾荒与重建并行时，他常按层次分步施策，先稳秩序，再谋恢复。其人守底线而知变通，使地方在高压环境中仍保有回弹空间。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 11
+      intellect: 53
+      defense: 22
+      agility: 14
+  - key: hist_xianqin_0485
+    name: 高无咎
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）高无咎，史料不繁，却足见其治事脉络清楚，重文教亦重吏治。整顿文书与责权体系，使行政不再止于口号，而能在基层形成闭环。其贡献多属迟发型，未必立见，却常在岁月中显出深远效应。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 16
+      intellect: 54
+      defense: 19
+      agility: 11
+  - key: hist_xianqin_0486
+    name: 高竖
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）高竖，不以奇谈立身，而以一桩桩可复核的政绩积累信誉。讲求文书可核、钱粮可稽、责任可追，借此把行政运转拉回清晰轨道。其风格低调却耐久，往往在喧嚣叙事之外发挥真正托底作用。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 17
+      intellect: 56
+      defense: 23
+      agility: 4
+  - key: hist_xianqin_0487
+    name: 高齮
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）高齮，立身之道在章法与耐性，而不在一时声势。其治务强调缓急有序，不以急功近利透支地方与民力，故能在反复局势中保持稳定。其人作风克制务实，善把理想原则转化为可执行实践。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 17
+      intellect: 50
+      defense: 19
+      agility: 14
+  - key: hist_xianqin_0488
+    name: 赇伯
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）赇伯，记载虽简，却可见其公牍作风简严分明，少留歧义。其治务不追锋芒，重在耐烦与细密，故能减少政令误读与执行偏差。长期看，其价值不在单次决断，而在持续提升行政确定性。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 57
+      defense: 20
+      agility: 7
+  - key: hist_xianqin_0489
+    name: 韩不信
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）韩不信，名望来自可核实的治绩，而非喧哗传闻。面对税粮、水利与转运等长期工程，他更重持续运行，不图一任粉饰。其履历少传奇色彩，却凭稳定产出成为地方运转的重要支点。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 16
+      intellect: 52
+      defense: 20
+      agility: 12
+  - key: hist_xianqin_0490
+    name: 韩万
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）韩万，在士林与州县之间辗转多年，以稳健务实著称。处理政务讲求先后次第，宁可循序渐进，也不以短期政绩压垮地方。其可贵在于能把政理落回日常治理，使制度真正可行。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 55
+      defense: 17
+      agility: 16
+  - key: hist_xianqin_0491
+    name: 韩须
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）韩须，善于在中枢与基层之间搭桥，使政令不悬空、责任不游移。办事少花样，先厘清权责，再层层压实，故能减少反复与内耗。其风格平实而坚韧，在政策多变时期尤显可贵。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 13
+      intellect: 50
+      defense: 16
+      agility: 21
+  - key: hist_xianqin_0493
+    name: 韩无忌
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）韩无忌，立身所恃在章法与耐心，不倚浮名。灾荒、迁徙或战后重建并起时，他多分层处置，先稳秩序，再谋恢复，避免急令伤本。其人守底线而能通权，令地方在重压下仍保修复余地。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 16
+      intellect: 52
+      defense: 19
+      agility: 13
+  - key: hist_xianqin_0494
+    name: 季寤
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）季寤，虽非最显赫者，却常在关键政务中留下可追索的成果。并重文教与吏治，一面整肃文书体系，一面厘清属吏责任，减少执行断裂。其目光放在制度遗产而非个人名位，故影响往往迟发而深远。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 58
+      defense: 16
+      agility: 15
+  - key: hist_xianqin_0495
+    name: 季甲
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）季甲，史料不全，却可见其治事路径一以贯之，重承诺、重兑现。派系角力最甚之时，他仍尽力维持议政空间，不使公事沦为私怨。其人不恃口辩，而以执行力赢得士民双重认可。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 14
+      intellect: 54
+      defense: 17
+      agility: 15
+  - key: hist_xianqin_0496
+    name: 季鲂侯
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）季鲂侯，所长在于将分散事务纳入可持续的制度轨道。既重文教风气，也重吏治细节，尤其强调文书规范与责任闭环。其功不求立显，却常在岁月里累积出稳定收益。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 11
+      intellect: 50
+      defense: 18
+      agility: 21
+  - key: hist_xianqin_0497
+    name: 桀溺
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）桀溺，记载虽不繁，却能看出其在文教与吏治两端都有经营。处理政务时重视责权边界，先把链条理顺，再逐项推进，少留扯皮空间。其影响不必然立显，却常在后续治理中持续显现。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 14
+      intellect: 57
+      defense: 22
+      agility: 7
+  - key: hist_xianqin_0498
+    name: 椒鸣
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）椒鸣，处世不张扬，却常在残局中承担收束职责。其应对积弊的方式偏向“先补缝、后拓面”，避免改革反复回摆。其人之功如榫卯入木，平时不显，关键时却决定结构是否稳固。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 14
+      intellect: 58
+      defense: 16
+      agility: 12
+  - key: hist_xianqin_0499
+    name: 桓叔捷
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）桓叔捷，所重不在一时名位，而在制度能否长期运转。其改革多先修边角，再动主干，故虽缓而少反噬。其政务作风沉着克制，往往在后期显出深远效果。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 55
+      defense: 16
+      agility: 17
+  - key: hist_xianqin_0500
+    name: 孔婴齐
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）孔婴齐，名望来自可复核的实绩，而非铺陈辞藻。凡涉税粮、水利、转运等长期事务，他皆重持续维护，不求短期观感。其履历虽少传奇，却凭稳定产出支撑了地方日常运转。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 14
+      intellect: 51
+      defense: 23
+      agility: 12
+  - key: hist_xianqin_0501
+    name: 阚止
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）阚止，处世谨严，尤擅在琐碎事务中守住政令筋骨。灾荒、迁徙或重建并行时，往往分层施策，先保秩序，再求恢复。其风格守底线而能通权，使地方在压力下仍保有修复空间。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 57
+      defense: 20
+      agility: 11
+  - key: hist_xianqin_0502
+    name: 孔鲤
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）孔鲤，长于在中枢决断与基层执行之间建立稳定通道。遇赋役争讼并发时，他总先清流程、定秩序，再徐徐抚平人情冲突。其人名声不高，却以可托付、可持续著称。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 17
+      intellect: 52
+      defense: 23
+      agility: 8
+  - key: hist_xianqin_0503
+    name: 伶州鸠
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）伶州鸠，往返士林与州县之间，以稳健实干得名。其施政重缓急次序，不以急功压垮地方承受，故虽进展不猛，却少见反复。其可贵处在于把原则化为可执行日常，令治理真正落地。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 11
+      intellect: 53
+      defense: 23
+      agility: 13
+  - key: hist_xianqin_0504
+    name: 卢蒲嫳
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）卢蒲嫳，身处多事之世而能把急务办得有尺度。其政风讲求文书可核、钱粮可稽、责任可追，使行政少留暗处。虽不以壮语自矜，却常在基层层面持续见效。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 15
+      intellect: 58
+      defense: 16
+      agility: 11
+  - key: hist_xianqin_0505
+    name: 栾灶
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）栾灶，史料所见虽简，却足以勾出其懂轻重、知分寸的政务轮廓。面对此起彼伏的实务压力，他总先定程序、再抚民情，避免政策空转。其人在同僚间素有“可信可久”之誉，尤适合担任过渡时局中的稳压角色。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 55
+      defense: 22
+      agility: 12
+  - key: hist_xianqin_0507
+    name: 栾施
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）栾施，处世谨严，善于在细务中守住政令筋骨。其强项在于把笼统条文拆解为可执行细则，减少推诿与堵塞。政局更迭之际，他仍努力维持法度连续，不使新旧命令互相冲突。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 55
+      defense: 21
+      agility: 8
+  - key: hist_xianqin_0508
+    name: 卢蒲癸
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）卢蒲癸，素以稳健实作为先，不喜空论。面对税粮、水利与转运等长期事务，他更看重持续运行，而非一时光鲜。其履历虽无传奇色彩，却凭稳定产出支撑地方常态秩序。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 13
+      intellect: 52
+      defense: 19
+      agility: 16
+  - key: hist_xianqin_0509
+    name: 管至父
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）管至父，史料不事铺陈，却足见其务实取向。其人办事先理权责链条，再逐项落到岗位，故能减少空转与摩擦。政策反复时，他仍能维持方向稳定，使地方不致因朝令变动而失序。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 11
+      intellect: 53
+      defense: 21
+      agility: 15
+  - key: hist_xianqin_0511
+    name: 连称
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）连称，虽无连篇记传，仍可见其治事重在次第与承受边界。不以短期功名透支地方，而倾向循序推进，令政策可持续运行。其作风克制务实，往往在喧闹之外产生稳定效果。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 55
+      defense: 20
+      agility: 13
+  - key: hist_xianqin_0512
+    name: 黎鉏
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）黎鉏，长于在法理与现实之间做细密修补，不使冲突外溢。处理不同地域事务时坚持因地制宜，反对简单套用一式。其难得处不在高论，而在能把原则落实为日常秩序。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 17
+      intellect: 57
+      defense: 21
+      agility: 5
+  - key: hist_xianqin_0514
+    name: 孟之侧
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）孟之侧，名声多立于可核实的政务结果，而非奇谈轶事。强调文书、财赋与责任三者并进，借此提升执行确定性。其力量常在喧闹之外显现，低调却耐久，能够稳住基层运转。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 17
+      intellect: 56
+      defense: 23
+      agility: 4
+  - key: hist_xianqin_0515
+    name: 孟公期
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）孟公期，履历如平实公牍，少有奇句，却处处见功。其文书风格简严明白，能显著减少误读，提升执行确定性。其人不逐锋芒，反以耐烦细密取胜，故在长期治理中尤为可贵。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 57
+      defense: 20
+      agility: 10
+  - key: hist_xianqin_0516
+    name: 孟公绰
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）孟公绰，最为人称道之处在于把议论转换成执行清单。其处理难题不走极端，宁以连续修补积小胜，令秩序逐步回稳。其名望虽不喧闹，却因可复验的成果而历久不坠。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 13
+      intellect: 50
+      defense: 21
+      agility: 16
+  - key: hist_xianqin_0517
+    name: 闵子马
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）闵子马，不逐名位浮沉，而着眼制度后效，故其影响常呈迟发。其统筹财政与人力能力突出，能在资源紧绷时维持最低运转与修复空间。其价值在于把士人理想落回现实土壤，不使政治停留于辞章。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 56
+      defense: 21
+      agility: 12
+  - key: hist_xianqin_0518
+    name: 潘党
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）潘党，处理政务时习于从细部修补入手，不急于以强势立威。面对积弊，他常先补制度接口，再推进更深层调整，减少改革回摆。其作用如结构中的榫卯，平时无声，关键处却决定稳固。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 17
+      intellect: 51
+      defense: 16
+      agility: 16
+  - key: hist_xianqin_0519
+    name: 庆佐
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）庆佐，议政重在可行，不以声量争高下。其强项是把抽象政令拆成执行细则，使下层官署有据可循、少生推诿。政局更迭时，他亦能维持法度连续，避免新旧命令互相抵销。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 17
+      intellect: 51
+      defense: 23
+      agility: 9
+  - key: hist_xianqin_0520
+    name: 庆舍
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）庆舍，史家着墨虽简，却反复肯定其“能成事”的实务能力。其审事不偏激，善在法理与乡情之间求取可持续折中。其作风不夸饰，故虽少居台前，常被视作支撑后局的关键人物。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 15
+      intellect: 57
+      defense: 23
+      agility: 5
+  - key: hist_xianqin_0521
+    name: 庆郑
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）庆郑，相关记述不多，却足见其知轻重、懂分寸的治务能力。其公牍简严明白，能降低误读与执行偏差，令政令更具确定性。其人不逐锋芒，而以耐烦细密取胜，故在长期治理中尤显价值。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 12
+      intellect: 54
+      defense: 22
+      agility: 12

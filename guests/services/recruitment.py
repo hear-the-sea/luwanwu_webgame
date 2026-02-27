@@ -13,6 +13,7 @@ from django.db import transaction
 from django.db.models import QuerySet
 from django.utils import timezone
 
+from core.config import RECRUITMENT
 from core.exceptions import (
     GuestCapacityFullError,
     GuestNotIdleError,
@@ -242,6 +243,32 @@ def get_pool_recruitment_duration_seconds(pool: RecruitmentPool) -> int:
     if base_seconds <= 0:
         return 0
     return scale_duration(base_seconds, minimum=1)
+
+
+def _get_pool_daily_draw_limit() -> int:
+    """获取单卡池每日招募上限。"""
+    value = int(getattr(RECRUITMENT, "DAILY_POOL_DRAW_LIMIT", 300) or 300)
+    return max(1, value)
+
+
+def _count_pool_draws_today(manor_id: int, pool_id: int, *, now=None) -> int:
+    """
+    统计指定庄园在“今日”对指定卡池已发起的招募次数。
+
+    仅统计 pending/completed，失败记录不计入上限。
+    """
+    current_time = now or timezone.now()
+    local_now = timezone.localtime(current_time)
+    day_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = day_start + timedelta(days=1)
+    valid_statuses = (GuestRecruitment.Status.PENDING, GuestRecruitment.Status.COMPLETED)
+    return GuestRecruitment.objects.filter(
+        manor_id=manor_id,
+        pool_id=pool_id,
+        status__in=valid_statuses,
+        started_at__gte=day_start,
+        started_at__lt=day_end,
+    ).count()
 
 
 def has_active_guest_recruitment(manor: Manor) -> bool:
@@ -759,6 +786,12 @@ def start_guest_recruitment(manor: Manor, pool: RecruitmentPool, seed: int | Non
     if has_active_guest_recruitment(locked_manor):
         raise ValueError("已有招募正在进行中，请等待当前招募完成。")
 
+    current_time = timezone.now()
+    daily_limit = _get_pool_daily_draw_limit()
+    draws_today = _count_pool_draws_today(locked_manor.pk, int(pool.pk), now=current_time)
+    if draws_today >= daily_limit:
+        raise ValueError(f"{pool.name}今日招募次数已达上限（{daily_limit}次）")
+
     resolved_seed = seed if seed is not None else random.SystemRandom().randint(1, 2**31 - 1)
     draw_count = pool.draw_count + locked_manor.tavern_recruitment_bonus
     duration_seconds = get_pool_recruitment_duration_seconds(pool)
@@ -782,7 +815,7 @@ def start_guest_recruitment(manor: Manor, pool: RecruitmentPool, seed: int | Non
         draw_count=max(1, int(draw_count)),
         duration_seconds=max(0, int(duration_seconds)),
         seed=int(resolved_seed),
-        complete_at=timezone.now() + timedelta(seconds=max(0, int(duration_seconds))),
+        complete_at=current_time + timedelta(seconds=max(0, int(duration_seconds))),
     )
     _schedule_guest_recruitment_completion(recruitment, duration_seconds)
     _invalidate_recruitment_hall_cache(getattr(locked_manor, "id", None))

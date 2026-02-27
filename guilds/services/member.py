@@ -1,5 +1,7 @@
 # guilds/services/member.py
 
+import logging
+
 from django.db import transaction
 from django.db.utils import IntegrityError
 from django.utils import timezone
@@ -9,7 +11,10 @@ from gameplay.services.utils.messages import create_message
 
 from ..models import Guild, GuildApplication, GuildMember
 from .guild import create_announcement
+from .hero_pool import invalidate_member_hero_pool
 from .utils import get_active_membership
+
+logger = logging.getLogger(__name__)
 
 
 def apply_to_guild(user, guild, message=""):
@@ -130,21 +135,42 @@ def approve_application(application, reviewer, auto=False):
         applicant_user_id = application_locked.applicant_id
         guild_name = guild_locked.name
 
-    # 事务外发送消息，减少锁持有时间
-    applicant_manor = Manor.objects.get(user_id=applicant_user_id)
-    create_message(
-        manor=applicant_manor,
-        kind="system",
-        title="入帮申请通过",
-        body=f"您的入帮申请已通过，欢迎加入【{guild_name}】！",
-    )
+    # 事务外发送消息，减少锁持有时间。通知失败不应回滚已完成的审批流程。
+    applicant_manor = Manor.objects.filter(user_id=applicant_user_id).first()
+    display_name = getattr(applicant_manor, "display_name", f"用户{applicant_user_id}")
+    if applicant_manor is None:
+        logger.warning(
+            "Guild approve follow-up message skipped because manor missing: applicant_user_id=%s guild=%s",
+            applicant_user_id,
+            guild_name,
+        )
+    else:
+        try:
+            create_message(
+                manor=applicant_manor,
+                kind="system",
+                title="入帮申请通过",
+                body=f"您的入帮申请已通过，欢迎加入【{guild_name}】！",
+            )
+        except Exception:
+            logger.exception(
+                "Guild approve follow-up message failed: applicant_user_id=%s guild=%s",
+                applicant_user_id,
+                guild_name,
+            )
 
-    # 发布帮会公告
-    create_announcement(
-        guild_locked,
-        "system",
-        f"欢迎新成员{applicant_manor.display_name}加入帮会！",
-    )
+    try:
+        create_announcement(
+            guild_locked,
+            "system",
+            f"欢迎新成员{display_name}加入帮会！",
+        )
+    except Exception:
+        logger.exception(
+            "Guild approve follow-up announcement failed: applicant_user_id=%s guild=%s",
+            applicant_user_id,
+            guild_name,
+        )
 
 
 def reject_application(application, reviewer, note=""):
@@ -217,6 +243,7 @@ def leave_guild(member):
         member_locked.is_active = False
         member_locked.left_at = timezone.now()
         member_locked.save(update_fields=["is_active", "left_at"])
+        invalidate_member_hero_pool(member_locked)
 
         # 发布公告
         create_announcement(
@@ -265,6 +292,7 @@ def kick_member(target_member, operator):
         target_locked.is_active = False
         target_locked.left_at = timezone.now()
         target_locked.save(update_fields=["is_active", "left_at"])
+        invalidate_member_hero_pool(target_locked)
 
         # 发送系统消息
         create_message(

@@ -103,3 +103,84 @@ def test_get_warehouse_context_queries_guest_table_once():
 
     guest_queries = [q for q in captured.captured_queries if 'from "guests_guest"' in q["sql"].lower()]
     assert len(guest_queries) == 1
+
+
+@pytest.mark.django_db
+def test_get_warehouse_context_rarity_upgrade_list_only_contains_supported_idle_guests():
+    user = User.objects.create_user(username="warehouse_rarity_upgrade_user", password="pass123")
+    manor = ensure_manor(user)
+
+    supported_a, _ = GuestTemplate.objects.get_or_create(
+        key="hist_sljnbc_0589",
+        defaults={
+            "name": "邢道荣",
+            "rarity": "green",
+            "archetype": "military",
+        },
+    )
+    supported_b, _ = GuestTemplate.objects.get_or_create(
+        key="hist_sljnbc_0590",
+        defaults={
+            "name": "潘凤",
+            "rarity": "green",
+            "archetype": "military",
+        },
+    )
+    unsupported = GuestTemplate.objects.create(
+        key="warehouse_other_guest_tpl",
+        name="其他门客",
+        rarity="green",
+        archetype="civil",
+    )
+
+    guest_idle_supported_a = Guest.objects.create(manor=manor, template=supported_a, status=GuestStatus.IDLE, level=30)
+    guest_idle_supported_b = Guest.objects.create(manor=manor, template=supported_b, status=GuestStatus.IDLE, level=40)
+    Guest.objects.create(manor=manor, template=supported_a, status=GuestStatus.INJURED, level=50)
+    Guest.objects.create(manor=manor, template=unsupported, status=GuestStatus.IDLE, level=60)
+
+    context = get_warehouse_context(manor, current_tab="warehouse", selected_category="all", page=1)
+    assert [guest.id for guest in context["guests_for_rarity_upgrade"]] == [
+        guest_idle_supported_b.id,
+        guest_idle_supported_a.id,
+    ]
+
+
+@pytest.mark.django_db
+def test_get_warehouse_context_rarity_upgrade_reads_source_keys_from_item_templates():
+    user = User.objects.create_user(username="warehouse_rarity_payload_user", password="pass123")
+    manor = ensure_manor(user)
+
+    supported = GuestTemplate.objects.create(
+        key="warehouse_rarity_payload_src",
+        name="升阶测试门客",
+        rarity="green",
+        archetype="military",
+    )
+    unsupported = GuestTemplate.objects.create(
+        key="warehouse_rarity_payload_other",
+        name="普通门客",
+        rarity="green",
+        archetype="civil",
+    )
+
+    supported_guest = Guest.objects.create(manor=manor, template=supported, status=GuestStatus.IDLE, level=30)
+    Guest.objects.create(manor=manor, template=supported, status=GuestStatus.INJURED, level=20)
+    Guest.objects.create(manor=manor, template=unsupported, status=GuestStatus.IDLE, level=40)
+
+    upgrade_token = ItemTemplate.objects.create(
+        key="warehouse_rarity_upgrade_token_test",
+        name="升阶残卷测试",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=True,
+        effect_payload={
+            "action": "upgrade_guest_rarity",
+            "source_template_keys": ["warehouse_rarity_payload_src"],
+            "target_template_map": {
+                "warehouse_rarity_payload_src": "warehouse_rarity_payload_target",
+            },
+        },
+    )
+    InventoryItem.objects.create(manor=manor, template=upgrade_token, quantity=1)
+
+    context = get_warehouse_context(manor, current_tab="warehouse", selected_category="all", page=1)
+    assert [guest.id for guest in context["guests_for_rarity_upgrade"]] == [supported_guest.id]

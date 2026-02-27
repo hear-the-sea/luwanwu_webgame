@@ -18,6 +18,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
+from common.utils.celery import safe_apply_async
 from core.utils.time_scale import scale_duration
 from core.utils.yaml_loader import load_yaml_data
 
@@ -1173,7 +1174,15 @@ def _schedule_forging_completion(production: EquipmentProduction, eta_seconds: i
         logger.warning("Unable to import complete_equipment_forging task; skip scheduling", exc_info=True)
         return
 
-    db_transaction.on_commit(lambda: complete_equipment_forging.apply_async(args=[production.id], countdown=countdown))
+    db_transaction.on_commit(
+        lambda: safe_apply_async(
+            complete_equipment_forging,
+            args=[production.id],
+            countdown=countdown,
+            logger=logger,
+            log_message="complete_equipment_forging dispatch failed",
+        )
+    )
 
 
 def finalize_equipment_forging(production: EquipmentProduction, send_notification: bool = False) -> bool:
@@ -1218,23 +1227,32 @@ def finalize_equipment_forging(production: EquipmentProduction, send_notificatio
         from ..utils.messages import create_message
 
         quantity_text = f"x{production.quantity}" if production.quantity > 1 else ""
-        create_message(
-            manor=production.manor,
-            kind=Message.Kind.SYSTEM,
-            title=f"{production.equipment_name}{quantity_text}锻造完成",
-            body=f"您的{production.equipment_name}{quantity_text}已锻造完成，请到仓库查收。",
-        )
+        try:
+            create_message(
+                manor=production.manor,
+                kind=Message.Kind.SYSTEM,
+                title=f"{production.equipment_name}{quantity_text}锻造完成",
+                body=f"您的{production.equipment_name}{quantity_text}已锻造完成，请到仓库查收。",
+            )
 
-        notify_user(
-            production.manor.user_id,
-            {
-                "kind": "system",
-                "title": f"{production.equipment_name}{quantity_text}锻造完成",
-                "equipment_key": production.equipment_key,
-                "quantity": production.quantity,
-            },
-            log_context="equipment forging notification",
-        )
+            notify_user(
+                production.manor.user_id,
+                {
+                    "kind": "system",
+                    "title": f"{production.equipment_name}{quantity_text}锻造完成",
+                    "equipment_key": production.equipment_key,
+                    "quantity": production.quantity,
+                },
+                log_context="equipment forging notification",
+            )
+        except Exception as exc:
+            logger.warning(
+                "equipment forging notification failed: production_id=%s manor_id=%s error=%s",
+                production.id,
+                production.manor_id,
+                exc,
+                exc_info=True,
+            )
 
     return True
 

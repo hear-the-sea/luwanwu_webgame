@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 
 
@@ -127,6 +128,13 @@ class WorkAssignment(models.Model):
             models.Index(fields=["status", "-started_at"]),
             models.Index(fields=["guest", "-started_at"]),
             models.Index(fields=["manor", "status", "complete_at"], name="work_manor_sts_comp_idx"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["manor", "work_template"],
+                condition=Q(status="working"),
+                name="uniq_working_assignment_per_work",
+            ),
         ]
 
     def __str__(self) -> str:

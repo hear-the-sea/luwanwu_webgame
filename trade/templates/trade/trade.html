@@ -48,7 +48,17 @@
 {% block extra_scripts %}
 <script src="{% static 'js/tooltip.js' %}"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function () {
+(function () {
+    // 避免重复进入交易页时倒计时定时器累积
+    if (window.__tradeMarketCountdownTimer) {
+        clearInterval(window.__tradeMarketCountdownTimer);
+        window.__tradeMarketCountdownTimer = null;
+    }
+    if (window.__tradeAuctionCountdownTimer) {
+        clearInterval(window.__tradeAuctionCountdownTimer);
+        window.__tradeAuctionCountdownTimer = null;
+    }
+
     // Shop 模式切换
     const modeButtons = document.querySelectorAll('.tw-mode-btn');
     const buySection = document.getElementById('shop-buy-section');
@@ -80,7 +90,15 @@ document.addEventListener('DOMContentLoaded', function () {
     const ONE_HOUR_SECONDS = 3600;
     const ONE_MINUTE_SECONDS = 60;
     function updateMarketCountdowns() {
-        document.querySelectorAll('.tw-market-countdown').forEach(el => {
+        const countdownElements = document.querySelectorAll('.tw-market-countdown');
+        if (countdownElements.length === 0) {
+            if (window.__tradeMarketCountdownTimer) {
+                clearInterval(window.__tradeMarketCountdownTimer);
+                window.__tradeMarketCountdownTimer = null;
+            }
+            return;
+        }
+        countdownElements.forEach(el => {
             const expiresAt = new Date(el.dataset.expires);
             const now = new Date();
             const remainingSeconds = Math.max(0, Math.floor((expiresAt - now) / 1000));
@@ -104,11 +122,115 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     if (document.querySelectorAll('.tw-market-countdown').length > 0) {
         updateMarketCountdowns();
-        setInterval(updateMarketCountdowns, 1000);
+        window.__tradeMarketCountdownTimer = setInterval(updateMarketCountdowns, 1000);
     }
-});
 
-// Market 全局函数
+function startAuctionCountdown() {
+    const countdownElement = document.querySelector('.auction-countdown');
+    if (!countdownElement || !countdownElement.dataset.remaining) {
+        return;
+    }
+
+    let remaining = parseInt(countdownElement.dataset.remaining, 10);
+    if (Number.isNaN(remaining)) {
+        return;
+    }
+
+    const updateCountdown = () => {
+        if (!countdownElement.isConnected) {
+            if (window.__tradeAuctionCountdownTimer) {
+                clearInterval(window.__tradeAuctionCountdownTimer);
+                window.__tradeAuctionCountdownTimer = null;
+            }
+            return;
+        }
+        if (remaining <= 0) {
+            countdownElement.textContent = '已结束';
+            countdownElement.style.color = 'var(--text-muted)';
+            if (window.__tradeAuctionCountdownTimer) {
+                clearInterval(window.__tradeAuctionCountdownTimer);
+                window.__tradeAuctionCountdownTimer = null;
+            }
+            return;
+        }
+
+        const days = Math.floor(remaining / 86400);
+        const hours = Math.floor((remaining % 86400) / 3600);
+        const minutes = Math.floor((remaining % 3600) / 60);
+        const seconds = remaining % 60;
+        if (days > 0) {
+            countdownElement.textContent = `${days}天${hours}小时`;
+        } else if (hours > 0) {
+            countdownElement.textContent = `${hours}小时${minutes}分`;
+        } else if (minutes > 0) {
+            countdownElement.textContent = `${minutes}分${seconds}秒`;
+        } else {
+            countdownElement.textContent = `${seconds}秒`;
+        }
+        countdownElement.style.color = remaining < 3600 ? '#FF6B6B' : 'var(--text-secondary)';
+        remaining -= 1;
+    };
+
+    updateCountdown();
+    window.__tradeAuctionCountdownTimer = setInterval(updateCountdown, 1000);
+}
+startAuctionCountdown();
+
+function openBidModal(slotId, itemName, cutoffPrice, winnerCount, bidderCount, myBidAmount, startingPrice) {
+    const modal = document.getElementById('bidModal');
+    if (!modal) return;
+
+    const form = document.getElementById('bidForm');
+    const itemNameEl = document.getElementById('bid-modal-item-name');
+    const winnerCountEl = document.getElementById('bid-modal-winner-count');
+    const cutoffPriceEl = document.getElementById('bid-modal-cutoff-price');
+    const myBidGroup = document.getElementById('bid-modal-my-bid-group');
+    const myBidEl = document.getElementById('bid-modal-my-bid');
+    const hintEl = document.getElementById('bid-modal-hint');
+    const amountInput = document.getElementById('bid-modal-amount');
+
+    if (!form || !itemNameEl || !winnerCountEl || !cutoffPriceEl || !myBidGroup || !myBidEl || !hintEl || !amountInput) {
+        return;
+    }
+
+    form.action = "{% url 'trade:auction_bid' 0 %}".replace('0', slotId);
+    itemNameEl.textContent = itemName;
+    winnerCountEl.textContent = winnerCount + ' 人';
+    cutoffPriceEl.textContent = cutoffPrice + ' 金条';
+
+    if (myBidAmount) {
+        myBidGroup.style.display = 'block';
+        myBidEl.textContent = myBidAmount + ' 金条';
+    } else {
+        myBidGroup.style.display = 'none';
+    }
+
+    let minBid;
+    let hintText;
+    if (myBidAmount) {
+        minBid = myBidAmount + 1;
+        hintText = `需要高于您当前出价 ${myBidAmount} 金条`;
+    } else if (bidderCount >= winnerCount) {
+        minBid = cutoffPrice + 1;
+        hintText = `名额已满，需要高于最低中标价 ${cutoffPrice} 金条才能进入前 ${winnerCount} 名`;
+    } else {
+        minBid = startingPrice;
+        hintText = `名额未满，最低 ${startingPrice} 金条即可进入中标范围`;
+    }
+
+    hintEl.textContent = hintText;
+    amountInput.value = minBid;
+    amountInput.min = minBid;
+    modal.style.display = 'flex';
+}
+
+function closeBidModal() {
+    const modal = document.getElementById('bidModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
 function openListingModal(itemKey, itemName, available, minPrice, rarity, imageUrl) {
     const modal = document.getElementById('listingModal');
     if (!modal) return;
@@ -132,22 +254,37 @@ function openListingModal(itemKey, itemName, available, minPrice, rarity, imageU
     // 更新物品图标
     if (itemIconEl) {
         itemIconEl.className = 'tw-item-icon rarity-' + (rarity || 'gray');
+        itemIconEl.textContent = '';
         if (imageUrl) {
-            itemIconEl.innerHTML = '<img src="' + imageUrl + '" alt="' + itemName + '" style="width:100%;height:100%;object-fit:contain;">';
-        } else if (itemInitialEl) {
-            itemIconEl.innerHTML = '<span class="tw-icon-placeholder">' + (itemName ? itemName.charAt(0) : '?') + '</span>';
+            const img = document.createElement('img');
+            img.src = imageUrl;
+            img.alt = itemName || '';
+            img.loading = 'lazy';
+            img.decoding = 'async';
+            img.style.width = '100%';
+            img.style.height = '100%';
+            img.style.objectFit = 'contain';
+            itemIconEl.appendChild(img);
+        } else {
+            const placeholder = document.createElement('span');
+            placeholder.className = 'tw-icon-placeholder';
+            placeholder.textContent = itemName ? itemName.charAt(0) : '?';
+            itemIconEl.appendChild(placeholder);
+            if (itemInitialEl) {
+                itemInitialEl.textContent = placeholder.textContent;
+            }
         }
     }
 
     if (quantityEl) {
         quantityEl.value = 1;
         quantityEl.max = available;
-        quantityEl.addEventListener('input', updateTotalPrice);
+        quantityEl.oninput = updateTotalPrice;
     }
     if (unitPriceEl) {
         unitPriceEl.value = minPrice;
         unitPriceEl.min = minPrice;
-        unitPriceEl.addEventListener('input', updateTotalPrice);
+        unitPriceEl.oninput = updateTotalPrice;
     }
     document.querySelectorAll('input[name="duration"]').forEach(radio => {
         radio.checked = radio.value === '7200';
@@ -179,9 +316,14 @@ function updateTotalPrice() {
     if (totalPriceElement) totalPriceElement.textContent = (quantity * unitPrice).toLocaleString();
 }
 
-window.addEventListener('click', e => {
+if (window.__tradeModalClickHandler) {
+    window.removeEventListener('click', window.__tradeModalClickHandler);
+}
+window.__tradeModalClickHandler = (e) => {
     if (e.target.id === 'listingModal') closeListingModal();
-});
+    if (e.target.id === 'bidModal') closeBidModal();
+};
+window.addEventListener('click', window.__tradeModalClickHandler);
 
 document.querySelectorAll('.market-cancel-form').forEach(form => {
     form.addEventListener('submit', async (e) => {
@@ -194,5 +336,14 @@ document.querySelectorAll('.market-cancel-form').forEach(form => {
         }
     });
 });
+
+// 暴露给模板内联 onclick/onchange
+window.openBidModal = openBidModal;
+window.closeBidModal = closeBidModal;
+window.openListingModal = openListingModal;
+window.closeListingModal = closeListingModal;
+window.updateFee = updateFee;
+window.updateTotalPrice = updateTotalPrice;
+})();
 </script>
 {% endblock %}

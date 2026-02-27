@@ -2,21 +2,6 @@
 
 heroes:
   green:
-  - key: hero_qi_shaoshang
-    name: 戚少商
-    archetype: military
-    flavor: 人称"九现神龙"，连云寨大当家。由于顾惜朝的背叛，他一夜之间失去了一切，被迫踏上逃亡之路。在《逆水寒》的故事中，他历经磨难，断臂重铸，展现了惊人的生命力与领袖气质。他既有江湖豪气，也有统御众人的担当，愿为兄弟扛下血债与误解。出自温瑞安小说《逆水寒》
-    default_gender: male
-    default_morality: 80
-    recruitable: true
-    growth_range:
-    - 5
-    - 7
-    attribute_weights:
-      force: 35
-      intellect: 20
-      defense: 25
-      agility: 20
   - key: hero_tang_fang
     name: 唐方
     archetype: civil
@@ -289,6 +274,21 @@ heroes:
       defense: 15
       agility: 35
   purple:
+  - key: hero_qi_shaoshang
+    name: 戚少商
+    archetype: military
+    flavor: 人称"九现神龙"，连云寨大当家。由于顾惜朝的背叛，他一夜之间失去了一切，被迫踏上逃亡之路。在《逆水寒》的故事中，他历经磨难，断臂重铸，展现了惊人的生命力与领袖气质。他既有江湖豪气，也有统御众人的担当，愿为兄弟扛下血债与误解。出自温瑞安小说《逆水寒》
+    default_gender: male
+    default_morality: 80
+    recruitable: true
+    growth_range:
+    - 6
+    - 11
+    attribute_weights:
+      force: 35
+      intellect: 20
+      defense: 25
+      agility: 20
   - key: hero_zhuge_zhengwo
     name: 诸葛正我
     archetype: civil

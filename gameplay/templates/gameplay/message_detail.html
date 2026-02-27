@@ -311,7 +311,7 @@
                     {% for item in attachment_details.items %}
                     <div class="msg-item-card">
                         {% if item.image %}
-                            <img src="{{ item.image.url }}" alt="{{ item.name }}">
+                            <img src="{{ item.image.url }}" alt="{{ item.name }}" loading="lazy" decoding="async">
                         {% elif item.icon %}
                             <div class="icon-placeholder">{{ item.icon }}</div>
                         {% else %}

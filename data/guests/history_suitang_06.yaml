@@ -229,18 +229,6 @@ green:
     defense: 18
     agility: 16
 
-- key: hist_suitang_0128_yangpu
-  name: 杨溥
-  default_gender: male
-  archetype: civil
-  flavor: （900年-938年）吴国后期君主，在位时实权多被徐温及其继承者掌控。杨溥名义上为国主，实际更多扮演政治合法性的载体：朝廷仪式需要他，册命与制度需要他，但重大军政决策由权臣主导。最终杨溥禅让给徐知诰（后改名李昪），吴亡而南唐兴，其个人命运因此成为"十国政权如何被权臣接管"的典型。杨溥的意义不在政绩，而在结构：他展示当军政资源集中在少数家族与禁军手中时，君主可以被空心化到几乎只剩名义。透过他，可以理解五代十国的政权形态常介于军阀与王朝之间。
-  growth_range: [4, 7]
-  attribute_weights:
-    force: 12
-    intellect: 36
-    defense: 17
-    agility: 16
-
 - key: hist_suitang_0129_xuwen
   name: 徐温
   default_gender: male
@@ -324,18 +312,6 @@ green:
     intellect: 20
     defense: 23
     agility: 19
-
-- key: hist_suitang_0136_wangyan
-  name: 王衍
-  default_gender: male
-  archetype: civil
-  flavor: （901年-926年）前蜀末主，承继的是已趋奢靡的宫廷体系与复杂的权臣结构。史书多记其荒纵误国，虽需警惕败亡叙事的夸饰，但前蜀在其时确实内政松弛、军备衰弱，对外缺乏有效应对。后唐大军入蜀时，蜀地防线迅速瓦解，王衍终至亡国被俘。王衍的悲剧不只在个人享乐，更在制度：当一个政权长期依赖地形天险与财富积累而缺少自我约束，统治者即便不昏庸也难以扭转惯性。王衍作为末主，承担了前蜀积弊的集中爆发点，也让后人看到"富庶之地"并不自动产生强国。
-  growth_range: [4, 7]
-  attribute_weights:
-    force: 13
-    intellect: 33
-    defense: 17
-    agility: 16
 
 - key: hist_suitang_0137_mengzhixiang
   name: 孟知祥

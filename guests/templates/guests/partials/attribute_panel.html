@@ -1,0 +1,79 @@
+{% load guest_extras %}
+
+<div id="guest-attribute-panel" class="board-card stats-card">
+    <h3>属性（属性点 <span class="js-attribute-points">{{ guest.attribute_points }}</span>）</h3>
+    <div class="stat-rows">
+        <div class="stat-row">
+            <div class="stat-left">
+                <form method="post" action="{% url 'guests:allocate_points' guest.id %}" class="js-allocate-points-form" data-attribute="force">
+                    {% csrf_token %}
+                    {{ skill_point_form.guest }}
+                    <input type="hidden" name="attribute" value="force">
+                    <input type="hidden" name="points" value="1">
+                    <input type="hidden" name="next" value="{% url 'guests:detail' guest.id %}">
+                    <button type="submit" class="add-btn" title="武力加点" {% if guest.attribute_points <= 0 %}disabled{% endif %}>+</button>
+                </form>
+                <span>武力</span>
+            </div>
+            <strong class="js-attribute-icons" data-attribute="force">{{ guest.force|attribute_icons }}</strong>
+        </div>
+        <div class="stat-row">
+            <div class="stat-left">
+                <form method="post" action="{% url 'guests:allocate_points' guest.id %}" class="js-allocate-points-form" data-attribute="intellect">
+                    {% csrf_token %}
+                    {{ skill_point_form.guest }}
+                    <input type="hidden" name="attribute" value="intellect">
+                    <input type="hidden" name="points" value="1">
+                    <input type="hidden" name="next" value="{% url 'guests:detail' guest.id %}">
+                    <button type="submit" class="add-btn" title="智力加点" {% if guest.attribute_points <= 0 %}disabled{% endif %}>+</button>
+                </form>
+                <span>智力</span>
+            </div>
+            <strong class="js-attribute-icons" data-attribute="intellect">{{ guest.intellect|attribute_icons }}</strong>
+        </div>
+        <div class="stat-row">
+            <div class="stat-left">
+                <form method="post" action="{% url 'guests:allocate_points' guest.id %}" class="js-allocate-points-form" data-attribute="defense">
+                    {% csrf_token %}
+                    {{ skill_point_form.guest }}
+                    <input type="hidden" name="attribute" value="defense">
+                    <input type="hidden" name="points" value="1">
+                    <input type="hidden" name="next" value="{% url 'guests:detail' guest.id %}">
+                    <button type="submit" class="add-btn" title="防御加点" {% if guest.attribute_points <= 0 %}disabled{% endif %}>+</button>
+                </form>
+                <span>防御</span>
+            </div>
+            <strong class="js-attribute-icons" data-attribute="defense">{{ guest.defense_stat|attribute_icons }}</strong>
+        </div>
+        <div class="stat-row">
+            <div class="stat-left">
+                <form method="post" action="{% url 'guests:allocate_points' guest.id %}" class="js-allocate-points-form" data-attribute="agility">
+                    {% csrf_token %}
+                    {{ skill_point_form.guest }}
+                    <input type="hidden" name="attribute" value="agility">
+                    <input type="hidden" name="points" value="1">
+                    <input type="hidden" name="next" value="{% url 'guests:detail' guest.id %}">
+                    <button type="submit" class="add-btn" title="敏捷加点" {% if guest.attribute_points <= 0 %}disabled{% endif %}>+</button>
+                </form>
+                <span>敏捷</span>
+            </div>
+            <strong class="js-attribute-icons" data-attribute="agility">{{ guest.agility|attribute_icons }}</strong>
+        </div>
+        <div class="stat-row">
+            <div class="stat-left">
+                <span class="add-btn-placeholder"></span>
+                <span>运势</span>
+            </div>
+            <strong class="js-attribute-icons" data-attribute="luck">{{ guest.luck|attribute_icons }}</strong>
+        </div>
+        <div class="stat-row">
+            <span>操作</span>
+            <div>
+                <form method="post" action="{% url 'guests:dismiss' guest.id %}" class="dismiss-form" data-guest-name="{{ guest.display_name }}">
+                    {% csrf_token %}
+                    <button type="submit" class="tw-btn-secondary tw-btn-sm">辞退门客</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

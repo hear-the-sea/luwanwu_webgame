@@ -1,201 +1,5 @@
 heroes:
-  purple:
-  - key: hist_suitang_0046_wangbo
-    name: 王勃
-    default_gender: male
-    archetype: civil
-    flavor: （650年-676年）初唐四杰之首，少年成名，文思敏捷。其《滕王阁序》以辞采与气势写尽江楼秋色，成为骈文典范。王勃仕途屡遭波折，曾因文事获罪而外放，后南下探父，归途中遇难身亡的说法较为流行。短短二十余年，他把初唐由六朝绮靡向盛唐雄健过渡的气象写进文字：既华丽又有骨力，既自信又带失意。王勃的早逝让人惋惜，也让他的名字永远停在"才气未尽"的高度。
-    growth_range:
-    - 7
-    - 10
-    attribute_weights:
-      force: 12
-      intellect: 52
-      defense: 20
-      agility: 16
-  - key: hist_suitang_0047_liuyuxi
-    name: 刘禹锡
-    default_gender: male
-    archetype: civil
-    flavor: （772年-842年）中唐诗人、政治人物，参与永贞革新失败后长期贬谪。逆境中他保持锐气，以诗文讥刺时政、抚慰自我，"沉舟侧畔千帆过"把挫折写成不屈的转身。刘禹锡的诗既有豪迈，也有清峻哲理，能把个人遭遇提升为对世事的判断。与白居易并称"刘白"，但他更偏锋利与简洁，像一把小刀在平静水面下割开暗流。晚年回京，仍不改风骨，证明被贬的也可以重新锻造语言与立场。
-    growth_range:
-    - 7
-    - 10
-    attribute_weights:
-      force: 14
-      intellect: 50
-      defense: 22
-      agility: 14
-  - key: hist_suitang_0048_wentlingyun
-    name: 温庭筠
-    default_gender: male
-    archetype: civil
-    flavor: （约812年-约870年）晚唐诗人、词人，才思敏捷，文名甚盛却仕途屡挫。其词风绮丽细密，善写闺情与梦境，成为花间词传统的重要先声；诗作亦多工致华美。温庭筠性格不羁，常与科举官场格格不入，留下"才高而命薄"的形象。他的作品呈现晚唐另一面：政治日衰，都市与宫廷审美却更趋精巧，情感更趋隐秘。温庭筠把这种精致写到极致：字面如锦，背后却有时代颓靡与个人失意的暗影。
-    growth_range:
-    - 7
-    - 10
-    attribute_weights:
-      force: 12
-      intellect: 52
-      defense: 20
-      agility: 16
-  - key: hist_suitang_0049_xuetao
-    name: 薛涛
-    default_gender: female
-    archetype: civil
-    flavor: （约768年-约831年）唐代女诗人，长期居蜀地，兼具才情与社交能力。她以诗名与当时名士唱和，作品多写离别、风物与个人境遇，清丽中见坚韧。薛涛还与"薛涛笺"相连，传为改良纸笺以便题诗往来，虽细节或有传说成分，却反映她在文化生活中的影响力。作为女性，她必须在礼法与现实之间寻找生存空间，她的诗正是在这种空间里开出的花：不高声争辩，却把自我感受写得明确。薛涛让唐代诗坛的女性声音更可见，也更可信。
-    growth_range:
-    - 7
-    - 10
-    attribute_weights:
-      force: 10
-      intellect: 54
-      defense: 20
-      agility: 16
-  - key: hist_suitang_0050_yuxuanji
-    name: 鱼玄机
-    default_gender: female
-    archetype: civil
-    flavor: （约844年-871年）晚唐女诗人，兼有道教身份与都市传奇色彩。其诗多清丽婉转，善写孤独、爱情与自我意识，语言不事雕琢却有锋芒。鱼玄机的人生亦极具争议：史载其因杀婢获罪被处死，结局悲惨，后世对其故事不断改写渲染。无论如何，她呈现了晚唐都市文化中的女性处境：才华可以让人被看见，却也更容易被放大审判。鱼玄机的诗与其人生相互纠缠，读来既有美感，也有寒意——那是乱世里个人命运的不由自主。
-    growth_range:
-    - 7
-    - 10
-    attribute_weights:
-      force: 10
-      intellect: 54
-      defense: 18
-      agility: 18
   blue:
-  - key: hist_suitang_0051_gaojiong
-    name: 高颎
-    default_gender: male
-    archetype: civil
-    flavor: （541年-607年）隋开国重臣，参与确立法度与行政框架，辅佐文帝完成统一。其长于综理机务，推行节用、整饬官僚，使"开皇之治"得以落地。政治上主张以制度制衡权贵，却在太子更易与宫廷斗争中遭猜忌，被炀帝诛杀。高颎的结局说明：隋初治世并不稳固，功臣也可能在权力重组时被迅速抹去；其名声因直而显，也因直而折。
-    growth_range:
-    - 6
-    - 9
-    attribute_weights:
-      force: 14
-      intellect: 48
-      defense: 26
-      agility: 12
-  - key: hist_suitang_0052_yangsu
-    name: 杨素
-    default_gender: male
-    archetype: military
-    flavor: （544年-606年）隋代权臣兼名将，参与灭陈、平叛与边防，军功显著；又善于经营朝局，位极人臣。其一面是统一事业的武功担当，一面是中枢权力的操盘者，家族势力随之膨胀。炀帝即位后仍倚重其资望，但其子杨玄感起兵反隋，使杨氏功名染上裂痕。杨素身上集合了隋代"以军功起、以权势盛"的典型轨迹，也折射权力家族化的隐患。
-    growth_range:
-    - 6
-    - 9
-    attribute_weights:
-      force: 38
-      intellect: 22
-      defense: 28
-      agility: 12
-  - key: hist_suitang_0053_heruobi
-    name: 贺若弼
-    default_gender: male
-    archetype: military
-    flavor: （544年-607年）隋代名将，灭陈之役中为主帅之一，率军入建康立下决定性战功。其性格刚猛而自负，常以功臣自居，屡在朝中直言褒贬，既有军人豪气，也缺政治收敛。统一后官场转入制度运作，他却难适应宫廷忌讳，终以言获罪被诛。贺若弼的沉浮提醒：战场上的锋芒若不懂藏锋，在太平时期反成祸端；功名与口舌同样锋利，终反噬其身。
-    growth_range:
-    - 6
-    - 9
-    attribute_weights:
-      force: 40
-      intellect: 18
-      defense: 26
-      agility: 16
-  - key: hist_suitang_0054_hqinhhu
-    name: 韩擒虎
-    default_gender: male
-    archetype: military
-    flavor: （538年-592年）隋代将领，南征灭陈时行动迅捷，率军先入建康并俘陈后主，成为统一江南的重要功臣。史传称其勇猛果决，善于把握战机，在渡江推进与合围作战中屡建奇功。其死后"为阎罗王"等说法属民间传说，反映百姓对其威名的再想象。抛开神怪色彩，韩擒虎的价值在于以快速突击终结一朝江山，展示隋军整合后的效率。
-    growth_range:
-    - 6
-    - 9
-    attribute_weights:
-      force: 40
-      intellect: 16
-      defense: 28
-      agility: 16
-  - key: hist_suitang_0055_yuchigong
-    name: 尉迟恭
-    default_gender: male
-    archetype: military
-    flavor: （585年-658年）唐初名将，出身行伍，辗转归附秦王，因勇烈与忠诚被重用。玄武门事变中他以武力护卫太宗立足，奠定功臣地位；其后参与征战与镇抚，战场上强悍，朝廷上却懂得收敛锋芒。晚年避开权力旋涡，闭门自守而得善终。后世将其与秦琼并奉为门神，不尽是史实，却说明民间对"护国护门"的武将形象有着长久需要。
-    growth_range:
-    - 6
-    - 9
-    attribute_weights:
-      force: 42
-      intellect: 14
-      defense: 30
-      agility: 14
-  - key: hist_suitang_0056_qinqiong
-    name: 秦琼
-    default_gender: male
-    archetype: military
-    flavor: （571年-638年）唐初将领，早年事隋，隋末辗转瓦岗与诸军，终归唐以战功闻名。其不以奇谋取胜，却以冲锋陷阵与坚忍守阵受人信赖，在统一与平叛战争中多次出力。晚年多病，史载其体弱而仍奉命从征，显示开国功臣的消耗。民间把他塑造成门神之一，既是对其忠勇的赞誉，也折射乱世之后百姓对安定与守护的朴素愿望；传说虽非史笔，却说明其形象深入人心。
-    growth_range:
-    - 6
-    - 9
-    attribute_weights:
-      force: 40
-      intellect: 16
-      defense: 32
-      agility: 12
-  - key: hist_suitang_0057_chengzhijie
-    name: 程知节
-    default_gender: male
-    archetype: military
-    flavor: （589年-665年）唐初将领，性情豪爽直率，历经隋末战乱而归入唐军。史书中的他并非只靠戏曲里的"三板斧"，而是能在多次战役中担任先锋与统兵任务的老将：敢冲阵，也能带兵守纪。其行事有时粗豪，却在功臣群体中进退有度，高龄善终尤为难得。程知节更像一位"能打也能活"的乱世幸存者，留下的是开国武人的粗砺与韧性。
-    growth_range:
-    - 6
-    - 9
-    attribute_weights:
-      force: 42
-      intellect: 14
-      defense: 30
-      agility: 14
-  - key: hist_suitang_0058_lixiaogong
-    name: 李孝恭
-    default_gender: male
-    archetype: military
-    flavor: （591年-640年）唐宗室名将，开国时期长期镇抚南方。其率军平定萧铣、辅公祏等势力，使江汉与江南纳入唐廷版图，军事与行政并举。作为宗室，他既享血缘优势，也更需谨慎避免"宗王拥兵"的疑忌，因此治军与治地方多强调安抚与整饬。凌烟阁功臣中宗室并不多，他以实绩证明宗亲也能成为制度化军政的一部分，是唐初统一进程的重要执行者。
-    growth_range:
-    - 6
-    - 9
-    attribute_weights:
-      force: 36
-      intellect: 24
-      defense: 28
-      agility: 12
-  - key: hist_suitang_0059_lixiuming
-    name: 李秀宁
-    default_gender: female
-    archetype: military
-    flavor: （？-623年）李渊之女，史称平阳公主。隋末起兵之际，她在关中招集义军并协助攻取要地，"娘子军"由此成为开国记忆的一部分。正史对其军旅细节记载有限，但其确为唐初政治号召的重要象征：以宗室女性身份参与战争，提升起兵合法性并凝聚地方人心。她早逝却获厚葬，说明功绩当时已被认可；后世尊其为巾帼英雄，也是在纪念开国的艰难与代价。
-    growth_range:
-    - 6
-    - 9
-    attribute_weights:
-      force: 36
-      intellect: 26
-      defense: 26
-      agility: 12
-  - key: hist_suitang_0060_xurengui
-    name: 薛仁贵
-    default_gender: male
-    archetype: military
-    flavor: （614年-683年）唐代名将，出身并不显赫而以战功起。史载其在东北与西北战事中屡有表现，善骑射、敢冲阵，成为军中可倚之将。民间"白袍将军""三箭定天山"等传说夸饰甚多，但也反映他确以勇武闻名。其仕途数起数落，既受赏识也遭疑忌，显示边将并不总能掌握命运。真实的薛仁贵是边防体系里的硬将，传说的薛仁贵则成了大众对英雄的投射。
-    growth_range:
-    - 6
-    - 9
-    attribute_weights:
-      force: 42
-      intellect: 16
-      defense: 28
-      agility: 14
   - key: hist_suitang_0061_gaoxianzhi
     name: 高仙芝
     default_gender: male
@@ -222,19 +26,6 @@ heroes:
       intellect: 50
       defense: 22
       agility: 16
-  - key: hist_suitang_0063_menghaoran
-    name: 孟浩然
-    default_gender: male
-    archetype: civil
-    flavor: （689年-740年）唐代山水田园诗人，一生多在襄阳与江汉间游走，向往隐逸却也曾求仕。其诗语言清淡自然，善写晨昏、江湖、村落等日常景色，《春晓》几乎成为共同的童年记忆。孟浩然与王维交游相契，却气质更贴近人间烟火；屡试不第使其作品常带淡淡失落，却不怨毒，反以自持回到山水之间。他把盛唐的豪迈留给边塞，把盛唐的宁静留给草木与清风。
-    growth_range:
-    - 6
-    - 9
-    attribute_weights:
-      force: 10
-      intellect: 52
-      defense: 20
-      agility: 18
   - key: hist_suitang_0064_wangchangling
     name: 王昌龄
     default_gender: male
@@ -287,19 +78,6 @@ heroes:
       intellect: 18
       defense: 30
       agility: 12
-  - key: hist_suitang_0068_liguangbi
-    name: 李光弼
-    default_gender: male
-    archetype: military
-    flavor: （708年-764年）安史之乱中唐军主将，与郭子仪并称中兴名将。其善守城与整军，屡在北方与河朔战场挫败叛军，稳定山西、河北局势，为收复两京与后续反攻争取时间。史载其治军严明而不乏权变，能在复杂的藩镇与宦官环境中勉力推进军务。乱后功高却多受猜忌，晚景郁郁。若只用一句话概括李光弼，就是"把乱局止住"：他更像一堵沉默的城墙，扛住风暴而不耀眼。
-    growth_range:
-    - 7
-    - 10
-    attribute_weights:
-      force: 40
-      intellect: 22
-      defense: 32
-      agility: 6
   - key: hist_suitang_0069_zhangxun
     name: 张巡
     default_gender: male
@@ -586,3 +364,160 @@ heroes:
       intellect: 52
       defense: 20
       agility: 18
+  - key: hist_suitang_0068_liguangbi
+    name: 李光弼
+    default_gender: male
+    archetype: military
+    flavor: （708年-764年）安史之乱中唐军主将，与郭子仪并称中兴名将。其善守城与整军，屡在北方与河朔战场挫败叛军，稳定山西、河北局势，为收复两京与后续反攻争取时间。史载其治军严明而不乏权变，能在复杂的藩镇与宦官环境中勉力推进军务。乱后功高却多受猜忌，晚景郁郁。若只用一句话概括李光弼，就是"把乱局止住"：他更像一堵沉默的城墙，扛住风暴而不耀眼。
+    growth_range:
+    - 7
+    - 10
+    attribute_weights:
+      force: 40
+      intellect: 22
+      defense: 32
+      agility: 6
+  - key: hist_suitang_0046_wangbo
+    name: 王勃
+    default_gender: male
+    archetype: civil
+    flavor: （650年-676年）初唐四杰之首，少年成名，文思敏捷。其《滕王阁序》以辞采与气势写尽江楼秋色，成为骈文典范。王勃仕途屡遭波折，曾因文事获罪而外放，后南下探父，归途中遇难身亡的说法较为流行。短短二十余年，他把初唐由六朝绮靡向盛唐雄健过渡的气象写进文字：既华丽又有骨力，既自信又带失意。王勃的早逝让人惋惜，也让他的名字永远停在"才气未尽"的高度。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 52
+      defense: 20
+      agility: 16
+  - key: hist_suitang_0047_liuyuxi
+    name: 刘禹锡
+    default_gender: male
+    archetype: civil
+    flavor: （772年-842年）中唐诗人、政治人物，参与永贞革新失败后长期贬谪。逆境中他保持锐气，以诗文讥刺时政、抚慰自我，"沉舟侧畔千帆过"把挫折写成不屈的转身。刘禹锡的诗既有豪迈，也有清峻哲理，能把个人遭遇提升为对世事的判断。与白居易并称"刘白"，但他更偏锋利与简洁，像一把小刀在平静水面下割开暗流。晚年回京，仍不改风骨，证明被贬的也可以重新锻造语言与立场。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 50
+      defense: 22
+      agility: 14
+  - key: hist_suitang_0048_wentlingyun
+    name: 温庭筠
+    default_gender: male
+    archetype: civil
+    flavor: （约812年-约870年）晚唐诗人、词人，才思敏捷，文名甚盛却仕途屡挫。其词风绮丽细密，善写闺情与梦境，成为花间词传统的重要先声；诗作亦多工致华美。温庭筠性格不羁，常与科举官场格格不入，留下"才高而命薄"的形象。他的作品呈现晚唐另一面：政治日衰，都市与宫廷审美却更趋精巧，情感更趋隐秘。温庭筠把这种精致写到极致：字面如锦，背后却有时代颓靡与个人失意的暗影。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 52
+      defense: 20
+      agility: 16
+  - key: hist_suitang_0049_xuetao
+    name: 薛涛
+    default_gender: female
+    archetype: civil
+    flavor: （约768年-约831年）唐代女诗人，长期居蜀地，兼具才情与社交能力。她以诗名与当时名士唱和，作品多写离别、风物与个人境遇，清丽中见坚韧。薛涛还与"薛涛笺"相连，传为改良纸笺以便题诗往来，虽细节或有传说成分，却反映她在文化生活中的影响力。作为女性，她必须在礼法与现实之间寻找生存空间，她的诗正是在这种空间里开出的花：不高声争辩，却把自我感受写得明确。薛涛让唐代诗坛的女性声音更可见，也更可信。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 54
+      defense: 20
+      agility: 16
+  - key: hist_suitang_0050_yuxuanji
+    name: 鱼玄机
+    default_gender: female
+    archetype: civil
+    flavor: （约844年-871年）晚唐女诗人，兼有道教身份与都市传奇色彩。其诗多清丽婉转，善写孤独、爱情与自我意识，语言不事雕琢却有锋芒。鱼玄机的人生亦极具争议：史载其因杀婢获罪被处死，结局悲惨，后世对其故事不断改写渲染。无论如何，她呈现了晚唐都市文化中的女性处境：才华可以让人被看见，却也更容易被放大审判。鱼玄机的诗与其人生相互纠缠，读来既有美感，也有寒意——那是乱世里个人命运的不由自主。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 54
+      defense: 18
+      agility: 18
+  purple:
+  - key: hist_suitang_0055_yuchigong
+    name: 尉迟恭
+    default_gender: male
+    archetype: military
+    flavor: （585年-658年）唐初名将，出身行伍，辗转归附秦王，因勇烈与忠诚被重用。玄武门事变中他以武力护卫太宗立足，奠定功臣地位；其后参与征战与镇抚，战场上强悍，朝廷上却懂得收敛锋芒。晚年避开权力旋涡，闭门自守而得善终。后世将其与秦琼并奉为门神，不尽是史实，却说明民间对"护国护门"的武将形象有着长久需要。
+    growth_range:
+    - 6
+    - 11
+    attribute_weights:
+      force: 42
+      intellect: 14
+      defense: 30
+      agility: 14
+  - key: hist_suitang_0056_qinqiong
+    name: 秦琼
+    default_gender: male
+    archetype: military
+    flavor: （571年-638年）唐初将领，早年事隋，隋末辗转瓦岗与诸军，终归唐以战功闻名。其不以奇谋取胜，却以冲锋陷阵与坚忍守阵受人信赖，在统一与平叛战争中多次出力。晚年多病，史载其体弱而仍奉命从征，显示开国功臣的消耗。民间把他塑造成门神之一，既是对其忠勇的赞誉，也折射乱世之后百姓对安定与守护的朴素愿望；传说虽非史笔，却说明其形象深入人心。
+    growth_range:
+    - 6
+    - 11
+    attribute_weights:
+      force: 40
+      intellect: 16
+      defense: 32
+      agility: 12
+  - key: hist_suitang_0057_chengzhijie
+    name: 程知节
+    default_gender: male
+    archetype: military
+    flavor: （589年-665年）唐初将领，性情豪爽直率，历经隋末战乱而归入唐军。史书中的他并非只靠戏曲里的"三板斧"，而是能在多次战役中担任先锋与统兵任务的老将：敢冲阵，也能带兵守纪。其行事有时粗豪，却在功臣群体中进退有度，高龄善终尤为难得。程知节更像一位"能打也能活"的乱世幸存者，留下的是开国武人的粗砺与韧性。
+    growth_range:
+    - 6
+    - 11
+    attribute_weights:
+      force: 42
+      intellect: 14
+      defense: 30
+      agility: 14
+  - key: hist_suitang_0058_lixiaogong
+    name: 李孝恭
+    default_gender: male
+    archetype: military
+    flavor: （591年-640年）唐宗室名将，开国时期长期镇抚南方。其率军平定萧铣、辅公祏等势力，使江汉与江南纳入唐廷版图，军事与行政并举。作为宗室，他既享血缘优势，也更需谨慎避免"宗王拥兵"的疑忌，因此治军与治地方多强调安抚与整饬。凌烟阁功臣中宗室并不多，他以实绩证明宗亲也能成为制度化军政的一部分，是唐初统一进程的重要执行者。
+    growth_range:
+    - 6
+    - 11
+    attribute_weights:
+      force: 36
+      intellect: 24
+      defense: 28
+      agility: 12
+  - key: hist_suitang_0059_lixiuming
+    name: 李秀宁
+    default_gender: female
+    archetype: military
+    flavor: （？-623年）李渊之女，史称平阳公主。隋末起兵之际，她在关中招集义军并协助攻取要地，"娘子军"由此成为开国记忆的一部分。正史对其军旅细节记载有限，但其确为唐初政治号召的重要象征：以宗室女性身份参与战争，提升起兵合法性并凝聚地方人心。她早逝却获厚葬，说明功绩当时已被认可；后世尊其为巾帼英雄，也是在纪念开国的艰难与代价。
+    growth_range:
+    - 6
+    - 11
+    attribute_weights:
+      force: 36
+      intellect: 26
+      defense: 26
+      agility: 12
+  - key: hist_suitang_0060_xurengui
+    name: 薛仁贵
+    default_gender: male
+    archetype: military
+    flavor: （614年-683年）唐代名将，出身并不显赫而以战功起。史载其在东北与西北战事中屡有表现，善骑射、敢冲阵，成为军中可倚之将。民间"白袍将军""三箭定天山"等传说夸饰甚多，但也反映他确以勇武闻名。其仕途数起数落，既受赏识也遭疑忌，显示边将并不总能掌握命运。真实的薛仁贵是边防体系里的硬将，传说的薛仁贵则成了大众对英雄的投射。
+    growth_range:
+    - 6
+    - 11
+    attribute_weights:
+      force: 42
+      intellect: 16
+      defense: 28
+      agility: 14

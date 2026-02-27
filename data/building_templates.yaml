@@ -137,7 +137,7 @@ buildings:
   - key: smithy
     name: 冶炼坊
     category: production
-    description: 炉火纯青，百炼成钢。好铁需经千锤百炼，方能铸就神兵利器。升级提升冶炼速度
+    description: 冶炼坊能够冶炼金属和制作药品。
     resource_type: silver
     base_rate_per_hour: 0
     rate_growth: 0.0

@@ -17,6 +17,7 @@ from django.core.cache import cache
 from django.db import transaction
 from django.db.models import F
 
+from common.utils.celery import safe_apply_async
 from core.exceptions import (
     InsufficientResourceError,
     TechnologyConcurrentUpgradeLimitError,
@@ -397,7 +398,15 @@ def schedule_technology_completion(tech, eta_seconds: int) -> None:
     except Exception:
         logger.warning("Unable to import complete_technology_upgrade task; skip scheduling", exc_info=True)
         return
-    transaction.on_commit(lambda: complete_technology_upgrade.apply_async(args=[tech.id], countdown=countdown))
+    transaction.on_commit(
+        lambda: safe_apply_async(
+            complete_technology_upgrade,
+            args=[tech.id],
+            countdown=countdown,
+            logger=logger,
+            log_message="complete_technology_upgrade dispatch failed",
+        )
+    )
 
 
 def upgrade_technology(manor, tech_key: str) -> Dict[str, Any]:
@@ -520,12 +529,20 @@ def finalize_technology_upgrade(tech, send_notification: bool = False) -> bool:
     if send_notification:
         from .utils.messages import create_message
 
-        create_message(
-            manor=tech.manor,
-            kind=Message.Kind.SYSTEM,
-            title=f"{tech_name} 研究完成",
-            body=f"当前等级 Lv{tech.level}",
-        )
+        try:
+            create_message(
+                manor=tech.manor,
+                kind=Message.Kind.SYSTEM,
+                title=f"{tech_name} 研究完成",
+                body=f"当前等级 Lv{tech.level}",
+            )
+        except Exception:
+            logger.exception(
+                "Technology completion message failed: manor_id=%s tech_key=%s level=%s",
+                tech.manor_id,
+                tech.tech_key,
+                tech.level,
+            )
 
         notify_user(
             tech.manor.user_id,

@@ -23,6 +23,11 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
 
   db:
@@ -40,6 +45,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 30
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
 
   web:
@@ -63,6 +73,11 @@ services:
       interval: 10s
       timeout: 3s
       retries: 10
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
 
   worker:
@@ -75,6 +90,11 @@ services:
     depends_on:
       - db
       - redis
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
 
   beat:
@@ -98,6 +118,11 @@ services:
     depends_on:
       - db
       - redis
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
 
 volumes:

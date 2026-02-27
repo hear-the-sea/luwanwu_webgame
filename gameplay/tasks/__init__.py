@@ -9,6 +9,7 @@ This package contains all Celery tasks for the gameplay module, organized by dom
 - recruitment: Troop recruitment tasks
 - pvp: Raid and scout tasks
 - maintenance: Data cleanup and prisoner loyalty decay tasks
+- global_mail: Global mail backfill tasks
 """
 
 from __future__ import annotations
@@ -25,6 +26,9 @@ from gameplay.tasks.arena import scan_arena_tournaments
 
 # Buildings
 from gameplay.tasks.buildings import complete_building_upgrade, scan_building_upgrades
+
+# Global mail
+from gameplay.tasks.global_mail import backfill_global_mail_campaign_task, enqueue_global_mail_backfill
 
 # Maintenance
 from gameplay.tasks.maintenance import cleanup_old_data_task, decay_prisoner_loyalty_task
@@ -74,6 +78,9 @@ __all__ = [
     "scan_building_upgrades",
     # Arena
     "scan_arena_tournaments",
+    # Global mail
+    "backfill_global_mail_campaign_task",
+    "enqueue_global_mail_backfill",
     # Technology
     "complete_technology_upgrade",
     "scan_technology_upgrades",

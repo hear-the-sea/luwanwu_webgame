@@ -18,9 +18,14 @@ from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
+from core.config import MESSAGE
+
 # 清理配置：模型 -> (默认保留天数, 时间字段名)
 CLEANUP_CONFIG = {
     "gameplay.ResourceEvent": (30, "created_at"),  # 资源流水保留30天
+    "gameplay.ArenaExchangeRecord": (30, "created_at"),  # 竞技场兑换记录保留30天
+    "battle.BattleReport": (30, "created_at"),  # 战报保留30天
+    "gameplay.Message": (MESSAGE.RETENTION_DAYS, "created_at"),  # 消息保留配置天数
     "guilds.GuildResourceLog": (30, "created_at"),  # 帮会资源流水保留30天
     "guilds.GuildDonationLog": (60, "donated_at"),  # 帮会捐献记录保留60天
     "guilds.GuildExchangeLog": (60, "exchanged_at"),  # 帮会兑换记录保留60天

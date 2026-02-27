@@ -70,7 +70,7 @@ def _refresh_guest_runtime_state(guest, now) -> None:
     if guest.training_complete_at and guest.training_complete_at <= now:
         if finalize_guest_training(guest, now=now):
             needs_refresh = True
-    if guest.status != GuestStatus.INJURED and guest.current_hp < guest.max_hp:
+    if guest.current_hp < guest.max_hp:
         last = guest.last_hp_recovery_at or guest.created_at or now
         if (now - last).total_seconds() >= TimeConstants.HP_RECOVERY_INTERVAL:
             recover_guest_hp(guest, now=now)
@@ -306,7 +306,7 @@ def dismiss_guest_view(request, pk: int):
             locked_guest = manor.guests.select_for_update().filter(pk=pk).first()
             if not locked_guest:
                 raise ValueError("门客不存在")
-            if locked_guest.status != GuestStatus.IDLE:
+            if locked_guest.status not in {GuestStatus.IDLE, GuestStatus.INJURED}:
                 raise GuestNotIdleError(locked_guest)
 
             gear_items = list(locked_guest.gear_items.select_related("template"))
@@ -316,7 +316,7 @@ def dismiss_guest_view(request, pk: int):
 
                 for gear in gear_items:
                     # 如果任何装备卸下失败，整个事务回滚
-                    unequip_guest_item(gear, locked_guest)
+                    unequip_guest_item(gear, locked_guest, allow_injured=True)
             locked_guest.delete()
     except (GameError, ValueError) as exc:
         messages.error(request, f"辞退失败：{sanitize_error_message(exc)}")

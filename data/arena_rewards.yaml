@@ -1,36 +1,68 @@
 rewards:
   - key: grain_pack_small
-    name: 粮草补给（小）
+    name: 粮草补给
     description: 适合前期补充粮草。
     cost_coins: 80
     daily_limit: 20
     rewards:
       resources:
-        grain: 1200
-
-  - key: grain_pack_large
-    name: 粮草补给（大）
-    description: 单次收益更高的粮草补给。
-    cost_coins: 300
-    daily_limit: 8
-    rewards:
-      resources:
-        grain: 5200
+        grain: 15000
 
   - key: silver_pack_small
-    name: 银两补给（小）
+    name: 银两补给
     description: 快速补充日常银两消耗。
     cost_coins: 100
     daily_limit: 15
     rewards:
       resources:
-        silver: 800
+        silver: 15000
 
-  - key: silver_pack_large
-    name: 银两补给（大）
-    description: 适合中后期的银两补给。
-    cost_coins: 360
-    daily_limit: 6
+  - key: gladiator_chest
+    name: 角斗士宝箱
+    description: 兑换后可获得10000银两，并随机获得1件角斗士装备（头盔30%、胸甲20%、之靴35%、之锤15%）。
+    cost_coins: 500
+    daily_limit: 2
     rewards:
       resources:
-        silver: 3200
+        silver: 10000
+      random_items:
+        - item_key: equip_jiaodoushitoukui
+          weight: 30
+        - item_key: equip_jiaodoushixiongjia
+          weight: 20
+        - item_key: equip_jiaodoushizhixue
+          weight: 35
+        - item_key: equip_jiaodoushizhichui
+          weight: 15
+
+  - key: panfeng_guest_exchange
+    name: 潘凤门客兑换
+    description: 兑换后获得「潘凤门客卡」，可直接招募绿色门客潘凤。
+    cost_coins: 1000
+    rewards:
+      items:
+        panfeng_guest_card: 1
+
+  - key: xingdaorong_guest_exchange
+    name: 邢道荣门客兑换
+    description: 兑换后获得「邢道荣门客卡」，可直接招募绿色门客邢道荣。
+    cost_coins: 1000
+    rewards:
+      items:
+        xingdaorong_guest_card: 1
+
+  - key: peerless_general_upgrade_reward
+    name: 《上将的自我修养》残卷1
+    description: 兑换后获得「《上将的自我修养》残卷1」，可将潘凤或邢道荣升至蓝色稀有度。
+    cost_coins: 1000
+    rewards:
+      items:
+        peerless_general_upgrade_token: 1
+
+  - key: peerless_general_upgrade_reward_2
+    name: 《上将的自我修养》残卷2
+    description: 兑换后获得「《上将的自我修养》残卷2」，可将潘凤或邢道荣从蓝色升至紫色稀有度。
+    cost_coins: 10000
+    rewards:
+      items:
+        peerless_general_upgrade_token_2: 1

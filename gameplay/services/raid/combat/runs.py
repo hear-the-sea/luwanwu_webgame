@@ -396,10 +396,24 @@ def start_raid(
         _deduct_troops(attacker_locked, loadout)
         travel_time = calculate_raid_travel_time(attacker_locked, defender_locked, guests, loadout)
         run = _create_raid_run_record(attacker_locked, defender_locked, guests, loadout, travel_time)
+        if attacker_locked.defeat_protection_until and attacker_locked.defeat_protection_until > now:
+            # 主动发起踢馆会解除战败保护。
+            attacker_locked.defeat_protection_until = None
+            attacker_locked.save(update_fields=["defeat_protection_until"])
         _invalidate_recent_attacks_cache_on_commit(defender_locked.pk)
 
-    # 发送来袭警报给防守方
-    _send_raid_incoming_message(run)
+    # 发送来袭警报给防守方（最佳努力，不能影响已成功创建的出征）
+    try:
+        _send_raid_incoming_message(run)
+    except Exception as exc:
+        logger.warning(
+            "raid incoming message failed: run_id=%s attacker=%s defender=%s error=%s",
+            getattr(run, "id", None),
+            getattr(run, "attacker_id", getattr(getattr(run, "attacker", None), "id", None)),
+            getattr(run, "defender_id", getattr(getattr(run, "defender", None), "id", None)),
+            exc,
+            exc_info=True,
+        )
     _dispatch_raid_battle_task(run, travel_time)
 
     return run

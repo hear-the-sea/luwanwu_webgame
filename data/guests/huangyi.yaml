@@ -17,6 +17,36 @@ heroes:
       intellect: 40
       defense: 25
       agility: 25
+  - key: hero_gu_zixian
+    name: 谷姿仙
+    archetype: civil
+    flavor: 覆雨翻云女主之一谷姿仙，美艳动人情深意重。她与浪翻云的爱情感人至深，是覆雨翻云中最动人的女性角色。她以柔情温暖了浪翻云冰冷的心。她的坚定与温润，让浪翻云有了人间归处。出自黄易小说《覆雨翻云》。就角色书写而言，谷姿仙兼具类型化特征与个体辨识度，因此在读者记忆中保持稳定位置。
+    default_gender: female
+    default_morality: 80
+    recruitable: true
+    growth_range:
+    - 3
+    - 5
+    attribute_weights:
+      force: 10
+      intellect: 40
+      defense: 20
+      agility: 30
+  - key: hero_ji_xixi
+    name: 纪惜惜
+    archetype: civil
+    flavor: 覆雨翻云角色纪惜惜，浪翻云亡妻琴艺无双。她的死让浪翻云性情大变，是覆雨翻云悲剧的起点。她虽早逝却影响深远，是浪翻云心中永远的痛。她的温柔与才情在回忆里不灭，成为他执刀的源头。出自黄易小说《覆雨翻云》。纪惜惜的文本价值不仅在于文学性，也体现在其对武侠叙事语境观念迁移的细密记录。
+    default_gender: female
+    default_morality: 85
+    recruitable: true
+    growth_range:
+    - 3
+    - 5
+    attribute_weights:
+      force: 10
+      intellect: 45
+      defense: 20
+      agility: 25
   - key: hero_ji_yanran
     name: 纪嫣然
     archetype: civil
@@ -95,7 +125,7 @@ heroes:
   - key: hero_song_yuzhi
     name: 宋玉致
     archetype: civil
-    flavor: 大唐双龙传女主之一宋玉致，寇仲红颜温柔美丽。她深爱寇仲，在乱世中坚守真情。她是寇仲生命中最重要的人，也是他争霸天下的动力。她的坚定与温柔，让寇仲在野心中仍留人性。出自黄易小说《大唐双龙传》
+    flavor: 大唐双龙传女主之一宋玉致，寇仲红颜温柔美丽。她深爱寇仲，在乱世中坚守真情。她是寇仲生命中最重要的人，也是他争霸天下的动力。她的坚定与温柔，让寇仲在野心中仍留人性。出自黄易小说《大唐双龙传》。若仅以一战成败评价宋玉致容易失真，结合武侠叙事语境后勤与边防压力才能接近真实语境。
     default_gender: female
     default_morality: 80
     recruitable: true
@@ -125,7 +155,7 @@ heroes:
   - key: hero_shen_luoyan
     name: 沈落雁
     archetype: civil
-    flavor: 大唐双龙传角色沈落雁，四大美女之一智计无双。她美艳绝伦善于谋略，是大唐双龙传中最有智慧的女性角色。她在乱世中游刃有余，以美貌和智慧征服群雄。她进退有度，常以一步棋决定全局。出自黄易小说《大唐双龙传》
+    flavor: 大唐双龙传角色沈落雁，四大美女之一智计无双。她美艳绝伦善于谋略，是大唐双龙传中最有智慧的女性角色。她在乱世中游刃有余，以美貌和智慧征服群雄。她进退有度，常以一步棋决定全局。出自黄易小说《大唐双龙传》。从人物史角度看，沈落雁的经历兼具代表性与特殊性，适合用于说明时代结构与个人命运的交错。
     default_gender: female
     default_morality: 60
     recruitable: true
@@ -140,7 +170,7 @@ heroes:
   - key: hero_shan_meixian
     name: 单美仙
     archetype: military
-    flavor: 大唐双龙传角色单美仙，四大美女之一性格刚烈。她武功高强美貌绝伦，是大唐双龙传中最有个性的女性角色。她以巾帼之姿在乱世中闯出一片天地。她宁折不弯，敢为情义一战到底。出自黄易小说《大唐双龙传》
+    flavor: 大唐双龙传角色单美仙，四大美女之一性格刚烈。她武功高强美貌绝伦，是大唐双龙传中最有个性的女性角色。她以巾帼之姿在乱世中闯出一片天地。她宁折不弯，敢为情义一战到底。出自黄易小说《大唐双龙传》。无论成败如何，单美仙所面对的战场条件都具有典型性，因此其经验常被后人用作比较案例。
     default_gender: female
     default_morality: 70
     recruitable: true
@@ -155,7 +185,7 @@ heroes:
   - key: hero_hou_xibai
     name: 侯希白
     archetype: military
-    flavor: 大唐双龙传角色侯希白，画圣门传人风流倜傥。他武功高强擅长绘画，是大唐双龙传中最有艺术气质的角色。他与寇仲徐子陵相交甚欢。他的画中有剑意，潇洒中藏着深厚功力。出自黄易小说《大唐双龙传》
+    flavor: 大唐双龙传角色侯希白，画圣门传人风流倜傥。他武功高强擅长绘画，是大唐双龙传中最有艺术气质的角色。他与寇仲徐子陵相交甚欢。他的画中有剑意，潇洒中藏着深厚功力。出自黄易小说《大唐双龙传》。侯希白战场表现在不同文献中呈现差异化叙述，值得结合成书背景一并辨析。
     default_gender: male
     default_morality: 70
     recruitable: true
@@ -170,7 +200,7 @@ heroes:
   - key: hero_shang_xiuxun
     name: 商秀珣
     archetype: military
-    flavor: 大唐双龙传角色商秀珣，飞马牧场少主武功高强。她性格爽朗与徐子陵有过情感纠葛，是大唐双龙传重要女性角色。她以女中豪杰的姿态行走江湖。她既能统御牧场，也能在战场上独当一面。出自黄易小说《大唐双龙传》
+    flavor: 大唐双龙传角色商秀珣，飞马牧场少主武功高强。她性格爽朗与徐子陵有过情感纠葛，是大唐双龙传重要女性角色。她以女中豪杰的姿态行走江湖。她既能统御牧场，也能在战场上独当一面。出自黄易小说《大唐双龙传》。在商秀珣身上，可见将领个人能力与军政体系边界之间持续拉扯的现实。
     default_gender: female
     default_morality: 75
     recruitable: true
@@ -185,7 +215,7 @@ heroes:
   - key: hero_feng_xinglie
     name: 风行烈
     archetype: military
-    flavor: 风行烈随风而来，行事干脆利落。与浪翻云并肩，他以豪情与忠义贯穿乱世。刀剑之间他从不含糊，血火之中依旧保留赤子之心。风过无痕，他却在江湖留下最爽朗的背影。出自黄易小说《覆雨翻云》
+    flavor: 风行烈随风而来，行事干脆利落。与浪翻云并肩，他以豪情与忠义贯穿乱世。刀剑之间他从不含糊，血火之中依旧保留赤子之心。风过无痕，他却在江湖留下最爽朗的背影。出自黄易小说《覆雨翻云》。围绕其生平的军事叙述，常与同代对手及盟友并读，进而揭示武侠叙事语境力量对比的动态演化。
     default_gender: male
     default_morality: 75
     recruitable: true
@@ -197,25 +227,10 @@ heroes:
       intellect: 15
       defense: 25
       agility: 25
-  - key: hero_gu_zixian
-    name: 谷姿仙
-    archetype: civil
-    flavor: 覆雨翻云女主之一谷姿仙，美艳动人情深意重。她与浪翻云的爱情感人至深，是覆雨翻云中最动人的女性角色。她以柔情温暖了浪翻云冰冷的心。她的坚定与温润，让浪翻云有了人间归处。出自黄易小说《覆雨翻云》
-    default_gender: female
-    default_morality: 80
-    recruitable: true
-    growth_range:
-    - 3
-    - 5
-    attribute_weights:
-      force: 10
-      intellect: 40
-      defense: 20
-      agility: 30
   - key: hero_qin_mengyao
     name: 秦梦瑶
     archetype: civil
-    flavor: 秦梦瑶琴心如水，气质清雅却意志坚决。她与韩柏情定终生，在正邪对立中始终守住本心。琴音之中藏剑意，温柔之下有锋芒。她以一曲清音，写尽覆雨翻云里的柔情与大义。出自黄易小说《覆雨翻云》
+    flavor: 秦梦瑶琴心如水，气质清雅却意志坚决。她与韩柏情定终生，在正邪对立中始终守住本心。琴音之中藏剑意，温柔之下有锋芒。她以一曲清音，写尽覆雨翻云里的柔情与大义。出自黄易小说《覆雨翻云》。秦梦瑶的作品与学术取向在同代群体中辨识度很高，常被并置于武侠叙事语境文化转向与审美变化的讨论中。
     default_gender: female
     default_morality: 80
     recruitable: true
@@ -230,7 +245,7 @@ heroes:
   - key: hero_fan_liangji
     name: 范良极
     archetype: military
-    flavor: 范良极行事怪诞，心思如渊。身负绝顶武学，却不愿为任何势力所缚，亦正亦邪、难测难猜。江湖人畏其名，更畏其不可知的目的。风雨翻云里，他像一枚游走的暗子，随时改写局势。出自黄易小说《覆雨翻云》
+    flavor: 范良极行事怪诞，心思如渊。身负绝顶武学，却不愿为任何势力所缚，亦正亦邪、难测难猜。江湖人畏其名，更畏其不可知的目的。风雨翻云里，他像一枚游走的暗子，随时改写局势。出自黄易小说《覆雨翻云》。研究范良极时，战术层面的得失与政治层面的约束应被并列考察，二者缺一不可。
     default_gender: male
     default_morality: 45
     recruitable: true
@@ -242,21 +257,6 @@ heroes:
       intellect: 25
       defense: 20
       agility: 20
-  - key: hero_ji_xixi
-    name: 纪惜惜
-    archetype: civil
-    flavor: 覆雨翻云角色纪惜惜，浪翻云亡妻琴艺无双。她的死让浪翻云性情大变，是覆雨翻云悲剧的起点。她虽早逝却影响深远，是浪翻云心中永远的痛。她的温柔与才情在回忆里不灭，成为他执刀的源头。出自黄易小说《覆雨翻云》
-    default_gender: female
-    default_morality: 85
-    recruitable: true
-    growth_range:
-    - 3
-    - 5
-    attribute_weights:
-      force: 10
-      intellect: 45
-      defense: 20
-      agility: 25
   - key: hero_yang_xuyan
     name: 杨虚彦
     archetype: military
@@ -303,81 +303,6 @@ heroes:
       defense: 15
       agility: 22
   blue:
-  - key: hero_chuan_ying
-    name: 传鹰
-    archetype: military
-    flavor: 覆雨翻云重要角色传鹰，浪翻云挚友武功高强。他与秦梦瑶情深意重，最终成就一代宗师。他在乱世中以武会友，与浪翻云惺惺相惜。他的人生轨迹与覆雨翻云的大时代交织，见证了那个风云际会的年代。黄易笔下经典侠客形象，以豪迈胸襟书写江湖兄弟情义。出自黄易小说《覆雨翻云》
-    default_gender: male
-    default_morality: 75
-    recruitable: true
-    growth_range:
-    - 6
-    - 9
-    attribute_weights:
-      force: 35
-      intellect: 20
-      defense: 25
-      agility: 20
-  - key: hero_shi_zhixuan
-    name: 石之轩
-    archetype: civil
-    flavor: 邪王石之轩，大唐双龙传最神秘的角色。他武功登峰造极，亦正亦邪难以捉摸。他是师妃暄之父，却又是魔门巨擘。他一生在正邪之间游走，所作所为令人费解。他的存在本身就是一个谜，黄易笔下最复杂的角色之一，以矛盾人格诠释人性的多面。出自黄易小说《大唐双龙传》
-    default_gender: male
-    default_morality: 40
-    recruitable: true
-    growth_range:
-    - 7
-    - 9
-    attribute_weights:
-      force: 20
-      intellect: 45
-      defense: 10
-      agility: 25
-  - key: hero_ning_daoqi
-    name: 宁道奇
-    archetype: military
-    flavor: 散人宁道奇，道家高手超脱世外。他是大唐双龙传中武功最高者之一，与师妃暄同属慈航静斋一系。他性格超脱飘逸，不问世事却在关键时刻出手。他的武学境界已入化境，一举一动皆合天道。黄易笔下最具仙气的角色，以出尘风骨诠释道法自然。出自黄易小说《大唐双龙传》
-    default_gender: male
-    default_morality: 85
-    recruitable: true
-    growth_range:
-    - 7
-    - 9
-    attribute_weights:
-      force: 35
-      intellect: 25
-      defense: 25
-      agility: 15
-  - key: hero_shi_feixuan
-    name: 师妃暄
-    archetype: civil
-    flavor: 慈航静斋传人师妃暄，大唐双龙传女主之一。她武功高强清丽脱俗，肩负选择天下明主的使命。她与徐子陵情深缘浅，最终出家为尼。她的一生都在家国与情爱间挣扎，以大局为重舍弃儿女私情。黄易笔下最具悲剧色彩的女性角色，以超脱姿态诠释何为取舍。出自黄易小说《大唐双龙传》
-    default_gender: female
-    default_morality: 90
-    recruitable: true
-    growth_range:
-    - 6
-    - 9
-    attribute_weights:
-      force: 20
-      intellect: 40
-      defense: 10
-      agility: 30
-  - key: hero_wan_wan
-    name: 婠婠
-    archetype: military
-    flavor: 阴癸派圣女婠婠，大唐双龙传女主之一。她美艳动人武功高强，是魔门最杰出的传人。她与徐子陵有复杂的感情纠葛，虽立场对立，却数次出手相助。她虽出身魔门却率性而为，最终接掌师门，成为阴癸派一代宗师。黄易笔下最妖娆的女性角色，以亦正亦邪的魅力倾倒众生。出自黄易小说《大唐双龙传》
-    default_gender: female
-    default_morality: 55
-    recruitable: true
-    growth_range:
-    - 6
-    - 9
-    attribute_weights:
-      force: 32
-      intellect: 25
-      defense: 10
-      agility: 33
   - key: hero_zhu_yuzhen
     name: 祝玉妍
     archetype: military
@@ -426,7 +351,7 @@ heroes:
   - key: hero_li_ruohai
     name: 厉若海
     archetype: military
-    flavor: 覆雨翻云角色厉若海，武功绝顶亦正亦邪。他与浪翻云亦敌亦友，是覆雨翻云中最复杂的角色之一。他的人生充满矛盾与挣扎，最终在正邪之间找到自己的道路。黄易笔下最具矛盾美的角色。出自黄易小说《覆雨翻云》
+    flavor: 覆雨翻云角色厉若海，武功绝顶亦正亦邪。他与浪翻云亦敌亦友，是覆雨翻云中最复杂的角色之一。他的人生充满矛盾与挣扎，最终在正邪之间找到自己的道路。黄易笔下最具矛盾美的角色。出自黄易小说《覆雨翻云》。他亦正亦邪的选择，让角色始终保持锋利而真实的张力。
     default_gender: male
     default_morality: 50
     recruitable: true
@@ -439,6 +364,81 @@ heroes:
       defense: 20
       agility: 25
   purple:
+  - key: hero_chuan_ying
+    name: 传鹰
+    archetype: military
+    flavor: 覆雨翻云重要角色传鹰，浪翻云挚友武功高强。他与秦梦瑶情深意重，最终成就一代宗师。他在乱世中以武会友，与浪翻云惺惺相惜。他的人生轨迹与覆雨翻云的大时代交织，见证了那个风云际会的年代。黄易笔下经典侠客形象，以豪迈胸襟书写江湖兄弟情义。出自黄易小说《覆雨翻云》
+    default_gender: male
+    default_morality: 75
+    recruitable: true
+    growth_range:
+    - 6
+    - 11
+    attribute_weights:
+      force: 35
+      intellect: 20
+      defense: 25
+      agility: 20
+  - key: hero_shi_zhixuan
+    name: 石之轩
+    archetype: civil
+    flavor: 邪王石之轩，大唐双龙传最神秘的角色。他武功登峰造极，亦正亦邪难以捉摸。他是师妃暄之父，却又是魔门巨擘。他一生在正邪之间游走，所作所为令人费解。他的存在本身就是一个谜，黄易笔下最复杂的角色之一，以矛盾人格诠释人性的多面。出自黄易小说《大唐双龙传》
+    default_gender: male
+    default_morality: 40
+    recruitable: true
+    growth_range:
+    - 7
+    - 11
+    attribute_weights:
+      force: 20
+      intellect: 45
+      defense: 10
+      agility: 25
+  - key: hero_ning_daoqi
+    name: 宁道奇
+    archetype: military
+    flavor: 散人宁道奇，道家高手超脱世外。他是大唐双龙传中武功最高者之一，与师妃暄同属慈航静斋一系。他性格超脱飘逸，不问世事却在关键时刻出手。他的武学境界已入化境，一举一动皆合天道。黄易笔下最具仙气的角色，以出尘风骨诠释道法自然。出自黄易小说《大唐双龙传》
+    default_gender: male
+    default_morality: 85
+    recruitable: true
+    growth_range:
+    - 7
+    - 11
+    attribute_weights:
+      force: 35
+      intellect: 25
+      defense: 25
+      agility: 15
+  - key: hero_shi_feixuan
+    name: 师妃暄
+    archetype: civil
+    flavor: 慈航静斋传人师妃暄，大唐双龙传女主之一。她武功高强清丽脱俗，肩负选择天下明主的使命。她与徐子陵情深缘浅，最终出家为尼。她的一生都在家国与情爱间挣扎，以大局为重舍弃儿女私情。黄易笔下最具悲剧色彩的女性角色，以超脱姿态诠释何为取舍。出自黄易小说《大唐双龙传》
+    default_gender: female
+    default_morality: 90
+    recruitable: true
+    growth_range:
+    - 6
+    - 11
+    attribute_weights:
+      force: 20
+      intellect: 40
+      defense: 10
+      agility: 30
+  - key: hero_wan_wan
+    name: 婠婠
+    archetype: military
+    flavor: 阴癸派圣女婠婠，大唐双龙传女主之一。她美艳动人武功高强，是魔门最杰出的传人。她与徐子陵有复杂的感情纠葛，虽立场对立，却数次出手相助。她虽出身魔门却率性而为，最终接掌师门，成为阴癸派一代宗师。黄易笔下最妖娆的女性角色，以亦正亦邪的魅力倾倒众生。出自黄易小说《大唐双龙传》
+    default_gender: female
+    default_morality: 55
+    recruitable: true
+    growth_range:
+    - 6
+    - 11
+    attribute_weights:
+      force: 32
+      intellect: 25
+      defense: 10
+      agility: 33
   - key: hero_xiang_shaolong
     name: 项少龙
     archetype: military

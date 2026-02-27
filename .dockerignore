@@ -2,6 +2,8 @@
 .gitignore
 .vscode
 .idea
+.venv/
+venv/
 
 __pycache__/
 *.py[cod]
@@ -17,6 +19,26 @@ htmlcov/
 *.sqlite3
 *.sqlite3-journal
 node_modules/
+dist/
+build/
+reports/
+docs/
+tests/
+# Keep large image assets out of image by default, but include source images
+# required by data loaders in production containers.
+data/images/*
+!data/images/items/
+!data/images/items/**
+!data/images/guests/
+!data/images/guests/**
+!data/images/troops/
+!data/images/troops/**
+
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.7z
 
 media/
 staticfiles/
@@ -27,3 +49,4 @@ celerybeat.pid
 
 *.log
 logs/
+runtime/

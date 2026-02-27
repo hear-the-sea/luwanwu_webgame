@@ -26,6 +26,8 @@ from gameplay.selectors.warehouse import get_warehouse_context
 from gameplay.services import (
     ensure_manor,
     refresh_manor_state,
+    sync_warehouse_grain_item,
+    use_guest_rarity_upgrade_item,
     use_guest_rebirth_card,
     use_inventory_item,
     use_xidianka,
@@ -64,6 +66,18 @@ def _error_response(
     return redirect(redirect_url)
 
 
+def _unexpected_error_response(
+    request: HttpRequest,
+    is_ajax: bool,
+    *,
+    redirect_url: str,
+    log_message: str,
+    log_args: tuple[Any, ...],
+) -> HttpResponse:
+    logger.exception(log_message, *log_args)
+    return _error_response(request, is_ajax, "操作失败，请稍后重试", redirect_url=redirect_url, status=500)
+
+
 def _move_item_between_storage(
     request: HttpRequest,
     pk: int,
@@ -86,15 +100,19 @@ def _move_item_between_storage(
         messages.success(request, message)
     except (GameError, ValueError) as exc:
         return _error_response(request, is_ajax, sanitize_error_message(exc), redirect_url=redirect_url)
-    except Exception as exc:
-        logger.exception(
-            "Unexpected storage move view error: manor_id=%s user_id=%s item_id=%s quantity=%s",
-            getattr(manor, "id", None),
-            getattr(request.user, "id", None),
-            pk,
-            quantity,
+    except Exception:
+        return _unexpected_error_response(
+            request,
+            is_ajax,
+            redirect_url=redirect_url,
+            log_message="Unexpected storage move view error: manor_id=%s user_id=%s item_id=%s quantity=%s",
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                pk,
+                quantity,
+            ),
         )
-        return _error_response(request, is_ajax, sanitize_error_message(exc), redirect_url=redirect_url, status=500)
 
     return redirect(redirect_url)
 
@@ -128,15 +146,19 @@ def _use_target_guest_item(
         messages.success(request, message)
     except (GameError, ValueError) as exc:
         return _error_response(request, is_ajax, sanitize_error_message(exc))
-    except Exception as exc:
-        logger.exception(
-            "Unexpected target-guest item use view error: manor_id=%s user_id=%s item_id=%s guest_id=%s",
-            getattr(manor, "id", None),
-            getattr(request.user, "id", None),
-            pk,
-            guest_id,
+    except Exception:
+        return _unexpected_error_response(
+            request,
+            is_ajax,
+            redirect_url="gameplay:warehouse",
+            log_message="Unexpected target-guest item use view error: manor_id=%s user_id=%s item_id=%s guest_id=%s",
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                pk,
+                guest_id,
+            ),
         )
-        return _error_response(request, is_ajax, sanitize_error_message(exc), status=500)
 
     return redirect("gameplay:warehouse")
 
@@ -162,6 +184,7 @@ class WarehouseView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         manor = ensure_manor(self.request.user)
         refresh_manor_state(manor)
+        sync_warehouse_grain_item(manor)
         context["manor"] = manor
 
         current_tab = self.request.GET.get("tab", "warehouse")
@@ -194,6 +217,18 @@ def use_item_view(request: HttpRequest, pk: int) -> HttpResponse:
         messages.success(request, f"{item.template.name} 使用成功：{summary}")
     except (GameError, ValueError) as exc:
         return _error_response(request, is_ajax, sanitize_error_message(exc))
+    except Exception:
+        return _unexpected_error_response(
+            request,
+            is_ajax,
+            redirect_url="gameplay:warehouse",
+            log_message="Unexpected inventory use error: manor_id=%s user_id=%s item_id=%s",
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                pk,
+            ),
+        )
     return redirect("gameplay:warehouse")
 
 
@@ -247,6 +282,27 @@ def use_guest_rebirth_card_view(request: HttpRequest, pk: int) -> HttpResponse:
         missing_guest_error="请选择要重生的门客",
         success_fallback_message=lambda result: f"门客 {result.get('guest_name', '')} 已重生为1级",
         service_call=use_guest_rebirth_card,
+    )
+
+
+@login_required
+@require_POST
+@rate_limit_redirect("use_guest_rarity_upgrade", limit=10, window_seconds=60)
+def use_guest_rarity_upgrade_view(request: HttpRequest, pk: int) -> HttpResponse:
+    """
+    使用门客升阶道具（需要选择目标门客）。
+
+    Args:
+        pk: 物品ID
+        guest_id: 目标门客ID（通过POST传入）
+    """
+    return _use_target_guest_item(
+        request,
+        pk,
+        expected_action="upgrade_guest_rarity",
+        missing_guest_error="请选择要升阶的门客",
+        success_fallback_message=lambda result: f"门客 {result.get('guest_name', '')} 升阶成功",
+        service_call=use_guest_rarity_upgrade_item,
     )
 
 

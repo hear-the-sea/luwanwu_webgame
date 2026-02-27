@@ -29,6 +29,12 @@ urlpatterns = [
     path("member/<int:member_id>/demote/", views.demote_admin, name="demote_admin"),
     path("member/<int:member_id>/transfer/", views.transfer_leadership, name="transfer_leadership"),
     path("leave/", views.leave_guild, name="leave"),
+    # 门客池
+    path("hero-pool/", views.hero_pool_page, name="hero_pool"),
+    path("hero-pool/submit/", views.hero_pool_submit, name="hero_pool_submit"),
+    path("hero-pool/remove/", views.hero_pool_remove, name="hero_pool_remove"),
+    path("hero-pool/lineup/add/", views.lineup_add, name="lineup_add"),
+    path("hero-pool/lineup/remove/", views.lineup_remove, name="lineup_remove"),
     # 帮会升级
     path("upgrade/", views.upgrade_guild, name="upgrade"),
     path("disband/", views.disband_guild, name="disband"),

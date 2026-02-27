@@ -41,7 +41,7 @@ class Manor(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="manor")
     name = models.CharField("庄园名称", max_length=20, unique=True, blank=True, null=True)
     grain = models.PositiveIntegerField("粮食", default=1200)
-    silver = models.PositiveIntegerField("银两", default=500)
+    silver = models.PositiveIntegerField("银两", default=5000)
     arena_coins = models.PositiveIntegerField("角斗币", default=0)
     arena_participations_today = models.PositiveSmallIntegerField("竞技场今日参与次数", default=0)
     arena_participation_date = models.DateField(
@@ -153,7 +153,7 @@ class Manor(models.Model):
     @property
     def is_protected(self) -> bool:
         """是否处于任何保护状态"""
-        return self.is_under_newbie_protection or self.is_under_peace_shield
+        return self.is_under_newbie_protection or self.is_under_peace_shield or self.is_under_defeat_protection
 
     @property
     def can_relocate(self) -> bool:

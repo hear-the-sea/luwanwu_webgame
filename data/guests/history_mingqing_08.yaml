@@ -1,16 +1,121 @@
 heroes:
-  green:
-  - key: hist_mingqing_0308
-    name: 吴嘉纪
+  purple:
+  - key: hist_mingqing_0327
+    name: 海瑞
     default_gender: male
     archetype: civil
-    flavor: （1618年—1684年）字宾贤，号野人，清初著名的诗人。他出身贫寒，长期生活在泰州泰兴的盐场底层，以极其真挚、深沉的笔触记录了沿海盐民的悲惨生活与民族巨变下的社会疾苦。吴嘉纪的诗歌风格质朴苍劲、不事雕琢，充满了浓郁的人文关怀与悲悯意识，被推为“泰州学派”在文学上的传人。他的一生在贫困与隐居中度过，拒绝与当政者合作，坚守了儒家士大夫最底层的气节。他那种“关注细节、记录真实”的实证眼光，使其诗作具有了跨越时代的史料价值与审美魅力。吴嘉纪的存在证明了思想的力量可以超越物质的匮乏，他那种在草屋中依然忧心天下的精神，是中国文化中一个极其坚韧的人格符号。
+    flavor: （1514年—1587年）海瑞，字汝贤，号刚峰，明代著名清官，历任淳安知县、应天巡抚等职。海瑞以廉洁刚直闻名，敢于上疏直陈时政得失，虽屡遭贬谪，仍不改其志。在地方治理中重视赋役公平与司法整饬，尤其强调官员应当节用爱民。
     growth_range:
-    - 4
-    - 7
+    - 6
+    - 11
+    attribute_weights:
+      force: 14
+      intellect: 56
+      defense: 18
+      agility: 12
+  - key: hist_mingqing_0328
+    name: 徐光启
+    default_gender: male
+    archetype: civil
+    flavor: （1562年—1633年）徐光启，字子先，号玄扈，明末科学家与政治家，官至礼部尚书、内阁大学士。主持修订历法，推动《崇祯历书》编纂，并与传教士合作译介《几何原本》等西学著作。徐光启重视农业、水利与军事技术，主张以实学应对国家危机。
+    growth_range:
+    - 6
+    - 11
+    attribute_weights:
+      force: 10
+      intellect: 62
+      defense: 16
+      agility: 12
+  - key: hist_mingqing_0329
+    name: 吴承恩
+    default_gender: male
+    archetype: civil
+    flavor: （约1500年—约1583年）吴承恩，字汝忠，号射阳山人，明代文学家，通常被认为是《西游记》的作者。其作品将神魔叙事、世俗讽谕与民间语言融合，构建出兼具想象力与社会批判性的长篇结构。吴承恩早年科举屡挫，晚年仕途亦不显，其创作却在后世形成了广泛文化影响。
+    growth_range:
+    - 6
+    - 11
     attribute_weights:
       force: 12
       intellect: 58
+      defense: 18
+      agility: 12
+  blue:
+  - key: hist_mingqing_0330
+    name: 罗本
+    default_gender: male
+    archetype: civil
+    flavor: （约1330年—约1400年）罗本，字贯中，元末明初文学家，常被视作《三国演义》编写与传播的重要人物。罗本在历史叙事与民间讲史之间建立了具有戏剧张力的叙述结构，使人物形象与政治伦理并行展开。其作品对后世戏曲、评书与通俗小说影响深远，许多典型历史记忆由此定型。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_mingqing_0347
+    name: 史可法
+    default_gender: male
+    archetype: military
+    flavor: （1601年—1645年）史可法，明末重臣，南明弘光朝兵部尚书，扬州守城主将。清军南下时，史可法坚守扬州并组织防务，城破后拒降殉国，成为南明抗清叙事中的核心象征。其政治角色兼具文臣与统帅双重属性，但在危局中所呈现的军事组织与守城决断尤为关键。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 48
+      intellect: 26
+      defense: 16
+      agility: 10
+  - key: hist_mingqing_0333
+    name: 杨慎
+    default_gender: male
+    archetype: civil
+    flavor: （1488年—1559年）杨慎，字用修，号升庵，明代学者、文学家，正德六年状元。因“大礼议”事件触怒朝廷而被长期谪戍云南，流放生涯反而使其学术视野更加广阔。杨慎著述宏富，涉经史、音韵、金石、地理等多个领域，并留下大量诗词文赋。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 60
+      defense: 16
+      agility: 12
+  - key: hist_mingqing_0334
+    name: 沈周
+    default_gender: male
+    archetype: civil
+    flavor: （1427年—1509年）沈周，字启南，号石田，明代书画家，“吴门画派”奠基人物之一。以山水、花鸟见长，强调文人笔墨中的人格修养与自然意趣，在明代中前期确立了“以诗书入画”的审美路径。沈周不以仕进为人生中心，长期活跃于江南士人网络，兼具艺术创造与文化组织能力。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 60
+      defense: 18
+      agility: 12
+  - key: hist_mingqing_0340
+    name: 仇英
+    default_gender: male
+    archetype: civil
+    flavor: （约1494年—约1552年）仇英为明代画家，“吴门四家”之一。仇英出身工匠，却以极高的笔墨控制力与构图能力进入文人画核心谱系，尤精人物与青绿山水。其作品在设色、细节与叙事层次上兼具装饰性与历史感，对后世院体与民间绘画都产生过持续影响。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 60
+      defense: 18
+      agility: 12
+  - key: hist_mingqing_0346
+    name: 夏完淳
+    default_gender: male
+    archetype: civil
+    flavor: （1631年—1647年）夏完淳为南明少年诗人、抗清志士。夏完淳年少即参与军事行动，后被俘遇害，年仅十六。其诗文虽篇幅不多，却在明清易代记忆中地位极高，兼具青春意气与亡国悲怆，被后世反复征引。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 16
+      intellect: 54
       defense: 18
       agility: 12
   - key: hist_mingqing_0309
@@ -18,6 +123,111 @@ heroes:
     default_gender: male
     archetype: civil
     flavor: （1460年—1526年）字希哲，号枝山，明代著名的书法家、诗人，“吴中四才子”之一。他才华横溢、狂放不羁，在书法造诣上尤其是草书方面达到了明代的巅峰水准。祝允明的笔墨苍劲飞动、气势夺人，融合了晋唐名家之长而自成一家，被誉为“明代草书第一”。他在文学上也展现了极高天赋，诗文风格雄浑、充满了浪漫情怀。尽管他在仕途上郁郁不得志，长期担任地方小官，但他那追求绝对艺术自由、不肯受成法束缚的性格，使其成为了中国艺术史上的一位顶级天才。他的一生是关于“才情”与“独立人格”的动人叙事。他留下的作品不仅具有极高的审美价值，更是研究明代中叶文人文化的重要材料。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_mingqing_0322
+    name: 唐顺之
+    default_gender: male
+    archetype: civil
+    flavor: （1507年—1560年）字应德，号荆川，明代杰出的文学家、武术家与军事家。他博学多才，在文学上提出“本色”说，主张散文应质朴自然、揭示事物的本质，是“唐宋派”散文的重要领袖。唐顺之不仅文采斐然，更是一位具有极高实战能力的军事统帅，在东南沿海抗击倭寇的战斗中身先士卒，立下赫赫战功。他在武学造诣上亦极其深厚，撰写了《荆川短篇》等涵盖历算、地理、兵法的综合性著作。他的一生是传统文人追求“知行合一、经世致用”的杰出典范。他在极其危险的边疆战场与繁琐的行政事务间展现出的那种从容与果敢，使其成为了明代士大夫阶层中一位极其罕见的、能够将文化修养与武装实践完美融合的英雄人物。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_mingqing_0332
+    name: 李梦阳
+    default_gender: male
+    archetype: civil
+    flavor: （1473年—1530年）李梦阳，字献吉，号空同子，明代文学家，“前七子”领袖之一。倡导“文必秦汉、诗必盛唐”，试图重建古典文体的气格与法度，对正德、嘉靖间文坛风向影响极大。李梦阳在政坛上亦多有直言，屡因言获罪，仕途并不顺遂。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_mingqing_0338
+    name: 杨涟
+    default_gender: male
+    archetype: civil
+    flavor: （1572年—1625年）杨涟，字文孺，号大洪，明末东林党代表人物，历任给事中、左副都御史。其人以弹劾魏忠贤著名，曾上疏“二十四大罪”，后遭诬陷下狱并被酷刑致死。杨涟在晚明政治中的象征意义超出个人官职，成为士大夫“以言责为本分”的典型。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 56
+      defense: 18
+      agility: 12
+  - key: hist_mingqing_0342
+    name: 高启
+    default_gender: male
+    archetype: civil
+    flavor: （1336年—1374年）高启为元末明初诗人，“吴中四杰”之首。高启诗风雄健清峭，兼有唐宋之长，题材涵盖山林隐逸与世局动荡，语言简劲而气象开阔。入明后曾短暂任职，后因政治风波被诛，结局悲剧。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_mingqing_0343
+    name: 刘宗周
+    default_gender: male
+    archetype: civil
+    flavor: （1578年—1645年）刘宗周，明末思想家与政治人物，字起东，号念台。其学承阳明而重“慎独”工夫，强调士人应在极端政治压力下守住道德自律与行动责任。刘宗周在朝局混乱时多次直言，晚年以身殉明，形成强烈道义象征。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 56
+      defense: 18
+      agility: 12
+  - key: hist_mingqing_0344
+    name: 黄道周
+    default_gender: male
+    archetype: civil
+    flavor: （1585年—1646年）黄道周，明末学者、书法家与政治家，字幼玄。其人以气节与学识并重著称，在南明政权中坚持抗清立场，后兵败被俘遇害。黄道周在经学、书法与政论方面均有深厚造诣，书风峭劲奇崛，影响清初书坛。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 56
+      defense: 18
+      agility: 12
+  - key: hist_mingqing_0345
+    name: 陈子龙
+    default_gender: male
+    archetype: civil
+    flavor: （1608年—1647年）陈子龙，明末文学家、政治人物，松江派代表之一。其诗词文兼长，风格沉郁而富时代紧张感，尤其在国难背景下形成鲜明的家国书写。陈子龙晚年参与抗清活动，兵败后殉节。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 56
+      defense: 18
+      agility: 12
+  green:
+  - key: hist_mingqing_0308
+    name: 吴嘉纪
+    default_gender: male
+    archetype: civil
+    flavor: （1618年—1684年）字宾贤，号野人，清初著名的诗人。他出身贫寒，长期生活在泰州泰兴的盐场底层，以极其真挚、深沉的笔触记录了沿海盐民的悲惨生活与民族巨变下的社会疾苦。吴嘉纪的诗歌风格质朴苍劲、不事雕琢，充满了浓郁的人文关怀与悲悯意识，被推为“泰州学派”在文学上的传人。他的一生在贫困与隐居中度过，拒绝与当政者合作，坚守了儒家士大夫最底层的气节。他那种“关注细节、记录真实”的实证眼光，使其诗作具有了跨越时代的史料价值与审美魅力。吴嘉纪的存在证明了思想的力量可以超越物质的匮乏，他那种在草屋中依然忧心天下的精神，是中国文化中一个极其坚韧的人格符号。
     growth_range:
     - 4
     - 7
@@ -182,19 +392,6 @@ heroes:
       intellect: 58
       defense: 18
       agility: 12
-  - key: hist_mingqing_0322
-    name: 唐顺之
-    default_gender: male
-    archetype: civil
-    flavor: （1507年—1560年）字应德，号荆川，明代杰出的文学家、武术家与军事家。他博学多才，在文学上提出“本色”说，主张散文应质朴自然、揭示事物的本质，是“唐宋派”散文的重要领袖。唐顺之不仅文采斐然，更是一位具有极高实战能力的军事统帅，在东南沿海抗击倭寇的战斗中身先士卒，立下赫赫战功。他在武学造诣上亦极其深厚，撰写了《荆川短篇》等涵盖历算、地理、兵法的综合性著作。他的一生是传统文人追求“知行合一、经世致用”的杰出典范。他在极其危险的边疆战场与繁琐的行政事务间展现出的那种从容与果敢，使其成为了明代士大夫阶层中一位极其罕见的、能够将文化修养与武装实践完美融合的英雄人物。
-    growth_range:
-    - 4
-    - 7
-    attribute_weights:
-      force: 12
-      intellect: 58
-      defense: 18
-      agility: 12
   - key: hist_mingqing_0323
     name: 吕坤
     default_gender: male
@@ -242,6 +439,162 @@ heroes:
     growth_range:
     - 4
     - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_mingqing_0331
+    name: 施彦端
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）施彦端为元末明初文学人物，通常被视作《水浒传》作者或重要编定者之一。其形象与著作关系在文献层面存在多种说法，但“施彦端”作为水浒叙事传统的代表姓名，长期活跃于版本流传与民间记忆中。《水浒传》对社会结构、江湖伦理与官民关系的复杂描写，极大塑造了后世的英雄叙事范式，也使施彦端成为古典小说史中不可回避的名字。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_mingqing_0336
+    name: 张四维
+    default_gender: male
+    archetype: civil
+    flavor: （1526年—1585年）张四维，字子维，号存斋，明代政治家，万历初年内阁首辅。其执政处于张居正改革前后过渡阶段，既需维持财政与军政秩序，又要在复杂党争中平衡朝局。张四维在制度延续与官僚协调方面具备较强能力，但也因政治立场受到后世多重评价。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 14
+      intellect: 56
+      defense: 18
+      agility: 12
+  - key: hist_mingqing_0337
+    name: 王艮
+    default_gender: male
+    archetype: civil
+    flavor: （1483年—1541年）王艮，字汝止，号心斋，明代思想家，泰州学派奠基人物。继承并转化阳明心学，强调“百姓日用即道”，推动儒学由士大夫话语向基层社会扩展。王艮重视实践伦理与个体自觉，对后续民间讲学传统影响深远。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 12
+      intellect: 60
+      defense: 16
+      agility: 12
+  - key: hist_mingqing_0339
+    name: 严世蕃
+    default_gender: male
+    archetype: civil
+    flavor: （1513年—1565年）严世蕃，字德球，明代权臣严嵩之子，嘉靖朝政治斗争中的关键人物之一。严世蕃长期依托父势经营政商网络，深度介入官员任免与财政利益分配，后因党争反转与多项罪名被处死。其形象常被后世塑造成“权臣子弟”典型，但相关史料亦提示其在行政运作与权力技术层面并非全无能力。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 54
+      defense: 18
+      agility: 12
+  - key: hist_mingqing_0341
+    name: 王廷相
+    default_gender: male
+    archetype: civil
+    flavor: （1474年—1544年）王廷相为明代官员与思想家，字子衡，号浚川。在理学讨论中强调“气本论”立场，主张从现实经验与事物运行规律理解道德与政治，反对空疏玄谈。王廷相长期在地方与中枢任职，兼具治理经验与理论表达能力。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 18
+      agility: 12
+  - key: hist_mingqing_0348
+    name: 马士英
+    default_gender: male
+    archetype: civil
+    flavor: （1591年—1646年）马士英，明末官员，南明弘光朝内阁大学士。马士英在南明权力结构中长期居于核心位置，善于结党与资源调度，却也因排斥异己、内耗加剧而饱受批评。其历史评价高度分化，常与南明政权迅速崩解并论。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 16
+      intellect: 54
+      defense: 18
+      agility: 12
+  - key: hist_mingqing_0349
+    name: 熊廷弼
+    default_gender: male
+    archetype: military
+    flavor: （1569年—1625年）熊廷弼，明末边将，历任辽东经略。熊廷弼主张整饬军备、稳固防线，在后金崛起初期尝试以系统防御延缓局势恶化。在战略判断上较为务实，却因朝廷内斗与问责机制反复受挫，最终遇害。
+    growth_range:
+    - 5
+    - 8
+    attribute_weights:
+      force: 50
+      intellect: 24
+      defense: 16
+      agility: 10
+  - key: hist_mingqing_0350
+    name: 袁可立
+    default_gender: male
+    archetype: military
+    flavor: （1562年—1633年）袁可立为明代官员，曾总理登莱海防与辽东军务。袁可立在海防、漕运与边务协同方面经验丰富，强调海上机动与陆防联动，在东南及北方防务体系中都留下制度痕迹。其施政风格兼具整饬与弹性，能够在财政紧张条件下维持区域防御效率。
+    growth_range:
+    - 5
+    - 8
+    attribute_weights:
+      force: 48
+      intellect: 26
+      defense: 16
+      agility: 10
+  - key: hist_mingqing_0351
+    name: 茅元仪
+    default_gender: male
+    archetype: military
+    flavor: （1594年—1640年）茅元仪，明末军事家，著有《武备志》。该书系统汇集兵制、战例、器械、地理与海防资料，是中国古代军事文献中的大型综合成果。茅元仪并非只做文献整理，其军事观察深受晚明海疆危机与边防现实驱动，强调知识整编服务于实战决策。
+    growth_range:
+    - 5
+    - 8
+    attribute_weights:
+      force: 48
+      intellect: 26
+      defense: 16
+      agility: 10
+  - key: hist_mingqing_0352
+    name: 毕懋康
+    default_gender: male
+    archetype: military
+    flavor: （生卒年约明末）毕懋康，军事技术人物，著有《军器图说》。毕懋康重视火器制造、操练流程与战场配置，尝试将工艺知识、军队训练与战术需求结合，为晚明火器系统化提供了可执行框架。其技术文本反映了明末军备升级的真实需求，也揭示中央财政与地方执行之间的长期摩擦。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 46
+      intellect: 28
+      defense: 16
+      agility: 10
+  - key: hist_mingqing_0353
+    name: 唐甄
+    default_gender: male
+    archetype: civil
+    flavor: （1630年—1704年）唐甄，清初思想家，著有《潜书》。唐甄对专制政治、赋役不均与社会不公提出尖锐批评，主张以民生与责任政治为核心重估统治合法性。的文字兼具伦理关怀与制度反思，在清初思想谱系中呈现强烈批判锋芒。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 12
+      intellect: 60
+      defense: 16
+      agility: 12
+  - key: hist_mingqing_0354
+    name: 顾贞观
+    default_gender: male
+    archetype: civil
+    flavor: （1637年—1714年）顾贞观，清初词人，字华峰，号梁汾。顾贞观词风沉郁婉转，长于以个人情感折射时代困境，与纳兰性德等人交游密切。其生平中最著名事件之一为营救吴兆骞，展现了文人网络在政治高压下的互助机制。
+    growth_range:
+    - 4
+    - 8
     attribute_weights:
       force: 12
       intellect: 58

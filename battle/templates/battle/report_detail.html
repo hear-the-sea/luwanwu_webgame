@@ -183,7 +183,7 @@
 <section class="dashboard">
     <div class="tw-section-header">
         <div>
-            <h1>{{ report.opponent_name }} 战报</h1>
+            <h1>{{ report_title }}</h1>
         </div>
     </div>
 
@@ -192,12 +192,19 @@
         <h2>阵容对比</h2>
         <div class="lineup-comparison">
             <article class="tw-building-card">
-                <h3>我方 {% if is_attacker %}<span class="role-tag attacker">进攻方</span>{% else %}<span class="role-tag defender">防守方</span>{% endif %}</h3>
+                <h3>
+                    {{ left_team_title }}
+                    {% if my_side == 'attacker' %}
+                    <span class="role-tag attacker">进攻方</span>
+                    {% else %}
+                    <span class="role-tag defender">防守方</span>
+                    {% endif %}
+                </h3>
                 <ul class="team-members">
                     {% for member in attacker_team_display %}
                         <li class="team-member {{ member.rarity|rarity_class }}" title="{{ member.name }}">
                             {% if member.avatar_url %}
-                                <img class="member-avatar" src="{{ member.avatar_url }}" alt="{{ member.name }}">
+                                <img class="member-avatar" src="{{ member.avatar_url }}" alt="{{ member.name }}" loading="lazy" decoding="async">
                             {% else %}
                                 <span class="avatar-placeholder">{{ member.name|first|default:"?" }}</span>
                             {% endif %}
@@ -209,7 +216,7 @@
                     {% for troop in attacker_troops %}
                         <li class="troop-item">
                             {% if troop.avatar %}
-                                <img class="troop-avatar" src="{{ troop.avatar }}" alt="{{ troop.label }}">
+                                <img class="troop-avatar" src="{{ troop.avatar }}" alt="{{ troop.label }}" loading="lazy" decoding="async">
                             {% else %}
                                 <span class="troop-placeholder">{{ troop.label|first|default:"兵" }}</span>
                             {% endif %}
@@ -224,12 +231,19 @@
                 </ul>
             </article>
             <article class="tw-building-card">
-                <h3>敌方 {% if is_attacker %}<span class="role-tag defender">防守方</span>{% else %}<span class="role-tag attacker">进攻方</span>{% endif %}</h3>
+                <h3>
+                    {{ right_team_title }}
+                    {% if enemy_side == 'attacker' %}
+                    <span class="role-tag attacker">进攻方</span>
+                    {% else %}
+                    <span class="role-tag defender">防守方</span>
+                    {% endif %}
+                </h3>
                 <ul class="team-members">
                     {% for member in defender_team_display %}
                         <li class="team-member {{ member.rarity|rarity_class }}" title="{{ member.name }}">
                             {% if member.avatar_url %}
-                                <img class="member-avatar" src="{{ member.avatar_url }}" alt="{{ member.name }}">
+                                <img class="member-avatar" src="{{ member.avatar_url }}" alt="{{ member.name }}" loading="lazy" decoding="async">
                             {% else %}
                                 <span class="avatar-placeholder">{{ member.name|first|default:"?" }}</span>
                             {% endif %}
@@ -241,7 +255,7 @@
                     {% for troop in defender_troops %}
                         <li class="troop-item">
                             {% if troop.avatar %}
-                                <img class="troop-avatar" src="{{ troop.avatar }}" alt="{{ troop.label }}">
+                                <img class="troop-avatar" src="{{ troop.avatar }}" alt="{{ troop.label }}" loading="lazy" decoding="async">
                             {% else %}
                                 <span class="troop-placeholder">{{ troop.label|first|default:"兵" }}</span>
                             {% endif %}
@@ -374,7 +388,7 @@
         <h2>战斗损失与掉落</h2>
         <div class="battle-loss-grid battle-loss-row">
             <article class="battle-loss friendly battle-loss-left">
-                <h3>我方损失</h3>
+                <h3>{{ left_loss_title }}</h3>
                 <p>阵亡护院：{{ attacker_loss.troops_lost|default:0 }}</p>
                 <div class="loss-details">
                     {% for entry in attacker_loss.casualties %}
@@ -385,7 +399,7 @@
                 </div>
             </article>
             <article class="battle-loss enemy battle-loss-right">
-                <h3>敌方损失</h3>
+                <h3>{{ right_loss_title }}</h3>
                 <p>阵亡护院：{{ defender_loss.troops_lost|default:0 }}</p>
                 <div class="loss-details">
                     {% for entry in defender_loss.casualties %}
@@ -397,21 +411,33 @@
             </article>
         </div>
         <div class="battle-drops">
-            <h3>战斗掉落</h3>
+            {% if loss_items and not player_won and not is_spectator %}
+                <h3>战斗损失</h3>
+            {% else %}
+                <h3>战斗掉落</h3>
+            {% endif %}
             {% if drop_items %}
                 <p>
                     {% for drop in drop_items %}{{ drop.label }} +{{ drop.amount }}{% if not forloop.last %}、{% endif %}{% endfor %}
                 </p>
+            {% elif loss_items %}
+                <p>
+                    {% for loss in loss_items %}{{ loss.label }}{% if loss.amount %} -{{ loss.amount }}{% endif %}{% if not forloop.last %}、{% endif %}{% endfor %}
+                </p>
+            {% elif is_spectator %}
+                <p>本场无额外掉落记录。</p>
             {% elif player_won %}
                 <p>胜利但补给匮乏，本次未获得额外战利品。</p>
             {% else %}
-                <p>战斗失败不获得奖励。</p>
+                <p>战斗失败，损失详见上方“战斗损失”明细。</p>
             {% endif %}
         </div>
     </section>
     <section class="tw-card">
         <h2>战斗结果</h2>
-        {% if player_won %}
+        {% if is_spectator %}
+            <p class="battle-result">{{ spectator_result }}</p>
+        {% elif player_won %}
             <p class="battle-result victory">战斗胜利！</p>
         {% elif report.winner == 'draw' or not report.winner %}
             <p class="battle-result">本次交手不分胜负，继续磨砺实力。</p>

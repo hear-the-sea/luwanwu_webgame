@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load gameplay_extras %}
+{% load gameplay_extras static %}
 
 {% block title %}铁匠铺{% endblock %}
 
@@ -48,7 +48,12 @@
                         </header>
                         <div class="flex gap-2 flex-wrap">
                             {% if production.time_remaining > 0 %}
-                                <span class="tw-chip">剩余时间：{{ production.time_remaining }} 秒</span>
+                                <span class="tw-chip">
+                                    剩余时间：
+                                    <span class="countdown" data-countdown="{{ production.complete_at|date:'c' }}" data-refresh="1">
+                                        {{ production.time_remaining }} 秒
+                                    </span>
+                                </span>
                             {% else %}
                                 <span class="tw-badge-green">已完成！</span>
                             {% endif %}
@@ -261,6 +266,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<script src="{% static 'js/dashboard.js' %}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.js-decompose-form').forEach(function (form) {

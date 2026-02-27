@@ -13,6 +13,7 @@
 from .announcement import announcement_list, create_announcement
 from .contribution import contribution_ranking, donate_resource, donation_logs, resource_logs, resource_status
 from .core import create_guild, guild_detail, guild_hall, guild_info, guild_list, guild_search
+from .hero_pool import hero_pool_page, hero_pool_remove, hero_pool_submit, lineup_add, lineup_remove
 from .membership import (
     application_list,
     apply_to_guild,
@@ -38,6 +39,11 @@ __all__ = [
     "create_guild",
     "guild_detail",
     "guild_info",
+    "hero_pool_page",
+    "hero_pool_submit",
+    "hero_pool_remove",
+    "lineup_add",
+    "lineup_remove",
     # membership
     "apply_to_guild",
     "application_list",

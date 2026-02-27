@@ -9,6 +9,7 @@ from django.urls import reverse
 
 from accounts import views as account_views
 from accounts.forms import SignUpForm
+from gameplay.services.manor.core import ensure_manor
 
 User = get_user_model()
 
@@ -20,14 +21,15 @@ def test_user_can_register(client):
         {
             "username": "test-user",
             "email": "test@example.com",
-            "title": "先锋官",
+            "manor_name": "先锋庄园",
             "region": "overseas",
             "password1": "StrongPass123!",
             "password2": "StrongPass123!",
         },
     )
     assert response.status_code == 302
-    assert User.objects.filter(username="test-user").exists()
+    user = User.objects.get(username="test-user")
+    assert user.manor.name == "先锋庄园"
 
 
 @pytest.mark.django_db
@@ -51,7 +53,7 @@ def test_signup_form_rejects_duplicate_email_case_insensitive():
         data={
             "username": "email_form_new",
             "email": " USED@EXAMPLE.COM ",
-            "title": "测试",
+            "manor_name": "测试庄园",
             "region": "overseas",
             "password1": "StrongPass123!",
             "password2": "StrongPass123!",
@@ -59,6 +61,21 @@ def test_signup_form_rejects_duplicate_email_case_insensitive():
     )
     assert form.is_valid() is False
     assert "email" in form.errors
+
+
+@pytest.mark.django_db
+def test_signup_form_requires_manor_name():
+    form = SignUpForm(
+        data={
+            "username": "no_manor_name_user",
+            "email": "no_manor_name@example.com",
+            "region": "overseas",
+            "password1": "StrongPass123!",
+            "password2": "StrongPass123!",
+        }
+    )
+    assert form.is_valid() is False
+    assert "manor_name" in form.errors
 
 
 @pytest.mark.django_db
@@ -73,7 +90,7 @@ def test_register_view_handles_integrity_error_duplicate_email_race(client, monk
         {
             "username": "race_new_user",
             "email": "race@example.com",
-            "title": "先锋官",
+            "manor_name": "竞速庄园A",
             "region": "overseas",
             "password1": "StrongPass123!",
             "password2": "StrongPass123!",
@@ -99,7 +116,7 @@ def test_register_view_handles_integrity_error_duplicate_username_race(client, m
         {
             "username": "race_same_name",
             "email": "race_name_new@example.com",
-            "title": "先锋官",
+            "manor_name": "竞速庄园B",
             "region": "overseas",
             "password1": "StrongPass123!",
             "password2": "StrongPass123!",
@@ -110,6 +127,34 @@ def test_register_view_handles_integrity_error_duplicate_username_race(client, m
     form = response.context["form"]
     assert "username" in form.errors
     assert any("该用户名已存在" in msg for msg in form.errors["username"])
+
+
+@pytest.mark.django_db
+def test_register_view_handles_integrity_error_duplicate_manor_name_race(client, monkeypatch):
+    owner = User(username="race_manor_owner")
+    owner.set_password("pass123")
+    User.objects.bulk_create([owner])
+    owner = User.objects.get(username="race_manor_owner")
+    ensure_manor(owner, initial_name="竞速庄园C")
+
+    monkeypatch.setattr("accounts.forms.SignUpForm.clean_manor_name", lambda self: self.cleaned_data["manor_name"])
+
+    response = client.post(
+        reverse("accounts:register"),
+        {
+            "username": "race_new_manor_user",
+            "email": "race_new_manor_user@example.com",
+            "manor_name": "竞速庄园C",
+            "region": "overseas",
+            "password1": "StrongPass123!",
+            "password2": "StrongPass123!",
+        },
+    )
+    assert response.status_code == 200
+    assert User.objects.filter(username="race_new_manor_user").exists() is False
+    form = response.context["form"]
+    assert "manor_name" in form.errors
+    assert any("该庄园名称已被使用" in msg for msg in form.errors["manor_name"])
 
 
 def _build_login_request(remote_addr: str = "127.0.0.1"):

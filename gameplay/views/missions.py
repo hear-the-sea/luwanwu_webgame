@@ -89,28 +89,29 @@ def _mission_action_lock_key(action: str, manor_id: int, scope: str) -> str:
     return f"mission:view_lock:{action}:{manor_id}:{scope}"
 
 
-def _acquire_mission_action_lock(action: str, manor_id: int, scope: str) -> tuple[bool, str]:
+def _acquire_mission_action_lock(action: str, manor_id: int, scope: str) -> tuple[bool, str, str | None]:
     key = _mission_action_lock_key(action, manor_id, scope)
-    acquired, from_cache = acquire_best_effort_lock(
+    acquired, from_cache, lock_token = acquire_best_effort_lock(
         key,
         timeout_seconds=MISSION_ACTION_LOCK_SECONDS,
         logger=logger,
         log_context="mission action lock",
     )
     if not acquired:
-        return False, ""
+        return False, "", None
     if from_cache:
-        return True, key
-    return True, f"{_LOCAL_LOCK_PREFIX}{key}"
+        return True, key, lock_token
+    return True, f"{_LOCAL_LOCK_PREFIX}{key}", lock_token
 
 
-def _release_mission_action_lock(lock_key: str) -> None:
+def _release_mission_action_lock(lock_key: str, lock_token: str | None) -> None:
     if not lock_key:
         return
     if lock_key.startswith(_LOCAL_LOCK_PREFIX):
         release_best_effort_lock(
             lock_key[len(_LOCAL_LOCK_PREFIX) :],
             from_cache=False,
+            lock_token=lock_token,
             logger=logger,
             log_context="mission action lock",
         )
@@ -118,6 +119,7 @@ def _release_mission_action_lock(lock_key: str) -> None:
     release_best_effort_lock(
         lock_key,
         from_cache=True,
+        lock_token=lock_token,
         logger=logger,
         log_context="mission action lock",
     )
@@ -427,7 +429,7 @@ class AcceptMissionView(LoginRequiredMixin, TemplateView):
                         return redirect(f"{reverse('gameplay:tasks')}?mission={mission.key}")
                     raw_loadout[item["key"]] = quantity
 
-        lock_ok, lock_key = _acquire_mission_action_lock("accept", int(manor.id), mission.key)
+        lock_ok, lock_key, lock_token = _acquire_mission_action_lock("accept", int(manor.id), mission.key)
         if not lock_ok:
             messages.warning(request, "任务请求处理中，请稍候重试")
             return redirect(f"{reverse('gameplay:tasks')}?mission={mission.key}")
@@ -452,7 +454,7 @@ class AcceptMissionView(LoginRequiredMixin, TemplateView):
                 )
                 messages.error(request, sanitize_error_message(exc))
         finally:
-            _release_mission_action_lock(lock_key)
+            _release_mission_action_lock(lock_key, lock_token)
         return redirect(f"{reverse('gameplay:tasks')}?mission={mission.key}")
 
 
@@ -466,7 +468,7 @@ def retreat_mission_view(request: HttpRequest, pk: int) -> HttpResponse:
         pk=pk,
         status=MissionRun.Status.ACTIVE,
     )
-    lock_ok, lock_key = _acquire_mission_action_lock("retreat_mission", int(manor.id), str(pk))
+    lock_ok, lock_key, lock_token = _acquire_mission_action_lock("retreat_mission", int(manor.id), str(pk))
     if not lock_ok:
         messages.warning(request, "任务请求处理中，请稍候重试")
         return redirect("gameplay:dashboard")
@@ -488,7 +490,7 @@ def retreat_mission_view(request: HttpRequest, pk: int) -> HttpResponse:
             )
             messages.error(request, sanitize_error_message(exc))
     finally:
-        _release_mission_action_lock(lock_key)
+        _release_mission_action_lock(lock_key, lock_token)
     return redirect("gameplay:dashboard")
 
 
@@ -506,7 +508,7 @@ def retreat_scout_view(request: HttpRequest, pk: int) -> HttpResponse:
         attacker=manor,
         status=ScoutRecord.Status.SCOUTING,
     )
-    lock_ok, lock_key = _acquire_mission_action_lock("retreat_scout", int(manor.id), str(pk))
+    lock_ok, lock_key, lock_token = _acquire_mission_action_lock("retreat_scout", int(manor.id), str(pk))
     if not lock_ok:
         messages.warning(request, "任务请求处理中，请稍候重试")
         return redirect("home")
@@ -527,7 +529,7 @@ def retreat_scout_view(request: HttpRequest, pk: int) -> HttpResponse:
             )
             messages.error(request, sanitize_error_message(exc))
     finally:
-        _release_mission_action_lock(lock_key)
+        _release_mission_action_lock(lock_key, lock_token)
     return redirect("home")
 
 
@@ -548,7 +550,7 @@ def use_mission_card_view(request: HttpRequest) -> HttpResponse:
     if mission is None:
         return redirect("gameplay:tasks")
 
-    lock_ok, lock_key = _acquire_mission_action_lock("use_card", int(manor.id), mission.key)
+    lock_ok, lock_key, lock_token = _acquire_mission_action_lock("use_card", int(manor.id), mission.key)
     if not lock_ok:
         messages.warning(request, "任务请求处理中，请稍候重试")
         return redirect(f"{reverse('gameplay:tasks')}?mission={mission.key}")
@@ -577,6 +579,6 @@ def use_mission_card_view(request: HttpRequest) -> HttpResponse:
             )
             messages.error(request, sanitize_error_message(exc))
     finally:
-        _release_mission_action_lock(lock_key)
+        _release_mission_action_lock(lock_key, lock_token)
 
     return redirect(f"{reverse('gameplay:tasks')}?mission={mission.key}")

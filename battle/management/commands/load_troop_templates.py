@@ -119,6 +119,11 @@ class Command(BaseCommand):
         troop_data = payload.get("troops") or []
         troop_data = ensure_list(troop_data, logger=logger, context="troop templates import entries")
         image_source_dir = Path(settings.BASE_DIR) / "data" / "images" / "troops"
+        if not skip_images and not image_source_dir.exists():
+            raise CommandError(
+                f"Troop avatar directory does not exist: {image_source_dir}. "
+                "Please include source images in the runtime image or use --skip-images."
+            )
 
         for raw_data in troop_data:
             data = ensure_mapping(raw_data, logger=logger, context="troop templates import entry")

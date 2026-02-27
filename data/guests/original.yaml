@@ -9,10 +9,15 @@ heroes:
     default_gender: male
     default_morality: 60
     growth_range:
-    - 2
+    - 3
     - 7
     recruitable: false
     avatar: pubayi.png
+    attribute_weights:
+      force: 45
+      intellect: 15
+      defense: 25
+      agility: 15
   blue:
   - key: pubayi_blue
     name: 蒲巴乙

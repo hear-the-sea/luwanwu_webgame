@@ -21,6 +21,8 @@ if TYPE_CHECKING:
 
 # 重伤恢复阈值：HP达到此比例时解除重伤状态
 INJURY_RECOVERY_THRESHOLD = 0.20
+# 重伤自动回血速率（相对普通状态）
+INJURED_RECOVERY_RATE_FACTOR = 0.1
 
 
 def recover_guest_hp(guest: Guest, now: timezone.datetime | None = None) -> None:
@@ -30,13 +32,10 @@ def recover_guest_hp(guest: Guest, now: timezone.datetime | None = None) -> None
     从1点到满血耗时24小时，每10分钟检查一次并线性恢复。
     澡堂建筑可提供生命恢复加成（满级200%）。
 
-    重伤门客（INJURED状态）不会自动恢复，需要使用药品治疗。
+    重伤门客（INJURED状态）会自动恢复，但速率仅为普通状态的 1/10。
+    全局时间流速（GAME_TIME_MULTIPLIER）同样作用于重伤回血。
     """
     now = now or timezone.now()
-
-    # 重伤门客无法自动恢复
-    if guest.status == GuestStatus.INJURED:
-        return
 
     last = guest.last_hp_recovery_at or guest.created_at or now
     if guest.current_hp >= guest.max_hp:
@@ -55,8 +54,15 @@ def recover_guest_hp(guest: Guest, now: timezone.datetime | None = None) -> None
     hp_multiplier = 1.0
     if hasattr(guest, "manor") and guest.manor:
         hp_multiplier = guest.manor.hp_recovery_multiplier
+    status_recovery_factor = INJURED_RECOVERY_RATE_FACTOR if guest.status == GuestStatus.INJURED else 1.0
 
-    recovered = int(scale_value(per_second) * intervals * TimeConstants.HP_RECOVERY_INTERVAL * hp_multiplier)
+    recovered = int(
+        scale_value(per_second)
+        * intervals
+        * TimeConstants.HP_RECOVERY_INTERVAL
+        * hp_multiplier
+        * status_recovery_factor
+    )
     new_hp = min(guest.max_hp, guest.current_hp + recovered)
     guest.current_hp = max(1, new_hp)
     guest.last_hp_recovery_at = last + timezone.timedelta(seconds=intervals * TimeConstants.HP_RECOVERY_INTERVAL)
@@ -67,7 +73,7 @@ def heal_guest(guest: Guest, heal_amount: int) -> dict:
     """
     为门客治疗，恢复生命值。
 
-    如果门客处于重伤状态且治疗后HP达到30%以上，自动解除重伤状态。
+    如果门客处于重伤状态且治疗后HP达到阈值（当前为20%）以上，自动解除重伤状态。
 
     Args:
         guest: 门客实例

@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any, Dict, List, Tuple
 
+from django.db import transaction
 from django.utils import timezone
 
 from ...models import Manor
@@ -26,27 +27,30 @@ def activate_peace_shield(manor: Manor, duration_seconds: int) -> None:
     Raises:
         ValueError: 无法使用免战牌时
     """
-    # 检查是否有出征中的队伍
-    active_raids = get_active_raid_count(manor)
-    if active_raids > 0:
-        raise ValueError("有出征中的队伍，无法使用免战牌")
+    with transaction.atomic():
+        manor = Manor.objects.select_for_update().get(pk=manor.pk)
 
-    # 检查是否有敌军来袭
-    incoming = get_incoming_raids(manor)
-    if incoming:
-        raise ValueError("有敌军来袭，无法使用免战牌")
+        # 检查是否有出征中的队伍
+        active_raids = get_active_raid_count(manor)
+        if active_raids > 0:
+            raise ValueError("有出征中的队伍，无法使用免战牌")
 
-    now = timezone.now()
-    current_until = manor.peace_shield_until or now
+        # 检查是否有敌军来袭
+        incoming = get_incoming_raids(manor)
+        if incoming:
+            raise ValueError("有敌军来袭，无法使用免战牌")
 
-    # 叠加时长
-    if current_until > now:
-        new_until = current_until + timedelta(seconds=duration_seconds)
-    else:
-        new_until = now + timedelta(seconds=duration_seconds)
+        now = timezone.now()
+        current_until = manor.peace_shield_until or now
 
-    manor.peace_shield_until = new_until
-    manor.save(update_fields=["peace_shield_until"])
+        # 叠加时长
+        if current_until > now:
+            new_until = current_until + timedelta(seconds=duration_seconds)
+        else:
+            new_until = now + timedelta(seconds=duration_seconds)
+
+        manor.peace_shield_until = new_until
+        manor.save(update_fields=["peace_shield_until"])
 
 
 def get_protection_status(manor: Manor) -> Dict[str, Any]:
@@ -91,6 +95,14 @@ def get_protection_status(manor: Manor) -> Dict[str, Any]:
             "remaining_seconds": remaining,
         }
         active.append(("newbie_protection", "新手保护", manor.newbie_protection_until, remaining))
+
+    if manor.is_under_defeat_protection:
+        remaining = int((manor.defeat_protection_until - now).total_seconds())
+        status["defeat_protection"] = {
+            "until": manor.defeat_protection_until.isoformat(),
+            "remaining_seconds": remaining,
+        }
+        active.append(("defeat_protection", "战败保护", manor.defeat_protection_until, remaining))
 
     if manor.is_under_peace_shield:
         remaining = int((manor.peace_shield_until - now).total_seconds())

@@ -19,7 +19,7 @@ from gameplay.services import inventory as inventory_pkg
 from gameplay.services.resources import grant_resources, grant_resources_locked
 
 from .core import add_item_to_inventory, consume_inventory_item_locked
-from .guest_items import use_guest_rebirth_card, use_xidianka, use_xisuidan  # noqa: F401
+from .guest_items import use_guest_rarity_upgrade_item, use_guest_rebirth_card, use_xidianka, use_xisuidan  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +74,18 @@ def _grant_item_resources(manor: Manor, payload: dict[str, int], note: str) -> d
         credited, _overflow = grant_resources_locked(manor, payload, note, ResourceEvent.Reason.ITEM_USE)
         return credited
     return grant_resources(manor, payload, note, ResourceEvent.Reason.ITEM_USE)
+
+
+def _normalize_probability(value: Any) -> float:
+    """Normalize probability config to [0, 1]. Supports 0.1 or 10 (percent)."""
+    try:
+        prob = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+    if prob > 1 and prob <= 100:
+        prob = prob / 100.0
+    return max(0.0, min(1.0, prob))
 
 
 def _apply_resource_pack(item: InventoryItem) -> Dict[str, Any]:
@@ -142,6 +154,12 @@ def _apply_guest_summon(item: InventoryItem) -> Dict[str, Any]:
     if not template:
         raise ValueError(f"门客模板不存在: {chosen_key}")
 
+    exclusive_template_keys = payload.get("exclusive_template_keys") or []
+    if isinstance(exclusive_template_keys, list):
+        normalized_exclusive_keys = [str(key).strip() for key in exclusive_template_keys if str(key).strip()]
+        if normalized_exclusive_keys and manor.guests.filter(template__key__in=normalized_exclusive_keys).exists():
+            raise ValueError(f"庄园已拥有门客「{template.name}」，不可重复获得")
+
     guest = create_guest_from_template(
         manor=manor,
         template=template,
@@ -166,6 +184,8 @@ def _apply_tool(item: InventoryItem) -> Dict[str, Any]:
     if payload.get("action") == "rebirth_guest":
         # 门客重生卡需要选择目标门客，抛出提示让前端引导选择
         raise ValueError("请选择要重生的门客")
+    if payload.get("action") == "upgrade_guest_rarity":
+        raise ValueError("请选择要升阶的门客")
     key = item.template.key or ""
     if key.startswith("peace_shield_"):
         return _apply_peace_shield(item)
@@ -181,28 +201,54 @@ def _apply_loot_box(item: InventoryItem) -> Dict[str, Any]:
     manor = item.manor
     rewards: List[str] = []
 
-    # 1. 资源掉落（必定）
+    # 1. 固定资源掉落（可选）
     resources = payload.get("resources") or {}
     if resources:
         result = _grant_item_resources(manor, resources, item.template.name)
         parts = [f"{k}+{v}" for k, v in result.items()]
         rewards.append("资源：" + "、".join(parts))
 
-    # 2. 装备掉落（可选）
+    # 2. 随机银两（可选）
+    silver_min_raw = payload.get("silver_min")
+    silver_max_raw = payload.get("silver_max")
+    if silver_min_raw is not None or silver_max_raw is not None:
+        try:
+            silver_min = int(silver_min_raw if silver_min_raw is not None else 0)
+            silver_max = int(silver_max_raw if silver_max_raw is not None else silver_min)
+        except (TypeError, ValueError):
+            raise ItemNotConfiguredError()
+
+        silver_min = max(0, silver_min)
+        silver_max = max(0, silver_max)
+        if silver_max < silver_min:
+            silver_min, silver_max = silver_max, silver_min
+
+        rolled_silver = inventory_pkg.random.randint(silver_min, silver_max)
+        if rolled_silver > 0:
+            silver_result = _grant_item_resources(manor, {"silver": rolled_silver}, item.template.name)
+            granted_silver = int(silver_result.get("silver", 0) or 0)
+            if granted_silver > 0:
+                rewards.append(f"银两+{granted_silver}")
+
+    # 3. 装备掉落（概率，随机一件）
     gear_keys = payload.get("gear_keys") or []
-    for gear_key in gear_keys:
+    gear_chance = _normalize_probability(payload.get("gear_chance", 0))
+    skipped_bonus_items: List[str] = []
+    if gear_chance > 0 and gear_keys and inventory_pkg.random.random() < gear_chance:
         from guests.models import GearTemplate
         from guests.services.equipment import give_gear
 
+        gear_key = inventory_pkg.random.choice(gear_keys)
         gear_template = GearTemplate.objects.filter(key=gear_key).first()
-        if gear_template:
+        if not gear_template:
+            skipped_bonus_items.append(gear_key)
+        else:
             give_gear(manor, gear_template)
             rewards.append(f"装备【{gear_template.name}】")
 
-    # 3. 技能书掉落（概率）
-    skill_book_chance = payload.get("skill_book_chance", 0)
+    # 4. 技能书掉落（概率，随机一本）
+    skill_book_chance = _normalize_probability(payload.get("skill_book_chance", 0))
     skill_book_keys = payload.get("skill_book_keys", [])
-    skipped_bonus_items: List[str] = []
     if skill_book_chance > 0 and skill_book_keys and inventory_pkg.random.random() < skill_book_chance:
         book_key = inventory_pkg.random.choice(skill_book_keys)
         try:

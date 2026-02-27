@@ -276,6 +276,33 @@ def test_draw_pie_loyalty_cannot_go_below_zero(mock_manor_model):
 
 
 @patch("gameplay.services.jail.Manor")
+def test_draw_pie_uses_configured_gold_cost(mock_manor_model, monkeypatch):
+    manor = SimpleNamespace(pk=1)
+    mock_manor_model.objects.select_for_update.return_value.get.return_value = manor
+    monkeypatch.setattr(jail_service.PVPConstants, "JAIL_PERSUADE_GOLD_BAR_COST", 2)
+
+    prisoner = MagicMock()
+    prisoner.loyalty = 80
+
+    with patch.object(jail_service.JailPrisoner, "objects") as mock_prisoner_qs:
+        mock_prisoner_qs.select_for_update.return_value.filter.return_value.first.return_value = prisoner
+
+        with patch("gameplay.models.InventoryItem") as mock_inventory_item:
+            mock_item_instance = MagicMock()
+            mock_item_instance.pk = 100
+            mock_item_instance.quantity = 5
+            mock_inventory_item.objects.select_for_update.return_value.filter.return_value.first.return_value = (
+                mock_item_instance
+            )
+
+            with patch.object(random, "randint", return_value=7):
+                jail_service.draw_pie(manor, prisoner_id=1)
+
+            filter_kwargs = mock_inventory_item.objects.select_for_update.return_value.filter.call_args.kwargs
+            assert filter_kwargs["quantity__gte"] == 2
+
+
+@patch("gameplay.services.jail.Manor")
 def test_draw_pie_raises_when_gold_insufficient_with_manor_lock(mock_manor_model):
     """Test that ValueError is raised when gold bars are insufficient."""
     manor = SimpleNamespace(pk=1)

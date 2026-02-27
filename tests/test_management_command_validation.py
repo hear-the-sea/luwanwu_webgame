@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pytest
 from django.core.management import call_command
+from django.core.management.base import CommandError
+from django.test import override_settings
 
 from battle.models import TroopTemplate
 from gameplay.models import BuildingType, MissionTemplate
@@ -95,3 +97,21 @@ troops:
     assert troop.priority == 0
     assert troop.default_count == 120
     assert TroopTemplate.objects.filter(key="cmd_troop_missing_name").exists() is False
+
+
+@pytest.mark.django_db
+def test_load_troop_templates_command_fails_when_avatar_dir_missing(tmp_path):
+    payload_path = tmp_path / "troop_templates.yaml"
+    payload_path.write_text(
+        """
+troops:
+  - key: cmd_troop_avatar_missing_dir
+    name: 头像目录缺失兵种
+    avatar: sample.png
+""",
+        encoding="utf-8",
+    )
+
+    with override_settings(BASE_DIR=tmp_path):
+        with pytest.raises(CommandError, match="Troop avatar directory does not exist"):
+            call_command("load_troop_templates", file=str(payload_path), verbosity=0)

@@ -1,0 +1,44 @@
+{% load gameplay_extras static %}
+
+<section class="tw-panel mb-6" id="recruit-pools-section">
+    <div class="tw-panel-header">招募类型</div>
+    <div class="tw-panel-content">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            {% for pool in pools %}
+            <article class="tw-building-card overflow-hidden text-sm pool-card-responsive">
+                <div class="relative w-full bg-gray-200 pool-img-container">
+                    {% if pool.key == 'cunmu' %}
+                    <img src="{% static 'images/buildings/cunmu.webp' %}" class="w-full h-full object-cover" alt="{{ pool.name }}" loading="lazy" decoding="async">
+                    {% elif pool.key == 'xiangshi' %}
+                    <img src="{% static 'images/buildings/xiangshi.webp' %}" class="w-full h-full object-cover" alt="{{ pool.name }}" loading="lazy" decoding="async">
+                    {% elif pool.key == 'huishi' %}
+                    <img src="{% static 'images/buildings/huishi.webp' %}" class="w-full h-full object-cover" alt="{{ pool.name }}" loading="lazy" decoding="async">
+                    {% elif pool.key == 'dianshi' %}
+                    <img src="{% static 'images/buildings/dianshi.webp' %}" class="w-full h-full object-cover" alt="{{ pool.name }}" loading="lazy" decoding="async">
+                    {% endif %}
+                </div>
+
+                <div class="p-2 pool-content">
+                    <p class="text-sm text-text-muted mb-2 leading-snug pool-desc">{{ pool.description }}</p>
+                    <form method="post" action="{% url 'guests:recruit' %}" class="recruit-form recruit-action"
+                          data-pool-name="{{ pool.name }}"
+                          data-pool-cost="{% for key,val in pool.cost.items %}{{ resource_labels|get_label:key }} {{ val }}{% if not forloop.last %}，{% endif %}{% empty %}免费{% endfor %}"
+                          data-pool-base="{{ pool.draw_count }}"
+                          data-pool-bonus="{{ manor.tavern_recruitment_bonus }}"
+                          data-pool-duration="{{ pool.recruit_duration_seconds }}">
+                        {% csrf_token %}
+                        <input type="hidden" name="pool" value="{{ pool.id }}">
+                        <button type="submit" class="tw-btn-primary tw-btn-sm"
+                                {% if active_recruitment %}disabled{% endif %}>
+                            {% if active_recruitment %}招募中{% else %}招募{% endif %}
+                        </button>
+                    </form>
+                    <p class="text-xs text-text-muted mt-2">耗时：{{ pool.recruit_duration_display }}</p>
+                </div>
+            </article>
+            {% empty %}
+            <p class="tw-empty-hint">暂无卡池配置。</p>
+            {% endfor %}
+        </div>
+    </div>
+</section>

@@ -57,11 +57,19 @@ def search_manors_by_region(
     Returns:
         (庄园列表, 总数)
     """
+    # 地区列表应包含自己庄园；当某地区仅有自己时，也能看到对应条目，避免误判“该地区无人”。
     queryset = (
         Manor.objects.filter(region=region)
-        .exclude(id=searcher.id)
         .select_related("user")
-        .only("id", "name", "prestige", "region", "coordinate_x", "coordinate_y", "user__username")
+        .only(
+            "id",
+            "name",
+            "prestige",
+            "region",
+            "coordinate_x",
+            "coordinate_y",
+            "user__username",
+        )
     )
 
     total = queryset.count()

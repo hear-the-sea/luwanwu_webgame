@@ -1,6 +1,10 @@
 from django.contrib import admin
 
+from core.admin_i18n import apply_common_field_labels
+
 from .models import BattleReport, TroopTemplate
+
+apply_common_field_labels(TroopTemplate, BattleReport)
 
 
 @admin.register(TroopTemplate)

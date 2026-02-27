@@ -8,7 +8,7 @@ from django.db.models import Q
 from django.views.generic import DetailView
 
 from common.constants.resources import ResourceType
-from guests.models import GuestTemplate, SkillBook
+from guests.models import Guest, GuestTemplate, SkillBook
 
 from .models import BattleReport
 from .troops import load_troop_templates
@@ -47,6 +47,39 @@ class BattleReportDetailView(LoginRequiredMixin, DetailView):
         return template_keys
 
     @staticmethod
+    def _extract_valid_guest_ids(team: list[dict[str, Any]]) -> set[int]:
+        ids: set[int] = set()
+        for member in team:
+            raw_id = member.get("guest_id")
+            try:
+                guest_id = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            if guest_id > 0:
+                ids.add(guest_id)
+        return ids
+
+    @classmethod
+    def _infer_side_from_guest_ownership(cls, report: BattleReport, manor_id: int) -> str | None:
+        attacker_ids = cls._extract_valid_guest_ids(report.attacker_team or [])
+        defender_ids = cls._extract_valid_guest_ids(report.defender_team or [])
+        candidate_ids = attacker_ids | defender_ids
+        if not candidate_ids:
+            return None
+
+        owned_ids = set(Guest.objects.filter(manor_id=manor_id, id__in=candidate_ids).values_list("id", flat=True))
+        if not owned_ids:
+            return None
+
+        attacker_owned_count = len(attacker_ids & owned_ids)
+        defender_owned_count = len(defender_ids & owned_ids)
+        if attacker_owned_count > defender_owned_count:
+            return "attacker"
+        if defender_owned_count > attacker_owned_count:
+            return "defender"
+        return None
+
+    @staticmethod
     def _load_avatar_map(template_keys: set[str]) -> Dict[str, str]:
         avatar_map: Dict[str, str] = {}
         if not template_keys:
@@ -66,6 +99,15 @@ class BattleReportDetailView(LoginRequiredMixin, DetailView):
     @staticmethod
     def _resolve_perspective(report: BattleReport, player_side: str) -> tuple:
         losses = report.losses or {}
+        if player_side == "spectator":
+            return (
+                report.attacker_team or [],
+                report.defender_team or [],
+                report.attacker_troops or {},
+                report.defender_troops or {},
+                losses.get("attacker", {}),
+                losses.get("defender", {}),
+            )
         if player_side == "defender":
             return (
                 report.defender_team or [],
@@ -105,9 +147,19 @@ class BattleReportDetailView(LoginRequiredMixin, DetailView):
             if amount:
                 target[key] = target.get(key, 0) + int(amount)
 
-    def _resolve_display_drops(self, report: BattleReport, player_won: bool, player_side: str) -> dict[str, int]:
+    @staticmethod
+    def _resolve_raid_run(report: BattleReport):
         RaidRun = apps.get_model("gameplay", "RaidRun")
-        raid_run = RaidRun.objects.filter(battle_report=report).first()
+        return RaidRun.objects.filter(battle_report=report).first()
+
+    def _resolve_display_drops(
+        self,
+        report: BattleReport,
+        player_won: bool,
+        player_side: str,
+        raid_run=None,
+    ) -> dict[str, int]:
+        raid_run = raid_run or self._resolve_raid_run(report)
         if not raid_run:
             return report.drops or {}
 
@@ -127,6 +179,33 @@ class BattleReportDetailView(LoginRequiredMixin, DetailView):
         equipment = battle_rewards.get("equipment", {}) or {}
         self._merge_nonzero_drops(drops, equipment)
         return drops
+
+    def _resolve_display_losses(self, player_won: bool, player_side: str, raid_run) -> dict[str, int]:
+        if player_won or player_side == "spectator" or not raid_run:
+            return {}
+
+        losses: dict[str, int] = {}
+        # 踢馆中仅防守失败会产生资源/物品掠夺损失。
+        if player_side == "defender":
+            self._merge_nonzero_drops(losses, raid_run.loot_resources or {})
+            self._merge_nonzero_drops(losses, raid_run.loot_items or {})
+        return losses
+
+    @staticmethod
+    def _resolve_capture_loss_label(player_side: str, raid_run) -> str:
+        if not raid_run:
+            return ""
+        battle_rewards = raid_run.battle_rewards or {}
+        capture_payload = battle_rewards.get("capture")
+        if not isinstance(capture_payload, dict):
+            return ""
+        capture_from = str(capture_payload.get("from") or "").strip()
+        if capture_from != player_side:
+            return ""
+        guest_name = str(capture_payload.get("guest_name") or "").strip()
+        if not guest_name:
+            return ""
+        return f"门客被俘（{guest_name}）"
 
     @staticmethod
     def _build_drop_items(
@@ -177,35 +256,83 @@ class BattleReportDetailView(LoginRequiredMixin, DetailView):
         context["attacker_loss"] = my_loss
         context["defender_loss"] = enemy_loss
 
-        # 判断玩家是否胜利
-        player_won = report.winner == player_side
+        is_spectator = player_side == "spectator"
+        if is_spectator:
+            left_name = getattr(report.manor, "display_name", "") or "进攻方"
+            right_name = (report.opponent_name or "").strip() or "防守方"
+            context["report_title"] = f"{left_name} vs {right_name} 战报"
+        elif player_side == "defender" and report.manor_id != manor.id:
+            attacker_name = getattr(report.manor, "display_name", "") or ""
+            context["report_title"] = f"{attacker_name or report.opponent_name} 战报"
+        else:
+            context["report_title"] = f"{report.opponent_name} 战报"
+
+        # 判断玩家是否胜利（观战视角不参与胜负判定）
+        player_won = (report.winner == player_side) if not is_spectator else False
         context["player_won"] = player_won
         context["player_side"] = player_side
+        context["is_spectator"] = is_spectator
+
+        if is_spectator:
+            context["left_team_title"] = "进攻方"
+            context["right_team_title"] = "防守方"
+            context["left_loss_title"] = "进攻方损失"
+            context["right_loss_title"] = "防守方损失"
+            if report.winner == "attacker":
+                context["spectator_result"] = "本场结果：进攻方胜利"
+            elif report.winner == "defender":
+                context["spectator_result"] = "本场结果：防守方胜利"
+            else:
+                context["spectator_result"] = "本场结果：不分胜负"
+        else:
+            context["left_team_title"] = "我方"
+            context["right_team_title"] = "敌方"
+            context["left_loss_title"] = "我方损失"
+            context["right_loss_title"] = "敌方损失"
 
         # 传递我方/敌方的 side 标识，用于战斗回合事件筛选
-        context["my_side"] = player_side
-        context["enemy_side"] = "defender" if player_side == "attacker" else "attacker"
+        context["my_side"] = "attacker" if is_spectator else player_side
+        context["enemy_side"] = "defender" if context["my_side"] == "attacker" else "attacker"
 
         # 进攻方/防守方标识
         context["is_attacker"] = player_side == "attacker"
         context["is_defender"] = player_side == "defender"
 
-        drops = self._resolve_display_drops(report, player_won, player_side)
+        raid_run = None if is_spectator else self._resolve_raid_run(report)
+        drops = (
+            report.drops or {}
+            if is_spectator
+            else self._resolve_display_drops(report, player_won, player_side, raid_run=raid_run)
+        )
         item_templates = get_item_template_names_by_keys(drops.keys())
         book_labels = {book.key: book.name for book in SkillBook.objects.filter(key__in=drops.keys())}
         drop_items = self._build_drop_items(drops, item_templates, book_labels)
         context["drop_items"] = drop_items
         context["has_drops"] = bool(drop_items)
+
+        loss_items: list[dict[str, Any]] = []
+        if not is_spectator:
+            loss_map = self._resolve_display_losses(player_won, player_side, raid_run)
+            loss_item_templates = get_item_template_names_by_keys(loss_map.keys())
+            loss_book_labels = {book.key: book.name for book in SkillBook.objects.filter(key__in=loss_map.keys())}
+            loss_items = self._build_drop_items(loss_map, loss_item_templates, loss_book_labels)
+
+            capture_loss_label = self._resolve_capture_loss_label(player_side, raid_run)
+            if capture_loss_label:
+                loss_items.append({"key": "captured_guest", "label": capture_loss_label})
+
+        context["loss_items"] = loss_items
         return context
 
     def _determine_player_side(self, report: BattleReport, manor) -> str:
         """
-        判断当前玩家在战报中的视角（attacker 或 defender）。
+        判断当前玩家在战报中的视角（attacker / defender / spectator）。
 
         判断逻辑：
         1. 检查 MissionRun：如果是防守任务，玩家是 defender
         2. 检查 RaidRun：根据玩家是进攻方还是防守方决定
-        3. 默认：战报归属方是 attacker（普通任务）
+        3. 检查 ArenaMatch：非参战玩家走 spectator 视角
+        4. 默认：战报归属方是 attacker（普通任务）
         """
         MissionRun = apps.get_model("gameplay", "MissionRun")
         RaidRun = apps.get_model("gameplay", "RaidRun")
@@ -237,6 +364,18 @@ class BattleReportDetailView(LoginRequiredMixin, DetailView):
             attacker_manor_id = getattr(arena_match.attacker_entry, "manor_id", None)
             if attacker_manor_id == manor.id:
                 return "attacker"
+            return "spectator"
+
+        inferred_side = self._infer_side_from_guest_ownership(report, manor.id)
+        if inferred_side:
+            return inferred_side
+
+        # 兜底逻辑：当关联记录缺失时，优先用战报归属方与消息接收方推断视角，
+        # 防止防守方回落到 attacker 视角。
+        if report.manor_id == manor.id:
+            return "attacker"
+        if report.messages.filter(manor_id=manor.id).exists():
+            return "defender"
 
         # 默认：战报归属方是进攻方（普通任务）
         return "attacker"

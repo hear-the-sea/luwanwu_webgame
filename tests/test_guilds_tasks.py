@@ -160,3 +160,60 @@ def test_cleanup_old_guild_logs_deletes_only_old_rows(monkeypatch, django_user_m
     assert GuildDonationLog.objects.count() == 1
     assert GuildExchangeLog.objects.count() == 0
     assert GuildResourceLog.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_cleanup_invalid_guild_hero_pool_task(monkeypatch, django_user_model):
+    from gameplay.services.manor.core import ensure_manor
+    from guests.models import Guest, GuestArchetype, GuestRarity, GuestTemplate
+    from guilds.models import Guild, GuildBattleLineupEntry, GuildHeroPoolEntry, GuildMember
+    from guilds.tasks import cleanup_invalid_guild_hero_pool
+
+    monkeypatch.setattr(
+        cleanup_invalid_guild_hero_pool,
+        "retry",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("retry should not be called")),
+    )
+
+    leader = django_user_model.objects.create_user(username="ghp_cleanup_leader", password="pass")
+    manor = ensure_manor(leader)
+    guild = Guild.objects.create(name="任务清理帮", founder=leader, is_active=True)
+    member = GuildMember.objects.create(guild=guild, user=leader, position="leader")
+
+    template = GuestTemplate.objects.create(
+        key="ghp_cleanup_tpl",
+        name="清理模板",
+        archetype=GuestArchetype.MILITARY,
+        rarity=GuestRarity.GREEN,
+    )
+    guest = Guest.objects.create(
+        manor=manor,
+        template=template,
+        custom_name="清理门客",
+        level=10,
+        force=100,
+        intellect=80,
+        defense_stat=90,
+        agility=70,
+        luck=50,
+        current_hp=1,
+    )
+
+    entry = GuildHeroPoolEntry.objects.create(
+        guild=guild,
+        owner_member=member,
+        source_guest=guest,
+        slot_index=1,
+        last_submitted_at=timezone.now() - timedelta(days=8),
+    )
+    GuildBattleLineupEntry.objects.create(guild=guild, pool_entry=entry, slot_index=1, selected_by=leader)
+
+    # 制造无效数据：成员已不在本帮
+    member.is_active = False
+    member.save(update_fields=["is_active"])
+
+    result = cleanup_invalid_guild_hero_pool.run()
+
+    assert "cleaned" in result
+    assert GuildHeroPoolEntry.objects.filter(pk=entry.pk).count() == 0
+    assert GuildBattleLineupEntry.objects.filter(guild=guild).count() == 0

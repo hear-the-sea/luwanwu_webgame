@@ -1,0 +1,84 @@
+# 三国演义门客
+
+heroes:
+  purple:
+  - key: hist_sljnbc_0589_purple
+    name: 邢道荣
+    default_gender: male
+    archetype: military
+    flavor: “南道荣，北潘凤”中的邢道荣，称号万人敌，手持六十斤开山大斧，胸怀一万个退堂大鼓。邢道荣是三国时期少有的“复合型人才”——武能硬刚张飞一回合，文能舌战诸葛亮不怯场。他的核心战术是“咆哮威吓法”配合“光速滑跪术”。只要敌军阵中没有拿丈八蛇矛和亮银枪的，他单凭一张嘴就能为你拿下一座城。
+    avatar: pig_wu_male5.png
+    recruitable: false
+    attribute_weights:
+      force: 40
+      intellect: 30
+      defense: 15
+      agility: 15
+  - key: hist_sljnbc_0590_purple
+    name: 潘凤
+    default_gender: male
+    archetype: military
+    flavor: “南道荣，北潘凤”中的潘凤，韩馥眼中的战神，十八路诸侯心中的流星。潘凤，一个把“出场即巅峰”演绎到极致的男人。他生平最大的爱好是保养他的大斧，最大的遗憾是没能告诉全世界他的大斧到底有多饥渴。为了表彰你的武勇，冀州方面特意送来了一把沉甸甸的开山大斧，以及它的主人——没错，就是那位让华雄连热身都没做完就火速下班的无双上将！好好待他，记得别让他碰酒，尤其是温热的。
+    avatar: pig_wu_male5.png
+    recruitable: false
+    attribute_weights:
+      force: 40
+      intellect: 15
+      defense: 25
+      agility: 20
+  blue:
+  - key: hist_sljnbc_0589_blue
+    name: 邢道荣
+    default_gender: male
+    archetype: military
+    flavor: “南道荣，北潘凤”中的邢道荣，称号万人敌，手持六十斤开山大斧，胸怀一万个退堂大鼓。邢道荣是三国时期少有的“复合型人才”——武能硬刚张飞一回合，文能舌战诸葛亮不怯场。他的核心战术是“咆哮威吓法”配合“光速滑跪术”。只要敌军阵中没有拿丈八蛇矛和亮银枪的，他单凭一张嘴就能为你拿下一座城。
+    avatar: pig_wu_male4.png
+    recruitable: false
+    attribute_weights:
+      force: 40
+      intellect: 30
+      defense: 15
+      agility: 15
+  - key: hist_sljnbc_0590_blue
+    name: 潘凤
+    default_gender: male
+    archetype: military
+    flavor: “南道荣，北潘凤”中的潘凤，韩馥眼中的战神，十八路诸侯心中的流星。潘凤，一个把“出场即巅峰”演绎到极致的男人。他生平最大的爱好是保养他的大斧，最大的遗憾是没能告诉全世界他的大斧到底有多饥渴。为了表彰你的武勇，冀州方面特意送来了一把沉甸甸的开山大斧，以及它的主人——没错，就是那位让华雄连热身都没做完就火速下班的无双上将！好好待他，记得别让他碰酒，尤其是温热的。
+    avatar: pig_wu_male4.png
+    recruitable: false
+    attribute_weights:
+      force: 40
+      intellect: 15
+      defense: 25
+      agility: 20
+  green:
+  - key: hist_sljnbc_0589
+    name: 邢道荣
+    default_gender: male
+    archetype: military
+    flavor: “南道荣，北潘凤”中的邢道荣，称号万人敌，手持六十斤开山大斧，胸怀一万个退堂大鼓。邢道荣是三国时期少有的“复合型人才”——武能硬刚张飞一回合，文能舌战诸葛亮不怯场。他的核心战术是“咆哮威吓法”配合“光速滑跪术”。只要敌军阵中没有拿丈八蛇矛和亮银枪的，他单凭一张嘴就能为你拿下一座城。
+    avatar: pig_wu_male4.png
+    recruitable: false
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 40
+      intellect: 30
+      defense: 15
+      agility: 15
+  - key: hist_sljnbc_0590
+    name: 潘凤
+    default_gender: male
+    archetype: military
+    flavor: “南道荣，北潘凤”中的潘凤，韩馥眼中的战神，十八路诸侯心中的流星。潘凤，一个把“出场即巅峰”演绎到极致的男人。他生平最大的爱好是保养他的大斧，最大的遗憾是没能告诉全世界他的大斧到底有多饥渴。为了表彰你的武勇，冀州方面特意送来了一把沉甸甸的开山大斧，以及它的主人——没错，就是那位让华雄连热身都没做完就火速下班的无双上将！好好待他，记得别让他碰酒，尤其是温热的。
+    avatar: pig_wu_male4.png
+    recruitable: false
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 40
+      intellect: 15
+      defense: 25
+      agility: 20

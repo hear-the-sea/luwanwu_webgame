@@ -12,7 +12,9 @@
     {% if user.is_authenticated %}
     <link rel="stylesheet" href="{% static 'css/chat_widget.css' %}">
     {% endif %}
+    <!--PAGE_EXTRA_HEAD_START-->
     {% block extra_head %}{% endblock %}
+    <!--PAGE_EXTRA_HEAD_END-->
 </head>
 
 <body>
@@ -21,25 +23,25 @@
             <div class="logo">乱舞春秋.改</div>
         </header>
 
-        <nav class="game-nav">
+        <nav class="game-nav" id="main-nav">
             {% if user.is_authenticated %}
-            <a href="{% url 'home' %}"
+            <a href="{% url 'home' %}" data-partial-nav="1"
                 class="nav-tab {% if request.resolver_match.url_name == 'home' %}active{% endif %}">首页</a>
-            <a href="{% url 'gameplay:dashboard' %}"
+            <a href="{% url 'gameplay:dashboard' %}" data-partial-nav="1"
                 class="nav-tab {% if request.resolver_match.url_name == 'dashboard' or request.resolver_match.url_name == 'buildings_category' %}active{% endif %}">庄园</a>
-            <a href="{% url 'guests:roster' %}"
+            <a href="{% url 'guests:roster' %}" data-partial-nav="1"
                 class="nav-tab {% if 'guests' in request.path %}active{% endif %}">门客</a>
-            <a href="{% url 'gameplay:warehouse' %}"
+            <a href="{% url 'gameplay:warehouse' %}" data-partial-nav="1"
                 class="nav-tab {% if 'warehouse' in request.path %}active{% endif %}">物品</a>
-            <a href="{% url 'gameplay:technology' %}"
+            <a href="{% url 'gameplay:technology' %}" data-partial-nav="1"
                 class="nav-tab {% if 'technology' in request.path %}active{% endif %}">技术</a>
-            <a href="{% url 'trade:trade' %}" class="nav-tab {% if 'trade' in request.path %}active{% endif %}">交易</a>
-            <a href="{% url 'guilds:hall' %}" class="nav-tab {% if 'guilds' in request.path %}active{% endif %}">帮会</a>
-            <a href="{% url 'gameplay:map' %}" class="nav-tab {% if 'map' in request.path %}active{% endif %}">地图</a>
-            <a href="{% url 'gameplay:arena' %}" class="nav-tab {% if 'arena' in request.path %}active{% endif %}">竞技场</a>
-            <a href="{% url 'gameplay:work' %}" class="nav-tab {% if 'work' in request.path %}active{% endif %}">打工</a>
-            <a href="{% url 'gameplay:tasks' %}" class="nav-tab {% if 'tasks' in request.path %}active{% endif %}">任务</a>
-            <a href="{% url 'gameplay:messages' %}" class="nav-tab {% if 'messages' in request.path %}active{% endif %}" id="nav-messages-link-top" style="position: relative;" data-unread="{{ message_unread_count|default:0 }}">
+            <a href="{% url 'trade:trade' %}" data-partial-nav="1" class="nav-tab {% if 'trade' in request.path %}active{% endif %}">交易</a>
+            <a href="{% url 'guilds:hall' %}" data-partial-nav="1" class="nav-tab {% if 'guilds' in request.path %}active{% endif %}">帮会</a>
+            <a href="{% url 'gameplay:map' %}" data-partial-nav="1" class="nav-tab {% if 'map' in request.path %}active{% endif %}">地图</a>
+            <a href="{% url 'gameplay:arena' %}" data-partial-nav="1" class="nav-tab {% if 'arena' in request.path %}active{% endif %}">竞技场</a>
+            <a href="{% url 'gameplay:work' %}" data-partial-nav="1" class="nav-tab {% if 'work' in request.path %}active{% endif %}">打工</a>
+            <a href="{% url 'gameplay:tasks' %}" data-partial-nav="1" class="nav-tab {% if 'tasks' in request.path %}active{% endif %}">任务</a>
+            <a href="{% url 'gameplay:messages' %}" data-partial-nav="1" class="nav-tab {% if 'messages' in request.path %}active{% endif %}" id="nav-messages-link-top" style="position: relative;" data-unread="{{ message_unread_count|default:0 }}">
                 消息
                 {% if message_unread_count > 0 %}
                 <span style="position: absolute; top: -4px; right: -4px; background: var(--accent-red, #DC143C); color: white; font-size: 10px; padding: 2px 5px; border-radius: 10px; font-weight: bold;">{{ message_unread_count }}</span>
@@ -52,7 +54,7 @@
         </nav>
 
         {% if user.is_authenticated %}
-        <div class="info-bar">
+        <div class="info-bar" id="info-bar">
             <span>服务器时间: {% now "Y-m-d H:i:s" %}</span>
             <span>
                 当前在线: <span id="online-user-count">{{ online_user_count }}</span> 人
@@ -67,7 +69,7 @@
         {% endif %}
 
         {% with url_name=request.resolver_match.url_name %}
-        <div class="{% if user.is_authenticated and url_name == 'home' %}main-layout{% elif user.is_authenticated %}full-layout{% else %}simple-layout{% endif %}">
+        <div id="page-shell" class="{% if user.is_authenticated and url_name == 'home' %}main-layout{% elif user.is_authenticated %}full-layout{% else %}simple-layout{% endif %}">
             {% if user.is_authenticated and url_name == 'home' %}
             <aside class="sidebar">
                 <!-- 庄园状态面板 -->
@@ -76,7 +78,15 @@
                     <div class="panel-content">
                         <ul class="user-info-list">
                             <li><label>庄园名称:</label> <span>{{ user.manor.display_name }}</span></li>
-                            <li><label>所属地区:</label> <span>北京(1148:17)</span></li>
+                            <li>
+                                <label>所属地区:</label>
+                                <span class="user-info-value-region">
+                                    {{ user.manor.region_display }}
+                                    {% if user.manor.coordinate_x > 0 and user.manor.coordinate_y > 0 %}
+                                        ({{ user.manor.coordinate_x }}:{{ user.manor.coordinate_y }})
+                                    {% endif %}
+                                </span>
+                            </li>
                             <li><label>您的官职:</label> <span>{{ user.title|default:"平民" }}</span></li>
                             <li><label>您的声望:</label> <span>{{ sidebar_prestige|default:0 }}</span></li>
                             <li><label>行动力值:</label> <span>1000/1000</span></li>
@@ -164,7 +174,12 @@
     <script src="{% static 'js/online_stats.js' %}"></script>
     <script src="{% static 'js/chat_widget.js' %}"></script>
     {% endif %}
-    {% block extra_scripts %}{% endblock %}
+    <div id="page-extra-scripts" hidden>
+        {% block extra_scripts %}{% endblock %}
+    </div>
+    {% if user.is_authenticated %}
+    <script src="{% static 'js/nav_partial.js' %}"></script>
+    {% endif %}
 </body>
 
 </html>

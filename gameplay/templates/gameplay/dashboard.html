@@ -17,7 +17,7 @@
     <section class="building-section">
         <div class="tw-building-grid tw-manor-building-grid">
         {% for building in buildings %}
-            <article class="tw-building-card tw-building-card--manor">
+            <article class="tw-building-card tw-building-card--manor" id="building-{{ building.pk }}">
                 {% with image_path=building.building_type.key|building_image %}
                 {% static image_path as building_image_url %}
                 <div class="tw-building-media">
@@ -54,7 +54,7 @@
                             <div>
                                 <dt>升级完成</dt>
                                 <dd>
-                                    <span class="countdown" data-countdown="{{ building.upgrade_complete_at|date:'c' }}">
+                                    <span class="countdown" data-countdown="{{ building.upgrade_complete_at|date:'c' }}" data-refresh="1">
                                         {{ building.upgrade_complete_at|date:"H:i:s" }}
                                     </span>
                                 </dd>
@@ -79,6 +79,7 @@
                         <div class="tw-btn-row">
                             <form method="post" action="{% url 'gameplay:upgrade_building' building.pk %}">
                                 {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}#building-{{ building.pk }}">
                                 {% if building.is_upgrading %}
                                     <button type="button" class="tw-btn-primary" disabled>升级进行中</button>
                                 {% else %}
@@ -92,7 +93,7 @@
                             {% elif building.building_type.key == 'ranch' %}
                                 <a class="tw-btn-primary" href="{% url 'gameplay:ranch' %}">养殖家畜</a>
                             {% elif building.building_type.key == 'smithy' %}
-                                <a class="tw-btn-primary" href="{% url 'gameplay:smithy' %}">冶炼金属</a>
+                                <a class="tw-btn-primary" href="{% url 'gameplay:smithy' %}">制作物品</a>
                             {% elif building.building_type.key == 'forge' %}
                                 <a class="tw-btn-primary" href="{% url 'gameplay:forge' %}">锻造装备</a>
                             {% elif building.building_type.key == 'lianggongchang' %}

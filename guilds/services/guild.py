@@ -1,3 +1,5 @@
+import logging
+
 from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.utils import timezone
@@ -11,8 +13,10 @@ from ..constants import (
     GUILD_NAME_PATTERN,
     GUILD_UPGRADE_BASE_COST,
 )
-from ..models import Guild, GuildAnnouncement, GuildMember, GuildTechnology
+from ..models import Guild, GuildAnnouncement, GuildHeroPoolEntry, GuildMember, GuildTechnology
 from .utils import get_active_membership
+
+logger = logging.getLogger(__name__)
 
 
 def validate_guild_name(name: str) -> None:
@@ -265,6 +269,7 @@ def disband_guild(guild, operator):
             is_active=False,
             left_at=timezone.now(),
         )
+        GuildHeroPoolEntry.objects.filter(guild=guild).delete()
 
     # 发送解散通知（移到事务外，避免长事务）
     from gameplay.services.utils.messages import bulk_create_messages
@@ -283,7 +288,14 @@ def disband_guild(guild, operator):
             )
 
     if messages_data:
-        bulk_create_messages(messages_data)
+        try:
+            bulk_create_messages(messages_data)
+        except Exception:
+            logger.exception(
+                "Guild disband follow-up message send failed: guild_id=%s member_count=%s",
+                guild.id,
+                len(messages_data),
+            )
 
 
 def get_guild_list(ordering="-level", search=None, page=1, page_size=20):

@@ -1,0 +1,161 @@
+"""
+数据清理统计报表命令
+
+用于查看各日志/战报表当前数据规模与按保留策略可清理数据量。
+
+使用方式：
+    python manage.py cleanup_data_report
+    python manage.py cleanup_data_report --model gameplay.ResourceEvent
+    python manage.py cleanup_data_report --days 7
+    python manage.py cleanup_data_report --json
+"""
+
+from __future__ import annotations
+
+import json
+from datetime import timedelta
+from typing import Any
+
+from django.apps import apps
+from django.core.management.base import BaseCommand
+from django.db.models import Max, Min
+from django.utils import timezone
+
+from .cleanup_old_data import CLEANUP_CONFIG
+
+
+class Command(BaseCommand):
+    help = "输出数据清理统计报表（总量/可清理量/保留策略）"
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--days",
+            type=int,
+            default=None,
+            help="覆盖所有模型的保留天数（默认使用各模型配置）",
+        )
+        parser.add_argument(
+            "--model",
+            type=str,
+            default=None,
+            help="只统计指定模型（如 gameplay.ResourceEvent）",
+        )
+        parser.add_argument(
+            "--json",
+            action="store_true",
+            help="以 JSON 格式输出报表",
+        )
+
+    def handle(self, *args, **options):
+        override_days = options["days"]
+        target_model = options["model"]
+        json_mode = bool(options["json"])
+
+        now = timezone.now()
+        rows: list[dict[str, Any]] = []
+        totals = {
+            "total_records": 0,
+            "stale_records": 0,
+            "models": 0,
+        }
+
+        for model_path, (default_days, time_field) in CLEANUP_CONFIG.items():
+            if target_model and model_path != target_model:
+                continue
+
+            days = override_days if override_days is not None else default_days
+            row = self._build_model_row(model_path=model_path, days=days, time_field=time_field, now=now)
+            rows.append(row)
+            if row.get("status") == "ok":
+                totals["models"] += 1
+                totals["total_records"] += int(row["total_records"])
+                totals["stale_records"] += int(row["stale_records"])
+
+        report = {
+            "generated_at": now.isoformat(),
+            "override_days": override_days,
+            "target_model": target_model,
+            "totals": totals,
+            "rows": rows,
+        }
+
+        if json_mode:
+            self.stdout.write(json.dumps(report, ensure_ascii=False, indent=2))
+            return
+
+        self._print_human_report(report)
+
+    def _build_model_row(self, *, model_path: str, days: int, time_field: str, now) -> dict[str, Any]:
+        try:
+            model = self._get_model(model_path)
+        except (LookupError, ModuleNotFoundError) as exc:
+            return {
+                "model": model_path,
+                "status": "error",
+                "error": str(exc),
+                "retention_days": days,
+                "time_field": time_field,
+            }
+
+        cutoff = now - timedelta(days=days)
+        queryset = model.objects.all()
+
+        total_records = int(queryset.count())
+        stale_records = int(queryset.filter(**{f"{time_field}__lt": cutoff}).count())
+        window = queryset.aggregate(oldest=Min(time_field), newest=Max(time_field))
+        oldest = window.get("oldest")
+        newest = window.get("newest")
+
+        ratio = (stale_records / total_records) if total_records > 0 else 0.0
+
+        return {
+            "model": model_path,
+            "status": "ok",
+            "retention_days": int(days),
+            "time_field": time_field,
+            "cutoff": cutoff.isoformat(),
+            "total_records": total_records,
+            "stale_records": stale_records,
+            "stale_ratio": round(ratio, 4),
+            "oldest": oldest.isoformat() if oldest else None,
+            "newest": newest.isoformat() if newest else None,
+        }
+
+    def _print_human_report(self, report: dict[str, Any]) -> None:
+        self.stdout.write("=== 数据清理统计报表 ===")
+        self.stdout.write(f"生成时间: {report['generated_at']}")
+        if report.get("target_model"):
+            self.stdout.write(f"过滤模型: {report['target_model']}")
+        if report.get("override_days") is not None:
+            self.stdout.write(f"全局保留天数覆盖: {report['override_days']}")
+        self.stdout.write("")
+
+        for row in report["rows"]:
+            if row.get("status") != "ok":
+                self.stdout.write(self.style.WARNING(f"[{row['model']}] 统计失败: {row.get('error', 'unknown error')}"))
+                continue
+
+            self.stdout.write(
+                (
+                    f"[{row['model']}] 总量={row['total_records']} "
+                    f"可清理={row['stale_records']} "
+                    f"比例={row['stale_ratio']:.2%} "
+                    f"保留={row['retention_days']}天 "
+                    f"截止线={row['cutoff']}"
+                )
+            )
+            self.stdout.write(
+                f"    时间范围: oldest={row['oldest'] or '-'} newest={row['newest'] or '-'} field={row['time_field']}"
+            )
+
+        totals = report["totals"]
+        self.stdout.write("")
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"汇总: models={totals['models']} total_records={totals['total_records']} stale_records={totals['stale_records']}"
+            )
+        )
+
+    def _get_model(self, model_path: str):
+        app_label, model_name = model_path.rsplit(".", 1)
+        return apps.get_model(app_label, model_name)

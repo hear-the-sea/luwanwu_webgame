@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from battle.models import BattleReport
-from gameplay.models import ArenaEntry, ArenaEntryGuest, ArenaMatch, ArenaTournament
+from gameplay.models import ArenaEntry, ArenaEntryGuest, ArenaMatch, ArenaTournament, ItemTemplate
 from gameplay.services.manor.core import ensure_manor
 from guests.models import Guest, GuestStatus, GuestTemplate
 
@@ -37,6 +37,23 @@ def _build_guest(manor, template, suffix: str) -> Guest:
     guest.current_hp = guest.max_hp
     guest.save(update_fields=["current_hp"])
     return guest
+
+
+def _ensure_gladiator_item_templates() -> None:
+    key_to_name = {
+        "equip_jiaodoushitoukui": "角斗士头盔",
+        "equip_jiaodoushixiongjia": "角斗士胸甲",
+        "equip_jiaodoushizhixue": "角斗士之靴",
+        "equip_jiaodoushizhichui": "角斗士之锤",
+    }
+    for key, name in key_to_name.items():
+        ItemTemplate.objects.get_or_create(
+            key=key,
+            defaults={
+                "name": name,
+                "effect_type": ItemTemplate.EffectType.TOOL,
+            },
+        )
 
 
 @pytest.fixture
@@ -162,6 +179,25 @@ def test_arena_exchange_view_redirects_to_safe_next(arena_client):
 
     assert response.status_code == 302
     assert response.url == reverse("gameplay:arena_exchange_page")
+
+
+@pytest.mark.django_db
+def test_arena_exchange_view_shows_drawn_gladiator_item(arena_client, monkeypatch):
+    client, manor = arena_client
+    _ensure_gladiator_item_templates()
+    manor.arena_coins = 600
+    manor.save(update_fields=["arena_coins"])
+    monkeypatch.setattr("gameplay.services.arena.core.random.random", lambda: 0.0)
+
+    response = client.post(
+        reverse("gameplay:arena_exchange"),
+        {"reward_key": "gladiator_chest", "quantity": "1"},
+        follow=True,
+    )
+
+    assert response.status_code == 200
+    body = response.content.decode("utf-8")
+    assert "本次抽到：角斗士头盔x1" in body
 
 
 @pytest.mark.django_db

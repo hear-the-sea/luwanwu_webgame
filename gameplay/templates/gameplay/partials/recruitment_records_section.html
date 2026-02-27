@@ -1,0 +1,16 @@
+<section class="tw-panel" id="recruit-records-section">
+    <div class="tw-panel-header">最近招募</div>
+    <div class="tw-panel-content">
+        <ul class="space-y-2">
+            {% for record in records %}
+            <li class="flex items-center gap-2">
+                <span class="text-text-muted text-sm">{{ record.created_at|date:"m-d H:i" }}</span>
+                <span>-</span>
+                <span class="font-semibold rarity-text-{{ record.guest_rarity }}">{{ record.guest_display_name }}</span>
+            </li>
+            {% empty %}
+            <li class="tw-muted">暂无记录</li>
+            {% endfor %}
+        </ul>
+    </div>
+</section>

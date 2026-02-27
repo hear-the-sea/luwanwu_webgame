@@ -1415,6 +1415,217 @@
     box-shadow: 0 2px 6px rgba(74, 38, 18, 0.25);
   }
 
+  /* ========== 竞技场 ========== */
+  .tw-arena-hero-card {
+    min-height: 236px;
+  }
+
+  .tw-arena-hero-card .tw-building-media {
+    flex: 0 0 274px;
+  }
+
+  .tw-arena-hero-card .tw-building-corner-frame {
+    width: 248px;
+    height: 248px;
+  }
+
+  .tw-arena-hero-card .tw-building-corner-frame img {
+    object-fit: cover;
+  }
+
+  .tw-arena-rule-list {
+    margin: 0;
+    padding: 1rem;
+    display: grid;
+    gap: 0.5rem 1rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .tw-arena-rule-list > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .tw-arena-rule-list dt {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    color: var(--text-secondary);
+  }
+
+  .tw-arena-rule-list dd {
+    margin: 0;
+    text-align: right;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .tw-arena-signup-panel {
+    margin-top: auto;
+    padding: 0.75rem 1rem 1rem;
+    border-top: 1px solid var(--border-light);
+  }
+
+  .tw-arena-reward-grid {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
+
+  .tw-arena-reward-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    border: 1px solid var(--border-light);
+    border-radius: 0.5rem;
+    background: linear-gradient(180deg, #f8f3e8 0%, var(--bg-hover) 100%);
+  }
+
+  .tw-arena-reward-card--disabled {
+    opacity: 0.7;
+  }
+
+  .tw-arena-reward-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .tw-arena-reward-name {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.35rem;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  .tw-arena-reward-cost {
+    flex-shrink: 0;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 700;
+    color: #7a3d17;
+    background: rgba(212, 175, 55, 0.22);
+    border: 1px solid rgba(122, 61, 23, 0.3);
+    border-radius: 999px;
+    padding: 0.15rem 0.45rem;
+  }
+
+  .tw-arena-reward-desc {
+    margin: 0;
+    font-size: 0.75rem;
+    line-height: 1.05rem;
+    color: var(--text-muted);
+  }
+
+  .tw-arena-reward-limit {
+    margin: 0;
+    font-size: 0.72rem;
+    line-height: 1rem;
+    color: var(--text-secondary);
+  }
+
+  .tw-arena-reward-subtitle {
+    margin: 0 0 0.25rem;
+    font-size: 0.72rem;
+    line-height: 1rem;
+    color: var(--text-secondary);
+  }
+
+  .tw-arena-reward-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+
+  .tw-arena-reward-item {
+    font-size: 0.72rem;
+    line-height: 1rem;
+    color: var(--text-primary);
+    background-color: var(--bg-panel);
+    border: 1px solid var(--border-light);
+    border-radius: 999px;
+    padding: 0.1rem 0.45rem;
+  }
+
+  .tw-arena-reward-form {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .tw-arena-qty-input {
+    width: 3.25rem;
+    height: 1.8rem;
+    border: 1px solid var(--border-light);
+    border-radius: 0.35rem;
+    background-color: var(--bg-panel);
+    color: var(--text-primary);
+    padding: 0 0.45rem;
+    font-size: 0.8rem;
+  }
+
+  .tw-arena-reward-form .tw-btn-secondary {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .tw-arena-guest-grid {
+    display: grid;
+    gap: 0.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+
+  .tw-arena-guest-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border-light);
+    border-radius: 0.375rem;
+    background-color: var(--bg-hover);
+  }
+
+  .tw-arena-guest-option input[type="checkbox"] {
+    accent-color: var(--accent-gold);
+  }
+
+  @media (max-width: 900px) {
+    .tw-arena-rule-list {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .tw-arena-reward-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .tw-arena-hero-card .tw-building-media {
+      flex: 0 0 198px;
+      padding: 6px;
+    }
+
+    .tw-arena-hero-card .tw-building-corner-frame {
+      width: 176px;
+      height: 176px;
+      --corner-size: 20px;
+    }
+
+    .tw-arena-guest-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
   /* ========== 技术卡片状态 ========== */
   .tw-tech-maxed {
     @apply opacity-85;
@@ -2103,16 +2314,123 @@
   }
 
   .tw-btn-bid {
-    @apply px-3 py-1.5 rounded cursor-pointer font-semibold text-sm transition-all;
-    background: linear-gradient(180deg, #fbbf24 0%, #d97706 100%);
-    color: #1a1a1a;
-    border: 1px solid #b45309;
+    @apply px-5 py-2 rounded-md cursor-pointer font-semibold text-sm transition-all whitespace-nowrap;
+    min-width: 72px;
+    color: var(--text-light);
+    background: linear-gradient(180deg, #8B4513 0%, #6B3410 100%);
+    border: 2px solid #5A2D0C;
+    box-shadow: 0 2px 6px rgba(74, 38, 18, 0.15);
   }
 
   .tw-btn-bid:hover {
-    background: linear-gradient(180deg, #f59e0b 0%, #b45309 100%);
+    background: linear-gradient(180deg, #7A3A10 0%, #5A2A0D 100%);
     transform: translateY(-1px);
-    box-shadow: 0 2px 6px rgba(251, 191, 36, 0.25);
+    box-shadow: 0 4px 8px rgba(74, 38, 18, 0.25);
+  }
+
+  .tw-btn-bid:disabled {
+    @apply cursor-not-allowed opacity-60;
+    box-shadow: none;
+    transform: none;
+  }
+
+  .tw-bid-modal {
+    max-width: 560px;
+  }
+
+  .tw-bid-modal-header {
+    background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-card) 100%);
+  }
+
+  .tw-bid-modal-title-wrap {
+    @apply flex flex-col;
+  }
+
+  .tw-bid-modal-subtitle {
+    @apply m-0 mt-1 text-xs text-text-muted;
+  }
+
+  .tw-bid-item-card {
+    @apply mb-4 p-3 rounded-lg;
+    border: 1px solid var(--border-primary);
+    background: linear-gradient(135deg, rgba(218, 165, 32, 0.12) 0%, rgba(218, 165, 32, 0.04) 100%);
+  }
+
+  .tw-bid-item-label {
+    @apply text-xs text-text-secondary;
+  }
+
+  .tw-bid-item-name {
+    @apply m-0 mt-1 text-lg font-bold text-accent-gold;
+    line-height: 1.4;
+    word-break: break-word;
+  }
+
+  .tw-bid-kpi-grid {
+    @apply grid gap-3 mb-4;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tw-bid-kpi {
+    @apply rounded-md p-3;
+    border: 1px solid var(--border-primary);
+    background: var(--bg-secondary);
+  }
+
+  .tw-bid-kpi-label {
+    @apply block text-xs text-text-muted;
+  }
+
+  .tw-bid-kpi-value {
+    @apply m-0 mt-1 font-semibold text-text-primary;
+    font-size: 1rem;
+    line-height: 1.5rem;
+  }
+
+  #bid-modal-my-bid-group {
+    grid-column: 1 / -1;
+  }
+
+  .tw-bid-amount-group {
+    @apply mb-4;
+  }
+
+  .tw-bid-input-wrap {
+    @apply relative;
+  }
+
+  .tw-bid-input-wrap input[type="number"] {
+    padding-right: 4rem;
+  }
+
+  .tw-bid-input-unit {
+    @apply absolute text-sm text-text-muted;
+    right: 0.875rem;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+
+  .tw-bid-dynamic-hint {
+    @apply mt-2 font-semibold;
+    color: var(--accent-gold);
+  }
+
+  .tw-bid-wallet-hint {
+    @apply mt-1;
+  }
+
+  .tw-bid-rules-card {
+    @apply mb-0;
+    background: linear-gradient(135deg, rgba(139, 90, 43, 0.12) 0%, rgba(139, 90, 43, 0.06) 100%);
+  }
+
+  .tw-bid-rules-card .tw-market-form-note {
+    @apply m-0 text-text-secondary;
+  }
+
+  .tw-bid-submit-btn {
+    min-width: 120px;
   }
 
   .tw-bid-status {
@@ -2695,5 +3013,17 @@
 
   .tw-modal-footer button {
     width: 100%;
+  }
+
+  .tw-bid-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  #bid-modal-my-bid-group {
+    grid-column: auto;
+  }
+
+  .tw-bid-item-card {
+    padding: 0.875rem;
   }
 }

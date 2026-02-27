@@ -3,12 +3,13 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Dict, List
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from core.exceptions import (
     GuestNotIdleError,
     GuestNotRequirementError,
+    WorkError,
     WorkLimitExceededError,
     WorkNotCompletedError,
     WorkNotInProgressError,
@@ -74,18 +75,30 @@ def assign_guest_to_work(guest: Guest, work_template: WorkTemplate) -> WorkAssig
         if current_working >= MAX_CONCURRENT_WORKERS:
             raise WorkLimitExceededError(MAX_CONCURRENT_WORKERS)
 
+        # 同一种工作同一时间仅允许一名门客进行
+        if WorkAssignment.objects.filter(
+            manor=locked_manor,
+            work_template=work_template,
+            status=WorkAssignment.Status.WORKING,
+        ).exists():
+            raise WorkError(f"{work_template.name} 当前已有门客在打工")
+
         # 计算完成时间
         now = timezone.now()
         complete_at = now + timedelta(seconds=scale_duration(work_template.work_duration, minimum=1))
 
         # 创建打工记录
-        assignment = WorkAssignment.objects.create(
-            manor=locked_manor,
-            guest=guest,
-            work_template=work_template,
-            status=WorkAssignment.Status.WORKING,
-            complete_at=complete_at,
-        )
+        try:
+            assignment = WorkAssignment.objects.create(
+                manor=locked_manor,
+                guest=guest,
+                work_template=work_template,
+                status=WorkAssignment.Status.WORKING,
+                complete_at=complete_at,
+            )
+        except IntegrityError:
+            # 防并发兜底：若唯一约束被击穿，转为业务可读错误
+            raise WorkError(f"{work_template.name} 当前已有门客在打工")
 
         # 更新门客状态
         guest.status = GuestStatus.WORKING

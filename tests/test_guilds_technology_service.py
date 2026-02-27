@@ -90,6 +90,26 @@ def test_apply_guild_bonus_to_guest_and_troop(django_user_model):
 
 
 @pytest.mark.django_db
+def test_apply_guild_bonus_to_guest_supports_defense_stat_field(django_user_model):
+    from guilds.models import Guild, GuildTechnology
+    from guilds.services.technology import apply_guild_bonus_to_guest
+
+    founder = django_user_model.objects.create_user(username="tech_founder_defense_stat", password="pass")
+    guild = Guild.objects.create(name="TechGuildDefenseStat", founder=founder)
+    GuildTechnology.objects.create(guild=guild, tech_key="military_study", level=5)
+
+    user_in_guild = SimpleNamespace(guild_membership=SimpleNamespace(is_active=True, guild=guild))
+    guest_in_guild = SimpleNamespace(
+        force=100,
+        intellect=100,
+        defense_stat=100,
+        manor=SimpleNamespace(user=user_in_guild),
+    )
+
+    assert apply_guild_bonus_to_guest(guest_in_guild) == {"force": 110, "intellect": 106, "defense": 102}
+
+
+@pytest.mark.django_db
 def test_upgrade_technology_happy_path(monkeypatch, django_user_model):
     from gameplay.services.manor.core import ensure_manor
     from guilds.models import Guild, GuildResourceLog, GuildTechnology
@@ -122,6 +142,44 @@ def test_upgrade_technology_happy_path(monkeypatch, django_user_model):
     assert guild.silver < 999999
     assert GuildResourceLog.objects.filter(guild=guild, action="tech_upgrade").exists()
     assert announcements
+
+
+@pytest.mark.django_db
+def test_upgrade_technology_keeps_success_when_announcement_fails(monkeypatch, django_user_model):
+    from gameplay.services.manor.core import ensure_manor
+    from guilds.models import Guild, GuildTechnology
+    from guilds.services.technology import upgrade_technology
+
+    monkeypatch.setattr(
+        "guilds.services.technology.get_active_membership",
+        lambda *_a, **_k: SimpleNamespace(can_manage=True),
+    )
+
+    operator = django_user_model.objects.create_user(username="tech_operator_announce_fail", password="pass")
+    ensure_manor(operator)
+
+    founder = django_user_model.objects.create_user(username="tech_founder_announce_fail", password="pass")
+    guild = Guild.objects.create(
+        name="TechGuildAnnounceFail",
+        founder=founder,
+        silver=999999,
+        grain=999999,
+        gold_bar=999999,
+    )
+    tech = GuildTechnology.objects.create(guild=guild, tech_key="equipment_forge", level=0, max_level=5)
+
+    monkeypatch.setattr(
+        "guilds.services.technology.create_announcement",
+        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("announcement down")),
+    )
+    monkeypatch.setattr(
+        "guilds.services.technology.Manor.objects.filter", lambda *_a, **_k: SimpleNamespace(first=lambda: None)
+    )
+
+    upgrade_technology(guild, "equipment_forge", operator)
+
+    tech.refresh_from_db()
+    assert tech.level == 1
 
 
 @pytest.mark.django_db

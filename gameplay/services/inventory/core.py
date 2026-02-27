@@ -156,6 +156,70 @@ def sync_manor_grain(manor: Manor) -> None:
         manor.grain = grain_quantity
 
 
+def sync_warehouse_grain_item_locked(manor: Manor) -> None:
+    """
+    同步仓库中的粮食物品数量，使其与 Manor.grain 一致。
+
+    约束：
+    - 仅同步仓库（不处理藏宝阁）；
+    - 以 Manor.grain 为单一事实来源；
+    - 必须在事务中调用。
+    """
+    _require_atomic_block("sync_warehouse_grain_item_locked")
+
+    grain_template = ItemTemplate.objects.filter(key=GRAIN_ITEM_KEY).only("id").first()
+    if not grain_template:
+        return
+
+    target_quantity = max(0, int(getattr(manor, "grain", 0) or 0))
+    storage_location = InventoryItem.StorageLocation.WAREHOUSE
+
+    grain_item = (
+        InventoryItem.objects.select_for_update()
+        .filter(
+            manor=manor,
+            template=grain_template,
+            storage_location=storage_location,
+        )
+        .first()
+    )
+
+    if target_quantity <= 0:
+        if grain_item:
+            grain_item.delete()
+        return
+
+    if grain_item:
+        if int(grain_item.quantity) != target_quantity:
+            InventoryItem.objects.filter(pk=grain_item.pk).update(quantity=target_quantity, updated_at=Now())
+            grain_item.quantity = target_quantity
+        return
+
+    try:
+        InventoryItem.objects.create(
+            manor=manor,
+            template=grain_template,
+            storage_location=storage_location,
+            quantity=target_quantity,
+        )
+    except IntegrityError:
+        InventoryItem.objects.filter(
+            manor=manor,
+            template=grain_template,
+            storage_location=storage_location,
+        ).update(quantity=target_quantity, updated_at=Now())
+
+
+def sync_warehouse_grain_item(manor: Manor) -> None:
+    """
+    同步仓库粮食物品数量（事务包装）。
+    """
+    with transaction.atomic():
+        locked_manor = Manor.objects.select_for_update().only("id", "grain").get(pk=manor.pk)
+        sync_warehouse_grain_item_locked(locked_manor)
+    manor.refresh_from_db(fields=["grain"])
+
+
 def list_inventory_items(manor: Manor):
     """获取庄园的背包物品列表。"""
     return manor.inventory_items.select_related("template").order_by("template__name")

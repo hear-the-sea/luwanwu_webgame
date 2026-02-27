@@ -20,6 +20,14 @@ from ..utils.resource_calculator import RESOURCE_FIELDS, get_hourly_rates, get_p
 logger = logging.getLogger(__name__)
 
 
+def _sync_warehouse_grain_item_locked(manor: Manor) -> None:
+    # Delay import to avoid circular dependency:
+    # resources -> inventory package -> inventory.use -> resources.
+    from .inventory.core import sync_warehouse_grain_item_locked
+
+    sync_warehouse_grain_item_locked(manor)
+
+
 def _get_resource_capacity(manor: Manor, resource: str) -> Tuple[int, bool]:
     """
     获取指定资源的容量上限。
@@ -91,6 +99,8 @@ def spend_resources_locked(
         raise ValueError("资源不足")
 
     manor.refresh_from_db(fields=RESOURCE_FIELDS)
+    if int(cost.get(ResourceType.GRAIN, 0) or 0) > 0:
+        _sync_warehouse_grain_item_locked(manor)
     negative = {key: -val for key, val in cost.items()}
     log_resource_gain(manor, negative, reason, note)
 
@@ -131,6 +141,8 @@ def grant_resources_locked(
 
     if credited:
         manor.save(update_fields=list(credited.keys()))
+        if int(credited.get(ResourceType.GRAIN, 0) or 0) > 0:
+            _sync_warehouse_grain_item_locked(manor)
         log_resource_gain(manor, credited, reason, note)
 
     # 记录溢出情况便于调试
@@ -207,6 +219,8 @@ def sync_resource_production(manor: Manor) -> None:
             # Only update fields that changed plus timestamp
             update_fields = list(produced.keys()) + ["resource_updated_at"]
             locked_manor.save(update_fields=update_fields)
+            if int(produced.get(ResourceType.GRAIN, 0) or 0) != 0:
+                _sync_warehouse_grain_item_locked(locked_manor)
 
             # Log resource gain if any resources were produced
             if produced:

@@ -146,3 +146,22 @@ def test_build_defender_setup_and_drop_table_for_defense_keeps_runtime_loadout()
 
     assert defender_setup == {"troop_loadout": loadout}
     assert drop_table == {}
+
+
+def test_send_mission_report_message_ignores_message_failure(monkeypatch):
+    run = SimpleNamespace(
+        id=88,
+        manor_id=9,
+        is_retreating=False,
+        manor=SimpleNamespace(user_id=100),
+        mission=SimpleNamespace(key="mission_key", name="任务名"),
+    )
+    report = SimpleNamespace(id=66)
+
+    monkeypatch.setattr(
+        mission_execution,
+        "create_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+    )
+
+    mission_execution._send_mission_report_message(run, report)

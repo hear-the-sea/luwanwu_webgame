@@ -43,12 +43,15 @@
      * @param {number} options.offset - 提示框与触发元素的间距 (默认: 8)
      */
     function initTooltip(options) {
+        options = options || {};
+        const supportsHover = !!(window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches);
         const config = {
             key: options.key || 'default',
             cellSelector: options.cellSelector || '.tw-item-cell',
             tooltipSelector: options.tooltipSelector || '.tw-item-tooltip',
             viewportPadding: options.viewportPadding || 20,
-            offset: options.offset || 8
+            offset: options.offset || 8,
+            enableTouch: options.enableTouch !== undefined ? !!options.enableTouch : !supportsHover,
         };
 
         // 防止重复初始化
@@ -62,13 +65,20 @@
         let rafId = null;
         let sizeRetryCount = 0;
 
+        function clearActiveCell() {
+            if (activeCell && activeCell.classList) {
+                activeCell.classList.remove('is-tooltip-active');
+            }
+            activeCell = null;
+            sizeRetryCount = 0;
+        }
+
         function requestUpdate() {
             if (rafId) return;
             rafId = requestAnimationFrame(() => {
                 rafId = null;
                 if (!activeCell || !activeCell.isConnected) {
-                    activeCell = null;
-                    sizeRetryCount = 0;
+                    clearActiveCell();
                     return;
                 }
 
@@ -95,11 +105,13 @@
                 if (left + tooltipRect.width > window.innerWidth - config.viewportPadding) {
                     left = window.innerWidth - tooltipRect.width - config.viewportPadding;
                 }
+                left = Math.max(config.viewportPadding, left);
 
                 // 防止超出下边界，改为显示在上方
                 if (top + tooltipRect.height > window.innerHeight - config.viewportPadding) {
                     top = cellRect.top - tooltipRect.height - config.offset;
                 }
+                top = Math.max(config.viewportPadding, top);
 
                 tooltip.style.top = top + 'px';
                 tooltip.style.left = left + 'px';
@@ -108,13 +120,14 @@
 
         function setActiveCell(cell) {
             if (activeCell === cell) return;
+            if (activeCell && activeCell.classList) {
+                activeCell.classList.remove('is-tooltip-active');
+            }
             activeCell = cell;
+            activeCell.classList.add('is-tooltip-active');
             sizeRetryCount = 0;
             requestUpdate();
         }
-
-        // Throttled update for high-frequency events (16ms ≈ 60fps)
-        const throttledUpdate = throttle(requestUpdate, 16);
 
         // 事件监听 - optimized with throttling
         document.addEventListener('mouseover', function(e) {
@@ -132,20 +145,45 @@
         document.addEventListener('mouseout', function(e) {
             const cell = e.target?.closest?.(config.cellSelector);
             if (cell && cell === activeCell && (!e.relatedTarget || !cell.contains(e.relatedTarget))) {
-                activeCell = null;
-                sizeRetryCount = 0;
+                clearActiveCell();
             }
         });
 
-        // Use passive scroll listener for better performance, throttled
-        window.addEventListener('scroll', throttle(function() {
+        if (config.enableTouch) {
+            document.addEventListener('click', function(e) {
+                const cell = e.target?.closest?.(config.cellSelector);
+                if (cell) {
+                    if (activeCell === cell) {
+                        clearActiveCell();
+                    } else {
+                        setActiveCell(cell);
+                    }
+                    return;
+                }
+                if (activeCell) {
+                    clearActiveCell();
+                }
+            });
+        }
+
+        // Use passive scroll listeners for better performance, throttled
+        const handleScroll = throttle(function() {
             if (activeCell) requestUpdate();
-        }, 16), { passive: true });
+        }, 16);
+
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        document.addEventListener('scroll', handleScroll, { passive: true, capture: true });
 
         // Throttled resize listener
         window.addEventListener('resize', throttle(function() {
             if (activeCell) requestUpdate();
         }, 100));
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && activeCell) {
+                clearActiveCell();
+            }
+        });
     }
 
     // 暴露到全局

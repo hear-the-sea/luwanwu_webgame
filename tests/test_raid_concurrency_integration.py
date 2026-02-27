@@ -12,6 +12,7 @@ from gameplay.services.manor.core import ensure_manor
 from gameplay.services.raid.combat import runs as combat_runs
 
 
+@pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
 def test_start_raid_concurrent_requests_respect_limit_inside_lock(monkeypatch, django_user_model):
     if connection.vendor == "sqlite":

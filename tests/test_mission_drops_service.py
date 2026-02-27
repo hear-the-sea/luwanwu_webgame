@@ -23,12 +23,13 @@ User = get_user_model()
 def test_award_mission_drops_grants_resources_and_items():
     user = User.objects.create_user(username="mission_drop_user", password="pass123")
     manor = ensure_manor(user)
+    initial_silver = manor.silver
     item_template = ItemTemplate.objects.create(key="mission_drop_item", name="任务掉落道具")
 
     award_mission_drops(manor, {"silver": 30, "mission_drop_item": 2}, note="测试任务")
 
     manor.refresh_from_db()
-    assert manor.silver == 530
+    assert manor.silver == initial_silver + 30
 
     inv = InventoryItem.objects.get(
         manor=manor,

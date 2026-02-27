@@ -17,6 +17,7 @@ CACHE_TIMEOUT_MEDIUM = 30  # 30秒 - 中等实时性要求
 CACHE_TIMEOUT_LONG = 60  # 60秒 - 低实时性要求
 CACHE_TIMEOUT_RANKING = 60  # 排行榜缓存
 CACHE_TIMEOUT_CONFIG = 300  # 5分钟 - 配置类数据
+RECRUITMENT_HALL_CACHE_VERSION = 1  # 聚贤庄上下文缓存版本
 
 
 class CacheKeys:
@@ -68,9 +69,17 @@ class CacheKeys:
         return f"{CacheKeys.HOME_HOURLY_RATES_PREFIX}:{manor_id}"
 
     @staticmethod
-    def recruitment_hall_context(manor_id: int) -> str:
+    def recruitment_hall_context(manor_id: int, *, version: int | None = None) -> str:
         """聚贤庄页面上下文缓存键。"""
-        return f"{CacheKeys.RECRUITMENT_HALL_CONTEXT_PREFIX}:{manor_id}"
+        base_key = f"{CacheKeys.RECRUITMENT_HALL_CONTEXT_PREFIX}:{manor_id}"
+        if version is None:
+            return base_key
+        return f"{base_key}:v{int(version)}"
+
+
+def recruitment_hall_context_cache_key(manor_id: int) -> str:
+    """返回聚贤庄页面上下文的当前版本缓存键。"""
+    return CacheKeys.recruitment_hall_context(manor_id, version=RECRUITMENT_HALL_CACHE_VERSION)
 
 
 def invalidate_home_stats_cache(manor_id: int) -> None:
@@ -80,7 +89,13 @@ def invalidate_home_stats_cache(manor_id: int) -> None:
 
 def invalidate_recruitment_hall_cache(manor_id: int) -> None:
     """清除聚贤庄页面上下文缓存。"""
-    cache.delete(CacheKeys.recruitment_hall_context(manor_id))
+    # 同时清理历史无版本键，兼容旧逻辑残留。
+    cache.delete_many(
+        [
+            CacheKeys.recruitment_hall_context(manor_id),
+            recruitment_hall_context_cache_key(manor_id),
+        ]
+    )
 
 
 def invalidate_manor_cache(manor_id: int) -> None:

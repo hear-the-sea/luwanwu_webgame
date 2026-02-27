@@ -2,43 +2,14 @@
 游戏玩法相关常量
 """
 
+from django.conf import settings
+
 from common.constants.resources import ResourceType, ResourceTypes  # noqa: F401
 from common.constants.time import TimeConstants  # noqa: F401
 from core.config import BUILDING_KEYS
 
 # 为了向后兼容，重新导出 BuildingKeys
 BuildingKeys = BUILDING_KEYS
-
-# 建筑最高等级限制（未配置则无限制）
-BUILDING_MAX_LEVELS = {
-    # 特殊建筑
-    BUILDING_KEYS.CITANG: 5,  # 祠堂：避免缩时达到100%
-    BUILDING_KEYS.YOUXIA_BAOTA: 15,  # 悠嘻宝塔：出战上限在15级封顶（SQUAD_SIZE_MAX=18）
-    BUILDING_KEYS.TREASURY: 20,  # 藏宝阁：容量函数按20级封顶（平衡时间消耗）
-    BUILDING_KEYS.JAIL: 5,  # 监牢：满级5人
-    BUILDING_KEYS.OATH_GROVE: 5,  # 结义林：满级5人
-    # 仓储设施
-    BUILDING_KEYS.SILVER_VAULT: 30,  # 银库：满级4000万两
-    BUILDING_KEYS.GRANARY: 20,  # 粮仓：满级1050万石
-    # 资源产出建筑
-    BUILDING_KEYS.BATHHOUSE: 20,  # 澡堂：满级每小时产银1000两+门客回血200%
-    BUILDING_KEYS.LATRINE: 20,  # 茅厕：满级每小时产粮1000+产银1000两
-    BUILDING_KEYS.TAVERN: 10,  # 酒馆：满级每小时产银1000两+候选人数+10
-    "farm": 50,  # 农田：满级50级
-    "tax_office": 20,  # 税务司：满级20级
-    # 人员管理建筑
-    BUILDING_KEYS.JUXIAN_ZHUANG: 15,  # 聚贤庄：满级容量18位门客
-    BUILDING_KEYS.JIADING_FANG: 30,  # 家丁房：满级容量3050个位置
-    BUILDING_KEYS.LIANGGONG_CHANG: 10,  # 练功场：满级护院训练速度提升30%
-    # 生产加工建筑
-    BUILDING_KEYS.RANCH: 10,  # 畜牧场：满级家畜制造速度提升50%
-    BUILDING_KEYS.SMITHY: 10,  # 冶炼坊：满级物资制造速度提升50%
-    BUILDING_KEYS.STABLE: 10,  # 马房：满级马匹制造速度提升50%
-    # 战斗相关建筑
-    BUILDING_KEYS.LIANBING_DAYING: 10,  # 练兵大营：满级护院训练速度提升50%
-    BUILDING_KEYS.FORGE: 10,  # 铁匠铺：满级装备制造速度提升50%
-}
-
 
 # 建筑最高等级限制（未配置则无限制）
 BUILDING_MAX_LEVELS = {
@@ -65,6 +36,8 @@ BUILDING_MAX_LEVELS = {
     BuildingKeys.RANCH: 10,  # 畜牧场：满级家畜制造速度提升50%
     BuildingKeys.SMITHY: 10,  # 冶炼坊：满级物资制造速度提升50%
     BuildingKeys.STABLE: 10,  # 马房：满级马匹制造速度提升50%
+    # 战斗相关建筑
+    BuildingKeys.LIANBING_DAYING: 10,  # 练兵大营：满级护院训练速度提升50%
     BuildingKeys.FORGE: 10,  # 铁匠铺：满级装备锻造速度提升50%
 }
 
@@ -172,9 +145,10 @@ class PVPConstants:
     RAID_TRAVEL_TIME_PER_DISTANCE = 3  # 每单位距离3秒
     RAID_CROSS_REGION_MULTIPLIER = 1.5  # 跨区系数
     RAID_MAX_DAILY_ATTACKS_RECEIVED = 8  # 每个庄园每24小时最多被攻击次数（防小号集群）
+    RAID_DEFEAT_PROTECTION_SECONDS = 1800  # 防守失败后战败保护时长（30分钟）
 
     # 俘获/监牢
-    RAID_CAPTURE_GUEST_RATE = 0.5  # 单场胜利后俘获失败方出战门客的概率（单场最多1名）【临时测试：50%】
+    RAID_CAPTURE_GUEST_RATE = 0.5  # 单场胜利后俘获失败方出战门客的概率（单场最多1名）
     JAIL_LOYALTY_DAILY_DECAY = 5  # 被俘期间每日忠诚度衰减值
     JAIL_RECRUIT_LOYALTY_THRESHOLD = 30  # 忠诚度<=该值可招募
     JAIL_RECRUIT_GOLD_BAR_COST = 1  # 招募俘虏消耗金条数量（gold_bar）
@@ -232,6 +206,15 @@ class PVPConstants:
         "purple": 3.0,
         "orange": 5.0,
     }
+
+
+def get_raid_capture_guest_rate() -> float:
+    raw_value = getattr(settings, "RAID_CAPTURE_GUEST_RATE", PVPConstants.RAID_CAPTURE_GUEST_RATE)
+    try:
+        capture_rate = float(raw_value)
+    except (TypeError, ValueError):
+        capture_rate = float(PVPConstants.RAID_CAPTURE_GUEST_RATE)
+    return max(0.0, min(1.0, capture_rate))
 
 
 # ============ UI/分页常量 ============

@@ -1,0 +1,146 @@
+from __future__ import annotations
+
+from types import SimpleNamespace
+
+import pytest
+from django.contrib.admin.sites import AdminSite
+
+from gameplay.admin import GlobalMailCampaignAdmin, GlobalMailCampaignForm
+from gameplay.models import GlobalMailCampaign, Message
+
+
+@pytest.mark.django_db
+def test_global_mail_campaign_form_initializes_attachment_split_fields():
+    campaign = GlobalMailCampaign.objects.create(
+        key="admin_form_init_campaign",
+        kind=Message.Kind.REWARD,
+        title="初始化附件活动",
+        attachments={"resources": {"silver": 100}, "items": {"peace_shield_small": 2}},
+    )
+
+    form = GlobalMailCampaignForm(instance=campaign)
+    assert form.fields["attachment_resources"].initial == {"silver": 100}
+    assert form.fields["attachment_items"].initial == {"peace_shield_small": 2}
+
+
+@pytest.mark.django_db
+def test_global_mail_campaign_form_save_merges_attachment_fields():
+    form = GlobalMailCampaignForm(
+        data={
+            "key": "admin_form_save_campaign",
+            "kind": Message.Kind.REWARD,
+            "title": "保存附件活动",
+            "body": "test",
+            "is_active": True,
+            "attachment_resources": {"grain": 50, "silver": 200},
+            "attachment_items": {"peace_shield_small": 1},
+        }
+    )
+    assert form.is_valid(), form.errors
+
+    campaign = form.save()
+    assert campaign.attachments == {
+        "resources": {"grain": 50, "silver": 200},
+        "items": {"peace_shield_small": 1},
+    }
+
+
+@pytest.mark.django_db
+def test_global_mail_campaign_form_rejects_invalid_attachment_amount():
+    form = GlobalMailCampaignForm(
+        data={
+            "key": "admin_form_invalid_amount_campaign",
+            "kind": Message.Kind.REWARD,
+            "title": "非法附件活动",
+            "is_active": True,
+            "attachment_resources": {"silver": 0},
+            "attachment_items": {},
+        }
+    )
+
+    assert not form.is_valid()
+    assert "attachment_resources.silver 必须大于 0" in str(form.errors)
+
+
+@pytest.mark.django_db
+def test_global_mail_campaign_admin_save_model_enqueues_backfill_with_batch(monkeypatch):
+    admin_obj = GlobalMailCampaignAdmin(GlobalMailCampaign, AdminSite())
+    messages: list[str] = []
+    enqueued: list[tuple[int, int]] = []
+
+    def _fake_enqueue(campaign_id: int, *, batch_size: int = 500):
+        enqueued.append((campaign_id, batch_size))
+        return SimpleNamespace(id="task-admin-save")
+
+    monkeypatch.setattr("gameplay.admin.enqueue_global_mail_backfill", _fake_enqueue)
+    monkeypatch.setattr(admin_obj, "message_user", lambda _request, message, **_kwargs: messages.append(str(message)))
+
+    form = GlobalMailCampaignForm(
+        data={
+            "key": "admin_save_model_campaign",
+            "kind": Message.Kind.REWARD,
+            "title": "后台保存补发",
+            "body": "",
+            "is_active": True,
+            "attachment_resources": {"silver": 88},
+            "attachment_items": {},
+            "send_to_existing_now": True,
+            "backfill_batch_size": 321,
+        }
+    )
+    assert form.is_valid(), form.errors
+
+    obj = form.save(commit=False)
+    admin_obj.save_model(SimpleNamespace(), obj, form, change=False)
+
+    assert obj.pk is not None
+    assert enqueued == [(obj.pk, 321)]
+    assert any("task-admin-save" in message and "batch_size=321" in message for message in messages)
+
+
+@pytest.mark.django_db
+def test_global_mail_campaign_admin_actions_enqueue_and_toggle(monkeypatch):
+    admin_obj = GlobalMailCampaignAdmin(GlobalMailCampaign, AdminSite())
+    messages: list[str] = []
+    enqueued_ids: list[int] = []
+
+    campaign_a = GlobalMailCampaign.objects.create(
+        key="admin_action_campaign_a",
+        kind=Message.Kind.REWARD,
+        title="活动A",
+        is_active=False,
+    )
+    campaign_b = GlobalMailCampaign.objects.create(
+        key="admin_action_campaign_b",
+        kind=Message.Kind.REWARD,
+        title="活动B",
+        is_active=False,
+    )
+
+    def _fake_enqueue(campaign_id: int, *, batch_size: int = 500):
+        del batch_size
+        enqueued_ids.append(campaign_id)
+        return SimpleNamespace(id=f"task-{campaign_id}")
+
+    monkeypatch.setattr("gameplay.admin.enqueue_global_mail_backfill", _fake_enqueue)
+    monkeypatch.setattr(admin_obj, "message_user", lambda _request, message, **_kwargs: messages.append(str(message)))
+
+    queryset = GlobalMailCampaign.objects.filter(pk__in=[campaign_a.pk, campaign_b.pk]).order_by("pk")
+    admin_obj.backfill_selected_campaigns(SimpleNamespace(), queryset)
+    assert enqueued_ids == [campaign_a.pk, campaign_b.pk]
+    assert any("已提交 2 个补发任务" in message for message in messages)
+
+    admin_obj.activate_selected_campaigns(SimpleNamespace(), queryset)
+    assert GlobalMailCampaign.objects.filter(pk__in=enqueued_ids, is_active=True).count() == 2
+
+    admin_obj.deactivate_selected_campaigns(SimpleNamespace(), queryset)
+    assert GlobalMailCampaign.objects.filter(pk__in=enqueued_ids, is_active=False).count() == 2
+
+
+def test_global_mail_campaign_admin_readonly_fields_handle_unsaved_obj():
+    admin_obj = GlobalMailCampaignAdmin(GlobalMailCampaign, AdminSite())
+
+    assert admin_obj.deliveries_count(None) == 0
+    assert admin_obj.deliveries_count(GlobalMailCampaign()) == 0
+    assert "未保存" in str(admin_obj.runtime_status_badge(None))
+    assert "{}" in str(admin_obj.attachments_preview(None))

@@ -105,10 +105,11 @@ def test_start_scout_rechecks_attack_constraints_inside_transaction(monkeypatch)
 def test_start_scout_precheck_uses_uncached_attack_check(monkeypatch):
     attacker = SimpleNamespace(pk=1, id=1)
     defender = SimpleNamespace(pk=2, id=2)
-    seen = {"use_cached_recent_attacks": None}
+    seen = {"use_cached_recent_attacks": None, "check_defeat_protection": None}
 
     def _fake_can_attack(*_args, **kwargs):
         seen["use_cached_recent_attacks"] = kwargs.get("use_cached_recent_attacks")
+        seen["check_defeat_protection"] = kwargs.get("check_defeat_protection")
         return False, "blocked"
 
     monkeypatch.setattr(scout_service, "can_attack_target", _fake_can_attack)
@@ -117,3 +118,4 @@ def test_start_scout_precheck_uses_uncached_attack_check(monkeypatch):
         scout_service.start_scout(attacker, defender)
 
     assert seen["use_cached_recent_attacks"] is False
+    assert seen["check_defeat_protection"] is False

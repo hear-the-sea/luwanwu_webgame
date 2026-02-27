@@ -21,11 +21,19 @@ def env(key: str, default: str = "") -> str:
     return os.getenv(key, default)
 
 
+def env_float(key: str, default: float) -> float:
+    raw_value = env(key, str(default))
+    try:
+        parsed = float(raw_value or default)
+    except (TypeError, ValueError):
+        return float(default)
+    if not math.isfinite(parsed):
+        return float(default)
+    return parsed
+
+
 # Game time multiplier
-try:
-    GAME_TIME_MULTIPLIER = float(env("GAME_TIME_MULTIPLIER", "1") or "1")
-except (TypeError, ValueError):
-    GAME_TIME_MULTIPLIER = 1.0
+GAME_TIME_MULTIPLIER = env_float("GAME_TIME_MULTIPLIER", 1.0)
 if not math.isfinite(GAME_TIME_MULTIPLIER) or GAME_TIME_MULTIPLIER <= 0:
     GAME_TIME_MULTIPLIER = 1.0
 
@@ -57,8 +65,8 @@ INSTALLED_APPS = [
 INSTALLED_APPS = [app for app in INSTALLED_APPS if app]
 
 MIDDLEWARE = [
-    "core.middleware.RequestIDMiddleware",
-    "core.middleware.AccessLogMiddleware",
+    "core.middleware.request_id.RequestIDMiddleware",
+    "core.middleware.access_log.AccessLogMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -183,11 +191,16 @@ RESOURCE_SYNC_MIN_INTERVAL_SECONDS = int(env("DJANGO_RESOURCE_SYNC_MIN_INTERVAL_
 MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS = int(
     env("DJANGO_MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS", "1" if DEBUG else "5")
 )
+# Arena limits
+ARENA_DAILY_PARTICIPATION_LIMIT = int(env("DJANGO_ARENA_DAILY_PARTICIPATION_LIMIT", "100"))
+ARENA_TOURNAMENT_PLAYER_LIMIT = int(env("DJANGO_ARENA_TOURNAMENT_PLAYER_LIMIT", "3"))
 
 # Cache TTL for home/dashboard stats
 HOME_STATS_CACHE_TTL_SECONDS = int(env("DJANGO_HOME_STATS_CACHE_TTL_SECONDS", "15"))
 # Cache TTL for defender 24h raid-received counter in attack checks
 RAID_RECENT_ATTACKS_CACHE_TTL_SECONDS = int(env("DJANGO_RAID_RECENT_ATTACKS_CACHE_TTL_SECONDS", "5"))
+# Raid capture rate (0.0 ~ 1.0, clamped in gameplay.constants.get_raid_capture_guest_rate)
+RAID_CAPTURE_GUEST_RATE = env_float("DJANGO_RAID_CAPTURE_GUEST_RATE", 0.5)
 
 # High-value thresholds for logging/monitoring
 TRADE_HIGH_VALUE_SILVER_THRESHOLD = int(env("DJANGO_TRADE_HIGH_VALUE_SILVER_THRESHOLD", "1000000"))

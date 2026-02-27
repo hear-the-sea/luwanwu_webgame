@@ -12,13 +12,17 @@ from gameplay.models import (
     ArenaExchangeRecord,
     ArenaMatch,
     ArenaTournament,
+    InventoryItem,
+    ItemTemplate,
     Manor,
     Message,
 )
 from gameplay.services.arena import core as arena_core
 from gameplay.services.arena.core import (
     ARENA_DAILY_PARTICIPATION_LIMIT,
+    ARENA_MAX_GUESTS_PER_ENTRY,
     ARENA_REGISTRATION_SILVER_COST,
+    ARENA_TOURNAMENT_PLAYER_LIMIT,
     cancel_arena_entry,
     cleanup_expired_tournaments,
     exchange_arena_reward,
@@ -69,6 +73,40 @@ def _fund_manor(manor: Manor, silver: int = 100000) -> None:
     manor.save(update_fields=["silver"])
 
 
+def _ensure_gladiator_item_templates() -> None:
+    key_to_name = {
+        "equip_jiaodoushitoukui": "角斗士头盔",
+        "equip_jiaodoushixiongjia": "角斗士胸甲",
+        "equip_jiaodoushizhixue": "角斗士之靴",
+        "equip_jiaodoushizhichui": "角斗士之锤",
+    }
+    for key, name in key_to_name.items():
+        ItemTemplate.objects.get_or_create(
+            key=key,
+            defaults={
+                "name": name,
+                "effect_type": ItemTemplate.EffectType.TOOL,
+            },
+        )
+
+
+def _ensure_sanguoyanyi_arena_item_templates() -> None:
+    key_to_name = {
+        "panfeng_guest_card": "潘凤门客卡",
+        "xingdaorong_guest_card": "邢道荣门客卡",
+        "peerless_general_upgrade_token": "《上将的自我修养》残卷1",
+        "peerless_general_upgrade_token_2": "《上将的自我修养》残卷2",
+    }
+    for key, name in key_to_name.items():
+        ItemTemplate.objects.get_or_create(
+            key=key,
+            defaults={
+                "name": name,
+                "effect_type": ItemTemplate.EffectType.TOOL,
+            },
+        )
+
+
 def _snapshot_from_guest(guest: Guest) -> dict:
     stats = guest.stat_block()
     return {
@@ -101,7 +139,7 @@ def test_register_arena_entry_respects_daily_limit():
     guest = _create_guest(manor, template, "A")
 
     now = timezone.now()
-    for idx in range(3):
+    for idx in range(ARENA_DAILY_PARTICIPATION_LIMIT):
         tournament = ArenaTournament.objects.create(
             status=ArenaTournament.Status.COMPLETED,
             player_limit=10,
@@ -112,7 +150,7 @@ def test_register_arena_entry_respects_daily_limit():
             tournament=tournament,
             manor=manor,
             status=ArenaEntry.Status.ELIMINATED,
-            final_rank=10 - idx,
+            final_rank=(idx % 10) + 1,
             coin_reward=10,
         )
 
@@ -121,7 +159,7 @@ def test_register_arena_entry_respects_daily_limit():
 
 
 @pytest.mark.django_db
-def test_register_arena_entry_rejects_more_than_ten_guests():
+def test_register_arena_entry_rejects_more_than_guest_limit():
     user = User.objects.create_user(
         username="arena_guest_limit",
         password="pass123",
@@ -129,9 +167,9 @@ def test_register_arena_entry_rejects_more_than_ten_guests():
     )
     manor = ensure_manor(user)
     template = _create_guest_template("arena_guest_limit_tpl")
-    guests = [_create_guest(manor, template, str(i)) for i in range(11)]
+    guests = [_create_guest(manor, template, str(i)) for i in range(ARENA_MAX_GUESTS_PER_ENTRY + 1)]
 
-    with pytest.raises(ValueError, match="最多选择 10 名门客"):
+    with pytest.raises(ValueError, match=f"最多选择 {ARENA_MAX_GUESTS_PER_ENTRY} 名门客"):
         register_arena_entry(manor, [guest.id for guest in guests])
 
 
@@ -164,18 +202,18 @@ def test_register_arena_entry_returns_busy_error_when_recruiting_lock_not_acquir
     template = _create_guest_template("arena_lock_busy_tpl")
     guest = _create_guest(manor, template, "A")
 
-    monkeypatch.setattr(arena_core, "acquire_best_effort_lock", lambda *args, **kwargs: (False, False))
+    monkeypatch.setattr(arena_core, "acquire_best_effort_lock", lambda *args, **kwargs: (False, False, None))
 
     with pytest.raises(ValueError, match="竞技场报名繁忙，请稍后重试"):
         register_arena_entry(manor, [guest.id])
 
 
 @pytest.mark.django_db
-def test_register_arena_entry_auto_starts_when_reaching_ten_players():
+def test_register_arena_entry_auto_starts_when_reaching_player_limit():
     template = _create_guest_template("arena_auto_start_tpl")
 
     tournament_id = None
-    for idx in range(10):
+    for idx in range(ARENA_TOURNAMENT_PLAYER_LIMIT):
         user = User.objects.create_user(
             username=f"arena_auto_{idx}",
             password="pass123",
@@ -192,7 +230,7 @@ def test_register_arena_entry_auto_starts_when_reaching_ten_players():
             tournament_id = result.tournament.id
         assert result.tournament.id == tournament_id
 
-        if idx < 9:
+        if idx < ARENA_TOURNAMENT_PLAYER_LIMIT - 1:
             assert result.auto_started is False
         else:
             assert result.auto_started is True
@@ -200,14 +238,14 @@ def test_register_arena_entry_auto_starts_when_reaching_ten_players():
     tournament = ArenaTournament.objects.get(pk=tournament_id)
     assert tournament.status == ArenaTournament.Status.RUNNING
     assert tournament.current_round == 1
-    assert tournament.entries.count() == 10
+    assert tournament.entries.count() == ARENA_TOURNAMENT_PLAYER_LIMIT
     assert (
         ArenaMatch.objects.filter(
             tournament=tournament,
             round_number=1,
             status=ArenaMatch.Status.SCHEDULED,
         ).count()
-        == 5
+        == (ARENA_TOURNAMENT_PLAYER_LIMIT + 1) // 2
     )
 
 
@@ -439,6 +477,162 @@ def test_exchange_arena_reward_deducts_coins_and_creates_record():
     assert result.total_cost == 160
     assert manor.arena_coins == 840
     assert manor.grain > initial_grain
+    assert ArenaExchangeRecord.objects.filter(manor=manor, reward_key="grain_pack_small").count() == 1
+
+
+@pytest.mark.django_db
+def test_exchange_arena_reward_gladiator_chest_grants_silver_and_weighted_item(monkeypatch):
+    user = User.objects.create_user(
+        username="arena_exchange_gladiator",
+        password="pass123",
+        email="arena_exchange_gladiator@test.local",
+    )
+    manor = ensure_manor(user)
+    _ensure_gladiator_item_templates()
+    manor.arena_coins = 600
+    manor.save(update_fields=["arena_coins"])
+    initial_silver = manor.silver
+
+    monkeypatch.setattr("gameplay.services.arena.core.random.random", lambda: 0.0)
+    result = exchange_arena_reward(manor, "gladiator_chest", quantity=1)
+
+    manor.refresh_from_db()
+    assert result.total_cost == 500
+    assert manor.arena_coins == 100
+    assert manor.silver == initial_silver + 10000
+    assert result.credited_resources == {"silver": 10000}
+    assert result.granted_items == {"equip_jiaodoushitoukui": 1}
+    assert result.random_granted_items == {"equip_jiaodoushitoukui": 1}
+    assert InventoryItem.objects.filter(manor=manor, template__key="equip_jiaodoushitoukui", quantity=1).exists()
+
+
+@pytest.mark.django_db
+def test_exchange_arena_reward_gladiator_chest_respects_daily_limit():
+    user = User.objects.create_user(
+        username="arena_exchange_gladiator_limit",
+        password="pass123",
+        email="arena_exchange_gladiator_limit@test.local",
+    )
+    manor = ensure_manor(user)
+    _ensure_gladiator_item_templates()
+    manor.arena_coins = 3000
+    manor.save(update_fields=["arena_coins"])
+
+    exchange_arena_reward(manor, "gladiator_chest", quantity=2)
+
+    with pytest.raises(ValueError, match="角斗士宝箱 今日最多可兑换 2 次"):
+        exchange_arena_reward(manor, "gladiator_chest", quantity=1)
+
+
+@pytest.mark.django_db
+def test_exchange_arena_reward_panfeng_guest_card_grants_item():
+    user = User.objects.create_user(
+        username="arena_exchange_panfeng_card",
+        password="pass123",
+        email="arena_exchange_panfeng_card@test.local",
+    )
+    manor = ensure_manor(user)
+    _ensure_sanguoyanyi_arena_item_templates()
+    manor.arena_coins = 1200
+    manor.save(update_fields=["arena_coins"])
+
+    result = exchange_arena_reward(manor, "panfeng_guest_exchange", quantity=1)
+
+    manor.refresh_from_db()
+    assert result.total_cost == 1000
+    assert manor.arena_coins == 200
+    assert result.granted_items == {"panfeng_guest_card": 1}
+    assert InventoryItem.objects.filter(manor=manor, template__key="panfeng_guest_card", quantity=1).exists()
+
+
+@pytest.mark.django_db
+def test_exchange_arena_reward_xingdaorong_guest_card_grants_item():
+    user = User.objects.create_user(
+        username="arena_exchange_xingdaorong_card",
+        password="pass123",
+        email="arena_exchange_xingdaorong_card@test.local",
+    )
+    manor = ensure_manor(user)
+    _ensure_sanguoyanyi_arena_item_templates()
+    manor.arena_coins = 1200
+    manor.save(update_fields=["arena_coins"])
+
+    result = exchange_arena_reward(manor, "xingdaorong_guest_exchange", quantity=1)
+
+    manor.refresh_from_db()
+    assert result.total_cost == 1000
+    assert manor.arena_coins == 200
+    assert result.granted_items == {"xingdaorong_guest_card": 1}
+    assert InventoryItem.objects.filter(manor=manor, template__key="xingdaorong_guest_card", quantity=1).exists()
+
+
+@pytest.mark.django_db
+def test_exchange_arena_reward_peerless_general_upgrade_grants_item():
+    user = User.objects.create_user(
+        username="arena_exchange_peerless_upgrade",
+        password="pass123",
+        email="arena_exchange_peerless_upgrade@test.local",
+    )
+    manor = ensure_manor(user)
+    _ensure_sanguoyanyi_arena_item_templates()
+    manor.arena_coins = 1200
+    manor.save(update_fields=["arena_coins"])
+
+    result = exchange_arena_reward(manor, "peerless_general_upgrade_reward", quantity=1)
+
+    manor.refresh_from_db()
+    assert result.total_cost == 1000
+    assert manor.arena_coins == 200
+    assert result.granted_items == {"peerless_general_upgrade_token": 1}
+    assert InventoryItem.objects.filter(
+        manor=manor, template__key="peerless_general_upgrade_token", quantity=1
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_exchange_arena_reward_peerless_general_upgrade_2_grants_item():
+    user = User.objects.create_user(
+        username="arena_exchange_peerless_upgrade_2",
+        password="pass123",
+        email="arena_exchange_peerless_upgrade_2@test.local",
+    )
+    manor = ensure_manor(user)
+    _ensure_sanguoyanyi_arena_item_templates()
+    manor.arena_coins = 12000
+    manor.save(update_fields=["arena_coins"])
+
+    result = exchange_arena_reward(manor, "peerless_general_upgrade_reward_2", quantity=1)
+
+    manor.refresh_from_db()
+    assert result.total_cost == 10000
+    assert manor.arena_coins == 2000
+    assert result.granted_items == {"peerless_general_upgrade_token_2": 1}
+    assert InventoryItem.objects.filter(
+        manor=manor, template__key="peerless_general_upgrade_token_2", quantity=1
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_exchange_arena_reward_keeps_success_when_message_fails(monkeypatch):
+    user = User.objects.create_user(
+        username="arena_exchange_message_fail",
+        password="pass123",
+        email="arena_exchange_message_fail@test.local",
+    )
+    manor = ensure_manor(user)
+    manor.arena_coins = 1000
+    manor.save(update_fields=["arena_coins"])
+
+    monkeypatch.setattr(
+        "gameplay.services.arena.core.create_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+    )
+
+    result = exchange_arena_reward(manor, "grain_pack_small", quantity=1)
+
+    manor.refresh_from_db()
+    assert result.total_cost == 80
+    assert manor.arena_coins == 920
     assert ArenaExchangeRecord.objects.filter(manor=manor, reward_key="grain_pack_small").count() == 1
 
 

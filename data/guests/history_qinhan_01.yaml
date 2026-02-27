@@ -40,19 +40,6 @@ heroes:
       defense: 26
       agility: 16
   purple:
-  - key: hist_qinhan_0004
-    name: 严光
-    default_gender: male
-    archetype: civil
-    flavor: （生卒年不详）东汉著名隐士，字子陵，浙江余姚人。他少有高名，与光武帝刘秀是布衣之交，同窗共读。刘秀即位后，他隐姓埋名，避居富春山耕钓。刘秀思念旧友，派人寻访，请他入朝为官。他坚辞不就，视富贵如浮云。刘秀亲临其舍，他偃卧不起；入宫叙旧，他将脚搁在刘秀肚子上入睡。他以"高风亮节"著称，后人称其隐居地为"严陵濑"。
-    growth_range:
-    - 7
-    - 10
-    attribute_weights:
-      force: 10
-      intellect: 58
-      defense: 20
-      agility: 12
   - key: hist_qinhan_0005
     name: 吕雉
     default_gender: female
@@ -300,32 +287,6 @@ heroes:
       intellect: 8
       defense: 24
       agility: 16
-  - key: hist_qinhan_0024
-    name: 刘向
-    default_gender: male
-    archetype: civil
-    flavor: （前77年—前6年）西汉学者与目录学奠基者之一，主持校理典籍、整理宫廷藏书，并撰述《说苑》《列女传》等。刘向的工作看似"坐冷板凳"，实则关系重大：典籍散乱与伪误会直接影响经学解释、政治论证与教育体系，校勘目录等于是为国家的知识基础做一次大修缮。更难得的是，他在西汉末年政治日益动荡的背景下仍坚持整理文化记忆，说明王朝即使走向衰疲，文化自救的冲动仍然存在。
-    growth_range:
-    - 7
-    - 10
-    attribute_weights:
-      force: 8
-      intellect: 60
-      defense: 20
-      agility: 12
-  - key: hist_qinhan_0025
-    name: 刘歆
-    default_gender: male
-    archetype: civil
-    flavor: （前50年—23年）西汉末学者，刘向之子，兼具文献整理者与制度参与者的双重身份。史载他参与校理群书、编订目录，并涉入历法与典章问题；这些工作看似冷门，却直接关系国家如何计算时间、如何解释经典、如何确立"正统"的知识框架。西汉末年政治动荡，学术官僚往往难以保持纯粹旁观者姿态：知识会被权力借用，权力也会反过来改写知识。刘歆卷入变局、命运多舛，正说明当"整理典籍"与"参与改制"交织在一起时，学者的风险并不比将领更小。
-    growth_range:
-    - 7
-    - 10
-    attribute_weights:
-      force: 8
-      intellect: 60
-      defense: 20
-      agility: 12
   - key: hist_qinhan_0026
     name: 叔孙通
     default_gender: male
@@ -352,97 +313,6 @@ heroes:
       intellect: 12
       defense: 28
       agility: 16
-  - key: hist_qinhan_0028
-    name: 娄敬
-    default_gender: male
-    archetype: civil
-    flavor: （生年不详—前195年）西汉早期谋臣，亦称刘敬。史载他提出迁都关中等建议，强调地理形势与战略纵深对新王朝的重要性；又在对匈奴问题上主张务实权衡，以外交安排争取休养生息的时间。娄敬的价值在于他把"国家活下去"当作第一目标：汉初刚定天下，兵疲民困，若急于四面开战或在旧都拖泥带水，成本可能高到无法承受。迁都、守边、通使这些选择看似保守，却是把风险从"立刻爆炸"延后为"可管理"。
-    growth_range:
-    - 7
-    - 10
-    attribute_weights:
-      force: 10
-      intellect: 56
-      defense: 22
-      agility: 12
-  - key: hist_qinhan_0029
-    name: 孔光
-    default_gender: male
-    archetype: civil
-    flavor: （生年不详—5年）西汉末重臣，孔子后裔。史载其在成帝、哀帝时期居高位，晚年又处在王莽辅政势力渐深的政治环境中，被视作元老式人物。孔光的形象常带着"谨慎"：他擅长在剧烈的人事更替中保全自身，言行多取持重与圆融，因此也容易被后世批评为过于趋时。把孔光放在西汉末年的权力环境里，这种谨慎并非纯粹性格，而是一种生存策略——皇权衰弱、外戚与新贵起落不定，任何一句话都可能改变命运。
-    growth_range:
-    - 7
-    - 10
-    attribute_weights:
-      force: 8
-      intellect: 58
-      defense: 22
-      agility: 12
-  - key: hist_qinhan_0030
-    name: 左雄
-    default_gender: male
-    archetype: civil
-    flavor: （生年不详—138年）东汉名臣，字伯豪，以改革察举制度闻名，史称"左雄改制"。察举本旨在于荐贤，但久而久之易被门第、人情与地方势力操弄，导致名实不符；左雄推动以年龄、考试与文书能力等方式加以约束，试图把选官从"看名声"拉回"看能力"。这类改革很难一劳永逸，却能在短期内提高筛选质量，也能向地方传递一个信号：朝廷仍在努力掌控官僚入口。
-    growth_range:
-    - 7
-    - 10
-    attribute_weights:
-      force: 10
-      intellect: 56
-      defense: 22
-      agility: 12
-  - key: hist_qinhan_0031
-    name: 平阳公主
-    default_gender: female
-    archetype: civil
-    flavor: （生年不详—前115年）西汉公主，其府邸在武帝初年的人事网络中颇具影响力，史载卫子夫得幸亦与公主府歌舞背景有关。平阳公主的意义不在"介绍了谁"，而在她所代表的权力节点：公主府既连接皇室亲属，也连接士人、将领与宫廷娱乐产业，是资源流动与关系编织的场所。后宫人物的起落往往会牵动外戚格局，外戚格局又会影响军政用人，这条链条并不总由皇帝一人亲自操控。
-    growth_range:
-    - 7
-    - 10
-    attribute_weights:
-      force: 10
-      intellect: 54
-      defense: 20
-      agility: 16
-  - key: hist_qinhan_0032
-    name: 张安世
-    default_gender: male
-    archetype: civil
-    flavor: （生年不详—前62年）西汉重臣，长期处于中枢，史书以稳重持平称之。武帝末年至宣帝初年，朝廷需要的不是再一次激进动员，而是把高压时期留下的矛盾缓下来：冤狱需要整理，财政需要回到常态，人事需要重新安置。张安世这类官员的本领，恰在于"把事情压住"：不锋芒毕露，不轻启争端，却能在关键处维持制度连续与权力平衡，使朝局不至于因一次风波就再次崩裂。
-    growth_range:
-    - 7
-    - 10
-    attribute_weights:
-      force: 10
-      intellect: 56
-      defense: 22
-      agility: 12
-  - key: hist_qinhan_0033
-    name: 张敞
-    default_gender: male
-    archetype: civil
-    flavor: （生年不详—前48年）西汉能吏，曾任京兆尹，治京畿以善断狱、善整饬闻名。张敞的特点在于"懂人心也懂规则"：处理治安与豪强问题时，他既能用法律震慑，也能用情理分化，务求把问题压在萌芽而非等到酿成大案。史书又记其生活细节与私德争议，使他的形象不止一面——这恰好反映能吏的常见处境：手段越强，越容易被挑剔；办事越快，越容易被怀疑"有私"。
-    growth_range:
-    - 7
-    - 10
-    attribute_weights:
-      force: 12
-      intellect: 54
-      defense: 22
-      agility: 12
-  - key: hist_qinhan_0034
-    name: 张汤
-    default_gender: male
-    archetype: civil
-    flavor: （生年不详—前115年）西汉以精于律令、擅长治狱闻名的权臣型官僚，武帝时期严密司法与官僚体系的代表人物之一。张汤的复杂处在于：他推动"法"更有效率地服务中央控制，整肃豪强与地方官吏，因此被视为能吏；同时史书又记其手段刻薄、善于罗织，使法律在政治斗争中更像一张网。张汤的仕途终以坐事败亡收场，正说明在高压政治中，靠"办案立功"的人也最容易被案件反噬。
-    growth_range:
-    - 7
-    - 10
-    attribute_weights:
-      force: 10
-      intellect: 56
-      defense: 22
-      agility: 12
   - key: hist_qinhan_0035
     name: 张释之
     default_gender: male
@@ -482,14 +352,132 @@ heroes:
       intellect: 52
       defense: 22
       agility: 12
+  blue:
+  - key: hist_qinhan_0024
+    name: 刘向
+    default_gender: male
+    archetype: civil
+    flavor: （前77年—前6年）西汉学者与目录学奠基者之一，主持校理典籍、整理宫廷藏书，并撰述《说苑》《列女传》等。刘向的工作看似"坐冷板凳"，实则关系重大：典籍散乱与伪误会直接影响经学解释、政治论证与教育体系，校勘目录等于是为国家的知识基础做一次大修缮。更难得的是，他在西汉末年政治日益动荡的背景下仍坚持整理文化记忆，说明王朝即使走向衰疲，文化自救的冲动仍然存在。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 60
+      defense: 20
+      agility: 12
+  - key: hist_qinhan_0025
+    name: 刘歆
+    default_gender: male
+    archetype: civil
+    flavor: （前50年—23年）西汉末学者，刘向之子，兼具文献整理者与制度参与者的双重身份。史载他参与校理群书、编订目录，并涉入历法与典章问题；这些工作看似冷门，却直接关系国家如何计算时间、如何解释经典、如何确立"正统"的知识框架。西汉末年政治动荡，学术官僚往往难以保持纯粹旁观者姿态：知识会被权力借用，权力也会反过来改写知识。刘歆卷入变局、命运多舛，正说明当"整理典籍"与"参与改制"交织在一起时，学者的风险并不比将领更小。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 60
+      defense: 20
+      agility: 12
+  - key: hist_qinhan_0028
+    name: 娄敬
+    default_gender: male
+    archetype: civil
+    flavor: （生年不详—前195年）西汉早期谋臣，亦称刘敬。史载他提出迁都关中等建议，强调地理形势与战略纵深对新王朝的重要性；又在对匈奴问题上主张务实权衡，以外交安排争取休养生息的时间。娄敬的价值在于他把"国家活下去"当作第一目标：汉初刚定天下，兵疲民困，若急于四面开战或在旧都拖泥带水，成本可能高到无法承受。迁都、守边、通使这些选择看似保守，却是把风险从"立刻爆炸"延后为"可管理"。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 56
+      defense: 22
+      agility: 12
+  - key: hist_qinhan_0029
+    name: 孔光
+    default_gender: male
+    archetype: civil
+    flavor: （生年不详—5年）西汉末重臣，孔子后裔。史载其在成帝、哀帝时期居高位，晚年又处在王莽辅政势力渐深的政治环境中，被视作元老式人物。孔光的形象常带着"谨慎"：他擅长在剧烈的人事更替中保全自身，言行多取持重与圆融，因此也容易被后世批评为过于趋时。把孔光放在西汉末年的权力环境里，这种谨慎并非纯粹性格，而是一种生存策略——皇权衰弱、外戚与新贵起落不定，任何一句话都可能改变命运。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 8
+      intellect: 58
+      defense: 22
+      agility: 12
+  - key: hist_qinhan_0030
+    name: 左雄
+    default_gender: male
+    archetype: civil
+    flavor: （生年不详—138年）东汉名臣，字伯豪，以改革察举制度闻名，史称"左雄改制"。察举本旨在于荐贤，但久而久之易被门第、人情与地方势力操弄，导致名实不符；左雄推动以年龄、考试与文书能力等方式加以约束，试图把选官从"看名声"拉回"看能力"。这类改革很难一劳永逸，却能在短期内提高筛选质量，也能向地方传递一个信号：朝廷仍在努力掌控官僚入口。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 56
+      defense: 22
+      agility: 12
+  - key: hist_qinhan_0031
+    name: 平阳公主
+    default_gender: female
+    archetype: civil
+    flavor: （生年不详—前115年）西汉公主，其府邸在武帝初年的人事网络中颇具影响力，史载卫子夫得幸亦与公主府歌舞背景有关。平阳公主的意义不在"介绍了谁"，而在她所代表的权力节点：公主府既连接皇室亲属，也连接士人、将领与宫廷娱乐产业，是资源流动与关系编织的场所。后宫人物的起落往往会牵动外戚格局，外戚格局又会影响军政用人，这条链条并不总由皇帝一人亲自操控。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 54
+      defense: 20
+      agility: 16
+  - key: hist_qinhan_0032
+    name: 张安世
+    default_gender: male
+    archetype: civil
+    flavor: （生年不详—前62年）西汉重臣，长期处于中枢，史书以稳重持平称之。武帝末年至宣帝初年，朝廷需要的不是再一次激进动员，而是把高压时期留下的矛盾缓下来：冤狱需要整理，财政需要回到常态，人事需要重新安置。张安世这类官员的本领，恰在于"把事情压住"：不锋芒毕露，不轻启争端，却能在关键处维持制度连续与权力平衡，使朝局不至于因一次风波就再次崩裂。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 56
+      defense: 22
+      agility: 12
+  - key: hist_qinhan_0033
+    name: 张敞
+    default_gender: male
+    archetype: civil
+    flavor: （生年不详—前48年）西汉能吏，曾任京兆尹，治京畿以善断狱、善整饬闻名。张敞的特点在于"懂人心也懂规则"：处理治安与豪强问题时，他既能用法律震慑，也能用情理分化，务求把问题压在萌芽而非等到酿成大案。史书又记其生活细节与私德争议，使他的形象不止一面——这恰好反映能吏的常见处境：手段越强，越容易被挑剔；办事越快，越容易被怀疑"有私"。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 54
+      defense: 22
+      agility: 12
+  - key: hist_qinhan_0034
+    name: 张汤
+    default_gender: male
+    archetype: civil
+    flavor: （生年不详—前115年）西汉以精于律令、擅长治狱闻名的权臣型官僚，武帝时期严密司法与官僚体系的代表人物之一。张汤的复杂处在于：他推动"法"更有效率地服务中央控制，整肃豪强与地方官吏，因此被视为能吏；同时史书又记其手段刻薄、善于罗织，使法律在政治斗争中更像一张网。张汤的仕途终以坐事败亡收场，正说明在高压政治中，靠"办案立功"的人也最容易被案件反噬。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 10
+      intellect: 56
+      defense: 22
+      agility: 12
   - key: hist_qinhan_0038
     name: 朱买臣
     default_gender: male
     archetype: civil
     flavor: （生年不详—前115年）西汉官员与文学人物，相关事迹在史书与后世叙事中传播很广。史载其早年贫困而好学，后来凭才学与际遇入仕，形象常被概括为"寒门得志"。但朱买臣之所以耐读，不只是励志：他的故事里有对名声的渴望、对现实处境的计算，也有仕途翻转带来的冷暖变化，折射汉代官僚系统并非只按才学排队，还受举荐、人脉与时局牵动。
     growth_range:
-    - 7
-    - 10
+    - 6
+    - 9
     attribute_weights:
       force: 10
       intellect: 56
@@ -501,8 +489,8 @@ heroes:
     archetype: military
     flavor: （生年不详—前119年）西汉名将，号"飞将军"。他历事文、景、武三朝，长期在北边与匈奴周旋，以善射、敢战与爱护士卒闻名；史书又反复写他"数奇不偶"——战场上立过功，却屡因迷失道、误期与军功核算的细节而错失封赏。漠北战后，李广因失期自杀（史载），使他的故事从"勇"转为"哀"：在高强度边战与严苛军法之下，将领的命运不只取决于一箭一刀，也取决于路程、时辰与背后的政治评判。
     growth_range:
-    - 7
-    - 10
+    - 6
+    - 9
     attribute_weights:
       force: 46
       intellect: 10
@@ -514,8 +502,8 @@ heroes:
     archetype: civil
     flavor: （前152年—前80年）西汉财政官僚，武帝时期国家动员能力的代表人物之一。盐铁官营、均输平准等政策，核心目标是把分散在民间与地方的资源更有效地汇入中央，以支撑长期战争与大规模工程；从技术角度看，这些举措体现了对市场与物流的敏锐把控。争议也因此伴生：当国家以更强的手伸向生产与流通，效率提高的同时，民间负担与官僚寻租风险也会增加。后世"盐铁论辩"之所以重要，正因为它把桑弘羊的政策变成一个可反复讨论的样本。
     growth_range:
-    - 7
-    - 10
+    - 6
+    - 9
     attribute_weights:
       force: 10
       intellect: 58
@@ -527,8 +515,8 @@ heroes:
     archetype: civil
     flavor: （前91年—前49年）西汉皇帝，少年时期经历坎坷，最终以"皇曾孙"身份被迎立，其登基本身就带有危机后的修复意味。宣帝在位后整饬吏治、重视考课与法律执行，任用能臣，使国力在动荡后出现恢复，被后世归入"昭宣中兴"的叙述。宣帝政治的特点在于务实：对外经营边疆不轻启大耗，对内则强调行政效率与秩序重建，让官僚体系回到可控状态。
     growth_range:
-    - 8
-    - 10
+    - 6
+    - 9
     attribute_weights:
       force: 16
       intellect: 50
@@ -540,8 +528,8 @@ heroes:
     archetype: civil
     flavor: （前203年—前157年）西汉皇帝，继位背景与代国经历使其更重节制与稳妥。史书称其俭约，减轻赋役，重视刑罚宽简，这些政策合在一起指向同一目标：让经历楚汉战争与吕氏变局的社会重新"能活下去"。文帝并非只做温和姿态，他还要处理诸侯王势力、功臣旧怨与中央财政的现实约束；能在这些约束下持续推行轻徭与节用，才使"文景之治"的名声具有分量。
     growth_range:
-    - 8
-    - 10
+    - 6
+    - 9
     attribute_weights:
       force: 14
       intellect: 52
@@ -553,8 +541,8 @@ heroes:
     archetype: civil
     flavor: （前188年—前141年）西汉皇帝，在位时期最关键的事件是七国之乱。削藩并非景帝一时兴起，而是汉初分封体系长期累积的结构问题：强藩既能守边，也能威胁中央；不动手是隐患，动手又可能引爆叛乱。景帝在平乱后加强中央集权，使地方权力更受约束，同时继续延续文帝以来的节用与轻徭取向，让社会得以持续恢复。
     growth_range:
-    - 8
-    - 10
+    - 6
+    - 9
     attribute_weights:
       force: 16
       intellect: 50
@@ -566,8 +554,8 @@ heroes:
     archetype: civil
     flavor: （27年—97年）东汉思想家，著《论衡》，以批判迷信与虚妄、强调证据与理性闻名。王充所处的时代谶纬、灾异解释盛行，很多政治与社会判断都喜欢借"天意"包装成必然；王充却选择把问题拉回可检验的常识与逻辑，敢质疑权威说法，也敢质疑大众偏好。这种写作姿态在两汉语境里并不讨喜，却极其重要：它让思想史里保留了一条"反迷信、反空谈"的硬线。
     growth_range:
-    - 7
-    - 10
+    - 6
+    - 9
     attribute_weights:
       force: 8
       intellect: 62
@@ -579,8 +567,8 @@ heroes:
     archetype: civil
     flavor: （32年—92年）东汉史学家、文学家。承家学而修史，编纂《汉书》并确立断代史书写的典范，其文笔、体例与价值判断深刻影响后世对西汉的整体印象。班固并非纯粹的书斋学者，他的工作依赖宫廷机构、藏书体系与政治许可；史官看似"记事"，实则要在史实、道德评判与当代政治之间反复取舍。班固一生也卷入东汉权力风向的起伏，终以牵连案件而遭厄。
     growth_range:
-    - 7
-    - 10
+    - 6
+    - 9
     attribute_weights:
       force: 8
       intellect: 60
@@ -592,8 +580,8 @@ heroes:
     archetype: civil
     flavor: （45年—116年）东汉学者，班固之妹。续成《汉书》并参与整理典籍，亦以《女诫》等作品著称。班昭的突出之处，不仅是"女性学者"这一身份，更在她能进入并完成一项大型史学工程：史书的编纂需要材料、方法与持续投入，也需要在宫廷与学术之间保持分寸。她既继承班氏家学，又以自身笔力把未竟之稿补齐，使《汉书》得以定型流传。
     growth_range:
-    - 7
-    - 10
+    - 6
+    - 9
     attribute_weights:
       force: 8
       intellect: 60
@@ -605,8 +593,8 @@ heroes:
     archetype: civil
     flavor: （生年不详—前131年）西汉重臣，与窦氏外戚身份相关，七国之乱时参与平叛并获声望。武帝即位后，朝廷权力重新洗牌，窦婴与田蚡、灌夫等人的冲突最终演成大案，窦婴被处死，成为武帝初年政治斗争的标志性结局。窦婴的悲剧提示外戚并非天然同一阵营：同为"外戚"，内部也可能因权力份额与政治路线分裂，尤其在新皇帝上台、旧格局被打散时更易爆发。
     growth_range:
-    - 7
-    - 10
+    - 6
+    - 9
     attribute_weights:
       force: 14
       intellect: 50
@@ -618,8 +606,8 @@ heroes:
     archetype: military
     flavor: （生年不详—92年）东汉外戚与名将。凭外戚身份崛起，后在北方军事行动中建立声望，势力极盛，终因权势过大而被迫自尽。窦宪的典型性在于"功与祸同源"：外戚身份让他更容易掌握资源与军权，军事胜利又进一步放大威望，使他看起来几乎不可撼动；但对皇权而言，这种不可撼动本身就是最大危险。史书所记的清算过程提醒人们，东汉政治对外戚的容忍有明确上限。
     growth_range:
-    - 7
-    - 10
+    - 6
+    - 9
     attribute_weights:
       force: 44
       intellect: 12
@@ -631,8 +619,8 @@ heroes:
     archetype: civil
     flavor: （生年不详—62年）东汉名臣，早年据守河西要地，后归附刘秀，成为光武中兴整合西北的重要力量。窦融的关键贡献不只在"归附"这一动作，而在他能把地方控制力转化为新王朝可用的秩序：交出名义与兵权的同时，保留地方的稳定与供应，使西北不必再因反复争夺而崩坏。窦融的选择也说明东汉统一并非只靠征讨，招抚与安置同样是策略。
     growth_range:
-    - 7
-    - 10
+    - 6
+    - 9
     attribute_weights:
       force: 16
       intellect: 48

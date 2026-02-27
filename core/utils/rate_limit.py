@@ -12,6 +12,7 @@ from django.shortcuts import redirect
 from django.utils.http import url_has_allowed_host_and_scheme
 from redis.exceptions import RedisError
 
+from core.utils.http import is_json_request
 from core.utils.network import get_client_ip
 from core.utils.responses import json_error
 
@@ -182,13 +183,18 @@ def rate_limit_redirect(
             if _should_bypass_rate_limit(request, include_safe_methods):
                 return view_func(request, *args, **kwargs)
 
+            wants_json = is_json_request(request)
             identifier = _safe_identifier(request, key_func)
             cache_key = _build_cache_key(scope, identifier)
             count = _get_rate_limit_count(cache_key, window_seconds, "Rate limit redirect")
             if count is None:
+                if wants_json:
+                    return json_error("系统繁忙，请稍后再试", status=503)
                 return _cache_error_response(False, error_message, request, redirect_url)
 
             if count > limit:
+                if wants_json:
+                    return json_error(error_message, status=429)
                 return _cache_error_response(False, error_message, request, redirect_url)
             return view_func(request, *args, **kwargs)
 

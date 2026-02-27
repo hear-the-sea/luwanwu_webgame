@@ -17,6 +17,13 @@ ARENA_REWARDS_PATH = Path(settings.BASE_DIR) / "data" / "arena_rewards.yaml"
 
 
 @dataclass(frozen=True)
+class ArenaRandomItemOption:
+    item_key: str
+    weight: int
+    amount: int
+
+
+@dataclass(frozen=True)
 class ArenaRewardDefinition:
     key: str
     name: str
@@ -24,6 +31,7 @@ class ArenaRewardDefinition:
     daily_limit: int | None
     resources: dict[str, int]
     items: dict[str, int]
+    random_items: tuple[ArenaRandomItemOption, ...]
     description: str = ""
 
 
@@ -35,7 +43,31 @@ def _to_positive_int(raw: Any, *, default: int = 0) -> int:
     return max(0, value)
 
 
-def _normalize_reward_payload(payload: dict[str, Any], *, context: str) -> tuple[dict[str, int], dict[str, int]]:
+def _normalize_random_items(rewards: dict[str, Any], *, context: str) -> tuple[ArenaRandomItemOption, ...]:
+    rows = ensure_list(rewards.get("random_items"), logger=logger, context=f"{context}.rewards.random_items")
+    options: list[ArenaRandomItemOption] = []
+    for idx, row in enumerate(rows):
+        row_context = f"{context}.rewards.random_items[{idx}]"
+        entry = ensure_mapping(row, logger=logger, context=row_context)
+        item_key = str(entry.get("item_key") or "").strip()
+        if not item_key:
+            logger.warning("arena reward random item without item_key: %s", row_context)
+            continue
+        weight = _to_positive_int(entry.get("weight"))
+        if weight <= 0:
+            logger.warning("arena reward random item with invalid weight: %s", row_context)
+            continue
+        amount = _to_positive_int(entry.get("amount"), default=1)
+        if amount <= 0:
+            logger.warning("arena reward random item with invalid amount: %s", row_context)
+            continue
+        options.append(ArenaRandomItemOption(item_key=item_key, weight=weight, amount=amount))
+    return tuple(options)
+
+
+def _normalize_reward_payload(
+    payload: dict[str, Any], *, context: str
+) -> tuple[dict[str, int], dict[str, int], tuple[ArenaRandomItemOption, ...]]:
     rewards = ensure_mapping(payload.get("rewards"), logger=logger, context=f"{context}.rewards")
     resources_raw = ensure_mapping(rewards.get("resources"), logger=logger, context=f"{context}.rewards.resources")
     items_raw = ensure_mapping(rewards.get("items"), logger=logger, context=f"{context}.rewards.items")
@@ -59,7 +91,8 @@ def _normalize_reward_payload(payload: dict[str, Any], *, context: str) -> tuple
         if normalized_amount > 0:
             items[normalized_key] = normalized_amount
 
-    return resources, items
+    random_items = _normalize_random_items(rewards, context=context)
+    return resources, items, random_items
 
 
 @lru_cache(maxsize=1)
@@ -90,8 +123,8 @@ def load_arena_reward_catalog() -> dict[str, ArenaRewardDefinition]:
             logger.warning("skip arena reward with invalid cost_coins: %s", key)
             continue
 
-        resources, items = _normalize_reward_payload(entry, context=context)
-        if not resources and not items:
+        resources, items, random_items = _normalize_reward_payload(entry, context=context)
+        if not resources and not items and not random_items:
             logger.warning("skip arena reward without payload: %s", key)
             continue
 
@@ -105,6 +138,7 @@ def load_arena_reward_catalog() -> dict[str, ArenaRewardDefinition]:
             daily_limit=daily_limit,
             resources=resources,
             items=items,
+            random_items=random_items,
             description=str(entry.get("description") or ""),
         )
 

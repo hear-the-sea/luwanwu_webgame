@@ -2,13 +2,46 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from typing import Any
 
 from celery import shared_task
 from django.db.models import F
 from django.db.models.functions import Greatest
 from django.utils import timezone
 
+from core.config import MESSAGE
+
 logger = logging.getLogger(__name__)
+
+RESOURCE_EVENT_RETENTION_DAYS = 30
+ARENA_EXCHANGE_RETENTION_DAYS = 30
+BATTLE_REPORT_RETENTION_DAYS = 30
+DELETE_BATCH_SIZE = 10000
+
+
+def _batched_delete_before(
+    model: type[Any],
+    *,
+    time_field: str,
+    cutoff,
+    batch_size: int = DELETE_BATCH_SIZE,
+) -> int:
+    """Delete rows older than cutoff in small batches to reduce lock pressure."""
+    filter_kwargs = {f"{time_field}__lt": cutoff}
+    deleted_total = 0
+
+    while True:
+        ids_to_delete = list(model.objects.filter(**filter_kwargs).values_list("id", flat=True)[:batch_size])
+        if not ids_to_delete:
+            break
+
+        deleted, _ = model.objects.filter(id__in=ids_to_delete).delete()
+        deleted_total += int(deleted)
+
+        if len(ids_to_delete) < batch_size:
+            break
+
+    return deleted_total
 
 
 @shared_task(name="gameplay.cleanup_old_data")
@@ -16,17 +49,39 @@ def cleanup_old_data_task():
     """
     Clean up expired transaction records to save database space.
 
-    Runs daily at midnight, cleans up:
+    Runs daily and cleans up:
     - ResourceEvent: keep 30 days
-    - Other log tables handled by their respective module tasks
+    - ArenaExchangeRecord: keep 30 days
+    - BattleReport: keep 30 days
+    - Message: keep MESSAGE.RETENTION_DAYS days
     """
-    from gameplay.models import ResourceEvent
+    from battle.models import BattleReport
+    from gameplay.models import ArenaExchangeRecord, Message, ResourceEvent
 
-    cutoff = timezone.now() - timedelta(days=30)
-    deleted, _ = ResourceEvent.objects.filter(created_at__lt=cutoff).delete()
+    now = timezone.now()
 
-    logger.info("Cleaned up %d resource event records older than 30 days", deleted)
-    return deleted
+    resource_cutoff = now - timedelta(days=RESOURCE_EVENT_RETENTION_DAYS)
+    arena_exchange_cutoff = now - timedelta(days=ARENA_EXCHANGE_RETENTION_DAYS)
+    battle_report_cutoff = now - timedelta(days=BATTLE_REPORT_RETENTION_DAYS)
+    message_cutoff = now - timedelta(days=MESSAGE.RETENTION_DAYS)
+
+    resource_deleted = _batched_delete_before(ResourceEvent, time_field="created_at", cutoff=resource_cutoff)
+    arena_exchange_deleted = _batched_delete_before(
+        ArenaExchangeRecord, time_field="created_at", cutoff=arena_exchange_cutoff
+    )
+    battle_report_deleted = _batched_delete_before(BattleReport, time_field="created_at", cutoff=battle_report_cutoff)
+    message_deleted = _batched_delete_before(Message, time_field="created_at", cutoff=message_cutoff)
+
+    total_deleted = resource_deleted + arena_exchange_deleted + battle_report_deleted + message_deleted
+    logger.info(
+        "Cleaned old data: total=%d (resource_events=%d, arena_exchange_records=%d, battle_reports=%d, messages=%d)",
+        total_deleted,
+        resource_deleted,
+        arena_exchange_deleted,
+        battle_report_deleted,
+        message_deleted,
+    )
+    return total_deleted
 
 
 @shared_task(name="gameplay.decay_prisoner_loyalty")

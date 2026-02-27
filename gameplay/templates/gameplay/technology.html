@@ -40,7 +40,7 @@
         <section class="building-section">
             <div class="tw-building-grid">
                 {% for tech in group.technologies %}
-                <article class="tw-building-card {% if tech.is_upgrading %}tw-tech-upgrading{% elif not tech.can_upgrade and tech.level >= tech.max_level %}tw-tech-maxed{% endif %}">
+                <article class="tw-building-card {% if tech.is_upgrading %}tw-tech-upgrading{% elif not tech.can_upgrade and tech.level >= tech.max_level %}tw-tech-maxed{% endif %}" id="tech-{{ tech.key }}">
                     <header>
                         <div>
                             <h3>{{ tech.name }}</h3>
@@ -91,6 +91,7 @@
                         {% csrf_token %}
                         <input type="hidden" name="tab" value="{{ current_tab }}">
                         <input type="hidden" name="troop" value="{{ current_troop_class }}">
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}#tech-{{ tech.key }}">
                         {% if tech.is_upgrading %}
                             <button type="button" class="tw-btn-secondary w-full" disabled>研究进行中</button>
                         {% elif tech.can_upgrade %}
@@ -115,7 +116,7 @@
     <section class="building-section">
         <div class="tw-building-grid">
             {% for tech in technologies %}
-            <article class="tw-building-card {% if tech.is_upgrading %}tw-tech-upgrading{% elif not tech.can_upgrade and tech.level >= tech.max_level %}tw-tech-maxed{% endif %}">
+            <article class="tw-building-card {% if tech.is_upgrading %}tw-tech-upgrading{% elif not tech.can_upgrade and tech.level >= tech.max_level %}tw-tech-maxed{% endif %}" id="tech-{{ tech.key }}">
                 <header>
                     <div>
                         <h3>{{ tech.name }}</h3>
@@ -165,6 +166,7 @@
                 <form method="post" action="{% url 'gameplay:upgrade_technology' tech.key %}" class="tw-card-actions mt-4 pt-4 border-t border-border-light">
                     {% csrf_token %}
                     <input type="hidden" name="tab" value="{{ current_tab }}">
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}#tech-{{ tech.key }}">
                     {% if tech.is_upgrading %}
                         <button type="button" class="tw-btn-secondary w-full" disabled>研究进行中</button>
                     {% elif tech.can_upgrade %}

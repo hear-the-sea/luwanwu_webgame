@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
 from django.db import transaction
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
+from gameplay.constants import get_raid_capture_guest_rate
 from gameplay.services.battle_snapshots import build_guest_battle_snapshots, build_guest_snapshot_proxies
 from gameplay.services.raid import combat as combat_pkg
 from guests.models import Guest, GuestStatus
@@ -85,6 +87,16 @@ def _prepare_run_for_battle(run_pk: int, now) -> Optional[RaidRun]:
     return locked_run
 
 
+def _lock_battle_manors(attacker_id: int, defender_id: int) -> tuple[Manor, Manor]:
+    ids = [attacker_id] if attacker_id == defender_id else sorted([attacker_id, defender_id])
+    locked = {m.pk: m for m in Manor.objects.select_for_update().filter(pk__in=ids).order_by("pk")}
+    attacker = locked.get(attacker_id)
+    defender = locked.get(defender_id)
+    if attacker is None or defender is None:
+        raise ValueError("目标庄园不存在")
+    return attacker, defender
+
+
 def _apply_raid_loot_if_needed(locked_run: RaidRun, is_attacker_victory: bool) -> None:
     if not is_attacker_victory:
         return
@@ -99,6 +111,24 @@ def _apply_raid_loot_if_needed(locked_run: RaidRun, is_attacker_victory: bool) -
     )
     locked_run.loot_resources = applied_resources
     locked_run.loot_items = applied_items
+
+
+def _apply_defeat_protection(run: RaidRun, is_attacker_victory: bool, *, now=None) -> None:
+    if not is_attacker_victory:
+        return
+    now = now or timezone.now()
+    duration_seconds = int(getattr(combat_pkg.PVPConstants, "RAID_DEFEAT_PROTECTION_SECONDS", 1800) or 0)
+    if duration_seconds <= 0:
+        return
+
+    defender = Manor.objects.select_for_update().get(pk=run.defender_id)
+    new_until = now + timedelta(seconds=duration_seconds)
+    current_until = defender.defeat_protection_until
+    if current_until and current_until > new_until:
+        new_until = current_until
+    defender.defeat_protection_until = new_until
+    defender.save(update_fields=["defeat_protection_until"])
+    run.defender = defender
 
 
 def _apply_capture_reward(locked_run: RaidRun, report, is_attacker_victory: bool) -> None:
@@ -178,13 +208,19 @@ def process_raid_battle(run: RaidRun, now=None) -> None:
         if locked_run is None:
             return
 
-        # 修复：在战斗计算前显式锁定攻守双方 Manor
-        # 确保后续的声望计算、俘虏容量检查等都是基于最新状态，防止并发陈旧读
-        from gameplay.models import Manor as ManorModel
-
-        ManorModel.objects.select_for_update().filter(pk__in=[locked_run.attacker_id, locked_run.defender_id]).order_by(
-            "pk"
-        ).count()
+        try:
+            attacker_locked, defender_locked = _lock_battle_manors(locked_run.attacker_id, locked_run.defender_id)
+        except ValueError:
+            logger.warning(
+                "raid battle skipped due to missing manor: run_id=%s attacker=%s defender=%s",
+                locked_run.id,
+                locked_run.attacker_id,
+                locked_run.defender_id,
+            )
+            return
+        # 保证后续计算使用同一事务里已加锁的攻守双方对象。
+        locked_run.attacker = attacker_locked
+        locked_run.defender = defender_locked
 
         report = _execute_raid_battle(locked_run)
         apply_defender_troop_losses(locked_run.defender, report)
@@ -195,14 +231,36 @@ def process_raid_battle(run: RaidRun, now=None) -> None:
 
         _apply_raid_loot_if_needed(locked_run, is_attacker_victory)
         _apply_prestige_changes(locked_run, is_attacker_victory)
+        _apply_defeat_protection(locked_run, is_attacker_victory, now=now)
         _apply_capture_reward(locked_run, report, is_attacker_victory)
         _apply_salvage_reward(locked_run, report, is_attacker_victory)
 
         locked_run.status = RaidRun.Status.RETURNING
         locked_run.save()
 
-    _send_raid_battle_messages(locked_run)
-    _dismiss_marching_raids_if_protected(locked_run.defender)
+    # 事务外通知/附加处理均为最佳努力，避免战斗已结算却向上抛错。
+    try:
+        _send_raid_battle_messages(locked_run)
+    except Exception as exc:
+        logger.warning(
+            "raid battle messages failed: run_id=%s attacker=%s defender=%s error=%s",
+            locked_run.id,
+            locked_run.attacker_id,
+            locked_run.defender_id,
+            exc,
+            exc_info=True,
+        )
+
+    try:
+        _dismiss_marching_raids_if_protected(locked_run.defender)
+    except Exception as exc:
+        logger.warning(
+            "dismiss marching raids failed: run_id=%s defender=%s error=%s",
+            locked_run.id,
+            locked_run.defender_id,
+            exc,
+            exc_info=True,
+        )
     _dispatch_complete_raid_task(locked_run, now=now)
 
 
@@ -221,7 +279,7 @@ def _can_attempt_capture(winner: Manor) -> bool:
     if held_count >= capacity:
         return False
 
-    capture_rate = float(getattr(combat_pkg.PVPConstants, "RAID_CAPTURE_GUEST_RATE", 0.0) or 0.0)
+    capture_rate = get_raid_capture_guest_rate()
     if capture_rate <= 0:
         return False
     if combat_pkg.random.random() >= capture_rate:
@@ -511,9 +569,13 @@ def _apply_prestige_changes(run: RaidRun, is_attacker_victory: bool) -> None:
         manor.save(update_fields=["prestige"])
         return after_total - before_total
 
-    # 行级锁防并发（例如多场踢馆同时结算）
-    attacker = ManorModel.objects.select_for_update().get(pk=run.attacker_id)
-    defender = ManorModel.objects.select_for_update().get(pk=run.defender_id)
+    # 行级锁防并发（例如多场踢馆同时结算），按固定顺序加锁避免互锁。
+    ids = [run.attacker_id] if run.attacker_id == run.defender_id else sorted([run.attacker_id, run.defender_id])
+    manor_map = {m.pk: m for m in ManorModel.objects.select_for_update().filter(pk__in=ids).order_by("pk")}
+    attacker = manor_map.get(run.attacker_id)
+    defender = manor_map.get(run.defender_id)
+    if attacker is None or defender is None:
+        return
 
     run.attacker_prestige_change = _apply_pvp_delta(attacker, attacker_change)
     run.defender_prestige_change = _apply_pvp_delta(defender, defender_change)
@@ -527,6 +589,8 @@ def _send_raid_battle_messages(run: RaidRun) -> None:
     loot_items = _normalize_positive_int_mapping(run.loot_items)
     battle_rewards_desc = _format_battle_rewards_description(battle_rewards)
     capture_desc = _format_capture_description(battle_rewards.get("capture"))
+    defeat_protection_seconds = int(getattr(combat_pkg.PVPConstants, "RAID_DEFEAT_PROTECTION_SECONDS", 1800) or 1800)
+    defeat_protection_minutes = max(1, defeat_protection_seconds // 60)
 
     # 进攻方消息
     if is_victory:
@@ -578,7 +642,7 @@ def _send_raid_battle_messages(run: RaidRun) -> None:
 {loot_desc}
 
 声望变化：{run.defender_prestige_change}
-已获得30分钟战败保护"""
+已获得{defeat_protection_minutes}分钟战败保护"""
         if capture_desc:
             defender_body += f"""
 
