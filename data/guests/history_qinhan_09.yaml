@@ -1,0 +1,1004 @@
+heroes:
+  blue:
+  - key: hist_qinhan_0452
+    name: 安期生
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）安期生，秦汉之际方士与学人，曾周游齐鲁并出入上层政坛，参与长生与礼制议论。其主要贡献在于推动方术与政治观念互动，反映了秦汉思想转型期知识阶层对国家治理的影响。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 15
+      intellect: 50
+      defense: 16
+      agility: 19
+  - key: hist_qinhan_0459
+    name: 绮里季
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）绮里季，秦汉之际隐士名士，商山四皓之一，曾隐居山林并在汉初政局中应召出山。其主要贡献在于以德望影响储位稳定，强化了西汉初年政治合法性与朝廷秩序。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 11
+      intellect: 54
+      defense: 17
+      agility: 18
+  - key: hist_qinhan_0518
+    name: 董偃
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）董偃为西汉宫廷人物，曾出入内廷权力网络，亲历武帝时期政治与礼制运作。其历史意义在于折射宫廷权力与私人关系对政局的影响，成为研究西汉中期政治生态的重要样本。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 57
+      defense: 21
+      agility: 8
+  - key: hist_qinhan_0523
+    name: 哀章
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）哀章，新莽时期政治人物，曾以符命文书介入政权合法性塑造，亲历王莽政局变动。其历史意义在于揭示谶纬政治如何影响权力建构与舆论动员。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 55
+      defense: 17
+      agility: 14
+  - key: hist_qinhan_0526
+    name: 蒯彻
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）蒯彻，楚汉之际谋士，先后服务诸侯，尤以游说与战略判断见长。其主要贡献在于提出因势制衡的谋略框架，深刻影响了楚汉战争后期的政治与军事布局。
+    growth_range:
+    - 5
+    - 8
+    attribute_weights:
+      force: 14
+      intellect: 51
+      defense: 17
+      agility: 18
+  - key: hist_qinhan_0527
+    name: 毛亨
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）毛亨为西汉经学家，《诗》学传承的重要人物，长期从事经典训诂与讲授。其主要贡献在于奠定毛诗学传统，对汉以后经学教育与文本解释产生深远影响。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 15
+      intellect: 56
+      defense: 23
+      agility: 6
+  - key: hist_qinhan_0461
+    name: 孔鲋
+    default_gender: male
+    archetype: civil
+    flavor: （前264年—前208年）孔鲋为秦末儒者，孔门后裔，曾在乱世中主持讲学并守护典籍。其经历贯穿秦末学术危局，其主要贡献在于保存儒学文脉，为汉初经学复兴奠定了关键基础。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 56
+      defense: 18
+      agility: 14
+  - key: hist_qinhan_0474
+    name: 夏无且
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）夏无且，秦代医官，曾在宫廷任太医，亲历秦始皇时代重大政治事件。其主要贡献在于代表秦廷医官群体的专业角色，反映了早期帝国医疗制度与宫廷政治之间的紧密关系。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 50
+      defense: 16
+      agility: 22
+  - key: hist_qinhan_0476
+    name: 巴寡妇清
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）巴寡妇清，秦代巴郡著名女商人，长期经营丹砂产业并与朝廷保持稳定供给关系。其主要贡献在于以卓越商业能力支撑国家战略物资供应，成为秦汉女性经济力量的代表性人物。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 15
+      intellect: 50
+      defense: 20
+      agility: 15
+  - key: hist_qinhan_0480
+    name: 乌氏倮
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）乌氏倮，秦代著名边地富商，长期经营畜牧与马匹贸易，并与朝廷保持供给往来。其主要贡献在于以商贸网络支持边地军需与交通体系，成为秦国北方经营的重要经济支点。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 54
+      defense: 18
+      agility: 16
+  - key: hist_qinhan_0491
+    name: 卢敖
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）卢敖为秦汉时期方术与游学人物，曾遍游名山并与士人群体往来，兼具知识传播与政治观察经验。其主要贡献在于拓展了秦汉时期知识交流网络，对思想与文化流动有持续影响。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 58
+      defense: 23
+      agility: 5
+  - key: hist_qinhan_0492
+    name: 史禄
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）史禄，秦代水利与工程官员，曾主持岭南灵渠等关键工程建设，兼顾军运与民用需求。其主要贡献在于打通湘漓水道，显著提升南北交通与军需转运能力。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 51
+      defense: 18
+      agility: 19
+  - key: hist_qinhan_0495
+    name: 朱家
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）朱家为秦汉时期游侠与地方名士，常在乱局中庇护弱者并调停冲突，社会声望颇高。其主要贡献在于维系民间伦理与社会互助网络，为动荡时代保留了基层秩序资源。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 51
+      defense: 18
+      agility: 17
+  - key: hist_qinhan_0496
+    name: 随何
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）随何，楚汉之际纵横家与外交谋士，曾奉刘邦之命游说诸侯，关键时期促成英布倒向汉军。其主要贡献在于以外交与辩说改写战略格局，为汉方最终胜出创造了重要条件。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 11
+      intellect: 57
+      defense: 17
+      agility: 15
+  - key: hist_qinhan_0508
+    name: 屠睢
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）屠睢，秦代将领，曾奉命南征百越，长期负责岭南战线推进与驻防。其主要贡献在于拓展帝国南方控制范围，推动了秦朝边疆军事与行政布局向南延伸。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 44
+      intellect: 11
+      defense: 24
+      agility: 21
+  green:
+  - key: hist_qinhan_0482
+    name: 羊千
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）羊千为秦汉时期地方吏员，曾在边地与郡县转任，积累了跨区域施政经验。其主要贡献在于把治理原则落实为日常规制，促成政令在不同社会结构中的稳定落地。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 17
+      intellect: 54
+      defense: 17
+      agility: 12
+  - key: hist_qinhan_0483
+    name: 卫君角
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）卫君角为秦汉时期州县执行官员，长期负责政令细化与基层督办，擅长把抽象原则转成具体章程。其主要贡献在于提升政策落地率，稳住地方治理节奏。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 56
+      defense: 16
+      agility: 16
+  - key: hist_qinhan_0484
+    name: 襄彊
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）襄彊为秦汉时期地方文官，历任州县政务岗位，施政以稳健著称。其主要贡献在于坚持缓急分序，避免短期施政透支民力，保障了地方社会的持续承载。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 15
+      intellect: 55
+      defense: 19
+      agility: 11
+  - key: hist_qinhan_0485
+    name: 阮翁仲
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）阮翁仲为秦汉时期边防人物，长期与军政体系相连，见于守备与边务相关记载。其主要贡献在于维护边线秩序与象征权威，折射了秦汉国家对边疆治理的制度化推进。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 52
+      defense: 16
+      agility: 19
+  - key: hist_qinhan_0486
+    name: 鲍白令之
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）鲍白令之为秦汉时期地方官员，历经灾后安置与重建治理，善于分层处理复杂事务。其主要贡献在于守住秩序底线并推进长效修复，增强了基层社会的恢复能力。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 14
+      intellect: 53
+      defense: 18
+      agility: 15
+  - key: hist_qinhan_0487
+    name: 黄疵
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）黄疵为秦汉时期实务文官，长期处理州县钱粮与民政事项，重视施政节律。其主要贡献在于以克制务实方式稳住治理节奏，减少了政策波动对地方民生的冲击。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 50
+      defense: 23
+      agility: 15
+  - key: hist_qinhan_0488
+    name: 陈恢
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）陈恢为秦汉时期州县治理人物，历经制度修补与基层改革，擅长从细节入手重建秩序。其主要贡献在于降低治理反复成本，让地方行政在长期运行中更趋稳固。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 57
+      defense: 16
+      agility: 15
+  - key: hist_qinhan_0490
+    name: 韩谈
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）韩谈为秦汉时期宫廷与政务相关人物，曾参与中枢事务，深知权力体系运行逻辑。其主要贡献在于推动政务衔接和信息传导，反映了秦汉中枢治理的实际机制。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 53
+      defense: 23
+      agility: 13
+  - key: hist_qinhan_0493
+    name: 丞相启
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）丞相启为秦汉时期高阶政务人物，曾任丞相属下要职，参与中枢与地方事务协调。其主要贡献在于强化政策在不同区域的适配执行，维持了国家治理体系的整体稳定。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 51
+      defense: 22
+      agility: 15
+  - key: hist_qinhan_0494
+    name: 项雎
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）项雎为秦汉时期地方行政人物，长期从事中枢命令转译与基层督办，熟悉执行链条。其主要贡献在于压实岗位责任，减少政策往返损耗，提升了地方治理一致性。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 54
+      defense: 16
+      agility: 19
+  - key: hist_qinhan_0497
+    name: 项缠
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）项缠，秦汉之际楚地军政人物，曾参与地方组织与后勤维持，经历战时行政压力。其主要贡献在于稳住责任链条与日常秩序，使战局变化下的地方治理不至全面失控。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 52
+      defense: 23
+      agility: 13
+  - key: hist_qinhan_0504
+    name: 骆甲
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）骆甲为秦汉时期军将，长期领兵于地方战线，擅长在兵员参差条件下整肃部伍。其主要贡献在于以统一号令和严明赏罚维持战斗力，为后续军务整编提供了可借鉴范式。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 46
+      intellect: 17
+      defense: 28
+      agility: 9
+  - key: hist_qinhan_0507
+    name: 苏角
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）苏角为秦末军官，曾在多场攻守战中统率前锋，经历复杂战场转换。其主要贡献在于兼顾冲击与收束，保证部伍在强压环境下不崩散，对战线延续意义重大。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 44
+      intellect: 18
+      defense: 24
+      agility: 14
+  - key: hist_qinhan_0510
+    name: 杨熊
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）杨熊，秦汉之际军将，曾在攻守转换频繁的战场担任统兵骨干。其主要贡献在于精准把握调度时机，以小范围机动换取整体战线稳定，体现出成熟的战场组织能力。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 27
+      agility: 13
+  - key: hist_qinhan_0513
+    name: 赵贲
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）赵贲为秦汉时期军官，早年从行伍起身，后在战区担任要职，兼具作战与善后经验。其主要贡献在于把军事行动与地方秩序修复结合，缩短了战后恢复周期。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 28
+      agility: 12
+  - key: hist_qinhan_0453
+    name: 班壹
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）班壹为西汉边郡豪商与地方实务人物，早年经营畜牧与远途贸易，后参与郡县财赋事务。其主要贡献在于联通边地物资流转与内地市场，为西北地区社会经济恢复提供了持续支撑。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 58
+      defense: 18
+      agility: 11
+  - key: hist_qinhan_0455
+    name: 共尉
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）共尉为秦汉时期州县文官，历任属吏与佐官，长期负责文书审核与基层督办。其主要贡献在于厘清职责边界、降低执行偏差，使地方政令由“可说”转为“可行”。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 52
+      defense: 21
+      agility: 15
+  - key: hist_qinhan_0456
+    name: 韩终
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）韩终为秦汉时期方术人物，曾出入宫廷与郡国之间，兼具学术传播与政务咨询经历。其主要贡献在于推动医药与方术知识流通，折射了秦汉早期技术知识对政治生活的渗透。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 15
+      intellect: 55
+      defense: 21
+      agility: 9
+  - key: hist_qinhan_0458
+    name: 胡毋敬
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）胡毋敬为秦汉时期儒生与官学人物，曾在地方教官体系任职并参与经学讲授。其主要贡献在于将礼法观念落实到基层教化，强化了郡县社会的伦理秩序与制度认同。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 14
+      intellect: 57
+      defense: 22
+      agility: 7
+  - key: hist_qinhan_0460
+    name: 孔树
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）孔树为秦汉时期地方官员，曾主持赋役登记与民讼调停，熟悉基层治理细节。其主要贡献在于先理流程后安人心，减少了政策落地时的社会摩擦与执行空转。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 57
+      defense: 19
+      agility: 11
+  - key: hist_qinhan_0515
+    name: 丁缓
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）丁缓为秦汉时期工艺与政务并重的人物，曾参与宫廷器用制作与制度服务。其主要贡献在于将技术能力转化为可用制度资源，反映了秦汉工匠知识对国家运作的支撑作用。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 14
+      intellect: 50
+      defense: 17
+      agility: 19
+  - key: hist_qinhan_0516
+    name: 刁间
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）刁间为秦汉时期地方执行官员，历任州县吏职，长期处理赋役与仓储事务。其主要贡献在于以流程化治理稳住基层秩序，提升了政策落实的连贯性。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 57
+      defense: 18
+      agility: 12
+  - key: hist_qinhan_0517
+    name: 杜穉季
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）杜穉季为秦汉时期州郡实务官员，经历多地差遣，善于协调财赋与人力。其主要贡献在于在资源紧张条件下维持政务常态，体现了基层官僚体系的承压能力。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 52
+      defense: 22
+      agility: 13
+  - key: hist_qinhan_0519
+    name: 樊少翁
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）樊少翁为秦汉时期地方条陈官员，曾参与郡县政令细化与执行督核。其主要贡献在于把抽象法令拆解为可操作步骤，降低了行政链条中的阻滞与推诿。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 53
+      defense: 19
+      agility: 12
+  - key: hist_qinhan_0521
+    name: 郭舍人
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）郭舍人为西汉宫廷近臣，曾在内廷承担侍从与事务转达职能，熟悉君臣沟通机制。其主要贡献在于连接宫廷决断与执行层面，反映了汉代内廷政治运作的细部结构。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 50
+      defense: 16
+      agility: 21
+  - key: hist_qinhan_0522
+    name: 胡毋生
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）胡毋生为西汉经学家，长期从事《春秋》学传授并参与官学体系。其主要贡献在于推动儒学经典进入制度化教育，强化了汉代经学政治的知识基础。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 15
+      intellect: 52
+      defense: 19
+      agility: 14
+  - key: hist_qinhan_0524
+    name: 金王孙
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）金王孙为秦汉时期关中士人，曾在地方政务与家族事务中担任协调角色，经历政权更替的社会冲击。其主要贡献在于以审慎方式维系基层秩序，促进地方社会平稳过渡。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 57
+      defense: 23
+      agility: 9
+  - key: hist_qinhan_0528
+    name: 谬忌
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）谬忌为秦汉时期医术与方技人物，曾在地方与上层之间提供医疗与术数服务。其历史意义在于体现秦汉社会对方技人才的制度需求及其在政治生活中的实际作用。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 51
+      defense: 23
+      agility: 14
+  - key: hist_qinhan_0529
+    name: 桥桃
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）桥桃为秦汉时期地方文官，长期承担公文核验与钱粮稽查，办事风格审慎务实。其主要贡献在于推动责任可追、账目可核，夯实了基层治理的制度基础。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 55
+      defense: 22
+      agility: 10
+  - key: hist_qinhan_0531
+    name: 师史
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）师史为秦汉时期地方治理人物，历任郡县职务，重视因地施策与流程治理。其主要贡献在于把政策原则转化为地方可行方案，提升了不同区域的治理适配度。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 15
+      intellect: 56
+      defense: 19
+      agility: 10
+  - key: hist_qinhan_0534
+    name: 田子春
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）田子春为秦汉时期地方统筹官员，历任州县佐职，善于协调财赋、人力与工役。其主要贡献在于维持治理体系基本运转，把理念落实为可执行的日常制度。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 53
+      defense: 21
+      agility: 14
+  - key: hist_qinhan_0536
+    name: 毋盐氏
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）毋盐氏为秦汉时期地方士族人物，曾主持乡里事务并协同官府处置民生问题。其主要贡献在于通过社会调解和基层组织能力维持社区稳定，补足了官治触角不足。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 15
+      intellect: 57
+      defense: 18
+      agility: 10
+  - key: hist_qinhan_0537
+    name: 卫长君
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）卫长君为秦汉时期州县文官，历任簿书与仓曹，熟悉赋役、仓储与民事流程。其主要贡献在于搭建中枢与基层之间的执行通道，使政令更稳定地转化为地方秩序。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 56
+      defense: 23
+      agility: 8
+  - key: hist_qinhan_0539
+    name: 郇越
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）郇越为秦汉时期文官，历任议政与执行岗位，长期处于派系竞争与实务治理交汇处。其主要贡献在于维护议政秩序并坚持兑现施政承诺，增强了公共决策公信力。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 58
+      defense: 18
+      agility: 13
+  - key: hist_qinhan_0462
+    name: 任氏
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）任氏为秦汉时期地方士族人物，曾主持家族与乡里公共事务，协助官府推进税役与赈济。其主要贡献在于以乡里组织能力弥补官治短板，提升了基层社会的协同治理水平。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 50
+      defense: 20
+      agility: 18
+  - key: hist_qinhan_0463
+    name: 田角
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）田角为秦汉时期州县文吏，历任簿曹与督邮属官，熟悉中枢与地方之间的执行链条。其主要贡献在于压实责任、稳定节奏，使政策在反复调整中仍可持续推进。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 14
+      intellect: 55
+      defense: 18
+      agility: 13
+  - key: hist_qinhan_0465
+    name: 崔广
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）崔广为秦汉时期基层官员，经历灾荒赈务、迁徙安置与重建调度等复杂事务。其主要贡献在于坚持分层治理与底线管理，增强了地方社会应对危机后的修复能力。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 14
+      intellect: 53
+      defense: 22
+      agility: 11
+  - key: hist_qinhan_0466
+    name: 徐公
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）徐公为秦汉时期州县文官，曾任文案与审计岗位，长期负责公牍与政令传达。其主要贡献在于提升文书清晰度与执行确定性，使地方治理链条更顺畅可靠。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 56
+      defense: 19
+      agility: 13
+  - key: hist_qinhan_0472
+    name: 郑昌
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）郑昌，秦汉之际地方首领与行政执行者，曾在郡县秩序重建中承担关键职责。其主要贡献在于厘清责任链条、稳定政务方向，减轻了战后治理中的社会摩擦。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 57
+      defense: 19
+      agility: 12
+  - key: hist_qinhan_0498
+    name: 蔡赐
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）蔡赐为秦末军将，曾在关中与河内一线统兵守备，历经急行军与连番转战。其主要贡献在于整肃部伍、稳固粮道，在局势最动荡的阶段维持了前线防御与后方调度的连续。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 48
+      intellect: 13
+      defense: 29
+      agility: 10
+  - key: hist_qinhan_0503
+    name: 李必
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）李必，秦汉之际军官，曾任前锋与营将，长期负责边线应急与驻防轮换。其所长在于先稳指挥层级再调兵应变，对战线秩序的维持与危机处置有切实贡献。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 49
+      intellect: 13
+      defense: 26
+      agility: 12
+  - key: hist_qinhan_0506
+    name: 涉间
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）涉间为秦末将领，久在前线领军，兼有守城与野战经验。其主要贡献在于重视训练与军心整合，能在险局中保持部队建制不散，为后续反击与整军争取了关键时间。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 45
+      intellect: 14
+      defense: 27
+      agility: 14
+  - key: hist_qinhan_0514
+    name: 秦嘉
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）秦嘉为秦末军事首领，曾在乱局中组织地方兵力并参与诸侯竞逐，兼顾前线指挥与后方衔接。其主要贡献在于以稳定战法维持军政连续，展现了动荡时期地方武装的组织能力。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 46
+      intellect: 16
+      defense: 26
+      agility: 12
+  - key: hist_qinhan_0520
+    name: 樊重
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）樊重为东汉时期地方豪族与乡里领袖，长期经营田产并组织宗族公共事务。其主要贡献在于通过地方资源整合支持基层秩序与社会救济，对东汉社会结构稳定具有示范意义。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 14
+      intellect: 53
+      defense: 17
+      agility: 16
+  - key: hist_qinhan_0525
+    name: 孔腾
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）孔腾，秦代儒家人物，孔氏后裔，曾在秦廷与地方之间参与礼学事务。其主要贡献在于延续儒家家学传统，为秦汉之际礼学传承保存了关键脉络。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 19
+      agility: 11
+  - key: hist_qinhan_0530
+    name: 司马季主
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）司马季主为西汉占验家与民间知识人，曾在长安从事占筮，出入士人交游圈。其主要贡献在于保留了汉代城市知识生态的侧面，显示术数文化与政治社会之间的互动关系。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 14
+      intellect: 54
+      defense: 16
+      agility: 16
+  - key: hist_qinhan_0533
+    name: 田仲
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）田仲为秦汉时期州县官员，长期处理灾后安置与民生恢复事务，经验丰富。其主要贡献在于先稳秩序后推重建，使地方社会在高压条件下仍保持修复能力。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 23
+      agility: 7
+  - key: hist_qinhan_0535
+    name: 田禄伯
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）田禄伯为秦汉时期基层治理官员，长期办理民政与诉讼，善于在法理与人情间求取平衡。其主要贡献在于以托底式治理稳定地方社会，减轻了政策调整带来的冲击。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 14
+      intellect: 57
+      defense: 16
+      agility: 13
+  - key: hist_qinhan_0538
+    name: 夏贺良
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）夏贺良为西汉晚期方士与政治参与者，曾就历法、礼制与天人观向朝廷进言。其历史意义在于揭示汉代政治中术数话语的动员力量及其对政策方向的影响。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 54
+      defense: 17
+      agility: 13
+  - key: hist_qinhan_0540
+    name: 新垣平
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）新垣平为西汉方术人物，曾因符命之说入朝并短暂影响政治决策，后事迹多见于政争记载。其历史意义在于揭示谶纬与权力互动的风险，成为汉代政治文化的重要反面样本。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 57
+      defense: 18
+      agility: 9
+  - key: hist_qinhan_0541
+    name: 虞常
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）虞常为西汉边事相关人物，曾卷入对外关系与边疆政务的关键事件，亲历紧张外交局势。其历史意义在于展示汉代边政中情报、使节与军事协同的复杂性，为研究边疆治理提供了重要个案。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 14
+      intellect: 52
+      defense: 16
+      agility: 18
+  - key: hist_qinhan_0464
+    name: 邢三姑
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）邢三姑为秦汉时期民间组织人物，曾在地方动荡期参与赈恤与治安协理，经验多来自基层实践。其主要贡献在于因地制宜处理急务，把临时救济转化为可持续秩序，对社区稳定意义显著。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 58
+      defense: 21
+      agility: 5
+  - key: hist_qinhan_0467
+    name: 项声
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）项声为秦末楚地宗室人物，曾参与地方军政组织与后勤协调，经历战时政务重组。其主要贡献在于补缀制度漏洞、稳住组织运转，为楚地势力维系了基本治理能力。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 56
+      defense: 19
+      agility: 12
+  - key: hist_qinhan_0469
+    name: 辕生
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）辕生为秦汉时期地方实务官，历任郡县幕僚与执行职务，长期处理积案与流程梗阻。其主要贡献在于通过渐进修补稳定行政结构，使改革更具连续性与可兑现性。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 15
+      intellect: 54
+      defense: 23
+      agility: 8
+  - key: hist_qinhan_0470
+    name: 蜀卓氏
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）蜀卓氏为秦汉时期蜀地商贾家族代表，长期经营冶铁与远途贸易，兼涉地方公共事务。其主要贡献在于推动蜀地财富流通与区域联结，增强了地方经济与国家财政之间的互动能力。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 17
+      intellect: 56
+      defense: 23
+      agility: 4
+  - key: hist_qinhan_0471
+    name: 赵子儿
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）赵子儿为秦汉时期地方行政人物，曾在郡县承担资源统筹与事务督办，经历多次政务紧缩阶段。其主要贡献在于提升财政与人力调度效率，使基层政务在高压条件下仍能维持常态运转。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 14
+      intellect: 52
+      defense: 17
+      agility: 17
+  - key: hist_qinhan_0473
+    name: 刘媪
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）刘媪为秦末沛地人物，史传称其为汉高祖刘邦之母，经历秦末社会剧烈动荡。其历史意义在于作为汉室家族记忆的重要源头，承载了汉初政治叙事中的民间根基与家国象征。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 57
+      defense: 22
+      agility: 10
+  - key: hist_qinhan_0475
+    name: 宛孔氏
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）宛孔氏为秦汉时期南阳地方士族人物，曾参与乡里教化与政务协办，长期在基层调和官民关系。其主要贡献在于把制度要求转化为可执行细则，推动地方秩序稳步修复。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 55
+      defense: 20
+      agility: 9
+  - key: hist_qinhan_0477
+    name: 桂贞
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）桂贞为秦汉时期地方文官，历任簿曹与督办职位，长期处理文书、钱粮与诉讼事务。其主要贡献在于建立可核验的办事链条，提升了基层政务的稳定性与可追溯性。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 51
+      defense: 19
+      agility: 14
+  - key: hist_qinhan_0478
+    name: 正先
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）正先为秦汉时期州县实务官员，曾在多地承担流程整饬与责任督核。其主要贡献在于先明权责再推事务，使政策调整期仍能保持执行方向，减少地方摩擦。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 54
+      defense: 23
+      agility: 10
+  - key: hist_qinhan_0479
+    name: 沈遂
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）沈遂为秦汉时期地方治理官员，经历边地与腹地双重任事环境，熟悉差异化施政。其主要贡献在于坚持因地制宜，避免政策机械套用，稳住了基层行政秩序。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 54
+      defense: 19
+      agility: 14
+  - key: hist_qinhan_0481
+    name: 邵骚
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）邵骚为秦汉时期基层官员，历任民政与文案岗位，长期处理积弊修补与流程重整。其主要贡献在于以渐进方式完善制度细节，避免改革反复，提升了地方治理韧性。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 15
+      intellect: 55
+      defense: 17
+      agility: 13

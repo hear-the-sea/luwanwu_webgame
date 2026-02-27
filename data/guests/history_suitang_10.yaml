@@ -1,0 +1,1108 @@
+heroes:
+  blue:
+  - key: hist_suitang_0293
+    name: 杜淹
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代史料中的杜淹，所处年代风浪不息，而其人之长恰在于把急务办得不失分寸。处理边地与腹地差异时主张因地制宜，反对一刀切式的粗暴套用。最难得的并非“高论”，而是“把高论化为日常秩序”的手段。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 11
+      intellect: 57
+      defense: 21
+      agility: 11
+  - key: hist_suitang_0286
+    name: 崔仲方
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物崔仲方，所处年代风浪不息，而其人之长恰在于把急务办得不失分寸。凡涉税粮、水利与转运，他更看重持续性，而非一任之内的表面繁荣。其履历虽少传奇色彩，却以稳定产出构成时代运转不可或缺的一环。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 56
+      defense: 21
+      agility: 9
+  - key: hist_suitang_0289
+    name: 陈棱
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）陈棱为隋唐五代人物陳稜，其人处世谨严，行事有节，常于看似琐碎处守住政令的筋骨。逢灾荒、迁徙或兵后重建，他多采用分层处置，先保秩序，再图长效。其人善守底线而不失通权，使地方社会在压力下仍保有修复能力。
+    growth_range:
+    - 5
+    - 8
+    attribute_weights:
+      force: 13
+      intellect: 50
+      defense: 21
+      agility: 16
+  - key: hist_suitang_0291
+    name: 杜正伦
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）杜正伦为隋唐五代人物杜正倫，其名不以奇谈传世，而以一件件可核可查的政务结果被记住。其所长在于把士人论辩转译为执行清单，使理念能够穿过层层官僚结构到达民间。其人不避难题，也不迷信猛药，往往靠持续修补积小胜为大安。
+    growth_range:
+    - 5
+    - 8
+    attribute_weights:
+      force: 17
+      intellect: 52
+      defense: 16
+      agility: 15
+  - key: hist_suitang_0292
+    name: 戴胄
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物戴胄，在公议场中的价值，不在声量大小，而在意见能否真正落地，他重视文教与吏治并举，既整顿文书系统，也强调胥吏责任边界；他更在意制度留下什么，而非个人留下什么，因此常有迟发而深远的影响。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 5
+    - 8
+    attribute_weights:
+      force: 14
+      intellect: 53
+      defense: 17
+      agility: 16
+  - key: hist_suitang_0295
+    name: 高季辅
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物高季辅，其生平枝节未必齐备，但从零散记载中仍可辨出一条清晰的治事线索。逢灾荒、迁徙或兵后重建，他多采用分层处置，先保秩序，再图长效。其人善守底线而不失通权，使地方社会在压力下仍保有修复能力。
+    growth_range:
+    - 5
+    - 8
+    attribute_weights:
+      force: 12
+      intellect: 54
+      defense: 22
+      agility: 12
+  - key: hist_suitang_0297
+    name: 令狐熙
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物令狐熙，在公议场中的价值，不在声量大小，而在意见能否真正落地。凡遇赋役、仓储、徭役、争讼等实务，他惯于先厘清流程，再安顿人心，使政策不致空转。同僚对他多有“可信、可久”的评价，这在多故之世尤为难得。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 56
+      defense: 16
+      agility: 14
+  - key: hist_suitang_0302
+    name: 裴蕴
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）裴蕴为隋唐五代人物裴蘊，所处年代风浪不息，而其人之长恰在于把急务办得不失分寸，其行政风格讲求“文书可核、钱粮可稽、责任可追”，故往往久而见效；在喧嚣叙事之外，他所代表的是基层治理中耐久、低调而有效的力量。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 5
+    - 8
+    attribute_weights:
+      force: 11
+      intellect: 54
+      defense: 22
+      agility: 13
+  - key: hist_suitang_0303
+    name: 裴虔通
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物裴虔通，在士林与州县之间辗转，以“稳”著称，少空论，多实作，他处理边地与腹地差异时主张因地制宜，反对一刀切式的粗暴套用。最难得的并非“高论”，而是“把高论化为日常秩序”的手段。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 5
+    - 8
+    attribute_weights:
+      force: 12
+      intellect: 51
+      defense: 20
+      agility: 17
+  - key: hist_suitang_0305
+    name: 苏瓌
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物苏瓌，其人处世谨严，行事有节，常于看似琐碎处守住政令的筋骨。凡遇赋役、仓储、徭役、争讼等实务，他惯于先厘清流程，再安顿人心，使政策不致空转，同僚对他多有“可信、可久”的评价，这在多故之世尤为难得。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 11
+      intellect: 58
+      defense: 23
+      agility: 8
+  - key: hist_suitang_0309
+    name: 韦世康
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）韦世康为隋唐五代人物韋世康，史家着墨或简，但其人“能把事做成”的能力始终被反复提及，面对积弊，他不急于立威，而先补制度缝隙，使改革不至于反复回摆。像一枚不起眼的榫卯，平时不显，一旦抽离，体系便开始松动。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 15
+      intellect: 55
+      defense: 23
+      agility: 7
+  - key: hist_suitang_0314
+    name: 宇文忻
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代史料中的宇文忻，在名位浮沉之外，他更重制度后效，因此影响往往来得迟，却走得长。其所长在于统筹多方资源，令本就紧绷的财政与人力仍能维持基本运转，其可贵之处，在于能把士人理想压进现实土壤，而不是停留在漂亮辞章里。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 5
+    - 8
+    attribute_weights:
+      force: 13
+      intellect: 54
+      defense: 16
+      agility: 17
+  - key: hist_suitang_0317
+    name: 袁聿修
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代史料中的袁聿修，在公议场中的价值，不在声量大小，而在意见能否真正落地。在政令下行环节里，他擅把大而化之的条目拆成可执行细则，减少推诿与滞塞。权势更迭频仍之际，他仍尽力维持法度连续，避免前后政令互相抵销。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 21
+      agility: 9
+  - key: hist_suitang_0319
+    name: 颜思鲁
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）颜思鲁为隋唐五代人物顏思魯，其名不以奇谈传世，而以一件件可核可查的政务结果被记住，他处理边地与腹地差异时主张因地制宜，反对一刀切式的粗暴套用。最难得的并非“高论”，而是“把高论化为日常秩序”的手段。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 5
+    - 8
+    attribute_weights:
+      force: 15
+      intellect: 52
+      defense: 22
+      agility: 11
+  - key: hist_suitang_0320
+    name: 宇文智及
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代史料中的宇文智及，其生平枝节未必齐备，但从零散记载中仍可辨出一条清晰的治事线索。其治务思路讲“缓急有序”，不以短期政绩透支地方承受力。这种克制与务实，让他成为理学名义与行政实践之间少见的连接点。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 55
+      defense: 23
+      agility: 8
+  - key: hist_suitang_0239
+    name: 杜楚客
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物杜楚客，面对礼法与现实的碰撞，他更愿意从细部着手，缓慢却有效地修补秩序，其行政风格讲求“文书可核、钱粮可稽、责任可追”，故往往久而见效；在喧嚣叙事之外，他所代表的是基层治理中耐久、低调而有效的力量。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 13
+      intellect: 56
+      defense: 23
+      agility: 8
+  - key: hist_suitang_0242
+    name: 侯白
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代史料中的侯白，见诸史料时，往往不是最喧赫的名字，却总在关键处留下可追索的痕迹。逢灾荒、迁徙或兵后重建，他多采用分层处置，先保秩序，再图长效，其人善守底线而不失通权，使地方社会在压力下仍保有修复能力。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 16
+      intellect: 52
+      defense: 22
+      agility: 10
+  - key: hist_suitang_0247
+    name: 李士谦
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）李士谦为隋唐五代人物李士謙，其人处世谨严，行事有节，常于看似琐碎处守住政令的筋骨。逢灾荒、迁徙或兵后重建，他多采用分层处置，先保秩序，再图长效。其人善守底线而不失通权，使地方社会在压力下仍保有修复能力。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 12
+      intellect: 56
+      defense: 16
+      agility: 16
+  - key: hist_suitang_0248
+    name: 李玄霸
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物李玄霸，相关记载并不铺张，却足以勾勒一位懂分寸、知轻重的实务型人物，在政令下行环节里，他擅把大而化之的条目拆成可执行细则，减少推诿与滞塞。权势更迭频仍之际，他仍尽力维持法度连续，避免前后政令互相抵销。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 16
+      intellect: 55
+      defense: 18
+      agility: 11
+  - key: hist_suitang_0249
+    name: 鲁广达
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）鲁广达为隋唐五代人物魯廣達，在名位浮沉之外，他更重制度后效，因此影响往往来得迟，却走得长，其公牍风格简严明白，减少了政令误读，也提升了执行确定性。其人并不追逐锋芒，反以耐烦与细密见长，故在长期治理里更显珍贵。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 16
+      intellect: 52
+      defense: 18
+      agility: 14
+  - key: hist_suitang_0255
+    name: 王玄应
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）王玄应为隋唐五代人物王玄應，见诸史料时，往往不是最喧赫的名字，却总在关键处留下可追索的痕迹，其治务思路讲“缓急有序”，不以短期政绩透支地方承受力。这种克制与务实，让他成为理学名义与行政实践之间少见的连接点。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 57
+      defense: 22
+      agility: 7
+  - key: hist_suitang_0264
+    name: 杨师道
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物杨师道，其人处世谨严，行事有节，常于看似琐碎处守住政令的筋骨。逢灾荒、迁徙或兵后重建，他多采用分层处置，先保秩序，再图长效。其人善守底线而不失通权，使地方社会在压力下仍保有修复能力。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 50
+      defense: 20
+      agility: 16
+  - key: hist_suitang_0266
+    name: 尉迟敬德
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物尉迟敬德，所处年代风浪不息，而其人之长恰在于把急务办得不失分寸，其行政风格讲求“文书可核、钱粮可稽、责任可追”，故往往久而见效；在喧嚣叙事之外，他所代表的是基层治理中耐久、低调而有效的力量。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 56
+      defense: 23
+      agility: 7
+  - key: hist_suitang_0274
+    name: 刘炫
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物刘炫，其名不以奇谈传世，而以一件件可核可查的政务结果被记住，他处理边地与腹地差异时主张因地制宜，反对一刀切式的粗暴套用。最难得的并非“高论”，而是“把高论化为日常秩序”的手段。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 16
+      intellect: 50
+      defense: 23
+      agility: 11
+  green:
+  - key: hist_suitang_0257
+    name: 王仁则
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物王仁则，其生平枝节未必齐备，但从零散记载中仍可辨出一条清晰的治事线索。逢灾荒、迁徙或兵后重建，他多采用分层处置，先保秩序，再图长效。其人善守底线而不失通权，使地方社会在压力下仍保有修复能力。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 51
+      defense: 18
+      agility: 18
+  - key: hist_suitang_0258
+    name: 徐则
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）徐则为隋唐五代人物徐則，所处年代风浪不息，而其人之长恰在于把急务办得不失分寸。凡涉税粮、水利与转运，他更看重持续性，而非一任之内的表面繁荣。其履历虽少传奇色彩，却以稳定产出构成时代运转不可或缺的一环。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 51
+      defense: 22
+      agility: 16
+  - key: hist_suitang_0259
+    name: 萧世廉
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物萧世廉，在士林与州县之间辗转时，他以“稳”著称，少空论，多实作。其治务思路讲“缓急有序”，不以短期政绩透支地方承受力。这种克制与务实，让他成为理学名义与行政实践之间少见的连接点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 52
+      defense: 18
+      agility: 19
+  - key: hist_suitang_0260
+    name: 薛收
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代史料中的薛收，其名不以奇谈传世，而以一件件可核可查的政务结果被记住。其行政风格讲求“文书可核、钱粮可稽、责任可追”，故往往久而见效。在喧嚣叙事之外，他所代表的是基层治理中耐久、低调而有效的力量。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 50
+      defense: 22
+      agility: 12
+  - key: hist_suitang_0261
+    name: 萧璿
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）萧璿为隋唐五代人物蕭璿，并非锋芒毕露之士，却常是同僚眼中可托后局的人。其行政风格讲求“文书可核、钱粮可稽、责任可追”，故往往久而见效。在喧嚣叙事之外，他所代表的是基层治理中耐久、低调而有效的力量。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 53
+      defense: 23
+      agility: 12
+  - key: hist_suitang_0262
+    name: 徐孝肃
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）徐孝肃为隋唐五代史料中的徐孝肅，若把时代噪音剥离，剩下的正是他在基层与中枢之间搭桥铺路的本事。办事不尚花哨，往往先厘清权责链条，再逐项压实到具体岗位。其风格看似平实，却能在政策反复时保持方向稳定，减少社会摩擦。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 55
+      defense: 16
+      agility: 16
+  - key: hist_suitang_0263
+    name: 乙弗弘礼
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物乙弗弘礼，所处年代风浪不息，而其人之长恰在于把急务办得不失分寸。在派系角力最激烈时，他仍努力保住议政空间，让公共决策不沦为意气之争。不以辞令取胜，而以可兑现的承诺获得士民双重认可。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 57
+      defense: 17
+      agility: 14
+  - key: hist_suitang_0265
+    name: 杨伯丑
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）杨伯丑为隋唐五代人物楊伯醜，立身不靠浮名，更多凭章法、耐心与日积月累的实绩，其治务思路讲“缓急有序”，不以短期政绩透支地方承受力。这种克制与务实，让他成为理学名义与行政实践之间少见的连接点。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 58
+      defense: 16
+      agility: 13
+  - key: hist_suitang_0267
+    name: 张公艺
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物张公艺，其名不以奇谈传世，而以一件件可核可查的政务结果被记住。凡涉税粮、水利与转运，他更看重持续性，而非一任之内的表面繁荣，其履历虽少传奇色彩，却以稳定产出构成时代运转不可或缺的一环。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 15
+      intellect: 58
+      defense: 16
+      agility: 11
+  - key: hist_suitang_0268
+    name: 张文诩
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）张文诩为隋唐五代人物張文詡，其名不以奇谈传世，而以一件件可核可查的政务结果被记住。其所长在于把士人论辩转译为执行清单，使理念能够穿过层层官僚结构到达民间。其人不避难题，也不迷信猛药，往往靠持续修补积小胜为大安。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 15
+      intellect: 52
+      defense: 20
+      agility: 13
+  - key: hist_suitang_0269
+    name: 祖君彦
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代史料中的祖君彦，其履历像一卷平实公牍，少有惊艳章句，却处处见功夫。其公牍风格简严明白，减少了政令误读，也提升了执行确定性。其人并不追逐锋芒，反以耐烦与细密见长，故在长期治理里更显珍贵。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 50
+      defense: 22
+      agility: 12
+  - key: hist_suitang_0270
+    name: 章仇太翼
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物章仇太翼，所处年代风浪不息，而其人之长恰在于把急务办得不失分寸。凡涉税粮、水利与转运，他更看重持续性，而非一任之内的表面繁荣。其履历虽少传奇色彩，却以稳定产出构成时代运转不可或缺的一环。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 15
+      intellect: 55
+      defense: 23
+      agility: 7
+  - key: hist_suitang_0271
+    name: 诸葛昂
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物诸葛昂，其生平枝节未必齐备，但从零散记载中仍可辨出一条清晰的治事线索，在派系角力最激烈时，他仍努力保住议政空间，让公共决策不沦为意气之争；他不以辞令取胜，而以可兑现的承诺获得士民双重认可。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 17
+      intellect: 58
+      defense: 18
+      agility: 7
+  - key: hist_suitang_0272
+    name: 长孙孝政
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）长孙孝政为隋唐五代人物長孫孝政，在名位浮沉之外，他更重制度后效，因此影响往往来得迟，却走得长，其审事不偏锋，常在法理与乡情之间寻找可持续的折中路径；这种不夸饰的作风，使他在变局中虽不常占据台前，却常被视为“托底之人”。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 17
+      intellect: 50
+      defense: 23
+      agility: 10
+  - key: hist_suitang_0273
+    name: 郑子翻
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物郑子翻，在士林与州县之间辗转时，他以“稳”著称，少空论，多实作。其治务思路讲“缓急有序”，不以短期政绩透支地方承受力。这种克制与务实，让他成为理学名义与行政实践之间少见的连接点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 54
+      defense: 19
+      agility: 11
+  - key: hist_suitang_0275
+    name: 可博汗
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物可博汗，见诸史料时，往往不是最喧赫的名字，却总在关键处留下可追索的痕迹，他重视文教与吏治并举，既整顿文书系统，也强调胥吏责任边界；他更在意制度留下什么，而非个人留下什么，因此常有迟发而深远的影响。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 15
+      intellect: 58
+      defense: 18
+      agility: 9
+  - key: hist_suitang_0276
+    name: 吐万绪
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物吐万绪，在公议场中的价值，不在声量大小，而在意见能否真正落地。办事不尚花哨，往往先厘清权责链条，再逐项压实到具体岗位。其风格看似平实，却能在政策反复时保持方向稳定，减少社会摩擦。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 50
+      defense: 20
+      agility: 18
+  - key: hist_suitang_0294
+    name: 郭文懿
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代史料中的郭文懿，在公议场中的价值，不在声量大小，而在意见能否真正落地。在政令下行环节里，他擅把大而化之的条目拆成可执行细则，减少推诿与滞塞。权势更迭频仍之际，他仍尽力维持法度连续，避免前后政令互相抵销。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 58
+      defense: 20
+      agility: 9
+  - key: hist_suitang_0298
+    name: 卢楚
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物卢楚，史家着墨或简，但其人“能把事做成”的能力始终被反复提及。其所长在于把士人论辩转译为执行清单，使理念能够穿过层层官僚结构到达民间，其人不避难题，也不迷信猛药，往往靠持续修补积小胜为大安。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 14
+      intellect: 56
+      defense: 19
+      agility: 11
+  - key: hist_suitang_0301
+    name: 陆爽
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）陆爽为隋唐五代人物陸爽，见诸史料时，往往不是最喧赫的名字，却总在关键处留下可追索的痕迹，其治务思路讲“缓急有序”，不以短期政绩透支地方承受力。这种克制与务实，让他成为理学名义与行政实践之间少见的连接点。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 15
+      intellect: 60
+      defense: 20
+      agility: 5
+  - key: hist_suitang_0304
+    name: 苏慈
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）苏慈为隋唐五代史料中的蘇慈，若把时代噪音剥离，剩下的正是他在基层与中枢之间搭桥铺路的本事。办事不尚花哨，往往先厘清权责链条，再逐项压实到具体岗位。其风格看似平实，却能在政策反复时保持方向稳定，减少社会摩擦。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 10
+      intellect: 53
+      defense: 19
+      agility: 18
+  - key: hist_suitang_0311
+    name: 韦鼎
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）韦鼎为隋唐五代人物韋鼎，相关记载并不铺张，却足以勾勒一位懂分寸、知轻重的实务型人物，他办事不尚花哨，往往先厘清权责链条，再逐项压实到具体岗位；其风格看似平实，却能在政策反复时保持方向稳定，减少社会摩擦。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 15
+      intellect: 60
+      defense: 24
+      agility: 1
+  - key: hist_suitang_0316
+    name: 杨约
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代史料中的杨约，所处年代风浪不息，而其人之长恰在于把急务办得不失分寸。处理边地与腹地差异时主张因地制宜，反对一刀切式的粗暴套用。最难得的并非“高论”，而是“把高论化为日常秩序”的手段。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 52
+      defense: 23
+      agility: 13
+  - key: hist_suitang_0233
+    name: 安伽佗
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物安伽佗，相关记载并不铺张，却足以勾勒一位懂分寸、知轻重的实务型人物，在政令下行环节里，他擅把大而化之的条目拆成可执行细则，减少推诿与滞塞。权势更迭频仍之际，他仍尽力维持法度连续，避免前后政令互相抵销。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 53
+      defense: 23
+      agility: 11
+  - key: hist_suitang_0234
+    name: 曹武彻
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代史料中的曹武彻，史家着墨或简，但其人“能把事做成”的能力始终被反复提及。其审事不偏锋，常在法理与乡情之间寻找可持续的折中路径。这种不夸饰的作风，使他在变局中虽不常占据台前，却常被视为“托底之人”。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 17
+      intellect: 54
+      defense: 20
+      agility: 9
+  - key: hist_suitang_0235
+    name: 蔡建德
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物蔡建德，立身不靠浮名，更多凭章法、耐心与日积月累的实绩，其治务思路讲“缓急有序”，不以短期政绩透支地方承受力。这种克制与务实，让他成为理学名义与行政实践之间少见的连接点。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 56
+      defense: 20
+      agility: 8
+  - key: hist_suitang_0277
+    name: 嵬王诃
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物嵬王诃，其生平枝节未必齐备，但从零散记载中仍可辨出一条清晰的治事线索。逢灾荒、迁徙或兵后重建，他多采用分层处置，先保秩序，再图长效。其人善守底线而不失通权，使地方社会在压力下仍保有修复能力。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 15
+      intellect: 55
+      defense: 18
+      agility: 12
+  - key: hist_suitang_0278
+    name: 无素
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物无素，史家着墨或简，但其人“能把事做成”的能力始终被反复提及。其所长在于统筹多方资源，令本就紧绷的财政与人力仍能维持基本运转。其可贵之处，在于能把士人理想压进现实土壤，而不是停留在漂亮辞章里。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 51
+      defense: 20
+      agility: 16
+  - key: hist_suitang_0279
+    name: 司马富
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）司马富为隋唐五代人物司馬富，其名不以奇谈传世，而以一件件可核可查的政务结果被记住。其所长在于把士人论辩转译为执行清单，使理念能够穿过层层官僚结构到达民间。其人不避难题，也不迷信猛药，往往靠持续修补积小胜为大安。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 14
+      intellect: 55
+      defense: 23
+      agility: 8
+  - key: hist_suitang_0280
+    name: 柴保昌
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物柴保昌，其履历像一卷平实公牍，少有惊艳章句，却处处见功夫。其所长在于统筹多方资源，令本就紧绷的财政与人力仍能维持基本运转。其可贵之处，在于能把士人理想压进现实土壤，而不是停留在漂亮辞章里。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 17
+      intellect: 57
+      defense: 20
+      agility: 6
+  - key: hist_suitang_0281
+    name: 白苏尼咥
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物白苏尼咥，所处年代风浪不息，而其人之长恰在于把急务办得不失分寸。凡涉税粮、水利与转运，他更看重持续性，而非一任之内的表面繁荣。其履历虽少传奇色彩，却以稳定产出构成时代运转不可或缺的一环。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 14
+      intellect: 50
+      defense: 16
+      agility: 20
+  - key: hist_suitang_0282
+    name: 裴子通
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物裴子通，相关记载并不铺张，却足以勾勒一位懂分寸、知轻重的实务型人物，他办事不尚花哨，往往先厘清权责链条，再逐项压实到具体岗位；其风格看似平实，却能在政策反复时保持方向稳定，减少社会摩擦。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 50
+      defense: 18
+      agility: 20
+  - key: hist_suitang_0283
+    name: 陆词
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）陆词为隋唐五代人物陸詞，在士林与州县之间辗转，以“稳”著称，少空论，多实作，他处理边地与腹地差异时主张因地制宜，反对一刀切式的粗暴套用。最难得的并非“高论”，而是“把高论化为日常秩序”的手段。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 54
+      defense: 20
+      agility: 14
+  - key: hist_suitang_0284
+    name: 陈伯义
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物陈伯义，相关记载并不铺张，却足以勾勒一位懂分寸、知轻重的实务型人物。其公牍风格简严明白，减少了政令误读，也提升了执行确定性。其人并不追逐锋芒，反以耐烦与细密见长，故在长期治理里更显珍贵。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 15
+      intellect: 54
+      defense: 18
+      agility: 13
+  - key: hist_suitang_0285
+    name: 陈庄
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物陈庄，在士林与州县之间辗转时，他以“稳”著称，少空论，多实作。其治务思路讲“缓急有序”，不以短期政绩透支地方承受力。这种克制与务实，让他成为理学名义与行政实践之间少见的连接点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 50
+      defense: 18
+      agility: 20
+  - key: hist_suitang_0287
+    name: 张煚
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）张煚为隋唐五代人物張煚，在公议场中的价值，不在声量大小，而在意见能否真正落地，他重视文教与吏治并举，既整顿文书系统，也强调胥吏责任边界；他更在意制度留下什么，而非个人留下什么，因此常有迟发而深远的影响。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 17
+      intellect: 56
+      defense: 21
+      agility: 6
+  - key: hist_suitang_0288
+    name: 爨玩
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）爨玩为隋唐五代人物爨翫，并非锋芒毕露之士，却常是同僚眼中可托后局的人。其所长在于把士人论辩转译为执行清单，使理念能够穿过层层官僚结构到达民间。其人不避难题，也不迷信猛药，往往靠持续修补积小胜为大安。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 57
+      defense: 16
+      agility: 16
+  - key: hist_suitang_0290
+    name: 杜台卿
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物杜台卿，面对礼法与现实的碰撞，他更愿意从细部着手，缓慢却有效地修补秩序。处理边地与腹地差异时主张因地制宜，反对一刀切式的粗暴套用。最难得的并非“高论”，而是“把高论化为日常秩序”的手段。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 51
+      defense: 22
+      agility: 16
+  - key: hist_suitang_0299
+    name: 柳机
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物柳机，见诸史料时，往往不是最喧赫的名字，却总在关键处留下可追索的痕迹。在政令下行环节里，他擅把大而化之的条目拆成可执行细则，减少推诿与滞塞。权势更迭频仍之际，他仍尽力维持法度连续，避免前后政令互相抵销。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 15
+      intellect: 52
+      defense: 16
+      agility: 17
+  - key: hist_suitang_0300
+    name: 梁士彦
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物梁士彦，其名不以奇谈传世，而以一件件可核可查的政务结果被记住。凡涉税粮、水利与转运，他更看重持续性，而非一任之内的表面繁荣，其履历虽少传奇色彩，却以稳定产出构成时代运转不可或缺的一环。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 51
+      defense: 21
+      agility: 12
+  - key: hist_suitang_0306
+    name: 苏夔
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）苏夔为隋唐五代人物蘇夔，见诸史料时，往往不是最喧赫的名字，却总在关键处留下可追索的痕迹，其治务思路讲“缓急有序”，不以短期政绩透支地方承受力。这种克制与务实，让他成为理学名义与行政实践之间少见的连接点。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 17
+      intellect: 56
+      defense: 18
+      agility: 9
+  - key: hist_suitang_0307
+    name: 王世恽
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物王世恽，并非锋芒毕露之士，却常是同僚眼中可托后局的人，其审事不偏锋，常在法理与乡情之间寻找可持续的折中路径；这种不夸饰的作风，使他在变局中虽不常占据台前，却常被视为“托底之人”。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 57
+      defense: 16
+      agility: 16
+  - key: hist_suitang_0310
+    name: 韦云起
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）韦云起为隋唐五代人物韋雲起，若把时代噪音剥离，剩下的正是他在基层与中枢之间搭桥铺路的本事，其公牍风格简严明白，减少了政令误读，也提升了执行确定性。其人并不追逐锋芒，反以耐烦与细密见长，故在长期治理里更显珍贵。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 17
+      intellect: 54
+      defense: 18
+      agility: 11
+  - key: hist_suitang_0312
+    name: 韦艺
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物韦艺，其履历像一卷平实公牍，少有惊艳章句，却处处见功夫，他办事不尚花哨，往往先厘清权责链条，再逐项压实到具体岗位；其风格看似平实，却能在政策反复时保持方向稳定，减少社会摩擦。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 52
+      defense: 16
+      agility: 16
+  - key: hist_suitang_0313
+    name: 魏澹
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物魏澹，见诸史料时，往往不是最喧赫的名字，却总在关键处留下可追索的痕迹，其治务思路讲“缓急有序”，不以短期政绩透支地方承受力。这种克制与务实，让他成为理学名义与行政实践之间少见的连接点。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 15
+      intellect: 53
+      defense: 22
+      agility: 10
+  - key: hist_suitang_0315
+    name: 杨恭道
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物杨恭道，若把时代噪音剥离，剩下的正是他在基层与中枢之间搭桥铺路的本事，其公牍风格简严明白，减少了政令误读，也提升了执行确定性。其人并不追逐锋芒，反以耐烦与细密见长，故在长期治理里更显珍贵。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 56
+      defense: 20
+      agility: 13
+  - key: hist_suitang_0318
+    name: 云定兴
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）云定兴为隋唐五代人物雲定興，其履历像一卷平实公牍，少有惊艳章句，却处处见功夫，他办事不尚花哨，往往先厘清权责链条，再逐项压实到具体岗位；其风格看似平实，却能在政策反复时保持方向稳定，减少社会摩擦。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 54
+      defense: 18
+      agility: 12
+  - key: hist_suitang_0236
+    name: 陈胤
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物陈胤，在公议场中的价值，不在声量大小，而在意见能否真正落地，他重视文教与吏治并举，既整顿文书系统，也强调胥吏责任边界；他更在意制度留下什么，而非个人留下什么，因此常有迟发而深远的影响。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 52
+      defense: 17
+      agility: 15
+  - key: hist_suitang_0237
+    name: 陈至泽
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物陈至泽，在士林与州县之间辗转，以“稳”著称，少空论，多实作，他处理边地与腹地差异时主张因地制宜，反对一刀切式的粗暴套用。最难得的并非“高论”，而是“把高论化为日常秩序”的手段。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 14
+      intellect: 54
+      defense: 22
+      agility: 10
+  - key: hist_suitang_0238
+    name: 陈恬
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）陈恬为隋唐五代史料中的陳恬，其人处世谨严，行事有节，常于看似琐碎处守住政令的筋骨。重视文教与吏治并举，既整顿文书系统，也强调胥吏责任边界。更在意制度留下什么，而非个人留下什么，因此常有迟发而深远的影响。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 53
+      defense: 23
+      agility: 13
+  - key: hist_suitang_0240
+    name: 郭儁
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物郭儁，并非锋芒毕露之士，却常是同僚眼中可托后局的人，其审事不偏锋，常在法理与乡情之间寻找可持续的折中路径；这种不夸饰的作风，使他在变局中虽不常占据台前，却常被视为“托底之人”。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 55
+      defense: 19
+      agility: 10
+  - key: hist_suitang_0241
+    name: 何蛮
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代史料中的何蛮，相关记载并不铺张，却足以勾勒一位懂分寸、知轻重的实务型人物。凡遇赋役、仓储、徭役、争讼等实务，他惯于先厘清流程，再安顿人心，使政策不致空转，同僚对他多有“可信、可久”的评价，这在多故之世尤为难得。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 52
+      defense: 19
+      agility: 18
+  - key: hist_suitang_0243
+    name: 华秋
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）华秋为隋唐五代人物華秋，相关记载并不铺张，却足以勾勒一位懂分寸、知轻重的实务型人物，他办事不尚花哨，往往先厘清权责链条，再逐项压实到具体岗位；其风格看似平实，却能在政策反复时保持方向稳定，减少社会摩擦。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 15
+      intellect: 57
+      defense: 19
+      agility: 9
+  - key: hist_suitang_0244
+    name: 刘士儁
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）刘士儁为隋唐五代人物劉士儁，若把时代噪音剥离，剩下的正是他在基层与中枢之间搭桥铺路的本事。凡遇赋役、仓储、徭役、争讼等实务，他惯于先厘清流程，再安顿人心，使政策不致空转。同僚对他多有“可信、可久”的评价，这在多故之世尤为难得。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 17
+      intellect: 57
+      defense: 18
+      agility: 8
+  - key: hist_suitang_0246
+    name: 卢祖尚
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物卢祖尚，其生平枝节未必齐备，但从零散记载中仍可辨出一条清晰的治事线索，在派系角力最激烈时，他仍努力保住议政空间，让公共决策不沦为意气之争；他不以辞令取胜，而以可兑现的承诺获得士民双重认可。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 14
+      intellect: 57
+      defense: 19
+      agility: 10
+  - key: hist_suitang_0250
+    name: 纽回
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）纽回为隋唐五代人物紐回，相关记载并不铺张，却足以勾勒一位懂分寸、知轻重的实务型人物。其公牍风格简严明白，减少了政令误读，也提升了执行确定性。其人并不追逐锋芒，反以耐烦与细密见长，故在长期治理里更显珍贵。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 52
+      defense: 19
+      agility: 13
+  - key: hist_suitang_0251
+    name: 纽士雄
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）纽士雄为隋唐五代人物紐士雄，其名不以奇谈传世，而以一件件可核可查的政务结果被记住。其所长在于把士人论辩转译为执行清单，使理念能够穿过层层官僚结构到达民间。其人不避难题，也不迷信猛药，往往靠持续修补积小胜为大安。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 51
+      defense: 20
+      agility: 18
+  - key: hist_suitang_0252
+    name: 秦爱
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代人物秦爱，面对礼法与现实的碰撞，他更愿意从细部着手，缓慢却有效地修补秩序。处理边地与腹地差异时主张因地制宜，反对一刀切式的粗暴套用。最难得的并非“高论”，而是“把高论化为日常秩序”的手段。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 58
+      defense: 18
+      agility: 8
+  - key: hist_suitang_0253
+    name: 田翼
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代史料中的田翼，其名不以奇谈传世，而以一件件可核可查的政务结果被记住。其行政风格讲求“文书可核、钱粮可稽、责任可追”，故往往久而见效。在喧嚣叙事之外，他所代表的是基层治理中耐久、低调而有效的力量。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 15
+      intellect: 56
+      defense: 22
+      agility: 7
+  - key: hist_suitang_0254
+    name: 王玄恕
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代史料中的王玄恕，见诸史料时，往往不是最喧赫的名字，却总在关键处留下可追索的痕迹。逢灾荒、迁徙或兵后重建，他多采用分层处置，先保秩序，再图长效，其人善守底线而不失通权，使地方社会在压力下仍保有修复能力。后世分析隋唐五代由盛及变的治理逻辑时，其行迹常被当作理解制度韧性的切入点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 50
+      defense: 21
+      agility: 13
+  - key: hist_suitang_0256
+    name: 王琬
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）隋唐五代史料中的王琬，其名不以奇谈传世，而以一件件可核可查的政务结果被记住。其行政风格讲求“文书可核、钱粮可稽、责任可追”，故往往久而见效。在喧嚣叙事之外，他所代表的是基层治理中耐久、低调而有效的力量。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 56
+      defense: 19
+      agility: 9

@@ -1,0 +1,1160 @@
+heroes:
+  blue:
+  - key: hist_songliaojinyuan_0502
+    name: 喻皓
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）喻皓，其人处世谨严，行事有节，常于看似琐碎处守住政令的筋骨。逢灾荒、迁徙或兵后重建，他多采用分层处置，先保秩序，再图长效。其人善守底线而不失通权，使地方社会在压力下仍保有修复能力。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 14
+      intellect: 54
+      defense: 21
+      agility: 11
+  - key: hist_songliaojinyuan_0576
+    name: 滕宗谅
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）滕宗谅，其战场存在感不靠夸耀，而靠一次次关键节点的有效处置。在攻守转换节点，他善于抓住半日之机，常以小调度换来大战线稳定，其经历说明，名将之难不在一时勇力，而在长期维系军心与秩序。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 42
+      intellect: 13
+      defense: 26
+      agility: 19
+  - key: hist_songliaojinyuan_0552
+    name: 焦赞
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）焦赞，在宏大战争叙事里，他或许不总居于中心，却常决定战线是否崩断，其用兵兼具刚猛与审慎：可攻则进，不可久战则迅速收束战线；这种可持续的军事治理能力，正是他区别于一般猛将的核心标识。
+    growth_range:
+    - 6
+    - 9
+    attribute_weights:
+      force: 47
+      intellect: 16
+      defense: 23
+      agility: 14
+  green:
+  - key: hist_songliaojinyuan_0496
+    name: 巢谷
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）巢谷，其履历像一卷平实公牍，少有惊艳章句，却处处见功夫。其公牍风格简严明白，减少了政令误读，也提升了执行确定性。其人并不追逐锋芒，反以耐烦与细密见长，故在长期治理里更显珍贵。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 56
+      defense: 17
+      agility: 14
+  - key: hist_songliaojinyuan_0497
+    name: 孔延龄
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）孔延龄，其人处世谨严，行事有节，常于看似琐碎处守住政令的筋骨。逢灾荒、迁徙或兵后重建，他多采用分层处置，先保秩序，再图长效。其人善守底线而不失通权，使地方社会在压力下仍保有修复能力。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 11
+      intellect: 53
+      defense: 23
+      agility: 13
+  - key: hist_songliaojinyuan_0498
+    name: 孔端立
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）孔端立，面对礼法与现实的碰撞，他更愿意从细部着手，缓慢却有效地修补秩序。其所长在于把士人论辩转译为执行清单，使理念能够穿过层层官僚结构到达民间，其人不避难题，也不迷信猛药，往往靠持续修补积小胜为大安。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 55
+      defense: 16
+      agility: 18
+  - key: hist_songliaojinyuan_0499
+    name: 孔若愚
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）孔若愚，其生平枝节未必齐备，但从零散记载中仍可辨出一条清晰的治事线索。其治务思路讲“缓急有序”，不以短期政绩透支地方承受力。这种克制与务实，让他成为理学名义与行政实践之间少见的连接点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 57
+      defense: 18
+      agility: 14
+  - key: hist_songliaojinyuan_0500
+    name: 刘永年
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）刘永年，史家着墨或简，但其人“能把事做成”的能力始终被反复提及。其所长在于把士人论辩转译为执行清单，使理念能够穿过层层官僚结构到达民间，其人不避难题，也不迷信猛药，往往靠持续修补积小胜为大安。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 17
+      intellect: 50
+      defense: 21
+      agility: 12
+  - key: hist_songliaojinyuan_0501
+    name: 王仁睿
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）王仁睿，面对礼法与现实的碰撞，他更愿意从细部着手，缓慢却有效地修补秩序。处理边地与腹地差异时主张因地制宜，反对一刀切式的粗暴套用。最难得的并非“高论”，而是“把高论化为日常秩序”的手段。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 11
+      intellect: 52
+      defense: 22
+      agility: 15
+  - key: hist_songliaojinyuan_0503
+    name: 吴仁裕
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）吴仁裕，在名位浮沉之外，他更重制度后效，因此影响往往来得迟，却走得长。面对积弊，他不急于立威，而先补制度缝隙，使改革不至于反复回摆。像一枚不起眼的榫卯，平时不显，一旦抽离，体系便开始松动。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 17
+      intellect: 50
+      defense: 17
+      agility: 16
+  - key: hist_songliaojinyuan_0504
+    name: 孔端操
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）孔端操，相关记载并不铺张，却足以勾勒一位懂分寸、知轻重的实务型人物。其公牍风格简严明白，减少了政令误读，也提升了执行确定性。其人并不追逐锋芒，反以耐烦与细密见长，故在长期治理里更显珍贵。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 16
+      intellect: 51
+      defense: 19
+      agility: 14
+  - key: hist_songliaojinyuan_0505
+    name: 王景绝
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）王景绝，面对礼法与现实的碰撞，他更愿意从细部着手，缓慢却有效地修补秩序，面对积弊，他不急于立威，而先补制度缝隙，使改革不至于反复回摆。像一枚不起眼的榫卯，平时不显，一旦抽离，体系便开始松动。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 13
+      intellect: 52
+      defense: 20
+      agility: 15
+  - key: hist_songliaojinyuan_0506
+    name: 陈太初
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）陈太初，在士林与州县之间辗转，以“稳”著称，少空论，多实作，他处理边地与腹地差异时主张因地制宜，反对一刀切式的粗暴套用。最难得的并非“高论”，而是“把高论化为日常秩序”的手段。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 14
+      intellect: 51
+      defense: 23
+      agility: 12
+  - key: hist_songliaojinyuan_0508
+    name: 窦贞固
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）窦贞固，其人处世谨严，行事有节，常于看似琐碎处守住政令的筋骨。重视文教与吏治并举，既整顿文书系统，也强调胥吏责任边界。更在意制度留下什么，而非个人留下什么，因此常有迟发而深远的影响。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 17
+      agility: 13
+  - key: hist_songliaojinyuan_0510
+    name: 范世京
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）范世京，在士林与州县之间辗转，以“稳”著称，少空论，多实作，在派系角力最激烈时，他仍努力保住议政空间，让公共决策不沦为意气之争；他不以辞令取胜，而以可兑现的承诺获得士民双重认可。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 17
+      intellect: 57
+      defense: 22
+      agility: 4
+  - key: hist_songliaojinyuan_0511
+    name: 范墉
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）范墉，若把时代噪音剥离，剩下的正是他在基层与中枢之间搭桥铺路的本事。其所长在于统筹多方资源，令本就紧绷的财政与人力仍能维持基本运转，其可贵之处，在于能把士人理想压进现实土壤，而不是停留在漂亮辞章里。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 14
+      intellect: 52
+      defense: 20
+      agility: 14
+  - key: hist_songliaojinyuan_0513
+    name: 范正平
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）范正平，其人处世谨严，行事有节，常于看似琐碎处守住政令的筋骨。逢灾荒、迁徙或兵后重建，他多采用分层处置，先保秩序，再图长效。其人善守底线而不失通权，使地方社会在压力下仍保有修复能力。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 13
+      intellect: 53
+      defense: 22
+      agility: 12
+  - key: hist_songliaojinyuan_0514
+    name: 范正思
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）范正思，在士林与州县之间辗转，以“稳”著称，少空论，多实作，他处理边地与腹地差异时主张因地制宜，反对一刀切式的粗暴套用。最难得的并非“高论”，而是“把高论化为日常秩序”的手段。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 14
+      intellect: 54
+      defense: 22
+      agility: 10
+  - key: hist_songliaojinyuan_0515
+    name: 范正民
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）范正民，在公议场中的价值，不在声量大小，而在意见能否真正落地。凡遇赋役、仓储、徭役、争讼等实务，他惯于先厘清流程，再安顿人心，使政策不致空转。同僚对他多有“可信、可久”的评价，这在多故之世尤为难得。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 14
+      intellect: 53
+      defense: 21
+      agility: 12
+  - key: hist_songliaojinyuan_0517
+    name: 范直筠
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）范直筠，立身不靠浮名，更多凭章法、耐心与日积月累的实绩。凡涉税粮、水利与转运，他更看重持续性，而非一任之内的表面繁荣。其履历虽少传奇色彩，却以稳定产出构成时代运转不可或缺的一环。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 11
+      intellect: 51
+      defense: 20
+      agility: 18
+  - key: hist_songliaojinyuan_0519
+    name: 范纯礼
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）范纯礼，见诸史料时，往往不是最喧赫的名字，却总在关键处留下可追索的痕迹，其治务思路讲“缓急有序”，不以短期政绩透支地方承受力。这种克制与务实，让他成为理学名义与行政实践之间少见的连接点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 56
+      defense: 20
+      agility: 13
+  - key: hist_songliaojinyuan_0521
+    name: 范纯佑
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）范纯佑，若把时代噪音剥离，剩下的正是他在基层与中枢之间搭桥铺路的本事。办事不尚花哨，往往先厘清权责链条，再逐项压实到具体岗位。其风格看似平实，却能在政策反复时保持方向稳定，减少社会摩擦。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 17
+      intellect: 50
+      defense: 18
+      agility: 15
+  - key: hist_songliaojinyuan_0522
+    name: 范雩
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）范雩，其人处世谨严，行事有节，常于看似琐碎处守住政令的筋骨。逢灾荒、迁徙或兵后重建，他多采用分层处置，先保秩序，再图长效。其人善守底线而不失通权，使地方社会在压力下仍保有修复能力。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 14
+      intellect: 56
+      defense: 21
+      agility: 9
+  - key: hist_songliaojinyuan_0523
+    name: 葛胜仲
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）葛胜仲，其履历像一卷平实公牍，少有惊艳章句，却处处见功夫。其审事不偏锋，常在法理与乡情之间寻找可持续的折中路径。这种不夸饰的作风，使他在变局中虽不常占据台前，却常被视为“托底之人”。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 11
+      intellect: 54
+      defense: 22
+      agility: 13
+  - key: hist_songliaojinyuan_0524
+    name: 刘承珪
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）刘承珪，在名位浮沉之外，他更重制度后效，因此影响往往来得迟，却走得长，其公牍风格简严明白，减少了政令误读，也提升了执行确定性。其人并不追逐锋芒，反以耐烦与细密见长，故在长期治理里更显珍贵。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 11
+      intellect: 52
+      defense: 20
+      agility: 17
+  - key: hist_songliaojinyuan_0525
+    name: 李从善
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）李从善，史家着墨或简，但其人“能把事做成”的能力始终被反复提及，面对积弊，他不急于立威，而先补制度缝隙，使改革不至于反复回摆。像一枚不起眼的榫卯，平时不显，一旦抽离，体系便开始松动。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 14
+      intellect: 53
+      defense: 17
+      agility: 16
+  - key: hist_songliaojinyuan_0526
+    name: 李神祐
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）李神祐，在公议场中的价值，不在声量大小，而在意见能否真正落地。在政令下行环节里，他擅把大而化之的条目拆成可执行细则，减少推诿与滞塞。权势更迭频仍之际，他仍尽力维持法度连续，避免前后政令互相抵销。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 14
+      intellect: 50
+      defense: 23
+      agility: 13
+  - key: hist_songliaojinyuan_0527
+    name: 梁适
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）梁适，史家着墨或简，但其人“能把事做成”的能力始终被反复提及。其所长在于统筹多方资源，令本就紧绷的财政与人力仍能维持基本运转。其可贵之处，在于能把士人理想压进现实土壤，而不是停留在漂亮辞章里。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 11
+      intellect: 50
+      defense: 16
+      agility: 23
+  - key: hist_songliaojinyuan_0528
+    name: 蓝元震
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）蓝元震，在名位浮沉之外，他更重制度后效，因此影响往往来得迟，却走得长。面对积弊，他不急于立威，而先补制度缝隙，使改革不至于反复回摆。像一枚不起眼的榫卯，平时不显，一旦抽离，体系便开始松动。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 55
+      defense: 19
+      agility: 13
+  - key: hist_songliaojinyuan_0529
+    name: 龙海基
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）龙海基，立身不靠浮名，更多凭章法、耐心与日积月累的实绩。逢灾荒、迁徙或兵后重建，他多采用分层处置，先保秩序，再图长效，其人善守底线而不失通权，使地方社会在压力下仍保有修复能力。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 15
+      intellect: 58
+      defense: 21
+      agility: 6
+  - key: hist_songliaojinyuan_0530
+    name: 李若拙
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）李若拙，在公议场中的价值，不在声量大小，而在意见能否真正落地。办事不尚花哨，往往先厘清权责链条，再逐项压实到具体岗位。其风格看似平实，却能在政策反复时保持方向稳定，减少社会摩擦。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 58
+      defense: 21
+      agility: 10
+  - key: hist_songliaojinyuan_0531
+    name: 梅执礼
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）梅执礼，面对礼法与现实的碰撞，他更愿意从细部着手，缓慢却有效地修补秩序。其所长在于把士人论辩转译为执行清单，使理念能够穿过层层官僚结构到达民间，其人不避难题，也不迷信猛药，往往靠持续修补积小胜为大安。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 15
+      intellect: 58
+      defense: 16
+      agility: 11
+  - key: hist_songliaojinyuan_0532
+    name: 钱勰
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）钱勰，其人处世谨严，行事有节，常于看似琐碎处守住政令的筋骨。重视文教与吏治并举，既整顿文书系统，也强调胥吏责任边界。更在意制度留下什么，而非个人留下什么，因此常有迟发而深远的影响。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 14
+      intellect: 54
+      defense: 19
+      agility: 13
+  - key: hist_songliaojinyuan_0533
+    name: 石以定
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）石以定，其履历像一卷平实公牍，少有惊艳章句，却处处见功夫。其公牍风格简严明白，减少了政令误读，也提升了执行确定性。其人并不追逐锋芒，反以耐烦与细密见长，故在长期治理里更显珍贵。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 56
+      defense: 16
+      agility: 12
+  - key: hist_songliaojinyuan_0534
+    name: 王守规
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）王守规，史家着墨或简，但其人“能把事做成”的能力始终被反复提及。其所长在于统筹多方资源，令本就紧绷的财政与人力仍能维持基本运转。其可贵之处，在于能把士人理想压进现实土壤，而不是停留在漂亮辞章里。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 12
+      intellect: 52
+      defense: 22
+      agility: 14
+  - key: hist_songliaojinyuan_0535
+    name: 谢德权
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）谢德权，若把时代噪音剥离，剩下的正是他在基层与中枢之间搭桥铺路的本事。办事不尚花哨，往往先厘清权责链条，再逐项压实到具体岗位。其风格看似平实，却能在政策反复时保持方向稳定，减少社会摩擦。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 15
+      intellect: 54
+      defense: 22
+      agility: 9
+  - key: hist_songliaojinyuan_0536
+    name: 阎士良
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）阎士良，立身不靠浮名，更多凭章法、耐心与日积月累的实绩。在派系角力最激烈时，他仍努力保住议政空间，让公共决策不沦为意气之争。不以辞令取胜，而以可兑现的承诺获得士民双重认可。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 57
+      defense: 23
+      agility: 7
+  - key: hist_songliaojinyuan_0537
+    name: 姚铉
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）姚铉，相关记载并不铺张，却足以勾勒一位懂分寸、知轻重的实务型人物。凡遇赋役、仓储、徭役、争讼等实务，他惯于先厘清流程，再安顿人心，使政策不致空转，同僚对他多有“可信、可久”的评价，这在多故之世尤为难得。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 12
+      intellect: 50
+      defense: 21
+      agility: 17
+  - key: hist_songliaojinyuan_0538
+    name: 张继能
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）张继能，其生平枝节未必齐备，但从零散记载中仍可辨出一条清晰的治事线索。重视文教与吏治并举，既整顿文书系统，也强调胥吏责任边界。更在意制度留下什么，而非个人留下什么，因此常有迟发而深远的影响。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 16
+      intellect: 51
+      defense: 20
+      agility: 13
+  - key: hist_songliaojinyuan_0539
+    name: 张茂则
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）张茂则，其履历像一卷平实公牍，少有惊艳章句，却处处见功夫，他办事不尚花哨，往往先厘清权责链条，再逐项压实到具体岗位；其风格看似平实，却能在政策反复时保持方向稳定，减少社会摩擦。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 58
+      defense: 22
+      agility: 9
+  - key: hist_songliaojinyuan_0540
+    name: 赵禼
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）赵禼，相关记载并不铺张，却足以勾勒一位懂分寸、知轻重的实务型人物。凡遇赋役、仓储、徭役、争讼等实务，他惯于先厘清流程，再安顿人心，使政策不致空转，同僚对他多有“可信、可久”的评价，这在多故之世尤为难得。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 12
+      intellect: 54
+      defense: 18
+      agility: 16
+  - key: hist_songliaojinyuan_0542
+    name: 朱寿昌
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）朱寿昌，其履历像一卷平实公牍，少有惊艳章句，却处处见功夫。其审事不偏锋，常在法理与乡情之间寻找可持续的折中路径。这种不夸饰的作风，使他在变局中虽不常占据台前，却常被视为“托底之人”。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 16
+      intellect: 50
+      defense: 20
+      agility: 14
+  - key: hist_songliaojinyuan_0544
+    name: 陈希亮
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）陈希亮，立身不靠浮名，更多凭章法、耐心与日积月累的实绩。逢灾荒、迁徙或兵后重建，他多采用分层处置，先保秩序，再图长效，其人善守底线而不失通权，使地方社会在压力下仍保有修复能力。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 11
+      intellect: 50
+      defense: 17
+      agility: 22
+  - key: hist_songliaojinyuan_0546
+    name: 种朴
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）种朴，在军中常扮演枢纽角色，既能压阵前线，也能稳住后勤。深知“兵贵整而不贵众”，故尤重训练节律与军心维系。在危急阶段展现出的组织力，往往比单场胜负更具历史意义。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 48
+      intellect: 13
+      defense: 23
+      agility: 16
+  - key: hist_songliaojinyuan_0547
+    name: 甘昭吉
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）甘昭吉，出身未必显赫，却能在高压战场中凭纪律与判断站稳脚跟，他在高强度行军与驻防转换间处理自如，减少了队伍疲敝与补给断裂；若离开时代滤镜再看，其份量恰在“能把难局撑住”这件事本身。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 16
+      defense: 25
+      agility: 17
+  - key: hist_songliaojinyuan_0548
+    name: 高延德
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）高延德，出身未必显赫，却能在高压战场中凭纪律与判断站稳脚跟，他在高强度行军与驻防转换间处理自如，减少了队伍疲敝与补给断裂；若离开时代滤镜再看，其份量恰在“能把难局撑住”这件事本身。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 48
+      intellect: 18
+      defense: 26
+      agility: 8
+  - key: hist_songliaojinyuan_0550
+    name: 韩守英
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）韩守英，其军事声望并非一战骤起，而是由多次硬仗与苦仗层层累积，其军事判断常以“保主干、清侧翼、留余力”为核心，败局中亦能保元气。的军事人生像一根承重梁，平时不夺目，关键时却不可替代。
+    growth_range:
+    - 4
+    - 6
+    attribute_weights:
+      force: 47
+      intellect: 12
+      defense: 28
+      agility: 13
+  - key: hist_songliaojinyuan_0553
+    name: 刘几
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）刘几，出身未必显赫，却能在高压战场中凭纪律与判断站稳脚跟。其军事判断常以“保主干、清侧翼、留余力”为核心，败局中亦能保元气。的军事人生像一根承重梁，平时不夺目，关键时却不可替代。
+    growth_range:
+    - 4
+    - 6
+    attribute_weights:
+      force: 47
+      intellect: 13
+      defense: 26
+      agility: 14
+  - key: hist_songliaojinyuan_0554
+    name: 刘惟简
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）刘惟简，史书对其生平或有简略，但其在军政链条中的位置绝非可有可无。其用兵兼具刚猛与审慎：可攻则进，不可久战则迅速收束战线。这种可持续的军事治理能力，正是他区别于一般猛将的核心标识。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 47
+      intellect: 18
+      defense: 27
+      agility: 8
+  - key: hist_songliaojinyuan_0555
+    name: 啰麻
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）啰麻，并非只会冲阵，真正见长处还在统筹与收束残局，其指挥并非单点冒进，而是通过纵深部署拉开容错空间。其真正贡献不止于斩获数字，更在于维系了政权对地方的持续控制力。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 48
+      intellect: 14
+      defense: 27
+      agility: 11
+  - key: hist_songliaojinyuan_0556
+    name: 李光祚
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）李光祚，其人用兵思路务实，不迷信侥幸，重在把不可控因素压到最低。其用兵兼具刚猛与审慎：可攻则进，不可久战则迅速收束战线。这种可持续的军事治理能力，正是他区别于一般猛将的核心标识。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 45
+      intellect: 17
+      defense: 27
+      agility: 11
+  - key: hist_songliaojinyuan_0557
+    name: 李大信
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）李大信，在军中常扮演枢纽角色，既能压阵前线，也能稳住后勤。在攻守转换节点，他善于抓住半日之机，常以小调度换来大战线稳定。其经历说明，名将之难不在一时勇力，而在长期维系军心与秩序。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 47
+      intellect: 16
+      defense: 22
+      agility: 15
+  - key: hist_songliaojinyuan_0559
+    name: 李继冲
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）李继冲，其名多见于战役纪载、军籍册牍与地方军报，履历未必华丽，却极具实战质地，在兵员参差条件下，他强调号令统一与赏罚分明，故部伍较少溃散。留下的，不只是胜负记录，更是一套可被后继者借鉴的处置范式。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 46
+      intellect: 16
+      defense: 25
+      agility: 13
+  - key: hist_songliaojinyuan_0560
+    name: 李舜举
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）李舜举，出身未必显赫，却能在高压战场中凭纪律与判断站稳脚跟。其军事判断常以“保主干、清侧翼、留余力”为核心，败局中亦能保元气。的军事人生像一根承重梁，平时不夺目，关键时却不可替代。
+    growth_range:
+    - 4
+    - 6
+    attribute_weights:
+      force: 45
+      intellect: 15
+      defense: 23
+      agility: 17
+  - key: hist_songliaojinyuan_0561
+    name: 吕璹
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）吕璹，史书对其生平或有简略，但其在军政链条中的位置绝非可有可无。在兵员参差条件下，他强调号令统一与赏罚分明，故部伍较少溃散。留下的，不只是胜负记录，更是一套可被后继者借鉴的处置范式。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 17
+      defense: 23
+      agility: 18
+  - key: hist_songliaojinyuan_0563
+    name: 秦翰
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）秦翰，最被看重的，是在逆风局里仍能守住队伍与秩序的能力，他擅把地方武装、正军与后勤系统串联，令战果不致转瞬流失。其作风朴实而不浮夸，故在乱局中更易获得上下层面的现实支持。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 48
+      intellect: 14
+      defense: 25
+      agility: 13
+  - key: hist_songliaojinyuan_0564
+    name: 孙行友
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）孙行友，在宏大战争叙事里，他或许不总居于中心，却常决定战线是否崩断。其统兵不止于冲锋取胜，更重粮道、军械与轮换，使军队具备续战能力。其既能打硬仗，也能收残局，这使其从“战将”迈向“将才”。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 48
+      intellect: 15
+      defense: 25
+      agility: 12
+  - key: hist_songliaojinyuan_0565
+    name: 盛佶
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）盛佶，在强敌环伺或内乱并起的背景下，他常被推上最先承压的位置，其军事判断常以“保主干、清侧翼、留余力”为核心，败局中亦能保元气。的军事人生像一根承重梁，平时不夺目，关键时却不可替代。
+    growth_range:
+    - 4
+    - 6
+    attribute_weights:
+      force: 44
+      intellect: 15
+      defense: 25
+      agility: 16
+  - key: hist_songliaojinyuan_0567
+    name: 石知颙
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）石知颙，相关记载虽分散，却可拼接出一位能守能战、进退有章的武职形象，深知“兵贵整而不贵众”，故尤重训练节律与军心维系；他在危急阶段展现出的组织力，往往比单场胜负更具历史意义。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 46
+      intellect: 14
+      defense: 25
+      agility: 15
+  - key: hist_songliaojinyuan_0568
+    name: 田仁朗
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）田仁朗，其战场存在感不靠夸耀，而靠一次次关键节点的有效处置。其统兵不止于冲锋取胜，更重粮道、军械与轮换，使军队具备续战能力。其既能打硬仗，也能收残局，这使其从“战将”迈向“将才”。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 46
+      intellect: 15
+      defense: 27
+      agility: 12
+  - key: hist_songliaojinyuan_0570
+    name: 王庶
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）王庶，活跃于兵事频仍之世，既在前线用兵，也在后方维持军政衔接，在兵员参差条件下，他强调号令统一与赏罚分明，故部伍较少溃散。留下的，不只是胜负记录，更是一套可被后继者借鉴的处置范式。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 48
+      intellect: 12
+      defense: 22
+      agility: 18
+  - key: hist_songliaojinyuan_0571
+    name: 杨师璠
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）杨师璠，其名多见于战役纪载、军籍册牍与地方军报，履历未必华丽，却极具实战质地。面对突发叛乱或边患，他常先稳交通仓储，再逐层清剿，不轻走险棋，其人在史传中虽未被神化，却因“可靠”二字而具有稳定分量。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 16
+      defense: 27
+      agility: 15
+  - key: hist_songliaojinyuan_0572
+    name: 姚友仲
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）姚友仲，出身未必显赫，却能在高压战场中凭纪律与判断站稳脚跟。其战功之外，更难得的是善后能力，能把战后地区尽快拉回常态秩序。其价值在于把兵事纳入秩序修复，而非让战争无限吞噬社会根基。
+    growth_range:
+    - 4
+    - 6
+    attribute_weights:
+      force: 42
+      intellect: 14
+      defense: 26
+      agility: 18
+  - key: hist_songliaojinyuan_0573
+    name: 赵崇韬
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）赵崇韬，其战场存在感不靠夸耀，而靠一次次关键节点的有效处置。在守城、野战、追击等不同场景中，他都能及时变阵，避免战术僵化。政局反复之下，他仍能保持部队执行力，显示出扎实统御基本功。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 47
+      intellect: 18
+      defense: 26
+      agility: 9
+  - key: hist_songliaojinyuan_0574
+    name: 全师雄
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）全师雄，在强敌环伺或内乱并起的背景下，他常被推上最先承压的位置。在高强度行军与驻防转换间处理自如，减少了队伍疲敝与补给断裂。若离开时代滤镜再看，其份量恰在“能把难局撑住”这件事本身。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 48
+      intellect: 18
+      defense: 22
+      agility: 12
+  - key: hist_songliaojinyuan_0575
+    name: 孙路
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）孙路，与其说他是“传奇猛将”，不如说是“可靠将才”的典型样本，临阵时他讲究阵形、时机与节奏，不逞匹夫之勇，而以协同压制局势。后人回看其事迹，常能看到一条由实务能力托起的上升路径。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 48
+      intellect: 13
+      defense: 27
+      agility: 12
+  - key: hist_songliaojinyuan_0578
+    name: 种诂
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）种诂，在强敌环伺或内乱并起的背景下，他常被推上最先承压的位置。遇敌情骤变时，他更重信息校核与层级响应，避免误判造成连锁失误。这种“战与治并重”的能力，使其在同代武职中具有长期被调用的价值。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 43
+      intellect: 12
+      defense: 24
+      agility: 21
+  - key: hist_songliaojinyuan_0579
+    name: 种诊
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）种诊，与其说他是“传奇猛将”，不如说是“可靠将才”的典型样本。其指挥并非单点冒进，而是通过纵深部署拉开容错空间。其真正贡献不止于斩获数字，更在于维系了政权对地方的持续控制力。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 48
+      intellect: 11
+      defense: 27
+      agility: 14
+  - key: hist_songliaojinyuan_0580
+    name: 窦神宝
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）窦神宝，其战场存在感不靠夸耀，而靠一次次关键节点的有效处置。其统兵不止于冲锋取胜，更重粮道、军械与轮换，使军队具备续战能力。其既能打硬仗，也能收残局，这使其从“战将”迈向“将才”。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 44
+      intellect: 15
+      defense: 24
+      agility: 17
+  - key: hist_songliaojinyuan_0581
+    name: 郭京
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）郭京，在强敌环伺或内乱并起的背景下，他常被推上最先承压的位置。遇敌情骤变时，他更重信息校核与层级响应，避免误判造成连锁失误。这种“战与治并重”的能力，使其在同代武职中具有长期被调用的价值。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 43
+      intellect: 13
+      defense: 27
+      agility: 17
+  - key: hist_songliaojinyuan_0583
+    name: 陈千二
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）陈千二，立身不靠浮名，更多凭章法、耐心与日积月累的实绩。逢灾荒、迁徙或兵后重建，他多采用分层处置，先保秩序，再图长效，其人善守底线而不失通权，使地方社会在压力下仍保有修复能力。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 14
+      intellect: 53
+      defense: 19
+      agility: 14
+  - key: hist_songliaojinyuan_0584
+    name: 陈咏
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）陈咏，其人处世谨严，行事有节，常于看似琐碎处守住政令的筋骨，在政令下行环节里，他擅把大而化之的条目拆成可执行细则，减少推诿与滞塞。权势更迭频仍之际，他仍尽力维持法度连续，避免前后政令互相抵销。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 12
+      intellect: 50
+      defense: 19
+      agility: 19
+  - key: hist_songliaojinyuan_0585
+    name: 傅立
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）傅立，相关记载并不铺张，却足以勾勒一位懂分寸、知轻重的实务型人物。凡遇赋役、仓储、徭役、争讼等实务，他惯于先厘清流程，再安顿人心，使政策不致空转，同僚对他多有“可信、可久”的评价，这在多故之世尤为难得。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 57
+      defense: 19
+      agility: 12
+  - key: hist_songliaojinyuan_0507
+    name: 陈洪进
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）陈洪进，在士林与州县之间辗转，以“稳”著称，少空论，多实作。凡涉税粮、水利与转运，他更看重持续性，而非一任之内的表面繁荣，其履历虽少传奇色彩，却以稳定产出构成时代运转不可或缺的一环。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 57
+      defense: 18
+      agility: 9
+  - key: hist_songliaojinyuan_0509
+    name: 邓守恩
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）邓守恩，见诸史料时，往往不是最喧赫的名字，却总在关键处留下可追索的痕迹，其治务思路讲“缓急有序”，不以短期政绩透支地方承受力。这种克制与务实，让他成为理学名义与行政实践之间少见的连接点。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 59
+      defense: 20
+      agility: 10
+  - key: hist_songliaojinyuan_0512
+    name: 范正国
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）范正国，相关记载并不铺张，却足以勾勒一位懂分寸、知轻重的实务型人物，他办事不尚花哨，往往先厘清权责链条，再逐项压实到具体岗位；其风格看似平实，却能在政策反复时保持方向稳定，减少社会摩擦。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 57
+      defense: 23
+      agility: 7
+  - key: hist_songliaojinyuan_0516
+    name: 范直彦
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）范直彦，其名不以奇谈传世，而以一件件可核可查的政务结果被记住。凡涉税粮、水利与转运，他更看重持续性，而非一任之内的表面繁荣，其履历虽少传奇色彩，却以稳定产出构成时代运转不可或缺的一环。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 58
+      defense: 23
+      agility: 8
+  - key: hist_songliaojinyuan_0520
+    name: 范纯粹
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）范纯粹，其人处世谨严，行事有节，常于看似琐碎处守住政令的筋骨。逢灾荒、迁徙或兵后重建，他多采用分层处置，先保秩序，再图长效。其人善守底线而不失通权，使地方社会在压力下仍保有修复能力。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 59
+      defense: 19
+      agility: 10
+  - key: hist_songliaojinyuan_0541
+    name: 郑穆
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）郑穆，在士林与州县之间辗转，以“稳”著称，少空论，多实作，在派系角力最激烈时，他仍努力保住议政空间，让公共决策不沦为意气之争；他不以辞令取胜，而以可兑现的承诺获得士民双重认可。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 58
+      defense: 20
+      agility: 10
+  - key: hist_songliaojinyuan_0543
+    name: 留居道
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）留居道，史家着墨或简，但其人“能把事做成”的能力始终被反复提及。其所长在于统筹多方资源，令本就紧绷的财政与人力仍能维持基本运转。其可贵之处，在于能把士人理想压进现实土壤，而不是停留在漂亮辞章里。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 56
+      defense: 19
+      agility: 9
+  - key: hist_songliaojinyuan_0545
+    name: 陈省华
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）陈省华，相关记载并不铺张，却足以勾勒一位懂分寸、知轻重的实务型人物。其公牍风格简严明白，减少了政令误读，也提升了执行确定性。其人并不追逐锋芒，反以耐烦与细密见长，故在长期治理里更显珍贵。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 15
+      intellect: 58
+      defense: 19
+      agility: 8
+  - key: hist_songliaojinyuan_0549
+    name: 和斌
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）和斌，相关记载虽分散，却可拼接出一位能守能战、进退有章的武职形象。在高强度行军与驻防转换间处理自如，减少了队伍疲敝与补给断裂。若离开时代滤镜再看，其份量恰在“能把难局撑住”这件事本身。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 46
+      intellect: 16
+      defense: 28
+      agility: 10
+  - key: hist_songliaojinyuan_0551
+    name: 江少虞
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）江少虞，在宏大战争叙事里，他或许不总居于中心，却常决定战线是否崩断。其统兵不止于冲锋取胜，更重粮道、军械与轮换，使军队具备续战能力。其既能打硬仗，也能收残局，这使其从“战将”迈向“将才”。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 46
+      intellect: 16
+      defense: 25
+      agility: 13
+  - key: hist_songliaojinyuan_0558
+    name: 李怀岊
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）李怀岊，在宏大战争叙事里，他或许不总居于中心，却常决定战线是否崩断。在守城、野战、追击等不同场景中，他都能及时变阵，避免战术僵化。政局反复之下，他仍能保持部队执行力，显示出扎实统御基本功。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 49
+      intellect: 13
+      defense: 28
+      agility: 10
+  - key: hist_songliaojinyuan_0562
+    name: 米信
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）米信，与其说他是“传奇猛将”，不如说是“可靠将才”的典型样本。其指挥并非单点冒进，而是通过纵深部署拉开容错空间。其真正贡献不止于斩获数字，更在于维系了政权对地方的持续控制力。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 46
+      intellect: 12
+      defense: 27
+      agility: 15
+  - key: hist_songliaojinyuan_0566
+    name: 石全彬
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）石全彬，其所处年代兵戈不断，而其价值恰在于把零散兵力组织为可持续战力，其指挥并非单点冒进，而是通过纵深部署拉开容错空间。其真正贡献不止于斩获数字，更在于维系了政权对地方的持续控制力。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 48
+      intellect: 15
+      defense: 26
+      agility: 11
+  - key: hist_songliaojinyuan_0569
+    name: 嵬名阿埋
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）嵬名阿埋，其名多见于战役纪载、军籍册牍与地方军报，履历未必华丽，却极具实战质地，其用兵兼具刚猛与审慎：可攻则进，不可久战则迅速收束战线；这种可持续的军事治理能力，正是他区别于一般猛将的核心标识。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 49
+      intellect: 11
+      defense: 29
+      agility: 11
+  - key: hist_songliaojinyuan_0577
+    name: 王沿
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）王沿，与其说他是“传奇猛将”，不如说是“可靠将才”的典型样本，深知“兵贵整而不贵众”，故尤重训练节律与军心维系；他在危急阶段展现出的组织力，往往比单场胜负更具历史意义。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 45
+      intellect: 10
+      defense: 26
+      agility: 19
+  - key: hist_songliaojinyuan_0582
+    name: 陈应功
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）陈应功，并非只会冲阵，真正见长处还在统筹与收束残局，其指挥并非单点冒进，而是通过纵深部署拉开容错空间。其真正贡献不止于斩获数字，更在于维系了政权对地方的持续控制力。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 49
+      intellect: 10
+      defense: 27
+      agility: 14

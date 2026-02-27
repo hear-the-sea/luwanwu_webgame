@@ -1,0 +1,1225 @@
+heroes:
+  blue:
+  - key: hist_sljnbc_0501
+    name: 胡车儿
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）胡车儿为东汉末年武将，早年随张绣征战关中与荆州，擅长近战突击。其历史意义在于作为军阀混战时期的典型猛将，反映了个人武力在乱世军政中的实际影响。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 49
+      intellect: 16
+      defense: 24
+      agility: 11
+  - key: hist_sljnbc_0511
+    name: 刘繇
+    default_gender: male
+    archetype: military
+    flavor: （156年—197年）刘繇为东汉末年宗室官员，历任扬州刺史，长期经营江东政务与防务。其主要贡献在于在群雄并起之际维持东南地区的汉廷秩序，为后续江东政权形成提供了政治土壤。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 49
+      intellect: 13
+      defense: 29
+      agility: 9
+  - key: hist_sljnbc_0539
+    name: 沙摩柯
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）沙摩柯，三国时期五溪蛮首领，曾率部参与蜀汉对吴作战，具备强悍山地战能力。其主要贡献在于体现西南部族武装在三国战争中的战略价值，拓展了蜀汉兵源结构。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 49
+      intellect: 14
+      defense: 28
+      agility: 9
+  - key: hist_sljnbc_0552
+    name: 文丑
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）文丑为东汉末年河北名将，袁绍麾下重将，曾在北方战场以勇猛著称。其主要贡献在于提升袁氏军团冲击能力，成为官渡前夕北方军事力量的重要支柱之一。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 48
+      intellect: 16
+      defense: 26
+      agility: 10
+  - key: hist_sljnbc_0563
+    name: 袁熙
+    default_gender: male
+    archetype: military
+    flavor: （？—207年）袁熙为东汉末年袁绍次子，曾据守幽州并参与袁氏集团北方经营。其历史意义在于体现世家军阀继承体系的脆弱性，对北方权力重组具有标志性影响。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 49
+      intellect: 13
+      defense: 26
+      agility: 12
+  - key: hist_sljnbc_0568
+    name: 杨奉
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）杨奉为东汉末年军阀将领，先后活动于关中与河洛，曾参与护驾与割据政治。其主要贡献在于其军政选择直接影响了汉末中枢权力流向，是观察东汉解体过程的重要个案。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 47
+      intellect: 16
+      defense: 27
+      agility: 10
+  - key: hist_sljnbc_0586
+    name: 韩嵩
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）韩嵩，所处年代风浪不息，而其人之长恰在于把急务办得不失分寸，其行政风格讲求“文书可核、钱粮可稽、责任可追”，故往往久而见效；在喧嚣叙事之外，他所代表的是基层治理中耐久、低调而有效的力量。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 13
+      intellect: 52
+      defense: 20
+      agility: 15
+  - key: hist_sljnbc_0515
+    name: 李傕
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）李傕，与其说他是“传奇猛将”，不如说是“可靠将才”的典型样本，深知“兵贵整而不贵众”，故尤重训练节律与军心维系；他在危急阶段展现出的组织力，往往比单场胜负更具历史意义。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 46
+      intellect: 17
+      defense: 23
+      agility: 14
+  - key: hist_sljnbc_0523
+    name: 孟达
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）孟达，史书对其生平或有简略，但其在军政链条中的位置绝非可有可无。其用兵兼具刚猛与审慎：可攻则进，不可久战则迅速收束战线。这种可持续的军事治理能力，正是他区别于一般猛将的核心标识。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 43
+      intellect: 11
+      defense: 23
+      agility: 23
+  - key: hist_sljnbc_0560
+    name: 颜良
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）三国两晋南北朝史料中的颜良，其人用兵思路务实，不迷信侥幸，重在把不可控因素压到最低。其用兵兼具刚猛与审慎：可攻则进，不可久战则迅速收束战线。这种可持续的军事治理能力，正是他区别于一般猛将的核心标识。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 48
+      intellect: 15
+      defense: 28
+      agility: 9
+  - key: hist_sljnbc_0504
+    name: 轲比能
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）轲比能，在军中常扮演枢纽角色，既能压阵前线，也能稳住后勤，其统兵不止于冲锋取胜，更重粮道、军械与轮换，使军队具备续战能力；他既能打硬仗，也能收残局，这使其从“战将”迈向“将才”。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 44
+      intellect: 11
+      defense: 27
+      agility: 18
+  - key: hist_sljnbc_0512
+    name: 刘虞
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）刘虞，史书对其生平或有简略，但其在军政链条中的位置绝非可有可无，其战功之外，更难得的是善后能力，能把战后地区尽快拉回常态秩序；其价值在于把兵事纳入秩序修复，而非让战争无限吞噬社会根基。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 42
+      intellect: 12
+      defense: 27
+      agility: 19
+  - key: hist_sljnbc_0531
+    name: 麴义
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）麴义为三国两晋南北朝史料中的麴義，在强敌环伺或内乱并起的背景下，他常被推上最先承压的位置。在高强度行军与驻防转换间处理自如，减少了队伍疲敝与补给断裂。若离开时代滤镜再看，其份量恰在“能把难局撑住”这件事本身。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 45
+      intellect: 15
+      defense: 23
+      agility: 17
+  - key: hist_sljnbc_0562
+    name: 袁尚
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）袁尚，在强敌环伺或内乱并起的背景下，他常被推上最先承压的位置。遇敌情骤变时，他更重信息校核与层级响应，避免误判造成连锁失误。这种“战与治并重”的能力，使其在同代武职中具有长期被调用的价值。
+    growth_range:
+    - 5
+    - 9
+    attribute_weights:
+      force: 42
+      intellect: 15
+      defense: 28
+      agility: 15
+  green:
+  - key: hist_sljnbc_0489
+    name: 步阐
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）步阐，在宏大战争叙事里，他或许不总居于中心，却常决定战线是否崩断，其用兵兼具刚猛与审慎：可攻则进，不可久战则迅速收束战线；这种可持续的军事治理能力，正是他区别于一般猛将的核心标识。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 45
+      intellect: 16
+      defense: 23
+      agility: 16
+  - key: hist_sljnbc_0490
+    name: 爨谷
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）三国两晋南北朝史料中的爨谷，与其说他是“传奇猛将”，不如说是“可靠将才”的典型样本。在攻守转换节点，他善于抓住半日之机，常以小调度换来大战线稳定，其经历说明，名将之难不在一时勇力，而在长期维系军心与秩序。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 44
+      intellect: 13
+      defense: 27
+      agility: 16
+  - key: hist_sljnbc_0491
+    name: 虞察
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）虞察，在宏大战争叙事里，他或许不总居于中心，却常决定战线是否崩断，其用兵兼具刚猛与审慎：可攻则进，不可久战则迅速收束战线；这种可持续的军事治理能力，正是他区别于一般猛将的核心标识。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 45
+      intellect: 16
+      defense: 22
+      agility: 17
+  - key: hist_sljnbc_0493
+    name: 丁原
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）三国两晋南北朝史料中的丁原，活跃于兵事频仍之世，既在前线用兵，也在后方维持军政衔接。其战功之外，更难得的是善后能力，能把战后地区尽快拉回常态秩序。其价值在于把兵事纳入秩序修复，而非让战争无限吞噬社会根基。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 43
+      intellect: 14
+      defense: 25
+      agility: 18
+  - key: hist_sljnbc_0495
+    name: 公孙脩
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）公孙脩，最被看重的，是在逆风局里仍能守住队伍与秩序的能力，其统兵不止于冲锋取胜，更重粮道、军械与轮换，使军队具备续战能力；他既能打硬仗，也能收残局，这使其从“战将”迈向“将才”。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 45
+      intellect: 16
+      defense: 25
+      agility: 14
+  - key: hist_sljnbc_0497
+    name: 顾容
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）顾容，在军中常扮演枢纽角色，既能压阵前线，也能稳住后勤。在攻守转换节点，他善于抓住半日之机，常以小调度换来大战线稳定。其经历说明，名将之难不在一时勇力，而在长期维系军心与秩序。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 47
+      intellect: 11
+      defense: 26
+      agility: 16
+  - key: hist_sljnbc_0499
+    name: 公孙晃
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）公孙晃，最被看重的，是在逆风局里仍能守住队伍与秩序的能力。临阵时他讲究阵形、时机与节奏，不逞匹夫之勇，而以协同压制局势。后人回看其事迹，常能看到一条由实务能力托起的上升路径。
+    growth_range:
+    - 4
+    - 6
+    attribute_weights:
+      force: 44
+      intellect: 11
+      defense: 24
+      agility: 21
+  - key: hist_sljnbc_0503
+    name: 柯吾
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）柯吾，在宏大战争叙事里，他或许不总居于中心，却常决定战线是否崩断。在守城、野战、追击等不同场景中，他都能及时变阵，避免战术僵化。政局反复之下，他仍能保持部队执行力，显示出扎实统御基本功。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 44
+      intellect: 17
+      defense: 26
+      agility: 13
+  - key: hist_sljnbc_0505
+    name: 李勖
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）李勖，最被看重的，是在逆风局里仍能守住队伍与秩序的能力。临阵时他讲究阵形、时机与节奏，不逞匹夫之勇，而以协同压制局势。后人回看其事迹，常能看到一条由实务能力托起的上升路径。
+    growth_range:
+    - 4
+    - 6
+    attribute_weights:
+      force: 47
+      intellect: 16
+      defense: 23
+      agility: 14
+  - key: hist_sljnbc_0506
+    name: 娄圭
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）娄圭，其所处年代兵戈不断，而其价值恰在于把零散兵力组织为可持续战力。在攻守转换节点，他善于抓住半日之机，常以小调度换来大战线稳定。其经历说明，名将之难不在一时勇力，而在长期维系军心与秩序。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 47
+      intellect: 13
+      defense: 27
+      agility: 13
+  - key: hist_sljnbc_0508
+    name: 吕威璜
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）吕威璜，活跃于兵事频仍之世，既在前线用兵，也在后方维持军政衔接。面对突发叛乱或边患，他常先稳交通仓储，再逐层清剿，不轻走险棋，其人在史传中虽未被神化，却因“可靠”二字而具有稳定分量。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 43
+      intellect: 15
+      defense: 24
+      agility: 18
+  - key: hist_sljnbc_0509
+    name: 令狐浚
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）令狐浚，其军事声望并非一战骤起，而是由多次硬仗与苦仗层层累积，其军事判断常以“保主干、清侧翼、留余力”为核心，败局中亦能保元气。的军事人生像一根承重梁，平时不夺目，关键时却不可替代。
+    growth_range:
+    - 4
+    - 6
+    attribute_weights:
+      force: 45
+      intellect: 18
+      defense: 26
+      agility: 11
+  - key: hist_sljnbc_0513
+    name: 吕旷
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）吕旷，出身未必显赫，却能在高压战场中凭纪律与判断站稳脚跟，他在高强度行军与驻防转换间处理自如，减少了队伍疲敝与补给断裂；若离开时代滤镜再看，其份量恰在“能把难局撑住”这件事本身。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 48
+      intellect: 16
+      defense: 25
+      agility: 11
+  - key: hist_sljnbc_0516
+    name: 李邹
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）李邹，史书对其生平或有简略，但其在军政链条中的位置绝非可有可无。其用兵兼具刚猛与审慎：可攻则进，不可久战则迅速收束战线。这种可持续的军事治理能力，正是他区别于一般猛将的核心标识。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 23
+      agility: 17
+  - key: hist_sljnbc_0517
+    name: 梁纲
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）梁纲为三国两晋南北朝史料中的梁綱，其所处年代兵戈不断，而其价值恰在于把零散兵力组织为可持续战力。深知“兵贵整而不贵众”，故尤重训练节律与军心维系。在危急阶段展现出的组织力，往往比单场胜负更具历史意义。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 47
+      intellect: 15
+      defense: 24
+      agility: 14
+  - key: hist_sljnbc_0519
+    name: 雷薄
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）雷薄，与其说他是“传奇猛将”，不如说是“可靠将才”的典型样本，临阵时他讲究阵形、时机与节奏，不逞匹夫之勇，而以协同压制局势。后人回看其事迹，常能看到一条由实务能力托起的上升路径。
+    growth_range:
+    - 4
+    - 6
+    attribute_weights:
+      force: 44
+      intellect: 15
+      defense: 26
+      agility: 15
+  - key: hist_sljnbc_0520
+    name: 毛炅
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）毛炅，其军事声望并非一战骤起，而是由多次硬仗与苦仗层层累积，其军事判断常以“保主干、清侧翼、留余力”为核心，败局中亦能保元气。的军事人生像一根承重梁，平时不夺目，关键时却不可替代。
+    growth_range:
+    - 4
+    - 6
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 27
+      agility: 13
+  - key: hist_sljnbc_0522
+    name: 马遵
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）马遵，出身未必显赫，却能在高压战场中凭纪律与判断站稳脚跟。不迷信速胜，倾向以可复制战法逐步压缩对手活动空间。在强压环境里仍守住章法，这种定力往往比锋锐更稀缺。
+    growth_range:
+    - 4
+    - 6
+    attribute_weights:
+      force: 46
+      intellect: 16
+      defense: 22
+      agility: 16
+  - key: hist_sljnbc_0524
+    name: 马休
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）马休，最被看重的，是在逆风局里仍能守住队伍与秩序的能力，他擅把地方武装、正军与后勤系统串联，令战果不致转瞬流失。其作风朴实而不浮夸，故在乱局中更易获得上下层面的现实支持。
+    growth_range:
+    - 4
+    - 6
+    attribute_weights:
+      force: 44
+      intellect: 15
+      defense: 24
+      agility: 17
+  - key: hist_sljnbc_0526
+    name: 马铁
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）马铁，最被看重的，是在逆风局里仍能守住队伍与秩序的能力。临阵时他讲究阵形、时机与节奏，不逞匹夫之勇，而以协同压制局势。后人回看其事迹，常能看到一条由实务能力托起的上升路径。
+    growth_range:
+    - 4
+    - 6
+    attribute_weights:
+      force: 45
+      intellect: 13
+      defense: 24
+      agility: 18
+  - key: hist_sljnbc_0527
+    name: 牛辅
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）牛辅，最被看重的，是在逆风局里仍能守住队伍与秩序的能力。临阵时他讲究阵形、时机与节奏，不逞匹夫之勇，而以协同压制局势。后人回看其事迹，常能看到一条由实务能力托起的上升路径。
+    growth_range:
+    - 4
+    - 6
+    attribute_weights:
+      force: 47
+      intellect: 17
+      defense: 23
+      agility: 13
+  - key: hist_sljnbc_0528
+    name: 桥瑁
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）桥瑁为三国两晋南北朝史料中的橋瑁，在强敌环伺或内乱并起的背景下，他常被推上最先承压的位置。在高强度行军与驻防转换间处理自如，减少了队伍疲敝与补给断裂。若离开时代滤镜再看，其份量恰在“能把难局撑住”这件事本身。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 11
+      defense: 22
+      agility: 25
+  - key: hist_sljnbc_0529
+    name: 桥蕤
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）桥蕤，其名多见于战役纪载、军籍册牍与地方军报，履历未必华丽，却极具实战质地，其用兵兼具刚猛与审慎：可攻则进，不可久战则迅速收束战线；这种可持续的军事治理能力，正是他区别于一般猛将的核心标识。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 43
+      intellect: 13
+      defense: 23
+      agility: 21
+  - key: hist_sljnbc_0530
+    name: 阙宣
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）阙宣，其战场存在感不靠夸耀，而靠一次次关键节点的有效处置，临阵时他讲究阵形、时机与节奏，不逞匹夫之勇，而以协同压制局势。后人回看其事迹，常能看到一条由实务能力托起的上升路径。
+    growth_range:
+    - 4
+    - 6
+    attribute_weights:
+      force: 42
+      intellect: 12
+      defense: 22
+      agility: 24
+  - key: hist_sljnbc_0532
+    name: 修则
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）修则，并非只会冲阵，真正见长处还在统筹与收束残局。其军事判断常以“保主干、清侧翼、留余力”为核心，败局中亦能保元气。的军事人生像一根承重梁，平时不夺目，关键时却不可替代。
+    growth_range:
+    - 4
+    - 6
+    attribute_weights:
+      force: 45
+      intellect: 13
+      defense: 28
+      agility: 14
+  - key: hist_sljnbc_0533
+    name: 申耽
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）三国两晋南北朝史料中的申耽，其军事声望并非一战骤起，而是由多次硬仗与苦仗层层累积。不迷信速胜，倾向以可复制战法逐步压缩对手活动空间，在强压环境里仍守住章法，这种定力往往比锋锐更稀缺。
+    growth_range:
+    - 4
+    - 6
+    attribute_weights:
+      force: 45
+      intellect: 18
+      defense: 23
+      agility: 14
+  - key: hist_sljnbc_0534
+    name: 宋建
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）宋建，其名多见于战役纪载、军籍册牍与地方军报，履历未必华丽，却极具实战质地，在兵员参差条件下，他强调号令统一与赏罚分明，故部伍较少溃散。留下的，不只是胜负记录，更是一套可被后继者借鉴的处置范式。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 45
+      intellect: 15
+      defense: 22
+      agility: 18
+  - key: hist_sljnbc_0535
+    name: 单经
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）单经，其所处年代兵戈不断，而其价值恰在于把零散兵力组织为可持续战力。在攻守转换节点，他善于抓住半日之机，常以小调度换来大战线稳定。其经历说明，名将之难不在一时勇力，而在长期维系军心与秩序。
+    growth_range:
+    - 5
+    - 8
+    attribute_weights:
+      force: 48
+      intellect: 17
+      defense: 24
+      agility: 11
+  - key: hist_sljnbc_0537
+    name: 宋宪
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）宋宪，其所处年代兵戈不断，而其价值恰在于把零散兵力组织为可持续战力。在攻守转换节点，他善于抓住半日之机，常以小调度换来大战线稳定。其经历说明，名将之难不在一时勇力，而在长期维系军心与秩序。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 42
+      intellect: 13
+      defense: 27
+      agility: 18
+  - key: hist_sljnbc_0538
+    name: 审荣
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）审荣，在强敌环伺或内乱并起的背景下，他常被推上最先承压的位置，其军事判断常以“保主干、清侧翼、留余力”为核心，败局中亦能保元气。的军事人生像一根承重梁，平时不夺目，关键时却不可替代。
+    growth_range:
+    - 4
+    - 6
+    attribute_weights:
+      force: 45
+      intellect: 16
+      defense: 24
+      agility: 15
+  - key: hist_sljnbc_0541
+    name: 眭固
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）眭固，史书对其生平或有简略，但其在军政链条中的位置绝非可有可无，其战功之外，更难得的是善后能力，能把战后地区尽快拉回常态秩序；其价值在于把兵事纳入秩序修复，而非让战争无限吞噬社会根基。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 17
+      defense: 23
+      agility: 18
+  - key: hist_sljnbc_0542
+    name: 苏飞
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）苏飞，与其说他是“传奇猛将”，不如说是“可靠将才”的典型样本，深知“兵贵整而不贵众”，故尤重训练节律与军心维系；他在危急阶段展现出的组织力，往往比单场胜负更具历史意义。
+    growth_range:
+    - 4
+    - 6
+    attribute_weights:
+      force: 47
+      intellect: 16
+      defense: 23
+      agility: 14
+  - key: hist_sljnbc_0543
+    name: 苏由
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）苏由为三国两晋南北朝史料中的蘇由，其人用兵思路务实，不迷信侥幸，重在把不可控因素压到最低。其用兵兼具刚猛与审慎：可攻则进，不可久战则迅速收束战线。这种可持续的军事治理能力，正是他区别于一般猛将的核心标识。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 16
+      defense: 27
+      agility: 15
+  - key: hist_sljnbc_0545
+    name: 田畴
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）田畴，并非只会冲阵，真正见长处还在统筹与收束残局，其指挥并非单点冒进，而是通过纵深部署拉开容错空间。其真正贡献不止于斩获数字，更在于维系了政权对地方的持续控制力。
+    growth_range:
+    - 4
+    - 6
+    attribute_weights:
+      force: 47
+      intellect: 12
+      defense: 26
+      agility: 15
+  - key: hist_sljnbc_0546
+    name: 卫温
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）卫温，活跃于兵事频仍之世，既在前线用兵，也在后方维持军政衔接。面对突发叛乱或边患，他常先稳交通仓储，再逐层清剿，不轻走险棋，其人在史传中虽未被神化，却因“可靠”二字而具有稳定分量。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 45
+      intellect: 11
+      defense: 26
+      agility: 18
+  - key: hist_sljnbc_0547
+    name: 吴匡
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）吴匡，出身未必显赫，却能在高压战场中凭纪律与判断站稳脚跟。其战功之外，更难得的是善后能力，能把战后地区尽快拉回常态秩序。其价值在于把兵事纳入秩序修复，而非让战争无限吞噬社会根基。
+    growth_range:
+    - 4
+    - 6
+    attribute_weights:
+      force: 45
+      intellect: 13
+      defense: 22
+      agility: 20
+  - key: hist_sljnbc_0548
+    name: 万彧
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）万彧为三国两晋南北朝史料中的萬彧，在宏大战争叙事里，他或许不总居于中心，却常决定战线是否崩断。擅把地方武装、正军与后勤系统串联，令战果不致转瞬流失。其作风朴实而不浮夸，故在乱局中更易获得上下层面的现实支持。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 43
+      intellect: 18
+      defense: 25
+      agility: 14
+  - key: hist_sljnbc_0551
+    name: 吴巨
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）吴巨，其人用兵思路务实，不迷信侥幸，重在把不可控因素压到最低。在守城、野战、追击等不同场景中，他都能及时变阵，避免战术僵化，政局反复之下，他仍能保持部队执行力，显示出扎实统御基本功。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 44
+      intellect: 11
+      defense: 27
+      agility: 18
+  - key: hist_sljnbc_0556
+    name: 夏侯威
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）夏侯威，与其说他是“传奇猛将”，不如说是“可靠将才”的典型样本，临阵时他讲究阵形、时机与节奏，不逞匹夫之勇，而以协同压制局势。后人回看其事迹，常能看到一条由实务能力托起的上升路径。
+    growth_range:
+    - 4
+    - 6
+    attribute_weights:
+      force: 47
+      intellect: 13
+      defense: 23
+      agility: 17
+  - key: hist_sljnbc_0557
+    name: 杨稷
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）杨稷，最被看重的，是在逆风局里仍能守住队伍与秩序的能力，其统兵不止于冲锋取胜，更重粮道、军械与轮换，使军队具备续战能力；他既能打硬仗，也能收残局，这使其从“战将”迈向“将才”。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 48
+      intellect: 12
+      defense: 22
+      agility: 18
+  - key: hist_sljnbc_0558
+    name: 虞昺
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）虞昺，活跃于兵事频仍之世，既在前线用兵，也在后方维持军政衔接。面对突发叛乱或边患，他常先稳交通仓储，再逐层清剿，不轻走险棋，其人在史传中虽未被神化，却因“可靠”二字而具有稳定分量。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 44
+      intellect: 17
+      defense: 26
+      agility: 13
+  - key: hist_sljnbc_0559
+    name: 袁遗
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）袁遗，其军事声望并非一战骤起，而是由多次硬仗与苦仗层层累积，其军事判断常以“保主干、清侧翼、留余力”为核心，败局中亦能保元气。的军事人生像一根承重梁，平时不夺目，关键时却不可替代。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 48
+      intellect: 18
+      defense: 25
+      agility: 9
+  - key: hist_sljnbc_0564
+    name: 严白虎
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）严白虎，并非只会冲阵，真正见长处还在统筹与收束残局。其军事判断常以“保主干、清侧翼、留余力”为核心，败局中亦能保元气。的军事人生像一根承重梁，平时不夺目，关键时却不可替代。
+    growth_range:
+    - 4
+    - 6
+    attribute_weights:
+      force: 46
+      intellect: 14
+      defense: 28
+      agility: 12
+  - key: hist_sljnbc_0565
+    name: 严纲
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）严纲，其人用兵思路务实，不迷信侥幸，重在把不可控因素压到最低。面对突发叛乱或边患，他常先稳交通仓储，再逐层清剿，不轻走险棋。其人在史传中虽未被神化，却因“可靠”二字而具有稳定分量。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 48
+      intellect: 15
+      defense: 22
+      agility: 15
+  - key: hist_sljnbc_0566
+    name: 严舆
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）严舆，相关记载虽分散，却可拼接出一位能守能战、进退有章的武职形象。在高强度行军与驻防转换间处理自如，减少了队伍疲敝与补给断裂。若离开时代滤镜再看，其份量恰在“能把难局撑住”这件事本身。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 46
+      intellect: 14
+      defense: 27
+      agility: 13
+  - key: hist_sljnbc_0567
+    name: 尹楷
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）三国两晋南北朝史料中的尹楷，其名多见于战役纪载、军籍册牍与地方军报，履历未必华丽，却极具实战质地。面对突发叛乱或边患，他常先稳交通仓储，再逐层清剿，不轻走险棋，其人在史传中虽未被神化，却因“可靠”二字而具有稳定分量。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 43
+      intellect: 17
+      defense: 26
+      agility: 14
+  - key: hist_sljnbc_0569
+    name: 杨祚
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）杨祚，并非只会冲阵，真正见长处还在统筹与收束残局，他在高强度行军与驻防转换间处理自如，减少了队伍疲敝与补给断裂；若离开时代滤镜再看，其份量恰在“能把难局撑住”这件事本身。
+    growth_range:
+    - 4
+    - 8
+    attribute_weights:
+      force: 47
+      intellect: 12
+      defense: 26
+      agility: 15
+  - key: hist_sljnbc_0570
+    name: 杨丑
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）杨丑，在强敌环伺或内乱并起的背景下，他常被推上最先承压的位置，其军事判断常以“保主干、清侧翼、留余力”为核心，败局中亦能保元气。的军事人生像一根承重梁，平时不夺目，关键时却不可替代。
+    growth_range:
+    - 4
+    - 6
+    attribute_weights:
+      force: 46
+      intellect: 18
+      defense: 22
+      agility: 14
+  - key: hist_sljnbc_0571
+    name: 乐就
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）乐就为三国两晋南北朝史料中的樂就，在强敌环伺或内乱并起的背景下，他常被推上最先承压的位置。在高强度行军与驻防转换间处理自如，减少了队伍疲敝与补给断裂。若离开时代滤镜再看，其份量恰在“能把难局撑住”这件事本身。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 42
+      intellect: 18
+      defense: 23
+      agility: 17
+  - key: hist_sljnbc_0574
+    name: 雍闿
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）雍闿，活跃于兵事频仍之世，既在前线用兵，也在后方维持军政衔接，在兵员参差条件下，他强调号令统一与赏罚分明，故部伍较少溃散。留下的，不只是胜负记录，更是一套可被后继者借鉴的处置范式。
+    growth_range:
+    - 4
+    - 7
+    attribute_weights:
+      force: 43
+      intellect: 15
+      defense: 28
+      agility: 14
+  - key: hist_sljnbc_0575
+    name: 曹彦
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）曹彦为三国两晋南北朝史料中的曹彥，其履历像一卷平实公牍，少有惊艳章句，却处处见功夫。其公牍风格简严明白，减少了政令误读，也提升了执行确定性。其人并不追逐锋芒，反以耐烦与细密见长，故在长期治理里更显珍贵。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 16
+      intellect: 57
+      defense: 19
+      agility: 8
+  - key: hist_sljnbc_0576
+    name: 曹羲
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）曹羲，其生平枝节未必齐备，但从零散记载中仍可辨出一条清晰的治事线索。重视文教与吏治并举，既整顿文书系统，也强调胥吏责任边界。更在意制度留下什么，而非个人留下什么，因此常有迟发而深远的影响。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 13
+      intellect: 53
+      defense: 16
+      agility: 18
+  - key: hist_sljnbc_0579
+    name: 陈声
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）陈声，其履历像一卷平实公牍，少有惊艳章句，却处处见功夫，他办事不尚花哨，往往先厘清权责链条，再逐项压实到具体岗位；其风格看似平实，却能在政策反复时保持方向稳定，减少社会摩擦。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 14
+      intellect: 58
+      defense: 23
+      agility: 5
+  - key: hist_sljnbc_0582
+    name: 傅肜
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）傅肜，见诸史料时，往往不是最喧赫的名字，却总在关键处留下可追索的痕迹，他重视文教与吏治并举，既整顿文书系统，也强调胥吏责任边界；他更在意制度留下什么，而非个人留下什么，因此常有迟发而深远的影响。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 12
+      intellect: 52
+      defense: 17
+      agility: 19
+  - key: hist_sljnbc_0583
+    name: 范粲
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）三国两晋南北朝史料中的范粲，史家着墨或简，但其人“能把事做成”的能力始终被反复提及。其审事不偏锋，常在法理与乡情之间寻找可持续的折中路径。这种不夸饰的作风，使他在变局中虽不常占据台前，却常被视为“托底之人”。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 55
+      defense: 23
+      agility: 9
+  - key: hist_sljnbc_0584
+    name: 国渊
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）国渊为三国两晋南北朝史料中的國淵，其人处世谨严，行事有节，常于看似琐碎处守住政令的筋骨。重视文教与吏治并举，既整顿文书系统，也强调胥吏责任边界。更在意制度留下什么，而非个人留下什么，因此常有迟发而深远的影响。
+    growth_range:
+    - 3
+    - 6
+    attribute_weights:
+      force: 17
+      intellect: 51
+      defense: 23
+      agility: 9
+  - key: hist_sljnbc_0585
+    name: 贺邵
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）贺邵，其人处世谨严，行事有节，常于看似琐碎处守住政令的筋骨。逢灾荒、迁徙或兵后重建，他多采用分层处置，先保秩序，再图长效。其人善守底线而不失通权，使地方社会在压力下仍保有修复能力。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 12
+      intellect: 57
+      defense: 19
+      agility: 12
+  - key: hist_sljnbc_0587
+    name: 纪陟
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）纪陟，所处年代风浪不息，而其人之长恰在于把急务办得不失分寸，其行政风格讲求“文书可核、钱粮可稽、责任可追”，故往往久而见效；在喧嚣叙事之外，他所代表的是基层治理中耐久、低调而有效的力量。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 14
+      intellect: 56
+      defense: 23
+      agility: 7
+  - key: hist_sljnbc_0588
+    name: 顾谭
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）顾谭，并非锋芒毕露之士，却常是同僚眼中可托后局的人。其行政风格讲求“文书可核、钱粮可稽、责任可追”，故往往久而见效。在喧嚣叙事之外，他所代表的是基层治理中耐久、低调而有效的力量。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 17
+      intellect: 56
+      defense: 22
+      agility: 5
+  - key: hist_sljnbc_0492
+    name: 程喜
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）程喜，三国时期武将，长期在州郡防线任职，经历多次攻守转换。其主要贡献在于重视部伍训练与军心整合，在危局中保持军阵不乱，为战线延续提供了稳定支撑。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 50
+      intellect: 16
+      defense: 28
+      agility: 6
+  - key: hist_sljnbc_0496
+    name: 吕兴
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）吕兴，三国时期交州军事首领，曾发动地方反叛并长期组织郡县兵力。其主要贡献在于揭示南方地方势力的动员能力，对后期交州政治格局产生了持续影响。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 45
+      intellect: 13
+      defense: 24
+      agility: 18
+  - key: hist_sljnbc_0498
+    name: 顾承
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）顾承，东吴宗室将领，历任边郡军职，长期参与江东防务与驻军调度。其主要贡献在于强化地方军政衔接，保障了吴国南部与沿江地区的持续控制力。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 47
+      intellect: 11
+      defense: 28
+      agility: 14
+  - key: hist_sljnbc_0502
+    name: 贾范
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）贾范，三国时期军事将校，历经多地调防，兼顾前线作战与后方整备。其主要贡献在于善于收束残局、恢复军序，使战后地区能够较快回归常态治理。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 49
+      intellect: 16
+      defense: 24
+      agility: 11
+  - key: hist_sljnbc_0507
+    name: 吕翔
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）吕翔为东汉末年袁氏阵营将领，曾参与河北战事并负责地方驻防。其主要贡献在于在混战中维持军政衔接，体现了中层武将对战线稳定的关键作用。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 48
+      intellect: 16
+      defense: 29
+      agility: 7
+  - key: hist_sljnbc_0510
+    name: 伦直
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）伦直，三国时期地方武官，长期在前线与郡县之间轮调，兼有作战和安抚经验。其主要贡献在于把军事行动与战后修复结合，减少了战争对地方社会的持续破坏。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 45
+      intellect: 14
+      defense: 27
+      agility: 14
+  - key: hist_sljnbc_0521
+    name: 芒中
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）芒中，三国时期军中将校，长期承担部曲整编与战时调度任务。其主要贡献在于把零散兵力转化为可持续战力，提升了军队在突发战况下的应对能力。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 44
+      intellect: 15
+      defense: 25
+      agility: 16
+  - key: hist_sljnbc_0525
+    name: 马延
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）马延为东汉末年武将，活跃于北方战线，擅长纵深布置与阵地协同。其主要贡献在于通过稳健用兵维系地方控制力，避免战线因冒进而骤然崩断。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 48
+      intellect: 14
+      defense: 28
+      agility: 10
+  - key: hist_sljnbc_0536
+    name: 孙歆
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）孙歆，东吴宗室将领，曾在江东与山越地区执行军事任务，兼管地方安抚。其主要贡献在于把清剿行动与地方恢复结合，保障了吴国边缘地区的持续治理。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 44
+      intellect: 15
+      defense: 28
+      agility: 13
+  - key: hist_sljnbc_0540
+    name: 眭元进
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）眭元进为东汉末年袁绍部将，长期担任骑步协同作战任务，参与官渡前后战事。其主要贡献在于以阵形与时机控制提升部队协同度，反映了北方军团作战方式的成熟面向。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 44
+      intellect: 16
+      defense: 29
+      agility: 11
+  - key: hist_sljnbc_0549
+    name: 魏续
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）魏续为东汉末年吕布部将，长期参与并州与徐州战事，兼有前锋与守备职责。其历史意义在于折射群雄麾下中层将领的两难处境，体现军纪、忠诚与生存之间的复杂张力。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 49
+      intellect: 15
+      defense: 28
+      agility: 8
+  - key: hist_sljnbc_0550
+    name: 伍习
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）伍习，三国时期地方武将，历任郡县军职，擅长交通线与补给线维护。其主要贡献在于先稳后剿的处置策略，使地方平叛行动具备持续性与可控性。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 49
+      intellect: 15
+      defense: 25
+      agility: 11
+  - key: hist_sljnbc_0553
+    name: 魏攸
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）魏攸，三国时期军事将校，兼历前线作战与后方整军，熟悉军政衔接流程。其主要贡献在于以可复制战法稳定战区秩序，增强了政权对地方的持续控制能力。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 47
+      intellect: 12
+      defense: 24
+      agility: 17
+  - key: hist_sljnbc_0555
+    name: 许昭
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）许昭，三国时期地方军官，长期负责兵员整编与驻防训练，擅长稳住军心。其主要贡献在于将临时武装转化为可持续战力，为地方防务提供了可靠基础。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 45
+      intellect: 15
+      defense: 25
+      agility: 15
+  - key: hist_sljnbc_0561
+    name: 郁筑鞬
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）郁筑鞬，三国时期边地武将，活跃于北方边防战场，兼具作战与安置经验。其主要贡献在于重视战后秩序修复，减少了战事对地方社会结构的长期破坏。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 46
+      intellect: 11
+      defense: 25
+      agility: 18
+  - key: hist_sljnbc_0572
+    name: 虞耸
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）虞耸，三国时期地方武将，长期承担守城与机动作战任务，经历多线战局考验。其主要贡献在于在逆风局中维持队伍执行力，为地方政权守住了关键防线。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 45
+      intellect: 14
+      defense: 27
+      agility: 14
+  - key: hist_sljnbc_0573
+    name: 阎宇
+    default_gender: male
+    archetype: military
+    flavor: （生卒年不详）阎宇，三国后期蜀汉将领，历任边防军职，长期参与蜀北防务。其主要贡献在于以稳健调度维持蜀汉后期防线，延缓了边境压力向腹地传导。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 45
+      intellect: 14
+      defense: 25
+      agility: 16
+  - key: hist_sljnbc_0577
+    name: 曹训
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）曹训，三国时期文官，历任州县簿曹与督办职位，长期处理赋役、仓储与讼务。其主要贡献在于以细密流程稳住基层政务，提升了地方治理的持续性。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 11
+      intellect: 52
+      defense: 24
+      agility: 13
+  - key: hist_sljnbc_0578
+    name: 曹遵
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）曹遵，三国时期州郡文官，兼历教化与吏治事务，熟悉文书整饬与责任划分。其主要贡献在于推进制度化管理，降低了地方行政的脱节与失序风险。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 13
+      intellect: 52
+      defense: 20
+      agility: 15
+  - key: hist_sljnbc_0580
+    name: 范慎
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）范慎，其人处世谨严，行事有节，常于看似琐碎处守住政令的筋骨。凡遇赋役、仓储、徭役、争讼等实务，他惯于先厘清流程，再安顿人心，使政策不致空转，同僚对他多有“可信、可久”的评价，这在多故之世尤为难得。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 10
+      intellect: 52
+      defense: 22
+      agility: 16
+  - key: hist_sljnbc_0581
+    name: 傅巽
+    default_gender: male
+    archetype: civil
+    flavor: （生卒年不详）三国两晋南北朝史料中的傅巽，其人处世谨严，行事有节，常于看似琐碎处守住政令的筋骨。重视文教与吏治并举，既整顿文书系统，也强调胥吏责任边界。更在意制度留下什么，而非个人留下什么，因此常有迟发而深远的影响。
+    growth_range:
+    - 3
+    - 7
+    attribute_weights:
+      force: 15
+      intellect: 54
+      defense: 20
+      agility: 11
