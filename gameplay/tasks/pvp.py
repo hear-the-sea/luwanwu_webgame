@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 
 from celery import shared_task
 from django.utils import timezone
@@ -35,10 +36,10 @@ def complete_scout_task(self, record_id: int):
             return "already_completed"
 
         if record.complete_at and record.complete_at > now:
-            remaining = int((record.complete_at - now).total_seconds())
+            remaining = math.ceil((record.complete_at - now).total_seconds())
             if remaining > 0:
                 # 使用去重机制避免并发重复调度
-                safe_apply_async_with_dedup(
+                dispatched = safe_apply_async_with_dedup(
                     complete_scout_task,
                     dedup_key=f"pvp:scout:complete:{record_id}",
                     dedup_timeout=_TASK_DEDUP_TIMEOUT,
@@ -47,6 +48,8 @@ def complete_scout_task(self, record_id: int):
                     logger=logger,
                     log_message=f"scout task reschedule failed: record_id={record_id}",
                 )
+                if not dispatched:
+                    raise RuntimeError(f"scout reschedule dispatch failed: record_id={record_id}")
                 return "rescheduled"
 
         finalize_scout(record, now=now)
@@ -77,10 +80,10 @@ def complete_scout_return_task(self, record_id: int):
             return "invalid_status"
 
         if record.return_at and record.return_at > now:
-            remaining = int((record.return_at - now).total_seconds())
+            remaining = math.ceil((record.return_at - now).total_seconds())
             if remaining > 0:
                 # 使用去重机制避免并发重复调度
-                safe_apply_async_with_dedup(
+                dispatched = safe_apply_async_with_dedup(
                     complete_scout_return_task,
                     dedup_key=f"pvp:scout:return:{record_id}",
                     dedup_timeout=_TASK_DEDUP_TIMEOUT,
@@ -89,6 +92,8 @@ def complete_scout_return_task(self, record_id: int):
                     logger=logger,
                     log_message=f"scout return task reschedule failed: record_id={record_id}",
                 )
+                if not dispatched:
+                    raise RuntimeError(f"scout return reschedule dispatch failed: record_id={record_id}")
                 return "rescheduled"
 
         finalize_scout_return(record, now=now)
@@ -168,9 +173,9 @@ def process_raid_battle_task(self, run_id: int):
         # Retreating troops should not be settled early at battle_at; wait for return_at
         if run.status == RaidRun.Status.RETREATED:
             if run.return_at and run.return_at > now:
-                remaining = int((run.return_at - now).total_seconds())
+                remaining = math.ceil((run.return_at - now).total_seconds())
                 if remaining > 0:
-                    safe_apply_async_with_dedup(
+                    dispatched = safe_apply_async_with_dedup(
                         complete_raid_task,
                         dedup_key=f"pvp:raid:complete:{run_id}",
                         dedup_timeout=_TASK_DEDUP_TIMEOUT,
@@ -179,8 +184,10 @@ def process_raid_battle_task(self, run_id: int):
                         logger=logger,
                         log_message=f"raid complete task reschedule failed: run_id={run_id}",
                     )
+                    if not dispatched:
+                        raise RuntimeError(f"raid complete reschedule dispatch failed: run_id={run_id}")
                     return "retreated_rescheduled"
-            safe_apply_async_with_dedup(
+            dispatched = safe_apply_async_with_dedup(
                 complete_raid_task,
                 dedup_key=f"pvp:raid:complete:{run_id}",
                 dedup_timeout=_TASK_DEDUP_TIMEOUT,
@@ -189,12 +196,14 @@ def process_raid_battle_task(self, run_id: int):
                 logger=logger,
                 log_message=f"raid complete task forward failed: run_id={run_id}",
             )
+            if not dispatched:
+                raise RuntimeError(f"raid complete forward dispatch failed: run_id={run_id}")
             return "retreated_forwarded"
 
         if run.status == RaidRun.Status.MARCHING and run.battle_at and run.battle_at > now:
-            remaining = int((run.battle_at - now).total_seconds())
+            remaining = math.ceil((run.battle_at - now).total_seconds())
             if remaining > 0:
-                safe_apply_async_with_dedup(
+                dispatched = safe_apply_async_with_dedup(
                     process_raid_battle_task,
                     dedup_key=f"pvp:raid:battle:{run_id}",
                     dedup_timeout=_TASK_DEDUP_TIMEOUT,
@@ -203,6 +212,8 @@ def process_raid_battle_task(self, run_id: int):
                     logger=logger,
                     log_message=f"raid battle task reschedule failed: run_id={run_id}",
                 )
+                if not dispatched:
+                    raise RuntimeError(f"raid battle reschedule dispatch failed: run_id={run_id}")
                 return "rescheduled"
 
         process_raid_battle(run, now=now)
@@ -238,9 +249,9 @@ def complete_raid_task(self, run_id: int):
         # Retreated status completes directly
         if run.status == RaidRun.Status.RETREATED:
             if run.return_at and run.return_at > now:
-                remaining = int((run.return_at - now).total_seconds())
+                remaining = math.ceil((run.return_at - now).total_seconds())
                 if remaining > 0:
-                    safe_apply_async_with_dedup(
+                    dispatched = safe_apply_async_with_dedup(
                         complete_raid_task,
                         dedup_key=f"pvp:raid:complete:{run_id}",
                         dedup_timeout=_TASK_DEDUP_TIMEOUT,
@@ -249,6 +260,8 @@ def complete_raid_task(self, run_id: int):
                         logger=logger,
                         log_message=f"raid complete task reschedule failed: run_id={run_id}",
                     )
+                    if not dispatched:
+                        raise RuntimeError(f"raid complete reschedule dispatch failed: run_id={run_id}")
                     return "rescheduled"
             finalize_raid(run, now=now)
             return "completed"
@@ -256,9 +269,9 @@ def complete_raid_task(self, run_id: int):
         # Returning status checks time
         if run.status == RaidRun.Status.RETURNING:
             if run.return_at and run.return_at > now:
-                remaining = int((run.return_at - now).total_seconds())
+                remaining = math.ceil((run.return_at - now).total_seconds())
                 if remaining > 0:
-                    safe_apply_async_with_dedup(
+                    dispatched = safe_apply_async_with_dedup(
                         complete_raid_task,
                         dedup_key=f"pvp:raid:complete:{run_id}",
                         dedup_timeout=_TASK_DEDUP_TIMEOUT,
@@ -267,6 +280,8 @@ def complete_raid_task(self, run_id: int):
                         logger=logger,
                         log_message=f"raid complete task reschedule failed: run_id={run_id}",
                     )
+                    if not dispatched:
+                        raise RuntimeError(f"raid complete reschedule dispatch failed: run_id={run_id}")
                     return "rescheduled"
             finalize_raid(run, now=now)
             return "completed"

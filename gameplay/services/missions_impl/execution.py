@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import os
 from datetime import timedelta
 from typing import Any, Dict, List, Set, Tuple
@@ -560,7 +561,7 @@ def _schedule_mission_completion_task(run: MissionRun, complete_mission_task) ->
     if run.return_at is None:
         raise RuntimeError("Mission run was not created correctly")
 
-    countdown = max(0, int((run.return_at - timezone.now()).total_seconds()))
+    countdown = max(0, math.ceil((run.return_at - timezone.now()).total_seconds()))
     safe_apply_async(
         complete_mission_task,
         args=[run.id],
@@ -631,7 +632,7 @@ def schedule_mission_completion(run: MissionRun) -> None:
 
     if not run.return_at:
         return
-    countdown = max(0, int((run.return_at - timezone.now()).total_seconds()))
+    countdown = max(0, math.ceil((run.return_at - timezone.now()).total_seconds()))
     safe_apply_async(
         complete_mission_task,
         args=[run.id],

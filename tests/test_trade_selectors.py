@@ -56,8 +56,10 @@ def test_get_trade_context_shop_builds_categories_and_filters(monkeypatch, djang
         ),
     ]
 
+    captured = {"category": "unset"}
+
     def _sellable_inventory(_manor, category=None):
-        assert category == "tool"
+        captured["category"] = category
         return [_DummySellable(inventory_item=object(), sell_price=1)]
 
     monkeypatch.setattr("trade.selectors.get_shop_items_for_display", lambda: list(shop_items))
@@ -70,6 +72,7 @@ def test_get_trade_context_shop_builds_categories_and_filters(monkeypatch, djang
     assert context["current_tab"] == "shop"
     assert context["selected_category"] == "tool"
     assert [item.key for item in context["shop_items"]] == ["tool_item"]
+    assert captured["category"] is None
 
     category_keys = [c["key"] for c in context["categories"]]
     assert "all" in category_keys

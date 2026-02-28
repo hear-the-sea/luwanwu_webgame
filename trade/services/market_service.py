@@ -570,7 +570,16 @@ def _expire_listings_queryset(expired_listings: QuerySet, log_label: str, limit:
                 # 在事务内重新获取并锁定记录，防止并发处理
                 # 使用 select_for_update(skip_locked=True) 进一步优化并发，
                 # 如果其他进程正在处理该行，直接跳过而不是等待
-                listing = MarketListing.objects.select_for_update(skip_locked=True).filter(pk=listing.pk).first()
+                listing = (
+                    MarketListing.objects.select_for_update(skip_locked=True)
+                    .select_related("seller", "item_template")
+                    .filter(
+                        pk=listing.pk,
+                        status=MarketListing.Status.ACTIVE,
+                        expires_at__lte=timezone.now(),
+                    )
+                    .first()
+                )
 
                 if not listing:
                     # 已经被其他进程处理或删除

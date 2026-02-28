@@ -47,15 +47,17 @@ def safe_apply_async_with_dedup(
     Returns True when dispatch succeeded, or when another worker/request already dispatched
     the same dedup key in the dedup window. Returns False only when dispatch fails.
     """
+    dedup_gate_acquired = False
     if dedup_key and dedup_timeout > 0:
         try:
-            if not cache.add(dedup_key, "1", timeout=dedup_timeout):
+            dedup_gate_acquired = bool(cache.add(dedup_key, "1", timeout=dedup_timeout))
+            if not dedup_gate_acquired:
                 return True
         except Exception:
             if logger:
                 logger.debug("celery dispatch dedup cache unavailable: %s", dedup_key, exc_info=True)
 
-    return safe_apply_async(
+    ok = safe_apply_async(
         task,
         args=args,
         kwargs=kwargs,
@@ -63,3 +65,14 @@ def safe_apply_async_with_dedup(
         logger=logger,
         log_message=log_message,
     )
+    if ok:
+        return True
+
+    # Roll back dedup gate on dispatch failure to avoid dropping retries in the dedup window.
+    if dedup_gate_acquired:
+        try:
+            cache.delete(dedup_key)
+        except Exception:
+            if logger:
+                logger.debug("celery dispatch dedup rollback failed: %s", dedup_key, exc_info=True)
+    return False

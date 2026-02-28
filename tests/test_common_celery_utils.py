@@ -116,7 +116,9 @@ def test_safe_apply_async_with_dedup_dispatches_when_gate_open(monkeypatch):
 
 def test_safe_apply_async_with_dedup_returns_false_on_dispatch_error(monkeypatch):
     task = _Task(should_fail=True)
+    deleted = {"keys": []}
     monkeypatch.setattr(celery_utils.cache, "add", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(celery_utils.cache, "delete", lambda key: deleted["keys"].append(key))
 
     ok = celery_utils.safe_apply_async_with_dedup(
         task,
@@ -127,6 +129,7 @@ def test_safe_apply_async_with_dedup_returns_false_on_dispatch_error(monkeypatch
 
     assert ok is False
     assert task.called == 1
+    assert deleted["keys"] == ["test:key3"]
 
 
 def test_safe_apply_async_with_dedup_falls_back_when_cache_unavailable(monkeypatch):

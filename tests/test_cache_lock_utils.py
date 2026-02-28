@@ -175,3 +175,57 @@ def test_cache_lock_release_skips_on_token_mismatch(monkeypatch):
         log_context="test lock",
     )
     assert fake_cache.deleted == ["lock:test:mismatch"]
+
+
+def test_release_cache_key_if_owner_prefers_atomic_path(monkeypatch):
+    logger = logging.getLogger(__name__)
+    called = {"atomic": 0, "fallback": 0}
+
+    def _atomic(*_args, **_kwargs):
+        called["atomic"] += 1
+        return True
+
+    def _fallback(*_args, **_kwargs):
+        called["fallback"] += 1
+        return True
+
+    monkeypatch.setattr(cache_lock, "_release_cache_lock_atomic_if_owner", _atomic)
+    monkeypatch.setattr(cache_lock, "_release_cache_lock_non_atomic_if_owner", _fallback)
+
+    released = cache_lock.release_cache_key_if_owner(
+        "lock:test:atomic",
+        lock_token="token",
+        logger=logger,
+        log_context="test release",
+    )
+
+    assert released is True
+    assert called["atomic"] == 1
+    assert called["fallback"] == 0
+
+
+def test_release_cache_key_if_owner_falls_back_when_atomic_unavailable(monkeypatch):
+    logger = logging.getLogger(__name__)
+    called = {"atomic": 0, "fallback": 0}
+
+    def _atomic(*_args, **_kwargs):
+        called["atomic"] += 1
+        return None
+
+    def _fallback(*_args, **_kwargs):
+        called["fallback"] += 1
+        return True
+
+    monkeypatch.setattr(cache_lock, "_release_cache_lock_atomic_if_owner", _atomic)
+    monkeypatch.setattr(cache_lock, "_release_cache_lock_non_atomic_if_owner", _fallback)
+
+    released = cache_lock.release_cache_key_if_owner(
+        "lock:test:fallback",
+        lock_token="token",
+        logger=logger,
+        log_context="test release",
+    )
+
+    assert released is True
+    assert called["atomic"] == 1
+    assert called["fallback"] == 1

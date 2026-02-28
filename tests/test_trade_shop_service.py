@@ -12,6 +12,7 @@ from trade.services.shop_service import (
     _get_category,
     _normalize_effect_type,
     buy_item,
+    get_sellable_inventory,
     get_shop_items_for_display,
     sell_item,
 )
@@ -192,3 +193,54 @@ def test_sell_item_grants_silver_and_clears_zero_inventory(monkeypatch, django_u
     assert log.quantity == 1
     assert log.unit_price == 7
     assert log.total_income == 7
+
+
+@pytest.mark.django_db
+def test_get_sellable_inventory_loads_shop_config_once(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="shop_sellable_perf", password="pass12345")
+    manor = ensure_manor(user)
+
+    override_template = ItemTemplate.objects.create(
+        key="shop_sellable_override",
+        name="覆盖价物品",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=False,
+        tradeable=False,
+        price=3,
+    )
+    default_template = ItemTemplate.objects.create(
+        key="shop_sellable_default",
+        name="默认价物品",
+        effect_type=ItemTemplate.EffectType.MEDICINE,
+        is_usable=False,
+        tradeable=False,
+        price=9,
+    )
+
+    InventoryItem.objects.create(
+        manor=manor,
+        template=override_template,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        quantity=2,
+    )
+    InventoryItem.objects.create(
+        manor=manor,
+        template=default_template,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        quantity=2,
+    )
+
+    calls = {"count": 0}
+
+    def _fake_shop_config():
+        calls["count"] += 1
+        return [ShopItemConfig(item_key=override_template.key, price=15, stock=-1, daily_refresh=False)]
+
+    monkeypatch.setattr("trade.services.shop_service.get_shop_config", _fake_shop_config)
+
+    sellable_items = get_sellable_inventory(manor)
+    prices = {row.inventory_item.template.key: row.sell_price for row in sellable_items}
+
+    assert calls["count"] == 1
+    assert prices[override_template.key] == 15
+    assert prices[default_template.key] == 9

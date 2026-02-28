@@ -74,6 +74,50 @@ def test_complete_mission_task_reschedules_when_not_due(monkeypatch):
 
 
 @pytest.mark.django_db
+def test_complete_mission_task_reschedules_with_ceil_for_fractional_remaining(monkeypatch):
+    now = timezone.now()
+    run = SimpleNamespace(return_at=now + timedelta(milliseconds=250))
+
+    monkeypatch.setattr("gameplay.tasks.missions.MissionRun", SimpleNamespace(objects=_Chain(first_result=run)))
+    monkeypatch.setattr("gameplay.tasks.missions.timezone.now", lambda: now)
+
+    called = {}
+
+    def _safe_apply_async_with_dedup(*_args, args=None, countdown=None, **_kwargs):
+        called["args"] = args
+        called["countdown"] = countdown
+        return True
+
+    monkeypatch.setattr("gameplay.tasks.missions.safe_apply_async_with_dedup", _safe_apply_async_with_dedup)
+
+    assert tasks.complete_mission_task.run(101) == "rescheduled"
+    assert called["args"] == [101]
+    assert called["countdown"] == 1
+
+
+@pytest.mark.django_db
+def test_complete_mission_task_retries_when_reschedule_dispatch_fails(monkeypatch):
+    now = timezone.now()
+    run = SimpleNamespace(return_at=now + timedelta(seconds=5))
+
+    monkeypatch.setattr("gameplay.tasks.missions.MissionRun", SimpleNamespace(objects=_Chain(first_result=run)))
+    monkeypatch.setattr("gameplay.tasks.missions.safe_apply_async_with_dedup", lambda *_args, **_kwargs: False)
+
+    retried = {}
+
+    def _retry(*, exc=None, **_kwargs):
+        retried["exc"] = exc
+        raise RuntimeError("retry requested")
+
+    monkeypatch.setattr(tasks.complete_mission_task, "retry", _retry)
+
+    with pytest.raises(RuntimeError, match="retry requested"):
+        tasks.complete_mission_task.run(102)
+
+    assert "mission reschedule dispatch failed" in str(retried["exc"])
+
+
+@pytest.mark.django_db
 def test_complete_building_upgrade_completes_or_skips(monkeypatch):
     now = timezone.now()
     building = SimpleNamespace(upgrade_complete_at=now - timedelta(seconds=1), id=7)
@@ -88,6 +132,38 @@ def test_complete_building_upgrade_completes_or_skips(monkeypatch):
 
     monkeypatch.setattr("gameplay.tasks.buildings.finalize_building_upgrade", lambda *_args, **_kwargs: False)
     assert tasks.complete_building_upgrade.run(7) == "skipped"
+
+
+@pytest.mark.django_db
+def test_complete_building_upgrade_reschedules_when_fractional_remaining(monkeypatch):
+    now = timezone.now()
+    building = SimpleNamespace(upgrade_complete_at=now + timedelta(milliseconds=300), id=8)
+
+    class _Building:
+        objects = _Chain(first_result=building)
+
+    monkeypatch.setattr("gameplay.models.Building", _Building)
+    monkeypatch.setattr("gameplay.tasks.buildings.timezone.now", lambda: now)
+
+    finalized = []
+    monkeypatch.setattr(
+        "gameplay.tasks.buildings.finalize_building_upgrade",
+        lambda *_args, **_kwargs: finalized.append(True),
+    )
+
+    called = {}
+
+    def _safe_apply_async_with_dedup(*_args, args=None, countdown=None, **_kwargs):
+        called["args"] = args
+        called["countdown"] = countdown
+        return True
+
+    monkeypatch.setattr("gameplay.tasks.buildings.safe_apply_async_with_dedup", _safe_apply_async_with_dedup)
+
+    assert tasks.complete_building_upgrade.run(8) == "rescheduled"
+    assert called["args"] == [8]
+    assert called["countdown"] == 1
+    assert not finalized
 
 
 @pytest.mark.django_db
@@ -141,6 +217,34 @@ def test_complete_horse_production_reschedules(monkeypatch):
     assert tasks.complete_horse_production.run(99) == "rescheduled"
     assert called["args"] == [99]
     assert called["countdown"] > 0
+
+
+@pytest.mark.django_db
+def test_complete_horse_production_reschedules_with_ceil_for_fractional_remaining(monkeypatch):
+    now = timezone.now()
+    production = SimpleNamespace(complete_at=now + timedelta(milliseconds=200))
+
+    class _HorseProduction:
+        class Status:
+            PRODUCING = "producing"
+
+        objects = _Chain(first_result=production)
+
+    monkeypatch.setattr("gameplay.models.HorseProduction", _HorseProduction)
+    monkeypatch.setattr("gameplay.tasks.production.timezone.now", lambda: now)
+
+    called = {}
+
+    def _safe_apply_async_with_dedup(*_args, args=None, countdown=None, **_kwargs):
+        called["args"] = args
+        called["countdown"] = countdown
+        return True
+
+    monkeypatch.setattr("gameplay.tasks.production.safe_apply_async_with_dedup", _safe_apply_async_with_dedup)
+
+    assert tasks.complete_horse_production.run(103) == "rescheduled"
+    assert called["args"] == [103]
+    assert called["countdown"] == 1
 
 
 @pytest.mark.django_db

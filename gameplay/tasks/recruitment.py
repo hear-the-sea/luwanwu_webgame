@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 
 from celery import shared_task
 from django.utils import timezone
@@ -29,9 +30,9 @@ def complete_troop_recruitment(self, recruitment_id: int):
 
         now = timezone.now()
         if recruitment.complete_at and recruitment.complete_at > now:
-            remaining = int((recruitment.complete_at - now).total_seconds())
+            remaining = math.ceil((recruitment.complete_at - now).total_seconds())
             if remaining > 0:
-                safe_apply_async_with_dedup(
+                dispatched = safe_apply_async_with_dedup(
                     complete_troop_recruitment,
                     dedup_key=f"recruitment:troop:{recruitment_id}",
                     dedup_timeout=_TASK_DEDUP_TIMEOUT,
@@ -40,6 +41,8 @@ def complete_troop_recruitment(self, recruitment_id: int):
                     logger=logger,
                     log_message=f"troop recruitment reschedule failed: id={recruitment_id}",
                 )
+                if not dispatched:
+                    raise RuntimeError(f"troop recruitment reschedule dispatch failed: id={recruitment_id}")
                 return "rescheduled"
 
         finalized = finalize_troop_recruitment(recruitment, send_notification=True)

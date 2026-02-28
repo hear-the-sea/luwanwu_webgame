@@ -188,3 +188,38 @@ def release_best_effort_lock(
         if existing[0] != lock_token:
             return
         _LOCAL_LOCKS.pop(key, None)
+
+
+def release_cache_key_if_owner(
+    key: str,
+    *,
+    lock_token: str | None,
+    logger: logging.Logger,
+    log_context: str,
+) -> bool:
+    """
+    Release a cache-backed lock key only when the token matches ownership.
+
+    Returns:
+        True when key was deleted by owner, otherwise False.
+    """
+    if not lock_token:
+        logger.warning("%s lock_token missing, skip release: key=%s", log_context, key)
+        return False
+
+    released = _release_cache_lock_atomic_if_owner(
+        key,
+        lock_token=lock_token,
+        logger=logger,
+        log_context=log_context,
+    )
+    if released is True:
+        return True
+    if released is None:
+        return _release_cache_lock_non_atomic_if_owner(
+            key,
+            lock_token=lock_token,
+            logger=logger,
+            log_context=log_context,
+        )
+    return False

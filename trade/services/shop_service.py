@@ -142,6 +142,18 @@ def get_shop_items_for_display() -> List[ShopItemDisplay]:
     return result
 
 
+def _build_sell_price_overrides() -> dict[str, int]:
+    """
+    构建回收价覆盖表，避免在遍历库存时重复线性扫描商店配置。
+    """
+    overrides: dict[str, int] = {}
+    for config in get_shop_config():
+        if config.price is None:
+            continue
+        overrides[config.item_key] = _coerce_non_negative_int(config.price, 0)
+    return overrides
+
+
 def get_sellable_inventory(manor: Manor, category: str = None) -> List[SellableItemDisplay]:
     """
     获取玩家可出售的物品列表
@@ -165,10 +177,13 @@ def get_sellable_inventory(manor: Manor, category: str = None) -> List[SellableI
         else:
             items = items.filter(template__effect_type=normalized_category)
 
+    sell_price_overrides = _build_sell_price_overrides()
     result = []
 
     for item in items:
-        sell_price = get_sell_price_by_template(item.template)
+        sell_price = sell_price_overrides.get(item.template.key)
+        if sell_price is None:
+            sell_price = _coerce_non_negative_int(item.template.price, 0)
         if sell_price > 0:  # 只显示有回收价的物品
             result.append(SellableItemDisplay(inventory_item=item, sell_price=sell_price))
 
@@ -315,22 +330,9 @@ def sell_item(manor: Manor, item_key: str, quantity: int) -> Dict:
 
     # 获取物品模板
     try:
-        template = ItemTemplate.objects.get(key=item_key)
+        template = ItemTemplate.objects.only("id", "key", "name", "price").get(key=item_key)
     except ItemTemplate.DoesNotExist:
         raise ValueError("物品不存在")
-
-    # 获取背包物品（不使用 select_for_update 以避免锁顺序问题）
-    # IMPORTANT: Must specify storage_location to avoid MultipleObjectsReturned
-    # when the same template exists in both warehouse and treasury
-    try:
-        inventory_item = InventoryItem.objects.get(
-            manor=manor, template=template, storage_location=InventoryItem.StorageLocation.WAREHOUSE
-        )
-    except InventoryItem.DoesNotExist:
-        raise ValueError("您没有该物品")
-
-    if inventory_item.quantity < quantity:
-        raise ValueError("物品数量不足")
 
     # 计算回收价
     unit_price = get_sell_price_by_template(template)
@@ -341,6 +343,24 @@ def sell_item(manor: Manor, item_key: str, quantity: int) -> Dict:
 
     # 锁定庄园并发放银两（并发安全）
     locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
+    # 扣除背包物品（使用原子操作，在 Manor 锁之后）
+    # IMPORTANT: Must specify storage_location to avoid touching treasury rows.
+    updated = InventoryItem.objects.filter(
+        manor=locked_manor,
+        template=template,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        quantity__gte=quantity,
+    ).update(quantity=F("quantity") - quantity)
+    if not updated:
+        has_item = InventoryItem.objects.filter(
+            manor=locked_manor,
+            template=template,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        ).exists()
+        if not has_item:
+            raise ValueError("您没有该物品")
+        raise ValueError("物品数量不足")
+
     grant_resources_locked(
         locked_manor,
         {"silver": total_income},
@@ -348,16 +368,13 @@ def sell_item(manor: Manor, item_key: str, quantity: int) -> Dict:
         ResourceEvent.Reason.SHOP_SELL,
     )
 
-    # 扣除背包物品（使用原子操作，在 Manor 锁之后）
-    # Use atomic F() expression to prevent race conditions
-    updated = InventoryItem.objects.filter(pk=inventory_item.pk, quantity__gte=quantity).update(
-        quantity=F("quantity") - quantity
-    )
-    if not updated:
-        raise ValueError("物品数量不足")
-
     # 清理库存为 0 的物品
-    InventoryItem.objects.filter(pk=inventory_item.pk, quantity=0).delete()
+    InventoryItem.objects.filter(
+        manor=locked_manor,
+        template=template,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        quantity=0,
+    ).delete()
 
     # 记录出售日志
     ShopSellLog.objects.create(

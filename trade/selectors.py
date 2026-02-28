@@ -195,7 +195,8 @@ def _update_shop_context(request, manor, context: dict) -> None:
         logger.warning("load shop items failed: %s", exc, exc_info=True)
         shop_items = []
     try:
-        sellable_items = list(get_sellable_inventory(manor, category=selected_category))
+        # 买入筛选只作用于买入列表；卖出列表始终展示全部可售物品
+        sellable_items = list(get_sellable_inventory(manor))
     except Exception as exc:
         logger.warning("load sellable inventory failed: %s", exc, exc_info=True)
         sellable_items = []

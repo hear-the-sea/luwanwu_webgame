@@ -196,7 +196,7 @@ def test_refresh_manor_state_local_fallback_throttles_when_cache_unavailable(dja
     refresh_manor_state(manor)
     refresh_manor_state(manor)
 
-    assert calls == {"finalize": 1, "resource": 1, "mission": 1}
+    assert calls == {"finalize": 2, "resource": 1, "mission": 1}
 
 
 @pytest.mark.django_db
@@ -233,4 +233,59 @@ def test_refresh_manor_state_local_fallback_allows_after_interval(django_user_mo
     refresh_manor_state(manor)
     refresh_manor_state(manor)
 
-    assert calls == {"finalize": 2, "resource": 2, "mission": 2}
+    assert calls == {"finalize": 3, "resource": 2, "mission": 2}
+
+
+@pytest.mark.django_db
+def test_refresh_manor_state_bypasses_cache_throttle_when_upgrade_due(django_user_model, settings, monkeypatch):
+    user = django_user_model.objects.create_user(username="player_refresh_due_upgrade", password="pass12345")
+    manor = ensure_manor(user)
+    building = manor.buildings.first()
+    assert building is not None
+    building.is_upgrading = True
+    building.upgrade_complete_at = timezone.now() - timedelta(seconds=1)
+    building.save(update_fields=["is_upgrading", "upgrade_complete_at"])
+
+    settings.MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS = 5
+    monkeypatch.setattr(manor_service.cache, "add", lambda *args, **kwargs: False)
+
+    calls = {"finalize": 0, "resource": 0, "mission": 0}
+    monkeypatch.setattr(
+        manor_service, "finalize_upgrades", lambda _manor: calls.__setitem__("finalize", calls["finalize"] + 1)
+    )
+    monkeypatch.setattr(
+        "gameplay.services.resources.sync_resource_production",
+        lambda _manor: calls.__setitem__("resource", calls["resource"] + 1),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.missions.refresh_mission_runs",
+        lambda _manor: calls.__setitem__("mission", calls["mission"] + 1),
+    )
+
+    refresh_manor_state(manor)
+    assert calls == {"finalize": 1, "resource": 0, "mission": 0}
+
+
+@pytest.mark.django_db
+def test_refresh_manor_state_still_throttles_when_cache_hit_and_no_due_work(django_user_model, settings, monkeypatch):
+    user = django_user_model.objects.create_user(username="player_refresh_no_due", password="pass12345")
+    manor = ensure_manor(user)
+
+    settings.MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS = 5
+    monkeypatch.setattr(manor_service.cache, "add", lambda *args, **kwargs: False)
+
+    calls = {"finalize": 0, "resource": 0, "mission": 0}
+    monkeypatch.setattr(
+        manor_service, "finalize_upgrades", lambda _manor: calls.__setitem__("finalize", calls["finalize"] + 1)
+    )
+    monkeypatch.setattr(
+        "gameplay.services.resources.sync_resource_production",
+        lambda _manor: calls.__setitem__("resource", calls["resource"] + 1),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.missions.refresh_mission_runs",
+        lambda _manor: calls.__setitem__("mission", calls["mission"] + 1),
+    )
+
+    refresh_manor_state(manor)
+    assert calls == {"finalize": 1, "resource": 0, "mission": 0}

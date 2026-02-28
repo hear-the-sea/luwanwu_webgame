@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 
 from celery import shared_task
 from django.utils import timezone
@@ -28,9 +29,9 @@ def complete_technology_upgrade(self, tech_id: int):
             return "not_found"
         now = timezone.now()
         if tech.upgrade_complete_at and tech.upgrade_complete_at > now:
-            remaining = int((tech.upgrade_complete_at - now).total_seconds())
+            remaining = math.ceil((tech.upgrade_complete_at - now).total_seconds())
             if remaining > 0:
-                safe_apply_async_with_dedup(
+                dispatched = safe_apply_async_with_dedup(
                     complete_technology_upgrade,
                     dedup_key=f"technology:upgrade:{tech_id}",
                     dedup_timeout=_TASK_DEDUP_TIMEOUT,
@@ -39,6 +40,8 @@ def complete_technology_upgrade(self, tech_id: int):
                     logger=logger,
                     log_message=f"technology upgrade reschedule failed: tech_id={tech_id}",
                 )
+                if not dispatched:
+                    raise RuntimeError(f"technology reschedule dispatch failed: tech_id={tech_id}")
                 return "rescheduled"
         finalized = finalize_technology_upgrade(tech, send_notification=True)
         return "completed" if finalized else "skipped"

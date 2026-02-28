@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
@@ -181,7 +182,7 @@ def _dispatch_complete_raid_task(run: RaidRun, *, now=None) -> None:
 
     current_time = now or timezone.now()
     if run.return_at:
-        remaining = max(0, int((run.return_at - current_time).total_seconds()))
+        remaining = max(0, math.ceil((run.return_at - current_time).total_seconds()))
     else:
         remaining = max(0, int(run.travel_time or 0))
     safe_apply_async(

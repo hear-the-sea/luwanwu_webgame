@@ -389,3 +389,27 @@ def test_expire_listings_queryset_rejects_non_integer_limit():
 
     with pytest.raises(ValueError, match="limit 必须是整数"):
         market_service._expire_listings_queryset(queryset, "test", limit=cast(int, "abc"))
+
+
+def test_expire_listings_queryset_skips_when_row_no_longer_active(monkeypatch):
+    queryset = MagicMock()
+    queryset.select_related.return_value = [SimpleNamespace(pk=1)]
+
+    locked_chain = MagicMock()
+    locked_chain.select_related.return_value.filter.return_value.first.return_value = None
+    objects_mock = MagicMock()
+    objects_mock.select_for_update.return_value = locked_chain
+
+    with patch.object(market_service.MarketListing, "objects", objects_mock):
+        create_message_mock = MagicMock()
+        monkeypatch.setattr(market_service, "create_message", create_message_mock)
+
+        result = market_service._expire_listings_queryset(queryset, "test", limit=None)
+
+    assert result == 0
+    create_message_mock.assert_not_called()
+
+    filter_kwargs = locked_chain.select_related.return_value.filter.call_args.kwargs
+    assert filter_kwargs["pk"] == 1
+    assert filter_kwargs["status"] == market_service.MarketListing.Status.ACTIVE
+    assert "expires_at__lte" in filter_kwargs

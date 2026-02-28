@@ -19,6 +19,7 @@ from django.db import transaction
 from django.db.models import F, Sum
 from django.utils import timezone
 
+from core.utils.cache_lock import release_cache_key_if_owner
 from gameplay.models import InventoryItem, ItemTemplate, Manor, ResourceEvent
 from gameplay.services.resources import spend_resources_locked
 from trade.models import GoldBarExchangeLog
@@ -92,6 +93,16 @@ def _safe_cache_delete(key: str) -> None:
 
 def _release_cache_lock_if_owner(lock_key: str, lock_token: str) -> None:
     """Best-effort lock release with ownership check."""
+    released = release_cache_key_if_owner(
+        lock_key,
+        lock_token=lock_token,
+        logger=logger,
+        log_context="gold supply cache lock release",
+    )
+    if released:
+        return
+
+    # Fallback path for non-Redis cache backends or test monkeypatches.
     current_token = _safe_cache_get(lock_key)
     if current_token == lock_token:
         _safe_cache_delete(lock_key)

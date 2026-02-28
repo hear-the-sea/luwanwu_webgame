@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 
 from celery import shared_task
 from django.utils import timezone
@@ -27,10 +28,11 @@ def complete_building_upgrade(self, building_id: int):
             return "not_found"
         now = timezone.now()
         if building.upgrade_complete_at and building.upgrade_complete_at > now:
-            remaining = int((building.upgrade_complete_at - now).total_seconds())
+            # Use ceil to avoid dropping sub-second remainder to 0 and missing reschedule.
+            remaining = math.ceil((building.upgrade_complete_at - now).total_seconds())
             if remaining > 0:
                 # 使用去重机制避免并发重复调度
-                safe_apply_async_with_dedup(
+                dispatched = safe_apply_async_with_dedup(
                     complete_building_upgrade,
                     dedup_key=f"building:upgrade:{building_id}",
                     dedup_timeout=_TASK_DEDUP_TIMEOUT,
@@ -39,6 +41,8 @@ def complete_building_upgrade(self, building_id: int):
                     logger=logger,
                     log_message=f"building upgrade reschedule failed: building_id={building_id}",
                 )
+                if not dispatched:
+                    raise RuntimeError(f"building upgrade reschedule dispatch failed: building_id={building_id}")
                 return "rescheduled"
         finalized = finalize_building_upgrade(building, now=now, send_notification=True)
         return "completed" if finalized else "skipped"

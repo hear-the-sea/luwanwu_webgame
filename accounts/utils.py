@@ -10,6 +10,8 @@ from django.contrib.sessions.models import Session
 from django.core.cache import cache
 from django.utils import timezone
 
+from core.utils.cache_lock import release_cache_key_if_owner
+
 logger = logging.getLogger(__name__)
 
 # 用户 session 映射的缓存 key 前缀
@@ -132,9 +134,17 @@ def _purge_sessions_fallback(user_id: int, current_session_key: str) -> None:
 def _release_login_lock(lock_key: str, lock_token: str) -> None:
     """Best-effort lock release with ownership check."""
     try:
-        current_token = cache.get(lock_key)
-        if current_token == lock_token:
-            cache.delete(lock_key)
+        released = release_cache_key_if_owner(
+            lock_key,
+            lock_token=lock_token,
+            logger=logger,
+            log_context="login lock release",
+        )
+        if not released:
+            # Fallback path for non-Redis cache backends or test monkeypatches.
+            current_token = cache.get(lock_key)
+            if current_token == lock_token:
+                cache.delete(lock_key)
     except Exception:
         logger.debug("Failed to release login lock %s", lock_key, exc_info=True)
     finally:

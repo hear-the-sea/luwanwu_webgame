@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 
 from celery import shared_task
 from django.utils import timezone
@@ -24,10 +25,10 @@ def complete_mission_task(self, run_id: int):
             return "not_found"
         now = timezone.now()
         if run.return_at and run.return_at > now:
-            remaining = int((run.return_at - now).total_seconds())
+            remaining = math.ceil((run.return_at - now).total_seconds())
             if remaining > 0:
                 # 使用去重机制避免并发重复调度
-                safe_apply_async_with_dedup(
+                dispatched = safe_apply_async_with_dedup(
                     complete_mission_task,
                     dedup_key=f"mission:complete:{run_id}",
                     dedup_timeout=_TASK_DEDUP_TIMEOUT,
@@ -36,6 +37,8 @@ def complete_mission_task(self, run_id: int):
                     logger=logger,
                     log_message=f"mission task reschedule failed: run_id={run_id}",
                 )
+                if not dispatched:
+                    raise RuntimeError(f"mission reschedule dispatch failed: run_id={run_id}")
                 return "rescheduled"
         finalize_mission_run(run, now=now)
         return "completed"
