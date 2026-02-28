@@ -21,7 +21,7 @@ from common.utils.celery import safe_apply_async
 from core.utils.time_scale import scale_duration
 
 from ...constants import BUILDING_MAX_LEVELS, MAX_CONCURRENT_BUILDING_UPGRADES, BuildingKeys, ManorNameConstants
-from ...models import Building, BuildingType, ItemTemplate, Manor, Message, ResourceEvent
+from ...models import Building, BuildingType, ItemTemplate, Manor, Message, MissionRun, ResourceEvent
 from ..utils.cache import invalidate_home_stats_cache
 from ..utils.notifications import notify_user
 
@@ -300,6 +300,27 @@ def ensure_buildings_exist(manor: Manor) -> None:
         Building.objects.bulk_create(buildings_to_create)
 
 
+def _has_due_manor_refresh_work(manor_id: int, now: datetime | None = None) -> bool:
+    """
+    检查庄园是否存在已到期的任务归来结算。
+
+    用于在节流命中时决定是否仍需放行 mission 结算。
+    """
+    if manor_id <= 0:
+        return False
+    now = now or timezone.now()
+    try:
+        return MissionRun.objects.filter(
+            manor_id=manor_id,
+            status=MissionRun.Status.ACTIVE,
+            return_at__isnull=False,
+            return_at__lte=now,
+        ).exists()
+    except DatabaseError:
+        logger.warning("due manor refresh work check failed: manor_id=%s", manor_id, exc_info=True)
+        return False
+
+
 def refresh_manor_state(manor: Manor, *, prefer_async: bool = False) -> None:
     """
     刷新庄园状态：完成建筑升级、同步资源产出、刷新任务状态。
@@ -308,18 +329,23 @@ def refresh_manor_state(manor: Manor, *, prefer_async: bool = False) -> None:
         manor: 庄园对象
         prefer_async: 是否优先使用异步结算（用于首页等高频读取场景）
     """
+    # 建筑升级结算优先且不受节流影响，避免短计时升级在高节流窗口下反复刷新。
+    finalize_upgrades(manor)
+
     min_interval = getattr(settings, "MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS", 0)
     if min_interval > 0:
+        now = timezone.now()
         cache_key = f"manor:refresh:{manor.pk}"
         try:
             if not cache.add(cache_key, "1", timeout=min_interval):
-                return
+                if not _has_due_manor_refresh_work(manor.pk, now=now):
+                    return
         except Exception as e:
             logger.warning("缓存操作失败，降级为本地节流: %s", e, exc_info=True)
             if _should_skip_refresh_by_local_fallback(manor.pk, min_interval):
-                return
+                if not _has_due_manor_refresh_work(manor.pk, now=now):
+                    return
 
-    finalize_upgrades(manor)
     from ..resources import sync_resource_production
 
     sync_resource_production(manor)

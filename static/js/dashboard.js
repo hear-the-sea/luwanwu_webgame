@@ -7,6 +7,15 @@
   let cacheInitialized = false;
   let observerInitialized = false;
   let tickTimerId = null;
+  let reloadTimerId = null;
+  const AUTO_REFRESH_GRACE_MS = 800;
+  const SHORT_COUNTDOWN_WINDOW_MS = 5000;
+  const SHORT_COUNTDOWN_GRACE_MS = 1200;
+
+  function schedulePageReload() {
+    if (reloadTimerId !== null) return;
+    reloadTimerId = window.setTimeout(() => window.location.reload(), 500);
+  }
 
   function initCache() {
     if (cacheInitialized) return;
@@ -21,13 +30,15 @@
     if (!targetIso) return;
     const target = Date.parse(targetIso);
     if (Number.isNaN(target)) return;
+    const initialRemainingMs = target - Date.now();
     countdownCache.set(el, {
       target,
       style: el.getAttribute("data-format") || "",
       shouldRefresh: el.getAttribute("data-refresh") === "1",
       checkUrl: el.getAttribute("data-check-url"),
       completeText: el.getAttribute("data-complete-text"),
-      removeSelector: el.getAttribute("data-remove-selector")
+      removeSelector: el.getAttribute("data-remove-selector"),
+      initialRemainingMs,
     });
   }
 
@@ -225,10 +236,15 @@
         continue;
       }
 
-      const { target, style, shouldRefresh, checkUrl, completeText, removeSelector } = cached;
+      const { target, style, shouldRefresh, checkUrl, completeText, removeSelector, initialRemainingMs } = cached;
       const diff = target - now;
+      const completionGraceMs =
+        shouldRefresh && initialRemainingMs <= SHORT_COUNTDOWN_WINDOW_MS
+          ? SHORT_COUNTDOWN_GRACE_MS
+          : AUTO_REFRESH_GRACE_MS;
+      const readyToComplete = shouldRefresh ? diff <= -completionGraceMs : diff <= 0;
 
-      if (diff <= 0) {
+      if (readyToComplete) {
         if (shouldRefresh || checkUrl) {
           el.textContent = "刷新中...";
         } else if (completeText) {
@@ -251,8 +267,11 @@
         if (checkUrl) {
           checkTrainingAndUpdate(el);
         } else if (shouldRefresh) {
-          setTimeout(() => window.location.reload(), 500);
+          schedulePageReload();
         }
+      } else if (shouldRefresh && diff <= 0) {
+        // 倒计时到点后留出短暂缓冲，减少短计时建筑因节流/时钟偏差导致的重复刷新。
+        el.textContent = "结算中...";
       } else {
         el.textContent = formatCountdown(diff, style);
       }

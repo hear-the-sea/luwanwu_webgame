@@ -318,7 +318,7 @@ heroes:
     is_hermit: true
     growth_range:
     - 8
-    - 13
+    - 14
     attribute_weights:
       force: 25
       intellect: 45

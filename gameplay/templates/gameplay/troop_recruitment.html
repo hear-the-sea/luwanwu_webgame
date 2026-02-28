@@ -122,7 +122,7 @@
                             <div class="flex items-center justify-center gap-2 mb-3">
                                 <label for="quantity-{{ troop.key }}" class="text-sm text-text-secondary">数量：</label>
                                 <input type="number" name="quantity" id="quantity-{{ troop.key }}"
-                                       value="1" min="1" max="10"
+                                       value="1" min="1" max="{{ troop.max_quantity }}"
                                        class="tw-quantity-input">
                             </div>
                             {% if troop.can_afford %}

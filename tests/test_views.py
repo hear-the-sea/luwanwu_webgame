@@ -87,6 +87,18 @@ class TestCoreViews:
         assert response.status_code == 200
         assert "buildings" in response.context
 
+    def test_dashboard_refresh_error_does_not_500(self, manor_with_user, monkeypatch):
+        """状态刷新异常时仪表盘不应返回500。"""
+        _manor, client = manor_with_user
+        monkeypatch.setattr(
+            "gameplay.views.core.refresh_manor_state",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        response = client.get(reverse("gameplay:dashboard"))
+        assert response.status_code == 200
+        assert "操作失败，请稍后重试" in response.content.decode("utf-8")
+
     def test_authenticated_layout_contains_partial_nav_markers(self, manor_with_user):
         """认证页面应包含局部导航刷新容器与脚本。"""
         _manor, client = manor_with_user

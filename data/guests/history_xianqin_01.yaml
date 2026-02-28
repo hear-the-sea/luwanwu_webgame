@@ -65,20 +65,20 @@ heroes:
       intellect: 50
       defense: 22
       agility: 14
-  purple:
   - key: hist_xianqin_0006
     name: 孔丘
     default_gender: male
     archetype: civil
     flavor: （前551年—前479年）万世师表，至圣先师。他生于礼崩乐坏之世，却以一己之力重塑华夏精神脊梁。周游列国十四载，虽累累若丧家之犬，却从未放弃仁义之道。删诗书、定礼乐、序周易、作春秋，有教无类三千弟子，七十二贤才遍布天下。他的思想如日月经天，照耀东方两千余年，不仅塑造了华夏文明的精神内核，更深刻影响了整个东亚文化圈。儒学大道，至今不衰。
     growth_range:
-    - 7
-    - 10
+    - 8
+    - 12
     attribute_weights:
       force: 8
-      intellect: 62
-      defense: 18
-      agility: 12
+      intellect: 66
+      defense: 16
+      agility: 10
+  purple:
   - key: hist_xianqin_0007
     name: 李耳
     default_gender: male

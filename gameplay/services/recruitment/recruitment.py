@@ -28,9 +28,10 @@ from core.utils.yaml_loader import ensure_list, ensure_mapping, load_yaml_data
 from ...constants import BuildingKeys
 from ...models import Manor, PlayerTroop, TroopRecruitment
 from ..inventory import get_item_quantity
-from ..technology import get_player_technology_level
+from ..technology import get_player_technology_level, get_technology_template
 
 logger = logging.getLogger(__name__)
+TROOP_RECRUITMENT_DEFAULT_MAX_QUANTITY = 10
 
 
 def _coerce_non_negative_int(value: Any, default: int = 0) -> int:
@@ -206,6 +207,43 @@ def has_active_recruitment(manor: Manor) -> bool:
     return manor.troop_recruitments.filter(status=TroopRecruitment.Status.RECRUITING).exists()
 
 
+def get_max_recruit_quantity(
+    manor: Manor,
+    troop_key: str,
+    recruit_config: Optional[Dict[str, Any]] = None,
+    tech_level: Optional[int] = None,
+) -> int:
+    """
+    获取单次最大募兵数量。
+
+    规则：
+    - 有造兵术科技时：按 `tech_level * effect_per_level` 计算；
+    - 无科技要求（如探子）或配置缺失时：使用默认上限。
+    """
+    config = recruit_config if isinstance(recruit_config, dict) else get_recruit_config(troop_key)
+    if not config:
+        return TROOP_RECRUITMENT_DEFAULT_MAX_QUANTITY
+
+    tech_key = str(config.get("tech_key") or "").strip()
+    if not tech_key:
+        return TROOP_RECRUITMENT_DEFAULT_MAX_QUANTITY
+
+    resolved_tech_level = (
+        _coerce_non_negative_int(tech_level)
+        if tech_level is not None
+        else max(0, get_player_technology_level(manor, tech_key))
+    )
+    if resolved_tech_level <= 0:
+        return TROOP_RECRUITMENT_DEFAULT_MAX_QUANTITY
+
+    tech_template = get_technology_template(tech_key) or {}
+    effect_per_level = _coerce_positive_int(
+        tech_template.get("effect_per_level"),
+        TROOP_RECRUITMENT_DEFAULT_MAX_QUANTITY,
+    )
+    return max(1, resolved_tech_level * effect_per_level)
+
+
 def check_recruitment_requirements(
     manor: Manor,
     troop_key: str,
@@ -372,6 +410,13 @@ def get_recruitment_options(manor: Manor) -> List[Dict[str, Any]]:
             player_tech_level = 0
             is_unlocked = True
 
+        max_quantity = get_max_recruit_quantity(
+            manor,
+            troop_key,
+            recruit_config,
+            tech_level=player_tech_level if tech_key else None,
+        )
+
         # 计算时间
         base_duration = recruit_config.get("base_duration", 120)
         actual_duration = calculate_recruitment_duration(base_duration, manor)
@@ -422,6 +467,7 @@ def get_recruitment_options(manor: Manor) -> List[Dict[str, Any]]:
                 "retainer_satisfied": retainer_satisfied,
                 "base_duration": base_duration,
                 "actual_duration": actual_duration,
+                "max_quantity": max_quantity,
                 "can_afford": can_afford and retainer_satisfied,
                 "is_recruiting": is_recruiting,
             }
@@ -498,6 +544,10 @@ def _validate_start_recruitment_inputs(manor: Manor, troop_key: str, quantity: i
     recruit_config = troop.get("recruit")
     if not recruit_config:
         raise ValueError("该兵种不可募兵")
+
+    max_quantity = get_max_recruit_quantity(manor, troop_key, recruit_config)
+    if quantity > max_quantity:
+        raise ValueError(f"造兵术等级限制，单次最多招募{max_quantity}人")
 
     check_result = check_recruitment_requirements(manor, troop_key, quantity)
     if not check_result["can_recruit"]:

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from typing import Any, Dict, List, Optional, TypeVar
+from urllib.parse import unquote
 
 from django.http import HttpRequest
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -223,10 +224,26 @@ def safe_redirect_url(request: HttpRequest, url: Optional[str], default: str) ->
     Returns:
         安全的重定向 URL
     """
-    if url and url_has_allowed_host_and_scheme(
-        url,
+    candidate = (url or "").strip()
+
+    # 某些代理/客户端会把片段标识符 `#` 编码进路径（如 `/manor/%23building-77`），
+    # 甚至出现二次编码（`/manor/%2523building-77`）。
+    # 这里在安全校验前最多解码两次以恢复正确的锚点跳转。
+    if candidate and "#" not in candidate and "%" in candidate:
+        probe = candidate
+        for _ in range(2):
+            decoded = unquote(probe)
+            if decoded == probe:
+                break
+            if "#" in decoded:
+                candidate = decoded
+                break
+            probe = decoded
+
+    if candidate and url_has_allowed_host_and_scheme(
+        candidate,
         allowed_hosts={request.get_host()},
         require_https=request.is_secure(),
     ):
-        return url
+        return candidate
     return default

@@ -1,7 +1,9 @@
 import random
 from types import SimpleNamespace
 
-from battle.combat_math import effective_attack_value, effective_defense_value, troop_unit_hp
+from battle.combat_math import SLAUGHTER_MULTIPLIER, effective_attack_value, effective_defense_value, troop_unit_hp
+from battle.simulation.constants import GUEST_SKILL_VS_TROOP_MULTIPLIER
+from battle.simulation.damage_calculation import calculate_attack_damage
 from battle.skills import apply_skill_statuses, skill_damage_bonus, trigger_skills
 from battle.status_manager import prepare_combatants_for_round
 
@@ -29,11 +31,21 @@ def make_unit(**kwargs):
         "has_acted_this_round": False,
         "current_round": 0,
         "last_round_acted": 0,
+        "troop_class": "",
+        "tech_effects": {},
     }
     defaults.update(kwargs)
     if defaults["initial_troop_strength"] == 0 and defaults["troop_strength"]:
         defaults["initial_troop_strength"] = defaults["troop_strength"]
     return SimpleNamespace(**defaults)
+
+
+class FixedRng:
+    def uniform(self, _a, _b):
+        return 1.0
+
+    def random(self):
+        return 1.0
 
 
 def test_trigger_skills_allows_only_one_active():
@@ -160,3 +172,30 @@ def test_troop_unit_hp_falls_back_to_average():
     troop = make_unit(kind="troop", unit_hp=0, max_hp=500, troop_strength=50, initial_troop_strength=50)
     troop.unit_hp = None
     assert troop_unit_hp(troop) == max(1, int(500 / 50))
+
+
+def test_guest_vs_troop_normal_attack_keeps_slaughter_multiplier():
+    actor = make_unit(kind="guest", attack=1000, priority=0)
+    target = make_unit(kind="troop", side="defender", unit_defense=10, troop_strength=200, unit_hp=10)
+    rng = FixedRng()
+
+    result = calculate_attack_damage(actor, target, skills=[], rng=rng, round_priority=0)
+
+    reduction = target.unit_defense / (target.unit_defense + 50)
+    base_damage = max(1, int(actor.attack * (1 - reduction)))
+    expected = int(base_damage * SLAUGHTER_MULTIPLIER)
+    assert result.damage == expected
+
+
+def test_guest_vs_troop_skill_damage_uses_reduced_skill_multiplier():
+    actor = make_unit(kind="guest", attack=1000, priority=0)
+    target = make_unit(kind="troop", side="defender", unit_defense=10, troop_strength=200, unit_hp=10)
+    skill = {"name": "Flat Bonus", "damage_formula": {"base": 2000}}
+    rng = FixedRng()
+
+    result = calculate_attack_damage(actor, target, skills=[skill], rng=rng, round_priority=0)
+
+    reduction = target.unit_defense / (target.unit_defense + 50)
+    base_damage = max(1, int(actor.attack * (1 - reduction)))
+    expected = int(base_damage * SLAUGHTER_MULTIPLIER + 2000 * GUEST_SKILL_VS_TROOP_MULTIPLIER)
+    assert result.damage == expected

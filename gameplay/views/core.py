@@ -32,7 +32,15 @@ class DashboardView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         manor = ensure_manor(self.request.user)
-        refresh_manor_state(manor)
+        try:
+            refresh_manor_state(manor)
+        except Exception as exc:
+            logger.exception(
+                "Unexpected dashboard refresh error: manor_id=%s user_id=%s",
+                getattr(manor, "id", None),
+                getattr(self.request.user, "id", None),
+            )
+            messages.error(self.request, sanitize_error_message(exc))
 
         # Get category from URL parameter, default to 'resource'
         category = self.kwargs.get("category", "resource")

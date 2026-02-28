@@ -14,6 +14,7 @@ from .constants import (
     DAMAGE_VARIANCE_MAX,
     DAMAGE_VARIANCE_MIN,
     DEFAULT_DEFENSE_CONSTANT,
+    GUEST_SKILL_VS_TROOP_MULTIPLIER,
     GUEST_VS_GUEST_DAMAGE_MULTIPLIER,
     GUEST_VS_GUEST_DEFENSE_CONSTANT,
     GUEST_VS_TROOP_DEFENSE_CONSTANT,
@@ -127,11 +128,27 @@ def _apply_round_and_tech_damage_modifiers(actor: "Combatant", round_priority: i
     return damage
 
 
-def _roll_double_strike(actor: "Combatant", damage: int, rng: random.Random) -> tuple[int, bool]:
+def _roll_double_strike(actor: "Combatant", rng: random.Random) -> bool:
     double_strike_chance = actor.tech_effects.get("double_strike_chance", 0)
     if double_strike_chance > 0 and rng.random() < double_strike_chance:
-        return damage * 2, True
-    return damage, False
+        return True
+    return False
+
+
+def _apply_post_damage_modifiers(
+    actor: "Combatant",
+    target: "Combatant",
+    skills: List[AttackSkill],
+    *,
+    round_priority: int,
+    damage: int,
+    is_double_strike: bool,
+    rng: random.Random,
+) -> int:
+    damage = _apply_round_and_tech_damage_modifiers(actor, round_priority, damage)
+    if is_double_strike:
+        damage *= 2
+    return process_status_effects(actor, target, skills, rng, phase="damage_penalty", damage=damage)
 
 
 def _apply_slaughter_multiplier(
@@ -146,6 +163,23 @@ def _apply_slaughter_multiplier(
     if slaughter_mult == 1.0:
         return damage
     return _at_least_one(int(damage * slaughter_mult))
+
+
+def _apply_guest_vs_troop_split_scaling(
+    actor: "Combatant",
+    target: "Combatant",
+    *,
+    base_damage: int,
+    total_damage: int,
+    calculate_slaughter_multiplier_fn: Callable[["Combatant", "Combatant"], float],
+) -> int:
+    slaughter_mult = calculate_slaughter_multiplier_fn(actor, target)
+    if slaughter_mult == 1.0:
+        return total_damage
+
+    skill_damage = total_damage - base_damage
+    scaled = int(base_damage * slaughter_mult + skill_damage * GUEST_SKILL_VS_TROOP_MULTIPLIER)
+    return _at_least_one(scaled)
 
 
 @overload
@@ -229,7 +263,7 @@ def calculate_attack_damage(
     9) 先手回合调整 + 特定武艺倍率
     10) 双倍打击
     11) 状态惩罚（伤害降低）
-    12) 屠戮倍率（门客打小兵）
+    12) 对小兵目标的最终倍率：普攻屠戮倍率 + 技能伤害独立倍率
 
     该函数不直接修改 actor/target 的血量或兵力，专注于"伤害数值"的计算。
     """
@@ -254,12 +288,38 @@ def calculate_attack_damage(
         base_damage *= CRIT_DAMAGE_MULTIPLIER
 
     bonus = skill_damage_bonus(skills, actor, target)
-    damage = _at_least_one(int(base_damage + bonus))
-    damage = _apply_round_and_tech_damage_modifiers(actor, round_priority, damage)
-    damage, is_double_strike = _roll_double_strike(actor, damage, rng)
+    base_damage_value = _at_least_one(int(base_damage))
+    total_damage_value = _at_least_one(int(base_damage + bonus))
 
-    damage = process_status_effects(actor, target, skills, rng, phase="damage_penalty", damage=damage)
+    is_double_strike = _roll_double_strike(actor, rng)
+    base_damage_value = _apply_post_damage_modifiers(
+        actor,
+        target,
+        skills,
+        round_priority=round_priority,
+        damage=base_damage_value,
+        is_double_strike=is_double_strike,
+        rng=rng,
+    )
+    total_damage_value = _apply_post_damage_modifiers(
+        actor,
+        target,
+        skills,
+        round_priority=round_priority,
+        damage=total_damage_value,
+        is_double_strike=is_double_strike,
+        rng=rng,
+    )
 
-    damage = _apply_slaughter_multiplier(actor, target, damage, calculate_slaughter_multiplier)
+    if actor.kind == "guest" and target.kind == "troop":
+        damage = _apply_guest_vs_troop_split_scaling(
+            actor,
+            target,
+            base_damage=base_damage_value,
+            total_damage=total_damage_value,
+            calculate_slaughter_multiplier_fn=calculate_slaughter_multiplier,
+        )
+    else:
+        damage = _apply_slaughter_multiplier(actor, target, total_damage_value, calculate_slaughter_multiplier)
 
     return _DamageCalculation(damage=damage, is_crit=is_crit, is_double_strike=is_double_strike)
