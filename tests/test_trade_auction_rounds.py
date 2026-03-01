@@ -6,8 +6,9 @@ import pytest
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from gameplay.models import ItemTemplate
+from gameplay.models import InventoryItem, ItemTemplate, Message
 from gameplay.services.manor.core import ensure_manor
+from gameplay.services.utils.messages import claim_message_attachments
 from trade.models import AuctionBid, AuctionRound, AuctionSlot, FrozenGoldBar
 from trade.services import auction_service
 from trade.services.auction_config import AuctionItemConfig, AuctionSettings
@@ -25,6 +26,19 @@ def _create_auction_item_template(key: str) -> ItemTemplate:
         key=key,
         defaults={
             "name": "拍卖测试物品",
+            "effect_type": ItemTemplate.EffectType.TOOL,
+            "is_usable": False,
+            "tradeable": False,
+        },
+    )
+    return template
+
+
+def _ensure_gold_bar_template() -> ItemTemplate:
+    template, _ = ItemTemplate.objects.get_or_create(
+        key=auction_service.GOLD_BAR_ITEM_KEY,
+        defaults={
+            "name": "金条",
             "effect_type": ItemTemplate.EffectType.TOOL,
             "is_usable": False,
             "tradeable": False,
@@ -495,6 +509,153 @@ def test_rounds_module_settle_slot_partial_refund_flow(monkeypatch, django_user_
     assert result["sold"] is True
     assert slot.status == AuctionSlot.Status.SOLD
     assert bid.status == AuctionBid.Status.WON
+
+
+@pytest.mark.django_db
+def test_rounds_module_settle_slot_delivers_item_via_message_attachment(monkeypatch, django_user_model):
+    from trade.services.auction.rounds import _settle_slot
+
+    user = django_user_model.objects.create_user(username="auction_rounds_attachment_flow", password="pass123")
+    manor = ensure_manor(user)
+
+    item_tpl = _create_auction_item_template("auction_settle_attachment_item")
+    gold_tpl = _ensure_gold_bar_template()
+    InventoryItem.objects.create(
+        manor=manor,
+        template=gold_tpl,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        quantity=30,
+    )
+    auction_round = AuctionRound.objects.create(
+        round_number=10014,
+        status=AuctionRound.Status.ACTIVE,
+        start_at=timezone.now() - timedelta(days=2),
+        end_at=timezone.now() - timedelta(minutes=1),
+    )
+    slot = AuctionSlot.objects.create(
+        round=auction_round,
+        item_template=item_tpl,
+        quantity=1,
+        starting_price=10,
+        current_price=10,
+        min_increment=1,
+        status=AuctionSlot.Status.ACTIVE,
+        config_key=item_tpl.key,
+        slot_index=0,
+    )
+    bid = AuctionBid.objects.create(
+        slot=slot,
+        manor=manor,
+        amount=20,
+        status=AuctionBid.Status.ACTIVE,
+        frozen_gold_bars=20,
+    )
+    FrozenGoldBar.objects.create(
+        manor=manor,
+        amount=20,
+        reason=FrozenGoldBar.Reason.AUCTION_BID,
+        auction_bid=bid,
+        is_frozen=True,
+    )
+    monkeypatch.setattr("trade.services.auction.rounds.notify_user", lambda *a, **k: True)
+
+    result = _settle_slot(slot)
+
+    bid.refresh_from_db()
+    slot.refresh_from_db()
+
+    assert result["sold"] is True
+    assert slot.status == AuctionSlot.Status.SOLD
+    assert bid.status == AuctionBid.Status.WON
+    assert not InventoryItem.objects.filter(
+        manor=manor,
+        template=item_tpl,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    ).exists()
+
+    message = Message.objects.filter(manor=manor, title__contains="拍卖行").order_by("-id").first()
+    assert message is not None
+    assert message.is_claimed is False
+    assert message.attachments.get("items", {}).get(item_tpl.key) == 1
+
+    claim_message_attachments(message)
+    item_after_claim = InventoryItem.objects.get(
+        manor=manor,
+        template=item_tpl,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+    assert item_after_claim.quantity == 1
+
+
+@pytest.mark.django_db
+def test_rounds_module_settle_slot_falls_back_to_direct_grant_when_message_create_fails(monkeypatch, django_user_model):
+    from trade.services.auction.rounds import _settle_slot
+
+    user = django_user_model.objects.create_user(username="auction_rounds_message_fallback", password="pass123")
+    manor = ensure_manor(user)
+
+    item_tpl = _create_auction_item_template("auction_settle_direct_grant_item")
+    gold_tpl = _ensure_gold_bar_template()
+    InventoryItem.objects.create(
+        manor=manor,
+        template=gold_tpl,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        quantity=30,
+    )
+    auction_round = AuctionRound.objects.create(
+        round_number=10015,
+        status=AuctionRound.Status.ACTIVE,
+        start_at=timezone.now() - timedelta(days=2),
+        end_at=timezone.now() - timedelta(minutes=1),
+    )
+    slot = AuctionSlot.objects.create(
+        round=auction_round,
+        item_template=item_tpl,
+        quantity=1,
+        starting_price=10,
+        current_price=10,
+        min_increment=1,
+        status=AuctionSlot.Status.ACTIVE,
+        config_key=item_tpl.key,
+        slot_index=0,
+    )
+    bid = AuctionBid.objects.create(
+        slot=slot,
+        manor=manor,
+        amount=20,
+        status=AuctionBid.Status.ACTIVE,
+        frozen_gold_bars=20,
+    )
+    FrozenGoldBar.objects.create(
+        manor=manor,
+        amount=20,
+        reason=FrozenGoldBar.Reason.AUCTION_BID,
+        auction_bid=bid,
+        is_frozen=True,
+    )
+
+    monkeypatch.setattr(
+        "trade.services.auction.rounds.create_message",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("message unavailable")),
+    )
+    monkeypatch.setattr("trade.services.auction.rounds.notify_user", lambda *a, **k: True)
+
+    result = _settle_slot(slot)
+
+    bid.refresh_from_db()
+    slot.refresh_from_db()
+
+    assert result["sold"] is True
+    assert slot.status == AuctionSlot.Status.SOLD
+    assert bid.status == AuctionBid.Status.WON
+    assert not Message.objects.filter(manor=manor, title__contains="拍卖行").exists()
+
+    granted_item = InventoryItem.objects.get(
+        manor=manor,
+        template=item_tpl,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+    assert granted_item.quantity == 1
 
 
 @pytest.mark.django_db

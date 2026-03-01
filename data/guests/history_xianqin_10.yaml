@@ -1,18 +1,5 @@
 heroes:
-  purple:
-  - key: hist_xianqin_0510
-    name: 老子
-    default_gender: male
-    archetype: civil
-    flavor: （生卒年不详）老子，虽以思想家名世，其治理观亦强调“少私寡欲、顺势而治”。在纷争激烈之际，他主张为公共议决保留空间，反对以意气代替制度。其价值不在辞锋，而在提醒统治者敬畏边界、节制干预。
-    growth_range:
-    - 6
-    - 11
-    attribute_weights:
-      force: 12
-      intellect: 52
-      defense: 20
-      agility: 16
+
   blue:
   - key: hist_xianqin_0456
     name: 卞庄子

@@ -9,9 +9,10 @@ from typing import Any, Callable, Dict, List, Optional
 
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
+from django.db.models import F
 from django.utils import timezone
 
-from gameplay.models import ItemTemplate, Manor
+from gameplay.models import InventoryItem, ItemTemplate, Manor
 from gameplay.services.utils.messages import create_message
 from gameplay.services.utils.notifications import notify_user
 from trade.models import AuctionBid, AuctionRound, AuctionSlot, FrozenGoldBar
@@ -389,24 +390,35 @@ def _send_winning_notification_vickrey(
     slot: AuctionSlot, winner: Manor, settlement_price: int, total_winners: int
 ) -> None:
     """发送中标通知并发放物品（维克里拍卖，每人1个）。"""
-    create_message(
-        manor=winner,
-        kind="reward",
-        title="【拍卖行】恭喜您成功拍得物品",
-        body=(
-            f"恭喜！您成功拍得 {slot.item_template.name} x1！\n\n"
-            f"拍卖详情：\n"
-            f"- 物品：{slot.item_template.name}\n"
-            f"- 数量：1\n"
-            f"- 结算价：{settlement_price} 金条（统一结算价）\n"
-            f"- 中标人数：{total_winners}\n"
-            f"- 拍卖轮次：第{slot.round.round_number}轮\n\n"
-            f"物品已通过附件发放，请查收。"
-        ),
-        attachments={
-            "items": {slot.item_template.key: 1},
-        },
-    )
+    delivery_via_message = True
+    try:
+        create_message(
+            manor=winner,
+            kind="reward",
+            title="【拍卖行】恭喜您成功拍得物品",
+            body=(
+                f"恭喜！您成功拍得 {slot.item_template.name} x1！\n\n"
+                f"拍卖详情：\n"
+                f"- 物品：{slot.item_template.name}\n"
+                f"- 数量：1\n"
+                f"- 结算价：{settlement_price} 金条（统一结算价）\n"
+                f"- 中标人数：{total_winners}\n"
+                f"- 拍卖轮次：第{slot.round.round_number}轮\n\n"
+                f"物品已通过附件发放，请查收。"
+            ),
+            attachments={
+                "items": {slot.item_template.key: 1},
+            },
+        )
+    except Exception as exc:
+        delivery_via_message = False
+        logger.exception(
+            "auction winning message create failed, fallback to direct inventory grant: slot_id=%s manor_id=%s error=%s",
+            slot.id,
+            winner.id,
+            exc,
+        )
+        _grant_auction_item_directly(winner, slot.item_template, quantity=1)
 
     _safe_notify_user(
         winner.user_id,
@@ -418,6 +430,24 @@ def _send_winning_notification_vickrey(
             "quantity": 1,
             "price": settlement_price,
             "total_winners": total_winners,
+            "delivery": "message_attachment" if delivery_via_message else "direct_inventory",
         },
         log_context="auction won notification",
+    )
+
+
+def _grant_auction_item_directly(manor: Manor, item_template: ItemTemplate, quantity: int) -> None:
+    """Fallback path when reward message creation fails."""
+    quantity = _safe_int(quantity, 0)
+    if quantity <= 0:
+        return
+
+    inventory_item, _created = InventoryItem.objects.select_for_update().get_or_create(
+        manor=manor,
+        template=item_template,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        defaults={"quantity": 0},
+    )
+    InventoryItem.objects.filter(pk=inventory_item.pk).update(
+        quantity=F("quantity") + quantity, updated_at=timezone.now()
     )

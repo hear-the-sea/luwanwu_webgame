@@ -198,8 +198,8 @@ heroes:
     recruitable: true
     is_hermit: true
     growth_range:
-    - 7
-    - 11
+    - 9
+    - 12
     attribute_weights:
       force: 40
       intellect: 30
@@ -216,7 +216,7 @@ heroes:
     is_hermit: true
     growth_range:
     - 7
-    - 11
+    - 13
     attribute_weights:
       force: 30
       intellect: 25
@@ -267,7 +267,7 @@ heroes:
     is_hermit: true
     growth_range:
     - 7
-    - 11
+    - 12
     attribute_weights:
       force: 5
       intellect: 60
@@ -301,7 +301,7 @@ heroes:
     is_hermit: true
     growth_range:
     - 7
-    - 12
+    - 13
     attribute_weights:
       force: 15
       intellect: 50
@@ -317,13 +317,13 @@ heroes:
     recruitable: true
     is_hermit: true
     growth_range:
-    - 8
+    - 9
     - 14
     attribute_weights:
-      force: 25
+      force: 10
       intellect: 45
       defense: 15
-      agility: 15
+      agility: 25
     avatar: buyi.png
   - key: hero_xiao_lou
     name: 谢晓峰
@@ -335,10 +335,10 @@ heroes:
     is_hermit: true
     growth_range:
     - 9
-    - 11
+    - 14
     attribute_weights:
       force: 45
-      intellect: 15
+      intellect: 10
       defense: 10
-      agility: 30
+      agility: 35
     avatar: buyi.png

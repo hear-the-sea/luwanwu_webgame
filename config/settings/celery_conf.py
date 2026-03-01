@@ -119,7 +119,8 @@ CELERY_BEAT_SCHEDULE = {
     },
     "settle-auction-round": {
         "task": "trade.settle_auction_round",
-        "schedule": crontab(hour="0,12", minute=5),
+        # 更及时地结算到期轮次，避免“拍卖已结束但长时间未到账”的体验问题。
+        "schedule": crontab(minute="*/5"),
     },
     "check-create-auction-round": {
         "task": "trade.create_auction_round",
