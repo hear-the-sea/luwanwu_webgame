@@ -39,9 +39,16 @@ def recover_guest_hp(guest: Guest, now: timezone.datetime | None = None) -> None
 
     last = guest.last_hp_recovery_at or guest.created_at or now
     if guest.current_hp >= guest.max_hp:
+        update_fields: list[str] = []
         if last != now:
             guest.last_hp_recovery_at = now
-            guest.save(update_fields=["last_hp_recovery_at"])
+            update_fields.append("last_hp_recovery_at")
+        # 修复：满血时不应继续显示重伤状态
+        if guest.status == GuestStatus.INJURED:
+            guest.status = GuestStatus.IDLE
+            update_fields.append("status")
+        if update_fields:
+            guest.save(update_fields=update_fields)
         return
     elapsed = (now - last).total_seconds()
     if elapsed < TimeConstants.HP_RECOVERY_INTERVAL:
@@ -66,7 +73,11 @@ def recover_guest_hp(guest: Guest, now: timezone.datetime | None = None) -> None
     new_hp = min(guest.max_hp, guest.current_hp + recovered)
     guest.current_hp = max(1, new_hp)
     guest.last_hp_recovery_at = last + timezone.timedelta(seconds=intervals * TimeConstants.HP_RECOVERY_INTERVAL)
-    guest.save(update_fields=["current_hp", "last_hp_recovery_at"])
+    update_fields = ["current_hp", "last_hp_recovery_at"]
+    if guest.status == GuestStatus.INJURED and guest.current_hp >= guest.max_hp:
+        guest.status = GuestStatus.IDLE
+        update_fields.append("status")
+    guest.save(update_fields=update_fields)
 
 
 def heal_guest(guest: Guest, heal_amount: int) -> dict:

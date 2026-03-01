@@ -613,8 +613,8 @@ def apply_guest_hp_updates(
 
     阵亡处理：
     - HP归零的门客设为重伤状态（INJURED）
-    - 重伤门客HP设为1，无法自动恢复，但可出征
-    - 需要使用药品治疗才能解除重伤状态
+    - 重伤门客HP设为1，战后会缓慢恢复
+    - HP回满或使用药品治疗后可解除重伤状态
     """
     now = timezone.now()
     guest_map = {c.guest_id: c for c in combatants if c.guest_id}

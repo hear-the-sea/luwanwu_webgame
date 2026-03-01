@@ -167,6 +167,36 @@ def test_recover_guest_hp_injured_respects_global_time_multiplier():
 
 
 @pytest.mark.django_db
+def test_recover_guest_hp_clears_injured_status_when_reaching_full_hp():
+    user = User.objects.create_user(username="testuser_hp_recover_full_injured", password="test123")
+    manor = ensure_manor(user)
+
+    template = GuestTemplate.objects.create(
+        key="test_guest_recover_full_injured",
+        name="测试门客满血解除重伤",
+        rarity="gray",
+        base_attack=50,
+        base_defense=50,
+    )
+    now = timezone.now()
+    last = now - timezone.timedelta(days=10)
+
+    guest = Guest.objects.create(
+        manor=manor,
+        template=template,
+        status=GuestStatus.INJURED,
+        current_hp=max(1, template.base_hp // 4),
+        last_hp_recovery_at=last,
+    )
+
+    recover_guest_hp(guest, now=now)
+    guest.refresh_from_db()
+
+    assert guest.current_hp == guest.max_hp
+    assert guest.status == GuestStatus.IDLE
+
+
+@pytest.mark.django_db
 def test_allocate_attribute_points():
     """测试分配属性点"""
     user = User.objects.create_user(username="testuser", password="test123")
