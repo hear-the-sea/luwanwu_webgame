@@ -30,6 +30,7 @@ from gameplay.services import (
     release_prisoner,
     remove_oath_bond,
 )
+from guests.query_utils import guest_template_rarity_rank_case
 
 logger = logging.getLogger(__name__)
 JAIL_ACTION_LOCK_SECONDS = 5
@@ -117,7 +118,8 @@ class OathGroveView(LoginRequiredMixin, TemplateView):
         available_guests = (
             manor.guests.select_related("template")
             .exclude(id__in=oathed_ids)
-            .order_by("-template__rarity", "-level", "id")
+            .annotate(_template_rarity_rank=guest_template_rarity_rank_case("template__rarity"))
+            .order_by("-_template_rarity_rank", "-level", "id")
         )
         context.update(
             {

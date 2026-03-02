@@ -15,6 +15,7 @@ from gameplay.constants import get_raid_capture_guest_rate
 from gameplay.services.battle_snapshots import build_guest_battle_snapshots, build_guest_snapshot_proxies
 from gameplay.services.raid import combat as combat_pkg
 from guests.models import Guest, GuestStatus
+from guests.query_utils import guest_template_rarity_rank_case
 
 from ....models import JailPrisoner, Manor, OathBond, PlayerTroop, RaidRun
 from ...recruitment.troops import apply_defender_troop_losses
@@ -501,7 +502,8 @@ def _execute_raid_battle(run: RaidRun):
         .filter(status=GuestStatus.IDLE)
         .select_related("template")
         .prefetch_related("skills")
-        .order_by("-template__rarity", "-level", "id")
+        .annotate(_template_rarity_rank=guest_template_rarity_rank_case("template__rarity"))
+        .order_by("-_template_rarity_rank", "-level", "id")
     )
 
     defender_troops: Dict[str, int] = {}

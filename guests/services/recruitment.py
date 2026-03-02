@@ -42,6 +42,7 @@ from ..models import (
     RecruitmentPoolEntry,
     RecruitmentRecord,
 )
+from ..query_utils import guest_template_rarity_rank_case
 from ..utils.name_generator import generate_random_name
 from ..utils.recruitment_utils import HERMIT_RARITY, RARITY_ORDER, choose_rarity, filter_entries, weighted_choice
 from ..utils.recruitment_variance import apply_recruitment_variance
@@ -291,7 +292,8 @@ def available_guests(manor: Manor) -> Sequence[Guest]:
     return (
         manor.guests.select_related("template")
         .prefetch_related("gear_items__template")
-        .order_by("-template__rarity", "-level")
+        .annotate(_template_rarity_rank=guest_template_rarity_rank_case("template__rarity"))
+        .order_by("-_template_rarity_rank", "-level")
     )
 
 

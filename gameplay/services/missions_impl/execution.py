@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from common.utils.celery import safe_apply_async, safe_apply_async_with_dedup
 from core.utils.time_scale import scale_duration
+from guests.query_utils import guest_template_rarity_rank_case
 
 from ...models import Manor, MissionRun, MissionTemplate
 from ..battle_snapshots import build_guest_battle_snapshots, build_guest_snapshot_proxies
@@ -125,7 +126,8 @@ def _build_defense_report_if_needed(locked_run: MissionRun) -> Any:
         .filter(status=GuestStatus.IDLE)
         .select_related("template")
         .prefetch_related("skills")
-        .order_by("-template__rarity", "-level", "id")
+        .annotate(_template_rarity_rank=guest_template_rarity_rank_case("template__rarity"))
+        .order_by("-_template_rarity_rank", "-level", "id")
     )
     defender_loadout = {
         troop.troop_template.key: troop.count

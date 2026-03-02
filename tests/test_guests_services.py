@@ -10,7 +10,7 @@ from django.utils import timezone
 from core.exceptions import InvalidAllocationError
 from gameplay.services.manor.core import ensure_manor
 from guests.constants import TimeConstants
-from guests.models import Guest, GuestStatus, GuestTemplate
+from guests.models import Guest, GuestArchetype, GuestRarity, GuestStatus, GuestTemplate
 from guests.services import allocate_attribute_points, available_guests, list_pools, recover_guest_hp
 
 User = get_user_model()
@@ -42,24 +42,40 @@ def test_available_guests_ordered():
 
     # 创建测试门客模板
     template1 = GuestTemplate.objects.create(
-        key="test_guest_1", name="测试门客1", rarity="gray", base_attack=50, base_defense=50
+        key="test_guest_1",
+        name="测试门客1",
+        rarity=GuestRarity.GRAY,
+        archetype=GuestArchetype.MILITARY,
+        base_attack=50,
+        base_defense=50,
     )
     template2 = GuestTemplate.objects.create(
-        key="test_guest_2", name="测试门客2", rarity="gold", base_attack=80, base_defense=80
+        key="test_guest_2",
+        name="测试门客2",
+        rarity=GuestRarity.RED,
+        archetype=GuestArchetype.MILITARY,
+        base_attack=80,
+        base_defense=80,
+    )
+    template3 = GuestTemplate.objects.create(
+        key="test_guest_3",
+        name="测试门客3",
+        rarity=GuestRarity.BLUE,
+        archetype=GuestArchetype.MILITARY,
+        base_attack=70,
+        base_defense=70,
     )
 
     # 创建门客
     guest1 = Guest.objects.create(manor=manor, template=template1, force=50, intellect=50, level=1)
-    guest2 = Guest.objects.create(manor=manor, template=template2, force=80, intellect=80, level=5)
+    guest2 = Guest.objects.create(manor=manor, template=template2, force=80, intellect=80, level=99)
+    guest3 = Guest.objects.create(manor=manor, template=template3, force=70, intellect=70, level=1)
 
     guests = list(available_guests(manor))
 
-    # 应该返回两个门客
-    assert len(guests) == 2
-    # 验证门客都被正确获取
-    guest_ids = {g.id for g in guests}
-    assert guest1.id in guest_ids
-    assert guest2.id in guest_ids
+    # 应该返回三个门客，且按业务稀有度排序（蓝 > 红 > 灰）
+    assert len(guests) == 3
+    assert [g.id for g in guests] == [guest3.id, guest2.id, guest1.id]
 
 
 @pytest.mark.django_db

@@ -64,7 +64,6 @@ def test_get_trade_context_shop_builds_categories_and_filters(monkeypatch, djang
 
     monkeypatch.setattr("trade.selectors.get_shop_items_for_display", lambda: list(shop_items))
     monkeypatch.setattr("trade.selectors.get_sellable_inventory", _sellable_inventory)
-    monkeypatch.setattr("trade.selectors.get_sellable_effect_types", lambda *_args, **_kwargs: {"tool"})
 
     request = RequestFactory().get("/trade", {"tab": "shop", "category": "magnifying_glass"})
     context = get_trade_context(request, manor)
@@ -268,10 +267,6 @@ def test_get_trade_context_shop_tolerates_data_loading_errors(monkeypatch, djang
     monkeypatch.setattr(
         "trade.selectors.get_sellable_inventory",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("sellable failed")),
-    )
-    monkeypatch.setattr(
-        "trade.selectors.get_sellable_effect_types",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("effect types failed")),
     )
 
     user = django_user_model.objects.create_user(username="trade_ctx_shop_load_err", password="pass12345")

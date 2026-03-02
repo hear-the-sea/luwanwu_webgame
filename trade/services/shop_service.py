@@ -194,19 +194,12 @@ def get_sellable_effect_types(manor: Manor) -> set:
     """
     获取玩家可出售物品的 effect_type 集合（用于构建分类列表）
 
-    使用 values_list + distinct 避免加载全部对象
+    与 get_sellable_inventory 保持一致的“可出售”判定规则。
     """
-    effect_types = (
-        manor.inventory_items.filter(
-            quantity__gt=0,
-            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-            template__price__gt=0,  # 只有有价格的物品才能出售
-        )
-        .values_list("template__effect_type", flat=True)
-        .distinct()
-    )
-
-    return {_normalize_effect_type(et or "other") for et in effect_types}
+    return {
+        _normalize_effect_type(getattr(item.inventory_item.template, "effect_type", "other"))
+        for item in get_sellable_inventory(manor)
+    }
 
 
 @transaction.atomic

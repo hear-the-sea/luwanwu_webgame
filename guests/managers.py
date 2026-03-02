@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING
 
 from django.db import models
 
+from .query_utils import guest_template_rarity_rank_case
+
 if TYPE_CHECKING:
     from gameplay.models import Manor
 
@@ -103,7 +105,12 @@ class GuestQuerySet(models.QuerySet):
 
         包含模板预加载，按稀有度和等级排序
         """
-        return self.filter(status="idle").select_related("template").order_by("-template__rarity", "-level")
+        return (
+            self.filter(status="idle")
+            .select_related("template")
+            .annotate(_template_rarity_rank=guest_template_rarity_rank_case("template__rarity"))
+            .order_by("-_template_rarity_rank", "-level")
+        )
 
     def by_rarity(self, rarity: str) -> "GuestQuerySet":
         """
@@ -115,7 +122,9 @@ class GuestQuerySet(models.QuerySet):
         """
         按战力排序（稀有度、等级）
         """
-        return self.order_by("-template__rarity", "-level")
+        return self.annotate(_template_rarity_rank=guest_template_rarity_rank_case("template__rarity")).order_by(
+            "-_template_rarity_rank", "-level"
+        )
 
     def ordered_by_creation(self, desc: bool = True) -> "GuestQuerySet":
         """

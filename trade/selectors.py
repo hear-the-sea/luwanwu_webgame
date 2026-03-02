@@ -18,12 +18,7 @@ from gameplay.services.technology import get_troop_class_for_key
 from .services.auction_service import get_active_slots, get_auction_stats, get_my_bids, get_my_leading_bids
 from .services.bank_service import get_bank_info
 from .services.market_service import expire_user_listings, get_active_listings, get_my_listings, get_tradeable_inventory
-from .services.shop_service import (
-    EFFECT_TYPE_CATEGORY,
-    get_sellable_effect_types,
-    get_sellable_inventory,
-    get_shop_items_for_display,
-)
+from .services.shop_service import EFFECT_TYPE_CATEGORY, get_sellable_inventory, get_shop_items_for_display
 
 _TOOL_EFFECT_TYPES = LEGACY_TOOL_EFFECT_TYPES
 _TROOP_CATEGORY_LABELS: dict[str, str] = {
@@ -165,18 +160,15 @@ def _update_auction_context(request, manor, context: dict) -> None:
         _update_auction_my_bids_context(manor, context)
 
 
-def _build_shop_category_options(shop_items, manor) -> list[dict]:
+def _build_shop_category_options(shop_items, sellable_items) -> list[dict]:
     categories = {"all"}
     categories.update(_normalize_effect_type(item.effect_type or "other") for item in shop_items)
-    try:
-        categories.update(get_sellable_effect_types(manor))
-    except Exception as exc:
-        logger.warning(
-            "load sellable effect types failed: manor_id=%s error=%s",
-            getattr(manor, "id", None),
-            exc,
-            exc_info=True,
+    categories.update(
+        _normalize_effect_type(
+            getattr(getattr(getattr(item, "inventory_item", None), "template", None), "effect_type", "")
         )
+        for item in sellable_items
+    )
 
     return [{"key": "all", "label": "全部"}] + [
         {"key": category_key, "label": EFFECT_TYPE_CATEGORY.get(category_key, category_key)}
@@ -200,7 +192,7 @@ def _update_shop_context(request, manor, context: dict) -> None:
     except Exception as exc:
         logger.warning("load sellable inventory failed: %s", exc, exc_info=True)
         sellable_items = []
-    category_options = _build_shop_category_options(shop_items, manor)
+    category_options = _build_shop_category_options(shop_items, sellable_items)
 
     if selected_category != "all":
         shop_items = [
