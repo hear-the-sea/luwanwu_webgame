@@ -190,18 +190,6 @@ def get_sellable_inventory(manor: Manor, category: str = None) -> List[SellableI
     return result
 
 
-def get_sellable_effect_types(manor: Manor) -> set:
-    """
-    获取玩家可出售物品的 effect_type 集合（用于构建分类列表）
-
-    与 get_sellable_inventory 保持一致的“可出售”判定规则。
-    """
-    return {
-        _normalize_effect_type(getattr(item.inventory_item.template, "effect_type", "other"))
-        for item in get_sellable_inventory(manor)
-    }
-
-
 @transaction.atomic
 def buy_item(manor: Manor, item_key: str, quantity: int) -> Dict:
     """

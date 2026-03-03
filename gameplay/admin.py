@@ -9,6 +9,7 @@ from django.utils.html import format_html
 
 from common.constants.resources import ResourceType
 from core.admin_i18n import apply_common_field_labels
+from guests.query_utils import guest_template_rarity_rank_case
 
 from .models import (
     ArenaEntry,
@@ -244,7 +245,13 @@ class ItemTemplateAdmin(admin.ModelAdmin):
     list_display = ("name", "key", "effect_type", "rarity", "tradeable", "price")
     list_filter = ("effect_type", "rarity", "tradeable")
     search_fields = ("name", "key")
-    ordering = ("effect_type", "rarity", "name")
+    ordering = ("effect_type", "name")
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).annotate(_rarity_rank=guest_template_rarity_rank_case("rarity"))
+
+    def get_ordering(self, request):
+        return ("effect_type", "-_rarity_rank", "name")
 
 
 @admin.register(InventoryItem)

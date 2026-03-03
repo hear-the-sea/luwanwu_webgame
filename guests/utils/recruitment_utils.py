@@ -21,16 +21,8 @@ from ..models import GuestRarity, RecruitmentPoolEntry
 
 logger = logging.getLogger(__name__)
 
-# 稀有度排序（从低到高）
-RARITY_ORDER = [
-    GuestRarity.BLACK,
-    GuestRarity.GRAY,
-    GuestRarity.GREEN,
-    GuestRarity.RED,
-    GuestRarity.BLUE,
-    GuestRarity.PURPLE,
-    GuestRarity.ORANGE,
-]
+# 稀有度排序（从低到高），由 GuestRarity 定义顺序派生。
+RARITY_ORDER = [rarity for rarity, _label in GuestRarity.choices]
 
 # 隐士类型标识（虽显示为黑色，但有独立抽取概率）
 HERMIT_RARITY = "hermit"
