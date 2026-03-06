@@ -1,5 +1,18 @@
 heroes:
   purple:
+  - key: hist_sljnbc_0003
+    name: 司马懿
+    default_gender: male
+    archetype: civil
+    flavor: （179年—251年9月7日）曹魏重臣、军事统帅，西晋王朝的实际奠基人。他早年装病拒绝曹操征辟，后辅佐曹丕登基，深受信任。镇守西线时多次与蜀汉北伐军对峙，以持重著称，诸葛亮送来女装羞辱亦不动声色；亦曾东征平定辽东公孙渊。高平陵之变后夺取朝政大权，隐忍数十年一朝得势，奠定司马氏取魏建晋的基础。后世有言"司马公善忍"，其谋深沉如渊。
+    growth_range:
+    - 8
+    - 10
+    attribute_weights:
+      force: 16
+      intellect: 50
+      defense: 22
+      agility: 12
   - key: hist_sljnbc_0008
     name: 荀彧
     default_gender: male
@@ -586,19 +599,6 @@ heroes:
       force: 12
       intellect: 56
       defense: 20
-      agility: 12
-  - key: hist_sljnbc_0003
-    name: 司马懿
-    default_gender: male
-    archetype: civil
-    flavor: （179年—251年9月7日）曹魏重臣、军事统帅，西晋王朝的实际奠基人。他早年装病拒绝曹操征辟，后辅佐曹丕登基，深受信任。镇守西线时多次与蜀汉北伐军对峙，以持重著称，诸葛亮送来女装羞辱亦不动声色；亦曾东征平定辽东公孙渊。高平陵之变后夺取朝政大权，隐忍数十年一朝得势，奠定司马氏取魏建晋的基础。后世有言"司马公善忍"，其谋深沉如渊。
-    growth_range:
-    - 8
-    - 13
-    attribute_weights:
-      force: 16
-      intellect: 50
-      defense: 22
       agility: 12
   - key: hist_sljnbc_0004
     name: 刘裕
