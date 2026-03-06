@@ -31,7 +31,7 @@ from .constants import (
     AUCTION_SETTLE_LOCK_TIMEOUT,
     GOLD_BAR_ITEM_KEY,
 )
-from .gold_bars import consume_frozen_gold_bars, unfreeze_gold_bars
+from .gold_bars import consume_frozen_gold_bars, try_get_frozen_record, unfreeze_gold_bars
 
 logger = logging.getLogger(__name__)
 
@@ -297,6 +297,32 @@ def _refund_losing_bids(losing_bids: list[AuctionBid]) -> None:
         losing_bid.save(update_fields=["status", "refunded_at"])
 
 
+def _consume_winning_bid_frozen_gold_bars(winning_bid: AuctionBid, winner: Manor, settlement_price: int) -> None:
+    frozen_record = try_get_frozen_record(winning_bid)
+    if not frozen_record:
+        raise RuntimeError(f"winning bid missing frozen record: bid_id={winning_bid.id}")
+    if not frozen_record.is_frozen:
+        raise RuntimeError(f"winning bid frozen record already unfrozen: bid_id={winning_bid.id}")
+
+    frozen_amount = _safe_int(getattr(frozen_record, "amount", 0), 0)
+    if frozen_amount <= 0:
+        raise RuntimeError(f"winning bid frozen amount invalid: bid_id={winning_bid.id} amount={frozen_amount}")
+    if settlement_price <= 0:
+        raise RuntimeError(
+            f"winning bid settlement price invalid: bid_id={winning_bid.id} settlement_price={settlement_price}"
+        )
+    if frozen_amount < settlement_price:
+        raise RuntimeError(
+            f"winning bid frozen amount insufficient: bid_id={winning_bid.id} amount={frozen_amount} price={settlement_price}"
+        )
+
+    refund_amount = frozen_amount - settlement_price
+    if refund_amount > 0:
+        _partial_consume_frozen_gold_bars(winning_bid, winner, settlement_price, refund_amount)
+    else:
+        consume_frozen_gold_bars(frozen_record, winner)
+
+
 def _settle_slot(slot: AuctionSlot) -> Dict:
     """结算单个拍卖位（维克里拍卖）。"""
     result = {"sold": False, "price": 0, "winner_count": 0}
@@ -329,17 +355,7 @@ def _settle_slot(slot: AuctionSlot) -> Dict:
         for winning_bid in actual_winners:
             winner = winning_bid.manor
 
-            frozen_amount = winning_bid.frozen_gold_bars
-            refund_amount = frozen_amount - settlement_price
-
-            if refund_amount > 0:
-                _partial_consume_frozen_gold_bars(winning_bid, winner, settlement_price, refund_amount)
-            else:
-                try:
-                    if winning_bid.frozen_record:
-                        consume_frozen_gold_bars(winning_bid.frozen_record, winner)
-                except FrozenGoldBar.DoesNotExist:
-                    pass
+            _consume_winning_bid_frozen_gold_bars(winning_bid, winner, settlement_price)
 
             winning_bid.status = AuctionBid.Status.WON
             winning_bid.save(update_fields=["status"])
@@ -364,18 +380,22 @@ def _partial_consume_frozen_gold_bars(bid: AuctionBid, manor: Manor, consume_amo
     """部分消耗冻结金条（用于维克里拍卖，出价高于结算价的情况）。"""
     from gameplay.services.inventory import consume_inventory_item_for_manor_locked
 
-    try:
-        frozen_record = bid.frozen_record
-    except FrozenGoldBar.DoesNotExist:
-        return
-
-    if not frozen_record or not frozen_record.is_frozen:
-        return
+    frozen_record = try_get_frozen_record(bid)
+    if not frozen_record:
+        raise RuntimeError(f"partial consume missing frozen record: bid_id={bid.id}")
+    if not frozen_record.is_frozen:
+        raise RuntimeError(f"partial consume frozen record already unfrozen: bid_id={bid.id}")
 
     with transaction.atomic():
         locked_record = FrozenGoldBar.objects.select_for_update().filter(pk=frozen_record.pk, is_frozen=True).first()
         if not locked_record:
-            return
+            raise RuntimeError(f"partial consume lock failed for frozen record: bid_id={bid.id}")
+
+        locked_amount = _safe_int(getattr(locked_record, "amount", 0), 0)
+        if locked_amount < consume_amount:
+            raise RuntimeError(
+                f"partial consume amount exceeds frozen amount: bid_id={bid.id} consume={consume_amount} amount={locked_amount}"
+            )
 
         consume_inventory_item_for_manor_locked(manor, GOLD_BAR_ITEM_KEY, consume_amount)
 

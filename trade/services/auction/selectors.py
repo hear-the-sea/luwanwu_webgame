@@ -7,6 +7,7 @@ from typing import Dict, List
 from django.db.models import QuerySet
 
 from gameplay.models import Manor
+from gameplay.models.items import LEGACY_TOOL_EFFECT_TYPES
 from trade.models import AuctionBid, AuctionSlot
 
 from .bidding import get_cutoff_price, get_slot_ranking, is_in_winning_range
@@ -30,9 +31,8 @@ def get_active_slots(
     )
 
     if category and category != "all":
-        tool_effect_types = {"tool", "magnifying_glass", "peace_shield", "manor_rename"}
-        if category in tool_effect_types:
-            queryset = queryset.filter(item_template__effect_type__in=tool_effect_types)
+        if category in LEGACY_TOOL_EFFECT_TYPES:
+            queryset = queryset.filter(item_template__effect_type__in=LEGACY_TOOL_EFFECT_TYPES)
         else:
             queryset = queryset.filter(item_template__effect_type=category)
 
@@ -101,27 +101,24 @@ def get_my_leading_bids(manor: Manor) -> List[AuctionSlot]:
         .order_by("slot_id", "-amount", "created_at")
     )
 
-    # Group by slot in memory
-    rankings_map: dict[int, list[int]] = {}
+    # Build first-occurrence rank map in one pass to avoid list.index() scans.
+    rank_map: dict[tuple[int, int], int] = {}
+    current_slot_id: int | None = None
+    current_rank = 0
     for slot_id, bidder_id in competitor_bids:
-        if slot_id not in rankings_map:
-            rankings_map[slot_id] = []
-        rankings_map[slot_id].append(bidder_id)
+        if slot_id != current_slot_id:
+            current_slot_id = slot_id
+            current_rank = 1
+        else:
+            current_rank += 1
+        rank_map.setdefault((slot_id, bidder_id), current_rank)
 
     result = []
     for bid in my_active_bids:
         slot = bid.slot
-        rank_list = rankings_map.get(slot.id, [])
-
-        # Check if I am in top N
-        try:
-            # list.index raises ValueError if not found
-            # 1-based rank
-            rank = rank_list.index(manor.id) + 1
-            if rank <= slot.quantity:
-                result.append(slot)
-        except ValueError:
-            continue
+        rank = rank_map.get((slot.id, manor.id))
+        if rank is not None and rank <= slot.quantity:
+            result.append(slot)
 
     return result
 

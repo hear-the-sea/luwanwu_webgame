@@ -614,6 +614,78 @@ def _save_resolved_match(
     match.save(update_fields=["winner_entry", "status", "notes", "resolved_at"])
 
 
+def _persist_forfeit_match_resolution(
+    *,
+    tournament: ArenaTournament,
+    round_number: int,
+    match_index: int,
+    attacker_entry: ArenaEntry,
+    defender_entry: ArenaEntry,
+    winner_entry: ArenaEntry,
+    note: str,
+    now,
+    match: ArenaMatch | None,
+) -> None:
+    if match is not None:
+        _save_resolved_match(
+            match=match,
+            winner_entry=winner_entry,
+            status=ArenaMatch.Status.FORFEIT,
+            note=note,
+            now=now,
+        )
+        return
+    _create_forfeit_match(
+        tournament=tournament,
+        round_number=round_number,
+        match_index=match_index,
+        attacker_entry=attacker_entry,
+        defender_entry=defender_entry,
+        winner_entry=winner_entry,
+        status=ArenaMatch.Status.FORFEIT,
+        note=note,
+        now=now,
+    )
+
+
+def _resolve_forfeit_winner(
+    *,
+    tournament: ArenaTournament,
+    round_number: int,
+    match_index: int,
+    attacker_entry: ArenaEntry,
+    defender_entry: ArenaEntry,
+    attacker_guests: list[ArenaGuestSnapshotProxy],
+    defender_guests: list[ArenaGuestSnapshotProxy],
+    now,
+    match: ArenaMatch | None,
+) -> ArenaEntry | None:
+    if not attacker_guests and not defender_guests:
+        winner_entry = random.choice([attacker_entry, defender_entry])
+        note = "双方均无可用门客，随机判定胜者"
+    elif not attacker_guests:
+        winner_entry = defender_entry
+        note = "攻击方无可用门客，判负"
+    elif not defender_guests:
+        winner_entry = attacker_entry
+        note = "防守方无可用门客，判负"
+    else:
+        return None
+
+    _persist_forfeit_match_resolution(
+        tournament=tournament,
+        round_number=round_number,
+        match_index=match_index,
+        attacker_entry=attacker_entry,
+        defender_entry=defender_entry,
+        winner_entry=winner_entry,
+        note=note,
+        now=now,
+        match=match,
+    )
+    return winner_entry
+
+
 def _resolve_match_locked(
     *,
     tournament: ArenaTournament,
@@ -627,75 +699,19 @@ def _resolve_match_locked(
     attacker_guests = _load_entry_guests(attacker_entry)
     defender_guests = _load_entry_guests(defender_entry)
 
-    if not attacker_guests and not defender_guests:
-        winner_entry = random.choice([attacker_entry, defender_entry])
-        if match:
-            _save_resolved_match(
-                match=match,
-                winner_entry=winner_entry,
-                status=ArenaMatch.Status.FORFEIT,
-                note="双方均无可用门客，随机判定胜者",
-                now=now,
-            )
-        else:
-            _create_forfeit_match(
-                tournament=tournament,
-                round_number=round_number,
-                match_index=match_index,
-                attacker_entry=attacker_entry,
-                defender_entry=defender_entry,
-                winner_entry=winner_entry,
-                status=ArenaMatch.Status.FORFEIT,
-                note="双方均无可用门客，随机判定胜者",
-                now=now,
-            )
-        return winner_entry
-
-    if not attacker_guests:
-        if match:
-            _save_resolved_match(
-                match=match,
-                winner_entry=defender_entry,
-                status=ArenaMatch.Status.FORFEIT,
-                note="攻击方无可用门客，判负",
-                now=now,
-            )
-        else:
-            _create_forfeit_match(
-                tournament=tournament,
-                round_number=round_number,
-                match_index=match_index,
-                attacker_entry=attacker_entry,
-                defender_entry=defender_entry,
-                winner_entry=defender_entry,
-                status=ArenaMatch.Status.FORFEIT,
-                note="攻击方无可用门客，判负",
-                now=now,
-            )
-        return defender_entry
-
-    if not defender_guests:
-        if match:
-            _save_resolved_match(
-                match=match,
-                winner_entry=attacker_entry,
-                status=ArenaMatch.Status.FORFEIT,
-                note="防守方无可用门客，判负",
-                now=now,
-            )
-        else:
-            _create_forfeit_match(
-                tournament=tournament,
-                round_number=round_number,
-                match_index=match_index,
-                attacker_entry=attacker_entry,
-                defender_entry=defender_entry,
-                winner_entry=attacker_entry,
-                status=ArenaMatch.Status.FORFEIT,
-                note="防守方无可用门客，判负",
-                now=now,
-            )
-        return attacker_entry
+    forfeit_winner = _resolve_forfeit_winner(
+        tournament=tournament,
+        round_number=round_number,
+        match_index=match_index,
+        attacker_entry=attacker_entry,
+        defender_entry=defender_entry,
+        attacker_guests=attacker_guests,
+        defender_guests=defender_guests,
+        now=now,
+        match=match,
+    )
+    if forfeit_winner is not None:
+        return forfeit_winner
 
     attacker_battle_guests = cast(list[Guest], attacker_guests)
     defender_battle_guests = cast(list[Guest], defender_guests)
@@ -839,6 +855,32 @@ def _finalize_tournament_locked(tournament: ArenaTournament, *, winner_entry: Ar
     )
 
 
+def _schedule_round_retry_locked(tournament: ArenaTournament, *, now) -> None:
+    retry_seconds = max(1, min(ARENA_ROUND_RETRY_SECONDS, _round_interval_seconds()))
+    tournament.next_round_at = now + timedelta(seconds=retry_seconds)
+    tournament.save(update_fields=["next_round_at", "updated_at"])
+
+
+def _collect_round_outcome_entry_ids(round_matches: list[ArenaMatch]) -> tuple[list[int], list[int]]:
+    winner_ids: list[int] = []
+    loser_ids: list[int] = []
+    for match in round_matches:
+        winner_id = match.winner_entry_id
+        if not winner_id:
+            continue
+        winner_ids.append(winner_id)
+        if match.defender_entry_id is None:
+            continue
+        if winner_id == match.attacker_entry_id:
+            loser_id = match.defender_entry_id
+        else:
+            loser_id = match.attacker_entry_id
+        if loser_id is not None:
+            loser_ids.append(loser_id)
+
+    return list(dict.fromkeys(winner_ids)), list(dict.fromkeys(loser_ids))
+
+
 def _run_tournament_round(tournament_id: int, *, now) -> bool:
     with transaction.atomic():
         tournament = ArenaTournament.objects.select_for_update().filter(pk=tournament_id).first()
@@ -943,31 +985,12 @@ def _run_tournament_round(tournament_id: int, *, now) -> bool:
         )
         unresolved_exists = any(match.status == ArenaMatch.Status.SCHEDULED for match in round_matches)
         if resolution_failed or unresolved_exists:
-            retry_seconds = max(1, min(ARENA_ROUND_RETRY_SECONDS, _round_interval_seconds()))
-            tournament.next_round_at = now + timedelta(seconds=retry_seconds)
-            tournament.save(update_fields=["next_round_at", "updated_at"])
+            _schedule_round_retry_locked(tournament, now=now)
             return False
 
-        winner_ids: list[int] = []
-        loser_ids: list[int] = []
-        for match in round_matches:
-            winner_id = match.winner_entry_id
-            if not winner_id:
-                continue
-            winner_ids.append(winner_id)
-            if match.defender_entry_id is None:
-                continue
-            if winner_id == match.attacker_entry_id:
-                loser_ids.append(match.defender_entry_id)
-            else:
-                loser_ids.append(match.attacker_entry_id)
-
-        winner_ids = list(dict.fromkeys(winner_ids))
-        loser_ids = list(dict.fromkeys(loser_ids))
+        winner_ids, loser_ids = _collect_round_outcome_entry_ids(round_matches)
         if not winner_ids:
-            retry_seconds = max(1, min(ARENA_ROUND_RETRY_SECONDS, _round_interval_seconds()))
-            tournament.next_round_at = now + timedelta(seconds=retry_seconds)
-            tournament.save(update_fields=["next_round_at", "updated_at"])
+            _schedule_round_retry_locked(tournament, now=now)
             return False
 
         if loser_ids:

@@ -512,6 +512,49 @@ def test_rounds_module_settle_slot_partial_refund_flow(monkeypatch, django_user_
 
 
 @pytest.mark.django_db
+def test_rounds_module_settle_slot_raises_when_winner_missing_frozen_record(django_user_model):
+    from trade.services.auction.rounds import _settle_slot
+
+    user = django_user_model.objects.create_user(username="auction_settle_missing_frozen", password="pass123")
+    manor = ensure_manor(user)
+
+    item_tpl = _create_auction_item_template("auction_settle_missing_frozen_item")
+    auction_round = AuctionRound.objects.create(
+        round_number=10017,
+        status=AuctionRound.Status.ACTIVE,
+        start_at=timezone.now() - timedelta(days=2),
+        end_at=timezone.now() - timedelta(minutes=1),
+    )
+    slot = AuctionSlot.objects.create(
+        round=auction_round,
+        item_template=item_tpl,
+        quantity=1,
+        starting_price=10,
+        current_price=10,
+        min_increment=1,
+        status=AuctionSlot.Status.ACTIVE,
+        config_key=item_tpl.key,
+        slot_index=0,
+    )
+    bid = AuctionBid.objects.create(
+        slot=slot,
+        manor=manor,
+        amount=20,
+        status=AuctionBid.Status.ACTIVE,
+        frozen_gold_bars=20,
+    )
+
+    with pytest.raises(RuntimeError, match="missing frozen record"):
+        _settle_slot(slot)
+
+    # 事务回滚：拍卖位与出价状态保持未结算，避免“未扣费已发货”。
+    slot.refresh_from_db()
+    bid.refresh_from_db()
+    assert slot.status == AuctionSlot.Status.ACTIVE
+    assert bid.status == AuctionBid.Status.ACTIVE
+
+
+@pytest.mark.django_db
 def test_rounds_module_settle_slot_delivers_item_via_message_attachment(monkeypatch, django_user_model):
     from trade.services.auction.rounds import _settle_slot
 

@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from core.config import TRADE
 from gameplay.models import InventoryItem, ItemTemplate, Manor, ResourceEvent
+from gameplay.models.items import LEGACY_TOOL_EFFECT_TYPES
 from gameplay.services.resources import grant_resources_locked, spend_resources_locked
 from gameplay.services.utils.messages import create_message
 from gameplay.services.utils.notifications import notify_user
@@ -275,9 +276,8 @@ def get_active_listings(
         queryset = queryset.filter(item_template_id=item_template_id)
 
     if category and category != "all":
-        tool_effect_types = {"tool", "magnifying_glass", "peace_shield", "manor_rename"}
-        if category in tool_effect_types:
-            queryset = queryset.filter(item_template__effect_type__in=tool_effect_types)
+        if category in LEGACY_TOOL_EFFECT_TYPES:
+            queryset = queryset.filter(item_template__effect_type__in=LEGACY_TOOL_EFFECT_TYPES)
         else:
             queryset = queryset.filter(item_template__effect_type=category)
 
@@ -288,133 +288,71 @@ def get_active_listings(
     return queryset.order_by(safe_order_by)
 
 
-def purchase_listing(buyer: Manor, listing_id: int) -> MarketTransaction:
-    """
-    购买挂单物品（并发安全版本）
+def _get_locked_listing_for_purchase(listing_id: int) -> MarketListing:
+    listing = (
+        MarketListing.objects.select_for_update()
+        .select_related("seller__user", "item_template")
+        .filter(id=listing_id)
+        .first()
+    )
+    if not listing:
+        raise ValueError("挂单不存在")
+    return listing
 
-    使用数据库行锁和F()表达式确保并发安全：
-    - 锁定MarketListing防止重复购买
-    - 锁定买家和卖家Manor防止银两透支/覆盖
-    - 锁定买家InventoryItem防止物品发放时的并发冲突
-    - 使用F()表达式进行原子性数值更新
 
-    锁定顺序：MarketListing -> 买家Manor -> 卖家Manor -> 买家InventoryItem
-    这个顺序与上架路径不同，但通过Listing作为第一锁避免了循环等待
+def _validate_listing_for_purchase(listing: MarketListing, buyer: Manor) -> None:
+    if listing.status != MarketListing.Status.ACTIVE:
+        raise ValueError("该挂单已下架")
+    if listing.is_expired:
+        raise ValueError("该挂单已过期")
+    if listing.seller_id == buyer.pk:
+        raise ValueError("不能购买自己的物品")
 
-    Args:
-        buyer: 买家庄园
-        listing_id: 挂单ID
 
-    Returns:
-        交易记录对象
+def _lock_purchase_parties(buyer_pk: int, seller_pk: int | None) -> tuple[Manor, Manor | None]:
+    # 固定顺序加锁，避免买卖双方并发交易时死锁
+    if seller_pk and buyer_pk < seller_pk:
+        buyer_locked = Manor.objects.select_for_update().get(pk=buyer_pk)
+        seller_locked = Manor.objects.select_for_update().get(pk=seller_pk)
+    elif seller_pk and buyer_pk > seller_pk:
+        seller_locked = Manor.objects.select_for_update().get(pk=seller_pk)
+        buyer_locked = Manor.objects.select_for_update().get(pk=buyer_pk)
+    else:
+        buyer_locked = Manor.objects.select_for_update().get(pk=buyer_pk)
+        seller_locked = Manor.objects.select_for_update().get(pk=seller_pk) if seller_pk else None
+    return buyer_locked, seller_locked
 
-    Raises:
-        ValueError: 验证失败时抛出异常
-    """
-    # 并发安全的事务处理
-    with transaction.atomic():
-        # 步骤1：锁定挂单，防止重复购买
-        listing = (
-            MarketListing.objects.select_for_update()
-            .select_related("seller__user", "item_template")
-            .filter(id=listing_id)
-            .first()
+
+def _grant_listing_item_to_buyer_locked(buyer_locked: Manor, item_template: ItemTemplate, quantity: int) -> None:
+    inventory_item = (
+        InventoryItem.objects.select_for_update()
+        .filter(
+            manor=buyer_locked,
+            template=item_template,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
         )
-
-        if not listing:
-            raise ValueError("挂单不存在")
-
-        # 验证挂单状态
-        if listing.status != MarketListing.Status.ACTIVE:
-            raise ValueError("该挂单已下架")
-
-        if listing.is_expired:
-            raise ValueError("该挂单已过期")
-
-        if listing.seller == buyer:
-            raise ValueError("不能购买自己的物品")
-
-        # 步骤2：按固定顺序锁定买家/卖家庄园，避免死锁
-        # 规则：始终按 pk 从小到大的顺序锁定
-        buyer_pk = buyer.pk
-        seller_pk = listing.seller_id
-
-        if seller_pk and buyer_pk < seller_pk:
-            # 买家 pk 较小，先锁买家再锁卖家
-            buyer_locked = Manor.objects.select_for_update().get(pk=buyer_pk)
-            seller_locked = Manor.objects.select_for_update().get(pk=seller_pk)
-        elif seller_pk and buyer_pk > seller_pk:
-            # 卖家 pk 较小，先锁卖家再锁买家
-            seller_locked = Manor.objects.select_for_update().get(pk=seller_pk)
-            buyer_locked = Manor.objects.select_for_update().get(pk=buyer_pk)
-        else:
-            # 无卖家（系统商店）或 pk 相同（不应发生）
-            buyer_locked = Manor.objects.select_for_update().get(pk=buyer_pk)
-            seller_locked = Manor.objects.select_for_update().get(pk=seller_pk) if seller_pk else None
-
-        # 步骤3：扣除买家银两
-        spend_resources_locked(
-            buyer_locked,
-            {"silver": listing.total_price},
-            note=f"购买{listing.item_template.name}",
-            reason=ResourceEvent.Reason.MARKET_PURCHASE,
+        .first()
+    )
+    if inventory_item:
+        InventoryItem.objects.filter(pk=inventory_item.pk).update(
+            quantity=F("quantity") + quantity, updated_at=timezone.now()
         )
+        return
+    InventoryItem.objects.create(
+        manor=buyer_locked,
+        template=item_template,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        quantity=quantity,
+    )
 
-        # 步骤4：计算税费和卖家实收，发放卖家收益
-        tax_amount = int(listing.total_price * TRANSACTION_TAX_RATE)
-        seller_received = listing.total_price - tax_amount
 
-        # 增加卖家银两（仅玩家卖家，系统商店无需处理）
-        if seller_locked is not None:
-            grant_resources_locked(
-                seller_locked,
-                {"silver": seller_received},
-                note=f"出售{listing.item_template.name}",
-                reason=ResourceEvent.Reason.ITEM_SOLD,
-            )
-
-        # 步骤5：更新挂单状态
-        now = timezone.now()
-        listing.status = MarketListing.Status.SOLD
-        listing.buyer = buyer_locked
-        listing.sold_at = now
-        listing.save(update_fields=["status", "buyer", "sold_at"])
-
-        # 步骤6：创建交易记录
-        transaction_record = MarketTransaction.objects.create(
-            listing=listing,
-            buyer=buyer_locked,
-            total_price=listing.total_price,
-            tax_amount=tax_amount,
-            seller_received=seller_received,
-        )
-
-        # 步骤7：物品发放到买家仓库 - 锁定库存行防止并发冲突
-        inventory_item = (
-            InventoryItem.objects.select_for_update()
-            .filter(
-                manor=buyer_locked,
-                template=listing.item_template,
-                storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-            )
-            .first()
-        )
-
-        if inventory_item:
-            # 已有该物品，使用F()表达式增加数量
-            InventoryItem.objects.filter(pk=inventory_item.pk).update(
-                quantity=F("quantity") + listing.quantity, updated_at=timezone.now()
-            )
-        else:
-            # 首次获得该物品，创建新记录
-            InventoryItem.objects.create(
-                manor=buyer_locked,
-                template=listing.item_template,
-                storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-                quantity=listing.quantity,
-            )
-
-    # 事务外发送邮件通知，减少锁持有时间
+def _send_purchase_notifications(
+    *,
+    buyer: Manor,
+    listing: MarketListing,
+    tax_amount: int,
+    seller_received: int,
+) -> tuple[bool, bool]:
     # 买家通知（物品已直接添加到仓库，邮件仅作通知用途，不含附件）
     buyer_mail_sent = _safe_create_message(
         manor=buyer,
@@ -455,7 +393,6 @@ def purchase_listing(buyer: Manor, listing_id: int) -> MarketTransaction:
             ),
         )
 
-        # WebSocket 即时推送通知卖家
         _safe_notify_user(
             listing.seller.user_id,
             {
@@ -469,7 +406,78 @@ def purchase_listing(buyer: Manor, listing_id: int) -> MarketTransaction:
             log_context="market sold notification",
         )
 
-    # 标记邮件已发送
+    return buyer_mail_sent, seller_mail_sent
+
+
+def purchase_listing(buyer: Manor, listing_id: int) -> MarketTransaction:
+    """
+    购买挂单物品（并发安全版本）
+
+    使用数据库行锁和F()表达式确保并发安全：
+    - 锁定MarketListing防止重复购买
+    - 锁定买家和卖家Manor防止银两透支/覆盖
+    - 锁定买家InventoryItem防止物品发放时的并发冲突
+    - 使用F()表达式进行原子性数值更新
+
+    锁定顺序：MarketListing -> 买家Manor -> 卖家Manor -> 买家InventoryItem
+    这个顺序与上架路径不同，但通过Listing作为第一锁避免了循环等待
+
+    Args:
+        buyer: 买家庄园
+        listing_id: 挂单ID
+
+    Returns:
+        交易记录对象
+
+    Raises:
+        ValueError: 验证失败时抛出异常
+    """
+    with transaction.atomic():
+        listing = _get_locked_listing_for_purchase(listing_id)
+        _validate_listing_for_purchase(listing, buyer)
+        buyer_locked, seller_locked = _lock_purchase_parties(buyer.pk, listing.seller_id)
+
+        spend_resources_locked(
+            buyer_locked,
+            {"silver": listing.total_price},
+            note=f"购买{listing.item_template.name}",
+            reason=ResourceEvent.Reason.MARKET_PURCHASE,
+        )
+
+        tax_amount = int(listing.total_price * TRANSACTION_TAX_RATE)
+        seller_received = listing.total_price - tax_amount
+
+        if seller_locked is not None:
+            grant_resources_locked(
+                seller_locked,
+                {"silver": seller_received},
+                note=f"出售{listing.item_template.name}",
+                reason=ResourceEvent.Reason.ITEM_SOLD,
+            )
+
+        now = timezone.now()
+        listing.status = MarketListing.Status.SOLD
+        listing.buyer = buyer_locked
+        listing.sold_at = now
+        listing.save(update_fields=["status", "buyer", "sold_at"])
+
+        transaction_record = MarketTransaction.objects.create(
+            listing=listing,
+            buyer=buyer_locked,
+            total_price=listing.total_price,
+            tax_amount=tax_amount,
+            seller_received=seller_received,
+        )
+
+        _grant_listing_item_to_buyer_locked(buyer_locked, listing.item_template, listing.quantity)
+
+    buyer_mail_sent, seller_mail_sent = _send_purchase_notifications(
+        buyer=buyer,
+        listing=listing,
+        tax_amount=tax_amount,
+        seller_received=seller_received,
+    )
+
     transaction_record.buyer_mail_sent = buyer_mail_sent
     transaction_record.seller_mail_sent = seller_mail_sent
     transaction_record.save(update_fields=["buyer_mail_sent", "seller_mail_sent"])
@@ -557,14 +565,17 @@ def _expire_listings_queryset(expired_listings: QuerySet, log_label: str, limit:
     if normalized_limit == 0:
         return 0
 
-    # 如果指定了 limit，先切片限制查询数量
-    # 注意：在切片前通常应该有排序，这里隐式依赖数据库默认排序或模型Meta排序
-    # 为了确定性，显式按过期时间排序
+    # 先只拿候选 ID，避免先加载完整对象再二次加锁查询。
+    candidates = expired_listings.filter(
+        status=MarketListing.Status.ACTIVE,
+        expires_at__lte=timezone.now(),
+    ).order_by("expires_at")
+    candidate_ids = candidates.values_list("pk", flat=True)
     if normalized_limit:
-        expired_listings = expired_listings.order_by("expires_at")[:normalized_limit]
+        candidate_ids = candidate_ids[:normalized_limit]
 
     count = 0
-    for listing in expired_listings.select_related("seller", "item_template"):
+    for listing_id in candidate_ids:
         try:
             with transaction.atomic():
                 # 在事务内重新获取并锁定记录，防止并发处理
@@ -574,7 +585,7 @@ def _expire_listings_queryset(expired_listings: QuerySet, log_label: str, limit:
                     MarketListing.objects.select_for_update(skip_locked=True)
                     .select_related("seller", "item_template")
                     .filter(
-                        pk=listing.pk,
+                        pk=listing_id,
                         status=MarketListing.Status.ACTIVE,
                         expires_at__lte=timezone.now(),
                     )
@@ -640,7 +651,7 @@ def _expire_listings_queryset(expired_listings: QuerySet, log_label: str, limit:
                 count += 1
         except Exception as e:
             # 记录错误但继续处理其他挂单
-            logger.exception("%s %s 时出错: %s", log_label, listing.id, e)
+            logger.exception("%s %s 时出错: %s", log_label, listing_id, e)
             continue
 
     return count

@@ -774,6 +774,39 @@ def _schedule_guest_recruitment_completion(recruitment: GuestRecruitment, eta_se
     )
 
 
+def _mark_recruitment_failed_locked(recruitment: GuestRecruitment, *, current_time, reason: str) -> None:
+    recruitment.status = GuestRecruitment.Status.FAILED
+    recruitment.finished_at = current_time
+    recruitment.error_message = str(reason)[:255]
+    recruitment.save(update_fields=["status", "finished_at", "error_message"])
+    _invalidate_recruitment_hall_cache(getattr(recruitment, "manor_id", None))
+
+
+def _send_recruitment_completion_notification(*, manor: Manor, pool: RecruitmentPool, candidate_count: int) -> None:
+    from gameplay.models import Message
+    from gameplay.services.utils.messages import create_message
+    from gameplay.services.utils.notifications import notify_user
+
+    title = f"{pool.name}招募完成"
+    body = f"您的{pool.name}已完成，生成 {candidate_count} 名候选门客，请前往聚贤庄挑选。"
+    create_message(
+        manor=manor,
+        kind=Message.Kind.SYSTEM,
+        title=title,
+        body=body,
+    )
+    notify_user(
+        manor.user_id,
+        {
+            "kind": "system",
+            "title": title,
+            "pool_key": pool.key,
+            "candidate_count": candidate_count,
+        },
+        log_context="guest recruitment notification",
+    )
+
+
 @transaction.atomic
 def start_guest_recruitment(manor: Manor, pool: RecruitmentPool, seed: int | None = None) -> GuestRecruitment:
     """
@@ -838,6 +871,9 @@ def finalize_guest_recruitment(
         return False
 
     current_time = now or timezone.now()
+    manor: Manor | None = None
+    pool: RecruitmentPool | None = None
+    candidate_count = 0
 
     with transaction.atomic():
         from gameplay.models import Manor as ManorModel
@@ -853,11 +889,7 @@ def finalize_guest_recruitment(
         if locked.complete_at > current_time:
             return False
         if not locked.pool_id:
-            locked.status = GuestRecruitment.Status.FAILED
-            locked.finished_at = current_time
-            locked.error_message = "招募卡池不存在"
-            locked.save(update_fields=["status", "finished_at", "error_message"])
-            _invalidate_recruitment_hall_cache(getattr(locked, "manor_id", None))
+            _mark_recruitment_failed_locked(locked, current_time=current_time, reason="招募卡池不存在")
             return False
         ManorModel.objects.select_for_update().filter(pk=locked.manor_id).exists()
 
@@ -871,11 +903,7 @@ def finalize_guest_recruitment(
             )
         except Exception as exc:
             logger.exception("Failed to finalize guest recruitment %s: %s", locked.id, exc)
-            locked.status = GuestRecruitment.Status.FAILED
-            locked.finished_at = current_time
-            locked.error_message = str(exc)[:255]
-            locked.save(update_fields=["status", "finished_at", "error_message"])
-            _invalidate_recruitment_hall_cache(getattr(locked, "manor_id", None))
+            _mark_recruitment_failed_locked(locked, current_time=current_time, reason=str(exc))
             return False
 
         locked.status = GuestRecruitment.Status.COMPLETED
@@ -888,29 +916,8 @@ def finalize_guest_recruitment(
         candidate_count = len(candidates)
         _invalidate_recruitment_hall_cache(getattr(manor, "id", None))
 
-    if send_notification and pool:
-        from gameplay.models import Message
-        from gameplay.services.utils.messages import create_message
-        from gameplay.services.utils.notifications import notify_user
-
-        title = f"{pool.name}招募完成"
-        body = f"您的{pool.name}已完成，生成 {candidate_count} 名候选门客，请前往聚贤庄挑选。"
-        create_message(
-            manor=manor,
-            kind=Message.Kind.SYSTEM,
-            title=title,
-            body=body,
-        )
-        notify_user(
-            manor.user_id,
-            {
-                "kind": "system",
-                "title": title,
-                "pool_key": pool.key,
-                "candidate_count": candidate_count,
-            },
-            log_context="guest recruitment notification",
-        )
+    if send_notification and pool and manor is not None:
+        _send_recruitment_completion_notification(manor=manor, pool=pool, candidate_count=candidate_count)
     return True
 
 

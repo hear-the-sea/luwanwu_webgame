@@ -11,9 +11,14 @@ from core.exceptions import InvalidAllocationError
 from gameplay.services.manor.core import ensure_manor
 from guests.constants import TimeConstants
 from guests.models import Guest, GuestArchetype, GuestRarity, GuestStatus, GuestTemplate
+from guests.rarity import GUEST_RARITY_ORDER
 from guests.services import allocate_attribute_points, available_guests, list_pools, recover_guest_hp
 
 User = get_user_model()
+
+
+def test_guest_rarity_order_matches_model_choices():
+    assert tuple(value for value, _label in GuestRarity.choices) == GUEST_RARITY_ORDER
 
 
 @pytest.mark.django_db

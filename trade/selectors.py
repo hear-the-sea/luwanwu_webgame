@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import logging
+from typing import Any, Callable
 
 from django.core.paginator import Paginator
 
 from core.utils import safe_int, safe_ordering
-from gameplay.models.items import LEGACY_TOOL_EFFECT_TYPES
+from gameplay.models.items import LEGACY_TOOL_EFFECT_TYPES, normalize_item_effect_type
 from gameplay.services.manor.troop_bank import (
     get_troop_bank_capacity,
     get_troop_bank_remaining_space,
@@ -33,6 +34,14 @@ _TROOP_CATEGORY_LABELS: dict[str, str] = {
 logger = logging.getLogger(__name__)
 
 
+def _safe_call(func: Callable[..., Any], *args, default: Any, log_message: str, **kwargs) -> Any:
+    try:
+        return func(*args, **kwargs)
+    except Exception as exc:
+        logger.warning("%s: %s", log_message, exc, exc_info=True)
+        return default
+
+
 def _base_trade_context(tab: str, manor) -> dict:
     return {
         "current_tab": tab,
@@ -53,10 +62,10 @@ def _effect_type_category_options() -> list[dict]:
     ]
 
 
-def _normalize_effect_type(effect_type: str) -> str:
-    normalized_effect_type = effect_type or "other"
-    if normalized_effect_type in _TOOL_EFFECT_TYPES:
-        return "tool"
+def _normalize_effect_type(effect_type: str | None) -> str:
+    normalized_effect_type = normalize_item_effect_type(effect_type or "")
+    if not normalized_effect_type:
+        return "other"
     return normalized_effect_type
 
 
@@ -85,21 +94,26 @@ def _update_auction_browse_context(request, manor, context: dict) -> None:
         {"-current_price", "current_price", "-bid_count", "bid_count"},
     )
     page = safe_int(request.GET.get("page", 1), 1, min_val=1)
-    try:
-        slots = get_active_slots(category=category, rarity=rarity, order_by=order_by)
-    except Exception as exc:
-        logger.warning("load active auction slots failed: %s", exc, exc_info=True)
-        slots = []
+    slots = _safe_call(
+        get_active_slots,
+        category=category,
+        rarity=rarity,
+        order_by=order_by,
+        default=[],
+        log_message="load active auction slots failed",
+    )
     page_obj = Paginator(slots, 5).get_page(page)
 
     from trade.services.auction_service import get_slots_bid_info_batch
 
     slots_list = list(page_obj)
-    try:
-        bid_info_map = get_slots_bid_info_batch(slots_list, manor)
-    except Exception as exc:
-        logger.warning("load auction bid info failed: %s", exc, exc_info=True)
-        bid_info_map = {}
+    bid_info_map = _safe_call(
+        get_slots_bid_info_batch,
+        slots_list,
+        manor,
+        default={},
+        log_message="load auction bid info failed",
+    )
     for slot in slots_list:
         slot.bid_info = bid_info_map.get(slot.id, {})
 
@@ -116,24 +130,18 @@ def _update_auction_browse_context(request, manor, context: dict) -> None:
 
 
 def _update_auction_my_bids_context(manor, context: dict) -> None:
-    try:
-        my_bids = get_my_bids(manor)
-    except Exception as exc:
-        logger.warning("load my auction bids failed: %s", exc, exc_info=True)
-        my_bids = []
-    try:
-        my_leading = get_my_leading_bids(manor)
-    except Exception as exc:
-        logger.warning("load my leading auction bids failed: %s", exc, exc_info=True)
-        my_leading = []
+    my_bids = _safe_call(get_my_bids, manor, default=[], log_message="load my auction bids failed")
+    my_leading = _safe_call(get_my_leading_bids, manor, default=[], log_message="load my leading auction bids failed")
 
     from trade.services.auction_service import get_slots_bid_info_batch
 
-    try:
-        bid_info_map = get_slots_bid_info_batch(my_leading, manor)
-    except Exception as exc:
-        logger.warning("load my leading bid info failed: %s", exc, exc_info=True)
-        bid_info_map = {}
+    bid_info_map = _safe_call(
+        get_slots_bid_info_batch,
+        my_leading,
+        manor,
+        default={},
+        log_message="load my leading bid info failed",
+    )
     for slot in my_leading:
         slot.bid_info = bid_info_map.get(slot.id, {})
 
@@ -146,11 +154,7 @@ def _update_auction_my_bids_context(manor, context: dict) -> None:
 
 
 def _update_auction_context(request, manor, context: dict) -> None:
-    try:
-        context["auction_stats"] = get_auction_stats(manor)
-    except Exception as exc:
-        logger.warning("load auction stats failed: %s", exc, exc_info=True)
-        context["auction_stats"] = {}
+    context["auction_stats"] = _safe_call(get_auction_stats, manor, default={}, log_message="load auction stats failed")
     auction_view = request.GET.get("view", "browse")
     context["auction_view"] = auction_view
 
@@ -181,17 +185,13 @@ def _update_shop_context(request, manor, context: dict) -> None:
     if selected_category != "all":
         selected_category = _normalize_effect_type(selected_category)
 
-    try:
-        shop_items = get_shop_items_for_display()
-    except Exception as exc:
-        logger.warning("load shop items failed: %s", exc, exc_info=True)
-        shop_items = []
-    try:
-        # 买入筛选只作用于买入列表；卖出列表始终展示全部可售物品
-        sellable_items = list(get_sellable_inventory(manor))
-    except Exception as exc:
-        logger.warning("load sellable inventory failed: %s", exc, exc_info=True)
-        sellable_items = []
+    shop_items = _safe_call(get_shop_items_for_display, default=[], log_message="load shop items failed")
+    # 买入筛选只作用于买入列表；卖出列表始终展示全部可售物品
+    sellable_items = _safe_call(
+        lambda: list(get_sellable_inventory(manor)),
+        default=[],
+        log_message="load sellable inventory failed",
+    )
     category_options = _build_shop_category_options(shop_items, sellable_items)
 
     if selected_category != "all":
@@ -217,11 +217,14 @@ def _update_market_buy_context(request, context: dict) -> None:
         "-listed_at",
         {"-listed_at", "listed_at", "-price", "price", "-expires_at", "expires_at"},
     )
-    try:
-        listings = get_active_listings(order_by=order_by, category=category, rarity=rarity)
-    except Exception as exc:
-        logger.warning("load market active listings failed: %s", exc, exc_info=True)
-        listings = []
+    listings = _safe_call(
+        get_active_listings,
+        order_by=order_by,
+        category=category,
+        rarity=rarity,
+        default=[],
+        log_message="load market active listings failed",
+    )
     page = safe_int(request.GET.get("page", 1), 1, min_val=1)
     page_obj = Paginator(listings, 5).get_page(page)
 
@@ -249,12 +252,16 @@ def _filter_tradeable_inventory(manor, category: str):
 
 def _update_market_sell_context(request, manor, context: dict) -> None:
     category = request.GET.get("category", "all")
+    if category != "all":
+        category = _normalize_effect_type(category)
     page = safe_int(request.GET.get("page", 1), 1, min_val=1)
-    try:
-        tradeable_qs = _filter_tradeable_inventory(manor, category)
-    except Exception as exc:
-        logger.warning("load market sell inventory failed: %s", exc, exc_info=True)
-        tradeable_qs = []
+    tradeable_qs = _safe_call(
+        _filter_tradeable_inventory,
+        manor,
+        category,
+        default=[],
+        log_message="load market sell inventory failed",
+    )
     page_obj = Paginator(tradeable_qs, 5).get_page(page)
 
     context.update(
@@ -269,11 +276,7 @@ def _update_market_sell_context(request, manor, context: dict) -> None:
 
 def _update_market_my_listings_context(request, manor, context: dict) -> None:
     status = request.GET.get("status", "all")
-    try:
-        my_listings = get_my_listings(manor, status)
-    except Exception as exc:
-        logger.warning("load my market listings failed: %s", exc, exc_info=True)
-        my_listings = []
+    my_listings = _safe_call(get_my_listings, manor, status, default=[], log_message="load my market listings failed")
     page = safe_int(request.GET.get("page", 1), 1, min_val=1)
     page_obj = Paginator(my_listings, 5).get_page(page)
 
@@ -287,12 +290,12 @@ def _update_market_my_listings_context(request, manor, context: dict) -> None:
 
 
 def _update_market_context(request, manor, context: dict) -> None:
-    try:
-        expire_user_listings(manor)
-    except Exception as exc:
-        logger.warning(
-            "expire user market listings failed: manor_id=%s error=%s", getattr(manor, "id", None), exc, exc_info=True
-        )
+    _safe_call(
+        expire_user_listings,
+        manor,
+        default=0,
+        log_message=f"expire user market listings failed: manor_id={getattr(manor, 'id', None)}",
+    )
     market_view = request.GET.get("view", "buy")
     context["market_view"] = market_view
 
@@ -305,15 +308,12 @@ def _update_market_context(request, manor, context: dict) -> None:
 
 
 def get_trade_context(request, manor) -> dict:
-    try:
-        sync_resource_production(manor)
-    except Exception as exc:
-        logger.warning(
-            "sync resource production for trade view failed: manor_id=%s error=%s",
-            getattr(manor, "id", None),
-            exc,
-            exc_info=True,
-        )
+    _safe_call(
+        sync_resource_production,
+        manor,
+        default=None,
+        log_message=f"sync resource production for trade view failed: manor_id={getattr(manor, 'id', None)}",
+    )
     tab = request.GET.get("tab", "shop")
     context = _base_trade_context(tab, manor)
 
@@ -323,51 +323,36 @@ def get_trade_context(request, manor) -> dict:
         _update_shop_context(request, manor, context)
     elif tab == "bank":
         selected_troop_category = (request.GET.get("troop_category") or "all").strip() or "all"
-        try:
-            context["bank_info"] = get_bank_info(manor)
-        except Exception as exc:
-            logger.warning(
-                "load bank info failed: manor_id=%s error=%s",
-                getattr(manor, "id", None),
-                exc,
-                exc_info=True,
-            )
-            context["bank_info"] = {}
+        manor_id = getattr(manor, "id", None)
+        context["bank_info"] = _safe_call(
+            get_bank_info,
+            manor,
+            default={},
+            log_message=f"load bank info failed: manor_id={manor_id}",
+        )
         context["troop_bank_capacity"] = 5000
         context["troop_bank_used"] = 0
         context["troop_bank_remaining"] = 5000
         context["troop_bank_rows"] = []
 
-        try:
-            context["troop_bank_capacity"] = get_troop_bank_capacity(manor)
-        except Exception as exc:
-            logger.warning(
-                "load troop bank capacity failed: manor_id=%s error=%s",
-                getattr(manor, "id", None),
-                exc,
-                exc_info=True,
-            )
-
-        try:
-            context["troop_bank_used"] = get_troop_bank_used_space(manor)
-            context["troop_bank_remaining"] = get_troop_bank_remaining_space(manor)
-        except Exception as exc:
-            logger.warning(
-                "load troop bank usage failed: manor_id=%s error=%s",
-                getattr(manor, "id", None),
-                exc,
-                exc_info=True,
-            )
-
-        try:
-            context["troop_bank_rows"] = get_troop_bank_rows(manor)
-        except Exception as exc:
-            logger.warning(
-                "load troop bank rows failed: manor_id=%s error=%s",
-                getattr(manor, "id", None),
-                exc,
-                exc_info=True,
-            )
+        context["troop_bank_capacity"] = _safe_call(
+            get_troop_bank_capacity,
+            manor,
+            default=context["troop_bank_capacity"],
+            log_message=f"load troop bank capacity failed: manor_id={manor_id}",
+        )
+        troop_usage = _safe_call(
+            lambda: (get_troop_bank_used_space(manor), get_troop_bank_remaining_space(manor)),
+            default=(context["troop_bank_used"], context["troop_bank_remaining"]),
+            log_message=f"load troop bank usage failed: manor_id={manor_id}",
+        )
+        context["troop_bank_used"], context["troop_bank_remaining"] = troop_usage
+        context["troop_bank_rows"] = _safe_call(
+            get_troop_bank_rows,
+            manor,
+            default=[],
+            log_message=f"load troop bank rows failed: manor_id={manor_id}",
+        )
 
         troop_bank_rows = context.get("troop_bank_rows", [])
         available_classes: set[str] = set()

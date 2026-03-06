@@ -18,11 +18,12 @@ from common.utils.random_utils import cumulative_choice, weighted_random_choice
 from core.utils.yaml_loader import ensure_mapping, load_yaml_data
 
 from ..models import GuestRarity, RecruitmentPoolEntry
+from ..rarity import GUEST_RARITY_ORDER
 
 logger = logging.getLogger(__name__)
 
-# 稀有度排序（从低到高），由 GuestRarity 定义顺序派生。
-RARITY_ORDER = [rarity for rarity, _label in GuestRarity.choices]
+# 稀有度排序（从低到高）。
+RARITY_ORDER = list(GUEST_RARITY_ORDER)
 
 # 隐士类型标识（虽显示为黑色，但有独立抽取概率）
 HERMIT_RARITY = "hermit"

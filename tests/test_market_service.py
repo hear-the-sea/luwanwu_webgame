@@ -393,7 +393,7 @@ def test_expire_listings_queryset_rejects_non_integer_limit():
 
 def test_expire_listings_queryset_skips_when_row_no_longer_active(monkeypatch):
     queryset = MagicMock()
-    queryset.select_related.return_value = [SimpleNamespace(pk=1)]
+    queryset.filter.return_value.order_by.return_value.values_list.return_value = [1]
 
     locked_chain = MagicMock()
     locked_chain.select_related.return_value.filter.return_value.first.return_value = None
@@ -408,6 +408,10 @@ def test_expire_listings_queryset_skips_when_row_no_longer_active(monkeypatch):
 
     assert result == 0
     create_message_mock.assert_not_called()
+
+    prefilter_kwargs = queryset.filter.call_args.kwargs
+    assert prefilter_kwargs["status"] == market_service.MarketListing.Status.ACTIVE
+    assert "expires_at__lte" in prefilter_kwargs
 
     filter_kwargs = locked_chain.select_related.return_value.filter.call_args.kwargs
     assert filter_kwargs["pk"] == 1
