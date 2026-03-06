@@ -1,8 +1,8 @@
-"""
-交易视图
-"""
+"""交易视图。"""
 
 import logging
+from collections.abc import Callable
+from typing import TypeVar
 from urllib.parse import urlencode
 
 from django.conf import settings
@@ -27,6 +27,7 @@ from .services.shop_service import buy_item, sell_item
 
 logger = logging.getLogger(__name__)
 ALLOWED_MARKET_DURATIONS = frozenset({7200, 28800, 86400})
+TradeResult = TypeVar("TradeResult")
 
 
 def _trade_redirect(tab: str | None = None, view: str | None = None, troop_category: str | None = None):
@@ -53,6 +54,22 @@ def _handle_unexpected_trade_error(request, exc: Exception, *, op: str) -> None:
         "trade view unexpected error: op=%s user_id=%s error=%s", op, getattr(request.user, "id", None), exc
     )
     _handle_trade_error(request, exc)
+
+
+def _execute_trade_action(
+    request,
+    *,
+    op: str,
+    action: Callable[[], TradeResult],
+    success_message: Callable[[TradeResult], str],
+) -> None:
+    try:
+        result = action()
+        messages.success(request, success_message(result))
+    except (GameError, ValueError) as exc:
+        _handle_trade_error(request, exc)
+    except Exception as exc:
+        _handle_unexpected_trade_error(request, exc, op=op)
 
 
 def _get_positive_int_setting(name: str, default: int) -> int:
@@ -113,15 +130,12 @@ def shop_buy_view(request):
         messages.error(request, "数量参数无效")
         return _trade_redirect()
 
-    try:
-        result = buy_item(manor, item_key, quantity)
-        messages.success(
-            request, f"成功购买 {result['item_name']} x{result['quantity']}，花费 {result['total_cost']} 银两"
-        )
-    except (GameError, ValueError) as exc:
-        _handle_trade_error(request, exc)
-    except Exception as exc:
-        _handle_unexpected_trade_error(request, exc, op="shop_buy")
+    _execute_trade_action(
+        request,
+        op="shop_buy",
+        action=lambda: buy_item(manor, item_key, quantity),
+        success_message=lambda result: f"成功购买 {result['item_name']} x{result['quantity']}，花费 {result['total_cost']} 银两",
+    )
 
     return _trade_redirect()
 
@@ -141,15 +155,12 @@ def shop_sell_view(request):
         messages.error(request, "数量参数无效")
         return _trade_redirect()
 
-    try:
-        result = sell_item(manor, item_key, quantity)
-        messages.success(
-            request, f"成功出售 {result['item_name']} x{result['quantity']}，获得 {result['total_income']} 银两"
-        )
-    except (GameError, ValueError) as exc:
-        _handle_trade_error(request, exc)
-    except Exception as exc:
-        _handle_unexpected_trade_error(request, exc, op="shop_sell")
+    _execute_trade_action(
+        request,
+        op="shop_sell",
+        action=lambda: sell_item(manor, item_key, quantity),
+        success_message=lambda result: f"成功出售 {result['item_name']} x{result['quantity']}，获得 {result['total_income']} 银两",
+    )
 
     return _trade_redirect()
 
@@ -166,17 +177,15 @@ def exchange_gold_bar_view(request):
         messages.error(request, "数量参数无效")
         return _trade_redirect(tab="bank", troop_category=troop_category)
 
-    try:
-        result = exchange_gold_bar(manor, quantity)
-        messages.success(
-            request,
+    _execute_trade_action(
+        request,
+        op="bank_exchange",
+        action=lambda: exchange_gold_bar(manor, quantity),
+        success_message=lambda result: (
             f"成功兑换 {result['quantity']} 根金条，花费 {result['total_cost']:,} 银两"
-            f"（含手续费 {result['fee']:,} 银两）。下一根汇率：{result['next_rate']:,} 银两。",
-        )
-    except (GameError, ValueError) as exc:
-        _handle_trade_error(request, exc)
-    except Exception as exc:
-        _handle_unexpected_trade_error(request, exc, op="bank_exchange")
+            f"（含手续费 {result['fee']:,} 银两）。下一根汇率：{result['next_rate']:,} 银两。"
+        ),
+    )
 
     return _trade_redirect(tab="bank", troop_category=troop_category)
 
@@ -198,15 +207,17 @@ def deposit_troop_to_bank_view(request):
         messages.error(request, "数量参数无效")
         return _trade_redirect(tab="bank", troop_category=troop_category)
 
-    try:
+    def _deposit():
         from gameplay.services.manor.troop_bank import deposit_troops_to_bank
 
-        result = deposit_troops_to_bank(manor, troop_key, quantity)
-        messages.success(request, f"已存入 {result['quantity']} 名{result['troop_name']}到钱庄")
-    except (GameError, ValueError) as exc:
-        _handle_trade_error(request, exc)
-    except Exception as exc:
-        _handle_unexpected_trade_error(request, exc, op="bank_troop_deposit")
+        return deposit_troops_to_bank(manor, troop_key, quantity)
+
+    _execute_trade_action(
+        request,
+        op="bank_troop_deposit",
+        action=_deposit,
+        success_message=lambda result: f"已存入 {result['quantity']} 名{result['troop_name']}到钱庄",
+    )
 
     return _trade_redirect(tab="bank", troop_category=troop_category)
 
@@ -228,15 +239,17 @@ def withdraw_troop_from_bank_view(request):
         messages.error(request, "数量参数无效")
         return _trade_redirect(tab="bank", troop_category=troop_category)
 
-    try:
+    def _withdraw():
         from gameplay.services.manor.troop_bank import withdraw_troops_from_bank
 
-        result = withdraw_troops_from_bank(manor, troop_key, quantity)
-        messages.success(request, f"已从钱庄取出 {result['quantity']} 名{result['troop_name']}")
-    except (GameError, ValueError) as exc:
-        _handle_trade_error(request, exc)
-    except Exception as exc:
-        _handle_unexpected_trade_error(request, exc, op="bank_troop_withdraw")
+        return withdraw_troops_from_bank(manor, troop_key, quantity)
+
+    _execute_trade_action(
+        request,
+        op="bank_troop_withdraw",
+        action=_withdraw,
+        success_message=lambda result: f"已从钱庄取出 {result['quantity']} 名{result['troop_name']}",
+    )
 
     return _trade_redirect(tab="bank", troop_category=troop_category)
 
@@ -264,17 +277,15 @@ def market_create_listing_view(request):
         messages.error(request, "时长参数无效")
         return _trade_redirect(tab="market", view="sell")
 
-    try:
-        listing = create_listing(manor, item_key, quantity, unit_price, duration)
-        messages.success(
-            request,
+    _execute_trade_action(
+        request,
+        op="market_create_listing",
+        action=lambda: create_listing(manor, item_key, quantity, unit_price, duration),
+        success_message=lambda listing: (
             f"成功上架 {listing.item_template.name} x{quantity}，单价 {unit_price} 银两，"
-            f"总价 {listing.total_price:,} 银两。上架时长 {listing.get_duration_display()}。",
-        )
-    except (GameError, ValueError) as exc:
-        _handle_trade_error(request, exc)
-    except Exception as exc:
-        _handle_unexpected_trade_error(request, exc, op="market_create_listing")
+            f"总价 {listing.total_price:,} 银两。上架时长 {listing.get_duration_display()}。"
+        ),
+    )
 
     return _trade_redirect(tab="market", view="sell")
 
@@ -286,7 +297,7 @@ def market_purchase_view(request, listing_id: int):
     """购买交易行物品"""
     manor = ensure_manor(request.user)
 
-    try:
+    def _purchase():
         transaction = purchase_listing(manor, listing_id)
         high_value_threshold = _get_positive_int_setting("TRADE_HIGH_VALUE_SILVER_THRESHOLD", 1_000_000)
         if transaction.total_price >= high_value_threshold:
@@ -296,15 +307,17 @@ def market_purchase_view(request, listing_id: int):
                 listing_id,
                 transaction.total_price,
             )
-        messages.success(
-            request,
+        return transaction
+
+    _execute_trade_action(
+        request,
+        op="market_purchase",
+        action=_purchase,
+        success_message=lambda transaction: (
             f"成功购买 {transaction.listing.item_template.name} x{transaction.listing.quantity}，"
-            f"花费 {transaction.total_price:,} 银两。物品已直接存入仓库，请查收！",
-        )
-    except (GameError, ValueError) as exc:
-        _handle_trade_error(request, exc)
-    except Exception as exc:
-        _handle_unexpected_trade_error(request, exc, op="market_purchase")
+            f"花费 {transaction.total_price:,} 银两。物品已直接存入仓库，请查收！"
+        ),
+    )
 
     return _trade_redirect(tab="market", view="buy")
 
@@ -316,16 +329,12 @@ def market_cancel_view(request, listing_id: int):
     """取消交易行挂单"""
     manor = ensure_manor(request.user)
 
-    try:
-        result = cancel_listing(manor, listing_id)
-        messages.success(
-            request,
-            f"已取消挂单，{result['item_name']} x{result['quantity']} 已退回仓库。",
-        )
-    except (GameError, ValueError) as exc:
-        _handle_trade_error(request, exc)
-    except Exception as exc:
-        _handle_unexpected_trade_error(request, exc, op="market_cancel")
+    _execute_trade_action(
+        request,
+        op="market_cancel",
+        action=lambda: cancel_listing(manor, listing_id),
+        success_message=lambda result: f"已取消挂单，{result['item_name']} x{result['quantity']} 已退回仓库。",
+    )
 
     return _trade_redirect(tab="market", view="my_listings")
 
@@ -341,7 +350,7 @@ def auction_bid_view(request, slot_id: int):
         messages.error(request, "出价参数无效")
         return _trade_redirect(tab="auction")
 
-    try:
+    def _place_bid():
         _bid, is_first_bid = place_bid(manor, slot_id, amount)
         high_bid_threshold = _get_positive_int_setting("AUCTION_HIGH_BID_THRESHOLD", 200)
         if amount >= high_bid_threshold:
@@ -351,19 +360,17 @@ def auction_bid_view(request, slot_id: int):
                 slot_id,
                 amount,
             )
-        if is_first_bid:
-            messages.success(
-                request,
-                f"成功出价 {amount} 金条！您目前是最高出价者。",
-            )
-        else:
-            messages.success(
-                request,
-                f"成功加价至 {amount} 金条！您目前是最高出价者。",
-            )
-    except (GameError, ValueError) as exc:
-        _handle_trade_error(request, exc)
-    except Exception as exc:
-        _handle_unexpected_trade_error(request, exc, op="auction_bid")
+        return is_first_bid
+
+    _execute_trade_action(
+        request,
+        op="auction_bid",
+        action=_place_bid,
+        success_message=lambda is_first_bid: (
+            f"成功出价 {amount} 金条！您目前是最高出价者。"
+            if is_first_bid
+            else f"成功加价至 {amount} 金条！您目前是最高出价者。"
+        ),
+    )
 
     return _trade_redirect(tab="auction")

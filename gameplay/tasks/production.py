@@ -1,17 +1,15 @@
 from __future__ import annotations
 
 import logging
-import math
 
 from celery import shared_task
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async_with_dedup
 
-logger = logging.getLogger(__name__)
+from ._scheduled import DEFAULT_TASK_DEDUP_TIMEOUT, count_finalized_records, maybe_reschedule_for_future
 
-# 任务去重超时时间（秒）
-_TASK_DEDUP_TIMEOUT = 5
+logger = logging.getLogger(__name__)
 
 
 # ============ Horse Production ============
@@ -31,22 +29,20 @@ def complete_horse_production(self, production_id: int):
             logger.warning("HorseProduction %d not found", production_id)
             return "not_found"
 
-        now = timezone.now()
-        if production.complete_at and production.complete_at > now:
-            remaining = math.ceil((production.complete_at - now).total_seconds())
-            if remaining > 0:
-                dispatched = safe_apply_async_with_dedup(
-                    complete_horse_production,
-                    dedup_key=f"production:horse:{production_id}",
-                    dedup_timeout=_TASK_DEDUP_TIMEOUT,
-                    args=[production_id],
-                    countdown=remaining,
-                    logger=logger,
-                    log_message=f"horse production reschedule failed: id={production_id}",
-                )
-                if not dispatched:
-                    raise RuntimeError(f"horse production reschedule dispatch failed: id={production_id}")
-                return "rescheduled"
+        rescheduled, _now = maybe_reschedule_for_future(
+            task_func=complete_horse_production,
+            record_id=production_id,
+            eta_value=production.complete_at,
+            dedup_key=f"production:horse:{production_id}",
+            schedule_func=safe_apply_async_with_dedup,
+            logger=logger,
+            now_func=timezone.now,
+            log_message=f"horse production reschedule failed: id={production_id}",
+            failure_message=f"horse production reschedule dispatch failed: id={production_id}",
+            dedup_timeout=DEFAULT_TASK_DEDUP_TIMEOUT,
+        )
+        if rescheduled is not None:
+            return rescheduled
 
         finalized = finalize_horse_production(production, send_notification=True)
         return "completed" if finalized else "skipped"
@@ -69,15 +65,12 @@ def scan_horse_productions(limit: int = 200):
         .filter(status=HorseProduction.Status.PRODUCING, complete_at__lte=now)
         .order_by("complete_at")[:limit]
     )
-    count = 0
-
-    for production in qs:
-        try:
-            if finalize_horse_production(production, send_notification=True):
-                count += 1
-        except Exception as exc:
-            logger.exception("Failed to finalize horse production %s: %s", production.id, exc)
-    return count
+    return count_finalized_records(
+        qs,
+        finalize=lambda production: finalize_horse_production(production, send_notification=True),
+        logger=logger,
+        error_message="Failed to finalize horse production %s: %s",
+    )
 
 
 # ============ Livestock Production ============
@@ -97,22 +90,20 @@ def complete_livestock_production(self, production_id: int):
             logger.warning("LivestockProduction %d not found", production_id)
             return "not_found"
 
-        now = timezone.now()
-        if production.complete_at and production.complete_at > now:
-            remaining = math.ceil((production.complete_at - now).total_seconds())
-            if remaining > 0:
-                dispatched = safe_apply_async_with_dedup(
-                    complete_livestock_production,
-                    dedup_key=f"production:livestock:{production_id}",
-                    dedup_timeout=_TASK_DEDUP_TIMEOUT,
-                    args=[production_id],
-                    countdown=remaining,
-                    logger=logger,
-                    log_message=f"livestock production reschedule failed: id={production_id}",
-                )
-                if not dispatched:
-                    raise RuntimeError(f"livestock production reschedule dispatch failed: id={production_id}")
-                return "rescheduled"
+        rescheduled, _now = maybe_reschedule_for_future(
+            task_func=complete_livestock_production,
+            record_id=production_id,
+            eta_value=production.complete_at,
+            dedup_key=f"production:livestock:{production_id}",
+            schedule_func=safe_apply_async_with_dedup,
+            logger=logger,
+            now_func=timezone.now,
+            log_message=f"livestock production reschedule failed: id={production_id}",
+            failure_message=f"livestock production reschedule dispatch failed: id={production_id}",
+            dedup_timeout=DEFAULT_TASK_DEDUP_TIMEOUT,
+        )
+        if rescheduled is not None:
+            return rescheduled
 
         finalized = finalize_livestock_production(production, send_notification=True)
         return "completed" if finalized else "skipped"
@@ -135,15 +126,12 @@ def scan_livestock_productions(limit: int = 200):
         .filter(status=LivestockProduction.Status.PRODUCING, complete_at__lte=now)
         .order_by("complete_at")[:limit]
     )
-    count = 0
-
-    for production in qs:
-        try:
-            if finalize_livestock_production(production, send_notification=True):
-                count += 1
-        except Exception as exc:
-            logger.exception("Failed to finalize livestock production %s: %s", production.id, exc)
-    return count
+    return count_finalized_records(
+        qs,
+        finalize=lambda production: finalize_livestock_production(production, send_notification=True),
+        logger=logger,
+        error_message="Failed to finalize livestock production %s: %s",
+    )
 
 
 # ============ Smelting Production ============
@@ -163,22 +151,20 @@ def complete_smelting_production(self, production_id: int):
             logger.warning("SmeltingProduction %d not found", production_id)
             return "not_found"
 
-        now = timezone.now()
-        if production.complete_at and production.complete_at > now:
-            remaining = math.ceil((production.complete_at - now).total_seconds())
-            if remaining > 0:
-                dispatched = safe_apply_async_with_dedup(
-                    complete_smelting_production,
-                    dedup_key=f"production:smelting:{production_id}",
-                    dedup_timeout=_TASK_DEDUP_TIMEOUT,
-                    args=[production_id],
-                    countdown=remaining,
-                    logger=logger,
-                    log_message=f"smelting production reschedule failed: id={production_id}",
-                )
-                if not dispatched:
-                    raise RuntimeError(f"smelting production reschedule dispatch failed: id={production_id}")
-                return "rescheduled"
+        rescheduled, _now = maybe_reschedule_for_future(
+            task_func=complete_smelting_production,
+            record_id=production_id,
+            eta_value=production.complete_at,
+            dedup_key=f"production:smelting:{production_id}",
+            schedule_func=safe_apply_async_with_dedup,
+            logger=logger,
+            now_func=timezone.now,
+            log_message=f"smelting production reschedule failed: id={production_id}",
+            failure_message=f"smelting production reschedule dispatch failed: id={production_id}",
+            dedup_timeout=DEFAULT_TASK_DEDUP_TIMEOUT,
+        )
+        if rescheduled is not None:
+            return rescheduled
 
         finalized = finalize_smelting_production(production, send_notification=True)
         return "completed" if finalized else "skipped"
@@ -201,15 +187,12 @@ def scan_smelting_productions(limit: int = 200):
         .filter(status=SmeltingProduction.Status.PRODUCING, complete_at__lte=now)
         .order_by("complete_at")[:limit]
     )
-    count = 0
-
-    for production in qs:
-        try:
-            if finalize_smelting_production(production, send_notification=True):
-                count += 1
-        except Exception as exc:
-            logger.exception("Failed to finalize smelting production %s: %s", production.id, exc)
-    return count
+    return count_finalized_records(
+        qs,
+        finalize=lambda production: finalize_smelting_production(production, send_notification=True),
+        logger=logger,
+        error_message="Failed to finalize smelting production %s: %s",
+    )
 
 
 # ============ Equipment Forging ============
@@ -229,22 +212,20 @@ def complete_equipment_forging(self, production_id: int):
             logger.warning("EquipmentProduction %d not found", production_id)
             return "not_found"
 
-        now = timezone.now()
-        if production.complete_at and production.complete_at > now:
-            remaining = math.ceil((production.complete_at - now).total_seconds())
-            if remaining > 0:
-                dispatched = safe_apply_async_with_dedup(
-                    complete_equipment_forging,
-                    dedup_key=f"production:equipment:{production_id}",
-                    dedup_timeout=_TASK_DEDUP_TIMEOUT,
-                    args=[production_id],
-                    countdown=remaining,
-                    logger=logger,
-                    log_message=f"equipment forging reschedule failed: id={production_id}",
-                )
-                if not dispatched:
-                    raise RuntimeError(f"equipment forging reschedule dispatch failed: id={production_id}")
-                return "rescheduled"
+        rescheduled, _now = maybe_reschedule_for_future(
+            task_func=complete_equipment_forging,
+            record_id=production_id,
+            eta_value=production.complete_at,
+            dedup_key=f"production:equipment:{production_id}",
+            schedule_func=safe_apply_async_with_dedup,
+            logger=logger,
+            now_func=timezone.now,
+            log_message=f"equipment forging reschedule failed: id={production_id}",
+            failure_message=f"equipment forging reschedule dispatch failed: id={production_id}",
+            dedup_timeout=DEFAULT_TASK_DEDUP_TIMEOUT,
+        )
+        if rescheduled is not None:
+            return rescheduled
 
         finalized = finalize_equipment_forging(production, send_notification=True)
         return "completed" if finalized else "skipped"
@@ -267,15 +248,12 @@ def scan_equipment_forgings(limit: int = 200):
         .filter(status=EquipmentProduction.Status.FORGING, complete_at__lte=now)
         .order_by("complete_at")[:limit]
     )
-    count = 0
-
-    for production in qs:
-        try:
-            if finalize_equipment_forging(production, send_notification=True):
-                count += 1
-        except Exception as exc:
-            logger.exception("Failed to finalize equipment forging %s: %s", production.id, exc)
-    return count
+    return count_finalized_records(
+        qs,
+        finalize=lambda production: finalize_equipment_forging(production, send_notification=True),
+        logger=logger,
+        error_message="Failed to finalize equipment forging %s: %s",
+    )
 
 
 # ============ Work Assignments ============

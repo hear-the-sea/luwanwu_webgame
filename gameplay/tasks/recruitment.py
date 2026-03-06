@@ -1,17 +1,15 @@
 from __future__ import annotations
 
 import logging
-import math
 
 from celery import shared_task
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async_with_dedup
 
-logger = logging.getLogger(__name__)
+from ._scheduled import DEFAULT_TASK_DEDUP_TIMEOUT, count_finalized_records, maybe_reschedule_for_future
 
-# 任务去重超时时间（秒）
-_TASK_DEDUP_TIMEOUT = 5
+logger = logging.getLogger(__name__)
 
 
 @shared_task(name="gameplay.complete_troop_recruitment", bind=True, max_retries=2, default_retry_delay=30)
@@ -28,22 +26,20 @@ def complete_troop_recruitment(self, recruitment_id: int):
             logger.warning("TroopRecruitment %d not found", recruitment_id)
             return "not_found"
 
-        now = timezone.now()
-        if recruitment.complete_at and recruitment.complete_at > now:
-            remaining = math.ceil((recruitment.complete_at - now).total_seconds())
-            if remaining > 0:
-                dispatched = safe_apply_async_with_dedup(
-                    complete_troop_recruitment,
-                    dedup_key=f"recruitment:troop:{recruitment_id}",
-                    dedup_timeout=_TASK_DEDUP_TIMEOUT,
-                    args=[recruitment_id],
-                    countdown=remaining,
-                    logger=logger,
-                    log_message=f"troop recruitment reschedule failed: id={recruitment_id}",
-                )
-                if not dispatched:
-                    raise RuntimeError(f"troop recruitment reschedule dispatch failed: id={recruitment_id}")
-                return "rescheduled"
+        rescheduled, _now = maybe_reschedule_for_future(
+            task_func=complete_troop_recruitment,
+            record_id=recruitment_id,
+            eta_value=recruitment.complete_at,
+            dedup_key=f"recruitment:troop:{recruitment_id}",
+            schedule_func=safe_apply_async_with_dedup,
+            logger=logger,
+            now_func=timezone.now,
+            log_message=f"troop recruitment reschedule failed: id={recruitment_id}",
+            failure_message=f"troop recruitment reschedule dispatch failed: id={recruitment_id}",
+            dedup_timeout=DEFAULT_TASK_DEDUP_TIMEOUT,
+        )
+        if rescheduled is not None:
+            return rescheduled
 
         finalized = finalize_troop_recruitment(recruitment, send_notification=True)
         return "completed" if finalized else "skipped"
@@ -66,11 +62,9 @@ def scan_troop_recruitments(limit: int = 200):
         .filter(status=TroopRecruitment.Status.RECRUITING, complete_at__lte=now)
         .order_by("complete_at")[:limit]
     )
-    count = 0
-    for recruitment in qs:
-        try:
-            if finalize_troop_recruitment(recruitment, send_notification=True):
-                count += 1
-        except Exception as exc:
-            logger.exception("Failed to finalize troop recruitment %s: %s", recruitment.id, exc)
-    return count
+    return count_finalized_records(
+        qs,
+        finalize=lambda recruitment: finalize_troop_recruitment(recruitment, send_notification=True),
+        logger=logger,
+        error_message="Failed to finalize troop recruitment %s: %s",
+    )

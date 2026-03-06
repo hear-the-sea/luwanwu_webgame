@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import math
 
 from celery import shared_task
 from django.utils import timezone
@@ -9,10 +8,9 @@ from django.utils import timezone
 from common.utils.celery import safe_apply_async_with_dedup
 from gameplay.services.manor.core import finalize_building_upgrade
 
-logger = logging.getLogger(__name__)
+from ._scheduled import DEFAULT_TASK_DEDUP_TIMEOUT, count_finalized_records, maybe_reschedule_for_future
 
-# 任务去重超时时间（秒）
-_TASK_DEDUP_TIMEOUT = 5
+logger = logging.getLogger(__name__)
 
 
 @shared_task(name="gameplay.complete_building_upgrade", bind=True, max_retries=2, default_retry_delay=30)
@@ -26,24 +24,20 @@ def complete_building_upgrade(self, building_id: int):
         if not building:
             logger.warning("Building %d not found", building_id)
             return "not_found"
-        now = timezone.now()
-        if building.upgrade_complete_at and building.upgrade_complete_at > now:
-            # Use ceil to avoid dropping sub-second remainder to 0 and missing reschedule.
-            remaining = math.ceil((building.upgrade_complete_at - now).total_seconds())
-            if remaining > 0:
-                # 使用去重机制避免并发重复调度
-                dispatched = safe_apply_async_with_dedup(
-                    complete_building_upgrade,
-                    dedup_key=f"building:upgrade:{building_id}",
-                    dedup_timeout=_TASK_DEDUP_TIMEOUT,
-                    args=[building_id],
-                    countdown=remaining,
-                    logger=logger,
-                    log_message=f"building upgrade reschedule failed: building_id={building_id}",
-                )
-                if not dispatched:
-                    raise RuntimeError(f"building upgrade reschedule dispatch failed: building_id={building_id}")
-                return "rescheduled"
+        rescheduled, now = maybe_reschedule_for_future(
+            task_func=complete_building_upgrade,
+            record_id=building_id,
+            eta_value=building.upgrade_complete_at,
+            dedup_key=f"building:upgrade:{building_id}",
+            schedule_func=safe_apply_async_with_dedup,
+            logger=logger,
+            now_func=timezone.now,
+            log_message=f"building upgrade reschedule failed: building_id={building_id}",
+            failure_message=f"building upgrade reschedule dispatch failed: building_id={building_id}",
+            dedup_timeout=DEFAULT_TASK_DEDUP_TIMEOUT,
+        )
+        if rescheduled is not None:
+            return rescheduled
         finalized = finalize_building_upgrade(building, now=now, send_notification=True)
         return "completed" if finalized else "skipped"
     except Exception as exc:
@@ -64,11 +58,9 @@ def scan_building_upgrades(limit: int = 200):
         .filter(is_upgrading=True, upgrade_complete_at__lte=now)
         .order_by("upgrade_complete_at")[:limit]
     )
-    count = 0
-    for building in qs:
-        try:
-            if finalize_building_upgrade(building, now=now, send_notification=True):
-                count += 1
-        except Exception:
-            logger.exception("Failed to finalize building %d", building.id)
-    return count
+    return count_finalized_records(
+        qs,
+        finalize=lambda building: finalize_building_upgrade(building, now=now, send_notification=True),
+        logger=logger,
+        error_message="Failed to finalize building %s: %s",
+    )
