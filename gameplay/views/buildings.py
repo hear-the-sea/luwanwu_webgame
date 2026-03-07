@@ -15,6 +15,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
+from core.decorators import flash_unexpected_view_error
 from core.exceptions import GameError
 from core.utils import safe_redirect_url, sanitize_error_message
 from gameplay.models import Building
@@ -49,11 +50,15 @@ class UpgradeBuildingView(LoginRequiredMixin, TemplateView):
         except (GameError, ValueError) as exc:
             messages.error(request, sanitize_error_message(exc))
         except Exception as exc:
-            logger.exception(
-                "Unexpected building upgrade view error: manor_id=%s user_id=%s building_id=%s",
-                getattr(building.manor, "id", None),
-                getattr(request.user, "id", None),
-                getattr(building, "id", None),
+            flash_unexpected_view_error(
+                request,
+                exc,
+                log_message="Unexpected building upgrade view error: manor_id=%s user_id=%s building_id=%s",
+                log_args=(
+                    getattr(building.manor, "id", None),
+                    getattr(request.user, "id", None),
+                    getattr(building, "id", None),
+                ),
+                logger_instance=logger,
             )
-            messages.error(request, sanitize_error_message(exc))
         return redirect(redirect_url)

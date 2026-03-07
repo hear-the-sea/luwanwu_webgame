@@ -16,16 +16,15 @@ from typing import Dict, Optional, Tuple
 
 from gameplay.models import Manor
 from trade.models import AuctionBid, AuctionRound
-
-from .auction.bidding import _notify_outbid_vickrey as _default_notify_outbid_vickrey
-from .auction.bidding import (  # noqa: F401
+from trade.services.auction.bidding import _notify_outbid_vickrey as _default_notify_outbid_vickrey
+from trade.services.auction.bidding import (  # noqa: F401
     get_cutoff_price,
     get_my_rank,
     get_slot_ranking,
     is_in_winning_range,
     validate_bid_amount,
 )
-from .auction.constants import (  # noqa: F401
+from trade.services.auction.constants import (  # noqa: F401
     ALLOWED_AUCTION_ORDER_BY,
     AUCTION_CREATE_LOCK_KEY,
     AUCTION_CREATE_LOCK_TIMEOUT,
@@ -33,7 +32,7 @@ from .auction.constants import (  # noqa: F401
     AUCTION_SETTLE_LOCK_TIMEOUT,
     GOLD_BAR_ITEM_KEY,
 )
-from .auction.gold_bars import (  # noqa: F401
+from trade.services.auction.gold_bars import (  # noqa: F401
     consume_frozen_gold_bars,
     freeze_gold_bars,
     get_available_gold_bars,
@@ -42,11 +41,11 @@ from .auction.gold_bars import (  # noqa: F401
     try_get_frozen_record,
     unfreeze_gold_bars,
 )
-from .auction.rounds import _settle_slot as _default_settle_slot
-from .auction.rounds import create_auction_round as _create_auction_round_impl
-from .auction.rounds import get_current_round, get_next_round_number  # noqa: F401
-from .auction.rounds import settle_auction_round as _settle_auction_round_impl
-from .auction.selectors import (  # noqa: F401
+from trade.services.auction.rounds import _settle_slot as _default_settle_slot
+from trade.services.auction.rounds import create_auction_round as _create_auction_round_impl
+from trade.services.auction.rounds import get_current_round, get_next_round_number  # noqa: F401
+from trade.services.auction.rounds import settle_auction_round as _settle_auction_round_impl
+from trade.services.auction.selectors import (  # noqa: F401
     get_active_slots,
     get_auction_stats,
     get_my_bids,
@@ -55,7 +54,7 @@ from .auction.selectors import (  # noqa: F401
     get_slot_bid_info,
     get_slots_bid_info_batch,
 )
-from .auction_config import get_auction_settings, get_enabled_auction_items
+from trade.services.auction_config import get_auction_settings, get_enabled_auction_items
 
 # These are intentionally module globals so tests can monkeypatch them via
 # `monkeypatch.setattr(trade.services.auction_service, ...)`.
@@ -73,7 +72,7 @@ def create_auction_round() -> Optional[AuctionRound]:
 
 def place_bid(manor: Manor, slot_id: int, amount: int) -> Tuple[AuctionBid, bool]:
     """Player bid wrapper that preserves monkeypatchability for notifications."""
-    from .auction.bidding import place_bid as _place_bid
+    from trade.services.auction.bidding import place_bid as _place_bid
 
     return _place_bid(manor, slot_id, amount, notify_outbid_func=_notify_outbid_vickrey)
 

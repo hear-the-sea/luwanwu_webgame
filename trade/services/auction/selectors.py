@@ -9,11 +9,10 @@ from django.db.models import QuerySet
 from gameplay.models import Manor
 from gameplay.models.items import LEGACY_TOOL_EFFECT_TYPES
 from trade.models import AuctionBid, AuctionSlot
-
-from .bidding import get_cutoff_price, get_slot_ranking, is_in_winning_range
-from .constants import ALLOWED_AUCTION_ORDER_BY
-from .gold_bars import get_available_gold_bars, get_frozen_gold_bars
-from .rounds import get_current_round
+from trade.services.auction.bidding import get_cutoff_price, get_slot_ranking, is_in_winning_range
+from trade.services.auction.constants import ALLOWED_AUCTION_ORDER_BY
+from trade.services.auction.gold_bars import get_available_gold_bars, get_frozen_gold_bars
+from trade.services.auction.rounds import get_current_round
 
 
 def get_active_slots(

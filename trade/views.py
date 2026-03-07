@@ -18,12 +18,11 @@ from core.exceptions import GameError
 from core.utils import safe_int, sanitize_error_message
 from core.utils.rate_limit import rate_limit_redirect
 from gameplay.services import ensure_manor
-
-from .selectors import get_trade_context
-from .services.auction_service import place_bid
-from .services.bank_service import exchange_gold_bar
-from .services.market_service import cancel_listing, create_listing, purchase_listing
-from .services.shop_service import buy_item, sell_item
+from trade.selectors import get_trade_context
+from trade.services.auction_service import place_bid
+from trade.services.bank_service import exchange_gold_bar
+from trade.services.market_service import cancel_listing, create_listing, purchase_listing
+from trade.services.shop_service import buy_item, sell_item
 
 logger = logging.getLogger(__name__)
 ALLOWED_MARKET_DURATIONS = frozenset({7200, 28800, 86400})

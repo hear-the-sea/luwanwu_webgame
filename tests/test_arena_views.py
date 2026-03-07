@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
+from django.contrib.messages import get_messages
 from django.test import Client
 from django.urls import reverse
 from django.utils import timezone
@@ -324,3 +325,47 @@ def test_arena_event_detail_view_supports_round_paging_and_inline_report(arena_c
     assert reverse("battle:report_detail", kwargs={"pk": report.id}) in body
     assert "tw-arena-loser text-text-muted" in body
     assert ">结果<" not in body
+
+
+@pytest.mark.django_db
+def test_arena_register_view_unexpected_error_does_not_500(arena_client, monkeypatch):
+    client, manor = arena_client
+    template = _build_guest_template("arena_view_register_exc_tpl")
+    guest = _build_guest(manor, template, "X")
+
+    monkeypatch.setattr(
+        "gameplay.views.arena.register_arena_entry",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+
+    response = client.post(
+        reverse("gameplay:arena_register"),
+        {"guest_ids": [str(guest.id)]},
+    )
+
+    assert response.status_code == 302
+    assert response.url == reverse("gameplay:arena")
+    messages = [str(m) for m in get_messages(response.wsgi_request)]
+    assert any("操作失败，请稍后重试" in m for m in messages)
+
+
+@pytest.mark.django_db
+def test_arena_exchange_view_unexpected_error_does_not_500(arena_client, monkeypatch):
+    client, manor = arena_client
+    manor.arena_coins = 300
+    manor.save(update_fields=["arena_coins"])
+
+    monkeypatch.setattr(
+        "gameplay.views.arena.exchange_arena_reward",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+
+    response = client.post(
+        reverse("gameplay:arena_exchange"),
+        {"reward_key": "grain_pack_small", "quantity": "1"},
+    )
+
+    assert response.status_code == 302
+    assert response.url == reverse("gameplay:arena")
+    messages = [str(m) for m in get_messages(response.wsgi_request)]
+    assert any("操作失败，请稍后重试" in m for m in messages)

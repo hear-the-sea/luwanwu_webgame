@@ -1003,6 +1003,37 @@ class TestMessageViews:
         assert payload["message_id"] == message.pk
         assert payload["unread_count"] == 0
 
+    def test_claim_attachment_json_unexpected_error_tolerates_unread_count_failure(self, manor_with_user, monkeypatch):
+        """JSON 领取附件异常时 unread 计数失败也应降级返回。"""
+        manor, client = manor_with_user
+        message = Message.objects.create(
+            manor=manor,
+            kind=Message.Kind.REWARD,
+            title="json claim unexpected unread fallback",
+            attachments={"items": {"msg_json_item_unexpected": 1}},
+        )
+
+        monkeypatch.setattr(
+            "gameplay.views.messages.claim_message_attachments",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+        monkeypatch.setattr(
+            "gameplay.views.messages.unread_message_count",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+        )
+
+        response = client.post(
+            reverse("gameplay:claim_attachment", kwargs={"pk": message.pk}),
+            HTTP_ACCEPT="application/json",
+        )
+
+        assert response.status_code == 500
+        payload = response.json()
+        assert payload["success"] is False
+        assert payload["message_id"] == message.pk
+        assert payload["unread_count"] == 0
+        assert "操作失败，请稍后重试" in payload["error"]
+
 
 # ============ 科技系统测试 ============
 

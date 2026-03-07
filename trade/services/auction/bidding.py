@@ -12,8 +12,7 @@ from gameplay.models import Manor
 from gameplay.services.utils.messages import create_message
 from gameplay.services.utils.notifications import notify_user
 from trade.models import AuctionBid, AuctionRound, AuctionSlot, FrozenGoldBar
-
-from .gold_bars import freeze_gold_bars, unfreeze_gold_bars
+from trade.services.auction.gold_bars import freeze_gold_bars, unfreeze_gold_bars
 
 logger = logging.getLogger(__name__)
 

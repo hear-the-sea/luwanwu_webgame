@@ -31,6 +31,7 @@ _GEAR_EXTRA_STAT_FIELDS = {
     "defense": "defense_stat",
     "agility": "agility",
     "luck": "luck",
+    "troop_capacity": "troop_capacity_bonus",
 }
 
 
@@ -51,7 +52,7 @@ def _apply_template_stats_to_guest(guest: Guest, template, sign: int, updates: s
             updates.add(field)
 
 
-def _clear_replaced_items(guest: Guest, existing_items: list[GearItem]) -> None:
+def _clear_replaced_items(guest: Guest, existing_items: list[GearItem], updates: set[str]) -> None:
     import logging
 
     from django.db.models import F
@@ -63,10 +64,12 @@ def _clear_replaced_items(guest: Guest, existing_items: list[GearItem]) -> None:
     for item in existing_items:
         guest.attack_bonus -= item.template.attack_bonus
         guest.defense_bonus -= item.template.defense_bonus
+        updates.update({"attack_bonus", "defense_bonus"})
         for key, field in _GEAR_EXTRA_STAT_FIELDS.items():
             value = (item.template.extra_stats or {}).get(key)
             if value:
                 setattr(guest, field, getattr(guest, field) - int(value))
+                updates.add(field)
         item.guest = None
         item.save(update_fields=["guest"])
 
@@ -251,11 +254,12 @@ def equip_guest(gear: GearItem, guest: Guest) -> GearItem:
         return gear
     # 锁定该槽位的现有装备，防止并发修改
     existing_items = list(guest.gear_items.select_for_update().filter(template__slot=slot))
+    updates = {"attack_bonus", "defense_bonus"}
     for item in existing_items:
         if item.template.name == gear.template.name:
             raise DuplicateEquipmentError()
     if capacity == 1 and existing_items:
-        _clear_replaced_items(guest, existing_items)
+        _clear_replaced_items(guest, existing_items, updates)
     elif capacity > 1 and len(existing_items) >= capacity:
         raise EquipmentSlotFullError(slot)
 
@@ -264,7 +268,6 @@ def equip_guest(gear: GearItem, guest: Guest) -> GearItem:
 
     _consume_warehouse_item_for_gear(guest, gear)
 
-    updates = {"attack_bonus", "defense_bonus"}
     _apply_template_stats_to_guest(guest, gear.template, +1, updates)
     guest.save(update_fields=list(updates))
     apply_set_bonuses(guest)
@@ -306,14 +309,7 @@ def unequip_guest_item(gear: GearItem, guest: Guest, *, allow_injured: bool = Fa
     updates = {"attack_bonus", "defense_bonus"}
     guest.attack_bonus -= gear.template.attack_bonus
     guest.defense_bonus -= gear.template.defense_bonus
-    for key, field in {
-        "hp": "hp_bonus",
-        "force": "force",
-        "intellect": "intellect",
-        "defense": "defense_stat",
-        "agility": "agility",
-        "luck": "luck",
-    }.items():
+    for key, field in _GEAR_EXTRA_STAT_FIELDS.items():
         value = extra_stats.get(key)
         if value:
             setattr(guest, field, getattr(guest, field) - int(value))

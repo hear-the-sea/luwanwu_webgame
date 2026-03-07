@@ -203,7 +203,7 @@ web_game_v5/
 ├── core/                     # 通用中间件/工具（request_id、health、rate_limit 等）
 ├── data/                     # YAML 数据模板（任务/门客/物品/兵种/商铺/建筑/科技）
 ├── docker/                   # 容器脚本与 Nginx 配置
-├── docs/                     # 技术与玩法文档（含历史归档）
+├── docs/                     # 当前技术文档与少量保留的专题说明
 ├── gameplay/                 # 庄园/建筑/任务/仓库/地图/打工等
 ├── guests/                   # 门客（招募/培养/技能/装备/薪资）
 ├── guilds/                   # 帮会（成员/科技/仓库/公告）

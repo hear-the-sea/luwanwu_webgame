@@ -9,8 +9,8 @@ import logging
 from celery import shared_task
 from django.utils import timezone
 
-from .models import ShopStock
-from .services.shop_config import get_shop_config, reload_shop_config
+from trade.models import ShopStock
+from trade.services.shop_config import get_shop_config, reload_shop_config
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +97,7 @@ def process_expired_listings(self):
     建议每10分钟执行一次
     """
     try:
-        from .services.market_service import expire_listings
+        from trade.services.market_service import expire_listings
 
         count = _coerce_non_negative_int(expire_listings(), 0)
         return f"处理了 {count} 个过期挂单"
@@ -122,7 +122,7 @@ def settle_auction_round_task(self):
     结算完成后自动触发创建新轮次任务。
     """
     try:
-        from .services.auction_service import settle_auction_round
+        from trade.services.auction_service import settle_auction_round
 
         settled, sold, unsold, total_gold_bars = _normalize_settlement_stats(settle_auction_round())
 

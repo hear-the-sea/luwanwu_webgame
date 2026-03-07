@@ -1,8 +1,7 @@
 from django.contrib import admin
 
 from core.admin_i18n import apply_common_field_labels
-
-from .models import (
+from trade.models import (
     AuctionBid,
     AuctionRound,
     AuctionSlot,

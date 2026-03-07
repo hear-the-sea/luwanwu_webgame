@@ -14,6 +14,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
+from core.decorators import flash_unexpected_view_error
 from core.exceptions import GameError
 from core.utils import safe_positive_int, sanitize_error_message
 from gameplay.models import WorkAssignment, WorkTemplate
@@ -27,16 +28,6 @@ from gameplay.services import (
 from guests.models import Guest, GuestStatus
 
 logger = logging.getLogger(__name__)
-
-
-def _unexpected_work_error(
-    request: HttpRequest,
-    *,
-    log_message: str,
-    log_args: tuple[object, ...],
-) -> None:
-    logger.exception(log_message, *log_args)
-    messages.error(request, "操作失败，请稍后重试")
 
 
 class WorkView(LoginRequiredMixin, TemplateView):
@@ -155,9 +146,10 @@ def assign_work_view(request: HttpRequest) -> HttpResponse:
         messages.success(request, f"{guest.display_name} 已前往 {work_template.name} 打工，预计 {hours:.1f} 小时后完成")
     except (GameError, ValueError) as exc:
         messages.error(request, sanitize_error_message(exc))
-    except Exception:
-        _unexpected_work_error(
+    except Exception as exc:
+        flash_unexpected_view_error(
             request,
+            exc,
             log_message="Unexpected work assign error: manor_id=%s user_id=%s guest_id=%s work_key=%s",
             log_args=(
                 getattr(manor, "id", None),
@@ -165,6 +157,7 @@ def assign_work_view(request: HttpRequest) -> HttpResponse:
                 guest_id,
                 work_key,
             ),
+            logger_instance=logger,
         )
 
     return redirect("gameplay:work")
@@ -184,15 +177,17 @@ def recall_work_view(request: HttpRequest, pk: int) -> HttpResponse:
         )
     except (GameError, ValueError) as exc:
         messages.error(request, sanitize_error_message(exc))
-    except Exception:
-        _unexpected_work_error(
+    except Exception as exc:
+        flash_unexpected_view_error(
             request,
+            exc,
             log_message="Unexpected work recall error: manor_id=%s user_id=%s assignment_id=%s",
             log_args=(
                 getattr(manor, "id", None),
                 getattr(request.user, "id", None),
                 pk,
             ),
+            logger_instance=logger,
         )
 
     return redirect("gameplay:work")
@@ -210,15 +205,17 @@ def claim_work_reward_view(request: HttpRequest, pk: int) -> HttpResponse:
         messages.success(request, f"{assignment.guest.display_name} 完成打工，获得银两 {reward['silver']}")
     except (GameError, ValueError) as exc:
         messages.error(request, sanitize_error_message(exc))
-    except Exception:
-        _unexpected_work_error(
+    except Exception as exc:
+        flash_unexpected_view_error(
             request,
+            exc,
             log_message="Unexpected work reward claim error: manor_id=%s user_id=%s assignment_id=%s",
             log_args=(
                 getattr(manor, "id", None),
                 getattr(request.user, "id", None),
                 pk,
             ),
+            logger_instance=logger,
         )
 
     return redirect("gameplay:work")

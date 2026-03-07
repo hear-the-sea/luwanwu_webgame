@@ -12,6 +12,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
+from core.decorators import flash_unexpected_view_error
 from core.utils import safe_positive_int, sanitize_error_message
 from core.utils.rate_limit import rate_limit_redirect
 from gameplay.selectors import (
@@ -165,12 +166,16 @@ def arena_register_view(request: HttpRequest) -> HttpResponse:
     except ValueError as exc:
         messages.error(request, sanitize_error_message(exc))
     except Exception as exc:
-        logger.exception(
-            "arena register failed: user_id=%s manor_id=%s",
-            getattr(request.user, "id", None),
-            getattr(manor, "id", None),
+        flash_unexpected_view_error(
+            request,
+            exc,
+            log_message="arena register failed: user_id=%s manor_id=%s",
+            log_args=(
+                getattr(request.user, "id", None),
+                getattr(manor, "id", None),
+            ),
+            logger_instance=logger,
         )
-        messages.error(request, sanitize_error_message(exc))
 
     return redirect(redirect_target)
 
@@ -190,12 +195,16 @@ def arena_cancel_view(request: HttpRequest) -> HttpResponse:
     except ValueError as exc:
         messages.error(request, sanitize_error_message(exc))
     except Exception as exc:
-        logger.exception(
-            "arena cancel failed: user_id=%s manor_id=%s",
-            getattr(request.user, "id", None),
-            getattr(manor, "id", None),
+        flash_unexpected_view_error(
+            request,
+            exc,
+            log_message="arena cancel failed: user_id=%s manor_id=%s",
+            log_args=(
+                getattr(request.user, "id", None),
+                getattr(manor, "id", None),
+            ),
+            logger_instance=logger,
         )
-        messages.error(request, sanitize_error_message(exc))
 
     return redirect(redirect_target)
 
@@ -231,13 +240,17 @@ def arena_exchange_view(request: HttpRequest) -> HttpResponse:
     except ValueError as exc:
         messages.error(request, sanitize_error_message(exc))
     except Exception as exc:
-        logger.exception(
-            "arena exchange failed: user_id=%s manor_id=%s reward=%s quantity=%s",
-            getattr(request.user, "id", None),
-            getattr(manor, "id", None),
-            reward_key,
-            quantity,
+        flash_unexpected_view_error(
+            request,
+            exc,
+            log_message="arena exchange failed: user_id=%s manor_id=%s reward=%s quantity=%s",
+            log_args=(
+                getattr(request.user, "id", None),
+                getattr(manor, "id", None),
+                reward_key,
+                quantity,
+            ),
+            logger_instance=logger,
         )
-        messages.error(request, sanitize_error_message(exc))
 
     return redirect(redirect_target)

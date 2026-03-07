@@ -16,22 +16,21 @@ from gameplay.models import InventoryItem, ItemTemplate, Manor
 from gameplay.services.utils.messages import create_message
 from gameplay.services.utils.notifications import notify_user
 from trade.models import AuctionBid, AuctionRound, AuctionSlot, FrozenGoldBar
-from trade.services.auction_config import (
-    AuctionItemConfig,
-    AuctionSettings,
-    get_auction_settings,
-    get_enabled_auction_items,
-)
-
-from .bidding import get_slot_ranking
-from .constants import (
+from trade.services.auction.bidding import get_slot_ranking
+from trade.services.auction.constants import (
     AUCTION_CREATE_LOCK_KEY,
     AUCTION_CREATE_LOCK_TIMEOUT,
     AUCTION_SETTLE_LOCK_KEY,
     AUCTION_SETTLE_LOCK_TIMEOUT,
     GOLD_BAR_ITEM_KEY,
 )
-from .gold_bars import consume_frozen_gold_bars, try_get_frozen_record, unfreeze_gold_bars
+from trade.services.auction.gold_bars import consume_frozen_gold_bars, try_get_frozen_record, unfreeze_gold_bars
+from trade.services.auction_config import (
+    AuctionItemConfig,
+    AuctionSettings,
+    get_auction_settings,
+    get_enabled_auction_items,
+)
 
 logger = logging.getLogger(__name__)
 

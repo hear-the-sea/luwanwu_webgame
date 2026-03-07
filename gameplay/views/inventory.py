@@ -16,6 +16,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
+from core.decorators import unexpected_error_response
 from core.exceptions import GameError
 from core.utils import is_ajax_request, json_error, json_success, safe_int, safe_positive_int, sanitize_error_message
 from core.utils.rate_limit import rate_limit_redirect
@@ -66,18 +67,6 @@ def _error_response(
     return redirect(redirect_url)
 
 
-def _unexpected_error_response(
-    request: HttpRequest,
-    is_ajax: bool,
-    *,
-    redirect_url: str,
-    log_message: str,
-    log_args: tuple[Any, ...],
-) -> HttpResponse:
-    logger.exception(log_message, *log_args)
-    return _error_response(request, is_ajax, "操作失败，请稍后重试", redirect_url=redirect_url, status=500)
-
-
 def _move_item_between_storage(
     request: HttpRequest,
     pk: int,
@@ -100,10 +89,11 @@ def _move_item_between_storage(
         messages.success(request, message)
     except (GameError, ValueError) as exc:
         return _error_response(request, is_ajax, sanitize_error_message(exc), redirect_url=redirect_url)
-    except Exception:
-        return _unexpected_error_response(
+    except Exception as exc:
+        return unexpected_error_response(
             request,
-            is_ajax,
+            exc,
+            is_ajax=is_ajax,
             redirect_url=redirect_url,
             log_message="Unexpected storage move view error: manor_id=%s user_id=%s item_id=%s quantity=%s",
             log_args=(
@@ -112,6 +102,7 @@ def _move_item_between_storage(
                 pk,
                 quantity,
             ),
+            logger_instance=logger,
         )
 
     return redirect(redirect_url)
@@ -146,10 +137,11 @@ def _use_target_guest_item(
         messages.success(request, message)
     except (GameError, ValueError) as exc:
         return _error_response(request, is_ajax, sanitize_error_message(exc))
-    except Exception:
-        return _unexpected_error_response(
+    except Exception as exc:
+        return unexpected_error_response(
             request,
-            is_ajax,
+            exc,
+            is_ajax=is_ajax,
             redirect_url="gameplay:warehouse",
             log_message="Unexpected target-guest item use view error: manor_id=%s user_id=%s item_id=%s guest_id=%s",
             log_args=(
@@ -158,6 +150,7 @@ def _use_target_guest_item(
                 pk,
                 guest_id,
             ),
+            logger_instance=logger,
         )
 
     return redirect("gameplay:warehouse")
@@ -217,10 +210,11 @@ def use_item_view(request: HttpRequest, pk: int) -> HttpResponse:
         messages.success(request, f"{item.template.name} 使用成功：{summary}")
     except (GameError, ValueError) as exc:
         return _error_response(request, is_ajax, sanitize_error_message(exc))
-    except Exception:
-        return _unexpected_error_response(
+    except Exception as exc:
+        return unexpected_error_response(
             request,
-            is_ajax,
+            exc,
+            is_ajax=is_ajax,
             redirect_url="gameplay:warehouse",
             log_message="Unexpected inventory use error: manor_id=%s user_id=%s item_id=%s",
             log_args=(
@@ -228,6 +222,7 @@ def use_item_view(request: HttpRequest, pk: int) -> HttpResponse:
                 getattr(request.user, "id", None),
                 pk,
             ),
+            logger_instance=logger,
         )
     return redirect("gameplay:warehouse")
 

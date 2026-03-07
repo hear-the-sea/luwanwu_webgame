@@ -15,11 +15,15 @@ from gameplay.services.manor.troop_bank import (
 )
 from gameplay.services.resources import sync_resource_production
 from gameplay.services.technology import get_troop_class_for_key
-
-from .services.auction_service import get_active_slots, get_auction_stats, get_my_bids, get_my_leading_bids
-from .services.bank_service import get_bank_info
-from .services.market_service import expire_user_listings, get_active_listings, get_my_listings, get_tradeable_inventory
-from .services.shop_service import EFFECT_TYPE_CATEGORY, get_sellable_inventory, get_shop_items_for_display
+from trade.services.auction_service import get_active_slots, get_auction_stats, get_my_bids, get_my_leading_bids
+from trade.services.bank_service import get_bank_info
+from trade.services.market_service import (
+    expire_user_listings,
+    get_active_listings,
+    get_my_listings,
+    get_tradeable_inventory,
+)
+from trade.services.shop_service import EFFECT_TYPE_CATEGORY, get_sellable_inventory, get_shop_items_for_display
 
 _TOOL_EFFECT_TYPES = LEGACY_TOOL_EFFECT_TYPES
 _TROOP_CATEGORY_LABELS: dict[str, str] = {

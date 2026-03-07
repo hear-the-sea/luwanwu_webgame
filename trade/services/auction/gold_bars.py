@@ -11,8 +11,7 @@ from django.utils import timezone
 from gameplay.models import InventoryItem, Manor
 from gameplay.services.inventory import get_item_quantity
 from trade.models import AuctionBid, FrozenGoldBar
-
-from .constants import GOLD_BAR_ITEM_KEY
+from trade.services.auction.constants import GOLD_BAR_ITEM_KEY
 
 
 def get_total_gold_bars(manor: Manor) -> int:

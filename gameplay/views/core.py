@@ -15,6 +15,7 @@ from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
 from common.constants.resources import ResourceType
+from core.decorators import flash_unexpected_view_error
 from core.exceptions import GameError
 from core.utils import sanitize_error_message
 from gameplay.models import BuildingCategory
@@ -35,12 +36,16 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         try:
             refresh_manor_state(manor)
         except Exception as exc:
-            logger.exception(
-                "Unexpected dashboard refresh error: manor_id=%s user_id=%s",
-                getattr(manor, "id", None),
-                getattr(self.request.user, "id", None),
+            flash_unexpected_view_error(
+                self.request,
+                exc,
+                log_message="Unexpected dashboard refresh error: manor_id=%s user_id=%s",
+                log_args=(
+                    getattr(manor, "id", None),
+                    getattr(self.request.user, "id", None),
+                ),
+                logger_instance=logger,
             )
-            messages.error(self.request, sanitize_error_message(exc))
 
         # Get category from URL parameter, default to 'resource'
         category = self.kwargs.get("category", "resource")
@@ -111,12 +116,16 @@ def rename_manor_view(request: HttpRequest) -> HttpResponse:
     except (GameError, ValueError) as exc:
         messages.error(request, sanitize_error_message(exc))
     except Exception as exc:
-        logger.exception(
-            "Unexpected manor rename error: manor_id=%s user_id=%s",
-            getattr(manor, "id", None),
-            getattr(request.user, "id", None),
+        flash_unexpected_view_error(
+            request,
+            exc,
+            log_message="Unexpected manor rename error: manor_id=%s user_id=%s",
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+            ),
+            logger_instance=logger,
         )
-        messages.error(request, sanitize_error_message(exc))
 
     return redirect("gameplay:settings")
 

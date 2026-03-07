@@ -125,6 +125,39 @@ def _handle_game_exception(
     return redirect(get_next_url(request, redirect_url))
 
 
+def flash_unexpected_view_error(
+    request: HttpRequest,
+    exc: Exception,
+    *,
+    log_message: str,
+    log_args: tuple[object, ...] = (),
+    logger_instance: logging.Logger | None = None,
+) -> None:
+    active_logger = logger_instance or logger
+    active_logger.exception(log_message, *log_args)
+    messages.error(request, sanitize_error_message(exc))
+
+
+def unexpected_error_response(
+    request: HttpRequest,
+    exc: Exception,
+    *,
+    is_ajax: bool,
+    redirect_url: str,
+    log_message: str,
+    log_args: tuple[object, ...] = (),
+    logger_instance: logging.Logger | None = None,
+    status: int = 500,
+) -> HttpResponse:
+    active_logger = logger_instance or logger
+    active_logger.exception(log_message, *log_args)
+    error_message = sanitize_error_message(exc)
+    if is_ajax:
+        return json_error(error_message, status=status)
+    messages.error(request, error_message)
+    return redirect(redirect_url)
+
+
 def get_next_url(request: HttpRequest, default: Optional[str] = None, result: Optional[str] = None) -> str:
     """
     获取安全的重定向 URL。

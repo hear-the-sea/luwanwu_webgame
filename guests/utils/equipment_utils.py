@@ -35,6 +35,7 @@ SET_STAT_FIELD_MAP = {
     "intellect": "intellect",
     "agility": "agility",
     "luck": "luck",
+    "troop_capacity": "troop_capacity_bonus",
 }
 
 

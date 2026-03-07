@@ -267,8 +267,9 @@ def validate_troop_capacity(guests: List[Guest], troop_loadout: Dict[str, int]) 
     验证总兵力是否超过门客带兵上限。
 
     规则：
-    - 每名门客基础带兵数量：200
-    - 满70级门客额外增加：50（总计250）
+    - 每名门客有基础带兵数量
+    - 满足等级门槛后获得额外基础带兵数量
+    - 装备与套装提供的带兵上限加成会计入 `guest.troop_capacity`
 
     Args:
         guests: 出征门客列表

@@ -16,6 +16,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
+from core.decorators import flash_unexpected_view_error
 from core.exceptions import GameError
 from core.utils import safe_positive_int, sanitize_error_message
 from core.utils.rate_limit import rate_limit_redirect
@@ -27,6 +28,22 @@ logger = logging.getLogger(__name__)
 
 def _parse_positive_quantity(raw_quantity: str | None) -> int | None:
     return safe_positive_int(raw_quantity, default=None)
+
+
+def _handle_unexpected_production_error(
+    request: HttpRequest,
+    exc: Exception,
+    *,
+    log_message: str,
+    log_args: tuple[object, ...],
+) -> None:
+    flash_unexpected_view_error(
+        request,
+        exc,
+        log_message=log_message,
+        log_args=log_args,
+        logger_instance=logger,
+    )
 
 
 class StableView(LoginRequiredMixin, TemplateView):
@@ -56,9 +73,10 @@ class StableView(LoginRequiredMixin, TemplateView):
 
         context["manor"] = manor
         context["horse_options"] = get_horse_options(manor)
+        speed_bonus = get_stable_speed_bonus(manor)
         context["active_productions"] = get_active_productions(manor)
-        context["speed_bonus"] = get_stable_speed_bonus(manor)
-        context["speed_bonus_percent"] = int(get_stable_speed_bonus(manor) * 100)
+        context["speed_bonus"] = speed_bonus
+        context["speed_bonus_percent"] = int(speed_bonus * 100)
         context["horsemanship_level"] = horsemanship_level
         context["max_production_quantity"] = max_quantity
         context["is_producing"] = is_producing
@@ -93,14 +111,17 @@ def start_horse_production_view(request: HttpRequest) -> HttpResponse:
     except (GameError, ValueError) as exc:
         messages.error(request, sanitize_error_message(exc))
     except Exception as exc:
-        logger.exception(
-            "Unexpected horse production start error: manor_id=%s user_id=%s horse_key=%s quantity=%s",
-            getattr(manor, "id", None),
-            getattr(request.user, "id", None),
-            horse_key,
-            request.POST.get("quantity"),
+        _handle_unexpected_production_error(
+            request,
+            exc,
+            log_message="Unexpected horse production start error: manor_id=%s user_id=%s horse_key=%s quantity=%s",
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                horse_key,
+                request.POST.get("quantity"),
+            ),
         )
-        messages.error(request, sanitize_error_message(exc))
 
     return redirect("gameplay:stable")
 
@@ -133,9 +154,10 @@ class RanchView(LoginRequiredMixin, TemplateView):
 
         context["manor"] = manor
         context["livestock_options"] = get_livestock_options(manor)
+        speed_bonus = get_ranch_speed_bonus(manor)
         context["active_productions"] = get_active_livestock_productions(manor)
-        context["speed_bonus"] = get_ranch_speed_bonus(manor)
-        context["speed_bonus_percent"] = int(get_ranch_speed_bonus(manor) * 100)
+        context["speed_bonus"] = speed_bonus
+        context["speed_bonus_percent"] = int(speed_bonus * 100)
         context["animal_husbandry_level"] = animal_husbandry_level
         context["max_livestock_quantity"] = max_quantity
         context["is_producing"] = is_producing
@@ -170,14 +192,17 @@ def start_livestock_production_view(request: HttpRequest) -> HttpResponse:
     except (GameError, ValueError) as exc:
         messages.error(request, sanitize_error_message(exc))
     except Exception as exc:
-        logger.exception(
-            "Unexpected livestock production start error: manor_id=%s user_id=%s livestock_key=%s quantity=%s",
-            getattr(manor, "id", None),
-            getattr(request.user, "id", None),
-            livestock_key,
-            request.POST.get("quantity"),
+        _handle_unexpected_production_error(
+            request,
+            exc,
+            log_message="Unexpected livestock production start error: manor_id=%s user_id=%s livestock_key=%s quantity=%s",
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                livestock_key,
+                request.POST.get("quantity"),
+            ),
         )
-        messages.error(request, sanitize_error_message(exc))
 
     return redirect("gameplay:ranch")
 
@@ -210,9 +235,10 @@ class SmithyView(LoginRequiredMixin, TemplateView):
 
         context["manor"] = manor
         context["metal_options"] = get_metal_options(manor)
+        speed_bonus = get_smithy_speed_bonus(manor)
         context["active_productions"] = get_active_smelting_productions(manor)
-        context["speed_bonus"] = get_smithy_speed_bonus(manor)
-        context["speed_bonus_percent"] = int(get_smithy_speed_bonus(manor) * 100)
+        context["speed_bonus"] = speed_bonus
+        context["speed_bonus_percent"] = int(speed_bonus * 100)
         context["smelting_level"] = smelting_level
         context["max_smelting_quantity"] = max_quantity
         context["is_producing"] = is_producing
@@ -247,14 +273,17 @@ def start_smelting_production_view(request: HttpRequest) -> HttpResponse:
     except (GameError, ValueError) as exc:
         messages.error(request, sanitize_error_message(exc))
     except Exception as exc:
-        logger.exception(
-            "Unexpected smelting production start error: manor_id=%s user_id=%s metal_key=%s quantity=%s",
-            getattr(manor, "id", None),
-            getattr(request.user, "id", None),
-            metal_key,
-            request.POST.get("quantity"),
+        _handle_unexpected_production_error(
+            request,
+            exc,
+            log_message="Unexpected smelting production start error: manor_id=%s user_id=%s metal_key=%s quantity=%s",
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                metal_key,
+                request.POST.get("quantity"),
+            ),
         )
-        messages.error(request, sanitize_error_message(exc))
 
     return redirect("gameplay:smithy")
 
@@ -367,9 +396,10 @@ class ForgeView(LoginRequiredMixin, TemplateView):
         context["decompose_page_obj"] = decompose_page_obj
         context["active_forgings"] = get_active_forgings(manor)
         context["blueprint_synthesis_options"] = blueprint_synthesis_options
+        speed_bonus = get_forge_speed_bonus(manor)
         context["decomposable_equipment"] = decompose_page_obj
-        context["speed_bonus"] = get_forge_speed_bonus(manor)
-        context["speed_bonus_percent"] = int(get_forge_speed_bonus(manor) * 100)
+        context["speed_bonus"] = speed_bonus
+        context["speed_bonus_percent"] = int(speed_bonus * 100)
         context["forging_level"] = forging_level
         context["max_forging_quantity"] = max_quantity
         context["is_forging"] = is_forging
@@ -412,14 +442,17 @@ def start_equipment_forging_view(request: HttpRequest) -> HttpResponse:
     except (GameError, ValueError) as exc:
         messages.error(request, sanitize_error_message(exc))
     except Exception as exc:
-        logger.exception(
-            "Unexpected equipment forging start error: manor_id=%s user_id=%s equipment_key=%s quantity=%s",
-            getattr(manor, "id", None),
-            getattr(request.user, "id", None),
-            equipment_key,
-            request.POST.get("quantity"),
+        _handle_unexpected_production_error(
+            request,
+            exc,
+            log_message="Unexpected equipment forging start error: manor_id=%s user_id=%s equipment_key=%s quantity=%s",
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                equipment_key,
+                request.POST.get("quantity"),
+            ),
         )
-        messages.error(request, sanitize_error_message(exc))
 
     return redirect(_forge_redirect_url(category, mode))
 
@@ -462,14 +495,17 @@ def decompose_equipment_view(request: HttpRequest) -> HttpResponse:
     except (GameError, ValueError) as exc:
         messages.error(request, sanitize_error_message(exc))
     except Exception as exc:
-        logger.exception(
-            "Unexpected equipment decompose error: manor_id=%s user_id=%s equipment_key=%s quantity=%s",
-            getattr(manor, "id", None),
-            getattr(request.user, "id", None),
-            equipment_key,
-            request.POST.get("quantity"),
+        _handle_unexpected_production_error(
+            request,
+            exc,
+            log_message="Unexpected equipment decompose error: manor_id=%s user_id=%s equipment_key=%s quantity=%s",
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                equipment_key,
+                request.POST.get("quantity"),
+            ),
         )
-        messages.error(request, sanitize_error_message(exc))
 
     return redirect(_forge_redirect_url(category, mode))
 
@@ -503,13 +539,16 @@ def synthesize_blueprint_equipment_view(request: HttpRequest) -> HttpResponse:
     except (GameError, ValueError) as exc:
         messages.error(request, sanitize_error_message(exc))
     except Exception as exc:
-        logger.exception(
-            "Unexpected blueprint synthesize error: manor_id=%s user_id=%s blueprint_key=%s quantity=%s",
-            getattr(manor, "id", None),
-            getattr(request.user, "id", None),
-            blueprint_key,
-            request.POST.get("quantity"),
+        _handle_unexpected_production_error(
+            request,
+            exc,
+            log_message="Unexpected blueprint synthesize error: manor_id=%s user_id=%s blueprint_key=%s quantity=%s",
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                blueprint_key,
+                request.POST.get("quantity"),
+            ),
         )
-        messages.error(request, sanitize_error_message(exc))
 
     return redirect(_forge_redirect_url(category, mode))

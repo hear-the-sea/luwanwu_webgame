@@ -476,7 +476,7 @@
 **计算属性：**
 - `max_hp` = (base_defense + allocated_defense + gear_defense) * 50 + hp_bonus
 - `force` = base + level * growth + allocated + gear_bonus
-- `troop_capacity` = 200 + (50 if level >= 70 else 0)
+- `troop_capacity` = 基础带兵数量 + 等级门槛额外带兵数量 + 装备/套装带兵加成
 
 ---
 

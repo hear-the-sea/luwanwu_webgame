@@ -144,3 +144,187 @@ class TestEquipmentHealthManagement(TestCase):
 
         # 生命值应该保持为0
         self.assertEqual(self.guest.current_hp, 0)
+
+
+class TestEquipmentTroopCapacity(TestCase):
+    def setUp(self):
+        from gameplay.models import InventoryItem, ItemTemplate
+
+        self.InventoryItem = InventoryItem
+        self.ItemTemplate = ItemTemplate
+        self.user = User.objects.create_user(username="troop_capacity_user", password="testpass")
+        self.manor = self.user.manor
+        self.template = GuestTemplate.objects.create(
+            key="troop_capacity_guest",
+            name="带兵测试门客",
+            rarity=GuestRarity.BLUE,
+            archetype=GuestArchetype.MILITARY,
+            base_hp=1000,
+        )
+        self.guest = Guest.objects.create(
+            template=self.template,
+            manor=self.manor,
+            level=10,
+            force=200,
+            intellect=150,
+            defense_stat=180,
+            current_hp=10000,
+        )
+
+    def _create_gear(
+        self,
+        *,
+        key: str,
+        name: str,
+        slot,
+        effect_type: str,
+        extra_stats: dict,
+        set_key: str = "",
+        set_bonus: dict | None = None,
+    ) -> GearItem:
+        payload = dict(extra_stats)
+        if set_key:
+            payload["set_key"] = set_key
+            payload["set_description"] = "测试套装"
+            payload["set_bonus"] = set_bonus or {}
+
+        item_template = self.ItemTemplate.objects.create(
+            key=key,
+            name=name,
+            effect_type=effect_type,
+            effect_payload=payload,
+            rarity=GuestRarity.BLUE,
+        )
+        self.InventoryItem.objects.create(manor=self.manor, template=item_template, quantity=1)
+
+        gear_template = GearTemplate.objects.create(
+            key=key,
+            name=name,
+            slot=slot,
+            rarity=GuestRarity.BLUE,
+            set_key=set_key,
+            set_description="测试套装" if set_key else "",
+            set_bonus=set_bonus or {},
+            extra_stats=extra_stats,
+        )
+        return GearItem.objects.create(manor=self.manor, template=gear_template)
+
+    def test_equipment_troop_capacity_bonus_applies_to_battle_validation(self):
+        from battle.services import validate_troop_capacity
+
+        gear = self._create_gear(
+            key="test_troop_ornament",
+            name="统军玉佩",
+            slot=GearSlot.ORNAMENT,
+            effect_type="equip_ornament",
+            extra_stats={"troop_capacity": 30},
+        )
+
+        self.assertEqual(self.guest.troop_capacity, 200)
+        with self.assertRaises(ValueError):
+            validate_troop_capacity([self.guest], {"test_troop": 230})
+
+        equip_guest(gear, self.guest)
+        self.guest.refresh_from_db()
+
+        self.assertEqual(self.guest.troop_capacity_bonus, 30)
+        self.assertEqual(self.guest.troop_capacity, 230)
+        validate_troop_capacity([self.guest], {"test_troop": 230})
+
+        unequip_guest_item(gear, self.guest)
+        self.guest.refresh_from_db()
+
+        self.assertEqual(self.guest.troop_capacity_bonus, 0)
+        self.assertEqual(self.guest.troop_capacity, 200)
+
+    def test_set_bonus_troop_capacity_only_activates_when_piece_count_is_met(self):
+        set_bonus = {"pieces": 4, "bonus": {"troop_capacity": 45}}
+        gears = [
+            self._create_gear(
+                key="test_set_helmet",
+                name="测试套头盔",
+                slot=GearSlot.HELMET,
+                effect_type="equip_helmet",
+                extra_stats={"hp": 20},
+                set_key="test_troop_set",
+                set_bonus=set_bonus,
+            ),
+            self._create_gear(
+                key="test_set_armor",
+                name="测试套胸甲",
+                slot=GearSlot.ARMOR,
+                effect_type="equip_armor",
+                extra_stats={"hp": 20},
+                set_key="test_troop_set",
+                set_bonus=set_bonus,
+            ),
+            self._create_gear(
+                key="test_set_weapon",
+                name="测试套武器",
+                slot=GearSlot.WEAPON,
+                effect_type="equip_weapon",
+                extra_stats={"force": 10},
+                set_key="test_troop_set",
+                set_bonus=set_bonus,
+            ),
+            self._create_gear(
+                key="test_set_shoes",
+                name="测试套鞋子",
+                slot=GearSlot.SHOES,
+                effect_type="equip_shoes",
+                extra_stats={"agility": 5},
+                set_key="test_troop_set",
+                set_bonus=set_bonus,
+            ),
+        ]
+
+        for gear in gears[:3]:
+            equip_guest(gear, self.guest)
+        self.guest.refresh_from_db()
+
+        self.assertEqual(self.guest.troop_capacity_bonus, 0)
+        self.assertEqual(self.guest.troop_capacity, 200)
+
+        equip_guest(gears[3], self.guest)
+        self.guest.refresh_from_db()
+
+        self.assertEqual(self.guest.troop_capacity_bonus, 45)
+        self.assertEqual(self.guest.troop_capacity, 245)
+        self.assertEqual(self.guest.gear_set_bonus.get("troop_capacity"), 45)
+
+        unequip_guest_item(gears[3], self.guest)
+        self.guest.refresh_from_db()
+
+        self.assertEqual(self.guest.troop_capacity_bonus, 0)
+        self.assertEqual(self.guest.troop_capacity, 200)
+        self.assertNotIn("troop_capacity", self.guest.gear_set_bonus)
+
+    def test_replacing_single_slot_item_removes_old_troop_capacity_bonus(self):
+        old_gear = self._create_gear(
+            key="test_old_helmet",
+            name="旧统军盔",
+            slot=GearSlot.HELMET,
+            effect_type="equip_helmet",
+            extra_stats={"troop_capacity": 20},
+        )
+        new_gear = self._create_gear(
+            key="test_new_helmet",
+            name="新统军盔",
+            slot=GearSlot.HELMET,
+            effect_type="equip_helmet",
+            extra_stats={"force": 8},
+        )
+
+        equip_guest(old_gear, self.guest)
+        self.guest.refresh_from_db()
+        self.assertEqual(self.guest.troop_capacity, 220)
+
+        equip_guest(new_gear, self.guest)
+        self.guest.refresh_from_db()
+        old_gear.refresh_from_db()
+        new_gear.refresh_from_db()
+
+        self.assertIsNone(old_gear.guest)
+        self.assertEqual(new_gear.guest_id, self.guest.id)
+        self.assertEqual(self.guest.troop_capacity_bonus, 0)
+        self.assertEqual(self.guest.troop_capacity, 200)

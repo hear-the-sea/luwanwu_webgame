@@ -232,6 +232,7 @@ class Guest(models.Model):
         help_text="记录最近一次每日忠诚度结算的日期，用于避免重复执行",
     )
     hp_bonus = models.IntegerField(default=0)
+    troop_capacity_bonus = models.IntegerField(default=0)
     current_hp = models.PositiveIntegerField(default=0)
     last_hp_recovery_at = models.DateTimeField(default=timezone.now)
     gear_set_bonus = models.JSONField(default=dict, blank=True)
@@ -364,9 +365,10 @@ class Guest(models.Model):
         - 满级额外增加：BONUS_TROOP_CAPACITY
         - 总计：达到等级门槛的门客可带更多兵
         """
+        base_capacity = BASE_TROOP_CAPACITY
         if self.level >= TROOP_CAPACITY_LEVEL_THRESHOLD:
-            return BASE_TROOP_CAPACITY + BONUS_TROOP_CAPACITY
-        return BASE_TROOP_CAPACITY
+            base_capacity += BONUS_TROOP_CAPACITY
+        return max(0, base_capacity + int(self.troop_capacity_bonus or 0))
 
 
 class GearSlot(models.TextChoices):

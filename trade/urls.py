@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from trade import views
 
 app_name = "trade"
 

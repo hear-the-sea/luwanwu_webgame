@@ -82,3 +82,50 @@ def test_notifications_authenticated_falls_back_when_sidebar_cache_payload_inval
     assert context["sidebar_active_raids"] == ["r1"]
     assert context["sidebar_active_scouts"] == ["s1", "s2"]
     assert context["sidebar_incoming_raids"] == []
+
+
+def test_notifications_authenticated_partial_sidebar_failures_do_not_hide_other_sections(
+    monkeypatch, django_user_model
+):
+    user = django_user_model.objects.create_user(username="ctx_partial_user", password="pass")
+    manor = ensure_manor(user)
+    request = RequestFactory().get("/")
+    request.user = user
+
+    def fake_cache_get(key, default=None):
+        if key == "stats:total_users_count":
+            return 5
+        if key == "stats:online_users_count":
+            return 2
+        if key == f"sidebar:rank:{manor.id}":
+            return None
+        if key == f"sidebar:raids:{manor.id}":
+            return None
+        return default
+
+    monkeypatch.setattr("gameplay.context_processors.cache.get", fake_cache_get)
+    monkeypatch.setattr("gameplay.context_processors.cache.set", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "gameplay.context_processors.unread_message_count",
+        lambda _manor: (_ for _ in ()).throw(RuntimeError("message boom")),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.raid.get_protection_status",
+        lambda _manor: {"is_protected": True, "type_display": "护盾", "remaining_display": "10m"},
+    )
+    monkeypatch.setattr("gameplay.services.ranking.get_player_rank", lambda _manor: 9)
+    monkeypatch.setattr("gameplay.services.raid.get_active_raids", lambda _manor: ["r1"])
+    monkeypatch.setattr("gameplay.services.raid.get_active_scouts", lambda _manor: ["s1"])
+    monkeypatch.setattr("gameplay.services.raid.get_incoming_raids", lambda _manor: ["i1"])
+
+    context = notifications(request)
+    assert context["message_unread_count"] == 0
+    assert context["header_protection_status"] == {
+        "is_protected": True,
+        "type_display": "护盾",
+        "remaining_display": "10m",
+    }
+    assert context["sidebar_rank"] == 9
+    assert context["sidebar_active_raids"] == ["r1"]
+    assert context["sidebar_active_scouts"] == ["s1"]
+    assert context["sidebar_incoming_raids"] == ["i1"]

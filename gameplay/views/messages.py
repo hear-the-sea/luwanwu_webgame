@@ -107,6 +107,26 @@ def _resolve_message_action_redirect(request: HttpRequest, default_url_name: str
     return redirect(default_url)
 
 
+def _claim_attachment_error_response(
+    request: HttpRequest,
+    *,
+    manor,
+    message_id: int,
+    is_json: bool,
+    error_message: str,
+    status: int,
+) -> HttpResponse | None:
+    if is_json:
+        return json_error(
+            error_message,
+            status=status,
+            message_id=message_id,
+            unread_count=_safe_unread_message_count(manor),
+        )
+    messages.error(request, error_message)
+    return None
+
+
 def _format_claimed_summary(claimed_summary: dict) -> tuple[str, list[dict]]:
     resource_labels = dict(ResourceType.choices)
     parts: list[str] = []
@@ -297,14 +317,16 @@ def claim_attachment_view(request: HttpRequest, pk: int) -> HttpResponse:
         messages.success(request, f"附件领取成功：{summary_text}")
     except (GameError, ValueError) as exc:
         error_message = sanitize_error_message(exc)
-        if is_json:
-            return json_error(
-                error_message,
-                status=400,
-                message_id=pk,
-                unread_count=_safe_unread_message_count(manor),
-            )
-        messages.error(request, error_message)
+        error_response = _claim_attachment_error_response(
+            request,
+            manor=manor,
+            message_id=pk,
+            is_json=is_json,
+            error_message=error_message,
+            status=400,
+        )
+        if error_response is not None:
+            return error_response
     except Exception as exc:
         logger.exception(
             "Unexpected error in claim_attachment_view: manor_id=%s user_id=%s message_id=%s",
@@ -313,13 +335,15 @@ def claim_attachment_view(request: HttpRequest, pk: int) -> HttpResponse:
             pk,
         )
         error_message = sanitize_error_message(exc)
-        if is_json:
-            return json_error(
-                error_message,
-                status=500,
-                message_id=pk,
-                unread_count=_safe_unread_message_count(manor),
-            )
-        messages.error(request, error_message)
+        error_response = _claim_attachment_error_response(
+            request,
+            manor=manor,
+            message_id=pk,
+            is_json=is_json,
+            error_message=error_message,
+            status=500,
+        )
+        if error_response is not None:
+            return error_response
 
     return _resolve_message_action_redirect(request, "gameplay:view_message", pk=pk)
