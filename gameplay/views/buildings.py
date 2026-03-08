@@ -24,6 +24,26 @@ from gameplay.services import refresh_manor_state, start_upgrade
 logger = logging.getLogger(__name__)
 
 
+def _handle_unexpected_building_error(
+    request: HttpRequest,
+    exc: Exception,
+    *,
+    log_message: str,
+    log_args: tuple[object, ...],
+) -> None:
+    flash_unexpected_view_error(
+        request,
+        exc,
+        log_message=log_message,
+        log_args=log_args,
+        logger_instance=logger,
+    )
+
+
+def _handle_known_building_error(request: HttpRequest, exc: GameError | ValueError) -> None:
+    messages.error(request, sanitize_error_message(exc))
+
+
 @method_decorator(require_POST, name="dispatch")
 class UpgradeBuildingView(LoginRequiredMixin, TemplateView):
     """建筑升级视图"""
@@ -48,9 +68,9 @@ class UpgradeBuildingView(LoginRequiredMixin, TemplateView):
             eta = building.upgrade_complete_at.strftime("%H:%M:%S") if building.upgrade_complete_at else ""
             messages.success(request, f"{building.building_type.name} 开始升级，完成时间 {eta}")
         except (GameError, ValueError) as exc:
-            messages.error(request, sanitize_error_message(exc))
+            _handle_known_building_error(request, exc)
         except Exception as exc:
-            flash_unexpected_view_error(
+            _handle_unexpected_building_error(
                 request,
                 exc,
                 log_message="Unexpected building upgrade view error: manor_id=%s user_id=%s building_id=%s",
@@ -59,6 +79,5 @@ class UpgradeBuildingView(LoginRequiredMixin, TemplateView):
                     getattr(request.user, "id", None),
                     getattr(building, "id", None),
                 ),
-                logger_instance=logger,
             )
         return redirect(redirect_url)

@@ -2443,6 +2443,21 @@ class TestPostOperations:
         response = client.post(reverse("gameplay:upgrade_building", kwargs={"pk": building.pk}))
         assert response.status_code == 302  # 重定向
 
+    def test_upgrade_building_known_error_shows_message(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        building = manor.buildings.first()
+
+        monkeypatch.setattr(
+            "gameplay.views.buildings.start_upgrade",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("upgrade blocked")),
+        )
+
+        response = client.post(reverse("gameplay:upgrade_building", kwargs={"pk": building.pk}))
+        assert response.status_code == 302
+        assert response.url == reverse("gameplay:dashboard")
+        messages = [str(m) for m in get_messages(response.wsgi_request)]
+        assert any("upgrade blocked" in m for m in messages)
+
     def test_upgrade_building_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
         building = manor.buildings.first()
