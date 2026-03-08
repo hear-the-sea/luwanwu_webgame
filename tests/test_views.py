@@ -649,6 +649,25 @@ class TestInventoryViews:
         assert "请选择要升阶的门客" in payload["error"]
         assert called["count"] == 0
 
+    def test_use_item_ajax_handles_known_error(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        template = ItemTemplate.objects.create(key="view_use_item_known_error", name="普通道具")
+        item = InventoryItem.objects.create(manor=manor, template=template, quantity=1)
+
+        monkeypatch.setattr(
+            "gameplay.views.inventory.use_inventory_item",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("use blocked")),
+        )
+
+        response = client.post(
+            reverse("gameplay:use_item", kwargs={"pk": item.pk}),
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        assert response.status_code == 400
+        payload = response.json()
+        assert payload["success"] is False
+        assert "use blocked" in payload["error"]
+
     def test_use_rebirth_card_unexpected_error_returns_500(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
         template = ItemTemplate.objects.create(

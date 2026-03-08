@@ -67,6 +67,36 @@ def _error_response(
     return redirect(redirect_url)
 
 
+def _known_inventory_error_response(
+    request: HttpRequest,
+    is_ajax: bool,
+    exc: GameError | ValueError,
+    *,
+    redirect_url: str = "gameplay:warehouse",
+) -> HttpResponse:
+    return _error_response(request, is_ajax, sanitize_error_message(exc), redirect_url=redirect_url)
+
+
+def _unexpected_inventory_error_response(
+    request: HttpRequest,
+    exc: Exception,
+    *,
+    is_ajax: bool,
+    redirect_url: str,
+    log_message: str,
+    log_args: tuple[object, ...],
+) -> HttpResponse:
+    return unexpected_error_response(
+        request,
+        exc,
+        is_ajax=is_ajax,
+        redirect_url=redirect_url,
+        log_message=log_message,
+        log_args=log_args,
+        logger_instance=logger,
+    )
+
+
 def _move_item_between_storage(
     request: HttpRequest,
     pk: int,
@@ -88,9 +118,9 @@ def _move_item_between_storage(
             return json_success(message=message)
         messages.success(request, message)
     except (GameError, ValueError) as exc:
-        return _error_response(request, is_ajax, sanitize_error_message(exc), redirect_url=redirect_url)
+        return _known_inventory_error_response(request, is_ajax, exc, redirect_url=redirect_url)
     except Exception as exc:
-        return unexpected_error_response(
+        return _unexpected_inventory_error_response(
             request,
             exc,
             is_ajax=is_ajax,
@@ -102,7 +132,6 @@ def _move_item_between_storage(
                 pk,
                 quantity,
             ),
-            logger_instance=logger,
         )
 
     return redirect(redirect_url)
@@ -136,9 +165,9 @@ def _use_target_guest_item(
             return json_success(message=message)
         messages.success(request, message)
     except (GameError, ValueError) as exc:
-        return _error_response(request, is_ajax, sanitize_error_message(exc))
+        return _known_inventory_error_response(request, is_ajax, exc)
     except Exception as exc:
-        return unexpected_error_response(
+        return _unexpected_inventory_error_response(
             request,
             exc,
             is_ajax=is_ajax,
@@ -150,7 +179,6 @@ def _use_target_guest_item(
                 pk,
                 guest_id,
             ),
-            logger_instance=logger,
         )
 
     return redirect("gameplay:warehouse")
@@ -209,9 +237,9 @@ def use_item_view(request: HttpRequest, pk: int) -> HttpResponse:
             return json_success(message=f"{item.template.name} 使用成功：{summary}")
         messages.success(request, f"{item.template.name} 使用成功：{summary}")
     except (GameError, ValueError) as exc:
-        return _error_response(request, is_ajax, sanitize_error_message(exc))
+        return _known_inventory_error_response(request, is_ajax, exc)
     except Exception as exc:
-        return unexpected_error_response(
+        return _unexpected_inventory_error_response(
             request,
             exc,
             is_ajax=is_ajax,
@@ -222,7 +250,6 @@ def use_item_view(request: HttpRequest, pk: int) -> HttpResponse:
                 getattr(request.user, "id", None),
                 pk,
             ),
-            logger_instance=logger,
         )
     return redirect("gameplay:warehouse")
 
