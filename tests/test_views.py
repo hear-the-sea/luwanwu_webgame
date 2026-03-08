@@ -1136,6 +1136,23 @@ class TestTechnologyViews:
         assert response.status_code == 200
         assert response.context["current_tab"] == "basic"
 
+    def test_upgrade_technology_known_error_shows_message(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.views.technology.upgrade_technology",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("tech blocked")),
+        )
+
+        response = client.post(
+            reverse("gameplay:upgrade_technology", kwargs={"tech_key": "dao_attack"}),
+            {"tab": "basic"},
+        )
+        assert response.status_code == 302
+        assert response.url == f"{reverse('gameplay:technology')}?tab=basic"
+        messages = [str(m) for m in get_messages(response.wsgi_request)]
+        assert any("tech blocked" in m for m in messages)
+
     def test_upgrade_technology_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
 

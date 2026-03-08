@@ -64,6 +64,26 @@ def _build_technology_redirect_url(tab: str, troop: str = "") -> str:
     return redirect_url
 
 
+def _handle_known_technology_error(request: HttpRequest, exc: GameError | ValueError) -> None:
+    messages.error(request, sanitize_error_message(exc))
+
+
+def _handle_unexpected_technology_error(
+    request: HttpRequest,
+    exc: Exception,
+    *,
+    log_message: str,
+    log_args: tuple[object, ...],
+) -> None:
+    flash_unexpected_view_error(
+        request,
+        exc,
+        log_message=log_message,
+        log_args=log_args,
+        logger_instance=logger,
+    )
+
+
 class TechnologyView(LoginRequiredMixin, TemplateView):
     """技术研究页面"""
 
@@ -119,9 +139,9 @@ def upgrade_technology_view(request: HttpRequest, tech_key: str) -> HttpResponse
         result = upgrade_technology(manor, tech_key)
         messages.success(request, result["message"])
     except (GameError, ValueError) as exc:
-        messages.error(request, sanitize_error_message(exc))
+        _handle_known_technology_error(request, exc)
     except Exception as exc:
-        flash_unexpected_view_error(
+        _handle_unexpected_technology_error(
             request,
             exc,
             log_message="Unexpected technology upgrade view error: manor_id=%s user_id=%s tech_key=%s",
@@ -130,7 +150,6 @@ def upgrade_technology_view(request: HttpRequest, tech_key: str) -> HttpResponse
                 getattr(request.user, "id", None),
                 tech_key,
             ),
-            logger_instance=logger,
         )
 
     # 构建重定向URL，保留子分类参数
