@@ -37,6 +37,26 @@ ARENA_TAB_EVENTS = "events"
 ARENA_TAB_EXCHANGE = "exchange"
 
 
+def _handle_known_arena_error(request: HttpRequest, exc: ValueError) -> None:
+    messages.error(request, sanitize_error_message(exc))
+
+
+def _handle_unexpected_arena_error(
+    request: HttpRequest,
+    exc: Exception,
+    *,
+    log_message: str,
+    log_args: tuple[object, ...],
+) -> None:
+    flash_unexpected_view_error(
+        request,
+        exc,
+        log_message=log_message,
+        log_args=log_args,
+        logger_instance=logger,
+    )
+
+
 def _parse_guest_ids(raw_values: list[str]) -> list[int]:
     parsed: list[int] = []
     seen: set[int] = set()
@@ -164,9 +184,9 @@ def arena_register_view(request: HttpRequest) -> HttpResponse:
                 f"报名成功！消耗银两 {ARENA_REGISTRATION_SILVER_COST}。当前已报名 {result.entry_count}/{result.tournament.player_limit} 人。",
             )
     except ValueError as exc:
-        messages.error(request, sanitize_error_message(exc))
+        _handle_known_arena_error(request, exc)
     except Exception as exc:
-        flash_unexpected_view_error(
+        _handle_unexpected_arena_error(
             request,
             exc,
             log_message="arena register failed: user_id=%s manor_id=%s",
@@ -174,7 +194,6 @@ def arena_register_view(request: HttpRequest) -> HttpResponse:
                 getattr(request.user, "id", None),
                 getattr(manor, "id", None),
             ),
-            logger_instance=logger,
         )
 
     return redirect(redirect_target)
@@ -193,9 +212,9 @@ def arena_cancel_view(request: HttpRequest) -> HttpResponse:
             f"已撤销报名（{canceled_count} 条），可重新报名（报名费 {ARENA_REGISTRATION_SILVER_COST} 银两不返还）。",
         )
     except ValueError as exc:
-        messages.error(request, sanitize_error_message(exc))
+        _handle_known_arena_error(request, exc)
     except Exception as exc:
-        flash_unexpected_view_error(
+        _handle_unexpected_arena_error(
             request,
             exc,
             log_message="arena cancel failed: user_id=%s manor_id=%s",
@@ -203,7 +222,6 @@ def arena_cancel_view(request: HttpRequest) -> HttpResponse:
                 getattr(request.user, "id", None),
                 getattr(manor, "id", None),
             ),
-            logger_instance=logger,
         )
 
     return redirect(redirect_target)
@@ -238,9 +256,9 @@ def arena_exchange_view(request: HttpRequest) -> HttpResponse:
             f"兑换成功：{result.reward.name} x{result.quantity}，消耗角斗币 {result.total_cost}。{random_draw_summary}",
         )
     except ValueError as exc:
-        messages.error(request, sanitize_error_message(exc))
+        _handle_known_arena_error(request, exc)
     except Exception as exc:
-        flash_unexpected_view_error(
+        _handle_unexpected_arena_error(
             request,
             exc,
             log_message="arena exchange failed: user_id=%s manor_id=%s reward=%s quantity=%s",
@@ -250,7 +268,6 @@ def arena_exchange_view(request: HttpRequest) -> HttpResponse:
                 reward_key,
                 quantity,
             ),
-            logger_instance=logger,
         )
 
     return redirect(redirect_target)

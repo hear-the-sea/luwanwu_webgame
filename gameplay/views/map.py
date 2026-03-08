@@ -5,14 +5,17 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
+from typing import TypeVar
 
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpRequest, JsonResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
+from core.decorators import unexpected_error_response
 from core.exceptions import GameError
 from core.utils import json_error, json_success, parse_json_object, safe_int, safe_positive_int, sanitize_error_message
 from core.utils.cache_lock import acquire_best_effort_lock, release_best_effort_lock
@@ -41,6 +44,67 @@ from gameplay.services.raid.utils import can_attack_target
 MAP_ACTION_LOCK_SECONDS = 5
 _LOCAL_LOCK_PREFIX = "local:"
 logger = logging.getLogger(__name__)
+
+
+MapActionResult = TypeVar("MapActionResult")
+
+
+def _map_action_conflict_response() -> JsonResponse:
+    return json_error("请求处理中，请稍候重试", status=409)
+
+
+def _map_known_error_response(exc: GameError | ValueError) -> JsonResponse:
+    return json_error(sanitize_error_message(exc))
+
+
+def _map_unexpected_error_response(
+    request: HttpRequest,
+    exc: Exception,
+    *,
+    log_message: str,
+    log_args: tuple[object, ...],
+) -> HttpResponse:
+    return unexpected_error_response(
+        request,
+        exc,
+        is_ajax=True,
+        redirect_url="gameplay:map",
+        log_message=log_message,
+        log_args=log_args,
+        logger_instance=logger,
+    )
+
+
+def _run_locked_map_json_action(
+    request: HttpRequest,
+    *,
+    manor,
+    action_name: str,
+    scope: str,
+    operation: Callable[[], MapActionResult],
+    success_response: Callable[[MapActionResult], JsonResponse],
+    log_message: str,
+    log_args: tuple[object, ...],
+) -> HttpResponse:
+    lock_ok, lock_key, lock_token = _acquire_map_action_lock(action_name, int(manor.id), scope)
+    if not lock_ok:
+        return _map_action_conflict_response()
+
+    try:
+        try:
+            result = operation()
+        except (GameError, ValueError) as exc:
+            return _map_known_error_response(exc)
+        except Exception as exc:
+            return _map_unexpected_error_response(
+                request,
+                exc,
+                log_message=log_message,
+                log_args=log_args,
+            )
+        return success_response(result)
+    finally:
+        _release_map_action_lock(lock_key, lock_token)
 
 
 def _resolve_attack_fields_from_info(info: dict, viewer_manor, target_manor) -> tuple[bool, str]:
@@ -221,31 +285,25 @@ def start_scout_api(request: HttpRequest) -> JsonResponse:
     if target_manor is None:
         return json_error("目标庄园不存在", status=404)
 
-    lock_ok, lock_key, lock_token = _acquire_map_action_lock("start_scout", int(manor.id), str(target_manor.id))
-    if not lock_ok:
-        return json_error("请求处理中，请稍候重试", status=409)
-
-    try:
-        try:
-            record = start_scout(manor, target_manor)
-            return json_success(
-                message=f"已派出探子前往 {target_manor.display_name}",
-                scout_id=record.id,
-                travel_time=record.travel_time,
-                success_rate=round(record.success_rate * 100),
-            )
-        except (GameError, ValueError) as exc:
-            return json_error(sanitize_error_message(exc))
-        except Exception as exc:
-            logger.exception(
-                "Unexpected scout start error: manor_id=%s user_id=%s target_id=%s",
-                getattr(manor, "id", None),
-                getattr(request.user, "id", None),
-                getattr(target_manor, "id", None),
-            )
-            return json_error(sanitize_error_message(exc), status=500)
-    finally:
-        _release_map_action_lock(lock_key, lock_token)
+    return _run_locked_map_json_action(
+        request,
+        manor=manor,
+        action_name="start_scout",
+        scope=str(target_manor.id),
+        operation=lambda: start_scout(manor, target_manor),
+        success_response=lambda record: json_success(
+            message=f"已派出探子前往 {target_manor.display_name}",
+            scout_id=record.id,
+            travel_time=record.travel_time,
+            success_rate=round(record.success_rate * 100),
+        ),
+        log_message="Unexpected scout start error: manor_id=%s user_id=%s target_id=%s",
+        log_args=(
+            getattr(manor, "id", None),
+            getattr(request.user, "id", None),
+            getattr(target_manor, "id", None),
+        ),
+    )
 
 
 @login_required
@@ -269,30 +327,24 @@ def start_raid_api(request: HttpRequest) -> JsonResponse:
     if not guest_ids:
         return json_error("请选择出征门客")
 
-    lock_ok, lock_key, lock_token = _acquire_map_action_lock("start_raid", int(manor.id), str(target_manor.id))
-    if not lock_ok:
-        return json_error("请求处理中，请稍候重试", status=409)
-
-    try:
-        try:
-            run = start_raid(manor, target_manor, guest_ids, troop_loadout)
-            return json_success(
-                message=f"已向 {target_manor.display_name} 发起进攻",
-                raid_id=run.id,
-                travel_time=run.travel_time,
-            )
-        except (GameError, ValueError) as exc:
-            return json_error(sanitize_error_message(exc))
-        except Exception as exc:
-            logger.exception(
-                "Unexpected raid start error: manor_id=%s user_id=%s target_id=%s",
-                getattr(manor, "id", None),
-                getattr(request.user, "id", None),
-                getattr(target_manor, "id", None),
-            )
-            return json_error(sanitize_error_message(exc), status=500)
-    finally:
-        _release_map_action_lock(lock_key, lock_token)
+    return _run_locked_map_json_action(
+        request,
+        manor=manor,
+        action_name="start_raid",
+        scope=str(target_manor.id),
+        operation=lambda: start_raid(manor, target_manor, guest_ids, troop_loadout),
+        success_response=lambda run: json_success(
+            message=f"已向 {target_manor.display_name} 发起进攻",
+            raid_id=run.id,
+            travel_time=run.travel_time,
+        ),
+        log_message="Unexpected raid start error: manor_id=%s user_id=%s target_id=%s",
+        log_args=(
+            getattr(manor, "id", None),
+            getattr(request.user, "id", None),
+            getattr(target_manor, "id", None),
+        ),
+    )
 
 
 @login_required
@@ -307,26 +359,20 @@ def retreat_raid_api(request: HttpRequest, raid_id: int) -> JsonResponse:
     except RaidRun.DoesNotExist:
         return json_error("出征记录不存在", status=404)
 
-    lock_ok, lock_key, lock_token = _acquire_map_action_lock("retreat_raid", int(manor.id), str(raid_id))
-    if not lock_ok:
-        return json_error("请求处理中，请稍候重试", status=409)
-
-    try:
-        try:
-            request_raid_retreat(run)
-            return json_success(message="已开始撤退")
-        except (GameError, ValueError) as exc:
-            return json_error(sanitize_error_message(exc))
-        except Exception as exc:
-            logger.exception(
-                "Unexpected raid retreat error: manor_id=%s user_id=%s raid_id=%s",
-                getattr(manor, "id", None),
-                getattr(request.user, "id", None),
-                raid_id,
-            )
-            return json_error(sanitize_error_message(exc), status=500)
-    finally:
-        _release_map_action_lock(lock_key, lock_token)
+    return _run_locked_map_json_action(
+        request,
+        manor=manor,
+        action_name="retreat_raid",
+        scope=str(raid_id),
+        operation=lambda: request_raid_retreat(run),
+        success_response=lambda _result: json_success(message="已开始撤退"),
+        log_message="Unexpected raid retreat error: manor_id=%s user_id=%s raid_id=%s",
+        log_args=(
+            getattr(manor, "id", None),
+            getattr(request.user, "id", None),
+            raid_id,
+        ),
+    )
 
 
 @login_required

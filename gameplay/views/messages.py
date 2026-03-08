@@ -107,6 +107,28 @@ def _resolve_message_action_redirect(request: HttpRequest, default_url_name: str
     return redirect(default_url)
 
 
+def _messages_list_redirect() -> HttpResponse:
+    return redirect("gameplay:messages")
+
+
+def _run_selected_message_action(
+    request: HttpRequest,
+    *,
+    action,
+    success_message: str,
+    empty_message: str,
+) -> HttpResponse:
+    manor = ensure_manor(request.user)
+    message_ids = request.POST.getlist("message_ids")
+    if not message_ids:
+        messages.info(request, empty_message)
+        return _messages_list_redirect()
+
+    action(manor, message_ids)
+    messages.success(request, success_message.format(count=len(message_ids)))
+    return _messages_list_redirect()
+
+
 def _claim_attachment_error_response(
     request: HttpRequest,
     *,
@@ -125,6 +147,29 @@ def _claim_attachment_error_response(
         )
     messages.error(request, error_message)
     return None
+
+
+def _claim_attachment_exception_response(
+    request: HttpRequest,
+    *,
+    manor,
+    message_id: int,
+    is_json: bool,
+    exc: Exception,
+    status: int,
+    log_message: str | None = None,
+    log_args: tuple[object, ...] = (),
+) -> HttpResponse | None:
+    if log_message is not None:
+        logger.exception(log_message, *log_args)
+    return _claim_attachment_error_response(
+        request,
+        manor=manor,
+        message_id=message_id,
+        is_json=is_json,
+        error_message=sanitize_error_message(exc),
+        status=status,
+    )
 
 
 def _format_claimed_summary(claimed_summary: dict) -> tuple[str, list[dict]]:
@@ -242,14 +287,12 @@ def view_message(request: HttpRequest, pk: int) -> HttpResponse:
 @require_POST
 def delete_messages_view(request: HttpRequest) -> HttpResponse:
     """Delete only the messages that have been selected via checkboxes."""
-    manor = ensure_manor(request.user)
-    ids = request.POST.getlist("message_ids")
-    if ids:
-        delete_messages(manor, ids)
-        messages.success(request, f"已删除 {len(ids)} 条消息")
-    else:
-        messages.info(request, "请先选择需要删除的消息")
-    return redirect("gameplay:messages")
+    return _run_selected_message_action(
+        request,
+        action=delete_messages,
+        success_message="已删除 {count} 条消息",
+        empty_message="请先选择需要删除的消息",
+    )
 
 
 @login_required
@@ -259,21 +302,19 @@ def delete_all_messages_view(request: HttpRequest) -> HttpResponse:
     manor = ensure_manor(request.user)
     delete_all_messages(manor)
     messages.info(request, "所有消息已清空")
-    return redirect("gameplay:messages")
+    return _messages_list_redirect()
 
 
 @login_required
 @require_POST
 def mark_messages_read_view(request: HttpRequest) -> HttpResponse:
     """Mark the selected messages as read without deleting them."""
-    manor = ensure_manor(request.user)
-    ids = request.POST.getlist("message_ids")
-    if ids:
-        mark_messages_read(manor, ids)
-        messages.success(request, f"已标记 {len(ids)} 条消息为已读")
-    else:
-        messages.info(request, "请先选择需要标记的消息")
-    return redirect("gameplay:messages")
+    return _run_selected_message_action(
+        request,
+        action=mark_messages_read,
+        success_message="已标记 {count} 条消息为已读",
+        empty_message="请先选择需要标记的消息",
+    )
 
 
 @login_required
@@ -283,7 +324,7 @@ def mark_all_messages_read_view(request: HttpRequest) -> HttpResponse:
     manor = ensure_manor(request.user)
     mark_all_messages_read(manor)
     messages.success(request, "已全部标记为已读")
-    return redirect("gameplay:messages")
+    return _messages_list_redirect()
 
 
 @login_required
@@ -316,32 +357,30 @@ def claim_attachment_view(request: HttpRequest, pk: int) -> HttpResponse:
 
         messages.success(request, f"附件领取成功：{summary_text}")
     except (GameError, ValueError) as exc:
-        error_message = sanitize_error_message(exc)
-        error_response = _claim_attachment_error_response(
+        error_response = _claim_attachment_exception_response(
             request,
             manor=manor,
             message_id=pk,
             is_json=is_json,
-            error_message=error_message,
+            exc=exc,
             status=400,
         )
         if error_response is not None:
             return error_response
     except Exception as exc:
-        logger.exception(
-            "Unexpected error in claim_attachment_view: manor_id=%s user_id=%s message_id=%s",
-            getattr(manor, "id", None),
-            getattr(request.user, "id", None),
-            pk,
-        )
-        error_message = sanitize_error_message(exc)
-        error_response = _claim_attachment_error_response(
+        error_response = _claim_attachment_exception_response(
             request,
             manor=manor,
             message_id=pk,
             is_json=is_json,
-            error_message=error_message,
+            exc=exc,
             status=500,
+            log_message="Unexpected error in claim_attachment_view: manor_id=%s user_id=%s message_id=%s",
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                pk,
+            ),
         )
         if error_response is not None:
             return error_response

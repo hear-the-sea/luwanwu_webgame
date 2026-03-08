@@ -15,6 +15,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
+from core.decorators import flash_unexpected_view_error
 from core.exceptions import GameError
 from core.utils import safe_redirect_url, sanitize_error_message
 from gameplay.services import (
@@ -28,6 +29,39 @@ from gameplay.services import (
 )
 
 logger = logging.getLogger(__name__)
+
+TECHNOLOGY_TABS = frozenset({"basic", "martial", "production"})
+MARTIAL_TROOP_CLASSES = (
+    {"key": "dao", "name": "刀类"},
+    {"key": "qiang", "name": "枪类"},
+    {"key": "jian", "name": "剑类"},
+    {"key": "quan", "name": "拳类"},
+    {"key": "gong", "name": "弓箭类"},
+)
+DEFAULT_TECHNOLOGY_TAB = "basic"
+DEFAULT_MARTIAL_TROOP_CLASS = "dao"
+
+
+def _normalize_technology_tab(raw_tab: str | None) -> str:
+    tab = (raw_tab or DEFAULT_TECHNOLOGY_TAB).strip()
+    if tab not in TECHNOLOGY_TABS:
+        return DEFAULT_TECHNOLOGY_TAB
+    return tab
+
+
+def _normalize_martial_troop_class(raw_troop_class: str | None) -> str:
+    troop_class = (raw_troop_class or DEFAULT_MARTIAL_TROOP_CLASS).strip()
+    valid_troop_classes = {item["key"] for item in MARTIAL_TROOP_CLASSES}
+    if troop_class not in valid_troop_classes:
+        return DEFAULT_MARTIAL_TROOP_CLASS
+    return troop_class
+
+
+def _build_technology_redirect_url(tab: str, troop: str = "") -> str:
+    redirect_url = f"{reverse('gameplay:technology')}?tab={tab}"
+    if tab == "martial" and troop:
+        redirect_url += f"&troop={troop}"
+    return redirect_url
 
 
 class TechnologyView(LoginRequiredMixin, TemplateView):
@@ -44,10 +78,7 @@ class TechnologyView(LoginRequiredMixin, TemplateView):
         refresh_technology_upgrades(manor)
 
         # 获取当前选中的分类，默认为 basic
-        current_tab = self.request.GET.get("tab", "basic")
-        valid_tabs = ["basic", "martial", "production"]
-        if current_tab not in valid_tabs:
-            current_tab = "basic"
+        current_tab = _normalize_technology_tab(self.request.GET.get("tab"))
 
         context["manor"] = manor
         context["categories"] = get_categories()
@@ -57,20 +88,10 @@ class TechnologyView(LoginRequiredMixin, TemplateView):
         if current_tab == "martial":
             all_groups = get_martial_technologies_grouped(manor)
             # 兵种子分类
-            troop_classes = [
-                {"key": "dao", "name": "刀类"},
-                {"key": "qiang", "name": "枪类"},
-                {"key": "jian", "name": "剑类"},
-                {"key": "quan", "name": "拳类"},
-                {"key": "gong", "name": "弓箭类"},
-            ]
-            context["troop_classes"] = troop_classes
+            context["troop_classes"] = list(MARTIAL_TROOP_CLASSES)
 
             # 获取当前选中的兵种子分类
-            current_troop_class = self.request.GET.get("troop", "dao")
-            valid_troop_classes = [tc["key"] for tc in troop_classes]
-            if current_troop_class not in valid_troop_classes:
-                current_troop_class = "dao"
+            current_troop_class = _normalize_martial_troop_class(self.request.GET.get("troop"))
             context["current_troop_class"] = current_troop_class
 
             # 只显示当前选中兵种的技术
@@ -90,8 +111,8 @@ class TechnologyView(LoginRequiredMixin, TemplateView):
 def upgrade_technology_view(request: HttpRequest, tech_key: str) -> HttpResponse:
     """升级技术"""
     manor = ensure_manor(request.user)
-    tab = request.POST.get("tab", "basic")
-    troop = request.POST.get("troop", "")
+    tab = _normalize_technology_tab(request.POST.get("tab"))
+    troop = _normalize_martial_troop_class(request.POST.get("troop")) if tab == "martial" else ""
     next_url = (request.POST.get("next") or "").strip()
 
     try:
@@ -100,17 +121,19 @@ def upgrade_technology_view(request: HttpRequest, tech_key: str) -> HttpResponse
     except (GameError, ValueError) as exc:
         messages.error(request, sanitize_error_message(exc))
     except Exception as exc:
-        logger.exception(
-            "Unexpected technology upgrade view error: manor_id=%s user_id=%s tech_key=%s",
-            getattr(manor, "id", None),
-            getattr(request.user, "id", None),
-            tech_key,
+        flash_unexpected_view_error(
+            request,
+            exc,
+            log_message="Unexpected technology upgrade view error: manor_id=%s user_id=%s tech_key=%s",
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                tech_key,
+            ),
+            logger_instance=logger,
         )
-        messages.error(request, sanitize_error_message(exc))
 
     # 构建重定向URL，保留子分类参数
-    redirect_url = f"{reverse('gameplay:technology')}?tab={tab}"
-    if tab == "martial" and troop:
-        redirect_url += f"&troop={troop}"
+    redirect_url = _build_technology_redirect_url(tab, troop)
     redirect_url = safe_redirect_url(request, next_url, redirect_url)
     return redirect(redirect_url)

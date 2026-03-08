@@ -16,6 +16,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
+from core.decorators import flash_unexpected_view_error
 from core.exceptions import GameError
 from core.utils import safe_positive_int, sanitize_error_message
 from core.utils.rate_limit import rate_limit_redirect
@@ -57,6 +58,26 @@ def _recruitment_redirect(category: str | None = None) -> HttpResponse:
     if normalized_category and normalized_category != "all":
         return redirect(f"{base_url}?{urlencode({'category': normalized_category})}")
     return redirect(base_url)
+
+
+def _handle_unexpected_recruitment_error(
+    request: HttpRequest,
+    exc: Exception,
+    *,
+    log_message: str,
+    log_args: tuple[object, ...],
+) -> None:
+    flash_unexpected_view_error(
+        request,
+        exc,
+        log_message=log_message,
+        log_args=log_args,
+        logger_instance=logger,
+    )
+
+
+def _handle_known_recruitment_error(request: HttpRequest, exc: GameError | ValueError) -> None:
+    messages.error(request, sanitize_error_message(exc))
 
 
 class TroopRecruitmentView(LoginRequiredMixin, TemplateView):
@@ -160,16 +181,19 @@ def start_troop_recruitment_view(request: HttpRequest) -> HttpResponse:
             request, f"{recruitment.troop_name}{quantity_text} 开始募兵，预计 {recruitment.actual_duration} 秒后完成"
         )
     except (GameError, ValueError) as exc:
-        messages.error(request, sanitize_error_message(exc))
+        _handle_known_recruitment_error(request, exc)
     except Exception as exc:
-        logger.exception(
-            "Unexpected troop recruitment start error: manor_id=%s user_id=%s troop_key=%s quantity=%s",
-            getattr(manor, "id", None),
-            getattr(request.user, "id", None),
-            troop_key,
-            request.POST.get("quantity"),
+        _handle_unexpected_recruitment_error(
+            request,
+            exc,
+            log_message="Unexpected troop recruitment start error: manor_id=%s user_id=%s troop_key=%s quantity=%s",
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                troop_key,
+                request.POST.get("quantity"),
+            ),
         )
-        messages.error(request, sanitize_error_message(exc))
 
     return _recruitment_redirect(selected_category)
 
@@ -194,16 +218,19 @@ def deposit_troop_to_bank_view(request: HttpRequest) -> HttpResponse:
         result = deposit_troops_to_bank(manor, troop_key, quantity)
         messages.success(request, f"已存入 {result['quantity']} 名{result['troop_name']}到钱庄")
     except (GameError, ValueError) as exc:
-        messages.error(request, sanitize_error_message(exc))
+        _handle_known_recruitment_error(request, exc)
     except Exception as exc:
-        logger.exception(
-            "Unexpected troop bank deposit error: manor_id=%s user_id=%s troop_key=%s quantity=%s",
-            getattr(manor, "id", None),
-            getattr(request.user, "id", None),
-            troop_key,
-            quantity,
+        _handle_unexpected_recruitment_error(
+            request,
+            exc,
+            log_message="Unexpected troop bank deposit error: manor_id=%s user_id=%s troop_key=%s quantity=%s",
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                troop_key,
+                quantity,
+            ),
         )
-        messages.error(request, sanitize_error_message(exc))
 
     return redirect("gameplay:troop_recruitment")
 
@@ -228,15 +255,18 @@ def withdraw_troop_from_bank_view(request: HttpRequest) -> HttpResponse:
         result = withdraw_troops_from_bank(manor, troop_key, quantity)
         messages.success(request, f"已从钱庄取出 {result['quantity']} 名{result['troop_name']}")
     except (GameError, ValueError) as exc:
-        messages.error(request, sanitize_error_message(exc))
+        _handle_known_recruitment_error(request, exc)
     except Exception as exc:
-        logger.exception(
-            "Unexpected troop bank withdraw error: manor_id=%s user_id=%s troop_key=%s quantity=%s",
-            getattr(manor, "id", None),
-            getattr(request.user, "id", None),
-            troop_key,
-            quantity,
+        _handle_unexpected_recruitment_error(
+            request,
+            exc,
+            log_message="Unexpected troop bank withdraw error: manor_id=%s user_id=%s troop_key=%s quantity=%s",
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                troop_key,
+                quantity,
+            ),
         )
-        messages.error(request, sanitize_error_message(exc))
 
     return redirect("gameplay:troop_recruitment")

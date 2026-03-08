@@ -140,6 +140,19 @@ class TestCoreViews:
         response = client.get(reverse("gameplay:settings"))
         assert response.status_code == 200
 
+    def test_rename_manor_known_error_shows_message(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+        monkeypatch.setattr(
+            "gameplay.services.rename_manor",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("rename blocked")),
+        )
+
+        response = client.post(reverse("gameplay:rename_manor"), {"new_name": "新庄园名"})
+        assert response.status_code == 302
+        assert response.url == reverse("gameplay:settings")
+        messages = [str(m) for m in get_messages(response.wsgi_request)]
+        assert any("rename blocked" in m for m in messages)
+
     def test_rename_manor_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
         monkeypatch.setattr(
@@ -384,6 +397,25 @@ class TestMissionViews:
         assert response.url == f"{reverse('gameplay:tasks')}?mission={mission.key}"
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("操作失败，请稍后重试" in m for m in messages)
+
+    def test_accept_mission_known_error_shows_message(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        mission = MissionTemplate.objects.create(
+            key=f"view_accept_known_{manor.id}",
+            name="已知错误任务",
+            is_defense=True,
+        )
+
+        monkeypatch.setattr(
+            "gameplay.views.missions.launch_mission",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("mission blocked")),
+        )
+
+        response = client.post(reverse("gameplay:accept_mission"), {"mission_key": mission.key})
+        assert response.status_code == 302
+        assert response.url == f"{reverse('gameplay:tasks')}?mission={mission.key}"
+        messages = [str(m) for m in get_messages(response.wsgi_request)]
+        assert any("mission blocked" in m for m in messages)
 
     def test_retreat_mission_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
@@ -1034,6 +1066,28 @@ class TestMessageViews:
         assert payload["unread_count"] == 0
         assert "操作失败，请稍后重试" in payload["error"]
 
+    def test_claim_attachment_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
+        """普通表单领取附件异常时应降级为消息提示。"""
+        manor, client = manor_with_user
+        message = Message.objects.create(
+            manor=manor,
+            kind=Message.Kind.REWARD,
+            title="claim unexpected fallback",
+            attachments={"items": {"msg_item_unexpected": 1}},
+        )
+
+        monkeypatch.setattr(
+            "gameplay.views.messages.claim_message_attachments",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        response = client.post(reverse("gameplay:claim_attachment", kwargs={"pk": message.pk}))
+
+        assert response.status_code == 302
+        assert response.url == reverse("gameplay:view_message", kwargs={"pk": message.pk})
+        messages = [str(m) for m in get_messages(response.wsgi_request)]
+        assert any("操作失败，请稍后重试" in m for m in messages)
+
 
 # ============ 科技系统测试 ============
 
@@ -1055,6 +1109,13 @@ class TestTechnologyViews:
         response = client.get(reverse("gameplay:technology") + "?tab=martial")
         assert response.status_code == 200
         assert response.context["current_tab"] == "martial"
+
+    def test_technology_invalid_tab_falls_back_to_basic(self, manor_with_user):
+        """非法科技标签页应回退到基础分类。"""
+        _manor, client = manor_with_user
+        response = client.get(reverse("gameplay:technology") + "?tab=unknown")
+        assert response.status_code == 200
+        assert response.context["current_tab"] == "basic"
 
     def test_upgrade_technology_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
@@ -1224,6 +1285,22 @@ class TestProductionViews:
         assert any("无效的数量" in m for m in messages)
         assert called["count"] == 0
 
+    def test_start_horse_production_rejects_missing_horse_key(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+        called = {"count": 0}
+
+        def _unexpected_start(*_args, **_kwargs):
+            called["count"] += 1
+
+        monkeypatch.setattr("gameplay.services.start_horse_production", _unexpected_start)
+
+        response = client.post(reverse("gameplay:start_horse_production"), {"quantity": "1"})
+        assert response.status_code == 302
+        assert response.url == reverse("gameplay:stable")
+        messages = [str(m) for m in get_messages(response.wsgi_request)]
+        assert any("请选择马匹类型" in m for m in messages)
+        assert called["count"] == 0
+
     def test_start_livestock_production_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
 
@@ -1323,6 +1400,25 @@ class TestProductionViews:
         assert response.url == f"{reverse('gameplay:forge')}?mode=synthesize&category=helmet"
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("无效的数量" in m for m in messages)
+        assert called["count"] == 0
+
+    def test_start_equipment_forging_rejects_missing_equipment_key(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+        called = {"count": 0}
+
+        def _unexpected_start(*_args, **_kwargs):
+            called["count"] += 1
+
+        monkeypatch.setattr("gameplay.services.buildings.forge.start_equipment_forging", _unexpected_start)
+
+        response = client.post(
+            reverse("gameplay:start_equipment_forging"),
+            {"quantity": "1", "category": "helmet", "mode": "invalid"},
+        )
+        assert response.status_code == 302
+        assert response.url == f"{reverse('gameplay:forge')}?mode=synthesize&category=helmet"
+        messages = [str(m) for m in get_messages(response.wsgi_request)]
+        assert any("请选择装备类型" in m for m in messages)
         assert called["count"] == 0
 
     def test_forge_page(self, manor_with_user):
@@ -1777,6 +1873,24 @@ class TestWorkViews:
         assert response.status_code == 200
         assert response.context["current_tier"] == "senior"
 
+    def test_assign_work_known_error_shows_message(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        guest, work_template = self._create_work_data(manor, "assign_known")
+
+        monkeypatch.setattr(
+            "gameplay.views.work.assign_guest_to_work",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("work blocked")),
+        )
+
+        response = client.post(
+            reverse("gameplay:assign_work"),
+            {"guest_id": guest.id, "work_key": work_template.key},
+        )
+        assert response.status_code == 302
+        assert response.url == reverse("gameplay:work")
+        messages = [str(m) for m in get_messages(response.wsgi_request)]
+        assert any("work blocked" in m for m in messages)
+
     def test_assign_work_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
         guest, work_template = self._create_work_data(manor, "assign_exc")
@@ -1919,6 +2033,23 @@ class TestRecruitmentViews:
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("无效的数量" in m for m in messages)
         assert called["count"] == 0
+
+    def test_start_troop_recruitment_known_error_shows_message(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.services.recruitment.recruitment.start_troop_recruitment",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("recruit blocked")),
+        )
+
+        response = client.post(
+            reverse("gameplay:start_troop_recruitment"),
+            {"troop_key": "any", "quantity": "1"},
+        )
+        assert response.status_code == 302
+        assert response.url == reverse("gameplay:troop_recruitment")
+        messages = [str(m) for m in get_messages(response.wsgi_request)]
+        assert any("recruit blocked" in m for m in messages)
 
 
 # ============ 地图系统测试 ============
@@ -2181,6 +2312,29 @@ class TestMapAPI:
         assert payload["success"] is False
         assert "请求处理中，请稍候重试" in payload["error"]
         assert called["count"] == 0
+
+    def test_start_raid_api_known_error_returns_400(self, manor_with_user, monkeypatch, django_user_model):
+        attacker, client = manor_with_user
+        defender_user = django_user_model.objects.create_user(
+            username=f"map_known_raid_def_{attacker.id}",
+            password="pass123",
+        )
+        defender = ensure_manor(defender_user)
+
+        monkeypatch.setattr(
+            "gameplay.views.map.start_raid",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("raid blocked")),
+        )
+
+        response = client.post(
+            reverse("gameplay:start_raid_api"),
+            data=json.dumps({"target_id": defender.id, "guest_ids": [1], "troop_loadout": {}}),
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        payload = response.json()
+        assert payload["success"] is False
+        assert "raid blocked" in payload["error"]
 
     def test_retreat_raid_api_rejects_when_action_lock_conflicts(self, manor_with_user, monkeypatch, django_user_model):
         attacker, client = manor_with_user
@@ -2519,6 +2673,39 @@ class TestJailAndOathAPI:
         assert payload["success"] is False
         assert "请求处理中，请稍候重试" in payload["error"]
         assert called["count"] == 0
+
+    def test_recruit_prisoner_api_unexpected_error_returns_500(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.views.jail.recruit_prisoner",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        response = client.post(reverse("gameplay:recruit_prisoner_api", kwargs={"prisoner_id": 1}))
+        assert response.status_code == 500
+        payload = response.json()
+        assert payload["success"] is False
+        assert "操作失败，请稍后重试" in payload["error"]
+
+
+@pytest.mark.django_db
+class TestJailAndOathViews:
+    """监牢与结义林页面操作测试"""
+
+    def test_add_oath_bond_view_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.views.jail.add_oath_bond",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        response = client.post(reverse("gameplay:add_oath_bond_view"), {"guest_id": 1})
+        assert response.status_code == 302
+        assert response.url == reverse("gameplay:oath_grove")
+        messages = [str(m) for m in get_messages(response.wsgi_request)]
+        assert any("操作失败，请稍后重试" in m for m in messages)
 
 
 # ============ 权限测试 ============

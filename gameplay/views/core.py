@@ -25,6 +25,26 @@ from gameplay.services import ensure_manor, refresh_manor_state
 logger = logging.getLogger(__name__)
 
 
+def _handle_unexpected_core_error(
+    request: HttpRequest,
+    exc: Exception,
+    *,
+    log_message: str,
+    log_args: tuple[object, ...],
+) -> None:
+    flash_unexpected_view_error(
+        request,
+        exc,
+        log_message=log_message,
+        log_args=log_args,
+        logger_instance=logger,
+    )
+
+
+def _handle_known_core_error(request: HttpRequest, exc: GameError | ValueError) -> None:
+    messages.error(request, sanitize_error_message(exc))
+
+
 class DashboardView(LoginRequiredMixin, TemplateView):
     """建筑仪表盘页面"""
 
@@ -36,7 +56,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         try:
             refresh_manor_state(manor)
         except Exception as exc:
-            flash_unexpected_view_error(
+            _handle_unexpected_core_error(
                 self.request,
                 exc,
                 log_message="Unexpected dashboard refresh error: manor_id=%s user_id=%s",
@@ -44,7 +64,6 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     getattr(manor, "id", None),
                     getattr(self.request.user, "id", None),
                 ),
-                logger_instance=logger,
             )
 
         # Get category from URL parameter, default to 'resource'
@@ -114,9 +133,9 @@ def rename_manor_view(request: HttpRequest) -> HttpResponse:
         rename_manor(manor, new_name)
         messages.success(request, f"庄园已成功更名为「{new_name}」")
     except (GameError, ValueError) as exc:
-        messages.error(request, sanitize_error_message(exc))
+        _handle_known_core_error(request, exc)
     except Exception as exc:
-        flash_unexpected_view_error(
+        _handle_unexpected_core_error(
             request,
             exc,
             log_message="Unexpected manor rename error: manor_id=%s user_id=%s",
@@ -124,7 +143,6 @@ def rename_manor_view(request: HttpRequest) -> HttpResponse:
                 getattr(manor, "id", None),
                 getattr(request.user, "id", None),
             ),
-            logger_instance=logger,
         )
 
     return redirect("gameplay:settings")

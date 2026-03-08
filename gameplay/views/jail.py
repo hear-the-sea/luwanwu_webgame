@@ -101,6 +101,23 @@ def _message_redirect(
     return redirect(redirect_name)
 
 
+def _redirect_exception_response(
+    request: HttpRequest,
+    redirect_name: str,
+    exc: Exception,
+) -> HttpResponse:
+    return _message_redirect(
+        request,
+        redirect_name,
+        level=messages.error,
+        message=sanitize_error_message(exc),
+    )
+
+
+def _json_exception_response(exc: Exception, *, status: int = 400) -> JsonResponse:
+    return json_error(sanitize_error_message(exc), status=status)
+
+
 def _execute_locked_jail_action(
     *,
     request: HttpRequest,
@@ -113,6 +130,7 @@ def _execute_locked_jail_action(
     on_known_error: Callable[[Exception], HttpResponse],
     on_unexpected_error: Callable[[Exception], HttpResponse],
     log_message: str,
+    log_args: tuple[object, ...],
 ) -> HttpResponse:
     lock_ok, lock_key, lock_token = _acquire_jail_action_lock(action_name, int(manor.id), scope)
     if not lock_ok:
@@ -124,7 +142,7 @@ def _execute_locked_jail_action(
         except (GameError, ValueError) as exc:
             return on_known_error(exc)
         except Exception as exc:
-            logger.exception(log_message, getattr(manor, "id", None), scope)
+            logger.exception(log_message, *log_args)
             return on_unexpected_error(exc)
         return on_success(result)
     finally:
@@ -141,6 +159,7 @@ def _run_locked_redirect_action(
     success_response: Callable[[JailActionResult], HttpResponse],
     redirect_name: str,
     log_message: str,
+    log_args: tuple[object, ...],
 ) -> HttpResponse:
     return _execute_locked_jail_action(
         request=request,
@@ -155,19 +174,10 @@ def _run_locked_redirect_action(
             message="请求处理中，请稍候重试",
         ),
         on_success=success_response,
-        on_known_error=lambda exc: _message_redirect(
-            request,
-            redirect_name,
-            level=messages.error,
-            message=sanitize_error_message(exc),
-        ),
-        on_unexpected_error=lambda exc: _message_redirect(
-            request,
-            redirect_name,
-            level=messages.error,
-            message=sanitize_error_message(exc),
-        ),
+        on_known_error=lambda exc: _redirect_exception_response(request, redirect_name, exc),
+        on_unexpected_error=lambda exc: _redirect_exception_response(request, redirect_name, exc),
         log_message=log_message,
+        log_args=log_args,
     )
 
 
@@ -180,6 +190,7 @@ def _run_locked_json_action(
     operation: Callable[[], JailActionResult],
     success_response: Callable[[JailActionResult], JsonResponse],
     log_message: str,
+    log_args: tuple[object, ...],
 ) -> HttpResponse:
     return _execute_locked_jail_action(
         request=request,
@@ -189,9 +200,10 @@ def _run_locked_json_action(
         operation=operation,
         on_lock_conflict=lambda: json_error("请求处理中，请稍候重试", status=409),
         on_success=success_response,
-        on_known_error=lambda exc: json_error(sanitize_error_message(exc)),
-        on_unexpected_error=lambda exc: json_error(sanitize_error_message(exc), status=500),
+        on_known_error=lambda exc: _json_exception_response(exc),
+        on_unexpected_error=lambda exc: _json_exception_response(exc, status=500),
         log_message=log_message,
+        log_args=log_args,
     )
 
 
@@ -304,6 +316,7 @@ def recruit_prisoner_view(request: HttpRequest, prisoner_id: int):
         ),
         redirect_name="gameplay:jail",
         log_message="Unexpected jail recruit error: manor_id=%s prisoner_id=%s",
+        log_args=(getattr(manor, "id", None), prisoner_id),
     )
 
 
@@ -325,6 +338,7 @@ def draw_pie_view(request: HttpRequest, prisoner_id: int):
         ),
         redirect_name="gameplay:jail",
         log_message="Unexpected jail draw_pie error: manor_id=%s prisoner_id=%s",
+        log_args=(getattr(manor, "id", None), prisoner_id),
     )
 
 
@@ -346,6 +360,7 @@ def release_prisoner_view(request: HttpRequest, prisoner_id: int):
         ),
         redirect_name="gameplay:jail",
         log_message="Unexpected jail release error: manor_id=%s prisoner_id=%s",
+        log_args=(getattr(manor, "id", None), prisoner_id),
     )
 
 
@@ -371,6 +386,7 @@ def add_oath_bond_view(request: HttpRequest):
         ),
         redirect_name="gameplay:oath_grove",
         log_message="Unexpected oath add error: manor_id=%s guest_id=%s",
+        log_args=(getattr(manor, "id", None), guest_id),
     )
 
 
@@ -392,6 +408,7 @@ def remove_oath_bond_view(request: HttpRequest, guest_id: int):
         ),
         redirect_name="gameplay:oath_grove",
         log_message="Unexpected oath remove error: manor_id=%s guest_id=%s",
+        log_args=(getattr(manor, "id", None), guest_id),
     )
 
 
@@ -411,6 +428,7 @@ def recruit_prisoner_api(request: HttpRequest, prisoner_id: int) -> JsonResponse
             guest_id=guest.id,
         ),
         log_message="Unexpected jail recruit API error: manor_id=%s prisoner_id=%s",
+        log_args=(getattr(manor, "id", None), prisoner_id),
     )
 
 
@@ -432,6 +450,7 @@ def draw_pie_api(request: HttpRequest, prisoner_id: int) -> JsonResponse:
             reduction=getattr(prisoner, "_reduction", 0),
         ),
         log_message="Unexpected jail draw_pie API error: manor_id=%s prisoner_id=%s",
+        log_args=(getattr(manor, "id", None), prisoner_id),
     )
 
 
@@ -450,6 +469,7 @@ def release_prisoner_api(request: HttpRequest, prisoner_id: int) -> JsonResponse
             message=f"已释放：{prisoner.display_name}", prisoner_id=prisoner.id
         ),
         log_message="Unexpected jail release API error: manor_id=%s prisoner_id=%s",
+        log_args=(getattr(manor, "id", None), prisoner_id),
     )
 
 
@@ -472,6 +492,7 @@ def add_oath_bond_api(request: HttpRequest) -> JsonResponse:
         operation=lambda: add_oath_bond(manor, guest_id),
         success_response=lambda bond: json_success(message=f"结义成功：{bond.guest.display_name}"),
         log_message="Unexpected oath add API error: manor_id=%s guest_id=%s",
+        log_args=(getattr(manor, "id", None), guest_id),
     )
 
 
@@ -496,4 +517,5 @@ def remove_oath_bond_api(request: HttpRequest) -> JsonResponse:
             json_error("该门客未结义") if not deleted else json_success(message="已解除结义")
         ),
         log_message="Unexpected oath remove API error: manor_id=%s guest_id=%s",
+        log_args=(getattr(manor, "id", None), guest_id),
     )

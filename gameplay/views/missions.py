@@ -18,6 +18,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
+from core.decorators import flash_unexpected_view_error
 from core.exceptions import GameError
 from core.utils import safe_int, sanitize_error_message
 from core.utils.cache_lock import acquire_best_effort_lock, release_best_effort_lock
@@ -45,11 +46,42 @@ _LOCAL_LOCK_PREFIX = "local:"
 logger = logging.getLogger(__name__)
 
 
+def _handle_unexpected_mission_error(
+    request: HttpRequest,
+    exc: Exception,
+    *,
+    log_message: str,
+    log_args: tuple[object, ...],
+) -> None:
+    flash_unexpected_view_error(
+        request,
+        exc,
+        log_message=log_message,
+        log_args=log_args,
+        logger_instance=logger,
+    )
+
+
+def _handle_known_mission_error(request: HttpRequest, exc: GameError | ValueError) -> None:
+    messages.error(request, sanitize_error_message(exc))
+
+
 def _normalize_mission_key(raw_value: Any) -> str | None:
     if raw_value is None:
         return None
     mission_key = str(raw_value).strip()
     return mission_key or None
+
+
+def _mission_tasks_url(mission_key: str | None = None) -> str:
+    base_url = reverse("gameplay:tasks")
+    if mission_key:
+        return f"{base_url}?mission={mission_key}"
+    return base_url
+
+
+def _mission_tasks_redirect(mission_key: str | None = None) -> HttpResponse:
+    return redirect(_mission_tasks_url(mission_key))
 
 
 def _resolve_mission_or_redirect(
@@ -58,12 +90,12 @@ def _resolve_mission_or_redirect(
     mission_key = _normalize_mission_key(mission_key_raw)
     if mission_key is None:
         messages.error(request, "请选择任务")
-        return None, redirect("gameplay:tasks")
+        return None, _mission_tasks_redirect()
 
     mission = MissionTemplate.objects.filter(key=mission_key).first()
     if mission is None:
         messages.error(request, "任务不存在")
-        return None, redirect(f"{reverse('gameplay:tasks')}?mission={mission_key}")
+        return None, _mission_tasks_redirect(mission_key)
 
     return mission, None
 
@@ -400,7 +432,7 @@ class AcceptMissionView(LoginRequiredMixin, TemplateView):
         if redirect_response is not None:
             return redirect_response
         if mission is None:
-            return redirect("gameplay:tasks")
+            return _mission_tasks_redirect()
 
         if mission.is_defense:
             guest_ids = []
@@ -410,11 +442,11 @@ class AcceptMissionView(LoginRequiredMixin, TemplateView):
             guest_ids = _parse_positive_ids(raw_guest_ids)
             if guest_ids is None:
                 messages.error(request, "门客选择有误")
-                return redirect(f"{reverse('gameplay:tasks')}?mission={mission.key}")
+                return _mission_tasks_redirect(mission.key)
             limit = getattr(manor, "max_squad_size", 5)
             if len(guest_ids) > limit:
                 messages.error(request, f"本次出征最多选择 {limit} 名门客")
-                return redirect(f"{reverse('gameplay:tasks')}?mission={mission.key}")
+                return _mission_tasks_redirect(mission.key)
             if mission.guest_only:
                 raw_loadout = {}
             else:
@@ -426,13 +458,13 @@ class AcceptMissionView(LoginRequiredMixin, TemplateView):
                     quantity = safe_int(raw_value, default=None, min_val=0)
                     if quantity is None:
                         messages.error(request, "护院配置有误")
-                        return redirect(f"{reverse('gameplay:tasks')}?mission={mission.key}")
+                        return _mission_tasks_redirect(mission.key)
                     raw_loadout[item["key"]] = quantity
 
         lock_ok, lock_key, lock_token = _acquire_mission_action_lock("accept", int(manor.id), mission.key)
         if not lock_ok:
             messages.warning(request, "任务请求处理中，请稍候重试")
-            return redirect(f"{reverse('gameplay:tasks')}?mission={mission.key}")
+            return _mission_tasks_redirect(mission.key)
 
         try:
             try:
@@ -443,19 +475,22 @@ class AcceptMissionView(LoginRequiredMixin, TemplateView):
                 else:
                     messages.success(request, f"{mission.name} 已出征，战报稍后送达。")
             except (GameError, ValueError) as exc:
-                messages.error(request, sanitize_error_message(exc))
+                _handle_known_mission_error(request, exc)
             except Exception as exc:
-                logger.exception(
-                    "Unexpected mission accept error: manor_id=%s user_id=%s mission_key=%s mission_id=%s",
-                    getattr(manor, "id", None),
-                    getattr(request.user, "id", None),
-                    mission.key,
-                    getattr(mission, "id", None),
+                _handle_unexpected_mission_error(
+                    request,
+                    exc,
+                    log_message="Unexpected mission accept error: manor_id=%s user_id=%s mission_key=%s mission_id=%s",
+                    log_args=(
+                        getattr(manor, "id", None),
+                        getattr(request.user, "id", None),
+                        mission.key,
+                        getattr(mission, "id", None),
+                    ),
                 )
-                messages.error(request, sanitize_error_message(exc))
         finally:
             _release_mission_action_lock(lock_key, lock_token)
-        return redirect(f"{reverse('gameplay:tasks')}?mission={mission.key}")
+        return _mission_tasks_redirect(mission.key)
 
 
 @login_required
@@ -479,16 +514,19 @@ def retreat_mission_view(request: HttpRequest, pk: int) -> HttpResponse:
             eta = run.return_at.strftime("%H:%M:%S") if run.return_at else ""
             messages.info(request, f"{run.mission.name} 已撤退，预计返程：{eta}")
         except (GameError, ValueError) as exc:
-            messages.error(request, sanitize_error_message(exc))
+            _handle_known_mission_error(request, exc)
         except Exception as exc:
-            logger.exception(
-                "Unexpected mission retreat error: manor_id=%s user_id=%s run_id=%s mission_id=%s",
-                getattr(manor, "id", None),
-                getattr(request.user, "id", None),
-                pk,
-                getattr(run, "mission_id", None),
+            _handle_unexpected_mission_error(
+                request,
+                exc,
+                log_message="Unexpected mission retreat error: manor_id=%s user_id=%s run_id=%s mission_id=%s",
+                log_args=(
+                    getattr(manor, "id", None),
+                    getattr(request.user, "id", None),
+                    pk,
+                    getattr(run, "mission_id", None),
+                ),
             )
-            messages.error(request, sanitize_error_message(exc))
     finally:
         _release_mission_action_lock(lock_key, lock_token)
     return redirect("gameplay:dashboard")
@@ -518,16 +556,19 @@ def retreat_scout_view(request: HttpRequest, pk: int) -> HttpResponse:
             request_scout_retreat(record)
             messages.info(request, f"侦察 {record.defender.display_name} 已撤退，探子正在返程")
         except (GameError, ValueError) as exc:
-            messages.error(request, sanitize_error_message(exc))
+            _handle_known_mission_error(request, exc)
         except Exception as exc:
-            logger.exception(
-                "Unexpected scout retreat error: manor_id=%s user_id=%s record_id=%s defender_id=%s",
-                getattr(manor, "id", None),
-                getattr(request.user, "id", None),
-                pk,
-                getattr(record, "defender_id", None),
+            _handle_unexpected_mission_error(
+                request,
+                exc,
+                log_message="Unexpected scout retreat error: manor_id=%s user_id=%s record_id=%s defender_id=%s",
+                log_args=(
+                    getattr(manor, "id", None),
+                    getattr(request.user, "id", None),
+                    pk,
+                    getattr(record, "defender_id", None),
+                ),
             )
-            messages.error(request, sanitize_error_message(exc))
     finally:
         _release_mission_action_lock(lock_key, lock_token)
     return redirect("home")
@@ -548,12 +589,12 @@ def use_mission_card_view(request: HttpRequest) -> HttpResponse:
     if redirect_response is not None:
         return redirect_response
     if mission is None:
-        return redirect("gameplay:tasks")
+        return _mission_tasks_redirect()
 
     lock_ok, lock_key, lock_token = _acquire_mission_action_lock("use_card", int(manor.id), mission.key)
     if not lock_ok:
         messages.warning(request, "任务请求处理中，请稍候重试")
-        return redirect(f"{reverse('gameplay:tasks')}?mission={mission.key}")
+        return _mission_tasks_redirect(mission.key)
 
     try:
         try:
@@ -570,15 +611,18 @@ def use_mission_card_view(request: HttpRequest) -> HttpResponse:
             # 任务卡不足等业务错误
             messages.error(request, sanitize_error_message(exc))
         except Exception as exc:
-            logger.exception(
-                "Unexpected mission card use error: manor_id=%s user_id=%s mission_key=%s mission_id=%s",
-                getattr(manor, "id", None),
-                getattr(request.user, "id", None),
-                mission.key,
-                getattr(mission, "id", None),
+            _handle_unexpected_mission_error(
+                request,
+                exc,
+                log_message="Unexpected mission card use error: manor_id=%s user_id=%s mission_key=%s mission_id=%s",
+                log_args=(
+                    getattr(manor, "id", None),
+                    getattr(request.user, "id", None),
+                    mission.key,
+                    getattr(mission, "id", None),
+                ),
             )
-            messages.error(request, sanitize_error_message(exc))
     finally:
         _release_mission_action_lock(lock_key, lock_token)
 
-    return redirect(f"{reverse('gameplay:tasks')}?mission={mission.key}")
+    return _mission_tasks_redirect(mission.key)
