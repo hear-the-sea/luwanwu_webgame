@@ -14,13 +14,7 @@ from django.db.models import QuerySet
 from django.utils import timezone
 
 from core.config import RECRUITMENT
-from core.exceptions import (
-    GuestCapacityFullError,
-    GuestNotIdleError,
-    InsufficientStockError,
-    InvalidAllocationError,
-    RetainerCapacityFullError,
-)
+from core.exceptions import GuestNotIdleError, InsufficientStockError, InvalidAllocationError
 from core.utils.time_scale import scale_duration
 
 if TYPE_CHECKING:
@@ -45,13 +39,25 @@ from ..utils.name_generator import generate_random_name
 from ..utils.recruitment_variance import apply_recruitment_variance
 from . import recruitment_batch as _recruitment_batch
 from . import recruitment_candidates as _recruitment_candidates
+from . import recruitment_finalize_helpers as _recruitment_finalize_helpers
 from . import recruitment_flow as _recruitment_flow
 from . import recruitment_templates as _recruitment_templates
 
 logger = logging.getLogger(__name__)
 
 _build_candidate_batch = _recruitment_candidates.build_candidate_batch
+_build_guest_from_candidate = _recruitment_finalize_helpers.build_guest_from_candidate
+_create_recruitment_record = _recruitment_finalize_helpers.create_recruitment_record
+_delete_processed_candidates = _recruitment_finalize_helpers.delete_processed_candidates
+_ensure_guest_capacity_available = _recruitment_finalize_helpers.ensure_guest_capacity_available
+_ensure_retainer_capacity_available = _recruitment_finalize_helpers.ensure_retainer_capacity_available
+_increment_retainer_count_locked = _recruitment_finalize_helpers.increment_retainer_count_locked
+_load_locked_retainer_candidate = _recruitment_finalize_helpers.load_locked_retainer_candidate
+_remaining_guest_capacity = _recruitment_finalize_helpers.remaining_guest_capacity
 _resolve_candidate_draw_count = _recruitment_candidates.resolve_candidate_draw_count
+_save_guest_objects = _recruitment_finalize_helpers.save_guest_objects
+_split_candidates_by_capacity = _recruitment_finalize_helpers.split_candidates_by_capacity
+_validate_retainer_candidate_identity = _recruitment_finalize_helpers.validate_retainer_candidate_identity
 _build_rarity_search_order = _recruitment_templates._build_rarity_search_order
 _choose_template_by_rarity = _recruitment_templates._choose_template_by_rarity
 _choose_template_by_rarity_cached = _recruitment_templates._choose_template_by_rarity_cached
@@ -652,31 +658,20 @@ def finalize_candidate(candidate: RecruitmentCandidate) -> Guest:
     """
     from gameplay.models import Manor
 
-    # 使用 select_for_update 锁定庄园，防止并发超出容量
     manor = Manor.objects.select_for_update().get(pk=candidate.manor_id)
-    capacity = manor.guest_capacity
-    current = manor.guests.count()
-    if current >= capacity:
-        raise GuestCapacityFullError()
-    rng = random.Random()
-    template = candidate.template
-
-    # 确定是否需要使用自定义名称（普通黑/灰门客使用随机名，隐士使用原名）
-    use_custom_name = _recruitment_batch.should_use_candidate_custom_name(candidate, template)
-
-    guest = create_guest_from_template(
+    _ensure_guest_capacity_available(manor)
+    guest = _build_guest_from_candidate(
+        candidate=candidate,
         manor=manor,
-        template=template,
-        rarity=candidate.rarity,
-        archetype=candidate.archetype,
-        custom_name=candidate.display_name if use_custom_name else "",
-        rng=rng,
+        rng=random.Random(),
+        create_guest_func=create_guest_from_template,
+        should_use_candidate_custom_name=_recruitment_batch.should_use_candidate_custom_name,
     )
-    RecruitmentRecord.objects.create(
+    _create_recruitment_record(
+        recruitment_record_model=RecruitmentRecord,
         manor=manor,
-        pool=candidate.pool,
+        candidate=candidate,
         guest=guest,
-        rarity=candidate.rarity,
     )
     candidate.delete()
     _invalidate_recruitment_hall_cache(getattr(manor, "id", None))
@@ -724,17 +719,12 @@ def bulk_finalize_candidates(
 
     from gameplay.models import Manor
 
-    # 锁定庄园并检查容量
     manor = Manor.objects.select_for_update().get(pk=candidates[0].manor_id)
-    capacity = manor.guest_capacity
-    current_count = manor.guests.count()
-    available_slots = capacity - current_count
-
+    available_slots = _remaining_guest_capacity(manor)
     if available_slots <= 0:
         return [], candidates
 
-    to_process = candidates[:available_slots]
-    failed = candidates[available_slots:]
+    to_process, failed = _split_candidates_by_capacity(candidates, available_slots=available_slots)
 
     # 预加载模板并准备门客对象
     rng = random.Random()
@@ -746,10 +736,7 @@ def bulk_finalize_candidates(
     )
 
     # 批量写入数据库
-    created_guests = []
-    for guest_obj in guests_to_create:
-        guest_obj.save()
-        created_guests.append(guest_obj)
+    created_guests = _save_guest_objects(guests_to_create)
 
     records_to_create = _recruitment_batch.build_recruitment_records(
         manor=manor,
@@ -766,8 +753,10 @@ def bulk_finalize_candidates(
     if all_skills_to_create:
         GuestSkill.objects.bulk_create(all_skills_to_create)
 
-    # 批量删除候选
-    RecruitmentCandidate.objects.filter(id__in=candidate_ids_to_delete).delete()
+    _delete_processed_candidates(
+        recruitment_candidate_model=RecruitmentCandidate,
+        candidate_ids_to_delete=candidate_ids_to_delete,
+    )
     _invalidate_recruitment_hall_cache(getattr(manor, "id", None))
 
     return created_guests, failed
@@ -784,27 +773,22 @@ def convert_candidate_to_retainer(candidate: RecruitmentCandidate) -> None:
     Raises:
         ValueError: 家丁房容量已满时抛出
     """
-    candidate_id = getattr(candidate, "pk", None)
-    manor_id = getattr(candidate, "manor_id", None)
-    if not candidate_id or not manor_id:
-        raise ValueError("候选门客不存在或已处理")
+    candidate_id, manor_id = _validate_retainer_candidate_identity(candidate)
 
     from gameplay.models import Manor
 
     # 锁顺序统一为 Manor -> RecruitmentCandidate，避免与其他招募流程死锁
     manor = Manor.objects.select_for_update().get(pk=manor_id)
-    locked_candidate = (
-        RecruitmentCandidate.objects.select_for_update().filter(pk=candidate_id, manor_id=manor_id).first()
+    locked_candidate = _load_locked_retainer_candidate(
+        recruitment_candidate_model=RecruitmentCandidate,
+        candidate_id=candidate_id,
+        manor_id=manor_id,
     )
     if locked_candidate is None:
         raise ValueError("候选门客不存在或已处理")
 
-    capacity = manor.retainer_capacity
-    if manor.retainer_count >= capacity:
-        raise RetainerCapacityFullError()
-
-    manor.retainer_count += 1
-    manor.save(update_fields=["retainer_count"])
+    _ensure_retainer_capacity_available(manor)
+    _increment_retainer_count_locked(manor)
     locked_candidate.delete()
     _invalidate_recruitment_hall_cache(getattr(manor, "id", None))
 
