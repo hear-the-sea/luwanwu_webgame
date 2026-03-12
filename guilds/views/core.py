@@ -16,6 +16,7 @@ from ..constants import GUILD_CREATION_COST, GUILD_HALL_DISPLAY_LIMIT, GUILD_LIS
 from ..decorators import require_guild_leader
 from ..models import Guild
 from ..services import guild as guild_service
+from .helpers import execute_guild_action, load_guild_leader, load_recent_announcements
 
 
 @login_required
@@ -95,29 +96,35 @@ def create_guild(request):
         description = request.POST.get("description", "").strip()
         emblem = request.POST.get("emblem", "default")
 
-        try:
-            guild = guild_service.create_guild(user=request.user, name=name, description=description, emblem=emblem)
-            messages.success(request, f"恭喜！帮会【{guild.name}】创建成功！")
-            return redirect("guilds:detail", guild_id=guild.id)
-        except ValueError as e:
-            messages.error(request, str(e))
+        outcome = execute_guild_action(
+            request,
+            action=lambda: guild_service.create_guild(
+                user=request.user,
+                name=name,
+                description=description,
+                emblem=emblem,
+            ),
+            success_message=lambda guild: f"恭喜！帮会【{guild.name}】创建成功！",
+        )
+        if outcome.succeeded and outcome.result is not None:
+            return redirect("guilds:detail", guild_id=outcome.result.id)
 
     # GET请求，显示创建表单
     manor = get_object_or_404(Manor, user=request.user)
 
     # 获取金条数量（从仓库）
-    from gameplay.models import InventoryItem, ItemTemplate
+    from gameplay.models import InventoryItem
 
-    try:
-        gold_bar_template = ItemTemplate.objects.get(key="gold_bar")
-        gold_bar_item = InventoryItem.objects.filter(
+    gold_bar_count = (
+        InventoryItem.objects.filter(
             manor=manor,
-            template=gold_bar_template,
+            template__key="gold_bar",
             storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-        ).first()
-        gold_bar_count = gold_bar_item.quantity if gold_bar_item else 0
-    except ItemTemplate.DoesNotExist:
-        gold_bar_count = 0
+        )
+        .values_list("quantity", flat=True)
+        .first()
+        or 0
+    )
 
     context = {
         "manor": manor,
@@ -131,53 +138,27 @@ def create_guild(request):
 @login_required
 def guild_detail(request, guild_id):
     """帮会详情页面"""
-    guild = get_object_or_404(Guild, id=guild_id, is_active=True)
+    guild = get_object_or_404(Guild.objects.with_member_count(), id=guild_id, is_active=True)
     user = request.user
 
     # 检查是否是本帮会成员
     is_member = False
     member = None
     if hasattr(user, "guild_membership") and user.guild_membership.is_active:
-        if user.guild_membership.guild == guild:
+        if user.guild_membership.guild_id == guild.id:
             is_member = True
             member = user.guild_membership
 
-    # 获取帮会信息 - 优化查询，预加载成员数据减少 N+1
-    leader = guild.get_leader()
-    admins = guild.get_admins()
-    members = (
-        guild.members.filter(is_active=True)
-        .select_related("user__manor")
-        .only(
-            "id",
-            "position",
-            "joined_at",
-            "total_contribution",
-            "is_active",
-            "user__id",
-            "user__username",
-            "user__manor__id",
-            "user__manor__name",
-        )[:20]
-    )
-    announcements = guild.announcements.select_related("author").only(
-        "id", "type", "content", "created_at", "author__id", "author__username"
-    )[:5]
-
-    # 获取科技信息
-    technologies = None
-    if is_member:
-        technologies = guild.technologies.only("id", "tech_key", "level", "category", "max_level")
+    leader = load_guild_leader(guild)
+    announcements = load_recent_announcements(guild, limit=5)
 
     context = {
         "guild": guild,
         "is_member": is_member,
         "member": member,
         "leader": leader,
-        "admins": admins,
-        "members": members,
+        "member_count": guild.current_member_count,
         "announcements": announcements,
-        "technologies": technologies,
     }
 
     return render(request, "guilds/detail.html", context)

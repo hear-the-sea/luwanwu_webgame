@@ -2,7 +2,6 @@
 帮会贡献视图：捐献、排名、资源日志
 """
 
-from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 
@@ -13,6 +12,7 @@ from gameplay.models import Manor
 from ..constants import CONTRIBUTION_RATES, DAILY_DONATION_LIMITS
 from ..decorators import require_guild_member
 from ..services import contribution as contribution_service
+from .helpers import build_guild_member_context, execute_guild_action, load_donation_logs, load_resource_logs
 
 
 @login_required
@@ -26,21 +26,22 @@ def donate_resource(request):
         resource_type = request.POST.get("resource_type")
         amount = safe_int(request.POST.get("amount", 0), default=0, min_val=0)
 
-        try:
-            contribution_service.donate_resource(member, resource_type, amount)
-            messages.success(request, "捐赠成功！您获得了相应的贡献度")
+        outcome = execute_guild_action(
+            request,
+            action=lambda: contribution_service.donate_resource(member, resource_type, amount),
+            success_message="捐赠成功！您获得了相应的贡献度",
+            error_message_formatter=sanitize_error_message,
+        )
+        if outcome.succeeded:
             return redirect("guilds:detail", guild_id=member.guild.id)
-        except ValueError as e:
-            messages.error(request, sanitize_error_message(e))
 
     manor = get_object_or_404(Manor, user=request.user)
-    context = {
-        "guild": member.guild,
-        "member": member,
-        "manor": manor,
-        "contribution_rates": CONTRIBUTION_RATES,
-        "daily_limits": DAILY_DONATION_LIMITS,
-    }
+    context = build_guild_member_context(
+        member,
+        manor=manor,
+        contribution_rates=CONTRIBUTION_RATES,
+        daily_limits=DAILY_DONATION_LIMITS,
+    )
 
     return render(request, "guilds/donate.html", context)
 
@@ -73,14 +74,13 @@ def contribution_ranking(request):
 
     my_rank = contribution_service.get_my_contribution_rank(member, ranking_type)
 
-    context = {
-        "guild": guild,
-        "member": member,
-        "rankings": rankings,
-        "my_rank": my_rank,
-        "ranking_type": ranking_type,
-        "page": page,
-    }
+    context = build_guild_member_context(
+        member,
+        rankings=rankings,
+        my_rank=my_rank,
+        ranking_type=ranking_type,
+        page=page,
+    )
 
     return render(request, "guilds/contribution_ranking.html", context)
 
@@ -90,12 +90,8 @@ def contribution_ranking(request):
 def resource_status(request):
     """资源状态"""
     member = request.guild_member
-    guild = member.guild
 
-    context = {
-        "guild": guild,
-        "member": member,
-    }
+    context = build_guild_member_context(member)
 
     return render(request, "guilds/resources.html", context)
 
@@ -105,15 +101,10 @@ def resource_status(request):
 def donation_logs(request):
     """捐赠日志"""
     member = request.guild_member
-    guild = member.guild
-
-    # 获取捐赠日志
-    logs = guild.donation_logs.all().select_related("member__user__manor")[:50]
-
-    context = {
-        "guild": guild,
-        "logs": logs,
-    }
+    context = build_guild_member_context(
+        member,
+        logs=load_donation_logs(member.guild, limit=50),
+    )
 
     return render(request, "guilds/donation_logs.html", context)
 
@@ -123,14 +114,9 @@ def donation_logs(request):
 def resource_logs(request):
     """资源日志"""
     member = request.guild_member
-    guild = member.guild
-
-    # 获取资源流水
-    logs = guild.resource_logs.all().select_related("related_user")[:50]
-
-    context = {
-        "guild": guild,
-        "logs": logs,
-    }
+    context = build_guild_member_context(
+        member,
+        logs=load_resource_logs(member.guild, limit=50),
+    )
 
     return render(request, "guilds/resource_logs.html", context)

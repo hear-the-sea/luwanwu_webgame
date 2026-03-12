@@ -1,0 +1,21 @@
+production:
+  ji:
+    grain_cost: 50
+    base_duration: 120
+    required_animal_husbandry: 1
+  ya:
+    grain_cost: 100
+    base_duration: 180
+    required_animal_husbandry: 3
+  e:
+    grain_cost: 200
+    base_duration: 240
+    required_animal_husbandry: 5
+  zhu:
+    grain_cost: 400
+    base_duration: 300
+    required_animal_husbandry: 7
+  niu:
+    grain_cost: 750
+    base_duration: 360
+    required_animal_husbandry: 9

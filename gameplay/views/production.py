@@ -24,6 +24,13 @@ from core.utils import safe_positive_int, sanitize_error_message
 from core.utils.rate_limit import rate_limit_redirect
 from gameplay.constants import UIConstants
 from gameplay.services import ensure_manor, get_player_technology_level, refresh_manor_state
+from gameplay.views.production_helpers import (
+    annotate_blueprint_synthesis_options,
+    build_categories_with_all,
+    get_filtered_equipment_options,
+    normalize_forge_category,
+    resolve_decompose_category,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -333,18 +340,6 @@ class ForgeView(LoginRequiredMixin, TemplateView):
     ITEMS_PER_PAGE = UIConstants.FORGE_ITEMS_PER_PAGE
     DECOMPOSE_ITEMS_PER_PAGE = 9
 
-    @staticmethod
-    def _sort_equipment_options(equipment_options):
-        """装备排序：可锻造优先，其次按需求等级降序。"""
-        return sorted(
-            equipment_options,
-            key=lambda item: (
-                item.get("is_unlocked", False) and item.get("can_afford", False),
-                item.get("required_forging", 0),
-            ),
-            reverse=True,
-        )
-
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         manor = ensure_manor(self.request.user)
@@ -374,51 +369,36 @@ class ForgeView(LoginRequiredMixin, TemplateView):
 
         current_mode = _normalize_forge_mode(self.request.GET.get("mode"), default="synthesize")
 
-        # 获取当前选中的类别（支持"all"表示全部）
-        current_category = self.request.GET.get("category", "all")
-        if current_category in DECOMPOSE_WEAPON_CATEGORIES:
-            current_category = "weapon"
         active_categories = DECOMPOSE_CATEGORIES
+        current_category = normalize_forge_category(
+            self.request.GET.get("category", "all"),
+            active_categories=active_categories,
+            weapon_categories=DECOMPOSE_WEAPON_CATEGORIES,
+        )
 
-        valid_categories = ["all"] + list(active_categories.keys())
-        if current_category not in valid_categories:
-            current_category = "all"
-
-        # 获取装备列表（按类别过滤或全部）
-        if current_category == "all":
-            equipment_list = get_equipment_options(manor)
-        elif current_category == "weapon":
-            equipment_list = [
-                opt for opt in get_equipment_options(manor) if opt.get("category") in DECOMPOSE_WEAPON_CATEGORIES
-            ]
-        else:
-            equipment_list = get_equipment_options(manor, category=current_category)
-        equipment_list = self._sort_equipment_options(equipment_list)
+        equipment_list = get_filtered_equipment_options(
+            manor=manor,
+            current_category=current_category,
+            weapon_categories=DECOMPOSE_WEAPON_CATEGORIES,
+            get_equipment_options=get_equipment_options,
+        )
 
         # 分页处理
         paginator = Paginator(equipment_list, self.ITEMS_PER_PAGE)
         page_number = self.request.GET.get("page", 1)
         page_obj = paginator.get_page(page_number)
 
-        # 构建带"全部"选项的类别字典
-        categories_with_all = {"all": "全部"}
-        categories_with_all.update(active_categories)
+        categories_with_all = build_categories_with_all(active_categories)
 
-        blueprint_synthesis_options = get_blueprint_synthesis_options(manor)
-        for recipe in blueprint_synthesis_options:
-            result_category = infer_equipment_category(
-                recipe.get("result_key", ""),
-                recipe.get("result_effect_type", ""),
-            )
-            merged_result_category = to_decompose_category(result_category)
-            recipe["result_category"] = merged_result_category
-            recipe["result_category_name"] = active_categories.get(merged_result_category, merged_result_category)
-        if current_category != "all":
-            blueprint_synthesis_options = [
-                recipe for recipe in blueprint_synthesis_options if recipe.get("result_category") == current_category
-            ]
+        blueprint_synthesis_options = annotate_blueprint_synthesis_options(
+            get_blueprint_synthesis_options(manor),
+            active_categories=active_categories,
+            current_category=current_category,
+            infer_equipment_category=infer_equipment_category,
+            to_decompose_category=to_decompose_category,
+        )
 
-        decompose_category = None if current_category == "all" else current_category
+        decompose_category = resolve_decompose_category(current_category)
         decomposable_equipment = get_decomposable_equipment_options(manor, category=decompose_category)
         decompose_paginator = Paginator(decomposable_equipment, self.DECOMPOSE_ITEMS_PER_PAGE)
         decompose_page_obj = decompose_paginator.get_page(page_number)

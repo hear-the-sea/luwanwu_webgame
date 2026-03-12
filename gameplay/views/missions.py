@@ -13,15 +13,12 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Prefetch
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
-from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
-from core.decorators import flash_unexpected_view_error
 from core.exceptions import GameError
-from core.utils import safe_int, sanitize_error_message
-from core.utils.cache_lock import acquire_best_effort_lock, release_best_effort_lock
+from core.utils import safe_int
 from gameplay.constants import UIConstants
 from gameplay.models import MissionRun, MissionTemplate, ResourceType
 from gameplay.services import (
@@ -39,219 +36,31 @@ from gameplay.services import (
 from gameplay.services.recruitment.recruitment import get_player_troops
 from guests.models import Guest, GuestStatus, GuestTemplate, SkillBook
 
-# 任务卡道具 key
-MISSION_CARD_KEY = "mission_card"
-MISSION_ACTION_LOCK_SECONDS = 5
-_LOCAL_LOCK_PREFIX = "local:"
+from .mission_helpers import (
+    MISSION_CARD_KEY,
+    acquire_mission_action_lock,
+    build_drop_lists,
+    build_mission_data,
+    build_selection_summary,
+    build_troop_config,
+    collect_mission_asset_keys,
+    handle_known_mission_error,
+    handle_unexpected_mission_error,
+    mission_tasks_redirect,
+    parse_positive_ids,
+    release_mission_action_lock,
+    resolve_mission_or_redirect,
+)
+
 logger = logging.getLogger(__name__)
 
-
-def _handle_unexpected_mission_error(
-    request: HttpRequest,
-    exc: Exception,
-    *,
-    log_message: str,
-    log_args: tuple[object, ...],
-) -> None:
-    flash_unexpected_view_error(
-        request,
-        exc,
-        log_message=log_message,
-        log_args=log_args,
-        logger_instance=logger,
-    )
-
-
-def _handle_known_mission_error(request: HttpRequest, exc: GameError | ValueError) -> None:
-    messages.error(request, sanitize_error_message(exc))
-
-
-def _normalize_mission_key(raw_value: Any) -> str | None:
-    if raw_value is None:
-        return None
-    mission_key = str(raw_value).strip()
-    return mission_key or None
-
-
-def _mission_tasks_url(mission_key: str | None = None) -> str:
-    base_url = reverse("gameplay:tasks")
-    if mission_key:
-        return f"{base_url}?mission={mission_key}"
-    return base_url
-
-
-def _mission_tasks_redirect(mission_key: str | None = None) -> HttpResponse:
-    return redirect(_mission_tasks_url(mission_key))
-
-
-def _resolve_mission_or_redirect(
-    request: HttpRequest, mission_key_raw: Any
-) -> tuple[MissionTemplate | None, HttpResponse | None]:
-    mission_key = _normalize_mission_key(mission_key_raw)
-    if mission_key is None:
-        messages.error(request, "请选择任务")
-        return None, _mission_tasks_redirect()
-
-    mission = MissionTemplate.objects.filter(key=mission_key).first()
-    if mission is None:
-        messages.error(request, "任务不存在")
-        return None, _mission_tasks_redirect(mission_key)
-
-    return mission, None
-
-
-def _parse_positive_ids(raw_values: list[str]) -> list[int] | None:
-    if not raw_values:
-        return []
-
-    parsed: list[int] = []
-    seen: set[int] = set()
-    for raw in raw_values:
-        value = safe_int(raw, default=None)
-        if value is None or value <= 0:
-            return None
-        if value in seen:
-            continue
-        parsed.append(value)
-        seen.add(value)
-    return parsed
-
-
-def _mission_action_lock_key(action: str, manor_id: int, scope: str) -> str:
-    return f"mission:view_lock:{action}:{manor_id}:{scope}"
-
-
-def _acquire_mission_action_lock(action: str, manor_id: int, scope: str) -> tuple[bool, str, str | None]:
-    key = _mission_action_lock_key(action, manor_id, scope)
-    acquired, from_cache, lock_token = acquire_best_effort_lock(
-        key,
-        timeout_seconds=MISSION_ACTION_LOCK_SECONDS,
-        logger=logger,
-        log_context="mission action lock",
-    )
-    if not acquired:
-        return False, "", None
-    if from_cache:
-        return True, key, lock_token
-    return True, f"{_LOCAL_LOCK_PREFIX}{key}", lock_token
-
-
-def _release_mission_action_lock(lock_key: str, lock_token: str | None) -> None:
-    if not lock_key:
-        return
-    if lock_key.startswith(_LOCAL_LOCK_PREFIX):
-        release_best_effort_lock(
-            lock_key[len(_LOCAL_LOCK_PREFIX) :],
-            from_cache=False,
-            lock_token=lock_token,
-            logger=logger,
-            log_context="mission action lock",
-        )
-        return
-    release_best_effort_lock(
-        lock_key,
-        from_cache=True,
-        lock_token=lock_token,
-        logger=logger,
-        log_context="mission action lock",
-    )
-
-
-def _collect_mission_asset_keys(missions: list[MissionTemplate]) -> tuple[set[str], set[str], set[str]]:
-    enemy_keys: set[str] = set()
-    troop_keys: set[str] = set()
-    drop_keys: set[str] = set()
-
-    for mission in missions:
-        for entry in mission.enemy_guests or []:
-            if isinstance(entry, str):
-                enemy_keys.add(entry)
-            elif isinstance(entry, dict):
-                key = entry.get("key")
-                if key:
-                    enemy_keys.add(key)
-        troop_keys.update((mission.enemy_troops or {}).keys())
-        drop_keys.update((mission.drop_table or {}).keys())
-
-    return enemy_keys, troop_keys, drop_keys
-
-
-def _parse_drop_value(value: Any) -> tuple[float | None, int | None]:
-    chance = None
-    count = None
-    if isinstance(value, dict):
-        raw_chance = value.get("chance", value.get("probability"))
-        raw_count = value.get("count", value.get("quantity", value.get("amount")))
-        try:
-            chance = float(raw_chance) if raw_chance is not None else None
-        except (TypeError, ValueError):
-            chance = None
-        try:
-            count = int(raw_count) if raw_count is not None else None
-        except (TypeError, ValueError):
-            count = None
-    else:
-        try:
-            number = float(value)
-        except (TypeError, ValueError):
-            number = None
-        if number is not None and 0 < number < 1:
-            chance = number
-            count = 1
-        elif number is not None and number >= 1:
-            count = int(number)
-
-    if chance is not None and count is None:
-        count = 1
-    return chance, count
-
-
-def _resolve_drop_label(
-    key: str,
-    drop_labels: dict[str, str],
-    item_templates: dict[str, Any],
-    book_labels: dict[str, str],
-) -> str:
-    label = drop_labels.get(key, key)
-    if label != key:
-        return label
-    tpl = item_templates.get(key)
-    if tpl:
-        return tpl.name
-    if key in book_labels:
-        return book_labels[key]
-    return key
-
-
-def _build_drop_lists(
-    selected_mission: MissionTemplate,
-    drop_labels: dict[str, str],
-    item_templates: dict[str, Any],
-    book_labels: dict[str, str],
-    loot_rarities: dict[str, str],
-) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
-    guaranteed_drops: list[dict[str, str]] = []
-    probability_drops: list[dict[str, str]] = []
-
-    for key, val in (selected_mission.drop_table or {}).items():
-        label = _resolve_drop_label(key, drop_labels, item_templates, book_labels)
-        chance, count = _parse_drop_value(val)
-        rarity = loot_rarities.get(key) or "default"
-
-        display_label = f"{label} x{count}" if (count is not None and count >= 1) else label
-        if chance is not None and 0 < chance < 1:
-            probability_drops.append({"label": display_label, "rarity": rarity})
-        else:
-            guaranteed_drops.append({"label": display_label, "rarity": rarity})
-
-    for key, val in (selected_mission.probability_drop_table or {}).items():
-        label = _resolve_drop_label(key, drop_labels, item_templates, book_labels)
-        _, count = _parse_drop_value(val)
-        display_label = f"{label} x{count}" if (count is not None and count >= 1) else label
-        rarity = loot_rarities.get(key) or "default"
-        probability_drops.append({"label": display_label, "rarity": rarity})
-
-    return guaranteed_drops, probability_drops
+# Backward-compatible aliases for existing tests and internal monkeypatch hooks.
+_acquire_mission_action_lock = acquire_mission_action_lock
+_release_mission_action_lock = release_mission_action_lock
+_resolve_mission_or_redirect = resolve_mission_or_redirect
+_mission_tasks_redirect = mission_tasks_redirect
+_parse_positive_ids = parse_positive_ids
+_build_drop_lists = build_drop_lists
 
 
 class TaskBoardView(LoginRequiredMixin, TemplateView):
@@ -265,22 +74,7 @@ class TaskBoardView(LoginRequiredMixin, TemplateView):
         attempts: dict[str, int],
         extra_attempts: dict[str, int],
     ) -> list[dict[str, Any]]:
-        mission_data: list[dict[str, Any]] = []
-        for mission in missions:
-            used = attempts.get(mission.key, 0)
-            extra = extra_attempts.get(mission.key, 0)
-            daily_limit = mission.daily_limit + extra
-            remaining = max(0, daily_limit - used)
-            mission_data.append(
-                {
-                    "mission": mission,
-                    "used": used,
-                    "remaining": remaining,
-                    "daily_limit": daily_limit,
-                    "extra": extra,
-                }
-            )
-        return mission_data
+        return build_mission_data(missions, attempts, extra_attempts)
 
     def _build_selection_summary(
         self,
@@ -289,31 +83,10 @@ class TaskBoardView(LoginRequiredMixin, TemplateView):
         attempts: dict[str, int],
         extra_attempts: dict[str, int],
     ) -> tuple[MissionTemplate | None, int, int, int]:
-        selected_mission = missions_by_key.get(selected_key) if selected_key else None
-        selected_attempts = attempts.get(selected_key, 0) if selected_key else 0
-        selected_extra = extra_attempts.get(selected_key, 0) if selected_key else 0
-        selected_daily_limit = (selected_mission.daily_limit + selected_extra) if selected_mission else 0
-        selected_remaining = max(0, selected_daily_limit - selected_attempts)
-        return selected_mission, selected_attempts, selected_daily_limit, selected_remaining
+        return build_selection_summary(selected_key, missions_by_key, attempts, extra_attempts)
 
     def _build_troop_config(self) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
-        from battle.troops import load_troop_templates
-
-        troop_templates = load_troop_templates()
-        troop_template_items = sorted(
-            troop_templates.items(),
-            key=lambda item: safe_int(item[1].get("priority"), default=0) or 0,
-        )
-        config_items = [
-            {
-                "key": key,
-                "label": data.get("label", key),
-                "description": data.get("description", "") or "",
-                "value": 0,
-            }
-            for key, data in troop_template_items
-        ]
-        return troop_templates, config_items
+        return build_troop_config()
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -324,7 +97,7 @@ class TaskBoardView(LoginRequiredMixin, TemplateView):
         missions_by_key = {mission.key: mission for mission in missions}
         attempts = bulk_mission_attempts_today(manor, missions)
         extra_attempts = bulk_get_mission_extra_attempts(manor, missions)
-        enemy_keys, troop_keys, drop_keys = _collect_mission_asset_keys(missions)
+        enemy_keys, troop_keys, drop_keys = collect_mission_asset_keys(missions)
         guest_templates = {
             tpl.key: tpl for tpl in GuestTemplate.objects.filter(key__in=enemy_keys).only("key", "name", "avatar")
         }
@@ -475,9 +248,9 @@ class AcceptMissionView(LoginRequiredMixin, TemplateView):
                 else:
                     messages.success(request, f"{mission.name} 已出征，战报稍后送达。")
             except (GameError, ValueError) as exc:
-                _handle_known_mission_error(request, exc)
+                handle_known_mission_error(request, exc)
             except Exception as exc:
-                _handle_unexpected_mission_error(
+                handle_unexpected_mission_error(
                     request,
                     exc,
                     log_message="Unexpected mission accept error: manor_id=%s user_id=%s mission_key=%s mission_id=%s",
@@ -487,6 +260,7 @@ class AcceptMissionView(LoginRequiredMixin, TemplateView):
                         mission.key,
                         getattr(mission, "id", None),
                     ),
+                    logger_instance=logger,
                 )
         finally:
             _release_mission_action_lock(lock_key, lock_token)
@@ -514,9 +288,9 @@ def retreat_mission_view(request: HttpRequest, pk: int) -> HttpResponse:
             eta = run.return_at.strftime("%H:%M:%S") if run.return_at else ""
             messages.info(request, f"{run.mission.name} 已撤退，预计返程：{eta}")
         except (GameError, ValueError) as exc:
-            _handle_known_mission_error(request, exc)
+            handle_known_mission_error(request, exc)
         except Exception as exc:
-            _handle_unexpected_mission_error(
+            handle_unexpected_mission_error(
                 request,
                 exc,
                 log_message="Unexpected mission retreat error: manor_id=%s user_id=%s run_id=%s mission_id=%s",
@@ -526,6 +300,7 @@ def retreat_mission_view(request: HttpRequest, pk: int) -> HttpResponse:
                     pk,
                     getattr(run, "mission_id", None),
                 ),
+                logger_instance=logger,
             )
     finally:
         _release_mission_action_lock(lock_key, lock_token)
@@ -556,9 +331,9 @@ def retreat_scout_view(request: HttpRequest, pk: int) -> HttpResponse:
             request_scout_retreat(record)
             messages.info(request, f"侦察 {record.defender.display_name} 已撤退，探子正在返程")
         except (GameError, ValueError) as exc:
-            _handle_known_mission_error(request, exc)
+            handle_known_mission_error(request, exc)
         except Exception as exc:
-            _handle_unexpected_mission_error(
+            handle_unexpected_mission_error(
                 request,
                 exc,
                 log_message="Unexpected scout retreat error: manor_id=%s user_id=%s record_id=%s defender_id=%s",
@@ -568,6 +343,7 @@ def retreat_scout_view(request: HttpRequest, pk: int) -> HttpResponse:
                     pk,
                     getattr(record, "defender_id", None),
                 ),
+                logger_instance=logger,
             )
     finally:
         _release_mission_action_lock(lock_key, lock_token)
@@ -609,9 +385,9 @@ def use_mission_card_view(request: HttpRequest) -> HttpResponse:
             messages.success(request, f"使用任务卡成功，{mission.name} 今日次数+1")
         except (GameError, ValueError) as exc:
             # 任务卡不足等业务错误
-            messages.error(request, sanitize_error_message(exc))
+            handle_known_mission_error(request, exc)
         except Exception as exc:
-            _handle_unexpected_mission_error(
+            handle_unexpected_mission_error(
                 request,
                 exc,
                 log_message="Unexpected mission card use error: manor_id=%s user_id=%s mission_key=%s mission_id=%s",
@@ -621,6 +397,7 @@ def use_mission_card_view(request: HttpRequest) -> HttpResponse:
                     mission.key,
                     getattr(mission, "id", None),
                 ),
+                logger_instance=logger,
             )
     finally:
         _release_mission_action_lock(lock_key, lock_token)

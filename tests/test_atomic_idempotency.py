@@ -158,3 +158,28 @@ def test_finalize_technology_upgrade_keeps_success_when_notification_message_fai
     tech.refresh_from_db()
     assert tech.level == 1
     assert tech.is_upgrading is False
+
+
+@pytest.mark.django_db
+def test_finalize_technology_upgrade_keeps_success_when_notification_ws_fails(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="tech_finalize_notify_ws_fail", password="pass12345")
+    manor = ensure_manor(user)
+
+    now = timezone.now()
+    tech = PlayerTechnology.objects.create(
+        manor=manor,
+        tech_key="march_art",
+        level=0,
+        is_upgrading=True,
+        upgrade_complete_at=now - timezone.timedelta(seconds=1),
+    )
+
+    monkeypatch.setattr(
+        "gameplay.services.technology.notify_user",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("ws backend down")),
+    )
+
+    assert finalize_technology_upgrade(tech, send_notification=True) is True
+    tech.refresh_from_db()
+    assert tech.level == 1
+    assert tech.is_upgrading is False

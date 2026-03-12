@@ -8,7 +8,7 @@
     <div class="tw-section-header">
         <div>
             <h1>成员列表</h1>
-            <p class="caption">{{ guild.name }} · 成员数：{{ guild.current_member_count }} / {{ guild.member_capacity }}</p>
+            <p class="caption">{{ guild.name }} · 成员数：{{ member_count }} / {{ guild.member_capacity }}</p>
         </div>
         <div class="flex gap-2">
             {% if member.can_manage %}
@@ -115,7 +115,7 @@
         <div class="tw-guild-stats-grid">
             <div class="tw-guild-stat-item">
                 <h4>总成员数</h4>
-                <p class="tw-guild-stat-value stat-total">{{ guild.current_member_count }}</p>
+                <p class="tw-guild-stat-value stat-total">{{ member_count }}</p>
                 <p class="tw-guild-stat-hint">容量：{{ guild.member_capacity }}</p>
             </div>
             <div class="tw-guild-stat-item">

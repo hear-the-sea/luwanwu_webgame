@@ -8,6 +8,8 @@ from django.utils import timezone
 
 from core.config import GUEST
 
+from . import growth_rules as _growth_rules
+
 if TYPE_CHECKING:
     from .managers import GuestManager as GuestManagerType
 
@@ -55,30 +57,9 @@ class GuestStatus(models.TextChoices):
     INJURED = "injured", "重伤"
 
 
-RARITY_HP_PROFILES = {
-    # 每个稀有度的基础HP配置
-    # HP计算公式：HP = base_hp + defense × 50
-    # 基础血量大幅下调，让防御属性成为HP的主要来源
-    GuestRarity.BLACK: {"base": 100},
-    GuestRarity.GRAY: {"base": 250},
-    GuestRarity.GREEN: {"base": 400},
-    GuestRarity.RED: {"base": 450},
-    GuestRarity.BLUE: {"base": 600},
-    GuestRarity.PURPLE: {"base": 800},
-    GuestRarity.ORANGE: {"base": 1000},
-}
-
-RARITY_SKILL_POINT_GAINS = {
-    # 每级固定+1自由点，所有稀有度一致
-    # 自由点可由玩家自由分配到任意属性，提供自定义成长的灵活性
-    GuestRarity.BLACK: 1,
-    GuestRarity.GRAY: 1,
-    GuestRarity.GREEN: 1,
-    GuestRarity.BLUE: 1,
-    GuestRarity.RED: 1,
-    GuestRarity.PURPLE: 1,
-    GuestRarity.ORANGE: 1,
-}
+# 门客全局成长默认值改由 data/guest_growth_rules.yaml 提供
+RARITY_HP_PROFILES = _growth_rules.RARITY_HP_PROFILES
+RARITY_SKILL_POINT_GAINS = _growth_rules.RARITY_SKILL_POINT_GAINS
 
 # 成长率配置已移除，改用直接数值成长
 # 属性分配逻辑见 guests/utils/attribute_growth.py

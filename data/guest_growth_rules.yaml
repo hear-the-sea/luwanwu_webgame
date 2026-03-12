@@ -1,0 +1,45 @@
+rarity_hp_profiles:
+  black:
+    base: 100
+  gray:
+    base: 250
+  green:
+    base: 400
+  red:
+    base: 450
+  blue:
+    base: 600
+  purple:
+    base: 800
+  orange:
+    base: 1000
+
+rarity_skill_point_gains:
+  black: 1
+  gray: 1
+  green: 1
+  red: 1
+  blue: 1
+  purple: 1
+  orange: 1
+
+rarity_attribute_growth_range:
+  black: [1, 3]
+  gray: [2, 5]
+  green: [3, 7]
+  red: [4, 7]
+  blue: [5, 9]
+  purple: [6, 11]
+  orange: [6, 14]
+
+archetype_attribute_weights:
+  military:
+    force: 40
+    intellect: 15
+    defense: 23
+    agility: 22
+  civil:
+    force: 20
+    intellect: 40
+    defense: 20
+    agility: 20

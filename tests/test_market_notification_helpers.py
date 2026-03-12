@@ -1,0 +1,92 @@
+from __future__ import annotations
+
+from types import SimpleNamespace
+
+from trade.services import market_notification_helpers
+
+
+def test_send_purchase_notifications_returns_mail_flags_and_notifies_seller():
+    calls = {"messages": [], "notifications": []}
+
+    def _safe_create_message(**kwargs):
+        calls["messages"].append(kwargs)
+        return True
+
+    def _safe_notify_user(user_id, payload, *, log_context):
+        calls["notifications"].append((user_id, payload, log_context))
+
+    buyer = SimpleNamespace(user=SimpleNamespace(username="buyer"))
+    seller = SimpleNamespace(user=SimpleNamespace(username="seller"), user_id=9)
+    listing = SimpleNamespace(
+        item_template=SimpleNamespace(name="青锋剑", key="equip_qingfeng"),
+        quantity=2,
+        total_price=5000,
+        unit_price=2500,
+        seller=seller,
+        seller_id=1,
+        sold_at=SimpleNamespace(strftime=lambda _fmt: "2026-03-12 12:00:00"),
+    )
+
+    buyer_sent, seller_sent = market_notification_helpers.send_purchase_notifications(
+        buyer=buyer,
+        listing=listing,
+        tax_amount=500,
+        seller_received=4500,
+        safe_create_message=_safe_create_message,
+        safe_notify_user=_safe_notify_user,
+    )
+
+    assert buyer_sent is True
+    assert seller_sent is True
+    assert len(calls["messages"]) == 2
+    assert calls["notifications"] == [
+        (
+            9,
+            {
+                "kind": "market_sold",
+                "title": "【交易成功】您的物品已售出",
+                "item_name": "青锋剑",
+                "item_key": "equip_qingfeng",
+                "quantity": 2,
+                "silver_received": 4500,
+            },
+            "market sold notification",
+        )
+    ]
+
+
+def test_send_purchase_notifications_skips_seller_branch_without_seller_id():
+    buyer = SimpleNamespace(user=SimpleNamespace(username="buyer"))
+    listing = SimpleNamespace(
+        item_template=SimpleNamespace(name="匿名物品", key="item"),
+        quantity=1,
+        total_price=100,
+        unit_price=100,
+        seller=SimpleNamespace(user=SimpleNamespace(username="npc"), user_id=0),
+        seller_id=None,
+        sold_at=SimpleNamespace(strftime=lambda _fmt: "2026-03-12 12:00:00"),
+    )
+
+    calls = {"messages": 0, "notifications": 0}
+
+    buyer_sent, seller_sent = market_notification_helpers.send_purchase_notifications(
+        buyer=buyer,
+        listing=listing,
+        tax_amount=10,
+        seller_received=90,
+        safe_create_message=lambda **_kwargs: calls.__setitem__("messages", calls["messages"] + 1) or True,
+        safe_notify_user=lambda *_args, **_kwargs: calls.__setitem__("notifications", calls["notifications"] + 1),
+    )
+
+    assert buyer_sent is True
+    assert seller_sent is False
+    assert calls == {"messages": 1, "notifications": 0}
+
+
+def test_build_cancel_listing_result_returns_expected_shape():
+    listing = SimpleNamespace(item_template=SimpleNamespace(name="铁甲"), quantity=3)
+
+    assert market_notification_helpers.build_cancel_listing_result(listing=listing) == {
+        "item_name": "铁甲",
+        "quantity": 3,
+    }

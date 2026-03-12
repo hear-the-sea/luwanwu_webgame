@@ -5,29 +5,76 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from functools import lru_cache
+from pathlib import Path
 from typing import Dict
 
+from django.conf import settings
 from django.db import transaction
-from django.db.models import F, QuerySet
+from django.db.models import QuerySet
 from django.utils import timezone
 
 from core.config import TRADE
+from core.utils.yaml_loader import load_yaml_data
 from gameplay.models import InventoryItem, ItemTemplate, Manor, ResourceEvent
 from gameplay.models.items import LEGACY_TOOL_EFFECT_TYPES
 from gameplay.services.resources import grant_resources_locked, spend_resources_locked
 from gameplay.services.utils.messages import create_message
 from gameplay.services.utils.notifications import notify_user
 from trade.models import MarketListing, MarketTransaction
+from trade.services.market_expiration import expire_listings_queryset as _expire_listings_queryset_impl
+from trade.services.market_listing_helpers import (
+    create_listing_record,
+    decrement_listing_inventory,
+    load_tradeable_item_template,
+    lock_listing_inventory_item,
+    normalize_listing_inputs,
+    validate_gold_bar_availability,
+    validate_listing_inventory,
+    validate_listing_total_price,
+)
+from trade.services.market_notification_helpers import build_cancel_listing_result as _build_cancel_listing_result_impl
+from trade.services.market_notification_helpers import (
+    restore_cancelled_listing_inventory as _restore_cancelled_listing_inventory_impl,
+)
+from trade.services.market_notification_helpers import send_purchase_notifications as _send_purchase_notifications_impl
+from trade.services.market_purchase_helpers import (
+    get_locked_listing_for_purchase as _get_locked_listing_for_purchase_impl,
+)
+from trade.services.market_purchase_helpers import (
+    grant_listing_item_to_buyer_locked as _grant_listing_item_to_buyer_locked_impl,
+)
+from trade.services.market_purchase_helpers import lock_purchase_parties as _lock_purchase_parties_impl
+from trade.services.market_purchase_helpers import validate_listing_for_purchase as _validate_listing_for_purchase_impl
+from trade.services.market_rules import DEFAULT_TRADE_MARKET_RULES
+from trade.services.market_rules import normalize_trade_market_rules as _normalize_trade_market_rules
 
 logger = logging.getLogger(__name__)
+_build_cancel_listing_result = _build_cancel_listing_result_impl
+_restore_cancelled_listing_inventory = _restore_cancelled_listing_inventory_impl
+
+TRADE_MARKET_RULES_PATH = Path(settings.BASE_DIR) / "data" / "trade_market_rules.yaml"
+
+
+@lru_cache(maxsize=1)
+def load_trade_market_rules() -> dict[str, dict[int, int]]:
+    raw = load_yaml_data(
+        TRADE_MARKET_RULES_PATH,
+        logger=logger,
+        context="trade market rules",
+        default=DEFAULT_TRADE_MARKET_RULES,
+    )
+    return _normalize_trade_market_rules(raw)
+
+
+def clear_trade_market_rules_cache() -> None:
+    global LISTING_FEES
+    load_trade_market_rules.cache_clear()
+    LISTING_FEES = dict(load_trade_market_rules()["listing_fees"])
+
 
 # 手续费配置
-LISTING_FEES = {
-    7200: 5000,  # 2小时 -> 5000银两
-    28800: 10000,  # 8小时 -> 10000银两
-    86400: 20000,  # 24小时 -> 20000银两
-}
+LISTING_FEES = dict(load_trade_market_rules()["listing_fees"])
 
 # 从 core.config 导入配置
 TRANSACTION_TAX_RATE = TRADE.TRANSACTION_TAX_RATE
@@ -72,18 +119,6 @@ def _safe_notify_user(user_id: int, payload: dict, *, log_context: str) -> None:
         notify_user(user_id, payload, log_context=log_context)
     except Exception as exc:
         logger.warning("market notify_user failed: user_id=%s error=%s", user_id, exc, exc_info=True)
-
-
-def _normalize_expire_limit(limit: int | None) -> int | None:
-    if limit is None:
-        return None
-    try:
-        parsed = int(limit)
-    except (TypeError, ValueError):
-        raise ValueError("limit 必须是整数")
-    if parsed <= 0:
-        return 0
-    return parsed
 
 
 def get_listing_fee(duration: int) -> int:
@@ -148,22 +183,14 @@ def create_listing(
     Raises:
         ValueError: 验证失败时抛出异常
     """
-    quantity = _safe_int(quantity, 0)
-    unit_price = _safe_int(unit_price, -1)
-    duration = _safe_int(duration, -1)
+    quantity, unit_price, duration = normalize_listing_inputs(quantity, unit_price, duration, safe_int=_safe_int)
 
     # 验证时长
     if duration not in LISTING_FEES:
         raise ValueError(f"无效的上架时长，请选择 {list(LISTING_FEES.keys())}")
 
     # 获取物品模板
-    item_template = ItemTemplate.objects.filter(key=item_key).first()
-    if not item_template:
-        raise ValueError("物品不存在")
-
-    # 验证是否可交易
-    if not item_template.tradeable:
-        raise ValueError("该物品不可交易")
+    item_template = load_tradeable_item_template(item_template_model=ItemTemplate, item_key=item_key)
 
     # 验证价格
     validate_listing_price(item_template, unit_price)
@@ -187,63 +214,42 @@ def create_listing(
 
         # 步骤2：锁定物品库存行并验证数量
         # IMPORTANT: 必须指定storage_location避免仓库和藏宝阁的同名物品冲突
-        inventory_item = (
-            InventoryItem.objects.select_for_update()
-            .filter(
-                manor=locked_manor,
-                template=item_template,
-                storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-            )
-            .first()
+        inventory_item = lock_listing_inventory_item(
+            inventory_item_model=InventoryItem,
+            locked_manor=locked_manor,
+            item_template=item_template,
         )
-
-        if not inventory_item or inventory_item.quantity < quantity:
-            raise ValueError("物品数量不足")
+        validate_listing_inventory(inventory_item=inventory_item, quantity=quantity)
 
         # 金条需要特殊检查：考虑拍卖冻结的金条
         if item_template.key == "gold_bar":
             from .auction_service import get_frozen_gold_bars
 
             frozen = get_frozen_gold_bars(manor)
-            available = inventory_item.quantity - frozen
-            if available < quantity:
-                raise ValueError(f"可用金条不足（当前可用 {available} 个，{frozen} 个被拍卖冻结）")
+            validate_gold_bar_availability(inventory_item=inventory_item, quantity=quantity, frozen=frozen)
 
         # 步骤3：使用F()表达式+条件约束原子性扣减库存
         # quantity__gte条件确保不会扣成负数（双重保险）
-        updated_rows = InventoryItem.objects.filter(pk=inventory_item.pk, quantity__gte=quantity).update(
-            quantity=F("quantity") - quantity, updated_at=timezone.now()
+        decrement_listing_inventory(
+            inventory_item_model=InventoryItem, inventory_item=inventory_item, quantity=quantity
         )
 
-        if not updated_rows:
-            raise ValueError("物品数量不足或已被其他操作占用")
-
-        # 步骤3.5：清理零库存记录，保持数据库整洁
-        # 使用条件删除避免竞态条件
-        InventoryItem.objects.filter(
-            pk=inventory_item.pk,
-            quantity=0,
-        ).delete()
-
         # 步骤4：创建挂单记录
-        total_price = unit_price * quantity
+        total_price = validate_listing_total_price(
+            unit_price=unit_price,
+            quantity=quantity,
+            max_total_price=MAX_TOTAL_PRICE,
+        )
 
-        # 防止整数溢出（数据库 IntegerField 最大约21亿）
-        if total_price > MAX_TOTAL_PRICE:
-            raise ValueError(f"总价不能超过 {MAX_TOTAL_PRICE:,} 银两")
-
-        expires_at = timezone.now() + timedelta(seconds=duration)
-
-        listing = MarketListing.objects.create(
-            seller=locked_manor,
+        listing = create_listing_record(
+            market_listing_model=MarketListing,
+            locked_manor=locked_manor,
             item_template=item_template,
             quantity=quantity,
             unit_price=unit_price,
             total_price=total_price,
             duration=duration,
             listing_fee=listing_fee,
-            expires_at=expires_at,
-            status=MarketListing.Status.ACTIVE,
         )
 
     return listing
@@ -289,59 +295,22 @@ def get_active_listings(
 
 
 def _get_locked_listing_for_purchase(listing_id: int) -> MarketListing:
-    listing = (
-        MarketListing.objects.select_for_update()
-        .select_related("seller__user", "item_template")
-        .filter(id=listing_id)
-        .first()
-    )
-    if not listing:
-        raise ValueError("挂单不存在")
-    return listing
+    return _get_locked_listing_for_purchase_impl(market_listing_model=MarketListing, listing_id=listing_id)
 
 
 def _validate_listing_for_purchase(listing: MarketListing, buyer: Manor) -> None:
-    if listing.status != MarketListing.Status.ACTIVE:
-        raise ValueError("该挂单已下架")
-    if listing.is_expired:
-        raise ValueError("该挂单已过期")
-    if listing.seller_id == buyer.pk:
-        raise ValueError("不能购买自己的物品")
+    _validate_listing_for_purchase_impl(listing, buyer, active_status=MarketListing.Status.ACTIVE)
 
 
 def _lock_purchase_parties(buyer_pk: int, seller_pk: int | None) -> tuple[Manor, Manor | None]:
-    # 固定顺序加锁，避免买卖双方并发交易时死锁
-    if seller_pk and buyer_pk < seller_pk:
-        buyer_locked = Manor.objects.select_for_update().get(pk=buyer_pk)
-        seller_locked = Manor.objects.select_for_update().get(pk=seller_pk)
-    elif seller_pk and buyer_pk > seller_pk:
-        seller_locked = Manor.objects.select_for_update().get(pk=seller_pk)
-        buyer_locked = Manor.objects.select_for_update().get(pk=buyer_pk)
-    else:
-        buyer_locked = Manor.objects.select_for_update().get(pk=buyer_pk)
-        seller_locked = Manor.objects.select_for_update().get(pk=seller_pk) if seller_pk else None
-    return buyer_locked, seller_locked
+    return _lock_purchase_parties_impl(manor_model=Manor, buyer_pk=buyer_pk, seller_pk=seller_pk)
 
 
 def _grant_listing_item_to_buyer_locked(buyer_locked: Manor, item_template: ItemTemplate, quantity: int) -> None:
-    inventory_item = (
-        InventoryItem.objects.select_for_update()
-        .filter(
-            manor=buyer_locked,
-            template=item_template,
-            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-        )
-        .first()
-    )
-    if inventory_item:
-        InventoryItem.objects.filter(pk=inventory_item.pk).update(
-            quantity=F("quantity") + quantity, updated_at=timezone.now()
-        )
-        return
-    InventoryItem.objects.create(
-        manor=buyer_locked,
-        template=item_template,
-        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    _grant_listing_item_to_buyer_locked_impl(
+        inventory_item_model=InventoryItem,
+        buyer_locked=buyer_locked,
+        item_template=item_template,
         quantity=quantity,
     )
 
@@ -353,60 +322,14 @@ def _send_purchase_notifications(
     tax_amount: int,
     seller_received: int,
 ) -> tuple[bool, bool]:
-    # 买家通知（物品已直接添加到仓库，邮件仅作通知用途，不含附件）
-    buyer_mail_sent = _safe_create_message(
-        manor=buyer,
-        kind="system",
-        title="【交易成功】您购买的物品已送达",
-        body=(
-            f"恭喜！您成功购买了 {listing.item_template.name} x{listing.quantity}，"
-            f"花费 {listing.total_price:,} 银两。\n\n"
-            f"物品已直接存入您的仓库，请前往查看。\n\n"
-            f"交易详情：\n"
-            f"- 物品：{listing.item_template.name}\n"
-            f"- 数量：{listing.quantity}\n"
-            f"- 单价：{listing.unit_price:,} 银两\n"
-            f"- 总价：{listing.total_price:,} 银两\n"
-            f"- 卖家：{listing.seller.user.username}\n"
-            f"- 成交时间：{listing.sold_at.strftime('%Y-%m-%d %H:%M:%S')}"
-        ),
+    return _send_purchase_notifications_impl(
+        buyer=buyer,
+        listing=listing,
+        tax_amount=tax_amount,
+        seller_received=seller_received,
+        safe_create_message=_safe_create_message,
+        safe_notify_user=_safe_notify_user,
     )
-
-    # 卖家通知（仅玩家卖家，银两已直接发放，邮件仅作通知）
-    seller_mail_sent = False
-    if listing.seller_id:
-        seller_mail_sent = _safe_create_message(
-            manor=listing.seller,
-            kind="system",
-            title="【交易成功】您的物品已售出",
-            body=(
-                f"恭喜！您上架的 {listing.item_template.name} x{listing.quantity} 已成功售出！\n\n"
-                f"银两已直接存入您的账户。\n\n"
-                f"交易详情：\n"
-                f"- 物品：{listing.item_template.name}\n"
-                f"- 数量：{listing.quantity}\n"
-                f"- 成交价：{listing.total_price:,} 银两\n"
-                f"- 税费（10%）：{tax_amount:,} 银两\n"
-                f"- 实际到账：{seller_received:,} 银两\n"
-                f"- 买家：{buyer.user.username}\n"
-                f"- 成交时间：{listing.sold_at.strftime('%Y-%m-%d %H:%M:%S')}"
-            ),
-        )
-
-        _safe_notify_user(
-            listing.seller.user_id,
-            {
-                "kind": "market_sold",
-                "title": "【交易成功】您的物品已售出",
-                "item_name": listing.item_template.name,
-                "item_key": listing.item_template.key,
-                "quantity": listing.quantity,
-                "silver_received": seller_received,
-            },
-            log_context="market sold notification",
-        )
-
-    return buyer_mail_sent, seller_mail_sent
 
 
 def purchase_listing(buyer: Manor, listing_id: int) -> MarketTransaction:
@@ -500,7 +423,6 @@ def cancel_listing(manor: Manor, listing_id: int) -> Dict:
     Raises:
         ValueError: 验证失败时抛出异常
     """
-    # 获取挂单
     listing = (
         MarketListing.objects.select_for_update()
         .select_related("item_template")
@@ -511,150 +433,30 @@ def cancel_listing(manor: Manor, listing_id: int) -> Dict:
     if not listing:
         raise ValueError("挂单不存在或无权取消")
 
-    # 验证状态
     if listing.status != MarketListing.Status.ACTIVE:
         raise ValueError("该挂单已经不在售状态，无法取消")
 
-    # 更新状态
     listing.status = MarketListing.Status.CANCELLED
     listing.save(update_fields=["status"])
 
-    # 退回物品到仓库（使用原子操作防止并发丢失更新）
-    # IMPORTANT: Must specify storage_location to avoid MultipleObjectsReturned
-    # when the same template exists in both warehouse and treasury
-    inventory_item = (
-        InventoryItem.objects.select_for_update()
-        .filter(
-            manor=manor,
-            template=listing.item_template,
-            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-        )
-        .first()
+    _restore_cancelled_listing_inventory(
+        inventory_item_model=InventoryItem,
+        manor=manor,
+        listing=listing,
     )
-
-    if inventory_item:
-        # 已有该物品，使用 F() 表达式增加数量
-        InventoryItem.objects.filter(pk=inventory_item.pk).update(
-            quantity=F("quantity") + listing.quantity, updated_at=timezone.now()
-        )
-    else:
-        # 首次获得该物品，创建新记录
-        InventoryItem.objects.create(
-            manor=manor,
-            template=listing.item_template,
-            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-            quantity=listing.quantity,
-        )
-
-    return {
-        "item_name": listing.item_template.name,
-        "quantity": listing.quantity,
-    }
+    return _build_cancel_listing_result(listing=listing)
 
 
 def _expire_listings_queryset(expired_listings: QuerySet, log_label: str, limit: int | None = None) -> int:
-    """处理过期挂单，通过邮件退回物品并删除挂单记录。
-
-    安全修复：先发送邮件确保物品退还成功，再删除挂单记录。
-    避免邮件发送失败导致物品永久丢失。
-
-    优化：
-    - 支持 limit 参数，防止单次处理过多导致超时或数据库锁竞争
-    """
-    normalized_limit = _normalize_expire_limit(limit)
-    if normalized_limit == 0:
-        return 0
-
-    # 先只拿候选 ID，避免先加载完整对象再二次加锁查询。
-    candidates = expired_listings.filter(
-        status=MarketListing.Status.ACTIVE,
-        expires_at__lte=timezone.now(),
-    ).order_by("expires_at")
-    candidate_ids = candidates.values_list("pk", flat=True)
-    if normalized_limit:
-        candidate_ids = candidate_ids[:normalized_limit]
-
-    count = 0
-    for listing_id in candidate_ids:
-        try:
-            with transaction.atomic():
-                # 在事务内重新获取并锁定记录，防止并发处理
-                # 使用 select_for_update(skip_locked=True) 进一步优化并发，
-                # 如果其他进程正在处理该行，直接跳过而不是等待
-                listing = (
-                    MarketListing.objects.select_for_update(skip_locked=True)
-                    .select_related("seller", "item_template")
-                    .filter(
-                        pk=listing_id,
-                        status=MarketListing.Status.ACTIVE,
-                        expires_at__lte=timezone.now(),
-                    )
-                    .first()
-                )
-
-                if not listing:
-                    # 已经被其他进程处理或删除
-                    continue
-
-                # 保存挂单信息用于发送邮件（删除前先读取）
-                seller = listing.seller
-                item_template = listing.item_template
-                item_name = item_template.name
-                item_key = item_template.key
-                quantity = listing.quantity
-                unit_price = listing.unit_price
-                listing_fee = listing.listing_fee
-                listed_at = listing.listed_at
-                expires_at = listing.expires_at
-
-                # 安全修复：先将状态标记为过期（防止重复处理）
-                listing.status = MarketListing.Status.EXPIRED
-                listing.save(update_fields=["status"])
-
-                # 通过邮件退回物品（如果失败会回滚状态变更）
-                create_message(
-                    manor=seller,
-                    kind="system",
-                    title="【交易过期】您的物品已退回",
-                    body=(
-                        f"您上架的 {item_name} x{quantity} 已过期，物品已通过附件退回。\n\n"
-                        f"挂单信息：\n"
-                        f"- 物品：{item_name}\n"
-                        f"- 数量：{quantity}\n"
-                        f"- 定价：{unit_price:,} 银两/件\n"
-                        f"- 上架时间：{listed_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                        f"- 过期时间：{expires_at.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-                        f"注意：手续费 {listing_fee:,} 银两不予退还。\n"
-                        f"请在消息中领取附件以取回物品。"
-                    ),
-                    attachments={
-                        "items": {item_key: quantity},
-                    },
-                )
-
-                # 邮件发送成功后，删除挂单记录
-                listing.delete()
-
-                # WebSocket 即时推送通知卖家
-                _safe_notify_user(
-                    seller.user_id,
-                    {
-                        "kind": "market_expired",
-                        "title": "【交易过期】您的物品已退回",
-                        "item_name": item_name,
-                        "item_key": item_key,
-                        "quantity": quantity,
-                    },
-                    log_context="market expired notification",
-                )
-
-                count += 1
-        except Exception as e:
-            # 记录错误但继续处理其他挂单
-            logger.exception("%s %s 时出错: %s", log_label, listing_id, e)
-            continue
-
-    return count
+    return _expire_listings_queryset_impl(
+        expired_listings,
+        log_label,
+        market_listing_model=MarketListing,
+        create_message_func=create_message,
+        notify_user_func=notify_user,
+        logger=logger,
+        limit=limit,
+    )
 
 
 def expire_listings(limit: int = 1000) -> int:

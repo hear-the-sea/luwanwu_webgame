@@ -1,0 +1,24 @@
+registration:
+  max_guests_per_entry: 10
+  registration_silver_cost: 5000
+  daily_participation_limit: 100
+  tournament_player_limit: 3
+runtime:
+  round_interval_seconds: 600
+  completed_retention_seconds: 600
+  round_retry_seconds: 30
+  recruiting_lock_key: arena:recruiting_tournament:create
+  recruiting_lock_timeout: 5
+rewards:
+  base_participation_coins: 30
+  rank_bonus_coins:
+    1: 280
+    2: 170
+    3: 120
+    4: 90
+    5: 70
+    6: 60
+    7: 50
+    8: 40
+    9: 30
+    10: 20

@@ -11,6 +11,7 @@ from core.utils.rate_limit import rate_limit_redirect
 
 from ..decorators import require_guild_leader, require_guild_member
 from ..services import guild as guild_service
+from .helpers import build_guild_member_context, execute_guild_action, load_recent_announcements
 
 
 @login_required
@@ -18,16 +19,10 @@ from ..services import guild as guild_service
 def announcement_list(request):
     """公告列表"""
     member = request.guild_member
-    guild = member.guild
-
-    # 获取公告列表
-    announcements = guild.announcements.select_related("author__manor").all()[:30]
-
-    context = {
-        "guild": guild,
-        "member": member,
-        "announcements": announcements,
-    }
+    context = build_guild_member_context(
+        member,
+        announcements=load_recent_announcements(member.guild, limit=30),
+    )
 
     return render(request, "guilds/announcements.html", context)
 
@@ -45,7 +40,9 @@ def create_announcement(request):
         messages.error(request, "公告内容不能为空")
         return redirect("guilds:announcements")
 
-    guild_service.create_announcement(member.guild, "leader", content, request.user)
-
-    messages.success(request, "公告发布成功")
+    execute_guild_action(
+        request,
+        action=lambda: guild_service.create_announcement(member.guild, "leader", content, request.user),
+        success_message="公告发布成功",
+    )
     return redirect("guilds:announcements")

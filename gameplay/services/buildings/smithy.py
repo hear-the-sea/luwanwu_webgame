@@ -8,13 +8,16 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from functools import lru_cache
 from typing import Any, Dict, List
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
 from core.utils.time_scale import scale_duration
+from core.utils.yaml_loader import load_yaml_data
 
 from ...constants import BuildingKeys
 from ...models import Manor, SmeltingProduction
@@ -35,78 +38,60 @@ logger = logging.getLogger(__name__)
 # - Lv8 补血丹（300银两，12分钟）
 # - Lv9 丁香丹（600银两，15分钟）
 # - Lv10 天香玉露丸（1000银两，20分钟）
-METAL_CONFIG: Dict[str, Dict[str, Any]] = {
-    "tong": {
-        "cost_type": "silver",  # 消耗类型
-        "cost_amount": 1,  # 单个消耗数量
-        "base_duration": 60,  # 1分钟
-        "required_smelting": 1,
-        "category": "metal",
-    },
-    "xi": {
-        "cost_type": "tong",  # 消耗铜
-        "cost_amount": 5,  # 5铜→1锡
-        "base_duration": 180,  # 3分钟
-        "required_smelting": 2,
-        "category": "metal",
-    },
-    "tie": {
-        "cost_type": "xi",  # 消耗锡
-        "cost_amount": 3,  # 3锡→1铁
-        "base_duration": 300,  # 5分钟
-        "required_smelting": 3,
-        "category": "metal",
-    },
-    "zhixuesan": {
-        "cost_type": "silver",
-        "cost_amount": 50,
-        "base_duration": 300,  # 5分钟
-        "required_smithy": 1,
-        "category": "medicine",
-    },
-    "jinchuangyao": {
-        "cost_type": "silver",
-        "cost_amount": 100,
-        "base_duration": 420,  # 7分钟
-        "required_smithy": 3,
-        "category": "medicine",
-    },
-    "baijiwan": {
-        "cost_type": "silver",
-        "cost_amount": 150,
-        "base_duration": 600,  # 10分钟
-        "required_smithy": 5,
-        "category": "medicine",
-    },
-    "baicaodan": {
-        "cost_type": "silver",
-        "cost_amount": 200,
-        "base_duration": 720,  # 12分钟
-        "required_smithy": 7,
-        "category": "medicine",
-    },
-    "buxuedan": {
-        "cost_type": "silver",
-        "cost_amount": 300,
-        "base_duration": 720,  # 12分钟
-        "required_smithy": 8,
-        "category": "medicine",
-    },
-    "dingxiangdan": {
-        "cost_type": "silver",
-        "cost_amount": 600,
-        "base_duration": 900,  # 15分钟
-        "required_smithy": 9,
-        "category": "medicine",
-    },
-    "tianxiangyuluwan": {
-        "cost_type": "silver",
-        "cost_amount": 1000,
-        "base_duration": 1200,  # 20分钟
-        "required_smithy": 10,
-        "category": "medicine",
-    },
-}
+DEFAULT_SMITHY_PRODUCTION_CONFIG: Dict[str, Dict[str, Any]] = {}
+
+
+def _normalize_smithy_production_config(raw: Any) -> Dict[str, Dict[str, Any]]:
+    root = raw
+    if isinstance(raw, dict) and isinstance(raw.get("production"), dict):
+        root = raw.get("production")
+    if not isinstance(root, dict):
+        return dict(DEFAULT_SMITHY_PRODUCTION_CONFIG)
+
+    config: Dict[str, Dict[str, Any]] = {}
+    for raw_key, raw_item in root.items():
+        item_key = str(raw_key).strip()
+        if not item_key or not isinstance(raw_item, dict):
+            continue
+        category = str(raw_item.get("category") or "").strip()
+        cost_type = str(raw_item.get("cost_type") or "").strip()
+        if not category or not cost_type:
+            continue
+        cost_amount = max(1, int(raw_item.get("cost_amount") or 1))
+        base_duration = max(1, int(raw_item.get("base_duration") or 1))
+        normalized = {
+            "cost_type": cost_type,
+            "cost_amount": cost_amount,
+            "base_duration": base_duration,
+            "category": category,
+        }
+        if raw_item.get("required_smelting") is not None:
+            normalized["required_smelting"] = max(1, int(raw_item.get("required_smelting") or 1))
+        if raw_item.get("required_smithy") is not None:
+            normalized["required_smithy"] = max(1, int(raw_item.get("required_smithy") or 1))
+        config[item_key] = normalized
+    return config
+
+
+@lru_cache(maxsize=1)
+def load_smithy_production_config() -> Dict[str, Dict[str, Any]]:
+    path = settings.BASE_DIR / "data" / "smithy_production.yaml"
+    raw = load_yaml_data(
+        path,
+        logger=logger,
+        context="smithy production config",
+        default={"production": DEFAULT_SMITHY_PRODUCTION_CONFIG},
+    )
+    return _normalize_smithy_production_config(raw)
+
+
+def clear_smithy_production_cache() -> None:
+    global METAL_CONFIG
+    load_smithy_production_config.cache_clear()
+    METAL_CONFIG = load_smithy_production_config()
+
+
+METAL_CONFIG: Dict[str, Dict[str, Any]] = load_smithy_production_config()
 
 
 def _get_item_name_map(keys: set[str]) -> Dict[str, str]:

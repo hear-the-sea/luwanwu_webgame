@@ -1,0 +1,61 @@
+production:
+  tong:
+    cost_type: silver
+    cost_amount: 1
+    base_duration: 60
+    required_smelting: 1
+    category: metal
+  xi:
+    cost_type: tong
+    cost_amount: 5
+    base_duration: 180
+    required_smelting: 2
+    category: metal
+  tie:
+    cost_type: xi
+    cost_amount: 3
+    base_duration: 300
+    required_smelting: 3
+    category: metal
+  zhixuesan:
+    cost_type: silver
+    cost_amount: 50
+    base_duration: 300
+    required_smithy: 1
+    category: medicine
+  jinchuangyao:
+    cost_type: silver
+    cost_amount: 100
+    base_duration: 420
+    required_smithy: 3
+    category: medicine
+  baijiwan:
+    cost_type: silver
+    cost_amount: 150
+    base_duration: 600
+    required_smithy: 5
+    category: medicine
+  baicaodan:
+    cost_type: silver
+    cost_amount: 200
+    base_duration: 720
+    required_smithy: 7
+    category: medicine
+  buxuedan:
+    cost_type: silver
+    cost_amount: 300
+    base_duration: 720
+    required_smithy: 8
+    category: medicine
+  dingxiangdan:
+    cost_type: silver
+    cost_amount: 600
+    base_duration: 900
+    required_smithy: 9
+    category: medicine
+  tianxiangyuluwan:
+    cost_type: silver
+    cost_amount: 1000
+    base_duration: 1200
+    required_smithy: 10
+    category: medicine

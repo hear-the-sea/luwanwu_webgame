@@ -6,13 +6,10 @@
 
 from __future__ import annotations
 
-import copy
 import logging
 import os
-import random
-from datetime import timedelta
 from functools import lru_cache
-from typing import Any, Dict, List, cast
+from typing import Any, Dict, List
 
 from django.conf import settings
 from django.db import transaction
@@ -24,214 +21,44 @@ from core.utils.yaml_loader import load_yaml_data
 
 from ...constants import BuildingKeys
 from ...models import EquipmentProduction, Manor
+from . import forge_config_helpers as _forge_config_helpers
+from . import forge_decompose_helpers as _forge_decompose_helpers
+from . import forge_flow_helpers as _forge_flow_helpers
+from . import forge_helpers as _forge_helpers
+
+random = _forge_decompose_helpers.random
 
 logger = logging.getLogger(__name__)
 
 # 装备配置
 # 锻造技等级需求：1,3,5,7,9级分别解锁不同等级装备
 # 材料：铜、锡、铁
-EQUIPMENT_CONFIG: Dict[str, Dict[str, Any]] = {
-    # ==================== 头盔 ====================
-    "equip_bumao": {
-        "category": "helmet",
-        "materials": {"tong": 5},
-        "base_duration": 120,
-        "required_forging": 1,
-    },
-    "equip_niupimao": {
-        "category": "helmet",
-        "materials": {"tong": 10, "xi": 5},
-        "base_duration": 180,
-        "required_forging": 3,
-    },
-    "equip_tieyekui": {
-        "category": "helmet",
-        "materials": {"tie": 10},
-        "base_duration": 240,
-        "required_forging": 5,
-    },
-    # ==================== 护甲 ====================
-    "equip_bupao": {
-        "category": "armor",
-        "materials": {"tong": 5},
-        "base_duration": 120,
-        "required_forging": 1,
-    },
-    "equip_shengpijia": {
-        "category": "armor",
-        "materials": {"tong": 10, "xi": 5},
-        "base_duration": 180,
-        "required_forging": 3,
-    },
-    "equip_housipao": {
-        "category": "armor",
-        "materials": {"tie": 10},
-        "base_duration": 240,
-        "required_forging": 5,
-    },
-    "equip_shapijia": {
-        "category": "armor",
-        "materials": {"tie": 20},
-        "base_duration": 300,
-        "required_forging": 7,
-    },
-    # ==================== 鞋子 ====================
-    "equip_buxie": {
-        "category": "shoes",
-        "materials": {"tong": 5},
-        "base_duration": 120,
-        "required_forging": 1,
-    },
-    "equip_yangpixue": {
-        "category": "shoes",
-        "materials": {"tong": 10, "xi": 5},
-        "base_duration": 180,
-        "required_forging": 3,
-    },
-    "equip_gangpianxue": {
-        "category": "shoes",
-        "materials": {"tie": 10},
-        "base_duration": 240,
-        "required_forging": 5,
-    },
-    "equip_yanyuxue": {
-        "category": "shoes",
-        "materials": {"tie": 20},
-        "base_duration": 300,
-        "required_forging": 7,
-    },
-    # ==================== 剑 ====================
-    "equip_duanjian": {
-        "category": "sword",
-        "materials": {"tong": 5},
-        "base_duration": 120,
-        "required_forging": 1,
-    },
-    "equip_changjian": {
-        "category": "sword",
-        "materials": {"tong": 10, "xi": 5},
-        "base_duration": 180,
-        "required_forging": 3,
-    },
-    "equip_qingmangjian": {
-        "category": "sword",
-        "materials": {"tie": 10},
-        "base_duration": 240,
-        "required_forging": 5,
-    },
-    "equip_duanmajian": {
-        "category": "sword",
-        "materials": {"tie": 20},
-        "base_duration": 300,
-        "required_forging": 7,
-    },
-    # ==================== 刀 ====================
-    "equip_duandao": {
-        "category": "dao",
-        "materials": {"tong": 5},
-        "base_duration": 120,
-        "required_forging": 1,
-    },
-    "equip_dakandao": {
-        "category": "dao",
-        "materials": {"tong": 10, "xi": 5},
-        "base_duration": 180,
-        "required_forging": 3,
-    },
-    "equip_tongchangdao": {
-        "category": "dao",
-        "materials": {"tie": 10},
-        "base_duration": 240,
-        "required_forging": 5,
-    },
-    "equip_jingtiedao": {
-        "category": "dao",
-        "materials": {"tie": 20},
-        "base_duration": 300,
-        "required_forging": 7,
-    },
-    # ==================== 枪 ====================
-    "equip_changqiang": {
-        "category": "spear",
-        "materials": {"tong": 5},
-        "base_duration": 120,
-        "required_forging": 1,
-    },
-    "equip_baoweiqiang": {
-        "category": "spear",
-        "materials": {"tong": 10, "xi": 5},
-        "base_duration": 180,
-        "required_forging": 3,
-    },
-    "equip_hutoumao": {
-        "category": "spear",
-        "materials": {"tie": 10},
-        "base_duration": 240,
-        "required_forging": 5,
-    },
-    "equip_pansheqiang": {
-        "category": "spear",
-        "materials": {"tie": 20},
-        "base_duration": 300,
-        "required_forging": 7,
-    },
-    # ==================== 弓 ====================
-    "equip_changgong": {
-        "category": "bow",
-        "materials": {"tong": 5},
-        "base_duration": 120,
-        "required_forging": 1,
-    },
-    "equip_fanqugong": {
-        "category": "bow",
-        "materials": {"tong": 10, "xi": 5},
-        "base_duration": 180,
-        "required_forging": 3,
-    },
-    "equip_tietaigong": {
-        "category": "bow",
-        "materials": {"tie": 10},
-        "base_duration": 240,
-        "required_forging": 5,
-    },
-    "equip_shenbigong": {
-        "category": "bow",
-        "materials": {"tie": 20},
-        "base_duration": 300,
-        "required_forging": 7,
-    },
-    # ==================== 鞭 ====================
-    "equip_changbian": {
-        "category": "whip",
-        "materials": {"tong": 5},
-        "base_duration": 120,
-        "required_forging": 1,
-    },
-    "equip_niupibian": {
-        "category": "whip",
-        "materials": {"tong": 10, "xi": 5},
-        "base_duration": 180,
-        "required_forging": 3,
-    },
-    "equip_jicibian": {
-        "category": "whip",
-        "materials": {"tie": 10},
-        "base_duration": 240,
-        "required_forging": 5,
-    },
-    "equip_jiulonggangbian": {
-        "category": "whip",
-        "materials": {"tie": 20},
-        "base_duration": 300,
-        "required_forging": 7,
-    },
-    "equip_mingshejiebian": {
-        "category": "whip",
-        "materials": {"tie": 30},
-        "base_duration": 360,
-        "required_forging": 9,
-    },
-}
+DEFAULT_FORGE_EQUIPMENT_CONFIG = _forge_config_helpers.DEFAULT_FORGE_EQUIPMENT_CONFIG
+_normalize_equipment_config = _forge_config_helpers._normalize_equipment_config
+
+
+@lru_cache(maxsize=1)
+def load_forge_equipment_config() -> Dict[str, Dict[str, Any]]:
+    """加载铁匠铺装备锻造配置。"""
+    path = os.path.join(settings.BASE_DIR, "data", "forge_equipment.yaml")
+    raw = load_yaml_data(
+        path,
+        logger=logger,
+        context="forge equipment config",
+        default={"equipment": DEFAULT_FORGE_EQUIPMENT_CONFIG},
+    )
+    return _normalize_equipment_config(raw)
+
+
+def clear_forge_equipment_cache() -> None:
+    """清理铁匠铺装备配置缓存。"""
+    global EQUIPMENT_CONFIG
+    load_forge_equipment_config.cache_clear()
+    EQUIPMENT_CONFIG = load_forge_equipment_config()
+
+
+EQUIPMENT_CONFIG: Dict[str, Dict[str, Any]] = load_forge_equipment_config()
+
 
 # 装备类别
 EQUIPMENT_CATEGORIES = {
@@ -258,207 +85,35 @@ def _get_item_name_map(keys: set[str]) -> Dict[str, str]:
     return {tpl.key: tpl.name for tpl in ItemTemplate.objects.filter(key__in=keys).only("key", "name")}
 
 
-WEAPON_KEYWORD_TO_CATEGORY: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("sword", ("jian",)),
-    ("dao", ("dao",)),
-    ("spear", ("qiang", "mao")),
-    ("bow", ("gong",)),
-    ("whip", ("bian",)),
-)
-
-DECOMPOSE_WEAPON_CATEGORIES: set[str] = {"sword", "dao", "spear", "bow", "whip"}
-DECOMPOSE_CATEGORIES: Dict[str, str] = {
-    "helmet": "头盔",
-    "armor": "衣服",
-    "shoes": "鞋子",
-    "weapon": "武器",
-    "device": "器械",
-}
+WEAPON_KEYWORD_TO_CATEGORY = _forge_helpers.WEAPON_KEYWORD_TO_CATEGORY
+DECOMPOSE_WEAPON_CATEGORIES = _forge_helpers.DECOMPOSE_WEAPON_CATEGORIES
+DECOMPOSE_CATEGORIES = _forge_helpers.DECOMPOSE_CATEGORIES
+_build_equipment_options = _forge_flow_helpers.build_equipment_options
+_build_filtered_equipment_configs = _forge_flow_helpers.build_filtered_equipment_configs
+_build_total_material_costs = _forge_flow_helpers.build_total_material_costs
+_consume_forging_materials_locked = _forge_flow_helpers.consume_forging_materials_locked
+_create_equipment_production_record = _forge_flow_helpers.create_equipment_production_record
+_load_material_quantity_map = _forge_flow_helpers.load_material_quantity_map
+_send_equipment_forging_completion_notification = _forge_flow_helpers.send_equipment_forging_completion_notification
+_validate_forging_quantity = _forge_flow_helpers.validate_forging_quantity
 
 
 def infer_equipment_category(item_key: str, effect_type: str | None = None) -> str | None:
-    """推断装备分类，优先使用锻造配置，缺失时按 effect_type/key 兜底。"""
-    config = EQUIPMENT_CONFIG.get(item_key)
-    if config:
-        category = config.get("category")
-        if isinstance(category, str) and category:
-            return category
-
-    normalized_effect_type = (effect_type or "").strip()
-    if normalized_effect_type == "equip_helmet":
-        return "helmet"
-    if normalized_effect_type == "equip_armor":
-        return "armor"
-    if normalized_effect_type == "equip_shoes":
-        return "shoes"
-    if normalized_effect_type == "equip_weapon":
-        key_lower = (item_key or "").lower()
-        for category, keywords in WEAPON_KEYWORD_TO_CATEGORY:
-            if any(keyword in key_lower for keyword in keywords):
-                return category
-    if normalized_effect_type == "equip_device":
-        return "device"
-    return None
+    return _forge_helpers.infer_equipment_category(item_key, effect_type, equipment_config=EQUIPMENT_CONFIG)
 
 
 def to_decompose_category(equipment_category: str | None) -> str | None:
-    """分解分类映射：剑/刀/枪/弓/鞭统一归类为武器。"""
-    if not equipment_category:
-        return None
-    if equipment_category in DECOMPOSE_WEAPON_CATEGORIES:
-        return "weapon"
-    return equipment_category
+    return _forge_helpers.to_decompose_category(equipment_category)
 
 
-DEFAULT_FORGE_DECOMPOSE_CONFIG: Dict[str, Any] = {
-    "supported_rarities": ["green", "blue", "purple", "orange"],
-    "rarity_labels": {
-        "green": "绿色",
-        "blue": "蓝色",
-        "purple": "紫色",
-        "orange": "橙色",
-    },
-    "rarity_order": {
-        "orange": 4,
-        "purple": 3,
-        "blue": 2,
-        "green": 1,
-    },
-    "base_materials": {
-        "green": {"tong": [2, 5], "xi": [1, 3], "tie": [1, 2]},
-        "blue": {"tong": [4, 8], "xi": [2, 5], "tie": [1, 3]},
-        "purple": {"tong": [6, 12], "xi": [4, 8], "tie": [2, 5]},
-        "orange": {"tong": [8, 16], "xi": [5, 10], "tie": [3, 7]},
-    },
-    "chance_rewards": {
-        "green": {"wood_essence": 0.75, "copper_essence": 0.25},
-        "blue": {
-            "wood_essence": 0.75,
-            "copper_essence": 0.75,
-            "xuan_tie_essence": 0.20,
-            "air_stone": 0.12,
-            "fire_stone": 0.12,
-            "earth_stone": 0.12,
-            "water_stone": 0.12,
-        },
-        "purple": {
-            "wood_essence": 0.88,
-            "copper_essence": 0.88,
-            "xuan_tie_essence": 0.35,
-            "air_stone": 0.22,
-            "fire_stone": 0.22,
-            "earth_stone": 0.22,
-            "water_stone": 0.22,
-        },
-        "orange": {
-            "wood_essence": 0.95,
-            "copper_essence": 0.95,
-            "xuan_tie_essence": 0.50,
-            "air_stone": 0.35,
-            "fire_stone": 0.35,
-            "earth_stone": 0.35,
-            "water_stone": 0.35,
-        },
-    },
-}
-
-
-def _coerce_int(value: Any, default: int) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _coerce_float(value: Any, default: float) -> float:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _normalize_quantity_range(raw_value: Any, fallback: list[int]) -> list[int]:
-    if not isinstance(raw_value, (list, tuple)) or len(raw_value) != 2:
-        return list(fallback)
-    minimum = _coerce_int(raw_value[0], fallback[0])
-    maximum = _coerce_int(raw_value[1], fallback[1])
-    minimum = max(0, minimum)
-    maximum = max(minimum, maximum)
-    return [minimum, maximum]
-
-
-def _normalize_decompose_config(raw: Any) -> Dict[str, Any]:
-    config: Dict[str, Any] = copy.deepcopy(DEFAULT_FORGE_DECOMPOSE_CONFIG)
-    if not isinstance(raw, dict):
-        return config
-
-    supported_rarities = raw.get("supported_rarities")
-    if isinstance(supported_rarities, list):
-        normalized = [str(item).strip() for item in supported_rarities if str(item).strip()]
-        if normalized:
-            config["supported_rarities"] = normalized
-
-    rarity_labels = raw.get("rarity_labels")
-    if isinstance(rarity_labels, dict):
-        for rarity, label in rarity_labels.items():
-            rarity_key = str(rarity).strip()
-            label_value = str(label).strip()
-            if rarity_key and label_value:
-                config["rarity_labels"][rarity_key] = label_value
-
-    rarity_order = raw.get("rarity_order")
-    if isinstance(rarity_order, dict):
-        for rarity, value in rarity_order.items():
-            rarity_key = str(rarity).strip()
-            if not rarity_key:
-                continue
-            config["rarity_order"][rarity_key] = _coerce_int(value, config["rarity_order"].get(rarity_key, 0))
-
-    base_materials = raw.get("base_materials")
-    if isinstance(base_materials, dict):
-        for rarity, materials in base_materials.items():
-            rarity_key = str(rarity).strip()
-            if not rarity_key or not isinstance(materials, dict):
-                continue
-            fallback_map = cast(Dict[str, list[int]], config["base_materials"].get(rarity_key, {}))
-            normalized_map: Dict[str, list[int]] = dict(fallback_map)
-            for mat_key, raw_range in materials.items():
-                mat_name = str(mat_key).strip()
-                if not mat_name:
-                    continue
-                fallback_range = normalized_map.get(mat_name, [1, 1])
-                normalized_map[mat_name] = _normalize_quantity_range(raw_range, fallback_range)
-            if normalized_map:
-                config["base_materials"][rarity_key] = normalized_map
-
-    chance_rewards = raw.get("chance_rewards")
-    if isinstance(chance_rewards, dict):
-        for rarity, rewards in chance_rewards.items():
-            rarity_key = str(rarity).strip()
-            if not rarity_key or not isinstance(rewards, dict):
-                continue
-            chance_fallback_map = cast(Dict[str, float], config["chance_rewards"].get(rarity_key, {}))
-            chance_map: Dict[str, float] = dict(chance_fallback_map)
-            for reward_key, raw_prob in rewards.items():
-                reward_name = str(reward_key).strip()
-                if not reward_name:
-                    continue
-                fallback_prob = float(chance_map.get(reward_name, 0.0))
-                prob = _coerce_float(raw_prob, fallback_prob)
-                chance_map[reward_name] = max(0.0, min(1.0, prob))
-            if chance_map:
-                config["chance_rewards"][rarity_key] = chance_map
-
-    available_rarities = [
-        rarity
-        for rarity in config["supported_rarities"]
-        if rarity in config["base_materials"] and rarity in config["chance_rewards"]
-    ]
-    if available_rarities:
-        config["supported_rarities"] = available_rarities
-    else:
-        config["supported_rarities"] = list(DEFAULT_FORGE_DECOMPOSE_CONFIG["supported_rarities"])
-    return config
+DEFAULT_FORGE_DECOMPOSE_CONFIG = _forge_config_helpers.DEFAULT_FORGE_DECOMPOSE_CONFIG
+DEFAULT_FORGE_BLUEPRINT_CONFIG = _forge_config_helpers.DEFAULT_FORGE_BLUEPRINT_CONFIG
+_coerce_int = _forge_config_helpers._coerce_int
+_coerce_float = _forge_config_helpers._coerce_float
+_normalize_quantity_range = _forge_config_helpers._normalize_quantity_range
+_normalize_decompose_config = _forge_config_helpers._normalize_decompose_config
+_normalize_blueprint_recipe = _forge_config_helpers._normalize_blueprint_recipe
+_normalize_blueprint_config = _forge_config_helpers._normalize_blueprint_config
 
 
 @lru_cache(maxsize=1)
@@ -477,60 +132,6 @@ def load_forge_decompose_config() -> Dict[str, Any]:
 def clear_forge_decompose_cache() -> None:
     """清理铁匠铺分解配置缓存。"""
     load_forge_decompose_config.cache_clear()
-
-
-DEFAULT_FORGE_BLUEPRINT_CONFIG: Dict[str, Any] = {"recipes": []}
-
-
-def _normalize_blueprint_recipe(raw: Any) -> Dict[str, Any] | None:
-    if not isinstance(raw, dict):
-        return None
-
-    blueprint_key = str(raw.get("blueprint_key") or "").strip()
-    result_item_key = str(raw.get("result_item_key") or "").strip()
-    if not blueprint_key or not result_item_key:
-        return None
-
-    required_forging = max(0, _coerce_int(raw.get("required_forging", 1), 1))
-    quantity_out = max(1, _coerce_int(raw.get("quantity_out", 1), 1))
-
-    costs_raw = raw.get("costs")
-    costs: Dict[str, int] = {}
-    if isinstance(costs_raw, dict):
-        for key, value in costs_raw.items():
-            item_key = str(key).strip()
-            if not item_key:
-                continue
-            amount = _coerce_int(value, 0)
-            if amount > 0:
-                costs[item_key] = amount
-
-    return {
-        "blueprint_key": blueprint_key,
-        "result_item_key": result_item_key,
-        "required_forging": required_forging,
-        "quantity_out": quantity_out,
-        "costs": costs,
-        "description": str(raw.get("description") or "").strip(),
-    }
-
-
-def _normalize_blueprint_config(raw: Any) -> Dict[str, Any]:
-    config: Dict[str, Any] = copy.deepcopy(DEFAULT_FORGE_BLUEPRINT_CONFIG)
-    if not isinstance(raw, dict):
-        return config
-
-    recipes_raw = raw.get("recipes")
-    if not isinstance(recipes_raw, list):
-        return config
-
-    recipes: List[Dict[str, Any]] = []
-    for entry in recipes_raw:
-        normalized = _normalize_blueprint_recipe(entry)
-        if normalized:
-            recipes.append(normalized)
-    config["recipes"] = recipes
-    return config
 
 
 @lru_cache(maxsize=1)
@@ -573,11 +174,7 @@ def get_blueprint_synthesis_options(manor: Manor) -> List[Dict[str, Any]]:
     if not recipes:
         return []
 
-    all_keys: set[str] = set()
-    for recipe in recipes:
-        all_keys.add(recipe["blueprint_key"])
-        all_keys.add(recipe["result_item_key"])
-        all_keys.update(recipe.get("costs", {}).keys())
+    all_keys = _forge_helpers.collect_recipe_related_keys(recipes)
 
     template_map = {tpl.key: tpl for tpl in ItemTemplate.objects.filter(key__in=all_keys)}
     inventory_items = (
@@ -590,65 +187,19 @@ def get_blueprint_synthesis_options(manor: Manor) -> List[Dict[str, Any]]:
         .order_by("id")
     )
 
-    quantities: Dict[str, int] = {}
-    for item in inventory_items:
-        key = item.template.key
-        quantities[key] = quantities.get(key, 0) + item.quantity
+    quantities = _forge_helpers.build_inventory_quantity_map(inventory_items)
 
     forging_level = get_player_technology_level(manor, "forging")
     options: List[Dict[str, Any]] = []
     for recipe in recipes:
-        blueprint_key = recipe["blueprint_key"]
-        blueprint_count = quantities.get(blueprint_key, 0)
-        if blueprint_count <= 0:
-            continue
-
-        result_key = recipe["result_item_key"]
-        quantity_out = recipe.get("quantity_out", 1)
-        required_forging = recipe.get("required_forging", 1)
-        costs = recipe.get("costs", {})
-
-        costs_info: List[Dict[str, Any]] = []
-        max_by_cost = blueprint_count
-        can_afford = True
-        for cost_key, cost_amount in costs.items():
-            current_amount = quantities.get(cost_key, 0)
-            cost_template = template_map.get(cost_key)
-            costs_info.append(
-                {
-                    "key": cost_key,
-                    "name": cost_template.name if cost_template else cost_key,
-                    "required": cost_amount,
-                    "current": current_amount,
-                }
-            )
-            if cost_amount > 0:
-                max_by_cost = min(max_by_cost, current_amount // cost_amount)
-            if current_amount < cost_amount:
-                can_afford = False
-
-        is_unlocked = forging_level >= required_forging
-        max_synthesis_quantity = max(0, max_by_cost)
-        blueprint_template = template_map.get(blueprint_key)
-        result_template = template_map.get(result_key)
-        options.append(
-            {
-                "blueprint_key": blueprint_key,
-                "blueprint_name": blueprint_template.name if blueprint_template else blueprint_key,
-                "blueprint_count": blueprint_count,
-                "result_key": result_key,
-                "result_name": result_template.name if result_template else result_key,
-                "result_effect_type": str(result_template.effect_type or "") if result_template else "",
-                "result_quantity": quantity_out,
-                "required_forging": required_forging,
-                "description": recipe.get("description", ""),
-                "costs": costs_info,
-                "max_synthesis_quantity": max_synthesis_quantity,
-                "is_unlocked": is_unlocked,
-                "can_afford": can_afford,
-                "can_synthesize": is_unlocked and can_afford and max_synthesis_quantity > 0,
-            }
+        option = _forge_helpers.build_blueprint_synthesis_option(
+            recipe,
+            quantities=quantities,
+            template_map=template_map,
+            forging_level=forging_level,
         )
+        if option is not None:
+            options.append(option)
 
     options.sort(key=lambda row: (row["required_forging"], row["result_name"]), reverse=True)
     return options
@@ -782,57 +333,23 @@ def get_decomposable_equipment_options(manor: Manor, category: str | None = None
 
     options: list[dict[str, Any]] = []
     for item in query:
-        item_category = infer_equipment_category(item.template.key, item.template.effect_type)
-        decompose_category = to_decompose_category(item_category)
-        if category and decompose_category != category:
-            continue
-
-        rarity = item.template.rarity
-        options.append(
-            {
-                "key": item.template.key,
-                "name": item.template.name,
-                "rarity": rarity,
-                "rarity_label": rarity_labels.get(rarity, rarity),
-                "quantity": item.quantity,
-                "effect_type": item.template.effect_type,
-                "category": decompose_category,
-                "category_name": (
-                    DECOMPOSE_CATEGORIES.get(decompose_category, decompose_category) if decompose_category else ""
-                ),
-            }
+        option = _forge_decompose_helpers.build_decomposable_equipment_option(
+            item,
+            rarity_labels=rarity_labels,
+            category_labels=DECOMPOSE_CATEGORIES,
+            infer_equipment_category=infer_equipment_category,
+            to_decompose_category=to_decompose_category,
+            category_filter=category,
         )
+        if option is not None:
+            options.append(option)
 
     options.sort(key=lambda row: (-rarity_order.get(row["rarity"], 0), row["name"]))
     return options
 
 
 def _roll_decompose_rewards(rarity: str, quantity: int, config: Dict[str, Any]) -> Dict[str, int]:
-    supported_rarities = set(config["supported_rarities"])
-    if rarity not in supported_rarities:
-        raise ValueError("仅绿色及以上装备可分解")
-
-    base_materials_map: Dict[str, Dict[str, list[int]]] = config["base_materials"]
-    chance_rewards_map: Dict[str, Dict[str, float]] = config["chance_rewards"]
-    base_materials = base_materials_map.get(rarity)
-    chance_rewards = chance_rewards_map.get(rarity)
-    if not base_materials or chance_rewards is None:
-        raise ValueError(f"分解配置缺失：{rarity}")
-
-    rewards: Dict[str, int] = {}
-
-    for _ in range(quantity):
-        for mat_key, amount_range in base_materials.items():
-            min_amount, max_amount = amount_range
-            amount = random.randint(min_amount, max_amount)
-            if amount > 0:
-                rewards[mat_key] = rewards.get(mat_key, 0) + amount
-
-        for reward_key, probability in chance_rewards.items():
-            if random.random() < probability:
-                rewards[reward_key] = rewards.get(reward_key, 0) + 1
-
-    return rewards
+    return _forge_decompose_helpers.roll_decompose_rewards(rarity, quantity, config)
 
 
 def decompose_equipment(manor: Manor, equipment_key: str, quantity: int = 1) -> Dict[str, Any]:
@@ -978,68 +495,37 @@ def get_equipment_options(manor: Manor, category: str = None) -> List[Dict[str, 
     Returns:
         装备选项列表
     """
-    from ..inventory import get_item_quantity
+    from ...models import InventoryItem
     from ..technology import get_player_technology_level
 
     forging_level = get_player_technology_level(manor, "forging")
     max_quantity = get_max_forging_quantity(manor)
     is_forging = has_active_forging(manor)
-
-    filtered_configs: list[tuple[str, Dict[str, Any]]] = []
-    for equip_key, config in EQUIPMENT_CONFIG.items():
-        if category and config["category"] != category:
-            continue
-        filtered_configs.append((equip_key, config))
+    filtered_configs = _build_filtered_equipment_configs(equipment_config=EQUIPMENT_CONFIG, category=category)
 
     equipment_keys: set[str] = {equip_key for equip_key, _ in filtered_configs}
-    material_keys: set[str] = set()
-    for _equip_key, config in filtered_configs:
-        material_keys.update(config.get("materials", {}).keys())
+    material_keys = _forge_helpers.collect_material_keys(filtered_configs)
     item_name_map = _get_item_name_map(equipment_keys | material_keys)
+    material_quantities = _load_material_quantity_map(
+        inventory_item_model=InventoryItem,
+        manor=manor,
+        material_keys=material_keys,
+        build_inventory_quantity_map=_forge_helpers.build_inventory_quantity_map,
+    )
 
-    options = []
-    for equip_key, config in filtered_configs:
-
-        actual_duration = calculate_forging_duration(config["base_duration"], manor)
-        required_level = config.get("required_forging", 1)
-        is_unlocked = forging_level >= required_level
-        equipment_name = item_name_map.get(equip_key, equip_key)
-
-        # 检查材料是否足够
-        materials = config.get("materials", {})
-        material_info = []
-        can_afford = True
-        for mat_key, mat_amount in materials.items():
-            current_amount = get_item_quantity(manor, mat_key)
-            mat_name = item_name_map.get(mat_key, MATERIAL_NAMES.get(mat_key, mat_key))
-            material_info.append(
-                {
-                    "key": mat_key,
-                    "name": mat_name,
-                    "required": mat_amount,
-                    "current": current_amount,
-                }
-            )
-            if current_amount < mat_amount:
-                can_afford = False
-
-        options.append(
-            {
-                "key": equip_key,
-                "name": equipment_name,
-                "category": config["category"],
-                "category_name": EQUIPMENT_CATEGORIES.get(config["category"], config["category"]),
-                "materials": material_info,
-                "base_duration": config["base_duration"],
-                "actual_duration": actual_duration,
-                "can_afford": can_afford,
-                "required_forging": required_level,
-                "is_unlocked": is_unlocked,
-                "max_quantity": max_quantity,
-                "is_forging": is_forging,
-            }
-        )
-    return options
+    return _build_equipment_options(
+        manor=manor,
+        filtered_configs=filtered_configs,
+        item_name_map=item_name_map,
+        material_quantities=material_quantities,
+        material_name_fallback_map=MATERIAL_NAMES,
+        equipment_categories=EQUIPMENT_CATEGORIES,
+        calculate_forging_duration=calculate_forging_duration,
+        build_equipment_option=_forge_helpers.build_equipment_option,
+        forging_level=forging_level,
+        max_quantity=max_quantity,
+        is_forging=is_forging,
+    )
 
 
 def get_equipment_by_category(manor: Manor) -> Dict[str, Dict[str, Any]]:
@@ -1094,14 +580,11 @@ def start_equipment_forging(manor: Manor, equipment_key: str, quantity: int = 1)
 
     # 验证锻造数量
     max_quantity = get_max_forging_quantity(manor)
-    if quantity < 1:
-        raise ValueError("锻造数量至少为1")
-    if quantity > max_quantity:
-        raise ValueError(f"锻造技等级限制，单次最多锻造{max_quantity}件")
+    _validate_forging_quantity(quantity=quantity, max_quantity=max_quantity)
 
     # 计算总材料消耗
     materials = config.get("materials", {})
-    total_costs = {mat_key: mat_amount * quantity for mat_key, mat_amount in materials.items()}
+    total_costs = _build_total_material_costs(materials=materials, quantity=quantity)
     material_name_map = _get_item_name_map(set(total_costs.keys()))
 
     with transaction.atomic():
@@ -1115,36 +598,29 @@ def start_equipment_forging(manor: Manor, equipment_key: str, quantity: int = 1)
         if has_active_forging(locked_manor):
             raise ValueError("已有装备正在锻造中，同时只能锻造一种装备")
 
-        # 扣除材料
-        for mat_key, total_amount in total_costs.items():
-            item = (
-                InventoryItem.objects.select_for_update()
-                .select_related("template", "manor")
-                .filter(
-                    manor=locked_manor,
-                    template__key=mat_key,
-                    storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-                )
-                .first()
-            )
-            mat_name = material_name_map.get(mat_key, MATERIAL_NAMES.get(mat_key, mat_key))
-            if not item or item.quantity < total_amount:
-                raise ValueError(f"{mat_name}不足")
-            consume_inventory_item_locked(item, total_amount)
+        _consume_forging_materials_locked(
+            inventory_item_model=InventoryItem,
+            locked_manor=locked_manor,
+            total_costs=total_costs,
+            material_name_map=material_name_map,
+            material_name_fallback_map=MATERIAL_NAMES,
+            consume_inventory_item_locked=consume_inventory_item_locked,
+        )
 
         # 计算实际锻造时间（时间不随数量增加）
         actual_duration = calculate_forging_duration(config["base_duration"], locked_manor)
 
         # 创建锻造记录
-        production = EquipmentProduction.objects.create(
-            manor=locked_manor,
+        production = _create_equipment_production_record(
+            equipment_production_model=EquipmentProduction,
+            locked_manor=locked_manor,
             equipment_key=equipment_key,
             equipment_name=equipment_name,
             quantity=quantity,
-            material_costs=total_costs,
-            base_duration=config["base_duration"],
+            total_costs=total_costs,
+            base_duration=int(config["base_duration"]),
             actual_duration=actual_duration,
-            complete_at=timezone.now() + timedelta(seconds=actual_duration),
+            current_time=timezone.now(),
         )
 
         # 调度 Celery 任务
@@ -1161,27 +637,12 @@ def _schedule_forging_completion(production: EquipmentProduction, eta_seconds: i
         production: EquipmentProduction实例
         eta_seconds: 预计完成时间（秒）
     """
-    import logging
-
-    from django.db import transaction as db_transaction
-
-    logger = logging.getLogger(__name__)
-    countdown = max(0, int(eta_seconds))
-
-    try:
-        from gameplay.tasks import complete_equipment_forging
-    except Exception:
-        logger.warning("Unable to import complete_equipment_forging task; skip scheduling", exc_info=True)
-        return
-
-    db_transaction.on_commit(
-        lambda: safe_apply_async(
-            complete_equipment_forging,
-            args=[production.id],
-            countdown=countdown,
-            logger=logger,
-            log_message="complete_equipment_forging dispatch failed",
-        )
+    _forge_flow_helpers.schedule_forging_completion_task(
+        production,
+        eta_seconds,
+        logger=logger,
+        transaction_module=transaction,
+        safe_apply_async_func=safe_apply_async,
     )
 
 
@@ -1196,63 +657,26 @@ def finalize_equipment_forging(production: EquipmentProduction, send_notificatio
     Returns:
         是否成功完成
     """
-    from ...models import Message
+    from ..inventory import add_item_to_inventory_locked
     from ..utils.notifications import notify_user
 
     with transaction.atomic():
-        # 修复：锁定生产记录，防止并发重复领取
-        locked_production = EquipmentProduction.objects.select_for_update().get(pk=production.pk)
-
-        if locked_production.status != EquipmentProduction.Status.FORGING:
-            return False
-        if locked_production.complete_at > timezone.now():
-            return False
-
-        # 添加装备到仓库（按数量添加）
-        from ..inventory import add_item_to_inventory_locked
-
-        add_item_to_inventory_locked(
-            locked_production.manor, locked_production.equipment_key, locked_production.quantity
+        locked_production = _forge_flow_helpers.finalize_equipment_production_locked(
+            equipment_production_model=EquipmentProduction,
+            production=production,
+            current_time=timezone.now(),
+            add_item_to_inventory_locked=add_item_to_inventory_locked,
         )
+        if locked_production is None:
+            return False
 
-        # 更新锻造状态
-        locked_production.status = EquipmentProduction.Status.COMPLETED
-        locked_production.finished_at = timezone.now()
-        locked_production.save(update_fields=["status", "finished_at"])
-
-        # 更新传入对象状态，以便后续通知使用正确信息
-        production.status = locked_production.status
-
+    production = locked_production
     if send_notification:
-        from ..utils.messages import create_message
-
-        quantity_text = f"x{production.quantity}" if production.quantity > 1 else ""
-        try:
-            create_message(
-                manor=production.manor,
-                kind=Message.Kind.SYSTEM,
-                title=f"{production.equipment_name}{quantity_text}锻造完成",
-                body=f"您的{production.equipment_name}{quantity_text}已锻造完成，请到仓库查收。",
-            )
-
-            notify_user(
-                production.manor.user_id,
-                {
-                    "kind": "system",
-                    "title": f"{production.equipment_name}{quantity_text}锻造完成",
-                    "equipment_key": production.equipment_key,
-                    "quantity": production.quantity,
-                },
-                log_context="equipment forging notification",
-            )
-        except Exception as exc:
-            logger.warning(
-                "equipment forging notification failed: production_id=%s manor_id=%s error=%s",
-                production.id,
-                production.manor_id,
-                exc,
-                exc_info=True,
-            )
+        _send_equipment_forging_completion_notification(
+            production=production,
+            logger=logger,
+            notify_user_func=notify_user,
+        )
 
     return True
 

@@ -42,41 +42,10 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"[OK] {step_name}"))
 
     def _reload_runtime_configs(self) -> None:
-        from gameplay.services.buildings.forge import (
-            clear_forge_blueprint_cache,
-            clear_forge_decompose_cache,
-            load_forge_blueprint_config,
-            load_forge_decompose_config,
-        )
-        from guilds.services.warehouse_config import load_warehouse_production, reload_warehouse_production
-        from trade.services.auction_config import load_auction_config, reload_auction_config
-        from trade.services.shop_config import load_shop_config, reload_shop_config
+        from gameplay.services.runtime_configs import format_runtime_config_summary, reload_runtime_configs
 
-        reload_shop_config()
-        shop_items = load_shop_config()
-
-        reload_auction_config()
-        auction_config = load_auction_config()
-
-        reload_warehouse_production()
-        warehouse_cfg = load_warehouse_production()
-
-        clear_forge_blueprint_cache()
-        blueprint_cfg = load_forge_blueprint_config()
-
-        clear_forge_decompose_cache()
-        decompose_cfg = load_forge_decompose_config()
-
-        self.stdout.write(
-            self.style.SUCCESS(
-                "[OK] 运行期配置已刷新: "
-                f"shop_items={len(shop_items)}, "
-                f"auction_items={len(auction_config.items)}, "
-                f"warehouse_techs={len(warehouse_cfg)}, "
-                f"forge_blueprints={len(blueprint_cfg.get('recipes', []) or [])}, "
-                f"forge_decompose_rarities={len(decompose_cfg.get('supported_rarities', []) or [])}"
-            )
-        )
+        summary = reload_runtime_configs()
+        self.stdout.write(self.style.SUCCESS(f"[OK] 运行期配置已刷新: {format_runtime_config_summary(summary)}"))
 
     def handle(self, *args, **options):
         skip_images = bool(options.get("skip_images"))

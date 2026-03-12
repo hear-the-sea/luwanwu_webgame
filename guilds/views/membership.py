@@ -10,9 +10,23 @@ from django.views.decorators.http import require_POST
 from core.utils.rate_limit import rate_limit_redirect
 
 from ..decorators import require_guild_leader, require_guild_manager, require_guild_member
-from ..models import Guild, GuildApplication, GuildMember
+from ..models import Guild
 from ..services import guild as guild_service
 from ..services import member as member_service
+from .helpers import (
+    build_guild_member_context,
+    execute_guild_action,
+    get_manageable_member,
+    get_reviewable_application,
+    load_active_member_summary,
+    load_pending_applications,
+)
+
+
+def _upgrade_guild_and_get_level(member, operator) -> int:
+    guild_service.upgrade_guild(member.guild, operator)
+    member.guild.refresh_from_db(fields=["level"])
+    return int(member.guild.level)
 
 
 @login_required
@@ -24,12 +38,13 @@ def apply_to_guild(request, guild_id):
     if request.method == "POST":
         message = request.POST.get("message", "").strip()
 
-        try:
-            member_service.apply_to_guild(user=request.user, guild=guild, message=message)
-            messages.success(request, "已提交申请，请等待审批")
+        outcome = execute_guild_action(
+            request,
+            action=lambda: member_service.apply_to_guild(user=request.user, guild=guild, message=message),
+            success_message="已提交申请，请等待审批",
+        )
+        if outcome.succeeded:
             return redirect("guilds:detail", guild_id=guild.id)
-        except ValueError as e:
-            messages.error(request, str(e))
 
     context = {
         "guild": guild,
@@ -43,18 +58,16 @@ def apply_to_guild(request, guild_id):
 def application_list(request):
     """申请列表"""
     member = request.guild_member
+    applications = load_pending_applications(member.guild)
+    member_count = member.guild.current_member_count
 
-    # 获取待审批的申请
-    applications = (
-        GuildApplication.objects.filter(guild=member.guild, status="pending")
-        .select_related("applicant")
-        .order_by("-created_at")
+    context = build_guild_member_context(
+        member,
+        applications=applications,
+        pending_count=len(applications),
+        member_count=member_count,
+        is_guild_full=member_count >= member.guild.member_capacity,
     )
-
-    context = {
-        "applications": applications,
-        "guild": member.guild,
-    }
 
     return render(request, "guilds/applications.html", context)
 
@@ -67,13 +80,13 @@ def approve_application(request, app_id):
     """通过申请"""
     member = request.guild_member
 
-    application = get_object_or_404(GuildApplication, id=app_id, guild=member.guild)
+    application = get_reviewable_application(member.guild, app_id)
 
-    try:
-        member_service.approve_application(application, request.user)
-        messages.success(request, f"已通过{application.applicant.username}的申请")
-    except ValueError as e:
-        messages.error(request, str(e))
+    execute_guild_action(
+        request,
+        action=lambda: member_service.approve_application(application, request.user),
+        success_message=lambda _result: f"已通过{application.applicant.username}的申请",
+    )
 
     return redirect("guilds:applications")
 
@@ -86,14 +99,14 @@ def reject_application(request, app_id):
     """拒绝申请"""
     member = request.guild_member
 
-    application = get_object_or_404(GuildApplication, id=app_id, guild=member.guild)
+    application = get_reviewable_application(member.guild, app_id)
     note = request.POST.get("note", "")
 
-    try:
-        member_service.reject_application(application, request.user, note)
-        messages.success(request, f"已拒绝{application.applicant.username}的申请")
-    except ValueError as e:
-        messages.error(request, str(e))
+    execute_guild_action(
+        request,
+        action=lambda: member_service.reject_application(application, request.user, note),
+        success_message=lambda _result: f"已拒绝{application.applicant.username}的申请",
+    )
 
     return redirect("guilds:applications")
 
@@ -104,26 +117,18 @@ def member_list(request):
     """成员列表"""
     member = request.guild_member
     guild = member.guild
+    member_summary = load_active_member_summary(guild)
+    leader = member_summary.leader
 
-    # 获取成员列表
-    leader = guild.get_leader()
-    members = (
-        guild.members.filter(is_active=True).select_related("user__manor").order_by("-position", "-total_contribution")
+    context = build_guild_member_context(
+        member,
+        members=member_summary.members,
+        leader=leader,
+        member_count=member_summary.member_count,
+        leader_count=1 if leader else 0,
+        admin_count=member_summary.admin_count,
+        normal_member_count=member_summary.normal_member_count,
     )
-
-    leader_count = 1 if leader else 0
-    admin_count = guild.get_admins().count()
-    normal_member_count = max(0, guild.current_member_count - leader_count - admin_count)
-
-    context = {
-        "guild": guild,
-        "members": members,
-        "member": member,
-        "leader": leader,
-        "leader_count": leader_count,
-        "admin_count": admin_count,
-        "normal_member_count": normal_member_count,
-    }
 
     return render(request, "guilds/members.html", context)
 
@@ -135,13 +140,13 @@ def member_list(request):
 def kick_member(request, member_id):
     """辞退成员"""
     # 安全修复：在查询时就过滤帮会，防止信息泄露
-    target_member = get_object_or_404(GuildMember, id=member_id, guild_id=request.guild_member.guild_id)
+    target_member = get_manageable_member(request.guild_member.guild_id, member_id)
 
-    try:
-        member_service.kick_member(target_member, request.user)
-        messages.success(request, f"已辞退{target_member.user.username}")
-    except ValueError as e:
-        messages.error(request, str(e))
+    execute_guild_action(
+        request,
+        action=lambda: member_service.kick_member(target_member, request.user),
+        success_message=lambda _result: f"已辞退{target_member.user.username}",
+    )
 
     return redirect("guilds:members")
 
@@ -153,13 +158,13 @@ def kick_member(request, member_id):
 def appoint_admin(request, member_id):
     """任命管理员"""
     # 安全修复：在查询时就过滤帮会，防止信息泄露
-    target_member = get_object_or_404(GuildMember, id=member_id, guild_id=request.guild_member.guild_id)
+    target_member = get_manageable_member(request.guild_member.guild_id, member_id)
 
-    try:
-        member_service.appoint_admin(target_member, request.user)
-        messages.success(request, f"已任命{target_member.user.username}为管理员")
-    except ValueError as e:
-        messages.error(request, str(e))
+    execute_guild_action(
+        request,
+        action=lambda: member_service.appoint_admin(target_member, request.user),
+        success_message=lambda _result: f"已任命{target_member.user.username}为管理员",
+    )
 
     return redirect("guilds:members")
 
@@ -171,13 +176,13 @@ def appoint_admin(request, member_id):
 def demote_admin(request, member_id):
     """罢免管理员"""
     # 安全修复：在查询时就过滤帮会，防止信息泄露
-    target_member = get_object_or_404(GuildMember, id=member_id, guild_id=request.guild_member.guild_id)
+    target_member = get_manageable_member(request.guild_member.guild_id, member_id)
 
-    try:
-        member_service.demote_admin(target_member, request.user)
-        messages.success(request, f"已罢免{target_member.user.username}的管理员职位")
-    except ValueError as e:
-        messages.error(request, str(e))
+    execute_guild_action(
+        request,
+        action=lambda: member_service.demote_admin(target_member, request.user),
+        success_message=lambda _result: f"已罢免{target_member.user.username}的管理员职位",
+    )
 
     return redirect("guilds:members")
 
@@ -190,13 +195,13 @@ def transfer_leadership(request, member_id):
     """转让帮主"""
     current_leader = request.guild_member
     # 安全修复：在查询时就过滤帮会，防止跨帮会转让
-    new_leader = get_object_or_404(GuildMember, id=member_id, guild_id=current_leader.guild_id)
+    new_leader = get_manageable_member(current_leader.guild_id, member_id)
 
-    try:
-        member_service.transfer_leadership(current_leader, new_leader)
-        messages.success(request, f"已将帮主之位传给{new_leader.user.username}")
-    except ValueError as e:
-        messages.error(request, str(e))
+    execute_guild_action(
+        request,
+        action=lambda: member_service.transfer_leadership(current_leader, new_leader),
+        success_message=lambda _result: f"已将帮主之位传给{new_leader.user.username}",
+    )
 
     return redirect("guilds:members")
 
@@ -209,13 +214,14 @@ def leave_guild(request):
     """退出帮会"""
     member = request.guild_member
 
-    try:
-        member_service.leave_guild(member)
-        messages.success(request, "已退出帮会")
+    outcome = execute_guild_action(
+        request,
+        action=lambda: member_service.leave_guild(member),
+        success_message="已退出帮会",
+    )
+    if outcome.succeeded:
         return redirect("guilds:hall")
-    except ValueError as e:
-        messages.error(request, str(e))
-        return redirect("guilds:detail", guild_id=member.guild.id)
+    return redirect("guilds:detail", guild_id=member.guild.id)
 
 
 @login_required
@@ -226,12 +232,11 @@ def upgrade_guild(request):
     """升级帮会"""
     member = request.guild_member
 
-    try:
-        guild_service.upgrade_guild(member.guild, request.user)
-        member.guild.refresh_from_db(fields=["level"])
-        messages.success(request, f"帮会升级成功！当前等级：{member.guild.level}")
-    except ValueError as e:
-        messages.error(request, str(e))
+    execute_guild_action(
+        request,
+        action=lambda: _upgrade_guild_and_get_level(member, request.user),
+        success_message=lambda level: f"帮会升级成功！当前等级：{level}",
+    )
 
     return redirect("guilds:detail", guild_id=member.guild.id)
 
@@ -251,10 +256,11 @@ def disband_guild(request):
         messages.error(request, "请输入正确的帮会名称以确认解散")
         return redirect("guilds:detail", guild_id=guild.id)
 
-    try:
-        guild_service.disband_guild(guild, request.user)
-        messages.success(request, "帮会已解散")
+    outcome = execute_guild_action(
+        request,
+        action=lambda: guild_service.disband_guild(guild, request.user),
+        success_message="帮会已解散",
+    )
+    if outcome.succeeded:
         return redirect("guilds:hall")
-    except ValueError as e:
-        messages.error(request, str(e))
-        return redirect("guilds:detail", guild_id=guild.id)
+    return redirect("guilds:detail", guild_id=guild.id)

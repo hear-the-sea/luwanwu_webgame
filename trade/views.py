@@ -1,74 +1,32 @@
 """交易视图。"""
 
 import logging
-from collections.abc import Callable
-from typing import TypeVar
-from urllib.parse import urlencode
 
 from django.conf import settings
-from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.shortcuts import redirect
-from django.urls import reverse
+from django.http import HttpResponseRedirect
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
-from core.exceptions import GameError
-from core.utils import safe_int, sanitize_error_message
+from core.utils import safe_int
 from core.utils.rate_limit import rate_limit_redirect
+from gameplay.models import Manor
 from gameplay.services import ensure_manor
 from trade.selectors import get_trade_context
 from trade.services.auction_service import place_bid
 from trade.services.bank_service import exchange_gold_bar
-from trade.services.market_service import cancel_listing, create_listing, purchase_listing
+from trade.services.market_service import LISTING_FEES, cancel_listing, create_listing, purchase_listing
 from trade.services.shop_service import buy_item, sell_item
+from trade.view_helpers import execute_manor_trade_action_and_redirect as _execute_manor_trade_action_and_redirect
+from trade.view_helpers import handle_troop_bank_transfer as _handle_troop_bank_transfer
+from trade.view_helpers import parse_market_listing_form as _parse_market_listing_form
+from trade.view_helpers import parse_positive_post_int_or_redirect as _parse_positive_post_int_or_redirect
+from trade.view_helpers import parse_required_post_text as _parse_required_post_text
+from trade.view_helpers import parse_trade_item_quantity_form as _parse_trade_item_quantity_form
 
 logger = logging.getLogger(__name__)
-ALLOWED_MARKET_DURATIONS = frozenset({7200, 28800, 86400})
-TradeResult = TypeVar("TradeResult")
-
-
-def _trade_redirect(tab: str | None = None, view: str | None = None, troop_category: str | None = None):
-    base_url = reverse("trade:trade")
-    params = {}
-    if tab:
-        params["tab"] = tab
-    if view:
-        params["view"] = view
-    normalized_troop_category = (troop_category or "").strip()
-    if normalized_troop_category and normalized_troop_category != "all":
-        params["troop_category"] = normalized_troop_category
-    if not params:
-        return redirect(base_url)
-    return redirect(f"{base_url}?{urlencode(params)}")
-
-
-def _handle_trade_error(request, exc: Exception) -> None:
-    messages.error(request, sanitize_error_message(exc))
-
-
-def _handle_unexpected_trade_error(request, exc: Exception, *, op: str) -> None:
-    logger.exception(
-        "trade view unexpected error: op=%s user_id=%s error=%s", op, getattr(request.user, "id", None), exc
-    )
-    _handle_trade_error(request, exc)
-
-
-def _execute_trade_action(
-    request,
-    *,
-    op: str,
-    action: Callable[[], TradeResult],
-    success_message: Callable[[TradeResult], str],
-) -> None:
-    try:
-        result = action()
-        messages.success(request, success_message(result))
-    except (GameError, ValueError) as exc:
-        _handle_trade_error(request, exc)
-    except Exception as exc:
-        _handle_unexpected_trade_error(request, exc, op=op)
+ALLOWED_MARKET_DURATIONS = frozenset(LISTING_FEES.keys())
 
 
 def _get_positive_int_setting(name: str, default: int) -> int:
@@ -78,27 +36,17 @@ def _get_positive_int_setting(name: str, default: int) -> int:
     return value
 
 
-def _parse_positive_post_int(request, field: str) -> int | None:
-    value = safe_int(request.POST.get(field), default=None)
-    if value is None or value <= 0:
-        return None
-    return value
-
-
-def _parse_non_negative_post_int(request, field: str) -> int | None:
-    value = safe_int(request.POST.get(field), default=None)
-    if value is None or value < 0:
-        return None
-    return value
-
-
-def _parse_market_duration(request) -> int | None:
-    duration = safe_int(request.POST.get("duration"), default=None)
-    if duration is None:
-        return None
-    if duration not in ALLOWED_MARKET_DURATIONS:
-        return None
-    return duration
+def _warn_if_threshold_exceeded(
+    *,
+    setting_name: str,
+    default: int,
+    value: int,
+    log_message: str,
+    log_args: tuple[object, ...],
+):
+    threshold = _get_positive_int_setting(setting_name, default)
+    if value >= threshold:
+        logger.warning(log_message, *log_args)
 
 
 class TradeView(LoginRequiredMixin, TemplateView):
@@ -119,24 +67,16 @@ class TradeView(LoginRequiredMixin, TemplateView):
 @rate_limit_redirect("shop_buy", limit=10, window_seconds=60)
 def shop_buy_view(request):
     """购买商品"""
-    manor = ensure_manor(request.user)
-    item_key = (request.POST.get("item_key") or "").strip()
-    if not item_key:
-        messages.error(request, "请选择商品")
-        return _trade_redirect()
-    quantity = _parse_positive_post_int(request, "quantity")
-    if quantity is None:
-        messages.error(request, "数量参数无效")
-        return _trade_redirect()
+    parsed = _parse_trade_item_quantity_form(request)
+    if isinstance(parsed, HttpResponseRedirect):
+        return parsed
 
-    _execute_trade_action(
+    return _execute_manor_trade_action_and_redirect(
         request,
         op="shop_buy",
-        action=lambda: buy_item(manor, item_key, quantity),
+        action_factory=lambda manor: buy_item(manor, parsed.item_key, parsed.quantity),
         success_message=lambda result: f"成功购买 {result['item_name']} x{result['quantity']}，花费 {result['total_cost']} 银两",
     )
-
-    return _trade_redirect()
 
 
 @login_required
@@ -144,24 +84,16 @@ def shop_buy_view(request):
 @rate_limit_redirect("shop_sell", limit=10, window_seconds=60)
 def shop_sell_view(request):
     """出售物品"""
-    manor = ensure_manor(request.user)
-    item_key = (request.POST.get("item_key") or "").strip()
-    if not item_key:
-        messages.error(request, "请选择商品")
-        return _trade_redirect()
-    quantity = _parse_positive_post_int(request, "quantity")
-    if quantity is None:
-        messages.error(request, "数量参数无效")
-        return _trade_redirect()
+    parsed = _parse_trade_item_quantity_form(request)
+    if isinstance(parsed, HttpResponseRedirect):
+        return parsed
 
-    _execute_trade_action(
+    return _execute_manor_trade_action_and_redirect(
         request,
         op="shop_sell",
-        action=lambda: sell_item(manor, item_key, quantity),
+        action_factory=lambda manor: sell_item(manor, parsed.item_key, parsed.quantity),
         success_message=lambda result: f"成功出售 {result['item_name']} x{result['quantity']}，获得 {result['total_income']} 银两",
     )
-
-    return _trade_redirect()
 
 
 @login_required
@@ -169,24 +101,28 @@ def shop_sell_view(request):
 @rate_limit_redirect("bank_exchange", limit=5, window_seconds=60)
 def exchange_gold_bar_view(request):
     """兑换金条"""
-    manor = ensure_manor(request.user)
-    troop_category = (request.POST.get("troop_category") or "").strip()
-    quantity = _parse_positive_post_int(request, "quantity")
-    if quantity is None:
-        messages.error(request, "数量参数无效")
-        return _trade_redirect(tab="bank", troop_category=troop_category)
+    troop_category = _parse_required_post_text(request, "troop_category") or ""
+    quantity = _parse_positive_post_int_or_redirect(
+        request,
+        "quantity",
+        "数量参数无效",
+        tab="bank",
+        troop_category=troop_category,
+    )
+    if isinstance(quantity, HttpResponseRedirect):
+        return quantity
 
-    _execute_trade_action(
+    return _execute_manor_trade_action_and_redirect(
         request,
         op="bank_exchange",
-        action=lambda: exchange_gold_bar(manor, quantity),
+        action_factory=lambda manor: exchange_gold_bar(manor, quantity),
         success_message=lambda result: (
             f"成功兑换 {result['quantity']} 根金条，花费 {result['total_cost']:,} 银两"
             f"（含手续费 {result['fee']:,} 银两）。下一根汇率：{result['next_rate']:,} 银两。"
         ),
+        tab="bank",
+        troop_category=troop_category,
     )
-
-    return _trade_redirect(tab="bank", troop_category=troop_category)
 
 
 @login_required
@@ -194,31 +130,18 @@ def exchange_gold_bar_view(request):
 @rate_limit_redirect("bank_troop_deposit", limit=30, window_seconds=60)
 def deposit_troop_to_bank_view(request):
     """钱庄存入护院"""
-    manor = ensure_manor(request.user)
-    troop_category = (request.POST.get("troop_category") or "").strip()
-    troop_key = (request.POST.get("troop_key") or "").strip()
-    quantity = _parse_positive_post_int(request, "quantity")
 
-    if not troop_key:
-        messages.error(request, "请选择护院类型")
-        return _trade_redirect(tab="bank", troop_category=troop_category)
-    if quantity is None:
-        messages.error(request, "数量参数无效")
-        return _trade_redirect(tab="bank", troop_category=troop_category)
-
-    def _deposit():
+    def _deposit(manor, troop_key: str, quantity: int):
         from gameplay.services.manor.troop_bank import deposit_troops_to_bank
 
         return deposit_troops_to_bank(manor, troop_key, quantity)
 
-    _execute_trade_action(
+    return _handle_troop_bank_transfer(
         request,
         op="bank_troop_deposit",
-        action=_deposit,
+        transfer_action=_deposit,
         success_message=lambda result: f"已存入 {result['quantity']} 名{result['troop_name']}到钱庄",
     )
-
-    return _trade_redirect(tab="bank", troop_category=troop_category)
 
 
 @login_required
@@ -226,31 +149,18 @@ def deposit_troop_to_bank_view(request):
 @rate_limit_redirect("bank_troop_withdraw", limit=30, window_seconds=60)
 def withdraw_troop_from_bank_view(request):
     """钱庄取出护院"""
-    manor = ensure_manor(request.user)
-    troop_category = (request.POST.get("troop_category") or "").strip()
-    troop_key = (request.POST.get("troop_key") or "").strip()
-    quantity = _parse_positive_post_int(request, "quantity")
 
-    if not troop_key:
-        messages.error(request, "请选择护院类型")
-        return _trade_redirect(tab="bank", troop_category=troop_category)
-    if quantity is None:
-        messages.error(request, "数量参数无效")
-        return _trade_redirect(tab="bank", troop_category=troop_category)
-
-    def _withdraw():
+    def _withdraw(manor, troop_key: str, quantity: int):
         from gameplay.services.manor.troop_bank import withdraw_troops_from_bank
 
         return withdraw_troops_from_bank(manor, troop_key, quantity)
 
-    _execute_trade_action(
+    return _handle_troop_bank_transfer(
         request,
         op="bank_troop_withdraw",
-        action=_withdraw,
+        transfer_action=_withdraw,
         success_message=lambda result: f"已从钱庄取出 {result['quantity']} 名{result['troop_name']}",
     )
-
-    return _trade_redirect(tab="bank", troop_category=troop_category)
 
 
 @login_required
@@ -258,35 +168,23 @@ def withdraw_troop_from_bank_view(request):
 @rate_limit_redirect("market_create", limit=10, window_seconds=60)
 def market_create_listing_view(request):
     """创建交易行挂单"""
-    manor = ensure_manor(request.user)
-    item_key = (request.POST.get("item_key") or "").strip()
-    if not item_key:
-        messages.error(request, "请选择商品")
-        return _trade_redirect(tab="market", view="sell")
-    quantity = _parse_positive_post_int(request, "quantity")
-    unit_price = _parse_non_negative_post_int(request, "unit_price")
-    duration = _parse_market_duration(request)
-    if quantity is None:
-        messages.error(request, "数量参数无效")
-        return _trade_redirect(tab="market", view="sell")
-    if unit_price is None:
-        messages.error(request, "单价参数无效")
-        return _trade_redirect(tab="market", view="sell")
-    if duration is None:
-        messages.error(request, "时长参数无效")
-        return _trade_redirect(tab="market", view="sell")
+    parsed = _parse_market_listing_form(request, allowed_durations=ALLOWED_MARKET_DURATIONS)
+    if isinstance(parsed, HttpResponseRedirect):
+        return parsed
 
-    _execute_trade_action(
+    return _execute_manor_trade_action_and_redirect(
         request,
         op="market_create_listing",
-        action=lambda: create_listing(manor, item_key, quantity, unit_price, duration),
+        action_factory=lambda manor: create_listing(
+            manor, parsed.item_key, parsed.quantity, parsed.unit_price, parsed.duration
+        ),
         success_message=lambda listing: (
-            f"成功上架 {listing.item_template.name} x{quantity}，单价 {unit_price} 银两，"
+            f"成功上架 {listing.item_template.name} x{parsed.quantity}，单价 {parsed.unit_price} 银两，"
             f"总价 {listing.total_price:,} 银两。上架时长 {listing.get_duration_display()}。"
         ),
+        tab="market",
+        view="sell",
     )
-
-    return _trade_redirect(tab="market", view="sell")
 
 
 @login_required
@@ -294,31 +192,29 @@ def market_create_listing_view(request):
 @rate_limit_redirect("market_purchase", limit=10, window_seconds=60)
 def market_purchase_view(request, listing_id: int):
     """购买交易行物品"""
-    manor = ensure_manor(request.user)
 
-    def _purchase():
+    def _purchase(manor: Manor):
         transaction = purchase_listing(manor, listing_id)
-        high_value_threshold = _get_positive_int_setting("TRADE_HIGH_VALUE_SILVER_THRESHOLD", 1_000_000)
-        if transaction.total_price >= high_value_threshold:
-            logger.warning(
-                "High-value market purchase: user_id=%s listing_id=%s total_price=%s",
-                request.user.id,
-                listing_id,
-                transaction.total_price,
-            )
+        _warn_if_threshold_exceeded(
+            setting_name="TRADE_HIGH_VALUE_SILVER_THRESHOLD",
+            default=1_000_000,
+            value=transaction.total_price,
+            log_message="High-value market purchase: user_id=%s listing_id=%s total_price=%s",
+            log_args=(request.user.id, listing_id, transaction.total_price),
+        )
         return transaction
 
-    _execute_trade_action(
+    return _execute_manor_trade_action_and_redirect(
         request,
         op="market_purchase",
-        action=_purchase,
+        action_factory=_purchase,
         success_message=lambda transaction: (
             f"成功购买 {transaction.listing.item_template.name} x{transaction.listing.quantity}，"
             f"花费 {transaction.total_price:,} 银两。物品已直接存入仓库，请查收！"
         ),
+        tab="market",
+        view="buy",
     )
-
-    return _trade_redirect(tab="market", view="buy")
 
 
 @login_required
@@ -326,16 +222,14 @@ def market_purchase_view(request, listing_id: int):
 @rate_limit_redirect("market_cancel", limit=20, window_seconds=60)
 def market_cancel_view(request, listing_id: int):
     """取消交易行挂单"""
-    manor = ensure_manor(request.user)
-
-    _execute_trade_action(
+    return _execute_manor_trade_action_and_redirect(
         request,
         op="market_cancel",
-        action=lambda: cancel_listing(manor, listing_id),
+        action_factory=lambda manor: cancel_listing(manor, listing_id),
         success_message=lambda result: f"已取消挂单，{result['item_name']} x{result['quantity']} 已退回仓库。",
+        tab="market",
+        view="my_listings",
     )
-
-    return _trade_redirect(tab="market", view="my_listings")
 
 
 @login_required
@@ -343,33 +237,29 @@ def market_cancel_view(request, listing_id: int):
 @rate_limit_redirect("auction_bid", limit=15, window_seconds=60)
 def auction_bid_view(request, slot_id: int):
     """拍卖行出价"""
-    manor = ensure_manor(request.user)
-    amount = _parse_positive_post_int(request, "amount")
-    if amount is None:
-        messages.error(request, "出价参数无效")
-        return _trade_redirect(tab="auction")
+    amount = _parse_positive_post_int_or_redirect(request, "amount", "出价参数无效", tab="auction")
+    if isinstance(amount, HttpResponseRedirect):
+        return amount
 
-    def _place_bid():
+    def _place_bid(manor: Manor):
         _bid, is_first_bid = place_bid(manor, slot_id, amount)
-        high_bid_threshold = _get_positive_int_setting("AUCTION_HIGH_BID_THRESHOLD", 200)
-        if amount >= high_bid_threshold:
-            logger.warning(
-                "High-value auction bid: user_id=%s slot_id=%s amount=%s",
-                request.user.id,
-                slot_id,
-                amount,
-            )
+        _warn_if_threshold_exceeded(
+            setting_name="AUCTION_HIGH_BID_THRESHOLD",
+            default=200,
+            value=amount,
+            log_message="High-value auction bid: user_id=%s slot_id=%s amount=%s",
+            log_args=(request.user.id, slot_id, amount),
+        )
         return is_first_bid
 
-    _execute_trade_action(
+    return _execute_manor_trade_action_and_redirect(
         request,
         op="auction_bid",
-        action=_place_bid,
+        action_factory=_place_bid,
         success_message=lambda is_first_bid: (
             f"成功出价 {amount} 金条！您目前是最高出价者。"
             if is_first_bid
             else f"成功加价至 {amount} 金条！您目前是最高出价者。"
         ),
+        tab="auction",
     )
-
-    return _trade_redirect(tab="auction")

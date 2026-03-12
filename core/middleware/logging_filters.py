@@ -22,3 +22,10 @@ class RequestIDFilter(logging.Filter):
         """为日志记录添加 request_id 属性"""
         record.request_id = get_current_request_id()
         return True
+
+
+class ExcludeAccessLogFilter(logging.Filter):
+    """阻止 access 日志重复经过 root console handler。"""
+
+    def filter(self, record):
+        return record.name != "access"

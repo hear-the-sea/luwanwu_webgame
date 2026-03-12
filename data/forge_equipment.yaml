@@ -1,0 +1,201 @@
+equipment:
+  equip_bumao:
+    category: helmet
+    materials:
+      tong: 5
+    base_duration: 120
+    required_forging: 1
+  equip_niupimao:
+    category: helmet
+    materials:
+      tong: 10
+      xi: 5
+    base_duration: 180
+    required_forging: 3
+  equip_tieyekui:
+    category: helmet
+    materials:
+      tie: 10
+    base_duration: 240
+    required_forging: 5
+  equip_bupao:
+    category: armor
+    materials:
+      tong: 5
+    base_duration: 120
+    required_forging: 1
+  equip_shengpijia:
+    category: armor
+    materials:
+      tong: 10
+      xi: 5
+    base_duration: 180
+    required_forging: 3
+  equip_housipao:
+    category: armor
+    materials:
+      tie: 10
+    base_duration: 240
+    required_forging: 5
+  equip_shapijia:
+    category: armor
+    materials:
+      tie: 20
+    base_duration: 300
+    required_forging: 7
+  equip_buxie:
+    category: shoes
+    materials:
+      tong: 5
+    base_duration: 120
+    required_forging: 1
+  equip_yangpixue:
+    category: shoes
+    materials:
+      tong: 10
+      xi: 5
+    base_duration: 180
+    required_forging: 3
+  equip_gangpianxue:
+    category: shoes
+    materials:
+      tie: 10
+    base_duration: 240
+    required_forging: 5
+  equip_yanyuxue:
+    category: shoes
+    materials:
+      tie: 20
+    base_duration: 300
+    required_forging: 7
+  equip_duanjian:
+    category: sword
+    materials:
+      tong: 5
+    base_duration: 120
+    required_forging: 1
+  equip_changjian:
+    category: sword
+    materials:
+      tong: 10
+      xi: 5
+    base_duration: 180
+    required_forging: 3
+  equip_qingmangjian:
+    category: sword
+    materials:
+      tie: 10
+    base_duration: 240
+    required_forging: 5
+  equip_duanmajian:
+    category: sword
+    materials:
+      tie: 20
+    base_duration: 300
+    required_forging: 7
+  equip_duandao:
+    category: dao
+    materials:
+      tong: 5
+    base_duration: 120
+    required_forging: 1
+  equip_dakandao:
+    category: dao
+    materials:
+      tong: 10
+      xi: 5
+    base_duration: 180
+    required_forging: 3
+  equip_tongchangdao:
+    category: dao
+    materials:
+      tie: 10
+    base_duration: 240
+    required_forging: 5
+  equip_jingtiedao:
+    category: dao
+    materials:
+      tie: 20
+    base_duration: 300
+    required_forging: 7
+  equip_changqiang:
+    category: spear
+    materials:
+      tong: 5
+    base_duration: 120
+    required_forging: 1
+  equip_baoweiqiang:
+    category: spear
+    materials:
+      tong: 10
+      xi: 5
+    base_duration: 180
+    required_forging: 3
+  equip_hutoumao:
+    category: spear
+    materials:
+      tie: 10
+    base_duration: 240
+    required_forging: 5
+  equip_pansheqiang:
+    category: spear
+    materials:
+      tie: 20
+    base_duration: 300
+    required_forging: 7
+  equip_changgong:
+    category: bow
+    materials:
+      tong: 5
+    base_duration: 120
+    required_forging: 1
+  equip_fanqugong:
+    category: bow
+    materials:
+      tong: 10
+      xi: 5
+    base_duration: 180
+    required_forging: 3
+  equip_tietaigong:
+    category: bow
+    materials:
+      tie: 10
+    base_duration: 240
+    required_forging: 5
+  equip_shenbigong:
+    category: bow
+    materials:
+      tie: 20
+    base_duration: 300
+    required_forging: 7
+  equip_changbian:
+    category: whip
+    materials:
+      tong: 5
+    base_duration: 120
+    required_forging: 1
+  equip_niupibian:
+    category: whip
+    materials:
+      tong: 10
+      xi: 5
+    base_duration: 180
+    required_forging: 3
+  equip_jicibian:
+    category: whip
+    materials:
+      tie: 10
+    base_duration: 240
+    required_forging: 5
+  equip_jiulonggangbian:
+    category: whip
+    materials:
+      tie: 20
+    base_duration: 300
+    required_forging: 7
+  equip_mingshejiebian:
+    category: whip
+    materials:
+      tie: 30
+    base_duration: 360
+    required_forging: 9

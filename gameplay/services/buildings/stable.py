@@ -8,13 +8,16 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from functools import lru_cache
 from typing import Any, Dict, List
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
 from core.utils.time_scale import scale_duration
+from core.utils.yaml_loader import load_yaml_data
 
 from ...constants import BuildingKeys
 from ...models import HorseProduction, Manor
@@ -22,23 +25,54 @@ from ...models import HorseProduction, Manor
 logger = logging.getLogger(__name__)
 
 # 马匹配置
-HORSE_CONFIG: Dict[str, Dict[str, Any]] = {
-    "equip_zaohongma": {
-        "grain_cost": 500,
-        "base_duration": 120,  # 2分钟
-        "required_horsemanship": 1,  # 需要驯马术1级
-    },
-    "equip_huangbiaoma": {
-        "grain_cost": 800,
-        "base_duration": 180,  # 3分钟
-        "required_horsemanship": 3,  # 需要驯马术3级
-    },
-    "equip_dawanma": {
-        "grain_cost": 1200,
-        "base_duration": 240,  # 4分钟
-        "required_horsemanship": 5,  # 需要驯马术5级
-    },
-}
+DEFAULT_HORSE_CONFIG: Dict[str, Dict[str, Any]] = {}
+
+
+def _normalize_stable_production_config(raw: Any) -> Dict[str, Dict[str, Any]]:
+    root = raw
+    if isinstance(raw, dict) and isinstance(raw.get("production"), dict):
+        root = raw.get("production")
+    if not isinstance(root, dict):
+        return dict(DEFAULT_HORSE_CONFIG)
+
+    config: Dict[str, Dict[str, Any]] = {}
+    for raw_key, raw_item in root.items():
+        item_key = str(raw_key).strip()
+        if not item_key or not isinstance(raw_item, dict):
+            continue
+        if (
+            raw_item.get("grain_cost") is None
+            or raw_item.get("base_duration") is None
+            or raw_item.get("required_horsemanship") is None
+        ):
+            continue
+        config[item_key] = {
+            "grain_cost": max(1, int(raw_item.get("grain_cost") or 1)),
+            "base_duration": max(1, int(raw_item.get("base_duration") or 1)),
+            "required_horsemanship": max(1, int(raw_item.get("required_horsemanship") or 1)),
+        }
+    return config
+
+
+@lru_cache(maxsize=1)
+def load_stable_production_config() -> Dict[str, Dict[str, Any]]:
+    path = settings.BASE_DIR / "data" / "stable_production.yaml"
+    raw = load_yaml_data(
+        path,
+        logger=logger,
+        context="horse_config config",
+        default={"production": DEFAULT_HORSE_CONFIG},
+    )
+    return _normalize_stable_production_config(raw)
+
+
+def clear_stable_production_cache() -> None:
+    global HORSE_CONFIG
+    load_stable_production_config.cache_clear()
+    HORSE_CONFIG = load_stable_production_config()
+
+
+HORSE_CONFIG: Dict[str, Dict[str, Any]] = load_stable_production_config()
 
 
 def _get_item_name_map(keys: set[str]) -> Dict[str, str]:

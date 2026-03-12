@@ -1,0 +1,69 @@
+pagination:
+  guild_list_page_size: 20
+  guild_hall_display_limit: 20
+creation:
+  guild_creation_cost:
+    gold_bar: 2
+  guild_upgrade_base_cost: 5
+contribution:
+  rates:
+    silver: 1
+    grain: 2
+  daily_limits:
+    silver: 100000
+    grain: 50000
+  min_donation_amount: 100
+technology:
+  upgrade_costs:
+    equipment_forge:
+      silver: 5000
+      grain: 2000
+      gold_bar: 1
+    experience_refine:
+      silver: 5000
+      grain: 2000
+      gold_bar: 1
+    resource_supply:
+      silver: 4000
+      grain: 3000
+      gold_bar: 1
+    military_study:
+      silver: 8000
+      grain: 3000
+      gold_bar: 2
+    troop_tactics:
+      silver: 8000
+      grain: 3000
+      gold_bar: 2
+    resource_boost:
+      silver: 10000
+      grain: 5000
+      gold_bar: 3
+    march_speed:
+      silver: 10000
+      grain: 5000
+      gold_bar: 3
+  names:
+    equipment_forge: 装备锻造
+    experience_refine: 经验炼制
+    resource_supply: 资源补给
+    military_study: 兵法研习
+    troop_tactics: 强兵战术
+    resource_boost: 资源增产
+    march_speed: 行军加速
+warehouse:
+  exchange_costs:
+    gear_green: 50
+    gear_blue: 150
+    gear_purple: 500
+    gear_orange: 2000
+    exp_small: 30
+    exp_medium: 100
+    exp_large: 400
+    resource_pack_common: 20
+    resource_pack_advanced: 80
+  daily_exchange_limit: 10
+hero_pool:
+  slot_limit: 2
+  battle_lineup_limit: 20
+  replace_cooldown_seconds: 1800

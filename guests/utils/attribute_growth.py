@@ -12,36 +12,8 @@ from typing import TYPE_CHECKING, Dict
 if TYPE_CHECKING:
     from ..models import Guest
 
+from ..growth_rules import CIVIL_ATTRIBUTE_WEIGHTS, MILITARY_ATTRIBUTE_WEIGHTS, RARITY_ATTRIBUTE_GROWTH_RANGE
 from ..models import GuestArchetype
-
-# 每个稀有度每升1级可获得的基础成长点区间（最小值, 最大值）
-# 基础成长点数会在区间内随机生成，然后按职业权重分配到各个属性
-# 稀有度越高，每级成长点数的区间越大，成长潜力越高
-RARITY_ATTRIBUTE_GROWTH_RANGE = {
-    "black": (1, 3),  # 黑色：1-3点基础成长
-    "gray": (2, 5),  # 灰色：2-5点基础成长
-    "green": (3, 7),  # 绿色：3-7点基础成长
-    "red": (4, 7),  # 红色：4-7点基础成长（调整：避免与绿色下限重叠，期望5.5）
-    "blue": (5, 9),  # 蓝色：5-9点基础成长
-    "purple": (6, 11),  # 紫色：6-11点基础成长
-    "orange": (6, 14),  # 橙色：6-14点基础成长
-}
-
-# 武门客属性分配权重
-MILITARY_ATTRIBUTE_WEIGHTS = {
-    "force": 40,
-    "intellect": 15,
-    "defense": 23,
-    "agility": 22,
-}
-
-# 文门客属性分配权重
-CIVIL_ATTRIBUTE_WEIGHTS = {
-    "force": 20,
-    "intellect": 40,
-    "defense": 20,
-    "agility": 20,
-}
 
 
 def _resolve_growth_range(rarity: str, growth_range: list | None) -> tuple[int, int]:
@@ -85,8 +57,8 @@ def allocate_level_up_attributes(
     基于稀有度和职业的成长机制：
     - 每一级独立随机生成基础成长点数（根据稀有度区间）
     - 基础成长点数按职业权重分配到各个属性
-    - 武将倾向防御（33%）和武力（30%），文官倾向智力（30%）和防御（30%）
-    - 武将敏捷（25%）> 文官敏捷（22%），体现先手优势
+    - 武将默认偏向武力（40%），其次防御（23%）与敏捷（22%）
+    - 文官默认偏向智力（40%），其余三项均衡分配
 
     Args:
         guest: 门客实例
@@ -99,8 +71,8 @@ def allocate_level_up_attributes(
     Examples:
         >>> guest = Guest(rarity="orange", archetype="military")
         >>> result = allocate_level_up_attributes(guest, levels=1)
-        >>> # 橙色武将升1级，6-12点基础成长随机分配
-        >>> # 预期：defense约33%，force约30%，agility约25%，intellect约12%
+        >>> # 橙色武将升1级，6-14点基础成长随机分配
+        >>> # 预期：force约40%，defense约23%，agility约22%，intellect约15%
     """
     if rng is None:
         rng = random.Random()
@@ -167,7 +139,7 @@ def get_expected_growth(
 
     Examples:
         >>> get_expected_growth("orange", "military", 1)
-        {'force': 2.7, 'intellect': 1.08, 'defense': 2.97, 'agility': 2.25}
+        {'force': 4.0, 'intellect': 1.5, 'defense': 2.3, 'agility': 2.2}
     """
     min_growth, max_growth = _resolve_growth_range(rarity, growth_range)
 

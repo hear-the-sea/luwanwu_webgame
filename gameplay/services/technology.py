@@ -29,10 +29,16 @@ from core.utils.time_scale import scale_duration
 from core.utils.yaml_loader import ensure_mapping, load_yaml_data
 
 from ..constants import MAX_CONCURRENT_TECH_UPGRADES
+from . import technology_helpers as _technology_helpers
 from .utils.cache import invalidate_home_stats_cache
 from .utils.notifications import notify_user
 
 logger = logging.getLogger(__name__)
+_build_technology_display_entry = _technology_helpers.build_technology_display_entry
+_build_technology_upgrade_response = _technology_helpers.build_technology_upgrade_response
+_group_martial_technology_entries = _technology_helpers.group_martial_technology_entries
+_resolve_technology_name = _technology_helpers.resolve_technology_name
+_send_technology_completion_notification = _technology_helpers.send_technology_completion_notification
 TECHNOLOGY_TEMPLATES_PATH = settings.BASE_DIR / "data" / "technology_templates.yaml"
 
 _LOCAL_TECH_REFRESH_FALLBACK: dict[int, float] = {}
@@ -288,63 +294,16 @@ def get_technology_display_data(manor, category: str) -> List[Dict[str, Any]]:
     """
 
     technologies = get_technologies_by_category(category)
-
-    # 获取玩家技术记录（包含升级状态）
     player_techs = {pt.tech_key: pt for pt in manor.technologies.all()}
-
-    result = []
-    for tech in technologies:
-        tech_key = tech["key"]
-        player_tech = player_techs.get(tech_key)
-        level = player_tech.level if player_tech else 0
-        max_level = tech.get("max_level", 10)
-
-        # 计算升级成本（使用统一的成本计算函数）
-        if level < max_level:
-            upgrade_cost = calculate_upgrade_cost(tech_key, level)
-        else:
-            upgrade_cost = None
-
-        # 计算升级时间（支持从配置读取 base_time）
-        if level < max_level:
-            base_time = tech.get("base_time", 60)  # 默认60秒，特殊技能可配置更长
-            upgrade_duration = scale_duration(base_time * (1.4**level), minimum=1)
-        else:
-            upgrade_duration = None
-
-        # 升级状态
-        is_upgrading = player_tech.is_upgrading if player_tech else False
-        upgrade_complete_at = player_tech.upgrade_complete_at if player_tech else None
-        time_remaining = player_tech.time_remaining if player_tech else 0
-
-        # 计算当前效果（转为百分比数字，如 0.10 -> 10）
-        effect_per_level = tech.get("effect_per_level", 0.10)
-        current_effect = level * effect_per_level * 100
-        next_effect = (level + 1) * effect_per_level * 100 if level < max_level else None
-
-        result.append(
-            {
-                "key": tech_key,
-                "name": tech["name"],
-                "description": tech.get("description", ""),
-                "category": tech.get("category"),
-                "troop_class": tech.get("troop_class"),
-                "effect_type": tech.get("effect_type"),
-                "level": level,
-                "max_level": max_level,
-                "upgrade_cost": upgrade_cost,
-                "upgrade_duration": upgrade_duration,
-                "current_effect": current_effect,
-                "next_effect": next_effect,
-                "effect_per_level": effect_per_level,
-                "can_upgrade": level < max_level and not is_upgrading,
-                "is_upgrading": is_upgrading,
-                "upgrade_complete_at": upgrade_complete_at,
-                "time_remaining": time_remaining,
-            }
+    return [
+        _build_technology_display_entry(
+            tech=tech,
+            player_tech=player_techs.get(tech["key"]),
+            calculate_upgrade_cost=calculate_upgrade_cost,
+            scale_duration=scale_duration,
         )
-
-    return result
+        for tech in technologies
+    ]
 
 
 def get_martial_technologies_grouped(manor) -> List[Dict[str, Any]]:
@@ -357,30 +316,10 @@ def get_martial_technologies_grouped(manor) -> List[Dict[str, Any]]:
     Returns:
         [{"class_key": "dao", "class_name": "刀类", "technologies": [...]}]
     """
-    technologies = get_technology_display_data(manor, "martial")
-    troop_classes = get_troop_classes()
-
-    # 按兵种分组
-    grouped = {}
-    for tech in technologies:
-        troop_class = str(tech.get("troop_class") or "")
-        if troop_class not in grouped:
-            class_info = troop_classes.get(troop_class, {})
-            grouped[troop_class] = {
-                "class_key": troop_class,
-                "class_name": class_info.get("name", troop_class),
-                "technologies": [],
-            }
-        grouped[troop_class]["technologies"].append(tech)
-
-    # 按固定顺序排列
-    order = ["dao", "qiang", "jian", "quan", "gong"]
-    result = []
-    for class_key in order:
-        if class_key in grouped:
-            result.append(grouped[class_key])
-
-    return result
+    return _group_martial_technology_entries(
+        get_technology_display_data(manor, "martial"),
+        get_troop_classes(),
+    )
 
 
 def schedule_technology_completion(tech, eta_seconds: int) -> None:
@@ -391,21 +330,12 @@ def schedule_technology_completion(tech, eta_seconds: int) -> None:
         tech: PlayerTechnology 实例
         eta_seconds: 预计完成时间（秒）
     """
-
-    countdown = max(0, int(eta_seconds))
-    try:
-        from gameplay.tasks import complete_technology_upgrade
-    except Exception:
-        logger.warning("Unable to import complete_technology_upgrade task; skip scheduling", exc_info=True)
-        return
-    transaction.on_commit(
-        lambda: safe_apply_async(
-            complete_technology_upgrade,
-            args=[tech.id],
-            countdown=countdown,
-            logger=logger,
-            log_message="complete_technology_upgrade dispatch failed",
-        )
+    _technology_helpers.schedule_technology_completion_task(
+        tech,
+        eta_seconds,
+        logger=logger,
+        transaction_module=transaction,
+        safe_apply_async_func=safe_apply_async,
     )
 
 
@@ -481,11 +411,7 @@ def upgrade_technology(manor, tech_key: str) -> Dict[str, Any]:
         # 调度 Celery 任务
         schedule_technology_completion(tech, duration)
 
-    return {
-        "success": True,
-        "message": f"{template['name']} 开始升级，预计 {duration} 秒后完成",
-        "duration": duration,
-    }
+    return _build_technology_upgrade_response(template_name=template["name"], duration=duration)
 
 
 def finalize_technology_upgrade(tech, send_notification: bool = False) -> bool:
@@ -500,8 +426,6 @@ def finalize_technology_upgrade(tech, send_notification: bool = False) -> bool:
         是否成功完成升级
     """
     from django.utils import timezone
-
-    from ..models import Message
 
     if not getattr(tech, "pk", None):
         return False
@@ -522,37 +446,15 @@ def finalize_technology_upgrade(tech, send_notification: bool = False) -> bool:
 
     tech = tech.__class__.objects.select_related("manor").get(pk=tech.pk)
 
-    # 获取技术名称
     template = get_technology_template(tech.tech_key)
-    tech_name = template["name"] if template else tech.tech_key
+    tech_name = _resolve_technology_name(template, tech.tech_key)
 
     if send_notification:
-        from .utils.messages import create_message
-
-        try:
-            create_message(
-                manor=tech.manor,
-                kind=Message.Kind.SYSTEM,
-                title=f"{tech_name} 研究完成",
-                body=f"当前等级 Lv{tech.level}",
-            )
-        except Exception:
-            logger.exception(
-                "Technology completion message failed: manor_id=%s tech_key=%s level=%s",
-                tech.manor_id,
-                tech.tech_key,
-                tech.level,
-            )
-
-        notify_user(
-            tech.manor.user_id,
-            {
-                "kind": "system",
-                "title": f"{tech_name} 研究完成",
-                "tech_key": tech.tech_key,
-                "level": tech.level,
-            },
-            log_context="technology upgrade notification",
+        _send_technology_completion_notification(
+            tech=tech,
+            tech_name=tech_name,
+            logger=logger,
+            notify_user_func=notify_user,
         )
 
     invalidate_home_stats_cache(tech.manor_id)

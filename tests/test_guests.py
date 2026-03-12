@@ -241,6 +241,36 @@ def test_finalize_guest_recruitment_generates_candidates(game_data, django_user_
     assert manor.candidates.count() == recruitment.draw_count
 
 
+@pytest.mark.django_db
+def test_finalize_guest_recruitment_keeps_success_when_notification_fails(
+    game_data, django_user_model, load_guest_data, monkeypatch
+):
+    user = django_user_model.objects.create_user(username="player_recruit_async_notify_fail", password="pass123")
+    manor = ensure_manor(user)
+    manor.silver = 50000
+    manor.save(update_fields=["silver"])
+    pool = RecruitmentPool.objects.get(key="cunmu")
+
+    recruitment = start_guest_recruitment(manor, pool, seed=99)
+    recruitment.complete_at = timezone.now() - timezone.timedelta(seconds=1)
+    recruitment.save(update_fields=["complete_at"])
+
+    monkeypatch.setattr(
+        "gameplay.services.utils.messages.create_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.utils.notifications.notify_user",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("ws backend down")),
+    )
+
+    assert finalize_guest_recruitment(recruitment, now=timezone.now(), send_notification=True) is True
+
+    recruitment.refresh_from_db()
+    assert recruitment.status == GuestRecruitment.Status.COMPLETED
+    assert manor.candidates.count() == recruitment.draw_count
+
+
 @pytest.mark.django_db(transaction=True)
 def test_train_guest_increases_level(game_data, django_user_model, load_guest_data):
     user = django_user_model.objects.create_user(username="player_train", password="pass123")

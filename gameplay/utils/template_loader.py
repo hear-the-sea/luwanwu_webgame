@@ -9,11 +9,25 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import TYPE_CHECKING, Dict, Iterable, List
 
+from core.utils.template_loader import load_templates_by_key
+
 if TYPE_CHECKING:
     from battle.models import TroopTemplate
     from guests.models import GuestTemplate, Skill
 
     from ..models import ItemTemplate
+
+
+def _normalize_keys(keys: Iterable[str]) -> tuple[str, ...]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw_key in keys:
+        key = str(raw_key).strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        normalized.append(key)
+    return tuple(normalized)
 
 
 def get_item_templates_by_keys(keys: Iterable[str]) -> Dict[str, "ItemTemplate"]:
@@ -32,10 +46,10 @@ def get_item_templates_by_keys(keys: Iterable[str]) -> Dict[str, "ItemTemplate"]
     """
     from ..models import ItemTemplate
 
-    key_list = list(keys)
-    if not key_list:
+    normalized_keys = _normalize_keys(keys)
+    if not normalized_keys:
         return {}
-    return {tpl.key: tpl for tpl in ItemTemplate.objects.filter(key__in=key_list)}
+    return load_templates_by_key(ItemTemplate, keys=normalized_keys)
 
 
 def get_item_template_names_by_keys(keys: Iterable[str]) -> Dict[str, str]:
@@ -54,10 +68,11 @@ def get_item_template_names_by_keys(keys: Iterable[str]) -> Dict[str, str]:
     """
     from ..models import ItemTemplate
 
-    key_list = list(keys)
-    if not key_list:
+    normalized_keys = _normalize_keys(keys)
+    if not normalized_keys:
         return {}
-    return {tpl.key: tpl.name for tpl in ItemTemplate.objects.filter(key__in=key_list).only("key", "name")}
+    templates = load_templates_by_key(ItemTemplate, keys=normalized_keys, only_fields=["key", "name"])
+    return {key: template.name for key, template in templates.items()}
 
 
 def get_guest_templates_by_keys(keys: Iterable[str]) -> Dict[str, "GuestTemplate"]:
@@ -72,10 +87,10 @@ def get_guest_templates_by_keys(keys: Iterable[str]) -> Dict[str, "GuestTemplate
     """
     from guests.models import GuestTemplate
 
-    key_list = list(keys)
-    if not key_list:
+    normalized_keys = _normalize_keys(keys)
+    if not normalized_keys:
         return {}
-    return {tpl.key: tpl for tpl in GuestTemplate.objects.filter(key__in=key_list)}
+    return load_templates_by_key(GuestTemplate, keys=normalized_keys)
 
 
 def get_skills_by_keys(keys: Iterable[str]) -> Dict[str, "Skill"]:
@@ -90,10 +105,10 @@ def get_skills_by_keys(keys: Iterable[str]) -> Dict[str, "Skill"]:
     """
     from guests.models import Skill
 
-    key_list = list(keys)
-    if not key_list:
+    normalized_keys = _normalize_keys(keys)
+    if not normalized_keys:
         return {}
-    return {skill.key: skill for skill in Skill.objects.filter(key__in=key_list)}
+    return load_templates_by_key(Skill, keys=normalized_keys)
 
 
 def get_troop_templates_by_keys(keys: Iterable[str]) -> Dict[str, "TroopTemplate"]:
@@ -108,10 +123,10 @@ def get_troop_templates_by_keys(keys: Iterable[str]) -> Dict[str, "TroopTemplate
     """
     from battle.models import TroopTemplate
 
-    key_list = list(keys)
-    if not key_list:
+    normalized_keys = _normalize_keys(keys)
+    if not normalized_keys:
         return {}
-    return {tpl.key: tpl for tpl in TroopTemplate.objects.filter(key__in=key_list)}
+    return load_templates_by_key(TroopTemplate, keys=normalized_keys)
 
 
 @lru_cache(maxsize=1)

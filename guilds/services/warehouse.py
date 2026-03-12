@@ -20,6 +20,11 @@ def add_item_to_warehouse(guild, item_key, quantity, contribution_cost):
         quantity: 数量
         contribution_cost: 兑换成本（贡献度）
     """
+    if quantity <= 0:
+        raise ValueError("产出数量必须为正整数")
+    if contribution_cost < 0:
+        raise ValueError("兑换成本不能为负数")
+
     warehouse_item, created = GuildWarehouse.objects.get_or_create(
         guild=guild, item_key=item_key, defaults={"contribution_cost": contribution_cost}
     )
@@ -50,6 +55,9 @@ def exchange_item(member, item_key, quantity=1):
     Raises:
         ValueError: 验证失败
     """
+    if quantity <= 0:
+        raise ValueError("兑换数量必须为正整数")
+
     from gameplay.models import ItemTemplate
 
     # 验证物品模板是否存在并可用

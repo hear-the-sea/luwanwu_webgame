@@ -8,7 +8,7 @@
     <div class="tw-section-header">
         <div>
             <h1>成员申请</h1>
-            <p class="caption">{{ guild.name }} · 待审批：{{ applications.count }}</p>
+            <p class="caption">{{ guild.name }} · 待审批：{{ pending_count }}</p>
         </div>
         <div class="flex gap-2">
             <a href="{% url 'guilds:members' %}" class="tw-btn-secondary">成员列表</a>
@@ -30,7 +30,7 @@
                         <div class="tw-guild-application-actions">
                             <form method="post" action="{% url 'guilds:approve_application' app.id %}">
                                 {% csrf_token %}
-                                <button type="submit" class="tw-btn-primary" {% if guild.current_member_count >= guild.member_capacity %}disabled title="成员已满"{% endif %}>
+                                <button type="submit" class="tw-btn-primary" {% if is_guild_full %}disabled title="成员已满"{% endif %}>
                                     通过
                                 </button>
                             </form>
@@ -46,7 +46,7 @@
                     {% else %}
                         <p class="tw-muted m-0">未留言</p>
                     {% endif %}
-                    {% if guild.current_member_count >= guild.member_capacity %}
+                    {% if is_guild_full %}
                         <div class="tw-guild-warning">
                             <p>成员已满，无法通过新申请。请先升级帮会或辞退成员。</p>
                         </div>

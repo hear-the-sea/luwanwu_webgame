@@ -14,6 +14,7 @@ from core.utils.rate_limit import rate_limit_redirect
 
 from ..decorators import require_guild_member
 from ..services import warehouse as warehouse_service
+from .helpers import build_guild_member_context, execute_guild_action
 
 # item_key 格式验证正则（只允许小写字母、数字、下划线）
 ITEM_KEY_PATTERN = re.compile(r"^[a-z0-9_]+$")
@@ -24,20 +25,17 @@ ITEM_KEY_PATTERN = re.compile(r"^[a-z0-9_]+$")
 def warehouse(request):
     """帮会仓库"""
     member = request.guild_member
-    guild = member.guild
 
     # 获取分页参数
     page = safe_int(request.GET.get("page", 1), default=1, min_val=1)
 
     # 获取仓库物品列表（分页）
-    warehouse_data = warehouse_service.get_warehouse_items(guild, page=page, per_page=50)
-
-    context = {
-        "guild": guild,
-        "member": member,
-        "warehouse_items": warehouse_data["items"],
-        "pagination": warehouse_data,
-    }
+    warehouse_data = warehouse_service.get_warehouse_items(member.guild, page=page, per_page=50)
+    context = build_guild_member_context(
+        member,
+        warehouse_items=warehouse_data["items"],
+        pagination=warehouse_data,
+    )
 
     return render(request, "guilds/warehouse.html", context)
 
@@ -56,11 +54,12 @@ def exchange_item(request, item_key):
     member = request.guild_member
     quantity = safe_int(request.POST.get("quantity", 1), default=1, min_val=1, max_val=100)
 
-    try:
-        warehouse_service.exchange_item(member, item_key, quantity)
-        messages.success(request, "兑换成功！")
-    except ValueError as e:
-        messages.error(request, sanitize_error_message(e))
+    execute_guild_action(
+        request,
+        action=lambda: warehouse_service.exchange_item(member, item_key, quantity),
+        success_message="兑换成功！",
+        error_message_formatter=sanitize_error_message,
+    )
 
     return redirect("guilds:warehouse")
 
@@ -70,14 +69,9 @@ def exchange_item(request, item_key):
 def exchange_logs(request):
     """兑换日志"""
     member = request.guild_member
-    guild = member.guild
-
-    # 获取兑换日志
-    logs = warehouse_service.get_exchange_logs(guild, 50)
-
-    context = {
-        "guild": guild,
-        "logs": logs,
-    }
+    context = build_guild_member_context(
+        member,
+        logs=warehouse_service.get_exchange_logs(member.guild, 50),
+    )
 
     return render(request, "guilds/exchange_logs.html", context)

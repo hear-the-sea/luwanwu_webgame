@@ -1,0 +1,13 @@
+production:
+  equip_zaohongma:
+    grain_cost: 500
+    base_duration: 120
+    required_horsemanship: 1
+  equip_huangbiaoma:
+    grain_cost: 800
+    base_duration: 180
+    required_horsemanship: 3
+  equip_dawanma:
+    grain_cost: 1200
+    base_duration: 240
+    required_horsemanship: 5

@@ -8,13 +8,16 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from functools import lru_cache
 from typing import Any, Dict, List
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
 from core.utils.time_scale import scale_duration
+from core.utils.yaml_loader import load_yaml_data
 
 from ...constants import BuildingKeys
 from ...models import LivestockProduction, Manor
@@ -24,33 +27,54 @@ logger = logging.getLogger(__name__)
 
 # 家畜配置
 # 养殖术等级需求：1级鸡，3级鸭，5级鹅，7级猪，9级牛
-LIVESTOCK_CONFIG: Dict[str, Dict[str, Any]] = {
-    "ji": {
-        "grain_cost": 50,
-        "base_duration": 120,  # 2分钟
-        "required_animal_husbandry": 1,
-    },
-    "ya": {
-        "grain_cost": 100,
-        "base_duration": 180,  # 3分钟
-        "required_animal_husbandry": 3,
-    },
-    "e": {
-        "grain_cost": 200,
-        "base_duration": 240,  # 4分钟
-        "required_animal_husbandry": 5,
-    },
-    "zhu": {
-        "grain_cost": 400,
-        "base_duration": 300,  # 5分钟
-        "required_animal_husbandry": 7,
-    },
-    "niu": {
-        "grain_cost": 750,
-        "base_duration": 360,  # 6分钟
-        "required_animal_husbandry": 9,
-    },
-}
+DEFAULT_LIVESTOCK_CONFIG: Dict[str, Dict[str, Any]] = {}
+
+
+def _normalize_ranch_production_config(raw: Any) -> Dict[str, Dict[str, Any]]:
+    root = raw
+    if isinstance(raw, dict) and isinstance(raw.get("production"), dict):
+        root = raw.get("production")
+    if not isinstance(root, dict):
+        return dict(DEFAULT_LIVESTOCK_CONFIG)
+
+    config: Dict[str, Dict[str, Any]] = {}
+    for raw_key, raw_item in root.items():
+        item_key = str(raw_key).strip()
+        if not item_key or not isinstance(raw_item, dict):
+            continue
+        if (
+            raw_item.get("grain_cost") is None
+            or raw_item.get("base_duration") is None
+            or raw_item.get("required_animal_husbandry") is None
+        ):
+            continue
+        config[item_key] = {
+            "grain_cost": max(1, int(raw_item.get("grain_cost") or 1)),
+            "base_duration": max(1, int(raw_item.get("base_duration") or 1)),
+            "required_animal_husbandry": max(1, int(raw_item.get("required_animal_husbandry") or 1)),
+        }
+    return config
+
+
+@lru_cache(maxsize=1)
+def load_ranch_production_config() -> Dict[str, Dict[str, Any]]:
+    path = settings.BASE_DIR / "data" / "ranch_production.yaml"
+    raw = load_yaml_data(
+        path,
+        logger=logger,
+        context="livestock_config config",
+        default={"production": DEFAULT_LIVESTOCK_CONFIG},
+    )
+    return _normalize_ranch_production_config(raw)
+
+
+def clear_ranch_production_cache() -> None:
+    global LIVESTOCK_CONFIG
+    load_ranch_production_config.cache_clear()
+    LIVESTOCK_CONFIG = load_ranch_production_config()
+
+
+LIVESTOCK_CONFIG: Dict[str, Dict[str, Any]] = load_ranch_production_config()
 
 
 def _get_item_name_map(keys: set[str]) -> Dict[str, str]:
