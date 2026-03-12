@@ -63,3 +63,81 @@ def test_candidate_template_rules_match_repeat_and_reveal_design():
         )
         is True
     )
+
+
+def test_validate_recruitment_start_allowed_rejects_active_recruitment():
+    manor = SimpleNamespace(pk=1)
+    pool = SimpleNamespace(pk=2, name="村募")
+
+    with __import__("pytest").raises(ValueError, match="已有招募正在进行中"):
+        recruitment_flow.validate_recruitment_start_allowed(
+            locked_manor=manor,
+            pool=pool,
+            current_time="now",
+            has_active_guest_recruitment=lambda _manor: True,
+            daily_limit=3,
+            count_pool_draws_today=lambda *_args, **_kwargs: 0,
+        )
+
+
+def test_validate_recruitment_start_allowed_rejects_daily_limit():
+    manor = SimpleNamespace(pk=1)
+    pool = SimpleNamespace(pk=2, name="村募")
+
+    with __import__("pytest").raises(ValueError, match="今日招募次数已达上限"):
+        recruitment_flow.validate_recruitment_start_allowed(
+            locked_manor=manor,
+            pool=pool,
+            current_time="now",
+            has_active_guest_recruitment=lambda _manor: False,
+            daily_limit=2,
+            count_pool_draws_today=lambda *_args, **_kwargs: 2,
+        )
+
+
+def test_spend_recruitment_cost_if_needed_skips_empty_cost_and_formats_note():
+    calls = []
+
+    recruitment_flow.spend_recruitment_cost_if_needed(
+        manor="manor",
+        cost={},
+        pool_name="村募",
+        spend_resources=lambda *args, **kwargs: calls.append((args, kwargs)),
+        recruit_cost_reason="reason",
+    )
+    assert calls == []
+
+    recruitment_flow.spend_recruitment_cost_if_needed(
+        manor="manor",
+        cost={"silver": 100},
+        pool_name="村募",
+        spend_resources=lambda *args, **kwargs: calls.append((args, kwargs)),
+        recruit_cost_reason="reason",
+    )
+    assert calls[0][0] == ("manor", {"silver": 100})
+    assert calls[0][1]["note"] == "卡池：村募"
+    assert calls[0][1]["reason"] == "reason"
+
+
+def test_load_candidate_generation_context_uses_injected_loaders_once():
+    calls = {"by_rarity": 0, "hermit": 0, "excluded": 0}
+
+    class _Entries:
+        def select_related(self, *_args, **_kwargs):
+            return ["entry-1"]
+
+    context = recruitment_candidates.load_candidate_generation_context(
+        manor=SimpleNamespace(tavern_recruitment_bonus=1),
+        pool=SimpleNamespace(draw_count=2, entries=_Entries()),
+        seed=7,
+        total_draw_count=None,
+        get_recruitable_templates_by_rarity=lambda: calls.__setitem__("by_rarity", calls["by_rarity"] + 1)
+        or {"gray": []},
+        get_hermit_templates=lambda: calls.__setitem__("hermit", calls["hermit"] + 1) or [],
+        get_excluded_template_ids=lambda _manor: calls.__setitem__("excluded", calls["excluded"] + 1) or {1, 2},
+    )
+
+    assert context["pool_entries"] == ["entry-1"]
+    assert context["resolved_draw_count"] == 3
+    assert context["excluded_ids"] == {1, 2}
+    assert calls == {"by_rarity": 1, "hermit": 1, "excluded": 1}

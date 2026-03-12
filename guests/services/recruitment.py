@@ -47,16 +47,21 @@ logger = logging.getLogger(__name__)
 
 _build_candidate_batch = _recruitment_candidates.build_candidate_batch
 _build_guest_from_candidate = _recruitment_finalize_helpers.build_guest_from_candidate
+_clear_manor_candidates = _recruitment_flow.clear_manor_candidates
 _create_recruitment_record = _recruitment_finalize_helpers.create_recruitment_record
 _delete_processed_candidates = _recruitment_finalize_helpers.delete_processed_candidates
 _ensure_guest_capacity_available = _recruitment_finalize_helpers.ensure_guest_capacity_available
 _ensure_retainer_capacity_available = _recruitment_finalize_helpers.ensure_retainer_capacity_available
 _increment_retainer_count_locked = _recruitment_finalize_helpers.increment_retainer_count_locked
+_load_candidate_generation_context = _recruitment_candidates.load_candidate_generation_context
 _load_locked_retainer_candidate = _recruitment_finalize_helpers.load_locked_retainer_candidate
+_persist_candidate_batch = _recruitment_candidates.persist_candidate_batch
 _remaining_guest_capacity = _recruitment_finalize_helpers.remaining_guest_capacity
 _resolve_candidate_draw_count = _recruitment_candidates.resolve_candidate_draw_count
 _save_guest_objects = _recruitment_finalize_helpers.save_guest_objects
 _split_candidates_by_capacity = _recruitment_finalize_helpers.split_candidates_by_capacity
+_spend_recruitment_cost_if_needed = _recruitment_flow.spend_recruitment_cost_if_needed
+_validate_recruitment_start_allowed = _recruitment_flow.validate_recruitment_start_allowed
 _validate_retainer_candidate_identity = _recruitment_finalize_helpers.validate_retainer_candidate_identity
 _build_rarity_search_order = _recruitment_templates._build_rarity_search_order
 _choose_template_by_rarity = _recruitment_templates._choose_template_by_rarity
@@ -440,32 +445,37 @@ def _build_recruitment_candidates(
         clear_existing: 是否清空已有候选
     """
     if clear_existing:
-        manor.candidates.all().delete()
+        _clear_manor_candidates(manor)
 
-    pool_entries = list(pool.entries.select_related("template"))
-    rng = random.Random(seed)
-    templates_by_rarity = _get_recruitable_templates_by_rarity()
-    hermit_templates = _get_hermit_templates()
-    resolved_draw_count = _resolve_candidate_draw_count(pool=pool, manor=manor, total_draw_count=total_draw_count)
-
+    context = _load_candidate_generation_context(
+        manor=manor,
+        pool=pool,
+        seed=seed,
+        total_draw_count=total_draw_count,
+        get_recruitable_templates_by_rarity=_get_recruitable_templates_by_rarity,
+        get_hermit_templates=_get_hermit_templates,
+        get_excluded_template_ids=get_excluded_template_ids,
+    )
     candidates_to_create = _build_candidate_batch(
         manor=manor,
         pool=pool,
-        pool_entries=pool_entries,
-        resolved_draw_count=resolved_draw_count,
-        excluded_ids=get_excluded_template_ids(manor),
-        rng=rng,
+        pool_entries=context["pool_entries"],
+        resolved_draw_count=context["resolved_draw_count"],
+        excluded_ids=context["excluded_ids"],
+        rng=context["rng"],
         choose_template_from_entries=choose_template_from_entries,
-        templates_by_rarity=templates_by_rarity,
-        hermit_templates=hermit_templates,
+        templates_by_rarity=context["templates_by_rarity"],
+        hermit_templates=context["hermit_templates"],
         generate_random_name=generate_random_name,
         non_repeatable_rarities=NON_REPEATABLE_RARITIES,
     )
 
-    # 批量创建候选门客
-    candidates = RecruitmentCandidate.objects.bulk_create(candidates_to_create)
-    _invalidate_recruitment_hall_cache(getattr(manor, "id", None))
-    return candidates
+    return _persist_candidate_batch(
+        recruitment_candidate_model=RecruitmentCandidate,
+        manor=manor,
+        candidates_to_create=candidates_to_create,
+        invalidate_cache=_invalidate_recruitment_hall_cache,
+    )
 
 
 def _schedule_guest_recruitment_completion(recruitment: GuestRecruitment, eta_seconds: int) -> None:
@@ -523,30 +533,30 @@ def start_guest_recruitment(manor: Manor, pool: RecruitmentPool, seed: int | Non
 
     locked_manor = ManorModel.objects.select_for_update().get(pk=manor.pk)
 
-    if has_active_guest_recruitment(locked_manor):
-        raise ValueError("已有招募正在进行中，请等待当前招募完成。")
-
     current_time = timezone.now()
-    daily_limit = _get_pool_daily_draw_limit()
-    draws_today = _count_pool_draws_today(locked_manor.pk, int(pool.pk), now=current_time)
-    if draws_today >= daily_limit:
-        raise ValueError(f"{pool.name}今日招募次数已达上限（{daily_limit}次）")
+    _validate_recruitment_start_allowed(
+        locked_manor=locked_manor,
+        pool=pool,
+        current_time=current_time,
+        has_active_guest_recruitment=has_active_guest_recruitment,
+        daily_limit=_get_pool_daily_draw_limit(),
+        count_pool_draws_today=_count_pool_draws_today,
+    )
 
     resolved_seed = _resolve_recruitment_seed(seed)
     draw_count = _resolve_candidate_draw_count(pool=pool, manor=locked_manor, total_draw_count=None)
     duration_seconds = get_pool_recruitment_duration_seconds(pool)
     cost = _resolve_recruitment_cost(pool)
 
-    if cost:
-        spend_resources(
-            locked_manor,
-            cost,
-            note=f"卡池：{pool.name}",
-            reason=ResourceEvent.Reason.RECRUIT_COST,
-        )
+    _spend_recruitment_cost_if_needed(
+        manor=locked_manor,
+        cost=cost,
+        pool_name=pool.name,
+        spend_resources=spend_resources,
+        recruit_cost_reason=ResourceEvent.Reason.RECRUIT_COST,
+    )
 
-    # 行为与原流程保持一致：开始新招募时清空现有候选
-    locked_manor.candidates.all().delete()
+    _clear_manor_candidates(locked_manor)
 
     recruitment = _recruitment_flow.create_pending_recruitment(
         recruitment_model=GuestRecruitment,

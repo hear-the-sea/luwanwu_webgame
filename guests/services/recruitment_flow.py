@@ -143,3 +143,37 @@ def send_recruitment_completion_notification(
             exc,
             exc_info=True,
         )
+
+
+def validate_recruitment_start_allowed(
+    *,
+    locked_manor,
+    pool,
+    current_time,
+    has_active_guest_recruitment,
+    daily_limit: int,
+    count_pool_draws_today,
+) -> None:
+    if has_active_guest_recruitment(locked_manor):
+        raise ValueError("已有招募正在进行中，请等待当前招募完成。")
+
+    draws_today = count_pool_draws_today(locked_manor.pk, int(pool.pk), now=current_time)
+    if draws_today >= daily_limit:
+        raise ValueError(f"{pool.name}今日招募次数已达上限（{daily_limit}次）")
+
+
+def spend_recruitment_cost_if_needed(
+    *, manor, cost: dict, pool_name: str, spend_resources, recruit_cost_reason
+) -> None:
+    if not cost:
+        return
+    spend_resources(
+        manor,
+        cost,
+        note=f"卡池：{pool_name}",
+        reason=recruit_cost_reason,
+    )
+
+
+def clear_manor_candidates(manor) -> None:
+    manor.candidates.all().delete()

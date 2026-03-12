@@ -81,3 +81,31 @@ def build_candidate_batch(
         if should_exclude_candidate_template(template, non_repeatable_rarities=non_repeatable_rarities):
             excluded_ids.add(template.id)
     return candidates_to_create
+
+
+def load_candidate_generation_context(
+    *,
+    manor: Manor,
+    pool: RecruitmentPool,
+    seed: int | None,
+    total_draw_count: int | None,
+    get_recruitable_templates_by_rarity,
+    get_hermit_templates,
+    get_excluded_template_ids,
+) -> dict[str, object]:
+    return {
+        "pool_entries": list(pool.entries.select_related("template")),
+        "rng": random.Random(seed),
+        "templates_by_rarity": get_recruitable_templates_by_rarity(),
+        "hermit_templates": get_hermit_templates(),
+        "resolved_draw_count": resolve_candidate_draw_count(pool=pool, manor=manor, total_draw_count=total_draw_count),
+        "excluded_ids": get_excluded_template_ids(manor),
+    }
+
+
+def persist_candidate_batch(
+    *, recruitment_candidate_model, manor: Manor, candidates_to_create: list, invalidate_cache
+) -> list:
+    candidates = recruitment_candidate_model.objects.bulk_create(candidates_to_create)
+    invalidate_cache(getattr(manor, "id", None))
+    return candidates
