@@ -3,10 +3,12 @@ import pytest
 from gameplay.services.arena.exchange_helpers import (
     build_exchange_payload,
     build_exchange_summary,
+    grant_exchange_items_locked,
     merge_item_grants,
     normalize_exchange_quantity,
     scale_reward_items,
     scale_reward_resources,
+    send_exchange_success_message,
 )
 
 
@@ -52,3 +54,44 @@ def test_build_exchange_payload_and_summary_cover_all_sections():
 
 def test_build_exchange_summary_returns_default_when_empty():
     assert build_exchange_summary(credited_resources={}, overflow_resources={}, granted_items={}) == "奖励已处理"
+
+
+def test_grant_exchange_items_locked_merges_grants_and_calls_inventory_writer():
+    calls = []
+
+    granted = grant_exchange_items_locked(
+        fixed_item_grants={"item_a": 2},
+        random_item_grants={"item_a": 1, "item_b": 3},
+        add_item_to_inventory_locked=lambda manor, item_key, amount: calls.append((manor, item_key, amount)),
+        locked_manor="manor-1",
+    )
+
+    assert calls == [
+        ("manor-1", "item_a", 2),
+        ("manor-1", "item_a", 1),
+        ("manor-1", "item_b", 3),
+    ]
+    assert granted == {"item_a": 3, "item_b": 3}
+
+
+def test_send_exchange_success_message_swallows_message_errors(caplog):
+    class _Reward:
+        key = "grain_pack_small"
+        name = "小粮包"
+
+    class _Manor:
+        id = 1
+
+    with caplog.at_level("WARNING"):
+        send_exchange_success_message(
+            create_message_func=lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+            message_kind="reward",
+            locked_manor=_Manor(),
+            reward=_Reward(),
+            total_cost=80,
+            normalized_quantity=1,
+            summary="资源已发放",
+            logger=__import__("logging").getLogger("tests.arena.exchange"),
+        )
+
+    assert "arena exchange message failed" in caplog.text

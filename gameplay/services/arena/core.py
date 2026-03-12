@@ -7,7 +7,7 @@ from datetime import timedelta
 from typing import Iterable, cast
 
 from django.db import transaction
-from django.db.models import Count, F, Sum
+from django.db.models import Count, F
 from django.utils import timezone
 
 from battle.services import simulate_report
@@ -33,6 +33,9 @@ from .registration_helpers import (
     load_selected_registration_guests_locked,
 )
 from .rewards import ArenaRewardDefinition, get_arena_reward_definition
+from .round_helpers import finalize_round_state_locked as _finalize_round_state_locked_impl
+from .round_helpers import load_round_entries_for_matches as _load_round_entries_for_matches_impl
+from .round_helpers import resolve_pending_round_matches as _resolve_pending_round_matches_impl
 from .rules import load_arena_rules
 from .snapshots import ArenaGuestSnapshotProxy, build_entry_guest_snapshot, load_entry_guests
 from .state_helpers import sync_daily_participation_counter_locked as _sync_daily_participation_counter_locked
@@ -103,6 +106,12 @@ _choose_random_item_option = _arena_helpers.choose_random_item_option
 
 
 _resolve_random_reward_items = _arena_helpers.resolve_random_reward_items
+_ensure_exchange_daily_limit = _exchange_helpers.ensure_exchange_daily_limit
+_create_exchange_record = _exchange_helpers.create_exchange_record
+_grant_exchange_items_locked = _exchange_helpers.grant_exchange_items_locked
+_load_round_entries_for_matches = _load_round_entries_for_matches_impl
+_resolve_pending_round_matches = _resolve_pending_round_matches_impl
+_send_exchange_success_message = _exchange_helpers.send_exchange_success_message
 
 
 _build_entry_guest_snapshot = build_entry_guest_snapshot
@@ -558,113 +567,41 @@ def _run_tournament_round(tournament_id: int, *, now) -> bool:
         tournament.next_round_at = now + _round_interval_delta(tournament)
         tournament.save(update_fields=["next_round_at", "updated_at"])
 
-    pending_matches = list(
-        ArenaMatch.objects.select_related(
-            "attacker_entry__manor",
-            "attacker_entry__manor__user",
-            "defender_entry__manor",
-            "defender_entry__manor__user",
-        )
-        .filter(id__in=pending_match_ids)
-        .order_by("match_index", "id")
+    pending_matches, entry_map = _load_round_entries_for_matches(
+        arena_match_model=ArenaMatch,
+        arena_entry_model=ArenaEntry,
+        pending_match_ids=pending_match_ids,
     )
-    entry_ids = {
-        entry_id
-        for match in pending_matches
-        for entry_id in [match.attacker_entry_id, match.defender_entry_id]
-        if entry_id is not None
-    }
-    entries = (
-        ArenaEntry.objects.select_related("manor", "manor__user")
-        .prefetch_related("entry_guests__guest__template", "entry_guests__guest__skills")
-        .filter(pk__in=entry_ids)
+    resolution_failed = _resolve_pending_round_matches(
+        pending_matches=pending_matches,
+        entry_map=entry_map,
+        round_number=round_number,
+        now=now,
+        bye_status=ArenaMatch.Status.BYE,
+        forfeit_status=ArenaMatch.Status.FORFEIT,
+        save_resolved_match=_save_resolved_match,
+        resolve_match_locked=_resolve_match_locked,
+        arena_match_resolution_error=ArenaMatchResolutionError,
     )
-    entry_map = {entry.id: entry for entry in entries}
-
-    resolution_failed = False
-    for pending in pending_matches:
-        attacker_entry = entry_map.get(pending.attacker_entry_id)
-        if not attacker_entry:
-            continue
-
-        if pending.defender_entry_id is None:
-            _save_resolved_match(
-                match=pending,
-                winner_entry=attacker_entry,
-                status=ArenaMatch.Status.BYE,
-                note="本轮轮空直接晋级",
-                now=now,
-            )
-            continue
-
-        defender_entry = entry_map.get(pending.defender_entry_id)
-        if not defender_entry:
-            _save_resolved_match(
-                match=pending,
-                winner_entry=attacker_entry,
-                status=ArenaMatch.Status.FORFEIT,
-                note="对手报名数据缺失，自动晋级",
-                now=now,
-            )
-            continue
-
-        try:
-            _resolve_match_locked(
-                tournament=pending.tournament,
-                round_number=round_number,
-                match_index=pending.match_index,
-                attacker_entry=attacker_entry,
-                defender_entry=defender_entry,
-                now=now,
-                match=pending,
-            )
-        except ArenaMatchResolutionError:
-            resolution_failed = True
 
     with transaction.atomic():
-        tournament = ArenaTournament.objects.select_for_update().filter(pk=tournament_id).first()
-        if not tournament or tournament.status != ArenaTournament.Status.RUNNING:
-            return False
-
-        round_matches = list(
-            ArenaMatch.objects.select_for_update()
-            .filter(tournament=tournament, round_number=round_number)
-            .order_by("match_index", "id")
+        return _finalize_round_state_locked_impl(
+            arena_tournament_model=ArenaTournament,
+            arena_match_model=ArenaMatch,
+            arena_entry_model=ArenaEntry,
+            tournament_id=tournament_id,
+            round_number=round_number,
+            now=now,
+            running_status=ArenaTournament.Status.RUNNING,
+            scheduled_status=ArenaMatch.Status.SCHEDULED,
+            registered_status=ArenaEntry.Status.REGISTERED,
+            eliminated_status=ArenaEntry.Status.ELIMINATED,
+            resolution_failed=resolution_failed,
+            collect_round_outcome_entry_ids=_collect_round_outcome_entry_ids,
+            schedule_round_retry_locked=_schedule_round_retry_locked,
+            finalize_tournament_locked=_finalize_tournament_locked,
+            schedule_round_locked=_schedule_round_locked,
         )
-        unresolved_exists = any(match.status == ArenaMatch.Status.SCHEDULED for match in round_matches)
-        if resolution_failed or unresolved_exists:
-            _schedule_round_retry_locked(tournament, now=now)
-            return False
-
-        winner_ids, loser_ids = _collect_round_outcome_entry_ids(round_matches)
-        if not winner_ids:
-            _schedule_round_retry_locked(tournament, now=now)
-            return False
-
-        if loser_ids:
-            ArenaEntry.objects.filter(
-                pk__in=loser_ids,
-                status=ArenaEntry.Status.REGISTERED,
-            ).update(
-                status=ArenaEntry.Status.ELIMINATED,
-                eliminated_round=round_number,
-            )
-        ArenaEntry.objects.filter(pk__in=winner_ids).update(matches_won=F("matches_won") + 1)
-
-        if len(winner_ids) <= 1:
-            winner = None
-            if winner_ids:
-                winner = (
-                    ArenaEntry.objects.select_related("manor", "manor__user")
-                    .select_for_update()
-                    .filter(pk=winner_ids[0])
-                    .first()
-                )
-            _finalize_tournament_locked(tournament, winner_entry=winner, now=now)
-            return True
-
-        _schedule_round_locked(tournament, round_number=round_number + 1, now=now)
-    return True
 
 
 def run_due_arena_rounds(*, now=None, limit: int = 20) -> int:
@@ -710,18 +647,14 @@ def exchange_arena_reward(manor: Manor, reward_key: str, quantity: int = 1) -> A
         raise ValueError("角斗币不足")
 
     day_start, day_end = _today_bounds()
-    if reward.daily_limit is not None:
-        today_exchanged = (
-            ArenaExchangeRecord.objects.filter(
-                manor=locked_manor,
-                reward_key=reward.key,
-                created_at__gte=day_start,
-                created_at__lt=day_end,
-            ).aggregate(total=Sum("quantity"))["total"]
-            or 0
-        )
-        if today_exchanged + normalized_quantity > reward.daily_limit:
-            raise ValueError(f"{reward.name} 今日最多可兑换 {reward.daily_limit} 次")
+    _ensure_exchange_daily_limit(
+        arena_exchange_record_model=ArenaExchangeRecord,
+        locked_manor=locked_manor,
+        reward=reward,
+        normalized_quantity=normalized_quantity,
+        day_start=day_start,
+        day_end=day_end,
+    )
 
     locked_manor.arena_coins = F("arena_coins") - total_cost
     locked_manor.save(update_fields=["arena_coins"])
@@ -734,25 +667,25 @@ def exchange_arena_reward(manor: Manor, reward_key: str, quantity: int = 1) -> A
     )
 
     fixed_item_grants = _exchange_helpers.scale_reward_items(reward.items, normalized_quantity)
-    for item_key, total_amount in fixed_item_grants.items():
-        add_item_to_inventory_locked(locked_manor, item_key, total_amount)
-
     random_item_grants = _resolve_random_reward_items(reward.random_items, normalized_quantity)
-    for item_key, amount in random_item_grants.items():
-        add_item_to_inventory_locked(locked_manor, item_key, amount)
-    granted_items = _exchange_helpers.merge_item_grants(fixed_item_grants, random_item_grants)
+    granted_items = _grant_exchange_items_locked(
+        fixed_item_grants=fixed_item_grants,
+        random_item_grants=random_item_grants,
+        add_item_to_inventory_locked=add_item_to_inventory_locked,
+        locked_manor=locked_manor,
+    )
 
     payload = _exchange_helpers.build_exchange_payload(
         credited_resources=credited_resources,
         overflow_resources=overflow_resources,
         granted_items=granted_items,
     )
-    ArenaExchangeRecord.objects.create(
-        manor=locked_manor,
-        reward_key=reward.key,
-        reward_name=reward.name,
-        cost_coins=total_cost,
-        quantity=normalized_quantity,
+    _create_exchange_record(
+        arena_exchange_record_model=ArenaExchangeRecord,
+        locked_manor=locked_manor,
+        reward=reward,
+        total_cost=total_cost,
+        normalized_quantity=normalized_quantity,
         payload=payload,
     )
 
@@ -762,22 +695,16 @@ def exchange_arena_reward(manor: Manor, reward_key: str, quantity: int = 1) -> A
         granted_items=granted_items,
     )
 
-    try:
-        create_message(
-            manor=locked_manor,
-            kind=Message.Kind.REWARD,
-            title=f"竞技场兑换成功：{reward.name}",
-            body=f"消耗角斗币 {total_cost}，兑换数量 {normalized_quantity}。{summary}。",
-        )
-    except Exception as exc:
-        logger.warning(
-            "arena exchange message failed: manor_id=%s reward_key=%s quantity=%s error=%s",
-            locked_manor.id,
-            reward.key,
-            normalized_quantity,
-            exc,
-            exc_info=True,
-        )
+    _send_exchange_success_message(
+        create_message_func=create_message,
+        message_kind=Message.Kind.REWARD,
+        locked_manor=locked_manor,
+        reward=reward,
+        total_cost=total_cost,
+        normalized_quantity=normalized_quantity,
+        summary=summary,
+        logger=logger,
+    )
 
     manor.refresh_from_db(fields=["arena_coins", "grain", "silver"])
     return ArenaExchangeResult(
