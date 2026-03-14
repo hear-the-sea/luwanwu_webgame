@@ -156,43 +156,6 @@ missions:
 
     daily_limit: 3
 
-
-  # ========================================
-  # 测试任务：临时技能覆盖测试
-  # ========================================
-  - key: test_temporary_skills
-    name: 临时技能测试
-    description: 测试任务中的临时技能覆盖功能，所有BOSS使用统一技能。
-    battle_type: task
-
-    # 敌方门客：2个高手
-    enemy_guests:
-      - special_hero_dugu_qiubai      # 独孤求败（原有技能）
-      - base_black_civil              # 黑阶学士（无技能）
-
-    # 敌方护院：少量刀客
-    enemy_troops:
-      dao_ke: 300
-
-    # 敌方强度配置（包含临时技能）
-    enemy_technology:
-      level: 3               # 3级科技
-      guest_level: 50        # 50级门客
-      guest_bonus: 0.1       # +10%属性加成
-      # 临时技能：为所有敌方门客统一赋予以下技能（会覆盖原有技能）
-      guest_skills:
-        - dragon_roar        # 龙吟破阵
-        - stratagem_burst    # 奇策突袭
-
-    # 掉落奖励
-    drop_table:
-      silver: 5000           # 5000 银两
-      experience_peach: 5    # 5 个经验桃
-
-    base_travel_time: 300    # 5 分钟
-    daily_limit: 10          # 每日 10 次
-
-
   # ========================================
   # 防守任务：瓦岗寨的逆袭
   # ========================================
@@ -678,6 +641,50 @@ missions:
     drop_table:
       silver: 30000
 
+    daily_limit: 3
+
+  - key: liangshanbo_zhuyingtai
+    name: 梁山伯与祝英台
+    difficulty: intermediate
+    description: |
+      红罗山书院里，三好学生梁山伯与女扮男装求学的祝英台在上学途中偶然相遇，二人一见如故，当下投名结义。三载同窗，情意在书声与山色间日渐深厚；待到英台学成归家，山伯一路相送十八里，英台屡借草木禽鸟暗寄芳心，山伯却迟迟未解。直到祝家厅前，英台换回红妆、手奉香茗，山伯方知“九弟即九妹”，二人遂私订终身。
+
+      奈何祝家已受北马庄恶霸马文才蛊惑，应下婚约。待山伯依约前来议婚，只换得英台一腔泪语，道是姻缘已晚。山伯素来为人端方，交游甚广，诸多义士闻讯赶来，誓要助这对有情人冲破门第与礼法。他们细细勘定迎亲路线，在沿途埋下伏兵，又备足暗器，只待花轿启行时奋力抢亲。一场满载义气与正心的夺亲之战，即将打响。
+    battle_type: task1
+
+    enemy_guests:
+      - key: orig_ma_wencai
+        label: 马文才
+        skills:
+          - stratagem_burst
+
+    enemy_troops:
+      qiang_wang: 200
+      arrow_god: 200
+      dao_sheng: 200
+
+    enemy_technology:
+      level: 4
+      guest_level: 48
+      guest_bonus: 0.16
+
+    drop_table:
+      silver: 10000
+      haorenka: 1
+      nichang_random_piece:
+        chance: 0.1
+        choices:
+          - equip_nichangyuyi
+          - equip_nichangwuxie
+          - equip_nichangjian
+      equip_baguadao: 0.1
+
+    probability_drop_table:
+      equip_nichangyuyi: 1
+      equip_nichangwuxie: 1
+      equip_nichangjian: 1
+
+    base_travel_time: 900
     daily_limit: 3
 
   # ========================================

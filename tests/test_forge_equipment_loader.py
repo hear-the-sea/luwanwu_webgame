@@ -61,3 +61,22 @@ def test_clear_forge_equipment_cache_refreshes_global_equipment_config(monkeypat
             "required_forging": 3,
         }
     }
+
+
+def test_load_forge_equipment_config_includes_advanced_helmets():
+    forge_service.clear_forge_equipment_cache()
+
+    loaded = forge_service.load_forge_equipment_config()
+
+    assert loaded["equip_yulindin"] == {
+        "category": "helmet",
+        "materials": {"tie": 20},
+        "base_duration": 300,
+        "required_forging": 7,
+    }
+    assert loaded["equip_baihongkui"] == {
+        "category": "helmet",
+        "materials": {"tie": 30},
+        "base_duration": 360,
+        "required_forging": 9,
+    }

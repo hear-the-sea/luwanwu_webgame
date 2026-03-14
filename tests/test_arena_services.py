@@ -346,7 +346,10 @@ def test_run_due_arena_rounds_completes_tournament_and_grants_coins():
 
     entry_a.refresh_from_db()
     entry_b.refresh_from_db()
+    guest_a.refresh_from_db(fields=["loyalty"])
+    guest_b.refresh_from_db(fields=["loyalty"])
     assert {entry_a.final_rank, entry_b.final_rank} == {1, 2}
+    assert sorted([guest_a.loyalty, guest_b.loyalty]) == [80, 81]
     assert entry_a.coin_reward > 0
     assert entry_b.coin_reward > 0
 

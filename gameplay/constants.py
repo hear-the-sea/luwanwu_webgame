@@ -139,7 +139,13 @@ class PVPConstants:
     SCOUT_MAX_SUCCESS_RATE = 0.95  # 最高成功率95%
 
     # 踢馆系统
-    RAID_PRESTIGE_RANGE = 500  # 声望差±500以内可攻击
+    RAID_PRESTIGE_DYNAMIC_RANGES = (
+        (5_000, 1_000),  # 双方较低声望 < 5000：允许差值 ±1000
+        (10_000, 2_000),  # 双方较低声望 < 10000：允许差值 ±2000
+        (15_000, 3_000),  # 双方较低声望 < 15000：允许差值 ±3000
+        (20_000, 4_000),  # 双方较低声望 < 20000：允许差值 ±4000
+    )
+    RAID_PRESTIGE_PROTECTION_CUTOFF = 20000  # 双方声望均达到该值后，不再受声望差保护
     RAID_MAX_CONCURRENT = 3  # 同时最多3次出征
     RAID_BASE_TRAVEL_TIME = 300  # 基础行军时间300秒（5分钟）
     RAID_TRAVEL_TIME_PER_DISTANCE = 3  # 每单位距离3秒

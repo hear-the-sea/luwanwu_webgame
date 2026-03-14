@@ -126,3 +126,90 @@ def test_can_attack_target_blocks_defender_defeat_protection():
     allowed, reason = raid_utils.can_attack_target(attacker, defender)
     assert allowed is False
     assert "战败保护期" in reason
+
+
+def test_can_attack_target_ignores_prestige_gap_when_both_manors_reach_cutoff(monkeypatch):
+    cutoff = raid_utils.PVPConstants.RAID_PRESTIGE_PROTECTION_CUTOFF
+    attacker = SimpleNamespace(
+        id=1,
+        is_under_newbie_protection=False,
+        is_under_defeat_protection=False,
+        is_under_peace_shield=False,
+        prestige=cutoff,
+    )
+    defender = SimpleNamespace(
+        id=2,
+        is_under_newbie_protection=False,
+        is_under_defeat_protection=False,
+        is_under_peace_shield=False,
+        prestige=cutoff + 10000,
+    )
+
+    monkeypatch.setattr(raid_utils, "get_recent_attacks_24h", lambda *_args, **_kwargs: 0)
+
+    allowed, reason = raid_utils.can_attack_target(attacker, defender)
+
+    assert raid_utils.get_prestige_color(attacker.prestige, defender.prestige) == "white"
+    assert allowed is True
+    assert reason == ""
+
+
+def test_can_attack_target_still_blocks_large_prestige_gap_below_cutoff(monkeypatch):
+    cutoff = raid_utils.PVPConstants.RAID_PRESTIGE_PROTECTION_CUTOFF
+    attacker = SimpleNamespace(
+        id=1,
+        is_under_newbie_protection=False,
+        is_under_defeat_protection=False,
+        is_under_peace_shield=False,
+        prestige=cutoff - 1,
+    )
+    defender = SimpleNamespace(
+        id=2,
+        is_under_newbie_protection=False,
+        is_under_defeat_protection=False,
+        is_under_peace_shield=False,
+        prestige=cutoff + 10000,
+    )
+
+    monkeypatch.setattr(raid_utils, "get_recent_attacks_24h", lambda *_args, **_kwargs: 0)
+
+    allowed, reason = raid_utils.can_attack_target(attacker, defender)
+
+    assert raid_utils.get_prestige_color(attacker.prestige, defender.prestige) == "red"
+    assert allowed is False
+    assert "声望过高" in reason
+
+
+def test_can_attack_target_uses_dynamic_prestige_range_below_cutoff(monkeypatch):
+    attacker = SimpleNamespace(
+        id=1,
+        is_under_newbie_protection=False,
+        is_under_defeat_protection=False,
+        is_under_peace_shield=False,
+        prestige=12000,
+    )
+    defender_allowed = SimpleNamespace(
+        id=2,
+        is_under_newbie_protection=False,
+        is_under_defeat_protection=False,
+        is_under_peace_shield=False,
+        prestige=14900,
+    )
+    defender_blocked = SimpleNamespace(
+        id=3,
+        is_under_newbie_protection=False,
+        is_under_defeat_protection=False,
+        is_under_peace_shield=False,
+        prestige=16050,
+    )
+
+    monkeypatch.setattr(raid_utils, "get_recent_attacks_24h", lambda *_args, **_kwargs: 0)
+
+    assert raid_utils.get_prestige_protection_range(attacker.prestige, defender_allowed.prestige) == 3000
+    allowed, allowed_reason = raid_utils.can_attack_target(attacker, defender_allowed)
+    blocked, blocked_reason = raid_utils.can_attack_target(attacker, defender_blocked)
+
+    assert allowed is True
+    assert allowed_reason == ""
+    assert blocked is False
+    assert "声望过高" in blocked_reason

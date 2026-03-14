@@ -18,7 +18,7 @@ from gameplay.models import InventoryItem, ItemTemplate, Manor, ResourceEvent
 from gameplay.services import inventory as inventory_pkg
 from gameplay.services.resources import grant_resources, grant_resources_locked
 
-from .core import add_item_to_inventory, consume_inventory_item_locked
+from .core import add_item_to_inventory, consume_inventory_item_for_manor_locked, consume_inventory_item_locked
 from .guest_items import use_guest_rarity_upgrade_item, use_guest_rebirth_card, use_xidianka, use_xisuidan  # noqa: F401
 
 logger = logging.getLogger(__name__)
@@ -67,6 +67,24 @@ def _weighted_choose_template_key(template_keys: List[str], weights: List[int]) 
 def _ensure_guest_capacity(manor: Manor) -> None:
     if manor.guests.count() >= manor.guest_capacity:
         raise GuestCapacityFullError()
+
+
+def _consume_required_items_locked(manor: Manor, payload: dict[str, Any]) -> None:
+    required_items = payload.get("required_items") or {}
+    if not isinstance(required_items, dict):
+        return
+
+    for item_key, raw_amount in required_items.items():
+        normalized_key = str(item_key or "").strip()
+        if not normalized_key:
+            continue
+        try:
+            amount = int(raw_amount)
+        except (TypeError, ValueError):
+            amount = 0
+        if amount <= 0:
+            continue
+        consume_inventory_item_for_manor_locked(manor, normalized_key, amount)
 
 
 def _grant_item_resources(manor: Manor, payload: dict[str, int], note: str) -> dict[str, int]:
@@ -159,6 +177,8 @@ def _apply_guest_summon(item: InventoryItem) -> Dict[str, Any]:
         normalized_exclusive_keys = [str(key).strip() for key in exclusive_template_keys if str(key).strip()]
         if normalized_exclusive_keys and manor.guests.filter(template__key__in=normalized_exclusive_keys).exists():
             raise ValueError(f"庄园已拥有门客「{template.name}」，不可重复获得")
+
+    _consume_required_items_locked(manor, payload)
 
     guest = create_guest_from_template(
         manor=manor,

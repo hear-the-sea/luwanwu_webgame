@@ -18,6 +18,18 @@ equipment:
       tie: 10
     base_duration: 240
     required_forging: 5
+  equip_yulindin:
+    category: helmet
+    materials:
+      tie: 20
+    base_duration: 300
+    required_forging: 7
+  equip_baihongkui:
+    category: helmet
+    materials:
+      tie: 30
+    base_duration: 360
+    required_forging: 9
   equip_bupao:
     category: armor
     materials:

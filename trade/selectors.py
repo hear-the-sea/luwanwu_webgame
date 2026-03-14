@@ -26,6 +26,7 @@ from trade.services.market_service import (
 from trade.services.shop_service import EFFECT_TYPE_CATEGORY, get_sellable_inventory, get_shop_items_for_display
 
 _TOOL_EFFECT_TYPES = LEGACY_TOOL_EFFECT_TYPES
+TRADE_ITEM_PAGE_SIZE = 20
 _TROOP_CATEGORY_LABELS: dict[str, str] = {
     "dao": "刀系",
     "qiang": "枪系",
@@ -185,9 +186,14 @@ def _build_shop_category_options(shop_items, sellable_items) -> list[dict]:
 
 
 def _update_shop_context(request, manor, context: dict) -> None:
+    shop_view = request.GET.get("view", "buy")
+    if shop_view not in {"buy", "sell"}:
+        shop_view = "buy"
     selected_category = request.GET.get("category", "all")
     if selected_category != "all":
         selected_category = _normalize_effect_type(selected_category)
+    buy_page = safe_int(request.GET.get("buy_page", 1), 1, min_val=1)
+    sell_page = safe_int(request.GET.get("sell_page", 1), 1, min_val=1)
 
     shop_items = _safe_call(get_shop_items_for_display, default=[], log_message="load shop items failed")
     # 买入筛选只作用于买入列表；卖出列表始终展示全部可售物品
@@ -203,10 +209,16 @@ def _update_shop_context(request, manor, context: dict) -> None:
             item for item in shop_items if _normalize_effect_type(item.effect_type or "other") == selected_category
         ]
 
+    shop_buy_page_obj = Paginator(shop_items, TRADE_ITEM_PAGE_SIZE).get_page(buy_page)
+    shop_sell_page_obj = Paginator(sellable_items, TRADE_ITEM_PAGE_SIZE).get_page(sell_page)
+
     context.update(
         {
-            "shop_items": shop_items,
-            "inventory": sellable_items,
+            "shop_view": shop_view,
+            "shop_items": list(shop_buy_page_obj.object_list),
+            "inventory": list(shop_sell_page_obj.object_list),
+            "shop_buy_page_obj": shop_buy_page_obj,
+            "shop_sell_page_obj": shop_sell_page_obj,
             "categories": category_options,
             "selected_category": selected_category,
         }
@@ -230,7 +242,7 @@ def _update_market_buy_context(request, context: dict) -> None:
         log_message="load market active listings failed",
     )
     page = safe_int(request.GET.get("page", 1), 1, min_val=1)
-    page_obj = Paginator(listings, 5).get_page(page)
+    page_obj = Paginator(listings, TRADE_ITEM_PAGE_SIZE).get_page(page)
 
     context.update(
         {
@@ -266,7 +278,7 @@ def _update_market_sell_context(request, manor, context: dict) -> None:
         default=[],
         log_message="load market sell inventory failed",
     )
-    page_obj = Paginator(tradeable_qs, 5).get_page(page)
+    page_obj = Paginator(tradeable_qs, TRADE_ITEM_PAGE_SIZE).get_page(page)
 
     context.update(
         {
@@ -282,7 +294,7 @@ def _update_market_my_listings_context(request, manor, context: dict) -> None:
     status = request.GET.get("status", "all")
     my_listings = _safe_call(get_my_listings, manor, status, default=[], log_message="load my market listings failed")
     page = safe_int(request.GET.get("page", 1), 1, min_val=1)
-    page_obj = Paginator(my_listings, 5).get_page(page)
+    page_obj = Paginator(my_listings, TRADE_ITEM_PAGE_SIZE).get_page(page)
 
     context.update(
         {

@@ -641,6 +641,47 @@
     min-height: 300px;
   }
 
+  /* ========== 物品列表分隔线 ========== */
+  .tw-warehouse-table,
+  .tw-shop-table,
+  .tw-auction-table {
+    --tw-item-divider-line: linear-gradient(
+      90deg,
+      rgba(139, 69, 19, 0) 0%,
+      rgba(193, 154, 107, 0.5) 14%,
+      rgba(218, 165, 32, 0.62) 50%,
+      rgba(193, 154, 107, 0.5) 86%,
+      rgba(139, 69, 19, 0) 100%
+    );
+    --tw-item-divider-glow: linear-gradient(
+      90deg,
+      rgba(255, 248, 231, 0) 0%,
+      rgba(255, 248, 231, 0.84) 50%,
+      rgba(255, 248, 231, 0) 100%
+    );
+  }
+
+  .tw-warehouse-table tbody tr,
+  .tw-shop-table tbody tr,
+  .tw-auction-table tbody tr {
+    background-image: var(--tw-item-divider-glow), var(--tw-item-divider-line);
+    background-repeat: no-repeat;
+    background-size: calc(100% - 2.5rem) 1px, calc(100% - 1.5rem) 1px;
+    background-position: center calc(100% - 1px), center bottom;
+  }
+
+  .tw-warehouse-table tbody tr:last-child,
+  .tw-shop-table tbody tr:last-child,
+  .tw-auction-table tbody tr:last-child {
+    background-image: none;
+  }
+
+  .tw-warehouse-table tbody td,
+  .tw-shop-table tbody td,
+  .tw-auction-table tbody td {
+    border-bottom-color: transparent;
+  }
+
   .tw-warehouse-table {
     @apply w-full border-collapse;
   }
@@ -2285,11 +2326,11 @@
   }
 
   .tw-auction-table tr.row-safe {
-    background: rgba(74, 222, 128, 0.08);
+    background-color: rgba(74, 222, 128, 0.08);
   }
 
   .tw-auction-table tr.row-safe:hover {
-    background: rgba(74, 222, 128, 0.15);
+    background-color: rgba(74, 222, 128, 0.15);
   }
 
   .tw-status-safe {

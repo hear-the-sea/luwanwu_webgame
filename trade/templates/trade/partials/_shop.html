@@ -1,11 +1,13 @@
 {% comment %}Shop with category filter{% endcomment %}
 <div class="shop-section">
     <!-- 购买区域 -->
-    <div id="shop-buy-section" class="tw-trade-card">
+    <div id="shop-buy-section" class="tw-trade-card {% if shop_view == 'sell' %}tw-shop-section-hidden{% endif %}">
         {% if shop_items %}
         <div class="tw-filter-bar">
             <form method="get" class="tw-filter-form">
                 <input type="hidden" name="tab" value="shop">
+                <input type="hidden" name="view" value="buy">
+                <input type="hidden" name="sell_page" value="{{ shop_sell_page_obj.number }}">
                 <label for="shop-category" class="tw-filter-label">筛选</label>
                 <select id="shop-category" name="category" class="tw-filter-select" onchange="this.form.submit()">
                     {% for opt in categories %}
@@ -96,6 +98,19 @@
             </tbody>
         </table>
         </div>
+        {% if shop_buy_page_obj.has_other_pages %}
+        <nav class="tw-pagination">
+            {% if shop_buy_page_obj.has_previous %}
+            <a href="?tab=shop&view=buy&category={{ selected_category }}&buy_page=1&sell_page={{ shop_sell_page_obj.number }}" class="tw-btn-secondary tw-btn-sm">首页</a>
+            <a href="?tab=shop&view=buy&category={{ selected_category }}&buy_page={{ shop_buy_page_obj.previous_page_number }}&sell_page={{ shop_sell_page_obj.number }}" class="tw-btn-secondary tw-btn-sm">上一页</a>
+            {% endif %}
+            <span class="tw-page-info">第 {{ shop_buy_page_obj.number }} / {{ shop_buy_page_obj.paginator.num_pages }} 页</span>
+            {% if shop_buy_page_obj.has_next %}
+            <a href="?tab=shop&view=buy&category={{ selected_category }}&buy_page={{ shop_buy_page_obj.next_page_number }}&sell_page={{ shop_sell_page_obj.number }}" class="tw-btn-secondary tw-btn-sm">下一页</a>
+            <a href="?tab=shop&view=buy&category={{ selected_category }}&buy_page={{ shop_buy_page_obj.paginator.num_pages }}&sell_page={{ shop_sell_page_obj.number }}" class="tw-btn-secondary tw-btn-sm">末页</a>
+            {% endif %}
+        </nav>
+        {% endif %}
         {% else %}
         <div class="tw-empty-hint">
             <p>暂无可购商品</p>
@@ -104,7 +119,7 @@
     </div>
 
     <!-- 出售区域 -->
-    <div id="shop-sell-section" class="tw-trade-card tw-shop-section-hidden">
+    <div id="shop-sell-section" class="tw-trade-card {% if shop_view != 'sell' %}tw-shop-section-hidden{% endif %}">
         {% if inventory %}
         <div class="tw-shop-table-wrapper">
         <table class="tw-shop-table">
@@ -181,6 +196,19 @@
             </tbody>
         </table>
         </div>
+        {% if shop_sell_page_obj.has_other_pages %}
+        <nav class="tw-pagination">
+            {% if shop_sell_page_obj.has_previous %}
+            <a href="?tab=shop&view=sell&category={{ selected_category }}&buy_page={{ shop_buy_page_obj.number }}&sell_page=1" class="tw-btn-secondary tw-btn-sm">首页</a>
+            <a href="?tab=shop&view=sell&category={{ selected_category }}&buy_page={{ shop_buy_page_obj.number }}&sell_page={{ shop_sell_page_obj.previous_page_number }}" class="tw-btn-secondary tw-btn-sm">上一页</a>
+            {% endif %}
+            <span class="tw-page-info">第 {{ shop_sell_page_obj.number }} / {{ shop_sell_page_obj.paginator.num_pages }} 页</span>
+            {% if shop_sell_page_obj.has_next %}
+            <a href="?tab=shop&view=sell&category={{ selected_category }}&buy_page={{ shop_buy_page_obj.number }}&sell_page={{ shop_sell_page_obj.next_page_number }}" class="tw-btn-secondary tw-btn-sm">下一页</a>
+            <a href="?tab=shop&view=sell&category={{ selected_category }}&buy_page={{ shop_buy_page_obj.number }}&sell_page={{ shop_sell_page_obj.paginator.num_pages }}" class="tw-btn-secondary tw-btn-sm">末页</a>
+            {% endif %}
+        </nav>
+        {% endif %}
         {% else %}
         <div class="tw-empty-hint">
             <p>暂无可出售的物品</p>

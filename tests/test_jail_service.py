@@ -424,6 +424,53 @@ def test_recruit_prisoner_raises_when_gold_insufficient(mock_manor_model):
                     jail_service.recruit_prisoner(manor, prisoner_id=1)
 
 
+@patch("gameplay.services.jail.Manor")
+def test_recruit_prisoner_rejects_duplicate_unique_original_guest(mock_manor_model):
+    manor = MagicMock()
+    manor.guest_capacity = 10
+    manor.guests.count.return_value = 2
+    manor.guests.filter.return_value.exists.return_value = True
+    mock_manor_model.objects.select_for_update.return_value.get.return_value = manor
+
+    prisoner = MagicMock()
+    prisoner.status = jail_service.JailPrisoner.Status.HELD
+    prisoner.loyalty = 20
+    prisoner.guest_template = SimpleNamespace(key="orig_zhu_yingtai", name="祝英台")
+
+    with patch.object(jail_service.JailPrisoner, "objects") as mock_qs:
+        mock_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = (
+            prisoner
+        )
+
+        with patch.object(jail_service, "consume_inventory_item") as mock_consume:
+            with pytest.raises(ValueError, match="不可重复招募"):
+                jail_service.recruit_prisoner(manor, prisoner_id=1)
+
+    mock_consume.assert_not_called()
+
+
+@patch("gameplay.services.jail.Manor")
+def test_recruit_prisoner_rejects_duplicate_panfeng_variant(mock_manor_model):
+    manor = MagicMock()
+    manor.guest_capacity = 10
+    manor.guests.count.return_value = 2
+    manor.guests.filter.return_value.exists.return_value = True
+    mock_manor_model.objects.select_for_update.return_value.get.return_value = manor
+
+    prisoner = MagicMock()
+    prisoner.status = jail_service.JailPrisoner.Status.HELD
+    prisoner.loyalty = 20
+    prisoner.guest_template = SimpleNamespace(key="hist_sljnbc_0590_blue", name="潘凤")
+
+    with patch.object(jail_service.JailPrisoner, "objects") as mock_qs:
+        mock_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = (
+            prisoner
+        )
+
+        with pytest.raises(ValueError, match="不可重复招募"):
+            jail_service.recruit_prisoner(manor, prisoner_id=1)
+
+
 # ============ Constants tests ============
 
 

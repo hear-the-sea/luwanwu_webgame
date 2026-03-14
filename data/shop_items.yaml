@@ -131,6 +131,15 @@ items:
   - item_key: xingdaorong_guest_card
     stock: 1
     daily_refresh: false
+  - item_key: zhuyingtai_guest_scroll
+    stock: 1
+    daily_refresh: false
+  - item_key: liangshanbo_guest_scroll
+    stock: 1
+    daily_refresh: false
+  - item_key: mawencai_guest_scroll
+    stock: 1
+    daily_refresh: false
   - item_key: peerless_general_upgrade_token
     stock: 1
     daily_refresh: false

@@ -39,6 +39,13 @@ def test_resolve_drop_rewards_rules_are_stable():
         def random(self) -> float:
             return self._value
 
+    class SequenceRng:
+        def __init__(self, values: list[float]):
+            self._values = iter(values)
+
+        def random(self) -> float:
+            return next(self._values)
+
     rng_hit = DummyRng(0.0)
     rng_miss = DummyRng(0.999)
 
@@ -49,6 +56,23 @@ def test_resolve_drop_rewards_rules_are_stable():
     # dict payload form: chance+count, and missing count defaults to 1.
     assert resolve_drop_rewards({"x": {"chance": 1, "count": 3}}, rng_miss) == {"x": 3}
     assert resolve_drop_rewards({"x": {"chance": 1}}, rng_miss) == {"x": 1}
+    assert resolve_drop_rewards(
+        {"pool": {"chance": 1, "choices": ["a", "b", "c"]}},
+        SequenceRng([0.8]),
+    ) == {"c": 1}
+    assert resolve_drop_rewards(
+        {
+            "pool": {
+                "chance": 0.5,
+                "count": 2,
+                "choices": [
+                    {"key": "x", "weight": 1},
+                    {"key": "y", "weight": 3},
+                ],
+            }
+        },
+        SequenceRng([0.0, 0.6]),
+    ) == {"y": 2}
 
 
 def test_safe_apply_async_swallows_dispatch_errors():

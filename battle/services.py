@@ -10,6 +10,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from guests.models import Guest, GuestStatus
+from guests.services.loyalty import grant_battle_victory_loyalty
 
 from .combatants import (
     Combatant,
@@ -524,6 +525,11 @@ def _finalize_battle_results(
         auto_reward=options.auto_reward,
         drop_handler=options.drop_handler,
     )
+
+    if simulation.winner == "attacker":
+        grant_battle_victory_loyalty(guests)
+    elif simulation.winner == "defender" and options.defender_guests is not None:
+        grant_battle_victory_loyalty(options.defender_guests)
 
     hp_updates = apply_guest_hp_updates(guests, attacker_guests_comb, apply_damage=options.apply_damage)
     simulation.losses["attacker"]["hp_updates"] = hp_updates

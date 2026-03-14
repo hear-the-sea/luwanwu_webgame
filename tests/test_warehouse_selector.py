@@ -184,3 +184,53 @@ def test_get_warehouse_context_rarity_upgrade_reads_source_keys_from_item_templa
 
     context = get_warehouse_context(manor, current_tab="warehouse", selected_category="all", page=1)
     assert [guest.id for guest in context["guests_for_rarity_upgrade"]] == [supported_guest.id]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("current_tab", "storage_location"),
+    [
+        ("warehouse", InventoryItem.StorageLocation.WAREHOUSE),
+        ("treasury", InventoryItem.StorageLocation.TREASURY),
+    ],
+)
+def test_get_warehouse_context_paginates_items_to_twenty(current_tab, storage_location):
+    user = User.objects.create_user(username=f"warehouse_page_{current_tab}", password="pass123")
+    manor = ensure_manor(user)
+
+    for idx in range(21):
+        template = ItemTemplate.objects.create(
+            key=f"warehouse_page_{current_tab}_{idx}",
+            name=f"分页物品{idx:02d}",
+        )
+        InventoryItem.objects.create(manor=manor, template=template, quantity=1, storage_location=storage_location)
+
+    first_page = get_warehouse_context(manor, current_tab=current_tab, selected_category="all", page=1)
+    second_page = get_warehouse_context(manor, current_tab=current_tab, selected_category="all", page=2)
+
+    assert len(first_page["inventory_items"]) == 20
+    assert first_page["pagination"]["total_count"] == 21
+    assert first_page["pagination"]["total_pages"] == 2
+    assert first_page["pagination"]["has_next"] is True
+    assert len(second_page["inventory_items"]) == 1
+
+
+@pytest.mark.django_db
+def test_get_warehouse_context_groups_loot_box_under_tool_category():
+    user = User.objects.create_user(username="warehouse_loot_box_tool_category", password="pass123")
+    manor = ensure_manor(user)
+
+    loot_box = ItemTemplate.objects.create(
+        key="warehouse_work_chest",
+        name="打工宝箱",
+        effect_type=ItemTemplate.EffectType.LOOT_BOX,
+        is_usable=True,
+    )
+    InventoryItem.objects.create(manor=manor, template=loot_box, quantity=1)
+
+    context = get_warehouse_context(manor, current_tab="warehouse", selected_category="tool", page=1)
+
+    assert [item.template.key for item in context["inventory_items"]] == ["warehouse_work_chest"]
+    assert context["inventory_items"][0].category_display == "道具"
+    assert any(category["key"] == "tool" for category in context["categories"])
+    assert all(category["key"] != ItemTemplate.EffectType.LOOT_BOX for category in context["categories"])

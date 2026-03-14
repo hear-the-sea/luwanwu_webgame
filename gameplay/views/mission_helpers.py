@@ -148,6 +148,24 @@ def collect_mission_asset_keys(missions: list[MissionTemplate]) -> tuple[set[str
                     enemy_keys.add(key)
         troop_keys.update((mission.enemy_troops or {}).keys())
         drop_keys.update((mission.drop_table or {}).keys())
+        drop_keys.update((mission.probability_drop_table or {}).keys())
+        for drop_value in (mission.drop_table or {}).values():
+            if not isinstance(drop_value, dict):
+                continue
+            choices = drop_value.get("choices")
+            if not isinstance(choices, list):
+                continue
+            for choice in choices:
+                if isinstance(choice, str):
+                    choice_key = choice.strip()
+                elif isinstance(choice, dict):
+                    choice_key = str(
+                        choice.get("key") or choice.get("item_key") or choice.get("template_key") or ""
+                    ).strip()
+                else:
+                    continue
+                if choice_key:
+                    drop_keys.add(choice_key)
 
     return enemy_keys, troop_keys, drop_keys
 
@@ -199,6 +217,81 @@ def resolve_drop_label(
     return key
 
 
+def resolve_drop_pool_label(
+    value: Any,
+    drop_labels: dict[str, str],
+    item_templates: dict[str, Any],
+    book_labels: dict[str, str],
+) -> str | None:
+    if not isinstance(value, dict):
+        return None
+    choices = value.get("choices")
+    if not isinstance(choices, list):
+        return None
+
+    labels: list[str] = []
+    for choice in choices:
+        if isinstance(choice, str):
+            choice_key = choice.strip()
+        elif isinstance(choice, dict):
+            choice_key = str(choice.get("key") or choice.get("item_key") or choice.get("template_key") or "").strip()
+        else:
+            continue
+        if not choice_key:
+            continue
+        labels.append(resolve_drop_label(choice_key, drop_labels, item_templates, book_labels))
+
+    if not labels:
+        return None
+    return "/".join(labels)
+
+
+def resolve_drop_pool_rarity(value: Any, loot_rarities: dict[str, str]) -> str | None:
+    if not isinstance(value, dict):
+        return None
+    choices = value.get("choices")
+    if not isinstance(choices, list):
+        return None
+
+    rarities: list[str] = []
+    for choice in choices:
+        if isinstance(choice, str):
+            choice_key = choice.strip()
+        elif isinstance(choice, dict):
+            choice_key = str(choice.get("key") or choice.get("item_key") or choice.get("template_key") or "").strip()
+        else:
+            continue
+        rarity = loot_rarities.get(choice_key)
+        if rarity:
+            rarities.append(rarity)
+
+    if not rarities:
+        return None
+    if len(set(rarities)) == 1:
+        return rarities[0]
+    return "default"
+
+
+def iter_choice_pool_keys(value: Any) -> list[str]:
+    if not isinstance(value, dict):
+        return []
+    choices = value.get("choices")
+    if not isinstance(choices, list):
+        return []
+
+    keys: list[str] = []
+    for choice in choices:
+        if isinstance(choice, str):
+            choice_key = choice.strip()
+        elif isinstance(choice, dict):
+            choice_key = str(choice.get("key") or choice.get("item_key") or choice.get("template_key") or "").strip()
+        else:
+            continue
+        if choice_key:
+            keys.append(choice_key)
+    return keys
+
+
 def build_drop_lists(
     selected_mission: MissionTemplate,
     drop_labels: dict[str, str],
@@ -208,19 +301,42 @@ def build_drop_lists(
 ) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
     guaranteed_drops: list[dict[str, str]] = []
     probability_drops: list[dict[str, str]] = []
+    handled_probability_keys: set[str] = set()
 
     for key, val in (selected_mission.drop_table or {}).items():
-        label = resolve_drop_label(key, drop_labels, item_templates, book_labels)
+        if isinstance(val, dict) and val.get("choices") and (selected_mission.probability_drop_table or {}):
+            for choice_key in iter_choice_pool_keys(val):
+                if choice_key not in (selected_mission.probability_drop_table or {}):
+                    continue
+                handled_probability_keys.add(choice_key)
+                label = resolve_drop_label(choice_key, drop_labels, item_templates, book_labels)
+                _, count = parse_drop_value((selected_mission.probability_drop_table or {}).get(choice_key))
+                rarity = loot_rarities.get(choice_key) or "default"
+                display_label = f"{label} x{count}" if (count is not None and count >= 1) else label
+                probability_drops.append({"label": display_label, "rarity": rarity})
+            continue
+        label = resolve_drop_pool_label(val, drop_labels, item_templates, book_labels) or resolve_drop_label(
+            key,
+            drop_labels,
+            item_templates,
+            book_labels,
+        )
         chance, count = parse_drop_value(val)
-        rarity = loot_rarities.get(key) or "default"
+        rarity = resolve_drop_pool_rarity(val, loot_rarities) or loot_rarities.get(key) or "default"
 
-        display_label = f"{label} x{count}" if (count is not None and count >= 1) else label
+        is_choice_pool = resolve_drop_pool_label(val, drop_labels, item_templates, book_labels) is not None
+        if count is not None and count >= 1 and not (is_choice_pool and count == 1):
+            display_label = f"{label} x{count}"
+        else:
+            display_label = label
         if chance is not None and 0 < chance < 1:
             probability_drops.append({"label": display_label, "rarity": rarity})
         else:
             guaranteed_drops.append({"label": display_label, "rarity": rarity})
 
     for key, val in (selected_mission.probability_drop_table or {}).items():
+        if key in handled_probability_keys:
+            continue
         label = resolve_drop_label(key, drop_labels, item_templates, book_labels)
         _, count = parse_drop_value(val)
         display_label = f"{label} x{count}" if (count is not None and count >= 1) else label

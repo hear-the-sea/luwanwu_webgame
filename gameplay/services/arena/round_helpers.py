@@ -87,6 +87,7 @@ def finalize_round_state_locked(
     arena_tournament_model,
     arena_match_model,
     arena_entry_model,
+    arena_entry_guest_model,
     tournament_id: int,
     round_number: int,
     now,
@@ -99,6 +100,7 @@ def finalize_round_state_locked(
     schedule_round_retry_locked: Callable[..., None],
     finalize_tournament_locked: Callable[..., None],
     schedule_round_locked: Callable[..., bool],
+    increase_guest_loyalty_by_ids: Callable[[list[int]], int],
 ) -> bool:
     tournament = arena_tournament_model.objects.select_for_update().filter(pk=tournament_id).first()
     if not tournament or tournament.status != running_status:
@@ -130,6 +132,12 @@ def finalize_round_state_locked(
     arena_entry_model.objects.filter(pk__in=winner_ids).update(
         matches_won=__import__("django.db.models", fromlist=["F"]).F("matches_won") + 1
     )
+
+    winner_guest_ids = list(
+        arena_entry_guest_model.objects.filter(entry_id__in=winner_ids).values_list("guest_id", flat=True).distinct()
+    )
+    if winner_guest_ids:
+        increase_guest_loyalty_by_ids(winner_guest_ids)
 
     if len(winner_ids) <= 1:
         winner = None

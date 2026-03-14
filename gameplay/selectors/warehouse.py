@@ -10,7 +10,7 @@ from ..models.items import LEGACY_TOOL_EFFECT_TYPES, get_item_effect_type_label
 from ..services import get_treasury_capacity, get_treasury_used_space
 
 # 每页显示的物品数量
-WAREHOUSE_PAGE_SIZE = 50
+WAREHOUSE_PAGE_SIZE = 20
 
 
 def _distinct_effect_types(items):

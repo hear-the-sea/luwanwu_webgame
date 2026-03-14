@@ -2,7 +2,7 @@ import logging
 
 import pytest
 
-from core.exceptions import GuestCapacityFullError
+from core.exceptions import GuestCapacityFullError, InsufficientStockError
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.inventory import use_inventory_item
 from gameplay.services.manor.core import ensure_manor
@@ -340,3 +340,126 @@ def test_summon_card_rejects_duplicate_unique_guest(django_user_model):
 
     item.refresh_from_db()
     assert item.quantity == 1
+
+
+@pytest.mark.django_db
+def test_summon_card_consumes_required_items_on_success(django_user_model):
+    user = django_user_model.objects.create_user(username="summon_required_items_ok", password="pass123")
+    manor = ensure_manor(user)
+
+    template = GuestTemplate.objects.create(
+        key="orig_zhu_yingtai_test",
+        name="祝英台",
+        archetype="civil",
+        rarity="purple",
+        base_attack=80,
+        base_intellect=90,
+        base_defense=70,
+        base_agility=75,
+        base_luck=60,
+        base_hp=1000,
+        default_gender="female",
+        default_morality=60,
+        recruitable=False,
+    )
+    good_card_template = ItemTemplate.objects.create(
+        key="haorenka_test",
+        name="好人卡",
+        effect_type=ItemTemplate.EffectType.RESOURCE,
+        is_usable=False,
+        rarity="green",
+    )
+    scroll_template = ItemTemplate.objects.create(
+        key="zhuyingtai_guest_scroll_test",
+        name="祝英台门客合成卷轴",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=True,
+        effect_payload={
+            "action": "summon_guest",
+            "required_items": {"haorenka_test": 360},
+            "exclusive_template_keys": [template.key],
+            "choices": [{"template_key": template.key, "weight": 100}],
+        },
+    )
+    good_cards = InventoryItem.objects.create(
+        manor=manor,
+        template=good_card_template,
+        quantity=400,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+    scroll = InventoryItem.objects.create(
+        manor=manor,
+        template=scroll_template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    payload = use_inventory_item(scroll)
+
+    assert payload["获得门客"] == "祝英台"
+    assert manor.guests.filter(template__key=template.key).count() == 1
+    good_cards.refresh_from_db()
+    assert good_cards.quantity == 40
+    assert not InventoryItem.objects.filter(pk=scroll.pk).exists()
+
+
+@pytest.mark.django_db
+def test_summon_card_keeps_scroll_when_required_items_insufficient(django_user_model):
+    user = django_user_model.objects.create_user(username="summon_required_items_fail", password="pass123")
+    manor = ensure_manor(user)
+
+    template = GuestTemplate.objects.create(
+        key="orig_liang_shanbo_test",
+        name="梁山伯",
+        archetype="civil",
+        rarity="blue",
+        base_attack=80,
+        base_intellect=90,
+        base_defense=70,
+        base_agility=75,
+        base_luck=60,
+        base_hp=1000,
+        default_gender="male",
+        default_morality=60,
+        recruitable=False,
+    )
+    good_card_template = ItemTemplate.objects.create(
+        key="haorenka_test_short",
+        name="好人卡",
+        effect_type=ItemTemplate.EffectType.RESOURCE,
+        is_usable=False,
+        rarity="green",
+    )
+    scroll_template = ItemTemplate.objects.create(
+        key="liangshanbo_guest_scroll_test",
+        name="梁山伯门客合成卷轴",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=True,
+        effect_payload={
+            "action": "summon_guest",
+            "required_items": {"haorenka_test_short": 210},
+            "exclusive_template_keys": [template.key],
+            "choices": [{"template_key": template.key, "weight": 100}],
+        },
+    )
+    good_cards = InventoryItem.objects.create(
+        manor=manor,
+        template=good_card_template,
+        quantity=100,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+    scroll = InventoryItem.objects.create(
+        manor=manor,
+        template=scroll_template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    with pytest.raises(InsufficientStockError):
+        use_inventory_item(scroll)
+
+    scroll.refresh_from_db()
+    good_cards.refresh_from_db()
+    assert scroll.quantity == 1
+    assert good_cards.quantity == 100
+    assert manor.guests.filter(template__key=template.key).count() == 0

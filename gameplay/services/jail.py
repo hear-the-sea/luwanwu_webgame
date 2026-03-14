@@ -25,6 +25,22 @@ from .inventory import consume_inventory_item, get_item_quantity
 
 GOLD_BAR_ITEM_KEY = "gold_bar"
 
+UNIQUE_PRISONER_RECRUIT_TEMPLATE_GROUPS = {
+    "hist_sljnbc_0589": ("hist_sljnbc_0589", "hist_sljnbc_0589_blue", "hist_sljnbc_0589_purple"),
+    "hist_sljnbc_0589_blue": ("hist_sljnbc_0589", "hist_sljnbc_0589_blue", "hist_sljnbc_0589_purple"),
+    "hist_sljnbc_0589_purple": ("hist_sljnbc_0589", "hist_sljnbc_0589_blue", "hist_sljnbc_0589_purple"),
+    "hist_sljnbc_0590": ("hist_sljnbc_0590", "hist_sljnbc_0590_blue", "hist_sljnbc_0590_purple"),
+    "hist_sljnbc_0590_blue": ("hist_sljnbc_0590", "hist_sljnbc_0590_blue", "hist_sljnbc_0590_purple"),
+    "hist_sljnbc_0590_purple": ("hist_sljnbc_0590", "hist_sljnbc_0590_blue", "hist_sljnbc_0590_purple"),
+    "orig_ma_wencai": ("orig_ma_wencai",),
+    "orig_liang_shanbo": ("orig_liang_shanbo",),
+    "orig_zhu_yingtai": ("orig_zhu_yingtai",),
+}
+
+
+def _get_prisoner_recruit_exclusive_keys(template_key: str) -> tuple[str, ...]:
+    return UNIQUE_PRISONER_RECRUIT_TEMPLATE_GROUPS.get(str(template_key or "").strip(), ())
+
 
 def list_held_prisoners(manor: Manor) -> List[JailPrisoner]:
     return list(
@@ -173,14 +189,17 @@ def recruit_prisoner(manor: Manor, prisoner_id: int) -> Guest:
     if current >= capacity:
         raise GuestCapacityFullError()
 
+    template: GuestTemplate = prisoner.guest_template
+    exclusive_template_keys = _get_prisoner_recruit_exclusive_keys(template.key)
+    if exclusive_template_keys and locked_manor.guests.filter(template__key__in=exclusive_template_keys).exists():
+        raise ValueError(f"庄园已拥有门客「{template.name}」，不可重复招募")
+
     cost = int(getattr(PVPConstants, "JAIL_RECRUIT_GOLD_BAR_COST", 1) or 1)
     if cost > 0:
         have = get_item_quantity(manor, GOLD_BAR_ITEM_KEY)
         if have < cost:
             raise ValueError(f"金条不足，需要 {cost} 个（当前 {have} 个）")
         consume_inventory_item(manor, GOLD_BAR_ITEM_KEY, cost)
-
-    template: GuestTemplate = prisoner.guest_template
 
     rng = random.Random()
     gender_choice = template.default_gender

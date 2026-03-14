@@ -21,7 +21,9 @@ from trade.services.shop_service import (
 @pytest.mark.django_db
 def test_normalize_effect_type_and_category():
     assert _normalize_effect_type("manor_rename") == ItemTemplate.EffectType.TOOL
+    assert _normalize_effect_type(ItemTemplate.EffectType.LOOT_BOX) == ItemTemplate.EffectType.TOOL
     assert _normalize_effect_type(ItemTemplate.EffectType.TOOL) == ItemTemplate.EffectType.TOOL
+    assert _get_category(ItemTemplate.EffectType.LOOT_BOX) == "道具"
     assert _get_category("equip_weapon") == "武器"
     assert _get_category("unknown") == "其他"
 

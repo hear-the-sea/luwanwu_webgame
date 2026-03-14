@@ -24,8 +24,8 @@
 
         {% if current_tab == "shop" %}
         <div class="tw-mode-switch">
-            <button type="button" class="tw-mode-btn active" data-mode="buy">买入道具</button>
-            <button type="button" class="tw-mode-btn" data-mode="sell">卖出道具</button>
+            <button type="button" class="tw-mode-btn {% if shop_view != 'sell' %}active{% endif %}" data-mode="buy">买入道具</button>
+            <button type="button" class="tw-mode-btn {% if shop_view == 'sell' %}active{% endif %}" data-mode="sell">卖出道具</button>
         </div>
         {% endif %}
     </div>
@@ -77,6 +77,10 @@
                     buySection.classList.add('tw-shop-section-hidden');
                     sellSection.classList.remove('tw-shop-section-hidden');
                 }
+                const url = new URL(window.location.href);
+                url.searchParams.set('tab', 'shop');
+                url.searchParams.set('view', mode);
+                window.history.replaceState({}, '', url);
             });
         });
     }

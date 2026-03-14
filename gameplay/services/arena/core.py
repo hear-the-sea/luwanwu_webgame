@@ -12,11 +12,20 @@ from django.utils import timezone
 
 from battle.services import simulate_report
 from core.utils.cache_lock import acquire_best_effort_lock, release_best_effort_lock
-from gameplay.models import ArenaEntry, ArenaExchangeRecord, ArenaMatch, ArenaTournament, Manor, Message
+from gameplay.models import (
+    ArenaEntry,
+    ArenaEntryGuest,
+    ArenaExchangeRecord,
+    ArenaMatch,
+    ArenaTournament,
+    Manor,
+    Message,
+)
 from gameplay.services.inventory import add_item_to_inventory_locked
 from gameplay.services.resources import grant_resources_locked
 from gameplay.services.utils.messages import create_message
 from guests.models import Guest, GuestStatus
+from guests.services.loyalty import increase_guest_loyalty_by_ids
 
 from . import exchange_helpers as _exchange_helpers
 from . import helpers as _arena_helpers
@@ -589,6 +598,7 @@ def _run_tournament_round(tournament_id: int, *, now) -> bool:
             arena_tournament_model=ArenaTournament,
             arena_match_model=ArenaMatch,
             arena_entry_model=ArenaEntry,
+            arena_entry_guest_model=ArenaEntryGuest,
             tournament_id=tournament_id,
             round_number=round_number,
             now=now,
@@ -601,6 +611,7 @@ def _run_tournament_round(tournament_id: int, *, now) -> bool:
             schedule_round_retry_locked=_schedule_round_retry_locked,
             finalize_tournament_locked=_finalize_tournament_locked,
             schedule_round_locked=_schedule_round_locked,
+            increase_guest_loyalty_by_ids=increase_guest_loyalty_by_ids,
         )
 
 

@@ -67,7 +67,7 @@ class TradeView(LoginRequiredMixin, TemplateView):
 @rate_limit_redirect("shop_buy", limit=10, window_seconds=60)
 def shop_buy_view(request):
     """购买商品"""
-    parsed = _parse_trade_item_quantity_form(request)
+    parsed = _parse_trade_item_quantity_form(request, tab="shop", view="buy")
     if isinstance(parsed, HttpResponseRedirect):
         return parsed
 
@@ -76,6 +76,8 @@ def shop_buy_view(request):
         op="shop_buy",
         action_factory=lambda manor: buy_item(manor, parsed.item_key, parsed.quantity),
         success_message=lambda result: f"成功购买 {result['item_name']} x{result['quantity']}，花费 {result['total_cost']} 银两",
+        tab="shop",
+        view="buy",
     )
 
 
@@ -84,7 +86,7 @@ def shop_buy_view(request):
 @rate_limit_redirect("shop_sell", limit=10, window_seconds=60)
 def shop_sell_view(request):
     """出售物品"""
-    parsed = _parse_trade_item_quantity_form(request)
+    parsed = _parse_trade_item_quantity_form(request, tab="shop", view="sell")
     if isinstance(parsed, HttpResponseRedirect):
         return parsed
 
@@ -93,6 +95,8 @@ def shop_sell_view(request):
         op="shop_sell",
         action_factory=lambda manor: sell_item(manor, parsed.item_key, parsed.quantity),
         success_message=lambda result: f"成功出售 {result['item_name']} x{result['quantity']}，获得 {result['total_income']} 银两",
+        tab="shop",
+        view="sell",
     )
 
 

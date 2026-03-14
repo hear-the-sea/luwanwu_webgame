@@ -67,6 +67,50 @@ def _resolve_drop_entry(value: float | int | dict) -> tuple[float | None, int] |
     return None
 
 
+def _normalize_choice_entries(choices: object) -> list[tuple[str, int]]:
+    if not isinstance(choices, list):
+        return []
+
+    normalized: list[tuple[str, int]] = []
+    for entry in choices:
+        if isinstance(entry, str):
+            key = entry.strip()
+            weight = 1
+        elif isinstance(entry, dict):
+            raw_key = entry.get("key") or entry.get("item_key") or entry.get("template_key")
+            key = str(raw_key or "").strip()
+            try:
+                weight = int(entry.get("weight", 1) or 0)
+            except (TypeError, ValueError):
+                weight = 0
+        else:
+            continue
+
+        if key and weight > 0:
+            normalized.append((key, weight))
+
+    return normalized
+
+
+def _pick_weighted_choice(choices: list[tuple[str, int]], rng: random.Random) -> str | None:
+    if not choices:
+        return None
+
+    total_weight = sum(weight for _key, weight in choices)
+    if total_weight <= 0:
+        return None
+
+    roll = rng.random() * total_weight
+    cumulative = 0
+    chosen = choices[-1][0]
+    for key, weight in choices:
+        cumulative += weight
+        if roll < cumulative:
+            chosen = key
+            break
+    return chosen
+
+
 def resolve_drop_rewards(drop_table: Dict[str, float | int | dict], rng: random.Random | None = None) -> Dict[str, int]:
     """
     Resolve a YAML-like drop table into concrete drops.
@@ -75,6 +119,7 @@ def resolve_drop_rewards(drop_table: Dict[str, float | int | dict], rng: random.
     - value >= 1: guaranteed amount
     - value < 1: probability to drop 1
     - value is dict: supports {"chance"/"probability", "count"/"quantity"/"amount"}
+    - dict may additionally include "choices" for weighted random selection of the actual drop key
 
     Args:
         drop_table: 掉落配置表
@@ -97,6 +142,14 @@ def resolve_drop_rewards(drop_table: Dict[str, float | int | dict], rng: random.
             continue
         chance, count = resolved
         if _should_drop(chance, rng):
-            _add_drop(drops, key, count)
+            drop_key = key
+            if isinstance(value, dict):
+                choice_entries = _normalize_choice_entries(value.get("choices"))
+                if choice_entries:
+                    chosen_key = _pick_weighted_choice(choice_entries, rng)
+                    if not chosen_key:
+                        continue
+                    drop_key = chosen_key
+            _add_drop(drops, drop_key, count)
 
     return drops

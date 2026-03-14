@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 import pytest
 from django.test import RequestFactory
@@ -81,6 +82,104 @@ def test_get_trade_context_shop_builds_categories_and_filters(monkeypatch, djang
 
 
 @pytest.mark.django_db
+def test_get_trade_context_shop_treats_loot_box_as_tool_category(monkeypatch, django_user_model):
+    monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
+
+    user = django_user_model.objects.create_user(username="trade_ctx_shop_loot_box", password="pass12345")
+    manor = ensure_manor(user)
+
+    shop_items = [
+        ShopItemDisplay(
+            key="work_chest_small",
+            name="打工宝箱（小）",
+            description="",
+            price=1,
+            stock=-1,
+            stock_display="无限",
+            available=True,
+            icon="",
+            image_url="",
+            effect_type="loot_box",
+            category="道具",
+            rarity="green",
+            effect_payload={},
+        ),
+        ShopItemDisplay(
+            key="med_item",
+            name="药品",
+            description="",
+            price=1,
+            stock=-1,
+            stock_display="无限",
+            available=True,
+            icon="",
+            image_url="",
+            effect_type="medicine",
+            category="药品",
+            rarity="black",
+            effect_payload={},
+        ),
+    ]
+
+    monkeypatch.setattr("trade.selectors.get_shop_items_for_display", lambda: list(shop_items))
+    monkeypatch.setattr("trade.selectors.get_sellable_inventory", lambda *_args, **_kwargs: [])
+
+    request = RequestFactory().get("/trade", {"tab": "shop", "category": "tool"})
+    context = get_trade_context(request, manor)
+
+    assert context["selected_category"] == "tool"
+    assert [item.key for item in context["shop_items"]] == ["work_chest_small"]
+    assert context["shop_items"][0].category == "道具"
+
+
+@pytest.mark.django_db
+def test_get_trade_context_shop_paginates_buy_and_sell_lists_independently(monkeypatch, django_user_model):
+    monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
+
+    user = django_user_model.objects.create_user(username="trade_ctx_shop_paging", password="pass12345")
+    manor = ensure_manor(user)
+
+    shop_items = [
+        ShopItemDisplay(
+            key=f"shop_item_{idx}",
+            name=f"商品{idx}",
+            description="",
+            price=idx + 1,
+            stock=-1,
+            stock_display="无限",
+            available=True,
+            icon="",
+            image_url="",
+            effect_type="tool",
+            category="道具",
+            rarity="black",
+            effect_payload={},
+        )
+        for idx in range(25)
+    ]
+    sellable_items = [
+        _DummySellable(
+            inventory_item=SimpleNamespace(template=SimpleNamespace(effect_type="tool"), quantity=idx + 1),
+            sell_price=idx + 1,
+        )
+        for idx in range(23)
+    ]
+
+    monkeypatch.setattr("trade.selectors.get_shop_items_for_display", lambda: list(shop_items))
+    monkeypatch.setattr("trade.selectors.get_sellable_inventory", lambda *_args, **_kwargs: list(sellable_items))
+
+    request = RequestFactory().get("/trade", {"tab": "shop", "view": "sell", "buy_page": "-8", "sell_page": "2"})
+    context = get_trade_context(request, manor)
+
+    assert context["current_tab"] == "shop"
+    assert context["shop_view"] == "sell"
+    assert context["shop_buy_page_obj"].number == 1
+    assert context["shop_sell_page_obj"].number == 2
+    assert len(context["shop_items"]) == 20
+    assert len(context["inventory"]) == 3
+
+
+@pytest.mark.django_db
 def test_get_trade_context_bank_includes_bank_info(monkeypatch, django_user_model):
     monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("trade.selectors.get_bank_info", lambda *_args, **_kwargs: {"current_rate": 123})
@@ -152,7 +251,7 @@ def test_get_trade_context_market_buy_lists_page(monkeypatch, django_user_model)
 def test_get_trade_context_market_buy_negative_page_clamped(monkeypatch, django_user_model):
     monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("trade.selectors.expire_user_listings", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("trade.selectors.get_active_listings", lambda **_kwargs: list(range(1, 21)))
+    monkeypatch.setattr("trade.selectors.get_active_listings", lambda **_kwargs: list(range(1, 22)))
 
     user = django_user_model.objects.create_user(username="trade_ctx_market_page_clamp", password="pass12345")
     manor = ensure_manor(user)
@@ -160,7 +259,7 @@ def test_get_trade_context_market_buy_negative_page_clamped(monkeypatch, django_
 
     context = get_trade_context(request, manor)
     assert context["page_obj"].number == 1
-    assert list(context["listings"].object_list) == [1, 2, 3, 4, 5]
+    assert list(context["listings"].object_list) == list(range(1, 21))
 
 
 @pytest.mark.django_db
@@ -229,7 +328,7 @@ def test_get_trade_context_auction_browse_tolerates_bid_info_batch_error(monkeyp
 def test_get_trade_context_market_my_listings_negative_page_clamped(monkeypatch, django_user_model):
     monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("trade.selectors.expire_user_listings", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("trade.selectors.get_my_listings", lambda *_args, **_kwargs: list(range(1, 21)))
+    monkeypatch.setattr("trade.selectors.get_my_listings", lambda *_args, **_kwargs: list(range(1, 22)))
 
     user = django_user_model.objects.create_user(username="trade_ctx_market_my_page_clamp", password="pass12345")
     manor = ensure_manor(user)
@@ -237,7 +336,22 @@ def test_get_trade_context_market_my_listings_negative_page_clamped(monkeypatch,
 
     context = get_trade_context(request, manor)
     assert context["page_obj"].number == 1
-    assert list(context["my_listings"].object_list) == [1, 2, 3, 4, 5]
+    assert list(context["my_listings"].object_list) == list(range(1, 21))
+
+
+@pytest.mark.django_db
+def test_get_trade_context_market_sell_paginates_to_twenty_items(monkeypatch, django_user_model):
+    monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("trade.selectors.expire_user_listings", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("trade.selectors.get_tradeable_inventory", lambda *_args, **_kwargs: list(range(1, 24)))
+
+    user = django_user_model.objects.create_user(username="trade_ctx_market_sell_page", password="pass12345")
+    manor = ensure_manor(user)
+    request = RequestFactory().get("/trade", {"tab": "market", "view": "sell", "page": "2"})
+
+    context = get_trade_context(request, manor)
+    assert context["page_obj"].number == 2
+    assert list(context["tradeable_items"].object_list) == [21, 22, 23]
 
 
 @pytest.mark.django_db

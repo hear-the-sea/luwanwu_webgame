@@ -48,6 +48,34 @@ def test_simulate_report_creates_battle(game_data, django_user_model):
 
 
 @pytest.mark.django_db
+def test_simulate_report_attacker_victory_increases_guest_loyalty(game_data, django_user_model):
+    user = django_user_model.objects.create_user(username="battle_loyalty", password="pass123")
+    manor = ensure_manor(user)
+    manor.silver = 5000
+    manor.save()
+    _recruit_frontline(manor, draws=4)
+
+    for guest in manor.guests.all():
+        guest.level = 50
+        guest.attack_bonus = 800
+        guest.defense_bonus = 800
+        guest.intellect = 800
+        guest.force = 800
+        guest.defense_stat = 300
+        guest.current_hp = guest.max_hp
+        guest.loyalty = 50
+        guest.save()
+
+    troop_loadout = {"dao_jie": 150, "qiang_ling": 150, "archer": 150, "fist_master": 150, "jian_shi": 150}
+    report = simulate_report(
+        manor, seed=1, max_squad=getattr(manor, "max_squad_size", None), troop_loadout=troop_loadout
+    )
+
+    assert report.winner == "attacker"
+    assert set(manor.guests.values_list("loyalty", flat=True)) == {51}
+
+
+@pytest.mark.django_db
 def test_simulate_report_rewards_on_victory(game_data, django_user_model):
     user = django_user_model.objects.create_user(username="champion", password="pass123")
     manor = ensure_manor(user)

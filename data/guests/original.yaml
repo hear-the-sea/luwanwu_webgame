@@ -18,6 +18,21 @@ heroes:
       intellect: 15
       defense: 25
       agility: 15
+  - key: orig_ma_wencai
+    name: 马文才
+    archetype: military
+    flavor: 民间传说中的马文才，多被视作梁祝姻缘间那道难以跨过的门第高墙。他出身豪门士族，家势煊赫，少年便习惯了以家声与礼法衡量世间万事，于是婚姻在他眼中更像两姓相合、门楣相称，而非两心相许。传说中的他气盛而自矜，行事带着世家子弟的强硬与骄贵，最终在梁祝故事里成了富贵礼教的冷影，也成了那场凄美爱情最无言的反衬。
+    default_gender: male
+    default_morality: 35
+    growth_range:
+    - 4
+    - 7
+    recruitable: false
+    attribute_weights:
+      force: 40
+      intellect: 10
+      defense: 30
+      agility: 20
   blue:
   - key: pubayi_blue
     name: 蒲巴乙
@@ -30,3 +45,34 @@ heroes:
     - 9
     recruitable: false
     avatar: pubayi.png
+  - key: orig_liang_shanbo
+    name: 梁山伯
+    archetype: civil
+    flavor: 相传梁山伯是东晋时一位寒门书生，性情敦厚，心地端方，读书之外更重一个“诚”字。他与女扮男装求学的祝英台同窗三载，朝夕相对，却始终只把那份情意藏在君子之交的温润里。待到长亭送别、十八里相送之后，他才从层层言外之意里惊觉知己原来是佳人。可惜情深总迟一步，待他怀着真心登门提亲时，英台已被许配马家。此后梁山伯忧思成疾，抱憾而终，终以一腔未尽之情，化作千古传说中最令人叹惋的名字。
+    default_gender: male
+    default_morality: 88
+    growth_range:
+    - 5
+    - 10
+    recruitable: false
+    attribute_weights:
+      force: 15
+      intellect: 45
+      defense: 25
+      agility: 15
+  purple:
+  - key: orig_zhu_yingtai
+    name: 祝英台
+    archetype: civil
+    flavor: 相传祝英台本是东晋闺秀，自幼聪慧过人，不甘只困于绣楼针黹之间，遂女扮男装远出求学。她与梁山伯同窗三载，情意在书声灯影里悄然生长，临别时又借一路山水、句句双关，将满怀心事细细托出。奈何世间最难违的，往往不是山长水远，而是父母之命与门第之见。待到出嫁之日，她绕道梁山伯墓前，悲恸叩拜，传说风雨骤起、墓裂如门，英台纵身而入，终与所爱埋骨一处。其后双蝶翩然而起，自坟前飞向长空，于是“梁祝化蝶”便成了华夏传说中最凄美也最自由的一笔。
+    default_gender: female
+    default_morality: 92
+    growth_range:
+    - 6
+    - 12
+    recruitable: false
+    attribute_weights:
+      force: 15
+      intellect: 40
+      defense: 15
+      agility: 30

@@ -18,6 +18,9 @@ from .equipment import apply_set_bonuses, ensure_inventory_gears, equip_guest, g
 # 生命值管理
 from .health import INJURY_RECOVERY_THRESHOLD, heal_guest, recover_guest_hp, use_medicine_item_for_guest
 
+# 忠诚度
+from .loyalty import grant_battle_victory_loyalty
+
 # 招募系统
 from .recruitment import (
     CORE_POOL_TIERS,
@@ -57,6 +60,7 @@ __all__ = [
     "recover_guest_hp",
     "use_medicine_item_for_guest",
     "INJURY_RECOVERY_THRESHOLD",
+    "grant_battle_victory_loyalty",
     # 装备
     "apply_set_bonuses",
     "ensure_inventory_gears",

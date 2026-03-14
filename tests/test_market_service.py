@@ -246,6 +246,22 @@ def test_get_active_listings_rejects_unsafe_order_by():
         mock_filter.order_by.assert_called_with("-listed_at")
 
 
+def test_get_active_listings_treats_loot_box_as_tool_category():
+    """Tool-category filtering should include loot_box templates."""
+    with patch.object(market_service.MarketListing, "objects") as mock_qs:
+        mock_filter = MagicMock()
+        mock_qs.filter.return_value.select_related.return_value = mock_filter
+        mock_filter.filter.return_value = mock_filter
+        mock_filter.order_by.return_value = mock_filter
+
+        market_service.get_active_listings(category="tool")
+
+        mock_filter.filter.assert_called_once_with(
+            item_template__effect_type__in=market_service.LEGACY_TOOL_EFFECT_TYPES
+        )
+        assert "loot_box" in market_service.LEGACY_TOOL_EFFECT_TYPES
+
+
 # ============ purchase_listing validation tests ============
 
 

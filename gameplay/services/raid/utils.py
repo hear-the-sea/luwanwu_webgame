@@ -123,12 +123,36 @@ def get_prestige_color(my_prestige: int, target_prestige: int) -> str:
     Returns:
         颜色标识: 'green'（弱小）, 'white'（势均力敌）, 'red'（强大）
     """
+    protection_range = get_prestige_protection_range(my_prestige, target_prestige)
+    if protection_range is None:
+        return "white"  # 高声望区间取消声望差保护
+
     diff = target_prestige - my_prestige
-    if diff < -PVPConstants.RAID_PRESTIGE_RANGE:
-        return "green"  # 对方声望低于我方500以上
-    elif diff > PVPConstants.RAID_PRESTIGE_RANGE:
-        return "red"  # 对方声望高于我方500以上
+    if diff < -protection_range:
+        return "green"
+    elif diff > protection_range:
+        return "red"
     return "white"  # 势均力敌
+
+
+def get_prestige_protection_range(my_prestige: int, target_prestige: int) -> int | None:
+    """
+    Return the allowed prestige gap for raid/scout protection.
+
+    Uses the lower prestige side as the band anchor, so lower-prestige players
+    keep protection while both sides are below the high-prestige cutoff.
+    """
+    if (
+        my_prestige >= PVPConstants.RAID_PRESTIGE_PROTECTION_CUTOFF
+        and target_prestige >= PVPConstants.RAID_PRESTIGE_PROTECTION_CUTOFF
+    ):
+        return None
+
+    base_prestige = min(my_prestige, target_prestige)
+    for upper_bound, allowed_gap in PVPConstants.RAID_PRESTIGE_DYNAMIC_RANGES:
+        if base_prestige < upper_bound:
+            return allowed_gap
+    return PVPConstants.RAID_PRESTIGE_DYNAMIC_RANGES[-1][1]
 
 
 def can_attack_target(
@@ -172,7 +196,7 @@ def can_attack_target(
     if defender.is_under_peace_shield:
         return False, "对方处于免战牌保护期"
 
-    # 检查声望差值
+    # 检查声望差值保护
     color = get_prestige_color(attacker.prestige, defender.prestige)
     if color == "green":
         return False, "对方声望过低，无法攻击"
