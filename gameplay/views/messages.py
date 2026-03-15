@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 def _safe_unread_message_count(manor) -> int:
     try:
         return int(unread_message_count(manor))
-    except Exception as exc:
+    except DatabaseError as exc:
         logger.warning(
             "Failed to read unread_message_count: manor_id=%s error=%s",
             getattr(manor, "id", None),

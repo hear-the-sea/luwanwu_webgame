@@ -84,8 +84,8 @@ class TestMessageViews:
         assert payload["message_id"] == message.pk
         assert "error" in payload
 
-    def test_view_message_json_tolerates_unread_count_failure(self, manor_with_user, monkeypatch):
-        """JSON 查看消息时 unread 计数失败应降级为0而不是500。"""
+    def test_view_message_json_tolerates_unread_count_database_error(self, manor_with_user, monkeypatch):
+        """JSON 查看消息时 unread 计数数据库故障应降级为0而不是500。"""
         manor, client = manor_with_user
         message = Message.objects.create(
             manor=manor,
@@ -96,7 +96,7 @@ class TestMessageViews:
 
         monkeypatch.setattr(
             "gameplay.views.messages.unread_message_count",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.get(
@@ -110,8 +110,28 @@ class TestMessageViews:
         assert payload["message_id"] == message.pk
         assert payload["unread_count"] == 0
 
-    def test_claim_attachment_json_error_tolerates_unread_count_failure(self, manor_with_user, monkeypatch):
-        """JSON 领取附件失败时 unread 计数异常不应扩大为500。"""
+    def test_view_message_json_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        message = Message.objects.create(
+            manor=manor,
+            kind=Message.Kind.SYSTEM,
+            title="json unread runtime boom",
+            attachments={},
+        )
+
+        monkeypatch.setattr(
+            "gameplay.views.messages.unread_message_count",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            client.get(
+                reverse("gameplay:view_message", kwargs={"pk": message.pk}),
+                HTTP_ACCEPT="application/json",
+            )
+
+    def test_claim_attachment_json_error_tolerates_unread_count_database_error(self, manor_with_user, monkeypatch):
+        """JSON 领取附件失败时 unread 计数数据库故障不应扩大为500。"""
         manor, client = manor_with_user
         message = Message.objects.create(
             manor=manor,
@@ -122,7 +142,7 @@ class TestMessageViews:
 
         monkeypatch.setattr(
             "gameplay.views.messages.unread_message_count",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.post(
@@ -136,8 +156,10 @@ class TestMessageViews:
         assert payload["message_id"] == message.pk
         assert payload["unread_count"] == 0
 
-    def test_claim_attachment_json_database_error_tolerates_unread_count_failure(self, manor_with_user, monkeypatch):
-        """JSON 领取附件数据库故障时 unread 计数失败也应降级返回。"""
+    def test_claim_attachment_json_database_error_tolerates_unread_count_database_error(
+        self, manor_with_user, monkeypatch
+    ):
+        """JSON 领取附件数据库故障时 unread 计数数据库故障也应降级返回。"""
         manor, client = manor_with_user
         message = Message.objects.create(
             manor=manor,
@@ -152,7 +174,7 @@ class TestMessageViews:
         )
         monkeypatch.setattr(
             "gameplay.views.messages.unread_message_count",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.post(
@@ -166,6 +188,26 @@ class TestMessageViews:
         assert payload["message_id"] == message.pk
         assert payload["unread_count"] == 0
         assert "操作失败，请稍后重试" in payload["error"]
+
+    def test_claim_attachment_json_error_unread_count_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        message = Message.objects.create(
+            manor=manor,
+            kind=Message.Kind.SYSTEM,
+            title="json claim unread runtime boom",
+            attachments={},
+        )
+
+        monkeypatch.setattr(
+            "gameplay.views.messages.unread_message_count",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            client.post(
+                reverse("gameplay:claim_attachment", kwargs={"pk": message.pk}),
+                HTTP_ACCEPT="application/json",
+            )
 
     def test_claim_attachment_json_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
