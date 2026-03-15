@@ -34,6 +34,7 @@ from gameplay.services.inventory.guest_items import (
 )
 from gameplay.services.inventory.use import use_inventory_item
 from gameplay.services.manor.core import get_manor
+from gameplay.services.manor.treasury import move_item_to_treasury, move_item_to_warehouse
 from gameplay.services.resources import sync_resource_production
 
 logger = logging.getLogger(__name__)
@@ -259,8 +260,6 @@ def use_item_view(request: HttpRequest, pk: int) -> HttpResponse:
 @rate_limit_redirect("move_to_treasury", limit=30, window_seconds=60)
 def move_item_to_treasury_view(request: HttpRequest, pk: int) -> HttpResponse:
     """将物品从仓库移动到藏宝阁"""
-    from gameplay.services import move_item_to_treasury
-
     return _move_item_between_storage(
         request,
         pk,
@@ -275,8 +274,6 @@ def move_item_to_treasury_view(request: HttpRequest, pk: int) -> HttpResponse:
 @rate_limit_redirect("move_to_warehouse", limit=30, window_seconds=60)
 def move_item_to_warehouse_view(request: HttpRequest, pk: int) -> HttpResponse:
     """将物品从藏宝阁移动到仓库"""
-    from gameplay.services import move_item_to_warehouse
-
     return _move_item_between_storage(
         request,
         pk,
