@@ -12,7 +12,7 @@ from django.db import DatabaseError
 from django.utils import timezone
 from django_redis import get_redis_connection
 
-from gameplay.services import unread_message_count
+from gameplay.services.utils.messages import unread_message_count
 
 logger = logging.getLogger(__name__)
 
