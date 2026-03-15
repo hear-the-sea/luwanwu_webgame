@@ -127,7 +127,7 @@ class TestCoreViews:
     def test_rename_manor_known_error_shows_message(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
         monkeypatch.setattr(
-            "gameplay.services.rename_manor",
+            "gameplay.views.core.rename_manor",
             lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("rename blocked")),
         )
 
@@ -140,7 +140,7 @@ class TestCoreViews:
     def test_rename_manor_database_error_does_not_500(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
         monkeypatch.setattr(
-            "gameplay.services.rename_manor",
+            "gameplay.views.core.rename_manor",
             lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
@@ -153,7 +153,7 @@ class TestCoreViews:
     def test_rename_manor_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
         monkeypatch.setattr(
-            "gameplay.services.rename_manor",
+            "gameplay.views.core.rename_manor",
             lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
         )
 

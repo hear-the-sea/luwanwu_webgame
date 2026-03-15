@@ -25,16 +25,16 @@ from gameplay.constants import UIConstants
 from gameplay.models import InventoryItem
 from gameplay.selectors.recruitment import get_recruitment_hall_context
 from gameplay.selectors.warehouse import get_warehouse_context
-from gameplay.services import (
-    get_manor,
-    sync_resource_production,
+from gameplay.services.inventory.guest_items import (
     use_guest_rarity_upgrade_item,
     use_guest_rebirth_card,
-    use_inventory_item,
     use_soul_container,
     use_xidianka,
     use_xisuidan,
 )
+from gameplay.services.inventory.use import use_inventory_item
+from gameplay.services.manor.core import get_manor
+from gameplay.services.resources import sync_resource_production
 
 logger = logging.getLogger(__name__)
 

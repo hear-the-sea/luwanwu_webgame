@@ -22,7 +22,7 @@ from core.utils import sanitize_error_message
 from gameplay.constants import BUILDING_MAX_LEVELS
 from gameplay.models import BuildingCategory
 from gameplay.selectors.home import get_home_context
-from gameplay.services.manor.core import get_manor
+from gameplay.services.manor.core import get_manor, get_rename_card_count, rename_manor
 from gameplay.services.resources import sync_resource_production
 
 logger = logging.getLogger(__name__)
@@ -125,8 +125,6 @@ class SettingsView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
 
-        from gameplay.services import get_rename_card_count
-
         context["manor"] = manor
         context["rename_card_count"] = get_rename_card_count(manor)
 
@@ -137,8 +135,6 @@ class SettingsView(LoginRequiredMixin, TemplateView):
 @require_POST
 def rename_manor_view(request: HttpRequest) -> HttpResponse:
     """庄园更名"""
-    from gameplay.services import rename_manor
-
     manor = get_manor(request.user)
     new_name = request.POST.get("new_name", "").strip()
 
