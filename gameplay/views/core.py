@@ -22,7 +22,8 @@ from core.utils import sanitize_error_message
 from gameplay.constants import BUILDING_MAX_LEVELS
 from gameplay.models import BuildingCategory
 from gameplay.selectors.home import get_home_context
-from gameplay.services import get_manor, sync_resource_production
+from gameplay.services.manor.core import get_manor
+from gameplay.services.resources import sync_resource_production
 
 logger = logging.getLogger(__name__)
 

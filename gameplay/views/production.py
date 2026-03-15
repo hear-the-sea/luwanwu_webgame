@@ -24,7 +24,9 @@ from core.exceptions import GameError
 from core.utils import safe_positive_int, sanitize_error_message
 from core.utils.rate_limit import rate_limit_redirect
 from gameplay.constants import UIConstants
-from gameplay.services import get_manor, get_player_technology_level, sync_resource_production
+from gameplay.services.manor.core import get_manor
+from gameplay.services.resources import sync_resource_production
+from gameplay.services.technology import get_player_technology_level
 from gameplay.views.production_helpers import (
     annotate_blueprint_synthesis_options,
     build_categories_with_all,

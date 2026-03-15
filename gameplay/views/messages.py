@@ -22,15 +22,15 @@ from core.utils import is_json_request, json_error, json_success, sanitize_error
 from core.utils.validation import safe_redirect_url
 from gameplay.constants import UIConstants
 from gameplay.models import ResourceType
-from gameplay.services import (
+from gameplay.services.manor.core import get_manor
+from gameplay.services.resources import sync_resource_production
+from gameplay.services.utils.messages import (
     claim_message_attachments,
     delete_all_messages,
     delete_messages,
-    get_manor,
     list_messages,
     mark_all_messages_read,
     mark_messages_read,
-    sync_resource_production,
     unread_message_count,
 )
 
