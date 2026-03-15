@@ -11,6 +11,7 @@ from typing import TypeVar
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import DatabaseError
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect
 from django.views.decorators.http import require_POST
@@ -25,7 +26,7 @@ from gameplay.constants import PVPConstants, get_raid_capture_guest_rate
 from gameplay.services import (
     add_oath_bond,
     draw_pie,
-    ensure_manor,
+    get_manor,
     list_held_prisoners,
     list_oath_bonds,
     recruit_prisoner,
@@ -104,7 +105,7 @@ def _message_redirect(
 def _redirect_exception_response(
     request: HttpRequest,
     redirect_name: str,
-    exc: Exception,
+    exc: GameError | ValueError | DatabaseError,
 ) -> HttpResponse:
     return _message_redirect(
         request,
@@ -114,7 +115,7 @@ def _redirect_exception_response(
     )
 
 
-def _json_exception_response(exc: Exception, *, status: int = 400) -> JsonResponse:
+def _json_exception_response(exc: GameError | ValueError | DatabaseError, *, status: int = 400) -> JsonResponse:
     return json_error(sanitize_error_message(exc), status=status)
 
 
@@ -127,8 +128,8 @@ def _execute_locked_jail_action(
     operation: Callable[[], JailActionResult],
     on_lock_conflict: Callable[[], HttpResponse],
     on_success: Callable[[JailActionResult], HttpResponse],
-    on_known_error: Callable[[Exception], HttpResponse],
-    on_unexpected_error: Callable[[Exception], HttpResponse],
+    on_known_error: Callable[[GameError | ValueError], HttpResponse],
+    on_database_error: Callable[[DatabaseError], HttpResponse],
     log_message: str,
     log_args: tuple[object, ...],
 ) -> HttpResponse:
@@ -141,9 +142,9 @@ def _execute_locked_jail_action(
             result = operation()
         except (GameError, ValueError) as exc:
             return on_known_error(exc)
-        except Exception as exc:
+        except DatabaseError as exc:
             logger.exception(log_message, *log_args)
-            return on_unexpected_error(exc)
+            return on_database_error(exc)
         return on_success(result)
     finally:
         _release_jail_action_lock(lock_key, lock_token)
@@ -175,7 +176,7 @@ def _run_locked_redirect_action(
         ),
         on_success=success_response,
         on_known_error=lambda exc: _redirect_exception_response(request, redirect_name, exc),
-        on_unexpected_error=lambda exc: _redirect_exception_response(request, redirect_name, exc),
+        on_database_error=lambda exc: _redirect_exception_response(request, redirect_name, exc),
         log_message=log_message,
         log_args=log_args,
     )
@@ -201,7 +202,7 @@ def _run_locked_json_action(
         on_lock_conflict=lambda: json_error("请求处理中，请稍候重试", status=409),
         on_success=success_response,
         on_known_error=lambda exc: _json_exception_response(exc),
-        on_unexpected_error=lambda exc: _json_exception_response(exc, status=500),
+        on_database_error=lambda exc: _json_exception_response(exc, status=500),
         log_message=log_message,
         log_args=log_args,
     )
@@ -212,7 +213,7 @@ class JailView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        manor = ensure_manor(self.request.user)
+        manor = get_manor(self.request.user)
         prisoners = list_held_prisoners(manor)
         context.update(
             {
@@ -232,7 +233,7 @@ class OathGroveView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        manor = ensure_manor(self.request.user)
+        manor = get_manor(self.request.user)
         bonds = list_oath_bonds(manor)
         oathed_ids = {b.guest_id for b in bonds}
         available_guests = (
@@ -254,7 +255,7 @@ class OathGroveView(LoginRequiredMixin, TemplateView):
 
 @login_required
 def jail_status_api(request: HttpRequest) -> JsonResponse:
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     prisoners = list_held_prisoners(manor)
     return json_success(
         jail={
@@ -278,7 +279,7 @@ def jail_status_api(request: HttpRequest) -> JsonResponse:
 
 @login_required
 def oath_status_api(request: HttpRequest) -> JsonResponse:
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     bonds = list_oath_bonds(manor)
     return json_success(
         oath_grove={
@@ -301,7 +302,7 @@ def oath_status_api(request: HttpRequest) -> JsonResponse:
 @login_required
 @require_POST
 def recruit_prisoner_view(request: HttpRequest, prisoner_id: int):
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     return _run_locked_redirect_action(
         request=request,
         manor=manor,
@@ -323,7 +324,7 @@ def recruit_prisoner_view(request: HttpRequest, prisoner_id: int):
 @login_required
 @require_POST
 def draw_pie_view(request: HttpRequest, prisoner_id: int):
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     return _run_locked_redirect_action(
         request=request,
         manor=manor,
@@ -345,7 +346,7 @@ def draw_pie_view(request: HttpRequest, prisoner_id: int):
 @login_required
 @require_POST
 def release_prisoner_view(request: HttpRequest, prisoner_id: int):
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     return _run_locked_redirect_action(
         request=request,
         manor=manor,
@@ -367,7 +368,7 @@ def release_prisoner_view(request: HttpRequest, prisoner_id: int):
 @login_required
 @require_POST
 def add_oath_bond_view(request: HttpRequest):
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     guest_id = safe_positive_int(request.POST.get("guest_id"), default=None)
     if guest_id is None:
         messages.error(request, "请指定门客")
@@ -393,7 +394,7 @@ def add_oath_bond_view(request: HttpRequest):
 @login_required
 @require_POST
 def remove_oath_bond_view(request: HttpRequest, guest_id: int):
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     return _run_locked_redirect_action(
         request=request,
         manor=manor,
@@ -416,7 +417,7 @@ def remove_oath_bond_view(request: HttpRequest, guest_id: int):
 @require_POST
 @rate_limit_json("jail_recruit", limit=10, window_seconds=60, error_message="操作过于频繁，请稍后再试")
 def recruit_prisoner_api(request: HttpRequest, prisoner_id: int) -> JsonResponse:
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     return _run_locked_json_action(
         request=request,
         manor=manor,
@@ -436,7 +437,7 @@ def recruit_prisoner_api(request: HttpRequest, prisoner_id: int) -> JsonResponse
 @require_POST
 @rate_limit_json("jail_draw_pie", limit=30, window_seconds=60, error_message="操作过于频繁，请稍后再试")
 def draw_pie_api(request: HttpRequest, prisoner_id: int) -> JsonResponse:
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     return _run_locked_json_action(
         request=request,
         manor=manor,
@@ -458,7 +459,7 @@ def draw_pie_api(request: HttpRequest, prisoner_id: int) -> JsonResponse:
 @require_POST
 @rate_limit_json("jail_release", limit=20, window_seconds=60, error_message="操作过于频繁，请稍后再试")
 def release_prisoner_api(request: HttpRequest, prisoner_id: int) -> JsonResponse:
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     return _run_locked_json_action(
         request=request,
         manor=manor,
@@ -477,7 +478,7 @@ def release_prisoner_api(request: HttpRequest, prisoner_id: int) -> JsonResponse
 @require_POST
 @rate_limit_json("oath_add", limit=10, window_seconds=60, error_message="操作过于频繁，请稍后再试")
 def add_oath_bond_api(request: HttpRequest) -> JsonResponse:
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     guest_id, error = _oath_guest_id_from_json_or_error(request)
     if error is not None:
         return error
@@ -500,7 +501,7 @@ def add_oath_bond_api(request: HttpRequest) -> JsonResponse:
 @require_POST
 @rate_limit_json("oath_remove", limit=10, window_seconds=60, error_message="操作过于频繁，请稍后再试")
 def remove_oath_bond_api(request: HttpRequest) -> JsonResponse:
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     guest_id, error = _oath_guest_id_from_json_or_error(request)
     if error is not None:
         return error

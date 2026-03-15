@@ -33,6 +33,7 @@ from .use import (
     use_guest_rarity_upgrade_item,
     use_guest_rebirth_card,
     use_inventory_item,
+    use_soul_container,
     use_xidianka,
     use_xisuidan,
 )
@@ -56,6 +57,7 @@ __all__ = [
     "use_inventory_item",
     "use_guest_rarity_upgrade_item",
     "use_guest_rebirth_card",
+    "use_soul_container",
     "use_xisuidan",
     "use_xidianka",
 ]

@@ -17,12 +17,7 @@ from gameplay.services.resources import sync_resource_production
 from gameplay.services.technology import get_troop_class_for_key
 from trade.services.auction_service import get_active_slots, get_auction_stats, get_my_bids, get_my_leading_bids
 from trade.services.bank_service import get_bank_info
-from trade.services.market_service import (
-    expire_user_listings,
-    get_active_listings,
-    get_my_listings,
-    get_tradeable_inventory,
-)
+from trade.services.market_service import get_active_listings, get_my_listings, get_tradeable_inventory
 from trade.services.shop_service import EFFECT_TYPE_CATEGORY, get_sellable_inventory, get_shop_items_for_display
 
 _TOOL_EFFECT_TYPES = LEGACY_TOOL_EFFECT_TYPES
@@ -306,12 +301,6 @@ def _update_market_my_listings_context(request, manor, context: dict) -> None:
 
 
 def _update_market_context(request, manor, context: dict) -> None:
-    _safe_call(
-        expire_user_listings,
-        manor,
-        default=0,
-        log_message=f"expire user market listings failed: manor_id={getattr(manor, 'id', None)}",
-    )
     market_view = request.GET.get("view", "buy")
     context["market_view"] = market_view
 
@@ -327,6 +316,7 @@ def get_trade_context(request, manor) -> dict:
     _safe_call(
         sync_resource_production,
         manor,
+        persist=False,
         default=None,
         log_message=f"sync resource production for trade view failed: manor_id={getattr(manor, 'id', None)}",
     )

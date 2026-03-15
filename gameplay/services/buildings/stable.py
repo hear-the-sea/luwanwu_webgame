@@ -240,16 +240,15 @@ def start_horse_production(manor: Manor, horse_key: str, quantity: int = 1) -> H
         # 锁内再次检查，避免并发下绕过限制
         if has_active_production(locked_manor):
             raise ValueError("已有马匹正在生产中，同时只能生产一种马匹")
-        if locked_manor.grain < total_grain_cost:
-            raise ValueError(f"粮食不足，需要{total_grain_cost}点粮食")
-
-        # 扣除粮食
-        spend_resources_locked(
-            locked_manor,
-            {"grain": total_grain_cost},
-            note=f"生产{horse_name}x{quantity}",
-            reason=ResourceEvent.Reason.UPGRADE_COST,
-        )
+        try:
+            spend_resources_locked(
+                locked_manor,
+                {"grain": total_grain_cost},
+                note=f"生产{horse_name}x{quantity}",
+                reason=ResourceEvent.Reason.UPGRADE_COST,
+            )
+        except ValueError as exc:
+            raise ValueError(f"粮食不足，需要{total_grain_cost}点粮食") from exc
 
         # 计算实际生产时间（时间不随数量增加）
         actual_duration = calculate_production_duration(config["base_duration"], manor)

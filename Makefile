@@ -4,7 +4,7 @@ LOCAL_STATE_DIR ?= .local
 FLAKE8_TARGETS ?= accounts battle gameplay guests guilds trade core websocket config tests
 MYPY_TARGETS ?= accounts battle common config core gameplay guests guilds tasks trade websocket
 
-.PHONY: install install-unpinned install-lock install-dev-lock migrate bootstrap-data dev dev-ws worker beat test test-integration format lint lint-strict check clean lock lock-dev
+.PHONY: install install-unpinned install-lock install-dev-lock migrate bootstrap-data dev dev-ws worker beat test test-unit test-integration test-all format lint lint-strict check clean lock lock-dev
 
 install:
 	@if [ -f requirements-dev.lock.txt ]; then \
@@ -54,11 +54,17 @@ beat:
 	mkdir -p $(LOCAL_STATE_DIR)
 	celery -A config beat -l info --schedule $(LOCAL_STATE_DIR)/celerybeat-schedule
 
-test:
-	$(PYTHON) -m pytest
+# Default to the hermetic unit-like suite. Integration tests require external services.
+test: test-unit
+
+test-unit:
+	$(PYTHON) -m pytest -m "not integration"
 
 test-integration:
 	DJANGO_TEST_USE_ENV_SERVICES=1 $(PYTHON) -m pytest -m integration -q
+
+test-all:
+	$(PYTHON) -m pytest
 
 cov:
 	$(PYTHON) -m coverage run -m pytest
@@ -76,7 +82,8 @@ format:
 
 lint:
 	$(PYTHON) -m flake8 --jobs=1 $(FLAKE8_TARGETS)
-	@$(PYTHON) -c "import mypy" >/dev/null 2>&1 || { echo "mypy is not installed; skipping type check. Run: make install"; exit 0; }; $(PYTHON) -m mypy $(MYPY_TARGETS)
+	@$(PYTHON) -m mypy --version >/dev/null 2>&1 || { echo "mypy is required for lint. Run: make install"; exit 1; }
+	$(PYTHON) -m mypy $(MYPY_TARGETS)
 
 lint-strict:
 	$(PYTHON) -m flake8 --jobs=1 $(FLAKE8_TARGETS)

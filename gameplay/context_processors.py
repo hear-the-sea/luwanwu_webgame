@@ -7,6 +7,8 @@ from typing import Any
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.core.exceptions import ObjectDoesNotExist
+from django.db import DatabaseError
 from django.utils import timezone
 from django_redis import get_redis_connection
 
@@ -23,9 +25,9 @@ TOTAL_USERS_CACHE_TIMEOUT = 300
 ONLINE_USERS_CACHE_TIMEOUT = 5
 ONLINE_USERS_FALLBACK_CACHE_TIMEOUT = 60
 ONLINE_USERS_TTL_SECONDS = 1800
+ONLINE_USER_TOUCH_CACHE_KEY_PREFIX = "stats:online_users:touch:"
+ONLINE_USER_TOUCH_CACHE_TIMEOUT = 60
 SIDEBAR_RANK_CACHE_TIMEOUT = 30
-SIDEBAR_RAID_CACHE_TIMEOUT = 10
-SIDEBAR_ACTIVITY_KEYS = frozenset({"active", "scouts", "incoming"})
 DEFAULT_PROTECTION_STATUS = {"is_protected": False, "type_display": "", "remaining_display": ""}
 
 
@@ -42,6 +44,21 @@ def _safe_cache_set(key: str, value, timeout: int) -> None:
         cache.set(key, value, timeout=timeout)
     except Exception:
         logger.warning("Failed to write cache key: %s", key, exc_info=True)
+
+
+def _safe_cache_add(key: str, value, timeout: int):
+    try:
+        return cache.add(key, value, timeout=timeout)
+    except Exception:
+        logger.warning("Failed to add cache key: %s", key, exc_info=True)
+        return None
+
+
+def _safe_cache_delete(key: str) -> None:
+    try:
+        cache.delete(key)
+    except Exception:
+        logger.warning("Failed to delete cache key: %s", key, exc_info=True)
 
 
 def _safe_int(value, default: int = 0) -> int:
@@ -101,6 +118,33 @@ def _load_online_user_count() -> int:
     return online_count
 
 
+def refresh_online_presence_from_request(user) -> None:
+    if not getattr(user, "is_authenticated", False):
+        return
+    if getattr(user, "is_staff", False) or getattr(user, "is_superuser", False):
+        return
+
+    user_id = getattr(user, "id", None)
+    if not user_id:
+        return
+
+    touch_cache_key = f"{ONLINE_USER_TOUCH_CACHE_KEY_PREFIX}{int(user_id)}"
+    should_refresh = _safe_cache_add(touch_cache_key, 1, timeout=ONLINE_USER_TOUCH_CACHE_TIMEOUT)
+    if should_refresh is False:
+        return
+
+    try:
+        redis = get_redis_connection("default")
+        now_ts = float(time.time())
+        redis.zadd(ONLINE_USERS_ZSET_KEY, {int(user_id): now_ts})
+        redis.expire(ONLINE_USERS_ZSET_KEY, ONLINE_USERS_TTL_SECONDS * 2)
+        _safe_cache_delete(ONLINE_USERS_CACHE_KEY)
+    except Exception:
+        if should_refresh:
+            _safe_cache_delete(touch_cache_key)
+        logger.warning("Failed to refresh online user presence from HTTP request", exc_info=True)
+
+
 def _load_sidebar_rank(manor) -> int:
     from gameplay.services.ranking import get_player_rank
 
@@ -114,39 +158,23 @@ def _load_sidebar_rank(manor) -> int:
     return rank
 
 
-def _is_valid_sidebar_activity_payload(payload: Any) -> bool:
-    return isinstance(payload, dict) and SIDEBAR_ACTIVITY_KEYS.issubset(payload.keys())
-
-
-def _load_sidebar_activity(manor) -> dict[str, Any]:
-    from gameplay.services.raid import get_active_raids, get_active_scouts, get_incoming_raids
-
-    cache_key_raids = f"sidebar:raids:{manor.id}"
-    cached_raids = _safe_cache_get(cache_key_raids)
-    if _is_valid_sidebar_activity_payload(cached_raids):
-        return cached_raids
-
-    activity = {
-        "active": get_active_raids(manor),
-        "scouts": get_active_scouts(manor),
-        "incoming": get_incoming_raids(manor),
-    }
-    _safe_cache_set(cache_key_raids, activity, timeout=SIDEBAR_RAID_CACHE_TIMEOUT)
-    return activity
+def _should_include_home_sidebar(request) -> bool:
+    resolver_match = getattr(request, "resolver_match", None)
+    if resolver_match is not None and getattr(resolver_match, "url_name", None) == "home":
+        return True
+    return getattr(request, "path", "") == "/"
 
 
 def _populate_authenticated_context(context: dict[str, Any], request) -> None:
     try:
         manor = request.user.manor
-    except Exception:
+    except (ObjectDoesNotExist, DatabaseError):
         logger.warning("Failed to resolve manor for sidebar context", exc_info=True)
         return
 
-    context["sidebar_prestige"] = manor.prestige
-
     try:
         context["message_unread_count"] = unread_message_count(manor)
-    except Exception:
+    except DatabaseError:
         logger.warning("Failed to load unread message count", exc_info=True)
 
     try:
@@ -155,23 +183,18 @@ def _populate_authenticated_context(context: dict[str, Any], request) -> None:
         protection_status = get_protection_status(manor)
         if isinstance(protection_status, dict):
             context["header_protection_status"] = protection_status
-    except Exception:
+    except DatabaseError:
         logger.warning("Failed to load protection status", exc_info=True)
+
+    if not _should_include_home_sidebar(request):
+        return
+
+    context["sidebar_prestige"] = manor.prestige
 
     try:
         context["sidebar_rank"] = _load_sidebar_rank(manor)
-    except Exception:
+    except DatabaseError:
         logger.warning("Failed to load sidebar rank", exc_info=True)
-
-    try:
-        activity = _load_sidebar_activity(manor)
-    except Exception:
-        logger.warning("Failed to load sidebar raid activity", exc_info=True)
-        return
-
-    context["sidebar_active_raids"] = activity["active"]
-    context["sidebar_active_scouts"] = activity["scouts"]
-    context["sidebar_incoming_raids"] = activity["incoming"]
 
 
 def notifications(request):
@@ -189,6 +212,7 @@ def notifications(request):
     """
     context = _build_default_context()
     context["total_user_count"] = _load_total_user_count()
+
     context["online_user_count"] = _load_online_user_count()
 
     if not request.user.is_authenticated:

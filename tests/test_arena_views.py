@@ -4,6 +4,7 @@ from datetime import timedelta
 
 import pytest
 from django.contrib.messages import get_messages
+from django.db import DatabaseError
 from django.test import Client
 from django.urls import reverse
 from django.utils import timezone
@@ -350,14 +351,14 @@ def test_arena_register_view_known_error_shows_message(arena_client, monkeypatch
 
 
 @pytest.mark.django_db
-def test_arena_register_view_unexpected_error_does_not_500(arena_client, monkeypatch):
+def test_arena_register_view_database_error_does_not_500(arena_client, monkeypatch):
     client, manor = arena_client
     template = _build_guest_template("arena_view_register_exc_tpl")
     guest = _build_guest(manor, template, "X")
 
     monkeypatch.setattr(
         "gameplay.views.arena.register_arena_entry",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
     )
 
     response = client.post(
@@ -372,14 +373,32 @@ def test_arena_register_view_unexpected_error_does_not_500(arena_client, monkeyp
 
 
 @pytest.mark.django_db
-def test_arena_exchange_view_unexpected_error_does_not_500(arena_client, monkeypatch):
+def test_arena_register_view_programming_error_bubbles_up(arena_client, monkeypatch):
+    client, manor = arena_client
+    template = _build_guest_template("arena_view_register_runtime_tpl")
+    guest = _build_guest(manor, template, "Y")
+
+    monkeypatch.setattr(
+        "gameplay.views.arena.register_arena_entry",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+
+    with pytest.raises(RuntimeError, match="boom"):
+        client.post(
+            reverse("gameplay:arena_register"),
+            {"guest_ids": [str(guest.id)]},
+        )
+
+
+@pytest.mark.django_db
+def test_arena_exchange_view_database_error_does_not_500(arena_client, monkeypatch):
     client, manor = arena_client
     manor.arena_coins = 300
     manor.save(update_fields=["arena_coins"])
 
     monkeypatch.setattr(
         "gameplay.views.arena.exchange_arena_reward",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
     )
 
     response = client.post(

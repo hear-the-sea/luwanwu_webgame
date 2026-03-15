@@ -12,10 +12,12 @@ from __future__ import annotations
 # 庄园核心（core.py）
 from .core import (
     bootstrap_buildings,
+    bootstrap_manor,
     ensure_buildings_exist,
     ensure_manor,
     finalize_building_upgrade,
     finalize_upgrades,
+    get_manor,
     get_rename_card_count,
     is_manor_name_available,
     refresh_manor_state,
@@ -49,10 +51,12 @@ from .troop_bank import (
 __all__ = [
     # core
     "bootstrap_buildings",
+    "bootstrap_manor",
     "ensure_buildings_exist",
     "ensure_manor",
     "finalize_building_upgrade",
     "finalize_upgrades",
+    "get_manor",
     "get_rename_card_count",
     "is_manor_name_available",
     "refresh_manor_state",

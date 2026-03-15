@@ -44,6 +44,7 @@ from .inventory import (
     use_guest_rarity_upgrade_item,
     use_guest_rebirth_card,
     use_inventory_item,
+    use_soul_container,
     use_xidianka,
     use_xisuidan,
 )
@@ -187,10 +188,12 @@ __all__ = [  # noqa: F405
     "resolve_drop_rewards",
     # 庄园和建筑
     "bootstrap_buildings",
+    "bootstrap_manor",
     "ensure_buildings_exist",
     "ensure_manor",
     "finalize_building_upgrade",
     "finalize_upgrades",
+    "get_manor",
     "get_rename_card_count",
     "is_manor_name_available",
     "refresh_manor_state",
@@ -215,6 +218,7 @@ __all__ = [  # noqa: F405
     "use_guest_rarity_upgrade_item",
     "use_guest_rebirth_card",
     "use_inventory_item",
+    "use_soul_container",
     "use_xisuidan",
     "use_xidianka",
     # 消息

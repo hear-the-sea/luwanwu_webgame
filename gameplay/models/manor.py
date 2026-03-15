@@ -87,6 +87,12 @@ class Manor(models.Model):
         blank=True,
         help_text="使用免战牌后的保护时间",
     )
+    initial_peace_shield_granted_at = models.DateTimeField(
+        "初始免战牌发放时间",
+        null=True,
+        blank=True,
+        help_text="记录新手初始免战牌的发放时间，确保初始化失败后可安全重试且不会重复补发。",
+    )
     last_relocation_at = models.DateTimeField(
         "上次迁移时间",
         null=True,

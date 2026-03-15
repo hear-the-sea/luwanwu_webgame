@@ -9,7 +9,7 @@ from typing import List, Tuple
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -24,9 +24,9 @@ logger = logging.getLogger(__name__)
 
 
 def _get_guest_and_next_url(request, pk: int):
-    from gameplay.services.manor.core import ensure_manor
+    from gameplay.services.manor.core import get_manor
 
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     guest = get_object_or_404(Guest.objects.for_manor(manor).with_template(), pk=pk)
     default_url = reverse("guests:detail", args=[guest.pk])
     next_url = safe_redirect_url(request, request.POST.get("next"), default_url)
@@ -177,9 +177,9 @@ def learn_skill_view(request, pk: int):
             exc,
         )
         messages.error(request, sanitize_error_message(exc))
-    except Exception as exc:
+    except DatabaseError as exc:
         logger.exception(
-            "Unexpected skill learn error: manor_id=%s user_id=%s guest_id=%s item_id=%s skill_key=%s",
+            "Unexpected skill learn database error: manor_id=%s user_id=%s guest_id=%s item_id=%s skill_key=%s",
             getattr(manor, "id", None),
             getattr(request.user, "id", None),
             getattr(guest, "id", None),
@@ -199,16 +199,29 @@ def forget_skill_view(request, pk: int):
 
     使用统一装饰器处理错误
     """
-    from gameplay.services.manor.core import ensure_manor
+    from gameplay.services.manor.core import get_manor
 
-    # 使用 manager 方法获取门客，避免重复的 select_related
-    guest = get_object_or_404(Guest.objects.for_manor(ensure_manor(request.user)).with_template(), pk=pk)
+    manor = get_manor(request.user)
 
-    guest_skill_id = safe_positive_int(request.POST.get("guest_skill_id"), default=None)
-    if guest_skill_id is None:
-        raise ValueError("未指定技能")
+    try:
+        # 使用 manager 方法获取门客，避免重复的 select_related
+        guest = get_object_or_404(Guest.objects.for_manor(manor).with_template(), pk=pk)
 
-    skill_name = _persist_skill_forget(guest, guest_skill_id)
+        guest_skill_id = safe_positive_int(request.POST.get("guest_skill_id"), default=None)
+        if guest_skill_id is None:
+            raise ValueError("未指定技能")
+
+        skill_name = _persist_skill_forget(guest, guest_skill_id)
+    except DatabaseError as exc:
+        logger.exception(
+            "Unexpected skill forget database error: manor_id=%s user_id=%s guest_id=%s guest_skill_id=%s",
+            getattr(manor, "id", None),
+            getattr(request.user, "id", None),
+            pk,
+            request.POST.get("guest_skill_id"),
+        )
+        messages.error(request, sanitize_error_message(exc))
+        return reverse("guests:detail", args=[pk])
 
     messages.info(request, f"{guest.display_name} 已遗忘 {skill_name}")
     return reverse("guests:detail", args=[guest.pk])

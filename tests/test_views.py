@@ -6,6 +6,7 @@ import json
 
 import pytest
 from django.contrib.messages import get_messages
+from django.db import DatabaseError
 from django.test import Client
 from django.urls import reverse
 from django.utils import timezone
@@ -88,17 +89,28 @@ class TestCoreViews:
         assert response.status_code == 200
         assert "buildings" in response.context
 
-    def test_dashboard_refresh_error_does_not_500(self, manor_with_user, monkeypatch):
-        """状态刷新异常时仪表盘不应返回500。"""
+    def test_dashboard_refresh_database_error_does_not_500(self, manor_with_user, monkeypatch):
+        """数据库故障时仪表盘应降级而不是返回500。"""
         _manor, client = manor_with_user
         monkeypatch.setattr(
-            "gameplay.views.core.refresh_manor_state",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+            "gameplay.views.core.sync_resource_production",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.get(reverse("gameplay:dashboard"))
         assert response.status_code == 200
         assert "操作失败，请稍后重试" in response.content.decode("utf-8")
+
+    def test_dashboard_refresh_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
+        """编程错误不应被页面层吞掉。"""
+        _manor, client = manor_with_user
+        monkeypatch.setattr(
+            "gameplay.views.core.sync_resource_production",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            client.get(reverse("gameplay:dashboard"))
 
     def test_authenticated_layout_contains_partial_nav_markers(self, manor_with_user):
         """认证页面应包含局部导航刷新容器与脚本。"""
@@ -176,11 +188,11 @@ class TestCoreViews:
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("rename blocked" in m for m in messages)
 
-    def test_rename_manor_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
+    def test_rename_manor_database_error_does_not_500(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
         monkeypatch.setattr(
             "gameplay.services.rename_manor",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.post(reverse("gameplay:rename_manor"), {"new_name": "新庄园名"})
@@ -188,6 +200,16 @@ class TestCoreViews:
         assert response.url == reverse("gameplay:settings")
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("操作失败，请稍后重试" in m for m in messages)
+
+    def test_rename_manor_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+        monkeypatch.setattr(
+            "gameplay.services.rename_manor",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            client.post(reverse("gameplay:rename_manor"), {"new_name": "新庄园名"})
 
     def test_ranking_page(self, manor_with_user):
         """排行榜页面"""
@@ -402,7 +424,7 @@ class TestMissionViews:
         assert any("护院配置有误" in m for m in messages)
         assert called["count"] == 0
 
-    def test_accept_mission_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
+    def test_accept_mission_database_error_does_not_500(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
         mission = MissionTemplate.objects.create(
             key=f"view_accept_unexpected_{manor.id}",
@@ -412,7 +434,7 @@ class TestMissionViews:
 
         monkeypatch.setattr(
             "gameplay.views.missions.launch_mission",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.post(reverse("gameplay:accept_mission"), {"mission_key": mission.key})
@@ -420,6 +442,22 @@ class TestMissionViews:
         assert response.url == f"{reverse('gameplay:tasks')}?mission={mission.key}"
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("操作失败，请稍后重试" in m for m in messages)
+
+    def test_accept_mission_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        mission = MissionTemplate.objects.create(
+            key=f"view_accept_runtime_{manor.id}",
+            name="运行时任务",
+            is_defense=True,
+        )
+
+        monkeypatch.setattr(
+            "gameplay.views.missions.launch_mission",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            client.post(reverse("gameplay:accept_mission"), {"mission_key": mission.key})
 
     def test_accept_mission_known_error_shows_message(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
@@ -440,7 +478,7 @@ class TestMissionViews:
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("mission blocked" in m for m in messages)
 
-    def test_retreat_mission_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
+    def test_retreat_mission_database_error_does_not_500(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
         mission = MissionTemplate.objects.create(
             key=f"view_retreat_unexpected_{manor.id}",
@@ -451,7 +489,7 @@ class TestMissionViews:
 
         monkeypatch.setattr(
             "gameplay.views.missions.request_retreat",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.post(reverse("gameplay:mission_retreat", kwargs={"pk": run.pk}))
@@ -460,9 +498,51 @@ class TestMissionViews:
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("操作失败，请稍后重试" in m for m in messages)
 
-    def test_retreat_scout_unexpected_error_does_not_500(self, manor_with_user, monkeypatch, django_user_model):
+    def test_retreat_mission_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        mission = MissionTemplate.objects.create(
+            key=f"view_retreat_runtime_{manor.id}",
+            name="撤退运行时任务",
+            is_defense=False,
+        )
+        run = MissionRun.objects.create(manor=manor, mission=mission, status=MissionRun.Status.ACTIVE)
+
+        monkeypatch.setattr(
+            "gameplay.views.missions.request_retreat",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            client.post(reverse("gameplay:mission_retreat", kwargs={"pk": run.pk}))
+
+    def test_retreat_scout_database_error_does_not_500(self, manor_with_user, monkeypatch, django_user_model):
         attacker, client = manor_with_user
         defender_user = django_user_model.objects.create_user(username=f"scout_def_{attacker.id}", password="pass123")
+        defender = ensure_manor(defender_user)
+        record = ScoutRecord.objects.create(
+            attacker=attacker,
+            defender=defender,
+            status=ScoutRecord.Status.SCOUTING,
+            complete_at=timezone.now(),
+        )
+
+        monkeypatch.setattr(
+            "gameplay.services.raid.request_scout_retreat",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
+        )
+
+        response = client.post(reverse("gameplay:scout_retreat", kwargs={"pk": record.pk}))
+        assert response.status_code == 302
+        assert response.url == reverse("home")
+        messages = [str(m) for m in get_messages(response.wsgi_request)]
+        assert any("操作失败，请稍后重试" in m for m in messages)
+
+    def test_retreat_scout_programming_error_bubbles_up(self, manor_with_user, monkeypatch, django_user_model):
+        attacker, client = manor_with_user
+        defender_user = django_user_model.objects.create_user(
+            username=f"scout_def_runtime_{attacker.id}",
+            password="pass123",
+        )
         defender = ensure_manor(defender_user)
         record = ScoutRecord.objects.create(
             attacker=attacker,
@@ -476,13 +556,10 @@ class TestMissionViews:
             lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
         )
 
-        response = client.post(reverse("gameplay:scout_retreat", kwargs={"pk": record.pk}))
-        assert response.status_code == 302
-        assert response.url == reverse("home")
-        messages = [str(m) for m in get_messages(response.wsgi_request)]
-        assert any("操作失败，请稍后重试" in m for m in messages)
+        with pytest.raises(RuntimeError, match="boom"):
+            client.post(reverse("gameplay:scout_retreat", kwargs={"pk": record.pk}))
 
-    def test_use_mission_card_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
+    def test_use_mission_card_database_error_does_not_500(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
         mission = MissionTemplate.objects.create(
             key=f"view_use_card_unexpected_{manor.id}",
@@ -491,7 +568,7 @@ class TestMissionViews:
 
         monkeypatch.setattr(
             "gameplay.services.inventory.consume_inventory_item_for_manor_locked",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.post(reverse("gameplay:use_mission_card"), {"mission_key": mission.key})
@@ -499,6 +576,21 @@ class TestMissionViews:
         assert response.url == f"{reverse('gameplay:tasks')}?mission={mission.key}"
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("操作失败，请稍后重试" in m for m in messages)
+
+    def test_use_mission_card_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        mission = MissionTemplate.objects.create(
+            key=f"view_use_card_runtime_{manor.id}",
+            name="任务卡运行时任务",
+        )
+
+        monkeypatch.setattr(
+            "gameplay.services.inventory.consume_inventory_item_for_manor_locked",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            client.post(reverse("gameplay:use_mission_card"), {"mission_key": mission.key})
 
 
 # ============ 仓库系统测试 ============
@@ -522,7 +614,7 @@ class TestInventoryViews:
         assert response.status_code == 200
         assert response.context["current_tab"] == "treasury"
 
-    def test_warehouse_page_syncs_grain_item_with_manor_grain(self, manor_with_user):
+    def test_warehouse_page_projects_grain_item_without_writing_inventory(self, manor_with_user):
         manor, client = manor_with_user
         grain_template, _ = ItemTemplate.objects.get_or_create(
             key="grain",
@@ -549,8 +641,64 @@ class TestInventoryViews:
             template=grain_template,
             storage_location=InventoryItem.StorageLocation.WAREHOUSE,
         ).first()
-        assert warehouse_grain is not None
-        assert warehouse_grain.quantity == 777
+        assert warehouse_grain is None
+        projected_entry = next(
+            (entry for entry in response.context["inventory_items"] if entry.template.key == "grain"),
+            None,
+        )
+        assert projected_entry is not None
+        assert projected_entry.display_quantity == 777
+        assert projected_entry.is_projected is True
+
+    def test_warehouse_page_renders_soul_fusion_requirements_for_current_item(self, manor_with_user):
+        manor, client = manor_with_user
+        guest_template = GuestTemplate.objects.create(
+            key="view_soul_fusion_guest",
+            name="魂器候选门客",
+            rarity=GuestRarity.BLUE,
+            archetype=GuestArchetype.CIVIL,
+            base_attack=100,
+            base_intellect=140,
+            base_defense=90,
+            base_agility=95,
+            base_luck=70,
+            base_hp=1200,
+            default_gender="male",
+            default_morality=60,
+        )
+        guest = Guest.objects.create(
+            manor=manor,
+            template=guest_template,
+            status=GuestStatus.IDLE,
+            level=66,
+        )
+        soul_container = ItemTemplate.objects.create(
+            key="view_soul_fusion_container",
+            name="蓝魂容器",
+            effect_type=ItemTemplate.EffectType.TOOL,
+            is_usable=True,
+            effect_payload={
+                "action": "soul_fusion",
+                "min_level": 60,
+                "allowed_rarities": ["blue", "purple"],
+            },
+        )
+        InventoryItem.objects.create(
+            manor=manor,
+            template=soul_container,
+            quantity=1,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        )
+
+        response = client.get(reverse("gameplay:warehouse"))
+
+        assert response.status_code == 200
+        body = response.content.decode("utf-8")
+        assert 'data-soul-fusion-min-level="60"' in body
+        assert 'data-soul-fusion-rarities="blue,purple"' in body
+        assert f'data-guest-id="{guest.id}"' in body
+        assert 'data-guest-level="66"' in body
+        assert 'data-guest-rarity="blue"' in body
 
     def test_recruitment_hall_page(self, manor_with_user):
         """招募大厅页面"""
@@ -672,6 +820,33 @@ class TestInventoryViews:
         assert "请选择要升阶的门客" in payload["error"]
         assert called["count"] == 0
 
+    def test_use_soul_container_rejects_non_positive_guest_id(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        template = ItemTemplate.objects.create(
+            key="view_soul_container_item",
+            name="灵魂容器",
+            effect_payload={"action": "soul_fusion"},
+        )
+        item = InventoryItem.objects.create(manor=manor, template=template, quantity=1)
+        called = {"count": 0}
+
+        def _unexpected_call(*args, **kwargs):
+            called["count"] += 1
+            return {}
+
+        monkeypatch.setattr("gameplay.views.inventory.use_soul_container", _unexpected_call)
+
+        response = client.post(
+            reverse("gameplay:use_soul_container", kwargs={"pk": item.pk}),
+            {"guest_id": 0},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        assert response.status_code == 400
+        payload = response.json()
+        assert payload["success"] is False
+        assert "请选择要融合的门客" in payload["error"]
+        assert called["count"] == 0
+
     def test_use_item_ajax_handles_known_error(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
         template = ItemTemplate.objects.create(key="view_use_item_known_error", name="普通道具")
@@ -691,7 +866,42 @@ class TestInventoryViews:
         assert payload["success"] is False
         assert "use blocked" in payload["error"]
 
-    def test_use_rebirth_card_unexpected_error_returns_500(self, manor_with_user, monkeypatch):
+    def test_use_item_ajax_database_error_returns_500(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        template = ItemTemplate.objects.create(key="view_use_item_database_error", name="数据库异常道具")
+        item = InventoryItem.objects.create(manor=manor, template=template, quantity=1)
+
+        monkeypatch.setattr(
+            "gameplay.views.inventory.use_inventory_item",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
+        )
+
+        response = client.post(
+            reverse("gameplay:use_item", kwargs={"pk": item.pk}),
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        assert response.status_code == 500
+        payload = response.json()
+        assert payload["success"] is False
+        assert "操作失败，请稍后重试" in payload["error"]
+
+    def test_use_item_ajax_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        template = ItemTemplate.objects.create(key="view_use_item_runtime_error", name="运行时异常道具")
+        item = InventoryItem.objects.create(manor=manor, template=template, quantity=1)
+
+        monkeypatch.setattr(
+            "gameplay.views.inventory.use_inventory_item",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            client.post(
+                reverse("gameplay:use_item", kwargs={"pk": item.pk}),
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+
+    def test_use_rebirth_card_database_error_returns_500(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
         template = ItemTemplate.objects.create(
             key="view_rebirth_card_item_unexpected",
@@ -702,7 +912,7 @@ class TestInventoryViews:
 
         monkeypatch.setattr(
             "gameplay.views.inventory.use_guest_rebirth_card",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.post(
@@ -714,6 +924,27 @@ class TestInventoryViews:
         payload = response.json()
         assert payload["success"] is False
         assert "操作失败，请稍后重试" in payload["error"]
+
+    def test_use_rebirth_card_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        template = ItemTemplate.objects.create(
+            key="view_rebirth_card_item_runtime",
+            name="门客重生卡运行时异常",
+            effect_payload={"action": "rebirth_guest"},
+        )
+        item = InventoryItem.objects.create(manor=manor, template=template, quantity=1)
+
+        monkeypatch.setattr(
+            "gameplay.views.inventory.use_guest_rebirth_card",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            client.post(
+                reverse("gameplay:use_rebirth_card", kwargs={"pk": item.pk}),
+                {"guest_id": 1},
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
 
     def test_unequip_view_rejects_invalid_guest_id(self, manor_with_user):
         _manor, client = manor_with_user
@@ -868,9 +1099,34 @@ class TestInventoryViews:
         assert payload["success"] is False
         assert "藏宝阁空间不足" in payload["error"]
 
-    def test_move_item_to_treasury_ajax_handles_unexpected_error(self, manor_with_user, monkeypatch):
+    def test_move_item_to_treasury_ajax_handles_database_error(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
         template = ItemTemplate.objects.create(key="move_treasury_unexpected_item", name="藏宝阁未知异常道具")
+        item = InventoryItem.objects.create(
+            manor=manor,
+            template=template,
+            quantity=5,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        )
+
+        monkeypatch.setattr(
+            "gameplay.services.move_item_to_treasury",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
+        )
+
+        response = client.post(
+            reverse("gameplay:move_to_treasury", kwargs={"pk": item.pk}),
+            {"quantity": 2},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        assert response.status_code == 500
+        payload = response.json()
+        assert payload["success"] is False
+        assert "操作失败，请稍后重试" in payload["error"]
+
+    def test_move_item_to_treasury_ajax_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        template = ItemTemplate.objects.create(key="move_treasury_runtime_item", name="藏宝阁运行时异常道具")
         item = InventoryItem.objects.create(
             manor=manor,
             template=template,
@@ -883,15 +1139,12 @@ class TestInventoryViews:
             lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
         )
 
-        response = client.post(
-            reverse("gameplay:move_to_treasury", kwargs={"pk": item.pk}),
-            {"quantity": 2},
-            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
-        )
-        assert response.status_code == 500
-        payload = response.json()
-        assert payload["success"] is False
-        assert "操作失败，请稍后重试" in payload["error"]
+        with pytest.raises(RuntimeError, match="boom"):
+            client.post(
+                reverse("gameplay:move_to_treasury", kwargs={"pk": item.pk}),
+                {"quantity": 2},
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
 
     def test_move_item_to_warehouse_rejects_invalid_quantity(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
@@ -1077,8 +1330,8 @@ class TestMessageViews:
         assert payload["message_id"] == message.pk
         assert payload["unread_count"] == 0
 
-    def test_claim_attachment_json_unexpected_error_tolerates_unread_count_failure(self, manor_with_user, monkeypatch):
-        """JSON 领取附件异常时 unread 计数失败也应降级返回。"""
+    def test_claim_attachment_json_database_error_tolerates_unread_count_failure(self, manor_with_user, monkeypatch):
+        """JSON 领取附件数据库故障时 unread 计数失败也应降级返回。"""
         manor, client = manor_with_user
         message = Message.objects.create(
             manor=manor,
@@ -1089,7 +1342,7 @@ class TestMessageViews:
 
         monkeypatch.setattr(
             "gameplay.views.messages.claim_message_attachments",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
         monkeypatch.setattr(
             "gameplay.views.messages.unread_message_count",
@@ -1108,8 +1361,28 @@ class TestMessageViews:
         assert payload["unread_count"] == 0
         assert "操作失败，请稍后重试" in payload["error"]
 
-    def test_claim_attachment_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
-        """普通表单领取附件异常时应降级为消息提示。"""
+    def test_claim_attachment_json_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        message = Message.objects.create(
+            manor=manor,
+            kind=Message.Kind.REWARD,
+            title="json claim runtime boom",
+            attachments={"items": {"msg_json_item_runtime": 1}},
+        )
+
+        monkeypatch.setattr(
+            "gameplay.views.messages.claim_message_attachments",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            client.post(
+                reverse("gameplay:claim_attachment", kwargs={"pk": message.pk}),
+                HTTP_ACCEPT="application/json",
+            )
+
+    def test_claim_attachment_database_error_does_not_500(self, manor_with_user, monkeypatch):
+        """普通表单领取附件数据库故障时应降级为消息提示。"""
         manor, client = manor_with_user
         message = Message.objects.create(
             manor=manor,
@@ -1120,7 +1393,7 @@ class TestMessageViews:
 
         monkeypatch.setattr(
             "gameplay.views.messages.claim_message_attachments",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.post(reverse("gameplay:claim_attachment", kwargs={"pk": message.pk}))
@@ -1129,6 +1402,23 @@ class TestMessageViews:
         assert response.url == reverse("gameplay:view_message", kwargs={"pk": message.pk})
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("操作失败，请稍后重试" in m for m in messages)
+
+    def test_claim_attachment_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        message = Message.objects.create(
+            manor=manor,
+            kind=Message.Kind.REWARD,
+            title="claim runtime boom",
+            attachments={"items": {"msg_item_runtime": 1}},
+        )
+
+        monkeypatch.setattr(
+            "gameplay.views.messages.claim_message_attachments",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            client.post(reverse("gameplay:claim_attachment", kwargs={"pk": message.pk}))
 
 
 # ============ 科技系统测试 ============
@@ -1179,12 +1469,12 @@ class TestTechnologyViews:
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("tech blocked" in m for m in messages)
 
-    def test_upgrade_technology_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
+    def test_upgrade_technology_database_error_does_not_500(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
 
         monkeypatch.setattr(
             "gameplay.views.technology.upgrade_technology",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.post(
@@ -1195,6 +1485,20 @@ class TestTechnologyViews:
         assert response.url == f"{reverse('gameplay:technology')}?tab=basic"
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("操作失败，请稍后重试" in m for m in messages)
+
+    def test_upgrade_technology_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.views.technology.upgrade_technology",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            client.post(
+                reverse("gameplay:upgrade_technology", kwargs={"tech_key": "dao_attack"}),
+                {"tab": "basic"},
+            )
 
     def test_upgrade_technology_redirects_to_safe_next_url(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
@@ -1317,12 +1621,12 @@ class TestProductionViews:
         assert "js/dashboard.js" in body
         assert 'data-refresh="1"' in body
 
-    def test_start_horse_production_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
+    def test_start_horse_production_database_error_does_not_500(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
 
         monkeypatch.setattr(
             "gameplay.services.start_horse_production",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.post(reverse("gameplay:start_horse_production"), {"horse_key": "any", "quantity": "1"})
@@ -1330,6 +1634,17 @@ class TestProductionViews:
         assert response.url == reverse("gameplay:stable")
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("操作失败，请稍后重试" in m for m in messages)
+
+    def test_start_horse_production_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.services.start_horse_production",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            client.post(reverse("gameplay:start_horse_production"), {"horse_key": "any", "quantity": "1"})
 
     def test_start_horse_production_rejects_invalid_quantity(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
@@ -1363,12 +1678,12 @@ class TestProductionViews:
         assert any("请选择马匹类型" in m for m in messages)
         assert called["count"] == 0
 
-    def test_start_livestock_production_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
+    def test_start_livestock_production_database_error_does_not_500(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
 
         monkeypatch.setattr(
             "gameplay.services.buildings.ranch.start_livestock_production",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.post(
@@ -1398,12 +1713,12 @@ class TestProductionViews:
         assert any("无效的数量" in m for m in messages)
         assert called["count"] == 0
 
-    def test_start_smelting_production_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
+    def test_start_smelting_production_database_error_does_not_500(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
 
         monkeypatch.setattr(
             "gameplay.services.buildings.smithy.start_smelting_production",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.post(reverse("gameplay:start_smelting_production"), {"metal_key": "any", "quantity": "1"})
@@ -1428,12 +1743,12 @@ class TestProductionViews:
         assert any("无效的数量" in m for m in messages)
         assert called["count"] == 0
 
-    def test_start_equipment_forging_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
+    def test_start_equipment_forging_database_error_does_not_500(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
 
         monkeypatch.setattr(
             "gameplay.services.buildings.forge.start_equipment_forging",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.post(
@@ -1532,12 +1847,12 @@ class TestProductionViews:
         assert response.status_code == 302
         assert response.url == f"{reverse('gameplay:forge')}?mode=decompose&category=helmet"
 
-    def test_decompose_equipment_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
+    def test_decompose_equipment_database_error_does_not_500(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
 
         monkeypatch.setattr(
             "gameplay.services.buildings.forge.decompose_equipment",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.post(
@@ -1590,12 +1905,12 @@ class TestProductionViews:
         assert response.status_code == 302
         assert response.url == f"{reverse('gameplay:forge')}?mode=synthesize&category=helmet"
 
-    def test_synthesize_blueprint_equipment_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
+    def test_synthesize_blueprint_equipment_database_error_does_not_500(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
 
         monkeypatch.setattr(
             "gameplay.services.buildings.forge.synthesize_equipment_with_blueprint",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.post(
@@ -2043,13 +2358,13 @@ class TestWorkViews:
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("work blocked" in m for m in messages)
 
-    def test_assign_work_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
+    def test_assign_work_database_error_does_not_500(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
         guest, work_template = self._create_work_data(manor, "assign_exc")
 
         monkeypatch.setattr(
             "gameplay.views.work.assign_guest_to_work",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.post(
@@ -2060,6 +2375,21 @@ class TestWorkViews:
         assert response.url == reverse("gameplay:work")
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("操作失败，请稍后重试" in m for m in messages)
+
+    def test_assign_work_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        guest, work_template = self._create_work_data(manor, "assign_runtime")
+
+        monkeypatch.setattr(
+            "gameplay.views.work.assign_guest_to_work",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            client.post(
+                reverse("gameplay:assign_work"),
+                {"guest_id": guest.id, "work_key": work_template.key},
+            )
 
     def test_assign_work_rejects_invalid_guest_id(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
@@ -2081,7 +2411,7 @@ class TestWorkViews:
         assert any("参数错误" in m for m in messages)
         assert called["count"] == 0
 
-    def test_recall_work_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
+    def test_recall_work_database_error_does_not_500(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
         guest, work_template = self._create_work_data(manor, "recall_exc")
         assignment = WorkAssignment.objects.create(
@@ -2094,7 +2424,7 @@ class TestWorkViews:
 
         monkeypatch.setattr(
             "gameplay.views.work.recall_guest_from_work",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.post(reverse("gameplay:recall_work", kwargs={"pk": assignment.pk}))
@@ -2103,7 +2433,7 @@ class TestWorkViews:
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("操作失败，请稍后重试" in m for m in messages)
 
-    def test_claim_work_reward_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
+    def test_claim_work_reward_database_error_does_not_500(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
         guest, work_template = self._create_work_data(manor, "claim_exc")
         assignment = WorkAssignment.objects.create(
@@ -2116,7 +2446,7 @@ class TestWorkViews:
 
         monkeypatch.setattr(
             "gameplay.views.work.claim_work_reward",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.post(reverse("gameplay:claim_work_reward", kwargs={"pk": assignment.pk}))
@@ -2150,12 +2480,12 @@ class TestRecruitmentViews:
         assert options
         assert all(option.get("troop_class") == "jian" for option in options)
 
-    def test_start_troop_recruitment_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
+    def test_start_troop_recruitment_database_error_does_not_500(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
 
         monkeypatch.setattr(
             "gameplay.services.recruitment.recruitment.start_troop_recruitment",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.post(
@@ -2166,6 +2496,20 @@ class TestRecruitmentViews:
         assert response.url == reverse("gameplay:troop_recruitment")
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("操作失败，请稍后重试" in m for m in messages)
+
+    def test_start_troop_recruitment_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.services.recruitment.recruitment.start_troop_recruitment",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            client.post(
+                reverse("gameplay:start_troop_recruitment"),
+                {"troop_key": "any", "quantity": "1"},
+            )
 
     def test_start_troop_recruitment_rejects_invalid_quantity(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
@@ -2512,7 +2856,7 @@ class TestMapAPI:
         assert "请求处理中，请稍候重试" in payload["error"]
         assert called["count"] == 0
 
-    def test_start_scout_api_unexpected_error_returns_500(self, manor_with_user, monkeypatch, django_user_model):
+    def test_start_scout_api_database_error_returns_500(self, manor_with_user, monkeypatch, django_user_model):
         attacker, client = manor_with_user
         defender_user = django_user_model.objects.create_user(
             username=f"map_exc_scout_def_{attacker.id}",
@@ -2522,7 +2866,7 @@ class TestMapAPI:
 
         monkeypatch.setattr(
             "gameplay.views.map.start_scout",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.post(
@@ -2535,7 +2879,27 @@ class TestMapAPI:
         assert payload["success"] is False
         assert "操作失败，请稍后重试" in payload["error"]
 
-    def test_start_raid_api_unexpected_error_returns_500(self, manor_with_user, monkeypatch, django_user_model):
+    def test_start_scout_api_programming_error_bubbles_up(self, manor_with_user, monkeypatch, django_user_model):
+        attacker, client = manor_with_user
+        defender_user = django_user_model.objects.create_user(
+            username=f"map_runtime_scout_def_{attacker.id}",
+            password="pass123",
+        )
+        defender = ensure_manor(defender_user)
+
+        monkeypatch.setattr(
+            "gameplay.views.map.start_scout",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            client.post(
+                reverse("gameplay:start_scout_api"),
+                data=json.dumps({"target_id": defender.id}),
+                content_type="application/json",
+            )
+
+    def test_start_raid_api_database_error_returns_500(self, manor_with_user, monkeypatch, django_user_model):
         attacker, client = manor_with_user
         defender_user = django_user_model.objects.create_user(
             username=f"map_exc_raid_def_{attacker.id}",
@@ -2545,7 +2909,7 @@ class TestMapAPI:
 
         monkeypatch.setattr(
             "gameplay.views.map.start_raid",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.post(
@@ -2558,7 +2922,27 @@ class TestMapAPI:
         assert payload["success"] is False
         assert "操作失败，请稍后重试" in payload["error"]
 
-    def test_retreat_raid_api_unexpected_error_returns_500(self, manor_with_user, monkeypatch, django_user_model):
+    def test_start_raid_api_programming_error_bubbles_up(self, manor_with_user, monkeypatch, django_user_model):
+        attacker, client = manor_with_user
+        defender_user = django_user_model.objects.create_user(
+            username=f"map_runtime_raid_def_{attacker.id}",
+            password="pass123",
+        )
+        defender = ensure_manor(defender_user)
+
+        monkeypatch.setattr(
+            "gameplay.views.map.start_raid",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            client.post(
+                reverse("gameplay:start_raid_api"),
+                data=json.dumps({"target_id": defender.id, "guest_ids": [1], "troop_loadout": {}}),
+                content_type="application/json",
+            )
+
+    def test_retreat_raid_api_database_error_returns_500(self, manor_with_user, monkeypatch, django_user_model):
         attacker, client = manor_with_user
         defender_user = django_user_model.objects.create_user(
             username=f"map_exc_retreat_def_{attacker.id}",
@@ -2569,7 +2953,7 @@ class TestMapAPI:
 
         monkeypatch.setattr(
             "gameplay.views.map.request_raid_retreat",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.post(reverse("gameplay:retreat_raid_api", kwargs={"raid_id": run.id}))
@@ -2577,6 +2961,23 @@ class TestMapAPI:
         payload = response.json()
         assert payload["success"] is False
         assert "操作失败，请稍后重试" in payload["error"]
+
+    def test_retreat_raid_api_programming_error_bubbles_up(self, manor_with_user, monkeypatch, django_user_model):
+        attacker, client = manor_with_user
+        defender_user = django_user_model.objects.create_user(
+            username=f"map_runtime_retreat_def_{attacker.id}",
+            password="pass123",
+        )
+        defender = ensure_manor(defender_user)
+        run = RaidRun.objects.create(attacker=attacker, defender=defender, status=RaidRun.Status.MARCHING)
+
+        monkeypatch.setattr(
+            "gameplay.views.map.request_raid_retreat",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            client.post(reverse("gameplay:retreat_raid_api", kwargs={"raid_id": run.id}))
 
 
 # ============ POST 操作测试 ============
@@ -2841,12 +3242,12 @@ class TestJailAndOathAPI:
         assert "请求处理中，请稍候重试" in payload["error"]
         assert called["count"] == 0
 
-    def test_recruit_prisoner_api_unexpected_error_returns_500(self, manor_with_user, monkeypatch):
+    def test_recruit_prisoner_api_database_error_returns_500(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
 
         monkeypatch.setattr(
             "gameplay.views.jail.recruit_prisoner",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.post(reverse("gameplay:recruit_prisoner_api", kwargs={"prisoner_id": 1}))
@@ -2855,17 +3256,28 @@ class TestJailAndOathAPI:
         assert payload["success"] is False
         assert "操作失败，请稍后重试" in payload["error"]
 
+    def test_recruit_prisoner_api_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.views.jail.recruit_prisoner",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            client.post(reverse("gameplay:recruit_prisoner_api", kwargs={"prisoner_id": 1}))
+
 
 @pytest.mark.django_db
 class TestJailAndOathViews:
     """监牢与结义林页面操作测试"""
 
-    def test_add_oath_bond_view_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
+    def test_add_oath_bond_view_database_error_does_not_500(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
 
         monkeypatch.setattr(
             "gameplay.views.jail.add_oath_bond",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
         response = client.post(reverse("gameplay:add_oath_bond_view"), {"guest_id": 1})
@@ -2873,6 +3285,17 @@ class TestJailAndOathViews:
         assert response.url == reverse("gameplay:oath_grove")
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("操作失败，请稍后重试" in m for m in messages)
+
+    def test_add_oath_bond_view_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.views.jail.add_oath_bond",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            client.post(reverse("gameplay:add_oath_bond_view"), {"guest_id": 1})
 
 
 # ============ 权限测试 ============

@@ -13,6 +13,7 @@ from guests.constants import TimeConstants
 from guests.models import Guest, GuestArchetype, GuestRarity, GuestStatus, GuestTemplate
 from guests.rarity import GUEST_RARITY_ORDER
 from guests.services import allocate_attribute_points, available_guests, list_pools, recover_guest_hp
+from guests.tasks import scan_passive_hp_recovery
 
 User = get_user_model()
 
@@ -213,6 +214,36 @@ def test_recover_guest_hp_clears_injured_status_when_reaching_full_hp():
     recover_guest_hp(guest, now=now)
     guest.refresh_from_db()
 
+    assert guest.current_hp == guest.max_hp
+    assert guest.status == GuestStatus.IDLE
+
+
+@pytest.mark.django_db
+def test_scan_passive_hp_recovery_clears_full_hp_injured_status():
+    user = User.objects.create_user(username="testuser_hp_scan_full_injured", password="test123")
+    manor = ensure_manor(user)
+
+    template = GuestTemplate.objects.create(
+        key="test_guest_scan_full_injured",
+        name="测试门客扫描满血解除重伤",
+        rarity="gray",
+        base_attack=50,
+        base_defense=50,
+    )
+    now = timezone.now()
+    last = now - timezone.timedelta(seconds=TimeConstants.HP_RECOVERY_INTERVAL)
+    guest = Guest.objects.create(
+        manor=manor,
+        template=template,
+        status=GuestStatus.INJURED,
+        current_hp=max(1, template.base_hp + 50 * 80),
+        last_hp_recovery_at=last,
+    )
+
+    processed = scan_passive_hp_recovery(limit=10)
+    guest.refresh_from_db()
+
+    assert processed == 1
     assert guest.current_hp == guest.max_hp
     assert guest.status == GuestStatus.IDLE
 

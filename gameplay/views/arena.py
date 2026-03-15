@@ -5,6 +5,7 @@ import logging
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import DatabaseError
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse
@@ -21,7 +22,7 @@ from gameplay.selectors import (
     get_arena_exchange_context,
     get_arena_registration_context,
 )
-from gameplay.services import ensure_manor
+from gameplay.services import get_manor
 from gameplay.services.arena.core import (
     ARENA_REGISTRATION_SILVER_COST,
     cancel_arena_entry,
@@ -114,7 +115,7 @@ class BaseArenaView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        manor = ensure_manor(self.request.user)
+        manor = get_manor(self.request.user)
         context.update(self._build_page_context(manor))
         context["arena_tabs"] = self._build_tabs()
         context["arena_active_tab"] = self.active_tab
@@ -168,7 +169,7 @@ class ArenaEventDetailView(BaseArenaView):
 @require_POST
 @rate_limit_redirect("arena_register", limit=20, window_seconds=60)
 def arena_register_view(request: HttpRequest) -> HttpResponse:
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     redirect_target = _resolve_safe_next_url(request, default_view_name="gameplay:arena")
     try:
         guest_ids = _parse_guest_ids(request.POST.getlist("guest_ids"))
@@ -185,7 +186,7 @@ def arena_register_view(request: HttpRequest) -> HttpResponse:
             )
     except ValueError as exc:
         _handle_known_arena_error(request, exc)
-    except Exception as exc:
+    except DatabaseError as exc:
         _handle_unexpected_arena_error(
             request,
             exc,
@@ -203,7 +204,7 @@ def arena_register_view(request: HttpRequest) -> HttpResponse:
 @require_POST
 @rate_limit_redirect("arena_cancel", limit=20, window_seconds=60)
 def arena_cancel_view(request: HttpRequest) -> HttpResponse:
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     redirect_target = _resolve_safe_next_url(request, default_view_name="gameplay:arena")
     try:
         canceled_count = cancel_arena_entry(manor)
@@ -213,7 +214,7 @@ def arena_cancel_view(request: HttpRequest) -> HttpResponse:
         )
     except ValueError as exc:
         _handle_known_arena_error(request, exc)
-    except Exception as exc:
+    except DatabaseError as exc:
         _handle_unexpected_arena_error(
             request,
             exc,
@@ -231,7 +232,7 @@ def arena_cancel_view(request: HttpRequest) -> HttpResponse:
 @require_POST
 @rate_limit_redirect("arena_exchange", limit=30, window_seconds=60)
 def arena_exchange_view(request: HttpRequest) -> HttpResponse:
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     redirect_target = _resolve_safe_next_url(request, default_view_name="gameplay:arena")
     reward_key = (request.POST.get("reward_key") or "").strip()
     quantity = safe_positive_int(request.POST.get("quantity"), default=1)
@@ -257,7 +258,7 @@ def arena_exchange_view(request: HttpRequest) -> HttpResponse:
         )
     except ValueError as exc:
         _handle_known_arena_error(request, exc)
-    except Exception as exc:
+    except DatabaseError as exc:
         _handle_unexpected_arena_error(
             request,
             exc,

@@ -19,11 +19,9 @@ from django.views.generic import TemplateView
 from core.exceptions import GameError, GuestNotIdleError
 from core.utils import sanitize_error_message
 
-from ..constants import TimeConstants
 from ..forms import AllocateSkillPointsForm
 from ..models import MAX_GUEST_SKILL_SLOTS, GearItem, GearSlot, GearTemplate, GuestSkill, GuestStatus, Skill
-from ..services import available_guests, finalize_guest_training, recover_guest_hp
-from ..utils.guest_state import refresh_guests_state
+from ..services import available_guests
 
 logger = logging.getLogger(__name__)
 
@@ -63,20 +61,6 @@ def _load_guest_detail(manor, guest_pk: int):
         ),
         pk=guest_pk,
     )
-
-
-def _refresh_guest_runtime_state(guest, now) -> None:
-    needs_refresh = False
-    if guest.training_complete_at and guest.training_complete_at <= now:
-        if finalize_guest_training(guest, now=now):
-            needs_refresh = True
-    if guest.current_hp < guest.max_hp:
-        last = guest.last_hp_recovery_at or guest.created_at or now
-        if (now - last).total_seconds() >= TimeConstants.HP_RECOVERY_INTERVAL:
-            recover_guest_hp(guest, now=now)
-            needs_refresh = True
-    if needs_refresh:
-        guest.refresh_from_db()
 
 
 def _build_gear_set_context(gear_items):
@@ -182,14 +166,14 @@ class RosterView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         from gameplay.models import InventoryItem, ItemTemplate
-        from gameplay.services.manor.core import ensure_manor, refresh_manor_state
+        from gameplay.services import sync_resource_production
+        from gameplay.services.manor.core import get_manor
         from guests.services.salary import bulk_check_salary_paid, get_guest_salary, get_unpaid_guests
 
         context = super().get_context_data(**kwargs)
-        manor = ensure_manor(self.request.user)
-        refresh_manor_state(manor)
+        manor = get_manor(self.request.user)
+        sync_resource_production(manor, persist=False)
         guests = list(available_guests(manor))
-        refresh_guests_state(guests, now=timezone.now(), refresh=True)
         exp_items = list(
             manor.inventory_items.select_related("template").filter(
                 template__effect_type=ItemTemplate.EffectType.EXPERIENCE_ITEM,
@@ -237,13 +221,11 @@ class GuestDetailView(LoginRequiredMixin, TemplateView):
     template_name = "guests/detail.html"
 
     def get_context_data(self, **kwargs):
-        from gameplay.services.manor.core import ensure_manor
+        from gameplay.services.manor.core import get_manor
 
         context = super().get_context_data(**kwargs)
-        manor = ensure_manor(self.request.user)
+        manor = get_manor(self.request.user)
         guest = _load_guest_detail(manor, self.kwargs["pk"])
-        now = timezone.now()
-        _refresh_guest_runtime_state(guest, now)
         slots = [(choice.value, choice.label) for choice in GearSlot]
         slot_capacity = {
             GearSlot.DEVICE.value: 3,
@@ -294,9 +276,9 @@ class GuestDetailView(LoginRequiredMixin, TemplateView):
 def dismiss_guest_view(request, pk: int):
     from django.db import transaction
 
-    from gameplay.services.manor.core import ensure_manor
+    from gameplay.services.manor.core import get_manor
 
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     guest = get_object_or_404(manor.guests, pk=pk)
     guest_name = guest.display_name
 

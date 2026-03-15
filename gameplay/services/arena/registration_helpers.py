@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 
-from django.db.models import F
-
-from gameplay.models import ArenaEntry, ArenaEntryGuest, ArenaTournament, Manor
+from gameplay.models import ArenaEntry, ArenaEntryGuest, ArenaTournament, Manor, ResourceEvent
 from guests.models import Guest, GuestStatus
 
 
@@ -29,9 +27,17 @@ def load_selected_registration_guests_locked(locked_manor: Manor, selected_guest
 
 
 def deduct_registration_silver_locked(locked_manor: Manor, *, silver_cost: int) -> None:
-    if locked_manor.silver < silver_cost:
-        raise ValueError(f"银两不足，报名需要 {silver_cost} 银两")
-    Manor.objects.filter(pk=locked_manor.pk).update(silver=F("silver") - silver_cost)
+    from gameplay.services.resources import spend_resources_locked
+
+    try:
+        spend_resources_locked(
+            locked_manor,
+            {"silver": silver_cost},
+            note="竞技场报名",
+            reason=ResourceEvent.Reason.UPGRADE_COST,
+        )
+    except ValueError as exc:
+        raise ValueError(f"银两不足，报名需要 {silver_cost} 银两") from exc
 
 
 def create_arena_entry_with_guests_locked(

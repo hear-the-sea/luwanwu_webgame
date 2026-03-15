@@ -10,6 +10,7 @@ from typing import TypeVar
 
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import DatabaseError
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_POST
@@ -24,13 +25,11 @@ from gameplay.constants import REGION_CHOICES, UIConstants
 from gameplay.models import Manor as ManorModel
 from gameplay.models import RaidRun
 from gameplay.selectors.map import get_map_context, get_raid_config_context
-from gameplay.services import ensure_manor, refresh_manor_state
+from gameplay.services import get_manor
 from gameplay.services.raid import (
     get_active_raids,
     get_active_scouts,
     get_incoming_raids,
-    refresh_raid_runs,
-    refresh_scout_records,
     request_raid_retreat,
     search_manors_by_name,
     search_manors_by_region,
@@ -59,7 +58,7 @@ def _map_known_error_response(exc: GameError | ValueError) -> JsonResponse:
 
 def _map_unexpected_error_response(
     request: HttpRequest,
-    exc: Exception,
+    exc: DatabaseError,
     *,
     log_message: str,
     log_args: tuple[object, ...],
@@ -95,7 +94,7 @@ def _run_locked_map_json_action(
             result = operation()
         except (GameError, ValueError) as exc:
             return _map_known_error_response(exc)
-        except Exception as exc:
+        except DatabaseError as exc:
             return _map_unexpected_error_response(
                 request,
                 exc,
@@ -195,7 +194,7 @@ class MapView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        manor = ensure_manor(self.request.user)
+        manor = get_manor(self.request.user)
         # 获取当前选中的地区（默认显示玩家所在地区）
         selected_region = self.request.GET.get("region", manor.region)
 
@@ -215,8 +214,7 @@ class RaidConfigView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        manor = ensure_manor(self.request.user)
-        refresh_manor_state(manor)
+        manor = get_manor(self.request.user)
 
         target_id = self.kwargs.get("target_id")
 
@@ -231,7 +229,7 @@ class RaidConfigView(LoginRequiredMixin, TemplateView):
 @login_required
 def map_search_api(request: HttpRequest) -> JsonResponse:
     """地图搜索API（支持按名称和地区）"""
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
 
     search_type = request.GET.get("type", "region")
     query = request.GET.get("q", "").strip()
@@ -258,7 +256,7 @@ def map_search_api(request: HttpRequest) -> JsonResponse:
 @login_required
 def manor_detail_api(request: HttpRequest, manor_id: int) -> JsonResponse:
     """获取庄园详情API"""
-    viewer_manor = ensure_manor(request.user)
+    viewer_manor = get_manor(request.user)
 
     try:
         # 优化：使用 select_related 预加载用户信息
@@ -277,7 +275,7 @@ def manor_detail_api(request: HttpRequest, manor_id: int) -> JsonResponse:
 @rate_limit_json("scout", limit=30, window_seconds=60, error_message="侦察过于频繁，请稍后再试")
 def start_scout_api(request: HttpRequest) -> JsonResponse:
     """发起侦察API"""
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
 
     _data, target_manor, error = _request_target_manor_or_error(request)
     if error is not None:
@@ -311,7 +309,7 @@ def start_scout_api(request: HttpRequest) -> JsonResponse:
 @rate_limit_json("raid", limit=20, window_seconds=60, error_message="进攻过于频繁，请稍后再试")
 def start_raid_api(request: HttpRequest) -> JsonResponse:
     """发起踢馆API"""
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
 
     data, target_manor, error = _request_target_manor_or_error(request)
     if error is not None:
@@ -352,7 +350,7 @@ def start_raid_api(request: HttpRequest) -> JsonResponse:
 @rate_limit_json("raid_retreat", limit=60, window_seconds=60, error_message="撤退操作过于频繁，请稍后再试")
 def retreat_raid_api(request: HttpRequest, raid_id: int) -> JsonResponse:
     """撤退API"""
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
 
     try:
         run = RaidRun.objects.get(pk=raid_id, attacker=manor)
@@ -378,11 +376,7 @@ def retreat_raid_api(request: HttpRequest, raid_id: int) -> JsonResponse:
 @login_required
 def raid_status_api(request: HttpRequest) -> JsonResponse:
     """获取当前出征和来袭状态API"""
-    manor = ensure_manor(request.user)
-
-    # 刷新状态
-    refresh_raid_runs(manor, prefer_async=True)
-    refresh_scout_records(manor, prefer_async=True)
+    manor = get_manor(request.user)
 
     active_raids = get_active_raids(manor)
     active_scouts = get_active_scouts(manor)
@@ -424,7 +418,7 @@ def raid_status_api(request: HttpRequest) -> JsonResponse:
 @login_required
 def protection_status_api(request: HttpRequest) -> JsonResponse:
     """获取保护状态API"""
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
 
     status = get_protection_status(manor)
     return json_success(protection=status)

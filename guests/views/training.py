@@ -9,6 +9,7 @@ import logging
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import DatabaseError
 from django.shortcuts import get_object_or_404, redirect
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -40,9 +41,9 @@ class TrainView(LoginRequiredMixin, TemplateView):
     http_method_names = ["post"]
 
     def post(self, request, *args, **kwargs):
-        from gameplay.services.manor.core import ensure_manor
+        from gameplay.services.manor.core import get_manor
 
-        manor = ensure_manor(request.user)
+        manor = get_manor(request.user)
         form = TrainGuestForm(request.POST, manor=manor)
         default_url = "gameplay:recruitment_hall"
         next_url = safe_redirect_url(request, request.POST.get("next"), default_url)
@@ -58,9 +59,9 @@ class TrainView(LoginRequiredMixin, TemplateView):
             messages.success(request, f"{guest.display_name} 正在升级，预计 {eta_str} 完成")
         except (GameError, ValueError) as exc:
             messages.error(request, sanitize_error_message(exc))
-        except Exception as exc:
+        except DatabaseError as exc:
             logger.exception(
-                "Unexpected guest train view error: manor_id=%s user_id=%s guest_id=%s levels=%s",
+                "Unexpected guest train database error: manor_id=%s user_id=%s guest_id=%s levels=%s",
                 getattr(manor, "id", None),
                 getattr(request.user, "id", None),
                 getattr(guest, "id", None),
@@ -80,9 +81,9 @@ def use_experience_item_view(request, pk: int):
     但使用 manager 方法简化查询
     """
     from gameplay.models import InventoryItem, ItemTemplate
-    from gameplay.services.manor.core import ensure_manor
+    from gameplay.services.manor.core import get_manor
 
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     # 使用 manager 方法获取门客，避免重复的 select_related
     guest = get_object_or_404(Guest.objects.for_manor(manor).with_template(), pk=pk)
     item_id = request.POST.get("item_id")
@@ -132,9 +133,9 @@ def use_experience_item_view(request, pk: int):
         if is_ajax:
             return json_error(error_msg, status=400, include_message=True)
         messages.error(request, error_msg)
-    except Exception as exc:
+    except DatabaseError as exc:
         logger.exception(
-            "Unexpected experience-item use view error: manor_id=%s user_id=%s guest_id=%s item_id=%s",
+            "Unexpected experience-item use database error: manor_id=%s user_id=%s guest_id=%s item_id=%s",
             getattr(manor, "id", None),
             getattr(request.user, "id", None),
             pk,
@@ -157,11 +158,11 @@ def check_training_view(request, pk: int):
     用于前端倒计时结束后主动检查，避免页面刷新时数据未更新的问题。
     使用 manager 方法简化查询
     """
-    from gameplay.services.manor.core import ensure_manor
+    from gameplay.services.manor.core import get_manor
 
     from ..services import finalize_guest_training
 
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     # 使用 manager 方法获取门客，避免重复的 select_related
     guest = get_object_or_404(Guest.objects.for_manor(manor).with_template(), pk=pk)
 
@@ -190,9 +191,9 @@ def allocate_points_view(request, pk: int):
 
     使用统一的错误处理装饰器，减少样板代码
     """
-    from gameplay.services.manor.core import ensure_manor
+    from gameplay.services.manor.core import get_manor
 
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     # 使用 manager 方法获取门客，避免重复的 select_related
     guest = get_object_or_404(Guest.objects.for_manor(manor).with_template(), pk=pk)
     form = AllocateSkillPointsForm(request.POST, manor=manor)
@@ -214,28 +215,42 @@ def allocate_points_view(request, pk: int):
     attribute = form.cleaned_data["attribute"]
     points = form.cleaned_data["points"]
 
-    # 执行加点
-    allocate_attribute_points(guest, attribute, points)
-    guest.refresh_from_db(fields=["force", "intellect", "defense_stat", "agility", "luck", "attribute_points"])
+    try:
+        allocate_attribute_points(guest, attribute, points)
+        guest.refresh_from_db(fields=["force", "intellect", "defense_stat", "agility", "luck", "attribute_points"])
 
-    if is_ajax:
-        refreshed_form = AllocateSkillPointsForm(manor=manor, initial={"guest": guest})
-        refreshed_form.fields["guest"].queryset = manor.guests.filter(pk=guest.pk)
-        attribute_panel_html = render_to_string(
-            "guests/partials/attribute_panel.html",
-            {"guest": guest, "skill_point_form": refreshed_form},
-            request=request,
+        if is_ajax:
+            refreshed_form = AllocateSkillPointsForm(manor=manor, initial={"guest": guest})
+            refreshed_form.fields["guest"].queryset = manor.guests.filter(pk=guest.pk)
+            attribute_panel_html = render_to_string(
+                "guests/partials/attribute_panel.html",
+                {"guest": guest, "skill_point_form": refreshed_form},
+                request=request,
+            )
+            return json_success(
+                message=f"{guest.display_name} 属性加点成功",
+                attribute_points=guest.attribute_points,
+                force=guest.force,
+                intellect=guest.intellect,
+                defense=guest.defense_stat,
+                agility=guest.agility,
+                luck=guest.luck,
+                attribute_panel_html=attribute_panel_html,
+            )
+    except DatabaseError as exc:
+        logger.exception(
+            "Unexpected allocate-points database error: manor_id=%s user_id=%s guest_id=%s attribute=%s points=%s",
+            getattr(manor, "id", None),
+            getattr(request.user, "id", None),
+            getattr(guest, "id", None),
+            attribute,
+            points,
         )
-        return json_success(
-            message=f"{guest.display_name} 属性加点成功",
-            attribute_points=guest.attribute_points,
-            force=guest.force,
-            intellect=guest.intellect,
-            defense=guest.defense_stat,
-            agility=guest.agility,
-            luck=guest.luck,
-            attribute_panel_html=attribute_panel_html,
-        )
+        error_msg = sanitize_error_message(exc)
+        if is_ajax:
+            return json_error(error_msg, status=500, include_message=True)
+        messages.error(request, error_msg)
+        return reverse("guests:detail", args=[guest.pk])
 
     # 成功消息由装饰器的 success_message 参数处理
     messages.success(request, f"{guest.display_name} 属性加点成功")

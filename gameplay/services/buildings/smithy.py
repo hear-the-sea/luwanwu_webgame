@@ -303,14 +303,15 @@ def start_smelting_production(manor: Manor, metal_key: str, quantity: int = 1) -
 
         # 扣除材料
         if cost_type == "silver":
-            if locked_manor.silver < total_cost:
-                raise ValueError(f"{cost_name}不足，需要{total_cost}{cost_name}")
-            spend_resources_locked(
-                locked_manor,
-                {"silver": total_cost},
-                note=f"制作{metal_name}x{quantity}",
-                reason=ResourceEvent.Reason.UPGRADE_COST,
-            )
+            try:
+                spend_resources_locked(
+                    locked_manor,
+                    {"silver": total_cost},
+                    note=f"制作{metal_name}x{quantity}",
+                    reason=ResourceEvent.Reason.UPGRADE_COST,
+                )
+            except ValueError as exc:
+                raise ValueError(f"{cost_name}不足，需要{total_cost}{cost_name}") from exc
         else:
             # 扣除物品（铜、锡等）
             item = (

@@ -10,6 +10,7 @@ from typing import Any
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import DatabaseError
 from django.db.models import Prefetch
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
@@ -25,13 +26,12 @@ from gameplay.services import (
     add_mission_extra_attempt,
     bulk_get_mission_extra_attempts,
     bulk_mission_attempts_today,
-    ensure_manor,
     get_item_quantity,
+    get_manor,
     launch_mission,
     normalize_mission_loadout,
-    refresh_manor_state,
-    refresh_mission_runs,
     request_retreat,
+    sync_resource_production,
 )
 from gameplay.services.recruitment.recruitment import get_player_troops
 from guests.models import Guest, GuestStatus, GuestTemplate, SkillBook
@@ -90,9 +90,8 @@ class TaskBoardView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        manor = ensure_manor(self.request.user)
-        refresh_manor_state(manor)
-        refresh_mission_runs(manor, prefer_async=True)
+        manor = get_manor(self.request.user)
+        sync_resource_production(manor, persist=False)
         missions = list(MissionTemplate.objects.all().order_by("id"))
         missions_by_key = {mission.key: mission for mission in missions}
         attempts = bulk_mission_attempts_today(manor, missions)
@@ -200,7 +199,7 @@ class AcceptMissionView(LoginRequiredMixin, TemplateView):
     http_method_names = ["post"]
 
     def post(self, request, *args, **kwargs):
-        manor = ensure_manor(request.user)
+        manor = get_manor(request.user)
         mission, redirect_response = _resolve_mission_or_redirect(request, request.POST.get("mission_key"))
         if redirect_response is not None:
             return redirect_response
@@ -249,7 +248,7 @@ class AcceptMissionView(LoginRequiredMixin, TemplateView):
                     messages.success(request, f"{mission.name} 已出征，战报稍后送达。")
             except (GameError, ValueError) as exc:
                 handle_known_mission_error(request, exc)
-            except Exception as exc:
+            except DatabaseError as exc:
                 handle_unexpected_mission_error(
                     request,
                     exc,
@@ -271,7 +270,7 @@ class AcceptMissionView(LoginRequiredMixin, TemplateView):
 @require_POST
 def retreat_mission_view(request: HttpRequest, pk: int) -> HttpResponse:
     """任务撤退"""
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     run = get_object_or_404(
         manor.mission_runs.select_related("mission"),
         pk=pk,
@@ -289,7 +288,7 @@ def retreat_mission_view(request: HttpRequest, pk: int) -> HttpResponse:
             messages.info(request, f"{run.mission.name} 已撤退，预计返程：{eta}")
         except (GameError, ValueError) as exc:
             handle_known_mission_error(request, exc)
-        except Exception as exc:
+        except DatabaseError as exc:
             handle_unexpected_mission_error(
                 request,
                 exc,
@@ -314,7 +313,7 @@ def retreat_scout_view(request: HttpRequest, pk: int) -> HttpResponse:
     from gameplay.models import ScoutRecord
     from gameplay.services.raid import request_scout_retreat
 
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     record = get_object_or_404(
         ScoutRecord.objects.select_related("defender"),
         pk=pk,
@@ -332,7 +331,7 @@ def retreat_scout_view(request: HttpRequest, pk: int) -> HttpResponse:
             messages.info(request, f"侦察 {record.defender.display_name} 已撤退，探子正在返程")
         except (GameError, ValueError) as exc:
             handle_known_mission_error(request, exc)
-        except Exception as exc:
+        except DatabaseError as exc:
             handle_unexpected_mission_error(
                 request,
                 exc,
@@ -360,7 +359,7 @@ def use_mission_card_view(request: HttpRequest) -> HttpResponse:
     """
     from django.db import transaction
 
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     mission, redirect_response = _resolve_mission_or_redirect(request, request.POST.get("mission_key"))
     if redirect_response is not None:
         return redirect_response
@@ -386,7 +385,7 @@ def use_mission_card_view(request: HttpRequest) -> HttpResponse:
         except (GameError, ValueError) as exc:
             # 任务卡不足等业务错误
             handle_known_mission_error(request, exc)
-        except Exception as exc:
+        except DatabaseError as exc:
             handle_unexpected_mission_error(
                 request,
                 exc,

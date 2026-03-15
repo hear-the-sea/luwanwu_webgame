@@ -40,3 +40,27 @@ def complete_mission_task(self, run_id: int):
     except Exception as exc:
         logger.exception("Failed to complete mission %d: %s", run_id, exc)
         raise self.retry(exc=exc)
+
+
+@shared_task(name="gameplay.scan_due_missions")
+def scan_due_missions(limit: int = 200) -> int:
+    now = timezone.now()
+    qs = (
+        MissionRun.objects.select_related("mission", "manor", "manor__user")
+        .prefetch_related("guests")
+        .filter(
+            status=MissionRun.Status.ACTIVE,
+            return_at__isnull=False,
+            return_at__lte=now,
+        )
+        .order_by("return_at")[:limit]
+    )
+    count = 0
+    for run in qs:
+        try:
+            finalize_mission_run(run, now=now)
+            if not MissionRun.objects.filter(pk=run.pk, status=MissionRun.Status.ACTIVE).exists():
+                count += 1
+        except Exception:
+            logger.exception("Failed to finalize mission run %d", run.id)
+    return count

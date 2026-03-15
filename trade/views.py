@@ -12,7 +12,7 @@ from django.views.generic import TemplateView
 from core.utils import safe_int
 from core.utils.rate_limit import rate_limit_redirect
 from gameplay.models import Manor
-from gameplay.services import ensure_manor
+from gameplay.services import get_manor
 from trade.selectors import get_trade_context
 from trade.services.auction_service import place_bid
 from trade.services.bank_service import exchange_gold_bar
@@ -56,7 +56,7 @@ class TradeView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        manor = ensure_manor(self.request.user)
+        manor = get_manor(self.request.user)
         context.update(get_trade_context(self.request, manor))
 
         return context

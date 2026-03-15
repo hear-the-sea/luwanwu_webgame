@@ -240,16 +240,15 @@ def start_livestock_production(manor: Manor, livestock_key: str, quantity: int =
 
         if has_active_livestock_production(locked_manor):
             raise ValueError("已有家畜正在养殖中，同时只能养殖一种家畜")
-        if locked_manor.grain < total_grain_cost:
-            raise ValueError(f"粮食不足，需要{total_grain_cost}点粮食")
-
-        # 扣除粮食
-        spend_resources_locked(
-            locked_manor,
-            {"grain": total_grain_cost},
-            note=f"养殖{livestock_name}x{quantity}",
-            reason=ResourceEvent.Reason.UPGRADE_COST,
-        )
+        try:
+            spend_resources_locked(
+                locked_manor,
+                {"grain": total_grain_cost},
+                note=f"养殖{livestock_name}x{quantity}",
+                reason=ResourceEvent.Reason.UPGRADE_COST,
+            )
+        except ValueError as exc:
+            raise ValueError(f"粮食不足，需要{total_grain_cost}点粮食") from exc
 
         # 计算实际养殖时间（时间不随数量增加）
         actual_duration = calculate_livestock_duration(config["base_duration"], manor)

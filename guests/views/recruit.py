@@ -10,6 +10,7 @@ import logging
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import DatabaseError
 from django.shortcuts import redirect
 from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_POST
@@ -208,9 +209,9 @@ class RecruitView(LoginRequiredMixin, TemplateView):
     http_method_names = ["post"]
 
     def post(self, request, *args, **kwargs):
-        from gameplay.services.manor.core import ensure_manor
+        from gameplay.services.manor.core import get_manor
 
-        manor = ensure_manor(request.user)
+        manor = get_manor(request.user)
         is_ajax = is_json_request(request)
         form = RecruitForm(request.POST)
         if not form.is_valid():
@@ -239,9 +240,9 @@ class RecruitView(LoginRequiredMixin, TemplateView):
                 if is_ajax:
                     return json_error(sanitize_error_message(exc), status=400)
                 messages.error(request, sanitize_error_message(exc))
-            except Exception as exc:
+            except DatabaseError as exc:
                 logger.exception(
-                    "Unexpected recruit draw error: manor_id=%s user_id=%s pool_key=%s",
+                    "Unexpected recruit draw database error: manor_id=%s user_id=%s pool_key=%s",
                     getattr(manor, "id", None),
                     getattr(request.user, "id", None),
                     getattr(pool, "key", None),
@@ -258,9 +259,9 @@ class RecruitView(LoginRequiredMixin, TemplateView):
 @require_POST
 @rate_limit_redirect("recruit_accept", limit=10, window_seconds=60)
 def accept_candidate_view(request):
-    from gameplay.services.manor.core import ensure_manor
+    from gameplay.services.manor.core import get_manor
 
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     is_ajax = is_json_request(request)
     scope = _normalize_candidate_scope(request.POST.get("scope"))
     if scope is None:
@@ -377,9 +378,9 @@ def accept_candidate_view(request):
             if is_ajax:
                 return json_error(sanitize_error_message(exc), status=400)
             messages.error(request, sanitize_error_message(exc))
-        except Exception as exc:
+        except DatabaseError as exc:
             logger.exception(
-                "Unexpected recruit accept error: manor_id=%s user_id=%s action=%s candidate_count=%s",
+                "Unexpected recruit accept database error: manor_id=%s user_id=%s action=%s candidate_count=%s",
                 getattr(manor, "id", None),
                 getattr(request.user, "id", None),
                 action,
@@ -398,9 +399,9 @@ def accept_candidate_view(request):
 @rate_limit_redirect("recruit_reveal", limit=10, window_seconds=60)
 def use_magnifying_glass_view(request):
     """使用放大镜显现候选门客的稀有度"""
-    from gameplay.services.manor.core import ensure_manor
+    from gameplay.services.manor.core import get_manor
 
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     item_id = request.POST.get("item_id")
 
     is_ajax = is_json_request(request)
@@ -438,9 +439,9 @@ def use_magnifying_glass_view(request):
             if is_ajax:
                 return json_error(error_msg, status=400)
             messages.error(request, error_msg)
-        except Exception as exc:
+        except DatabaseError as exc:
             logger.exception(
-                "Unexpected magnifying-glass view error: manor_id=%s user_id=%s item_id=%s",
+                "Unexpected magnifying-glass database error: manor_id=%s user_id=%s item_id=%s",
                 getattr(manor, "id", None),
                 getattr(request.user, "id", None),
                 item_id_int,

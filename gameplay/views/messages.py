@@ -10,6 +10,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
+from django.db import DatabaseError
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -25,11 +26,11 @@ from gameplay.services import (
     claim_message_attachments,
     delete_all_messages,
     delete_messages,
-    ensure_manor,
+    get_manor,
     list_messages,
     mark_all_messages_read,
     mark_messages_read,
-    refresh_manor_state,
+    sync_resource_production,
     unread_message_count,
 )
 
@@ -118,7 +119,7 @@ def _run_selected_message_action(
     success_message: str,
     empty_message: str,
 ) -> HttpResponse:
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     message_ids = request.POST.getlist("message_ids")
     if not message_ids:
         messages.info(request, empty_message)
@@ -216,8 +217,8 @@ class MessageListView(LoginRequiredMixin, TemplateView):
         contextual hint ("当前有 X 条未读通知").
         """
         context = super().get_context_data(**kwargs)
-        manor = ensure_manor(self.request.user)
-        refresh_manor_state(manor)
+        manor = get_manor(self.request.user)
+        sync_resource_production(manor, persist=False)
         context["manor"] = manor
 
         all_messages = list_messages(manor)
@@ -242,7 +243,7 @@ def view_message(request: HttpRequest, pk: int) -> HttpResponse:
     支持JSON请求：当请求头包含 Accept: application/json 或 X-Requested-With: XMLHttpRequest 时，
     返回JSON格式的响应，包含消息状态和最新的未读消息计数。
     """
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     message = get_object_or_404(
         manor.messages.select_related("battle_report"),
         pk=pk,
@@ -299,7 +300,7 @@ def delete_messages_view(request: HttpRequest) -> HttpResponse:
 @require_POST
 def delete_all_messages_view(request: HttpRequest) -> HttpResponse:
     """Handle the 'one click clear' button."""
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     delete_all_messages(manor)
     messages.info(request, "所有消息已清空")
     return _messages_list_redirect()
@@ -321,7 +322,7 @@ def mark_messages_read_view(request: HttpRequest) -> HttpResponse:
 @require_POST
 def mark_all_messages_read_view(request: HttpRequest) -> HttpResponse:
     """Mark every stored message as read."""
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     mark_all_messages_read(manor)
     messages.success(request, "已全部标记为已读")
     return _messages_list_redirect()
@@ -335,7 +336,7 @@ def claim_attachment_view(request: HttpRequest, pk: int) -> HttpResponse:
 
     将附件中的资源和道具发放到玩家账户。
     """
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     message = get_object_or_404(
         manor.messages,
         pk=pk,
@@ -367,7 +368,7 @@ def claim_attachment_view(request: HttpRequest, pk: int) -> HttpResponse:
         )
         if error_response is not None:
             return error_response
-    except Exception as exc:
+    except DatabaseError as exc:
         error_response = _claim_attachment_exception_response(
             request,
             manor=manor,

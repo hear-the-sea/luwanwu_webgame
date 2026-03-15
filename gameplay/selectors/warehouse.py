@@ -11,6 +11,7 @@ from ..services import get_treasury_capacity, get_treasury_used_space
 
 # 每页显示的物品数量
 WAREHOUSE_PAGE_SIZE = 20
+GRAIN_ITEM_KEY = "grain"
 
 
 def _distinct_effect_types(items):
@@ -51,6 +52,98 @@ def _collect_rarity_upgrade_source_keys(manor) -> set[str]:
     return source_keys
 
 
+def _collect_soul_fusion_requirements(manor) -> tuple[int, set[str]]:
+    from gameplay.services.inventory.guest_items import (
+        SOUL_FUSION_DEFAULT_ALLOWED_RARITIES,
+        SOUL_FUSION_DEFAULT_MIN_LEVEL,
+        get_soul_fusion_requirements,
+    )
+
+    min_level: int | None = None
+    allowed_rarities: set[str] = set()
+    payloads = (
+        manor.inventory_items.filter(
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+            quantity__gt=0,
+            template__effect_type=ItemTemplate.EffectType.TOOL,
+            template__is_usable=True,
+        )
+        .values_list("template__effect_payload", flat=True)
+        .distinct()
+    )
+    for payload in payloads:
+        if not isinstance(payload, dict):
+            continue
+        if payload.get("action") != "soul_fusion":
+            continue
+        normalized_min_level, normalized_rarities = get_soul_fusion_requirements(payload)
+        if min_level is None:
+            min_level = normalized_min_level
+        else:
+            min_level = min(min_level, normalized_min_level)
+        allowed_rarities.update(normalized_rarities)
+    return (
+        min_level or SOUL_FUSION_DEFAULT_MIN_LEVEL,
+        allowed_rarities or set(SOUL_FUSION_DEFAULT_ALLOWED_RARITIES),
+    )
+
+
+def _build_projected_grain_item(manor):
+    grain_template = ItemTemplate.objects.filter(key=GRAIN_ITEM_KEY).first()
+    if not grain_template:
+        return None
+
+    projected_item = InventoryItem(
+        manor=manor,
+        template=grain_template,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        quantity=0,
+    )
+    projected_item.display_quantity = max(0, int(getattr(manor, "grain", 0) or 0))
+    projected_item.is_projected = True
+    projected_item.projected_display_hint = "实时产出待后台同步，当前不可操作"
+    return projected_item
+
+
+def _project_warehouse_grain_item(items, manor, *, current_tab: str, selected_category: str):
+    items_list = list(items)
+    if current_tab != "warehouse":
+        return items_list, None
+
+    projected_grain = max(0, int(getattr(manor, "grain", 0) or 0))
+    grain_item = next((item for item in items_list if item.template.key == GRAIN_ITEM_KEY), None)
+    if grain_item is None and projected_grain > 0:
+        projected_item = _build_projected_grain_item(manor)
+        if projected_item is not None:
+            effect_type = projected_item.template.effect_type
+            if selected_category in {"all", effect_type}:
+                items_list.append(projected_item)
+                items_list.sort(key=lambda item: (item.template.name, item.id or 0))
+                grain_item = projected_item
+
+    if grain_item is None:
+        return items_list, None
+
+    actual_quantity = max(0, int(getattr(grain_item, "quantity", 0) or 0))
+    grain_item.display_quantity = projected_grain
+    grain_item.is_projected = projected_grain != actual_quantity or not getattr(grain_item, "pk", None)
+    if grain_item.is_projected:
+        grain_item.projected_display_hint = "实时产出待后台同步，当前不可操作"
+    return items_list, grain_item
+
+
+def _append_missing_category_option(
+    categories: list[dict], *, effect_type: str | None, tool_effect_types, tool_category_key
+):
+    key = effect_type or "other"
+    if key in tool_effect_types:
+        if not any(item["key"] == tool_category_key for item in categories):
+            categories.append({"key": tool_category_key, "label": "道具"})
+        return
+    if not any(item["key"] == key for item in categories):
+        categories.append({"key": key, "label": get_item_effect_type_label(key)})
+
+
 def get_warehouse_context(manor, current_tab: str, selected_category: str, page: int = 1) -> dict:
     # Get frozen gold bars for display adjustment
     from trade.services.auction_service import get_frozen_gold_bars
@@ -81,6 +174,18 @@ def get_warehouse_context(manor, current_tab: str, selected_category: str, page:
             or guest.allocated_intellect != 0
             or guest.allocated_defense != 0
             or guest.allocated_agility != 0
+        )
+    ]
+    from gameplay.services.inventory.guest_items import guest_is_eligible_for_soul_fusion
+
+    soul_fusion_min_level, soul_fusion_allowed_rarities = _collect_soul_fusion_requirements(manor)
+    context["guests_for_soul_fusion"] = [
+        guest
+        for guest in eligible_guests
+        if guest_is_eligible_for_soul_fusion(
+            guest,
+            min_level=soul_fusion_min_level,
+            allowed_rarities=soul_fusion_allowed_rarities,
         )
     ]
     rarity_upgrade_source_keys = _collect_rarity_upgrade_source_keys(manor)
@@ -137,17 +242,33 @@ def get_warehouse_context(manor, current_tab: str, selected_category: str, page:
         categories.append({"key": key, "label": label})
     if has_tools:
         categories.append({"key": tool_category_key, "label": "道具"})
-    categories.sort(key=lambda x: x["label"])
 
     frozen_gold = context["frozen_gold_bars"] if current_tab == "warehouse" else 0
 
     # 分页处理
-    paginator = Paginator(items, WAREHOUSE_PAGE_SIZE)
+    projected_items, projected_grain_item = _project_warehouse_grain_item(
+        items,
+        manor,
+        current_tab=current_tab,
+        selected_category=selected_category,
+    )
+    if projected_grain_item is not None:
+        _append_missing_category_option(
+            categories,
+            effect_type=projected_grain_item.template.effect_type,
+            tool_effect_types=tool_effect_types,
+            tool_category_key=tool_category_key,
+        )
+    categories.sort(key=lambda x: x["label"])
+
+    paginator = Paginator(projected_items, WAREHOUSE_PAGE_SIZE)
     page_obj = paginator.get_page(page)
     items_list = list(page_obj)
 
     for item in items_list:
-        if item.template.key == "gold_bar" and frozen_gold > 0:
+        if item.template.key == GRAIN_ITEM_KEY:
+            item.display_quantity = max(0, int(getattr(manor, "grain", 0) or 0))
+        elif item.template.key == "gold_bar" and frozen_gold > 0:
             item.display_quantity = max(0, item.quantity - frozen_gold)
         else:
             item.display_quantity = item.quantity

@@ -19,7 +19,13 @@ from gameplay.services import inventory as inventory_pkg
 from gameplay.services.resources import grant_resources, grant_resources_locked
 
 from .core import add_item_to_inventory, consume_inventory_item_for_manor_locked, consume_inventory_item_locked
-from .guest_items import use_guest_rarity_upgrade_item, use_guest_rebirth_card, use_xidianka, use_xisuidan  # noqa: F401
+from .guest_items import (  # noqa: F401
+    use_guest_rarity_upgrade_item,
+    use_guest_rebirth_card,
+    use_soul_container,
+    use_xidianka,
+    use_xisuidan,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -206,6 +212,8 @@ def _apply_tool(item: InventoryItem) -> Dict[str, Any]:
         raise ValueError("请选择要重生的门客")
     if payload.get("action") == "upgrade_guest_rarity":
         raise ValueError("请选择要升阶的门客")
+    if payload.get("action") == "soul_fusion":
+        raise ValueError("请选择要融合的门客")
     key = item.template.key or ""
     if key.startswith("peace_shield_"):
         return _apply_peace_shield(item)

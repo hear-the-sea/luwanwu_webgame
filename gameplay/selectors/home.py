@@ -8,7 +8,7 @@ from core.utils import safe_int
 from guests.models import RARITY_SALARY, GuestStatus
 
 from ..models import MissionRun, ResourceType
-from ..services import can_retreat, get_technology_template, refresh_manor_state, refresh_technology_upgrades
+from ..services import can_retreat, get_technology_template, sync_resource_production
 from ..services.utils.cache import CacheKeys
 from ..services.utils.query_optimization import optimize_guest_queryset
 
@@ -26,8 +26,7 @@ def _normalize_hourly_rates(hourly_rates) -> dict[str, int]:
 
 
 def get_home_context(manor) -> dict:
-    refresh_manor_state(manor, prefer_async=True)
-    refresh_technology_upgrades(manor)
+    sync_resource_production(manor, persist=False)
 
     resources = [
         ("grain", "粮食", manor.grain),
@@ -83,16 +82,7 @@ def get_home_context(manor) -> dict:
         manor.troops.select_related("troop_template").filter(count__gt=0).order_by("troop_template__priority")
     )
 
-    from ..services.raid import (
-        get_active_raids,
-        get_active_scouts,
-        get_incoming_raids,
-        refresh_raid_runs,
-        refresh_scout_records,
-    )
-
-    refresh_scout_records(manor, prefer_async=True)
-    refresh_raid_runs(manor, prefer_async=True)
+    from ..services.raid import get_active_raids, get_active_scouts, get_incoming_raids
 
     return {
         "manor": manor,

@@ -73,11 +73,7 @@ def _add_success_message(
         return
 
     if callable(success_message):
-        try:
-            msg = success_message(result)
-        except Exception:
-            logger.warning("success_message callable failed, using fallback message", exc_info=True)
-            msg = "操作成功"
+        msg = success_message(result)
     else:
         msg = success_message
     messages.success(request, msg)
@@ -236,7 +232,7 @@ def handle_game_errors(
         @require_POST
         @handle_game_errors(redirect_url="gameplay:dashboard")
         def my_view(request, pk):
-            guest = get_guest_with_template(ensure_manor(request.user), pk)
+            guest = get_guest_with_template(get_manor(request.user), pk)
             train_guest(guest, levels=1)
             messages.success(request, f"{guest.display_name} 开始训练")
             return redirect("guests:detail", pk=guest.pk)
@@ -246,7 +242,7 @@ def handle_game_errors(
         @require_POST
         @handle_game_errors(redirect_url="gameplay:dashboard")
         def my_view(request, pk):
-            guest = get_guest_with_template(ensure_manor(request.user), pk)
+            guest = get_guest_with_template(get_manor(request.user), pk)
             train_guest(guest, levels=1)
             # 返回 URL 字符串，装饰器会处理重定向
             return "guests:detail"
@@ -295,7 +291,7 @@ def atomic_handle_game_errors(
         @atomic_handle_game_errors(redirect_url="gameplay:dashboard")
         def my_view(request, pk):
             # 自动在事务中执行
-            guest = get_guest_with_template(ensure_manor(request.user), pk)
+            guest = get_guest_with_template(get_manor(request.user), pk)
             train_guest(guest, levels=1)
             # ...
     """

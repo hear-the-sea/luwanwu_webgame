@@ -377,20 +377,18 @@ def exchange_gold_bar(manor: Manor, quantity: int) -> dict:
         cost_info = calculate_gold_bar_cost(manor_locked, quantity)
         total_cost = cost_info["total_cost"]
 
-        # 锁内检查银两是否足够
-        if manor_locked.silver < total_cost:
+        try:
+            spend_resources_locked(
+                manor_locked,
+                {"silver": total_cost},
+                note=f"兑换金条 x{quantity}",
+                reason=ResourceEvent.Reason.BANK_EXCHANGE,
+            )
+        except ValueError as exc:
             raise ValueError(
                 f"银两不足，需要 {total_cost:,} 银两"
                 f"（基础 {cost_info['base_cost']:,} + 手续费 {cost_info['fee']:,}）"
-            )
-
-        # 步骤1：消耗银两
-        spend_resources_locked(
-            manor_locked,
-            {"silver": total_cost},
-            note=f"兑换金条 x{quantity}",
-            reason=ResourceEvent.Reason.BANK_EXCHANGE,
-        )
+            ) from exc
 
         # 步骤2：锁定并增加金条库存
         # 锁定现有记录避免并发时数量增加被覆盖

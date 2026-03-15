@@ -75,6 +75,79 @@ def test_ensure_manor_grants_initial_peace_shield_when_template_exists():
 
 
 @pytest.mark.django_db
+def test_ensure_manor_does_not_duplicate_initial_peace_shield_on_repeat_call():
+    ItemTemplate.objects.create(
+        key="peace_shield_small",
+        name="免战牌·小",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=True,
+        effect_payload={"duration": 28800},
+    )
+
+    user = User.objects.create_user(username="testuser_init_shield_repeat", password="test123")
+    first = ensure_manor(user)
+    second = ensure_manor(user)
+
+    shield_item = InventoryItem.objects.get(
+        manor=second,
+        template__key="peace_shield_small",
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+    second.refresh_from_db(fields=["initial_peace_shield_granted_at"])
+
+    assert first.id == second.id
+    assert shield_item.quantity == 1
+    assert second.initial_peace_shield_granted_at is not None
+
+
+@pytest.mark.django_db
+def test_ensure_manor_retries_initial_peace_shield_after_transient_failure(monkeypatch):
+    ItemTemplate.objects.create(
+        key="peace_shield_small",
+        name="免战牌·小",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=True,
+        effect_payload={"duration": 28800},
+    )
+
+    from gameplay.services.inventory.core import add_item_to_inventory_locked as original_add_item
+
+    call_state = {"count": 0}
+
+    def flaky_add_item(*args, **kwargs):
+        item_key = args[1] if len(args) > 1 else kwargs.get("item_key")
+        if item_key == "peace_shield_small":
+            call_state["count"] += 1
+        if item_key == "peace_shield_small" and call_state["count"] == 1:
+            raise RuntimeError("temporary inventory failure")
+        return original_add_item(*args, **kwargs)
+
+    monkeypatch.setattr("gameplay.services.inventory.core.add_item_to_inventory_locked", flaky_add_item)
+
+    user = User(username="testuser_init_shield_retry")
+    user.set_password("test123")
+    User.objects.bulk_create([user])
+    user = User.objects.get(username="testuser_init_shield_retry")
+
+    first = ensure_manor(user)
+    first.refresh_from_db(fields=["initial_peace_shield_granted_at"])
+    assert first.initial_peace_shield_granted_at is None
+    assert not InventoryItem.objects.filter(manor=first, template__key="peace_shield_small").exists()
+
+    second = ensure_manor(user)
+    second.refresh_from_db(fields=["initial_peace_shield_granted_at"])
+    shield_item = InventoryItem.objects.get(
+        manor=second,
+        template__key="peace_shield_small",
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    assert call_state["count"] >= 2
+    assert second.initial_peace_shield_granted_at is not None
+    assert shield_item.quantity == 1
+
+
+@pytest.mark.django_db
 def test_ensure_manor_returns_existing():
     """测试为已有用户返回现有庄园"""
     user = User.objects.create_user(username="testuser", password="test123")
@@ -318,6 +391,51 @@ def test_sync_resource_production():
 
     # 资源应该有所增加
     assert manor.silver >= initial_silver
+
+
+@pytest.mark.django_db
+def test_sync_resource_production_persist_false_projects_without_db_write(monkeypatch):
+    user = User.objects.create_user(username="resource_projection_user", password="test123")
+    manor = ensure_manor(user)
+    original_updated_at = timezone.now() - timezone.timedelta(hours=1)
+    manor.resource_updated_at = original_updated_at
+    manor.save(update_fields=["resource_updated_at"])
+    initial_silver = manor.silver
+
+    monkeypatch.setattr(
+        "gameplay.services.resources.get_hourly_rates",
+        lambda _manor: {ResourceType.SILVER: 120, ResourceType.GRAIN: 0},
+    )
+    monkeypatch.setattr("gameplay.services.resources.get_personnel_grain_cost_per_hour", lambda _manor: 0)
+    monkeypatch.setattr("gameplay.services.resources.scale_value", lambda value: value)
+
+    sync_resource_production(manor, persist=False)
+
+    assert manor.silver == initial_silver + 120
+    manor.refresh_from_db(fields=["silver", "resource_updated_at"])
+    assert manor.silver == initial_silver
+    assert manor.resource_updated_at == original_updated_at
+
+
+@pytest.mark.django_db
+def test_spend_resources_applies_offline_production_before_balance_check(monkeypatch):
+    user = User.objects.create_user(username="resource_spend_sync_user", password="test123")
+    manor = ensure_manor(user)
+    manor.silver = 50
+    manor.resource_updated_at = timezone.now() - timezone.timedelta(hours=1)
+    manor.save(update_fields=["silver", "resource_updated_at"])
+
+    monkeypatch.setattr(
+        "gameplay.services.resources.get_hourly_rates",
+        lambda _manor: {ResourceType.SILVER: 100, ResourceType.GRAIN: 0},
+    )
+    monkeypatch.setattr("gameplay.services.resources.get_personnel_grain_cost_per_hour", lambda _manor: 0)
+    monkeypatch.setattr("gameplay.services.resources.scale_value", lambda value: value)
+
+    spend_resources(manor, {"silver": 100}, "离线产出后扣费")
+    manor.refresh_from_db(fields=["silver"])
+
+    assert manor.silver == 50
 
 
 @pytest.mark.django_db

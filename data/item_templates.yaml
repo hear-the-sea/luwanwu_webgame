@@ -732,6 +732,25 @@ items:
     effect_payload:
       action: reset_allocation
 
+  # ---------- 灵魂容器 ----------
+
+  - key: soul_container
+    name: 灵魂容器
+    description: 在仓库中使用后，可融合一名30级以上的绿色、蓝色或紫色空闲门客。门客灵魂会凝成强力饰品，属性受到原门客属性偏向影响。
+    effect_type: tool
+    rarity: orange
+    tradeable: true
+    price: 350000
+    storage_space: 1
+    is_usable: true
+    effect_payload:
+      action: soul_fusion
+      min_level: 30
+      allowed_rarities:
+        - green
+        - blue
+        - purple
+
   # ---------- 打工宝箱 ----------
 
   - key: work_chest_small
@@ -1012,8 +1031,8 @@ items:
     price: 0
 
   - key: equip_tiejian
-    name: 竹杖
-    description: 一根简单的竹棍。
+    name: 铁剑
+    description: 一柄简朴耐用的铁剑，适合初入江湖之人防身。
     effect_type: equip_weapon
     rarity: black
     effect_payload:
@@ -1043,9 +1062,9 @@ items:
     price: 100
     storage_space: 100
     effect_payload:
-      hp: 56
-      defense: 4
-      luck: 3
+      hp: 78
+      defense: 5
+      luck: 4
 
   - key: equip_niupimao
     name: 牛皮帽
@@ -1069,9 +1088,9 @@ items:
     price: 800
     storage_space: 100
     effect_payload:
-      hp: 136
-      defense: 10
-      force: 4
+      hp: 154
+      defense: 11
+      force: 5
 
   - key: equip_yulindin
     name: 鱼鳞顶
@@ -1195,8 +1214,9 @@ items:
     price: 5000
     storage_space: 100
     effect_payload:
-      hp: 300
-      defense: 17
+      hp: 330
+      defense: 19
+      force: 4
       set_key: xiaowei_set
       set_description: 校尉套装
       set_bonus:
@@ -1428,10 +1448,11 @@ items:
     price: 50000
     storage_space: 100
     effect_payload:
-      hp: 560
-      defense: 30
-      force: 28
-      troop_capacity: 56
+      hp: 620
+      defense: 26
+      force: 12
+      intellect: 32
+      troop_capacity: 20
 
   - key: equip_diwangkui
     name: 帝王盔
@@ -1474,9 +1495,9 @@ items:
     price: 100
     storage_space: 100
     effect_payload:
-      hp: 84
-      defense: 5
-      intellect: 3
+      hp: 102
+      defense: 6
+      intellect: 4
 
   - key: equip_shengpijia
     name: 生皮甲
@@ -1500,9 +1521,9 @@ items:
     price: 800
     storage_space: 100
     effect_payload:
-      hp: 205
-      defense: 13
-      agility: 5
+      hp: 236
+      defense: 15
+      agility: 8
 
   - key: equip_shapijia
     name: 鲨皮甲
@@ -1626,8 +1647,9 @@ items:
     price: 6000
     storage_space: 100
     effect_payload:
-      hp: 402
-      defense: 22
+      hp: 440
+      defense: 24
+      force: 6
       set_key: xiaowei_set
       set_description: 校尉套装
       set_bonus:
@@ -1801,9 +1823,9 @@ items:
     price: 16000
     storage_space: 100
     effect_payload:
-      hp: 520
-      defense: 22
-      agility: 24
+      hp: 560
+      defense: 24
+      agility: 28
 
   - key: equip_pojunzhanjia
     name: 破军战甲
@@ -1856,10 +1878,10 @@ items:
     price: 55000
     storage_space: 100
     effect_payload:
-      hp: 610
+      hp: 640
       defense: 32
-      agility: 27
-      luck: 17
+      agility: 28
+      luck: 18
 
   - key: equip_hundunlongpao
     name: 混沌龙袍
@@ -1870,10 +1892,10 @@ items:
     price: 65000
     storage_space: 100
     effect_payload:
-      hp: 590
-      defense: 29
-      intellect: 55
-      luck: 20
+      hp: 650
+      defense: 28
+      intellect: 48
+      luck: 18
 
   - key: equip_ruanweijia
     name: 软猬甲
@@ -1901,9 +1923,9 @@ items:
     price: 100
     storage_space: 100
     effect_payload:
-      hp: 30
-      defense: 3
-      agility: 6
+      hp: 54
+      defense: 4
+      agility: 8
 
   - key: equip_yangpixue
     name: 羊皮靴
@@ -1984,9 +2006,9 @@ items:
     price: 2200
     storage_space: 100
     effect_payload:
-      hp: 80
+      hp: 96
       defense: 5
-      agility: 20
+      agility: 25
 
   - key: equip_jifengxue
     name: 疾风靴
@@ -2060,9 +2082,9 @@ items:
     price: 5000
     storage_space: 100
     effect_payload:
-      hp: 202
-      defense: 13
-      agility: 18
+      hp: 230
+      defense: 14
+      agility: 21
       set_key: xiaowei_set
       set_description: 校尉套装
       set_bonus:
@@ -2196,9 +2218,10 @@ items:
     price: 14000
     storage_space: 100
     effect_payload:
-      hp: 274
-      agility: 26
-      intellect: 20
+      hp: 320
+      defense: 8
+      agility: 30
+      intellect: 22
       set_key: huxian_set
       set_description: 狐仙套装
       set_bonus:
@@ -2697,7 +2720,8 @@ items:
     price: 6000
     storage_space: 100
     effect_payload:
-      force: 46
+      force: 54
+      hp: 72
       set_key: xiaowei_set
       set_description: 校尉套装
       set_bonus:
@@ -2894,8 +2918,9 @@ items:
     price: 16000
     storage_space: 100
     effect_payload:
-      force: 56
-      intellect: 40
+      force: 62
+      intellect: 42
+      luck: 8
       set_key: huxian_set
       set_description: 狐仙套装
       set_bonus:
@@ -3237,10 +3262,12 @@ items:
     price: 52000
     storage_space: 100
     effect_payload:
-      force: 82
-      intellect: 42
-      agility: 29
-      luck: 16
+      force: 46
+      intellect: 28
+      agility: 16
+      luck: 6
+      defense: 4
+      hp: 600
 
   - key: equip_fangtianhuaji
     name: 方天画戟
@@ -3251,9 +3278,11 @@ items:
     price: 52000
     storage_space: 100
     effect_payload:
-      force: 98
-      hp: 400
-      troop_capacity: 84
+      force: 50
+      hp: 650
+      defense: 12
+      troop_capacity: 24
+      agility: 10
 
   - key: equip_xuanyuanjian
     name: 轩辕剑
@@ -3264,9 +3293,11 @@ items:
     price: 52000
     storage_space: 100
     effect_payload:
-      force: 80
-      intellect: 48
-      luck: 20
+      force: 38
+      intellect: 34
+      luck: 16
+      defense: 8
+      hp: 620
 
   - key: equip_panlonggun
     name: 盘龙棍
@@ -3277,9 +3308,11 @@ items:
     price: 52000
     storage_space: 100
     effect_payload:
-      force: 68
-      defense: 15
-      hp: 460
+      force: 48
+      defense: 12
+      hp: 680
+      agility: 12
+      luck: 8
 
   - key: equip_zhuxianjian
     name: 诛仙剑
@@ -3290,9 +3323,12 @@ items:
     price: 52000
     storage_space: 100
     effect_payload:
-      force: 94
-      intellect: 65
-      agility: 24
+      force: 44
+      intellect: 34
+      agility: 8
+      luck: 6
+      defense: 6
+      hp: 640
 
   - key: equip_qiankunshengong
     name: 乾坤神弓
@@ -3303,9 +3339,12 @@ items:
     price: 52000
     storage_space: 100
     effect_payload:
-      force: 90
-      agility: 40
-      luck: 16
+      force: 40
+      agility: 28
+      luck: 10
+      intellect: 10
+      defense: 8
+      hp: 620
 
   - key: equip_xuantiechongjian
     name: 玄铁重剑
@@ -3316,9 +3355,10 @@ items:
     price: 52000
     storage_space: 100
     effect_payload:
-      force: 116
-      hp: 560
-      defense: 18
+      force: 54
+      hp: 760
+      defense: 12
+      agility: 4
 
   - key: equip_dagoubang
     name: 打狗棒
@@ -3329,9 +3369,11 @@ items:
     price: 52000
     storage_space: 100
     effect_payload:
-      force: 94
-      agility: 39
-      luck: 26
+      force: 44
+      agility: 24
+      luck: 16
+      defense: 10
+      hp: 660
 
   - key: equip_xiaolifeidao
     name: 小李飞刀
@@ -3342,9 +3384,11 @@ items:
     price: 52000
     storage_space: 100
     effect_payload:
-      force: 90
-      agility: 44
+      force: 44
+      agility: 26
       luck: 18
+      intellect: 8
+      hp: 700
 
   - key: equip_kongquelin
     name: 孔雀翎
@@ -3355,9 +3399,11 @@ items:
     price: 52000
     storage_space: 100
     effect_payload:
-      force: 90
-      agility: 46
+      force: 42
+      agility: 26
       luck: 16
+      intellect: 10
+      hp: 700
 
   - key: equip_tianyamingyuedao
     name: 天涯明月刀
@@ -3368,9 +3414,10 @@ items:
     price: 52000
     storage_space: 100
     effect_payload:
-      force: 114
-      hp: 438
-      agility: 30
+      force: 58
+      hp: 680
+      agility: 18
+      defense: 10
 
   - key: equip_yuanyuewandao
     name: 圆月弯刀
@@ -3381,9 +3428,11 @@ items:
     price: 52000
     storage_space: 100
     effect_payload:
-      force: 100
-      agility: 42
-      luck: 16
+      force: 50
+      agility: 24
+      luck: 12
+      defense: 10
+      hp: 650
 
   - key: equip_changshengjian
     name: 长生剑
@@ -3394,9 +3443,11 @@ items:
     price: 52000
     storage_space: 100
     effect_payload:
-      force: 104
-      intellect: 54
-      luck: 25
+      force: 36
+      intellect: 32
+      luck: 14
+      defense: 12
+      hp: 620
 
   # ══════════════════════════════════════════════════════════════════════════════
   #                         装备类 - 饰品
@@ -3408,10 +3459,10 @@ items:
     effect_type: equip_ornament
     rarity: purple
     effect_payload:
-      hp: 260
-      defense: 4
-      force: 8
-      luck: 8
+      hp: 360
+      defense: 6
+      force: 14
+      luck: 14
     tradeable: false
     price: 0
 
@@ -3654,9 +3705,9 @@ items:
     price: 16000
     storage_space: 100
     effect_payload:
-      hp: 190
-      intellect: 24
-      luck: 16
+      hp: 220
+      intellect: 28
+      luck: 18
       set_key: fengling_set
       set_description: 凤翎套装
       set_bonus:
@@ -3726,9 +3777,9 @@ items:
     price: 16000
     storage_space: 100
     effect_payload:
-      hp: 300
-      intellect: 13
-      luck: 22
+      hp: 340
+      intellect: 20
+      luck: 24
 
   - key: equip_shenghuoling
     name: 圣火令
@@ -3755,10 +3806,10 @@ items:
     price: 52000
     storage_space: 100
     effect_payload:
-      hp: 260
-      force: 14
-      intellect: 14
-      luck: 18
+      hp: 360
+      intellect: 32
+      luck: 24
+      defense: 2
 
   - key: equip_chuanguoyuxi
     name: 传国玉玺
@@ -3769,11 +3820,12 @@ items:
     price: 52000
     storage_space: 100
     effect_payload:
-      hp: 240
+      hp: 420
       defense: 6
-      troop_capacity: 72
-      force: 12
-      intellect: 12
+      troop_capacity: 40
+      force: 10
+      intellect: 10
+      luck: 4
 
   - key: equip_qiankunzhu
     name: 乾坤珠
@@ -3784,10 +3836,11 @@ items:
     price: 52000
     storage_space: 100
     effect_payload:
-      hp: 260
+      hp: 320
       force: 18
-      agility: 14
-      luck: 16
+      agility: 16
+      luck: 18
+      intellect: 8
 
   - key: equip_businiaoyu
     name: 不死鸟羽
@@ -3798,9 +3851,10 @@ items:
     price: 52000
     storage_space: 100
     effect_payload:
-      hp: 300
-      intellect: 30
-      luck: 16
+      hp: 360
+      intellect: 34
+      luck: 18
+      agility: 10
 
   - key: equip_jianghuling
     name: 江湖令
@@ -3811,10 +3865,11 @@ items:
     price: 52000
     storage_space: 100
     effect_payload:
-      hp: 280
-      force: 12
-      agility: 8
+      hp: 420
+      force: 18
+      agility: 14
       luck: 22
+      troop_capacity: 10
 
   - key: equip_shangshanfaeling
     name: 赏善罚恶令
@@ -3825,11 +3880,11 @@ items:
     price: 52000
     storage_space: 100
     effect_payload:
-      hp: 260
-      defense: 7
-      force: 17
-      intellect: 13
-      luck: 18
+      hp: 320
+      defense: 8
+      force: 18
+      intellect: 14
+      luck: 20
 
   # ══════════════════════════════════════════════════════════════════════════════
   #                         装备类 - 器械
@@ -4160,10 +4215,10 @@ items:
     price: 16000
     storage_space: 100
     effect_payload:
-      intellect: 38
-      hp: 230
-      agility: 14
-      luck: 12
+      intellect: 42
+      hp: 260
+      agility: 16
+      luck: 14
 
   - key: equip_kuileiren
     name: 傀儡人
@@ -4257,9 +4312,10 @@ items:
     price: 52000
     storage_space: 100
     effect_payload:
-      intellect: 52
-      agility: 24
-      hp: 220
+      intellect: 50
+      agility: 25
+      luck: 8
+      hp: 420
 
   - key: equip_chixiaojifeng
     name: 赤霄机凤
@@ -4270,8 +4326,9 @@ items:
     price: 52000
     storage_space: 100
     effect_payload:
-      intellect: 64
-      hp: 280
+      intellect: 52
+      hp: 400
+      defense: 4
       agility: 16
       luck: 10
 
@@ -4284,10 +4341,12 @@ items:
     price: 52000
     storage_space: 100
     effect_payload:
-      intellect: 72
-      hp: 572
-      defense: 20
-      force: 30
+      intellect: 48
+      hp: 520
+      defense: 6
+      force: 14
+      agility: 8
+      luck: 6
 
   # ══════════════════════════════════════════════════════════════════════════════
   #                         装备类 - 坐骑
@@ -4625,8 +4684,8 @@ items:
     price: 52000
     storage_space: 200
     effect_payload:
-      hp: 390
-      defense: 19
+      hp: 450
+      defense: 20
       agility: 58
 
   - key: equip_qilin
@@ -4656,7 +4715,7 @@ items:
       hp: 340
       defense: 16
       agility: 54
-      intellect: 36
+      intellect: 30
 
   - key: equip_shendiao
     name: 神雕
@@ -4667,7 +4726,7 @@ items:
     price: 52000
     storage_space: 200
     effect_payload:
-      hp: 430
+      hp: 470
       defense: 18
-      agility: 54
-      luck: 12
+      agility: 56
+      luck: 14

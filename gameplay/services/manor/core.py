@@ -18,6 +18,7 @@ from django.db.models import F
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
+from core.exceptions import GameError
 from core.utils.time_scale import scale_duration
 
 from ...constants import BUILDING_MAX_LEVELS, MAX_CONCURRENT_BUILDING_UPGRADES, BuildingKeys, ManorNameConstants
@@ -48,6 +49,13 @@ logger = logging.getLogger(__name__)
 
 class ManorNameConflictError(ValueError):
     """Raised when the requested manor name is already occupied."""
+
+
+class ManorNotFoundError(GameError):
+    """Raised when a user tries to access gameplay without a provisioned manor."""
+
+    error_code = "MANOR_NOT_FOUND"
+    default_message = "庄园尚未初始化，请重新登录后再试"
 
 
 INITIAL_PEACE_SHIELD_KEYS: tuple[str, ...] = (
@@ -118,7 +126,15 @@ def _cleanup_local_fallback_cache(now_monotonic: float, stale_threshold: float) 
             _LOCAL_REFRESH_FALLBACK.pop(key, None)
 
 
-def ensure_manor(user, region: str = "overseas", initial_name: str | None = None) -> Manor:
+def get_manor(user) -> Manor:
+    """Return an existing manor without triggering bootstrap side effects."""
+    try:
+        return user.manor
+    except Manor.DoesNotExist as exc:
+        raise ManorNotFoundError() from exc
+
+
+def bootstrap_manor(user, region: str = "overseas", initial_name: str | None = None) -> Manor:
     """
     获取或创建用户的庄园，确保庄园拥有所有建筑。
 
@@ -146,13 +162,23 @@ def ensure_manor(user, region: str = "overseas", initial_name: str | None = None
                 Manor.objects.filter(pk=manor.pk, user=user, coordinate_x=0, coordinate_y=0).delete()
             raise RuntimeError("Failed to allocate a unique manor coordinate after multiple attempts")
         manor.refresh_from_db(fields=["region", "coordinate_x", "coordinate_y", "name"])
+    _ensure_manor_provisioning(manor, created=created)
+    return manor
+
+
+def ensure_manor(user, region: str = "overseas", initial_name: str | None = None) -> Manor:
+    """Backward-compatible alias for explicit manor provisioning."""
+    return bootstrap_manor(user, region=region, initial_name=initial_name)
+
+
+def _ensure_manor_provisioning(manor: Manor, *, created: bool) -> None:
     if created:
         bootstrap_buildings(manor)
-        _grant_initial_peace_shield(manor)
-        _deliver_active_global_mail_campaigns(manor)
     else:
         ensure_buildings_exist(manor)
-    return manor
+
+    _grant_initial_peace_shield(manor)
+    _deliver_active_global_mail_campaigns(manor)
 
 
 def _assign_manor_location_and_name(manor: Manor, *, region: str, normalized_name: str | None) -> bool:
@@ -191,9 +217,19 @@ def _grant_initial_peace_shield(manor: Manor) -> None:
         return
 
     try:
-        from ..inventory.core import add_item_to_inventory
+        from ..inventory.core import add_item_to_inventory_locked
 
-        add_item_to_inventory(manor, shield_key, 1)
+        granted_at = timezone.now()
+        with transaction.atomic():
+            locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
+            if locked_manor.initial_peace_shield_granted_at:
+                manor.initial_peace_shield_granted_at = locked_manor.initial_peace_shield_granted_at
+                return
+
+            add_item_to_inventory_locked(locked_manor, shield_key, 1)
+            locked_manor.initial_peace_shield_granted_at = granted_at
+            locked_manor.save(update_fields=["initial_peace_shield_granted_at"])
+        manor.initial_peace_shield_granted_at = granted_at
     except Exception:
         logger.exception("Failed to grant initial peace shield: manor_id=%s item_key=%s", manor.pk, shield_key)
 

@@ -159,12 +159,13 @@ def _record_failed_attempt(request, username: str = None) -> int:
     return max(ip_attempts, user_attempts)
 
 
-def _clear_login_attempts(request, username: str = None) -> None:
-    """登录成功后清除尝试记录"""
+def _clear_login_attempts(request, username: str = None, *, clear_ip: bool = True) -> None:
+    """登录成功后清除尝试记录。"""
     ip_key, username_key = _get_login_attempt_key(request, username)
     ip_lock_key, username_lock_key = _get_login_lock_key(request, username)
-    _safe_cache_delete(ip_key)
-    _safe_cache_delete(ip_lock_key)
+    if clear_ip:
+        _safe_cache_delete(ip_key)
+        _safe_cache_delete(ip_lock_key)
     if username_key:
         _safe_cache_delete(username_key)
     if username_lock_key:
@@ -210,9 +211,9 @@ class LoginView(DjangoLoginView):
         return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form):
-        # 登录成功，清除失败记录（同时清除 IP 和用户名的记录）
+        # 登录成功后仅清理用户名维度的失败记录，保留 IP 维度风控信号。
         username = form.cleaned_data.get("username", "")
-        _clear_login_attempts(self.request, username)
+        _clear_login_attempts(self.request, username, clear_ip=False)
         messages.success(self.request, "欢迎回来，领主大人！")
         response = super().form_valid(form)
         # 仅保留当前登录的 session，实现顶号

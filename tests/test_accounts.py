@@ -199,6 +199,29 @@ def test_clear_login_attempts_removes_lock(monkeypatch):
 
 
 @pytest.mark.django_db
+def test_clear_login_attempts_can_preserve_ip_bucket(monkeypatch):
+    cache.clear()
+    monkeypatch.setattr(account_views, "LOGIN_ATTEMPT_LIMIT", 2)
+    monkeypatch.setattr(account_views, "LOGIN_ATTEMPT_WINDOW", 60)
+    monkeypatch.setattr(account_views, "LOGIN_LOCKOUT_DURATION", 120)
+
+    request = _build_login_request(remote_addr="10.0.0.22")
+    account_views._record_failed_attempt(request, "tester_ip_preserved")
+    account_views._record_failed_attempt(request, "tester_ip_preserved")
+
+    ip_key, username_key = account_views._get_login_attempt_key(request, "tester_ip_preserved")
+    ip_lock_key, username_lock_key = account_views._get_login_lock_key(request, "tester_ip_preserved")
+
+    account_views._clear_login_attempts(request, "tester_ip_preserved", clear_ip=False)
+
+    assert cache.get(username_key) is None
+    assert cache.get(username_lock_key) is None
+    assert cache.get(ip_key) is not None
+    assert cache.get(ip_lock_key) is not None
+    assert account_views._check_login_attempts(request, "another_user")[0] is True
+
+
+@pytest.mark.django_db
 def test_check_login_attempts_respects_username_lock(monkeypatch):
     request = _build_login_request(remote_addr="10.0.0.8")
     _ip_lock_key, username_lock_key = account_views._get_login_lock_key(request, "locked_user")

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from typing import Callable
 
 from celery import shared_task
+from django.db.models import F, IntegerField, Q, Value
+from django.db.models.functions import Greatest
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async_with_dedup
@@ -124,6 +127,41 @@ def scan_guest_recruitments(limit: int = 200) -> int:
                 count += 1
         except Exception:
             logger.exception("Failed to finalize guest recruitment %d", recruitment.id)
+    return count
+
+
+@shared_task(name="guests.scan_passive_hp_recovery")
+def scan_passive_hp_recovery(limit: int = 200) -> int:
+    from guests.constants import TimeConstants
+    from guests.models import DEFENSE_TO_HP_MULTIPLIER, MIN_HP_FLOOR, Guest, GuestStatus
+    from guests.services.health import recover_guest_hp
+
+    now = timezone.now()
+    cutoff = now - timedelta(seconds=TimeConstants.HP_RECOVERY_INTERVAL)
+    max_hp_expr = Greatest(
+        F("template__base_hp") + F("hp_bonus") + F("defense_stat") * DEFENSE_TO_HP_MULTIPLIER,
+        Value(MIN_HP_FLOOR),
+        output_field=IntegerField(),
+    )
+    qs = (
+        Guest.objects.select_related("manor", "template")
+        .filter(
+            last_hp_recovery_at__lte=cutoff,
+            status__in=[GuestStatus.IDLE, GuestStatus.INJURED],
+        )
+        .filter(Q(current_hp__lt=max_hp_expr) | Q(status=GuestStatus.INJURED, current_hp__gte=max_hp_expr))
+        .order_by("last_hp_recovery_at")[:limit]
+    )
+    count = 0
+    for guest in qs:
+        before_state = (guest.current_hp, guest.last_hp_recovery_at, guest.status)
+        try:
+            recover_guest_hp(guest, now=now)
+            after_state = (guest.current_hp, guest.last_hp_recovery_at, guest.status)
+            if after_state != before_state:
+                count += 1
+        except Exception:
+            logger.exception("Failed to recover passive HP for guest %d", guest.id)
     return count
 
 

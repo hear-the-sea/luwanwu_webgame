@@ -78,6 +78,80 @@ def _credit_resource(manor: Manor, resource: str, amount: int) -> Tuple[int, int
     return added, overflowed
 
 
+def _require_atomic_block(name: str) -> None:
+    if not transaction.get_connection().in_atomic_block:
+        raise RuntimeError(f"{name} must be called inside transaction.atomic()")
+
+
+def _build_production_snapshot(manor: Manor, *, now) -> tuple[Dict[str, int], Dict[str, int], bool]:
+    elapsed_seconds = (now - manor.resource_updated_at).total_seconds()
+    if elapsed_seconds <= 0:
+        return {}, {}, False
+
+    scaled_elapsed_seconds = scale_value(elapsed_seconds)
+    hourly_rates = get_hourly_rates(manor)
+    personnel_grain_cost = get_personnel_grain_cost_per_hour(manor)
+    hourly_rates[ResourceType.GRAIN] = hourly_rates.get(ResourceType.GRAIN, 0) - personnel_grain_cost
+
+    projected_values: Dict[str, int] = {}
+    produced: Dict[str, int] = {}
+    for resource in RESOURCE_FIELDS:
+        per_hour = hourly_rates.get(resource, 0)
+        delta = int(per_hour * (scaled_elapsed_seconds / 3600))
+        if delta == 0:
+            continue
+
+        current_value = getattr(manor, resource)
+        capacity, is_valid = _get_resource_capacity(manor, resource)
+        if not is_valid:
+            continue
+
+        if delta > 0:
+            new_value = min(capacity, current_value + delta)
+        else:
+            new_value = max(0, current_value + delta)
+        actual_delta = new_value - current_value
+        if actual_delta == 0:
+            continue
+
+        projected_values[resource] = new_value
+        produced[resource] = actual_delta
+
+    return projected_values, produced, True
+
+
+def _apply_resource_projection(manor: Manor, projected_values: Dict[str, int], *, now) -> None:
+    for resource, value in projected_values.items():
+        setattr(manor, resource, value)
+    manor.resource_updated_at = now
+
+
+def _sync_resource_production_locked(manor: Manor, *, now=None) -> Dict[str, int]:
+    _require_atomic_block("sync_resource_production_locked")
+    now = now or timezone.now()
+
+    projected_values, produced, should_advance_timestamp = _build_production_snapshot(manor, now=now)
+    if not should_advance_timestamp:
+        return {}
+
+    _apply_resource_projection(manor, projected_values, now=now)
+
+    update_fields = list(projected_values.keys()) + ["resource_updated_at"]
+    manor.save(update_fields=update_fields)
+    if int(produced.get(ResourceType.GRAIN, 0) or 0) != 0:
+        _sync_warehouse_grain_item_locked(manor)
+
+    if produced:
+        log_resource_gain(
+            manor,
+            {str(k): int(v) for k, v in produced.items()},
+            ResourceEvent.Reason.PRODUCE,
+            note="离线产出",
+        )
+
+    return produced
+
+
 def spend_resources_locked(
     manor: Manor, cost: Dict[str, int], note: str, reason: str = ResourceEvent.Reason.UPGRADE_COST
 ) -> None:
@@ -89,8 +163,8 @@ def spend_resources_locked(
     """
     if not cost:
         return
-    if not transaction.get_connection().in_atomic_block:
-        raise RuntimeError("spend_resources_locked must be called inside transaction.atomic()")
+    _require_atomic_block("spend_resources_locked")
+    _sync_resource_production_locked(manor)
 
     filters = {f"{key}__gte": value for key, value in cost.items()}
     updates = {key: F(key) - value for key, value in cost.items()}
@@ -98,7 +172,7 @@ def spend_resources_locked(
     if not updated:
         raise ValueError("资源不足")
 
-    manor.refresh_from_db(fields=RESOURCE_FIELDS)
+    manor.refresh_from_db(fields=RESOURCE_FIELDS + ["resource_updated_at"])
     if int(cost.get(ResourceType.GRAIN, 0) or 0) > 0:
         _sync_warehouse_grain_item_locked(manor)
     negative = {key: -val for key, val in cost.items()}
@@ -119,8 +193,8 @@ def grant_resources_locked(
     """
     if not rewards:
         return {}, {}
-    if not transaction.get_connection().in_atomic_block:
-        raise RuntimeError("grant_resources_locked must be called inside transaction.atomic()")
+    _require_atomic_block("grant_resources_locked")
+    _sync_resource_production_locked(manor)
 
     credited: Dict[str, int] = {}
     overflow: Dict[str, int] = {}
@@ -156,19 +230,19 @@ def grant_resources_locked(
     return credited, overflow
 
 
-def sync_resource_production(manor: Manor) -> None:
+def sync_resource_production(manor: Manor, *, persist: bool = True) -> None:
     """
     同步庄园资源产出，根据离线时间计算并发放资源。
 
-    Uses row-level locking to prevent concurrent race conditions that could
-    lead to duplicate resource awards. The manor parameter will be refreshed
-    to reflect the latest database state before returning.
+    `persist=True` 时会在锁内落库并刷新传入对象。
+    `persist=False` 时仅将计算结果投影到传入对象本身，不写入数据库。
 
-    Note: resource_updated_at is only advanced when elapsed_seconds > 0 to
-    prevent unnecessary database writes on repeated zero-elapsed calls.
+    Uses row-level locking to prevent concurrent race conditions that could
+    lead to duplicate resource awards when persistence is enabled.
 
     Args:
         manor: 庄园对象（会被刷新以反映最新状态）
+        persist: 是否持久化到数据库
     """
     now = timezone.now()
     min_interval = getattr(settings, "RESOURCE_SYNC_MIN_INTERVAL_SECONDS", 0)
@@ -177,61 +251,16 @@ def sync_resource_production(manor: Manor) -> None:
         if elapsed_hint < min_interval:
             return
 
+    if not persist:
+        projected_values, _produced, should_advance_timestamp = _build_production_snapshot(manor, now=now)
+        if should_advance_timestamp:
+            _apply_resource_projection(manor, projected_values, now=now)
+        return
+
     with transaction.atomic():
-        # Lock the manor row to prevent concurrent production syncs
         locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
+        _sync_resource_production_locked(locked_manor, now=now)
 
-        # Calculate elapsed time from the locked manor's timestamp
-        elapsed_seconds = (now - locked_manor.resource_updated_at).total_seconds()
-        if elapsed_seconds > 0:
-            elapsed_seconds = scale_value(elapsed_seconds)
-            hourly_rates = get_hourly_rates(locked_manor)
-            personnel_grain_cost = get_personnel_grain_cost_per_hour(locked_manor)
-            hourly_rates[ResourceType.GRAIN] = hourly_rates.get(ResourceType.GRAIN, 0) - personnel_grain_cost
-            produced = {}
-
-            for resource in RESOURCE_FIELDS:
-                per_hour = hourly_rates.get(resource, 0)
-                delta = int(per_hour * (elapsed_seconds / 3600))
-                if delta == 0:
-                    continue
-
-                current_value = getattr(locked_manor, resource)
-
-                # DRY 修复：使用辅助函数获取容量（在锁内调用保证事务一致性）
-                capacity, is_valid = _get_resource_capacity(locked_manor, resource)
-                if not is_valid:
-                    continue
-
-                if delta > 0:
-                    new_value = min(capacity, current_value + delta)
-                else:
-                    new_value = max(0, current_value + delta)
-                actual_delta = new_value - current_value
-
-                if actual_delta != 0:
-                    setattr(locked_manor, resource, new_value)
-                    produced[resource] = actual_delta
-
-            # Update timestamp even if no resources produced (prevents repeated checks)
-            locked_manor.resource_updated_at = now
-
-            # Only update fields that changed plus timestamp
-            update_fields = list(produced.keys()) + ["resource_updated_at"]
-            locked_manor.save(update_fields=update_fields)
-            if int(produced.get(ResourceType.GRAIN, 0) or 0) != 0:
-                _sync_warehouse_grain_item_locked(locked_manor)
-
-            # Log resource gain if any resources were produced
-            if produced:
-                log_resource_gain(
-                    locked_manor,
-                    {str(k): int(v) for k, v in produced.items()},
-                    ResourceEvent.Reason.PRODUCE,
-                    note="离线产出",
-                )
-
-    # Always refresh the original manor object to reflect database state
     manor.refresh_from_db(fields=RESOURCE_FIELDS + ["resource_updated_at"])
 
 
@@ -278,7 +307,7 @@ def spend_resources(
         spend_resources_locked(locked_manor, cost, note=note, reason=reason)
 
     # 刷新原始 manor 对象以反映最新状态
-    manor.refresh_from_db(fields=RESOURCE_FIELDS)
+    manor.refresh_from_db(fields=RESOURCE_FIELDS + ["resource_updated_at"])
 
 
 def grant_resources(
@@ -307,6 +336,5 @@ def grant_resources(
         # 修复：正确解构 grant_resources_locked 的返回值
         credited, _overflow = grant_resources_locked(locked_manor, rewards, note=note, reason=reason)
 
-    if credited:
-        manor.refresh_from_db(fields=RESOURCE_FIELDS)
+    manor.refresh_from_db(fields=RESOURCE_FIELDS + ["resource_updated_at"])
     return credited

@@ -34,7 +34,7 @@ from gameplay.tasks.global_mail import backfill_global_mail_campaign_task, enque
 from gameplay.tasks.maintenance import cleanup_old_data_task, decay_prisoner_loyalty_task
 
 # Missions
-from gameplay.tasks.missions import complete_mission_task
+from gameplay.tasks.missions import complete_mission_task, scan_due_missions
 
 # Production (horse, livestock, smelting, equipment, work)
 from gameplay.tasks.production import (
@@ -73,6 +73,7 @@ __all__ = [
     "finalize_technology_upgrade",
     # Missions
     "complete_mission_task",
+    "scan_due_missions",
     # Buildings
     "complete_building_upgrade",
     "scan_building_upgrades",

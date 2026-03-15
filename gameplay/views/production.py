@@ -12,6 +12,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
+from django.db import DatabaseError
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse
@@ -23,7 +24,7 @@ from core.exceptions import GameError
 from core.utils import safe_positive_int, sanitize_error_message
 from core.utils.rate_limit import rate_limit_redirect
 from gameplay.constants import UIConstants
-from gameplay.services import ensure_manor, get_player_technology_level, refresh_manor_state
+from gameplay.services import get_manor, get_player_technology_level, sync_resource_production
 from gameplay.views.production_helpers import (
     annotate_blueprint_synthesis_options,
     build_categories_with_all,
@@ -66,7 +67,7 @@ def _run_basic_production_start(
     success_message: Callable[[Any, str], str],
     log_message: str,
 ) -> HttpResponse:
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     quantity = _parse_positive_quantity(raw_quantity)
 
     if not item_key:
@@ -82,7 +83,7 @@ def _run_basic_production_start(
         messages.success(request, success_message(production, quantity_text))
     except (GameError, ValueError) as exc:
         messages.error(request, sanitize_error_message(exc))
-    except Exception as exc:
+    except DatabaseError as exc:
         _handle_unexpected_production_error(
             request,
             exc,
@@ -118,7 +119,7 @@ def _run_forge_post_action(
     success_message: Callable[[Any], str],
     log_message: str,
 ) -> HttpResponse:
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     quantity = _parse_positive_quantity(raw_quantity)
     mode = _normalize_forge_mode(raw_mode, default=default_mode)
     redirect_url = _forge_redirect_url(category, mode)
@@ -135,7 +136,7 @@ def _run_forge_post_action(
         messages.success(request, success_message(result))
     except (GameError, ValueError) as exc:
         messages.error(request, sanitize_error_message(exc))
-    except Exception as exc:
+    except DatabaseError as exc:
         _handle_unexpected_production_error(
             request,
             exc,
@@ -158,19 +159,11 @@ class StableView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        manor = ensure_manor(self.request.user)
-        refresh_manor_state(manor)
+        manor = get_manor(self.request.user)
+        sync_resource_production(manor, persist=False)
 
-        from gameplay.services import (
-            get_active_productions,
-            get_horse_options,
-            get_stable_speed_bonus,
-            refresh_horse_productions,
-        )
+        from gameplay.services import get_active_productions, get_horse_options, get_stable_speed_bonus
         from gameplay.services.buildings.stable import get_max_production_quantity, has_active_production
-
-        # 刷新马匹生产状态
-        refresh_horse_productions(manor)
 
         horsemanship_level = get_player_technology_level(manor, "horsemanship")
         max_quantity = get_max_production_quantity(manor)
@@ -218,8 +211,8 @@ class RanchView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        manor = ensure_manor(self.request.user)
-        refresh_manor_state(manor)
+        manor = get_manor(self.request.user)
+        sync_resource_production(manor, persist=False)
 
         from gameplay.services.buildings.ranch import (
             get_active_livestock_productions,
@@ -227,11 +220,7 @@ class RanchView(LoginRequiredMixin, TemplateView):
             get_max_livestock_quantity,
             get_ranch_speed_bonus,
             has_active_livestock_production,
-            refresh_livestock_productions,
         )
-
-        # 刷新家畜养殖状态
-        refresh_livestock_productions(manor)
 
         animal_husbandry_level = get_player_technology_level(manor, "animal_husbandry")
         max_quantity = get_max_livestock_quantity(manor)
@@ -279,8 +268,8 @@ class SmithyView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        manor = ensure_manor(self.request.user)
-        refresh_manor_state(manor)
+        manor = get_manor(self.request.user)
+        sync_resource_production(manor, persist=False)
 
         from gameplay.services.buildings.smithy import (
             get_active_smelting_productions,
@@ -288,11 +277,7 @@ class SmithyView(LoginRequiredMixin, TemplateView):
             get_metal_options,
             get_smithy_speed_bonus,
             has_active_smelting_production,
-            refresh_smelting_productions,
         )
-
-        # 刷新金属冶炼状态
-        refresh_smelting_productions(manor)
 
         smelting_level = get_player_technology_level(manor, "smelting")
         max_quantity = get_max_smelting_quantity(manor)
@@ -342,8 +327,8 @@ class ForgeView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        manor = ensure_manor(self.request.user)
-        refresh_manor_state(manor)
+        manor = get_manor(self.request.user)
+        sync_resource_production(manor, persist=False)
 
         from gameplay.services.buildings.forge import (
             DECOMPOSE_CATEGORIES,
@@ -356,12 +341,8 @@ class ForgeView(LoginRequiredMixin, TemplateView):
             get_max_forging_quantity,
             has_active_forging,
             infer_equipment_category,
-            refresh_equipment_forgings,
             to_decompose_category,
         )
-
-        # 刷新装备锻造状态
-        refresh_equipment_forgings(manor)
 
         forging_level = get_player_technology_level(manor, "forging")
         max_quantity = get_max_forging_quantity(manor)

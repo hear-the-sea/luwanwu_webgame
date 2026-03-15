@@ -8,6 +8,7 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import DatabaseError
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -32,9 +33,9 @@ def use_medicine_item_view(request, pk: int):
     但使用 manager 方法简化查询
     """
     from gameplay.models import InventoryItem, ItemTemplate
-    from gameplay.services.manor.core import ensure_manor
+    from gameplay.services.manor.core import get_manor
 
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     # 使用 manager 方法获取门客，避免重复的 select_related
     guest = get_object_or_404(Guest.objects.for_manor(manor).with_template(), pk=pk)
     item_id = request.POST.get("item_id")
@@ -83,9 +84,9 @@ def use_medicine_item_view(request, pk: int):
         if is_ajax:
             return json_error(error_msg, status=400, include_message=True)
         messages.error(request, error_msg)
-    except Exception as exc:
+    except DatabaseError as exc:
         logger.exception(
-            "Unexpected medicine use view error: manor_id=%s user_id=%s guest_id=%s item_id=%s",
+            "Unexpected medicine use view database error: manor_id=%s user_id=%s guest_id=%s item_id=%s",
             getattr(manor, "id", None),
             getattr(request.user, "id", None),
             pk,

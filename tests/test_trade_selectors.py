@@ -234,7 +234,6 @@ def test_get_trade_context_auction_browse_sets_bid_info(monkeypatch, django_user
 @pytest.mark.django_db
 def test_get_trade_context_market_buy_lists_page(monkeypatch, django_user_model):
     monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("trade.selectors.expire_user_listings", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("trade.selectors.get_active_listings", lambda **_kwargs: ["l1", "l2", "l3"])
 
     user = django_user_model.objects.create_user(username="trade_ctx_market", password="pass12345")
@@ -250,7 +249,6 @@ def test_get_trade_context_market_buy_lists_page(monkeypatch, django_user_model)
 @pytest.mark.django_db
 def test_get_trade_context_market_buy_negative_page_clamped(monkeypatch, django_user_model):
     monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("trade.selectors.expire_user_listings", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("trade.selectors.get_active_listings", lambda **_kwargs: list(range(1, 22)))
 
     user = django_user_model.objects.create_user(username="trade_ctx_market_page_clamp", password="pass12345")
@@ -260,25 +258,6 @@ def test_get_trade_context_market_buy_negative_page_clamped(monkeypatch, django_
     context = get_trade_context(request, manor)
     assert context["page_obj"].number == 1
     assert list(context["listings"].object_list) == list(range(1, 21))
-
-
-@pytest.mark.django_db
-def test_get_trade_context_market_buy_tolerates_expire_user_listings_error(monkeypatch, django_user_model):
-    monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(
-        "trade.selectors.expire_user_listings",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("expire failed")),
-    )
-    monkeypatch.setattr("trade.selectors.get_active_listings", lambda **_kwargs: ["l1"])
-
-    user = django_user_model.objects.create_user(username="trade_ctx_market_expire_err", password="pass12345")
-    manor = ensure_manor(user)
-    request = RequestFactory().get("/trade", {"tab": "market", "view": "buy"})
-
-    context = get_trade_context(request, manor)
-    assert context["current_tab"] == "market"
-    assert context["market_view"] == "buy"
-    assert list(context["listings"].object_list) == ["l1"]
 
 
 @pytest.mark.django_db
@@ -327,7 +306,6 @@ def test_get_trade_context_auction_browse_tolerates_bid_info_batch_error(monkeyp
 @pytest.mark.django_db
 def test_get_trade_context_market_my_listings_negative_page_clamped(monkeypatch, django_user_model):
     monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("trade.selectors.expire_user_listings", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("trade.selectors.get_my_listings", lambda *_args, **_kwargs: list(range(1, 22)))
 
     user = django_user_model.objects.create_user(username="trade_ctx_market_my_page_clamp", password="pass12345")
@@ -342,7 +320,6 @@ def test_get_trade_context_market_my_listings_negative_page_clamped(monkeypatch,
 @pytest.mark.django_db
 def test_get_trade_context_market_sell_paginates_to_twenty_items(monkeypatch, django_user_model):
     monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("trade.selectors.expire_user_listings", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("trade.selectors.get_tradeable_inventory", lambda *_args, **_kwargs: list(range(1, 24)))
 
     user = django_user_model.objects.create_user(username="trade_ctx_market_sell_page", password="pass12345")
@@ -445,7 +422,6 @@ def test_get_trade_context_auction_my_bids_tolerates_loading_errors(monkeypatch,
 @pytest.mark.django_db
 def test_get_trade_context_market_buy_tolerates_active_listings_error(monkeypatch, django_user_model):
     monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("trade.selectors.expire_user_listings", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         "trade.selectors.get_active_listings",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("listings failed")),
@@ -466,7 +442,6 @@ def test_get_trade_context_market_sell_negative_page_clamped_and_tolerates_inven
     monkeypatch, django_user_model
 ):
     monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("trade.selectors.expire_user_listings", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         "trade.selectors.get_tradeable_inventory",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("tradeable failed")),
@@ -486,7 +461,6 @@ def test_get_trade_context_market_sell_negative_page_clamped_and_tolerates_inven
 @pytest.mark.django_db
 def test_get_trade_context_market_my_listings_tolerates_loading_error(monkeypatch, django_user_model):
     monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("trade.selectors.expire_user_listings", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         "trade.selectors.get_my_listings",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("my listings failed")),

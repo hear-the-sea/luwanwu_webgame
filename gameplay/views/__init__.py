@@ -40,6 +40,7 @@ from .inventory import (
     use_guest_rarity_upgrade_view,
     use_guest_rebirth_card_view,
     use_item_view,
+    use_soul_container_view,
     use_xidianka_view,
     use_xisuidan_view,
 )
@@ -136,6 +137,7 @@ __all__ = [
     "use_item_view",
     "use_guest_rarity_upgrade_view",
     "use_guest_rebirth_card_view",
+    "use_soul_container_view",
     "use_xisuidan_view",
     "use_xidianka_view",
     "move_item_to_treasury_view",

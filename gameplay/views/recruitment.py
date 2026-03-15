@@ -10,6 +10,7 @@ from urllib.parse import urlencode
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import DatabaseError
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse
@@ -21,7 +22,7 @@ from core.exceptions import GameError
 from core.utils import safe_positive_int, sanitize_error_message
 from core.utils.rate_limit import rate_limit_redirect
 from gameplay.constants import BuildingKeys
-from gameplay.services import ensure_manor, refresh_manor_state
+from gameplay.services import get_manor, sync_resource_production
 
 logger = logging.getLogger(__name__)
 
@@ -87,19 +88,15 @@ class TroopRecruitmentView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        manor = ensure_manor(self.request.user)
-        refresh_manor_state(manor)
+        manor = get_manor(self.request.user)
+        sync_resource_production(manor, persist=False)
 
         from gameplay.services.recruitment.recruitment import (
             get_active_recruitments,
             get_player_troops,
             get_recruitment_options,
             has_active_recruitment,
-            refresh_troop_recruitments,
         )
-
-        # 刷新募兵状态
-        refresh_troop_recruitments(manor)
 
         training_level = manor.get_building_level(BuildingKeys.LIANGGONG_CHANG)
         citang_level = manor.get_building_level(BuildingKeys.CITANG)
@@ -160,7 +157,7 @@ def _troop_bank_post_input(request: HttpRequest) -> tuple[str | None, int | None
 @require_POST
 def start_troop_recruitment_view(request: HttpRequest) -> HttpResponse:
     """开始募兵"""
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     selected_category = (request.POST.get("category") or "all").strip()
     troop_key = (request.POST.get("troop_key") or "").strip()
     quantity = safe_positive_int(request.POST.get("quantity"), default=None)
@@ -182,7 +179,7 @@ def start_troop_recruitment_view(request: HttpRequest) -> HttpResponse:
         )
     except (GameError, ValueError) as exc:
         _handle_known_recruitment_error(request, exc)
-    except Exception as exc:
+    except DatabaseError as exc:
         _handle_unexpected_recruitment_error(
             request,
             exc,
@@ -202,7 +199,7 @@ def start_troop_recruitment_view(request: HttpRequest) -> HttpResponse:
 @require_POST
 @rate_limit_redirect("deposit_troop_to_bank", limit=30, window_seconds=60)
 def deposit_troop_to_bank_view(request: HttpRequest) -> HttpResponse:
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     troop_key, quantity = _troop_bank_post_input(request)
 
     if not troop_key:
@@ -219,7 +216,7 @@ def deposit_troop_to_bank_view(request: HttpRequest) -> HttpResponse:
         messages.success(request, f"已存入 {result['quantity']} 名{result['troop_name']}到钱庄")
     except (GameError, ValueError) as exc:
         _handle_known_recruitment_error(request, exc)
-    except Exception as exc:
+    except DatabaseError as exc:
         _handle_unexpected_recruitment_error(
             request,
             exc,
@@ -239,7 +236,7 @@ def deposit_troop_to_bank_view(request: HttpRequest) -> HttpResponse:
 @require_POST
 @rate_limit_redirect("withdraw_troop_from_bank", limit=30, window_seconds=60)
 def withdraw_troop_from_bank_view(request: HttpRequest) -> HttpResponse:
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     troop_key, quantity = _troop_bank_post_input(request)
 
     if not troop_key:
@@ -256,7 +253,7 @@ def withdraw_troop_from_bank_view(request: HttpRequest) -> HttpResponse:
         messages.success(request, f"已从钱庄取出 {result['quantity']} 名{result['troop_name']}")
     except (GameError, ValueError) as exc:
         _handle_known_recruitment_error(request, exc)
-    except Exception as exc:
+    except DatabaseError as exc:
         _handle_unexpected_recruitment_error(
             request,
             exc,

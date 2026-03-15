@@ -187,6 +187,125 @@ def test_get_warehouse_context_rarity_upgrade_reads_source_keys_from_item_templa
 
 
 @pytest.mark.django_db
+def test_get_warehouse_context_soul_fusion_list_only_contains_supported_idle_high_level_guests():
+    user = User.objects.create_user(username="warehouse_soul_fusion_user", password="pass123")
+    manor = ensure_manor(user)
+
+    green_tpl = GuestTemplate.objects.create(
+        key="warehouse_soul_green", name="绿门客", rarity="green", archetype="military"
+    )
+    blue_tpl = GuestTemplate.objects.create(key="warehouse_soul_blue", name="蓝门客", rarity="blue", archetype="civil")
+    purple_tpl = GuestTemplate.objects.create(
+        key="warehouse_soul_purple",
+        name="紫门客",
+        rarity="purple",
+        archetype="military",
+    )
+    gray_tpl = GuestTemplate.objects.create(key="warehouse_soul_gray", name="灰门客", rarity="gray", archetype="civil")
+
+    eligible_high = Guest.objects.create(manor=manor, template=purple_tpl, status=GuestStatus.IDLE, level=70)
+    eligible_mid = Guest.objects.create(manor=manor, template=green_tpl, status=GuestStatus.IDLE, level=45)
+    Guest.objects.create(manor=manor, template=blue_tpl, status=GuestStatus.INJURED, level=80)
+    Guest.objects.create(manor=manor, template=blue_tpl, status=GuestStatus.IDLE, level=29)
+    Guest.objects.create(manor=manor, template=gray_tpl, status=GuestStatus.IDLE, level=90)
+
+    soul_container = ItemTemplate.objects.create(
+        key="warehouse_soul_container_test",
+        name="灵魂容器",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=True,
+        effect_payload={
+            "action": "soul_fusion",
+            "min_level": 30,
+            "allowed_rarities": ["green", "blue", "purple"],
+        },
+    )
+    InventoryItem.objects.create(manor=manor, template=soul_container, quantity=1)
+
+    context = get_warehouse_context(manor, current_tab="warehouse", selected_category="all", page=1)
+    assert [guest.id for guest in context["guests_for_soul_fusion"]] == [
+        eligible_high.id,
+        eligible_mid.id,
+    ]
+
+
+@pytest.mark.django_db
+def test_get_warehouse_context_soul_fusion_reads_requirements_from_item_templates():
+    user = User.objects.create_user(username="warehouse_soul_payload_user", password="pass123")
+    manor = ensure_manor(user)
+
+    blue_tpl = GuestTemplate.objects.create(
+        key="warehouse_payload_blue", name="蓝门客", rarity="blue", archetype="civil"
+    )
+    green_tpl = GuestTemplate.objects.create(
+        key="warehouse_payload_green",
+        name="绿门客",
+        rarity="green",
+        archetype="military",
+    )
+    supported_guest = Guest.objects.create(manor=manor, template=blue_tpl, status=GuestStatus.IDLE, level=60)
+    Guest.objects.create(manor=manor, template=blue_tpl, status=GuestStatus.IDLE, level=59)
+    Guest.objects.create(manor=manor, template=green_tpl, status=GuestStatus.IDLE, level=90)
+
+    soul_container = ItemTemplate.objects.create(
+        key="warehouse_soul_payload_container",
+        name="蓝魂容器",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=True,
+        effect_payload={
+            "action": "soul_fusion",
+            "min_level": 60,
+            "allowed_rarities": ["blue"],
+        },
+    )
+    InventoryItem.objects.create(manor=manor, template=soul_container, quantity=1)
+
+    context = get_warehouse_context(manor, current_tab="warehouse", selected_category="all", page=1)
+    assert [guest.id for guest in context["guests_for_soul_fusion"]] == [supported_guest.id]
+
+
+@pytest.mark.django_db
+def test_get_warehouse_context_soul_fusion_merges_multiple_container_requirements_for_client_filtering():
+    user = User.objects.create_user(username="warehouse_soul_payload_merge_user", password="pass123")
+    manor = ensure_manor(user)
+
+    green_tpl = GuestTemplate.objects.create(
+        key="warehouse_merge_green", name="绿门客", rarity="green", archetype="military"
+    )
+    blue_tpl = GuestTemplate.objects.create(key="warehouse_merge_blue", name="蓝门客", rarity="blue", archetype="civil")
+    green_guest = Guest.objects.create(manor=manor, template=green_tpl, status=GuestStatus.IDLE, level=40)
+    blue_guest = Guest.objects.create(manor=manor, template=blue_tpl, status=GuestStatus.IDLE, level=68)
+
+    green_container = ItemTemplate.objects.create(
+        key="warehouse_merge_green_container",
+        name="青魂容器",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=True,
+        effect_payload={
+            "action": "soul_fusion",
+            "min_level": 30,
+            "allowed_rarities": ["green"],
+        },
+    )
+    blue_container = ItemTemplate.objects.create(
+        key="warehouse_merge_blue_container",
+        name="玄魂容器",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=True,
+        effect_payload={
+            "action": "soul_fusion",
+            "min_level": 60,
+            "allowed_rarities": ["blue"],
+        },
+    )
+    InventoryItem.objects.create(manor=manor, template=green_container, quantity=1)
+    InventoryItem.objects.create(manor=manor, template=blue_container, quantity=1)
+
+    context = get_warehouse_context(manor, current_tab="warehouse", selected_category="all", page=1)
+    assert [guest.id for guest in context["guests_for_soul_fusion"]] == [blue_guest.id, green_guest.id]
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize(
     ("current_tab", "storage_location"),
     [

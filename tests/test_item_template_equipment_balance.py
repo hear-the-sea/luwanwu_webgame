@@ -22,6 +22,7 @@ MAX_DIRECT_TROOP_CAPACITY = 220
 MAX_DIRECT_LUCK = 210
 MAX_DIRECT_AGILITY = 330
 MAX_DIRECT_EFFECTIVE_HP = 15000
+MAX_ORANGE_NON_HP_ATTRIBUTE_SUM = 100
 
 
 def _load_item_templates() -> dict[str, dict]:
@@ -81,6 +82,10 @@ def _top_effective_hp_total(items: dict[str, dict]) -> int:
             slot_values.append(hp + defense * 50)
         total += sum(sorted(slot_values, reverse=True)[:capacity])
     return total
+
+
+def _non_hp_attribute_sum(effect_payload: dict) -> int:
+    return sum(int(value) for stat, value in effect_payload.items() if stat != "hp" and isinstance(value, (int, float)))
 
 
 def test_equipment_payload_uses_supported_stats_only():
@@ -215,3 +220,18 @@ def test_multi_slot_direct_stat_caps_remain_bounded():
     assert _top_slot_total(items, "luck") <= MAX_DIRECT_LUCK
     assert _top_slot_total(items, "agility") <= MAX_DIRECT_AGILITY
     assert _top_effective_hp_total(items) <= MAX_DIRECT_EFFECTIVE_HP
+
+
+def test_orange_equipment_non_hp_attribute_sum_stays_within_target_band():
+    items = _load_item_templates()
+
+    over_budget = {}
+    for key, item in _iter_equipment_items(items):
+        if item.get("rarity") != "orange":
+            continue
+        payload = item.get("effect_payload") or {}
+        total = _non_hp_attribute_sum(payload)
+        if total > MAX_ORANGE_NON_HP_ATTRIBUTE_SUM:
+            over_budget[key] = total
+
+    assert over_budget == {}

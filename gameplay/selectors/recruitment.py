@@ -8,16 +8,11 @@ from guests.services import (
     get_pool_recruitment_duration_seconds,
     list_candidates,
     list_pools,
-    refresh_guest_recruitments,
 )
 
 from ..models import InventoryItem
-from ..services import refresh_manor_state
-from ..services.utils.cache import (
-    CACHE_TIMEOUT_SHORT,
-    invalidate_recruitment_hall_cache,
-    recruitment_hall_context_cache_key,
-)
+from ..services import sync_resource_production
+from ..services.utils.cache import CACHE_TIMEOUT_SHORT, recruitment_hall_context_cache_key
 
 
 def _recruitment_hall_cache_key(manor_id: int) -> str:
@@ -91,10 +86,7 @@ def _build_cached_payload(manor, records_limit: int) -> dict:
 
 
 def get_recruitment_hall_context(manor, records_limit: int) -> dict:
-    refresh_manor_state(manor)
-    completed = refresh_guest_recruitments(manor)
-    if completed > 0:
-        invalidate_recruitment_hall_cache(int(manor.id))
+    sync_resource_production(manor, persist=False)
 
     pools = list(list_pools(core_only=True, include_entries=False))
     for pool in pools:

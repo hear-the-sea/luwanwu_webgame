@@ -9,6 +9,7 @@ import logging
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import DatabaseError
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse
@@ -19,12 +20,11 @@ from core.decorators import flash_unexpected_view_error
 from core.exceptions import GameError
 from core.utils import safe_redirect_url, sanitize_error_message
 from gameplay.services import (
-    ensure_manor,
     get_categories,
+    get_manor,
     get_martial_technologies_grouped,
     get_technology_display_data,
-    refresh_manor_state,
-    refresh_technology_upgrades,
+    sync_resource_production,
     upgrade_technology,
 )
 
@@ -91,11 +91,8 @@ class TechnologyView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        manor = ensure_manor(self.request.user)
-        refresh_manor_state(manor)
-
-        # 刷新技术升级状态
-        refresh_technology_upgrades(manor)
+        manor = get_manor(self.request.user)
+        sync_resource_production(manor, persist=False)
 
         # 获取当前选中的分类，默认为 basic
         current_tab = _normalize_technology_tab(self.request.GET.get("tab"))
@@ -130,7 +127,7 @@ class TechnologyView(LoginRequiredMixin, TemplateView):
 @require_POST
 def upgrade_technology_view(request: HttpRequest, tech_key: str) -> HttpResponse:
     """升级技术"""
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     tab = _normalize_technology_tab(request.POST.get("tab"))
     troop = _normalize_martial_troop_class(request.POST.get("troop")) if tab == "martial" else ""
     next_url = (request.POST.get("next") or "").strip()
@@ -140,7 +137,7 @@ def upgrade_technology_view(request: HttpRequest, tech_key: str) -> HttpResponse
         messages.success(request, result["message"])
     except (GameError, ValueError) as exc:
         _handle_known_technology_error(request, exc)
-    except Exception as exc:
+    except DatabaseError as exc:
         _handle_unexpected_technology_error(
             request,
             exc,

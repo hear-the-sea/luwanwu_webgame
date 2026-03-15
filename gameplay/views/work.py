@@ -10,6 +10,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
+from django.db import DatabaseError
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
@@ -23,9 +24,9 @@ from gameplay.models import WorkAssignment, WorkTemplate
 from gameplay.services import (
     assign_guest_to_work,
     claim_work_reward,
-    ensure_manor,
+    get_manor,
     recall_guest_from_work,
-    refresh_work_assignments,
+    sync_resource_production,
 )
 from guests.models import Guest, GuestStatus
 
@@ -68,10 +69,8 @@ class WorkView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        manor = ensure_manor(self.request.user)
-
-        # 刷新打工状态
-        refresh_work_assignments(manor)
+        manor = get_manor(self.request.user)
+        sync_resource_production(manor, persist=False)
 
         # 获取当前标签页
         current_tier = self.request.GET.get("tier", "junior")
@@ -168,7 +167,7 @@ class WorkView(LoginRequiredMixin, TemplateView):
 def assign_work_view(request: HttpRequest) -> HttpResponse:
     """派遣门客打工"""
     redirect_url = _resolve_work_redirect_url(request)
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     guest_id = safe_positive_int(request.POST.get("guest_id"), default=None)
     work_key = (request.POST.get("work_key") or "").strip()
 
@@ -186,7 +185,7 @@ def assign_work_view(request: HttpRequest) -> HttpResponse:
         messages.success(request, f"{guest.display_name} 已前往 {work_template.name} 打工，预计 {hours:.1f} 小时后完成")
     except (GameError, ValueError) as exc:
         _handle_known_work_error(request, exc)
-    except Exception as exc:
+    except DatabaseError as exc:
         _handle_unexpected_work_error(
             request,
             exc,
@@ -207,7 +206,7 @@ def assign_work_view(request: HttpRequest) -> HttpResponse:
 def recall_work_view(request: HttpRequest, pk: int) -> HttpResponse:
     """召回打工中的门客"""
     redirect_url = _resolve_work_redirect_url(request)
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     assignment = get_object_or_404(WorkAssignment, id=pk, manor=manor, status=WorkAssignment.Status.WORKING)
 
     try:
@@ -217,7 +216,7 @@ def recall_work_view(request: HttpRequest, pk: int) -> HttpResponse:
         )
     except (GameError, ValueError) as exc:
         _handle_known_work_error(request, exc)
-    except Exception as exc:
+    except DatabaseError as exc:
         _handle_unexpected_work_error(
             request,
             exc,
@@ -237,7 +236,7 @@ def recall_work_view(request: HttpRequest, pk: int) -> HttpResponse:
 def claim_work_reward_view(request: HttpRequest, pk: int) -> HttpResponse:
     """领取打工报酬"""
     redirect_url = _resolve_work_redirect_url(request)
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     assignment = get_object_or_404(WorkAssignment, id=pk, manor=manor)
 
     try:
@@ -245,7 +244,7 @@ def claim_work_reward_view(request: HttpRequest, pk: int) -> HttpResponse:
         messages.success(request, f"{assignment.guest.display_name} 完成打工，获得银两 {reward['silver']}")
     except (GameError, ValueError) as exc:
         _handle_known_work_error(request, exc)
-    except Exception as exc:
+    except DatabaseError as exc:
         _handle_unexpected_work_error(
             request,
             exc,

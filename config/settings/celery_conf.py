@@ -33,15 +33,27 @@ CELERY_TASK_QUEUES = (
 CELERY_TASK_ROUTES = {
     "battle.generate_report": {"queue": CELERY_BATTLE_QUEUE},
     "gameplay.complete_mission": {"queue": CELERY_TIMER_QUEUE},
+    "gameplay.scan_due_missions": {"queue": CELERY_TIMER_QUEUE},
     "gameplay.complete_building_upgrade": {"queue": CELERY_TIMER_QUEUE},
     "gameplay.scan_building_upgrades": {"queue": CELERY_TIMER_QUEUE},
+    "gameplay.complete_technology_upgrade": {"queue": CELERY_TIMER_QUEUE},
+    "gameplay.scan_technology_upgrades": {"queue": CELERY_TIMER_QUEUE},
     "gameplay.complete_troop_recruitment": {"queue": CELERY_TIMER_QUEUE},
     "gameplay.scan_troop_recruitments": {"queue": CELERY_TIMER_QUEUE},
+    "gameplay.complete_horse_production": {"queue": CELERY_TIMER_QUEUE},
+    "gameplay.scan_horse_productions": {"queue": CELERY_TIMER_QUEUE},
+    "gameplay.complete_livestock_production": {"queue": CELERY_TIMER_QUEUE},
+    "gameplay.scan_livestock_productions": {"queue": CELERY_TIMER_QUEUE},
+    "gameplay.complete_smelting_production": {"queue": CELERY_TIMER_QUEUE},
+    "gameplay.scan_smelting_productions": {"queue": CELERY_TIMER_QUEUE},
+    "gameplay.complete_equipment_forging": {"queue": CELERY_TIMER_QUEUE},
+    "gameplay.scan_equipment_forgings": {"queue": CELERY_TIMER_QUEUE},
     "gameplay.complete_work_assignments": {"queue": CELERY_TIMER_QUEUE},
     "guests.complete_training": {"queue": CELERY_TIMER_QUEUE},
     "guests.scan_training": {"queue": CELERY_TIMER_QUEUE},
     "guests.complete_recruitment": {"queue": CELERY_TIMER_QUEUE},
     "guests.scan_recruitments": {"queue": CELERY_TIMER_QUEUE},
+    "guests.scan_passive_hp_recovery": {"queue": CELERY_TIMER_QUEUE},
     "guests.process_daily_loyalty": {"queue": CELERY_TIMER_QUEUE},
     "gameplay.complete_scout": {"queue": CELERY_TIMER_QUEUE},
     "gameplay.scan_scout_records": {"queue": CELERY_TIMER_QUEUE},
@@ -58,6 +70,14 @@ CELERY_BEAT_SCHEDULE = {
         "task": "gameplay.scan_building_upgrades",
         "schedule": crontab(minute="*/10"),
     },
+    "scan-due-missions": {
+        "task": "gameplay.scan_due_missions",
+        "schedule": crontab(minute="*/1"),
+    },
+    "scan-technology-upgrades": {
+        "task": "gameplay.scan_technology_upgrades",
+        "schedule": crontab(minute="*/5"),
+    },
     "scan-guest-training": {
         "task": "guests.scan_training",
         "schedule": crontab(minute="*/10"),
@@ -66,12 +86,32 @@ CELERY_BEAT_SCHEDULE = {
         "task": "guests.scan_recruitments",
         "schedule": crontab(minute="*/5"),
     },
+    "scan-passive-guest-hp-recovery": {
+        "task": "guests.scan_passive_hp_recovery",
+        "schedule": crontab(minute="*/5"),
+    },
     "process-daily-guest-loyalty": {
         "task": "guests.process_daily_loyalty",
         "schedule": crontab(hour=0, minute=0),
     },
     "scan-troop-recruitments": {
         "task": "gameplay.scan_troop_recruitments",
+        "schedule": crontab(minute="*/5"),
+    },
+    "scan-horse-productions": {
+        "task": "gameplay.scan_horse_productions",
+        "schedule": crontab(minute="*/5"),
+    },
+    "scan-livestock-productions": {
+        "task": "gameplay.scan_livestock_productions",
+        "schedule": crontab(minute="*/5"),
+    },
+    "scan-smelting-productions": {
+        "task": "gameplay.scan_smelting_productions",
+        "schedule": crontab(minute="*/5"),
+    },
+    "scan-equipment-forgings": {
+        "task": "gameplay.scan_equipment_forgings",
         "schedule": crontab(minute="*/5"),
     },
     "complete-work-assignments": {

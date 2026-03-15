@@ -10,6 +10,7 @@ from typing import Any, Callable, Mapping
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import DatabaseError
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
@@ -25,12 +26,12 @@ from gameplay.models import InventoryItem
 from gameplay.selectors.recruitment import get_recruitment_hall_context
 from gameplay.selectors.warehouse import get_warehouse_context
 from gameplay.services import (
-    ensure_manor,
-    refresh_manor_state,
-    sync_warehouse_grain_item,
+    get_manor,
+    sync_resource_production,
     use_guest_rarity_upgrade_item,
     use_guest_rebirth_card,
     use_inventory_item,
+    use_soul_container,
     use_xidianka,
     use_xisuidan,
 )
@@ -79,7 +80,7 @@ def _known_inventory_error_response(
 
 def _unexpected_inventory_error_response(
     request: HttpRequest,
-    exc: Exception,
+    exc: DatabaseError,
     *,
     is_ajax: bool,
     redirect_url: str,
@@ -105,7 +106,7 @@ def _move_item_between_storage(
     success_message: Callable[[int], str],
     redirect_url: str,
 ) -> HttpResponse:
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     quantity = _parse_positive_quantity(request.POST.get("quantity"), default=1)
     is_ajax = is_ajax_request(request)
     if quantity is None:
@@ -119,7 +120,7 @@ def _move_item_between_storage(
         messages.success(request, message)
     except (GameError, ValueError) as exc:
         return _known_inventory_error_response(request, is_ajax, exc, redirect_url=redirect_url)
-    except Exception as exc:
+    except DatabaseError as exc:
         return _unexpected_inventory_error_response(
             request,
             exc,
@@ -146,7 +147,7 @@ def _use_target_guest_item(
     success_fallback_message: Callable[[Mapping[str, Any]], str],
     service_call: Callable[[Any, InventoryItem, int], Mapping[str, Any]],
 ) -> HttpResponse:
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     item = _warehouse_item(manor, pk)
     is_ajax = is_ajax_request(request)
 
@@ -166,7 +167,7 @@ def _use_target_guest_item(
         messages.success(request, message)
     except (GameError, ValueError) as exc:
         return _known_inventory_error_response(request, is_ajax, exc)
-    except Exception as exc:
+    except DatabaseError as exc:
         return _unexpected_inventory_error_response(
             request,
             exc,
@@ -191,7 +192,7 @@ class RecruitmentHallView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        manor = ensure_manor(self.request.user)
+        manor = get_manor(self.request.user)
         context.update(get_recruitment_hall_context(manor, UIConstants.RECRUIT_RECORDS_DISPLAY))
         return context
 
@@ -203,9 +204,8 @@ class WarehouseView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        manor = ensure_manor(self.request.user)
-        refresh_manor_state(manor)
-        sync_warehouse_grain_item(manor)
+        manor = get_manor(self.request.user)
+        sync_resource_production(manor, persist=False)
         context["manor"] = manor
 
         current_tab = self.request.GET.get("tab", "warehouse")
@@ -220,7 +220,7 @@ class WarehouseView(LoginRequiredMixin, TemplateView):
 @rate_limit_redirect("use_item", limit=20, window_seconds=60)
 def use_item_view(request: HttpRequest, pk: int) -> HttpResponse:
     """使用物品"""
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     item = _warehouse_item(manor, pk)
     is_ajax = is_ajax_request(request)
     try:
@@ -238,7 +238,7 @@ def use_item_view(request: HttpRequest, pk: int) -> HttpResponse:
         messages.success(request, f"{item.template.name} 使用成功：{summary}")
     except (GameError, ValueError) as exc:
         return _known_inventory_error_response(request, is_ajax, exc)
-    except Exception as exc:
+    except DatabaseError as exc:
         return _unexpected_inventory_error_response(
             request,
             exc,
@@ -325,6 +325,27 @@ def use_guest_rarity_upgrade_view(request: HttpRequest, pk: int) -> HttpResponse
         missing_guest_error="请选择要升阶的门客",
         success_fallback_message=lambda result: f"门客 {result.get('guest_name', '')} 升阶成功",
         service_call=use_guest_rarity_upgrade_item,
+    )
+
+
+@login_required
+@require_POST
+@rate_limit_redirect("use_soul_container", limit=10, window_seconds=60)
+def use_soul_container_view(request: HttpRequest, pk: int) -> HttpResponse:
+    """
+    使用灵魂容器（需要选择目标门客）。
+
+    Args:
+        pk: 物品ID
+        guest_id: 目标门客ID（通过POST传入）
+    """
+    return _use_target_guest_item(
+        request,
+        pk,
+        expected_action="soul_fusion",
+        missing_guest_error="请选择要融合的门客",
+        success_fallback_message=lambda result: f"门客 {result.get('guest_name', '')} 已完成灵魂融合",
+        service_call=use_soul_container,
     )
 
 

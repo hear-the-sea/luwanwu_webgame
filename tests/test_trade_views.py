@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from django.contrib.messages import get_messages
+from django.db import DatabaseError
 from django.urls import reverse
 
 from gameplay.models import Manor
@@ -61,6 +62,35 @@ def test_shop_buy_view_error(monkeypatch, client, django_user_model):
     assert resp.status_code == 302
     msgs = [m.message for m in get_messages(resp.wsgi_request)]
     assert any("bad" in m for m in msgs)
+
+
+@pytest.mark.django_db
+def test_shop_buy_view_database_error_degrades_with_flash_message(monkeypatch, client, django_user_model):
+    monkeypatch.setattr(
+        "trade.views.buy_item",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
+    )
+
+    user = django_user_model.objects.create_user(username="shop_buy_db_err", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    resp = client.post(reverse("trade:shop_buy"), {"item_key": "k", "quantity": "1"})
+    assert resp.status_code == 302
+    msgs = [m.message for m in get_messages(resp.wsgi_request)]
+    assert any("操作失败，请稍后重试" in m for m in msgs)
+
+
+@pytest.mark.django_db
+def test_shop_buy_view_programming_error_bubbles_up(monkeypatch, client, django_user_model):
+    monkeypatch.setattr("trade.views.buy_item", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    user = django_user_model.objects.create_user(username="shop_buy_runtime_err", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        client.post(reverse("trade:shop_buy"), {"item_key": "k", "quantity": "1"})
 
 
 @pytest.mark.django_db
@@ -563,9 +593,9 @@ def test_market_purchase_view_success(monkeypatch, client, django_user_model):
 
 
 @pytest.mark.django_db
-def test_market_purchase_view_unexpected_error_uses_generic_message(monkeypatch, client, django_user_model):
+def test_market_purchase_view_database_error_uses_generic_message(monkeypatch, client, django_user_model):
     monkeypatch.setattr(
-        "trade.views.purchase_listing", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom"))
+        "trade.views.purchase_listing", lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down"))
     )
 
     user = django_user_model.objects.create_user(username="market_buy_unexpected", password="pass12345")
@@ -576,6 +606,20 @@ def test_market_purchase_view_unexpected_error_uses_generic_message(monkeypatch,
     assert resp.status_code == 302
     msgs = [m.message for m in get_messages(resp.wsgi_request)]
     assert any("操作失败，请稍后重试" in m for m in msgs)
+
+
+@pytest.mark.django_db
+def test_market_purchase_view_programming_error_bubbles_up(monkeypatch, client, django_user_model):
+    monkeypatch.setattr(
+        "trade.views.purchase_listing", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom"))
+    )
+
+    user = django_user_model.objects.create_user(username="market_buy_runtime", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        client.post(reverse("trade:market_purchase", args=[1]))
 
 
 @pytest.mark.django_db

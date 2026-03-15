@@ -9,6 +9,7 @@ import logging
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
+from django.db import DatabaseError
 from django.db.models import Count, Min
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
@@ -16,7 +17,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from core.decorators import handle_game_errors
 from core.exceptions import GameError
-from core.utils import is_ajax_request, json_success
+from core.utils import is_ajax_request, json_error, json_success
 from core.utils.rate_limit import rate_limit_redirect
 from core.utils.validation import safe_positive_int, safe_redirect_url, sanitize_error_message
 
@@ -37,25 +38,38 @@ def equip_view(request):
 
     使用统一装饰器处理错误，表单验证失败时抛出 ValueError
     """
-    from gameplay.services.manor.core import ensure_manor
+    from gameplay.services.manor.core import get_manor
 
     from ..services import ensure_inventory_gears
     from ..services import equip_guest as equip_guest_service
 
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
 
-    slot = request.POST.get("slot") or ""
-    ensure_inventory_gears(manor, slot=slot or None)
-    form = EquipForm(request.POST, manor=manor)
+    try:
+        slot = request.POST.get("slot") or ""
+        ensure_inventory_gears(manor, slot=slot or None)
+        form = EquipForm(request.POST, manor=manor)
 
-    if not form.is_valid():
-        raise ValueError("请选择门客与可用装备")
+        if not form.is_valid():
+            raise ValueError("请选择门客与可用装备")
 
-    gear = form.cleaned_data["gear"]
-    guest = form.cleaned_data["guest"]
+        gear = form.cleaned_data["gear"]
+        guest = form.cleaned_data["guest"]
 
-    equip_guest_service(gear, guest)
-    _clear_gear_options_cache(manor.id, slots={gear.template.slot})
+        equip_guest_service(gear, guest)
+        _clear_gear_options_cache(manor.id, slots={gear.template.slot})
+    except DatabaseError as exc:
+        logger.exception(
+            "Unexpected equip view database error: manor_id=%s user_id=%s slot=%s",
+            getattr(manor, "id", None),
+            getattr(request.user, "id", None),
+            request.POST.get("slot"),
+        )
+        error_msg = sanitize_error_message(exc)
+        if is_ajax_request(request):
+            return json_error(error_msg, status=500, include_message=True)
+        messages.error(request, error_msg)
+        return redirect("gameplay:recruitment_hall")
 
     # AJAX 请求返回 JSON 响应
     if is_ajax_request(request):
@@ -75,11 +89,11 @@ def unequip_view(request):
     由于有复杂的验证逻辑，保持手动错误处理
     但使用 manager 方法简化查询
     """
-    from gameplay.services.manor.core import ensure_manor
+    from gameplay.services.manor.core import get_manor
 
     from ..services import unequip_guest_item
 
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     guest_id = safe_positive_int(request.POST.get("guest"), default=None)
     raw_gear_ids = request.POST.getlist("gear")
     default_url = "guests:roster"
@@ -134,9 +148,9 @@ def unequip_view(request):
             messages.info(request, "没有可卸下的装备")
     except (GameError, ValueError) as exc:
         messages.error(request, sanitize_error_message(exc))
-    except Exception as exc:
+    except DatabaseError as exc:
         logger.exception(
-            "Unexpected unequip view error: manor_id=%s user_id=%s guest_id=%s gear_count=%s",
+            "Unexpected unequip view database error: manor_id=%s user_id=%s guest_id=%s gear_count=%s",
             getattr(manor, "id", None),
             getattr(request.user, "id", None),
             guest_id,
@@ -149,10 +163,10 @@ def unequip_view(request):
 @login_required
 @require_GET
 def gear_options_view(request):
-    from gameplay.services.manor.core import ensure_manor
+    from gameplay.services.manor.core import get_manor
     from gameplay.services.utils.cache import CACHE_TIMEOUT_SHORT
 
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     slot = request.GET.get("slot")
     slot_label_map = dict(GearSlot.choices)
     if not slot or slot not in slot_label_map:

@@ -9,6 +9,7 @@ import logging
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import DatabaseError
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.views.decorators.http import require_POST
@@ -21,7 +22,7 @@ from core.utils import sanitize_error_message
 from gameplay.constants import BUILDING_MAX_LEVELS
 from gameplay.models import BuildingCategory
 from gameplay.selectors.home import get_home_context
-from gameplay.services import ensure_manor, refresh_manor_state
+from gameplay.services import get_manor, sync_resource_production
 
 logger = logging.getLogger(__name__)
 
@@ -66,10 +67,10 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        manor = ensure_manor(self.request.user)
+        manor = get_manor(self.request.user)
         try:
-            refresh_manor_state(manor)
-        except Exception as exc:
+            sync_resource_production(manor, persist=False)
+        except DatabaseError as exc:
             _handle_unexpected_core_error(
                 self.request,
                 exc,
@@ -108,7 +109,7 @@ class HomeView(TemplateView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
         if user.is_authenticated:
-            manor = ensure_manor(user)
+            manor = get_manor(user)
             context.update(get_home_context(manor))
 
         return context
@@ -121,7 +122,7 @@ class SettingsView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        manor = ensure_manor(self.request.user)
+        manor = get_manor(self.request.user)
 
         from gameplay.services import get_rename_card_count
 
@@ -137,7 +138,7 @@ def rename_manor_view(request: HttpRequest) -> HttpResponse:
     """庄园更名"""
     from gameplay.services import rename_manor
 
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     new_name = request.POST.get("new_name", "").strip()
 
     if not new_name:
@@ -149,7 +150,7 @@ def rename_manor_view(request: HttpRequest) -> HttpResponse:
         messages.success(request, f"庄园已成功更名为「{new_name}」")
     except (GameError, ValueError) as exc:
         _handle_known_core_error(request, exc)
-    except Exception as exc:
+    except DatabaseError as exc:
         _handle_unexpected_core_error(
             request,
             exc,
@@ -170,7 +171,7 @@ class RankingView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        manor = ensure_manor(self.request.user)
+        manor = get_manor(self.request.user)
 
         from gameplay.services.manor.prestige import get_prestige_progress
         from gameplay.services.ranking import get_ranking_with_player_context

@@ -4,7 +4,7 @@ from typing import Any
 
 from guests.models import GuestStatus
 
-from ..services import refresh_manor_state
+from ..services import sync_resource_production
 from ..services.raid import (
     can_attack_target,
     get_active_raids,
@@ -26,7 +26,7 @@ def _resolve_attack_fields(target_info: dict[str, Any], manor, target_manor) -> 
 
 
 def get_map_context(manor, selected_region: str, search_query: str) -> dict:
-    refresh_manor_state(manor)
+    sync_resource_production(manor, persist=False)
 
     return {
         "manor": manor,
@@ -42,7 +42,7 @@ def get_map_context(manor, selected_region: str, search_query: str) -> dict:
 
 
 def get_raid_config_context(manor, target_manor) -> dict:
-    refresh_manor_state(manor)
+    sync_resource_production(manor, persist=False)
     target_info = get_manor_public_info(target_manor, viewer=manor)
     can_attack, attack_reason = _resolve_attack_fields(target_info, manor, target_manor)
     available_guests = list(

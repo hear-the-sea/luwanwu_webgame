@@ -8,6 +8,7 @@ from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
+from django.db import DatabaseError
 from django.http import HttpResponseRedirect
 from django.shortcuts import redirect
 from django.urls import reverse
@@ -15,7 +16,7 @@ from django.urls import reverse
 from core.exceptions import GameError
 from core.utils import safe_int, sanitize_error_message
 from gameplay.models import Manor
-from gameplay.services import ensure_manor
+from gameplay.services import get_manor
 
 logger = logging.getLogger(__name__)
 
@@ -250,7 +251,7 @@ def execute_trade_action(
     except (GameError, ValueError) as exc:
         handle_trade_error(request, exc)
         return TradeActionOutcome(succeeded=False)
-    except Exception as exc:
+    except DatabaseError as exc:
         handle_unexpected_trade_error(request, exc, op=op)
         return TradeActionOutcome(succeeded=False)
 
@@ -284,7 +285,7 @@ def execute_manor_trade_action_and_redirect(
     view: str | None = None,
     troop_category: str | None = None,
 ):
-    manor = ensure_manor(request.user)
+    manor = get_manor(request.user)
     return execute_trade_action_and_redirect(
         request,
         op=op,

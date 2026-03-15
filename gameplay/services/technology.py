@@ -387,11 +387,15 @@ def upgrade_technology(manor, tech_key: str) -> Dict[str, Any]:
         # 计算升级成本（使用服务层函数）
         cost = calculate_upgrade_cost(tech_key, tech.level)
 
-        # 检查并扣除银两
-        if locked_manor.silver < cost:
-            raise InsufficientResourceError("silver", cost, locked_manor.silver)
-
-        spend_resources_locked(locked_manor, {"silver": cost}, reason="tech_upgrade", note=f"升级{template['name']}")
+        try:
+            spend_resources_locked(
+                locked_manor,
+                {"silver": cost},
+                reason="tech_upgrade",
+                note=f"升级{template['name']}",
+            )
+        except ValueError as exc:
+            raise InsufficientResourceError("silver", cost, locked_manor.silver) from exc
 
         # 累计银两花费，计算声望
         from .manor.prestige import add_prestige_silver_locked
