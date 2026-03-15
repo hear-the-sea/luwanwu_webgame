@@ -10,9 +10,11 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.core.management import call_command
 from django.db import transaction
+from django.test import Client
 
 from battle.models import TroopTemplate
 from gameplay.models import PlayerTroop
+from gameplay.services.manor.core import ensure_manor
 
 # 获取项目根目录
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -144,6 +146,23 @@ def manor_with_troops(django_user_model, django_db_blocker):
             call_command("load_guest_templates", verbosity=0, skip_images=True)
 
     return manor
+
+
+@pytest.fixture
+def authenticated_client(django_user_model):
+    """返回已登录的测试客户端。"""
+    user = django_user_model.objects.create_user(username="testplayer", password="testpass123")
+    client = Client()
+    client.login(username="testplayer", password="testpass123")
+    client.user = user
+    return client
+
+
+@pytest.fixture
+def manor_with_user(authenticated_client):
+    """返回带庄园的用户。"""
+    manor = ensure_manor(authenticated_client.user)
+    return manor, authenticated_client
 
 
 @pytest.fixture(scope="session")
