@@ -44,6 +44,13 @@ jobs:
           python manage.py check --deploy
           python -m coverage run -m pytest -q -m "not integration"
           python -m coverage report --fail-under=60
+          python -m coverage xml -o coverage-unit.xml
+
+      - name: Upload Unit Coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-unit
+          path: coverage-unit.xml
 
   integration-tests:
     runs-on: ubuntu-latest
@@ -117,4 +124,12 @@ jobs:
         run: |
           python manage.py migrate --noinput
           python manage.py check --deploy
-          python -m pytest -m integration -q
+          python -m coverage run -m pytest -m integration -q
+          python -m coverage report -m
+          python -m coverage xml -o coverage-integration.xml
+
+      - name: Upload Integration Coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-integration
+          path: coverage-integration.xml
