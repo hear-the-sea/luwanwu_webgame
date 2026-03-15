@@ -8,6 +8,7 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import DatabaseError
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
@@ -19,7 +20,7 @@ from core.decorators import flash_unexpected_view_error
 from core.exceptions import GameError
 from core.utils import safe_redirect_url, sanitize_error_message
 from gameplay.models import Building
-from gameplay.services import refresh_manor_state, start_upgrade
+from gameplay.services.manor.core import refresh_manor_state, start_upgrade
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +70,7 @@ class UpgradeBuildingView(LoginRequiredMixin, TemplateView):
             messages.success(request, f"{building.building_type.name} 开始升级，完成时间 {eta}")
         except (GameError, ValueError) as exc:
             _handle_known_building_error(request, exc)
-        except Exception as exc:
+        except DatabaseError as exc:
             _handle_unexpected_building_error(
                 request,
                 exc,

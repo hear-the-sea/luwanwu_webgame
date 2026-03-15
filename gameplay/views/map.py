@@ -25,7 +25,7 @@ from gameplay.constants import REGION_CHOICES, UIConstants
 from gameplay.models import Manor as ManorModel
 from gameplay.models import RaidRun
 from gameplay.selectors.map import get_map_context, get_raid_config_context
-from gameplay.services import get_manor
+from gameplay.services.manor.core import get_manor
 from gameplay.services.raid import (
     get_active_raids,
     get_active_scouts,

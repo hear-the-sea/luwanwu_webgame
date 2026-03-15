@@ -22,13 +22,13 @@ from gameplay.selectors import (
     get_arena_exchange_context,
     get_arena_registration_context,
 )
-from gameplay.services import get_manor
 from gameplay.services.arena.core import (
     ARENA_REGISTRATION_SILVER_COST,
     cancel_arena_entry,
     exchange_arena_reward,
     register_arena_entry,
 )
+from gameplay.services.manor.core import get_manor
 from gameplay.utils.template_loader import get_item_template_names_by_keys
 
 logger = logging.getLogger(__name__)
