@@ -177,6 +177,9 @@ SPECTACULAR_SETTINGS = {
     "SCHEMA_PATH_PREFIX": r"/api/",
 }
 
+ENABLE_API_DOCS = env("DJANGO_ENABLE_API_DOCS", "1" if DEBUG else "0") == "1"
+API_DOCS_REQUIRE_AUTH = env("DJANGO_API_DOCS_REQUIRE_AUTH", "0" if DEBUG else "1") == "1"
+
 # Trusted reverse proxy addresses (exact IPs or CIDR), comma-separated.
 trusted_proxy_ips_str = env("DJANGO_TRUSTED_PROXY_IPS", "")
 TRUSTED_PROXY_IPS = [ip.strip() for ip in trusted_proxy_ips_str.split(",") if ip.strip()]
@@ -205,6 +208,9 @@ RAID_CAPTURE_GUEST_RATE = env_float("DJANGO_RAID_CAPTURE_GUEST_RATE", 0.5)
 # High-value thresholds for logging/monitoring
 TRADE_HIGH_VALUE_SILVER_THRESHOLD = int(env("DJANGO_TRADE_HIGH_VALUE_SILVER_THRESHOLD", "1000000"))
 AUCTION_HIGH_BID_THRESHOLD = int(env("DJANGO_AUCTION_HIGH_BID_THRESHOLD", "200"))
+
+HEALTH_CHECK_CHANNEL_LAYER = env("DJANGO_HEALTH_CHECK_CHANNEL_LAYER", "1") == "1"
+HEALTH_CHECK_CELERY_BROKER = env("DJANGO_HEALTH_CHECK_CELERY_BROKER", "1") == "1"
 
 # Detect test runs
 RUNNING_TESTS = ("pytest" in sys.modules) or ("test" in sys.argv) or ("pytest" in os.path.basename(sys.argv[0] or ""))

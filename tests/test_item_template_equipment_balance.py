@@ -7,6 +7,21 @@ import yaml
 ITEM_TEMPLATES_PATH = Path(__file__).resolve().parent.parent / "data" / "item_templates.yaml"
 FORGE_EQUIPMENT_PATH = Path(__file__).resolve().parent.parent / "data" / "forge_equipment.yaml"
 SUPPORTED_EQUIPMENT_STATS = {"hp", "force", "intellect", "defense", "agility", "luck", "troop_capacity"}
+RARITY_ORDER = ("black", "green", "blue", "purple", "orange")
+MIN_RARITY_SCORE_RATIO = 1.10
+SLOT_CAPACITY = {
+    "helmet": 1,
+    "armor": 1,
+    "shoes": 1,
+    "weapon": 1,
+    "mount": 1,
+    "ornament": 3,
+    "device": 3,
+}
+MAX_DIRECT_TROOP_CAPACITY = 220
+MAX_DIRECT_LUCK = 210
+MAX_DIRECT_AGILITY = 330
+MAX_DIRECT_EFFECTIVE_HP = 15000
 
 
 def _load_item_templates() -> dict[str, dict]:
@@ -31,15 +46,48 @@ def _equipment_score(effect_payload: dict) -> float:
     )
 
 
+def _iter_equipment_items(items: dict[str, dict]):
+    for key, item in items.items():
+        effect_type = str(item.get("effect_type") or "")
+        if effect_type.startswith("equip_"):
+            yield key, item
+
+
+def _top_slot_total(items: dict[str, dict], stat: str) -> int:
+    total = 0
+    for slot, capacity in SLOT_CAPACITY.items():
+        slot_values = []
+        for _key, item in _iter_equipment_items(items):
+            effect_type = str(item.get("effect_type") or "")
+            if effect_type != f"equip_{slot}":
+                continue
+            payload = item.get("effect_payload") or {}
+            slot_values.append(int(payload.get(stat, 0) or 0))
+        total += sum(sorted(slot_values, reverse=True)[:capacity])
+    return total
+
+
+def _top_effective_hp_total(items: dict[str, dict]) -> int:
+    total = 0
+    for slot, capacity in SLOT_CAPACITY.items():
+        slot_values = []
+        for _key, item in _iter_equipment_items(items):
+            effect_type = str(item.get("effect_type") or "")
+            if effect_type != f"equip_{slot}":
+                continue
+            payload = item.get("effect_payload") or {}
+            hp = int(payload.get("hp", 0) or 0)
+            defense = int(payload.get("defense", 0) or 0)
+            slot_values.append(hp + defense * 50)
+        total += sum(sorted(slot_values, reverse=True)[:capacity])
+    return total
+
+
 def test_equipment_payload_uses_supported_stats_only():
     items = _load_item_templates()
 
     invalid_stats_by_item: dict[str, list[str]] = {}
-    for key, item in items.items():
-        effect_type = str(item.get("effect_type") or "")
-        if not effect_type.startswith("equip_"):
-            continue
-
+    for key, item in _iter_equipment_items(items):
         payload = item.get("effect_payload") or {}
         invalid_stats = [
             stat
@@ -105,3 +153,65 @@ def test_forgeable_weapon_lines_have_distinct_secondary_roles():
 
     assert whip.get("luck", 0) > 0
     assert whip.get("agility", 0) > 0
+
+
+def test_equipment_sets_use_consistent_bonus_definition_per_set():
+    items = _load_item_templates()
+
+    set_bonus_by_key: dict[str, dict] = {}
+    inconsistent_sets: dict[str, list[str]] = {}
+    for key, item in _iter_equipment_items(items):
+        payload = item.get("effect_payload") or {}
+        set_key = str(payload.get("set_key") or "")
+        if not set_key:
+            continue
+
+        normalized = {
+            "pieces": payload.get("set_bonus", {}).get("pieces"),
+            "bonus": payload.get("set_bonus", {}).get("bonus"),
+        }
+        current = set_bonus_by_key.get(set_key)
+        if current is None:
+            set_bonus_by_key[set_key] = normalized
+            continue
+        if current != normalized:
+            inconsistent_sets.setdefault(set_key, []).append(key)
+
+    assert inconsistent_sets == {}
+
+
+def test_equipment_rarity_progression_has_clear_slot_gaps():
+    items = _load_item_templates()
+
+    scores_by_slot_and_rarity: dict[str, dict[str, list[float]]] = {}
+    for _key, item in _iter_equipment_items(items):
+        effect_type = str(item.get("effect_type") or "")
+        slot = effect_type.removeprefix("equip_")
+        rarity = str(item.get("rarity") or "")
+        slot_scores = scores_by_slot_and_rarity.setdefault(slot, {})
+        slot_scores.setdefault(rarity, []).append(_equipment_score(item.get("effect_payload") or {}))
+
+    for slot, rarity_map in scores_by_slot_and_rarity.items():
+        previous_average: float | None = None
+        previous_rarity: str | None = None
+        for rarity in RARITY_ORDER:
+            scores = rarity_map.get(rarity)
+            if not scores:
+                continue
+
+            average_score = sum(scores) / len(scores)
+            if previous_average is not None and previous_rarity is not None:
+                ratio = average_score / previous_average
+                assert average_score > previous_average, f"{slot}: {previous_rarity} -> {rarity}"
+                assert ratio >= MIN_RARITY_SCORE_RATIO, f"{slot}: {previous_rarity} -> {rarity} = {ratio:.3f}"
+            previous_average = average_score
+            previous_rarity = rarity
+
+
+def test_multi_slot_direct_stat_caps_remain_bounded():
+    items = _load_item_templates()
+
+    assert _top_slot_total(items, "troop_capacity") <= MAX_DIRECT_TROOP_CAPACITY
+    assert _top_slot_total(items, "luck") <= MAX_DIRECT_LUCK
+    assert _top_slot_total(items, "agility") <= MAX_DIRECT_AGILITY
+    assert _top_effective_hp_total(items) <= MAX_DIRECT_EFFECTIVE_HP

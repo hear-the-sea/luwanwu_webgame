@@ -232,7 +232,7 @@ web_game_v5/
 1. `cp .env.example .env` 并根据实际数据库/Redis 凭据调整。
    - Redis 拆分已预留：`REDIS_URL`（默认基址）、`REDIS_CHANNEL_URL`（Channels）、`REDIS_BROKER_URL`/`REDIS_RESULT_URL`（Celery）、`REDIS_CACHE_URL`（缓存/锁），默认指向同一实例不同 DB，后续按需改为独立实例即可。
    - （可选）`GAME_TIME_MULTIPLIER` 可用于加速/减速所有计时类行为（升级/出征/生产/训练等），开发调试默认建议为 `1`。
-2. （可选）创建虚拟环境并执行 `make install`（开发依赖）或 `pip install -r requirements.txt`（运行时依赖）。
+2. （可选）创建虚拟环境并执行 `make install`（开发依赖；存在 `requirements-dev.lock.txt` 时优先使用开发锁文件）或 `pip install -r requirements.txt`（运行时依赖）。
 3. 初始化数据库：`python manage.py migrate`（可选 `python manage.py createsuperuser` 便于调试后台）。
 4. 同步模板数据：
    - 门客/卡池/技能：`python manage.py load_guest_templates --file data/guest_templates.yaml`（默认加载 `data/guest_skills.yaml`）
@@ -255,14 +255,19 @@ web_game_v5/
 
 1. 准备生产环境变量：
    - `cp .env.docker.prod.example .env.docker`
-   - 修改：`DJANGO_SECRET_KEY`、`DJANGO_ALLOWED_HOSTS`、`DJANGO_CSRF_TRUSTED_ORIGINS`、`MYSQL_PASSWORD`、`MYSQL_ROOT_PASSWORD` 等
-   - 反向代理部署请配置：`DJANGO_USE_PROXY=1`、`DJANGO_TRUSTED_PROXY_IPS`、`DJANGO_ACCESS_LOG_TRUST_PROXY=1`
+   - 默认示例域名已设置为 `luanwu.top`；如果还要支持 `www.luanwu.top`，请同步补到 `DJANGO_ALLOWED_HOSTS` 和 `DJANGO_CSRF_TRUSTED_ORIGINS`
+   - 必改项：`DJANGO_SECRET_KEY`、`MYSQL_PASSWORD`、`MYSQL_ROOT_PASSWORD`、`REDIS_PASSWORD`（建议）等
+   - 若由 CDN / 反向代理 / 负载均衡终止 TLS，请配置：`DJANGO_USE_PROXY=1`、`DJANGO_TRUSTED_PROXY_IPS`、`DJANGO_ACCESS_LOG_TRUST_PROXY=1`
+   - 若没有前置 HTTPS 终止层，不要直接使用 `DJANGO_SECURE_SSL_REDIRECT=1` 对外暴露当前 compose；请先补齐 `443` 入口或在前面接入 HTTPS 反向代理
 2. 启动（含 Nginx 反代、静态文件、WebSocket）：
    - `docker compose -f docker-compose.prod.yml up -d --build`
 3. 首次上线常用操作：
    - 迁移：`docker compose -f docker-compose.prod.yml exec web python manage.py migrate --noinput`
    - 管理员：`docker compose -f docker-compose.prod.yml exec web python manage.py createsuperuser`
+   - 若本次发布包含 `data/*.yaml` 中的导入型模板改动，请执行：`docker compose -f docker-compose.prod.yml exec web python manage.py bootstrap_game_data --skip-images`
+   - 若只需同步物品模板，可执行：`docker compose -f docker-compose.prod.yml exec web python manage.py load_item_templates --file data/item_templates.yaml`
    - 健康检查：`/health/live`、`/health/ready`
+   - `/health/ready` 默认会检查 DB、cache、channel layer、Celery broker；如果你的编排不希望 `web` readiness 绑定后两项，可在环境变量里调整 `DJANGO_HEALTH_CHECK_CHANNEL_LAYER=0` 或 `DJANGO_HEALTH_CHECK_CELERY_BROKER=0`
 
 ## 十二、后续迭代提示
 - 结合游戏玩法补充更多 Django App/DRF Router（庄园、建筑、门客等），在 `config/urls.py` 中按领域挂载。

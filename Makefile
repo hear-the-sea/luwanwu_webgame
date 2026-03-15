@@ -4,16 +4,31 @@ LOCAL_STATE_DIR ?= .local
 FLAKE8_TARGETS ?= accounts battle gameplay guests guilds trade core websocket config tests
 MYPY_TARGETS ?= accounts battle common config core gameplay guests guilds tasks trade websocket
 
-.PHONY: install migrate bootstrap-data dev dev-ws worker beat test test-integration format lint lint-strict check clean
+.PHONY: install install-unpinned install-lock install-dev-lock migrate bootstrap-data dev dev-ws worker beat test test-integration format lint lint-strict check clean lock lock-dev
 
 install:
+	@if [ -f requirements-dev.lock.txt ]; then \
+		pip install -r requirements-dev.lock.txt; \
+	elif [ -f requirements.lock.txt ]; then \
+		pip install -r requirements.lock.txt -r requirements-dev.txt; \
+	else \
+		pip install -r requirements-dev.txt; \
+	fi
+
+install-unpinned:
 	pip install -r requirements-dev.txt
 
 install-lock:
 	pip install -r requirements.lock.txt
 
+install-dev-lock:
+	pip install -r requirements-dev.lock.txt
+
 lock:
-	$(PYTHON) scripts/generate_requirements_lock.py > requirements.lock.txt
+	$(PYTHON) scripts/generate_requirements_lock.py requirements.txt > requirements.lock.txt
+
+lock-dev:
+	$(PYTHON) scripts/generate_requirements_lock.py requirements-dev.txt > requirements-dev.lock.txt
 
 precommit:
 	pre-commit install

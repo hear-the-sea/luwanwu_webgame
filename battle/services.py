@@ -104,6 +104,42 @@ def _collect_guest_ids(guests: List[Guest]) -> list[int]:
     return [int(guest.id) for guest in guests if guest.pk]
 
 
+def _collect_manor_ids(manor, *guest_groups: List[Guest] | None) -> list[int]:
+    manor_ids: set[int] = set()
+    if getattr(manor, "pk", None):
+        manor_ids.add(int(manor.pk))
+
+    for guests in guest_groups:
+        for guest in guests or []:
+            guest_manor_id = getattr(guest, "manor_id", None)
+            if guest_manor_id is None:
+                guest_manor = getattr(guest, "manor", None)
+                guest_manor_id = getattr(guest_manor, "pk", None)
+            if guest_manor_id is None:
+                continue
+            try:
+                parsed_id = int(guest_manor_id)
+            except (TypeError, ValueError):
+                continue
+            if parsed_id > 0:
+                manor_ids.add(parsed_id)
+    return sorted(manor_ids)
+
+
+def _lock_manor_rows(manor_ids: list[int]) -> None:
+    if not manor_ids:
+        return
+
+    from gameplay.models import Manor
+
+    locked_ids = set(
+        Manor.objects.select_for_update().filter(pk__in=manor_ids).order_by("id").values_list("id", flat=True)
+    )
+    missing_ids = [manor_id for manor_id in manor_ids if manor_id not in locked_ids]
+    if missing_ids:
+        raise ValueError("部分庄园不存在，无法执行战斗")
+
+
 def _lock_guest_rows(guest_ids: list[int]) -> list[Guest]:
     # Enforce ordering to prevent deadlocks
     return list(Guest.objects.select_for_update().filter(id__in=guest_ids).order_by("id"))
@@ -142,6 +178,49 @@ def _recover_guest_hp_batch(guests: List[Guest], now) -> None:
     for guest in guests:
         if getattr(guest, "pk", None):
             recover_guest_hp(guest, now=now)
+
+
+def _validate_attacker_guest_ownership(manor, guests: List[Guest]) -> None:
+    manor_pk = getattr(manor, "pk", None)
+    if not manor_pk:
+        return
+
+    unresolved_ids: list[int] = []
+    for guest in guests:
+        guest_pk = getattr(guest, "pk", None)
+        if not guest_pk:
+            continue
+        is_snapshot_proxy = bool(getattr(guest, "is_battle_snapshot_proxy", False))
+
+        guest_manor_id = getattr(guest, "manor_id", None)
+        if guest_manor_id is None:
+            guest_manor = getattr(guest, "manor", None)
+            guest_manor_id = getattr(guest_manor, "pk", None)
+
+        if guest_manor_id is None:
+            if is_snapshot_proxy:
+                # Historical snapshot replay should not depend on current DB ownership.
+                continue
+            unresolved_ids.append(int(guest_pk))
+            continue
+
+        try:
+            parsed_manor_id = int(guest_manor_id)
+        except (TypeError, ValueError):
+            if is_snapshot_proxy:
+                continue
+            unresolved_ids.append(int(guest_pk))
+            continue
+
+        if parsed_manor_id != int(manor_pk):
+            raise ValueError("攻击方门客必须属于当前庄园")
+
+    if not unresolved_ids:
+        return
+
+    owned_ids = set(Guest.objects.filter(id__in=unresolved_ids, manor_id=manor_pk).values_list("id", flat=True))
+    if len(owned_ids) != len(set(unresolved_ids)):
+        raise ValueError("攻击方门客必须属于当前庄园")
 
 
 def _resolve_battle_rng(seed: int | None, rng_source: random.Random | None) -> tuple[int, random.Random]:
@@ -219,7 +298,12 @@ def _build_defender_guest_and_loadout(
 
 
 @contextmanager
-def lock_guests_for_battle(guests: List[Guest], manor=None) -> Generator[List[Guest], None, None]:
+def lock_guests_for_battle(
+    guests: List[Guest],
+    manor=None,
+    *,
+    other_guests: List[Guest] | None = None,
+) -> Generator[List[Guest], None, None]:
     """
     获取门客的战斗锁，防止并发战斗。
 
@@ -236,28 +320,37 @@ def lock_guests_for_battle(guests: List[Guest], manor=None) -> Generator[List[Gu
     Raises:
         ValueError: 如果门客已在战斗中或状态不是空闲
     """
-    if not guests:
+    other_guests = other_guests or []
+    if not guests and not other_guests:
         yield []
         return
 
-    guest_ids = _collect_guest_ids(guests)
+    primary_guest_ids = _collect_guest_ids(guests)
+    secondary_guest_ids = _collect_guest_ids(other_guests)
+    guest_ids = sorted(set(primary_guest_ids + secondary_guest_ids))
     if not guest_ids:
         yield guests
         return
 
     with transaction.atomic():
         # 统一锁顺序为 Manor -> Guest，降低跨服务死锁风险
-        if manor is not None and getattr(manor, "pk", None):
-            from gameplay.models import Manor
-
-            Manor.objects.select_for_update().get(pk=manor.pk)
-
+        _lock_manor_rows(_collect_manor_ids(manor, guests, other_guests))
         locked_guests = _lock_guest_rows(guest_ids)
-        _validate_locked_guest_statuses(locked_guests)
-        _mark_locked_guests_deployed(locked_guests)
+        locked_guest_map = {guest.id: guest for guest in locked_guests}
+        missing_guest_ids = [guest_id for guest_id in guest_ids if guest_id not in locked_guest_map]
+        if missing_guest_ids:
+            raise ValueError("部分门客不存在，无法执行战斗")
+
+        locked_primary = [locked_guest_map[guest_id] for guest_id in primary_guest_ids]
+        locked_secondary = [locked_guest_map[guest_id] for guest_id in secondary_guest_ids]
+        locked_participants = list({guest.id: guest for guest in locked_primary + locked_secondary}.values())
+
+        _validate_locked_guest_statuses(locked_participants)
+        _mark_locked_guests_deployed(locked_participants)
 
         try:
             _refresh_guest_instances(guests)
+            _refresh_guest_instances(other_guests)
             yield guests
         finally:
             _release_deployed_guests(guest_ids)
@@ -376,6 +469,7 @@ def simulate_report(
         guests = attacker_guests
         if not guests:
             raise ValueError("请选择可出征的门客")
+        _validate_attacker_guest_ownership(manor, guests)
 
     defender_limit = defender_max_squad or limit
     active_guests = guests[:limit]
@@ -406,7 +500,7 @@ def simulate_report(
     )
 
     if use_lock:
-        with lock_guests_for_battle(active_guests, manor=manor):
+        with lock_guests_for_battle(active_guests, manor=manor, other_guests=options.defender_guests):
             return _execute_battle(manor, guests, active_guests, options)
     else:
         # 不使用锁（用于测试或特殊场景）

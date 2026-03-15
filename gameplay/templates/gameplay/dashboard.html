@@ -17,7 +17,7 @@
     <section class="building-section">
         <div class="tw-building-grid tw-manor-building-grid">
         {% for building in buildings %}
-            <article class="tw-building-card tw-building-card--manor" id="building-{{ building.pk }}">
+            <article class="tw-building-card tw-building-card--manor{% if building.is_max_level %} tw-tech-maxed{% endif %}" id="building-{{ building.pk }}">
                 {% with image_path=building.building_type.key|building_image %}
                 {% static image_path as building_image_url %}
                 <div class="tw-building-media">
@@ -41,7 +41,9 @@
                     <header>
                         <div class="tw-building-headline">
                             <h3>{{ building.building_type.name }}</h3>
-                            <span class="tw-level-badge">Lv {{ building.level }}</span>
+                            <span class="tw-level-badge {% if building.is_max_level %}tw-badge-maxed{% endif %}">
+                                Lv {{ building.level }}{% if building.max_level %} / {{ building.max_level }}{% endif %}{% if building.is_max_level %} 满级{% endif %}
+                            </span>
                         </div>
                         <p class="tw-building-desc">{{ building.building_type.key|building_desc }}</p>
                     </header>
@@ -60,16 +62,18 @@
                                 </dd>
                             </div>
                         {% else %}
-                            {% with cost=building.next_level_cost %}
                             <div>
                                 <dt>下级所需</dt>
                                 <dd class="tw-next-cost-list">
-                                    {% for key,val in cost.items %}
-                                        <span>{{ resource_labels|get_label:key }} {{ val }}</span>
-                                    {% endfor %}
+                                    {% if building.is_max_level %}
+                                        <span>/</span>
+                                    {% else %}
+                                        {% for key,val in building.next_level_cost_display.items %}
+                                            <span>{{ resource_labels|get_label:key }} {{ val }}</span>
+                                        {% endfor %}
+                                    {% endif %}
                                 </dd>
                             </div>
-                            {% endwith %}
                         {% endif %}
                     </dl>
                     <div class="tw-card-actions">
@@ -82,6 +86,8 @@
                                 <input type="hidden" name="next" value="{{ request.get_full_path }}#building-{{ building.pk }}">
                                 {% if building.is_upgrading %}
                                     <button type="button" class="tw-btn-primary" disabled>升级进行中</button>
+                                {% elif building.is_max_level %}
+                                    <button type="button" class="tw-btn-secondary" disabled>已满级</button>
                                 {% else %}
                                     <button type="submit" class="tw-btn-primary">升级</button>
                                 {% endif %}

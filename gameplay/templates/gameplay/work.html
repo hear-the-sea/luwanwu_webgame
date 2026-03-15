@@ -28,7 +28,7 @@
             {% if works %}
             <div class="tw-building-grid tw-manor-building-grid">
                 {% for work in works %}
-                <article class="tw-building-card tw-building-card--manor tw-work-card">
+                <article class="tw-building-card tw-building-card--manor tw-work-card" id="work-{{ work.pk }}">
                     {% with image_path=work.key|work_image %}
                     {% static image_path as work_image_url %}
                     <div class="tw-building-media">
@@ -77,6 +77,7 @@
                             </p>
                             <form method="post" action="{% url 'gameplay:recall_work' assignment.id %}" class="recall-form text-center">
                                 {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}#work-{{ work.pk }}">
                                 <button type="submit" class="tw-btn-secondary tw-btn-sm">召回</button>
                             </form>
                             {% else %}
@@ -86,6 +87,7 @@
                             </p>
                             <form method="post" action="{% url 'gameplay:claim_work_reward' assignment.id %}" class="text-center">
                                 {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}#work-{{ work.pk }}">
                                 <button type="submit" class="tw-btn-primary tw-btn-sm">领取报酬</button>
                             </form>
                             {% endif %}
@@ -94,6 +96,7 @@
                         <form method="post" action="{% url 'gameplay:assign_work' %}" class="tw-card-actions pt-2 pb-2 border-t border-border-light">
                             {% csrf_token %}
                             <input type="hidden" name="work_key" value="{{ work.key }}">
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}#work-{{ work.pk }}">
                             <div class="flex gap-2 items-center">
                                 <select name="guest_id" class="tw-form-select flex-1" required>
                                     <option value="">选择门客</option>
@@ -114,6 +117,21 @@
                 </article>
                 {% endfor %}
             </div>
+            {% if is_paginated %}
+            <div class="tw-pagination flex justify-center items-center gap-3 mt-6">
+                {% if page_obj.has_previous %}
+                <a href="?tier={{ current_tier }}&page={{ page_obj.previous_page_number }}" class="tw-btn-secondary tw-btn-sm">上一页</a>
+                {% else %}
+                <span class="tw-btn-secondary tw-btn-sm disabled">上一页</span>
+                {% endif %}
+                <span class="tw-page-info">第 {{ page_obj.number }} / {{ page_obj.paginator.num_pages }} 页</span>
+                {% if page_obj.has_next %}
+                <a href="?tier={{ current_tier }}&page={{ page_obj.next_page_number }}" class="tw-btn-secondary tw-btn-sm">下一页</a>
+                {% else %}
+                <span class="tw-btn-secondary tw-btn-sm disabled">下一页</span>
+                {% endif %}
+            </div>
+            {% endif %}
             {% else %}
             <div class="tw-empty-hint">
                 <p>暂无工作配置。</p>

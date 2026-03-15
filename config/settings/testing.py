@@ -4,7 +4,10 @@ Test environment overrides.
 
 from __future__ import annotations
 
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -57,4 +60,4 @@ try:
         task_eager_propagates=CELERY_TASK_EAGER_PROPAGATES,
     )
 except Exception:
-    pass
+    logger.warning("Failed to update Celery app for tests", exc_info=True)

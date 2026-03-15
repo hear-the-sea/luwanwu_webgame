@@ -18,6 +18,7 @@ from common.constants.resources import ResourceType
 from core.decorators import flash_unexpected_view_error
 from core.exceptions import GameError
 from core.utils import sanitize_error_message
+from gameplay.constants import BUILDING_MAX_LEVELS
 from gameplay.models import BuildingCategory
 from gameplay.selectors.home import get_home_context
 from gameplay.services import ensure_manor, refresh_manor_state
@@ -50,6 +51,19 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
     template_name = "gameplay/dashboard.html"
 
+    @staticmethod
+    def _prepare_building_display(buildings):
+        prepared = []
+        for building in buildings:
+            max_level = BUILDING_MAX_LEVELS.get(building.building_type.key)
+            is_max_level = max_level is not None and building.level >= max_level
+            building.max_level = max_level
+            building.is_max_level = is_max_level
+            building.can_upgrade = not building.is_upgrading and not is_max_level
+            building.next_level_cost_display = None if is_max_level else building.next_level_cost()
+            prepared.append(building)
+        return prepared
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         manor = ensure_manor(self.request.user)
@@ -75,11 +89,12 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         context["current_category"] = category
         context["category_label"] = dict(BuildingCategory.choices).get(category, "资源生产")
         context["categories"] = BuildingCategory.choices
-        context["buildings"] = (
+        buildings = (
             manor.buildings.select_related("building_type")
             .filter(building_type__category=category)
             .order_by("building_type__name")
         )
+        context["buildings"] = self._prepare_building_display(buildings)
         context["resource_labels"] = dict(ResourceType.choices)
         return context
 

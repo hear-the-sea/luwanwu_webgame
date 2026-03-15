@@ -3,6 +3,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from django.db import transaction
+from django.test import TestCase
 
 from gameplay.services import technology
 from gameplay.services.buildings import forge, ranch, smithy, stable
@@ -27,10 +29,14 @@ class _FailingTask:
         (forge._schedule_forging_completion, "complete_equipment_forging", 7),
     ],
 )
+@pytest.mark.django_db(transaction=True)
 def test_schedule_callbacks_do_not_raise_on_dispatch_failure(monkeypatch, scheduler, task_attr, obj_id):
     import gameplay.tasks as gameplay_tasks
 
-    monkeypatch.setattr("django.db.transaction.on_commit", lambda callback: callback())
     monkeypatch.setattr(gameplay_tasks, task_attr, _FailingTask(), raising=False)
 
-    scheduler(SimpleNamespace(id=obj_id), 30)
+    with transaction.atomic():
+        with TestCase.captureOnCommitCallbacks(execute=True) as callbacks:
+            scheduler(SimpleNamespace(id=obj_id), 30)
+
+        assert len(callbacks) == 1

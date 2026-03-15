@@ -210,13 +210,7 @@ def calculate_upgrade_cost(tech_key: str, current_level: int) -> int:
     计算技术升级到下一级所需的银两。
 
     公式: base_cost * (growth^current_level)
-    使用指数增长，平衡科技研究成本：
-    - 0->1级: 8000 * 1.5^0 = 8,000
-    - 1->2级: 8000 * 1.5^1 = 12,000
-    - 2->3级: 8000 * 1.5^2 = 18,000
-    - 5->6级: 8000 * 1.5^5 = 60,750
-    - 9->10级: 8000 * 1.5^9 = 307,546
-    - 19->20级: 8000 * 1.5^19 = 17,734,702
+    默认增长系数为 1.5，也可以在 technology_templates.yaml 中按科技单独配置 cost_growth。
 
     Args:
         tech_key: 技术标识
@@ -229,7 +223,9 @@ def calculate_upgrade_cost(tech_key: str, current_level: int) -> int:
     if not template:
         return 0
     base_cost = _coerce_int(template.get("base_cost", 8000), 8000)
-    growth = 1.5  # 指数增长系数
+    growth = _coerce_float(template.get("cost_growth", 1.5), 1.5)
+    if growth <= 0:
+        growth = 1.5
     return int(base_cost * (growth**current_level))
 
 

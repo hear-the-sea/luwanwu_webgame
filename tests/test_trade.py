@@ -5,6 +5,7 @@
 from datetime import timedelta
 
 import pytest
+from django.db import IntegrityError
 from django.utils import timezone
 
 from gameplay.models import InventoryItem, ItemTemplate, Manor
@@ -333,6 +334,40 @@ class TestMarketCancel:
 
         with pytest.raises(ValueError, match="无权取消"):
             market_service.cancel_listing(buyer_manor, listing.id)
+
+    def test_cancel_listing_restores_inventory_when_create_races(
+        self, seller_manor, tradeable_item_template, monkeypatch
+    ):
+        listing = market_service.create_listing(
+            manor=seller_manor,
+            item_key="test_tradeable_item",
+            quantity=10,
+            unit_price=2000,
+            duration=7200,
+        )
+        InventoryItem.objects.filter(
+            manor=seller_manor,
+            template=tradeable_item_template,
+            storage_location="warehouse",
+        ).delete()
+
+        original_create = InventoryItem.objects.create
+
+        def _race_create(**kwargs):
+            original_create(**{**kwargs, "quantity": 0})
+            raise IntegrityError("duplicate key value violates unique constraint")
+
+        monkeypatch.setattr(InventoryItem.objects, "create", _race_create)
+
+        result = market_service.cancel_listing(seller_manor, listing.id)
+
+        assert result["quantity"] == 10
+        inventory = InventoryItem.objects.get(
+            manor=seller_manor,
+            template=tradeable_item_template,
+            storage_location="warehouse",
+        )
+        assert inventory.quantity == 10
 
 
 @pytest.mark.django_db

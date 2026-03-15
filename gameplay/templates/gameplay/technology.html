@@ -43,12 +43,14 @@
                 <article class="tw-building-card {% if tech.is_upgrading %}tw-tech-upgrading{% elif not tech.can_upgrade and tech.level >= tech.max_level %}tw-tech-maxed{% endif %}" id="tech-{{ tech.key }}">
                     <header>
                         <div>
-                            <h3>{{ tech.name }}</h3>
+                            <div class="tw-building-headline">
+                                <h3>{{ tech.name }}</h3>
+                                <span class="tw-level-badge {% if tech.level >= tech.max_level %}tw-badge-maxed{% elif tech.is_upgrading %}tw-badge-upgrading{% endif %}">
+                                    Lv {{ tech.level }} / {{ tech.max_level }}
+                                </span>
+                            </div>
                             <p class="tw-building-desc">{{ tech.description }}</p>
                         </div>
-                        <span class="tw-level-badge {% if tech.level >= tech.max_level %}tw-badge-maxed{% elif tech.is_upgrading %}tw-badge-upgrading{% endif %}">
-                            Lv {{ tech.level }} / {{ tech.max_level }}
-                        </span>
                     </header>
                     <dl>
                         <div>
@@ -119,12 +121,14 @@
             <article class="tw-building-card {% if tech.is_upgrading %}tw-tech-upgrading{% elif not tech.can_upgrade and tech.level >= tech.max_level %}tw-tech-maxed{% endif %}" id="tech-{{ tech.key }}">
                 <header>
                     <div>
-                        <h3>{{ tech.name }}</h3>
+                        <div class="tw-building-headline">
+                            <h3>{{ tech.name }}</h3>
+                            <span class="tw-level-badge {% if tech.level >= tech.max_level %}tw-badge-maxed{% elif tech.is_upgrading %}tw-badge-upgrading{% endif %}">
+                                Lv {{ tech.level }} / {{ tech.max_level }}
+                            </span>
+                        </div>
                         <p class="tw-building-desc">{{ tech.description }}</p>
                     </div>
-                    <span class="tw-level-badge {% if tech.level >= tech.max_level %}tw-badge-maxed{% elif tech.is_upgrading %}tw-badge-upgrading{% endif %}">
-                        Lv {{ tech.level }} / {{ tech.max_level }}
-                    </span>
                 </header>
                 <dl>
                     <div>

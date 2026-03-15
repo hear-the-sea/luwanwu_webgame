@@ -6,7 +6,8 @@ from datetime import timezone as dt_timezone
 from types import SimpleNamespace
 
 import pytest
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
+from django.test import TestCase
 from django.utils import timezone
 
 from gameplay.services.raid.combat import runs as combat_runs
@@ -259,13 +260,12 @@ def test_start_raid_rechecks_attack_constraints_inside_transaction(monkeypatch):
     assert called["load_guests"] == 0
 
 
+@pytest.mark.django_db(transaction=True)
 def test_start_raid_invalidates_recent_attack_cache_on_commit(monkeypatch):
     attacker = SimpleNamespace(pk=1, id=1, defeat_protection_until=None)
     defender = SimpleNamespace(pk=2, id=2)
     invalidated = {"defender_id": None}
 
-    monkeypatch.setattr(combat_runs.transaction, "atomic", contextlib.nullcontext)
-    monkeypatch.setattr(combat_runs.transaction, "on_commit", lambda callback: callback())
     monkeypatch.setattr(
         combat_runs,
         "_validate_and_normalize_raid_inputs",
@@ -290,11 +290,19 @@ def test_start_raid_invalidates_recent_attack_cache_on_commit(monkeypatch):
         lambda defender_id: invalidated.__setitem__("defender_id", defender_id),
     )
 
-    combat_runs.start_raid(attacker, defender, [101], {"inf": 1})
+    with transaction.atomic():
+        with TestCase.captureOnCommitCallbacks(execute=False) as callbacks:
+            combat_runs.start_raid(attacker, defender, [101], {"inf": 1})
+
+        assert invalidated["defender_id"] is None
+        assert len(callbacks) == 1
+
+        callbacks[0]()
 
     assert invalidated["defender_id"] == defender.id
 
 
+@pytest.mark.django_db(transaction=True)
 def test_start_raid_clears_attacker_defeat_protection_on_success(monkeypatch):
     now = timezone.now()
     saved = {"fields": None}
@@ -306,8 +314,6 @@ def test_start_raid_clears_attacker_defeat_protection_on_success(monkeypatch):
     )
     defender = SimpleNamespace(pk=2, id=2)
 
-    monkeypatch.setattr(combat_runs.transaction, "atomic", contextlib.nullcontext)
-    monkeypatch.setattr(combat_runs.transaction, "on_commit", lambda callback: callback())
     monkeypatch.setattr(
         combat_runs,
         "_validate_and_normalize_raid_inputs",
@@ -328,7 +334,11 @@ def test_start_raid_clears_attacker_defeat_protection_on_success(monkeypatch):
     monkeypatch.setattr(combat_runs, "_send_raid_incoming_message", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(combat_runs, "_dispatch_raid_battle_task", lambda *_args, **_kwargs: None)
 
-    combat_runs.start_raid(attacker, defender, [101], {"inf": 1})
+    with transaction.atomic():
+        with TestCase.captureOnCommitCallbacks(execute=True) as callbacks:
+            combat_runs.start_raid(attacker, defender, [101], {"inf": 1})
+
+        assert len(callbacks) == 1
 
     assert attacker.defeat_protection_until is None
     assert saved["fields"] == ["defeat_protection_until"]

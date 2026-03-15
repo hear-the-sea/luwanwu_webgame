@@ -42,6 +42,7 @@ CELERY_TASK_ROUTES = {
     "guests.scan_training": {"queue": CELERY_TIMER_QUEUE},
     "guests.complete_recruitment": {"queue": CELERY_TIMER_QUEUE},
     "guests.scan_recruitments": {"queue": CELERY_TIMER_QUEUE},
+    "guests.process_daily_loyalty": {"queue": CELERY_TIMER_QUEUE},
     "gameplay.complete_scout": {"queue": CELERY_TIMER_QUEUE},
     "gameplay.scan_scout_records": {"queue": CELERY_TIMER_QUEUE},
     "gameplay.scan_arena_tournaments": {"queue": CELERY_TIMER_QUEUE},
@@ -64,6 +65,10 @@ CELERY_BEAT_SCHEDULE = {
     "scan-guest-recruitments": {
         "task": "guests.scan_recruitments",
         "schedule": crontab(minute="*/5"),
+    },
+    "process-daily-guest-loyalty": {
+        "task": "guests.process_daily_loyalty",
+        "schedule": crontab(hour=0, minute=0),
     },
     "scan-troop-recruitments": {
         "task": "gameplay.scan_troop_recruitments",

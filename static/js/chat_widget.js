@@ -54,7 +54,7 @@
   const STORAGE_POS_KEY = "chat:world:pos";
   const STORAGE_UNREAD_KEY = "chat:world:unread";
   const MAX_DOM_MESSAGES = 260;
-  const MESSAGE_TTL_MS = 15 * 60 * 1000;
+  const MESSAGE_TTL_MS = 24 * 60 * 60 * 1000;
   const EDGE_MARGIN_PX = 8;
   const DRAG_THRESHOLD_PX = 6;
 

@@ -10,21 +10,39 @@ from packaging.markers import default_environment
 from packaging.requirements import Requirement
 
 
-def _iter_root_requirements(requirements_file: Path) -> list[str]:
+def _iter_root_requirements(requirements_file: Path, *, _seen_files: set[Path] | None = None) -> list[str]:
+    _seen_files = _seen_files or set()
+    resolved_file = requirements_file.resolve()
+    if resolved_file in _seen_files:
+        return []
+    _seen_files.add(resolved_file)
+
     names: list[str] = []
     for raw_line in requirements_file.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
-        if line.startswith("-r") or line.startswith("--requirement"):
+        if line.startswith("-r"):
+            nested_path = line[2:].strip()
+            if nested_path:
+                names.extend(
+                    _iter_root_requirements((requirements_file.parent / nested_path).resolve(), _seen_files=_seen_files)
+                )
+            continue
+        if line.startswith("--requirement"):
+            nested_path = line[len("--requirement") :].lstrip(" =")
+            if nested_path:
+                names.extend(
+                    _iter_root_requirements((requirements_file.parent / nested_path).resolve(), _seen_files=_seen_files)
+                )
             continue
         req = Requirement(line)
         names.append(req.name)
     return names
 
 
-def _iter_runtime_root_names() -> list[str]:
-    return _iter_root_requirements(Path(__file__).resolve().parent.parent / "requirements.txt")
+def _iter_root_names(requirements_file: Path) -> list[str]:
+    return _iter_root_requirements(requirements_file)
 
 
 def _dist_for_name(name: str) -> metadata.Distribution:
@@ -48,8 +66,13 @@ def _iter_deps(dist: metadata.Distribution, env: dict[str, str]) -> list[str]:
 
 def main() -> int:
     env = default_environment()
+    requirements_file = (
+        Path(sys.argv[1]).resolve()
+        if len(sys.argv) > 1
+        else (Path(__file__).resolve().parent.parent / "requirements.txt")
+    )
 
-    pending = list(_iter_runtime_root_names())
+    pending = list(_iter_root_names(requirements_file))
     visited: set[str] = set()
     pinned: dict[str, str] = {}
 

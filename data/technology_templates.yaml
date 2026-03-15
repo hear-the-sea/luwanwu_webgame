@@ -388,6 +388,7 @@ technologies:
     effect_per_level: 0.05
     max_level: 30
     base_cost: 6400
+    cost_growth: 1.25
 
   - key: dao_recruit
     name: 造兵术-刀

@@ -20,8 +20,11 @@ class BattleGuestSnapshotProxy:
     def __init__(self, snapshot: dict[str, Any], *, include_guest_identity: bool = False):
         now = timezone.now()
         guest_id = int(snapshot.get("guest_id") or 0) if include_guest_identity else 0
+        guest_manor_id = int(snapshot.get("manor_id") or 0) if include_guest_identity else 0
         self.pk = guest_id or None
         self.id = guest_id or None
+        self.manor_id = guest_manor_id or None
+        self.is_battle_snapshot_proxy = True
         self.template = SimpleNamespace(
             key=str(snapshot.get("template_key") or "snapshot_unknown"),
             initial_skills=_EmptySkillSet(),
@@ -105,6 +108,7 @@ def build_guest_battle_snapshot(guest: Guest, *, include_identity: bool = True) 
     }
     if include_identity:
         payload["guest_id"] = int(guest.id)
+        payload["manor_id"] = int(guest.manor_id)
     return payload
 
 

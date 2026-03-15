@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from django.db import IntegrityError
 from django.db.models import F
 from django.utils import timezone
 
@@ -68,15 +69,12 @@ def send_purchase_notifications(
 
 
 def restore_cancelled_listing_inventory(*, inventory_item_model, manor, listing) -> None:
-    inventory_item = (
-        inventory_item_model.objects.select_for_update()
-        .filter(
-            manor=manor,
-            template=listing.item_template,
-            storage_location=inventory_item_model.StorageLocation.WAREHOUSE,
-        )
-        .first()
-    )
+    filter_kwargs = {
+        "manor": manor,
+        "template": listing.item_template,
+        "storage_location": inventory_item_model.StorageLocation.WAREHOUSE,
+    }
+    inventory_item = inventory_item_model.objects.select_for_update().filter(**filter_kwargs).first()
 
     if inventory_item:
         inventory_item_model.objects.filter(pk=inventory_item.pk).update(
@@ -85,12 +83,17 @@ def restore_cancelled_listing_inventory(*, inventory_item_model, manor, listing)
         )
         return
 
-    inventory_item_model.objects.create(
-        manor=manor,
-        template=listing.item_template,
-        storage_location=inventory_item_model.StorageLocation.WAREHOUSE,
-        quantity=listing.quantity,
-    )
+    try:
+        inventory_item_model.objects.create(
+            **filter_kwargs,
+            quantity=listing.quantity,
+        )
+    except IntegrityError:
+        # Another transaction may have created the row after our select-for-update lookup.
+        inventory_item_model.objects.filter(**filter_kwargs).update(
+            quantity=F("quantity") + listing.quantity,
+            updated_at=timezone.now(),
+        )
 
 
 def build_cancel_listing_result(*, listing) -> dict[str, object]:

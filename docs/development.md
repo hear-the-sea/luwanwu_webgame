@@ -35,14 +35,17 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 - 设置强随机 `DJANGO_SECRET_KEY`
 - 设置 `MYSQL_PASSWORD` 与 `MYSQL_ROOT_PASSWORD`
-- 正确配置 `DJANGO_ALLOWED_HOSTS` 与 `DJANGO_CSRF_TRUSTED_ORIGINS`
+- 正确配置 `DJANGO_ALLOWED_HOSTS` 与 `DJANGO_CSRF_TRUSTED_ORIGINS`；默认示例域名为 `luanwu.top`
 - 若通过反向代理/负载均衡终止 TLS，设置 `DJANGO_USE_PROXY=1`、`DJANGO_TRUSTED_PROXY_IPS`、`DJANGO_ACCESS_LOG_TRUST_PROXY=1`
+- 若没有前置 HTTPS 终止层，不要直接对外暴露当前 `docker-compose.prod.yml` 并保留 `DJANGO_SECURE_SSL_REDIRECT=1`；请先补齐 `443` 入口或在前面接入 HTTPS 代理
+- `health/ready` 默认会检查 DB、cache、channel layer、Celery broker；如果你的编排不希望 `web` readiness 依赖后两项，可配置 `DJANGO_HEALTH_CHECK_CHANNEL_LAYER=0` 或 `DJANGO_HEALTH_CHECK_CELERY_BROKER=0`
 
 常用容器内命令：
 
 ```bash
 docker compose exec web python manage.py migrate
 docker compose exec web python manage.py createsuperuser
+docker compose exec web python manage.py bootstrap_game_data --skip-images
 docker compose exec web python manage.py load_item_templates
 docker compose exec web python manage.py load_mission_templates
 docker compose exec web python manage.py load_guest_templates
@@ -81,12 +84,18 @@ make install
 
 ```bash
 make install-lock
+
+# 如果已生成开发锁文件，也可安装完整开发环境
+make install-dev-lock
 ```
 
 更新锁文件：
 
 ```bash
 make lock
+
+# 生成包含开发依赖的锁文件
+make lock-dev
 ```
 
 建议安装 `pre-commit` 钩子，避免提交前才发现格式/静态检查问题：
@@ -264,12 +273,15 @@ REDIS_CACHE_URL=redis://127.0.0.1:6379/2
 | 命令 | 说明 |
 |------|------|
 | `make install` | 安装 Python 依赖 |
+| `make install-dev-lock` | 安装锁定的开发依赖 |
 | `make migrate` | 运行数据库迁移 |
 | `make dev` | 启动开发服务器 |
 | `make worker` | 启动 Celery Worker |
 | `make beat` | 启动 Celery Beat |
 | `make test` | 运行测试 |
 | `make format` | 格式化代码（black + isort） |
+| `make lock` | 生成运行时锁文件 |
+| `make lock-dev` | 生成开发依赖锁文件 |
 | `make lint` | 代码检查（flake8 + mypy） |
 | `make check` | 格式化 + 检查 |
 

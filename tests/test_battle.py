@@ -6,6 +6,7 @@ from django.utils import timezone
 from battle.models import BattleReport
 from battle.services import _build_defender_guest_and_loadout, _extract_defender_tech_profile, simulate_report
 from core.exceptions import GuestNotIdleError
+from gameplay.services.battle_snapshots import build_guest_battle_snapshots, build_guest_snapshot_proxies
 from gameplay.services.manor.core import ensure_manor
 from guests.models import GuestStatus, RecruitmentPool
 from guests.services import finalize_candidate, recruit_guest
@@ -73,6 +74,53 @@ def test_simulate_report_attacker_victory_increases_guest_loyalty(game_data, dja
 
     assert report.winner == "attacker"
     assert set(manor.guests.values_list("loyalty", flat=True)) == {51}
+
+
+@pytest.mark.django_db
+def test_simulate_report_rejects_foreign_attacker_guests(game_data, django_user_model):
+    attacker_user = django_user_model.objects.create_user(username="battle_owner", password="pass123")
+    foreign_user = django_user_model.objects.create_user(username="battle_foreign", password="pass123")
+    attacker_manor = ensure_manor(attacker_user)
+    foreign_manor = ensure_manor(foreign_user)
+
+    _recruit_frontline(attacker_manor, draws=1)
+    _recruit_frontline(foreign_manor, draws=1)
+    foreign_guest = foreign_manor.guests.first()
+
+    with pytest.raises(ValueError, match="攻击方门客必须属于当前庄园"):
+        simulate_report(attacker_manor, attacker_guests=[foreign_guest], troop_loadout={})
+
+
+@pytest.mark.django_db
+def test_simulate_report_accepts_legacy_snapshot_guests_without_db_ownership_lookup(game_data, django_user_model):
+    user = django_user_model.objects.create_user(username="battle_snapshot_owner", password="pass123")
+    manor = ensure_manor(user)
+    manor.silver = 5000
+    manor.save(update_fields=["silver"])
+    _recruit_frontline(manor, draws=1)
+    guest = manor.guests.first()
+
+    snapshots = build_guest_battle_snapshots([guest], include_identity=True)
+    assert snapshots[0]["manor_id"] == manor.pk
+
+    legacy_snapshot = dict(snapshots[0])
+    legacy_snapshot.pop("manor_id")
+    guest.delete()
+
+    snapshot_guest = build_guest_snapshot_proxies([legacy_snapshot], include_guest_identity=True)[0]
+    report = simulate_report(
+        manor,
+        seed=7,
+        troop_loadout={},
+        fill_default_troops=False,
+        attacker_guests=[snapshot_guest],
+        auto_reward=False,
+        send_message=False,
+        apply_damage=False,
+        use_lock=False,
+    )
+
+    assert isinstance(report, BattleReport)
 
 
 @pytest.mark.django_db
@@ -168,6 +216,32 @@ def test_injured_guest_cannot_deploy(django_user_model):
     with pytest.raises(ValueError) as exc:
         simulate_report(manor, seed=1, troop_loadout=troop_loadout)
     assert "重伤" in str(exc.value)
+
+
+@pytest.mark.django_db
+def test_lock_guests_for_battle_marks_and_releases_defender_guests(game_data, django_user_model):
+    from battle.services import lock_guests_for_battle
+
+    attacker_user = django_user_model.objects.create_user(username="battle_lock_a", password="pass123")
+    defender_user = django_user_model.objects.create_user(username="battle_lock_b", password="pass123")
+    attacker_manor = ensure_manor(attacker_user)
+    defender_manor = ensure_manor(defender_user)
+    _recruit_frontline(attacker_manor, draws=1)
+    _recruit_frontline(defender_manor, draws=1)
+
+    attacker_guest = attacker_manor.guests.first()
+    defender_guest = defender_manor.guests.first()
+
+    with lock_guests_for_battle([attacker_guest], manor=attacker_manor, other_guests=[defender_guest]):
+        attacker_guest.refresh_from_db(fields=["status"])
+        defender_guest.refresh_from_db(fields=["status"])
+        assert attacker_guest.status == GuestStatus.DEPLOYED
+        assert defender_guest.status == GuestStatus.DEPLOYED
+
+    attacker_guest.refresh_from_db(fields=["status"])
+    defender_guest.refresh_from_db(fields=["status"])
+    assert attacker_guest.status == GuestStatus.IDLE
+    assert defender_guest.status == GuestStatus.IDLE
 
 
 @pytest.mark.django_db

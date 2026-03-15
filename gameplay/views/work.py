@@ -9,14 +9,16 @@ import logging
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.paginator import Paginator
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
 from core.decorators import flash_unexpected_view_error
 from core.exceptions import GameError
-from core.utils import safe_positive_int, sanitize_error_message
+from core.utils import safe_positive_int, safe_redirect_url, sanitize_error_message
 from gameplay.models import WorkAssignment, WorkTemplate
 from gameplay.services import (
     assign_guest_to_work,
@@ -50,10 +52,19 @@ def _handle_known_work_error(request: HttpRequest, exc: GameError | ValueError) 
     messages.error(request, sanitize_error_message(exc))
 
 
+def _resolve_work_redirect_url(request: HttpRequest) -> str:
+    return safe_redirect_url(
+        request,
+        (request.POST.get("next") or request.GET.get("next") or "").strip(),
+        reverse("gameplay:work"),
+    )
+
+
 class WorkView(LoginRequiredMixin, TemplateView):
     """打工页面"""
 
     template_name = "gameplay/work.html"
+    WORKS_PER_PAGE = 4
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -89,9 +100,15 @@ class WorkView(LoginRequiredMixin, TemplateView):
 
         # 获取当前工作区的配置
         current_tier_config = next((t for t in work_tiers if t["key"] == current_tier), work_tiers[0])
+        current_tier = current_tier_config["key"]
 
         # 获取当前工作区的工作列表
-        works = list(WorkTemplate.objects.filter(tier=current_tier_config["tier"]).order_by("display_order"))
+        paginator = Paginator(
+            WorkTemplate.objects.filter(tier=current_tier_config["tier"]).order_by("display_order"),
+            self.WORKS_PER_PAGE,
+        )
+        page_obj = paginator.get_page(self.request.GET.get("page", 1))
+        works = list(page_obj.object_list)
 
         # 获取所有空闲的门客
         idle_guests = list(
@@ -138,6 +155,8 @@ class WorkView(LoginRequiredMixin, TemplateView):
                 "current_tier": current_tier,
                 "current_tier_config": current_tier_config,
                 "works": works,
+                "page_obj": page_obj,
+                "is_paginated": page_obj.has_other_pages(),
             }
         )
 
@@ -148,13 +167,14 @@ class WorkView(LoginRequiredMixin, TemplateView):
 @require_POST
 def assign_work_view(request: HttpRequest) -> HttpResponse:
     """派遣门客打工"""
+    redirect_url = _resolve_work_redirect_url(request)
     manor = ensure_manor(request.user)
     guest_id = safe_positive_int(request.POST.get("guest_id"), default=None)
     work_key = (request.POST.get("work_key") or "").strip()
 
     if guest_id is None or not work_key:
         messages.error(request, "参数错误")
-        return redirect("gameplay:work")
+        return redirect(redirect_url)
 
     guest = get_object_or_404(Guest, id=guest_id, manor=manor)
     work_template = get_object_or_404(WorkTemplate, key=work_key)
@@ -179,13 +199,14 @@ def assign_work_view(request: HttpRequest) -> HttpResponse:
             ),
         )
 
-    return redirect("gameplay:work")
+    return redirect(redirect_url)
 
 
 @login_required
 @require_POST
 def recall_work_view(request: HttpRequest, pk: int) -> HttpResponse:
     """召回打工中的门客"""
+    redirect_url = _resolve_work_redirect_url(request)
     manor = ensure_manor(request.user)
     assignment = get_object_or_404(WorkAssignment, id=pk, manor=manor, status=WorkAssignment.Status.WORKING)
 
@@ -208,13 +229,14 @@ def recall_work_view(request: HttpRequest, pk: int) -> HttpResponse:
             ),
         )
 
-    return redirect("gameplay:work")
+    return redirect(redirect_url)
 
 
 @login_required
 @require_POST
 def claim_work_reward_view(request: HttpRequest, pk: int) -> HttpResponse:
     """领取打工报酬"""
+    redirect_url = _resolve_work_redirect_url(request)
     manor = ensure_manor(request.user)
     assignment = get_object_or_404(WorkAssignment, id=pk, manor=manor)
 
@@ -235,4 +257,4 @@ def claim_work_reward_view(request: HttpRequest, pk: int) -> HttpResponse:
             ),
         )
 
-    return redirect("gameplay:work")
+    return redirect(redirect_url)

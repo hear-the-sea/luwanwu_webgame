@@ -9,6 +9,9 @@ from websocket.consumers import WorldChatConsumer
 
 
 class WorldChatConsumerTests(SimpleTestCase):
+    def test_history_ttl_is_24_hours(self):
+        self.assertEqual(WorldChatConsumer.HISTORY_MESSAGE_TTL_SECONDS, 24 * 60 * 60)
+
     def _build_consumer(self) -> WorldChatConsumer:
         consumer = WorldChatConsumer()
         consumer.user_id = 1

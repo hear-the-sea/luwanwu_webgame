@@ -883,18 +883,19 @@
   }
 }
 
-.tw-building-card--manor .tw-building-headline {
+.tw-building-card .tw-building-headline {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
-.tw-building-card--manor .tw-building-headline h3 {
+.tw-building-card .tw-building-headline h3 {
   margin: 0px;
 }
 
-.tw-building-card--manor .tw-level-badge {
+.tw-building-card .tw-building-headline .tw-level-badge {
   flex-shrink: 0;
 }
 

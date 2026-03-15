@@ -11,6 +11,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.exceptions import GameError
+from gameplay.constants import BUILDING_MAX_LEVELS
 from gameplay.models import (
     EquipmentProduction,
     HorseProduction,
@@ -133,6 +134,28 @@ class TestCoreViews:
         body = response.content.decode("utf-8")
         assert 'data-countdown="' in body
         assert 'data-refresh="1"' in body
+
+    def test_dashboard_max_level_building_shows_maxed_state(self, manor_with_user):
+        """达到建筑等级上限时，页面应显示满级、禁用升级按钮，并将升级消耗显示为 /。"""
+        manor, client = manor_with_user
+        building = manor.buildings.select_related("building_type").get(building_type__key="juxianzhuang")
+        max_level = BUILDING_MAX_LEVELS[building.building_type.key]
+        building.level = max_level
+        building.is_upgrading = False
+        building.upgrade_complete_at = None
+        building.save(update_fields=["level", "is_upgrading", "upgrade_complete_at"])
+
+        response = client.get(
+            reverse(
+                "gameplay:buildings_category",
+                kwargs={"category": building.building_type.category},
+            )
+        )
+        assert response.status_code == 200
+        body = response.content.decode("utf-8")
+        assert f"Lv {max_level} / {max_level} 满级" in body
+        assert "<span>/</span>" in body
+        assert "disabled>已满级</button>" in body
 
     def test_settings_page(self, manor_with_user):
         """设置页面"""
@@ -1121,6 +1144,9 @@ class TestTechnologyViews:
         response = client.get(reverse("gameplay:technology"))
         assert response.status_code == 200
         assert "technologies" in response.context
+        content = response.content.decode("utf-8")
+        assert 'class="tw-building-headline"' in content
+        assert "Lv 0 /" in content
 
     def test_technology_martial_tab(self, manor_with_user):
         """武艺科技标签页"""
@@ -1854,7 +1880,13 @@ class TestWorkViews:
     """打工系统视图测试"""
 
     @staticmethod
-    def _create_work_data(manor, suffix: str) -> tuple[Guest, WorkTemplate]:
+    def _create_work_data(
+        manor,
+        suffix: str,
+        *,
+        tier: str = WorkTemplate.Tier.JUNIOR,
+        display_order: int = 0,
+    ) -> tuple[Guest, WorkTemplate]:
         guest_template = GuestTemplate.objects.create(
             key=f"view_work_guest_tpl_{suffix}_{manor.id}",
             name=f"打工门客模板{suffix}",
@@ -1869,11 +1901,13 @@ class TestWorkViews:
         work_template = WorkTemplate.objects.create(
             key=f"view_work_template_{suffix}_{manor.id}",
             name=f"打工模板{suffix}",
+            tier=tier,
             required_level=1,
             required_force=0,
             required_intellect=0,
             reward_silver=100,
             work_duration=3600,
+            display_order=display_order,
         )
         return guest, work_template
 
@@ -1908,6 +1942,88 @@ class TestWorkViews:
         response = client.get(reverse("gameplay:work") + "?tier=senior")
         assert response.status_code == 200
         assert response.context["current_tier"] == "senior"
+
+    def test_work_page_paginates_four_works_per_tier(self, manor_with_user):
+        manor, client = manor_with_user
+        for index in range(5):
+            self._create_work_data(
+                manor,
+                f"page_{index}",
+                tier=WorkTemplate.Tier.SENIOR,
+                display_order=index + 1,
+            )
+
+        response = client.get(reverse("gameplay:work") + "?tier=senior")
+        assert response.status_code == 200
+        assert len(response.context["works"]) == 4
+        assert response.context["page_obj"].number == 1
+        assert response.context["is_paginated"] is True
+        body = response.content.decode("utf-8")
+        assert "打工模板page_0" in body
+        assert "打工模板page_3" in body
+        assert "打工模板page_4" not in body
+        assert "?tier=senior&page=2" in body
+
+        second_page = client.get(reverse("gameplay:work") + "?tier=senior&page=2")
+        assert second_page.status_code == 200
+        assert len(second_page.context["works"]) == 1
+        assert second_page.context["page_obj"].number == 2
+        second_body = second_page.content.decode("utf-8")
+        assert "打工模板page_4" in second_body
+        assert "打工模板page_0" not in second_body
+
+    def test_assign_work_redirects_back_to_current_page_when_next_provided(self, manor_with_user):
+        manor, client = manor_with_user
+        guest, work_template = self._create_work_data(manor, "assign_next", tier=WorkTemplate.Tier.SENIOR)
+        next_url = reverse("gameplay:work") + "?tier=senior&page=2"
+
+        response = client.post(
+            reverse("gameplay:assign_work"),
+            {"guest_id": guest.id, "work_key": work_template.key, "next": next_url},
+        )
+
+        assert response.status_code == 302
+        assert response.url == next_url
+
+    def test_recall_work_redirects_back_to_current_page_when_next_provided(self, manor_with_user):
+        manor, client = manor_with_user
+        guest, work_template = self._create_work_data(manor, "recall_next", tier=WorkTemplate.Tier.SENIOR)
+        assignment = WorkAssignment.objects.create(
+            manor=manor,
+            guest=guest,
+            work_template=work_template,
+            status=WorkAssignment.Status.WORKING,
+            complete_at=timezone.now() + timezone.timedelta(minutes=30),
+        )
+        next_url = reverse("gameplay:work") + "?tier=senior&page=2"
+
+        response = client.post(
+            reverse("gameplay:recall_work", kwargs={"pk": assignment.pk}),
+            {"next": next_url},
+        )
+
+        assert response.status_code == 302
+        assert response.url == next_url
+
+    def test_claim_work_reward_redirects_back_to_current_page_when_next_provided(self, manor_with_user):
+        manor, client = manor_with_user
+        guest, work_template = self._create_work_data(manor, "claim_next", tier=WorkTemplate.Tier.SENIOR)
+        assignment = WorkAssignment.objects.create(
+            manor=manor,
+            guest=guest,
+            work_template=work_template,
+            status=WorkAssignment.Status.COMPLETED,
+            complete_at=timezone.now(),
+        )
+        next_url = reverse("gameplay:work") + "?tier=senior&page=2"
+
+        response = client.post(
+            reverse("gameplay:claim_work_reward", kwargs={"pk": assignment.pk}),
+            {"next": next_url},
+        )
+
+        assert response.status_code == 302
+        assert response.url == next_url
 
     def test_assign_work_known_error_shows_message(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user

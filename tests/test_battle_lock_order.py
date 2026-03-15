@@ -19,9 +19,16 @@ def test_lock_guests_for_battle_locks_manor_before_guests(monkeypatch):
             events.append("manor_lock")
             return self
 
-        def get(self, pk):
-            events.append(f"manor_get:{pk}")
-            return manor
+        def filter(self, pk__in):
+            events.append(f"manor_filter:{sorted(pk__in)}")
+            return self
+
+        def order_by(self, *_args):
+            return self
+
+        def values_list(self, *_args, **_kwargs):
+            events.append(f"manor_values:{manor.pk}")
+            return [manor.pk]
 
     monkeypatch.setattr("gameplay.models.Manor", SimpleNamespace(objects=_ManorObjects()))
     monkeypatch.setattr(
