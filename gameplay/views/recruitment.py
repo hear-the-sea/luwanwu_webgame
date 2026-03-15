@@ -22,7 +22,8 @@ from core.exceptions import GameError
 from core.utils import safe_positive_int, sanitize_error_message
 from core.utils.rate_limit import rate_limit_redirect
 from gameplay.constants import BuildingKeys
-from gameplay.services import get_manor, sync_resource_production
+from gameplay.services.manor.core import get_manor
+from gameplay.services.resources import sync_resource_production
 
 logger = logging.getLogger(__name__)
 

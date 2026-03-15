@@ -21,13 +21,9 @@ from core.decorators import flash_unexpected_view_error
 from core.exceptions import GameError
 from core.utils import safe_positive_int, safe_redirect_url, sanitize_error_message
 from gameplay.models import WorkAssignment, WorkTemplate
-from gameplay.services import (
-    assign_guest_to_work,
-    claim_work_reward,
-    get_manor,
-    recall_guest_from_work,
-    sync_resource_production,
-)
+from gameplay.services.manor.core import get_manor
+from gameplay.services.resources import sync_resource_production
+from gameplay.services.work import assign_guest_to_work, claim_work_reward, recall_guest_from_work
 from guests.models import Guest, GuestStatus
 
 logger = logging.getLogger(__name__)
