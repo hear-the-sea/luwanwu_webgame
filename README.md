@@ -246,7 +246,11 @@ web_game_v5/
    - Celery Worker（战斗队列）：`celery -A config worker -l info -Q ${CELERY_BATTLE_QUEUE:-battle}`
    - Celery Worker（计时/任务队列）：`celery -A config worker -l info -Q ${CELERY_TIMER_QUEUE:-timer}`（建筑升级、门客自动升级、返程等依赖）
    - Celery Beat（兜底/调度）：`make beat`（或 `celery -A config beat -l info`）
-6. 运行测试：`pytest`（或 `make test`）。
+6. 运行测试：
+   - 单元/默认测试道：`pytest -m "not integration"`（或 `make test` / `make test-unit`）
+   - 外部服务集成测试道：`DJANGO_TEST_USE_ENV_SERVICES=1 pytest -m integration`（或 `make test-integration`）
+   - 默认测试道会自动切到内存 SQLite/locmem/in-memory channel layer；`integration` 测试才会验证外部 MySQL/Redis/Celery/Channels 依赖。
+   - 当前仓库还没有独立的 profile/performance 测试道。
 7. Docker 一键拉起全栈依赖（API/Worker/MySQL/Redis/Channels）：
    - `cp .env.docker.example .env.docker`
    - `docker compose up --build`

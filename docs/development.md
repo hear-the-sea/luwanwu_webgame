@@ -111,7 +111,7 @@ make precommit
 本项目默认启用 CI 质量门禁（GitHub Actions）：
 
 - `flake8`：基础代码风格检查（仓库内固定 `jobs=1`，保证在受限环境也可运行）
-- `pytest + coverage`：单元测试与覆盖率报告
+- `pytest + coverage`：默认单元测试道与覆盖率报告（不包含 `integration` marker）
 - `python manage.py check --deploy`：部署安全检查
 
 本地建议按以下顺序执行：
@@ -278,7 +278,9 @@ REDIS_CACHE_URL=redis://127.0.0.1:6379/2
 | `make dev` | 启动开发服务器 |
 | `make worker` | 启动 Celery Worker |
 | `make beat` | 启动 Celery Beat |
-| `make test` | 运行测试 |
+| `make test` | 运行默认单元测试道（排除 `integration`） |
+| `make test-unit` | 同 `make test`，显式运行单元测试道 |
+| `make test-integration` | 运行依赖外部 MySQL/Redis/Celery/Channels 的集成测试 |
 | `make format` | 格式化代码（black + isort） |
 | `make lock` | 生成运行时锁文件 |
 | `make lock-dev` | 生成开发依赖锁文件 |
@@ -360,8 +362,16 @@ python manage.py load_guest_templates
 ### 运行测试
 
 ```bash
-# 运行所有测试
-python -m pytest
+# 默认单元测试道（排除 integration）
+python -m pytest -m "not integration"
+
+# 或使用 Makefile 封装
+make test
+make test-unit
+
+# 运行依赖外部 MySQL/Redis/Celery/Channels 的集成测试
+DJANGO_TEST_USE_ENV_SERVICES=1 python -m pytest -m integration
+make test-integration
 
 # 运行特定模块测试
 python -m pytest tests/test_gameplay.py
@@ -379,14 +389,17 @@ python -m pytest --cov=.
 tests/
 ├── __init__.py
 ├── test_accounts.py    # 账户模块测试
-├── test_gameplay.py    # 玩法模块测试
-├── test_guests.py      # 门客模块测试
-└── test_battle.py      # 战斗模块测试
+├── test_core_views.py  # 拆分后的核心视图测试
+├── test_message_views.py  # 拆分后的消息视图测试
+├── test_integration_external_services.py  # 外部服务集成测试
+└── ...
 ```
 
 ### 测试数据库
 
-测试时自动使用内存 SQLite 数据库，无需额外配置。
+- 默认测试道会自动使用内存 SQLite、`locmem` cache、in-memory channel layer 和 memory Celery backend，无需额外配置。
+- `integration` 测试要求设置 `DJANGO_TEST_USE_ENV_SERVICES=1`，并连接外部 MySQL/Redis/Celery/Channels。
+- 当前仓库没有独立的 profile/performance 测试道；性能/容量回归仍需额外补充。
 
 ---
 
