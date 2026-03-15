@@ -84,3 +84,4 @@ runtime/
 # OS
 Thumbs.db
 *:Zone.Identifier
+*.lnk
