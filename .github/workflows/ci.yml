@@ -35,14 +35,14 @@ jobs:
         run: |
           python -m mypy accounts battle common config core gameplay guests guilds tasks trade websocket
 
-      - name: Tests (pytest + coverage)
+      - name: Unit Tests (pytest + coverage)
         env:
           DJANGO_DEBUG: "0"
           DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1"
           DJANGO_SECRET_KEY: "ci-only-not-a-real-secret-key-change-me-1234567890"
         run: |
           python manage.py check --deploy
-          python -m coverage run -m pytest -q
+          python -m coverage run -m pytest -q -m "not integration"
           python -m coverage report --fail-under=60
 
   integration-tests:
@@ -116,4 +116,5 @@ jobs:
           REDIS_CACHE_URL: "redis://127.0.0.1:6379/2"
         run: |
           python manage.py migrate --noinput
+          python manage.py check --deploy
           python -m pytest -m integration -q

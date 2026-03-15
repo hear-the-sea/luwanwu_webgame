@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 
 import pytest
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from django.core.management import call_command
 from django.db import transaction
 
@@ -14,6 +16,61 @@ from gameplay.models import PlayerTroop
 
 # 获取项目根目录
 PROJECT_ROOT = Path(__file__).parent.parent
+
+
+def _require_non_sqlite_database(settings) -> None:
+    db_engine = str(settings.DATABASES["default"].get("ENGINE", ""))
+    if "sqlite" in db_engine:
+        pytest.skip("integration tests require non-sqlite database backend")
+
+
+def _require_external_cache_backend(settings, cache) -> None:
+    cache_backend = str(settings.CACHES["default"].get("BACKEND", "")).lower()
+    if "locmem" in cache_backend:
+        pytest.skip("integration tests require external cache backend")
+
+    probe_key = "integration:services:probe"
+    try:
+        cache.set(probe_key, "1", timeout=5)
+        if cache.get(probe_key) != "1":
+            pytest.skip("integration tests require a writable external cache backend")
+        cache.delete(probe_key)
+    except Exception as exc:
+        pytest.skip(f"integration tests require reachable external cache backend: {exc}")
+
+
+def _require_external_channel_layer(settings, channel_layer) -> None:
+    default_layer = settings.CHANNEL_LAYERS.get("default", {})
+    backend = str(default_layer.get("BACKEND", "")).lower()
+    if "inmemory" in backend:
+        pytest.skip("integration tests require external channel layer backend")
+    if channel_layer is None:
+        pytest.skip("integration tests require configured channel layer")
+
+    try:
+        channel_name = async_to_sync(channel_layer.new_channel)("integration.probe.")
+        payload = {"type": "integration.probe", "value": "ok"}
+        async_to_sync(channel_layer.send)(channel_name, payload)
+        received = async_to_sync(channel_layer.receive)(channel_name)
+        if received != payload:
+            pytest.skip("integration tests require reliable external channel layer backend")
+    except Exception as exc:
+        pytest.skip(f"integration tests require reachable external channel layer backend: {exc}")
+
+
+def _require_external_celery_broker(celery_app) -> None:
+    broker_url = str(getattr(celery_app.conf, "broker_url", "") or "")
+    result_backend = str(getattr(celery_app.conf, "result_backend", "") or "")
+    if not broker_url or broker_url.startswith("memory://"):
+        pytest.skip("integration tests require external Celery broker")
+    if result_backend.startswith("cache+memory://"):
+        pytest.skip("integration tests require external Celery result backend")
+
+    try:
+        with celery_app.connection() as connection:
+            connection.ensure_connection(max_retries=1)
+    except Exception as exc:
+        pytest.skip(f"integration tests require reachable Celery broker: {exc}")
 
 
 @pytest.fixture(scope="session")
@@ -91,26 +148,16 @@ def manor_with_troops(django_user_model, django_db_blocker):
 
 @pytest.fixture(scope="session")
 def require_env_services():
-    """Skip integration tests unless external DB/cache services are enabled."""
+    """Skip integration tests unless external DB/cache/channel/celery services are enabled."""
     if os.environ.get("DJANGO_TEST_USE_ENV_SERVICES", "0") != "1":
         pytest.skip("integration tests require DJANGO_TEST_USE_ENV_SERVICES=1")
 
     from django.conf import settings
     from django.core.cache import cache
 
-    db_engine = str(settings.DATABASES["default"].get("ENGINE", ""))
-    if "sqlite" in db_engine:
-        pytest.skip("integration tests require non-sqlite database backend")
+    from config.celery import app as celery_app
 
-    cache_backend = str(settings.CACHES["default"].get("BACKEND", "")).lower()
-    if "locmem" in cache_backend:
-        pytest.skip("integration tests require external cache backend")
-
-    probe_key = "integration:services:probe"
-    try:
-        cache.set(probe_key, "1", timeout=5)
-        if cache.get(probe_key) != "1":
-            pytest.skip("integration tests require a writable external cache backend")
-        cache.delete(probe_key)
-    except Exception as exc:
-        pytest.skip(f"integration tests require reachable external cache backend: {exc}")
+    _require_non_sqlite_database(settings)
+    _require_external_cache_backend(settings, cache)
+    _require_external_channel_layer(settings, get_channel_layer())
+    _require_external_celery_broker(celery_app)
