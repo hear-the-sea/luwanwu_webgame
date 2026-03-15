@@ -101,7 +101,7 @@ class TestProductionViews:
         _manor, client = manor_with_user
 
         monkeypatch.setattr(
-            "gameplay.services.start_horse_production",
+            "gameplay.views.production.start_horse_production",
             lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
@@ -115,7 +115,7 @@ class TestProductionViews:
         _manor, client = manor_with_user
 
         monkeypatch.setattr(
-            "gameplay.services.start_horse_production",
+            "gameplay.views.production.start_horse_production",
             lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
         )
 
@@ -129,7 +129,7 @@ class TestProductionViews:
         def _unexpected_start(*_args, **_kwargs):
             called["count"] += 1
 
-        monkeypatch.setattr("gameplay.services.start_horse_production", _unexpected_start)
+        monkeypatch.setattr("gameplay.views.production.start_horse_production", _unexpected_start)
 
         response = client.post(reverse("gameplay:start_horse_production"), {"horse_key": "any", "quantity": "-1"})
         assert response.status_code == 302
@@ -145,7 +145,7 @@ class TestProductionViews:
         def _unexpected_start(*_args, **_kwargs):
             called["count"] += 1
 
-        monkeypatch.setattr("gameplay.services.start_horse_production", _unexpected_start)
+        monkeypatch.setattr("gameplay.views.production.start_horse_production", _unexpected_start)
 
         response = client.post(reverse("gameplay:start_horse_production"), {"quantity": "1"})
         assert response.status_code == 302

@@ -24,6 +24,14 @@ from core.exceptions import GameError
 from core.utils import safe_positive_int, sanitize_error_message
 from core.utils.rate_limit import rate_limit_redirect
 from gameplay.constants import UIConstants
+from gameplay.services.buildings.stable import (
+    get_active_productions,
+    get_horse_options,
+    get_max_production_quantity,
+    get_stable_speed_bonus,
+    has_active_production,
+    start_horse_production,
+)
 from gameplay.services.manor.core import get_manor
 from gameplay.services.resources import sync_resource_production
 from gameplay.services.technology import get_player_technology_level
@@ -164,9 +172,6 @@ class StableView(LoginRequiredMixin, TemplateView):
         manor = get_manor(self.request.user)
         sync_resource_production(manor, persist=False)
 
-        from gameplay.services import get_active_productions, get_horse_options, get_stable_speed_bonus
-        from gameplay.services.buildings.stable import get_max_production_quantity, has_active_production
-
         horsemanship_level = get_player_technology_level(manor, "horsemanship")
         max_quantity = get_max_production_quantity(manor)
         is_producing = has_active_production(manor)
@@ -189,8 +194,6 @@ class StableView(LoginRequiredMixin, TemplateView):
 @rate_limit_redirect("horse_production", limit=10, window_seconds=60)
 def start_horse_production_view(request: HttpRequest) -> HttpResponse:
     """开始马匹生产"""
-    from gameplay.services import start_horse_production
-
     horse_key = (request.POST.get("horse_key") or "").strip()
     return _run_basic_production_start(
         request,

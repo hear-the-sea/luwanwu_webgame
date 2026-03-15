@@ -19,12 +19,12 @@ from django.views.generic import TemplateView
 from core.decorators import flash_unexpected_view_error
 from core.exceptions import GameError
 from core.utils import safe_redirect_url, sanitize_error_message
-from gameplay.services import (
+from gameplay.services.manor.core import get_manor
+from gameplay.services.resources import sync_resource_production
+from gameplay.services.technology import (
     get_categories,
-    get_manor,
     get_martial_technologies_grouped,
     get_technology_display_data,
-    sync_resource_production,
     upgrade_technology,
 )
 

@@ -23,16 +23,16 @@ from core.utils.cache_lock import acquire_best_effort_lock, release_best_effort_
 from core.utils.rate_limit import rate_limit_json
 from core.utils.validation import sanitize_error_message
 from gameplay.constants import PVPConstants, get_raid_capture_guest_rate
-from gameplay.services import (
+from gameplay.services.jail import (
     add_oath_bond,
     draw_pie,
-    get_manor,
     list_held_prisoners,
     list_oath_bonds,
     recruit_prisoner,
     release_prisoner,
     remove_oath_bond,
 )
+from gameplay.services.manor.core import get_manor
 from guests.query_utils import guest_template_rarity_rank_case
 
 logger = logging.getLogger(__name__)

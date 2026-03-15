@@ -22,18 +22,17 @@ from core.exceptions import GameError
 from core.utils import safe_int
 from gameplay.constants import UIConstants
 from gameplay.models import MissionRun, MissionTemplate, ResourceType
-from gameplay.services import (
+from gameplay.services.inventory.core import get_item_quantity
+from gameplay.services.manor.core import get_manor
+from gameplay.services.missions_impl.attempts import (
     add_mission_extra_attempt,
     bulk_get_mission_extra_attempts,
     bulk_mission_attempts_today,
-    get_item_quantity,
-    get_manor,
-    launch_mission,
-    normalize_mission_loadout,
-    request_retreat,
-    sync_resource_production,
 )
+from gameplay.services.missions_impl.execution import launch_mission, request_retreat
+from gameplay.services.missions_impl.loadout import normalize_mission_loadout
 from gameplay.services.recruitment.recruitment import get_player_troops
+from gameplay.services.resources import sync_resource_production
 from guests.models import Guest, GuestStatus, GuestTemplate, SkillBook
 
 from .mission_helpers import (
