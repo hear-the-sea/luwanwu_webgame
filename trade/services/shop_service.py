@@ -346,6 +346,7 @@ def sell_item(manor: Manor, item_key: str, quantity: int) -> Dict:
         {"silver": total_income},
         f"出售 {template.name} x{quantity}",
         ResourceEvent.Reason.SHOP_SELL,
+        sync_production=False,
     )
 
     # 清理库存为 0 的物品

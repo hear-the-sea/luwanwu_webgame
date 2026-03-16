@@ -189,6 +189,81 @@ def test_start_troop_recruitment_rollback_on_insufficient_equipment(monkeypatch,
 
 
 @pytest.mark.django_db
+def test_start_troop_recruitment_rechecks_active_queue_after_lock(monkeypatch, recruit_manor):
+    manor = recruit_manor
+    stale_manor = type(manor).objects.get(pk=manor.pk)
+
+    troop_data = {
+        "name": "长枪兵",
+        "recruit": {
+            "equipment": [],
+            "retainer_cost": 2,
+            "base_duration": 60,
+        },
+    }
+
+    monkeypatch.setattr(
+        "gameplay.services.recruitment.recruitment._validate_start_recruitment_inputs",
+        lambda current_manor, troop_key, quantity: troop_data,
+    )
+    monkeypatch.setattr(
+        "gameplay.services.recruitment.recruitment._schedule_recruitment_completion",
+        lambda recruitment, eta_seconds: None,
+    )
+
+    TroopRecruitment.objects.create(
+        manor=manor,
+        troop_key="existing_spearman",
+        troop_name="现有长枪兵",
+        quantity=1,
+        equipment_costs={},
+        retainer_cost=1,
+        base_duration=60,
+        actual_duration=60,
+        complete_at=timezone.now() + timedelta(minutes=1),
+    )
+
+    with pytest.raises(ValueError, match="已有募兵正在进行中"):
+        start_troop_recruitment(stale_manor, "spearman", quantity=1)
+
+    manor.refresh_from_db()
+    assert manor.retainer_count == 20
+    assert TroopRecruitment.objects.filter(manor=manor, status=TroopRecruitment.Status.RECRUITING).count() == 1
+
+
+@pytest.mark.django_db
+def test_start_troop_recruitment_uses_locked_retainer_count_instead_of_stale_object(monkeypatch, recruit_manor):
+    manor = recruit_manor
+    stale_manor = type(manor).objects.get(pk=manor.pk)
+    type(manor).objects.filter(pk=manor.pk).update(retainer_count=1)
+
+    troop_data = {
+        "name": "刀盾兵",
+        "recruit": {
+            "equipment": [],
+            "retainer_cost": 2,
+            "base_duration": 60,
+        },
+    }
+
+    monkeypatch.setattr(
+        "gameplay.services.recruitment.recruitment._validate_start_recruitment_inputs",
+        lambda current_manor, troop_key, quantity: troop_data,
+    )
+    monkeypatch.setattr(
+        "gameplay.services.recruitment.recruitment._schedule_recruitment_completion",
+        lambda recruitment, eta_seconds: None,
+    )
+
+    with pytest.raises(ValueError, match="家丁不足，需要2"):
+        start_troop_recruitment(stale_manor, "shield_bearer", quantity=1)
+
+    manor.refresh_from_db()
+    assert manor.retainer_count == 1
+    assert TroopRecruitment.objects.filter(manor=manor).count() == 0
+
+
+@pytest.mark.django_db
 def test_finalize_troop_recruitment_auto_creates_missing_troop_template(recruit_manor):
     manor = recruit_manor
     TroopTemplate.objects.filter(key="scout").delete()

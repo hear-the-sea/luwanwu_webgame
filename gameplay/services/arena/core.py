@@ -675,6 +675,7 @@ def exchange_arena_reward(manor: Manor, reward_key: str, quantity: int = 1) -> A
         locked_manor,
         reward_resources,
         note=f"竞技场兑换：{reward.name}",
+        sync_production=False,
     )
 
     fixed_item_grants = _exchange_helpers.scale_reward_items(reward.items, normalized_quantity)

@@ -10,8 +10,9 @@ from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import DatabaseError
 from django.utils import timezone
-from django_redis import get_redis_connection
 
+from gameplay.services.online_presence import ONLINE_USERS_TTL_SECONDS, ONLINE_USERS_ZSET_KEY
+from gameplay.services.online_presence import get_redis_connection_if_supported as _get_redis_connection_if_supported
 from gameplay.services.utils.messages import unread_message_count
 
 logger = logging.getLogger(__name__)
@@ -20,15 +21,18 @@ User = get_user_model()
 
 TOTAL_USERS_CACHE_KEY = "stats:total_users_count"
 ONLINE_USERS_CACHE_KEY = "stats:online_users_count"
-ONLINE_USERS_ZSET_KEY = "online_users_zset"
 TOTAL_USERS_CACHE_TIMEOUT = 300
 ONLINE_USERS_CACHE_TIMEOUT = 5
 ONLINE_USERS_FALLBACK_CACHE_TIMEOUT = 60
-ONLINE_USERS_TTL_SECONDS = 1800
-ONLINE_USER_TOUCH_CACHE_KEY_PREFIX = "stats:online_users:touch:"
-ONLINE_USER_TOUCH_CACHE_TIMEOUT = 60
 SIDEBAR_RANK_CACHE_TIMEOUT = 30
 DEFAULT_PROTECTION_STATUS = {"is_protected": False, "type_display": "", "remaining_display": ""}
+
+
+def get_redis_connection(*_args, **_kwargs):
+    """
+    Backwards-compatible hook for tests and existing monkeypatch call sites.
+    """
+    return _get_redis_connection_if_supported()
 
 
 def _safe_cache_get(key: str, default=None):
@@ -44,14 +48,6 @@ def _safe_cache_set(key: str, value, timeout: int) -> None:
         cache.set(key, value, timeout=timeout)
     except Exception:
         logger.warning("Failed to write cache key: %s", key, exc_info=True)
-
-
-def _safe_cache_add(key: str, value, timeout: int):
-    try:
-        return cache.add(key, value, timeout=timeout)
-    except Exception:
-        logger.warning("Failed to add cache key: %s", key, exc_info=True)
-        return None
 
 
 def _safe_cache_delete(key: str) -> None:
@@ -78,6 +74,15 @@ def _build_default_context() -> dict[str, Any]:
     }
 
 
+def _should_load_global_stats(request) -> bool:
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return False
+    accept = request.headers.get("accept", "")
+    if accept and "text/html" not in accept and "application/xhtml+xml" not in accept:
+        return False
+    return True
+
+
 def _load_total_user_count() -> int:
     total_count = _safe_cache_get(TOTAL_USERS_CACHE_KEY)
     if total_count is None:
@@ -87,7 +92,9 @@ def _load_total_user_count() -> int:
 
 
 def _load_online_user_count_from_redis() -> int:
-    redis = get_redis_connection("default")
+    redis = get_redis_connection()
+    if redis is None:
+        raise NotImplementedError("Redis operations are unavailable for the configured cache backend")
     cutoff = float(time.time()) - float(ONLINE_USERS_TTL_SECONDS)
     redis.zremrangebyscore(ONLINE_USERS_ZSET_KEY, "-inf", cutoff)
     return _safe_int(redis.zcard(ONLINE_USERS_ZSET_KEY))
@@ -105,6 +112,10 @@ def _load_online_user_count() -> int:
 
     try:
         online_count = _load_online_user_count_from_redis()
+    except NotImplementedError:
+        online_count = _load_online_user_count_from_db()
+        _safe_cache_set(ONLINE_USERS_CACHE_KEY, online_count, timeout=ONLINE_USERS_FALLBACK_CACHE_TIMEOUT)
+        return online_count
     except Exception:
         logger.warning("Failed to load online user count from Redis", exc_info=True)
         fallback_cached = _safe_cache_get(ONLINE_USERS_CACHE_KEY)
@@ -116,33 +127,6 @@ def _load_online_user_count() -> int:
 
     _safe_cache_set(ONLINE_USERS_CACHE_KEY, online_count, timeout=ONLINE_USERS_CACHE_TIMEOUT)
     return online_count
-
-
-def refresh_online_presence_from_request(user) -> None:
-    if not getattr(user, "is_authenticated", False):
-        return
-    if getattr(user, "is_staff", False) or getattr(user, "is_superuser", False):
-        return
-
-    user_id = getattr(user, "id", None)
-    if not user_id:
-        return
-
-    touch_cache_key = f"{ONLINE_USER_TOUCH_CACHE_KEY_PREFIX}{int(user_id)}"
-    should_refresh = _safe_cache_add(touch_cache_key, 1, timeout=ONLINE_USER_TOUCH_CACHE_TIMEOUT)
-    if should_refresh is False:
-        return
-
-    try:
-        redis = get_redis_connection("default")
-        now_ts = float(time.time())
-        redis.zadd(ONLINE_USERS_ZSET_KEY, {int(user_id): now_ts})
-        redis.expire(ONLINE_USERS_ZSET_KEY, ONLINE_USERS_TTL_SECONDS * 2)
-        _safe_cache_delete(ONLINE_USERS_CACHE_KEY)
-    except Exception:
-        if should_refresh:
-            _safe_cache_delete(touch_cache_key)
-        logger.warning("Failed to refresh online user presence from HTTP request", exc_info=True)
 
 
 def _load_sidebar_rank(manor) -> int:
@@ -211,9 +195,9 @@ def notifications(request):
     - Player rank cached for 30 seconds per user
     """
     context = _build_default_context()
-    context["total_user_count"] = _load_total_user_count()
-
-    context["online_user_count"] = _load_online_user_count()
+    if _should_load_global_stats(request):
+        context["total_user_count"] = _load_total_user_count()
+        context["online_user_count"] = _load_online_user_count()
 
     if not request.user.is_authenticated:
         return context

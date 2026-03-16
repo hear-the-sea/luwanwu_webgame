@@ -166,8 +166,8 @@ class RosterView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         from gameplay.models import InventoryItem, ItemTemplate
-        from gameplay.services import sync_resource_production
         from gameplay.services.manor.core import get_manor
+        from gameplay.services.resources import sync_resource_production
         from guests.services.salary import bulk_check_salary_paid, get_guest_salary, get_unpaid_guests
 
         context = super().get_context_data(**kwargs)
@@ -301,6 +301,9 @@ def dismiss_guest_view(request, pk: int):
                     unequip_guest_item(gear, locked_guest, allow_injured=True)
             locked_guest.delete()
     except (GameError, ValueError) as exc:
+        messages.error(request, f"辞退失败：{sanitize_error_message(exc)}")
+        return redirect("guests:detail", pk=pk)
+    except Exception as exc:
         messages.error(request, f"辞退失败：{sanitize_error_message(exc)}")
         return redirect("guests:detail", pk=pk)
 

@@ -1,7 +1,8 @@
 """
-技术系统服务模块
+技术系统服务模块。
 
-提供技术配置加载、玩家技术管理和加成计算功能。
+保留历史导入入口，同时把纯规则计算与升级运行态拆到子模块，
+降低单文件复杂度并保持现有 monkeypatch/导入兼容性。
 """
 
 from __future__ import annotations
@@ -15,7 +16,6 @@ from typing import Any, Dict, List, Optional
 from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models import F
 
 from common.utils.celery import safe_apply_async
 from core.exceptions import (
@@ -30,6 +30,8 @@ from core.utils.yaml_loader import ensure_mapping, load_yaml_data
 
 from ..constants import MAX_CONCURRENT_TECH_UPGRADES
 from . import technology_helpers as _technology_helpers
+from . import technology_rules as _technology_rules
+from . import technology_runtime as _technology_runtime
 from .utils.cache import invalidate_home_stats_cache
 from .utils.notifications import notify_user
 
@@ -39,6 +41,8 @@ _build_technology_upgrade_response = _technology_helpers.build_technology_upgrad
 _group_martial_technology_entries = _technology_helpers.group_martial_technology_entries
 _resolve_technology_name = _technology_helpers.resolve_technology_name
 _send_technology_completion_notification = _technology_helpers.send_technology_completion_notification
+_coerce_int = _technology_rules.coerce_int
+_coerce_float = _technology_rules.coerce_float
 TECHNOLOGY_TEMPLATES_PATH = settings.BASE_DIR / "data" / "technology_templates.yaml"
 
 _LOCAL_TECH_REFRESH_FALLBACK: dict[int, float] = {}
@@ -47,50 +51,18 @@ _LOCAL_TECH_REFRESH_FALLBACK_MAX_SIZE = 5000
 
 
 def _should_skip_tech_refresh_by_local_fallback(manor_id: int, min_interval: int) -> bool:
-    if manor_id <= 0 or min_interval <= 0:
-        return False
-
-    now_monotonic = time.monotonic()
-    stale_before = now_monotonic - max(min_interval * 2, 60)
-
-    with _LOCAL_TECH_REFRESH_FALLBACK_LOCK:
-        last_refresh = _LOCAL_TECH_REFRESH_FALLBACK.get(manor_id)
-        if last_refresh is not None and now_monotonic - last_refresh < min_interval:
-            return True
-
-        _LOCAL_TECH_REFRESH_FALLBACK[manor_id] = now_monotonic
-        if len(_LOCAL_TECH_REFRESH_FALLBACK) > _LOCAL_TECH_REFRESH_FALLBACK_MAX_SIZE:
-            stale_keys = [key for key, ts in _LOCAL_TECH_REFRESH_FALLBACK.items() if ts < stale_before]
-            for key in stale_keys[:1000]:
-                _LOCAL_TECH_REFRESH_FALLBACK.pop(key, None)
-            if len(_LOCAL_TECH_REFRESH_FALLBACK) > _LOCAL_TECH_REFRESH_FALLBACK_MAX_SIZE:
-                for key, _ in sorted(_LOCAL_TECH_REFRESH_FALLBACK.items(), key=lambda item: item[1])[:500]:
-                    _LOCAL_TECH_REFRESH_FALLBACK.pop(key, None)
-    return False
-
-
-def _coerce_int(value: Any, default: int = 0) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _coerce_float(value: Any, default: float = 0.0) -> float:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
+    return _technology_runtime.should_skip_tech_refresh_by_local_fallback(
+        _LOCAL_TECH_REFRESH_FALLBACK,
+        state_lock=_LOCAL_TECH_REFRESH_FALLBACK_LOCK,
+        max_size=_LOCAL_TECH_REFRESH_FALLBACK_MAX_SIZE,
+        manor_id=manor_id,
+        min_interval=min_interval,
+        monotonic_func=time.monotonic,
+    )
 
 
 @lru_cache(maxsize=1)
 def load_technology_templates() -> Dict[str, Any]:
-    """
-    加载技术配置文件。
-
-    Returns:
-        包含 categories, technologies, troop_classes 的字典
-    """
     raw = load_yaml_data(
         TECHNOLOGY_TEMPLATES_PATH,
         logger=logger,
@@ -102,12 +74,6 @@ def load_technology_templates() -> Dict[str, Any]:
 
 @lru_cache(maxsize=1)
 def _build_technology_index() -> Dict[str, Dict[str, Any]]:
-    """
-    构建技术索引字典，将 O(n) 查找优化为 O(1)。
-
-    Returns:
-        {tech_key: tech_config} 索引字典
-    """
     data = load_technology_templates()
     result: Dict[str, Dict[str, Any]] = {}
     for tech in data.get("technologies", []) or []:
@@ -122,12 +88,6 @@ def _build_technology_index() -> Dict[str, Dict[str, Any]]:
 
 @lru_cache(maxsize=1)
 def _build_troop_to_class_index() -> Dict[str, str]:
-    """
-    构建兵种到分类的索引字典，将 O(n*m) 查找优化为 O(1)。
-
-    Returns:
-        {troop_key: class_key} 索引字典
-    """
     data = load_technology_templates()
     index = {}
     for class_key, class_info in (data.get("troop_classes", {}) or {}).items():
@@ -141,12 +101,6 @@ def _build_troop_to_class_index() -> Dict[str, str]:
 
 
 def clear_technology_cache() -> None:
-    """
-    清理技术配置缓存。
-
-    在运行时修改配置文件后调用此函数使缓存失效。
-    也可用于测试环境重置。
-    """
     load_technology_templates.cache_clear()
     _build_technology_index.cache_clear()
     _build_troop_to_class_index.cache_clear()
@@ -155,30 +109,10 @@ def clear_technology_cache() -> None:
 
 
 def get_technology_template(tech_key: str) -> Optional[Dict[str, Any]]:
-    """
-    获取单个技术的配置模板。
-
-    时间复杂度: O(1)（使用索引缓存）
-
-    Args:
-        tech_key: 技术标识
-
-    Returns:
-        技术配置字典，不存在则返回 None
-    """
     return _build_technology_index().get(tech_key)
 
 
 def get_technologies_by_category(category: str) -> List[Dict[str, Any]]:
-    """
-    获取指定分类的所有技术。
-
-    Args:
-        category: 分类标识 (basic, martial, production)
-
-    Returns:
-        技术配置列表
-    """
     data = load_technology_templates()
     return [
         tech
@@ -188,7 +122,6 @@ def get_technologies_by_category(category: str) -> List[Dict[str, Any]]:
 
 
 def get_categories() -> List[Dict[str, Any]]:
-    """获取所有技术分类。"""
     data = load_technology_templates()
     categories = data.get("categories", [])
     if isinstance(categories, list):
@@ -197,7 +130,6 @@ def get_categories() -> List[Dict[str, Any]]:
 
 
 def get_troop_classes() -> Dict[str, Any]:
-    """获取兵种分类映射。"""
     data = load_technology_templates()
     troop_classes = data.get("troop_classes", {})
     if isinstance(troop_classes, dict):
@@ -206,55 +138,19 @@ def get_troop_classes() -> Dict[str, Any]:
 
 
 def calculate_upgrade_cost(tech_key: str, current_level: int) -> int:
-    """
-    计算技术升级到下一级所需的银两。
-
-    公式: base_cost * (growth^current_level)
-    默认增长系数为 1.5，也可以在 technology_templates.yaml 中按科技单独配置 cost_growth。
-
-    Args:
-        tech_key: 技术标识
-        current_level: 当前等级
-
-    Returns:
-        升级所需银两，如果技术不存在返回 0
-    """
-    template = get_technology_template(tech_key)
-    if not template:
-        return 0
-    base_cost = _coerce_int(template.get("base_cost", 8000), 8000)
-    growth = _coerce_float(template.get("cost_growth", 1.5), 1.5)
-    if growth <= 0:
-        growth = 1.5
-    return int(base_cost * (growth**current_level))
+    return _technology_rules.calculate_upgrade_cost(
+        get_technology_template(tech_key),
+        current_level,
+        coerce_int_func=_coerce_int,
+        coerce_float_func=_coerce_float,
+    )
 
 
 def get_troop_class_for_key(troop_key: str) -> Optional[str]:
-    """
-    根据兵种 key 获取其所属分类。
-
-    时间复杂度: O(1)（使用索引缓存）
-
-    Args:
-        troop_key: 兵种标识 (如 dao_ke, jian_shi)
-
-    Returns:
-        分类标识 (如 dao, jian)，不存在则返回 None
-    """
     return _build_troop_to_class_index().get(troop_key)
 
 
 def get_player_technology_level(manor, tech_key: str) -> int:
-    """
-    获取玩家某项技术的等级。
-
-    Args:
-        manor: 庄园实例
-        tech_key: 技术标识
-
-    Returns:
-        技术等级，未研究返回 0
-    """
     from ..models import PlayerTechnology
 
     try:
@@ -265,30 +161,10 @@ def get_player_technology_level(manor, tech_key: str) -> int:
 
 
 def get_player_technologies(manor) -> Dict[str, int]:
-    """
-    获取玩家所有技术等级。
-
-    Args:
-        manor: 庄园实例
-
-    Returns:
-        {tech_key: level} 字典
-    """
     return {tech.tech_key: tech.level for tech in manor.technologies.all()}
 
 
 def get_technology_display_data(manor, category: str) -> List[Dict[str, Any]]:
-    """
-    获取用于页面显示的技术数据。
-
-    Args:
-        manor: 庄园实例
-        category: 分类标识
-
-    Returns:
-        包含技术信息和玩家等级的列表
-    """
-
     technologies = get_technologies_by_category(category)
     player_techs = {pt.tech_key: pt for pt in manor.technologies.all()}
     return [
@@ -303,15 +179,6 @@ def get_technology_display_data(manor, category: str) -> List[Dict[str, Any]]:
 
 
 def get_martial_technologies_grouped(manor) -> List[Dict[str, Any]]:
-    """
-    获取按兵种分组的武艺技术数据。
-
-    Args:
-        manor: 庄园实例
-
-    Returns:
-        [{"class_key": "dao", "class_name": "刀类", "technologies": [...]}]
-    """
     return _group_martial_technology_entries(
         get_technology_display_data(manor, "martial"),
         get_troop_classes(),
@@ -319,13 +186,6 @@ def get_martial_technologies_grouped(manor) -> List[Dict[str, Any]]:
 
 
 def schedule_technology_completion(tech, eta_seconds: int) -> None:
-    """
-    调度后台任务，在技术升级计时器结束时完成升级。
-
-    Args:
-        tech: PlayerTechnology 实例
-        eta_seconds: 预计完成时间（秒）
-    """
     _technology_helpers.schedule_technology_completion_task(
         tech,
         eta_seconds,
@@ -336,290 +196,85 @@ def schedule_technology_completion(tech, eta_seconds: int) -> None:
 
 
 def upgrade_technology(manor, tech_key: str) -> Dict[str, Any]:
-    """
-    开始升级玩家技术（耗时升级）。
-
-    Args:
-        manor: 庄园实例
-        tech_key: 技术标识
-
-    Returns:
-        {"success": bool, "message": str, "duration": int}
-
-    Raises:
-        ValueError: 升级失败时抛出异常
-    """
-    from datetime import timedelta
-
-    from django.utils import timezone
-
-    from ..models import PlayerTechnology
-    from .resources import spend_resources_locked
-
-    template = get_technology_template(tech_key)
-    if not template:
-        raise TechnologyNotFoundError(tech_key)
-
-    max_level = template.get("max_level", 10)
-
-    with transaction.atomic():
-        # 锁住庄园行，确保并发上限校验在并发请求下仍然可靠
-        from ..models import Manor
-
-        locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
-
-        # 获取或创建玩家技术记录
-        tech, created = PlayerTechnology.objects.get_or_create(
-            manor=locked_manor, tech_key=tech_key, defaults={"level": 0}
-        )
-
-        # 检查是否正在升级
-        if tech.is_upgrading:
-            raise TechnologyUpgradeInProgressError(tech_key, template["name"])
-
-        if tech.level >= max_level:
-            raise TechnologyMaxLevelError(tech_key, template["name"], max_level)
-
-        upgrading_count = PlayerTechnology.objects.filter(manor=locked_manor, is_upgrading=True).count()
-        if upgrading_count >= MAX_CONCURRENT_TECH_UPGRADES:
-            raise TechnologyConcurrentUpgradeLimitError(MAX_CONCURRENT_TECH_UPGRADES)
-
-        # 计算升级成本（使用服务层函数）
-        cost = calculate_upgrade_cost(tech_key, tech.level)
-
-        try:
-            spend_resources_locked(
-                locked_manor,
-                {"silver": cost},
-                reason="tech_upgrade",
-                note=f"升级{template['name']}",
-            )
-        except ValueError as exc:
-            raise InsufficientResourceError("silver", cost, locked_manor.silver) from exc
-
-        # 累计银两花费，计算声望
-        from .manor.prestige import add_prestige_silver_locked
-
-        add_prestige_silver_locked(locked_manor, cost)
-
-        # 计算升级时间并开始升级
-        duration = tech.upgrade_duration()
-        tech.is_upgrading = True
-        tech.upgrade_complete_at = timezone.now() + timedelta(seconds=duration)
-        tech.save(update_fields=["is_upgrading", "upgrade_complete_at"])
-
-        # 调度 Celery 任务
-        schedule_technology_completion(tech, duration)
-
-    return _build_technology_upgrade_response(template_name=template["name"], duration=duration)
+    return _technology_runtime.upgrade_technology(
+        manor,
+        tech_key,
+        get_technology_template_func=get_technology_template,
+        calculate_upgrade_cost_func=calculate_upgrade_cost,
+        max_concurrent_tech_upgrades=MAX_CONCURRENT_TECH_UPGRADES,
+        schedule_technology_completion_func=schedule_technology_completion,
+        build_technology_upgrade_response_func=_build_technology_upgrade_response,
+        transaction_module=transaction,
+        technology_not_found_error_cls=TechnologyNotFoundError,
+        technology_upgrade_in_progress_error_cls=TechnologyUpgradeInProgressError,
+        technology_max_level_error_cls=TechnologyMaxLevelError,
+        technology_concurrent_upgrade_limit_error_cls=TechnologyConcurrentUpgradeLimitError,
+        insufficient_resource_error_cls=InsufficientResourceError,
+    )
 
 
 def finalize_technology_upgrade(tech, send_notification: bool = False) -> bool:
-    """
-    完成技术升级。
-
-    Args:
-        tech: PlayerTechnology 实例
-        send_notification: 是否发送通知
-
-    Returns:
-        是否成功完成升级
-    """
-    from django.utils import timezone
-
-    if not getattr(tech, "pk", None):
-        return False
-    now = timezone.now()
-    updated = tech.__class__.objects.filter(
-        pk=tech.pk,
-        is_upgrading=True,
-        upgrade_complete_at__isnull=False,
-        upgrade_complete_at__lte=now,
-    ).update(
-        level=F("level") + 1,
-        is_upgrading=False,
-        upgrade_complete_at=None,
-        updated_at=now,
+    return _technology_runtime.finalize_technology_upgrade(
+        tech,
+        get_technology_template_func=get_technology_template,
+        resolve_technology_name_func=_resolve_technology_name,
+        send_technology_completion_notification_func=_send_technology_completion_notification,
+        notify_user_func=notify_user,
+        invalidate_home_stats_cache_func=invalidate_home_stats_cache,
+        logger=logger,
+        send_notification=send_notification,
     )
-    if updated != 1:
-        return False
-
-    tech = tech.__class__.objects.select_related("manor").get(pk=tech.pk)
-
-    template = get_technology_template(tech.tech_key)
-    tech_name = _resolve_technology_name(template, tech.tech_key)
-
-    if send_notification:
-        _send_technology_completion_notification(
-            tech=tech,
-            tech_name=tech_name,
-            logger=logger,
-            notify_user_func=notify_user,
-        )
-
-    invalidate_home_stats_cache(tech.manor_id)
-    return True
 
 
 def refresh_technology_upgrades(manor) -> int:
-    """
-    刷新庄园所有技术的升级状态。
-
-    Args:
-        manor: 庄园实例
-
-    Returns:
-        完成升级的技术数量
-    """
-    from django.utils import timezone
-
-    min_interval = getattr(settings, "MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS", 0)
-    if min_interval > 0 and getattr(manor, "pk", None):
-        cache_key = f"tech:refresh:{manor.pk}"
-        try:
-            if not cache.add(cache_key, "1", timeout=min_interval):
-                return 0
-        except Exception as exc:
-            logger.warning("Technology refresh cache unavailable, fallback to local throttle: %s", exc, exc_info=True)
-            if _should_skip_tech_refresh_by_local_fallback(int(manor.pk), min_interval):
-                return 0
-
-    completed = 0
-    upgrading_techs = list(manor.technologies.filter(is_upgrading=True, upgrade_complete_at__lte=timezone.now()))
-
-    for tech in upgrading_techs:
-        if finalize_technology_upgrade(tech, send_notification=True):
-            completed += 1
-
-    return completed
+    return _technology_runtime.refresh_technology_upgrades(
+        manor,
+        settings_obj=settings,
+        cache_backend=cache,
+        logger=logger,
+        should_skip_tech_refresh_by_local_fallback_func=_should_skip_tech_refresh_by_local_fallback,
+        finalize_technology_upgrade_func=finalize_technology_upgrade,
+    )
 
 
 def get_tech_bonus_from_levels(levels: Dict[str, int], effect_type: str, troop_class: Optional[str] = None) -> float:
-    """
-    纯数据版科技加成计算（供 AI/敌方使用）。
-
-    Args:
-        levels: 科技等级字典 {tech_key: level}
-        effect_type: 效果类型 (如 troop_attack, march_speed)
-        troop_class: 兵种分类 (如 dao, jian)，部分效果类型需要
-
-    Returns:
-        加成倍率 (如 0.3 表示 +30%)
-    """
     data = load_technology_templates()
-    total = 0.0
-    for tech in data.get("technologies", []) or []:
-        if not isinstance(tech, dict):
-            continue
-        if tech.get("effect_type") != effect_type:
-            continue
-        tech_key = str(tech.get("key") or "").strip()
-        if not tech_key:
-            continue
-        tech_troop_class = tech.get("troop_class")
-        if tech_troop_class and troop_class and tech_troop_class != troop_class:
-            continue
-        level = _coerce_int(levels.get(tech_key, 0), 0)
-        if level <= 0:
-            continue
-        effect_per_level = _coerce_float(tech.get("effect_per_level", 0.10), 0.10)
-        total += level * effect_per_level
-    return total
+    return _technology_rules.get_tech_bonus_from_templates(
+        data.get("technologies", []) or [],
+        levels,
+        effect_type,
+        troop_class=troop_class,
+        coerce_int_func=_coerce_int,
+        coerce_float_func=_coerce_float,
+    )
 
 
 def get_tech_bonus(manor, effect_type: str, troop_class: str = None) -> float:
-    """
-    获取技术提供的加成值。
-
-    Args:
-        manor: 庄园实例
-        effect_type: 效果类型 (如 troop_attack, march_speed)
-        troop_class: 兵种分类 (如 dao, jian)，部分效果类型需要
-
-    Returns:
-        加成倍率 (如 0.3 表示 +30%)
-    """
     return get_tech_bonus_from_levels(get_player_technologies(manor), effect_type, troop_class)
 
 
 def build_uniform_tech_levels(level: int) -> Dict[str, int]:
-    """
-    将单一等级映射到所有科技键，并按 max_level 截断。
-
-    Args:
-        level: 统一等级
-
-    Returns:
-        {tech_key: level} 字典
-    """
     data = load_technology_templates()
-    base_level = max(0, _coerce_int(level, 0))
-    resolved: Dict[str, int] = {}
-    for tech in data.get("technologies", []) or []:
-        if not isinstance(tech, dict):
-            continue
-        tech_key = str(tech.get("key") or "").strip()
-        if not tech_key:
-            continue
-        max_level = max(0, _coerce_int(tech.get("max_level", base_level), base_level))
-        resolved[tech_key] = max(0, min(base_level, max_level))
-    return resolved
+    return _technology_rules.build_uniform_tech_levels(
+        data.get("technologies", []) or [],
+        level,
+        coerce_int_func=_coerce_int,
+    )
 
 
 def resolve_enemy_tech_levels(config: Dict[str, Any]) -> Dict[str, int]:
-    """
-    简单合并规则：
-    1) level 统一铺底；2) levels 逐个键覆盖。
-
-    Args:
-        config: 敌方科技配置字典
-
-    Returns:
-        {tech_key: level} 字典
-    """
-    if not config or not isinstance(config, dict):
-        return {}
-    levels = {}
-    if config.get("level") is not None:
-        levels = build_uniform_tech_levels(_coerce_int(config.get("level", 0), 0))
-    for key, val in (config.get("levels") or {}).items():
-        normalized_key = str(key).strip()
-        if not normalized_key:
-            continue
-        levels[normalized_key] = max(0, _coerce_int(val, 0))
-    return levels
+    return _technology_rules.resolve_enemy_tech_levels(
+        config,
+        build_uniform_tech_levels_func=build_uniform_tech_levels,
+        coerce_int_func=_coerce_int,
+    )
 
 
 def get_guest_stat_bonuses(config: Dict[str, Any]) -> Dict[str, float]:
-    """
-    根据配置计算门客的属性加成。
-
-    Args:
-        config: 敌方科技配置字典，可包含：
-            - guest_bonus: 直接百分比加成，如 0.2 表示 +20%
-            - guest_bonus_flat: 固定值加成字典 {"attack": 100, "defense": 50}
-
-    Returns:
-        {"attack": 0.2, "defense": 0.2, "hp": 0.2, "agility": 0.1} 加成字典
-    """
-    if not config:
-        return {}
-
-    bonuses = {}
-
-    # 方式1：统一百分比加成
-    if "guest_bonus" in config:
-        bonus_percent = _coerce_float(config.get("guest_bonus", 0), 0.0)
-        bonuses["attack"] = bonus_percent
-        bonuses["defense"] = bonus_percent
-        bonuses["hp"] = bonus_percent
-        bonuses["agility"] = bonus_percent * 0.5  # 敏捷减半
-
-    # 方式2：固定值加成（暂时不实现，保留接口）
-    # if "guest_bonus_flat" in config:
-    #     bonuses["flat"] = config.get("guest_bonus_flat", {})
-
-    return bonuses
+    return _technology_rules.get_guest_stat_bonuses(
+        config,
+        coerce_float_func=_coerce_float,
+    )
 
 
 def get_resource_production_bonus_from_levels(
@@ -627,68 +282,18 @@ def get_resource_production_bonus_from_levels(
     resource_type: str,
     building_key: Optional[str] = None,
 ) -> float:
-    """
-    纯数据版资源产出加成计算。
-
-    支持在 technology_templates.yaml 的 resource_production 科技中通过以下字段限定生效范围：
-    - building_key: str（单个建筑 key）
-    - building_keys: [str, ...]（多个建筑 key）
-
-    Args:
-        levels: 科技等级字典 {tech_key: level}
-        resource_type: 资源类型 (grain, silver)
-        building_key: 可选，产出来源建筑 key（如 farm）
-
-    Returns:
-        加成倍率
-    """
     data = load_technology_templates()
-
-    total_bonus = 0.0
-    for tech in data.get("technologies", []) or []:
-        if not isinstance(tech, dict):
-            continue
-        if tech.get("effect_type") != "resource_production":
-            continue
-        if tech.get("resource_type") != resource_type:
-            continue
-
-        # 检查建筑限制
-        required_building_key = tech.get("building_key")
-        required_building_keys = tech.get("building_keys")
-        if required_building_key or required_building_keys:
-            if not building_key:
-                continue
-            if required_building_key and building_key != required_building_key:
-                continue
-            if required_building_keys and building_key not in required_building_keys:
-                continue
-
-        tech_key = str(tech.get("key") or "").strip()
-        if not tech_key:
-            continue
-        level = _coerce_int(levels.get(tech_key, 0), 0)
-        if level <= 0:
-            continue
-        effect_per_level = _coerce_float(tech.get("effect_per_level", 0.05), 0.05)
-        total_bonus += level * effect_per_level
-
-    return total_bonus
+    return _technology_rules.get_resource_production_bonus_from_templates(
+        data.get("technologies", []) or [],
+        levels,
+        resource_type,
+        building_key=building_key,
+        coerce_int_func=_coerce_int,
+        coerce_float_func=_coerce_float,
+    )
 
 
 def get_resource_production_bonus(manor, resource_type: str, building_key: Optional[str] = None) -> float:
-    """
-    获取资源产出加成。
-
-    Args:
-        manor: 庄园实例
-        resource_type: 资源类型 (grain, silver)
-        building_key: 可选，产出来源建筑 key（如 farm）。
-            当科技模板配置了 building_key/building_keys 时，将据此限定生效范围。
-
-    Returns:
-        加成倍率
-    """
     return get_resource_production_bonus_from_levels(
         get_player_technologies(manor),
         resource_type,
@@ -697,23 +302,11 @@ def get_resource_production_bonus(manor, resource_type: str, building_key: Optio
 
 
 def get_troop_stat_bonuses(manor, troop_key: str, tech_levels: Optional[Dict[str, int]] = None) -> Dict[str, float]:
-    """
-    获取兵种的所有属性加成。
-
-    Args:
-        manor: 庄园实例
-        troop_key: 兵种标识
-        tech_levels: 可选的科技等级字典（供敌方使用）
-
-    Returns:
-        {"attack": 0.2, "defense": 0.1, ...} 加成字典
-    """
     troop_class = get_troop_class_for_key(troop_key)
     if not troop_class:
         return {}
 
     levels = tech_levels if tech_levels is not None else get_player_technologies(manor)
-
     bonuses = {}
     stat_types = [
         ("troop_attack", "attack"),
@@ -731,10 +324,8 @@ def get_troop_stat_bonuses(manor, troop_key: str, tech_levels: Optional[Dict[str
 
 
 def get_march_speed_bonus(manor) -> float:
-    """获取行军速度加成倍率。"""
     return get_tech_bonus(manor, "march_speed")
 
 
 def get_building_cost_reduction(manor) -> float:
-    """获取建筑成本减免倍率。"""
     return get_tech_bonus(manor, "building_cost_reduction")

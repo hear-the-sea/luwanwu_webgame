@@ -91,6 +91,7 @@ def guild_tech_daily_production(self):
                 args=[guild_id],
                 logger=logger,
                 log_message=f"Failed to dispatch daily production for guild {guild_id}",
+                raise_on_failure=True,
             )
             if dispatched:
                 dispatched_count += 1

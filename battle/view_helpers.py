@@ -14,6 +14,50 @@ if TYPE_CHECKING:
 _RESOURCE_LABELS = {key: label for key, label in ResourceType.choices}
 
 
+def _load_mission_run_for_report(report: "BattleReport"):
+    MissionRun = apps.get_model("gameplay", "MissionRun")
+    return MissionRun.objects.filter(battle_report=report).select_related("mission").first()
+
+
+def _load_raid_run_for_report(report: "BattleReport"):
+    RaidRun = apps.get_model("gameplay", "RaidRun")
+    return RaidRun.objects.filter(battle_report=report).first()
+
+
+def _load_arena_match_for_report(report: "BattleReport"):
+    ArenaMatch = apps.get_model("gameplay", "ArenaMatch")
+    return ArenaMatch.objects.select_related("attacker_entry", "defender_entry").filter(battle_report=report).first()
+
+
+def resolve_report_runtime_context(report: "BattleReport", *, manor_id: int) -> dict[str, Any]:
+    mission_run = _load_mission_run_for_report(report)
+    if mission_run and mission_run.mission.is_defense:
+        return {"player_side": "defender", "raid_run": None}
+
+    raid_run = _load_raid_run_for_report(report)
+    if raid_run:
+        side = "defender" if raid_run.defender_id == manor_id else "attacker"
+        return {"player_side": side, "raid_run": raid_run}
+
+    arena_match = _load_arena_match_for_report(report)
+    if arena_match:
+        if arena_match.defender_entry_id and getattr(arena_match.defender_entry, "manor_id", None) == manor_id:
+            return {"player_side": "defender", "raid_run": None}
+        if getattr(arena_match.attacker_entry, "manor_id", None) == manor_id:
+            return {"player_side": "attacker", "raid_run": None}
+        return {"player_side": "spectator", "raid_run": None}
+
+    inferred_side = infer_side_from_guest_ownership(report, manor_id)
+    if inferred_side:
+        return {"player_side": inferred_side, "raid_run": None}
+
+    if report.manor_id == manor_id:
+        return {"player_side": "attacker", "raid_run": None}
+    if report.messages.filter(manor_id=manor_id).exists():
+        return {"player_side": "defender", "raid_run": None}
+    return {"player_side": "attacker", "raid_run": None}
+
+
 def collect_template_keys(attacker_team: list[dict[str, Any]], defender_team: list[dict[str, Any]]) -> set[str]:
     template_keys: set[str] = set()
     for member in attacker_team + defender_team:
@@ -234,8 +278,7 @@ def infer_side_from_guest_ownership(report: "BattleReport", manor_id: int) -> st
 
 
 def resolve_report_raid_run(report: "BattleReport"):
-    RaidRun = apps.get_model("gameplay", "RaidRun")
-    return RaidRun.objects.filter(battle_report=report).first()
+    return _load_raid_run_for_report(report)
 
 
 def resolve_display_drops(
@@ -295,37 +338,4 @@ def resolve_capture_loss_label(*, player_side: str, raid_run) -> str:
 
 
 def determine_player_side(report: "BattleReport", *, manor_id: int) -> str:
-    MissionRun = apps.get_model("gameplay", "MissionRun")
-    RaidRun = apps.get_model("gameplay", "RaidRun")
-    ArenaMatch = apps.get_model("gameplay", "ArenaMatch")
-
-    mission_run = MissionRun.objects.filter(battle_report=report).select_related("mission").first()
-    if mission_run and mission_run.mission.is_defense:
-        return "defender"
-
-    raid_run = RaidRun.objects.filter(battle_report=report).first()
-    if raid_run:
-        return "defender" if raid_run.defender_id == manor_id else "attacker"
-
-    arena_match = (
-        ArenaMatch.objects.select_related("attacker_entry", "defender_entry").filter(battle_report=report).first()
-    )
-    if arena_match:
-        if arena_match.defender_entry_id:
-            defender_manor_id = getattr(arena_match.defender_entry, "manor_id", None)
-            if defender_manor_id == manor_id:
-                return "defender"
-        attacker_manor_id = getattr(arena_match.attacker_entry, "manor_id", None)
-        if attacker_manor_id == manor_id:
-            return "attacker"
-        return "spectator"
-
-    inferred_side = infer_side_from_guest_ownership(report, manor_id)
-    if inferred_side:
-        return inferred_side
-
-    if report.manor_id == manor_id:
-        return "attacker"
-    if report.messages.filter(manor_id=manor_id).exists():
-        return "defender"
-    return "attacker"
+    return str(resolve_report_runtime_context(report, manor_id=manor_id)["player_side"])

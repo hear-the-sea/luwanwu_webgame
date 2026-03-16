@@ -16,7 +16,7 @@ from django.urls import reverse
 from core.exceptions import GameError
 from core.utils import safe_int, sanitize_error_message
 from gameplay.models import Manor
-from gameplay.services import get_manor
+from gameplay.services.manor import get_manor
 
 logger = logging.getLogger(__name__)
 

@@ -9,7 +9,7 @@ import os
 from celery.schedules import crontab
 from kombu import Queue
 
-from .base import env
+from .base import DEBUG, RUNNING_TESTS, env
 from .database import REDIS_BROKER_URL, REDIS_PASSWORD, REDIS_RESULT_URL, _redis_url_with_password
 
 CELERY_BROKER_URL = _redis_url_with_password(env("CELERY_BROKER_URL", REDIS_BROKER_URL), REDIS_PASSWORD)
@@ -18,11 +18,37 @@ CELERY_RESULT_BACKEND = env(
     CELERY_BROKER_URL if "CELERY_BROKER_URL" in os.environ else REDIS_RESULT_URL,
 )
 CELERY_RESULT_BACKEND = _redis_url_with_password(CELERY_RESULT_BACKEND, REDIS_PASSWORD)
+CELERY_RESULT_EXPIRES = int(env("CELERY_RESULT_EXPIRES", "3600"))
+CELERY_TASK_STORE_EAGER_RESULT = False
 
 CELERY_DEFAULT_QUEUE = env("CELERY_DEFAULT_QUEUE", "default")
 CELERY_BATTLE_QUEUE = env("CELERY_BATTLE_QUEUE", "battle")
 CELERY_TIMER_QUEUE = env("CELERY_TIMER_QUEUE", "timer")
 CELERY_TASK_DEFAULT_QUEUE = CELERY_DEFAULT_QUEUE
+
+HEALTH_CHECK_CELERY_WORKERS = (
+    env(
+        "DJANGO_HEALTH_CHECK_CELERY_WORKERS",
+        "1" if not DEBUG and not RUNNING_TESTS else "0",
+    )
+    == "1"
+)
+HEALTH_CHECK_CELERY_BEAT = (
+    env(
+        "DJANGO_HEALTH_CHECK_CELERY_BEAT",
+        "1" if not DEBUG and not RUNNING_TESTS else "0",
+    )
+    == "1"
+)
+HEALTH_CHECK_CELERY_ROUNDTRIP = (
+    env(
+        "DJANGO_HEALTH_CHECK_CELERY_ROUNDTRIP",
+        "1" if not DEBUG and not RUNNING_TESTS else "0",
+    )
+    == "1"
+)
+HEALTH_CHECK_CELERY_BEAT_MAX_AGE_SECONDS = int(env("DJANGO_HEALTH_CHECK_CELERY_BEAT_MAX_AGE_SECONDS", "180"))
+HEALTH_CHECK_CELERY_ROUNDTRIP_TIMEOUT_SECONDS = float(env("DJANGO_HEALTH_CHECK_CELERY_ROUNDTRIP_TIMEOUT_SECONDS", "3"))
 
 CELERY_TASK_QUEUES = (
     Queue(CELERY_DEFAULT_QUEUE),
@@ -170,5 +196,9 @@ CELERY_BEAT_SCHEDULE = {
     "check-create-auction-round": {
         "task": "trade.create_auction_round",
         "schedule": crontab(hour=0, minute=10),
+    },
+    "record-celery-beat-heartbeat": {
+        "task": "core.record_celery_beat_heartbeat",
+        "schedule": crontab(minute="*"),
     },
 }

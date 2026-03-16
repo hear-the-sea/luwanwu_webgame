@@ -46,7 +46,7 @@ class TestRecruitmentViews:
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("操作失败，请稍后重试" in m for m in messages)
 
-    def test_start_troop_recruitment_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
+    def test_start_troop_recruitment_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
 
         monkeypatch.setattr(
@@ -54,11 +54,14 @@ class TestRecruitmentViews:
             lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
         )
 
-        with pytest.raises(RuntimeError, match="boom"):
-            client.post(
-                reverse("gameplay:start_troop_recruitment"),
-                {"troop_key": "any", "quantity": "1"},
-            )
+        response = client.post(
+            reverse("gameplay:start_troop_recruitment"),
+            {"troop_key": "any", "quantity": "1"},
+        )
+        assert response.status_code == 302
+        assert response.url == reverse("gameplay:troop_recruitment")
+        messages = [str(m) for m in get_messages(response.wsgi_request)]
+        assert any("操作失败，请稍后重试" in m for m in messages)
 
     def test_start_troop_recruitment_rejects_invalid_quantity(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user

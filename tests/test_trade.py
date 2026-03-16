@@ -210,6 +210,43 @@ class TestMarketPurchase:
         listing.refresh_from_db()
         assert listing.status == MarketListing.Status.SOLD
 
+    def test_purchase_listing_disables_production_sync_for_seller_income(
+        self,
+        seller_manor,
+        buyer_manor,
+        tradeable_item_template,
+        monkeypatch,
+    ):
+        """测试成交给卖家入账时不会顺带同步离线产出"""
+        listing = market_service.create_listing(
+            manor=seller_manor,
+            item_key="test_tradeable_item",
+            quantity=10,
+            unit_price=2000,
+            duration=7200,
+        )
+
+        observed: dict[str, object] = {}
+        original_grant_resources_locked = market_service.grant_resources_locked
+
+        def _capture_grant_resources_locked(manor, rewards, note, reason, *, sync_production=True):
+            observed["sync_production"] = sync_production
+            observed["rewards"] = rewards
+            return original_grant_resources_locked(
+                manor,
+                rewards,
+                note,
+                reason,
+                sync_production=sync_production,
+            )
+
+        monkeypatch.setattr(market_service, "grant_resources_locked", _capture_grant_resources_locked)
+
+        transaction = market_service.purchase_listing(buyer_manor, listing.id)
+
+        assert transaction.seller_received == 18000
+        assert observed == {"sync_production": False, "rewards": {"silver": 18000}}
+
     def test_purchase_own_listing(self, seller_manor):
         """测试购买自己的挂单"""
         listing = market_service.create_listing(

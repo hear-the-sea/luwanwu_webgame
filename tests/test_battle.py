@@ -245,6 +245,41 @@ def test_lock_guests_for_battle_marks_and_releases_defender_guests(game_data, dj
 
 
 @pytest.mark.django_db
+def test_lock_guests_for_battle_releases_transaction_before_battle_body(game_data, django_user_model, monkeypatch):
+    import battle.services as battle_services
+    from battle.services import lock_guests_for_battle
+
+    user = django_user_model.objects.create_user(username="battle_lock_txn", password="pass123")
+    manor = ensure_manor(user)
+    _recruit_frontline(manor, draws=1)
+    guest = manor.guests.first()
+
+    atomic_depth = {"value": 0}
+    real_atomic = battle_services.transaction.atomic
+
+    class _RecordingAtomic:
+        def __call__(self, *args, **kwargs):
+            context = real_atomic(*args, **kwargs)
+
+            class _WrappedContext:
+                def __enter__(self_inner):
+                    atomic_depth["value"] += 1
+                    return context.__enter__()
+
+                def __exit__(self_inner, exc_type, exc, tb):
+                    try:
+                        return context.__exit__(exc_type, exc, tb)
+                    finally:
+                        atomic_depth["value"] -= 1
+
+            return _WrappedContext()
+
+    monkeypatch.setattr(battle_services.transaction, "atomic", _RecordingAtomic())
+    with lock_guests_for_battle([guest], manor=manor):
+        assert atomic_depth["value"] == 0
+
+
+@pytest.mark.django_db
 def test_heal_guest_cures_injury(django_user_model):
     """药品治疗可解除重伤状态（HP>=30%时）"""
     from guests.services import INJURY_RECOVERY_THRESHOLD, heal_guest

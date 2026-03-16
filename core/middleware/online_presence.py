@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from gameplay.context_processors import refresh_online_presence_from_request
+from gameplay.services.online_presence import refresh_online_presence_from_request
 
 
 class OnlinePresenceMiddleware:

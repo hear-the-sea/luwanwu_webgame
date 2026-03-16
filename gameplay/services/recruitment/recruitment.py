@@ -17,21 +17,39 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
+from django.db.models import F
 from django.utils import timezone
 
-from common.utils.celery import safe_apply_async
 from core.utils import safe_int
 from core.utils.time_scale import scale_duration
 from core.utils.yaml_loader import ensure_list, ensure_mapping, load_yaml_data
 
 from ...constants import BuildingKeys
-from ...models import Manor, PlayerTroop, TroopRecruitment
+from ...models import Manor, TroopRecruitment
 from ..inventory import get_item_quantity
 from ..technology import get_player_technology_level, get_technology_template
+from .lifecycle import finalize_troop_recruitment
+from .lifecycle import schedule_recruitment_completion as _schedule_recruitment_completion
+from .queries import get_active_recruitments, get_player_troops, refresh_troop_recruitments
 
 logger = logging.getLogger(__name__)
 TROOP_RECRUITMENT_DEFAULT_MAX_QUANTITY = 10
+__all__ = [
+    "calculate_recruitment_duration",
+    "check_recruitment_requirements",
+    "clear_troop_cache",
+    "finalize_troop_recruitment",
+    "get_active_recruitments",
+    "get_player_troops",
+    "get_recruit_config",
+    "get_recruitment_options",
+    "get_troop_template",
+    "has_active_recruitment",
+    "load_troop_templates",
+    "refresh_troop_recruitments",
+    "start_troop_recruitment",
+]
 
 
 def _coerce_non_negative_int(value: Any, default: int = 0) -> int:
@@ -597,10 +615,26 @@ def _consume_equipment_for_recruitment(manor: Manor, equipment_list: list[str], 
 
 
 def _consume_retainers_for_recruitment(manor: Manor, retainer_cost: int) -> None:
-    if manor.retainer_count < retainer_cost:
+    available_retainers = _coerce_non_negative_int(getattr(manor, "retainer_count", 0), 0)
+    if available_retainers < retainer_cost:
         raise ValueError(f"家丁不足，需要{retainer_cost}")
-    Manor.objects.filter(pk=manor.pk).update(retainer_count=manor.retainer_count - retainer_cost)
-    manor.retainer_count -= retainer_cost
+
+    updated = Manor.objects.filter(pk=manor.pk, retainer_count__gte=retainer_cost).update(
+        retainer_count=F("retainer_count") - retainer_cost
+    )
+    if updated != 1:
+        raise ValueError(f"家丁不足，需要{retainer_cost}")
+
+    manor.refresh_from_db(fields=["retainer_count"])
+
+
+def _lock_manor_for_recruitment(manor: Manor) -> Manor:
+    return Manor.objects.select_for_update().get(pk=manor.pk)
+
+
+def _ensure_no_active_recruitment_locked(manor: Manor) -> None:
+    if TroopRecruitment.objects.filter(manor=manor, status=TroopRecruitment.Status.RECRUITING).exists():
+        raise ValueError("已有募兵正在进行中，同时只能进行一种募兵")
 
 
 def _create_troop_recruitment_record(
@@ -655,237 +689,22 @@ def start_troop_recruitment(
     base_duration = recruit_config.get("base_duration", 120)
 
     with transaction.atomic():
-        equipment_costs = _consume_equipment_for_recruitment(manor, equipment_list, quantity)
-        _consume_retainers_for_recruitment(manor, retainer_cost)
-        recruitment, actual_duration = _create_troop_recruitment_record(
-            manor,
-            troop,
-            troop_key,
-            quantity,
-            equipment_costs,
-            retainer_cost,
-            base_duration,
-        )
+        locked_manor = _lock_manor_for_recruitment(manor)
+        _ensure_no_active_recruitment_locked(locked_manor)
+        equipment_costs = _consume_equipment_for_recruitment(locked_manor, equipment_list, quantity)
+        _consume_retainers_for_recruitment(locked_manor, retainer_cost)
+        try:
+            recruitment, actual_duration = _create_troop_recruitment_record(
+                locked_manor,
+                troop,
+                troop_key,
+                quantity,
+                equipment_costs,
+                retainer_cost,
+                base_duration,
+            )
+        except IntegrityError:
+            raise ValueError("已有募兵正在进行中，同时只能进行一种募兵")
         _schedule_recruitment_completion(recruitment, actual_duration)
 
     return recruitment
-
-
-def _schedule_recruitment_completion(recruitment: TroopRecruitment, eta_seconds: int) -> None:
-    """
-    调度募兵完成任务。
-
-    Args:
-        recruitment: TroopRecruitment 实例
-        eta_seconds: 预计完成时间（秒）
-    """
-    import logging
-
-    from django.db import transaction as db_transaction
-
-    logger = logging.getLogger(__name__)
-    countdown = max(0, int(eta_seconds))
-
-    try:
-        from gameplay.tasks import complete_troop_recruitment
-    except Exception:
-        logger.warning("Unable to import complete_troop_recruitment task; skip scheduling", exc_info=True)
-        return
-
-    db_transaction.on_commit(
-        lambda: safe_apply_async(
-            complete_troop_recruitment,
-            args=[recruitment.id],
-            countdown=countdown,
-            logger=logger,
-            log_message="complete_troop_recruitment dispatch failed",
-        )
-    )
-
-
-def _get_or_create_battle_troop_template(recruitment: TroopRecruitment):
-    """获取战斗兵种模板，缺失时按募兵配置自动补建。"""
-    from battle.models import TroopTemplate
-
-    troop_template = TroopTemplate.objects.filter(key=recruitment.troop_key).first()
-    if troop_template:
-        return troop_template
-
-    troop_config = get_troop_template(recruitment.troop_key)
-    if not troop_config:
-        logger.error("Troop template config not found: %s", recruitment.troop_key)
-        return None
-
-    defaults = {
-        "name": str(troop_config.get("name") or recruitment.troop_name or recruitment.troop_key),
-        "description": str(troop_config.get("description") or ""),
-        "base_attack": _coerce_non_negative_int(troop_config.get("base_attack"), 30),
-        "base_defense": _coerce_non_negative_int(troop_config.get("base_defense"), 20),
-        "base_hp": _coerce_non_negative_int(troop_config.get("base_hp"), 80),
-        "speed_bonus": _coerce_non_negative_int(troop_config.get("speed_bonus"), 10),
-        "priority": safe_int(troop_config.get("priority"), default=0) or 0,
-        "default_count": _coerce_positive_int(troop_config.get("default_count"), 120),
-    }
-
-    troop_template, created = TroopTemplate.objects.get_or_create(key=recruitment.troop_key, defaults=defaults)
-    if created:
-        logger.warning(
-            "Auto-created missing TroopTemplate for recruitment: key=%s recruitment_id=%s",
-            recruitment.troop_key,
-            recruitment.id,
-        )
-    return troop_template
-
-
-def finalize_troop_recruitment(recruitment: TroopRecruitment, send_notification: bool = False) -> bool:
-    """
-    完成募兵，将护院添加到玩家存储。
-
-    Args:
-        recruitment: TroopRecruitment 实例
-        send_notification: 是否发送通知
-
-    Returns:
-        是否成功完成
-    """
-    from ...models import Message
-    from ..utils.notifications import notify_user
-
-    with transaction.atomic():
-        locked_recruitment = (
-            TroopRecruitment.objects.select_for_update()
-            .select_related("manor", "manor__user")
-            .filter(pk=recruitment.pk)
-            .first()
-        )
-        if not locked_recruitment:
-            return False
-
-        if locked_recruitment.status != TroopRecruitment.Status.RECRUITING:
-            return False
-
-        if locked_recruitment.complete_at > timezone.now():
-            return False
-
-        troop_template = _get_or_create_battle_troop_template(locked_recruitment)
-        if not troop_template:
-            return False
-
-        # 添加护院到玩家存储
-        player_troop, _ = PlayerTroop.objects.get_or_create(
-            manor=locked_recruitment.manor,
-            troop_template=troop_template,
-            defaults={"count": 0},
-        )
-        player_troop.count += locked_recruitment.quantity
-        player_troop.save(update_fields=["count", "updated_at"])
-
-        # 更新募兵状态
-        locked_recruitment.status = TroopRecruitment.Status.COMPLETED
-        locked_recruitment.finished_at = timezone.now()
-        locked_recruitment.save(update_fields=["status", "finished_at"])
-        recruitment = locked_recruitment
-
-    if send_notification:
-        quantity_text = f"x{recruitment.quantity}" if recruitment.quantity > 1 else ""
-        try:
-            from ..utils.messages import create_message
-
-            create_message(
-                manor=recruitment.manor,
-                kind=Message.Kind.SYSTEM,
-                title=f"{recruitment.troop_name}{quantity_text}募兵完成",
-                body=f"您的{recruitment.troop_name}{quantity_text}已募兵完成。",
-            )
-
-            notify_user(
-                recruitment.manor.user_id,
-                {
-                    "kind": "system",
-                    "title": f"{recruitment.troop_name}{quantity_text}募兵完成",
-                    "troop_key": recruitment.troop_key,
-                    "quantity": recruitment.quantity,
-                },
-                log_context="troop recruitment notification",
-            )
-        except Exception as exc:
-            logger.warning(
-                "troop recruitment notification failed: recruitment_id=%s manor_id=%s error=%s",
-                recruitment.id,
-                recruitment.manor_id,
-                exc,
-                exc_info=True,
-            )
-
-    return True
-
-
-def refresh_troop_recruitments(manor: Manor) -> int:
-    """
-    刷新募兵状态，完成所有到期的募兵。
-
-    Args:
-        manor: 庄园实例
-
-    Returns:
-        完成的募兵数量
-    """
-    completed = 0
-    recruiting = manor.troop_recruitments.filter(
-        status=TroopRecruitment.Status.RECRUITING, complete_at__lte=timezone.now()
-    )
-
-    for recruitment in recruiting:
-        if finalize_troop_recruitment(recruitment, send_notification=True):
-            completed += 1
-
-    return completed
-
-
-def get_active_recruitments(manor: Manor) -> List[TroopRecruitment]:
-    """
-    获取正在进行的募兵列表。
-
-    Args:
-        manor: 庄园实例
-
-    Returns:
-        募兵列表
-    """
-    return list(manor.troop_recruitments.filter(status=TroopRecruitment.Status.RECRUITING).order_by("complete_at"))
-
-
-def get_player_troops(manor: Manor) -> List[Dict[str, Any]]:
-    """
-    获取玩家已拥有的护院列表（count > 0）。
-
-    Args:
-        manor: 庄园实例
-
-    Returns:
-        护院列表（只包含数量大于0的护院）
-    """
-    troops = PlayerTroop.objects.filter(manor=manor, count__gt=0).select_related("troop_template")
-
-    result = []
-    for pt in troops:
-        template = pt.troop_template
-
-        # 使用数据库的 avatar 字段，与战报保持一致
-        avatar_url = template.avatar.url if template.avatar else ""
-
-        result.append(
-            {
-                "key": template.key,
-                "name": template.name,
-                "description": template.description,
-                "count": pt.count,
-                "base_attack": template.base_attack,
-                "base_defense": template.base_defense,
-                "base_hp": template.base_hp,
-                "speed_bonus": template.speed_bonus,
-                "avatar": avatar_url,
-            }
-        )
-
-    return result

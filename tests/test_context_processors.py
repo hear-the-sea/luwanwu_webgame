@@ -82,6 +82,10 @@ def test_notifications_authenticated_http_touch_refreshes_online_count(monkeypat
 
     fake_redis = _FakeRedis()
     monkeypatch.setattr("gameplay.context_processors.get_redis_connection", lambda *_args, **_kwargs: fake_redis)
+    monkeypatch.setattr(
+        "gameplay.services.online_presence.get_redis_connection_if_supported",
+        lambda *_args, **_kwargs: fake_redis,
+    )
     monkeypatch.setattr("gameplay.context_processors._populate_authenticated_context", lambda *_args, **_kwargs: None)
 
     cache.set("stats:online_users_count", 0, timeout=60)
@@ -217,3 +221,22 @@ def test_notifications_non_home_pages_skip_home_sidebar_queries(monkeypatch, dja
     assert context["message_unread_count"] == 2
     assert "sidebar_rank" not in context
     assert "sidebar_prestige" not in context
+
+
+def test_notifications_ajax_requests_skip_global_stats_queries(monkeypatch):
+    request = RequestFactory().get("/", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+    request.user = AnonymousUser()
+
+    monkeypatch.setattr(
+        "gameplay.context_processors._load_total_user_count",
+        lambda: (_ for _ in ()).throw(AssertionError("global stats should be skipped for ajax")),
+    )
+    monkeypatch.setattr(
+        "gameplay.context_processors._load_online_user_count",
+        lambda: (_ for _ in ()).throw(AssertionError("online stats should be skipped for ajax")),
+    )
+
+    context = notifications(request)
+
+    assert context["total_user_count"] == 0
+    assert context["online_user_count"] == 0

@@ -31,12 +31,16 @@ import os
 import time
 
 import django
+from django.conf import settings
 from django.core.cache import cache
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", os.environ.get("DJANGO_SETTINGS_MODULE", "config.settings"))
 django.setup()
 
 deadline = time.time() + int(os.environ.get("DJANGO_WAIT_FOR_REDIS_SECONDS", "60"))
+allow_degraded = os.environ.get("DJANGO_ALLOW_CACHE_STARTUP_DEGRADED")
+if allow_degraded is None:
+    allow_degraded = "1" if settings.DEBUG or getattr(settings, "RUNNING_TESTS", False) else "0"
 key = "startup:cache:ping"
 while True:
     try:
@@ -45,8 +49,11 @@ while True:
             break
     except Exception as exc:
         if time.time() > deadline:
-            print(f"[entrypoint] cache/redis not ready after timeout, continuing... ({exc})")
-            break
+            message = f"[entrypoint] cache/redis not ready after timeout ({exc})"
+            if allow_degraded == "1":
+                print(message + ", continuing...")
+                break
+            raise RuntimeError(message)
         print(f"[entrypoint] waiting for cache/redis... ({exc})")
         time.sleep(1)
 PY

@@ -521,6 +521,7 @@ def finalize_raid(run: RaidRun, now=None) -> None:
                     loot_resources,
                     note="踢馆掠夺",
                     reason=ResourceEvent.Reason.BATTLE_REWARD,
+                    sync_production=False,
                 )
             loot_items = _normalize_positive_int_mapping(locked_run.loot_items)
             if loot_items:

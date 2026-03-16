@@ -95,9 +95,21 @@ def _consume_required_items_locked(manor: Manor, payload: dict[str, Any]) -> Non
 
 def _grant_item_resources(manor: Manor, payload: dict[str, int], note: str) -> dict[str, int]:
     if transaction.get_connection().in_atomic_block:
-        credited, _overflow = grant_resources_locked(manor, payload, note, ResourceEvent.Reason.ITEM_USE)
+        credited, _overflow = grant_resources_locked(
+            manor,
+            payload,
+            note,
+            ResourceEvent.Reason.ITEM_USE,
+            sync_production=False,
+        )
         return credited
-    return grant_resources(manor, payload, note, ResourceEvent.Reason.ITEM_USE)
+    return grant_resources(
+        manor,
+        payload,
+        note,
+        ResourceEvent.Reason.ITEM_USE,
+        sync_production=False,
+    )
 
 
 def _normalize_probability(value: Any) -> float:

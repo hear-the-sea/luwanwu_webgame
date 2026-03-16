@@ -19,6 +19,7 @@ from core.utils.validation import safe_redirect_url, sanitize_error_message
 
 from ..models import Guest
 from ..services import use_medicine_item_for_guest
+from .common import unexpected_action_error_response
 
 logger = logging.getLogger(__name__)
 
@@ -96,4 +97,13 @@ def use_medicine_item_view(request, pk: int):
         if is_ajax:
             return json_error(error_msg, status=500, include_message=True)
         messages.error(request, error_msg)
+    except Exception as exc:
+        logger.exception(
+            "Unexpected medicine use view error: manor_id=%s user_id=%s guest_id=%s item_id=%s",
+            getattr(manor, "id", None),
+            getattr(request.user, "id", None),
+            pk,
+            item_id_int,
+        )
+        return unexpected_action_error_response(request, exc, is_ajax=is_ajax, redirect_to=next_url)
     return redirect(next_url)

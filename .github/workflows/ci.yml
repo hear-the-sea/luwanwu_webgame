@@ -24,6 +24,7 @@ jobs:
           if [ -f requirements.lock.txt ]; then
             pip install -r requirements.lock.txt
           fi
+          pip install -r requirements-dev.txt
           # Type-checking deps (keep them small/stable for CI).
           pip install "mypy>=1.8" "django-stubs>=5.0" "django-stubs-ext>=5.0" "types-PyYAML"
 
@@ -96,6 +97,7 @@ jobs:
           if [ -f requirements.lock.txt ]; then
             pip install -r requirements.lock.txt
           fi
+          pip install -r requirements-dev.txt
 
       - name: Wait for MySQL and Redis
         run: |

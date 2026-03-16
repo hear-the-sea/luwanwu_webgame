@@ -91,7 +91,13 @@ def award_mission_drops_locked(
 
     resources, item_keys = _split_drop_payload(drops)
     if resources:
-        grant_resources_locked(manor_locked, resources, note, ResourceEvent.Reason.BATTLE_REWARD)
+        grant_resources_locked(
+            manor_locked,
+            resources,
+            note,
+            ResourceEvent.Reason.BATTLE_REWARD,
+            sync_production=False,
+        )
 
     if not item_keys:
         return

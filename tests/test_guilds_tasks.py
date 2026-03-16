@@ -6,8 +6,8 @@ import pytest
 from django.utils import timezone
 
 
-def _dispatch_immediately(task, *, args=None, kwargs=None, countdown=None, logger=None, log_message=""):
-    del kwargs, countdown, logger, log_message
+def _dispatch_immediately(task, *, args=None, kwargs=None, countdown=None, logger=None, log_message="", **_kwargs):
+    del kwargs, countdown, logger, log_message, _kwargs
     task.run(*(args or []))
     return True
 
@@ -87,6 +87,33 @@ def test_guild_tech_daily_production_handles_inner_errors(monkeypatch, django_us
     result = guild_tech_daily_production.run()
     assert result == "dispatched 1 guild tasks"
     assert sorted(calls) == ["exp", "packs"]
+
+
+@pytest.mark.django_db
+def test_guild_tech_daily_production_retries_when_dispatch_fails(monkeypatch, django_user_model):
+    from guilds.models import Guild
+    from guilds.tasks import guild_tech_daily_production
+
+    founder = django_user_model.objects.create_user(username="g_founder_dispatch_fail", password="pass")
+    Guild.objects.create(name="G-dispatch", founder=founder, is_active=True)
+
+    monkeypatch.setattr(
+        "common.utils.celery.safe_apply_async",
+        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("dispatch failed")),
+    )
+
+    called = {"retry": 0}
+
+    def _retry(exc):
+        called["retry"] += 1
+        raise RuntimeError("retried")
+
+    monkeypatch.setattr(guild_tech_daily_production, "retry", _retry)
+
+    with pytest.raises(RuntimeError, match="retried"):
+        guild_tech_daily_production.run()
+
+    assert called["retry"] == 1
 
 
 @pytest.mark.django_db

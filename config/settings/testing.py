@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import os
+import tempfile
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +31,17 @@ def _clear_celery_env_vars() -> None:
         os.environ.pop(key, None)
 
 
+def _default_sqlite_test_db_path() -> str:
+    worker_id = str(os.environ.get("PYTEST_XDIST_WORKER", "main") or "main")
+    return os.path.join(tempfile.gettempdir(), f"web_game_v5_test_{worker_id}_{os.getpid()}.sqlite3")
+
+
+_SQLITE_TEST_DB_PATH = _default_sqlite_test_db_path()
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": ":memory:",
+        "NAME": os.environ.get("DJANGO_TEST_SQLITE_NAME", _SQLITE_TEST_DB_PATH),
     }
 }
 
@@ -56,6 +64,9 @@ CELERY_BROKER_URL = "memory://"
 CELERY_RESULT_BACKEND = "cache+memory://"
 CELERY_TASK_ALWAYS_EAGER = _env_flag("DJANGO_TEST_CELERY_EAGER", default=False)
 CELERY_TASK_EAGER_PROPAGATES = CELERY_TASK_ALWAYS_EAGER
+HEALTH_CHECK_CELERY_WORKERS = False
+HEALTH_CHECK_CELERY_BEAT = False
+HEALTH_CHECK_CELERY_ROUNDTRIP = False
 
 try:
     from config.celery import app as celery_app

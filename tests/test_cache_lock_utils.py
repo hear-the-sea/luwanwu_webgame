@@ -56,6 +56,28 @@ def test_cache_lock_falls_back_to_local_lock_when_cache_unavailable(monkeypatch)
     cache_lock._LOCAL_LOCKS.clear()
 
 
+def test_cache_lock_can_fail_closed_when_local_fallback_disabled(monkeypatch):
+    class _BrokenCache:
+        def add(self, *_args, **_kwargs):
+            raise RuntimeError("cache down")
+
+    cache_lock._LOCAL_LOCKS.clear()
+    monkeypatch.setattr(cache_lock, "cache", _BrokenCache())
+
+    acquired, from_cache, token = cache_lock.acquire_best_effort_lock(
+        "lock:test:fail-closed",
+        timeout_seconds=5,
+        logger=logging.getLogger(__name__),
+        log_context="test lock",
+        allow_local_fallback=False,
+    )
+
+    assert acquired is False
+    assert from_cache is False
+    assert token is None
+    assert cache_lock._LOCAL_LOCKS == {}
+
+
 def test_cache_lock_uses_cache_when_available(monkeypatch):
     class _FakeCache:
         def __init__(self):

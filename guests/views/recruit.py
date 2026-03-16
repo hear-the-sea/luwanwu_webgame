@@ -29,6 +29,7 @@ from ..services import (
     start_guest_recruitment,
     use_magnifying_glass_for_candidates,
 )
+from .common import unexpected_action_error_response
 
 logger = logging.getLogger(__name__)
 RECRUIT_ACTION_LOCK_SECONDS = 5
@@ -96,6 +97,7 @@ def _acquire_recruit_action_lock(action: str, manor_id: int, scope: str) -> tupl
         timeout_seconds=RECRUIT_ACTION_LOCK_SECONDS,
         logger=logger,
         log_context="recruit action lock",
+        allow_local_fallback=False,
     )
     if not acquired:
         return False, "", None
@@ -250,6 +252,19 @@ class RecruitView(LoginRequiredMixin, TemplateView):
                 if is_ajax:
                     return json_error(sanitize_error_message(exc), status=500)
                 messages.error(request, sanitize_error_message(exc))
+            except Exception as exc:
+                logger.exception(
+                    "Unexpected recruit draw error: manor_id=%s user_id=%s pool_key=%s",
+                    getattr(manor, "id", None),
+                    getattr(request.user, "id", None),
+                    getattr(pool, "key", None),
+                )
+                return unexpected_action_error_response(
+                    request,
+                    exc,
+                    is_ajax=is_ajax,
+                    redirect_to="gameplay:recruitment_hall",
+                )
         finally:
             _release_recruit_action_lock(lock_key, lock_token)
         return redirect("gameplay:recruitment_hall")
@@ -389,6 +404,20 @@ def accept_candidate_view(request):
             if is_ajax:
                 return json_error(sanitize_error_message(exc), status=500)
             messages.error(request, sanitize_error_message(exc))
+        except Exception as exc:
+            logger.exception(
+                "Unexpected recruit accept error: manor_id=%s user_id=%s action=%s candidate_count=%s",
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                action,
+                len(candidates),
+            )
+            return unexpected_action_error_response(
+                request,
+                exc,
+                is_ajax=is_ajax,
+                redirect_to="gameplay:recruitment_hall",
+            )
     finally:
         _release_recruit_action_lock(lock_key, lock_token)
     return redirect("gameplay:recruitment_hall")
@@ -450,6 +479,19 @@ def use_magnifying_glass_view(request):
             if is_ajax:
                 return json_error(error_msg, status=500)
             messages.error(request, error_msg)
+        except Exception as exc:
+            logger.exception(
+                "Unexpected magnifying-glass error: manor_id=%s user_id=%s item_id=%s",
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                item_id_int,
+            )
+            return unexpected_action_error_response(
+                request,
+                exc,
+                is_ajax=is_ajax,
+                redirect_to="gameplay:recruitment_hall",
+            )
     finally:
         _release_recruit_action_lock(lock_key, lock_token)
 

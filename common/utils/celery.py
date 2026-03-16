@@ -14,6 +14,7 @@ def safe_apply_async(
     countdown: Optional[int] = None,
     logger: Optional[logging.Logger] = None,
     log_message: str = "celery task dispatch failed",
+    raise_on_failure: bool = False,
 ) -> bool:
     """
     Best-effort Celery dispatch wrapper.
@@ -27,6 +28,8 @@ def safe_apply_async(
     except Exception:
         if logger:
             logger.warning(log_message, exc_info=True)
+        if raise_on_failure:
+            raise
         return False
 
 
@@ -40,6 +43,7 @@ def safe_apply_async_with_dedup(
     countdown: Optional[int] = None,
     logger: Optional[logging.Logger] = None,
     log_message: str = "celery task dispatch failed",
+    raise_on_failure: bool = False,
 ) -> bool:
     """
     Best-effort Celery dispatch with cache-based dedup gate.
@@ -57,14 +61,24 @@ def safe_apply_async_with_dedup(
             if logger:
                 logger.debug("celery dispatch dedup cache unavailable: %s", dedup_key, exc_info=True)
 
-    ok = safe_apply_async(
-        task,
-        args=args,
-        kwargs=kwargs,
-        countdown=countdown,
-        logger=logger,
-        log_message=log_message,
-    )
+    try:
+        ok = safe_apply_async(
+            task,
+            args=args,
+            kwargs=kwargs,
+            countdown=countdown,
+            logger=logger,
+            log_message=log_message,
+            raise_on_failure=raise_on_failure,
+        )
+    except Exception:
+        if dedup_gate_acquired:
+            try:
+                cache.delete(dedup_key)
+            except Exception:
+                if logger:
+                    logger.debug("celery dispatch dedup rollback failed: %s", dedup_key, exc_info=True)
+        raise
     if ok:
         return True
 

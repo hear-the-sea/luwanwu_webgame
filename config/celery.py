@@ -11,6 +11,9 @@ app = Celery("config")
 app.config_from_object("django.conf:settings", namespace="CELERY", force=True)
 app.autodiscover_tasks()
 
+# `core` is not a Django app, so its shared tasks need explicit import for registration.
+import core.tasks  # noqa: F401,E402
+
 logger = logging.getLogger(__name__)
 
 

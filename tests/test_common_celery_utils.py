@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 
+import pytest
+
 from common.utils import celery as celery_utils
 
 
@@ -57,6 +59,13 @@ def test_safe_apply_async_logs_on_failure_when_logger_provided(caplog):
 
     assert ok is False
     assert "custom error message" in caplog.text
+
+
+def test_safe_apply_async_can_raise_on_failure():
+    task = _Task(should_fail=True)
+
+    with pytest.raises(RuntimeError, match="dispatch failed"):
+        celery_utils.safe_apply_async(task, args=[1], raise_on_failure=True)
 
 
 def test_safe_apply_async_handles_none_args_and_kwargs():
@@ -130,6 +139,25 @@ def test_safe_apply_async_with_dedup_returns_false_on_dispatch_error(monkeypatch
     assert ok is False
     assert task.called == 1
     assert deleted["keys"] == ["test:key3"]
+
+
+def test_safe_apply_async_with_dedup_rolls_back_and_raises_on_dispatch_error(monkeypatch):
+    task = _Task(should_fail=True)
+    deleted = {"keys": []}
+    monkeypatch.setattr(celery_utils.cache, "add", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(celery_utils.cache, "delete", lambda key: deleted["keys"].append(key))
+
+    with pytest.raises(RuntimeError, match="dispatch failed"):
+        celery_utils.safe_apply_async_with_dedup(
+            task,
+            dedup_key="test:key3:raise",
+            dedup_timeout=5,
+            args=[3],
+            raise_on_failure=True,
+        )
+
+    assert task.called == 1
+    assert deleted["keys"] == ["test:key3:raise"]
 
 
 def test_safe_apply_async_with_dedup_falls_back_when_cache_unavailable(monkeypatch):

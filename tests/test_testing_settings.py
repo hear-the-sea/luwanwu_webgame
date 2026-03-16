@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import tempfile
 
 import pytest
 
@@ -40,11 +41,25 @@ def test_testing_settings_force_in_memory_backends(monkeypatch: pytest.MonkeyPat
     assert module.DATABASES == {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
-            "NAME": ":memory:",
+            "NAME": os.path.join(tempfile.gettempdir(), f"web_game_v5_test_main_{os.getpid()}.sqlite3"),
         }
     }
     assert module.CACHES["default"]["BACKEND"] == "django.core.cache.backends.locmem.LocMemCache"
     assert module.CHANNEL_LAYERS["default"]["BACKEND"] == "channels.layers.InMemoryChannelLayer"
+    assert module.HEALTH_CHECK_CELERY_WORKERS is False
+    assert module.HEALTH_CHECK_CELERY_BEAT is False
+    assert module.HEALTH_CHECK_CELERY_ROUNDTRIP is False
+
+
+def test_testing_settings_uses_xdist_worker_in_sqlite_name(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("PYTEST_XDIST_WORKER", "gw3")
+
+    module = _reload_testing_settings(monkeypatch)
+
+    assert module.DATABASES["default"]["NAME"] == os.path.join(
+        tempfile.gettempdir(),
+        f"web_game_v5_test_gw3_{os.getpid()}.sqlite3",
+    )
 
 
 def test_testing_settings_clear_external_celery_env(monkeypatch: pytest.MonkeyPatch):

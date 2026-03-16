@@ -12,13 +12,12 @@ from .view_helpers import (
     build_reward_context,
     build_side_labels,
     collect_template_keys,
-    determine_player_side,
     load_avatar_map,
     resolve_capture_loss_label,
     resolve_display_drops,
     resolve_display_losses,
     resolve_perspective,
-    resolve_report_raid_run,
+    resolve_report_runtime_context,
     serialize_troops,
 )
 
@@ -28,28 +27,41 @@ class BattleReportDetailView(LoginRequiredMixin, DetailView):
     model = BattleReport
     context_object_name = "report"
 
-    def get_queryset(self):
-        from gameplay.services.manor.core import ensure_manor
+    def _get_request_manor(self):
+        from gameplay.services.manor.core import ManorNotFoundError, get_manor
 
-        manor = ensure_manor(self.request.user)
+        if hasattr(self, "_request_manor"):
+            return self._request_manor
+
+        try:
+            self._request_manor = get_manor(self.request.user)
+        except ManorNotFoundError:
+            self._request_manor = None
+        return self._request_manor
+
+    def get_queryset(self):
+        manor = self._get_request_manor()
+        if manor is None:
+            return BattleReport.objects.none()
         # 允许查看：
         # 1) 自己作为战报归属方（report.manor）
         # 2) 通过站内信收到的战报（Message.battle_report）
         # 3) 竞技场公开战报（通过 ArenaMatch 关联）
-        return BattleReport.objects.filter(
-            Q(manor=manor) | Q(messages__manor=manor) | Q(arena_matches__isnull=False)
-        ).distinct()
+        return (
+            BattleReport.objects.select_related("manor")
+            .filter(Q(manor=manor) | Q(messages__manor=manor) | Q(arena_matches__isnull=False))
+            .distinct()
+        )
 
     def get_context_data(self, **kwargs):
-        from gameplay.services.manor.core import ensure_manor
-
         context = super().get_context_data(**kwargs)
         report: BattleReport = context["report"]
-        manor = ensure_manor(self.request.user)
+        manor = self._get_request_manor()
+        viewer_manor_id = manor.id if manor is not None else 0
         troop_definitions = load_troop_templates()
 
-        # 判断玩家视角
-        player_side = determine_player_side(report, manor_id=manor.id)
+        report_runtime = resolve_report_runtime_context(report, manor_id=viewer_manor_id)
+        player_side = str(report_runtime["player_side"])
 
         attacker_team = report.attacker_team or []
         defender_team = report.defender_team or []
@@ -73,10 +85,10 @@ class BattleReportDetailView(LoginRequiredMixin, DetailView):
         side_context = build_side_labels(player_side=player_side, winner=report.winner)
         is_spectator = bool(side_context["is_spectator"])
         player_won = bool(side_context["player_won"])
-        context["report_title"] = build_report_title(report, player_side=player_side, viewer_manor_id=manor.id)
+        context["report_title"] = build_report_title(report, player_side=player_side, viewer_manor_id=viewer_manor_id)
         context.update(side_context)
 
-        raid_run = None if is_spectator else resolve_report_raid_run(report)
+        raid_run = None if is_spectator else report_runtime.get("raid_run")
         drops = (
             report.drops or {}
             if is_spectator

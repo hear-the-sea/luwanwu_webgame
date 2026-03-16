@@ -52,6 +52,7 @@ def _acquire_jail_action_lock(action: str, manor_id: int, scope: str) -> tuple[b
         timeout_seconds=JAIL_ACTION_LOCK_SECONDS,
         logger=logger,
         log_context="jail action lock",
+        allow_local_fallback=False,
     )
     if not acquired:
         return False, "", None

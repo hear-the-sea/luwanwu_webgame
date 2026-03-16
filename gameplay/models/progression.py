@@ -379,6 +379,13 @@ class TroopRecruitment(models.Model):
         indexes = [
             models.Index(fields=["status", "complete_at"], name="troop_status_complete_idx"),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["manor"],
+                condition=Q(status="recruiting"),
+                name="uniq_active_troop_recruitment_per_manor",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.manor.user.username} - {self.troop_name} x{self.quantity} ({self.status})"

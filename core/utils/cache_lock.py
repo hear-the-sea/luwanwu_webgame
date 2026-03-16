@@ -5,6 +5,7 @@ import time
 import uuid
 from threading import Lock
 
+from django.conf import settings
 from django.core.cache import cache
 
 _LOCAL_LOCKS: dict[str, tuple[str, float]] = {}
@@ -56,6 +57,19 @@ def _release_cache_lock_atomic_if_owner(
 
     try:
         redis = get_redis_connection("default")
+    except NotImplementedError:
+        return None
+    except Exception as exc:
+        logger.warning(
+            "%s atomic cache lock release unavailable, fallback to compare-delete: key=%s error=%s",
+            log_context,
+            key,
+            exc,
+            exc_info=True,
+        )
+        return None
+
+    try:
         redis_key = cache.make_key(key) if hasattr(cache, "make_key") else key  # type: ignore[attr-defined]
         deleted = redis.eval(_CACHE_RELEASE_IF_OWNER_SCRIPT, 1, redis_key, lock_token)
         return bool(int(deleted or 0))
@@ -113,6 +127,7 @@ def acquire_best_effort_lock(
     timeout_seconds: int,
     logger: logging.Logger,
     log_context: str,
+    allow_local_fallback: bool | None = None,
 ) -> tuple[bool, bool, str | None]:
     """
     Acquire lock via cache first; fallback to in-process lock on cache failure.
@@ -122,6 +137,8 @@ def acquire_best_effort_lock(
     """
     timeout = max(1, int(timeout_seconds))
     lock_token = _make_lock_token()
+    if allow_local_fallback is None:
+        allow_local_fallback = bool(getattr(settings, "BEST_EFFORT_LOCK_ALLOW_LOCAL_FALLBACK", True))
     try:
         if cache.add(key, lock_token, timeout=timeout):
             return True, True, lock_token
@@ -134,6 +151,8 @@ def acquire_best_effort_lock(
             exc,
             exc_info=True,
         )
+        if not allow_local_fallback:
+            return False, False, None
 
     now = time.monotonic()
     with _LOCAL_LOCKS_GUARD:

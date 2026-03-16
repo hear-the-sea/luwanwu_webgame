@@ -180,7 +180,12 @@ def spend_resources_locked(
 
 
 def grant_resources_locked(
-    manor: Manor, rewards: Dict[str, int], note: str, reason: str = ResourceEvent.Reason.TASK_REWARD
+    manor: Manor,
+    rewards: Dict[str, int],
+    note: str,
+    reason: str = ResourceEvent.Reason.TASK_REWARD,
+    *,
+    sync_production: bool = True,
 ) -> Tuple[Dict[str, int], Dict[str, int]]:
     """
     发放资源奖励给庄园（假设调用方已在 transaction.atomic 中持有 manor 行锁）。
@@ -194,7 +199,8 @@ def grant_resources_locked(
     if not rewards:
         return {}, {}
     _require_atomic_block("grant_resources_locked")
-    _sync_resource_production_locked(manor)
+    if sync_production:
+        _sync_resource_production_locked(manor)
 
     credited: Dict[str, int] = {}
     overflow: Dict[str, int] = {}
@@ -311,7 +317,12 @@ def spend_resources(
 
 
 def grant_resources(
-    manor: Manor, rewards: Dict[str, int], note: str, reason: str = ResourceEvent.Reason.TASK_REWARD
+    manor: Manor,
+    rewards: Dict[str, int],
+    note: str,
+    reason: str = ResourceEvent.Reason.TASK_REWARD,
+    *,
+    sync_production: bool = True,
 ) -> Dict[str, int]:
     """
     发放资源奖励给庄园。
@@ -334,7 +345,13 @@ def grant_resources(
     with transaction.atomic():
         locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
         # 修复：正确解构 grant_resources_locked 的返回值
-        credited, _overflow = grant_resources_locked(locked_manor, rewards, note=note, reason=reason)
+        credited, _overflow = grant_resources_locked(
+            locked_manor,
+            rewards,
+            note=note,
+            reason=reason,
+            sync_production=sync_production,
+        )
 
     manor.refresh_from_db(fields=RESOURCE_FIELDS + ["resource_updated_at"])
     return credited

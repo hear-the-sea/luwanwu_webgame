@@ -1,400 +1,335 @@
 """
-游戏玩法服务模块
+游戏玩法服务模块聚合导出。
 
-本模块已重构为多个子模块以提高可维护性：
-- manor: 庄园和建筑管理
-- resources: 资源管理
-- inventory: 背包物品管理
-- messages: 消息管理
-- missions: 任务管理
-
-为保持向后兼容，所有函数在此统一导出。
+保留历史兼容入口，但改为懒加载，避免导入包时一次性拉起整个 services 树。
 """
 
 from __future__ import annotations
 
-# 工具函数
-from common.utils.loot import resolve_drop_rewards
+from importlib import import_module
+from typing import Any
 
-# 建筑系统（向后兼容导入）
-from .buildings import *  # noqa: F403
+_MODULE_EXPORTS = {
+    "battle_salvage": ".battle_salvage",
+    "buildings": ".buildings",
+    "inventory": ".inventory",
+    "jail": ".jail",
+    "manor": ".manor",
+    "missions": ".missions",
+    "raid": ".raid",
+    "ranking": ".ranking",
+    "recruitment": ".recruitment",
+    "resources": ".resources",
+    "technology": ".technology",
+    "technology_helpers": ".technology_helpers",
+    "work": ".work",
+    "cache": ".utils.cache",
+    "notifications": ".utils.notifications",
+    "query_optimization": ".utils.query_optimization",
+    "template_cache": ".utils.template_cache",
+}
 
-# 铁匠铺锻造服务（向后兼容 - 从 buildings.forge 导入）
-from .buildings.forge import EQUIPMENT_CATEGORIES, EQUIPMENT_CONFIG, MATERIAL_NAMES, get_active_forgings
+_ATTRIBUTE_EXPORT_GROUPS = {
+    "common.utils.loot": ("resolve_drop_rewards",),
+    ".buildings": (
+        "calculate_forging_duration",
+        "calculate_livestock_duration",
+        "calculate_production_duration",
+        "calculate_smelting_duration",
+        "clear_building_cache",
+        "finalize_equipment_forging",
+        "finalize_horse_production",
+        "finalize_livestock_production",
+        "finalize_smelting_production",
+        "get_active_livestock_productions",
+        "get_active_productions",
+        "get_active_smelting_productions",
+        "get_all_buildings",
+        "get_building_categories",
+        "get_building_config",
+        "get_building_description",
+        "get_buildings_by_category",
+        "get_equipment_by_category",
+        "get_equipment_options",
+        "get_forge_speed_bonus",
+        "get_horse_options",
+        "get_livestock_options",
+        "get_max_forging_quantity",
+        "get_max_livestock_quantity",
+        "get_max_production_quantity",
+        "get_max_smelting_quantity",
+        "get_metal_options",
+        "get_ranch_speed_bonus",
+        "get_smithy_speed_bonus",
+        "get_stable_speed_bonus",
+        "has_active_forging",
+        "has_active_livestock_production",
+        "has_active_production",
+        "has_active_smelting_production",
+        "load_building_templates",
+        "refresh_equipment_forgings",
+        "refresh_horse_productions",
+        "refresh_livestock_productions",
+        "refresh_smelting_productions",
+        "start_equipment_forging",
+        "start_horse_production",
+        "start_livestock_production",
+        "start_smelting_production",
+    ),
+    ".buildings.forge": (
+        "EQUIPMENT_CATEGORIES",
+        "EQUIPMENT_CONFIG",
+        "MATERIAL_NAMES",
+        "get_active_forgings",
+    ),
+    ".buildings.ranch": ("LIVESTOCK_CONFIG",),
+    ".buildings.smithy": ("METAL_CONFIG",),
+    ".buildings.stable": ("HORSE_CONFIG",),
+    ".inventory": (
+        "ITEM_EFFECT_HANDLERS",
+        "NON_WAREHOUSE_MESSAGES",
+        "add_item_to_inventory",
+        "consume_inventory_item",
+        "get_item_quantity",
+        "list_inventory_items",
+        "sync_manor_grain",
+        "sync_warehouse_grain_item",
+        "use_guest_rarity_upgrade_item",
+        "use_guest_rebirth_card",
+        "use_inventory_item",
+        "use_soul_container",
+        "use_xidianka",
+        "use_xisuidan",
+    ),
+    ".jail": (
+        "add_oath_bond",
+        "draw_pie",
+        "list_held_prisoners",
+        "list_oath_bonds",
+        "recruit_prisoner",
+        "release_prisoner",
+        "remove_oath_bond",
+    ),
+    ".manor": (
+        "PRESTIGE_SILVER_THRESHOLD",
+        "TROOP_BANK_CAPACITY",
+        "add_prestige_silver",
+        "bootstrap_buildings",
+        "bootstrap_manor",
+        "deposit_troops_to_bank",
+        "ensure_buildings_exist",
+        "ensure_manor",
+        "finalize_building_upgrade",
+        "finalize_upgrades",
+        "get_manor",
+        "get_prestige_progress",
+        "get_rename_card_count",
+        "get_treasury_capacity",
+        "get_treasury_used_space",
+        "get_troop_bank_capacity",
+        "get_troop_bank_remaining_space",
+        "get_troop_bank_rows",
+        "get_troop_bank_used_space",
+        "get_warehouse_used_space",
+        "is_manor_name_available",
+        "move_item_to_treasury",
+        "move_item_to_warehouse",
+        "refresh_manor_state",
+        "rename_manor",
+        "schedule_building_completion",
+        "start_upgrade",
+        "validate_manor_name",
+        "withdraw_troops_from_bank",
+    ),
+    ".missions": (
+        "add_mission_extra_attempt",
+        "award_mission_drops",
+        "bulk_get_mission_extra_attempts",
+        "bulk_mission_attempts_today",
+        "can_retreat",
+        "finalize_mission_run",
+        "get_mission_daily_limit",
+        "get_mission_extra_attempts",
+        "launch_mission",
+        "mission_attempts_today",
+        "normalize_mission_loadout",
+        "refresh_mission_runs",
+        "request_retreat",
+        "schedule_mission_completion",
+    ),
+    ".raid": (
+        "activate_peace_shield",
+        "calculate_distance",
+        "calculate_raid_travel_time",
+        "calculate_scout_success_rate",
+        "calculate_scout_travel_time",
+        "can_attack_target",
+        "can_raid_retreat",
+        "check_scout_cooldown",
+        "finalize_raid",
+        "finalize_scout",
+        "get_active_raid_count",
+        "get_active_raids",
+        "get_active_scouts",
+        "get_asset_level",
+        "get_incoming_raids",
+        "get_manor_public_info",
+        "get_prestige_color",
+        "get_protection_status",
+        "get_raid_history",
+        "get_relocation_cost",
+        "get_scout_count",
+        "get_scout_history",
+        "get_scout_tech_level",
+        "get_troop_description",
+        "is_same_region",
+        "process_raid_battle",
+        "refresh_raid_runs",
+        "refresh_scout_records",
+        "relocate_manor",
+        "request_raid_retreat",
+        "search_manors_by_coordinate",
+        "search_manors_by_name",
+        "search_manors_by_region",
+        "start_raid",
+        "start_scout",
+    ),
+    ".ranking": (
+        "get_player_rank",
+        "get_prestige_ranking",
+        "get_ranking_with_player_context",
+    ),
+    ".recruitment": (
+        "apply_defender_troop_losses",
+        "calculate_recruitment_duration",
+        "check_recruitment_requirements",
+        "clear_troop_cache",
+        "finalize_troop_recruitment",
+        "get_active_recruitments",
+        "get_player_troops",
+        "get_recruit_config",
+        "get_recruitment_options",
+        "get_troop_template",
+        "has_active_recruitment",
+        "load_troop_templates",
+        "refresh_troop_recruitments",
+        "start_troop_recruitment",
+    ),
+    ".resources": (
+        "grant_resources",
+        "log_resource_gain",
+        "spend_resources",
+        "sync_resource_production",
+    ),
+    ".technology": (
+        "finalize_technology_upgrade",
+        "get_building_cost_reduction",
+        "get_categories",
+        "get_march_speed_bonus",
+        "get_martial_technologies_grouped",
+        "get_player_technologies",
+        "get_player_technology_level",
+        "get_resource_production_bonus",
+        "get_resource_production_bonus_from_levels",
+        "get_tech_bonus",
+        "get_technologies_by_category",
+        "get_technology_display_data",
+        "get_technology_template",
+        "get_troop_class_for_key",
+        "get_troop_classes",
+        "get_troop_stat_bonuses",
+        "load_technology_templates",
+        "refresh_technology_upgrades",
+        "schedule_technology_completion",
+        "upgrade_technology",
+    ),
+    ".utils.cache": (
+        "CACHE_TIMEOUT_CONFIG",
+        "CACHE_TIMEOUT_LONG",
+        "CACHE_TIMEOUT_MEDIUM",
+        "CACHE_TIMEOUT_RANKING",
+        "CACHE_TIMEOUT_SHORT",
+        "CacheKeys",
+        "cached",
+        "get_or_set",
+        "invalidate_home_stats_cache",
+        "invalidate_manor_cache",
+        "invalidate_ranking_cache",
+        "invalidate_recruitment_hall_cache",
+        "recruitment_hall_context_cache_key",
+    ),
+    ".utils.messages": (
+        "MESSAGE_RETENTION_DAYS",
+        "claim_message_attachments",
+        "cleanup_old_messages",
+        "create_message",
+        "delete_all_messages",
+        "delete_messages",
+        "list_messages",
+        "mark_all_messages_read",
+        "mark_messages_read",
+        "unread_message_count",
+    ),
+    ".utils.notifications": (
+        "notify_manor",
+        "notify_user",
+    ),
+    ".utils.query_optimization": (
+        "bulk_get_manor_stats",
+        "count_with_cache",
+        "get_idle_guests_optimized",
+        "get_manor_with_relations",
+        "optimize_guest_queryset",
+        "optimize_mission_run_queryset",
+        "prefetch_active_missions",
+        "prefetch_guests_with_gear",
+        "prefetch_upgrading_buildings",
+    ),
+    ".utils.template_cache": (
+        "clear_all_template_caches",
+        "clear_building_template_cache",
+        "clear_technology_template_cache",
+        "clear_troop_template_caches",
+    ),
+    ".work": (
+        "assign_guest_to_work",
+        "claim_work_reward",
+        "complete_work_assignments",
+        "get_available_works_for_guest",
+        "recall_guest_from_work",
+        "refresh_work_assignments",
+    ),
+}
 
-# 畜牧场服务（向后兼容 - 从 buildings.ranch 导入）
-from .buildings.ranch import LIVESTOCK_CONFIG
+_ATTRIBUTE_EXPORTS = {
+    export_name: module_path
+    for module_path, export_names in _ATTRIBUTE_EXPORT_GROUPS.items()
+    for export_name in export_names
+}
 
-# 冶炼坊服务（向后兼容 - 从 buildings.smithy 导入）
-from .buildings.smithy import METAL_CONFIG
+__all__ = [*_MODULE_EXPORTS.keys(), *_ATTRIBUTE_EXPORTS.keys()]
 
-# 马房服务（向后兼容 - 从 buildings.stable 导入）
-from .buildings.stable import HORSE_CONFIG
 
-# 背包物品管理
-from .inventory import (
-    ITEM_EFFECT_HANDLERS,
-    NON_WAREHOUSE_MESSAGES,
-    add_item_to_inventory,
-    consume_inventory_item,
-    get_item_quantity,
-    list_inventory_items,
-    sync_manor_grain,
-    sync_warehouse_grain_item,
-    use_guest_rarity_upgrade_item,
-    use_guest_rebirth_card,
-    use_inventory_item,
-    use_soul_container,
-    use_xidianka,
-    use_xisuidan,
-)
+def _import_module(module_path: str):
+    return import_module(module_path, __name__)
 
-# 监牢/结义林
-from .jail import (
-    add_oath_bond,
-    draw_pie,
-    list_held_prisoners,
-    list_oath_bonds,
-    recruit_prisoner,
-    release_prisoner,
-    remove_oath_bond,
-)
 
-# 庄园系统（向后兼容导入）
-from .manor import *  # noqa: F403
+def __getattr__(name: str) -> Any:
+    module_path = _MODULE_EXPORTS.get(name)
+    if module_path is not None:
+        module = _import_module(module_path)
+        globals()[name] = module
+        return module
 
-# 任务管理
-from .missions import (
-    add_mission_extra_attempt,
-    award_mission_drops,
-    bulk_get_mission_extra_attempts,
-    bulk_mission_attempts_today,
-    can_retreat,
-    finalize_mission_run,
-    get_mission_daily_limit,
-    get_mission_extra_attempts,
-    launch_mission,
-    mission_attempts_today,
-    normalize_mission_loadout,
-    refresh_mission_runs,
-    request_retreat,
-    schedule_mission_completion,
-)
+    module_path = _ATTRIBUTE_EXPORTS.get(name)
+    if module_path is not None:
+        module = _import_module(module_path)
+        value = getattr(module, name)
+        globals()[name] = value
+        return value
 
-# 踢馆/PVP服务
-from .raid import (  # 地图查询; 距离和工具函数; 侦察系统; 踢馆出征; 撤退机制; 保护机制; 庄园迁移; 刷新服务
-    activate_peace_shield,
-    calculate_distance,
-    calculate_raid_travel_time,
-    calculate_scout_success_rate,
-    calculate_scout_travel_time,
-    can_attack_target,
-    can_raid_retreat,
-    check_scout_cooldown,
-    finalize_raid,
-    finalize_scout,
-    get_active_raid_count,
-    get_active_raids,
-    get_active_scouts,
-    get_asset_level,
-    get_incoming_raids,
-    get_manor_public_info,
-    get_prestige_color,
-    get_protection_status,
-    get_raid_history,
-    get_relocation_cost,
-    get_scout_count,
-    get_scout_history,
-    get_scout_tech_level,
-    get_troop_description,
-    is_same_region,
-    process_raid_battle,
-    refresh_raid_runs,
-    refresh_scout_records,
-    relocate_manor,
-    request_raid_retreat,
-    search_manors_by_coordinate,
-    search_manors_by_name,
-    search_manors_by_region,
-    start_raid,
-    start_scout,
-)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-# 排行榜服务
-from .ranking import get_player_rank, get_prestige_ranking, get_ranking_with_player_context
 
-# 护院募兵服务（向后兼容导入）
-from .recruitment import *  # noqa: F403
-
-# 资源管理
-from .resources import grant_resources, log_resource_gain, spend_resources, sync_resource_production
-
-# 技术管理
-from .technology import (
-    finalize_technology_upgrade,
-    get_building_cost_reduction,
-    get_categories,
-    get_march_speed_bonus,
-    get_martial_technologies_grouped,
-    get_player_technologies,
-    get_player_technology_level,
-    get_resource_production_bonus,
-    get_resource_production_bonus_from_levels,
-    get_tech_bonus,
-    get_technologies_by_category,
-    get_technology_display_data,
-    get_technology_template,
-    get_troop_class_for_key,
-    get_troop_classes,
-    get_troop_stat_bonuses,
-    load_technology_templates,
-    refresh_technology_upgrades,
-    schedule_technology_completion,
-    upgrade_technology,
-)
-
-# 工具模块（向后兼容导入）
-from .utils.cache import *  # noqa: F403
-
-# 消息管理
-from .utils.messages import (
-    MESSAGE_RETENTION_DAYS,
-    claim_message_attachments,
-    cleanup_old_messages,
-    create_message,
-    delete_all_messages,
-    delete_messages,
-    list_messages,
-    mark_all_messages_read,
-    mark_messages_read,
-    unread_message_count,
-)
-from .utils.notifications import *  # noqa: F403
-from .utils.query_optimization import *  # noqa: F403
-from .utils.template_cache import *  # noqa: F403
-
-# 打工管理
-from .work import (
-    assign_guest_to_work,
-    claim_work_reward,
-    complete_work_assignments,
-    get_available_works_for_guest,
-    recall_guest_from_work,
-    refresh_work_assignments,
-)
-
-__all__ = [  # noqa: F405
-    # 工具函数
-    "resolve_drop_rewards",
-    # 庄园和建筑
-    "bootstrap_buildings",
-    "bootstrap_manor",
-    "ensure_buildings_exist",
-    "ensure_manor",
-    "finalize_building_upgrade",
-    "finalize_upgrades",
-    "get_manor",
-    "get_rename_card_count",
-    "is_manor_name_available",
-    "refresh_manor_state",
-    "rename_manor",
-    "schedule_building_completion",
-    "start_upgrade",
-    "validate_manor_name",
-    # 资源
-    "grant_resources",
-    "log_resource_gain",
-    "spend_resources",
-    "sync_resource_production",
-    # 背包物品
-    "ITEM_EFFECT_HANDLERS",
-    "NON_WAREHOUSE_MESSAGES",
-    "add_item_to_inventory",
-    "consume_inventory_item",
-    "get_item_quantity",
-    "list_inventory_items",
-    "sync_manor_grain",
-    "sync_warehouse_grain_item",
-    "use_guest_rarity_upgrade_item",
-    "use_guest_rebirth_card",
-    "use_inventory_item",
-    "use_soul_container",
-    "use_xisuidan",
-    "use_xidianka",
-    # 消息
-    "MESSAGE_RETENTION_DAYS",
-    "claim_message_attachments",
-    "cleanup_old_messages",
-    "create_message",
-    "delete_all_messages",
-    "delete_messages",
-    "list_messages",
-    "mark_all_messages_read",
-    "mark_messages_read",
-    "unread_message_count",
-    # 任务
-    "add_mission_extra_attempt",
-    "award_mission_drops",
-    "bulk_get_mission_extra_attempts",
-    "bulk_mission_attempts_today",
-    "can_retreat",
-    "finalize_mission_run",
-    "get_mission_daily_limit",
-    "get_mission_extra_attempts",
-    "launch_mission",
-    "mission_attempts_today",
-    "normalize_mission_loadout",
-    "refresh_mission_runs",
-    "request_retreat",
-    "schedule_mission_completion",
-    # 技术
-    "finalize_technology_upgrade",
-    "get_building_cost_reduction",
-    "get_categories",
-    "get_march_speed_bonus",
-    "get_martial_technologies_grouped",
-    "get_player_technologies",
-    "get_player_technology_level",
-    "get_resource_production_bonus",
-    "get_resource_production_bonus_from_levels",
-    "get_tech_bonus",
-    "get_technologies_by_category",
-    "get_technology_display_data",
-    "get_technology_template",
-    "get_troop_class_for_key",
-    "get_troop_classes",
-    "get_troop_stat_bonuses",
-    "load_technology_templates",
-    "refresh_technology_upgrades",
-    "schedule_technology_completion",
-    "upgrade_technology",
-    # 打工
-    "assign_guest_to_work",
-    "claim_work_reward",
-    "complete_work_assignments",
-    "get_available_works_for_guest",
-    "recall_guest_from_work",
-    "refresh_work_assignments",
-    # 藏宝阁
-    "get_treasury_capacity",
-    "get_treasury_used_space",
-    "get_warehouse_used_space",
-    "move_item_to_treasury",
-    "move_item_to_warehouse",
-    # 声望系统
-    "PRESTIGE_SILVER_THRESHOLD",
-    "add_prestige_silver",
-    "get_prestige_progress",
-    # 排行榜服务
-    "get_player_rank",
-    "get_prestige_ranking",
-    "get_ranking_with_player_context",
-    # 马房服务
-    "HORSE_CONFIG",
-    "finalize_horse_production",
-    "get_active_productions",
-    "get_horse_options",
-    "get_max_production_quantity",
-    "get_stable_speed_bonus",
-    "has_active_production",
-    "refresh_horse_productions",
-    "start_horse_production",
-    # 畜牧场服务
-    "LIVESTOCK_CONFIG",
-    "finalize_livestock_production",
-    "get_active_livestock_productions",
-    "get_livestock_options",
-    "get_max_livestock_quantity",
-    "get_ranch_speed_bonus",
-    "has_active_livestock_production",
-    "refresh_livestock_productions",
-    "start_livestock_production",
-    # 冶炼坊服务
-    "METAL_CONFIG",
-    "finalize_smelting_production",
-    "get_active_smelting_productions",
-    "get_metal_options",
-    "get_max_smelting_quantity",
-    "get_smithy_speed_bonus",
-    "has_active_smelting_production",
-    "refresh_smelting_productions",
-    "start_smelting_production",
-    # 铁匠铺锻造服务
-    "EQUIPMENT_CONFIG",
-    "EQUIPMENT_CATEGORIES",
-    "MATERIAL_NAMES",
-    "finalize_equipment_forging",
-    "get_active_forgings",
-    "get_equipment_by_category",
-    "get_equipment_options",
-    "get_forge_speed_bonus",
-    "get_max_forging_quantity",
-    "has_active_forging",
-    "refresh_equipment_forgings",
-    "start_equipment_forging",
-    # 护院募兵服务
-    "calculate_recruitment_duration",
-    "check_recruitment_requirements",
-    "finalize_troop_recruitment",
-    "get_active_recruitments",
-    "get_player_troops",
-    "get_recruit_config",
-    "get_recruitment_options",
-    "get_troop_template",
-    "has_active_recruitment",
-    "load_troop_templates",
-    "refresh_troop_recruitments",
-    "start_troop_recruitment",
-    # 踢馆/PVP服务
-    # 地图查询
-    "search_manors_by_name",
-    "search_manors_by_region",
-    "search_manors_by_coordinate",
-    "get_manor_public_info",
-    # 距离和工具函数
-    "calculate_distance",
-    "is_same_region",
-    "get_prestige_color",
-    "can_attack_target",
-    "get_asset_level",
-    "get_troop_description",
-    # 侦察系统
-    "get_scout_tech_level",
-    "calculate_scout_success_rate",
-    "calculate_scout_travel_time",
-    "check_scout_cooldown",
-    "get_scout_count",
-    "start_scout",
-    "finalize_scout",
-    "refresh_scout_records",
-    "get_active_scouts",
-    "get_scout_history",
-    # 踢馆出征
-    "calculate_raid_travel_time",
-    "get_active_raid_count",
-    "get_incoming_raids",
-    "start_raid",
-    "process_raid_battle",
-    "finalize_raid",
-    # 撤退机制
-    "request_raid_retreat",
-    "can_raid_retreat",
-    # 保护机制
-    "activate_peace_shield",
-    "get_protection_status",
-    # 庄园迁移
-    "get_relocation_cost",
-    "relocate_manor",
-    # 刷新服务
-    "refresh_raid_runs",
-    "get_active_raids",
-    "get_raid_history",
-    # 监牢/结义林
-    "list_held_prisoners",
-    "recruit_prisoner",
-    "list_oath_bonds",
-    "add_oath_bond",
-    "remove_oath_bond",
-    "draw_pie",
-    "release_prisoner",
-]
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(__all__))

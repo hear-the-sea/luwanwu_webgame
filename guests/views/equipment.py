@@ -24,6 +24,7 @@ from core.utils.validation import safe_positive_int, safe_redirect_url, sanitize
 from ..forms import EquipForm
 from ..models import GearSlot, GearTemplate, Guest
 from ..templatetags.guest_extras import gear_summary, rarity_class, rarity_label
+from .common import unexpected_action_error_response
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,19 @@ def equip_view(request):
             return json_error(error_msg, status=500, include_message=True)
         messages.error(request, error_msg)
         return redirect("gameplay:recruitment_hall")
+    except Exception as exc:
+        logger.exception(
+            "Unexpected equip view error: manor_id=%s user_id=%s slot=%s",
+            getattr(manor, "id", None),
+            getattr(request.user, "id", None),
+            request.POST.get("slot"),
+        )
+        return unexpected_action_error_response(
+            request,
+            exc,
+            is_ajax=is_ajax_request(request),
+            redirect_to="gameplay:recruitment_hall",
+        )
 
     # AJAX 请求返回 JSON 响应
     if is_ajax_request(request):
@@ -151,6 +165,15 @@ def unequip_view(request):
     except DatabaseError as exc:
         logger.exception(
             "Unexpected unequip view database error: manor_id=%s user_id=%s guest_id=%s gear_count=%s",
+            getattr(manor, "id", None),
+            getattr(request.user, "id", None),
+            guest_id,
+            len(gear_ids),
+        )
+        messages.error(request, sanitize_error_message(exc))
+    except Exception as exc:
+        logger.exception(
+            "Unexpected unequip view error: manor_id=%s user_id=%s guest_id=%s gear_count=%s",
             getattr(manor, "id", None),
             getattr(request.user, "id", None),
             guest_id,

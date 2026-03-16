@@ -8,20 +8,22 @@
 
 from __future__ import annotations
 
-# 护院募兵（recruitment.py）
+# 护院募兵生命周期（lifecycle.py）
+from .lifecycle import finalize_troop_recruitment
+
+# 护院募兵查询（queries.py）
+from .queries import get_active_recruitments, get_player_troops, refresh_troop_recruitments
+
+# 护院募兵配置/创建（recruitment.py）
 from .recruitment import (
     calculate_recruitment_duration,
     check_recruitment_requirements,
     clear_troop_cache,
-    finalize_troop_recruitment,
-    get_active_recruitments,
-    get_player_troops,
     get_recruit_config,
     get_recruitment_options,
     get_troop_template,
     has_active_recruitment,
     load_troop_templates,
-    refresh_troop_recruitments,
     start_troop_recruitment,
 )
 

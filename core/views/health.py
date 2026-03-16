@@ -7,7 +7,10 @@ from django.core.cache import cache
 from django.db import connections
 from django.db.utils import DatabaseError
 from django.http import JsonResponse
+from django.utils import timezone
 from django.views.decorators.http import require_GET
+
+from core.tasks import CELERY_BEAT_HEARTBEAT_CACHE_KEY, celery_health_ping
 
 
 def _maybe_debug_error(exc: Exception) -> str | None:
@@ -77,6 +80,53 @@ def _check_celery_broker_ready() -> tuple[bool, str | None]:
         return False, _maybe_debug_error(exc)
 
 
+def _check_celery_workers_ready() -> tuple[bool, str | None]:
+    try:
+        from config.celery import app as celery_app
+
+        responses = celery_app.control.inspect(timeout=1.0).ping() or {}
+        if not responses:
+            raise RuntimeError("no Celery workers responded to ping")
+        return True, None
+    except Exception as exc:
+        return False, _maybe_debug_error(exc)
+
+
+def _check_celery_beat_ready() -> tuple[bool, str | None]:
+    max_age_seconds = max(60, int(getattr(settings, "HEALTH_CHECK_CELERY_BEAT_MAX_AGE_SECONDS", 180)))
+    try:
+        last_seen_raw = cache.get(CELERY_BEAT_HEARTBEAT_CACHE_KEY)
+        if last_seen_raw is None:
+            raise RuntimeError("Celery beat heartbeat missing")
+
+        last_seen = float(last_seen_raw)
+        age_seconds = timezone.now().timestamp() - last_seen
+        if age_seconds > max_age_seconds:
+            raise RuntimeError(f"Celery beat heartbeat stale: {int(age_seconds)}s old")
+        return True, None
+    except Exception as exc:
+        return False, _maybe_debug_error(exc)
+
+
+def _check_celery_roundtrip_ready() -> tuple[bool, str | None]:
+    timeout_seconds = max(0.5, float(getattr(settings, "HEALTH_CHECK_CELERY_ROUNDTRIP_TIMEOUT_SECONDS", 3.0)))
+    async_result = None
+    try:
+        async_result = celery_health_ping.apply_async()
+        response = async_result.get(timeout=timeout_seconds, disable_sync_subtasks=False)
+        if response != "pong":
+            raise RuntimeError(f"unexpected Celery roundtrip payload: {response!r}")
+        return True, None
+    except Exception as exc:
+        return False, _maybe_debug_error(exc)
+    finally:
+        if async_result is not None:
+            try:
+                async_result.forget()
+            except Exception:
+                pass
+
+
 @require_GET
 def health_ready(request):
     checks: dict[str, bool] = {"db": True, "cache": True}
@@ -103,6 +153,24 @@ def health_ready(request):
         checks["celery_broker"] = celery_ok
         if celery_error:
             errors["celery_broker"] = celery_error
+
+    if getattr(settings, "HEALTH_CHECK_CELERY_WORKERS", False):
+        workers_ok, workers_error = _check_celery_workers_ready()
+        checks["celery_workers"] = workers_ok
+        if workers_error:
+            errors["celery_workers"] = workers_error
+
+    if getattr(settings, "HEALTH_CHECK_CELERY_BEAT", False):
+        beat_ok, beat_error = _check_celery_beat_ready()
+        checks["celery_beat"] = beat_ok
+        if beat_error:
+            errors["celery_beat"] = beat_error
+
+    if getattr(settings, "HEALTH_CHECK_CELERY_ROUNDTRIP", False):
+        roundtrip_ok, roundtrip_error = _check_celery_roundtrip_ready()
+        checks["celery_roundtrip"] = roundtrip_ok
+        if roundtrip_error:
+            errors["celery_roundtrip"] = roundtrip_error
 
     ok = all(checks.values())
     payload = {"status": "ok" if ok else "error", "checks": checks}

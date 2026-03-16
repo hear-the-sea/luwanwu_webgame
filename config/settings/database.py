@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from urllib.parse import quote, urlparse, urlunparse
 
-from .base import BASE_DIR, DEBUG, env
+from .base import BASE_DIR, DEBUG, RUNNING_TESTS, env
 
 # Redis configuration
 REDIS_URL = env("REDIS_URL", "redis://127.0.0.1:6379")
@@ -32,14 +32,40 @@ def _redis_url_with_password(url: str, password: str) -> str:
     return urlunparse(parsed._replace(netloc=netloc))
 
 
-# Production security: warn if Redis password is not set
-if not DEBUG and not REDIS_PASSWORD:
-    import warnings
+def _redis_url_has_auth(url: str) -> bool:
+    parsed = urlparse(url)
+    return bool(parsed.username or parsed.password or ("@" in (parsed.netloc or "")))
 
-    warnings.warn(
-        "REDIS_PASSWORD is not set in production. " "This is a security risk. Set REDIS_PASSWORD environment variable.",
-        RuntimeWarning,
-    )
+
+def _validate_production_infrastructure(
+    *,
+    strict_mode: bool,
+    db_engine: str,
+    db_name: str,
+    redis_password: str,
+    redis_urls: tuple[str, ...],
+) -> None:
+    if not strict_mode:
+        return
+
+    normalized_engine = str(db_engine or "").strip().lower()
+    normalized_db_name = str(db_name or "").strip()
+    if not normalized_engine or normalized_engine == "django.db.backends.sqlite3":
+        raise RuntimeError(
+            "Production requires an explicit non-SQLite database configuration. "
+            "Set DJANGO_DB_ENGINE and related database environment variables."
+        )
+    if not normalized_db_name:
+        raise RuntimeError("Production requires DJANGO_DB_NAME to be set.")
+
+    if not redis_password and any(
+        urlparse(url).scheme in {"redis", "rediss"} and not _redis_url_has_auth(url) for url in redis_urls
+    ):
+        raise RuntimeError(
+            "Production requires authenticated Redis configuration. "
+            "Set REDIS_PASSWORD or embed credentials in each Redis URL."
+        )
+
 
 REDIS_BROKER_URL = _redis_url_with_password(env("REDIS_BROKER_URL", f"{REDIS_URL}/0"), REDIS_PASSWORD)
 REDIS_RESULT_URL = _redis_url_with_password(env("REDIS_RESULT_URL", REDIS_BROKER_URL), REDIS_PASSWORD)
@@ -63,6 +89,8 @@ CACHES = {
 
 # Database engine configuration
 _db_engine = env("DJANGO_DB_ENGINE", "django.db.backends.sqlite3")
+_db_name = str(env("DJANGO_DB_NAME", str(BASE_DIR / "db.sqlite3")))
+_strict_infra_config = env("DJANGO_STRICT_INFRA_CONFIG", "1" if not DEBUG and not RUNNING_TESTS else "0") == "1"
 
 # Connection pool configuration
 _conn_max_age_str = env("DJANGO_DB_CONN_MAX_AGE", "")
@@ -90,7 +118,7 @@ elif "mysql" in _db_engine:
 DATABASES = {
     "default": {
         "ENGINE": _db_engine,
-        "NAME": env("DJANGO_DB_NAME", str(BASE_DIR / "db.sqlite3")),
+        "NAME": _db_name,
         "USER": env("DJANGO_DB_USER", ""),
         "PASSWORD": env("DJANGO_DB_PASSWORD", ""),
         "HOST": env("DJANGO_DB_HOST", ""),
@@ -101,6 +129,14 @@ DATABASES = {
         "OPTIONS": _db_options,
     }
 }
+
+_validate_production_infrastructure(
+    strict_mode=_strict_infra_config,
+    db_engine=_db_engine,
+    db_name=_db_name,
+    redis_password=REDIS_PASSWORD,
+    redis_urls=(REDIS_URL, REDIS_BROKER_URL, REDIS_RESULT_URL, REDIS_CHANNEL_URL, REDIS_CACHE_URL),
+)
 
 # Channel layers
 CHANNEL_LAYERS = {

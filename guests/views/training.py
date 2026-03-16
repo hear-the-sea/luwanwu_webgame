@@ -26,6 +26,7 @@ from core.utils.validation import safe_redirect_url, sanitize_error_message
 from ..forms import AllocateSkillPointsForm, TrainGuestForm
 from ..models import Guest
 from ..services import allocate_attribute_points, train_guest, use_experience_item_for_guest
+from .common import unexpected_action_error_response
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,15 @@ class TrainView(LoginRequiredMixin, TemplateView):
         except DatabaseError as exc:
             logger.exception(
                 "Unexpected guest train database error: manor_id=%s user_id=%s guest_id=%s levels=%s",
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                getattr(guest, "id", None),
+                levels,
+            )
+            messages.error(request, sanitize_error_message(exc))
+        except Exception as exc:
+            logger.exception(
+                "Unexpected guest train error: manor_id=%s user_id=%s guest_id=%s levels=%s",
                 getattr(manor, "id", None),
                 getattr(request.user, "id", None),
                 getattr(guest, "id", None),
@@ -145,6 +155,15 @@ def use_experience_item_view(request, pk: int):
         if is_ajax:
             return json_error(error_msg, status=500, include_message=True)
         messages.error(request, error_msg)
+    except Exception as exc:
+        logger.exception(
+            "Unexpected experience-item use error: manor_id=%s user_id=%s guest_id=%s item_id=%s",
+            getattr(manor, "id", None),
+            getattr(request.user, "id", None),
+            pk,
+            item_id_int,
+        )
+        return unexpected_action_error_response(request, exc, is_ajax=is_ajax, redirect_to=next_url)
     return redirect(next_url)
 
 
@@ -237,6 +256,8 @@ def allocate_points_view(request, pk: int):
                 luck=guest.luck,
                 attribute_panel_html=attribute_panel_html,
             )
+    except (GameError, ValueError):
+        raise
     except DatabaseError as exc:
         logger.exception(
             "Unexpected allocate-points database error: manor_id=%s user_id=%s guest_id=%s attribute=%s points=%s",
@@ -250,6 +271,19 @@ def allocate_points_view(request, pk: int):
         if is_ajax:
             return json_error(error_msg, status=500, include_message=True)
         messages.error(request, error_msg)
+        return reverse("guests:detail", args=[guest.pk])
+    except Exception as exc:
+        logger.exception(
+            "Unexpected allocate-points error: manor_id=%s user_id=%s guest_id=%s attribute=%s points=%s",
+            getattr(manor, "id", None),
+            getattr(request.user, "id", None),
+            getattr(guest, "id", None),
+            attribute,
+            points,
+        )
+        if is_ajax:
+            return json_error(sanitize_error_message(exc), status=500, include_message=True)
+        messages.error(request, sanitize_error_message(exc))
         return reverse("guests:detail", args=[guest.pk])
 
     # 成功消息由装饰器的 success_message 参数处理

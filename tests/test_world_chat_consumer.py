@@ -102,6 +102,18 @@ class WorldChatConsumerTests(SimpleTestCase):
         self.assertIn("8s", payload["message"])
         consumer._consume_trumpet.assert_not_awaited()
 
+    def test_receive_json_rate_limit_backend_failure_returns_chat_unavailable(self):
+        consumer = self._build_consumer()
+        consumer._rate_limit = AsyncMock(side_effect=RuntimeError("redis down"))
+        consumer._consume_trumpet = AsyncMock(return_value=(True, ""))
+
+        asyncio.run(consumer.receive_json({"type": "send", "text": "hello"}))
+
+        consumer.send_json.assert_awaited_once_with(
+            {"type": "error", "code": "chat_unavailable", "message": consumer.CHAT_UNAVAILABLE_MESSAGE}
+        )
+        consumer._consume_trumpet.assert_not_awaited()
+
     def test_receive_json_no_trumpet_returns_error(self):
         consumer = self._build_consumer()
         consumer._rate_limit = AsyncMock(return_value=(True, None))
@@ -135,5 +147,65 @@ class WorldChatConsumerTests(SimpleTestCase):
             {
                 "type": "chat_message",
                 "payload": message,
+            },
+        )
+
+    def test_receive_json_refunds_trumpet_when_history_write_fails(self):
+        consumer = self._build_consumer()
+        consumer._rate_limit = AsyncMock(return_value=(True, None))
+        consumer._consume_trumpet = AsyncMock(return_value=(True, ""))
+        consumer._refund_trumpet = AsyncMock(return_value=True)
+        consumer._append_history = AsyncMock(side_effect=RuntimeError("redis down"))
+
+        message = {
+            "type": "message",
+            "channel": "world",
+            "id": 1,
+            "ts": 1700000000000,
+            "sender": {"id": 1, "name": "玩家A"},
+            "text": "hello",
+        }
+        consumer._build_message = AsyncMock(return_value=message)
+
+        asyncio.run(consumer.receive_json({"type": "send", "text": "hello"}))
+
+        consumer._refund_trumpet.assert_awaited_once_with()
+        consumer.channel_layer.group_send.assert_not_awaited()
+        self.assertEqual(
+            consumer.send_json.await_args.args[0],
+            {
+                "type": "error",
+                "code": "chat_unavailable",
+                "message": consumer.CHAT_UNAVAILABLE_REFUNDED_MESSAGE,
+            },
+        )
+
+    def test_receive_json_reports_manual_compensation_when_refund_fails(self):
+        consumer = self._build_consumer()
+        consumer._rate_limit = AsyncMock(return_value=(True, None))
+        consumer._consume_trumpet = AsyncMock(return_value=(True, ""))
+        consumer._refund_trumpet = AsyncMock(return_value=False)
+        consumer._append_history = AsyncMock()
+        consumer.channel_layer.group_send = AsyncMock(side_effect=RuntimeError("channel layer down"))
+
+        message = {
+            "type": "message",
+            "channel": "world",
+            "id": 1,
+            "ts": 1700000000000,
+            "sender": {"id": 1, "name": "玩家A"},
+            "text": "hello",
+        }
+        consumer._build_message = AsyncMock(return_value=message)
+
+        asyncio.run(consumer.receive_json({"type": "send", "text": "hello"}))
+
+        consumer._refund_trumpet.assert_awaited_once_with()
+        self.assertEqual(
+            consumer.send_json.await_args.args[0],
+            {
+                "type": "error",
+                "code": "chat_unavailable",
+                "message": consumer.CHAT_UNAVAILABLE_REFUND_FAILED_MESSAGE,
             },
         )

@@ -86,6 +86,70 @@ def test_health_ready_returns_503_when_celery_broker_check_fails(monkeypatch, cl
 
 
 @pytest.mark.django_db
+@override_settings(HEALTH_CHECK_CELERY_WORKERS=True, HEALTH_CHECK_CELERY_BEAT=True)
+def test_health_ready_includes_async_worker_and_beat_checks(monkeypatch, client):
+    monkeypatch.setattr("core.views.health._check_database_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health._check_cache_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health._check_channel_layer_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health._check_celery_broker_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health._check_celery_workers_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health._check_celery_beat_ready", lambda: (True, None))
+
+    resp = client.get("/health/ready")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["checks"]["celery_workers"] is True
+    assert data["checks"]["celery_beat"] is True
+
+
+@pytest.mark.django_db
+@override_settings(HEALTH_CHECK_CELERY_ROUNDTRIP=True)
+def test_health_ready_includes_celery_roundtrip_check(monkeypatch, client):
+    monkeypatch.setattr("core.views.health._check_database_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health._check_cache_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health._check_channel_layer_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health._check_celery_broker_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health._check_celery_roundtrip_ready", lambda: (True, None))
+
+    resp = client.get("/health/ready")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["checks"]["celery_roundtrip"] is True
+
+
+@pytest.mark.django_db
+@override_settings(HEALTH_CHECK_CELERY_WORKERS=True, HEALTH_CHECK_CELERY_BEAT=True)
+def test_health_ready_returns_503_when_celery_beat_check_fails(monkeypatch, client):
+    monkeypatch.setattr("core.views.health._check_database_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health._check_cache_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health._check_channel_layer_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health._check_celery_broker_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health._check_celery_workers_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health._check_celery_beat_ready", lambda: (False, "beat fail"))
+
+    resp = client.get("/health/ready")
+    assert resp.status_code == 503
+    data = resp.json()
+    assert data["checks"]["celery_workers"] is True
+    assert data["checks"]["celery_beat"] is False
+
+
+@pytest.mark.django_db
+@override_settings(HEALTH_CHECK_CELERY_ROUNDTRIP=True)
+def test_health_ready_returns_503_when_celery_roundtrip_check_fails(monkeypatch, client):
+    monkeypatch.setattr("core.views.health._check_database_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health._check_cache_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health._check_channel_layer_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health._check_celery_broker_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health._check_celery_roundtrip_ready", lambda: (False, "roundtrip fail"))
+
+    resp = client.get("/health/ready")
+    assert resp.status_code == 503
+    data = resp.json()
+    assert data["checks"]["celery_roundtrip"] is False
+
+
+@pytest.mark.django_db
 @override_settings(DEBUG=False)
 def test_health_ready_hides_error_details_when_not_debug(monkeypatch, client):
     monkeypatch.setattr("core.views.health._check_database_ready", lambda: (False, None))

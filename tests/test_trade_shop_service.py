@@ -198,6 +198,44 @@ def test_sell_item_grants_silver_and_clears_zero_inventory(monkeypatch, django_u
 
 
 @pytest.mark.django_db
+def test_sell_item_disables_production_sync_on_resource_grant(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="shop_sell_sync_flag", password="pass12345")
+    manor = ensure_manor(user)
+
+    template = ItemTemplate.objects.create(
+        key="shop_sell_sync_flag_item",
+        name="出售标记物品",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=False,
+        tradeable=False,
+        price=7,
+    )
+
+    InventoryItem.objects.create(
+        manor=manor,
+        template=template,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        quantity=1,
+    )
+
+    observed: dict[str, object] = {}
+
+    def _fake_grant_resources_locked(locked_manor, rewards, note, reason, *, sync_production=True):
+        observed["sync_production"] = sync_production
+        observed["rewards"] = rewards
+        locked_manor.silver += rewards["silver"]
+        locked_manor.save(update_fields=["silver"])
+        return rewards, {}
+
+    monkeypatch.setattr("trade.services.shop_service.grant_resources_locked", _fake_grant_resources_locked)
+
+    result = sell_item(manor, template.key, 1)
+
+    assert result == {"item_name": template.name, "quantity": 1, "total_income": 7}
+    assert observed == {"sync_production": False, "rewards": {"silver": 7}}
+
+
+@pytest.mark.django_db
 def test_get_sellable_inventory_loads_shop_config_once(monkeypatch, django_user_model):
     user = django_user_model.objects.create_user(username="shop_sellable_perf", password="pass12345")
     manor = ensure_manor(user)

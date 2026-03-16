@@ -5,7 +5,6 @@ import html
 import json
 import logging
 import re
-import threading
 
 from asgiref.sync import sync_to_async
 from channels.db import database_sync_to_async
@@ -50,18 +49,8 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
 
     TRUMPET_ITEM_KEY = "small_trumpet"
 
-    # Fallback in-memory rate limiting when Redis is unavailable
-    _fallback_rate_limits: dict[int, list[float]] = {}
-    _fallback_rate_limits_last_seen: dict[int, float] = {}
-    FALLBACK_RATE_LIMIT_CLEANUP_THRESHOLD = 1000
-
     # Display name cache TTL (5 minutes)
     DISPLAY_NAME_CACHE_TTL = 300
-
-    # Fallback message-id state when Redis INCR is unavailable.
-    _fallback_next_id_lock = threading.Lock()
-    _fallback_next_id_last_ms = 0
-    _fallback_next_id_seq = 0
 
     # Lua script for batch history trimming (O(1) per removed message vs O(n) round trips)
     TRIM_HISTORY_SCRIPT = """
@@ -88,6 +77,9 @@ return removed
 
     user_id: int | None = None
     display_name: str = ""
+    CHAT_UNAVAILABLE_MESSAGE = "世界频道暂时不可用，请稍后重试"
+    CHAT_UNAVAILABLE_REFUNDED_MESSAGE = "世界频道暂时不可用，已返还小喇叭"
+    CHAT_UNAVAILABLE_REFUND_FAILED_MESSAGE = "世界频道暂时不可用，请联系管理员补发小喇叭"
 
     _re_control_chars = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
@@ -142,7 +134,13 @@ return removed
         if len(text) > self.MESSAGE_MAX_LEN:
             text = text[: self.MESSAGE_MAX_LEN]
 
-        allowed, retry_after = await self._rate_limit(self.user_id)
+        try:
+            allowed, retry_after = await self._rate_limit(self.user_id)
+        except RuntimeError:
+            await self.send_json(
+                {"type": "error", "code": "chat_unavailable", "message": self.CHAT_UNAVAILABLE_MESSAGE}
+            )
+            return
         if not allowed:
             tip = "发送太快，请稍候再试"
             if retry_after:
@@ -155,15 +153,34 @@ return removed
             await self.send_json({"type": "error", "code": "no_trumpet", "message": error_msg})
             return
 
-        message = await self._build_message(text)
-        await self._append_history(message)
-        await self.channel_layer.group_send(
-            self.GROUP_NAME,
-            {
-                "type": "chat_message",
-                "payload": message,
-            },
-        )
+        try:
+            message = await self._build_message(text)
+            await self._append_history(message)
+            await self.channel_layer.group_send(
+                self.GROUP_NAME,
+                {
+                    "type": "chat_message",
+                    "payload": message,
+                },
+            )
+        except Exception:
+            refunded = await self._refund_trumpet()
+            logger.exception(
+                "World chat publish failed after consuming trumpet: user_id=%s refunded=%s",
+                self.user_id,
+                refunded,
+            )
+            await self.send_json(
+                {
+                    "type": "error",
+                    "code": "chat_unavailable",
+                    "message": (
+                        self.CHAT_UNAVAILABLE_REFUNDED_MESSAGE
+                        if refunded
+                        else self.CHAT_UNAVAILABLE_REFUND_FAILED_MESSAGE
+                    ),
+                }
+            )
 
     async def receive_json(self, content, **kwargs):
         try:
@@ -255,6 +272,14 @@ return removed
             return False, "未登录，无法发言"
         return consume_trumpet(self.user_id)
 
+    @database_sync_to_async
+    def _refund_trumpet(self) -> bool:
+        from gameplay.services.chat import refund_trumpet
+
+        if self.user_id is None:
+            return False
+        return refund_trumpet(self.user_id)
+
     def _get_history_sync(self) -> list[dict]:
         redis = self._get_redis()
         cutoff_ms = int((_now_ts() - float(self.HISTORY_MESSAGE_TTL_SECONDS)) * 1000)
@@ -338,12 +363,7 @@ return removed
         self._trim_history_by_time_sync(cutoff_ms)
 
     async def _append_history(self, message: dict) -> None:
-        try:
-            await sync_to_async(self._append_history_sync, thread_sensitive=True)(message)
-        except RedisError as exc:
-            logger.debug("World chat history write skipped due to Redis error: %s", exc)
-        except Exception:
-            logger.exception("Unexpected error while appending world chat history")
+        await sync_to_async(self._append_history_sync, thread_sensitive=True)(message)
 
     def _rate_limit_sync(self, user_id: int | None) -> tuple[bool, int | None]:
         if not user_id:
@@ -358,51 +378,12 @@ return removed
             if count == 1:
                 redis.expire(key, self.RATE_LIMIT_WINDOW_SECONDS + 2)
         except RedisError as exc:
-            logger.warning("World chat rate limit Redis error, using fallback: %s", exc)
-            return self._fallback_rate_limit(user_id)
+            logger.warning("World chat rate limit Redis error; rejecting send: %s", exc)
+            raise RuntimeError("world chat rate limit backend unavailable") from exc
 
         if count > self.RATE_LIMIT_MAX_MESSAGES:
             return False, self.RATE_LIMIT_WINDOW_SECONDS
         return True, None
-
-    def _fallback_rate_limit(self, user_id: int) -> tuple[bool, int | None]:
-        """Fallback in-memory rate limiting when Redis is unavailable."""
-        import time
-
-        now = time.time()
-        window = self.RATE_LIMIT_WINDOW_SECONDS
-        cls = self.__class__
-
-        if user_id not in cls._fallback_rate_limits:
-            cls._fallback_rate_limits[user_id] = []
-
-        # Clean up expired records for current user
-        timestamps = cls._fallback_rate_limits[user_id]
-        timestamps[:] = [t for t in timestamps if now - t < window]
-        cls._fallback_rate_limits_last_seen[user_id] = now
-
-        # Memory pressure guard: purge stale fallback users once the map grows.
-        if len(cls._fallback_rate_limits) > int(self.FALLBACK_RATE_LIMIT_CLEANUP_THRESHOLD):
-            self._cleanup_fallback_rate_limits(now, window)
-
-        if len(timestamps) >= self.RATE_LIMIT_MAX_MESSAGES:
-            return False, int(window - (now - timestamps[0]))
-
-        timestamps.append(now)
-        return True, None
-
-    def _cleanup_fallback_rate_limits(self, now: float, window: int) -> None:
-        cls = self.__class__
-        stale_after_seconds = max(60, int(window) * 10)
-        stale_users = []
-        for uid, ts in cls._fallback_rate_limits.items():
-            last_seen = cls._fallback_rate_limits_last_seen.get(uid, 0.0)
-            if not ts or (now - last_seen) > stale_after_seconds:
-                stale_users.append(uid)
-
-        for uid in stale_users:
-            cls._fallback_rate_limits.pop(uid, None)
-            cls._fallback_rate_limits_last_seen.pop(uid, None)
 
     async def _rate_limit(self, user_id: int | None) -> tuple[bool, int | None]:
         return await sync_to_async(self._rate_limit_sync, thread_sensitive=True)(user_id)
@@ -412,22 +393,8 @@ return removed
         try:
             return int(redis.incr(self.NEXT_ID_KEY) or 0)
         except RedisError as exc:
-            logger.debug("World chat next_id Redis error; falling back to local sequencer: %s", exc)
-            cls = self.__class__
-            with cls._fallback_next_id_lock:
-                now_ms = int(_now_ts() * 1000)
-                if now_ms > cls._fallback_next_id_last_ms:
-                    cls._fallback_next_id_last_ms = now_ms
-                    cls._fallback_next_id_seq = 0
-                else:
-                    # Clock rollback / same-millisecond burst: keep monotonic IDs.
-                    now_ms = cls._fallback_next_id_last_ms
-                    cls._fallback_next_id_seq += 1
-                    if cls._fallback_next_id_seq >= 1_000_000:
-                        cls._fallback_next_id_last_ms += 1
-                        now_ms = cls._fallback_next_id_last_ms
-                        cls._fallback_next_id_seq = 0
-                return now_ms * 1_000_000 + cls._fallback_next_id_seq
+            logger.warning("World chat next_id Redis error; rejecting send: %s", exc)
+            raise RuntimeError("world chat id backend unavailable") from exc
 
     async def _build_message(self, text: str) -> dict:
         msg_id = await sync_to_async(self._next_id_sync, thread_sensitive=True)()

@@ -376,6 +376,7 @@ def purchase_listing(buyer: Manor, listing_id: int) -> MarketTransaction:
                 {"silver": seller_received},
                 note=f"出售{listing.item_template.name}",
                 reason=ResourceEvent.Reason.ITEM_SOLD,
+                sync_production=False,
             )
 
         now = timezone.now()

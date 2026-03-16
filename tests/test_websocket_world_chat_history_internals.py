@@ -96,10 +96,6 @@ class _FakeRedis:
 
 
 def _build_consumer(fake_redis: _FakeRedis) -> WorldChatConsumer:
-    WorldChatConsumer._fallback_rate_limits = {}
-    WorldChatConsumer._fallback_rate_limits_last_seen = {}
-    WorldChatConsumer._fallback_next_id_last_ms = 0
-    WorldChatConsumer._fallback_next_id_seq = 0
     consumer = WorldChatConsumer()
     consumer._get_redis = lambda: fake_redis
     consumer.user_id = 1
@@ -173,16 +169,18 @@ def test_world_chat_rate_limit_sync_handles_no_user_id():
     assert retry_after == 3
 
 
-def test_world_chat_rate_limit_sync_allows_when_redis_errors(monkeypatch):
+def test_world_chat_rate_limit_sync_raises_when_redis_errors(monkeypatch):
     class _BrokenRedis(_FakeRedis):
         def incr(self, key: str):
             raise RedisError("down")
 
     consumer = _build_consumer(_BrokenRedis())
-    allowed, retry_after = consumer._rate_limit_sync(1)
-
-    assert allowed is True
-    assert retry_after is None
+    try:
+        consumer._rate_limit_sync(1)
+    except RuntimeError as exc:
+        assert "rate limit backend unavailable" in str(exc)
+    else:  # pragma: no cover - defensive failure path
+        raise AssertionError("expected RuntimeError when Redis is unavailable")
 
 
 def test_world_chat_rate_limit_sync_rejects_after_limit(monkeypatch):
@@ -197,41 +195,18 @@ def test_world_chat_rate_limit_sync_rejects_after_limit(monkeypatch):
     assert consumer._rate_limit_sync(1) == (False, 8)
 
 
-def test_world_chat_next_id_sync_falls_back_on_redis_error(monkeypatch):
+def test_world_chat_next_id_sync_raises_on_redis_error(monkeypatch):
     class _BrokenRedis(_FakeRedis):
         def incr(self, key: str):
             raise RedisError("down")
 
     consumer = _build_consumer(_BrokenRedis())
-    monkeypatch.setattr("websocket.consumers.time.time", lambda: 1234.5)
-
-    assert consumer._next_id_sync() == 1234500000000
-
-
-def test_world_chat_next_id_sync_fallback_is_unique_with_same_timestamp(monkeypatch):
-    class _BrokenRedis(_FakeRedis):
-        def incr(self, key: str):
-            raise RedisError("down")
-
-    consumer = _build_consumer(_BrokenRedis())
-    monkeypatch.setattr("websocket.consumers.time.time", lambda: 1234.5)
-
-    first = consumer._next_id_sync()
-    second = consumer._next_id_sync()
-
-    assert second == first + 1
-
-
-def test_world_chat_fallback_rate_limit_cleanup_drops_stale_users():
-    consumer = _build_consumer(_FakeRedis())
-    WorldChatConsumer._fallback_rate_limits = {1: [1.0], 2: [190.0]}
-    WorldChatConsumer._fallback_rate_limits_last_seen = {1: 1.0, 2: 190.0}
-
-    consumer._cleanup_fallback_rate_limits(now=200.0, window=8)
-
-    assert 1 not in WorldChatConsumer._fallback_rate_limits
-    assert 1 not in WorldChatConsumer._fallback_rate_limits_last_seen
-    assert 2 in WorldChatConsumer._fallback_rate_limits
+    try:
+        consumer._next_id_sync()
+    except RuntimeError as exc:
+        assert "id backend unavailable" in str(exc)
+    else:  # pragma: no cover - defensive failure path
+        raise AssertionError("expected RuntimeError when Redis is unavailable")
 
 
 def test_world_chat_get_display_name_tolerates_cache_errors(monkeypatch):

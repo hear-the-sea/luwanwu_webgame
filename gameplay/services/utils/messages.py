@@ -330,6 +330,7 @@ def claim_message_attachments(message: Message) -> Dict:
         resources,
         note=f"邮件附件：{locked_message.title}",
         reason=ResourceEvent.Reason.ADMIN_ADJUST,
+        sync_production=False,
     )
     claimed_summary.update(claimed_resources)
 

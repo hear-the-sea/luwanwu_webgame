@@ -204,7 +204,7 @@ def test_equip_view_database_error_degrades_with_message(django_user_model, monk
 
 
 @pytest.mark.django_db
-def test_equip_view_runtime_error_bubbles_up(django_user_model, monkeypatch):
+def test_equip_view_runtime_error_degrades_with_message(django_user_model, monkeypatch):
     client, manor = _login_client(django_user_model, prefix="equip_runtime")
     guest = _create_guest(manor, prefix="equip_runtime")
     gear = _create_gear(manor)
@@ -212,11 +212,14 @@ def test_equip_view_runtime_error_bubbles_up(django_user_model, monkeypatch):
 
     monkeypatch.setattr("guests.services.equip_guest", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("boom")))
 
-    with pytest.raises(RuntimeError, match="boom"):
-        client.post(
-            reverse("guests:equip"),
-            {"guest": str(guest.pk), "gear": str(gear.pk), "slot": gear.template.slot},
-        )
+    response = client.post(
+        reverse("guests:equip"),
+        {"guest": str(guest.pk), "gear": str(gear.pk), "slot": gear.template.slot},
+    )
+
+    assert response.status_code == 302
+    assert response.url == reverse("gameplay:recruitment_hall")
+    assert "操作失败，请稍后重试" in _messages(response)
 
 
 @pytest.mark.django_db
@@ -238,7 +241,7 @@ def test_unequip_view_database_error_degrades_with_message(django_user_model, mo
 
 
 @pytest.mark.django_db
-def test_unequip_view_runtime_error_bubbles_up(django_user_model, monkeypatch):
+def test_unequip_view_runtime_error_degrades_with_message(django_user_model, monkeypatch):
     client, manor = _login_client(django_user_model, prefix="unequip_runtime")
     guest = _create_guest(manor, prefix="unequip_runtime")
     gear = _create_gear(manor, guest=guest)
@@ -248,8 +251,11 @@ def test_unequip_view_runtime_error_bubbles_up(django_user_model, monkeypatch):
         lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
-    with pytest.raises(RuntimeError, match="boom"):
-        client.post(reverse("guests:unequip"), {"guest": str(guest.pk), "gear": [str(gear.pk)]})
+    response = client.post(reverse("guests:unequip"), {"guest": str(guest.pk), "gear": [str(gear.pk)]})
+
+    assert response.status_code == 302
+    assert response.url == reverse("guests:roster")
+    assert "操作失败，请稍后重试" in _messages(response)
 
 
 @pytest.mark.django_db
@@ -309,7 +315,7 @@ def test_use_medicine_item_view_database_error_returns_generic_json(django_user_
 
 
 @pytest.mark.django_db
-def test_use_medicine_item_view_runtime_error_bubbles_up(django_user_model, monkeypatch):
+def test_use_medicine_item_view_runtime_error_returns_generic_json(django_user_model, monkeypatch):
     client, manor = _login_client(django_user_model, prefix="medicine_runtime")
     guest = _create_guest(manor, prefix="medicine_runtime")
     item = _create_item(
@@ -324,12 +330,14 @@ def test_use_medicine_item_view_runtime_error_bubbles_up(django_user_model, monk
         lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
-    with pytest.raises(RuntimeError, match="boom"):
-        client.post(
-            reverse("guests:use_medicine_item", args=[guest.pk]),
-            {"item_id": str(item.pk)},
-            **_ajax_headers(),
-        )
+    response = client.post(
+        reverse("guests:use_medicine_item", args=[guest.pk]),
+        {"item_id": str(item.pk)},
+        **_ajax_headers(),
+    )
+
+    assert response.status_code == 500
+    assert response.json()["error"] == "操作失败，请稍后重试"
 
 
 @pytest.mark.django_db
@@ -351,7 +359,7 @@ def test_recruit_view_database_error_degrades_with_message(django_user_model, mo
 
 
 @pytest.mark.django_db
-def test_recruit_view_runtime_error_bubbles_up(django_user_model, monkeypatch):
+def test_recruit_view_runtime_error_degrades_with_message(django_user_model, monkeypatch):
     client, _manor = _login_client(django_user_model, prefix="recruit_runtime")
     pool = _create_pool("recruit_runtime")
     _stub_recruit_lock(monkeypatch)
@@ -361,8 +369,11 @@ def test_recruit_view_runtime_error_bubbles_up(django_user_model, monkeypatch):
         lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
-    with pytest.raises(RuntimeError, match="boom"):
-        client.post(reverse("guests:recruit"), {"pool": str(pool.pk)})
+    response = client.post(reverse("guests:recruit"), {"pool": str(pool.pk)})
+
+    assert response.status_code == 302
+    assert response.url == reverse("gameplay:recruitment_hall")
+    assert "操作失败，请稍后重试" in _messages(response)
 
 
 @pytest.mark.django_db
@@ -387,7 +398,7 @@ def test_accept_candidate_view_database_error_degrades_with_message(django_user_
 
 
 @pytest.mark.django_db
-def test_accept_candidate_view_runtime_error_bubbles_up(django_user_model, monkeypatch):
+def test_accept_candidate_view_runtime_error_degrades_with_message(django_user_model, monkeypatch):
     client, manor = _login_client(django_user_model, prefix="accept_runtime")
     candidate = _create_candidate(manor, prefix="accept_runtime")
     _stub_recruit_lock(monkeypatch)
@@ -397,11 +408,14 @@ def test_accept_candidate_view_runtime_error_bubbles_up(django_user_model, monke
         lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
-    with pytest.raises(RuntimeError, match="boom"):
-        client.post(
-            reverse("guests:candidate_accept"),
-            {"candidate_ids": [str(candidate.pk)], "action": "accept"},
-        )
+    response = client.post(
+        reverse("guests:candidate_accept"),
+        {"candidate_ids": [str(candidate.pk)], "action": "accept"},
+    )
+
+    assert response.status_code == 302
+    assert response.url == reverse("gameplay:recruitment_hall")
+    assert "操作失败，请稍后重试" in _messages(response)
 
 
 @pytest.mark.django_db
@@ -445,7 +459,7 @@ def test_use_magnifying_glass_view_database_error_returns_generic_json(django_us
 
 
 @pytest.mark.django_db
-def test_use_magnifying_glass_view_runtime_error_bubbles_up(django_user_model, monkeypatch):
+def test_use_magnifying_glass_view_runtime_error_returns_generic_json(django_user_model, monkeypatch):
     client, _manor = _login_client(django_user_model, prefix="magnify_runtime")
     _stub_recruit_lock(monkeypatch)
 
@@ -454,12 +468,14 @@ def test_use_magnifying_glass_view_runtime_error_bubbles_up(django_user_model, m
         lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
-    with pytest.raises(RuntimeError, match="boom"):
-        client.post(
-            reverse("guests:use_magnifying_glass"),
-            {"item_id": "1"},
-            **_ajax_headers(),
-        )
+    response = client.post(
+        reverse("guests:use_magnifying_glass"),
+        {"item_id": "1"},
+        **_ajax_headers(),
+    )
+
+    assert response.status_code == 500
+    assert response.json()["error"] == "操作失败，请稍后重试"
 
 
 @pytest.mark.django_db
@@ -481,7 +497,7 @@ def test_learn_skill_view_database_error_degrades_with_message(django_user_model
 
 
 @pytest.mark.django_db
-def test_learn_skill_view_runtime_error_bubbles_up(django_user_model, monkeypatch):
+def test_learn_skill_view_runtime_error_degrades_with_message(django_user_model, monkeypatch):
     client, manor = _login_client(django_user_model, prefix="learn_runtime")
     guest = _create_guest(manor, prefix="learn_runtime")
     _skill, item = _create_skill_book(manor, prefix="learn_runtime")
@@ -491,8 +507,11 @@ def test_learn_skill_view_runtime_error_bubbles_up(django_user_model, monkeypatc
         lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
-    with pytest.raises(RuntimeError, match="boom"):
-        client.post(reverse("guests:learn_skill", args=[guest.pk]), {"item_id": str(item.pk)})
+    response = client.post(reverse("guests:learn_skill", args=[guest.pk]), {"item_id": str(item.pk)})
+
+    assert response.status_code == 302
+    assert response.url == reverse("guests:detail", args=[guest.pk])
+    assert "操作失败，请稍后重试" in _messages(response)
 
 
 @pytest.mark.django_db
@@ -515,7 +534,7 @@ def test_forget_skill_view_database_error_degrades_with_message(django_user_mode
 
 
 @pytest.mark.django_db
-def test_forget_skill_view_runtime_error_bubbles_up(django_user_model, monkeypatch):
+def test_forget_skill_view_runtime_error_degrades_with_message(django_user_model, monkeypatch):
     client, manor = _login_client(django_user_model, prefix="forget_runtime")
     guest = _create_guest(manor, prefix="forget_runtime")
     skill = Skill.objects.create(key=_unique("forget_runtime_skill"), name="遗忘技能", rarity="green")
@@ -526,8 +545,11 @@ def test_forget_skill_view_runtime_error_bubbles_up(django_user_model, monkeypat
         lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
-    with pytest.raises(RuntimeError, match="boom"):
-        client.post(reverse("guests:forget_skill", args=[guest.pk]), {"guest_skill_id": str(guest_skill.pk)})
+    response = client.post(reverse("guests:forget_skill", args=[guest.pk]), {"guest_skill_id": str(guest_skill.pk)})
+
+    assert response.status_code == 302
+    assert response.url == reverse("guests:detail", args=[guest.pk])
+    assert "操作失败，请稍后重试" in _messages(response)
 
 
 @pytest.mark.django_db
@@ -547,7 +569,7 @@ def test_train_view_database_error_degrades_with_message(django_user_model, monk
 
 
 @pytest.mark.django_db
-def test_train_view_runtime_error_bubbles_up(django_user_model, monkeypatch):
+def test_train_view_runtime_error_degrades_with_message(django_user_model, monkeypatch):
     client, manor = _login_client(django_user_model, prefix="train_runtime")
     guest = _create_guest(manor, prefix="train_runtime")
 
@@ -555,8 +577,11 @@ def test_train_view_runtime_error_bubbles_up(django_user_model, monkeypatch):
         "guests.views.training.train_guest", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("boom"))
     )
 
-    with pytest.raises(RuntimeError, match="boom"):
-        client.post(reverse("guests:train"), {"guest": str(guest.pk), "levels": "1"})
+    response = client.post(reverse("guests:train"), {"guest": str(guest.pk), "levels": "1"})
+
+    assert response.status_code == 302
+    assert response.url == reverse("gameplay:recruitment_hall")
+    assert "操作失败，请稍后重试" in _messages(response)
 
 
 @pytest.mark.django_db
@@ -586,7 +611,7 @@ def test_use_experience_item_view_database_error_returns_generic_json(django_use
 
 
 @pytest.mark.django_db
-def test_use_experience_item_view_runtime_error_bubbles_up(django_user_model, monkeypatch):
+def test_use_experience_item_view_runtime_error_returns_generic_json(django_user_model, monkeypatch):
     client, manor = _login_client(django_user_model, prefix="exp_runtime")
     guest = _create_guest(manor, prefix="exp_runtime")
     item = _create_item(
@@ -601,12 +626,14 @@ def test_use_experience_item_view_runtime_error_bubbles_up(django_user_model, mo
         lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
-    with pytest.raises(RuntimeError, match="boom"):
-        client.post(
-            reverse("guests:use_exp_item", args=[guest.pk]),
-            {"item_id": str(item.pk)},
-            **_ajax_headers(),
-        )
+    response = client.post(
+        reverse("guests:use_exp_item", args=[guest.pk]),
+        {"item_id": str(item.pk)},
+        **_ajax_headers(),
+    )
+
+    assert response.status_code == 500
+    assert response.json()["error"] == "操作失败，请稍后重试"
 
 
 @pytest.mark.django_db
@@ -650,7 +677,7 @@ def test_allocate_points_view_database_error_returns_generic_json(django_user_mo
 
 
 @pytest.mark.django_db
-def test_allocate_points_view_runtime_error_bubbles_up(django_user_model, monkeypatch):
+def test_allocate_points_view_runtime_error_returns_generic_json(django_user_model, monkeypatch):
     client, manor = _login_client(django_user_model, prefix="allocate_runtime")
     guest = _create_guest(manor, prefix="allocate_runtime")
 
@@ -659,9 +686,11 @@ def test_allocate_points_view_runtime_error_bubbles_up(django_user_model, monkey
         lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
-    with pytest.raises(RuntimeError, match="boom"):
-        client.post(
-            reverse("guests:allocate_points", args=[guest.pk]),
-            {"guest": str(guest.pk), "attribute": "force", "points": "1"},
-            **_ajax_headers(),
-        )
+    response = client.post(
+        reverse("guests:allocate_points", args=[guest.pk]),
+        {"guest": str(guest.pk), "attribute": "force", "points": "1"},
+        **_ajax_headers(),
+    )
+
+    assert response.status_code == 500
+    assert response.json()["error"] == "操作失败，请稍后重试"

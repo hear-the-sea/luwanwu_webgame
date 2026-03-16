@@ -154,6 +154,56 @@ def _troop_bank_post_input(request: HttpRequest) -> tuple[str | None, int | None
     return troop_key, quantity
 
 
+def _execute_troop_bank_transfer(
+    request: HttpRequest,
+    *,
+    transfer_action,
+    success_message_template: str,
+    log_message: str,
+) -> HttpResponse:
+    manor = get_manor(request.user)
+    troop_key, quantity = _troop_bank_post_input(request)
+
+    if not troop_key:
+        messages.error(request, "请选择护院类型")
+        return redirect("gameplay:troop_recruitment")
+    if quantity is None:
+        messages.error(request, "数量参数无效")
+        return redirect("gameplay:troop_recruitment")
+
+    try:
+        result = transfer_action(manor, troop_key, quantity)
+        messages.success(request, success_message_template.format(**result))
+    except (GameError, ValueError) as exc:
+        _handle_known_recruitment_error(request, exc)
+    except DatabaseError as exc:
+        _handle_unexpected_recruitment_error(
+            request,
+            exc,
+            log_message=log_message,
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                troop_key,
+                quantity,
+            ),
+        )
+    except Exception as exc:
+        _handle_unexpected_recruitment_error(
+            request,
+            exc,
+            log_message=log_message,
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                troop_key,
+                quantity,
+            ),
+        )
+
+    return redirect("gameplay:troop_recruitment")
+
+
 @login_required
 @require_POST
 def start_troop_recruitment_view(request: HttpRequest) -> HttpResponse:
@@ -192,6 +242,18 @@ def start_troop_recruitment_view(request: HttpRequest) -> HttpResponse:
                 request.POST.get("quantity"),
             ),
         )
+    except Exception as exc:
+        _handle_unexpected_recruitment_error(
+            request,
+            exc,
+            log_message="Unexpected troop recruitment start error: manor_id=%s user_id=%s troop_key=%s quantity=%s",
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                troop_key,
+                request.POST.get("quantity"),
+            ),
+        )
 
     return _recruitment_redirect(selected_category)
 
@@ -200,71 +262,25 @@ def start_troop_recruitment_view(request: HttpRequest) -> HttpResponse:
 @require_POST
 @rate_limit_redirect("deposit_troop_to_bank", limit=30, window_seconds=60)
 def deposit_troop_to_bank_view(request: HttpRequest) -> HttpResponse:
-    manor = get_manor(request.user)
-    troop_key, quantity = _troop_bank_post_input(request)
+    from gameplay.services.manor.troop_bank import deposit_troops_to_bank
 
-    if not troop_key:
-        messages.error(request, "请选择护院类型")
-        return redirect("gameplay:troop_recruitment")
-    if quantity is None:
-        messages.error(request, "数量参数无效")
-        return redirect("gameplay:troop_recruitment")
-
-    try:
-        from gameplay.services.manor.troop_bank import deposit_troops_to_bank
-
-        result = deposit_troops_to_bank(manor, troop_key, quantity)
-        messages.success(request, f"已存入 {result['quantity']} 名{result['troop_name']}到钱庄")
-    except (GameError, ValueError) as exc:
-        _handle_known_recruitment_error(request, exc)
-    except DatabaseError as exc:
-        _handle_unexpected_recruitment_error(
-            request,
-            exc,
-            log_message="Unexpected troop bank deposit error: manor_id=%s user_id=%s troop_key=%s quantity=%s",
-            log_args=(
-                getattr(manor, "id", None),
-                getattr(request.user, "id", None),
-                troop_key,
-                quantity,
-            ),
-        )
-
-    return redirect("gameplay:troop_recruitment")
+    return _execute_troop_bank_transfer(
+        request,
+        transfer_action=deposit_troops_to_bank,
+        success_message_template="已存入 {quantity} 名{troop_name}到钱庄",
+        log_message="Unexpected troop bank deposit error: manor_id=%s user_id=%s troop_key=%s quantity=%s",
+    )
 
 
 @login_required
 @require_POST
 @rate_limit_redirect("withdraw_troop_from_bank", limit=30, window_seconds=60)
 def withdraw_troop_from_bank_view(request: HttpRequest) -> HttpResponse:
-    manor = get_manor(request.user)
-    troop_key, quantity = _troop_bank_post_input(request)
+    from gameplay.services.manor.troop_bank import withdraw_troops_from_bank
 
-    if not troop_key:
-        messages.error(request, "请选择护院类型")
-        return redirect("gameplay:troop_recruitment")
-    if quantity is None:
-        messages.error(request, "数量参数无效")
-        return redirect("gameplay:troop_recruitment")
-
-    try:
-        from gameplay.services.manor.troop_bank import withdraw_troops_from_bank
-
-        result = withdraw_troops_from_bank(manor, troop_key, quantity)
-        messages.success(request, f"已从钱庄取出 {result['quantity']} 名{result['troop_name']}")
-    except (GameError, ValueError) as exc:
-        _handle_known_recruitment_error(request, exc)
-    except DatabaseError as exc:
-        _handle_unexpected_recruitment_error(
-            request,
-            exc,
-            log_message="Unexpected troop bank withdraw error: manor_id=%s user_id=%s troop_key=%s quantity=%s",
-            log_args=(
-                getattr(manor, "id", None),
-                getattr(request.user, "id", None),
-                troop_key,
-                quantity,
-            ),
-        )
-
-    return redirect("gameplay:troop_recruitment")
+    return _execute_troop_bank_transfer(
+        request,
+        transfer_action=withdraw_troops_from_bank,
+        success_message_template="已从钱庄取出 {quantity} 名{troop_name}",
+        log_message="Unexpected troop bank withdraw error: manor_id=%s user_id=%s troop_key=%s quantity=%s",
+    )

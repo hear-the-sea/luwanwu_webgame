@@ -39,7 +39,14 @@ def _grant_resources(manor, drops: Dict[str, int], opponent_label: str) -> None:
     from gameplay.models import ResourceEvent
     from gameplay.services.resources import grant_resources
 
-    grant_resources(manor, drops, f"{opponent_label} 战利品", ResourceEvent.Reason.BATTLE_REWARD)
+    # Battle rewards should not opportunistically settle offline production.
+    grant_resources(
+        manor,
+        drops,
+        f"{opponent_label} 战利品",
+        ResourceEvent.Reason.BATTLE_REWARD,
+        sync_production=False,
+    )
 
 
 def _grant_resources_locked(manor, drops: Dict[str, int], opponent_label: str) -> None:
@@ -47,7 +54,13 @@ def _grant_resources_locked(manor, drops: Dict[str, int], opponent_label: str) -
     from gameplay.services.resources import grant_resources_locked
 
     locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
-    grant_resources_locked(locked_manor, drops, f"{opponent_label} 战利品", ResourceEvent.Reason.BATTLE_REWARD)
+    grant_resources_locked(
+        locked_manor,
+        drops,
+        f"{opponent_label} 战利品",
+        ResourceEvent.Reason.BATTLE_REWARD,
+        sync_production=False,
+    )
 
 
 def _in_atomic_block() -> bool:
