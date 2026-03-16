@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from django.core.cache import cache
+
 from core.utils.task_monitoring import (
+    TASK_METRICS_CACHE_KEY,
+    _metric_key,
     get_task_metrics,
     record_task_failure,
     record_task_retry,
@@ -78,6 +82,14 @@ class TestTaskMonitoringCounters:
         record_task_success("restarted_task")
         metrics = get_task_metrics()
         assert metrics["restarted_task"]["success"] == 1
+
+    def test_metrics_are_persisted_via_cache_snapshot(self):
+        record_task_success("cache_backed_task")
+        # Registry records the task name.
+        registry = cache.get(TASK_METRICS_CACHE_KEY)
+        assert "cache_backed_task" in registry
+        # Atomic counter key holds the correct value.
+        assert cache.get(_metric_key("cache_backed_task", "success")) == 1
 
     def test_retry_also_records_degradation(self):
         from core.utils.degradation import CELERY_TASK_RETRY, get_degradation_counts, reset_degradation_counts

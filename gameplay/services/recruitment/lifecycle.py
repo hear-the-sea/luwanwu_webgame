@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from django.db import transaction
 from django.utils import timezone
@@ -16,17 +17,20 @@ from core.utils import safe_int
 
 from ...models import PlayerTroop, TroopRecruitment
 
+if TYPE_CHECKING:
+    from battle.models import TroopTemplate
+
 logger = logging.getLogger(__name__)
 
 
-def _coerce_non_negative_int(value, default: int = 0) -> int:
+def _coerce_non_negative_int(value: object, default: int = 0) -> int:
     parsed = safe_int(value, default=default)
     if parsed is None:
         return default
     return max(0, parsed)
 
 
-def _coerce_positive_int(value, default: int = 1) -> int:
+def _coerce_positive_int(value: object, default: int = 1) -> int:
     parsed = safe_int(value, default=default)
     if parsed is None:
         return default
@@ -58,7 +62,7 @@ def schedule_recruitment_completion(recruitment: TroopRecruitment, eta_seconds: 
     )
 
 
-def _get_or_create_battle_troop_template(recruitment: TroopRecruitment):
+def _get_or_create_battle_troop_template(recruitment: TroopRecruitment) -> TroopTemplate | None:
     """获取战斗兵种模板，缺失时按募兵配置自动补建。"""
     from battle.models import TroopTemplate
 

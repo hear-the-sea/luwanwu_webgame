@@ -73,45 +73,53 @@ files = [
 ]
 exclude = "(^|/)(migrations|\\.venv|scripts|battle_debugger|tests|docs)/"
 
+# Modules with real type errors — keep suppressed until fixed.
+# Governance goal: shrink this list each sprint.
 [[tool.mypy.overrides]]
 module = [
-    "*.admin",
-    "*.admin.*",
     "*.views",
     "*.views.*",
     "*.management.commands.*",
-]
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = [
-    "battle.combatants",
-    "battle.simulation_core",
+    "*.admin",
+    "*.admin.*",
     "battle_debugger.*",
     "gameplay.migrations.*",
     "gameplay.models.*",
-    "gameplay.services.forge",
-    "gameplay.services.jail",
     "gameplay.services.inventory.use",
-    "gameplay.services.raid.*",
-    "gameplay.services.ranch",
-    "gameplay.services.smithy",
-    "gameplay.services.stable",
-    "gameplay.services.recruitment",
+    "gameplay.services.jail",
     "gameplay.services.missions",
+    "gameplay.services.raid.*",
     "guests.services.*",
     "guests.templatetags.*",
     "guests.utils.guest_state",
     "guests.utils.training_timer",
-    "trade.models",
-    "trade.services.market_service",
 ]
 ignore_errors = true
 
-# New modules: enforce strict type checking (target default for all modules)
+# Strict type checking: all functions must have full annotations.
+# Add modules here as they reach full annotation coverage.
+# Goal: grow this list until disallow_untyped_defs = true can be set globally.
 [[tool.mypy.overrides]]
 module = [
-    "trade.selectors",
+    "accounts.utils",
+    "battle.combatants",
+    "battle.simulation_core",
     "core.middleware.*",
+    "core.utils.cache_lock",
+    "core.utils.degradation",
+    "core.utils.task_monitoring",
+    "core.utils.yaml_loader",
+    "core.utils.yaml_schema",
+    "gameplay.services.arena.core",
+    "gameplay.services.arena.rules",
+    "gameplay.services.buildings.forge",
+    "gameplay.services.buildings.ranch",
+    "gameplay.services.buildings.smithy",
+    "gameplay.services.buildings.stable",
+    "gameplay.services.recruitment.*",
+    "gameplay.services.resources",
+    "gameplay.services.runtime_configs",
+    "guilds.constants",
+    "trade.selectors",
 ]
 disallow_untyped_defs = true

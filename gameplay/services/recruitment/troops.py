@@ -63,7 +63,7 @@ def _calculate_surviving_troops(manor: "Manor", loadout: Dict[str, int], troops_
     return surviving_troops
 
 
-def apply_defender_troop_losses(defender: "Manor", report) -> None:
+def apply_defender_troop_losses(defender: "Manor", report: object) -> None:
     """
     批量应用防守方护院损失到 PlayerTroop。
 

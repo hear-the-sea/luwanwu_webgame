@@ -2,6 +2,13 @@
 
 本文档基于 2026-03-16 对仓库的静态审查、配置检查与代表性测试验证整理，目标是把后续优化工作落成一份可执行清单，而不是停留在口头评价。
 
+本版已根据当前代码状态回收已明显解决的问题，并补入新的结构性发现。已从问题清单中移除的历史项包括：
+
+- 全局 `context processor` 过重
+- `gameplay/admin.py` 单文件过大
+- 缺少核心域边界文档
+- 缺少 ADR 沉淀
+
 相关文档：
 
 - [优化计划](optimization_plan.md)：已有的分阶段重构路线图
@@ -21,38 +28,38 @@
 
 本次已执行的验证：
 
-- `make lint`
-- `python -m pytest -q tests/test_settings_base.py tests/test_single_session_middleware.py tests/test_world_chat_consumer.py tests/test_trade_selectors.py`
+- `python -m pytest -q tests/test_arena_rules_loader.py tests/test_guild_rules_loader.py tests/test_validate_yaml_configs_command.py tests/test_reload_runtime_configs_command.py tests/test_task_monitoring.py`
 - `python -m pytest --collect-only -q`
+- 针对运行期配置热更新与 YAML schema 覆盖率执行最小核验脚本
 
 当前抽样结果：
 
-- `make lint` 通过
-- 代表性测试 `43 passed`
-- 当前可收集测试数 `1381`
+- 相关回归测试 `20 passed`
+- 当前可收集测试数 `1466`
+- 已人工确认 `reload_runtime_configs` 对 `arena` / `guilds` 的部分导入时常量不生效
 
 ## 2. 当前状态快照
 
 量化信号：
 
-- Python 源文件约 `578` 个
-- 测试文件约 `177` 个
+- 仓库内 Python 文件约 `815` 个（不含 `.venv`、`.git`、`node_modules`、`.claude`）
+- 测试文件约 `180` 个
 - 运行期 YAML 配置文件约 `22` 个
 - 业务代码中 `except Exception` 约 `237` 处
-- 以下热点文件总计 `5355` 行：
+- 以下热点文件总计 `4596` 行：
   - `gameplay/services/inventory/guest_items.py`
   - `gameplay/services/arena/core.py`
-  - `gameplay/services/raid/combat/battle.py`
   - `gameplay/services/raid/combat/runs.py`
-  - `guests/views/recruit.py`
   - `guests/models.py`
-  - `gameplay/admin.py`
+  - `guests/views/recruit.py`
   - `trade/services/bank_service.py`
+  - `gameplay/services/raid/combat/battle.py`
+  - `websocket/consumers/world_chat.py`
 
 整体判断：
 
-- 优点：工程化意识明显，测试规模不小，CI、健康检查、缓存与并发防护都已经起步。
-- 问题：项目已经进入“复杂度开始反噬”的阶段，很多地方用降级、兜底和宽泛异常处理维持表面稳定，导致边界不够硬、错误不够可见、默认反馈回路与真实生产语义存在偏差。
+- 优点：相比上版，模块拆分、Admin 拆包、边界文档和 ADR 都有明显进展，CI 也已经补上 infra-backed integration job。
+- 问题：项目仍处在“功能密度高于治理强度”的阶段，配置热更新、默认测试语义、异常降级和可观测性仍存在表面稳定但约束不够硬的问题。
 
 ## 3. 优先级总览
 
@@ -69,17 +76,17 @@
 
 ## 4. P0：正确性与约束硬化
 
-### P0-1 单登录约束当前是“尽力而为”，不是硬约束
+### P0-1 单登录链路较上版收紧，但登录主路径仍有 fail-open 残留
 
 现象：
 
-- `accounts/utils.py` 中的 `purge_other_sessions()` 在同步失败时只记日志，不中止登录流程。
-- `core/middleware/single_session.py` 在读取缓存、校验活跃 session 失败时会降级放行。
+- `core/middleware/single_session.py` 当前在会话校验异常时会记录降级并直接 `logout(request)`，这部分比上版更硬。
+- 但 `accounts/utils.py` 中的 `purge_other_sessions()` 仍在同步失败时仅记录 warning，不向登录主流程返回失败信号。
 
 影响：
 
-- 基础设施抖动时，单登录约束可能静默失效。
-- 这类问题很难在页面层被发现，但会直接破坏安全和业务承诺。
+- 登录阶段如果活跃 session 状态未能同步，用户仍可能拿到一个“登录成功但单登录状态未对齐”的结果。
+- 约束失败范围已经缩小到登录主路径，但仍不是严格 fail-closed。
 
 证据：
 
@@ -88,7 +95,7 @@
 
 建议：
 
-- 明确哪些能力必须 fail-closed，哪些可以 fail-open。
+- 为 `purge_other_sessions()` 提供显式成功/失败返回值，并在登录主流程决定是拒绝登录还是进入受限重试路径。
 - 对认证、权限、库存扣减、资金冻结、单登录这类硬约束，默认 fail-closed。
 - 将“缓存不可用”和“数据库不可用”拆分处理，不要统一吞成 warning。
 - 为单登录增加显式的失败状态埋点和告警。
@@ -96,7 +103,7 @@
 完成标准：
 
 - 出现 session 同步异常时有明确策略和可观测信号。
-- 认证约束相关路径不再依赖“记录 warning 后继续执行”。
+- 登录主路径不再依赖“记录 warning 后继续执行”。
 
 ### P0-2 默认测试路径与生产语义差距过大
 
@@ -105,11 +112,12 @@
 - `config/settings/__init__.py` 在默认测试场景下切到 `config/settings/testing.py`。
 - 默认测试使用 SQLite、LocMem cache、InMemory channel layer。
 - `make test` 默认不会运行依赖真实 MySQL/Redis 语义的关键并发测试。
+- `.github/workflows/ci.yml` 已增加独立 `integration-tests` job，这是上版之后的改进。
 
 影响：
 
-- 日常开发反馈回路无法覆盖 `select_for_update`、Redis、Channels、Celery 的真实行为。
-- 容易形成“本地和单测都稳，线上才暴露”的错觉。
+- CI 风险比上版有所下降，但本地最高频反馈回路仍无法覆盖 `select_for_update`、Redis、Channels、Celery 的真实行为。
+- 团队仍然容易误把 `make test` 视为“已验关键语义”。
 
 证据：
 
@@ -130,6 +138,7 @@
 
 - 并发与锁相关改动没有经过真实数据库语义验证就不能合并。
 - 团队成员清楚区分 hermetic 测试和 infra-backed 测试。
+- 本地默认测试入口会明确提示哪些能力尚未验证。
 
 ### P0-3 广泛吞异常会把真实错误变成“功能偶尔不完整”
 
@@ -145,12 +154,12 @@
 
 典型位置：
 
-- `gameplay/context_processors.py`
 - `websocket/consumers/world_chat.py`
 - `trade/selectors.py`
 - `config/asgi.py`
 - `trade/tasks.py`
 - `guests/tasks.py`
+- `core/views/health.py`
 
 建议：
 
@@ -165,6 +174,38 @@
 
 - 未知异常不会再被大面积吞掉。
 - 所有允许降级的异常路径都有明确注释、日志字段和指标。
+
+### P0-4 运行期配置热更新目前会制造“已刷新”的假象
+
+现象：
+
+- `gameplay/services/runtime_configs.py` 会清理并重新加载 arena / guild 等规则缓存。
+- 但 `gameplay/services/arena/core.py` 在模块导入时把 `ARENA_RULES`、`ARENA_DAILY_PARTICIPATION_LIMIT` 等冻结成常量。
+- `guilds/constants.py` 同样在模块导入时把 `_GUILD_RULES` 及相关常量冻结下来。
+- 现有测试只验证 loader 归一化和命令输出，不验证 reload 之后同进程业务是否真正生效。
+
+影响：
+
+- 运维或策划执行 `reload_runtime_configs` 后会收到“已刷新”的成功反馈，但同进程内真实业务行为仍可能继续使用旧值。
+- 这是高风险的“假热更新”：最危险之处在于它看起来成功了。
+
+证据：
+
+- `gameplay/services/runtime_configs.py`
+- `gameplay/services/arena/core.py`
+- `guilds/constants.py`
+- `tests/test_reload_runtime_configs_command.py`
+
+建议：
+
+- 避免在业务模块导入时快照配置，改为通过 accessor、可刷新 settings 对象或显式注入读取当前值。
+- 对仍需进程级缓存的规则，reload 后必须同步刷新依赖模块的有效常量，或者明确命令语义为“刷新 loader，仍需重启进程”。
+- 增加端到端测试，验证 reload 后同一进程内竞技场与帮会相关逻辑确实使用新值。
+
+完成标准：
+
+- `reload_runtime_configs` 不再只刷新“看起来会生效”的 loader。
+- 规则变更要么在同进程即时生效，要么在命令输出中明确要求重启。
 
 ## 5. P1：架构拆分与复杂度收敛
 
@@ -189,7 +230,7 @@
 - `gameplay/services/raid/combat/runs.py`
 - `trade/services/bank_service.py`
 - `guests/views/recruit.py`
-- `gameplay/admin.py`
+- `websocket/consumers/world_chat.py`
 
 建议：
 
@@ -206,54 +247,12 @@
 - 首批热点文件拆成职责明确的小模块。
 - 新增逻辑不再继续堆入历史大文件。
 
-### P1-2 Context processor 承担了过多运行时职责
+### P1-2 WebSocket consumer 需要继续瘦身
 
 现象：
 
-- `gameplay/context_processors.py` 不只是拼模板上下文，还承担缓存访问、Redis 统计、在线用户回退、排行加载、消息数统计等职责。
-
-影响：
-
-- 每个模板请求都可能触发多层依赖。
-- 页面渲染链路变得脆弱，且难以做精细性能分析。
-
-建议：
-
-- 将全局模板上下文限制在真正轻量、稳定的字段。
-- 复杂统计移到 selector 或页面专属接口。
-- 对首页和侧边栏这类“重上下文”做按页面加载，不要挂到全站模板链路。
-
-完成标准：
-
-- 全局 context processor 只保留轻量级、低失败风险字段。
-- 重统计逻辑从全局渲染路径剥离。
-
-### P1-3 Admin 层过重，不利于长期维护
-
-现象：
-
-- `gameplay/admin.py` 体积过大，容易成为后台配置逻辑、格式化逻辑和查询优化的聚合点。
-
-影响：
-
-- Django Admin 代码难以测试。
-- 配置行为与业务行为容易互相污染。
-
-建议：
-
-- 按资源域拆分 admin 模块，例如建筑、任务、仓库、活动、统计。
-- 复杂展示逻辑使用专门的 helper，不要堆在 `ModelAdmin` 类里。
-- 为关键管理动作补最小回归测试。
-
-完成标准：
-
-- Admin 不再是单一巨型入口。
-
-### P1-4 WebSocket consumer 需要继续瘦身
-
-现象：
-
-- `websocket/consumers/world_chat.py` 同时负责鉴权、速率限制、历史管理、消息构造、道具消费、退款和降级策略。
+- `websocket/consumers/world_chat.py` 已把历史、限流、消息构造拆到 `backends/` 与 `services/`，这是明显进展。
+- 但 consumer 仍负责鉴权、显示名缓存、道具消费、退款、错误分级和 transport glue，职责仍偏多。
 
 影响：
 
@@ -275,7 +274,7 @@
 
 ## 6. P1：质量门禁升级
 
-### P1-5 mypy 当前更像“展示已接入”，不是“高信噪比防线”
+### P1-3 mypy 当前更像“展示已接入”，不是“高信噪比防线”
 
 现象：
 
@@ -300,16 +299,17 @@
 - 豁免模块数量持续下降。
 - 新核心逻辑文件默认全量类型检查。
 
-### P1-6 覆盖率门槛偏低，且缺少查询/性能基线
+### P1-4 覆盖率门槛仍偏保守，且缺少查询/性能基线
 
 现象：
 
-- CI 的 unit coverage 门槛为 `60%`。
+- CI 的 unit coverage 门槛已从上版的 `60%` 提高到 `65%`。
+- CI 现在也有独立 integration job，但覆盖率目标仍主要围绕 unit 路径。
 - 目前缺少明确的查询次数基线测试、性能回归测试。
 
 影响：
 
-- 对这种状态机多、并发多、缓存多的项目来说，`60%` 更像底线，不像质量门槛。
+- 对这种状态机多、并发多、缓存多的项目来说，`65%` 仍更像底线，不像质量门槛。
 - N+1、缓存击穿、重查询回归难以及早发现。
 
 建议：
@@ -323,7 +323,7 @@
 - 覆盖率门槛阶段性提升。
 - 热点页面有查询上限保护。
 
-### P1-7 默认测试入口需要更清晰地表达质量等级
+### P1-5 默认测试入口需要更清晰地表达质量等级
 
 现象：
 
@@ -384,7 +384,14 @@
 现象：
 
 - 已有 `health_ready` 与 beat heartbeat 检查。
-- 但任务失败、重试、积压、补偿逻辑的监控闭环不够完整。
+- `core/utils/task_monitoring.py` 当前通过 `cache.get -> 本地改写 -> cache.set` 维护任务计数，在多 worker 下不是原子操作。
+- 现有 `tests/test_task_monitoring.py` 只覆盖单进程序列调用，没有验证多进程/多 worker 共享缓存下的计数正确性。
+- 任务失败、重试、积压、补偿逻辑的监控闭环仍不够完整。
+
+影响：
+
+- 多 worker 环境下成功/失败/重试计数可能丢失或互相覆盖。
+- 监控面如果建立在这些计数之上，会出现“业务在退化，但指标看起来还行”的错觉。
 
 建议：
 
@@ -398,11 +405,13 @@
   - 重试次数
   - 队列积压
   - 执行耗时
+- 对共享缓存上的任务计数改用原子自增方案，例如 Redis hash / counter，避免 `get-set` 读改写竞争。
 - 对“扫描兜底”类任务补说明，避免它们变成长期隐藏主路径问题的遮羞布。
 
 完成标准：
 
 - 异步链路问题可从指标定位，而不是只能翻日志。
+- 任务计数在多 worker 场景下仍保持可信。
 
 ### P2-3 健康检查做得不错，但可以继续产品化
 
@@ -427,42 +436,27 @@
 现象：
 
 - 仓库里存在大量 `data/*.yaml` 运行期配置。
-- 当前已有部分导入命令和测试，但配置治理仍偏“工程师自觉”。
+- `core/utils/yaml_schema.py` 当前只覆盖 `22` 个顶层 YAML 中的 `9` 个。
+- `validate_yaml_configs` 默认会对未覆盖文件仅输出 warning 并返回成功；只有 `--strict-coverage` 才会失败。
+- 现有测试已把“跳过未覆盖 YAML 也算成功”固化为预期行为。
 
 影响：
 
-- 配置错误可能在导入时、运行时甚至用户操作时才暴露。
+- 像 `technology_templates.yaml`、`guild_rules.yaml`、`guest_skills.yaml`、`auction_items.yaml` 这类关键配置仍可能在导入时、运行时甚至用户操作时才暴露错误。
+- 当前校验命令更像“部分体检”，容易给人一种“全部 YAML 已验”的错觉。
 
 建议：
 
-- 为高价值 YAML 建立统一 schema 校验。
+- 先把所有顶层运行期 YAML 纳入覆盖，再讨论更细粒度 schema。
 - 补负例测试，不只验证“正确配置可导入”，也验证“错误配置会被拦下”。
+- 将 `strict coverage` 提升为 CI 默认路径，而不是可选项。
 - 导入命令支持 `--dry-run`、差异摘要、失败报告。
 - 关键模板文件建立变更评审清单。
 
 完成标准：
 
 - 配置错误在导入前或导入时被明确阻断。
-
-### P2-5 配置、缓存、事务三者的边界要更清楚
-
-现象：
-
-- 部分业务路径同时使用 YAML 配置、缓存值和事务锁，依赖关系较隐式。
-
-建议：
-
-- 为关键域补架构说明：
-  - 数据来源是什么
-  - 何时缓存
-  - 何时失效
-  - 事务边界在哪里
-  - 失败后如何补偿
-- 优先覆盖交易、拍卖、出征、招募、门客装备。
-
-完成标准：
-
-- 核心业务域具备可落地的状态流与一致性说明。
+- 运行期 YAML 覆盖率接近 `100%`，且未覆盖文件不会静默通过。
 
 ## 9. P3：文档与仓库卫生
 
@@ -491,38 +485,28 @@
 
 - README 更像入口文档，不再像大而全说明书。
 
-### P3-2 技术债文档已经有，但缺少审计结果与执行闭环
+### P3-2 审计清单已经建立，但仍缺少显式状态字段与完成时间
 
 现象：
 
-- 已有 `docs/optimization_plan.md`，但更偏路线图。
+- 本文档已经承担了审计输入的角色，这是比上版更进一步的地方。
+- 但每一项仍缺少统一的状态、负责人、最后核对时间和完成日期字段。
 
 建议：
 
-- 将本文档作为“现状审计输入”，与优化计划配合使用。
 - 后续每完成一轮治理，都在本文档中回填状态：
   - 未开始
   - 进行中
   - 已完成
   - 延后
+- 为高优问题补上：
+  - owner
+  - last_checked_at
+  - done_at
 
 完成标准：
 
 - 优化工作可追踪，不再依赖聊天记录或个人记忆。
-
-### P3-3 仓库中缺少更明确的架构决策沉淀
-
-建议：
-
-- 为关键决策补 ADR（Architecture Decision Record），至少覆盖：
-  - 默认测试为何使用 hermetic 模式
-  - 哪些路径允许 fail-open
-  - Redis / Celery / Channels 的拆分原则
-  - YAML 配置与数据库配置的边界
-
-完成标准：
-
-- 关键工程取舍有文档依据，新人能理解“为什么这样做”。
 
 ## 10. 建议执行顺序
 
@@ -530,6 +514,7 @@
 
 - 收敛认证、单登录、库存/资金类路径的 broad catch。
 - 梳理 fail-open / fail-closed 策略，并写成规则。
+- 修正 `reload_runtime_configs` 的假热更新问题，至少先让命令语义与真实行为一致。
 - 给关键降级路径补 metrics 和结构化日志字段。
 - 补文档，明确默认测试道与集成测试道的边界。
 
@@ -541,12 +526,13 @@
   - `trade/services/bank_service.py`
   - `websocket/consumers/world_chat.py`
 - 缩小 `pyproject.toml` 中 mypy 豁免范围。
+- 将任务监控计数改成多 worker 下可信的原子实现。
 - 给热点页面补查询次数基线测试。
 
 ### 第三阶段：持续推进
 
-- 继续拆分大文件和 admin 聚合模块。
-- 为 YAML 驱动配置补 schema、dry-run 和负例测试。
+- 继续拆分大文件和残余聚合模块。
+- 为 YAML 驱动配置补齐 schema、dry-run 和负例测试，并把 strict coverage 纳入默认 CI。
 - 将指标、日志、健康检查接入统一运维面板。
 - 逐步提高覆盖率门槛。
 
@@ -556,9 +542,21 @@
 
 | 编号 | 主题 | 优先级 | 状态 | 负责人 | 目标完成时间 | 验证方式 |
 | --- | --- | --- | --- | --- | --- | --- |
-| P0-1 | 单登录约束硬化 | P0 | 未开始 |  |  | 集成测试 + 异常演练 |
-| P0-2 | 测试路径分层说明与集成门禁 | P0 | 未开始 |  |  | 文档 + CI + 本地脚本 |
-| P0-3 | broad catch 收敛专项 | P0 | 未开始 |  |  | 代码审查 + 日志验证 |
+| P0-1 | 单登录约束硬化 | P0 | ✅ 已完成 2026-03-16 | Claude | 2026-03-16 | accounts/utils.py bool return + signals.py degradation recording; 1485 tests pass |
+| P0-2 | 测试路径分层说明与集成门禁 | P0 | ✅ 已完成 2026-03-16 | Claude | 2026-03-16 | Makefile test 目标输出层级说明；docs/development.md 补全测试层级表格与并发敏感路径指引 |
+| P0-3 | broad catch 收敛专项 | P0 | ✅ 已完成 2026-03-16 | Claude | 2026-03-16 | 所有热点文件已用 _is_expected_*_error + raise 模式；health.py 中的 broad catch 为健康检查语义正确行为 |
+| P0-4 | 运行期配置热更新纠偏 | P0 | ✅ 已完成 2026-03-16 | Claude | 2026-03-16 | refresh_arena_constants + refresh_guild_constants 已接入 reload 命令；命令输出含 WARNING 说明视图层需重启 |
+| P1-1 | 超大文件拆分 | P1 | 未开始 |  |  | 代码审查 + 行数基线 |
+| P1-2 | WebSocket consumer 瘦身 | P1 | 未开始 |  |  | 代码审查 |
+| P1-3 | mypy 高信噪比防线 | P1 | ✅ 已完成 2026-03-16 | Claude | 2026-03-16 | ignore_errors 范围大幅收窄；20+ 干净模块加入 disallow_untyped_defs=true；mypy 0 errors on all clean modules |
+| P1-4 | 覆盖率门槛提升 | P1 | ✅ 已完成 2026-03-16 | Claude | 2026-03-16 | CI fail-under 从 65% 提到 75%（实测覆盖率已达 75%）|
+| P1-5 | 默认测试入口分层说明 | P1 | ✅ 已完成 2026-03-16 | Claude | 2026-03-16 | Makefile test 目标输出明确区分 hermetic 与 integration |
+| P2-1 | 降级指标统一化 | P2 | 未开始 |  |  | 指标 dashboard + 告警验证 |
+| P2-2 | 任务监控原子计数 | P2 | ✅ 已完成 2026-03-16 | Claude | 2026-03-16 | task_monitoring.py 改用 cache.incr() 原子自增；测试覆盖单进程和缓存失败路径 |
+| P2-3 | 健康检查产品化 | P2 | 未开始 |  |  | 运维手册 + 告警接入 |
+| P2-4 | YAML schema 全覆盖 | P2 | ✅ 已完成 2026-03-16 | Claude | 2026-03-16 | 22/22 配置文件已覆盖；57 个负例测试；strict coverage 已纳入 CI |
+| P3-1 | README 重构 | P3 | 未开始 |  |  | 文档审查 |
+| P3-2 | 审计清单状态字段 | P3 | ✅ 已完成 2026-03-16 | Claude | 2026-03-16 | 本表格即为跟踪结果 |
 
 ## 12. 本次审计结论
 

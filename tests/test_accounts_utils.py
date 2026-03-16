@@ -30,7 +30,8 @@ def test_purge_other_sessions_does_not_release_foreign_lock(monkeypatch):
     monkeypatch.setattr(account_utils, "_sync_active_session_state", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(account_utils.cache, "delete", delete_mock)
 
-    account_utils.purge_other_sessions(user_id, "current-session")
+    result = account_utils.purge_other_sessions(user_id, "current-session")
+    assert result is True
     delete_mock.assert_not_called()
 
 
@@ -55,7 +56,8 @@ def test_purge_other_sessions_releases_owned_lock(monkeypatch):
     monkeypatch.setattr(account_utils, "_sync_active_session_state", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(account_utils.cache, "delete", delete_mock)
 
-    account_utils.purge_other_sessions(user_id, "current-session")
+    result = account_utils.purge_other_sessions(user_id, "current-session")
+    assert result is True
     delete_mock.assert_called_once_with(lock_key)
 
 
@@ -71,10 +73,27 @@ def test_purge_other_sessions_continues_when_lock_busy(monkeypatch):
     monkeypatch.setattr(account_utils, "_sync_active_session_state", sync_mock)
     monkeypatch.setattr(account_utils, "_purge_sessions_fallback", fallback_mock)
 
-    account_utils.purge_other_sessions(user_id, current_session_key)
+    result = account_utils.purge_other_sessions(user_id, current_session_key)
 
+    assert result is True
     sync_mock.assert_called_once_with(user_id, current_session_key, cache_key)
     fallback_mock.assert_not_called()
+
+
+def test_purge_other_sessions_returns_false_when_sync_raises(monkeypatch):
+    user_id = 999
+
+    monkeypatch.setattr(account_utils.cache, "add", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(account_utils.cache, "get", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(account_utils.cache, "delete", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        account_utils,
+        "_sync_active_session_state",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("db failure")),
+    )
+
+    result = account_utils.purge_other_sessions(user_id, "current-session")
+    assert result is False
 
 
 def test_acquire_login_lock_falls_back_to_local_when_cache_add_errors(monkeypatch):

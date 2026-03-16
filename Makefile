@@ -55,7 +55,13 @@ beat:
 	celery -A config beat -l info --schedule $(LOCAL_STATE_DIR)/celerybeat-schedule
 
 # Default to the hermetic unit-like suite, then surface critical concurrency coverage explicitly.
-test: test-unit test-critical
+test:
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "  Running hermetic unit tests (SQLite / LocMem / InMemory channel layer)"
+	@echo "  NOT verified: select_for_update row-locking, Redis semantics, real Channels"
+	@echo "  For full coverage: make test-integration  (requires Docker / real services)"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@$(MAKE) test-unit test-critical
 
 test-unit:
 	$(PYTHON) -m pytest -m "not integration"

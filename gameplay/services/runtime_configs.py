@@ -4,6 +4,7 @@ from typing import Any
 
 
 def reload_runtime_configs() -> dict[str, int]:
+    from gameplay.services.arena.core import refresh_arena_constants
     from gameplay.services.arena.rewards import clear_arena_reward_cache, load_arena_reward_catalog
     from gameplay.services.arena.rules import clear_arena_rules_cache, load_arena_rules
     from gameplay.services.buildings.forge import (
@@ -18,7 +19,7 @@ def reload_runtime_configs() -> dict[str, int]:
     from gameplay.services.buildings.smithy import clear_smithy_production_cache, load_smithy_production_config
     from gameplay.services.buildings.stable import clear_stable_production_cache, load_stable_production_config
     from guests.growth_rules import clear_guest_growth_rules_cache, load_guest_growth_rules
-    from guilds.constants import clear_guild_rules_cache, load_guild_rules
+    from guilds.constants import clear_guild_rules_cache, load_guild_rules, refresh_guild_constants
     from guilds.services.warehouse_config import get_warehouse_production, reload_warehouse_production
     from trade.services.auction_config import load_auction_config, reload_auction_config
     from trade.services.market_service import clear_trade_market_rules_cache, load_trade_market_rules
@@ -59,12 +60,14 @@ def reload_runtime_configs() -> dict[str, int]:
 
     clear_arena_rules_cache()
     arena_rules = load_arena_rules()
+    refresh_arena_constants()
 
     clear_trade_market_rules_cache()
     trade_market_rules = load_trade_market_rules()
 
     clear_guild_rules_cache()
     guild_rules = load_guild_rules()
+    refresh_guild_constants()
 
     return {
         "shop_items": len(shop_items),

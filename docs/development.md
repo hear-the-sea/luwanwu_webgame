@@ -395,6 +395,23 @@ tests/
 └── ...
 ```
 
+### 测试层级与语义边界
+
+> **重要**：`make test`（默认测试道）和真实生产语义之间存在明确差距，**务必理解以下分层**。
+
+| 层级 | 命令 | 依赖 | 覆盖能力 | 未覆盖能力 |
+|------|------|------|----------|-----------|
+| 单元/hermetic | `make test` / `make test-unit` | SQLite, LocMem, InMemory Channel | 业务逻辑、状态机、计算规则 | `select_for_update` 行锁、Redis 原子操作、Channels 广播 |
+| 关键并发 | `make test-critical` | 同上（默认跳过） | 并发基本路径 | 真实 MySQL 隔离级别 |
+| 集成 | `make test-integration` | MySQL, Redis, Celery, Channels | 全路径语义、并发一致性 | 性能/容量 |
+
+**何时必须运行 `make test-integration`（需 Docker 或真实服务）：**
+
+- 修改了涉及 `select_for_update`、`F()` 表达式、`cache.incr()` 的逻辑
+- 修改了资源扣减、库存变更、护院出征/归还等并发敏感路径
+- 修改了 WebSocket 消费者或 Channels 广播逻辑
+- 修改了 Celery 任务的重试/事务边界
+
 ### 测试数据库
 
 - 默认测试道会自动使用内存 SQLite、`locmem` cache、in-memory channel layer 和 memory Celery backend，无需额外配置。

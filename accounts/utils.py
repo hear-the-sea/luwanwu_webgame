@@ -37,14 +37,17 @@ def _session_key_prefix(session_key: str | None) -> str:
     return (str(session_key) if session_key is not None else "<none>")[:8]
 
 
-def purge_other_sessions(user_id: int, current_session_key: str | None) -> None:
+def purge_other_sessions(user_id: int, current_session_key: str | None) -> bool:
     """
     Enforce single active session per user without scanning the whole session table.
 
     数据库中的 UserActiveSession 是权威记录，缓存仅做镜像加速。
+
+    Returns True on success, False if session sync failed (caller should treat
+    this as a signal that single-session enforcement may not have taken effect).
     """
     if not current_session_key:
-        return
+        return True
 
     cache_key = f"{USER_SESSION_CACHE_PREFIX}{user_id}"
     lock_key = f"{USER_LOGIN_LOCK_PREFIX}{user_id}"
@@ -57,8 +60,16 @@ def purge_other_sessions(user_id: int, current_session_key: str | None) -> None:
             logger.warning("Login lock busy for user %s, proceeding with database-backed session sync", user_id)
 
         _sync_active_session_state(user_id, current_session_key, cache_key)
+        return True
     except Exception as exc:
-        logger.warning("Failed to sync active session for user %s: %s", user_id, exc, exc_info=True)
+        logger.warning(
+            "Failed to sync active session for user %s: %s",
+            user_id,
+            exc,
+            extra={"user_id": user_id, "degraded": True},
+            exc_info=True,
+        )
+        return False
     finally:
         if lock_acquired:
             _release_login_lock(lock_key, lock_token)

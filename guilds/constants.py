@@ -218,6 +218,39 @@ def clear_guild_rules_cache() -> None:
     load_guild_rules.cache_clear()
 
 
+def refresh_guild_constants() -> None:
+    """重新从 YAML 加载帮会规则并更新模块级常量。"""
+    global _GUILD_RULES
+    global GUILD_LIST_PAGE_SIZE, GUILD_HALL_DISPLAY_LIMIT
+    global GUILD_CREATION_COST, GUILD_UPGRADE_BASE_COST
+    global CONTRIBUTION_RATES, DAILY_DONATION_LIMITS, MIN_DONATION_AMOUNT
+    global TECH_UPGRADE_COSTS, TECH_NAMES
+    global EXCHANGE_COSTS, DAILY_EXCHANGE_LIMIT
+    global GUILD_HERO_POOL_SLOT_LIMIT, GUILD_BATTLE_LINEUP_LIMIT, GUILD_HERO_POOL_REPLACE_COOLDOWN_SECONDS
+
+    _GUILD_RULES = load_guild_rules()
+
+    GUILD_LIST_PAGE_SIZE = _GUILD_RULES["pagination"]["guild_list_page_size"]
+    GUILD_HALL_DISPLAY_LIMIT = _GUILD_RULES["pagination"]["guild_hall_display_limit"]
+
+    GUILD_CREATION_COST = _GUILD_RULES["creation"]["guild_creation_cost"]
+    GUILD_UPGRADE_BASE_COST = _GUILD_RULES["creation"]["guild_upgrade_base_cost"]
+
+    CONTRIBUTION_RATES = _GUILD_RULES["contribution"]["rates"]
+    DAILY_DONATION_LIMITS = _GUILD_RULES["contribution"]["daily_limits"]
+    MIN_DONATION_AMOUNT = _GUILD_RULES["contribution"]["min_donation_amount"]
+
+    TECH_UPGRADE_COSTS = _GUILD_RULES["technology"]["upgrade_costs"]
+    TECH_NAMES = _GUILD_RULES["technology"]["names"]
+
+    EXCHANGE_COSTS = _GUILD_RULES["warehouse"]["exchange_costs"]
+    DAILY_EXCHANGE_LIMIT = _GUILD_RULES["warehouse"]["daily_exchange_limit"]
+
+    GUILD_HERO_POOL_SLOT_LIMIT = _GUILD_RULES["hero_pool"]["slot_limit"]
+    GUILD_BATTLE_LINEUP_LIMIT = _GUILD_RULES["hero_pool"]["battle_lineup_limit"]
+    GUILD_HERO_POOL_REPLACE_COOLDOWN_SECONDS = _GUILD_RULES["hero_pool"]["replace_cooldown_seconds"]
+
+
 _GUILD_RULES = load_guild_rules()
 
 # ============ 分页与列表 ============

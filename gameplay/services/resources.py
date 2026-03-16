@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Dict, Tuple
 
 from django.conf import settings
@@ -83,7 +84,7 @@ def _require_atomic_block(name: str) -> None:
         raise RuntimeError(f"{name} must be called inside transaction.atomic()")
 
 
-def _build_production_snapshot(manor: Manor, *, now) -> tuple[Dict[str, int], Dict[str, int], bool]:
+def _build_production_snapshot(manor: Manor, *, now: datetime) -> tuple[Dict[str, int], Dict[str, int], bool]:
     elapsed_seconds = (now - manor.resource_updated_at).total_seconds()
     if elapsed_seconds <= 0:
         return {}, {}, False
@@ -120,13 +121,13 @@ def _build_production_snapshot(manor: Manor, *, now) -> tuple[Dict[str, int], Di
     return projected_values, produced, True
 
 
-def _apply_resource_projection(manor: Manor, projected_values: Dict[str, int], *, now) -> None:
+def _apply_resource_projection(manor: Manor, projected_values: Dict[str, int], *, now: datetime) -> None:
     for resource, value in projected_values.items():
         setattr(manor, resource, value)
     manor.resource_updated_at = now
 
 
-def _sync_resource_production_locked(manor: Manor, *, now=None) -> Dict[str, int]:
+def _sync_resource_production_locked(manor: Manor, *, now: datetime | None = None) -> Dict[str, int]:
     _require_atomic_block("sync_resource_production_locked")
     now = now or timezone.now()
 

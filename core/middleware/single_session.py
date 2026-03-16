@@ -93,9 +93,10 @@ class SingleSessionMiddleware:
                     record_degradation(
                         SESSION_SYNC_FAILURE,
                         component="single_session_middleware",
-                        detail="session enforcement failed, degrading to open",
+                        detail="session enforcement failed, logging out current request",
                         user_id=user.id,
                     )
+                    logout(request)
                 else:
                     if not active_session_key:
                         active_session_key = _ensure_active_session_key(user.id, current_session_key)

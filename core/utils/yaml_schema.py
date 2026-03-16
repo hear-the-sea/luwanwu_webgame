@@ -16,6 +16,31 @@ from core.utils.yaml_loader import load_yaml_data
 
 logger = logging.getLogger(__name__)
 
+SUPPORTED_YAML_CONFIGS = (
+    "item_templates.yaml",
+    "building_templates.yaml",
+    "guest_templates.yaml",
+    "troop_templates.yaml",
+    "mission_templates.yaml",
+    "forge_equipment.yaml",
+    "shop_items.yaml",
+    "arena_rules.yaml",
+    "trade_market_rules.yaml",
+    "warehouse_production.yaml",
+    "auction_items.yaml",
+    "forge_blueprints.yaml",
+    "forge_decompose.yaml",
+    "guest_skills.yaml",
+    "recruitment_rarity_weights.yaml",
+    "arena_rewards.yaml",
+    "smithy_production.yaml",
+    "ranch_production.yaml",
+    "stable_production.yaml",
+    "guild_rules.yaml",
+    "guest_growth_rules.yaml",
+    "technology_templates.yaml",
+)
+
 
 # ---------------------------------------------------------------------------
 # Validation result types
@@ -803,6 +828,858 @@ def validate_trade_market_rules(data: dict, *, file: str = "trade_market_rules.y
 
 
 # ---------------------------------------------------------------------------
+# Schema: warehouse_production.yaml
+# ---------------------------------------------------------------------------
+
+VALID_WAREHOUSE_TECH_KEYS = {"equipment", "experience", "resource"}
+
+
+def validate_warehouse_production(data: dict, *, file: str = "warehouse_production.yaml") -> ValidationResult:
+    result = ValidationResult()
+
+    if not isinstance(data, dict):
+        result.add(file, "<root>", "expected a mapping at root level")
+        return result
+
+    for tech_key, tech_data in data.items():
+        path = tech_key
+        if tech_key not in VALID_WAREHOUSE_TECH_KEYS:
+            result.add(file, path, f"unknown tech section '{tech_key}'")
+
+        if not isinstance(tech_data, dict):
+            result.add(file, path, "expected a mapping")
+            continue
+
+        levels = tech_data.get("levels")
+        if levels is None:
+            result.add(file, path, "missing required key 'levels'")
+            continue
+
+        if not isinstance(levels, dict):
+            result.add(file, f"{path}.levels", "expected a mapping")
+            continue
+
+        for level_key, items in levels.items():
+            level_path = f"{path}.levels.{level_key}"
+            if not isinstance(items, list):
+                result.add(file, level_path, "expected a list of items")
+                continue
+
+            for idx, item in enumerate(items):
+                item_path = f"{level_path}[{idx}]"
+                if not isinstance(item, dict):
+                    result.add(file, item_path, "expected a mapping")
+                    continue
+                _check_required_fields(
+                    item,
+                    ["item_key", "quantity", "contribution_cost"],
+                    result=result,
+                    file=file,
+                    path=item_path,
+                )
+                quantity = item.get("quantity")
+                if quantity is not None:
+                    _check_type(quantity, int, result=result, file=file, path=item_path, field_name="quantity")
+                    _check_positive(
+                        quantity, result=result, file=file, path=item_path, field_name="quantity", allow_zero=False
+                    )
+                contribution_cost = item.get("contribution_cost")
+                if contribution_cost is not None:
+                    _check_type(
+                        contribution_cost, int, result=result, file=file, path=item_path, field_name="contribution_cost"
+                    )
+                    _check_positive(
+                        contribution_cost,
+                        result=result,
+                        file=file,
+                        path=item_path,
+                        field_name="contribution_cost",
+                        allow_zero=False,
+                    )
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Schema: auction_items.yaml
+# ---------------------------------------------------------------------------
+
+
+def validate_auction_items(
+    data: dict,
+    *,
+    file: str = "auction_items.yaml",
+    item_keys: set[str] | None = None,
+) -> ValidationResult:
+    result = ValidationResult()
+
+    if not isinstance(data, dict):
+        result.add(file, "<root>", "expected a mapping at root level")
+        return result
+
+    settings_data = data.get("settings")
+    if settings_data is not None:
+        if not isinstance(settings_data, dict):
+            result.add(file, "settings", "expected a mapping")
+        else:
+            cycle_days = settings_data.get("cycle_days")
+            if cycle_days is not None:
+                _check_type(cycle_days, int, result=result, file=file, path="settings", field_name="cycle_days")
+                _check_positive(
+                    cycle_days, result=result, file=file, path="settings", field_name="cycle_days", allow_zero=False
+                )
+
+    items = data.get("items")
+    if items is None:
+        result.add(file, "<root>", "missing required key 'items'")
+        return result
+
+    if not isinstance(items, list):
+        result.add(file, "items", "expected a list")
+        return result
+
+    _check_unique_keys(items, "item_key", result=result, file=file, context="items")
+
+    for idx, entry in enumerate(items):
+        path = f"items[{idx}]"
+        if not isinstance(entry, dict):
+            result.add(file, path, "expected a mapping")
+            continue
+
+        _check_required_fields(
+            entry, ["item_key", "slots", "quantity_per_slot", "starting_price"], result=result, file=file, path=path
+        )
+
+        item_key = entry.get("item_key")
+        if item_key is not None and item_keys is not None:
+            if item_key not in item_keys:
+                result.add(file, path, f"item_key '{item_key}' not found in item_templates.yaml")
+
+        for pos_int_field in ("slots", "quantity_per_slot", "starting_price", "min_increment"):
+            val = entry.get(pos_int_field)
+            if val is not None:
+                _check_type(val, int, result=result, file=file, path=path, field_name=pos_int_field)
+                _check_positive(val, result=result, file=file, path=path, field_name=pos_int_field, allow_zero=False)
+
+        enabled = entry.get("enabled")
+        if enabled is not None:
+            _check_type(enabled, bool, result=result, file=file, path=path, field_name="enabled")
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Schema: forge_blueprints.yaml
+# ---------------------------------------------------------------------------
+
+
+def validate_forge_blueprints(
+    data: dict,
+    *,
+    file: str = "forge_blueprints.yaml",
+    item_keys: set[str] | None = None,
+) -> ValidationResult:
+    result = ValidationResult()
+
+    if not isinstance(data, dict):
+        result.add(file, "<root>", "expected a mapping at root level")
+        return result
+
+    recipes = data.get("recipes")
+    if recipes is None:
+        result.add(file, "<root>", "missing required key 'recipes'")
+        return result
+
+    if not isinstance(recipes, list):
+        result.add(file, "recipes", "expected a list")
+        return result
+
+    _check_unique_keys(recipes, "blueprint_key", result=result, file=file, context="recipes")
+
+    for idx, recipe in enumerate(recipes):
+        path = f"recipes[{idx}]"
+        if not isinstance(recipe, dict):
+            result.add(file, path, "expected a mapping")
+            continue
+
+        _check_required_fields(
+            recipe,
+            ["blueprint_key", "result_item_key", "required_forging", "quantity_out"],
+            result=result,
+            file=file,
+            path=path,
+        )
+
+        result_item_key = recipe.get("result_item_key")
+        if result_item_key is not None and item_keys is not None:
+            if result_item_key not in item_keys:
+                result.add(file, path, f"result_item_key '{result_item_key}' not found in item_templates.yaml")
+
+        required_forging = recipe.get("required_forging")
+        if required_forging is not None:
+            _check_type(required_forging, int, result=result, file=file, path=path, field_name="required_forging")
+            _check_positive(
+                required_forging, result=result, file=file, path=path, field_name="required_forging", allow_zero=False
+            )
+
+        quantity_out = recipe.get("quantity_out")
+        if quantity_out is not None:
+            _check_type(quantity_out, int, result=result, file=file, path=path, field_name="quantity_out")
+            _check_positive(
+                quantity_out, result=result, file=file, path=path, field_name="quantity_out", allow_zero=False
+            )
+
+        costs = recipe.get("costs")
+        if costs is not None and not isinstance(costs, dict):
+            result.add(file, path, "field 'costs' expected a mapping")
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Schema: forge_decompose.yaml
+# ---------------------------------------------------------------------------
+
+VALID_DECOMPOSE_RARITIES = {"green", "blue", "purple", "orange"}
+
+
+def validate_forge_decompose(data: dict, *, file: str = "forge_decompose.yaml") -> ValidationResult:
+    result = ValidationResult()
+
+    if not isinstance(data, dict):
+        result.add(file, "<root>", "expected a mapping at root level")
+        return result
+
+    supported_rarities = data.get("supported_rarities")
+    if supported_rarities is None:
+        result.add(file, "<root>", "missing required key 'supported_rarities'")
+    elif not isinstance(supported_rarities, list):
+        result.add(file, "supported_rarities", "expected a list")
+    else:
+        for rarity in supported_rarities:
+            if rarity not in VALID_DECOMPOSE_RARITIES:
+                result.add(file, "supported_rarities", f"unknown rarity '{rarity}'")
+
+    # Validate base_materials per rarity
+    base_materials = data.get("base_materials")
+    if base_materials is not None:
+        if not isinstance(base_materials, dict):
+            result.add(file, "base_materials", "expected a mapping")
+        else:
+            for rarity, materials in base_materials.items():
+                rarity_path = f"base_materials.{rarity}"
+                if rarity not in VALID_DECOMPOSE_RARITIES:
+                    result.add(file, rarity_path, f"unknown rarity '{rarity}'")
+                if not isinstance(materials, dict):
+                    result.add(file, rarity_path, "expected a mapping of material ranges")
+                    continue
+                for mat_key, mat_range in materials.items():
+                    mat_path = f"{rarity_path}.{mat_key}"
+                    if not isinstance(mat_range, list) or len(mat_range) != 2:
+                        result.add(file, mat_path, "expected a list of [min, max]")
+                        continue
+                    for i, bound in enumerate(mat_range):
+                        if not isinstance(bound, (int, float)) or bound < 0:
+                            result.add(file, mat_path, f"bound[{i}] must be a non-negative number, got {bound!r}")
+
+    # Validate chance_rewards per rarity
+    chance_rewards = data.get("chance_rewards")
+    if chance_rewards is not None:
+        if not isinstance(chance_rewards, dict):
+            result.add(file, "chance_rewards", "expected a mapping")
+        else:
+            for rarity, rewards in chance_rewards.items():
+                rarity_path = f"chance_rewards.{rarity}"
+                if rarity not in VALID_DECOMPOSE_RARITIES:
+                    result.add(file, rarity_path, f"unknown rarity '{rarity}'")
+                if not isinstance(rewards, dict):
+                    result.add(file, rarity_path, "expected a mapping of chance values")
+                    continue
+                for reward_key, prob in rewards.items():
+                    reward_path = f"{rarity_path}.{reward_key}"
+                    if not isinstance(prob, (int, float)):
+                        result.add(file, reward_path, f"expected a number, got {type(prob).__name__}")
+                    elif not (0.0 <= prob <= 1.0):
+                        result.add(file, reward_path, f"probability must be between 0 and 1, got {prob}")
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Schema: guest_skills.yaml
+# ---------------------------------------------------------------------------
+
+VALID_SKILL_RARITIES = {"black", "gray", "green", "red", "blue", "purple", "orange"}
+VALID_SKILL_KINDS = {"active", "passive"}
+
+
+def validate_guest_skills(data: dict, *, file: str = "guest_skills.yaml") -> ValidationResult:
+    result = ValidationResult()
+
+    if not isinstance(data, dict):
+        result.add(file, "<root>", "expected a mapping at root level")
+        return result
+
+    skills = data.get("skills")
+    if skills is None:
+        result.add(file, "<root>", "missing required key 'skills'")
+        return result
+
+    if not isinstance(skills, list):
+        result.add(file, "skills", "expected a list")
+        return result
+
+    _check_unique_keys(skills, "key", result=result, file=file, context="skills")
+
+    for idx, skill in enumerate(skills):
+        path = f"skills[{idx}]"
+        if not isinstance(skill, dict):
+            result.add(file, path, "expected a mapping")
+            continue
+
+        _check_required_fields(skill, ["key", "name", "rarity"], result=result, file=file, path=path)
+
+        rarity = skill.get("rarity")
+        if rarity is not None:
+            _check_in(rarity, VALID_SKILL_RARITIES, result=result, file=file, path=path, field_name="rarity")
+
+        kind = skill.get("kind")
+        if kind is not None:
+            _check_in(kind, VALID_SKILL_KINDS, result=result, file=file, path=path, field_name="kind")
+
+        base_power = skill.get("base_power")
+        if base_power is not None:
+            _check_type(base_power, (int, float), result=result, file=file, path=path, field_name="base_power")
+            _check_positive(base_power, result=result, file=file, path=path, field_name="base_power")
+
+        base_probability = skill.get("base_probability")
+        if base_probability is not None:
+            _check_type(
+                base_probability, (int, float), result=result, file=file, path=path, field_name="base_probability"
+            )
+            if isinstance(base_probability, (int, float)) and not (0.0 <= base_probability <= 1.0):
+                result.add(file, path, f"field 'base_probability' must be between 0 and 1, got {base_probability}")
+
+        targets = skill.get("targets")
+        if targets is not None:
+            _check_type(targets, int, result=result, file=file, path=path, field_name="targets")
+            _check_positive(targets, result=result, file=file, path=path, field_name="targets", allow_zero=False)
+
+        required_level = skill.get("required_level")
+        if required_level is not None:
+            _check_type(required_level, int, result=result, file=file, path=path, field_name="required_level")
+            _check_positive(
+                required_level, result=result, file=file, path=path, field_name="required_level", allow_zero=False
+            )
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Schema: recruitment_rarity_weights.yaml
+# ---------------------------------------------------------------------------
+
+VALID_RARITY_WEIGHT_KEYS = {"orange", "hermit", "purple", "red", "blue", "green", "gray", "black"}
+
+
+def validate_recruitment_rarity_weights(
+    data: dict, *, file: str = "recruitment_rarity_weights.yaml"
+) -> ValidationResult:
+    result = ValidationResult()
+
+    if not isinstance(data, dict):
+        result.add(file, "<root>", "expected a mapping at root level")
+        return result
+
+    total_weight = data.get("total_weight")
+    if total_weight is None:
+        result.add(file, "<root>", "missing required key 'total_weight'")
+    else:
+        _check_type(total_weight, int, result=result, file=file, path="<root>", field_name="total_weight")
+        _check_positive(
+            total_weight, result=result, file=file, path="<root>", field_name="total_weight", allow_zero=False
+        )
+
+    weights = data.get("weights")
+    if weights is None:
+        result.add(file, "<root>", "missing required key 'weights'")
+        return result
+
+    if not isinstance(weights, dict):
+        result.add(file, "weights", "expected a mapping")
+        return result
+
+    for rarity, weight in weights.items():
+        path = f"weights.{rarity}"
+        if rarity not in VALID_RARITY_WEIGHT_KEYS:
+            result.add(file, path, f"unknown rarity '{rarity}'")
+        if not isinstance(weight, int):
+            result.add(file, path, f"expected int, got {type(weight).__name__}")
+        elif weight < 0:
+            result.add(file, path, f"weight must be >= 0, got {weight}")
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Schema: arena_rewards.yaml
+# ---------------------------------------------------------------------------
+
+
+def validate_arena_rewards(
+    data: dict,
+    *,
+    file: str = "arena_rewards.yaml",
+    item_keys: set[str] | None = None,
+) -> ValidationResult:
+    result = ValidationResult()
+
+    if not isinstance(data, dict):
+        result.add(file, "<root>", "expected a mapping at root level")
+        return result
+
+    rewards = data.get("rewards")
+    if rewards is None:
+        result.add(file, "<root>", "missing required key 'rewards'")
+        return result
+
+    if not isinstance(rewards, list):
+        result.add(file, "rewards", "expected a list")
+        return result
+
+    _check_unique_keys(rewards, "key", result=result, file=file, context="rewards")
+
+    for idx, entry in enumerate(rewards):
+        path = f"rewards[{idx}]"
+        if not isinstance(entry, dict):
+            result.add(file, path, "expected a mapping")
+            continue
+
+        _check_required_fields(entry, ["key", "name", "cost_coins"], result=result, file=file, path=path)
+
+        cost_coins = entry.get("cost_coins")
+        if cost_coins is not None:
+            _check_type(cost_coins, int, result=result, file=file, path=path, field_name="cost_coins")
+            _check_positive(cost_coins, result=result, file=file, path=path, field_name="cost_coins", allow_zero=False)
+
+        daily_limit = entry.get("daily_limit")
+        if daily_limit is not None:
+            _check_type(daily_limit, int, result=result, file=file, path=path, field_name="daily_limit")
+            _check_positive(
+                daily_limit, result=result, file=file, path=path, field_name="daily_limit", allow_zero=False
+            )
+
+        reward_data = entry.get("rewards")
+        if reward_data is not None and not isinstance(reward_data, dict):
+            result.add(file, path, "field 'rewards' expected a mapping")
+
+        # Validate random_items referential integrity
+        if isinstance(reward_data, dict) and item_keys is not None:
+            random_items = reward_data.get("random_items")
+            if random_items is not None:
+                if not isinstance(random_items, list):
+                    result.add(file, f"{path}.rewards", "field 'random_items' expected a list")
+                else:
+                    for ri, rand_item in enumerate(random_items):
+                        ri_path = f"{path}.rewards.random_items[{ri}]"
+                        if not isinstance(rand_item, dict):
+                            result.add(file, ri_path, "expected a mapping")
+                            continue
+                        rand_item_key = rand_item.get("item_key")
+                        if rand_item_key is not None and rand_item_key not in item_keys:
+                            result.add(file, ri_path, f"item_key '{rand_item_key}' not found in item_templates.yaml")
+                        weight = rand_item.get("weight")
+                        if weight is not None:
+                            _check_type(weight, int, result=result, file=file, path=ri_path, field_name="weight")
+                            _check_positive(
+                                weight, result=result, file=file, path=ri_path, field_name="weight", allow_zero=False
+                            )
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Schema: smithy_production.yaml
+# ---------------------------------------------------------------------------
+
+VALID_SMITHY_CATEGORIES = {"metal", "medicine"}
+
+
+def validate_smithy_production(data: dict, *, file: str = "smithy_production.yaml") -> ValidationResult:
+    result = ValidationResult()
+
+    if not isinstance(data, dict):
+        result.add(file, "<root>", "expected a mapping at root level")
+        return result
+
+    production = data.get("production")
+    if production is None:
+        result.add(file, "<root>", "missing required key 'production'")
+        return result
+
+    if not isinstance(production, dict):
+        result.add(file, "production", "expected a mapping")
+        return result
+
+    for item_key, item_data in production.items():
+        path = f"production.{item_key}"
+        if not isinstance(item_data, dict):
+            result.add(file, path, "expected a mapping")
+            continue
+
+        _check_required_fields(
+            item_data, ["cost_type", "cost_amount", "base_duration"], result=result, file=file, path=path
+        )
+
+        cost_amount = item_data.get("cost_amount")
+        if cost_amount is not None:
+            _check_type(cost_amount, (int, float), result=result, file=file, path=path, field_name="cost_amount")
+            _check_positive(
+                cost_amount, result=result, file=file, path=path, field_name="cost_amount", allow_zero=False
+            )
+
+        base_duration = item_data.get("base_duration")
+        if base_duration is not None:
+            _check_type(base_duration, int, result=result, file=file, path=path, field_name="base_duration")
+            _check_positive(
+                base_duration, result=result, file=file, path=path, field_name="base_duration", allow_zero=False
+            )
+
+        category = item_data.get("category")
+        if category is not None:
+            _check_in(category, VALID_SMITHY_CATEGORIES, result=result, file=file, path=path, field_name="category")
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Schema: ranch_production.yaml
+# ---------------------------------------------------------------------------
+
+
+def validate_ranch_production(data: dict, *, file: str = "ranch_production.yaml") -> ValidationResult:
+    result = ValidationResult()
+
+    if not isinstance(data, dict):
+        result.add(file, "<root>", "expected a mapping at root level")
+        return result
+
+    production = data.get("production")
+    if production is None:
+        result.add(file, "<root>", "missing required key 'production'")
+        return result
+
+    if not isinstance(production, dict):
+        result.add(file, "production", "expected a mapping")
+        return result
+
+    for item_key, item_data in production.items():
+        path = f"production.{item_key}"
+        if not isinstance(item_data, dict):
+            result.add(file, path, "expected a mapping")
+            continue
+
+        _check_required_fields(item_data, ["grain_cost", "base_duration"], result=result, file=file, path=path)
+
+        grain_cost = item_data.get("grain_cost")
+        if grain_cost is not None:
+            _check_type(grain_cost, (int, float), result=result, file=file, path=path, field_name="grain_cost")
+            _check_positive(grain_cost, result=result, file=file, path=path, field_name="grain_cost", allow_zero=False)
+
+        base_duration = item_data.get("base_duration")
+        if base_duration is not None:
+            _check_type(base_duration, int, result=result, file=file, path=path, field_name="base_duration")
+            _check_positive(
+                base_duration, result=result, file=file, path=path, field_name="base_duration", allow_zero=False
+            )
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Schema: stable_production.yaml
+# ---------------------------------------------------------------------------
+
+
+def validate_stable_production(
+    data: dict,
+    *,
+    file: str = "stable_production.yaml",
+    item_keys: set[str] | None = None,
+) -> ValidationResult:
+    result = ValidationResult()
+
+    if not isinstance(data, dict):
+        result.add(file, "<root>", "expected a mapping at root level")
+        return result
+
+    production = data.get("production")
+    if production is None:
+        result.add(file, "<root>", "missing required key 'production'")
+        return result
+
+    if not isinstance(production, dict):
+        result.add(file, "production", "expected a mapping")
+        return result
+
+    for equip_key, item_data in production.items():
+        path = f"production.{equip_key}"
+        if not isinstance(item_data, dict):
+            result.add(file, path, "expected a mapping")
+            continue
+
+        if item_keys is not None and equip_key not in item_keys:
+            result.add(file, path, f"production key '{equip_key}' not found in item_templates.yaml")
+
+        _check_required_fields(item_data, ["grain_cost", "base_duration"], result=result, file=file, path=path)
+
+        grain_cost = item_data.get("grain_cost")
+        if grain_cost is not None:
+            _check_type(grain_cost, (int, float), result=result, file=file, path=path, field_name="grain_cost")
+            _check_positive(grain_cost, result=result, file=file, path=path, field_name="grain_cost", allow_zero=False)
+
+        base_duration = item_data.get("base_duration")
+        if base_duration is not None:
+            _check_type(base_duration, int, result=result, file=file, path=path, field_name="base_duration")
+            _check_positive(
+                base_duration, result=result, file=file, path=path, field_name="base_duration", allow_zero=False
+            )
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Schema: guild_rules.yaml
+# ---------------------------------------------------------------------------
+
+
+def validate_guild_rules(data: dict, *, file: str = "guild_rules.yaml") -> ValidationResult:
+    result = ValidationResult()
+
+    if not isinstance(data, dict):
+        result.add(file, "<root>", "expected a mapping at root level")
+        return result
+
+    for section in ("pagination", "creation", "contribution"):
+        section_data = data.get(section)
+        if section_data is None:
+            result.add(file, "<root>", f"missing required section '{section}'")
+        elif not isinstance(section_data, dict):
+            result.add(file, section, "expected a mapping")
+
+    pagination = data.get("pagination")
+    if isinstance(pagination, dict):
+        for int_field in ("guild_list_page_size", "guild_hall_display_limit"):
+            val = pagination.get(int_field)
+            if val is not None:
+                _check_type(val, int, result=result, file=file, path="pagination", field_name=int_field)
+                _check_positive(
+                    val, result=result, file=file, path="pagination", field_name=int_field, allow_zero=False
+                )
+
+    contribution = data.get("contribution")
+    if isinstance(contribution, dict):
+        min_donation = contribution.get("min_donation_amount")
+        if min_donation is not None:
+            _check_type(
+                min_donation,
+                (int, float),
+                result=result,
+                file=file,
+                path="contribution",
+                field_name="min_donation_amount",
+            )
+            _check_positive(
+                min_donation,
+                result=result,
+                file=file,
+                path="contribution",
+                field_name="min_donation_amount",
+                allow_zero=False,
+            )
+
+        daily_limits = contribution.get("daily_limits")
+        if daily_limits is not None:
+            if not isinstance(daily_limits, dict):
+                result.add(file, "contribution.daily_limits", "expected a mapping")
+            else:
+                for resource, limit in daily_limits.items():
+                    if not isinstance(limit, (int, float)) or limit < 0:
+                        result.add(
+                            file,
+                            f"contribution.daily_limits.{resource}",
+                            f"expected a non-negative number, got {limit!r}",
+                        )
+
+    hero_pool = data.get("hero_pool")
+    if hero_pool is not None:
+        if not isinstance(hero_pool, dict):
+            result.add(file, "hero_pool", "expected a mapping")
+        else:
+            for int_field in ("slot_limit", "battle_lineup_limit", "replace_cooldown_seconds"):
+                val = hero_pool.get(int_field)
+                if val is not None:
+                    _check_type(val, int, result=result, file=file, path="hero_pool", field_name=int_field)
+                    _check_positive(
+                        val, result=result, file=file, path="hero_pool", field_name=int_field, allow_zero=False
+                    )
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Schema: guest_growth_rules.yaml
+# ---------------------------------------------------------------------------
+
+VALID_GROWTH_RARITIES = {"black", "gray", "green", "red", "blue", "purple", "orange"}
+VALID_GROWTH_ARCHETYPES = {"military", "civil"}
+
+
+def validate_guest_growth_rules(data: dict, *, file: str = "guest_growth_rules.yaml") -> ValidationResult:
+    result = ValidationResult()
+
+    if not isinstance(data, dict):
+        result.add(file, "<root>", "expected a mapping at root level")
+        return result
+
+    # Validate rarity_hp_profiles
+    hp_profiles = data.get("rarity_hp_profiles")
+    if hp_profiles is not None:
+        if not isinstance(hp_profiles, dict):
+            result.add(file, "rarity_hp_profiles", "expected a mapping")
+        else:
+            for rarity, profile in hp_profiles.items():
+                path = f"rarity_hp_profiles.{rarity}"
+                if rarity not in VALID_GROWTH_RARITIES:
+                    result.add(file, path, f"unknown rarity '{rarity}'")
+                if not isinstance(profile, dict):
+                    result.add(file, path, "expected a mapping")
+                    continue
+                base = profile.get("base")
+                if base is not None:
+                    _check_type(base, (int, float), result=result, file=file, path=path, field_name="base")
+                    _check_positive(base, result=result, file=file, path=path, field_name="base", allow_zero=False)
+
+    # Validate rarity_skill_point_gains
+    skill_point_gains = data.get("rarity_skill_point_gains")
+    if skill_point_gains is not None:
+        if not isinstance(skill_point_gains, dict):
+            result.add(file, "rarity_skill_point_gains", "expected a mapping")
+        else:
+            for rarity, gain in skill_point_gains.items():
+                path = f"rarity_skill_point_gains.{rarity}"
+                if rarity not in VALID_GROWTH_RARITIES:
+                    result.add(file, path, f"unknown rarity '{rarity}'")
+                if not isinstance(gain, (int, float)) or gain < 0:
+                    result.add(file, path, f"expected a non-negative number, got {gain!r}")
+
+    # Validate rarity_attribute_growth_range
+    growth_ranges = data.get("rarity_attribute_growth_range")
+    if growth_ranges is not None:
+        if not isinstance(growth_ranges, dict):
+            result.add(file, "rarity_attribute_growth_range", "expected a mapping")
+        else:
+            for rarity, growth_range in growth_ranges.items():
+                path = f"rarity_attribute_growth_range.{rarity}"
+                if rarity not in VALID_GROWTH_RARITIES:
+                    result.add(file, path, f"unknown rarity '{rarity}'")
+                if not isinstance(growth_range, list) or len(growth_range) != 2:
+                    result.add(file, path, "expected a list of [min, max]")
+
+    # Validate archetype_attribute_weights
+    archetype_weights = data.get("archetype_attribute_weights")
+    if archetype_weights is not None:
+        if not isinstance(archetype_weights, dict):
+            result.add(file, "archetype_attribute_weights", "expected a mapping")
+        else:
+            for archetype, weights in archetype_weights.items():
+                path = f"archetype_attribute_weights.{archetype}"
+                if archetype not in VALID_GROWTH_ARCHETYPES:
+                    result.add(file, path, f"unknown archetype '{archetype}'")
+                if not isinstance(weights, dict):
+                    result.add(file, path, "expected a mapping of attribute weights")
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Schema: technology_templates.yaml
+# ---------------------------------------------------------------------------
+
+VALID_TECH_CATEGORIES = {"basic", "martial", "production"}
+
+
+def validate_technology_templates(data: dict, *, file: str = "technology_templates.yaml") -> ValidationResult:
+    result = ValidationResult()
+
+    if not isinstance(data, dict):
+        result.add(file, "<root>", "expected a mapping at root level")
+        return result
+
+    # Validate categories section
+    categories = data.get("categories")
+    if categories is not None:
+        if not isinstance(categories, list):
+            result.add(file, "categories", "expected a list")
+        else:
+            _check_unique_keys(categories, "key", result=result, file=file, context="categories")
+            for idx, cat in enumerate(categories):
+                cat_path = f"categories[{idx}]"
+                if not isinstance(cat, dict):
+                    result.add(file, cat_path, "expected a mapping")
+                    continue
+                _check_required_fields(cat, ["key", "name"], result=result, file=file, path=cat_path)
+
+    # Validate technologies list
+    technologies = data.get("technologies")
+    if technologies is None:
+        result.add(file, "<root>", "missing required key 'technologies'")
+        return result
+
+    if not isinstance(technologies, list):
+        result.add(file, "technologies", "expected a list")
+        return result
+
+    _check_unique_keys(technologies, "key", result=result, file=file, context="technologies")
+
+    for idx, tech in enumerate(technologies):
+        path = f"technologies[{idx}]"
+        if not isinstance(tech, dict):
+            result.add(file, path, "expected a mapping")
+            continue
+
+        _check_required_fields(
+            tech,
+            ["key", "name", "category", "effect_type", "max_level", "base_cost"],
+            result=result,
+            file=file,
+            path=path,
+        )
+
+        category = tech.get("category")
+        if category is not None:
+            _check_in(category, VALID_TECH_CATEGORIES, result=result, file=file, path=path, field_name="category")
+
+        max_level = tech.get("max_level")
+        if max_level is not None:
+            _check_type(max_level, int, result=result, file=file, path=path, field_name="max_level")
+            _check_positive(max_level, result=result, file=file, path=path, field_name="max_level", allow_zero=False)
+
+        base_cost = tech.get("base_cost")
+        if base_cost is not None:
+            _check_type(base_cost, (int, float), result=result, file=file, path=path, field_name="base_cost")
+            _check_positive(base_cost, result=result, file=file, path=path, field_name="base_cost", allow_zero=False)
+
+        effect_per_level = tech.get("effect_per_level")
+        if effect_per_level is not None:
+            _check_type(
+                effect_per_level, (int, float), result=result, file=file, path=path, field_name="effect_per_level"
+            )
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # High-level: validate all config files at once
 # ---------------------------------------------------------------------------
 
@@ -833,6 +1710,19 @@ def validate_all_configs(data_dir: str | Path) -> ValidationResult:
     shop_data = _load("shop_items.yaml")
     arena_data = _load("arena_rules.yaml")
     trade_data = _load("trade_market_rules.yaml")
+    warehouse_data = _load("warehouse_production.yaml")
+    auction_data = _load("auction_items.yaml")
+    blueprints_data = _load("forge_blueprints.yaml")
+    decompose_data = _load("forge_decompose.yaml")
+    skills_data = _load("guest_skills.yaml")
+    rarity_weights_data = _load("recruitment_rarity_weights.yaml")
+    arena_rewards_data = _load("arena_rewards.yaml")
+    smithy_data = _load("smithy_production.yaml")
+    ranch_data = _load("ranch_production.yaml")
+    stable_data = _load("stable_production.yaml")
+    guild_data = _load("guild_rules.yaml")
+    growth_data = _load("guest_growth_rules.yaml")
+    tech_data = _load("technology_templates.yaml")
 
     # Build cross-reference key sets for referential integrity checks
     item_keys: set[str] | None = None
@@ -870,4 +1760,48 @@ def validate_all_configs(data_dir: str | Path) -> ValidationResult:
     if trade_data is not None:
         result.merge(validate_trade_market_rules(trade_data))
 
+    if warehouse_data is not None:
+        result.merge(validate_warehouse_production(warehouse_data))
+
+    if auction_data is not None:
+        result.merge(validate_auction_items(auction_data, item_keys=item_keys))
+
+    if blueprints_data is not None:
+        result.merge(validate_forge_blueprints(blueprints_data, item_keys=item_keys))
+
+    if decompose_data is not None:
+        result.merge(validate_forge_decompose(decompose_data))
+
+    if skills_data is not None:
+        result.merge(validate_guest_skills(skills_data))
+
+    if rarity_weights_data is not None:
+        result.merge(validate_recruitment_rarity_weights(rarity_weights_data))
+
+    if arena_rewards_data is not None:
+        result.merge(validate_arena_rewards(arena_rewards_data, item_keys=item_keys))
+
+    if smithy_data is not None:
+        result.merge(validate_smithy_production(smithy_data))
+
+    if ranch_data is not None:
+        result.merge(validate_ranch_production(ranch_data))
+
+    if stable_data is not None:
+        result.merge(validate_stable_production(stable_data, item_keys=item_keys))
+
+    if guild_data is not None:
+        result.merge(validate_guild_rules(guild_data))
+
+    if growth_data is not None:
+        result.merge(validate_guest_growth_rules(growth_data))
+
+    if tech_data is not None:
+        result.merge(validate_technology_templates(tech_data))
+
     return result
+
+
+def get_supported_yaml_configs() -> tuple[str, ...]:
+    """Return the YAML config filenames currently covered by schema validation."""
+    return SUPPORTED_YAML_CONFIGS

@@ -3,13 +3,14 @@ from __future__ import annotations
 import logging
 import random
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Iterable, cast
 
 from django.db import transaction
 from django.db.models import Count, F
 from django.utils import timezone
 
+from battle.models import BattleReport
 from battle.services import simulate_report
 from core.utils.cache_lock import acquire_best_effort_lock, release_best_effort_lock
 from gameplay.models import (
@@ -72,6 +73,32 @@ ARENA_BASE_PARTICIPATION_COINS = int(ARENA_RULES["rewards"]["base_participation_
 ARENA_RANK_BONUS_COINS = dict(ARENA_RULES["rewards"]["rank_bonus_coins"])
 ARENA_RECRUITING_LOCK_KEY = str(ARENA_RULES["runtime"]["recruiting_lock_key"])
 ARENA_RECRUITING_LOCK_TIMEOUT = int(ARENA_RULES["runtime"]["recruiting_lock_timeout"])
+
+
+def refresh_arena_constants() -> None:
+    """重新从 YAML 加载竞技场规则并更新模块级常量。"""
+    global ARENA_RULES
+    global ARENA_DAILY_PARTICIPATION_LIMIT, ARENA_MAX_GUESTS_PER_ENTRY, ARENA_TOURNAMENT_PLAYER_LIMIT
+    global ARENA_ROUND_INTERVAL_SECONDS, ARENA_COMPLETED_RETENTION_SECONDS, ARENA_ROUND_RETRY_SECONDS
+    global ARENA_REGISTRATION_SILVER_COST, ARENA_BASE_PARTICIPATION_COINS, ARENA_RANK_BONUS_COINS
+    global ARENA_RECRUITING_LOCK_KEY, ARENA_RECRUITING_LOCK_TIMEOUT
+
+    ARENA_RULES = load_arena_rules()
+    ARENA_DAILY_PARTICIPATION_LIMIT = _load_positive_int_setting(
+        "ARENA_DAILY_PARTICIPATION_LIMIT", ARENA_RULES["registration"]["daily_participation_limit"], minimum=1
+    )
+    ARENA_MAX_GUESTS_PER_ENTRY = int(ARENA_RULES["registration"]["max_guests_per_entry"])
+    ARENA_TOURNAMENT_PLAYER_LIMIT = _load_positive_int_setting(
+        "ARENA_TOURNAMENT_PLAYER_LIMIT", ARENA_RULES["registration"]["tournament_player_limit"], minimum=2
+    )
+    ARENA_ROUND_INTERVAL_SECONDS = int(ARENA_RULES["runtime"]["round_interval_seconds"])
+    ARENA_COMPLETED_RETENTION_SECONDS = int(ARENA_RULES["runtime"]["completed_retention_seconds"])
+    ARENA_ROUND_RETRY_SECONDS = int(ARENA_RULES["runtime"]["round_retry_seconds"])
+    ARENA_REGISTRATION_SILVER_COST = int(ARENA_RULES["registration"]["registration_silver_cost"])
+    ARENA_BASE_PARTICIPATION_COINS = int(ARENA_RULES["rewards"]["base_participation_coins"])
+    ARENA_RANK_BONUS_COINS = dict(ARENA_RULES["rewards"]["rank_bonus_coins"])
+    ARENA_RECRUITING_LOCK_KEY = str(ARENA_RULES["runtime"]["recruiting_lock_key"])
+    ARENA_RECRUITING_LOCK_TIMEOUT = int(ARENA_RULES["runtime"]["recruiting_lock_timeout"])
 
 
 @dataclass(frozen=True)
@@ -183,7 +210,7 @@ def _get_or_create_recruiting_tournament_locked() -> ArenaTournament:
         )
 
 
-def _start_tournament_locked(tournament: ArenaTournament, *, now=None) -> bool:
+def _start_tournament_locked(tournament: ArenaTournament, *, now: datetime | None = None) -> bool:
     if tournament.status != ArenaTournament.Status.RECRUITING:
         return False
     entry_count = tournament.entries.count()
@@ -206,7 +233,7 @@ def _round_interval_delta(tournament: ArenaTournament) -> timedelta:
 _build_round_pairings = _arena_helpers.build_round_pairings
 
 
-def _schedule_round_locked(tournament: ArenaTournament, *, round_number: int, now) -> bool:
+def _schedule_round_locked(tournament: ArenaTournament, *, round_number: int, now: datetime) -> bool:
     return _schedule_round_locked_impl(
         tournament,
         round_number=round_number,
@@ -270,7 +297,7 @@ def cancel_arena_entry(manor: Manor) -> int:
 
 
 @transaction.atomic
-def start_tournament_if_ready(tournament: ArenaTournament, *, now=None) -> bool:
+def start_tournament_if_ready(tournament: ArenaTournament, *, now: datetime | None = None) -> bool:
     locked = ArenaTournament.objects.select_for_update().filter(pk=tournament.pk).first()
     if not locked:
         return False
@@ -301,7 +328,7 @@ def _load_entry_guests(entry: ArenaEntry) -> list[ArenaGuestSnapshotProxy]:
 
 def _send_arena_battle_messages(
     *,
-    report,
+    report: BattleReport,
     round_number: int,
     attacker_entry: ArenaEntry,
     defender_entry: ArenaEntry,
@@ -327,7 +354,7 @@ def _create_forfeit_match(
     winner_entry: ArenaEntry,
     status: str,
     note: str,
-    now,
+    now: datetime,
 ) -> ArenaMatch:
     return ArenaMatch.objects.create(
         tournament=tournament,
@@ -347,9 +374,9 @@ def _save_resolved_match(
     match: ArenaMatch,
     winner_entry: ArenaEntry,
     status: str,
-    now,
+    now: datetime,
     note: str = "",
-    report=None,
+    report: BattleReport | None = None,
 ) -> None:
     _save_resolved_match_impl(
         match=match,
@@ -370,7 +397,7 @@ def _persist_forfeit_match_resolution(
     defender_entry: ArenaEntry,
     winner_entry: ArenaEntry,
     note: str,
-    now,
+    now: datetime,
     match: ArenaMatch | None,
 ) -> None:
     if match is not None:
@@ -404,7 +431,7 @@ def _resolve_forfeit_winner(
     defender_entry: ArenaEntry,
     attacker_guests: list[ArenaGuestSnapshotProxy],
     defender_guests: list[ArenaGuestSnapshotProxy],
-    now,
+    now: datetime,
     match: ArenaMatch | None,
 ) -> ArenaEntry | None:
     return _resolve_forfeit_winner_impl(
@@ -428,7 +455,7 @@ def _resolve_match_locked(
     match_index: int,
     attacker_entry: ArenaEntry,
     defender_entry: ArenaEntry,
-    now,
+    now: datetime,
     match: ArenaMatch | None = None,
 ) -> ArenaEntry:
     attacker_guests = _load_entry_guests(attacker_entry)
@@ -527,7 +554,7 @@ def _reward_for_rank(rank: int) -> int:
     )
 
 
-def _finalize_tournament_locked(tournament: ArenaTournament, *, winner_entry: ArenaEntry | None, now) -> None:
+def _finalize_tournament_locked(tournament: ArenaTournament, *, winner_entry: ArenaEntry | None, now: datetime) -> None:
     _finalize_tournament_locked_impl(
         tournament,
         winner_entry=winner_entry,
@@ -538,7 +565,7 @@ def _finalize_tournament_locked(tournament: ArenaTournament, *, winner_entry: Ar
     )
 
 
-def _schedule_round_retry_locked(tournament: ArenaTournament, *, now) -> None:
+def _schedule_round_retry_locked(tournament: ArenaTournament, *, now: datetime) -> None:
     retry_seconds = max(1, min(ARENA_ROUND_RETRY_SECONDS, _round_interval_seconds()))
     tournament.next_round_at = now + timedelta(seconds=retry_seconds)
     tournament.save(update_fields=["next_round_at", "updated_at"])
@@ -547,7 +574,7 @@ def _schedule_round_retry_locked(tournament: ArenaTournament, *, now) -> None:
 _collect_round_outcome_entry_ids = _arena_helpers.collect_round_outcome_entry_ids
 
 
-def _run_tournament_round(tournament_id: int, *, now) -> bool:
+def _run_tournament_round(tournament_id: int, *, now: datetime) -> bool:
     with transaction.atomic():
         tournament = ArenaTournament.objects.select_for_update().filter(pk=tournament_id).first()
         if not tournament:
@@ -615,7 +642,7 @@ def _run_tournament_round(tournament_id: int, *, now) -> bool:
         )
 
 
-def run_due_arena_rounds(*, now=None, limit: int = 20) -> int:
+def run_due_arena_rounds(*, now: datetime | None = None, limit: int = 20) -> int:
     current_time = now or timezone.now()
     due_ids = list(
         ArenaTournament.objects.filter(
@@ -638,7 +665,7 @@ def run_due_arena_rounds(*, now=None, limit: int = 20) -> int:
 
 
 def cleanup_expired_tournaments(
-    *, now=None, grace_seconds: int = ARENA_COMPLETED_RETENTION_SECONDS, limit: int = 50
+    *, now: datetime | None = None, grace_seconds: int = ARENA_COMPLETED_RETENTION_SECONDS, limit: int = 50
 ) -> int:
     current_time = now or timezone.now()
     return _cleanup_expired_tournaments(now=current_time, grace_seconds=grace_seconds, limit=limit)
