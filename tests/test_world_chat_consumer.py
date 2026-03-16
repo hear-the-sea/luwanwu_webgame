@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from django.test import SimpleTestCase
@@ -209,3 +210,25 @@ class WorldChatConsumerTests(SimpleTestCase):
                 "message": consumer.CHAT_UNAVAILABLE_REFUND_FAILED_MESSAGE,
             },
         )
+
+    def test_connect_reports_history_degraded_status(self):
+        consumer = WorldChatConsumer()
+        consumer.scope = {"user": SimpleNamespace(is_authenticated=True, id=7)}
+        consumer.channel_name = "test-channel"
+        consumer.channel_layer = AsyncMock()
+        consumer.accept = AsyncMock()
+        consumer.send_json = AsyncMock()
+        consumer._get_display_name = AsyncMock(return_value="玩家A")
+        consumer._get_history = AsyncMock(return_value=[])
+        consumer._history_degraded = True
+
+        asyncio.run(consumer.connect())
+
+        consumer.channel_layer.group_add.assert_awaited_once_with(consumer.GROUP_NAME, consumer.channel_name)
+        consumer.accept.assert_awaited_once_with()
+        self.assertEqual(consumer.send_json.await_count, 2)
+        history_payload = consumer.send_json.await_args_list[0].args[0]
+        status_payload = consumer.send_json.await_args_list[1].args[0]
+        self.assertEqual(history_payload["type"], "history")
+        self.assertTrue(status_payload["history_degraded"])
+        self.assertEqual(status_payload["history_status_message"], consumer.HISTORY_UNAVAILABLE_MESSAGE)

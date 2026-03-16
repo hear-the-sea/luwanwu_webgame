@@ -7,7 +7,8 @@ from types import SimpleNamespace
 import pytest
 from django.utils import timezone
 
-from gameplay.models import RaidRun
+from battle.models import TroopTemplate
+from gameplay.models import PlayerTroop, RaidRun
 from gameplay.services.manor.core import ensure_manor
 from gameplay.services.raid.combat import battle as combat_battle
 from guests.models import Guest, GuestStatus, GuestTemplate
@@ -113,6 +114,25 @@ def test_dispatch_complete_raid_task_uses_remaining_return_time(monkeypatch):
     assert captured["task"] is fake_complete_task
     assert captured["args"] == [42]
     assert captured["countdown"] == 37
+
+
+def test_dispatch_complete_raid_task_finalizes_sync_when_due_dispatch_fails(monkeypatch):
+    now = timezone.now()
+    finalized: list[tuple[int, object]] = []
+
+    import gameplay.tasks as gameplay_tasks
+
+    monkeypatch.setattr(gameplay_tasks, "complete_raid_task", object(), raising=False)
+    monkeypatch.setattr(combat_battle, "safe_apply_async", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(
+        "gameplay.services.raid.combat.runs.finalize_raid",
+        lambda run, now=None: finalized.append((run.id, now)),
+    )
+
+    run = SimpleNamespace(id=77, return_at=now, travel_time=600)
+    combat_battle._dispatch_complete_raid_task(run, now=now)
+
+    assert finalized == [(77, now)]
 
 
 def test_process_raid_battle_ignores_post_commit_failures(monkeypatch):
@@ -289,3 +309,67 @@ def test_execute_raid_battle_uses_attacker_snapshot(monkeypatch, django_user_mod
     assert captured["force"] == 300
     assert captured["guest_id"] == attacker_guest.id
     assert attacker_guest.current_hp == 500
+
+
+@pytest.mark.django_db
+def test_process_raid_battle_cleans_up_run_when_manor_lock_fails(monkeypatch, django_user_model):
+    attacker_user = django_user_model.objects.create_user(username="raid_cleanup_a", password="pass123")
+    defender_user = django_user_model.objects.create_user(username="raid_cleanup_d", password="pass123")
+    attacker = ensure_manor(attacker_user)
+    defender = ensure_manor(defender_user)
+
+    troop_template = TroopTemplate.objects.create(key="raid_cleanup_guard", name="清理护院")
+    troop = PlayerTroop.objects.create(manor=attacker, troop_template=troop_template, count=2)
+    guest_template = GuestTemplate.objects.create(
+        key="raid_cleanup_guest",
+        name="清理门客",
+        archetype="military",
+        rarity="green",
+        base_attack=100,
+        base_intellect=80,
+        base_defense=90,
+        base_agility=70,
+        base_luck=50,
+        base_hp=1200,
+    )
+    guest = Guest.objects.create(
+        manor=attacker,
+        template=guest_template,
+        status=GuestStatus.DEPLOYED,
+        level=10,
+        force=100,
+        intellect=90,
+        defense_stat=95,
+        agility=80,
+        current_hp=guest_template.base_hp,
+    )
+    now = timezone.now()
+    run = RaidRun.objects.create(
+        attacker=attacker,
+        defender=defender,
+        status=RaidRun.Status.MARCHING,
+        troop_loadout={"raid_cleanup_guard": 3},
+        travel_time=60,
+        battle_at=now,
+        return_at=now,
+    )
+    run.guests.add(guest)
+
+    monkeypatch.setattr(
+        combat_battle,
+        "_lock_battle_manors",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("目标庄园不存在")),
+    )
+
+    combat_battle.process_raid_battle(run, now=now)
+
+    run.refresh_from_db()
+    guest.refresh_from_db()
+    troop.refresh_from_db()
+
+    assert run.status == RaidRun.Status.COMPLETED
+    assert run.completed_at is not None
+    assert run.return_at is not None
+    assert run.is_attacker_victory is False
+    assert guest.status == GuestStatus.IDLE
+    assert troop.count == 5

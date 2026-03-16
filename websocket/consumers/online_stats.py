@@ -112,6 +112,25 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
     def _get_redis(self):
         return get_redis_connection("default")
 
+    def _safe_cache_get(self, key: str):
+        try:
+            return cache.get(key)
+        except Exception as exc:
+            logger.warning("Online stats cache.get failed: key=%s error=%s", key, exc, exc_info=True)
+            return None
+
+    def _safe_cache_set(self, key: str, value: int, timeout: int) -> None:
+        try:
+            cache.set(key, value, timeout=timeout)
+        except Exception as exc:
+            logger.warning("Online stats cache.set failed: key=%s error=%s", key, exc, exc_info=True)
+
+    def _safe_cache_delete(self, key: str) -> None:
+        try:
+            cache.delete(key)
+        except Exception as exc:
+            logger.warning("Online stats cache.delete failed: key=%s error=%s", key, exc, exc_info=True)
+
     def _touch_online_user_sync(self, user_id: int, now_ts: float) -> None:
         redis = self._get_redis()
         count_key = f"{self.ONLINE_USER_CONN_COUNT_KEY_PREFIX}{int(user_id)}"
@@ -129,7 +148,7 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
         pipe.expire(self.ONLINE_USERS_KEY, self.ONLINE_USERS_TTL * 2)
         pipe.execute()
 
-        cache.delete(self.ONLINE_COUNT_CACHE_KEY)
+        self._safe_cache_delete(self.ONLINE_COUNT_CACHE_KEY)
 
     def _remove_online_connection_sync(self, user_id: int) -> int:
         redis = self._get_redis()
@@ -180,7 +199,7 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
             )
 
         remaining = int(remaining_raw or 0)
-        cache.delete(self.ONLINE_COUNT_CACHE_KEY)
+        self._safe_cache_delete(self.ONLINE_COUNT_CACHE_KEY)
         return remaining
 
     def _cleanup_expired_users_sync(self, now_ts: float) -> int:
@@ -193,7 +212,7 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
             return 0
 
     def _get_online_count_sync(self) -> int:
-        cached_count = cache.get(self.ONLINE_COUNT_CACHE_KEY)
+        cached_count = self._safe_cache_get(self.ONLINE_COUNT_CACHE_KEY)
         if cached_count is not None:
             return int(cached_count)
 
@@ -201,7 +220,7 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
         self._cleanup_expired_users_sync(now_ts)
         redis = self._get_redis()
         count = int(redis.zcard(self.ONLINE_USERS_KEY) or 0)
-        cache.set(self.ONLINE_COUNT_CACHE_KEY, count, timeout=self.ONLINE_COUNT_CACHE_TTL)
+        self._safe_cache_set(self.ONLINE_COUNT_CACHE_KEY, count, timeout=self.ONLINE_COUNT_CACHE_TTL)
         return count
 
     async def touch_online_user(self, user_id: int):
@@ -256,7 +275,7 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
 
     @database_sync_to_async
     def get_total_users(self):
-        cached_total = cache.get(self.TOTAL_COUNT_CACHE_KEY)
+        cached_total = self._safe_cache_get(self.TOTAL_COUNT_CACHE_KEY)
         if cached_total is not None:
             return int(cached_total)
 
@@ -266,5 +285,5 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
             logger.warning("Failed to COUNT total users; returning 0: %s", exc)
             return 0
 
-        cache.set(self.TOTAL_COUNT_CACHE_KEY, total, timeout=self.TOTAL_COUNT_CACHE_TTL)
+        self._safe_cache_set(self.TOTAL_COUNT_CACHE_KEY, total, timeout=self.TOTAL_COUNT_CACHE_TTL)
         return total

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from django.core.cache import cache
 
 from common.constants.resources import ResourceType
@@ -13,6 +15,8 @@ from guests.services import (
 from ..models import InventoryItem
 from ..services import sync_resource_production
 from ..services.utils.cache import CACHE_TIMEOUT_SHORT, recruitment_hall_context_cache_key
+
+logger = logging.getLogger(__name__)
 
 
 def _recruitment_hall_cache_key(manor_id: int) -> str:
@@ -85,7 +89,22 @@ def _build_cached_payload(manor, records_limit: int) -> dict:
     }
 
 
-def get_recruitment_hall_context(manor, records_limit: int) -> dict:
+def _safe_cache_get(key: str):
+    try:
+        return cache.get(key)
+    except Exception as exc:
+        logger.warning("Recruitment hall cache.get failed: key=%s error=%s", key, exc, exc_info=True)
+        return None
+
+
+def _safe_cache_set(key: str, value: dict, timeout: int) -> None:
+    try:
+        cache.set(key, value, timeout=timeout)
+    except Exception as exc:
+        logger.warning("Recruitment hall cache.set failed: key=%s error=%s", key, exc, exc_info=True)
+
+
+def get_recruitment_hall_context(manor, records_limit: int, *, use_cache: bool = True) -> dict:
     sync_resource_production(manor, persist=False)
 
     pools = list(list_pools(core_only=True, include_entries=False))
@@ -96,10 +115,11 @@ def get_recruitment_hall_context(manor, records_limit: int) -> dict:
     active_recruitment = get_active_guest_recruitment(manor)
 
     cache_key = _recruitment_hall_cache_key(int(manor.id))
-    cached_payload = cache.get(cache_key)
+    cached_payload = _safe_cache_get(cache_key) if use_cache else None
     if cached_payload is None:
         cached_payload = _build_cached_payload(manor, records_limit)
-        cache.set(cache_key, cached_payload, timeout=CACHE_TIMEOUT_SHORT)
+        if use_cache:
+            _safe_cache_set(cache_key, cached_payload, timeout=CACHE_TIMEOUT_SHORT)
 
     return {
         "manor": manor,

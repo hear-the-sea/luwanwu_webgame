@@ -111,6 +111,7 @@ def test_world_chat_get_history_sync_returns_empty_on_redis_error(monkeypatch):
     consumer = _build_consumer(_BrokenRedis())
 
     assert consumer._get_history_sync() == []
+    assert consumer._history_degraded is True
 
 
 def test_world_chat_get_history_sync_skips_old_and_malformed_entries(monkeypatch):
@@ -136,6 +137,7 @@ def test_world_chat_get_history_sync_skips_old_and_malformed_entries(monkeypatch
     messages = consumer._get_history_sync()
 
     assert messages == [recent]
+    assert consumer._history_degraded is False
     # The internal trim should drop malformed/old tail entries.
     assert len(fake._lists[consumer.HISTORY_KEY]) == 1
 

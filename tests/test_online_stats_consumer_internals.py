@@ -155,6 +155,24 @@ class OnlineStatsConsumerInternalTests(SimpleTestCase):
         # Cache hit path
         assert consumer._get_online_count_sync() == 1
 
+    def test_get_online_count_sync_tolerates_cache_backend_failure(self):
+        consumer = self._build_consumer()
+        fake = _FakeRedis()
+        consumer._get_redis = lambda: fake
+
+        now_ts = time.time()
+        fake.zadd(consumer.ONLINE_USERS_KEY, {1: now_ts})
+
+        original_get = cache.get
+        original_set = cache.set
+        cache.get = lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down"))
+        cache.set = lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down"))
+        try:
+            assert consumer._get_online_count_sync() == 1
+        finally:
+            cache.get = original_get
+            cache.set = original_set
+
     def test_cleanup_expired_users_sync_handles_redis_error(self):
         consumer = self._build_consumer()
 
@@ -191,3 +209,22 @@ def test_get_total_users_uses_cache(django_user_model):
     django_user_model.objects.filter(username="total_users_1").delete()
     second = consumer.get_total_users.__wrapped__(consumer)
     assert second == 1
+
+
+@pytest.mark.django_db
+def test_get_total_users_tolerates_cache_backend_failure(django_user_model):
+    consumer = OnlineStatsConsumer()
+
+    django_user_model.objects.create_user(username="total_users_cache_failure", password="pass")
+
+    original_get = cache.get
+    original_set = cache.set
+    cache.get = lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down"))
+    cache.set = lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down"))
+    try:
+        total = consumer.get_total_users.__wrapped__(consumer)
+    finally:
+        cache.get = original_get
+        cache.set = original_set
+
+    assert total == 1

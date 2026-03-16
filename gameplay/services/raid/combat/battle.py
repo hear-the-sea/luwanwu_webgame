@@ -27,7 +27,7 @@ from .loot import (
     _format_capture_description,
     _format_loot_description,
 )
-from .runs import _finalize_raid_retreat
+from .runs import _add_troops_batch, _finalize_raid_retreat
 from .travel import _dismiss_marching_raids_if_protected
 
 logger = logging.getLogger(__name__)
@@ -169,7 +169,41 @@ def _apply_salvage_reward(locked_run: RaidRun, report, is_attacker_victory: bool
     }
 
 
+def _fail_raid_run_due_missing_manor(locked_run: RaidRun, *, now=None) -> None:
+    now = now or timezone.now()
+
+    guests = list(locked_run.guests.select_for_update())
+    guests_to_update = []
+    for guest in guests:
+        if guest.status == GuestStatus.DEPLOYED:
+            guest.status = GuestStatus.IDLE
+            guests_to_update.append(guest)
+    if guests_to_update:
+        Guest.objects.bulk_update(guests_to_update, ["status"])
+
+    attacker_locked = Manor.objects.select_for_update().filter(pk=locked_run.attacker_id).first()
+    if attacker_locked is not None:
+        loadout = _normalize_positive_int_mapping(getattr(locked_run, "troop_loadout", {}))
+        if loadout:
+            _add_troops_batch(attacker_locked, loadout)
+        locked_run.attacker = attacker_locked
+
+    locked_run.status = RaidRun.Status.COMPLETED
+    locked_run.is_attacker_victory = False
+    locked_run.return_at = now
+    locked_run.completed_at = now
+    locked_run.save(update_fields=["status", "is_attacker_victory", "return_at", "completed_at"])
+
+
 def _dispatch_complete_raid_task(run: RaidRun, *, now=None) -> None:
+    def _fallback_sync_when_due(remaining_seconds: int) -> None:
+        if remaining_seconds > 0:
+            return
+        logger.warning("complete_raid_task dispatch failed for due raid; finalizing synchronously: run_id=%s", run.id)
+        from .runs import finalize_raid
+
+        finalize_raid(run, now=current_time)
+
     try:
         from gameplay.tasks import complete_raid_task
     except Exception as exc:
@@ -179,6 +213,9 @@ def _dispatch_complete_raid_task(run: RaidRun, *, now=None) -> None:
             exc,
             exc_info=True,
         )
+        current_time = now or timezone.now()
+        remaining = 0 if not run.return_at else max(0, math.ceil((run.return_at - current_time).total_seconds()))
+        _fallback_sync_when_due(remaining)
         return
 
     current_time = now or timezone.now()
@@ -186,13 +223,15 @@ def _dispatch_complete_raid_task(run: RaidRun, *, now=None) -> None:
         remaining = max(0, math.ceil((run.return_at - current_time).total_seconds()))
     else:
         remaining = max(0, int(run.travel_time or 0))
-    safe_apply_async(
+    dispatched = safe_apply_async(
         complete_raid_task,
         args=[run.id],
         countdown=remaining,
         logger=logger,
         log_message="complete_raid_task dispatch failed",
     )
+    if not dispatched:
+        _fallback_sync_when_due(remaining)
 
 
 def process_raid_battle(run: RaidRun, now=None) -> None:
@@ -214,11 +253,12 @@ def process_raid_battle(run: RaidRun, now=None) -> None:
             attacker_locked, defender_locked = _lock_battle_manors(locked_run.attacker_id, locked_run.defender_id)
         except ValueError:
             logger.warning(
-                "raid battle skipped due to missing manor: run_id=%s attacker=%s defender=%s",
+                "raid battle aborted due to missing manor: run_id=%s attacker=%s defender=%s",
                 locked_run.id,
                 locked_run.attacker_id,
                 locked_run.defender_id,
             )
+            _fail_raid_run_due_missing_manor(locked_run, now=now)
             return
         # 保证后续计算使用同一事务里已加锁的攻守双方对象。
         locked_run.attacker = attacker_locked

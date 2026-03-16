@@ -21,3 +21,18 @@ class User(AbstractUser):
         normalized_email = (self.email or "").strip().lower()
         self.email = normalized_email or None
         super().save(*args, **kwargs)
+
+
+class UserActiveSession(models.Model):
+    """Authoritative single-session record per user."""
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="active_session")
+    session_key = models.CharField(max_length=40, unique=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "用户活跃会话"
+        verbose_name_plural = "用户活跃会话"
+
+    def __str__(self) -> str:
+        return f"{self.user_id}:{self.session_key[:8]}"

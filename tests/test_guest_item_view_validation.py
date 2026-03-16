@@ -7,7 +7,7 @@ from django.urls import reverse
 
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.manor.core import ensure_manor
-from guests.models import RecruitmentCandidate, RecruitmentPool
+from guests.models import GearSlot, RecruitmentCandidate, RecruitmentPool
 from guests.services import finalize_candidate, recruit_guest
 from guests.views import recruit as recruit_views
 
@@ -176,6 +176,42 @@ def test_use_magnifying_glass_view_rejects_invalid_item_id_ajax(game_data, djang
 
 
 @pytest.mark.django_db
+def test_gear_options_view_tolerates_cache_backend_failure(game_data, django_user_model, monkeypatch):
+    user = django_user_model.objects.create_user(username="view_gear_options_cache_failure", password="pass123")
+    manor = ensure_manor(user)
+    client = Client()
+    assert client.login(username="view_gear_options_cache_failure", password="pass123")
+
+    monkeypatch.setattr("guests.services.ensure_inventory_gears", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "guests.views.equipment.cache.get",
+        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down")),
+    )
+    monkeypatch.setattr(
+        "guests.views.equipment.cache.set",
+        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down")),
+    )
+
+    from guests.models import GearItem, GearTemplate
+
+    template = GearTemplate.objects.create(
+        key=f"view_gear_options_cache_failure_{manor.id}",
+        name="缓存失败测试装备",
+        slot=GearSlot.WEAPON,
+        rarity="green",
+    )
+    GearItem.objects.create(manor=manor, template=template, guest=None)
+
+    response = client.get(reverse("guests:gear_options"), {"slot": GearSlot.WEAPON})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["slot"] == GearSlot.WEAPON
+    assert len(payload["options"]) == 1
+    assert payload["options"][0]["name"] == template.name
+
+
+@pytest.mark.django_db
 def test_recruit_view_rejects_when_action_lock_conflicts(game_data, django_user_model, monkeypatch):
     user = django_user_model.objects.create_user(username="view_recruit_lock_conflict", password="pass123")
     ensure_manor(user)
@@ -224,6 +260,39 @@ def test_recruit_view_ajax_success_returns_recruitment_hall_partials(game_data, 
     assert "recruit-pools-section" in payload["hall_pools_html"]
     assert "recruit-candidates-section" in payload["hall_candidates_html"]
     assert "recruit-records-section" in payload["hall_records_html"]
+
+
+@pytest.mark.django_db
+def test_recruit_view_ajax_success_bypasses_cache_when_invalidation_fails(game_data, django_user_model, monkeypatch):
+    user = django_user_model.objects.create_user(username="view_recruit_ajax_uncached", password="pass123")
+    manor = ensure_manor(user)
+    manor.grain = manor.silver = 500000
+    manor.save(update_fields=["grain", "silver"])
+    client = Client()
+    assert client.login(username="view_recruit_ajax_uncached", password="pass123")
+    pool = RecruitmentPool.objects.get(key="cunmu")
+
+    monkeypatch.setattr("guests.views.recruit._invalidate_recruitment_hall_cache_for_manor", lambda *_a, **_k: False)
+    monkeypatch.setattr(
+        "gameplay.selectors.recruitment.cache.get",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("cache.get should be bypassed")),
+    )
+    monkeypatch.setattr(
+        "gameplay.selectors.recruitment.cache.set",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("cache.set should be bypassed")),
+    )
+
+    response = client.post(
+        reverse("guests:recruit"),
+        {"pool": str(pool.pk)},
+        HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        HTTP_ACCEPT="application/json",
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert "recruit-candidates-section" in payload["hall_candidates_html"]
 
 
 @pytest.mark.django_db

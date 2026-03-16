@@ -209,7 +209,7 @@ def settle_auction_round(
                 auction_round = (
                     AuctionRound.objects.select_for_update()
                     .filter(
-                        status=AuctionRound.Status.ACTIVE,
+                        status__in=[AuctionRound.Status.ACTIVE, AuctionRound.Status.SETTLING],
                         end_at__lte=timezone.now(),
                     )
                     .order_by("end_at", "id")
@@ -247,17 +247,33 @@ def settle_auction_round(
                     stats["unsold"] += 1
             except Exception as exc:
                 logger.exception("结算拍卖位 %s 时出错: %s", slot.id, exc)
-                failed_slots.append({"slot_id": slot.id, "error": str(exc)})
+                if _mark_slot_unsold_after_failure(slot):
+                    stats["unsold"] += 1
+                    failed_slots.append({"slot_id": slot.id, "error": str(exc), "recovered": True})
+                    continue
+                failed_slots.append({"slot_id": slot.id, "error": str(exc), "recovered": False})
                 continue
 
-        if failed_slots:
+        unrecovered_failures = [entry for entry in failed_slots if not entry.get("recovered")]
+        if unrecovered_failures:
+            with transaction.atomic():
+                locked_round = AuctionRound.objects.select_for_update().get(pk=auction_round.pk)
+                locked_round.status = AuctionRound.Status.ACTIVE
+                locked_round.save(update_fields=["status"])
             logger.error(
-                f"拍卖轮次 #{auction_round.round_number} 有 {len(failed_slots)} 个拍卖位结算失败",
-                extra={"failed_slots": failed_slots},
+                f"拍卖轮次 #{auction_round.round_number} 有 {len(unrecovered_failures)} 个拍卖位结算失败",
+                extra={"failed_slots": unrecovered_failures},
             )
-            stats["failed"] = len(failed_slots)
-            stats["failed_details"] = failed_slots
-            raise RuntimeError(f"拍卖轮次 #{auction_round.round_number} 结算失败：{len(failed_slots)} 个拍卖位异常")
+            stats["failed"] = len(unrecovered_failures)
+            stats["failed_details"] = unrecovered_failures
+            raise RuntimeError(
+                f"拍卖轮次 #{auction_round.round_number} 结算失败：{len(unrecovered_failures)} 个拍卖位异常"
+            )
+
+        recovered_failures = [entry for entry in failed_slots if entry.get("recovered")]
+        if recovered_failures:
+            stats["recovered_failures"] = len(recovered_failures)
+            stats["recovered_failure_details"] = recovered_failures
 
         with transaction.atomic():
             locked_round = AuctionRound.objects.select_for_update().get(pk=auction_round.pk)
@@ -294,6 +310,27 @@ def _refund_losing_bids(losing_bids: list[AuctionBid]) -> None:
         losing_bid.status = AuctionBid.Status.REFUNDED
         losing_bid.refunded_at = timezone.now()
         losing_bid.save(update_fields=["status", "refunded_at"])
+
+
+def _mark_slot_unsold_after_failure(slot: AuctionSlot) -> bool:
+    try:
+        with transaction.atomic():
+            locked_slot = AuctionSlot.objects.select_for_update().get(pk=slot.pk)
+            if locked_slot.status != AuctionSlot.Status.ACTIVE:
+                return True
+
+            active_bids = list(
+                AuctionBid.objects.select_for_update().filter(slot=locked_slot, status=AuctionBid.Status.ACTIVE)
+            )
+            if active_bids:
+                _refund_losing_bids(active_bids)
+
+            locked_slot.status = AuctionSlot.Status.UNSOLD
+            locked_slot.save(update_fields=["status"])
+            return True
+    except Exception as exc:
+        logger.exception("failed to force slot %s unsold after settlement error: %s", slot.id, exc)
+        return False
 
 
 def _consume_winning_bid_frozen_gold_bars(winning_bid: AuctionBid, winner: Manor, settlement_price: int) -> None:
@@ -359,7 +396,15 @@ def _settle_slot(slot: AuctionSlot) -> Dict:
             winning_bid.status = AuctionBid.Status.WON
             winning_bid.save(update_fields=["status"])
 
-            _send_winning_notification_vickrey(slot, winner, settlement_price, actual_winner_count)
+            def _notify_winner(
+                slot=slot,
+                winner=winner,
+                settlement_price=settlement_price,
+                total_winners=actual_winner_count,
+            ) -> None:
+                _send_winning_notification_vickrey(slot, winner, settlement_price, total_winners)
+
+            transaction.on_commit(_notify_winner)
 
             result["price"] += settlement_price
 
@@ -461,12 +506,13 @@ def _grant_auction_item_directly(manor: Manor, item_template: ItemTemplate, quan
     if quantity <= 0:
         return
 
-    inventory_item, _created = InventoryItem.objects.select_for_update().get_or_create(
-        manor=manor,
-        template=item_template,
-        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-        defaults={"quantity": 0},
-    )
-    InventoryItem.objects.filter(pk=inventory_item.pk).update(
-        quantity=F("quantity") + quantity, updated_at=timezone.now()
-    )
+    with transaction.atomic():
+        inventory_item, _created = InventoryItem.objects.select_for_update().get_or_create(
+            manor=manor,
+            template=item_template,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+            defaults={"quantity": 0},
+        )
+        InventoryItem.objects.filter(pk=inventory_item.pk).update(
+            quantity=F("quantity") + quantity, updated_at=timezone.now()
+        )

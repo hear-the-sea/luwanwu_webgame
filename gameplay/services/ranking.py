@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List, Optional
 
 from django.core.cache import cache
@@ -13,6 +14,23 @@ from django.db.models import Q
 
 from ..models import Manor
 from .utils.cache import CACHE_TIMEOUT_MEDIUM, CACHE_TIMEOUT_RANKING, CacheKeys, get_or_set
+
+logger = logging.getLogger(__name__)
+
+
+def _safe_cache_get(key: str):
+    try:
+        return cache.get(key)
+    except Exception as exc:
+        logger.warning("Ranking cache.get failed: key=%s error=%s", key, exc, exc_info=True)
+        return None
+
+
+def _safe_cache_set(key: str, value: int, timeout: int) -> None:
+    try:
+        cache.set(key, value, timeout=timeout)
+    except Exception as exc:
+        logger.warning("Ranking cache.set failed: key=%s error=%s", key, exc, exc_info=True)
 
 
 def get_prestige_ranking(limit: int = 50) -> List[Dict[str, Any]]:
@@ -66,7 +84,7 @@ def get_player_rank(manor: Manor) -> Optional[int]:
 
     # 使用缓存减少数据库查询
     cache_key = CacheKeys.player_rank(manor.id, manor.prestige)
-    cached_rank = cache.get(cache_key)
+    cached_rank = _safe_cache_get(cache_key)
     if cached_rank is not None:
         return cached_rank
 
@@ -78,7 +96,7 @@ def get_player_rank(manor: Manor) -> Optional[int]:
 
     rank = ahead_count + 1
     # 缓存30秒，声望变化时 cache_key 会变化自动失效
-    cache.set(cache_key, rank, timeout=CACHE_TIMEOUT_MEDIUM)
+    _safe_cache_set(cache_key, rank, timeout=CACHE_TIMEOUT_MEDIUM)
     return rank
 
 

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import builtins
 from types import SimpleNamespace
+
+from django.utils import timezone
 
 import gameplay.services.missions_impl.execution as mission_execution
 
@@ -165,3 +168,43 @@ def test_send_mission_report_message_ignores_message_failure(monkeypatch):
     )
 
     mission_execution._send_mission_report_message(run, report)
+
+
+def test_schedule_mission_completion_task_finalizes_sync_when_due_dispatch_fails(monkeypatch):
+    now = timezone.now()
+    run = SimpleNamespace(id=51, return_at=now)
+    finalized: list[int] = []
+
+    monkeypatch.setattr(mission_execution, "safe_apply_async", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(
+        mission_execution,
+        "finalize_mission_run",
+        lambda scheduled_run, **_kwargs: finalized.append(scheduled_run.id),
+    )
+
+    mission_execution._schedule_mission_completion_task(run, object())
+
+    assert finalized == [51]
+
+
+def test_schedule_mission_completion_finalizes_sync_when_due_task_import_fails(monkeypatch):
+    now = timezone.now()
+    run = SimpleNamespace(id=52, return_at=now)
+    finalized: list[int] = []
+    original_import = builtins.__import__
+
+    def _raising_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "gameplay.tasks":
+            raise ImportError("tasks unavailable")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _raising_import)
+    monkeypatch.setattr(
+        mission_execution,
+        "finalize_mission_run",
+        lambda scheduled_run, **_kwargs: finalized.append(scheduled_run.id),
+    )
+
+    mission_execution.schedule_mission_completion(run)
+
+    assert finalized == [52]

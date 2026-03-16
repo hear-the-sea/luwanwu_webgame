@@ -382,6 +382,23 @@ def test_start_raid_succeeds_when_incoming_message_fails(monkeypatch):
     assert dispatched == {"run_id": 99, "travel_time": 45}
 
 
+def test_dispatch_raid_battle_task_processes_sync_when_due_dispatch_fails(monkeypatch):
+    processed: list[int] = []
+
+    import gameplay.tasks as gameplay_tasks
+
+    monkeypatch.setattr(gameplay_tasks, "process_raid_battle_task", object(), raising=False)
+    monkeypatch.setattr(combat_runs, "safe_apply_async", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(
+        "gameplay.services.raid.combat.battle.process_raid_battle",
+        lambda run, **_kwargs: processed.append(run.id),
+    )
+
+    combat_runs._dispatch_raid_battle_task(SimpleNamespace(id=123), travel_time=0)
+
+    assert processed == [123]
+
+
 def test_validate_and_normalize_raid_inputs_uses_uncached_attack_check(monkeypatch):
     attacker = SimpleNamespace(id=1)
     defender = SimpleNamespace(id=2)

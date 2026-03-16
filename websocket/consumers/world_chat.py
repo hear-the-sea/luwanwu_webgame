@@ -80,8 +80,10 @@ return removed
     CHAT_UNAVAILABLE_MESSAGE = "世界频道暂时不可用，请稍后重试"
     CHAT_UNAVAILABLE_REFUNDED_MESSAGE = "世界频道暂时不可用，已返还小喇叭"
     CHAT_UNAVAILABLE_REFUND_FAILED_MESSAGE = "世界频道暂时不可用，请联系管理员补发小喇叭"
+    HISTORY_UNAVAILABLE_MESSAGE = "历史消息暂时不可用，已跳过历史记录加载"
 
     _re_control_chars = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+    _history_degraded: bool = False
 
     async def connect(self):
         user = self.scope.get("user")
@@ -116,6 +118,8 @@ return removed
                 "channel": self.CHANNEL,
                 "status": "connected",
                 "user": {"id": self.user_id, "name": self.display_name},
+                "history_degraded": self._history_degraded,
+                "history_status_message": self.HISTORY_UNAVAILABLE_MESSAGE if self._history_degraded else "",
             }
         )
 
@@ -283,9 +287,11 @@ return removed
     def _get_history_sync(self) -> list[dict]:
         redis = self._get_redis()
         cutoff_ms = int((_now_ts() - float(self.HISTORY_MESSAGE_TTL_SECONDS)) * 1000)
+        self._history_degraded = False
         try:
             raw_items = redis.lrange(self.HISTORY_KEY, 0, max(0, self.HISTORY_ON_CONNECT - 1))
         except RedisError as exc:
+            self._history_degraded = True
             logger.warning("World chat history Redis read failed; returning empty history: %s", exc)
             return []
 

@@ -57,7 +57,11 @@
                     class="tw-input"
                     required>
             </div>
+            {% if bank_info.exchange_available %}
             <button type="submit" class="tw-btn-primary w-full mt-4">兑换金条</button>
+            {% else %}
+            <button type="button" class="tw-btn-secondary w-full mt-4 opacity-60" disabled>兑换暂不可用</button>
+            {% endif %}
         </form>
 
         <div class="tw-bank-tips">

@@ -5,14 +5,36 @@ import logging
 from datetime import timedelta
 
 from celery import shared_task
+from django.db import transaction
 from django.utils import timezone
 
-from .models import Guild, GuildDonationLog, GuildExchangeLog, GuildResourceLog
+from .models import Guild, GuildDonationLog, GuildExchangeLog, GuildResourceLog, GuildTechnology
 from .services.contribution import reset_weekly_contributions
 from .services.hero_pool import cleanup_invalid_hero_pool_entries
 from .services.warehouse import produce_equipment, produce_experience_items, produce_resource_packs
 
 logger = logging.getLogger(__name__)
+
+
+def _process_daily_technology_production(
+    guild: Guild,
+    *,
+    tech_key: str,
+    producer,
+    now,
+) -> bool:
+    with transaction.atomic():
+        tech = GuildTechnology.objects.select_for_update().filter(guild=guild, tech_key=tech_key).first()
+        if not tech or tech.level <= 0:
+            return False
+
+        if tech.last_production_at and timezone.localdate(tech.last_production_at) >= timezone.localdate(now):
+            return False
+
+        producer(guild, tech.level)
+        tech.last_production_at = now
+        tech.save(update_fields=["last_production_at"])
+        return True
 
 
 @shared_task(name="guilds.process_single_guild_production", bind=True, max_retries=3, default_retry_delay=60)
@@ -21,46 +43,48 @@ def process_single_guild_production(self, guild_id: int):
     处理单个帮会的每日科技产出
     """
     try:
-        guild = Guild.objects.prefetch_related("technologies").get(pk=guild_id)
+        guild = Guild.objects.get(pk=guild_id)
         if not guild.is_active:
             return f"guild {guild_id} is inactive"
 
-        # 构建科技字典，避免重复查询
-        techs = {t.tech_key: t for t in guild.technologies.all()}
         produced_items = []
+        now = timezone.now()
 
         # 装备锻造
-        tech = techs.get("equipment_forge")
-        if tech and tech.level > 0:
-            try:
-                produce_equipment(guild, tech.level)
-                tech.last_production_at = timezone.now()
-                tech.save(update_fields=["last_production_at"])
+        try:
+            if _process_daily_technology_production(
+                guild,
+                tech_key="equipment_forge",
+                producer=produce_equipment,
+                now=now,
+            ):
                 produced_items.append("equipment")
-            except Exception as exc:
-                logger.error("Failed to produce equipment for guild %s: %s", guild.id, exc)
+        except Exception as exc:
+            logger.error("Failed to produce equipment for guild %s: %s", guild.id, exc)
 
         # 经验炼制
-        tech = techs.get("experience_refine")
-        if tech and tech.level > 0:
-            try:
-                produce_experience_items(guild, tech.level)
-                tech.last_production_at = timezone.now()
-                tech.save(update_fields=["last_production_at"])
+        try:
+            if _process_daily_technology_production(
+                guild,
+                tech_key="experience_refine",
+                producer=produce_experience_items,
+                now=now,
+            ):
                 produced_items.append("experience")
-            except Exception as exc:
-                logger.error("Failed to produce experience items for guild %s: %s", guild.id, exc)
+        except Exception as exc:
+            logger.error("Failed to produce experience items for guild %s: %s", guild.id, exc)
 
         # 资源补给
-        tech = techs.get("resource_supply")
-        if tech and tech.level > 0:
-            try:
-                produce_resource_packs(guild, tech.level)
-                tech.last_production_at = timezone.now()
-                tech.save(update_fields=["last_production_at"])
+        try:
+            if _process_daily_technology_production(
+                guild,
+                tech_key="resource_supply",
+                producer=produce_resource_packs,
+                now=now,
+            ):
                 produced_items.append("resource")
-            except Exception as exc:
-                logger.error("Failed to produce resource packs for guild %s: %s", guild.id, exc)
+        except Exception as exc:
+            logger.error("Failed to produce resource packs for guild %s: %s", guild.id, exc)
 
         return f"processed guild {guild_id}: {', '.join(produced_items)}"
     except Guild.DoesNotExist:

@@ -157,3 +157,49 @@ class OnlineStatsConsumerTests(SimpleTestCase):
         consumer._get_redis = lambda: _Redis()  # type: ignore[method-assign]
 
         assert consumer._cleanup_expired_users_sync(1000.0) == 0
+
+    def test_add_online_connection_sync_tolerates_cache_delete_failure(self):
+        consumer = OnlineStatsConsumer()
+
+        class _Redis:
+            def pipeline(self):
+                class _Pipeline:
+                    def incr(self, *_args, **_kwargs):
+                        return self
+
+                    def expire(self, *_args, **_kwargs):
+                        return self
+
+                    def zadd(self, *_args, **_kwargs):
+                        return self
+
+                    def execute(self):
+                        return []
+
+                return _Pipeline()
+
+        consumer._get_redis = lambda: _Redis()  # type: ignore[method-assign]
+        original_delete = cache.delete
+        cache.delete = lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down"))
+        try:
+            consumer._add_online_connection_sync(7, 1000.0)
+        finally:
+            cache.delete = original_delete
+
+    def test_remove_online_connection_sync_tolerates_cache_delete_failure(self):
+        consumer = OnlineStatsConsumer()
+
+        class _Redis:
+            def script_load(self, *_args, **_kwargs):
+                return "sha"
+
+            def evalsha(self, *_args, **_kwargs):
+                return 0
+
+        consumer._get_redis = lambda: _Redis()  # type: ignore[method-assign]
+        original_delete = cache.delete
+        cache.delete = lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down"))
+        try:
+            assert consumer._remove_online_connection_sync(7) == 0
+        finally:
+            cache.delete = original_delete

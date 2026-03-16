@@ -19,6 +19,7 @@ from django.db import transaction
 from django.db.models import F, Sum
 from django.utils import timezone
 
+from core.exceptions import GameError
 from core.utils.cache_lock import release_cache_key_if_owner
 from gameplay.models import InventoryItem, ItemTemplate, Manor, ResourceEvent
 from gameplay.services.resources import spend_resources_locked
@@ -45,6 +46,12 @@ SUPPLY_CACHE_KEY = "gold_bar:effective_supply"
 SUPPLY_CACHE_TTL = 300  # 缓存5分钟
 SUPPLY_STALE_CACHE_KEY = "gold_bar:effective_supply:stale"
 SUPPLY_STALE_CACHE_TTL = 3600  # 过期缓存保留1小时，用于降级
+DEGRADED_PRICING_SOURCES = frozenset({"stale_cache", "default"})
+
+
+class GoldBarPricingUnavailableError(GameError):
+    error_code = "BANK_PRICING_UNAVAILABLE"
+    default_message = "钱庄汇率暂时不可用，请稍后再试"
 
 
 def _safe_int(value, default: int) -> int:
@@ -91,6 +98,22 @@ def _safe_cache_delete(key: str) -> None:
         logger.warning("Failed to delete cache key: %s", key, exc_info=True)
 
 
+def _strict_cache_get(key: str, default=None):
+    try:
+        return cache.get(key, default)
+    except Exception as exc:
+        logger.error("Strict gold supply cache.get failed: key=%s", key, exc_info=True)
+        raise GoldBarPricingUnavailableError() from exc
+
+
+def _strict_cache_add(key: str, value, timeout: int) -> bool:
+    try:
+        return bool(cache.add(key, value, timeout=timeout))
+    except Exception as exc:
+        logger.error("Strict gold supply cache.add failed: key=%s", key, exc_info=True)
+        raise GoldBarPricingUnavailableError() from exc
+
+
 def _release_cache_lock_if_owner(lock_key: str, lock_token: str) -> None:
     """Best-effort lock release with ownership check."""
     released = release_cache_key_if_owner(
@@ -108,6 +131,16 @@ def _release_cache_lock_if_owner(lock_key: str, lock_token: str) -> None:
         _safe_cache_delete(lock_key)
 
 
+def _normalize_supply_value(raw_value, *, source: str, fail_closed: bool) -> int:
+    try:
+        return max(0, int(raw_value))
+    except (TypeError, ValueError) as exc:
+        logger.warning("Invalid gold supply value from %s: %r", source, raw_value, exc_info=True)
+        if fail_closed:
+            raise GoldBarPricingUnavailableError() from exc
+        return GOLD_BAR_TARGET_SUPPLY
+
+
 def get_today_exchange_count(manor: Manor) -> int:
     """获取今日已兑换金条数量"""
     # 安全修复：使用 timezone.now().date() 保持时区一致性
@@ -121,7 +154,7 @@ def get_today_exchange_count(manor: Manor) -> int:
 # ============ 动态汇率计算 ============
 
 
-def get_effective_gold_supply() -> int:
+def _get_effective_gold_supply_data(*, fail_closed: bool = False) -> tuple[int, str]:
     """
     获取有效金条供应量（仅统计活跃玩家）
 
@@ -135,28 +168,34 @@ def get_effective_gold_supply() -> int:
     4. 过期缓存也没有 → 返回默认值
 
     Returns:
-        int: 活跃玩家持有的金条总量
+        tuple[int, str]: (活跃玩家持有的金条总量, 数据来源)
     """
-    cached = _safe_cache_get(SUPPLY_CACHE_KEY)
+    cache_get = _strict_cache_get if fail_closed else _safe_cache_get
+    cache_add = _strict_cache_add if fail_closed else _safe_cache_add
+
+    cached = cache_get(SUPPLY_CACHE_KEY)
     if cached is not None:
-        return max(0, _safe_int(cached, GOLD_BAR_TARGET_SUPPLY))
+        return _normalize_supply_value(cached, source="cache", fail_closed=fail_closed), "cache"
 
     # 缓存击穿保护：使用分布式锁防止并发查询
     lock_key = f"{SUPPLY_CACHE_KEY}:lock"
     lock_token = uuid.uuid4().hex
-    lock_acquired = _safe_cache_add(lock_key, lock_token, timeout=10)  # 10秒锁超时
+    lock_acquired = cache_add(lock_key, lock_token, timeout=10)  # 10秒锁超时
 
     if not lock_acquired:
-        # 未获取到锁：直接降级到过期缓存，避免 sleep 放大高并发延迟。
-        # 降级策略：使用过期缓存（stale cache），避免使用硬编码默认值
-        stale = _safe_cache_get(SUPPLY_STALE_CACHE_KEY)
+        stale = cache_get(SUPPLY_STALE_CACHE_KEY)
         if stale is not None:
-            stale_value = max(0, _safe_int(stale, GOLD_BAR_TARGET_SUPPLY))
+            stale_value = _normalize_supply_value(stale, source="stale_cache", fail_closed=fail_closed)
+            if fail_closed:
+                logger.error("Gold supply strict path rejected stale cache pricing")
+                raise GoldBarPricingUnavailableError()
             logger.info("Gold supply cache miss, using stale cache value: %d", stale_value)
-            return stale_value
-        # 过期缓存也没有，返回默认值
+            return stale_value, "stale_cache"
+        if fail_closed:
+            logger.error("Gold supply strict path rejected default pricing fallback")
+            raise GoldBarPricingUnavailableError()
         logger.warning("Gold supply cache miss and no stale cache, using default")
-        return GOLD_BAR_TARGET_SUPPLY
+        return GOLD_BAR_TARGET_SUPPLY, "default"
 
     try:
         cutoff = timezone.now() - timedelta(days=ACTIVE_DAYS_THRESHOLD)
@@ -170,19 +209,34 @@ def get_effective_gold_supply() -> int:
         # 同时更新主缓存和过期缓存（过期缓存TTL更长，用于降级）
         _safe_cache_set(SUPPLY_CACHE_KEY, total, SUPPLY_CACHE_TTL)
         _safe_cache_set(SUPPLY_STALE_CACHE_KEY, total, SUPPLY_STALE_CACHE_TTL)
-        return total
+        return total, "db"
     except Exception as e:
         logger.warning("Failed to query gold supply: %s", e, exc_info=True)
-        # 降级策略：优先使用过期缓存
+        if fail_closed:
+            raise GoldBarPricingUnavailableError() from e
         stale = _safe_cache_get(SUPPLY_STALE_CACHE_KEY)
         if stale is not None:
-            return max(0, _safe_int(stale, GOLD_BAR_TARGET_SUPPLY))
-        return GOLD_BAR_TARGET_SUPPLY
+            return _normalize_supply_value(stale, source="stale_cache", fail_closed=False), "stale_cache"
+        return GOLD_BAR_TARGET_SUPPLY, "default"
     finally:
         _release_cache_lock_if_owner(lock_key, lock_token)
 
 
-def calculate_supply_factor() -> float:
+def get_effective_gold_supply(*, fail_closed: bool = False) -> int:
+    return _get_effective_gold_supply_data(fail_closed=fail_closed)[0]
+
+
+def _calculate_supply_factor_from_supply(total_supply: int) -> float:
+    if total_supply <= 0:
+        return 0.85  # 无金条时给最低价
+
+    ratio = total_supply / GOLD_BAR_TARGET_SUPPLY
+    factor = 1 + GOLD_BAR_SUPPLY_FACTOR * math.log2(ratio)
+
+    return max(0.85, min(1.40, factor))
+
+
+def calculate_supply_factor(*, fail_closed: bool = False) -> float:
     """
     计算总量系数
 
@@ -193,15 +247,8 @@ def calculate_supply_factor() -> float:
     Returns:
         float: 总量系数，范围 0.85 ~ 1.40
     """
-    total_supply = get_effective_gold_supply()
-
-    if total_supply <= 0:
-        return 0.85  # 无金条时给最低价
-
-    ratio = total_supply / GOLD_BAR_TARGET_SUPPLY
-    factor = 1 + GOLD_BAR_SUPPLY_FACTOR * math.log2(ratio)
-
-    return max(0.85, min(1.40, factor))
+    total_supply = get_effective_gold_supply(fail_closed=fail_closed) if fail_closed else get_effective_gold_supply()
+    return _calculate_supply_factor_from_supply(total_supply)
 
 
 def calculate_progressive_factor(today_count: int) -> float:
@@ -225,7 +272,7 @@ def calculate_progressive_factor(today_count: int) -> float:
     return min(factor, 1.60)
 
 
-def calculate_dynamic_rate(manor: Manor) -> int:
+def calculate_dynamic_rate(manor: Manor, *, supply_factor: float | None = None, fail_closed: bool = False) -> int:
     """
     计算当前动态汇率
 
@@ -237,7 +284,8 @@ def calculate_dynamic_rate(manor: Manor) -> int:
     Returns:
         int: 当前汇率（银两/金条）
     """
-    supply_factor = calculate_supply_factor()
+    if supply_factor is None:
+        supply_factor = calculate_supply_factor(fail_closed=fail_closed) if fail_closed else calculate_supply_factor()
     today_count = get_today_exchange_count(manor)
     progressive_factor = calculate_progressive_factor(today_count)
 
@@ -245,7 +293,7 @@ def calculate_dynamic_rate(manor: Manor) -> int:
     return max(GOLD_BAR_MIN_PRICE, min(GOLD_BAR_MAX_PRICE, rate))
 
 
-def calculate_next_rate(manor: Manor) -> int:
+def calculate_next_rate(manor: Manor, *, supply_factor: float | None = None, fail_closed: bool = False) -> int:
     """
     计算下一根金条的汇率（用于显示）
 
@@ -255,7 +303,8 @@ def calculate_next_rate(manor: Manor) -> int:
     Returns:
         int: 下一根金条的汇率
     """
-    supply_factor = calculate_supply_factor()
+    if supply_factor is None:
+        supply_factor = calculate_supply_factor(fail_closed=fail_closed) if fail_closed else calculate_supply_factor()
     today_count = get_today_exchange_count(manor)
     # 下一根的累进系数应基于“今日已兑换数量 + 1”
     progressive_factor = calculate_progressive_factor(today_count + 1)
@@ -264,7 +313,13 @@ def calculate_next_rate(manor: Manor) -> int:
     return max(GOLD_BAR_MIN_PRICE, min(GOLD_BAR_MAX_PRICE, rate))
 
 
-def calculate_gold_bar_cost(manor: Manor, quantity: int) -> dict:
+def calculate_gold_bar_cost(
+    manor: Manor,
+    quantity: int,
+    *,
+    supply_factor: float | None = None,
+    fail_closed: bool = False,
+) -> dict:
     """
     计算兑换金条所需银两（含手续费）
 
@@ -280,7 +335,8 @@ def calculate_gold_bar_cost(manor: Manor, quantity: int) -> dict:
         dict: 包含各项费用明细
     """
     quantity = _normalize_positive_quantity(quantity)
-    supply_factor = calculate_supply_factor()
+    if supply_factor is None:
+        supply_factor = calculate_supply_factor(fail_closed=fail_closed) if fail_closed else calculate_supply_factor()
     today_count = max(0, _safe_int(get_today_exchange_count(manor), 0))
 
     base_cost = 0
@@ -374,7 +430,7 @@ def exchange_gold_bar(manor: Manor, quantity: int) -> dict:
 
         # 安全修复：在锁内重新计算价格，确保基于最新的今日已兑换数量
         # 防止并发请求利用旧的低价买入
-        cost_info = calculate_gold_bar_cost(manor_locked, quantity)
+        cost_info = calculate_gold_bar_cost(manor_locked, quantity, fail_closed=True)
         total_cost = cost_info["total_cost"]
 
         try:
@@ -427,7 +483,7 @@ def exchange_gold_bar(manor: Manor, quantity: int) -> dict:
         "fee": cost_info["fee"],
         "avg_rate": cost_info["avg_rate"],
         "rate_details": cost_info["rate_details"],
-        "next_rate": calculate_next_rate(manor),
+        "next_rate": calculate_next_rate(manor, fail_closed=True),
     }
 
 
@@ -438,14 +494,22 @@ def get_bank_info(manor: Manor) -> dict:
     Returns:
         dict: 包含动态汇率、手续费率、今日兑换情况等信息
     """
+    effective_supply, pricing_source = _get_effective_gold_supply_data()
+    pricing_degraded = pricing_source in DEGRADED_PRICING_SOURCES
+    pricing_status_message = ""
+    if pricing_source == "stale_cache":
+        pricing_status_message = "钱庄汇率数据正在降级展示，当前价格可能不是最新值，已暂时关闭兑换。"
+    elif pricing_source == "default":
+        pricing_status_message = "钱庄汇率数据暂时不可用，已暂时关闭兑换。"
+
     today_count = get_today_exchange_count(manor)
-    current_rate = calculate_dynamic_rate(manor)
-    next_rate = calculate_next_rate(manor)
-    supply_factor = calculate_supply_factor()
+    supply_factor = _calculate_supply_factor_from_supply(effective_supply)
+    current_rate = calculate_dynamic_rate(manor, supply_factor=supply_factor)
+    next_rate = calculate_next_rate(manor, supply_factor=supply_factor)
     progressive_factor = calculate_progressive_factor(today_count)
 
     # 计算单根金条的总费用（含手续费）
-    cost_info = calculate_gold_bar_cost(manor, 1)
+    cost_info = calculate_gold_bar_cost(manor, 1, supply_factor=supply_factor)
 
     return {
         # 基础配置
@@ -459,7 +523,11 @@ def get_bank_info(manor: Manor) -> dict:
         "total_cost_per_bar": cost_info["total_cost"],
         "supply_factor": round(supply_factor, 3),
         "progressive_factor": round(progressive_factor, 3),
-        "effective_supply": get_effective_gold_supply(),
+        "effective_supply": effective_supply,
+        "pricing_source": pricing_source,
+        "pricing_degraded": pricing_degraded,
+        "pricing_status_message": pricing_status_message,
+        "exchange_available": not pricing_degraded,
         # 个人兑换情况
         "today_count": today_count,
         "manor_silver": manor.silver,

@@ -29,6 +29,28 @@ from .common import unexpected_action_error_response
 logger = logging.getLogger(__name__)
 
 
+def _safe_cache_get(key: str):
+    try:
+        return cache.get(key)
+    except Exception as exc:
+        logger.warning("Gear options cache.get failed: key=%s error=%s", key, exc, exc_info=True)
+        return None
+
+
+def _safe_cache_set(key: str, value, timeout: int) -> None:
+    try:
+        cache.set(key, value, timeout=timeout)
+    except Exception as exc:
+        logger.warning("Gear options cache.set failed: key=%s error=%s", key, exc, exc_info=True)
+
+
+def _safe_cache_delete_many(keys: list[str]) -> None:
+    try:
+        cache.delete_many(keys)
+    except Exception as exc:
+        logger.warning("Gear options cache.delete_many failed: keys_count=%s error=%s", len(keys), exc, exc_info=True)
+
+
 @login_required
 @require_POST
 @rate_limit_redirect("equip", limit=15, window_seconds=60)
@@ -196,7 +218,7 @@ def gear_options_view(request):
         return JsonResponse({"error": "invalid_slot"}, status=400)
 
     cache_key = _gear_options_cache_key(manor.id, slot)
-    cached = cache.get(cache_key)
+    cached = _safe_cache_get(cache_key)
     if cached is not None:
         return JsonResponse(cached)
 
@@ -246,7 +268,7 @@ def gear_options_view(request):
         "slot_label": slot_label_map.get(slot, ""),
         "options": options,
     }
-    cache.set(cache_key, payload, timeout=CACHE_TIMEOUT_SHORT)
+    _safe_cache_set(cache_key, payload, timeout=CACHE_TIMEOUT_SHORT)
     return JsonResponse(payload)
 
 
@@ -257,4 +279,4 @@ def _gear_options_cache_key(manor_id: int, slot: str) -> str:
 def _clear_gear_options_cache(manor_id: int, slots: set[str] | None = None) -> None:
     slot_values = slots or {choice.value for choice in GearSlot}
     keys = [_gear_options_cache_key(manor_id, value) for value in slot_values]
-    cache.delete_many(keys)
+    _safe_cache_delete_many(keys)

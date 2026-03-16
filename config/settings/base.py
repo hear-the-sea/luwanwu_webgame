@@ -73,6 +73,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "core.middleware.single_session.SingleSessionMiddleware",
     "core.middleware.online_presence.OnlinePresenceMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -210,8 +211,10 @@ RAID_CAPTURE_GUEST_RATE = env_float("DJANGO_RAID_CAPTURE_GUEST_RATE", 0.5)
 TRADE_HIGH_VALUE_SILVER_THRESHOLD = int(env("DJANGO_TRADE_HIGH_VALUE_SILVER_THRESHOLD", "1000000"))
 AUCTION_HIGH_BID_THRESHOLD = int(env("DJANGO_AUCTION_HIGH_BID_THRESHOLD", "200"))
 
-HEALTH_CHECK_CHANNEL_LAYER = env("DJANGO_HEALTH_CHECK_CHANNEL_LAYER", "1") == "1"
-HEALTH_CHECK_CELERY_BROKER = env("DJANGO_HEALTH_CHECK_CELERY_BROKER", "1") == "1"
+HEALTH_CHECK_REQUIRE_INTERNAL = env("DJANGO_HEALTH_CHECK_REQUIRE_INTERNAL", "0") == "1"
+HEALTH_CHECK_CHANNEL_LAYER = env("DJANGO_HEALTH_CHECK_CHANNEL_LAYER", "0") == "1"
+HEALTH_CHECK_CHANNEL_LAYER_TIMEOUT_SECONDS = env_float("DJANGO_HEALTH_CHECK_CHANNEL_LAYER_TIMEOUT_SECONDS", 1.0)
+HEALTH_CHECK_CELERY_BROKER = env("DJANGO_HEALTH_CHECK_CELERY_BROKER", "0") == "1"
 
 # Detect test runs
 RUNNING_TESTS = ("pytest" in sys.modules) or ("test" in sys.argv) or ("pytest" in os.path.basename(sys.argv[0] or ""))

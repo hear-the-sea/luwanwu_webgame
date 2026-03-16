@@ -90,6 +90,50 @@ def test_guild_tech_daily_production_handles_inner_errors(monkeypatch, django_us
 
 
 @pytest.mark.django_db
+def test_process_single_guild_production_is_idempotent_per_day(monkeypatch, django_user_model):
+    from guilds.models import Guild, GuildTechnology
+    from guilds.tasks import process_single_guild_production
+
+    calls: list[int] = []
+
+    monkeypatch.setattr("guilds.tasks.produce_equipment", lambda guild, level: calls.append(level))
+
+    founder = django_user_model.objects.create_user(username="g_founder_daily_once", password="pass")
+    guild = Guild.objects.create(name="G-once", founder=founder, is_active=True)
+    tech = GuildTechnology.objects.create(guild=guild, tech_key="equipment_forge", level=2)
+
+    first = process_single_guild_production.run(guild.id)
+    second = process_single_guild_production.run(guild.id)
+
+    tech.refresh_from_db()
+    assert first == f"processed guild {guild.id}: equipment"
+    assert second == f"processed guild {guild.id}: "
+    assert calls == [2]
+    assert tech.last_production_at is not None
+
+
+@pytest.mark.django_db
+def test_process_single_guild_production_does_not_mark_timestamp_on_failure(monkeypatch, django_user_model):
+    from guilds.models import Guild, GuildTechnology
+    from guilds.tasks import process_single_guild_production
+
+    monkeypatch.setattr(
+        "guilds.tasks.produce_equipment",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+
+    founder = django_user_model.objects.create_user(username="g_founder_daily_fail", password="pass")
+    guild = Guild.objects.create(name="G-fail", founder=founder, is_active=True)
+    tech = GuildTechnology.objects.create(guild=guild, tech_key="equipment_forge", level=2)
+
+    result = process_single_guild_production.run(guild.id)
+
+    tech.refresh_from_db()
+    assert result == f"processed guild {guild.id}: "
+    assert tech.last_production_at is None
+
+
+@pytest.mark.django_db
 def test_guild_tech_daily_production_retries_when_dispatch_fails(monkeypatch, django_user_model):
     from guilds.models import Guild
     from guilds.tasks import guild_tech_daily_production

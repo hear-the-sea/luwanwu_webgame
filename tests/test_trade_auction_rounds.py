@@ -4,6 +4,7 @@ from datetime import timedelta
 
 import pytest
 from django.db import IntegrityError, transaction
+from django.test import TestCase
 from django.utils import timezone
 
 from gameplay.models import InventoryItem, ItemTemplate, Message
@@ -215,7 +216,7 @@ def test_auction_round_completed_status_clears_singleton_value():
 
 
 @pytest.mark.django_db
-def test_settle_auction_round_keeps_settling_status_on_slot_failure(monkeypatch):
+def test_settle_auction_round_marks_failed_slot_unsold_and_completes_round(monkeypatch):
     item_template = _create_auction_item_template("auction_settle_failure_item")
 
     auction_round = AuctionRound.objects.create(
@@ -224,7 +225,7 @@ def test_settle_auction_round_keeps_settling_status_on_slot_failure(monkeypatch)
         start_at=timezone.now() - timedelta(days=2),
         end_at=timezone.now() - timedelta(minutes=1),
     )
-    AuctionSlot.objects.create(
+    slot = AuctionSlot.objects.create(
         round=auction_round,
         item_template=item_template,
         quantity=1,
@@ -238,12 +239,16 @@ def test_settle_auction_round_keeps_settling_status_on_slot_failure(monkeypatch)
 
     monkeypatch.setattr(auction_service, "_settle_slot", lambda slot: (_ for _ in ()).throw(RuntimeError("boom")))
 
-    with pytest.raises(RuntimeError, match="结算失败"):
-        auction_service.settle_auction_round(round_id=auction_round.id)
+    stats = auction_service.settle_auction_round(round_id=auction_round.id)
 
     auction_round.refresh_from_db()
-    assert auction_round.status == AuctionRound.Status.SETTLING
-    assert auction_round.settled_at is None
+    slot.refresh_from_db()
+    assert stats["settled"] == 1
+    assert stats["unsold"] == 1
+    assert stats["recovered_failures"] == 1
+    assert auction_round.status == AuctionRound.Status.COMPLETED
+    assert auction_round.settled_at is not None
+    assert slot.status == AuctionSlot.Status.UNSOLD
 
 
 @pytest.mark.django_db
@@ -266,7 +271,7 @@ def test_rounds_module_settle_auction_round_marks_completed_when_no_slots():
 
 
 @pytest.mark.django_db
-def test_settle_auction_round_without_round_id_skips_settling_round():
+def test_settle_auction_round_without_round_id_resumes_settling_round():
     auction_round = AuctionRound.objects.create(
         round_number=10011,
         status=AuctionRound.Status.SETTLING,
@@ -277,10 +282,48 @@ def test_settle_auction_round_without_round_id_skips_settling_round():
     stats = auction_service.settle_auction_round()
 
     auction_round.refresh_from_db()
-    assert stats["settled"] == 0
+    assert stats["settled"] == 1
     assert stats["sold"] == 0
     assert stats["unsold"] == 0
-    assert auction_round.status == AuctionRound.Status.SETTLING
+    assert auction_round.status == AuctionRound.Status.COMPLETED
+    assert auction_round.settled_at is not None
+
+
+@pytest.mark.django_db
+def test_settle_auction_round_without_round_id_resumes_settling_active_slots(monkeypatch):
+    item_template = _create_auction_item_template("auction_settling_resume_active_slot")
+    auction_round = AuctionRound.objects.create(
+        round_number=10014,
+        status=AuctionRound.Status.SETTLING,
+        start_at=timezone.now() - timedelta(days=2),
+        end_at=timezone.now() - timedelta(minutes=1),
+    )
+    slot = AuctionSlot.objects.create(
+        round=auction_round,
+        item_template=item_template,
+        quantity=1,
+        starting_price=10,
+        current_price=10,
+        min_increment=1,
+        status=AuctionSlot.Status.ACTIVE,
+        config_key=item_template.key,
+        slot_index=0,
+    )
+
+    def _settle_unsold(slot_to_settle):
+        AuctionSlot.objects.filter(pk=slot_to_settle.pk).update(status=AuctionSlot.Status.UNSOLD)
+        return {"sold": False, "price": 0}
+
+    monkeypatch.setattr(auction_service, "_settle_slot", _settle_unsold)
+
+    stats = auction_service.settle_auction_round()
+
+    auction_round.refresh_from_db()
+    slot.refresh_from_db()
+    assert stats["settled"] == 1
+    assert stats["unsold"] == 1
+    assert auction_round.status == AuctionRound.Status.COMPLETED
+    assert slot.status == AuctionSlot.Status.UNSOLD
 
 
 @pytest.mark.django_db
@@ -306,7 +349,8 @@ def test_rounds_module_settle_slot_skips_non_active_slot():
         slot_index=0,
     )
 
-    result = _settle_slot(slot)
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        result = _settle_slot(slot)
     slot.refresh_from_db()
 
     assert result.get("skipped") is True
@@ -345,7 +389,7 @@ def test_rounds_module_settle_auction_round_keeps_settling_when_active_slots_rem
 
 
 @pytest.mark.django_db
-def test_rounds_module_settle_auction_round_keeps_settling_on_slot_failure():
+def test_rounds_module_settle_auction_round_marks_failed_slot_unsold(monkeypatch):
     from trade.services.auction.rounds import settle_auction_round as settle_round_impl
 
     item_template = _create_auction_item_template("auction_rounds_impl_failure")
@@ -355,7 +399,7 @@ def test_rounds_module_settle_auction_round_keeps_settling_on_slot_failure():
         start_at=timezone.now() - timedelta(days=2),
         end_at=timezone.now() - timedelta(minutes=1),
     )
-    AuctionSlot.objects.create(
+    slot = AuctionSlot.objects.create(
         round=auction_round,
         item_template=item_template,
         quantity=1,
@@ -367,14 +411,18 @@ def test_rounds_module_settle_auction_round_keeps_settling_on_slot_failure():
         slot_index=0,
     )
 
-    with pytest.raises(RuntimeError, match="结算失败"):
-        settle_round_impl(
-            round_id=auction_round.id, settle_slot_func=lambda _slot: (_ for _ in ()).throw(RuntimeError("boom"))
-        )
+    stats = settle_round_impl(
+        round_id=auction_round.id, settle_slot_func=lambda _slot: (_ for _ in ()).throw(RuntimeError("boom"))
+    )
 
     auction_round.refresh_from_db()
-    assert auction_round.status == AuctionRound.Status.SETTLING
-    assert auction_round.settled_at is None
+    slot.refresh_from_db()
+    assert stats["settled"] == 1
+    assert stats["unsold"] == 1
+    assert stats["recovered_failures"] == 1
+    assert auction_round.status == AuctionRound.Status.COMPLETED
+    assert auction_round.settled_at is not None
+    assert slot.status == AuctionSlot.Status.UNSOLD
 
 
 @pytest.mark.django_db
@@ -400,7 +448,8 @@ def test_rounds_module_settle_slot_marks_unsold_when_no_bids():
         slot_index=0,
     )
 
-    result = _settle_slot(slot)
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        result = _settle_slot(slot)
     slot.refresh_from_db()
 
     assert result["sold"] is False
@@ -446,7 +495,8 @@ def test_rounds_module_settle_slot_invalid_winner_count_refunds_all_bids(monkeyp
     monkeypatch.setattr("trade.services.auction.rounds.create_message", lambda *a, **k: None)
     monkeypatch.setattr("trade.services.auction.rounds.notify_user", lambda *a, **k: True)
 
-    result = _settle_slot(slot)
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        result = _settle_slot(slot)
 
     bid.refresh_from_db()
     frozen.refresh_from_db()
@@ -501,7 +551,8 @@ def test_rounds_module_settle_slot_partial_refund_flow(monkeypatch, django_user_
     monkeypatch.setattr("trade.services.auction.rounds.create_message", lambda *a, **k: None)
     monkeypatch.setattr("trade.services.auction.rounds.notify_user", lambda *a, **k: True)
 
-    result = _settle_slot(slot)
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        result = _settle_slot(slot)
 
     bid.refresh_from_db()
     slot.refresh_from_db()
@@ -555,6 +606,80 @@ def test_rounds_module_settle_slot_raises_when_winner_missing_frozen_record(djan
 
 
 @pytest.mark.django_db
+def test_rounds_module_settle_slot_does_not_emit_notifications_before_commit(monkeypatch, django_user_model):
+    from trade.services.auction.rounds import _settle_slot
+
+    user_one = django_user_model.objects.create_user(username="auction_rounds_notify_a", password="pass123")
+    user_two = django_user_model.objects.create_user(username="auction_rounds_notify_b", password="pass123")
+    manor_one = ensure_manor(user_one)
+    manor_two = ensure_manor(user_two)
+
+    item_tpl = _create_auction_item_template("auction_settle_notify_after_commit_item")
+    auction_round = AuctionRound.objects.create(
+        round_number=10018,
+        status=AuctionRound.Status.ACTIVE,
+        start_at=timezone.now() - timedelta(days=2),
+        end_at=timezone.now() - timedelta(minutes=1),
+    )
+    slot = AuctionSlot.objects.create(
+        round=auction_round,
+        item_template=item_tpl,
+        quantity=2,
+        starting_price=10,
+        current_price=10,
+        min_increment=1,
+        status=AuctionSlot.Status.ACTIVE,
+        config_key=item_tpl.key,
+        slot_index=0,
+    )
+    first_bid = AuctionBid.objects.create(
+        slot=slot,
+        manor=manor_one,
+        amount=20,
+        status=AuctionBid.Status.ACTIVE,
+        frozen_gold_bars=20,
+    )
+    second_bid = AuctionBid.objects.create(
+        slot=slot,
+        manor=manor_two,
+        amount=18,
+        status=AuctionBid.Status.ACTIVE,
+        frozen_gold_bars=18,
+    )
+
+    consume_calls = {"count": 0}
+    emitted_messages: list[tuple] = []
+    emitted_notifications: list[tuple] = []
+
+    def _consume_or_fail(*_args, **_kwargs):
+        consume_calls["count"] += 1
+        if consume_calls["count"] == 2:
+            raise RuntimeError("boom on second winner")
+
+    monkeypatch.setattr("trade.services.auction.rounds._consume_winning_bid_frozen_gold_bars", _consume_or_fail)
+    monkeypatch.setattr(
+        "trade.services.auction.rounds.create_message", lambda *args, **kwargs: emitted_messages.append((args, kwargs))
+    )
+    monkeypatch.setattr(
+        "trade.services.auction.rounds.notify_user",
+        lambda *args, **kwargs: emitted_notifications.append((args, kwargs)),
+    )
+
+    with pytest.raises(RuntimeError, match="boom on second winner"):
+        _settle_slot(slot)
+
+    slot.refresh_from_db()
+    first_bid.refresh_from_db()
+    second_bid.refresh_from_db()
+
+    assert slot.status == AuctionSlot.Status.ACTIVE
+    assert first_bid.status == AuctionBid.Status.ACTIVE
+    assert second_bid.status == AuctionBid.Status.ACTIVE
+    assert emitted_messages == []
+    assert emitted_notifications == []
+
+
+@pytest.mark.django_db
 def test_rounds_module_settle_slot_delivers_item_via_message_attachment(monkeypatch, django_user_model):
     from trade.services.auction.rounds import _settle_slot
 
@@ -602,7 +727,8 @@ def test_rounds_module_settle_slot_delivers_item_via_message_attachment(monkeypa
     )
     monkeypatch.setattr("trade.services.auction.rounds.notify_user", lambda *a, **k: True)
 
-    result = _settle_slot(slot)
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        result = _settle_slot(slot)
 
     bid.refresh_from_db()
     slot.refresh_from_db()
@@ -683,7 +809,8 @@ def test_rounds_module_settle_slot_falls_back_to_direct_grant_when_message_creat
     )
     monkeypatch.setattr("trade.services.auction.rounds.notify_user", lambda *a, **k: True)
 
-    result = _settle_slot(slot)
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        result = _settle_slot(slot)
 
     bid.refresh_from_db()
     slot.refresh_from_db()

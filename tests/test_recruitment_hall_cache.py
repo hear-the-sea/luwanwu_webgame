@@ -49,3 +49,24 @@ def test_recruit_guest_invalidates_cached_empty_recruitment_hall_context(game_da
 
     cached_after = get_recruitment_hall_context(manor, records_limit=5)
     assert cached_after["candidate_count"] == expected_count
+
+
+@pytest.mark.django_db
+def test_get_recruitment_hall_context_tolerates_cache_backend_failure(game_data, django_user_model, monkeypatch):
+    user = django_user_model.objects.create_user(username="recruit_cache_backend_failure", password="pass123")
+    manor = ensure_manor(user)
+    manor.silver = 500000
+    manor.grain = 500000
+    manor.save(update_fields=["silver", "grain"])
+
+    monkeypatch.setattr(
+        "gameplay.selectors.recruitment.cache.get", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down"))
+    )
+    monkeypatch.setattr(
+        "gameplay.selectors.recruitment.cache.set", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down"))
+    )
+
+    context = get_recruitment_hall_context(manor, records_limit=5)
+
+    assert context["candidate_count"] == 0
+    assert "pools" in context

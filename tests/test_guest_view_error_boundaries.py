@@ -223,6 +223,29 @@ def test_equip_view_runtime_error_degrades_with_message(django_user_model, monke
 
 
 @pytest.mark.django_db
+def test_equip_view_cache_invalidation_failure_does_not_hide_success(django_user_model, monkeypatch):
+    client, manor = _login_client(django_user_model, prefix="equip_cache")
+    guest = _create_guest(manor, prefix="equip_cache")
+    gear = _create_gear(manor)
+    _stub_equip_form(monkeypatch, guest, gear)
+
+    monkeypatch.setattr("guests.services.equip_guest", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "guests.views.equipment.cache.delete_many",
+        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down")),
+    )
+
+    response = client.post(
+        reverse("guests:equip"),
+        {"guest": str(guest.pk), "gear": str(gear.pk), "slot": gear.template.slot},
+    )
+
+    assert response.status_code == 302
+    assert response.url == reverse("guests:detail", args=[guest.pk])
+    assert any("已装备" in m for m in _messages(response))
+
+
+@pytest.mark.django_db
 def test_unequip_view_database_error_degrades_with_message(django_user_model, monkeypatch):
     client, manor = _login_client(django_user_model, prefix="unequip_db")
     guest = _create_guest(manor, prefix="unequip_db")
@@ -256,6 +279,25 @@ def test_unequip_view_runtime_error_degrades_with_message(django_user_model, mon
     assert response.status_code == 302
     assert response.url == reverse("guests:roster")
     assert "操作失败，请稍后重试" in _messages(response)
+
+
+@pytest.mark.django_db
+def test_unequip_view_cache_invalidation_failure_does_not_hide_success(django_user_model, monkeypatch):
+    client, manor = _login_client(django_user_model, prefix="unequip_cache")
+    guest = _create_guest(manor, prefix="unequip_cache")
+    gear = _create_gear(manor, guest=guest)
+
+    monkeypatch.setattr("guests.services.unequip_guest_item", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "guests.views.equipment.cache.delete_many",
+        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down")),
+    )
+
+    response = client.post(reverse("guests:unequip"), {"guest": str(guest.pk), "gear": [str(gear.pk)]})
+
+    assert response.status_code == 302
+    assert response.url == reverse("guests:roster")
+    assert any("卸下 1 件装备" in m for m in _messages(response))
 
 
 @pytest.mark.django_db

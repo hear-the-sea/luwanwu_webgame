@@ -564,13 +564,16 @@ def _schedule_mission_completion_task(run: MissionRun, complete_mission_task) ->
         raise RuntimeError("Mission run was not created correctly")
 
     countdown = max(0, math.ceil((run.return_at - timezone.now()).total_seconds()))
-    safe_apply_async(
+    dispatched = safe_apply_async(
         complete_mission_task,
         args=[run.id],
         countdown=countdown,
         logger=logger,
         log_message="complete_mission_task dispatch failed; relying on refresh_mission_runs",
     )
+    if not dispatched and countdown <= 0:
+        logger.warning("complete_mission_task dispatch failed for due run; finalizing synchronously: run_id=%s", run.id)
+        finalize_mission_run(run)
 
 
 def launch_mission(
@@ -630,18 +633,27 @@ def launch_mission(
 
 
 def schedule_mission_completion(run: MissionRun) -> None:
-    from gameplay.tasks import complete_mission_task
-
     if not run.return_at:
         return
     countdown = max(0, math.ceil((run.return_at - timezone.now()).total_seconds()))
-    safe_apply_async(
+    try:
+        from gameplay.tasks import complete_mission_task
+    except Exception:
+        logger.warning("Unable to import complete_mission_task; relying on sync fallback when due", exc_info=True)
+        if countdown <= 0:
+            finalize_mission_run(run)
+        return
+
+    dispatched = safe_apply_async(
         complete_mission_task,
         args=[run.id],
         countdown=countdown,
         logger=logger,
         log_message="complete_mission_task dispatch failed; relying on refresh_mission_runs",
     )
+    if not dispatched and countdown <= 0:
+        logger.warning("complete_mission_task dispatch failed for due run; finalizing synchronously: run_id=%s", run.id)
+        finalize_mission_run(run)
 
 
 def request_retreat(run: MissionRun) -> None:

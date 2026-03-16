@@ -19,7 +19,6 @@ from gameplay.services.manor.core import ManorNameConflictError
 
 from .forms import LoginForm, SignUpForm
 from .models import User
-from .utils import purge_other_sessions
 
 # 从 core.config 导入配置
 LOGIN_ATTEMPT_LIMIT = SECURITY.LOGIN_ATTEMPT_LIMIT
@@ -215,11 +214,7 @@ class LoginView(DjangoLoginView):
         username = form.cleaned_data.get("username", "")
         _clear_login_attempts(self.request, username, clear_ip=False)
         messages.success(self.request, "欢迎回来，领主大人！")
-        response = super().form_valid(form)
-        # 仅保留当前登录的 session，实现顶号
-        self.request.session.save()
-        purge_other_sessions(self.request.user.id, self.request.session.session_key)
-        return response
+        return super().form_valid(form)
 
     def form_invalid(self, form):
         # 登录失败，记录尝试次数（基于 IP + 用户名双重限制）
@@ -270,9 +265,6 @@ class RegisterView(CreateView):
 
         login(self.request, self.object)
         messages.success(self.request, "注册成功，已自动登录。")
-        # 新注册后也保持单活跃 session
-        self.request.session.save()
-        purge_other_sessions(self.request.user.id, self.request.session.session_key)
         return redirect(self.success_url)
 
 

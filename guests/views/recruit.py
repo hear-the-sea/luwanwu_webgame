@@ -75,15 +75,17 @@ def _finalize_candidates(candidates) -> tuple[list, list]:
     return bulk_finalize_candidates(candidates)
 
 
-def _invalidate_recruitment_hall_cache_for_manor(manor_id: int | None) -> None:
+def _invalidate_recruitment_hall_cache_for_manor(manor_id: int | None) -> bool:
     if not manor_id:
-        return
+        return True
     try:
         from gameplay.services.utils.cache import invalidate_recruitment_hall_cache
 
         invalidate_recruitment_hall_cache(int(manor_id))
+        return True
     except Exception:
-        logger.debug("Failed to invalidate recruitment hall cache from view: manor_id=%s", manor_id, exc_info=True)
+        logger.warning("Failed to invalidate recruitment hall cache from view: manor_id=%s", manor_id, exc_info=True)
+        return False
 
 
 def _recruit_action_lock_key(action: str, manor_id: int, scope: str) -> str:
@@ -178,13 +180,13 @@ def _format_bulk_recruit_success_message(succeeded_guests: list) -> str:
     return f"成功招募 {total} 名门客：{preview}"
 
 
-def _build_recruitment_hall_ajax_payload(request, manor) -> dict:
+def _build_recruitment_hall_ajax_payload(request, manor, *, use_cache: bool = True) -> dict:
     from django.template.loader import render_to_string
 
     from gameplay.constants import UIConstants
     from gameplay.selectors.recruitment import get_recruitment_hall_context
 
-    context = get_recruitment_hall_context(manor, UIConstants.RECRUIT_RECORDS_DISPLAY)
+    context = get_recruitment_hall_context(manor, UIConstants.RECRUIT_RECORDS_DISPLAY, use_cache=use_cache)
     return {
         "hall_pools_html": render_to_string(
             "gameplay/partials/recruitment_pools_section.html", context, request=request
@@ -199,9 +201,18 @@ def _build_recruitment_hall_ajax_payload(request, manor) -> dict:
     }
 
 
-def _json_recruitment_hall_success(request, manor, message: str, *, message_level: str = "success"):
+def _json_recruitment_hall_success(
+    request,
+    manor,
+    message: str,
+    *,
+    message_level: str = "success",
+    use_cache: bool = True,
+):
     return json_success(
-        message=message, message_level=message_level, **_build_recruitment_hall_ajax_payload(request, manor)
+        message=message,
+        message_level=message_level,
+        **_build_recruitment_hall_ajax_payload(request, manor, use_cache=use_cache),
     )
 
 
@@ -233,10 +244,10 @@ class RecruitView(LoginRequiredMixin, TemplateView):
             try:
                 recruitment = start_guest_recruitment(manor, pool)
                 eta_text = _format_duration(recruitment.duration_seconds)
-                _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
+                cache_ok = _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
                 message = f"{pool.name} 已开始招募，预计 {eta_text} 后完成。"
                 if is_ajax:
-                    return _json_recruitment_hall_success(request, manor, message)
+                    return _json_recruitment_hall_success(request, manor, message, use_cache=cache_ok)
                 messages.success(request, f"{pool.name} 已开始招募，预计 {eta_text} 后完成。")
             except (GameError, ValueError) as exc:
                 if is_ajax:
@@ -348,20 +359,21 @@ def accept_candidate_view(request):
                 deleted = queryset.count() if scope == "all" else len(candidates)
                 queryset.delete()
                 msg = f"已放弃 {deleted} 名候选门客。"
+                cache_ok = _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
                 if is_ajax:
-                    _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
-                    return _json_recruitment_hall_success(request, manor, msg, message_level="warning")
+                    return _json_recruitment_hall_success(
+                        request, manor, msg, message_level="warning", use_cache=cache_ok
+                    )
                 messages.info(request, f"已放弃 {deleted} 名候选门客。")
-                _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
             elif action == "retain":
                 retained, error_message = _retain_candidates(candidates)
                 if is_ajax:
                     if retained:
-                        _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
+                        cache_ok = _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
                         msg = f"已将 {retained} 名候选收为家丁。"
                         if error_message:
                             msg = f"{msg} {error_message}"
-                        return _json_recruitment_hall_success(request, manor, msg)
+                        return _json_recruitment_hall_success(request, manor, msg, use_cache=cache_ok)
                     if error_message:
                         return json_error(error_message, status=400)
                     return json_error("当前没有可操作的候选门客。", status=400)
@@ -375,14 +387,21 @@ def accept_candidate_view(request):
                 succeeded, failed = _finalize_candidates(candidates)
                 if is_ajax:
                     if succeeded:
-                        _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
+                        cache_ok = _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
                         msg = _format_bulk_recruit_success_message(succeeded)
                         if failed:
                             msg = f"{msg}；门客容量不足，{len(failed)} 名候选未能招募"
-                        return _json_recruitment_hall_success(request, manor, msg)
+                        return _json_recruitment_hall_success(request, manor, msg, use_cache=cache_ok)
                     if failed:
                         msg = f"门客容量不足，{len(failed)} 名候选未能招募"
-                        return _json_recruitment_hall_success(request, manor, msg, message_level="warning")
+                        cache_ok = _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
+                        return _json_recruitment_hall_success(
+                            request,
+                            manor,
+                            msg,
+                            message_level="warning",
+                            use_cache=cache_ok,
+                        )
                     return json_error("当前没有可操作的候选门客。", status=400)
                 if succeeded:
                     messages.success(request, _format_bulk_recruit_success_message(succeeded))
@@ -454,9 +473,9 @@ def use_magnifying_glass_view(request):
             count = use_magnifying_glass_for_candidates(manor, item_id_int)
             if count > 0:
                 msg = f"使用放大镜成功：显现 {count} 位候选门客的稀有度"
-                _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
+                cache_ok = _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
                 if is_ajax:
-                    return _json_recruitment_hall_success(request, manor, msg)
+                    return _json_recruitment_hall_success(request, manor, msg, use_cache=cache_ok)
                 messages.success(request, msg)
             else:
                 msg = "当前候选门客的稀有度已全部显现"

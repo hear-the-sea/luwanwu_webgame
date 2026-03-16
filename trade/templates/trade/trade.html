@@ -32,6 +32,15 @@
 
     <!-- Tab 内容 -->
     <div class="tw-trade-content">
+        {% if trade_alerts %}
+        <div class="mb-4 flex flex-col gap-2">
+            {% for alert in trade_alerts %}
+            <div class="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                {{ alert.message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
         {% if current_tab == "auction" %}
         {% include "trade/partials/_auction.html" %}
         {% elif current_tab == "shop" %}

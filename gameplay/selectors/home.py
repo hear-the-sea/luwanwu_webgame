@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
@@ -12,6 +14,8 @@ from ..services import can_retreat, get_technology_template, sync_resource_produ
 from ..services.utils.cache import CacheKeys
 from ..services.utils.query_optimization import optimize_guest_queryset
 
+logger = logging.getLogger(__name__)
+
 
 def _normalize_hourly_rates(hourly_rates) -> dict[str, int]:
     if not isinstance(hourly_rates, dict):
@@ -23,6 +27,21 @@ def _normalize_hourly_rates(hourly_rates) -> dict[str, int]:
             continue
         normalized[key] = safe_int(value, default=0, min_val=0) or 0
     return normalized
+
+
+def _safe_cache_get(key: str):
+    try:
+        return cache.get(key)
+    except Exception as exc:
+        logger.warning("Home selector cache.get failed: key=%s error=%s", key, exc, exc_info=True)
+        return None
+
+
+def _safe_cache_set(key: str, value, timeout: int) -> None:
+    try:
+        cache.set(key, value, timeout=timeout)
+    except Exception as exc:
+        logger.warning("Home selector cache.set failed: key=%s error=%s", key, exc, exc_info=True)
 
 
 def get_home_context(manor) -> dict:
@@ -66,10 +85,10 @@ def get_home_context(manor) -> dict:
     from ..utils.resource_calculator import get_hourly_rates, get_personnel_grain_cost_per_hour
 
     cache_key = CacheKeys.home_hourly_rates(manor.pk)
-    hourly_rates = cache.get(cache_key)
+    hourly_rates = _safe_cache_get(cache_key)
     if hourly_rates is None:
         hourly_rates = get_hourly_rates(manor)
-        cache.set(cache_key, hourly_rates, timeout=settings.HOME_STATS_CACHE_TTL_SECONDS)
+        _safe_cache_set(cache_key, hourly_rates, timeout=settings.HOME_STATS_CACHE_TTL_SECONDS)
     hourly_rates = _normalize_hourly_rates(hourly_rates)
     resource_labels = dict(ResourceType.choices)
     building_income = []

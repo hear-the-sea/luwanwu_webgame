@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+import asyncio
+import ipaddress
+
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.conf import settings
 from django.core.cache import cache
 from django.db import connections
 from django.db.utils import DatabaseError
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_GET
 
 from core.tasks import CELERY_BEAT_HEARTBEAT_CACHE_KEY, celery_health_ping
+from core.utils.network import get_client_ip, is_trusted_proxy_ip
 
 
 def _maybe_debug_error(exc: Exception) -> str | None:
@@ -22,6 +26,23 @@ def _maybe_debug_error(exc: Exception) -> str | None:
 @require_GET
 def health_live(request):
     return JsonResponse({"status": "ok"})
+
+
+def _is_internal_request(request) -> bool:
+    remote_addr = request.META.get("REMOTE_ADDR", "")
+    forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR", "")
+
+    if forwarded_for and not is_trusted_proxy_ip(remote_addr):
+        return False
+
+    client_ip = get_client_ip(request, trust_proxy=bool(forwarded_for))
+    if client_ip == "unknown":
+        return False
+    try:
+        ip = ipaddress.ip_address(client_ip)
+    except ValueError:
+        return False
+    return ip.is_loopback or ip.is_private
 
 
 def _check_database_ready() -> tuple[bool, str | None]:
@@ -52,18 +73,26 @@ def _check_cache_ready() -> tuple[bool, str | None]:
             pass
 
 
+async def _channel_layer_roundtrip(channel_layer, timeout_seconds: float) -> dict:
+    channel_name = await channel_layer.new_channel("health.ready")
+    payload = {"type": "health.ready", "marker": "ok"}
+    await channel_layer.send(channel_name, payload)
+    try:
+        received = await asyncio.wait_for(channel_layer.receive(channel_name), timeout=timeout_seconds)
+    except asyncio.TimeoutError as exc:
+        raise RuntimeError(f"channel layer receive timed out after {timeout_seconds:.2f}s") from exc
+    if not isinstance(received, dict) or received.get("marker") != payload["marker"]:
+        raise RuntimeError("channel layer roundtrip failed")
+    return received
+
+
 def _check_channel_layer_ready() -> tuple[bool, str | None]:
     try:
         channel_layer = get_channel_layer()
         if channel_layer is None:
             raise RuntimeError("channel layer is unavailable")
-
-        channel_name = async_to_sync(channel_layer.new_channel)("health.ready")
-        payload = {"type": "health.ready", "marker": "ok"}
-        async_to_sync(channel_layer.send)(channel_name, payload)
-        received = async_to_sync(channel_layer.receive)(channel_name)
-        if not isinstance(received, dict) or received.get("marker") != payload["marker"]:
-            raise RuntimeError("channel layer roundtrip failed")
+        timeout_seconds = max(0.01, float(getattr(settings, "HEALTH_CHECK_CHANNEL_LAYER_TIMEOUT_SECONDS", 1.0)))
+        async_to_sync(_channel_layer_roundtrip)(channel_layer, timeout_seconds)
         return True, None
     except Exception as exc:
         return False, _maybe_debug_error(exc)
@@ -129,6 +158,9 @@ def _check_celery_roundtrip_ready() -> tuple[bool, str | None]:
 
 @require_GET
 def health_ready(request):
+    if getattr(settings, "HEALTH_CHECK_REQUIRE_INTERNAL", False) and not _is_internal_request(request):
+        raise Http404()
+
     checks: dict[str, bool] = {"db": True, "cache": True}
     errors: dict[str, str] = {}
 

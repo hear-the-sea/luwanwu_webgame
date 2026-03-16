@@ -178,6 +178,16 @@ def _create_raid_run_record(
 
 
 def _dispatch_raid_battle_task(run: RaidRun, travel_time: int) -> None:
+    def _fallback_sync_when_due() -> None:
+        if travel_time > 0:
+            return
+        logger.warning(
+            "process_raid_battle_task dispatch failed for due raid; processing synchronously: run_id=%s", run.id
+        )
+        from .battle import process_raid_battle
+
+        process_raid_battle(run)
+
     try:
         from gameplay.tasks import process_raid_battle_task
     except Exception as exc:
@@ -187,15 +197,18 @@ def _dispatch_raid_battle_task(run: RaidRun, travel_time: int) -> None:
             exc,
             exc_info=True,
         )
+        _fallback_sync_when_due()
         return
 
-    safe_apply_async(
+    dispatched = safe_apply_async(
         process_raid_battle_task,
         args=[run.id],
         countdown=travel_time,
         logger=logger,
         log_message="process_raid_battle_task dispatch failed",
     )
+    if not dispatched:
+        _fallback_sync_when_due()
 
 
 def _extract_raid_troops_lost(loadout: Dict[str, int], battle_report) -> Dict[str, int]:

@@ -6,10 +6,13 @@
 
 from __future__ import annotations
 
+import logging
 from functools import wraps
 from typing import Callable, TypeVar, cast
 
 from django.core.cache import cache
+
+logger = logging.getLogger(__name__)
 
 # 缓存超时时间常量（秒）
 CACHE_TIMEOUT_SHORT = 5  # 5秒 - 实时性要求高的数据
@@ -154,7 +157,11 @@ def cached(
         def wrapper(*args, **kwargs) -> T:
             cache_key = key_func(*args, **kwargs)
             sentinel = object()
-            result = cache.get(cache_key, sentinel)
+            try:
+                result = cache.get(cache_key, sentinel)
+            except Exception as exc:
+                logger.warning("cache.get failed in cached(): key=%s error=%s", cache_key, exc, exc_info=True)
+                result = sentinel
 
             if result is not sentinel:
                 # If `cache_none=False` we don't normally store None, but keep
@@ -165,7 +172,10 @@ def cached(
 
             computed = func(*args, **kwargs)
             if computed is not None or cache_none:
-                cache.set(cache_key, computed, timeout=timeout)
+                try:
+                    cache.set(cache_key, computed, timeout=timeout)
+                except Exception as exc:
+                    logger.warning("cache.set failed in cached(): key=%s error=%s", cache_key, exc, exc_info=True)
             return cast(T, computed)
 
         return wrapper
@@ -185,8 +195,15 @@ def get_or_set(key: str, default_func: Callable[[], T], timeout: int = CACHE_TIM
     Returns:
         缓存值或计算的默认值
     """
-    result = cache.get(key)
+    try:
+        result = cache.get(key)
+    except Exception as exc:
+        logger.warning("cache.get failed in get_or_set(): key=%s error=%s", key, exc, exc_info=True)
+        result = None
     if result is None:
         result = default_func()
-        cache.set(key, result, timeout=timeout)
+        try:
+            cache.set(key, result, timeout=timeout)
+        except Exception as exc:
+            logger.warning("cache.set failed in get_or_set(): key=%s error=%s", key, exc, exc_info=True)
     return cast(T, result)

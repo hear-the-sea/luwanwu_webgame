@@ -9,7 +9,7 @@ import os
 from celery.schedules import crontab
 from kombu import Queue
 
-from .base import DEBUG, RUNNING_TESTS, env
+from .base import env
 from .database import REDIS_BROKER_URL, REDIS_PASSWORD, REDIS_RESULT_URL, _redis_url_with_password
 
 CELERY_BROKER_URL = _redis_url_with_password(env("CELERY_BROKER_URL", REDIS_BROKER_URL), REDIS_PASSWORD)
@@ -29,21 +29,21 @@ CELERY_TASK_DEFAULT_QUEUE = CELERY_DEFAULT_QUEUE
 HEALTH_CHECK_CELERY_WORKERS = (
     env(
         "DJANGO_HEALTH_CHECK_CELERY_WORKERS",
-        "1" if not DEBUG and not RUNNING_TESTS else "0",
+        "0",
     )
     == "1"
 )
 HEALTH_CHECK_CELERY_BEAT = (
     env(
         "DJANGO_HEALTH_CHECK_CELERY_BEAT",
-        "1" if not DEBUG and not RUNNING_TESTS else "0",
+        "0",
     )
     == "1"
 )
 HEALTH_CHECK_CELERY_ROUNDTRIP = (
     env(
         "DJANGO_HEALTH_CHECK_CELERY_ROUNDTRIP",
-        "1" if not DEBUG and not RUNNING_TESTS else "0",
+        "0",
     )
     == "1"
 )

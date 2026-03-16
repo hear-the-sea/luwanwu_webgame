@@ -182,7 +182,15 @@ def test_get_trade_context_shop_paginates_buy_and_sell_lists_independently(monke
 @pytest.mark.django_db
 def test_get_trade_context_bank_includes_bank_info(monkeypatch, django_user_model):
     monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("trade.selectors.get_bank_info", lambda *_args, **_kwargs: {"current_rate": 123})
+    monkeypatch.setattr(
+        "trade.selectors.get_bank_info",
+        lambda *_args, **_kwargs: {
+            "current_rate": 123,
+            "pricing_degraded": False,
+            "exchange_available": True,
+            "pricing_status_message": "",
+        },
+    )
     monkeypatch.setattr("trade.selectors.get_troop_bank_capacity", lambda *_args, **_kwargs: 5000)
     monkeypatch.setattr("trade.selectors.get_troop_bank_used_space", lambda *_args, **_kwargs: 100)
     monkeypatch.setattr("trade.selectors.get_troop_bank_remaining_space", lambda *_args, **_kwargs: 4900)
@@ -197,7 +205,8 @@ def test_get_trade_context_bank_includes_bank_info(monkeypatch, django_user_mode
 
     context = get_trade_context(request, manor)
     assert context["current_tab"] == "bank"
-    assert context["bank_info"] == {"current_rate": 123}
+    assert context["bank_info"]["current_rate"] == 123
+    assert context["trade_alerts"] == []
     assert context["troop_bank_capacity"] == 5000
     assert context["troop_bank_used"] == 100
     assert context["troop_bank_remaining"] == 4900
@@ -266,7 +275,15 @@ def test_get_trade_context_bank_tolerates_sync_resource_error(monkeypatch, djang
         "trade.selectors.sync_resource_production",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("sync failed")),
     )
-    monkeypatch.setattr("trade.selectors.get_bank_info", lambda *_args, **_kwargs: {"current_rate": 123})
+    monkeypatch.setattr(
+        "trade.selectors.get_bank_info",
+        lambda *_args, **_kwargs: {
+            "current_rate": 123,
+            "pricing_degraded": False,
+            "exchange_available": True,
+            "pricing_status_message": "",
+        },
+    )
 
     user = django_user_model.objects.create_user(username="trade_ctx_bank_sync_err", password="pass12345")
     manor = ensure_manor(user)
@@ -274,7 +291,7 @@ def test_get_trade_context_bank_tolerates_sync_resource_error(monkeypatch, djang
 
     context = get_trade_context(request, manor)
     assert context["current_tab"] == "bank"
-    assert context["bank_info"] == {"current_rate": 123}
+    assert context["bank_info"]["current_rate"] == 123
 
 
 @pytest.mark.django_db
@@ -332,7 +349,7 @@ def test_get_trade_context_market_sell_paginates_to_twenty_items(monkeypatch, dj
 
 
 @pytest.mark.django_db
-def test_get_trade_context_bank_tolerates_bank_info_error(monkeypatch, django_user_model):
+def test_get_trade_context_bank_marks_bank_info_error_as_degraded(monkeypatch, django_user_model):
     monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         "trade.selectors.get_bank_info",
@@ -345,7 +362,10 @@ def test_get_trade_context_bank_tolerates_bank_info_error(monkeypatch, django_us
 
     context = get_trade_context(request, manor)
     assert context["current_tab"] == "bank"
-    assert context["bank_info"] == {}
+    assert context["bank_info"]["pricing_degraded"] is True
+    assert context["bank_info"]["exchange_available"] is False
+    assert "已暂时关闭兑换" in context["bank_info"]["pricing_status_message"]
+    assert context["trade_alerts"][0]["section"] == "bank"
 
 
 @pytest.mark.django_db

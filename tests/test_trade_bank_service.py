@@ -221,6 +221,50 @@ def test_exchange_gold_bar_rejects_invalid_quantity(django_user_model):
 
 
 @pytest.mark.django_db
+def test_exchange_gold_bar_fails_closed_when_pricing_falls_back_to_stale_cache(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="bank_exchange_fail_closed", password="pass12345")
+    manor = ensure_manor(user)
+    manor.silver = 1_000_000_000
+    manor.save(update_fields=["silver"])
+    _ = _ensure_gold_bar_template()
+
+    def fake_get(key, default=None):
+        if key == bank_service.SUPPLY_CACHE_KEY:
+            return None
+        if key == bank_service.SUPPLY_STALE_CACHE_KEY:
+            return 4321
+        return default
+
+    monkeypatch.setattr(bank_service.cache, "get", fake_get)
+    monkeypatch.setattr(bank_service.cache, "add", lambda *_args, **_kwargs: False)
+
+    with pytest.raises(bank_service.GoldBarPricingUnavailableError, match="钱庄汇率暂时不可用"):
+        bank_service.exchange_gold_bar(manor, 1)
+
+
+@pytest.mark.django_db
+def test_get_bank_info_marks_pricing_as_degraded_when_using_stale_cache(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="bank_info_stale", password="pass12345")
+    manor = ensure_manor(user)
+
+    def fake_get(key, default=None):
+        if key == bank_service.SUPPLY_CACHE_KEY:
+            return None
+        if key == bank_service.SUPPLY_STALE_CACHE_KEY:
+            return 765
+        return default
+
+    monkeypatch.setattr(bank_service.cache, "get", fake_get)
+    monkeypatch.setattr(bank_service.cache, "add", lambda *_args, **_kwargs: False)
+
+    info = bank_service.get_bank_info(manor)
+    assert info["pricing_source"] == "stale_cache"
+    assert info["pricing_degraded"] is True
+    assert info["exchange_available"] is False
+    assert "已暂时关闭兑换" in info["pricing_status_message"]
+
+
+@pytest.mark.django_db
 def test_get_effective_gold_supply_does_not_release_foreign_lock(monkeypatch):
     lock_key = f"{bank_service.SUPPLY_CACHE_KEY}:lock"
     lock_token_holder: dict[str, str] = {}

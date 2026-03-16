@@ -6,10 +6,13 @@ import uuid
 from threading import Lock
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.contrib.sessions.models import Session
 from django.core.cache import cache
+from django.db import transaction
 from django.utils import timezone
 
+from accounts.models import UserActiveSession
 from core.utils.cache_lock import release_cache_key_if_owner
 
 logger = logging.getLogger(__name__)
@@ -36,14 +39,9 @@ def _session_key_prefix(session_key: str | None) -> str:
 
 def purge_other_sessions(user_id: int, current_session_key: str | None) -> None:
     """
-    Enforce single active session per user by removing all other sessions.
+    Enforce single active session per user without scanning the whole session table.
 
-    优化说明：
-    - 使用 Redis 缓存维护 user_id -> session_key 映射
-    - 避免遍历全表 Session，时间复杂度从 O(N) 降到 O(1)
-    - 登录时记录新 session，同时清除旧 session
-
-    安全修复：使用分布式锁防止并发登录导致的竞态条件
+    数据库中的 UserActiveSession 是权威记录，缓存仅做镜像加速。
     """
     if not current_session_key:
         return
@@ -51,49 +49,66 @@ def purge_other_sessions(user_id: int, current_session_key: str | None) -> None:
     cache_key = f"{USER_SESSION_CACHE_PREFIX}{user_id}"
     lock_key = f"{USER_LOGIN_LOCK_PREFIX}{user_id}"
     lock_token = uuid.uuid4().hex
+    lock_acquired = False
 
     try:
-        # 安全修复：使用分布式锁防止并发登录竞态条件
-        # 如果无法获取锁，直接跳过（非阻塞），避免阻塞 worker
         lock_acquired = _acquire_login_lock(lock_key, lock_token)
         if not lock_acquired:
-            # 在短暂重试后仍未拿到锁时，走降级清理，尽量保持单活跃 session 语义。
-            logger.warning("Login lock busy for user %s, falling back to full session scan", user_id)
-            _purge_sessions_fallback(user_id, current_session_key)
-            cache.set(cache_key, current_session_key, timeout=USER_SESSION_CACHE_TTL)
+            logger.warning("Login lock busy for user %s, proceeding with database-backed session sync", user_id)
+
+        _sync_active_session_state(user_id, current_session_key, cache_key)
+    except Exception as exc:
+        logger.warning("Failed to sync active session for user %s: %s", user_id, exc, exc_info=True)
+    finally:
+        if lock_acquired:
+            _release_login_lock(lock_key, lock_token)
+
+
+def _safe_get_cached_session_key(cache_key: str) -> str | None:
+    try:
+        cached = cache.get(cache_key)
+    except Exception:
+        logger.debug("Failed to read active session cache for key=%s", cache_key, exc_info=True)
+        return None
+    return str(cached) if cached else None
+
+
+def _safe_set_cached_session_key(cache_key: str, session_key: str) -> None:
+    try:
+        cache.set(cache_key, session_key, timeout=USER_SESSION_CACHE_TTL)
+    except Exception:
+        logger.debug("Failed to write active session cache for key=%s", cache_key, exc_info=True)
+
+
+def _sync_active_session_state(user_id: int, current_session_key: str, cache_key: str) -> None:
+    user_model = get_user_model()
+
+    with transaction.atomic():
+        locked_user = user_model.objects.select_for_update().filter(pk=user_id).only("pk").first()
+        if locked_user is None:
             return
 
-        try:
-            # 获取该用户之前的 session key
-            old_session_key = cache.get(cache_key)
+        session_record = UserActiveSession.objects.select_for_update().filter(user_id=user_id).first()
+        old_session_key = session_record.session_key if session_record else _safe_get_cached_session_key(cache_key)
 
-            # 如果存在旧 session 且不是当前 session，删除它
-            if old_session_key and old_session_key != current_session_key:
-                try:
-                    Session.objects.filter(session_key=old_session_key).delete()
-                    logger.debug("Purged old session for user %s", user_id)
-                except Exception as e:
-                    logger.warning("Failed to delete old session for user %s: %s", user_id, e)
+        if old_session_key and old_session_key != current_session_key:
+            Session.objects.filter(session_key=old_session_key).delete()
 
-            # 记录当前 session key 到缓存
-            cache.set(cache_key, current_session_key, timeout=USER_SESSION_CACHE_TTL)
-        finally:
-            # 仅释放自己持有的锁，避免锁过期后误删其他并发请求新获取的锁
-            if lock_acquired:
-                _release_login_lock(lock_key, lock_token)
+        if session_record is None:
+            UserActiveSession.objects.create(user_id=user_id, session_key=current_session_key)
+        elif session_record.session_key != current_session_key:
+            session_record.session_key = current_session_key
+            session_record.save(update_fields=["session_key", "updated_at"])
 
-    except Exception as e:
-        # 缓存不可用时降级为原始逻辑（但仅在必要时）
-        logger.warning("Cache unavailable, falling back to session scan: %s", e)
-        _purge_sessions_fallback(user_id, current_session_key)
+    _safe_set_cached_session_key(cache_key, current_session_key)
 
 
 def _purge_sessions_fallback(user_id: int, current_session_key: str) -> None:
     """
-    降级方案：当缓存不可用时的 session 清理。
+    兼容保留的全量清理工具。
 
-    注意：此方法会遍历有效 session，仅在缓存故障时使用。
-    为了保持“单活跃 session”的语义一致性，这里不再截断扫描。
+    注意：此方法会遍历有效 session，仅用于排障或手工修复，
+    不再作为登录主路径上的降级方案。
     """
     now = timezone.now()
     sessions = Session.objects.filter(expire_date__gt=now).iterator(chunk_size=1000)
@@ -108,21 +123,19 @@ def _purge_sessions_fallback(user_id: int, current_session_key: str) -> None:
                 continue
             session.delete()
             deleted_count += 1
-        except (ValueError, KeyError, TypeError) as e:
-            # 安全修复：明确捕获特定的解码异常类型，而非所有异常
+        except (ValueError, KeyError, TypeError) as exc:
             logger.debug(
                 "Failed to decode session %s...: %s",
                 _session_key_prefix(getattr(session, "session_key", None)),
-                type(e).__name__,
+                type(exc).__name__,
                 exc_info=True,
             )
             continue
-        except Exception as e:
-            # 其他未预期的异常记录为警告级别
+        except Exception as exc:
             logger.warning(
                 "Unexpected error processing session %s...: %s",
                 _session_key_prefix(getattr(session, "session_key", None)),
-                e,
+                exc,
                 exc_info=True,
             )
             continue
@@ -141,7 +154,6 @@ def _release_login_lock(lock_key: str, lock_token: str) -> None:
             log_context="login lock release",
         )
         if not released:
-            # Fallback path for non-Redis cache backends or test monkeypatches.
             current_token = cache.get(lock_key)
             if current_token == lock_token:
                 cache.delete(lock_key)

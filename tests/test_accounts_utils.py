@@ -1,12 +1,17 @@
+from datetime import timedelta
 from unittest.mock import Mock
 
+import pytest
+from django.contrib.sessions.models import Session
+from django.utils import timezone
+
 from accounts import utils as account_utils
+from accounts.models import UserActiveSession
 
 
 def test_purge_other_sessions_does_not_release_foreign_lock(monkeypatch):
     user_id = 123
     lock_key = f"{account_utils.USER_LOGIN_LOCK_PREFIX}{user_id}"
-    cache_key = f"{account_utils.USER_SESSION_CACHE_PREFIX}{user_id}"
     delete_mock = Mock()
     token_holder: dict[str, str] = {}
 
@@ -16,15 +21,13 @@ def test_purge_other_sessions_does_not_release_foreign_lock(monkeypatch):
         return True
 
     def fake_get(key, default=None):
-        if key == cache_key:
-            return None
         if key == lock_key:
             return "another-token"
         return default
 
     monkeypatch.setattr(account_utils.cache, "add", fake_add)
     monkeypatch.setattr(account_utils.cache, "get", fake_get)
-    monkeypatch.setattr(account_utils.cache, "set", lambda *args, **kwargs: None)
+    monkeypatch.setattr(account_utils, "_sync_active_session_state", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(account_utils.cache, "delete", delete_mock)
 
     account_utils.purge_other_sessions(user_id, "current-session")
@@ -34,7 +37,6 @@ def test_purge_other_sessions_does_not_release_foreign_lock(monkeypatch):
 def test_purge_other_sessions_releases_owned_lock(monkeypatch):
     user_id = 456
     lock_key = f"{account_utils.USER_LOGIN_LOCK_PREFIX}{user_id}"
-    cache_key = f"{account_utils.USER_SESSION_CACHE_PREFIX}{user_id}"
     delete_mock = Mock()
     token_holder: dict[str, str] = {}
 
@@ -44,23 +46,21 @@ def test_purge_other_sessions_releases_owned_lock(monkeypatch):
         return True
 
     def fake_get(key, default=None):
-        if key == cache_key:
-            return None
         if key == lock_key:
             return token_holder["token"]
         return default
 
     monkeypatch.setattr(account_utils.cache, "add", fake_add)
     monkeypatch.setattr(account_utils.cache, "get", fake_get)
-    monkeypatch.setattr(account_utils.cache, "set", lambda *args, **kwargs: None)
+    monkeypatch.setattr(account_utils, "_sync_active_session_state", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(account_utils.cache, "delete", delete_mock)
 
     account_utils.purge_other_sessions(user_id, "current-session")
     delete_mock.assert_called_once_with(lock_key)
 
 
-def test_purge_other_sessions_falls_back_when_lock_busy(monkeypatch):
-    set_mock = Mock()
+def test_purge_other_sessions_continues_when_lock_busy(monkeypatch):
+    sync_mock = Mock()
     fallback_mock = Mock()
     user_id = 777
     current_session_key = "current-session"
@@ -68,12 +68,13 @@ def test_purge_other_sessions_falls_back_when_lock_busy(monkeypatch):
 
     monkeypatch.setattr(account_utils, "LOGIN_LOCK_MAX_WAIT_SECONDS", 0.0)
     monkeypatch.setattr(account_utils.cache, "add", lambda *args, **kwargs: False)
-    monkeypatch.setattr(account_utils.cache, "set", set_mock)
+    monkeypatch.setattr(account_utils, "_sync_active_session_state", sync_mock)
     monkeypatch.setattr(account_utils, "_purge_sessions_fallback", fallback_mock)
 
     account_utils.purge_other_sessions(user_id, current_session_key)
-    fallback_mock.assert_called_once_with(user_id, current_session_key)
-    set_mock.assert_called_once_with(cache_key, current_session_key, timeout=account_utils.USER_SESSION_CACHE_TTL)
+
+    sync_mock.assert_called_once_with(user_id, current_session_key, cache_key)
+    fallback_mock.assert_not_called()
 
 
 def test_acquire_login_lock_falls_back_to_local_when_cache_add_errors(monkeypatch):
@@ -144,3 +145,33 @@ def test_purge_sessions_fallback_scans_beyond_1000_records(monkeypatch):
     account_utils._purge_sessions_fallback(int(target_user), current_session)
 
     assert far_session.deleted is True
+
+
+@pytest.mark.django_db
+def test_sync_active_session_state_updates_authoritative_record(django_user_model):
+    user = django_user_model.objects.create_user(username="single_session_user", password="pass123")
+    Session.objects.create(
+        session_key="old-session-key",
+        session_data="e30:",
+        expire_date=timezone.now() + timedelta(days=1),
+    )
+    UserActiveSession.objects.create(user=user, session_key="old-session-key")
+
+    account_utils._sync_active_session_state(
+        user.id,
+        "new-session-key",
+        f"{account_utils.USER_SESSION_CACHE_PREFIX}{user.id}",
+    )
+
+    assert UserActiveSession.objects.get(user=user).session_key == "new-session-key"
+    assert Session.objects.filter(session_key="old-session-key").exists() is False
+
+
+@pytest.mark.django_db
+def test_login_signal_records_active_session(client, django_user_model):
+    user = django_user_model.objects.create_user(username="signal_login_user", password="pass123")
+
+    assert client.login(username="signal_login_user", password="pass123") is True
+
+    active_session = UserActiveSession.objects.get(user=user)
+    assert active_session.session_key == client.session.session_key

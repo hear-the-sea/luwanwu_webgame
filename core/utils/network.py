@@ -34,6 +34,38 @@ def _is_trusted_proxy(remote_addr: str, trusted_proxy_ips: Iterable[str]) -> boo
     return False
 
 
+def is_trusted_proxy_ip(remote_addr: str) -> bool:
+    trusted_proxy_ips = getattr(settings, "TRUSTED_PROXY_IPS", [])
+    return _is_trusted_proxy(remote_addr, trusted_proxy_ips)
+
+
+def _extract_client_ip_from_forwarded_chain(
+    remote_addr: str, x_forwarded_for: str, trusted_proxy_ips: Iterable[str]
+) -> str:
+    chain: list[str] = []
+    for part in (x_forwarded_for or "").split(","):
+        candidate = part.strip()
+        if not candidate:
+            continue
+        try:
+            ipaddress.ip_address(candidate)
+        except ValueError:
+            continue
+        chain.append(candidate)
+
+    if not chain:
+        return remote_addr
+
+    # Evaluate the hop chain from the server side backwards:
+    # X-Forwarded-For entries ..., immediate client/proxy, REMOTE_ADDR.
+    # Strip trusted proxies from the right; the first remaining hop is the client.
+    chain.append(remote_addr)
+    while len(chain) > 1 and _is_trusted_proxy(chain[-1], trusted_proxy_ips):
+        chain.pop()
+
+    return chain[-1] if chain else remote_addr
+
+
 def get_client_ip(request: HttpRequest, *, trust_proxy: bool = False) -> str:
     """
     Get client IP with optional trusted-proxy support.
@@ -56,14 +88,4 @@ def get_client_ip(request: HttpRequest, *, trust_proxy: bool = False) -> str:
     if not x_forwarded_for:
         return remote_addr
 
-    for part in x_forwarded_for.split(","):
-        candidate = part.strip()
-        if not candidate:
-            continue
-        try:
-            ipaddress.ip_address(candidate)
-            return candidate
-        except ValueError:
-            continue
-
-    return remote_addr
+    return _extract_client_ip_from_forwarded_chain(remote_addr, x_forwarded_for, trusted_proxy_ips)

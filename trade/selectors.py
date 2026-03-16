@@ -42,6 +42,10 @@ def _safe_call(func: Callable[..., Any], *args, default: Any, log_message: str, 
         return default
 
 
+def _record_trade_issue(context: dict, *, section: str, message: str) -> None:
+    context.setdefault("trade_alerts", []).append({"section": section, "message": message})
+
+
 def _base_trade_context(tab: str, manor) -> dict:
     return {
         "current_tab": tab,
@@ -322,6 +326,7 @@ def get_trade_context(request, manor) -> dict:
     )
     tab = request.GET.get("tab", "shop")
     context = _base_trade_context(tab, manor)
+    context["trade_alerts"] = []
 
     if tab == "auction":
         _update_auction_context(request, manor, context)
@@ -333,9 +338,32 @@ def get_trade_context(request, manor) -> dict:
         context["bank_info"] = _safe_call(
             get_bank_info,
             manor,
-            default={},
+            default={
+                "gold_bar_base_price": 0,
+                "gold_bar_fee_rate": 0,
+                "gold_bar_min_price": 0,
+                "gold_bar_max_price": 0,
+                "current_rate": 0,
+                "next_rate": 0,
+                "total_cost_per_bar": 0,
+                "supply_factor": 0,
+                "progressive_factor": 0,
+                "effective_supply": 0,
+                "pricing_source": "unavailable",
+                "pricing_degraded": True,
+                "pricing_status_message": "钱庄汇率数据暂时不可用，已暂时关闭兑换。",
+                "exchange_available": False,
+                "today_count": 0,
+                "manor_silver": getattr(manor, "silver", 0),
+            },
             log_message=f"load bank info failed: manor_id={manor_id}",
         )
+        if context["bank_info"].get("pricing_degraded"):
+            _record_trade_issue(
+                context,
+                section="bank",
+                message=context["bank_info"].get("pricing_status_message") or "钱庄部分数据暂时不可用。",
+            )
         context["troop_bank_capacity"] = 5000
         context["troop_bank_used"] = 0
         context["troop_bank_remaining"] = 5000
