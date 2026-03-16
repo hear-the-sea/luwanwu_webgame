@@ -11,33 +11,7 @@ from gameplay.services.raid import combat as combat_pkg
 
 from ....models import InventoryItem, ItemTemplate, Manor, ResourceEvent
 from ...resources import log_resource_gain
-
-
-def _normalize_mapping(raw: Any) -> Dict[str, Any]:
-    if isinstance(raw, dict):
-        return raw
-    return {}
-
-
-def _coerce_positive_int(raw: Any, default: int = 0) -> int:
-    try:
-        parsed = int(raw)
-    except (TypeError, ValueError):
-        parsed = default
-    return parsed if parsed > 0 else 0
-
-
-def _normalize_positive_int_mapping(raw: Any) -> Dict[str, int]:
-    data = _normalize_mapping(raw)
-    normalized: Dict[str, int] = {}
-    for key, value in data.items():
-        normalized_key = str(key or "").strip()
-        if not normalized_key:
-            continue
-        normalized_value = _coerce_positive_int(value, 0)
-        if normalized_value > 0:
-            normalized[normalized_key] = normalized_value
-    return normalized
+from .troops import _coerce_positive_int, _normalize_mapping, _normalize_positive_int_mapping
 
 
 def _calculate_resource_loot(defender: Manor, loot_percent: float) -> Dict[str, int]:

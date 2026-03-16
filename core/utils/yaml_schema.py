@@ -530,7 +530,7 @@ def validate_mission_templates(
                             f"{path}.enemy_troops",
                             f"troop key '{troop_key}' not found in troop_templates.yaml",
                         )
-                    if not isinstance(count, (int, float)) or count < 0:
+                    if isinstance(count, bool) or not isinstance(count, (int, float)) or count < 0:
                         result.add(
                             file,
                             f"{path}.enemy_troops.{troop_key}",

@@ -150,15 +150,14 @@ def _check_login_attempts(request, username: str = None) -> tuple[bool, int]:
 
 def _normalize_lock_ttl(lock_key: str) -> int:
     if not hasattr(cache, "ttl"):
-        local_lock = _local_login_cache_get(lock_key)
-        return LOGIN_LOCKOUT_DURATION if local_lock is not None else LOGIN_LOCKOUT_DURATION
+        return LOGIN_LOCKOUT_DURATION
     try:
         ttl = cache.ttl(lock_key)
     except Exception:
         logger.warning("Failed to read lock TTL from cache: key=%s", lock_key, exc_info=True)
-        return LOGIN_LOCKOUT_DURATION if _local_login_cache_get(lock_key) is not None else LOGIN_LOCKOUT_DURATION
+        return LOGIN_LOCKOUT_DURATION
     if ttl is None:
-        return LOGIN_LOCKOUT_DURATION if _local_login_cache_get(lock_key) is not None else LOGIN_LOCKOUT_DURATION
+        return LOGIN_LOCKOUT_DURATION
     try:
         ttl_int = int(ttl)
     except (TypeError, ValueError):
@@ -235,14 +234,17 @@ def _clear_login_attempts(request, username: str = None, *, clear_ip: bool = Tru
         _safe_cache_delete(username_lock_key)
 
 
+_CACHE_MISS = object()
+
+
 def _safe_cache_get(key: str, default=None):
     local_value = _local_login_cache_get(key, default)
     try:
-        cached = cache.get(key, default)
+        cached = cache.get(key, _CACHE_MISS)
     except Exception:
         logger.warning("Failed to read cache key: %s", key, exc_info=True)
         return local_value
-    if cached is default:
+    if cached is _CACHE_MISS:
         return local_value
     if cached is not None:
         _local_login_cache_set(key, cached, timeout=max(LOGIN_ATTEMPT_WINDOW, LOGIN_LOCKOUT_DURATION))

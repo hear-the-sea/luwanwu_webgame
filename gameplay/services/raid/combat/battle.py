@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import math
 from datetime import timedelta
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 
 from django.db import transaction
 from django.utils import timezone
@@ -36,35 +36,9 @@ from .loot import _apply_loot, _calculate_loot
 from .messaging import _send_raid_battle_messages  # noqa: F401
 from .runs import _add_troops_batch, _finalize_raid_retreat
 from .travel import _dismiss_marching_raids_if_protected
+from .troops import _coerce_positive_int, _normalize_mapping, _normalize_positive_int_mapping
 
 logger = logging.getLogger(__name__)
-
-
-def _normalize_mapping(raw: Any) -> Dict[str, Any]:
-    if isinstance(raw, dict):
-        return raw
-    return {}
-
-
-def _coerce_positive_int(raw: Any, default: int = 0) -> int:
-    try:
-        parsed = int(raw)
-    except (TypeError, ValueError):
-        parsed = default
-    return parsed if parsed > 0 else 0
-
-
-def _normalize_positive_int_mapping(raw: Any) -> Dict[str, int]:
-    data = _normalize_mapping(raw)
-    normalized: Dict[str, int] = {}
-    for key, value in data.items():
-        normalized_key = str(key or "").strip()
-        if not normalized_key:
-            continue
-        normalized_value = _coerce_positive_int(value, 0)
-        if normalized_value > 0:
-            normalized[normalized_key] = normalized_value
-    return normalized
 
 
 def _load_locked_raid_run(run_pk: int) -> Optional[RaidRun]:

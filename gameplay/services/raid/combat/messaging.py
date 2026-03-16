@@ -2,34 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
-
 from gameplay.services.raid import combat as combat_pkg
 
 from ...utils.messages import create_message
 from .loot import _format_battle_rewards_description, _format_capture_description, _format_loot_description
-
-
-def _normalize_mapping(raw: Any) -> Dict[str, Any]:
-    if isinstance(raw, dict):
-        return raw
-    return {}
-
-
-def _normalize_positive_int_mapping(raw: Any) -> Dict[str, int]:
-    data = _normalize_mapping(raw)
-    normalized: Dict[str, int] = {}
-    for key, value in data.items():
-        normalized_key = str(key or "").strip()
-        if not normalized_key:
-            continue
-        try:
-            parsed = int(value)
-        except (TypeError, ValueError):
-            continue
-        if parsed > 0:
-            normalized[normalized_key] = parsed
-    return normalized
+from .troops import _normalize_mapping, _normalize_positive_int_mapping
 
 
 def _send_raid_battle_messages(run) -> None:
