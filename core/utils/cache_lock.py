@@ -144,6 +144,18 @@ def acquire_best_effort_lock(
             return True, True, lock_token
         return False, True, None
     except Exception as exc:
+        if not allow_local_fallback:
+            logger.warning(
+                "%s cache lock unavailable (fail-closed): key=%s degraded=True error=%s",
+                log_context,
+                key,
+                exc,
+                exc_info=True,
+            )
+            from core.utils.task_monitoring import increment_degraded_counter
+
+            increment_degraded_counter("cache_lock_fail_closed")
+            return False, False, None
         logger.warning(
             "%s cache lock unavailable, fallback to local lock: key=%s error=%s",
             log_context,
@@ -151,8 +163,6 @@ def acquire_best_effort_lock(
             exc,
             exc_info=True,
         )
-        if not allow_local_fallback:
-            return False, False, None
 
     now = time.monotonic()
     with _LOCAL_LOCKS_GUARD:
@@ -161,6 +171,9 @@ def acquire_best_effort_lock(
             return False, False, None
 
         _LOCAL_LOCKS[key] = (lock_token, now + timeout)
+        from core.utils.task_monitoring import increment_degraded_counter
+
+        increment_degraded_counter("local_lock_fallback")
         if len(_LOCAL_LOCKS) > _LOCAL_LOCKS_MAX_SIZE:
             _cleanup_expired_local_locks(now)
             if len(_LOCAL_LOCKS) > _LOCAL_LOCKS_MAX_SIZE:

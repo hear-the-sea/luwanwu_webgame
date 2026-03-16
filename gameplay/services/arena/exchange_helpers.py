@@ -1,6 +1,18 @@
 from __future__ import annotations
 
-from django.db.models import Sum
+import logging
+from dataclasses import dataclass
+
+from django.db import transaction
+from django.db.models import F, Sum
+
+from gameplay.models import ArenaExchangeRecord, Manor, Message
+from gameplay.services.inventory import add_item_to_inventory_locked
+from gameplay.services.resources import grant_resources_locked
+from gameplay.services.utils.messages import create_message
+
+from . import helpers as _arena_helpers
+from .rewards import ArenaRewardDefinition, get_arena_reward_definition
 
 
 def normalize_exchange_quantity(quantity: int) -> int:
@@ -140,3 +152,103 @@ def send_exchange_success_message(
             exc,
             exc_info=True,
         )
+
+
+_logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ArenaExchangeResult:
+    reward: ArenaRewardDefinition
+    quantity: int
+    total_cost: int
+    credited_resources: dict[str, int]
+    overflow_resources: dict[str, int]
+    granted_items: dict[str, int]
+    random_granted_items: dict[str, int]
+
+
+@transaction.atomic
+def exchange_arena_reward(manor: Manor, reward_key: str, quantity: int = 1) -> ArenaExchangeResult:
+    reward = get_arena_reward_definition(reward_key)
+    if not reward:
+        raise ValueError("兑换项不存在")
+
+    normalized_quantity = normalize_exchange_quantity(quantity)
+
+    locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
+    total_cost = reward.cost_coins * normalized_quantity
+    if locked_manor.arena_coins < total_cost:
+        raise ValueError("角斗币不足")
+
+    day_start, day_end = _arena_helpers.today_bounds()
+    ensure_exchange_daily_limit(
+        arena_exchange_record_model=ArenaExchangeRecord,
+        locked_manor=locked_manor,
+        reward=reward,
+        normalized_quantity=normalized_quantity,
+        day_start=day_start,
+        day_end=day_end,
+    )
+
+    locked_manor.arena_coins = F("arena_coins") - total_cost
+    locked_manor.save(update_fields=["arena_coins"])
+
+    reward_resources = scale_reward_resources(reward.resources, normalized_quantity)
+    credited_resources, overflow_resources = grant_resources_locked(
+        locked_manor,
+        reward_resources,
+        note=f"竞技场兑换：{reward.name}",
+        sync_production=False,
+    )
+
+    fixed_item_grants = scale_reward_items(reward.items, normalized_quantity)
+    random_item_grants = _arena_helpers.resolve_random_reward_items(reward.random_items, normalized_quantity)
+    granted_items = grant_exchange_items_locked(
+        fixed_item_grants=fixed_item_grants,
+        random_item_grants=random_item_grants,
+        add_item_to_inventory_locked=add_item_to_inventory_locked,
+        locked_manor=locked_manor,
+    )
+
+    payload = build_exchange_payload(
+        credited_resources=credited_resources,
+        overflow_resources=overflow_resources,
+        granted_items=granted_items,
+    )
+    create_exchange_record(
+        arena_exchange_record_model=ArenaExchangeRecord,
+        locked_manor=locked_manor,
+        reward=reward,
+        total_cost=total_cost,
+        normalized_quantity=normalized_quantity,
+        payload=payload,
+    )
+
+    summary = build_exchange_summary(
+        credited_resources=credited_resources,
+        overflow_resources=overflow_resources,
+        granted_items=granted_items,
+    )
+
+    send_exchange_success_message(
+        create_message_func=create_message,
+        message_kind=Message.Kind.REWARD,
+        locked_manor=locked_manor,
+        reward=reward,
+        total_cost=total_cost,
+        normalized_quantity=normalized_quantity,
+        summary=summary,
+        logger=_logger,
+    )
+
+    manor.refresh_from_db(fields=["arena_coins", "grain", "silver"])
+    return ArenaExchangeResult(
+        reward=reward,
+        quantity=normalized_quantity,
+        total_cost=total_cost,
+        credited_resources=credited_resources,
+        overflow_resources=overflow_resources,
+        granted_items=granted_items,
+        random_granted_items=random_item_grants,
+    )

@@ -412,6 +412,34 @@ tests/
 - 修改了 WebSocket 消费者或 Channels 广播逻辑
 - 修改了 Celery 任务的重试/事务边界
 
+### 集成测试门禁（合并前必读）
+
+以下模块属于**高风险区域**，改动后**必须**配套集成测试才能合并，hermetic 单元测试无法覆盖其真实语义：
+
+| 模块 / 路径 | 风险类型 | 原因 |
+|-------------|----------|------|
+| `core/utils/cache_lock.py` | 分布式锁 | `locmem` 锁是进程内的，无法验证跨进程/跨实例的锁互斥行为 |
+| `gameplay/services/arena/` | 并发状态机 | arena 回合推进依赖 `select_for_update` 行锁，SQLite 下该语义是 no-op |
+| `gameplay/models/arena.py` | DB 约束变更 | MySQL 约束（唯一索引、外键、CHECK）在 SQLite 下部分不生效 |
+| `common/utils/celery.py` | 任务调度 | broker 相关行为（重试、路由、序列化）仅在真实 Redis broker 下可验证 |
+| 任何含 `select_for_update()` 的路径 | 行锁并发 | SQLite 无行锁，并发冲突无法在 hermetic 环境复现 |
+| 任何含分布式锁（`cache_lock`）的路径 | 跨进程锁 | `locmem` cache 锁是单进程的，分布式互斥需要真实 Redis |
+
+**hermetic 单元测试（SQLite）无法验证的语义：**
+
+- `select_for_update()` 在 SQLite 下是 no-op，行锁并发冲突不会被触发
+- 缓存锁（`cache_lock`）在 `locmem` 下是进程内锁，跨进程/跨实例互斥无法验证
+- Celery broker 相关行为（任务入队、路由、序列化、broker 不可用降级）
+- MySQL 特定约束（唯一索引冲突、`SELECT ... FOR UPDATE` 死锁检测等）
+- Channels / WebSocket 真实广播到多个消费者
+
+**本地运行集成测试：**
+
+```bash
+# 需要先启动 MySQL 和 Redis（推荐 Docker Compose）
+DJANGO_TEST_USE_ENV_SERVICES=1 make test-integration
+```
+
 ### 测试数据库
 
 - 默认测试道会自动使用内存 SQLite、`locmem` cache、in-memory channel layer 和 memory Celery backend，无需额外配置。
@@ -607,6 +635,60 @@ tmux send-keys -t webgame:2 'make beat' C-m
 # 连接会话
 tmux attach -t webgame
 ```
+
+---
+
+---
+
+## 异步任务调度约束
+
+### safe_apply_async 语义
+
+`safe_apply_async` 和 `safe_apply_async_with_dedup`（位于 `common/utils/celery.py`）采用 **best-effort** 语义：
+
+- **dispatch 成功**：返回 `True`，任务已进入 broker 队列
+- **dispatch 失败**（broker 不可用等基础设施问题）：返回 `False`，同时记录 `celery_dispatch_failed` 降级计数，**不抛异常**
+- **`raise_on_failure=True`**：仅在调用方明确要求强制保证时使用，此时 dispatch 失败会重新抛出原始异常
+
+**调用方职责**：检查返回值，根据业务场景决定失败时的处理方式。
+
+### 两类使用场景
+
+| 场景 | dispatch 失败时 | 补偿机制 |
+|------|-----------------|----------|
+| 允许降级（如通知、消息推送、刷新缓存） | 静默跳过，仅记录降级计数 | 无需补偿，下次请求自然触发 |
+| 必须执行（如状态机推进、资源扣减） | **必须同步降级执行** | 调用方负责提供降级路径 |
+
+对于"必须执行"场景，推荐模式：
+
+```python
+dispatched = safe_apply_async(my_task, args=[...], logger=logger)
+if not dispatched:
+    # broker 不可用，同步降级执行
+    my_task_logic(...)
+```
+
+### safe_apply_async_with_dedup 的去重语义
+
+`safe_apply_async_with_dedup` 在 dispatch 前通过 `cache.add(dedup_key, ...)` 设置去重锁：
+
+- 去重锁获取成功且 dispatch 成功：返回 `True`，锁保留到 `dedup_timeout` 超时
+- 去重锁获取失败（key 已存在）：表示窗口内已有相同任务 dispatch，**直接返回 `True`**（幂等跳过）
+- 去重锁获取成功但 dispatch 失败：**自动回滚去重锁**（`cache.delete`），避免窗口内后续重试被误判为重复
+
+### 降级计数观测
+
+当 `dispatch 失败` 时，`celery_dispatch_failed` 降级计数器会自动递增（通过 `core.utils.task_monitoring.increment_degraded_counter`）。
+
+```bash
+# 查询今日 Celery dispatch 失败次数（需要 Redis 可用）
+python manage.py shell -c "
+from core.utils.task_monitoring import get_degraded_counter
+print(get_degraded_counter('celery_dispatch_failed'))
+"
+```
+
+> **注意**：该计数器存储在 Redis cache 中。若 Redis 本身不可用，计数器读取也会失败——这种情况下应直接检查 broker 连通性（`celery -A config inspect ping`）。
 
 ---
 

@@ -496,7 +496,7 @@ def test_exchange_arena_reward_gladiator_chest_grants_silver_and_weighted_item(m
     manor.save(update_fields=["arena_coins"])
     initial_silver = manor.silver
 
-    monkeypatch.setattr("gameplay.services.arena.core.random.random", lambda: 0.0)
+    monkeypatch.setattr("gameplay.services.arena.helpers.random.random", lambda: 0.0)
     result = exchange_arena_reward(manor, "gladiator_chest", quantity=1)
 
     manor.refresh_from_db()
@@ -627,7 +627,7 @@ def test_exchange_arena_reward_keeps_success_when_message_fails(monkeypatch):
     manor.save(update_fields=["arena_coins"])
 
     monkeypatch.setattr(
-        "gameplay.services.arena.core.create_message",
+        "gameplay.services.arena.exchange_helpers.create_message",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
     )
 

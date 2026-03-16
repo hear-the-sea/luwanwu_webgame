@@ -44,7 +44,7 @@ def test_sync_daily_participation_counter_locked_backfills_from_today_entries():
         round_interval_seconds=600,
     )
     second_tournament = ArenaTournament.objects.create(
-        status=ArenaTournament.Status.RECRUITING,
+        status=ArenaTournament.Status.RUNNING,
         player_limit=2,
         round_interval_seconds=600,
     )

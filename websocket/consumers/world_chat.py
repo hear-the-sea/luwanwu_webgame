@@ -229,14 +229,26 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
         try:
             return cache.get(key)
         except Exception as exc:
-            logger.warning("World chat cache.get failed: key=%s error=%s", key, exc, exc_info=True)
+            logger.warning(
+                "World chat cache.get failed: key=%s error=%s",
+                key,
+                exc,
+                exc_info=True,
+                extra={"degraded": True, "component": "world_chat_cache"},
+            )
             return None
 
     def _safe_cache_set(self, key: str, value: str, timeout: int) -> None:
         try:
             cache.set(key, value, timeout=timeout)
         except Exception as exc:
-            logger.warning("World chat cache.set failed: key=%s error=%s", key, exc, exc_info=True)
+            logger.warning(
+                "World chat cache.set failed: key=%s error=%s",
+                key,
+                exc,
+                exc_info=True,
+                extra={"degraded": True, "component": "world_chat_cache"},
+            )
 
     @database_sync_to_async
     def _get_display_name(self, user_id: int) -> str:

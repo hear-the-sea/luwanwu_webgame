@@ -104,6 +104,7 @@ module = [
     "accounts.utils",
     "battle.combatants",
     "battle.simulation_core",
+    "common.utils.celery",
     "core.middleware.*",
     "core.utils.cache_lock",
     "core.utils.degradation",
@@ -121,5 +122,6 @@ module = [
     "gameplay.services.runtime_configs",
     "guilds.constants",
     "trade.selectors",
+    "trade.services.bank_service",
 ]
 disallow_untyped_defs = true

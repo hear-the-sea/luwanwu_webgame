@@ -11,6 +11,7 @@
 import logging
 import uuid
 from datetime import timedelta
+from typing import Any
 
 from django.core.cache import cache
 from django.db import transaction
@@ -48,26 +49,32 @@ from .bank_pricing import (  # noqa: F401
 logger = logging.getLogger(__name__)
 
 
-def _safe_cache_get(key: str, default=None):
+def _safe_cache_get(key: str, default: Any = None) -> Any:
     try:
         return cache.get(key, default)
     except Exception:
-        logger.warning("Failed to read cache key: %s", key, exc_info=True)
+        logger.warning(
+            "Failed to read cache key: %s", key, exc_info=True, extra={"degraded": True, "component": "bank_cache"}
+        )
         return default
 
 
-def _safe_cache_set(key: str, value, timeout: int) -> None:
+def _safe_cache_set(key: str, value: Any, timeout: int) -> None:
     try:
         cache.set(key, value, timeout=timeout)
     except Exception:
-        logger.warning("Failed to write cache key: %s", key, exc_info=True)
+        logger.warning(
+            "Failed to write cache key: %s", key, exc_info=True, extra={"degraded": True, "component": "bank_cache"}
+        )
 
 
-def _safe_cache_add(key: str, value, timeout: int) -> bool:
+def _safe_cache_add(key: str, value: Any, timeout: int) -> bool:
     try:
         return bool(cache.add(key, value, timeout=timeout))
     except Exception:
-        logger.warning("Failed to add cache key: %s", key, exc_info=True)
+        logger.warning(
+            "Failed to add cache key: %s", key, exc_info=True, extra={"degraded": True, "component": "bank_cache"}
+        )
         return False
 
 
@@ -75,10 +82,12 @@ def _safe_cache_delete(key: str) -> None:
     try:
         cache.delete(key)
     except Exception:
-        logger.warning("Failed to delete cache key: %s", key, exc_info=True)
+        logger.warning(
+            "Failed to delete cache key: %s", key, exc_info=True, extra={"degraded": True, "component": "bank_cache"}
+        )
 
 
-def _strict_cache_get(key: str, default=None):
+def _strict_cache_get(key: str, default: Any = None) -> Any:
     try:
         return cache.get(key, default)
     except Exception as exc:
@@ -86,7 +95,7 @@ def _strict_cache_get(key: str, default=None):
         raise GoldBarPricingUnavailableError() from exc
 
 
-def _strict_cache_add(key: str, value, timeout: int) -> bool:
+def _strict_cache_add(key: str, value: Any, timeout: int) -> bool:
     try:
         return bool(cache.add(key, value, timeout=timeout))
     except Exception as exc:
@@ -111,7 +120,7 @@ def _release_cache_lock_if_owner(lock_key: str, lock_token: str) -> None:
         _safe_cache_delete(lock_key)
 
 
-def _normalize_supply_value(raw_value, *, source: str, fail_closed: bool) -> int:
+def _normalize_supply_value(raw_value: Any, *, source: str, fail_closed: bool) -> int:
     try:
         return max(0, int(raw_value))
     except (TypeError, ValueError) as exc:
@@ -191,7 +200,12 @@ def _get_effective_gold_supply_data(*, fail_closed: bool = False) -> tuple[int, 
         _safe_cache_set(SUPPLY_STALE_CACHE_KEY, total, SUPPLY_STALE_CACHE_TTL)
         return total, "db"
     except Exception as e:
-        logger.warning("Failed to query gold supply: %s", e, exc_info=True)
+        logger.warning(
+            "Failed to query gold supply: %s",
+            e,
+            exc_info=True,
+            extra={"degraded": True, "component": "bank_gold_supply"},
+        )
         if fail_closed:
             raise GoldBarPricingUnavailableError() from e
         stale = _safe_cache_get(SUPPLY_STALE_CACHE_KEY)

@@ -11,6 +11,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from gameplay.services.raid.combat import runs as combat_runs
+from gameplay.services.raid.combat import troop_ops
 
 
 def test_send_raid_incoming_message_builds_body(monkeypatch):
@@ -58,7 +59,7 @@ def test_return_surviving_troops_returns_all_when_no_report(monkeypatch):
     def _add_batch(_manor, payload):
         called["payload"] = payload
 
-    monkeypatch.setattr(combat_runs, "_add_troops_batch", _add_batch)
+    monkeypatch.setattr(troop_ops, "_add_troops_batch", _add_batch)
 
     run = SimpleNamespace(attacker=object(), troop_loadout={"inf": 5}, battle_report=None)
     combat_runs._return_surviving_troops(run)
@@ -74,7 +75,7 @@ def test_return_surviving_troops_filters_casualties(monkeypatch):
     def _add_batch(_manor, payload):
         called["payload"] = payload
 
-    monkeypatch.setattr(combat_runs, "_add_troops_batch", _add_batch)
+    monkeypatch.setattr(troop_ops, "_add_troops_batch", _add_batch)
 
     report = SimpleNamespace(
         losses={
@@ -98,7 +99,7 @@ def test_extract_raid_troops_lost_handles_non_mapping_losses(monkeypatch):
     monkeypatch.setattr("battle.troops.load_troop_templates", lambda: {"inf": {"label": "步兵"}})
 
     report = SimpleNamespace(losses=["not-a-mapping"])
-    assert combat_runs._extract_raid_troops_lost({"inf": 3}, report) == {}
+    assert troop_ops._extract_raid_troops_lost({"inf": 3}, report) == {}
 
 
 def test_return_surviving_troops_ignores_invalid_loadout_shape(monkeypatch):
@@ -108,7 +109,7 @@ def test_return_surviving_troops_ignores_invalid_loadout_shape(monkeypatch):
         called["count"] += 1
         called["payload"] = payload
 
-    monkeypatch.setattr(combat_runs, "_add_troops_batch", _add_batch)
+    monkeypatch.setattr(troop_ops, "_add_troops_batch", _add_batch)
 
     run = SimpleNamespace(attacker=object(), troop_loadout=["bad-shape"], battle_report=None)
     combat_runs._return_surviving_troops(run)
@@ -124,7 +125,7 @@ def test_deduct_troops_raises_when_missing(monkeypatch):
             )
         )
 
-    monkeypatch.setattr(combat_runs, "PlayerTroop", _PlayerTroop)
+    monkeypatch.setattr(troop_ops, "PlayerTroop", _PlayerTroop)
 
     with pytest.raises(ValueError, match="没有该类型的护院"):
         combat_runs._deduct_troops(SimpleNamespace(), {"inf": 1})
@@ -212,7 +213,7 @@ def test_bulk_create_troops_with_fallback_upserts_without_losing_counts(monkeypa
                 raise IntegrityError("duplicate key")
             return SimpleNamespace(manor=manor, troop_template=troop_template, count=count)
 
-    monkeypatch.setattr(combat_runs, "PlayerTroop", type("_PlayerTroop", (), {"objects": _Objects()}))
+    monkeypatch.setattr(troop_ops, "PlayerTroop", type("_PlayerTroop", (), {"objects": _Objects()}))
 
     to_create = [
         SimpleNamespace(manor="m", troop_template=SimpleNamespace(key="existing"), count=2),

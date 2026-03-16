@@ -4,7 +4,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import IntegrityError
-from django.test import RequestFactory
+from django.test import RequestFactory, override_settings
 from django.urls import reverse
 
 from accounts import views as account_views
@@ -284,8 +284,25 @@ def test_check_login_attempts_fallback_ttl_when_cache_ttl_invalid(monkeypatch):
 
 
 @pytest.mark.django_db
-def test_increment_attempt_counter_fallback_resets_on_non_numeric_cache_value(monkeypatch):
+@override_settings(DEBUG=False)
+def test_increment_attempt_counter_fail_closed_on_incr_error_in_production(monkeypatch):
+    """生产环境下 cache.incr 失败时 fail-closed，返回 LOGIN_ATTEMPT_LIMIT 触发锁定。"""
     key = "login_attempts:test-corrupt"
+
+    monkeypatch.setattr(account_views.cache, "add", lambda *args, **kwargs: False)
+    monkeypatch.setattr(
+        account_views.cache, "incr", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("no incr"))
+    )
+
+    attempts = account_views._increment_attempt_counter(key)
+    assert attempts == account_views.LOGIN_ATTEMPT_LIMIT
+
+
+@pytest.mark.django_db
+@override_settings(DEBUG=True)
+def test_increment_attempt_counter_debug_fallback_resets_on_non_numeric_cache_value(monkeypatch):
+    """DEBUG 模式下 cache.incr 失败 + 非数字缓存值时，本地 fallback 重置为 1。"""
+    key = "login_attempts:test-corrupt-debug"
     set_mock = Mock()
 
     monkeypatch.setattr(account_views.cache, "add", lambda *args, **kwargs: False)
@@ -302,22 +319,17 @@ def test_increment_attempt_counter_fallback_resets_on_non_numeric_cache_value(mo
 
 
 @pytest.mark.django_db
-def test_increment_attempt_counter_fallback_tolerates_cache_read_write_errors(monkeypatch):
+@override_settings(DEBUG=False)
+def test_increment_attempt_counter_fail_closed_when_cache_add_raises_in_production(monkeypatch):
+    """生产环境下 cache.add 抛异常（added=None）时 fail-closed，返回 LOGIN_ATTEMPT_LIMIT。"""
     key = "login_attempts:test-cache-error"
 
-    monkeypatch.setattr(account_views.cache, "add", lambda *args, **kwargs: False)
     monkeypatch.setattr(
-        account_views.cache, "incr", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("no incr"))
-    )
-    monkeypatch.setattr(
-        account_views.cache, "get", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("read fail"))
-    )
-    monkeypatch.setattr(
-        account_views.cache, "set", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("write fail"))
+        account_views.cache, "add", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("add fail"))
     )
 
     attempts = account_views._increment_attempt_counter(key)
-    assert attempts == 1
+    assert attempts == account_views.LOGIN_ATTEMPT_LIMIT
 
 
 @pytest.mark.django_db
@@ -339,7 +351,9 @@ def test_check_login_attempts_uses_local_lock_when_cache_get_errors(monkeypatch)
 
 
 @pytest.mark.django_db
-def test_record_failed_attempt_uses_local_counter_when_cache_ops_fail(monkeypatch):
+@override_settings(DEBUG=False)
+def test_record_failed_attempt_fail_closed_when_cache_ops_fail_in_production(monkeypatch):
+    """生产环境下 cache.add 抛异常时 fail-closed：首次尝试即返回 LOGIN_ATTEMPT_LIMIT 并触发锁定。"""
     request = _build_login_request(remote_addr="10.0.0.13")
     account_views._LOCAL_LOGIN_CACHE.clear()
     monkeypatch.setattr(account_views, "LOGIN_ATTEMPT_LIMIT", 2)
@@ -350,15 +364,11 @@ def test_record_failed_attempt_uses_local_counter_when_cache_ops_fail(monkeypatc
         "add",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache add down")),
     )
-    monkeypatch.setattr(
-        account_views.cache,
-        "get",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache get down")),
-    )
 
-    assert account_views._record_failed_attempt(request, "tester_local_lock") == 1
-    assert account_views._record_failed_attempt(request, "tester_local_lock") == 2
-    assert account_views._check_login_attempts(request, "tester_local_lock")[0] is True
+    # 首次 cache.add 失败 → fail-closed → 返回 LOGIN_ATTEMPT_LIMIT(2) → 触发锁定
+    result = account_views._record_failed_attempt(request, "tester_fail_closed")
+    assert result == account_views.LOGIN_ATTEMPT_LIMIT
+    assert account_views._check_login_attempts(request, "tester_fail_closed")[0] is True
 
 
 @pytest.mark.django_db

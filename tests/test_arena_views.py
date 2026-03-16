@@ -189,7 +189,7 @@ def test_arena_exchange_view_shows_drawn_gladiator_item(arena_client, monkeypatc
     _ensure_gladiator_item_templates()
     manor.arena_coins = 600
     manor.save(update_fields=["arena_coins"])
-    monkeypatch.setattr("gameplay.services.arena.core.random.random", lambda: 0.0)
+    monkeypatch.setattr("gameplay.services.arena.helpers.random.random", lambda: 0.0)
 
     response = client.post(
         reverse("gameplay:arena_exchange"),

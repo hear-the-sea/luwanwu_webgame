@@ -16,7 +16,14 @@ from django.views.decorators.http import require_GET
 from core.tasks import CELERY_BEAT_HEARTBEAT_CACHE_KEY, celery_health_ping
 from core.utils.degradation import get_degradation_counts
 from core.utils.network import get_client_ip, is_trusted_proxy_ip
-from core.utils.task_monitoring import get_task_metrics
+from core.utils.task_monitoring import get_degraded_counter, get_task_metrics
+
+_DEGRADED_COMPONENTS = [
+    "cache_lock_fail_closed",
+    "local_lock_fallback",
+    "login_security_degraded",
+    "celery_dispatch_failed",
+]
 
 
 def _maybe_debug_error(exc: Exception) -> str | None:
@@ -218,5 +225,10 @@ def health_ready(request):
     task_metrics = get_task_metrics()
     if task_metrics:
         payload["task_metrics"] = task_metrics
+
+    degraded_counters = {c: get_degraded_counter(c) for c in _DEGRADED_COMPONENTS}
+    nonzero_degraded = {c: v for c, v in degraded_counters.items() if v > 0}
+    if nonzero_degraded:
+        payload["degraded_counters"] = nonzero_degraded
 
     return JsonResponse(payload, status=200 if ok else 503)

@@ -203,3 +203,47 @@ def reset_task_metrics() -> None:
                 cache.delete(key)
             except Exception:
                 pass
+
+
+# --- Degraded path counters ---
+
+_DEGRADED_COUNTER_TTL = 86400  # 24 hours
+
+
+def increment_degraded_counter(component: str) -> None:
+    """
+    Increment the degraded-path counter for a named component.
+
+    Counters are keyed by component name and reset daily.
+    Safe to call from any context; cache failures are silently ignored.
+    """
+    from django.utils import timezone
+
+    today = timezone.now().date().isoformat()
+    key = f"degraded:{component}:{today}"
+    try:
+        try:
+            cache.incr(key)
+        except ValueError:
+            cache.set(key, 1, timeout=_DEGRADED_COUNTER_TTL)
+        except Exception:
+            cache.set(key, 1, timeout=_DEGRADED_COUNTER_TTL)
+    except Exception:
+        pass  # Never let metrics fail the caller
+
+
+def get_degraded_counter(component: str, *, date_str: str | None = None) -> int:
+    """
+    Read the degraded-path counter for a named component.
+    Returns 0 if counter is missing or cache is unavailable.
+    """
+    from django.utils import timezone
+
+    if date_str is None:
+        date_str = timezone.now().date().isoformat()
+    key = f"degraded:{component}:{date_str}"
+    try:
+        value = cache.get(key)
+        return int(value or 0)
+    except Exception:
+        return 0

@@ -33,6 +33,13 @@ class ArenaTournament(models.Model):
         verbose_name = "竞技场赛事"
         verbose_name_plural = "竞技场赛事"
         ordering = ("-created_at",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=["status"],
+                condition=models.Q(status="recruiting"),
+                name="unique_recruiting_tournament",
+            ),
+        ]
         indexes = [
             models.Index(fields=["status", "next_round_at"], name="arena_tour_status_next_idx"),
         ]

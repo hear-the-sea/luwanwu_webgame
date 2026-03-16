@@ -82,7 +82,11 @@ def refresh_mission_runs(manor: Manor, *, prefer_async: bool = False) -> None:
         try:
             from gameplay.tasks import complete_mission_task
         except Exception:
-            logger.warning("Failed to import mission task, falling back to sync refresh", exc_info=True)
+            logger.warning(
+                "Failed to import mission task, falling back to sync refresh",
+                exc_info=True,
+                extra={"degraded": True, "component": "mission_task_import"},
+            )
         else:
             sync_run_ids = []
             for run_id in due_run_ids:
@@ -283,6 +287,7 @@ def _build_mission_drops_with_salvage(locked_run: MissionRun, report: Any, playe
             getattr(report, "id", None),
             exc,
             exc_info=True,
+            extra={"degraded": True, "component": "mission_battle_salvage", "run_id": locked_run.id},
         )
 
     return drops
@@ -334,6 +339,7 @@ def _send_mission_report_message(locked_run: MissionRun, report: Any) -> None:
             getattr(report, "id", None),
             exc,
             exc_info=True,
+            extra={"degraded": True, "component": "mission_notification", "run_id": locked_run.id},
         )
 
 
@@ -639,7 +645,11 @@ def schedule_mission_completion(run: MissionRun) -> None:
     try:
         from gameplay.tasks import complete_mission_task
     except Exception:
-        logger.warning("Unable to import complete_mission_task; relying on sync fallback when due", exc_info=True)
+        logger.warning(
+            "Unable to import complete_mission_task; relying on sync fallback when due",
+            exc_info=True,
+            extra={"degraded": True, "component": "mission_task_import"},
+        )
         if countdown <= 0:
             finalize_mission_run(run)
         return

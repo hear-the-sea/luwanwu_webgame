@@ -54,6 +54,18 @@ jobs:
           name: coverage-unit
           path: coverage-unit.xml
 
+  # ── 集成测试门禁 ──────────────────────────────────────────────────────────
+  # 以下类型的 PR 改动必须通过本 job 才能合并（hermetic 单元测试无法覆盖真实语义）：
+  #
+  #   - core/utils/cache_lock.py          → 分布式锁行为（locmem 是进程内锁）
+  #   - gameplay/services/arena/**        → 并发状态机（依赖 select_for_update 行锁）
+  #   - gameplay/models/arena.py          → DB 约束变更（MySQL 约束在 SQLite 下部分不生效）
+  #   - common/utils/celery.py            → 任务调度（broker 行为需真实 Redis）
+  #   - 任何含 select_for_update() 的路径  → SQLite 下 select_for_update 是 no-op
+  #   - 任何含分布式锁（cache_lock）的路径  → 跨进程互斥需真实 Redis
+  #
+  # 本地等价命令：DJANGO_TEST_USE_ENV_SERVICES=1 make test-integration
+  # ─────────────────────────────────────────────────────────────────────────
   integration-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 30

@@ -4,6 +4,7 @@ import logging
 import time
 from threading import Lock
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -185,11 +186,47 @@ def _increment_attempt_counter(key: str) -> int:
             _local_login_cache_set(key, attempts, timeout=LOGIN_ATTEMPT_WINDOW)
             return attempts
         except Exception:
-            logger.warning("Failed to increment login attempts cache key: %s", key, exc_info=True)
+            logger.warning(
+                "Failed to increment login attempts cache key: key=%s degraded=True",
+                key,
+                exc_info=True,
+            )
+            if not settings.DEBUG:
+                # 生产环境：缓存故障时 fail-closed，返回限制值触发锁定
+                logger.warning(
+                    "Login attempt counter cache unavailable: key=%s degraded=True fallback_mode=fail_closed",
+                    key,
+                    exc_info=False,
+                )
+                from core.utils.task_monitoring import increment_degraded_counter
 
-    if added is None:
-        logger.warning("Fallback to local login attempt counter path: key=%s", key)
+                increment_degraded_counter("login_security_degraded")
+                return LOGIN_ATTEMPT_LIMIT
+            # DEBUG 模式：回落到本地计数，避免阻断开发调试
+            logger.warning("Fallback to local login attempt counter path: key=%s", key)
+            attempts = 1
+            try:
+                raw_attempts = _safe_cache_get(key, 0)
+                attempts = int(raw_attempts or 0) + 1
+            except (TypeError, ValueError):
+                attempts = 1
+            _safe_cache_set(key, attempts, timeout=LOGIN_ATTEMPT_WINDOW)
+            return attempts
 
+    # added is None：cache.add 本身抛异常
+    logger.warning(
+        "Login attempt counter cache unavailable: key=%s degraded=True fallback_mode=%s",
+        key,
+        "local" if settings.DEBUG else "fail_closed",
+    )
+    if not settings.DEBUG:
+        # 生产环境：缓存故障时 fail-closed，返回限制值触发锁定
+        from core.utils.task_monitoring import increment_degraded_counter
+
+        increment_degraded_counter("login_security_degraded")
+        return LOGIN_ATTEMPT_LIMIT
+
+    # DEBUG 模式：回落到本地计数，避免阻断开发调试
     attempts = 1
     try:
         raw_attempts = _safe_cache_get(key, 0)

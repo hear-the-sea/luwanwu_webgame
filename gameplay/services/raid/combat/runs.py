@@ -6,8 +6,8 @@ import logging
 from datetime import timedelta
 from typing import Dict, List, Optional
 
-from django.db import IntegrityError, transaction
-from django.db.models import F, Q
+from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async, safe_apply_async_with_dedup
@@ -15,21 +15,22 @@ from gameplay.services.battle_snapshots import build_guest_battle_snapshots
 from gameplay.services.raid import combat as combat_pkg
 from guests.models import Guest, GuestStatus
 
-from ....models import Manor, PlayerTroop, RaidRun, ResourceEvent
+from ....models import Manor, RaidRun, ResourceEvent
 from ...utils.messages import create_message
 from .loot import _grant_loot_items
 from .travel import calculate_raid_travel_time, get_active_raid_count
 
-# Import normalization/calculation helpers from the troops sub-module.
-from .troops import (  # noqa: F401
-    _calculate_surviving_raid_troops,
-    _coerce_positive_int,
-    _collect_troop_upserts,
-    _extract_raid_troops_lost,
-    _normalize_mapping,
-    _normalize_positive_int_mapping,
-    _normalize_troops_for_addition,
+# Import troop management helpers (moved to troop_ops, re-exported for callers).
+from .troop_ops import (  # noqa: F401
+    _add_troops,
+    _add_troops_batch,
+    _bulk_create_troops_with_fallback,
+    _deduct_troops,
+    _return_surviving_troops,
 )
+
+# Import normalization helpers from the troops sub-module (still used in this file).
+from .troops import _coerce_positive_int, _normalize_mapping, _normalize_positive_int_mapping  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -193,116 +194,6 @@ def _dispatch_raid_battle_task(run: RaidRun, travel_time: int) -> None:
     )
     if not dispatched:
         _fallback_sync_when_due()
-
-
-# ============ Troop management (ORM-dependent, test-monkeypatched) ============
-
-
-def _deduct_troops(manor: Manor, loadout: Dict[str, int]) -> None:
-    """从庄园批量扣除指定数量的护院"""
-    loadout = _normalize_positive_int_mapping(loadout)
-    if not loadout:
-        return
-
-    troops = {
-        t.troop_template.key: t
-        for t in PlayerTroop.objects.select_for_update()
-        .filter(manor=manor, troop_template__key__in=loadout.keys())
-        .select_related("troop_template")
-    }
-
-    to_update = []
-    for troop_key, count in loadout.items():
-        troop = troops.get(troop_key)
-        if not troop:
-            raise ValueError("没有该类型的护院")
-        if troop.count < count:
-            raise ValueError(f"护院 {troop.troop_template.name} 数量不足")
-        troop.count -= count
-        to_update.append(troop)
-
-    if to_update:
-        PlayerTroop.objects.bulk_update(to_update, ["count", "updated_at"])
-
-
-def _bulk_create_troops_with_fallback(to_create: list[PlayerTroop], now) -> None:
-    if not to_create:
-        return
-    for pt in to_create:
-        updated = PlayerTroop.objects.filter(manor=pt.manor, troop_template=pt.troop_template).update(
-            count=F("count") + pt.count,
-            updated_at=now,
-        )
-        if updated:
-            continue
-        try:
-            PlayerTroop.objects.create(
-                manor=pt.manor,
-                troop_template=pt.troop_template,
-                count=pt.count,
-            )
-        except IntegrityError:
-            PlayerTroop.objects.filter(manor=pt.manor, troop_template=pt.troop_template).update(
-                count=F("count") + pt.count,
-                updated_at=now,
-            )
-
-
-def _add_troops(manor: Manor, troop_key: str, count: int) -> None:
-    """给庄园添加护院（单个兵种）"""
-    if count <= 0:
-        return
-    _add_troops_batch(manor, {troop_key: count})
-
-
-def _add_troops_batch(manor: Manor, troops_to_add: Dict[str, int]) -> None:
-    """批量给庄园添加护院"""
-    from battle.models import TroopTemplate
-
-    if not troops_to_add:
-        return
-
-    troops_to_add = _normalize_troops_for_addition(troops_to_add)
-    if not troops_to_add:
-        return
-
-    from core.utils.template_loader import load_templates_by_key
-
-    templates = load_templates_by_key(TroopTemplate, keys=troops_to_add.keys())
-
-    if not templates:
-        return
-
-    existing = {
-        pt.troop_template.key: pt
-        for pt in PlayerTroop.objects.select_for_update()
-        .filter(manor=manor, troop_template__key__in=troops_to_add.keys())
-        .select_related("troop_template")
-    }
-
-    now = timezone.now()
-    to_update, to_create = _collect_troop_upserts(manor, troops_to_add, templates, existing, now)
-
-    if to_update:
-        PlayerTroop.objects.bulk_update(to_update, ["count", "updated_at"])
-    _bulk_create_troops_with_fallback(to_create, now)
-
-
-def _return_surviving_troops(run: RaidRun) -> None:
-    """批量归还存活的护院"""
-    loadout = _normalize_positive_int_mapping(getattr(run, "troop_loadout", {}))
-    if not loadout:
-        return
-
-    if not run.battle_report:
-        _add_troops_batch(run.attacker, loadout)
-        return
-
-    troops_lost = _extract_raid_troops_lost(loadout, run.battle_report)
-    surviving_troops = _calculate_surviving_raid_troops(loadout, troops_lost)
-
-    if surviving_troops:
-        _add_troops_batch(run.attacker, surviving_troops)
 
 
 # ============ Raid run state collection and async dispatch ============

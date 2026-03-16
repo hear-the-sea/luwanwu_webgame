@@ -1,28 +1,24 @@
-"""Backward-compatible re-export of yaml_validators package.
-
-The implementation has been moved to core/utils/yaml_validators/.
-This module is kept for backward compatibility only.
-"""
+"""YAML validators package — schema validation for all game YAML config files."""
 
 from __future__ import annotations
 
-from core.utils.yaml_validators.base import ValidationError, ValidationResult
-from core.utils.yaml_validators.gear import (
+from .base import ValidationError, ValidationResult
+from .gear import (
     validate_forge_blueprints,
     validate_forge_decompose,
     validate_forge_equipment,
     validate_shop_items,
     validate_smithy_production,
 )
-from core.utils.yaml_validators.production import (
+from .production import (
     validate_guest_growth_rules,
     validate_guest_skills,
     validate_ranch_production,
     validate_stable_production,
     validate_technology_templates,
 )
-from core.utils.yaml_validators.registry import SUPPORTED_YAML_CONFIGS, get_supported_yaml_configs, validate_all_configs
-from core.utils.yaml_validators.rules import (
+from .registry import get_supported_yaml_configs, validate_all_configs
+from .rules import (
     validate_arena_rewards,
     validate_arena_rules,
     validate_auction_items,
@@ -31,7 +27,7 @@ from core.utils.yaml_validators.rules import (
     validate_trade_market_rules,
     validate_warehouse_production,
 )
-from core.utils.yaml_validators.templates import (
+from .templates import (
     validate_building_templates,
     validate_guest_templates,
     validate_item_templates,
@@ -72,5 +68,4 @@ __all__ = [
     # registry
     "validate_all_configs",
     "get_supported_yaml_configs",
-    "SUPPORTED_YAML_CONFIGS",
 ]

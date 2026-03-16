@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 import logging
+import random
 from collections.abc import Callable
+from typing import TYPE_CHECKING, cast
 
+from battle.services import simulate_report
 from gameplay.models import ArenaEntry, ArenaMatch, ArenaTournament, Message
 from gameplay.services.utils.messages import create_message
+from guests.models import Guest
 
-from .snapshots import ArenaGuestSnapshotProxy
+from .snapshots import ArenaGuestSnapshotProxy, load_entry_guests
+
+if TYPE_CHECKING:
+    from datetime import datetime
 
 
 def send_arena_battle_messages(
@@ -160,5 +167,105 @@ def resolve_forfeit_winner(
         note=note,
         now=now,
         match=match,
+    )
+    return winner_entry
+
+
+def resolve_match_locked(
+    *,
+    tournament: ArenaTournament,
+    round_number: int,
+    match_index: int,
+    attacker_entry: ArenaEntry,
+    defender_entry: ArenaEntry,
+    now: datetime,
+    max_guests_per_entry: int,
+    arena_match_resolution_error: type[Exception],
+    match: ArenaMatch | None = None,
+    logger: logging.Logger,
+) -> ArenaEntry:
+    attacker_guests = load_entry_guests(attacker_entry, max_guests_per_entry=max_guests_per_entry)
+    defender_guests = load_entry_guests(defender_entry, max_guests_per_entry=max_guests_per_entry)
+
+    forfeit_winner = resolve_forfeit_winner(
+        tournament=tournament,
+        round_number=round_number,
+        match_index=match_index,
+        attacker_entry=attacker_entry,
+        defender_entry=defender_entry,
+        attacker_guests=attacker_guests,
+        defender_guests=defender_guests,
+        now=now,
+        match=match,
+        random_choice=random.choice,
+    )
+    if forfeit_winner is not None:
+        return forfeit_winner
+
+    attacker_battle_guests = cast(list[Guest], attacker_guests)
+    defender_battle_guests = cast(list[Guest], defender_guests)
+    try:
+        report = simulate_report(
+            manor=attacker_entry.manor,
+            battle_type="arena",
+            troop_loadout={},
+            fill_default_troops=False,
+            attacker_guests=attacker_battle_guests,
+            defender_guests=defender_battle_guests,
+            max_squad=max_guests_per_entry,
+            auto_reward=False,
+            send_message=False,
+            apply_damage=False,
+            use_lock=False,
+            opponent_name=defender_entry.manor.display_name,
+        )
+    except Exception:
+        logger.exception(
+            "arena simulate_report failed; defer match for retry: tournament_id=%s round=%s attacker=%s defender=%s",
+            tournament.id,
+            round_number,
+            attacker_entry.id,
+            defender_entry.id,
+        )
+        if match:
+            match.notes = "战斗模拟异常，待系统重试"
+            match.save(update_fields=["notes"])
+        raise arena_match_resolution_error("战斗模拟异常，已保留待重试")
+
+    if report.winner == "attacker":
+        winner_entry = attacker_entry
+    elif report.winner == "defender":
+        winner_entry = defender_entry
+    else:
+        winner_entry = random.choice([attacker_entry, defender_entry])
+
+    if match:
+        save_resolved_match(
+            match=match,
+            winner_entry=winner_entry,
+            status=ArenaMatch.Status.COMPLETED,
+            report=report,
+            now=now,
+        )
+    else:
+        ArenaMatch.objects.create(
+            tournament=tournament,
+            round_number=round_number,
+            match_index=match_index,
+            attacker_entry=attacker_entry,
+            defender_entry=defender_entry,
+            winner_entry=winner_entry,
+            battle_report=report,
+            status=ArenaMatch.Status.COMPLETED,
+            resolved_at=now,
+        )
+
+    send_arena_battle_messages(
+        report=report,
+        round_number=round_number,
+        attacker_entry=attacker_entry,
+        defender_entry=defender_entry,
+        winner_entry=winner_entry,
+        logger=logger,
     )
     return winner_entry
