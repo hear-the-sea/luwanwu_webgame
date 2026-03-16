@@ -14,7 +14,9 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET
 
 from core.tasks import CELERY_BEAT_HEARTBEAT_CACHE_KEY, celery_health_ping
+from core.utils.degradation import get_degradation_counts
 from core.utils.network import get_client_ip, is_trusted_proxy_ip
+from core.utils.task_monitoring import get_task_metrics
 
 
 def _maybe_debug_error(exc: Exception) -> str | None:
@@ -205,7 +207,16 @@ def health_ready(request):
             errors["celery_roundtrip"] = roundtrip_error
 
     ok = all(checks.values())
-    payload = {"status": "ok" if ok else "error", "checks": checks}
+    payload: dict[str, object] = {"status": "ok" if ok else "error", "checks": checks}
     if errors:
         payload["errors"] = errors
+
+    degradation = get_degradation_counts()
+    if degradation:
+        payload["degradation_counts"] = degradation
+
+    task_metrics = get_task_metrics()
+    if task_metrics:
+        payload["task_metrics"] = task_metrics
+
     return JsonResponse(payload, status=200 if ok else 503)

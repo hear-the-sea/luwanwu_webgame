@@ -13,6 +13,9 @@ app.autodiscover_tasks()
 
 # `core` is not a Django app, so its shared tasks need explicit import for registration.
 import core.tasks  # noqa: F401,E402
+from core.celery_signals import connect_task_signals  # noqa: E402
+
+connect_task_signals()
 
 logger = logging.getLogger(__name__)
 

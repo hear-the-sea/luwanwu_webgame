@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 from django.test import SimpleTestCase
 
 from websocket.consumers import WorldChatConsumer
+from websocket.consumers.world_chat import WorldChatInfrastructureError
 
 
 class WorldChatConsumerTests(SimpleTestCase):
@@ -105,7 +106,7 @@ class WorldChatConsumerTests(SimpleTestCase):
 
     def test_receive_json_rate_limit_backend_failure_returns_chat_unavailable(self):
         consumer = self._build_consumer()
-        consumer._rate_limit = AsyncMock(side_effect=RuntimeError("redis down"))
+        consumer._rate_limit = AsyncMock(side_effect=WorldChatInfrastructureError("redis down"))
         consumer._consume_trumpet = AsyncMock(return_value=(True, ""))
 
         asyncio.run(consumer.receive_json({"type": "send", "text": "hello"}))
@@ -156,7 +157,7 @@ class WorldChatConsumerTests(SimpleTestCase):
         consumer._rate_limit = AsyncMock(return_value=(True, None))
         consumer._consume_trumpet = AsyncMock(return_value=(True, ""))
         consumer._refund_trumpet = AsyncMock(return_value=True)
-        consumer._append_history = AsyncMock(side_effect=RuntimeError("redis down"))
+        consumer._append_history = AsyncMock(side_effect=WorldChatInfrastructureError("redis down"))
 
         message = {
             "type": "message",
@@ -187,7 +188,7 @@ class WorldChatConsumerTests(SimpleTestCase):
         consumer._consume_trumpet = AsyncMock(return_value=(True, ""))
         consumer._refund_trumpet = AsyncMock(return_value=False)
         consumer._append_history = AsyncMock()
-        consumer.channel_layer.group_send = AsyncMock(side_effect=RuntimeError("channel layer down"))
+        consumer.channel_layer.group_send = AsyncMock(side_effect=OSError("channel layer down"))
 
         message = {
             "type": "message",
@@ -210,6 +211,15 @@ class WorldChatConsumerTests(SimpleTestCase):
                 "message": consumer.CHAT_UNAVAILABLE_REFUND_FAILED_MESSAGE,
             },
         )
+
+    def test_receive_json_programming_error_bubbles_up(self):
+        consumer = self._build_consumer()
+        consumer._rate_limit = AsyncMock(return_value=(True, None))
+        consumer._consume_trumpet = AsyncMock(return_value=(True, ""))
+        consumer._build_message = AsyncMock(side_effect=RuntimeError("bug"))
+
+        with self.assertRaisesRegex(RuntimeError, "bug"):
+            asyncio.run(consumer.receive_json({"type": "send", "text": "hello"}))
 
     def test_connect_reports_history_degraded_status(self):
         consumer = WorldChatConsumer()

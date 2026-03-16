@@ -5,6 +5,7 @@ from datetime import timedelta
 from typing import Callable
 
 from celery import shared_task
+from django.db import DatabaseError
 from django.db.models import F, IntegerField, Q, Value
 from django.db.models.functions import Greatest
 from django.utils import timezone
@@ -20,6 +21,11 @@ _TASK_DEDUP_TIMEOUT = 5
 DEFECTION_PROBABILITY = GUEST_LOYALTY.DEFECTION_PROBABILITY
 DEFECTION_BATCH_SIZE = GUEST_LOYALTY.DEFECTION_BATCH_SIZE
 DEFECTION_QUERY_CHUNK_SIZE = GUEST_LOYALTY.DEFECTION_QUERY_CHUNK_SIZE
+
+
+def _is_expected_task_error(exc: Exception) -> bool:
+    """Infrastructure errors that warrant a Celery retry rather than immediate propagation."""
+    return isinstance(exc, (DatabaseError, ConnectionError, OSError, TimeoutError))
 
 
 @shared_task(name="guests.complete_training", bind=True, max_retries=2, default_retry_delay=30)
@@ -49,12 +55,26 @@ def complete_guest_training(self, guest_id: int) -> str:
         finalized = finalize_guest_training(guest, now=now)
         return "completed" if finalized else "skipped"
     except Exception as exc:
+        if not _is_expected_task_error(exc):
+            raise
         logger.exception("Failed to complete guest training %d: %s", guest_id, exc)
         raise self.retry(exc=exc)
 
 
 @shared_task(name="guests.scan_training")
 def scan_guest_training(limit: int = 200) -> int:
+    """
+    Scan-fallback: finalize overdue guest training sessions.
+
+    Primary path: each training session schedules a dedicated
+    ``complete_guest_training`` task at ``training_complete_at`` time.
+
+    This periodic scan compensates for tasks that were lost, delayed, or failed
+    due to broker restarts, worker crashes, or transient infrastructure errors.
+    It queries for all guests whose ``training_complete_at`` has passed but
+    whose training has not yet been finalized, processing up to *limit* guests
+    per invocation.
+    """
     from guests.models import Guest
     from guests.services import finalize_guest_training
 
@@ -69,7 +89,11 @@ def scan_guest_training(limit: int = 200) -> int:
         try:
             if finalize_guest_training(guest, now=now):
                 count += 1
-        except Exception:
+        except Exception as exc:
+            if not _is_expected_task_error(exc):
+                raise
+            # Per-guest failure should not abort the scan; the next scan cycle
+            # will retry any guests that were skipped.
             logger.exception("Failed to finalize guest training %d", guest.id)
     return count
 
@@ -105,12 +129,25 @@ def complete_guest_recruitment(self, recruitment_id: int) -> str:
         finalized = finalize_guest_recruitment(recruitment, now=now, send_notification=True)
         return "completed" if finalized else "skipped"
     except Exception as exc:
+        if not _is_expected_task_error(exc):
+            raise
         logger.exception("Failed to complete guest recruitment %d: %s", recruitment_id, exc)
         raise self.retry(exc=exc)
 
 
 @shared_task(name="guests.scan_recruitments")
 def scan_guest_recruitments(limit: int = 200) -> int:
+    """
+    Scan-fallback: finalize overdue guest recruitment processes.
+
+    Primary path: each recruitment schedules a dedicated
+    ``complete_guest_recruitment`` task at ``complete_at`` time.
+
+    This periodic scan compensates for tasks that were lost, delayed, or failed
+    due to broker restarts, worker crashes, or transient infrastructure errors.
+    It queries for all recruitments in PENDING status whose ``complete_at`` has
+    passed, processing up to *limit* recruitments per invocation.
+    """
     from guests.models import GuestRecruitment
     from guests.services import finalize_guest_recruitment
 
@@ -125,13 +162,27 @@ def scan_guest_recruitments(limit: int = 200) -> int:
         try:
             if finalize_guest_recruitment(recruitment, now=now, send_notification=True):
                 count += 1
-        except Exception:
+        except Exception as exc:
+            if not _is_expected_task_error(exc):
+                raise
+            # Per-recruitment failure should not abort the scan; the next cycle
+            # will retry any recruitments that were skipped.
             logger.exception("Failed to finalize guest recruitment %d", recruitment.id)
     return count
 
 
 @shared_task(name="guests.scan_passive_hp_recovery")
 def scan_passive_hp_recovery(limit: int = 200) -> int:
+    """
+    Scan-fallback: recover HP for injured or idle guests.
+
+    There is no per-guest primary task for passive HP recovery; this periodic
+    scan is the sole mechanism.  It acts as a fallback in the sense that HP
+    recovery is intentionally batched and tolerant of missed cycles -- if a
+    scan cycle is skipped, guests simply wait longer and the next cycle catches
+    up.  The ``last_hp_recovery_at`` timestamp ensures idempotent recovery
+    regardless of scan frequency.
+    """
     from guests.constants import TimeConstants
     from guests.models import DEFENSE_TO_HP_MULTIPLIER, MIN_HP_FLOOR, Guest, GuestStatus
     from guests.services.health import recover_guest_hp
@@ -160,7 +211,10 @@ def scan_passive_hp_recovery(limit: int = 200) -> int:
             after_state = (guest.current_hp, guest.last_hp_recovery_at, guest.status)
             if after_state != before_state:
                 count += 1
-        except Exception:
+        except Exception as exc:
+            if not _is_expected_task_error(exc):
+                raise
+            # Per-guest HP recovery failure should not abort the scan.
             logger.exception("Failed to recover passive HP for guest %d", guest.id)
     return count
 
@@ -230,6 +284,8 @@ def process_daily_loyalty(self) -> str:
         updated_count = increased_count + decreased_count
         return f"处理了 {updated_count} 个门客的忠诚度，{defection_count} 个门客叛逃"
     except Exception as exc:
+        if not _is_expected_task_error(exc):
+            raise
         logger.exception("Failed to process daily loyalty: %s", exc)
         raise self.retry(exc=exc)
 
@@ -273,7 +329,11 @@ def _process_defection_batch(guest_ids: list[int], *, create_message: Callable) 
 
             guest.delete()
             defection_count += 1
-        except Exception:
+        except Exception as exc:
+            if not _is_expected_task_error(exc):
+                raise
+            # Per-guest defection failure should not abort the batch; the guest
+            # will remain with low loyalty and be retried on the next daily run.
             logger.exception("Failed to process defection for guest %d", guest.id)
 
     return defection_count

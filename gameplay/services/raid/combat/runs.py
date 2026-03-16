@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from django.db import IntegrityError, transaction
 from django.db.models import F, Q
@@ -20,37 +20,21 @@ from ...utils.messages import create_message
 from .loot import _grant_loot_items
 from .travel import calculate_raid_travel_time, get_active_raid_count
 
+# Import normalization/calculation helpers from the troops sub-module.
+from .troops import (  # noqa: F401
+    _calculate_surviving_raid_troops,
+    _coerce_positive_int,
+    _collect_troop_upserts,
+    _extract_raid_troops_lost,
+    _normalize_mapping,
+    _normalize_positive_int_mapping,
+    _normalize_troops_for_addition,
+)
+
 logger = logging.getLogger(__name__)
 
 
 _REFRESH_DISPATCH_DEDUP_SECONDS = 5
-
-
-def _normalize_mapping(raw: Any) -> Dict[str, Any]:
-    if isinstance(raw, dict):
-        return raw
-    return {}
-
-
-def _coerce_positive_int(raw: Any, default: int = 0) -> int:
-    try:
-        parsed = int(raw)
-    except (TypeError, ValueError):
-        parsed = default
-    return parsed if parsed > 0 else 0
-
-
-def _normalize_positive_int_mapping(raw: Any) -> Dict[str, int]:
-    data = _normalize_mapping(raw)
-    normalized: Dict[str, int] = {}
-    for key, value in data.items():
-        normalized_key = str(key or "").strip()
-        if not normalized_key:
-            continue
-        normalized_value = _coerce_positive_int(value, 0)
-        if normalized_value > 0:
-            normalized[normalized_key] = normalized_value
-    return normalized
 
 
 def _try_dispatch_raid_refresh_task(task, run_id: int, stage: str) -> bool:
@@ -211,78 +195,39 @@ def _dispatch_raid_battle_task(run: RaidRun, travel_time: int) -> None:
         _fallback_sync_when_due()
 
 
-def _extract_raid_troops_lost(loadout: Dict[str, int], battle_report) -> Dict[str, int]:
-    if not battle_report:
-        return {}
-
-    normalized_loadout = _normalize_positive_int_mapping(loadout)
-    if not normalized_loadout:
-        return {}
-
-    losses = _normalize_mapping(getattr(battle_report, "losses", {}))
-    attacker_losses = _normalize_mapping(losses.get("attacker"))
-    casualties = attacker_losses.get("casualties")
-    if not isinstance(casualties, list):
-        return {}
-
-    from battle.troops import load_troop_templates
-
-    troop_definitions = load_troop_templates()
-    troops_lost: Dict[str, int] = {}
-    for entry in casualties:
-        if not isinstance(entry, dict):
-            continue
-        key = str(entry.get("key") or "").strip()
-        if key not in normalized_loadout or key not in troop_definitions:
-            continue
-        lost = _coerce_positive_int(entry.get("lost", 0), 0)
-        if lost > 0:
-            troops_lost[key] = troops_lost.get(key, 0) + lost
-    return troops_lost
+# ============ Troop management (ORM-dependent, test-monkeypatched) ============
 
 
-def _calculate_surviving_raid_troops(loadout: Dict[str, int], troops_lost: Dict[str, int]) -> Dict[str, int]:
-    surviving_troops: Dict[str, int] = {}
-    for troop_key, original_count in loadout.items():
-        surviving = max(0, original_count - troops_lost.get(troop_key, 0))
-        if surviving > 0:
-            surviving_troops[troop_key] = surviving
-    return surviving_troops
+def _deduct_troops(manor: Manor, loadout: Dict[str, int]) -> None:
+    """从庄园批量扣除指定数量的护院"""
+    loadout = _normalize_positive_int_mapping(loadout)
+    if not loadout:
+        return
 
+    troops = {
+        t.troop_template.key: t
+        for t in PlayerTroop.objects.select_for_update()
+        .filter(manor=manor, troop_template__key__in=loadout.keys())
+        .select_related("troop_template")
+    }
 
-def _normalize_troops_for_addition(troops_to_add: Dict[str, int]) -> Dict[str, int]:
-    return _normalize_positive_int_mapping(troops_to_add)
+    to_update = []
+    for troop_key, count in loadout.items():
+        troop = troops.get(troop_key)
+        if not troop:
+            raise ValueError("没有该类型的护院")
+        if troop.count < count:
+            raise ValueError(f"护院 {troop.troop_template.name} 数量不足")
+        troop.count -= count
+        to_update.append(troop)
 
-
-def _collect_troop_upserts(
-    manor: Manor,
-    troops_to_add: Dict[str, int],
-    templates: Dict[str, object],
-    existing: Dict[str, PlayerTroop],
-    now,
-) -> tuple[list[PlayerTroop], list[PlayerTroop]]:
-    to_update: list[PlayerTroop] = []
-    to_create: list[PlayerTroop] = []
-    for key, count in troops_to_add.items():
-        template = templates.get(key)
-        if not template:
-            logger.warning("Unknown troop template: %s", key)
-            continue
-        if key in existing:
-            existing[key].count += count
-            existing[key].updated_at = now
-            to_update.append(existing[key])
-        else:
-            to_create.append(PlayerTroop(manor=manor, troop_template=template, count=count))
-    return to_update, to_create
+    if to_update:
+        PlayerTroop.objects.bulk_update(to_update, ["count", "updated_at"])
 
 
 def _bulk_create_troops_with_fallback(to_create: list[PlayerTroop], now) -> None:
     if not to_create:
         return
-    # Use per-row upsert to avoid silent quantity loss:
-    # bulk_create(ignore_conflicts=True) swallows conflicts without raising,
-    # which may drop increments under concurrent create races.
     for pt in to_create:
         updated = PlayerTroop.objects.filter(manor=pt.manor, troop_template=pt.troop_template).update(
             count=F("count") + pt.count,
@@ -301,6 +246,66 @@ def _bulk_create_troops_with_fallback(to_create: list[PlayerTroop], now) -> None
                 count=F("count") + pt.count,
                 updated_at=now,
             )
+
+
+def _add_troops(manor: Manor, troop_key: str, count: int) -> None:
+    """给庄园添加护院（单个兵种）"""
+    if count <= 0:
+        return
+    _add_troops_batch(manor, {troop_key: count})
+
+
+def _add_troops_batch(manor: Manor, troops_to_add: Dict[str, int]) -> None:
+    """批量给庄园添加护院"""
+    from battle.models import TroopTemplate
+
+    if not troops_to_add:
+        return
+
+    troops_to_add = _normalize_troops_for_addition(troops_to_add)
+    if not troops_to_add:
+        return
+
+    from core.utils.template_loader import load_templates_by_key
+
+    templates = load_templates_by_key(TroopTemplate, keys=troops_to_add.keys())
+
+    if not templates:
+        return
+
+    existing = {
+        pt.troop_template.key: pt
+        for pt in PlayerTroop.objects.select_for_update()
+        .filter(manor=manor, troop_template__key__in=troops_to_add.keys())
+        .select_related("troop_template")
+    }
+
+    now = timezone.now()
+    to_update, to_create = _collect_troop_upserts(manor, troops_to_add, templates, existing, now)
+
+    if to_update:
+        PlayerTroop.objects.bulk_update(to_update, ["count", "updated_at"])
+    _bulk_create_troops_with_fallback(to_create, now)
+
+
+def _return_surviving_troops(run: RaidRun) -> None:
+    """批量归还存活的护院"""
+    loadout = _normalize_positive_int_mapping(getattr(run, "troop_loadout", {}))
+    if not loadout:
+        return
+
+    if not run.battle_report:
+        _add_troops_batch(run.attacker, loadout)
+        return
+
+    troops_lost = _extract_raid_troops_lost(loadout, run.battle_report)
+    surviving_troops = _calculate_surviving_raid_troops(loadout, troops_lost)
+
+    if surviving_troops:
+        _add_troops_batch(run.attacker, surviving_troops)
+
+
+# ============ Raid run state collection and async dispatch ============
 
 
 def _collect_due_raid_run_ids(manor: Manor, now) -> tuple[list[int], list[int], list[int]]:
@@ -369,6 +374,9 @@ def _process_due_raid_run_ids(now, marching_ids: list[int], returning_ids: list[
             finalize_raid(run, now=now)
 
 
+# ============ Public API: raid lifecycle ============
+
+
 def start_raid(
     attacker: Manor, defender: Manor, guest_ids: List[int], troop_loadout: Dict[str, int], seed: Optional[int] = None
 ) -> RaidRun:
@@ -391,7 +399,6 @@ def start_raid(
     guest_ids, troop_loadout = _validate_and_normalize_raid_inputs(attacker, defender, guest_ids, troop_loadout)
 
     with transaction.atomic():
-        # Lock both attacker and defender in a stable order, then re-check all start constraints.
         attacker_locked, defender_locked = _lock_manor_pair(attacker.pk, defender.pk)
         now = timezone.now()
 
@@ -399,7 +406,6 @@ def start_raid(
         if not can_attack:
             raise ValueError(reason)
 
-        # Re-check concurrent limit inside lock
         active_count = get_active_raid_count(attacker_locked)
         if active_count >= combat_pkg.PVPConstants.RAID_MAX_CONCURRENT:
             raise ValueError(f"同时最多进行 {combat_pkg.PVPConstants.RAID_MAX_CONCURRENT} 次出征")
@@ -410,12 +416,10 @@ def start_raid(
         travel_time = calculate_raid_travel_time(attacker_locked, defender_locked, guests, loadout)
         run = _create_raid_run_record(attacker_locked, defender_locked, guests, loadout, travel_time)
         if attacker_locked.defeat_protection_until and attacker_locked.defeat_protection_until > now:
-            # 主动发起踢馆会解除战败保护。
             attacker_locked.defeat_protection_until = None
             attacker_locked.save(update_fields=["defeat_protection_until"])
         _invalidate_recent_attacks_cache_on_commit(defender_locked.pk)
 
-    # 发送来袭警报给防守方（最佳努力，不能影响已成功创建的出征）
     try:
         _send_raid_incoming_message(run)
     except Exception as exc:
@@ -432,39 +436,8 @@ def start_raid(
     return run
 
 
-def _deduct_troops(manor: Manor, loadout: Dict[str, int]) -> None:
-    """从庄园批量扣除指定数量的护院"""
-    # 过滤掉数量无效的配置
-    loadout = _normalize_positive_int_mapping(loadout)
-    if not loadout:
-        return
-
-    # 1次查询获取所有需要的护院记录
-    troops = {
-        t.troop_template.key: t
-        for t in PlayerTroop.objects.select_for_update()
-        .filter(manor=manor, troop_template__key__in=loadout.keys())
-        .select_related("troop_template")
-    }
-
-    to_update = []
-    for troop_key, count in loadout.items():
-        troop = troops.get(troop_key)
-        if not troop:
-            raise ValueError("没有该类型的护院")
-        if troop.count < count:
-            raise ValueError(f"护院 {troop.troop_template.name} 数量不足")
-        troop.count -= count
-        to_update.append(troop)
-
-    # 1次批量更新
-    if to_update:
-        PlayerTroop.objects.bulk_update(to_update, ["count", "updated_at"])
-
-
 def _send_raid_incoming_message(run: RaidRun) -> None:
     """发送来袭警报消息"""
-    # 格式化预计抵达时间
     arrive_time = run.battle_at.strftime("%Y-%m-%d %H:%M:%S")
 
     body = f"""来自 {run.attacker.location_display} 的 {run.attacker.display_name} 正在向你发起进攻！
@@ -506,11 +479,9 @@ def finalize_raid(run: RaidRun, now=None) -> None:
         if locked_run.status == RaidRun.Status.COMPLETED:
             return
 
-        # 批量释放门客
         guests = list(locked_run.guests.select_for_update())
         guests_to_update = []
         for guest in guests:
-            # 保留战斗造成的重伤状态，仅将仍处于 DEPLOYED 的门客恢复为空闲
             if guest.status == GuestStatus.DEPLOYED:
                 guest.status = GuestStatus.IDLE
                 guests_to_update.append(guest)
@@ -518,10 +489,8 @@ def finalize_raid(run: RaidRun, now=None) -> None:
         if guests_to_update:
             Guest.objects.bulk_update(guests_to_update, ["status"])
 
-        # 归还进攻方护院（存活的）
         _return_surviving_troops(locked_run)
 
-        # 发放战利品给进攻方
         if locked_run.is_attacker_victory:
             from gameplay.models import Manor as ManorModel
             from gameplay.services.resources import grant_resources_locked
@@ -543,67 +512,6 @@ def finalize_raid(run: RaidRun, now=None) -> None:
         locked_run.status = RaidRun.Status.COMPLETED
         locked_run.completed_at = now
         locked_run.save(update_fields=["status", "completed_at"])
-
-
-def _return_surviving_troops(run: RaidRun) -> None:
-    """批量归还存活的护院"""
-    loadout = _normalize_positive_int_mapping(getattr(run, "troop_loadout", {}))
-    if not loadout:
-        return
-
-    if not run.battle_report:
-        # 没有战报（撤退等情况），全部归还
-        _add_troops_batch(run.attacker, loadout)
-        return
-
-    troops_lost = _extract_raid_troops_lost(loadout, run.battle_report)
-    surviving_troops = _calculate_surviving_raid_troops(loadout, troops_lost)
-
-    # 批量归还
-    if surviving_troops:
-        _add_troops_batch(run.attacker, surviving_troops)
-
-
-def _add_troops(manor: Manor, troop_key: str, count: int) -> None:
-    """给庄园添加护院（单个兵种）"""
-    if count <= 0:
-        return
-    _add_troops_batch(manor, {troop_key: count})
-
-
-def _add_troops_batch(manor: Manor, troops_to_add: Dict[str, int]) -> None:
-    """批量给庄园添加护院"""
-    from battle.models import TroopTemplate
-
-    if not troops_to_add:
-        return
-
-    troops_to_add = _normalize_troops_for_addition(troops_to_add)
-    if not troops_to_add:
-        return
-
-    # 预加载模板
-    from core.utils.template_loader import load_templates_by_key
-
-    templates = load_templates_by_key(TroopTemplate, keys=troops_to_add.keys())
-
-    if not templates:
-        return
-
-    # 预加载现有护院
-    existing = {
-        pt.troop_template.key: pt
-        for pt in PlayerTroop.objects.select_for_update()
-        .filter(manor=manor, troop_template__key__in=troops_to_add.keys())
-        .select_related("troop_template")
-    }
-
-    now = timezone.now()
-    to_update, to_create = _collect_troop_upserts(manor, troops_to_add, templates, existing, now)
-
-    if to_update:
-        PlayerTroop.objects.bulk_update(to_update, ["count", "updated_at"])
-    _bulk_create_troops_with_fallback(to_create, now)
 
 
 def request_raid_retreat(run: RaidRun) -> None:
@@ -635,7 +543,6 @@ def request_raid_retreat(run: RaidRun) -> None:
         locked_run.return_at = now + timedelta(seconds=max(1, elapsed))
         locked_run.save(update_fields=["is_retreating", "status", "return_at"])
 
-    # 调度撤退完成任务
     try:
         from gameplay.tasks import complete_raid_task
     except Exception as exc:
@@ -660,18 +567,15 @@ def _finalize_raid_retreat(run: RaidRun, now=None) -> None:
     """完成撤退，归还所有护院和门客"""
     now = now or timezone.now()
 
-    # 批量释放门客
     guests = list(run.guests.select_for_update())
     guests_to_update = []
     for guest in guests:
-        # 仅将仍处于 DEPLOYED 的门客恢复为空闲，避免覆盖其他状态
         if guest.status == GuestStatus.DEPLOYED:
             guest.status = GuestStatus.IDLE
             guests_to_update.append(guest)
     if guests_to_update:
         Guest.objects.bulk_update(guests_to_update, ["status"])
 
-    # 批量全额归还护院
     loadout = _normalize_positive_int_mapping(getattr(run, "troop_loadout", {}))
     if loadout:
         _add_troops_batch(run.attacker, loadout)

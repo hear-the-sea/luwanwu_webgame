@@ -85,3 +85,4 @@ runtime/
 Thumbs.db
 *:Zone.Identifier
 *.lnk
+.claude/worktrees/

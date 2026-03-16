@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import Any, Callable
 
 from django.conf import settings
+from django.http import HttpRequest, HttpResponse
 
 from core.utils.network import get_client_ip
 
 logger = logging.getLogger("access")
 
 
-def _sanitize_log_value(value, *, max_length: int = 2048) -> str:
+def _sanitize_log_value(value: Any, *, max_length: int = 2048) -> str:
     text = str(value)
     sanitized = text.replace("\r", " ").replace("\n", " ").replace("\t", " ")
     if len(sanitized) > max_length:
@@ -19,10 +21,10 @@ def _sanitize_log_value(value, *, max_length: int = 2048) -> str:
 
 
 class AccessLogMiddleware:
-    def __init__(self, get_response):
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
         self.get_response = get_response
 
-    def __call__(self, request):
+    def __call__(self, request: HttpRequest) -> HttpResponse:
         if getattr(settings, "ACCESS_LOG_ENABLED", True) is False:
             return self.get_response(request)
 

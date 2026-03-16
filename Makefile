@@ -4,7 +4,7 @@ LOCAL_STATE_DIR ?= .local
 FLAKE8_TARGETS ?= accounts battle gameplay guests guilds trade core websocket config tests
 MYPY_TARGETS ?= accounts battle common config core gameplay guests guilds tasks trade websocket
 
-.PHONY: install install-unpinned install-lock install-dev-lock migrate bootstrap-data dev dev-ws worker beat test test-unit test-integration test-all format lint lint-strict check clean lock lock-dev
+.PHONY: install install-unpinned install-lock install-dev-lock migrate bootstrap-data dev dev-ws worker beat test test-unit test-critical test-integration test-all format lint lint-strict check clean lock lock-dev
 
 install:
 	@if [ -f requirements-dev.lock.txt ]; then \
@@ -54,11 +54,18 @@ beat:
 	mkdir -p $(LOCAL_STATE_DIR)
 	celery -A config beat -l info --schedule $(LOCAL_STATE_DIR)/celerybeat-schedule
 
-# Default to the hermetic unit-like suite. Integration tests require external services.
-test: test-unit
+# Default to the hermetic unit-like suite, then surface critical concurrency coverage explicitly.
+test: test-unit test-critical
 
 test-unit:
 	$(PYTHON) -m pytest -m "not integration"
+
+test-critical:
+	@if [ "$$DJANGO_TEST_USE_ENV_SERVICES" = "1" ]; then \
+		$(PYTHON) -m pytest tests/test_raid_concurrency_integration.py tests/test_work_service_concurrency.py -q; \
+	else \
+		echo "Skipping critical concurrency integration tests; set DJANGO_TEST_USE_ENV_SERVICES=1 to enable non-SQLite verification."; \
+	fi
 
 test-integration:
 	DJANGO_TEST_USE_ENV_SERVICES=1 $(PYTHON) -m pytest -m integration -q

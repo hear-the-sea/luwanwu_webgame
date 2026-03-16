@@ -14,6 +14,7 @@
 | [数据库设计](database.md) | 数据模型、表结构、索引优化 | 后端开发、DBA |
 | [编码规范](coding_standards.md) | Python / Django 代码风格与协作约定 | 所有开发者 |
 | [优化计划](optimization_plan.md) | 分阶段技术治理与重构路线图 | 项目维护者、核心开发 |
+| [技术审计（2026-03）](technical_audit_2026-03.md) | 当前项目问题清单、优先级与治理建议 | 项目维护者、核心开发 |
 | [配置数据](config_data.md) | 运行期 YAML / 导库型 YAML 的职责与刷新方式 | 开发、测试、运维 |
 
 ---

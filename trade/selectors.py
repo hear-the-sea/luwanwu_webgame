@@ -4,6 +4,9 @@ import logging
 from typing import Any, Callable
 
 from django.core.paginator import Paginator
+from django.db import DatabaseError
+from django.db.models import QuerySet
+from django.http import HttpRequest
 
 from core.utils import safe_int, safe_ordering
 from gameplay.models.items import LEGACY_TOOL_EFFECT_TYPES, normalize_item_effect_type
@@ -34,19 +37,25 @@ _TROOP_CATEGORY_LABELS: dict[str, str] = {
 logger = logging.getLogger(__name__)
 
 
-def _safe_call(func: Callable[..., Any], *args, default: Any, log_message: str, **kwargs) -> Any:
+def _is_expected_trade_context_error(exc: Exception) -> bool:
+    return isinstance(exc, (DatabaseError, ConnectionError, OSError, TimeoutError))
+
+
+def _safe_call(func: Callable[..., Any], *args: Any, default: Any, log_message: str, **kwargs: Any) -> Any:
     try:
         return func(*args, **kwargs)
     except Exception as exc:
+        if not _is_expected_trade_context_error(exc):
+            raise
         logger.warning("%s: %s", log_message, exc, exc_info=True)
         return default
 
 
-def _record_trade_issue(context: dict, *, section: str, message: str) -> None:
+def _record_trade_issue(context: dict[str, Any], *, section: str, message: str) -> None:
     context.setdefault("trade_alerts", []).append({"section": section, "message": message})
 
 
-def _base_trade_context(tab: str, manor) -> dict:
+def _base_trade_context(tab: str, manor: Any) -> dict[str, Any]:
     return {
         "current_tab": tab,
         "tabs": [
@@ -59,7 +68,7 @@ def _base_trade_context(tab: str, manor) -> dict:
     }
 
 
-def _effect_type_category_options() -> list[dict]:
+def _effect_type_category_options() -> list[dict[str, str]]:
     return [{"key": "all", "label": "全部"}] + [
         {"key": category_key, "label": EFFECT_TYPE_CATEGORY.get(category_key, category_key)}
         for category_key in sorted(EFFECT_TYPE_CATEGORY.keys())
@@ -89,7 +98,7 @@ def _build_troop_bank_categories(available_classes: set[str]) -> list[dict[str, 
     return categories
 
 
-def _update_auction_browse_context(request, manor, context: dict) -> None:
+def _update_auction_browse_context(request: HttpRequest, manor: Any, context: dict[str, Any]) -> None:
     category = request.GET.get("category", "all")
     rarity = request.GET.get("rarity", "all")
     order_by = safe_ordering(
@@ -133,7 +142,7 @@ def _update_auction_browse_context(request, manor, context: dict) -> None:
     )
 
 
-def _update_auction_my_bids_context(manor, context: dict) -> None:
+def _update_auction_my_bids_context(manor: Any, context: dict[str, Any]) -> None:
     my_bids = _safe_call(get_my_bids, manor, default=[], log_message="load my auction bids failed")
     my_leading = _safe_call(get_my_leading_bids, manor, default=[], log_message="load my leading auction bids failed")
 
@@ -157,7 +166,7 @@ def _update_auction_my_bids_context(manor, context: dict) -> None:
     )
 
 
-def _update_auction_context(request, manor, context: dict) -> None:
+def _update_auction_context(request: HttpRequest, manor: Any, context: dict[str, Any]) -> None:
     context["auction_stats"] = _safe_call(get_auction_stats, manor, default={}, log_message="load auction stats failed")
     auction_view = request.GET.get("view", "browse")
     context["auction_view"] = auction_view
@@ -168,7 +177,7 @@ def _update_auction_context(request, manor, context: dict) -> None:
         _update_auction_my_bids_context(manor, context)
 
 
-def _build_shop_category_options(shop_items, sellable_items) -> list[dict]:
+def _build_shop_category_options(shop_items: Any, sellable_items: Any) -> list[dict[str, str]]:
     categories = {"all"}
     categories.update(_normalize_effect_type(item.effect_type or "other") for item in shop_items)
     categories.update(
@@ -184,7 +193,7 @@ def _build_shop_category_options(shop_items, sellable_items) -> list[dict]:
     ]
 
 
-def _update_shop_context(request, manor, context: dict) -> None:
+def _update_shop_context(request: HttpRequest, manor: Any, context: dict[str, Any]) -> None:
     shop_view = request.GET.get("view", "buy")
     if shop_view not in {"buy", "sell"}:
         shop_view = "buy"
@@ -224,7 +233,7 @@ def _update_shop_context(request, manor, context: dict) -> None:
     )
 
 
-def _update_market_buy_context(request, context: dict) -> None:
+def _update_market_buy_context(request: HttpRequest, context: dict[str, Any]) -> None:
     category = request.GET.get("category", "all")
     rarity = request.GET.get("rarity", "all")
     order_by = safe_ordering(
@@ -255,7 +264,7 @@ def _update_market_buy_context(request, context: dict) -> None:
     )
 
 
-def _filter_tradeable_inventory(manor, category: str):
+def _filter_tradeable_inventory(manor: Any, category: str) -> QuerySet[Any]:
     tradeable_qs = get_tradeable_inventory(manor)
     if category == "all":
         return tradeable_qs
@@ -265,7 +274,7 @@ def _filter_tradeable_inventory(manor, category: str):
     return tradeable_qs.filter(template__effect_type=category)
 
 
-def _update_market_sell_context(request, manor, context: dict) -> None:
+def _update_market_sell_context(request: HttpRequest, manor: Any, context: dict[str, Any]) -> None:
     category = request.GET.get("category", "all")
     if category != "all":
         category = _normalize_effect_type(category)
@@ -289,7 +298,7 @@ def _update_market_sell_context(request, manor, context: dict) -> None:
     )
 
 
-def _update_market_my_listings_context(request, manor, context: dict) -> None:
+def _update_market_my_listings_context(request: HttpRequest, manor: Any, context: dict[str, Any]) -> None:
     status = request.GET.get("status", "all")
     my_listings = _safe_call(get_my_listings, manor, status, default=[], log_message="load my market listings failed")
     page = safe_int(request.GET.get("page", 1), 1, min_val=1)
@@ -304,7 +313,7 @@ def _update_market_my_listings_context(request, manor, context: dict) -> None:
     )
 
 
-def _update_market_context(request, manor, context: dict) -> None:
+def _update_market_context(request: HttpRequest, manor: Any, context: dict[str, Any]) -> None:
     market_view = request.GET.get("view", "buy")
     context["market_view"] = market_view
 
@@ -316,7 +325,7 @@ def _update_market_context(request, manor, context: dict) -> None:
         _update_market_my_listings_context(request, manor, context)
 
 
-def get_trade_context(request, manor) -> dict:
+def get_trade_context(request: HttpRequest, manor: Any) -> dict[str, Any]:
     _safe_call(
         sync_resource_production,
         manor,

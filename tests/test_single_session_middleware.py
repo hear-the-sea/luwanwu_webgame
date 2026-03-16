@@ -66,3 +66,33 @@ def test_single_session_middleware_backfills_authoritative_record_from_legacy_ca
     assert response.status_code == 200
     assert UserActiveSession.objects.get(user=user).session_key == current_session_key
     assert client.session.get("_auth_user_id") == str(user.id)
+
+
+@pytest.mark.django_db
+def test_single_session_middleware_rechecks_db_when_verify_marker_cache_write_fails(
+    client, django_user_model, monkeypatch
+):
+    user = django_user_model.objects.create_user(username="single_session_verify_fallback", password="pass123")
+    client.force_login(user)
+    current_session_key = client.session.session_key
+
+    UserActiveSession.objects.filter(user=user).update(session_key="canonical-session-key")
+    cache.set(
+        f"{USER_SESSION_CACHE_PREFIX}{user.id}",
+        current_session_key,
+        timeout=USER_SESSION_CACHE_TTL,
+    )
+
+    original_add = cache.add
+
+    def fake_add(key, value, timeout=None):
+        if key.endswith(":verified"):
+            raise RuntimeError("cache add down")
+        return original_add(key, value, timeout=timeout)
+
+    monkeypatch.setattr("core.middleware.single_session.cache.add", fake_add)
+
+    response = client.get("/health/live")
+
+    assert response.status_code == 200
+    assert "_auth_user_id" not in client.session

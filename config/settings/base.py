@@ -16,6 +16,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 load_dotenv(BASE_DIR / ".env")
 
+RUNNING_TESTS = ("pytest" in sys.modules) or ("test" in sys.argv) or ("pytest" in os.path.basename(sys.argv[0] or ""))
+
 
 def env(key: str, default: str = "") -> str:
     return os.getenv(key, default)
@@ -30,6 +32,10 @@ def env_float(key: str, default: float) -> float:
     if not math.isfinite(parsed):
         return float(default)
     return parsed
+
+
+def _production_default_flag(*, debug: bool, running_tests: bool) -> str:
+    return "0" if debug or running_tests else "1"
 
 
 # Game time multiplier
@@ -128,11 +134,7 @@ STORAGES = {
     },
 }
 
-if (
-    not DEBUG
-    and env("DJANGO_STATIC_USE_MANIFEST", "1") == "1"
-    and not (("pytest" in sys.modules) or ("test" in sys.argv) or ("pytest" in os.path.basename(sys.argv[0] or "")))
-):
+if not DEBUG and env("DJANGO_STATIC_USE_MANIFEST", "1") == "1" and not RUNNING_TESTS:
     STORAGES["staticfiles"] = {
         "BACKEND": "django.contrib.staticfiles.storage.ManifestStaticFilesStorage",
     }
@@ -211,10 +213,25 @@ RAID_CAPTURE_GUEST_RATE = env_float("DJANGO_RAID_CAPTURE_GUEST_RATE", 0.5)
 TRADE_HIGH_VALUE_SILVER_THRESHOLD = int(env("DJANGO_TRADE_HIGH_VALUE_SILVER_THRESHOLD", "1000000"))
 AUCTION_HIGH_BID_THRESHOLD = int(env("DJANGO_AUCTION_HIGH_BID_THRESHOLD", "200"))
 
-HEALTH_CHECK_REQUIRE_INTERNAL = env("DJANGO_HEALTH_CHECK_REQUIRE_INTERNAL", "0") == "1"
-HEALTH_CHECK_CHANNEL_LAYER = env("DJANGO_HEALTH_CHECK_CHANNEL_LAYER", "0") == "1"
+HEALTH_CHECK_REQUIRE_INTERNAL = (
+    env(
+        "DJANGO_HEALTH_CHECK_REQUIRE_INTERNAL",
+        _production_default_flag(debug=DEBUG, running_tests=RUNNING_TESTS),
+    )
+    == "1"
+)
+HEALTH_CHECK_CHANNEL_LAYER = (
+    env(
+        "DJANGO_HEALTH_CHECK_CHANNEL_LAYER",
+        _production_default_flag(debug=DEBUG, running_tests=RUNNING_TESTS),
+    )
+    == "1"
+)
 HEALTH_CHECK_CHANNEL_LAYER_TIMEOUT_SECONDS = env_float("DJANGO_HEALTH_CHECK_CHANNEL_LAYER_TIMEOUT_SECONDS", 1.0)
-HEALTH_CHECK_CELERY_BROKER = env("DJANGO_HEALTH_CHECK_CELERY_BROKER", "0") == "1"
-
-# Detect test runs
-RUNNING_TESTS = ("pytest" in sys.modules) or ("test" in sys.argv) or ("pytest" in os.path.basename(sys.argv[0] or ""))
+HEALTH_CHECK_CELERY_BROKER = (
+    env(
+        "DJANGO_HEALTH_CHECK_CELERY_BROKER",
+        _production_default_flag(debug=DEBUG, running_tests=RUNNING_TESTS),
+    )
+    == "1"
+)

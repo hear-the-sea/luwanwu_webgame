@@ -35,6 +35,9 @@ exclude = [
 
 [tool.mypy]
 python_version = "3.12"
+# mypy governance: shrink ignore_errors list over time.
+# New modules must pass full type checking.
+#
 # Start enforcing mypy in CI with a pragmatic baseline:
 # - Keep missing-imports ignored (Django ecosystem is dynamic)
 # - Disable warn_return_any initially to avoid turning implicit Any
@@ -42,6 +45,7 @@ python_version = "3.12"
 # We can tighten this progressively once CI is green.
 warn_return_any = false
 warn_unused_configs = true
+# disallow_untyped_defs target default: true (enforce for new modules via overrides below)
 disallow_untyped_defs = false
 ignore_missing_imports = true
 no_implicit_optional = false
@@ -72,6 +76,7 @@ exclude = "(^|/)(migrations|\\.venv|scripts|battle_debugger|tests|docs)/"
 [[tool.mypy.overrides]]
 module = [
     "*.admin",
+    "*.admin.*",
     "*.views",
     "*.views.*",
     "*.management.commands.*",
@@ -99,7 +104,14 @@ module = [
     "guests.utils.guest_state",
     "guests.utils.training_timer",
     "trade.models",
-    "trade.selectors",
     "trade.services.market_service",
 ]
 ignore_errors = true
+
+# New modules: enforce strict type checking (target default for all modules)
+[[tool.mypy.overrides]]
+module = [
+    "trade.selectors",
+    "core.middleware.*",
+]
+disallow_untyped_defs = true

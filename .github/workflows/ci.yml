@@ -44,7 +44,8 @@ jobs:
         run: |
           python manage.py check --deploy
           python -m coverage run -m pytest -q -m "not integration"
-          python -m coverage report --fail-under=60
+          # Coverage target: incrementally raise from 60% → 65% → 70% → 75%
+          python -m coverage report --fail-under=65
           python -m coverage xml -o coverage-unit.xml
 
       - name: Upload Unit Coverage

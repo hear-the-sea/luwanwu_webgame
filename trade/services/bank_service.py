@@ -9,63 +9,43 @@
 """
 
 import logging
-import math
 import uuid
 from datetime import timedelta
-from decimal import Decimal
 
 from django.core.cache import cache
 from django.db import transaction
 from django.db.models import F, Sum
 from django.utils import timezone
 
-from core.exceptions import GameError
 from core.utils.cache_lock import release_cache_key_if_owner
 from gameplay.models import InventoryItem, ItemTemplate, Manor, ResourceEvent
 from gameplay.services.resources import spend_resources_locked
 from trade.models import GoldBarExchangeLog
 
+# Pure pricing constants and math functions extracted to bank_pricing.
+from .bank_pricing import (  # noqa: F401
+    ACTIVE_DAYS_THRESHOLD,
+    DEGRADED_PRICING_SOURCES,
+    GOLD_BAR_BASE_PRICE,
+    GOLD_BAR_FEE_RATE,
+    GOLD_BAR_ITEM_KEY,
+    GOLD_BAR_MAX_PRICE,
+    GOLD_BAR_MIN_PRICE,
+    GOLD_BAR_PROGRESSIVE_FACTOR,
+    GOLD_BAR_SUPPLY_FACTOR,
+    GOLD_BAR_TARGET_SUPPLY,
+    SUPPLY_CACHE_KEY,
+    SUPPLY_CACHE_TTL,
+    SUPPLY_STALE_CACHE_KEY,
+    SUPPLY_STALE_CACHE_TTL,
+    GoldBarPricingUnavailableError,
+    _calculate_supply_factor_from_supply,
+    _normalize_positive_quantity,
+    _safe_int,
+    calculate_progressive_factor,
+)
+
 logger = logging.getLogger(__name__)
-
-
-# 金条基础配置
-GOLD_BAR_ITEM_KEY = "gold_bar"
-GOLD_BAR_BASE_PRICE = 1_000_000  # 基准价100万银两
-GOLD_BAR_FEE_RATE = Decimal("0.10")  # 10%手续费
-
-# 动态汇率配置
-GOLD_BAR_TARGET_SUPPLY = 1000  # 基准活跃金条量
-GOLD_BAR_MIN_PRICE = 800_000  # 最低价80万
-GOLD_BAR_MAX_PRICE = 1_600_000  # 最高价160万
-GOLD_BAR_SUPPLY_FACTOR = 0.12  # 总量系数调节因子
-GOLD_BAR_PROGRESSIVE_FACTOR = 0.05  # 累进系数：每根+5%
-ACTIVE_DAYS_THRESHOLD = 14  # 活跃判定天数
-
-# 缓存配置
-SUPPLY_CACHE_KEY = "gold_bar:effective_supply"
-SUPPLY_CACHE_TTL = 300  # 缓存5分钟
-SUPPLY_STALE_CACHE_KEY = "gold_bar:effective_supply:stale"
-SUPPLY_STALE_CACHE_TTL = 3600  # 过期缓存保留1小时，用于降级
-DEGRADED_PRICING_SOURCES = frozenset({"stale_cache", "default"})
-
-
-class GoldBarPricingUnavailableError(GameError):
-    error_code = "BANK_PRICING_UNAVAILABLE"
-    default_message = "钱庄汇率暂时不可用，请稍后再试"
-
-
-def _safe_int(value, default: int) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _normalize_positive_quantity(quantity) -> int:
-    normalized = _safe_int(quantity, 0)
-    if normalized <= 0:
-        raise ValueError("兑换数量必须大于0")
-    return normalized
 
 
 def _safe_cache_get(key: str, default=None):
@@ -226,16 +206,6 @@ def get_effective_gold_supply(*, fail_closed: bool = False) -> int:
     return _get_effective_gold_supply_data(fail_closed=fail_closed)[0]
 
 
-def _calculate_supply_factor_from_supply(total_supply: int) -> float:
-    if total_supply <= 0:
-        return 0.85  # 无金条时给最低价
-
-    ratio = total_supply / GOLD_BAR_TARGET_SUPPLY
-    factor = 1 + GOLD_BAR_SUPPLY_FACTOR * math.log2(ratio)
-
-    return max(0.85, min(1.40, factor))
-
-
 def calculate_supply_factor(*, fail_closed: bool = False) -> float:
     """
     计算总量系数
@@ -249,27 +219,6 @@ def calculate_supply_factor(*, fail_closed: bool = False) -> float:
     """
     total_supply = get_effective_gold_supply(fail_closed=fail_closed) if fail_closed else get_effective_gold_supply()
     return _calculate_supply_factor_from_supply(total_supply)
-
-
-def calculate_progressive_factor(today_count: int) -> float:
-    """
-    计算累进系数
-
-    基于当日个人已兑换数量，每兑换一根价格上涨5%：
-    - 第1根：1.05
-    - 第5根：1.25
-    - 第10根：1.50
-    - 第12根及以上：1.60（封顶）
-
-    Args:
-        today_count: 当日已兑换数量
-
-    Returns:
-        float: 累进系数，范围 1.0 ~ 1.60
-    """
-    normalized_count = max(0, _safe_int(today_count, 0))
-    factor = 1 + GOLD_BAR_PROGRESSIVE_FACTOR * normalized_count
-    return min(factor, 1.60)
 
 
 def calculate_dynamic_rate(manor: Manor, *, supply_factor: float | None = None, fail_closed: bool = False) -> int:

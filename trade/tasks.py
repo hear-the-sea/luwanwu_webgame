@@ -7,6 +7,7 @@ from __future__ import annotations
 import logging
 
 from celery import shared_task
+from django.db import DatabaseError
 from django.utils import timezone
 
 from trade.models import ShopStock
@@ -25,6 +26,11 @@ def _safe_int(value, default: int = 0) -> int:
 def _coerce_non_negative_int(value, default: int = 0) -> int:
     parsed = _safe_int(value, default)
     return parsed if parsed >= 0 else default
+
+
+def _is_expected_task_error(exc: Exception) -> bool:
+    """Infrastructure errors that warrant a Celery retry rather than immediate propagation."""
+    return isinstance(exc, (DatabaseError, ConnectionError, OSError, TimeoutError))
 
 
 def _normalize_settlement_stats(stats) -> tuple[int, int, int, int]:
@@ -73,6 +79,10 @@ def refresh_shop_stock(self):
                     )
                     refreshed_count += 1
                 except Exception as e:
+                    if not _is_expected_task_error(e):
+                        raise
+                    # DB/connection errors on a single item should not abort the
+                    # entire refresh; log and continue with the remaining items.
                     logger.exception("Failed to refresh stock for item %s: %s", item_key, e)
                     failed_items.append({"item_key": item_key, "error": str(e)})
 
@@ -86,6 +96,8 @@ def refresh_shop_stock(self):
 
         return f"refreshed {refreshed_count} items"
     except Exception as exc:
+        if not _is_expected_task_error(exc):
+            raise
         logger.exception("Failed to refresh shop stock: %s", exc)
         raise self.retry(exc=exc)
 
@@ -93,8 +105,16 @@ def refresh_shop_stock(self):
 @shared_task(name="trade.process_expired_listings", bind=True, max_retries=2, default_retry_delay=60)
 def process_expired_listings(self):
     """
-    处理过期的交易行挂单
-    建议每10分钟执行一次
+    Scan-fallback: process expired market listings.
+
+    Primary path: listings are expired individually when their expiry time is
+    reached via scheduled per-listing Celery tasks.
+
+    This periodic scan (recommended every 10 minutes) acts as a fallback to
+    catch listings whose individual expiry tasks were lost, delayed, or failed
+    due to broker restarts, worker crashes, or transient infrastructure errors.
+    It compensates for the unreliable at-most-once delivery guarantee of the
+    Celery broker by sweeping up any missed expirations in bulk.
     """
     try:
         from trade.services.market_service import expire_listings
@@ -102,6 +122,8 @@ def process_expired_listings(self):
         count = _coerce_non_negative_int(expire_listings(), 0)
         return f"处理了 {count} 个过期挂单"
     except Exception as exc:
+        if not _is_expected_task_error(exc):
+            raise
         logger.exception("Failed to process expired listings: %s", exc)
         raise self.retry(exc=exc)
 
@@ -131,12 +153,18 @@ def settle_auction_round_task(self):
             try:
                 create_auction_round_task.delay()
             except Exception as exc:
+                if not _is_expected_task_error(exc):
+                    raise
+                # Failure to enqueue the follow-up task is non-fatal; the
+                # periodic scheduler will pick it up on the next cycle.
                 logger.warning("拍卖结算后触发新轮次任务失败: %s", exc, exc_info=True)
             logger.info(f"拍卖轮次结算完成：售出 {sold} 件，" f"流拍 {unsold} 件，" f"共收取 {total_gold_bars} 金条")
             return f"结算完成：售出 {sold} 件，流拍 {unsold} 件，" f"共 {total_gold_bars} 金条"
         else:
             return "没有需要结算的拍卖轮次"
     except Exception as exc:
+        if not _is_expected_task_error(exc):
+            raise
         logger.exception("结算拍卖轮次失败: %s", exc)
         raise self.retry(exc=exc)
 
@@ -166,6 +194,9 @@ def create_auction_round_task(self):
             try:
                 slot_count = _coerce_non_negative_int(auction_round.slots.count(), 0)
             except Exception as exc:
+                if not _is_expected_task_error(exc):
+                    raise
+                # Slot count is informational; degrade to 0 on infra errors.
                 logger.warning(
                     "读取拍卖轮次槽位数失败: round=%s error=%s",
                     round_number,
@@ -178,5 +209,7 @@ def create_auction_round_task(self):
         else:
             return "已有进行中的拍卖轮次或无可用商品，跳过创建"
     except Exception as exc:
+        if not _is_expected_task_error(exc):
+            raise
         logger.exception("创建拍卖轮次失败: %s", exc)
         raise self.retry(exc=exc)

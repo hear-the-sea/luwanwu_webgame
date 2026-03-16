@@ -1,10 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-import html
-import json
 import logging
-import re
 
 from asgiref.sync import sync_to_async
 from channels.db import database_sync_to_async
@@ -15,11 +12,26 @@ from django.db import DatabaseError
 from django_redis import get_redis_connection
 from redis.exceptions import RedisError
 
+from core.utils.degradation import WORLD_CHAT_REFUND, record_degradation
+from websocket.backends.chat_history import (
+    TRIM_HISTORY_SCRIPT,
+    append_history_sync,
+    get_history_sync,
+    trim_history_by_time_fallback,
+    trim_history_by_time_sync,
+)
+from websocket.backends.rate_limiter import rate_limit_sync
+from websocket.services.message_builder import build_message_sync, next_id_sync, normalize_text
+
 from ..utils import filter_payload
 
 User = get_user_model()
 
 logger = logging.getLogger(__name__)
+
+
+class WorldChatInfrastructureError(RuntimeError):
+    """Expected infrastructure/runtime dependency failure for world chat operations."""
 
 
 def _now_ts() -> float:
@@ -52,28 +64,8 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
     # Display name cache TTL (5 minutes)
     DISPLAY_NAME_CACHE_TTL = 300
 
-    # Lua script for batch history trimming (O(1) per removed message vs O(n) round trips)
-    TRIM_HISTORY_SCRIPT = """
-local key = KEYS[1]
-local cutoff = tonumber(ARGV[1])
-local limit = tonumber(ARGV[2])
-local removed = 0
-while removed < limit do
-    local tail = redis.call('LINDEX', key, -1)
-    if not tail then break end
-    local ok, msg = pcall(cjson.decode, tail)
-    if not ok then
-        redis.call('RPOP', key)
-        removed = removed + 1
-    elseif msg.ts and tonumber(msg.ts) < cutoff then
-        redis.call('RPOP', key)
-        removed = removed + 1
-    else
-        break
-    end
-end
-return removed
-"""
+    # Lua script kept as class attribute for backwards compatibility
+    TRIM_HISTORY_SCRIPT = TRIM_HISTORY_SCRIPT
 
     user_id: int | None = None
     display_name: str = ""
@@ -82,8 +74,10 @@ return removed
     CHAT_UNAVAILABLE_REFUND_FAILED_MESSAGE = "世界频道暂时不可用，请联系管理员补发小喇叭"
     HISTORY_UNAVAILABLE_MESSAGE = "历史消息暂时不可用，已跳过历史记录加载"
 
-    _re_control_chars = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
     _history_degraded: bool = False
+
+    def _is_expected_infrastructure_error(self, exc: Exception) -> bool:
+        return isinstance(exc, (WorldChatInfrastructureError, RedisError, ConnectionError, OSError, TimeoutError))
 
     async def connect(self):
         user = self.scope.get("user")
@@ -140,7 +134,7 @@ return removed
 
         try:
             allowed, retry_after = await self._rate_limit(self.user_id)
-        except RuntimeError:
+        except WorldChatInfrastructureError:
             await self.send_json(
                 {"type": "error", "code": "chat_unavailable", "message": self.CHAT_UNAVAILABLE_MESSAGE}
             )
@@ -167,8 +161,16 @@ return removed
                     "payload": message,
                 },
             )
-        except Exception:
+        except Exception as exc:
+            if not self._is_expected_infrastructure_error(exc):
+                raise
             refunded = await self._refund_trumpet()
+            record_degradation(
+                WORLD_CHAT_REFUND,
+                component="world_chat",
+                detail=f"publish failed, refunded={refunded}",
+                user_id=self.user_id,
+            )
             logger.exception(
                 "World chat publish failed after consuming trumpet: user_id=%s refunded=%s",
                 self.user_id,
@@ -202,9 +204,6 @@ return removed
         except (ValueError, TypeError) as exc:
             logger.info("World chat message rejected due to invalid payload: %s", exc)
             await self.send_json({"type": "error", "code": "invalid_payload", "message": "消息格式错误"})
-        except Exception:
-            logger.exception("Unexpected error handling world chat message")
-            await self.send_json({"type": "error", "code": "server_error", "message": "服务器错误，请稍后重试"})
 
     async def chat_message(self, event):
         payload = event.get("payload", {})
@@ -216,12 +215,12 @@ return removed
             safe_payload["text"] = payload["message"]
         await self.send_json(safe_payload)
 
+    # -- Delegating methods ------------------------------------------------
+    # These thin wrappers preserve the existing instance-method interface
+    # (used by tests via monkeypatching) while delegating to extracted modules.
+
     def _normalize_text(self, text: str) -> str:
-        text = html.escape(text)
-        cleaned = self._re_control_chars.sub("", text)
-        cleaned = cleaned.replace("\r\n", "\n").replace("\r", "\n")
-        cleaned = re.sub(r"\n{4,}", "\n\n\n", cleaned)
-        return cleaned.strip()
+        return normalize_text(text)
 
     def _get_redis(self):
         return get_redis_connection("default")
@@ -286,130 +285,75 @@ return removed
 
     def _get_history_sync(self) -> list[dict]:
         redis = self._get_redis()
-        cutoff_ms = int((_now_ts() - float(self.HISTORY_MESSAGE_TTL_SECONDS)) * 1000)
-        self._history_degraded = False
-        try:
-            raw_items = redis.lrange(self.HISTORY_KEY, 0, max(0, self.HISTORY_ON_CONNECT - 1))
-        except RedisError as exc:
-            self._history_degraded = True
-            logger.warning("World chat history Redis read failed; returning empty history: %s", exc)
-            return []
-
-        messages: list[dict] = []
-        for raw in reversed(raw_items or []):
-            try:
-                if isinstance(raw, (bytes, bytearray)):
-                    raw = raw.decode("utf-8")
-                msg = json.loads(raw)
-                if not isinstance(msg, dict):
-                    continue
-                ts = msg.get("ts")
-                if isinstance(ts, (int, float)) and int(ts) < cutoff_ms:
-                    continue
-                messages.append(msg)
-            except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
-                logger.debug("Skipping malformed world chat history entry: %s", exc)
-                continue
-            except Exception:
-                logger.exception("Unexpected error while parsing world chat history entry")
-                continue
-
-        try:
-            self._trim_history_by_time_sync(cutoff_ms)
-        except RedisError as exc:
-            logger.debug("World chat history trim skipped due to Redis error: %s", exc)
-        except Exception:
-            logger.exception("Unexpected error while trimming world chat history")
+        messages, degraded = get_history_sync(
+            redis,
+            history_key=self.HISTORY_KEY,
+            history_on_connect=self.HISTORY_ON_CONNECT,
+            history_limit=self.HISTORY_LIMIT,
+            history_message_ttl_seconds=self.HISTORY_MESSAGE_TTL_SECONDS,
+            user_id=self.user_id,
+        )
+        self._history_degraded = degraded
         return messages
 
     async def _get_history(self) -> list[dict]:
         return await sync_to_async(self._get_history_sync, thread_sensitive=True)()
 
     def _trim_history_by_time_sync(self, cutoff_ms: int) -> None:
-        """Trim expired messages from history using Lua script for O(1) performance."""
         redis = self._get_redis()
-        try:
-            redis.eval(self.TRIM_HISTORY_SCRIPT, 1, self.HISTORY_KEY, cutoff_ms, self.HISTORY_LIMIT)
-        except (RedisError, AttributeError) as exc:
-            # Fallback to Python-based trimming when Lua is unavailable (e.g., in tests)
-            logger.debug("Lua script unavailable, using Python fallback: %s", exc)
-            self._trim_history_by_time_fallback(cutoff_ms, redis)
-        except Exception:
-            logger.exception("Unexpected error while trimming world chat history")
+        trim_history_by_time_sync(
+            cutoff_ms,
+            redis,
+            history_key=self.HISTORY_KEY,
+            history_limit=self.HISTORY_LIMIT,
+        )
 
     def _trim_history_by_time_fallback(self, cutoff_ms: int, redis) -> None:
-        """Python fallback for trimming history when Lua is unavailable."""
-        for _ in range(int(self.HISTORY_LIMIT)):
-            raw_tail = redis.lindex(self.HISTORY_KEY, -1)
-            if not raw_tail:
-                return
-            try:
-                if isinstance(raw_tail, (bytes, bytearray)):
-                    raw_tail = raw_tail.decode("utf-8")
-                msg = json.loads(raw_tail)
-                ts = msg.get("ts") if isinstance(msg, dict) else None
-                if isinstance(ts, (int, float)) and int(ts) >= int(cutoff_ms):
-                    return
-            except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
-                logger.debug("Dropping corrupted world chat history tail entry: %s", exc)
-            except Exception:
-                logger.exception("Unexpected error while trimming world chat history tail entry")
-            redis.rpop(self.HISTORY_KEY)
+        trim_history_by_time_fallback(
+            cutoff_ms,
+            redis,
+            history_key=self.HISTORY_KEY,
+            history_limit=self.HISTORY_LIMIT,
+        )
 
     def _append_history_sync(self, message: dict) -> None:
         redis = self._get_redis()
-        payload = json.dumps(message, ensure_ascii=False, separators=(",", ":"))
-        pipe = redis.pipeline()
-        pipe.lpush(self.HISTORY_KEY, payload)
-        pipe.ltrim(self.HISTORY_KEY, 0, max(0, self.HISTORY_LIMIT - 1))
-        pipe.expire(self.HISTORY_KEY, int(self.HISTORY_MESSAGE_TTL_SECONDS) + 60)
-        pipe.execute()
-
-        cutoff_ms = int((_now_ts() - float(self.HISTORY_MESSAGE_TTL_SECONDS)) * 1000)
-        self._trim_history_by_time_sync(cutoff_ms)
+        append_history_sync(
+            message,
+            redis,
+            history_key=self.HISTORY_KEY,
+            history_limit=self.HISTORY_LIMIT,
+            history_message_ttl_seconds=self.HISTORY_MESSAGE_TTL_SECONDS,
+        )
 
     async def _append_history(self, message: dict) -> None:
         await sync_to_async(self._append_history_sync, thread_sensitive=True)(message)
 
     def _rate_limit_sync(self, user_id: int | None) -> tuple[bool, int | None]:
-        if not user_id:
-            return False, 3
-
         redis = self._get_redis()
-        now_bucket = int(_now_ts() // self.RATE_LIMIT_WINDOW_SECONDS)
-        key = f"chat:world:rate:{int(user_id)}:{now_bucket}"
-
-        try:
-            count = int(redis.incr(key) or 0)
-            if count == 1:
-                redis.expire(key, self.RATE_LIMIT_WINDOW_SECONDS + 2)
-        except RedisError as exc:
-            logger.warning("World chat rate limit Redis error; rejecting send: %s", exc)
-            raise RuntimeError("world chat rate limit backend unavailable") from exc
-
-        if count > self.RATE_LIMIT_MAX_MESSAGES:
-            return False, self.RATE_LIMIT_WINDOW_SECONDS
-        return True, None
+        return rate_limit_sync(
+            user_id,
+            redis,
+            rate_limit_window_seconds=self.RATE_LIMIT_WINDOW_SECONDS,
+            rate_limit_max_messages=self.RATE_LIMIT_MAX_MESSAGES,
+        )
 
     async def _rate_limit(self, user_id: int | None) -> tuple[bool, int | None]:
         return await sync_to_async(self._rate_limit_sync, thread_sensitive=True)(user_id)
 
     def _next_id_sync(self) -> int:
         redis = self._get_redis()
-        try:
-            return int(redis.incr(self.NEXT_ID_KEY) or 0)
-        except RedisError as exc:
-            logger.warning("World chat next_id Redis error; rejecting send: %s", exc)
-            raise RuntimeError("world chat id backend unavailable") from exc
+        return next_id_sync(redis, next_id_key=self.NEXT_ID_KEY)
 
     async def _build_message(self, text: str) -> dict:
-        msg_id = await sync_to_async(self._next_id_sync, thread_sensitive=True)()
-        ts_ms = int(_now_ts() * 1000)
-        return {
-            "type": "message",
-            "channel": self.CHANNEL,
-            "id": msg_id,
-            "ts": ts_ms,
-            "sender": {"id": self.user_id, "name": self.display_name},
-            "text": text,
-        }
+        return await sync_to_async(
+            lambda: build_message_sync(
+                text,
+                self._get_redis(),
+                next_id_key=self.NEXT_ID_KEY,
+                channel=self.CHANNEL,
+                user_id=self.user_id,
+                display_name=self.display_name,
+            ),
+            thread_sensitive=True,
+        )()

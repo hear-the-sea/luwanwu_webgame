@@ -39,15 +39,15 @@ def test_notifications_anonymous_tolerates_cache_and_redis_failures(monkeypatch)
     request.user = AnonymousUser()
 
     monkeypatch.setattr(
-        "gameplay.context_processors.cache.get",
+        "gameplay.selectors.stats.cache.get",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache read failed")),
     )
     monkeypatch.setattr(
-        "gameplay.context_processors.cache.set",
+        "gameplay.selectors.stats.cache.set",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache write failed")),
     )
     monkeypatch.setattr(
-        "gameplay.context_processors.get_redis_connection",
+        "gameplay.selectors.stats.get_redis_connection",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("redis down")),
     )
 
@@ -68,7 +68,7 @@ def test_notifications_anonymous_handles_corrupted_cached_online_value(monkeypat
             return "invalid-int"
         return default
 
-    monkeypatch.setattr("gameplay.context_processors.cache.get", fake_cache_get)
+    monkeypatch.setattr("gameplay.selectors.stats.cache.get", fake_cache_get)
 
     context = notifications(request)
     assert context["total_user_count"] == 7
@@ -81,7 +81,7 @@ def test_notifications_authenticated_http_touch_refreshes_online_count(monkeypat
     request.user = user
 
     fake_redis = _FakeRedis()
-    monkeypatch.setattr("gameplay.context_processors.get_redis_connection", lambda *_args, **_kwargs: fake_redis)
+    monkeypatch.setattr("gameplay.selectors.stats.get_redis_connection", lambda *_args, **_kwargs: fake_redis)
     monkeypatch.setattr(
         "gameplay.services.online_presence.get_redis_connection_if_supported",
         lambda *_args, **_kwargs: fake_redis,
@@ -111,8 +111,10 @@ def test_notifications_authenticated_falls_back_when_sidebar_cache_payload_inval
             return None
         return default
 
-    monkeypatch.setattr("gameplay.context_processors.cache.get", fake_cache_get)
-    monkeypatch.setattr("gameplay.context_processors.cache.set", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("gameplay.selectors.stats.cache.get", fake_cache_get)
+    monkeypatch.setattr("gameplay.selectors.stats.cache.set", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("gameplay.selectors.sidebar.cache.get", fake_cache_get)
+    monkeypatch.setattr("gameplay.selectors.sidebar.cache.set", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("gameplay.context_processors.unread_message_count", lambda _manor: 4)
     monkeypatch.setattr("gameplay.services.ranking.get_player_rank", lambda _manor: 9)
 
@@ -135,8 +137,10 @@ def test_notifications_authenticated_partial_sidebar_failures_do_not_hide_other_
             return 2
         return default
 
-    monkeypatch.setattr("gameplay.context_processors.cache.get", fake_cache_get)
-    monkeypatch.setattr("gameplay.context_processors.cache.set", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("gameplay.selectors.stats.cache.get", fake_cache_get)
+    monkeypatch.setattr("gameplay.selectors.stats.cache.set", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("gameplay.selectors.sidebar.cache.get", fake_cache_get)
+    monkeypatch.setattr("gameplay.selectors.sidebar.cache.set", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         "gameplay.context_processors.unread_message_count",
         lambda _manor: (_ for _ in ()).throw(DatabaseError("message db boom")),
@@ -165,7 +169,7 @@ def test_notifications_authenticated_programming_error_in_unread_count_bubbles_u
     request = RequestFactory().get("/")
     request.user = user
 
-    monkeypatch.setattr("gameplay.context_processors.cache.get", lambda *_args, **_kwargs: 0)
+    monkeypatch.setattr("gameplay.selectors.stats.cache.get", lambda *_args, **_kwargs: 0)
     monkeypatch.setattr(
         "gameplay.context_processors.unread_message_count",
         lambda _manor: (_ for _ in ()).throw(RuntimeError("message boom")),
@@ -187,7 +191,8 @@ def test_notifications_authenticated_programming_error_in_rank_bubbles_up(monkey
             return None
         return default
 
-    monkeypatch.setattr("gameplay.context_processors.cache.get", fake_cache_get)
+    monkeypatch.setattr("gameplay.selectors.stats.cache.get", fake_cache_get)
+    monkeypatch.setattr("gameplay.selectors.sidebar.cache.get", fake_cache_get)
     monkeypatch.setattr("gameplay.context_processors.unread_message_count", lambda _manor: 1)
     monkeypatch.setattr(
         "gameplay.services.raid.get_protection_status",
@@ -208,7 +213,7 @@ def test_notifications_non_home_pages_skip_home_sidebar_queries(monkeypatch, dja
     request.user = user
 
     monkeypatch.setattr(
-        "gameplay.context_processors.get_redis_connection",
+        "gameplay.selectors.stats.get_redis_connection",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("redis down")),
     )
     monkeypatch.setattr("gameplay.context_processors.unread_message_count", lambda _manor: 2)
@@ -240,3 +245,77 @@ def test_notifications_ajax_requests_skip_global_stats_queries(monkeypatch):
 
     assert context["total_user_count"] == 0
     assert context["online_user_count"] == 0
+
+
+def test_notifications_total_user_count_uses_local_fallback_when_cache_reads_fail(monkeypatch):
+    request = RequestFactory().get("/")
+    request.user = AnonymousUser()
+    gameplay_selectors_stats = __import__("gameplay.selectors.stats", fromlist=["load_total_user_count"])
+    gameplay_selectors_stats._LOCAL_STATS_CACHE.clear()
+
+    count_calls = {"count": 0}
+
+    monkeypatch.setattr(
+        "gameplay.selectors.stats.cache.get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache read failed")),
+    )
+    monkeypatch.setattr(
+        "gameplay.selectors.stats.cache.set",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache write failed")),
+    )
+    monkeypatch.setattr(
+        "gameplay.selectors.stats.User.objects.filter",
+        lambda **_kwargs: type(
+            "FakeQuerySet",
+            (),
+            {"count": lambda self: count_calls.__setitem__("count", count_calls["count"] + 1) or 11},
+        )(),
+    )
+    monkeypatch.setattr(
+        "gameplay.context_processors._load_online_user_count",
+        lambda: 0,
+    )
+
+    first = notifications(request)
+    second = notifications(request)
+
+    assert first["total_user_count"] == 11
+    assert second["total_user_count"] == 11
+    assert count_calls["count"] == 1
+
+
+def test_notifications_online_user_count_uses_local_fallback_when_cache_and_redis_fail(monkeypatch):
+    request = RequestFactory().get("/")
+    request.user = AnonymousUser()
+    gameplay_selectors_stats = __import__("gameplay.selectors.stats", fromlist=["load_online_user_count"])
+    gameplay_selectors_stats._LOCAL_STATS_CACHE.clear()
+
+    count_calls = {"count": 0}
+
+    monkeypatch.setattr(
+        "gameplay.selectors.stats.cache.get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache read failed")),
+    )
+    monkeypatch.setattr(
+        "gameplay.selectors.stats.cache.set",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache write failed")),
+    )
+    monkeypatch.setattr(
+        "gameplay.selectors.stats.get_redis_connection",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("redis down")),
+    )
+    monkeypatch.setattr(
+        "gameplay.context_processors._load_total_user_count",
+        lambda: 0,
+    )
+    monkeypatch.setattr(
+        "gameplay.selectors.stats._load_online_user_count_from_db",
+        lambda: count_calls.__setitem__("count", count_calls["count"] + 1) or 3,
+    )
+
+    first = notifications(request)
+    second = notifications(request)
+
+    assert first["online_user_count"] == 3
+    assert second["online_user_count"] == 3
+    assert count_calls["count"] == 1

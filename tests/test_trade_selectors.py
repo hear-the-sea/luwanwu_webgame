@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 
 import pytest
+from django.db import DatabaseError
 from django.test import RequestFactory
 
 from gameplay.services.manor.core import ensure_manor
@@ -273,7 +274,7 @@ def test_get_trade_context_market_buy_negative_page_clamped(monkeypatch, django_
 def test_get_trade_context_bank_tolerates_sync_resource_error(monkeypatch, django_user_model):
     monkeypatch.setattr(
         "trade.selectors.sync_resource_production",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("sync failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("sync failed")),
     )
     monkeypatch.setattr(
         "trade.selectors.get_bank_info",
@@ -307,7 +308,7 @@ def test_get_trade_context_auction_browse_tolerates_bid_info_batch_error(monkeyp
     monkeypatch.setattr("trade.selectors.get_active_slots", lambda **_kwargs: list(slots))
     monkeypatch.setattr(
         "trade.services.auction_service.get_slots_bid_info_batch",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("batch failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("batch failed")),
     )
 
     user = django_user_model.objects.create_user(username="trade_ctx_auction_bidinfo_err", password="pass12345")
@@ -353,7 +354,7 @@ def test_get_trade_context_bank_marks_bank_info_error_as_degraded(monkeypatch, d
     monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         "trade.selectors.get_bank_info",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bank failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("bank failed")),
     )
 
     user = django_user_model.objects.create_user(username="trade_ctx_bank_info_err", password="pass12345")
@@ -373,11 +374,11 @@ def test_get_trade_context_shop_tolerates_data_loading_errors(monkeypatch, djang
     monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         "trade.selectors.get_shop_items_for_display",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("shop items failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("shop items failed")),
     )
     monkeypatch.setattr(
         "trade.selectors.get_sellable_inventory",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("sellable failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("sellable failed")),
     )
 
     user = django_user_model.objects.create_user(username="trade_ctx_shop_load_err", password="pass12345")
@@ -396,11 +397,11 @@ def test_get_trade_context_auction_browse_tolerates_stats_and_slot_errors(monkey
     monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         "trade.selectors.get_auction_stats",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("stats failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("stats failed")),
     )
     monkeypatch.setattr(
         "trade.selectors.get_active_slots",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("slots failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("slots failed")),
     )
 
     user = django_user_model.objects.create_user(username="trade_ctx_auction_load_err", password="pass12345")
@@ -421,11 +422,11 @@ def test_get_trade_context_auction_my_bids_tolerates_loading_errors(monkeypatch,
     monkeypatch.setattr("trade.selectors.get_auction_stats", lambda *_args, **_kwargs: {"round": 1})
     monkeypatch.setattr(
         "trade.selectors.get_my_bids",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("my bids failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("my bids failed")),
     )
     monkeypatch.setattr(
         "trade.selectors.get_my_leading_bids",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("leading bids failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("leading bids failed")),
     )
 
     user = django_user_model.objects.create_user(username="trade_ctx_auction_my_err", password="pass12345")
@@ -444,7 +445,7 @@ def test_get_trade_context_market_buy_tolerates_active_listings_error(monkeypatc
     monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         "trade.selectors.get_active_listings",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("listings failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("listings failed")),
     )
 
     user = django_user_model.objects.create_user(username="trade_ctx_market_buy_err", password="pass12345")
@@ -464,7 +465,7 @@ def test_get_trade_context_market_sell_negative_page_clamped_and_tolerates_inven
     monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         "trade.selectors.get_tradeable_inventory",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("tradeable failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("tradeable failed")),
     )
 
     user = django_user_model.objects.create_user(username="trade_ctx_market_sell_err", password="pass12345")
@@ -483,7 +484,7 @@ def test_get_trade_context_market_my_listings_tolerates_loading_error(monkeypatc
     monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         "trade.selectors.get_my_listings",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("my listings failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("my listings failed")),
     )
 
     user = django_user_model.objects.create_user(username="trade_ctx_market_my_err", password="pass12345")
@@ -494,3 +495,35 @@ def test_get_trade_context_market_my_listings_tolerates_loading_error(monkeypatc
     assert context["current_tab"] == "market"
     assert context["market_view"] == "my_listings"
     assert list(context["my_listings"].object_list) == []
+
+
+@pytest.mark.django_db
+def test_get_trade_context_shop_programming_error_bubbles_up(monkeypatch, django_user_model):
+    monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "trade.selectors.get_shop_items_for_display",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("shop bug")),
+    )
+
+    user = django_user_model.objects.create_user(username="trade_ctx_shop_bug", password="pass12345")
+    manor = ensure_manor(user)
+    request = RequestFactory().get("/trade", {"tab": "shop"})
+
+    with pytest.raises(RuntimeError, match="shop bug"):
+        get_trade_context(request, manor)
+
+
+@pytest.mark.django_db
+def test_get_trade_context_market_programming_error_bubbles_up(monkeypatch, django_user_model):
+    monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "trade.selectors.get_active_listings",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("market bug")),
+    )
+
+    user = django_user_model.objects.create_user(username="trade_ctx_market_bug", password="pass12345")
+    manor = ensure_manor(user)
+    request = RequestFactory().get("/trade", {"tab": "market", "view": "buy"})
+
+    with pytest.raises(RuntimeError, match="market bug"):
+        get_trade_context(request, manor)

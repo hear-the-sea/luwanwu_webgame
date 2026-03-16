@@ -222,6 +222,33 @@ def test_clear_login_attempts_can_preserve_ip_bucket(monkeypatch):
 
 
 @pytest.mark.django_db
+def test_login_view_clears_ip_bucket_after_success(client, monkeypatch):
+    cache.clear()
+    monkeypatch.setattr(account_views, "LOGIN_ATTEMPT_LIMIT", 3)
+    monkeypatch.setattr(account_views, "LOGIN_ATTEMPT_WINDOW", 60)
+    monkeypatch.setattr(account_views, "LOGIN_LOCKOUT_DURATION", 120)
+
+    user = User.objects.create_user(username="login_success_user", password="StrongPass123!")
+    request = _build_login_request(remote_addr="10.0.0.30")
+    ip_key, _username_key = account_views._get_login_attempt_key(request, user.username)
+    ip_lock_key, _username_lock_key = account_views._get_login_lock_key(request, user.username)
+
+    assert account_views._record_failed_attempt(request, user.username) == 1
+    assert cache.get(ip_key) == 1
+
+    response = client.post(
+        reverse("accounts:login"),
+        {"username": user.username, "password": "StrongPass123!"},
+        REMOTE_ADDR="10.0.0.30",
+    )
+
+    assert response.status_code == 302
+    assert cache.get(ip_key) is None
+    assert cache.get(ip_lock_key) is None
+    assert account_views._check_login_attempts(request, "another_user")[0] is False
+
+
+@pytest.mark.django_db
 def test_check_login_attempts_respects_username_lock(monkeypatch):
     request = _build_login_request(remote_addr="10.0.0.8")
     _ip_lock_key, username_lock_key = account_views._get_login_lock_key(request, "locked_user")
@@ -294,8 +321,11 @@ def test_increment_attempt_counter_fallback_tolerates_cache_read_write_errors(mo
 
 
 @pytest.mark.django_db
-def test_check_login_attempts_fails_open_when_cache_get_errors(monkeypatch):
+def test_check_login_attempts_uses_local_lock_when_cache_get_errors(monkeypatch):
     request = _build_login_request(remote_addr="10.0.0.10")
+    ip_lock_key, _username_lock_key = account_views._get_login_lock_key(request, "tester")
+    account_views._LOCAL_LOGIN_CACHE.clear()
+    account_views._local_login_cache_set(ip_lock_key, 1, timeout=account_views.LOGIN_LOCKOUT_DURATION)
 
     monkeypatch.setattr(
         account_views.cache,
@@ -304,8 +334,31 @@ def test_check_login_attempts_fails_open_when_cache_get_errors(monkeypatch):
     )
 
     is_locked, ttl = account_views._check_login_attempts(request, "tester")
-    assert is_locked is False
-    assert ttl == 0
+    assert is_locked is True
+    assert ttl == account_views.LOGIN_LOCKOUT_DURATION
+
+
+@pytest.mark.django_db
+def test_record_failed_attempt_uses_local_counter_when_cache_ops_fail(monkeypatch):
+    request = _build_login_request(remote_addr="10.0.0.13")
+    account_views._LOCAL_LOGIN_CACHE.clear()
+    monkeypatch.setattr(account_views, "LOGIN_ATTEMPT_LIMIT", 2)
+    monkeypatch.setattr(account_views, "LOGIN_ATTEMPT_WINDOW", 60)
+    monkeypatch.setattr(account_views, "LOGIN_LOCKOUT_DURATION", 120)
+    monkeypatch.setattr(
+        account_views.cache,
+        "add",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache add down")),
+    )
+    monkeypatch.setattr(
+        account_views.cache,
+        "get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache get down")),
+    )
+
+    assert account_views._record_failed_attempt(request, "tester_local_lock") == 1
+    assert account_views._record_failed_attempt(request, "tester_local_lock") == 2
+    assert account_views._check_login_attempts(request, "tester_local_lock")[0] is True
 
 
 @pytest.mark.django_db
@@ -337,6 +390,9 @@ def test_clear_login_attempts_tolerates_cache_delete_errors(monkeypatch):
     request = _build_login_request(remote_addr="10.0.0.12")
     delete_mock = Mock(side_effect=RuntimeError("delete fail"))
     monkeypatch.setattr(account_views.cache, "delete", delete_mock)
+    account_views._LOCAL_LOGIN_CACHE.clear()
+    account_views._local_login_cache_set("login_attempts:ip:10.0.0.12", 2, timeout=60)
 
     account_views._clear_login_attempts(request, "tester")
     assert delete_mock.call_count >= 2
+    assert not account_views._LOCAL_LOGIN_CACHE

@@ -8,6 +8,8 @@ from .arena import (
 from .home import get_home_context
 from .map import get_map_context, get_raid_config_context
 from .recruitment import get_recruitment_hall_context
+from .sidebar import load_sidebar_rank
+from .stats import load_online_user_count, load_total_user_count
 from .warehouse import get_warehouse_context
 
 __all__ = [
@@ -21,4 +23,7 @@ __all__ = [
     "get_raid_config_context",
     "get_recruitment_hall_context",
     "get_warehouse_context",
+    "load_online_user_count",
+    "load_sidebar_rank",
+    "load_total_user_count",
 ]

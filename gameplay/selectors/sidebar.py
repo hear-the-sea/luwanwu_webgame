@@ -1,0 +1,45 @@
+from __future__ import annotations
+
+import logging
+
+from django.core.cache import cache
+
+logger = logging.getLogger(__name__)
+
+SIDEBAR_RANK_CACHE_TIMEOUT = 30
+
+
+def _safe_cache_get(key: str, default=None):
+    try:
+        return cache.get(key, default)
+    except Exception:
+        logger.warning("Failed to read cache key: %s", key, exc_info=True)
+        return default
+
+
+def _safe_cache_set(key: str, value, timeout: int) -> None:
+    try:
+        cache.set(key, value, timeout=timeout)
+    except Exception:
+        logger.warning("Failed to write cache key: %s", key, exc_info=True)
+
+
+def _safe_int(value, default: int = 0) -> int:
+    try:
+        resolved = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(0, resolved)
+
+
+def load_sidebar_rank(manor) -> int:
+    from gameplay.services.ranking import get_player_rank
+
+    cache_key_rank = f"sidebar:rank:{manor.id}"
+    cached_rank = _safe_cache_get(cache_key_rank)
+    if cached_rank is not None:
+        return _safe_int(cached_rank)
+
+    rank = _safe_int(get_player_rank(manor))
+    _safe_cache_set(cache_key_rank, rank, timeout=SIDEBAR_RANK_CACHE_TIMEOUT)
+    return rank

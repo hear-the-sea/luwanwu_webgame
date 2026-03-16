@@ -51,7 +51,7 @@ def test_refresh_shop_stock_returns_failure_summary(monkeypatch):
 
     def _update_or_create(*args, **kwargs):
         if kwargs.get("item_key") == "bad":
-            raise RuntimeError("boom")
+            raise OSError("boom")
         return original_update_or_create(*args, **kwargs)
 
     monkeypatch.setattr(ShopStock.objects, "update_or_create", _update_or_create)
@@ -70,7 +70,7 @@ def test_settle_auction_round_task_does_not_fail_when_create_round_dispatch_fail
     )
 
     def _raise_dispatch_error():
-        raise RuntimeError("dispatch failed")
+        raise ConnectionError("dispatch failed")
 
     monkeypatch.setattr("trade.tasks.create_auction_round_task.delay", _raise_dispatch_error)
 
@@ -101,18 +101,18 @@ def test_refresh_shop_stock_retries_when_loading_config_fails(monkeypatch):
     monkeypatch.setattr("trade.tasks.reload_shop_config", lambda: None)
     monkeypatch.setattr(
         "trade.tasks.get_shop_config",
-        lambda: (_ for _ in ()).throw(RuntimeError("config failed")),
+        lambda: (_ for _ in ()).throw(OSError("config failed")),
     )
 
     called = {"retry": 0}
 
     def _retry(exc):
         called["retry"] += 1
-        raise RuntimeError(f"retry called: {exc}")
+        raise OSError(f"retry called: {exc}")
 
     monkeypatch.setattr(refresh_shop_stock, "retry", _retry)
 
-    with pytest.raises(RuntimeError, match="retry called"):
+    with pytest.raises(OSError, match="retry called"):
         refresh_shop_stock.run()
 
     assert called["retry"] == 1
@@ -129,18 +129,18 @@ def test_process_expired_listings_coerces_invalid_count(monkeypatch):
 def test_process_expired_listings_retries_on_error(monkeypatch):
     monkeypatch.setattr(
         "trade.services.market_service.expire_listings",
-        lambda: (_ for _ in ()).throw(RuntimeError("expire failed")),
+        lambda: (_ for _ in ()).throw(OSError("expire failed")),
     )
 
     called = {"retry": 0}
 
     def _retry(exc):
         called["retry"] += 1
-        raise RuntimeError(f"retry called: {exc}")
+        raise OSError(f"retry called: {exc}")
 
     monkeypatch.setattr(process_expired_listings, "retry", _retry)
 
-    with pytest.raises(RuntimeError, match="retry called"):
+    with pytest.raises(OSError, match="retry called"):
         process_expired_listings.run()
 
     assert called["retry"] == 1
@@ -178,7 +178,7 @@ def test_settle_auction_round_task_coerces_invalid_stats_numbers(monkeypatch):
 def test_create_auction_round_task_tolerates_slots_count_error(monkeypatch):
     class _Slots:
         def count(self):
-            raise RuntimeError("count failed")
+            raise OSError("count failed")
 
     class _Round:
         round_number = 3
@@ -195,18 +195,18 @@ def test_create_auction_round_task_tolerates_slots_count_error(monkeypatch):
 def test_create_auction_round_task_retries_when_reload_fails(monkeypatch):
     monkeypatch.setattr(
         "trade.services.auction_config.reload_auction_config",
-        lambda: (_ for _ in ()).throw(RuntimeError("reload failed")),
+        lambda: (_ for _ in ()).throw(OSError("reload failed")),
     )
 
     called = {"retry": 0}
 
     def _retry(exc):
         called["retry"] += 1
-        raise RuntimeError(f"retry called: {exc}")
+        raise OSError(f"retry called: {exc}")
 
     monkeypatch.setattr(create_auction_round_task, "retry", _retry)
 
-    with pytest.raises(RuntimeError, match="retry called"):
+    with pytest.raises(OSError, match="retry called"):
         create_auction_round_task.run()
 
     assert called["retry"] == 1

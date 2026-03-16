@@ -5,6 +5,7 @@ import json
 from redis.exceptions import RedisError
 
 from websocket.consumers import WorldChatConsumer
+from websocket.consumers.world_chat import WorldChatInfrastructureError
 
 
 class _FakePipeline:
@@ -179,10 +180,10 @@ def test_world_chat_rate_limit_sync_raises_when_redis_errors(monkeypatch):
     consumer = _build_consumer(_BrokenRedis())
     try:
         consumer._rate_limit_sync(1)
-    except RuntimeError as exc:
+    except WorldChatInfrastructureError as exc:
         assert "rate limit backend unavailable" in str(exc)
     else:  # pragma: no cover - defensive failure path
-        raise AssertionError("expected RuntimeError when Redis is unavailable")
+        raise AssertionError("expected WorldChatInfrastructureError when Redis is unavailable")
 
 
 def test_world_chat_rate_limit_sync_rejects_after_limit(monkeypatch):
@@ -205,10 +206,10 @@ def test_world_chat_next_id_sync_raises_on_redis_error(monkeypatch):
     consumer = _build_consumer(_BrokenRedis())
     try:
         consumer._next_id_sync()
-    except RuntimeError as exc:
+    except WorldChatInfrastructureError as exc:
         assert "id backend unavailable" in str(exc)
     else:  # pragma: no cover - defensive failure path
-        raise AssertionError("expected RuntimeError when Redis is unavailable")
+        raise AssertionError("expected WorldChatInfrastructureError when Redis is unavailable")
 
 
 def test_world_chat_get_display_name_tolerates_cache_errors(monkeypatch):

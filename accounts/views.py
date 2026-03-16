@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import time
+from threading import Lock
 
 from django.contrib import messages
 from django.contrib.auth import login
@@ -25,6 +27,9 @@ LOGIN_ATTEMPT_LIMIT = SECURITY.LOGIN_ATTEMPT_LIMIT
 LOGIN_ATTEMPT_WINDOW = SECURITY.LOGIN_ATTEMPT_WINDOW
 LOGIN_LOCKOUT_DURATION = SECURITY.LOGIN_LOCKOUT_DURATION
 logger = logging.getLogger(__name__)
+_LOCAL_LOGIN_CACHE: dict[str, tuple[object, float]] = {}
+_LOCAL_LOGIN_CACHE_GUARD = Lock()
+_LOCAL_LOGIN_CACHE_MAX_SIZE = 5000
 
 
 def _get_client_ip(request) -> str:
@@ -65,6 +70,62 @@ def _get_login_lock_key(request, username: str = None) -> tuple[str, str]:
     return ip_lock_key, username_lock_key
 
 
+def _cleanup_local_login_cache(now: float) -> None:
+    expired_keys = [key for key, (_value, expire_at) in _LOCAL_LOGIN_CACHE.items() if expire_at <= now]
+    for key in expired_keys[:1000]:
+        _LOCAL_LOGIN_CACHE.pop(key, None)
+
+    if len(_LOCAL_LOGIN_CACHE) <= _LOCAL_LOGIN_CACHE_MAX_SIZE:
+        return
+
+    for key, _value in sorted(_LOCAL_LOGIN_CACHE.items(), key=lambda item: item[1][1])[:500]:
+        _LOCAL_LOGIN_CACHE.pop(key, None)
+
+
+def _local_login_cache_get(key: str, default=None):
+    now = time.monotonic()
+    with _LOCAL_LOGIN_CACHE_GUARD:
+        record = _LOCAL_LOGIN_CACHE.get(key)
+        if record is None:
+            return default
+        value, expire_at = record
+        if expire_at <= now:
+            _LOCAL_LOGIN_CACHE.pop(key, None)
+            return default
+        return value
+
+
+def _local_login_cache_set(key: str, value, timeout: int) -> None:
+    expire_at = time.monotonic() + max(1, int(timeout))
+    with _LOCAL_LOGIN_CACHE_GUARD:
+        _LOCAL_LOGIN_CACHE[key] = (value, expire_at)
+        if len(_LOCAL_LOGIN_CACHE) > _LOCAL_LOGIN_CACHE_MAX_SIZE:
+            _cleanup_local_login_cache(time.monotonic())
+
+
+def _local_login_cache_delete(key: str) -> None:
+    with _LOCAL_LOGIN_CACHE_GUARD:
+        _LOCAL_LOGIN_CACHE.pop(key, None)
+
+
+def _local_login_cache_incr(key: str, timeout: int) -> int:
+    now = time.monotonic()
+    expire_at = now + max(1, int(timeout))
+    with _LOCAL_LOGIN_CACHE_GUARD:
+        record = _LOCAL_LOGIN_CACHE.get(key)
+        if record is None or record[1] <= now:
+            _LOCAL_LOGIN_CACHE[key] = (1, expire_at)
+            return 1
+
+        current_value, _current_expire_at = record
+        try:
+            next_value = int(current_value) + 1
+        except (TypeError, ValueError):
+            next_value = 1
+        _LOCAL_LOGIN_CACHE[key] = (next_value, expire_at)
+        return next_value
+
+
 def _check_login_attempts(request, username: str = None) -> tuple[bool, int]:
     """
     检查登录尝试次数（IP + 用户名双重限制）
@@ -89,14 +150,15 @@ def _check_login_attempts(request, username: str = None) -> tuple[bool, int]:
 
 def _normalize_lock_ttl(lock_key: str) -> int:
     if not hasattr(cache, "ttl"):
-        return LOGIN_LOCKOUT_DURATION
+        local_lock = _local_login_cache_get(lock_key)
+        return LOGIN_LOCKOUT_DURATION if local_lock is not None else LOGIN_LOCKOUT_DURATION
     try:
         ttl = cache.ttl(lock_key)
     except Exception:
         logger.warning("Failed to read lock TTL from cache: key=%s", lock_key, exc_info=True)
-        return LOGIN_LOCKOUT_DURATION
+        return LOGIN_LOCKOUT_DURATION if _local_login_cache_get(lock_key) is not None else LOGIN_LOCKOUT_DURATION
     if ttl is None:
-        return LOGIN_LOCKOUT_DURATION
+        return LOGIN_LOCKOUT_DURATION if _local_login_cache_get(lock_key) is not None else LOGIN_LOCKOUT_DURATION
     try:
         ttl_int = int(ttl)
     except (TypeError, ValueError):
@@ -115,18 +177,20 @@ def _increment_attempt_counter(key: str) -> int:
         added = None
 
     if added is True:
+        _local_login_cache_set(key, 1, timeout=LOGIN_ATTEMPT_WINDOW)
         return 1
 
     if added is False:
         try:
-            return int(cache.incr(key))
+            attempts = int(cache.incr(key))
+            _local_login_cache_set(key, attempts, timeout=LOGIN_ATTEMPT_WINDOW)
+            return attempts
         except Exception:
             logger.warning("Failed to increment login attempts cache key: %s", key, exc_info=True)
 
     if added is None:
         logger.warning("Fallback to local login attempt counter path: key=%s", key)
 
-    # added is None (cache.add failed) or incr path failed
     attempts = 1
     try:
         raw_attempts = _safe_cache_get(key, 0)
@@ -172,14 +236,21 @@ def _clear_login_attempts(request, username: str = None, *, clear_ip: bool = Tru
 
 
 def _safe_cache_get(key: str, default=None):
+    local_value = _local_login_cache_get(key, default)
     try:
-        return cache.get(key, default)
+        cached = cache.get(key, default)
     except Exception:
         logger.warning("Failed to read cache key: %s", key, exc_info=True)
-        return default
+        return local_value
+    if cached is default:
+        return local_value
+    if cached is not None:
+        _local_login_cache_set(key, cached, timeout=max(LOGIN_ATTEMPT_WINDOW, LOGIN_LOCKOUT_DURATION))
+    return cached
 
 
 def _safe_cache_set(key: str, value, timeout: int) -> None:
+    _local_login_cache_set(key, value, timeout=timeout)
     try:
         cache.set(key, value, timeout=timeout)
     except Exception:
@@ -187,6 +258,7 @@ def _safe_cache_set(key: str, value, timeout: int) -> None:
 
 
 def _safe_cache_delete(key: str) -> None:
+    _local_login_cache_delete(key)
     try:
         cache.delete(key)
     except Exception:
@@ -210,9 +282,9 @@ class LoginView(DjangoLoginView):
         return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form):
-        # 登录成功后仅清理用户名维度的失败记录，保留 IP 维度风控信号。
+        # 登录成功后清理用户名与 IP 维度失败记录，避免共享出口 IP 被持续误伤。
         username = form.cleaned_data.get("username", "")
-        _clear_login_attempts(self.request, username, clear_ip=False)
+        _clear_login_attempts(self.request, username, clear_ip=True)
         messages.success(self.request, "欢迎回来，领主大人！")
         return super().form_valid(form)
 
