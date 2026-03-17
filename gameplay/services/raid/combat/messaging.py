@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from gameplay.services.raid import combat as combat_pkg
+
+if TYPE_CHECKING:
+    from ....models import RaidRun
 
 from ...utils.messages import create_message
 from .loot import _format_battle_rewards_description, _format_capture_description, _format_loot_description
 from .troops import _normalize_mapping, _normalize_positive_int_mapping
 
 
-def _send_raid_battle_messages(run) -> None:
+def _send_raid_battle_messages(run: RaidRun) -> None:
     """发送踢馆战报消息"""
     is_victory = run.is_attacker_victory
     battle_rewards = _normalize_mapping(run.battle_rewards)

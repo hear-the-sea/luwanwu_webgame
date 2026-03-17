@@ -7,9 +7,13 @@ through ``combat_runs`` remain in ``runs.py`` and import from here.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from datetime import datetime
+from typing import TYPE_CHECKING, Any, Dict
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from ....models import Manor, PlayerTroop
 
 
 # ============ Normalization helpers ============
@@ -51,7 +55,7 @@ def _normalize_troops_for_addition(troops_to_add: Dict[str, int]) -> Dict[str, i
 
 def _extract_raid_troops_lost(
     loadout: Dict[str, int],
-    battle_report,
+    battle_report: Any,
 ) -> Dict[str, int]:
     """Extract troop losses from a battle report, capped by the original loadout."""
     if not battle_report:
@@ -96,12 +100,12 @@ def _calculate_surviving_raid_troops(
 
 
 def _collect_troop_upserts(
-    manor,
+    manor: Manor,
     troops_to_add: Dict[str, int],
-    templates: Dict[str, object],
-    existing: Dict[str, object],
-    now,
-) -> tuple[list, list]:
+    templates: Dict[str, Any],
+    existing: Dict[str, PlayerTroop],
+    now: datetime,
+) -> tuple[list[PlayerTroop], list[PlayerTroop]]:
     """Prepare update/create lists for troop batch upsert.
 
     Returns ``(to_update, to_create)`` lists of ``PlayerTroop`` instances.

@@ -38,7 +38,7 @@ def _can_attempt_capture(winner: Manor) -> bool:
     return True
 
 
-def _collect_losing_guest_ids(report, is_attacker_victory: bool) -> List[int]:
+def _collect_losing_guest_ids(report: Any, is_attacker_victory: bool) -> List[int]:
     losing_team = (report.defender_team or []) if is_attacker_victory else (report.attacker_team or [])
     losing_guest_ids: List[int] = []
 
@@ -103,7 +103,7 @@ def _capture_guest_payload(
     }
 
 
-def _try_capture_guest(run: RaidRun, report, is_attacker_victory: bool) -> Optional[Dict[str, Any]]:
+def _try_capture_guest(run: RaidRun, report: Any, is_attacker_victory: bool) -> Optional[Dict[str, Any]]:
     """
     尝试俘获失败方出战门客（单场最多1名）。
 

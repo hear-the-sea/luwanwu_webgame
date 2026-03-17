@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Dict
 
 from django.db import IntegrityError
@@ -50,7 +51,7 @@ def _deduct_troops(manor: Manor, loadout: Dict[str, int]) -> None:
         PlayerTroop.objects.bulk_update(to_update, ["count", "updated_at"])
 
 
-def _bulk_create_troops_with_fallback(to_create: list[PlayerTroop], now) -> None:
+def _bulk_create_troops_with_fallback(to_create: list[PlayerTroop], now: datetime) -> None:
     if not to_create:
         return
     for pt in to_create:

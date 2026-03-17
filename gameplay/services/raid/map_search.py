@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 from datetime import timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from django.db.models import Count
 from django.utils import timezone
@@ -130,7 +130,7 @@ def search_manors_by_coordinate(
     return _format_manor_list(searcher, result)
 
 
-def _format_manor_list(searcher: Manor, manors) -> List[Dict[str, Any]]:
+def _format_manor_list(searcher: Manor, manors: Iterable[Manor]) -> List[Dict[str, Any]]:
     """
     格式化庄园列表，添加距离和声望颜色信息。
     """
@@ -151,7 +151,7 @@ def _format_manor_list(searcher: Manor, manors) -> List[Dict[str, Any]]:
         )
     }
 
-    result = []
+    result: List[Dict[str, Any]] = []
     for manor in manors_list:
         distance = calculate_distance(searcher, manor)
         color = get_prestige_color(searcher.prestige, manor.prestige)

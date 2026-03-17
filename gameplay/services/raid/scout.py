@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import random
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from django.db import models, transaction
@@ -61,7 +61,7 @@ def _schedule_scout_followup(action: str, callback: Callable[[], None], **contex
     transaction.on_commit(lambda: _run_scout_followup(action, callback, **context))
 
 
-def _try_dispatch_scout_refresh_task(task, record_id: int, phase: str) -> bool:
+def _try_dispatch_scout_refresh_task(task: Any, record_id: int, phase: str) -> bool:
     return safe_apply_async_with_dedup(
         task,
         dedup_key=f"pvp:refresh_dispatch:scout:{phase}:{record_id}",
@@ -84,7 +84,7 @@ def _lock_manor_pair(attacker_id: int, defender_id: int) -> tuple[Manor, Manor]:
     return attacker, defender
 
 
-def _collect_due_scout_record_ids(manor: Manor, now) -> tuple[list[int], list[int]]:
+def _collect_due_scout_record_ids(manor: Manor, now: datetime) -> tuple[list[int], list[int]]:
     scouting_ids = list(
         ScoutRecord.objects.filter(
             attacker=manor,
@@ -127,7 +127,7 @@ def _dispatch_async_scout_refresh(
     return sync_scouting_ids, sync_returning_ids, False
 
 
-def _finalize_due_scout_records(now, scouting_ids: list[int], returning_ids: list[int]) -> None:
+def _finalize_due_scout_records(now: datetime, scouting_ids: list[int], returning_ids: list[int]) -> None:
     if scouting_ids:
         scouting_records = ScoutRecord.objects.select_related("attacker", "defender").filter(id__in=scouting_ids)
         for record in scouting_records:
@@ -231,8 +231,9 @@ def start_scout(attacker: Manor, defender: Manor) -> ScoutRecord:
     # 检查冷却
     in_cooldown, remaining = check_scout_cooldown(attacker, defender)
     if in_cooldown:
-        minutes = remaining // 60
-        seconds = remaining % 60
+        remaining_secs = remaining or 0
+        minutes = remaining_secs // 60
+        seconds = remaining_secs % 60
         raise ValueError(f"侦察冷却中，剩余 {minutes}分{seconds}秒")
 
     # 检查探子数量
@@ -326,7 +327,7 @@ def start_scout(attacker: Manor, defender: Manor) -> ScoutRecord:
     return record
 
 
-def finalize_scout(record: ScoutRecord, now=None) -> None:
+def finalize_scout(record: ScoutRecord, now: Optional[datetime] = None) -> None:
     """
     侦察到达目标，判定成功/失败并进入返程阶段。
 
@@ -364,7 +365,7 @@ def finalize_scout(record: ScoutRecord, now=None) -> None:
             # 失败时：事务提交后给防守方发送警告消息（探子被发现）
             followup_action = "detected message"
 
-            def followup_callback(record=locked_record):  # noqa: F811
+            def followup_callback(record: ScoutRecord = locked_record) -> None:  # type: ignore[assignment]  # noqa: F811
                 _send_scout_detected_message(record)
 
         # 进入返程阶段
@@ -419,7 +420,7 @@ def finalize_scout(record: ScoutRecord, now=None) -> None:
             )
 
 
-def finalize_scout_return(record: ScoutRecord, now=None) -> None:
+def finalize_scout_return(record: ScoutRecord, now: Optional[datetime] = None) -> None:
     """
     侦察返程完成，发送结果消息给进攻方。
 
@@ -445,7 +446,7 @@ def finalize_scout_return(record: ScoutRecord, now=None) -> None:
             locked_record.status = ScoutRecord.Status.FAILED
             followup_action = "retreat result message"
 
-            def followup_callback(record=locked_record):
+            def followup_callback(record: ScoutRecord = locked_record) -> None:  # type: ignore[assignment]
                 _send_scout_retreat_message(record)
 
         elif locked_record.is_success:
@@ -461,14 +462,14 @@ def finalize_scout_return(record: ScoutRecord, now=None) -> None:
                 pass
             followup_action = "success result message"
 
-            def followup_callback(record=locked_record):  # noqa: F811
+            def followup_callback(record: ScoutRecord = locked_record) -> None:  # type: ignore[assignment]  # noqa: F811
                 _send_scout_success_message(record)
 
         else:
             locked_record.status = ScoutRecord.Status.FAILED
             followup_action = "failure result message"
 
-            def followup_callback(record=locked_record):  # noqa: F811
+            def followup_callback(record: ScoutRecord = locked_record) -> None:  # type: ignore[assignment]  # noqa: F811
                 _send_scout_fail_message(record)
 
         locked_record.completed_at = now

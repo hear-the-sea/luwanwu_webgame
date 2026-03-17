@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import logging
 import math
-from datetime import timedelta
-from typing import Dict, Optional
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional
 
 from django.db import DatabaseError, transaction
 from django.utils import timezone
@@ -55,7 +55,7 @@ def _load_locked_raid_run(run_pk: int) -> Optional[RaidRun]:
     )
 
 
-def _prepare_run_for_battle(run_pk: int, now) -> Optional[RaidRun]:
+def _prepare_run_for_battle(run_pk: int, now: datetime) -> Optional[RaidRun]:
     locked_run = _load_locked_raid_run(run_pk)
     if not locked_run:
         return None
@@ -100,7 +100,7 @@ def _apply_raid_loot_if_needed(locked_run: RaidRun, is_attacker_victory: bool) -
     locked_run.loot_items = applied_items
 
 
-def _apply_defeat_protection(run: RaidRun, is_attacker_victory: bool, *, now=None) -> None:
+def _apply_defeat_protection(run: RaidRun, is_attacker_victory: bool, *, now: Optional[datetime] = None) -> None:
     if not is_attacker_victory:
         return
     now = now or timezone.now()
@@ -118,7 +118,7 @@ def _apply_defeat_protection(run: RaidRun, is_attacker_victory: bool, *, now=Non
     run.defender = defender
 
 
-def _apply_capture_reward(locked_run: RaidRun, report, is_attacker_victory: bool) -> None:
+def _apply_capture_reward(locked_run: RaidRun, report: Any, is_attacker_victory: bool) -> None:
     try:
         capture_info = _try_capture_guest(locked_run, report, is_attacker_victory)
         if capture_info:
@@ -154,7 +154,7 @@ def _apply_capture_reward(locked_run: RaidRun, report, is_attacker_victory: bool
         raise
 
 
-def _apply_salvage_reward(locked_run: RaidRun, report, is_attacker_victory: bool) -> None:
+def _apply_salvage_reward(locked_run: RaidRun, report: Any, is_attacker_victory: bool) -> None:
     from gameplay.services.battle_salvage import calculate_battle_salvage, grant_battle_salvage
 
     exp_fruit_count, equipment_recovery = calculate_battle_salvage(report)
@@ -173,7 +173,7 @@ def _apply_salvage_reward(locked_run: RaidRun, report, is_attacker_victory: bool
     }
 
 
-def _fail_raid_run_due_missing_manor(locked_run: RaidRun, *, now=None) -> None:
+def _fail_raid_run_due_missing_manor(locked_run: RaidRun, *, now: Optional[datetime] = None) -> None:
     now = now or timezone.now()
 
     guests = list(locked_run.guests.select_for_update())
@@ -199,7 +199,7 @@ def _fail_raid_run_due_missing_manor(locked_run: RaidRun, *, now=None) -> None:
     locked_run.save(update_fields=["status", "is_attacker_victory", "return_at", "completed_at"])
 
 
-def _dispatch_complete_raid_task(run: RaidRun, *, now=None) -> None:
+def _dispatch_complete_raid_task(run: RaidRun, *, now: Optional[datetime] = None) -> None:
     def _fallback_sync_when_due(remaining_seconds: int) -> None:
         if remaining_seconds > 0:
             return
@@ -247,7 +247,7 @@ def _dispatch_complete_raid_task(run: RaidRun, *, now=None) -> None:
         _fallback_sync_when_due(remaining)
 
 
-def process_raid_battle(run: RaidRun, now=None) -> None:
+def process_raid_battle(run: RaidRun, now: Optional[datetime] = None) -> None:
     """
     处理踢馆战斗。
 
@@ -357,7 +357,7 @@ def process_raid_battle(run: RaidRun, now=None) -> None:
 # ============ Battle execution and guest damage ============
 
 
-def _extract_side_guest_state(report, side: str) -> tuple[Dict[int, int], set[int]]:
+def _extract_side_guest_state(report: Any, side: str) -> tuple[Dict[int, int], set[int]]:
     hp_updates: Dict[int, int] = {}
     defeated_guest_ids: set[int] = set()
 
@@ -371,8 +371,8 @@ def _extract_side_guest_state(report, side: str) -> tuple[Dict[int, int], set[in
         guest_id_raw = entry.get("guest_id")
         remaining_hp_raw = entry.get("remaining_hp")
         try:
-            guest_id = int(guest_id_raw)
-            remaining_hp = int(remaining_hp_raw)
+            guest_id = int(guest_id_raw)  # type: ignore[arg-type]
+            remaining_hp = int(remaining_hp_raw)  # type: ignore[arg-type]
         except (TypeError, ValueError):
             continue
         hp_updates[guest_id] = remaining_hp
@@ -392,7 +392,7 @@ def _extract_side_guest_state(report, side: str) -> tuple[Dict[int, int], set[in
 
 
 def _apply_guest_damage_from_report(
-    report,
+    report: Any,
     *,
     attacker_guest_ids: set[int],
     defender_guest_ids: set[int],
@@ -432,7 +432,7 @@ def _apply_guest_damage_from_report(
         Guest.objects.bulk_update(dirty_guests, ["current_hp", "last_hp_recovery_at", "status"])
 
 
-def _execute_raid_battle(run: RaidRun):
+def _execute_raid_battle(run: RaidRun) -> Any:
     """执行踢馆战斗"""
     from battle.services import simulate_report
 
@@ -445,9 +445,9 @@ def _execute_raid_battle(run: RaidRun):
     attacker_snapshots = list(run.guest_snapshots or [])
     if not attacker_snapshots and attacker_guests:
         attacker_snapshots = build_guest_battle_snapshots(attacker_guests, include_identity=True)
-    attacker_combat_guests = build_guest_snapshot_proxies(attacker_snapshots, include_guest_identity=True)
+    attacker_combat_guests: list[Any] = build_guest_snapshot_proxies(attacker_snapshots, include_guest_identity=True)
     if not attacker_combat_guests:
-        attacker_combat_guests = attacker_guests
+        attacker_combat_guests = attacker_guests  # type: ignore[assignment]
 
     defender_guests = list(
         defender.guests.select_for_update()
@@ -477,7 +477,7 @@ def _execute_raid_battle(run: RaidRun):
         fill_default_troops=False,
         attacker_guests=attacker_combat_guests,
         defender_setup=defender_setup,
-        defender_guests=defender_guests,
+        defender_guests=defender_guests,  # type: ignore[arg-type]
         defender_max_squad=getattr(defender, "max_squad_size", None),
         opponent_name=defender.display_name,
         travel_seconds=0,

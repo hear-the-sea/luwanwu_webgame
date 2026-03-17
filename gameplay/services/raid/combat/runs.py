@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
-from typing import Dict, List, Optional
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
 
 from django.db import transaction
 from django.db.models import Q
@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 _REFRESH_DISPATCH_DEDUP_SECONDS = 5
 
 
-def _try_dispatch_raid_refresh_task(task, run_id: int, stage: str) -> bool:
+def _try_dispatch_raid_refresh_task(task: Any, run_id: int, stage: str) -> bool:
     return safe_apply_async_with_dedup(
         task,
         dedup_key=f"pvp:refresh_dispatch:raid:{stage}:{run_id}",
@@ -56,7 +56,7 @@ def _try_dispatch_raid_refresh_task(task, run_id: int, stage: str) -> bool:
     )
 
 
-def _import_raid_refresh_tasks():
+def _import_raid_refresh_tasks() -> tuple[Any, Any]:
     from gameplay.tasks import complete_raid_task, process_raid_battle_task
 
     return complete_raid_task, process_raid_battle_task
@@ -73,7 +73,7 @@ def _lock_manor_pair(attacker_id: int, defender_id: int) -> tuple[Manor, Manor]:
     return attacker, defender
 
 
-def _recheck_can_attack_target(attacker: Manor, defender: Manor, now) -> tuple[bool, str]:
+def _recheck_can_attack_target(attacker: Manor, defender: Manor, now: datetime) -> tuple[bool, str]:
     from ..utils import can_attack_target
 
     return can_attack_target(attacker, defender, now=now, use_cached_recent_attacks=False)
@@ -219,7 +219,8 @@ def start_raid(
 
 def _send_raid_incoming_message(run: RaidRun) -> None:
     """发送来袭警报消息"""
-    arrive_time = run.battle_at.strftime("%Y-%m-%d %H:%M:%S")
+    battle_at = run.battle_at
+    arrive_time = battle_at.strftime("%Y-%m-%d %H:%M:%S") if battle_at else "未知"
 
     body = f"""来自 {run.attacker.location_display} 的 {run.attacker.display_name} 正在向你发起进攻！
 
@@ -235,7 +236,7 @@ def _send_raid_incoming_message(run: RaidRun) -> None:
     )
 
 
-def finalize_raid(run: RaidRun, now=None) -> None:
+def finalize_raid(run: RaidRun, now: Optional[datetime] = None) -> None:
     """
     完成踢馆返程，释放门客和发放战利品。
 
@@ -354,7 +355,7 @@ def request_raid_retreat(run: RaidRun) -> None:
             )
 
 
-def _finalize_raid_retreat(run: RaidRun, now=None) -> None:
+def _finalize_raid_retreat(run: RaidRun, now: Optional[datetime] = None) -> None:
     """完成撤退，归还所有护院和门客"""
     now = now or timezone.now()
 
@@ -376,7 +377,7 @@ def _finalize_raid_retreat(run: RaidRun, now=None) -> None:
     run.save(update_fields=["status", "completed_at"])
 
 
-def can_raid_retreat(run: RaidRun, now=None) -> bool:
+def can_raid_retreat(run: RaidRun, now: Optional[datetime] = None) -> bool:
     """判断踢馆是否可以撤退"""
     if run.status != RaidRun.Status.MARCHING:
         return False

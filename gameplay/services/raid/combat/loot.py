@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, Iterable, Tuple
 
 from django.db import IntegrityError
-from django.db.models import F
+from django.db.models import F, QuerySet
 
 from gameplay.services.raid import combat as combat_pkg
 
@@ -30,7 +30,7 @@ def _calculate_resource_loot(defender: Manor, loot_percent: float) -> Dict[str, 
     return loot_resources
 
 
-def _build_loot_item_queryset(defender: Manor):
+def _build_loot_item_queryset(defender: Manor) -> QuerySet[InventoryItem]:
     return InventoryItem.objects.filter(
         manor=defender,
         template__tradeable=True,
@@ -106,13 +106,13 @@ def _collect_loot_from_rows(
     return items_looted
 
 
-def _build_small_inventory_rows(base_qs) -> list[Dict[str, Any]]:
-    rows = list(base_qs.values("quantity", "template__key", "template__rarity"))
+def _build_small_inventory_rows(base_qs: QuerySet[InventoryItem]) -> list[Dict[str, Any]]:
+    rows: list[Dict[str, Any]] = list(base_qs.values("quantity", "template__key", "template__rarity"))  # type: ignore[arg-type]
     combat_pkg.random.shuffle(rows)
     return rows
 
 
-def _iter_sample_batches(base_qs) -> Iterable[list[Dict[str, Any]]]:
+def _iter_sample_batches(base_qs: QuerySet[InventoryItem]) -> Iterable[list[Dict[str, Any]]]:
     seen_ids: set[int] = set()
     for _ in range(combat_pkg.LOOT_ITEM_SAMPLE_MAX_BATCHES):
         remaining_qs = base_qs.exclude(id__in=seen_ids) if seen_ids else base_qs
@@ -124,8 +124,8 @@ def _iter_sample_batches(base_qs) -> Iterable[list[Dict[str, Any]]]:
         max_offset = max(0, remaining_count - batch_size)
         offset = combat_pkg.random.randint(0, max_offset) if max_offset else 0
 
-        batch_rows = list(
-            remaining_qs.order_by("id").values("id", "quantity", "template__key", "template__rarity")[
+        batch_rows: list[Dict[str, Any]] = list(
+            remaining_qs.order_by("id").values("id", "quantity", "template__key", "template__rarity")[  # type: ignore[arg-type]
                 offset : offset + batch_size
             ]
         )
@@ -139,7 +139,7 @@ def _iter_sample_batches(base_qs) -> Iterable[list[Dict[str, Any]]]:
         yield batch_rows
 
 
-def _calculate_loot_items(base_qs) -> Dict[str, int]:
+def _calculate_loot_items(base_qs: QuerySet[InventoryItem]) -> Dict[str, int]:
     loot_items: Dict[str, int] = {}
     items_looted = 0
     max_loot_items = combat_pkg.PVPConstants.LOOT_ITEM_MAX_COUNT

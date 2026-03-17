@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import math
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Optional, Tuple
 
 from django.core.cache import cache
@@ -39,7 +39,7 @@ def _recent_attacks_cache_ttl_seconds() -> int:
     return max(1, ttl)
 
 
-def _safe_cache_get(key: str):
+def _safe_cache_get(key: str) -> int | None:
     try:
         return cache.get(key)
     except Exception:
@@ -68,7 +68,7 @@ def invalidate_recent_attacks_cache(defender_id: int) -> None:
     _safe_cache_delete(_recent_attacks_cache_key(int(defender_id)))
 
 
-def get_recent_attacks_24h(defender: Manor, now=None, *, use_cache: bool = True) -> int:
+def get_recent_attacks_24h(defender: Manor, now: Optional[datetime] = None, *, use_cache: bool = True) -> int:
     """
     Return how many raids the defender received in the last 24 hours.
 
@@ -160,7 +160,7 @@ def can_attack_target(
     defender: Manor,
     *,
     recent_attacks: Optional[int] = None,
-    now: Optional[timezone.datetime] = None,
+    now: Optional[datetime] = None,
     use_cached_recent_attacks: bool = True,
     check_defeat_protection: bool = True,
 ) -> Tuple[bool, str]:

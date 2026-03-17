@@ -6,8 +6,8 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
-from typing import Any, Dict, List, Tuple
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Tuple
 
 from django.db import transaction
 from django.utils import timezone
@@ -86,31 +86,37 @@ def get_protection_status(manor: Manor) -> Dict[str, Any]:
         "defeat_protection": None,
         "peace_shield": None,
     }
-    active: List[Tuple[str, str, timezone.datetime, int]] = []
+    active: List[Tuple[str, str, datetime, int]] = []
 
     if manor.is_under_newbie_protection:
-        remaining = int((manor.newbie_protection_until - now).total_seconds())
-        status["newbie_protection"] = {
-            "until": manor.newbie_protection_until.isoformat(),
-            "remaining_seconds": remaining,
-        }
-        active.append(("newbie_protection", "新手保护", manor.newbie_protection_until, remaining))
+        newbie_until: Optional[datetime] = manor.newbie_protection_until
+        if newbie_until is not None:
+            remaining = int((newbie_until - now).total_seconds())
+            status["newbie_protection"] = {
+                "until": newbie_until.isoformat(),
+                "remaining_seconds": remaining,
+            }
+            active.append(("newbie_protection", "新手保护", newbie_until, remaining))
 
     if manor.is_under_defeat_protection:
-        remaining = int((manor.defeat_protection_until - now).total_seconds())
-        status["defeat_protection"] = {
-            "until": manor.defeat_protection_until.isoformat(),
-            "remaining_seconds": remaining,
-        }
-        active.append(("defeat_protection", "战败保护", manor.defeat_protection_until, remaining))
+        defeat_until: Optional[datetime] = manor.defeat_protection_until
+        if defeat_until is not None:
+            remaining = int((defeat_until - now).total_seconds())
+            status["defeat_protection"] = {
+                "until": defeat_until.isoformat(),
+                "remaining_seconds": remaining,
+            }
+            active.append(("defeat_protection", "战败保护", defeat_until, remaining))
 
     if manor.is_under_peace_shield:
-        remaining = int((manor.peace_shield_until - now).total_seconds())
-        status["peace_shield"] = {
-            "until": manor.peace_shield_until.isoformat(),
-            "remaining_seconds": remaining,
-        }
-        active.append(("peace_shield", "免战牌保护", manor.peace_shield_until, remaining))
+        shield_until: Optional[datetime] = manor.peace_shield_until
+        if shield_until is not None:
+            remaining = int((shield_until - now).total_seconds())
+            status["peace_shield"] = {
+                "until": shield_until.isoformat(),
+                "remaining_seconds": remaining,
+            }
+            active.append(("peace_shield", "免战牌保护", shield_until, remaining))
 
     if active:
         # 选择到期时间最晚的那个作为“当前保护状态”的主显示
