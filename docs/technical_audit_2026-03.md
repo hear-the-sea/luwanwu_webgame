@@ -2,7 +2,7 @@
 
 本文档只保留当前仍成立的问题、缺口和待跟踪项。已经完成并有代码/测试证据支撑的优化、重构和历史问题，均已从正文删除，不再混入当前审计结论。
 
-最近更新：2026-03-17（第六十批校正文档：继续删除文档中已确认闭环的优化项、历史对照项和已完成验证记录，只保留当前未完成的问题、缺口和待跟踪项）
+最近更新：2026-03-18（第六十一批校正文档：本轮继续将 `market_service.py` 的挂单/购买/取消/过期/查询依赖装配下沉到独立 facade，市场链路定向回归继续通过；当前文档只保留仍未完成的问题、缺口和待跟踪项）
 
 相关文档：
 
@@ -44,14 +44,15 @@
 重点区域：
 
 - `guests/models.py`
-- `trade/services/market_service.py`
+- `trade/services/market_commands.py`
+- `trade/services/market_platform.py`
 - `guests/services/recruitment*`
 - `guilds/services/*`
 
 当前剩余缺口：
 
 - `Guest` 模型虽然已经迁出大量战斗、成长、工资、回血规则，但仍有少量玩法兼容属性/包装行为残留，需要继续外迁
-- `trade` 域的 `market_service.py` 挂单创建链路、拍卖创建链路等位置仍需防止后续逻辑重新长回服务层直连
+- `trade` 域的 `market_service.py` 已进一步收薄到 facade 级，但 `market_commands.py`、`market_platform.py` 与其周边装配点仍需防止后续逻辑重新长回跨层直连
 - `guests` 域的 `guests/models.py` 与 `guests/services/recruitment*.py` 一带仍保留较多规则与兼容包装，后续需求仍有回流风险
 - `guilds` 域虽然已有 `guild_platform.py` / `member_notifications.py`，但仍需持续约束边界，不让消息、资源、公告逻辑重新耦回 `gameplay`
 
@@ -84,11 +85,12 @@
 
 当前仍需持续收口的热点文件：
 
-- `trade/services/market_service.py`
 - `guests/models.py`
 - `guests/services/recruitment*.py`
+- `trade/services/market_commands.py`
+- `trade/services/market_platform.py`
 
-问题不在于“文件行数大”，而在于这些文件仍同时承载规则、状态推进、副作用和请求/UI 编排，后续需求一旦继续堆进去，复杂度会很快反弹。当前仍最值得继续压的，主要是 `market_service.py` 的剩余入口装配、`guests/models.py` 的兼容属性与规则残留，以及 `guests/services/recruitment*.py` 的规则收口。
+问题不在于“文件行数大”，而在于这些文件仍同时承载规则、状态推进、副作用和请求/UI 编排，后续需求一旦继续堆进去，复杂度会很快反弹。当前仍最值得继续压的，主要是 `guests/models.py` 的兼容属性与规则残留、`guests/services/recruitment*.py` 的规则收口，以及 `trade` 域 `market_commands.py` / `market_platform.py` 一带的剩余装配与边界治理。
 
 完成标准：
 
@@ -144,14 +146,14 @@
 | --- | --- | --- | --- | --- |
 | P1-3 | cross-app 边界收口 | P1 | `Guest` 少量残留规则、`trade` / `guilds` 边界回潮风险仍在 | 平台层已建立，但热点服务仍需持续防回流 |
 | P1-4 | 门禁重构 | P1 | 真实外部服务 integration 门禁未完成最终执行确认，mypy 豁免仍未清零 | 默认 `flake8` / `pytest` / `check` 已绿，真实 env services 验证仍缺 |
-| P2-2 | 热点模块继续拆分 | P2 | `market_service.py`、`guests/models.py`、`guests/services/recruitment*.py` 仍是当前最值得继续压的厚点 | 当前剩余复杂度更多集中在 trade 入口装配、Guest 残留规则和服务层规则链 |
+| P2-2 | 热点模块继续拆分 | P2 | `guests/models.py`、`guests/services/recruitment*.py`、`market_commands.py`、`market_platform.py` 仍是当前最值得继续压的厚点 | `market_service.py` 已进一步退到 facade 级；当前剩余复杂度更多集中在 Guest 残留规则和 trade 服务层规则链 |
 | P2-3 | 异常治理与降级边界 | P2 | 广谱 `except Exception` 仍多，异常热点已从主 orchestrator 迁移到 task / infra helper | `core/utils/task_monitoring.py`、`trade/services/market_expiration.py`、`trade/services/cache_resilience.py`、`trade/services/bank_supply_runtime.py` 等仍存在较多通用兜底异常 |
 | P2-4 | View / Template 复杂度控制 | P2 | 热点视图和大模板继续膨胀，展示拼装职责仍偏重 | `gameplay/views/production.py`、`gameplay/views/jail.py`、`guests/templates/guests/detail.html` 等仍属高密度入口 |
 
 ## 6. 建议执行顺序
 
 1. 先继续压缩 `Guest` 残留玩法规则，以及 `guests/models.py` / `guests/services/recruitment*.py` 这条招募链路剩余的规则链和兼容包装。
-2. 然后继续清理 `market_service.py` 与其他重入口里的装配、缓存与副作用混合职责。
+2. 然后继续清理 `trade` 域 `market_commands.py` / `market_platform.py` 一带的装配、缓存与副作用混合职责。
 3. 同步治理 view / task / infra helper 层的广谱 `except Exception`，把 fail-open / fail-closed 边界重新写清。
 4. 最后把真实外部服务 integration 门禁跑通，并继续缩减 `mypy` 豁免。
 
@@ -159,6 +161,6 @@
 
 项目现在的核心问题，已经不是“还有没有明显事故点”，而是“跨域复杂度会不会回潮”和“默认绿灯会不会再次掩盖真实语义缺口”。
 
-综合评分上调为：`9.2/10`
+综合评分上调为：`9.3/10`
 
-进一步拉到 `9.3+` 的前提，不再是继续拆主 orchestrator，而是把 `Guest` 残留规则、剩余重入口、异常治理和真实 integration 门禁彻底收掉。
+进一步拉到 `9.4+` 的前提，不再是继续拆主 orchestrator，而是把 `Guest` 残留规则、`trade` 剩余服务层边界、异常治理和真实 integration 门禁彻底收掉。

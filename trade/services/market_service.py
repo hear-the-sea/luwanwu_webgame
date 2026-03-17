@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict
@@ -19,8 +20,10 @@ from gameplay.models import Manor
 from gameplay.models.items import LEGACY_TOOL_EFFECT_TYPES
 from trade.models import MarketListing, MarketTransaction
 from trade.services import market_commands as _market_commands
+from trade.services import market_facade as _market_facade
 from trade.services import market_notification_helpers as _market_notification_helpers
 from trade.services import market_purchase_helpers as _market_purchase_helpers
+from trade.services import market_queries as _market_queries
 from trade.services.market_expiration import expire_listings_queryset as _expire_listings_queryset_impl
 from trade.services.market_listing_helpers import (
     create_listing_record,
@@ -41,16 +44,8 @@ from trade.services.market_platform import (
     send_market_notification,
     settle_market_sale_proceeds,
 )
-from trade.services.market_queries import (
-    get_active_listings_queryset,
-    get_expired_listings_queryset,
-    get_market_stats_payload,
-    get_my_listings_queryset,
-    get_user_expired_listings_queryset,
-)
 from trade.services.market_rules import DEFAULT_TRADE_MARKET_RULES
 from trade.services.market_rules import normalize_trade_market_rules as _normalize_trade_market_rules
-from trade.services.market_runtime import expire_listings_queryset_entry, send_purchase_notifications_entry
 
 if TYPE_CHECKING:
     from gameplay.models import ItemTemplate
@@ -100,6 +95,31 @@ ALLOWED_LISTING_ORDER_BY = {
     "expires_at",
     "-expires_at",
 }
+
+
+# Dynamic facade assembly in market_facade.py resolves these names from this module at runtime.
+_FACADE_EXPORTS = (
+    timezone,
+    LEGACY_TOOL_EFFECT_TYPES,
+    _market_notification_helpers,
+    _market_purchase_helpers,
+    _expire_listings_queryset_impl,
+    normalize_listing_inputs,
+    create_listing_record,
+    validate_gold_bar_availability,
+    validate_listing_inventory,
+    validate_listing_total_price,
+    charge_listing_fee,
+    decrement_market_listing_inventory,
+    get_tradeable_inventory_queryset,
+    grant_market_item_locked,
+    load_market_item_template,
+    lock_market_listing_inventory_item,
+    pay_market_purchase,
+    send_market_message,
+    send_market_notification,
+    settle_market_sale_proceeds,
+)
 
 
 def _safe_int(value, default: int) -> int:
@@ -171,31 +191,14 @@ def create_listing(
     Raises:
         ValueError: 验证失败时抛出异常
     """
-    from .auction_service import get_frozen_gold_bars
-
-    return _market_commands.create_market_listing(
+    return _market_facade.create_listing_entry(
         manor,
         item_key,
         quantity,
         unit_price,
         duration,
-        normalize_listing_inputs=normalize_listing_inputs,
-        listing_fees=LISTING_FEES,
-        load_market_item_template=load_market_item_template,
-        validate_listing_price=validate_listing_price,
-        manor_model=Manor,
-        get_listing_fee=get_listing_fee,
-        charge_listing_fee=charge_listing_fee,
-        lock_market_listing_inventory_item=lock_market_listing_inventory_item,
-        get_frozen_gold_bars=get_frozen_gold_bars,
-        validate_gold_bar_availability=validate_gold_bar_availability,
-        validate_listing_inventory=validate_listing_inventory,
-        decrement_market_listing_inventory=decrement_market_listing_inventory,
-        validate_listing_total_price=validate_listing_total_price,
-        create_listing_record=create_listing_record,
-        market_listing_model=MarketListing,
-        max_total_price=MAX_TOTAL_PRICE,
-        safe_int=_safe_int,
+        commands_module=_market_commands,
+        service_module=sys.modules[__name__],
     )
 
 
@@ -217,15 +220,13 @@ def get_active_listings(
     Returns:
         挂单查询集
     """
-    return get_active_listings_queryset(
-        market_listing_model=MarketListing,
-        now=timezone.now(),
-        order_by=order_by,
-        allowed_order_by=ALLOWED_LISTING_ORDER_BY,
-        legacy_tool_effect_types=LEGACY_TOOL_EFFECT_TYPES,
+    return _market_facade.get_active_listings_entry(
         item_template_id=item_template_id,
+        order_by=order_by,
         category=category,
         rarity=rarity,
+        queries_module=_market_queries,
+        service_module=sys.modules[__name__],
     )
 
 
@@ -252,32 +253,11 @@ def purchase_listing(buyer: Manor, listing_id: int) -> MarketTransaction:
     Raises:
         ValueError: 验证失败时抛出异常
     """
-    return _market_commands.purchase_market_listing(
+    return _market_facade.purchase_listing_entry(
         buyer,
         listing_id,
-        market_listing_model=MarketListing,
-        market_transaction_model=MarketTransaction,
-        manor_model=Manor,
-        get_locked_listing_for_purchase=_market_purchase_helpers.get_locked_listing_for_purchase,
-        validate_listing_for_purchase=_market_purchase_helpers.validate_listing_for_purchase,
-        lock_purchase_parties=_market_purchase_helpers.lock_purchase_parties,
-        pay_market_purchase=pay_market_purchase,
-        settle_market_sale_proceeds=settle_market_sale_proceeds,
-        grant_listing_item_to_buyer_locked=_market_purchase_helpers.grant_listing_item_to_buyer_locked,
-        grant_market_item_locked=grant_market_item_locked,
-        transaction_tax_rate=TRANSACTION_TAX_RATE,
-        send_purchase_notifications=lambda *, buyer, listing, tax_amount, seller_received: send_purchase_notifications_entry(
-            buyer=buyer,
-            listing=listing,
-            tax_amount=tax_amount,
-            seller_received=seller_received,
-            send_purchase_notifications=_market_notification_helpers.send_purchase_notifications,
-            safe_send_market_message=_market_notification_helpers.safe_send_market_message,
-            safe_send_market_notification=_market_notification_helpers.safe_send_market_notification,
-            create_message_func=send_market_message,
-            notify_user_func=send_market_notification,
-            logger=logger,
-        ),
+        commands_module=_market_commands,
+        service_module=sys.modules[__name__],
     )
 
 
@@ -295,27 +275,19 @@ def cancel_listing(manor: Manor, listing_id: int) -> Dict:
     Raises:
         ValueError: 验证失败时抛出异常
     """
-    return _market_commands.cancel_market_listing(
+    return _market_facade.cancel_listing_entry(
         manor,
         listing_id,
-        market_listing_model=MarketListing,
-        restore_cancelled_listing_inventory=_market_notification_helpers.restore_cancelled_listing_inventory,
-        build_cancel_listing_result=_market_notification_helpers.build_cancel_listing_result,
-        grant_market_item_locked=grant_market_item_locked,
+        commands_module=_market_commands,
+        service_module=sys.modules[__name__],
     )
 
 
 def _expire_listings_queryset(expired_listings: QuerySet, log_label: str, limit: int | None = None) -> int:
-    return expire_listings_queryset_entry(
+    return _market_facade.expire_listings_queryset_entrypoint(
         expired_listings,
         log_label,
-        expire_listings_queryset_impl=_expire_listings_queryset_impl,
-        market_listing_model=MarketListing,
-        restore_cancelled_listing_inventory=_market_notification_helpers.restore_cancelled_listing_inventory,
-        grant_market_item_locked=grant_market_item_locked,
-        create_message_func=send_market_message,
-        notify_user_func=send_market_notification,
-        logger=logger,
+        service_module=sys.modules[__name__],
         limit=limit,
     )
 
@@ -330,8 +302,11 @@ def expire_listings(limit: int = 1000) -> int:
     Returns:
         处理的挂单数量
     """
-    expired_listings = get_expired_listings_queryset(market_listing_model=MarketListing, now=timezone.now())
-    return _expire_listings_queryset(expired_listings, "处理过期挂单", limit=limit)
+    return _market_facade.expire_listings_entry(
+        limit=limit,
+        queries_module=_market_queries,
+        service_module=sys.modules[__name__],
+    )
 
 
 def expire_user_listings(manor: Manor) -> int:
@@ -344,10 +319,11 @@ def expire_user_listings(manor: Manor) -> int:
     Returns:
         处理的挂单数量
     """
-    expired_listings = get_user_expired_listings_queryset(
-        market_listing_model=MarketListing, manor=manor, now=timezone.now()
+    return _market_facade.expire_user_listings_entry(
+        manor,
+        queries_module=_market_queries,
+        service_module=sys.modules[__name__],
     )
-    return _expire_listings_queryset(expired_listings, f"处理用户 {manor.id} 的过期挂单")
 
 
 def get_my_listings(manor: Manor, status: str = None) -> QuerySet:
@@ -361,7 +337,12 @@ def get_my_listings(manor: Manor, status: str = None) -> QuerySet:
     Returns:
         挂单查询集
     """
-    return get_my_listings_queryset(market_listing_model=MarketListing, manor=manor, status=status)
+    return _market_facade.get_my_listings_entry(
+        manor,
+        status=status,
+        queries_module=_market_queries,
+        service_module=sys.modules[__name__],
+    )
 
 
 def get_market_stats() -> Dict:
@@ -371,10 +352,9 @@ def get_market_stats() -> Dict:
     Returns:
         统计信息字典
     """
-    return get_market_stats_payload(
-        market_listing_model=MarketListing,
-        market_transaction_model=MarketTransaction,
-        now=timezone.now(),
+    return _market_facade.get_market_stats_entry(
+        queries_module=_market_queries,
+        service_module=sys.modules[__name__],
     )
 
 
@@ -390,4 +370,4 @@ def get_tradeable_inventory(manor: Manor) -> QuerySet:
     Returns:
         可交易的库存物品查询集
     """
-    return get_tradeable_inventory_queryset(manor)
+    return _market_facade.get_tradeable_inventory_entry(manor, service_module=sys.modules[__name__])
