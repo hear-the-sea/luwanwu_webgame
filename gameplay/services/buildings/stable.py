@@ -340,7 +340,7 @@ def finalize_horse_production(production: HorseProduction, send_notification: bo
             return False
 
         # 添加马匹到仓库（按数量添加）
-        from ..inventory import add_item_to_inventory_locked
+        from ..inventory.core import add_item_to_inventory_locked
 
         add_item_to_inventory_locked(locked_production.manor, locked_production.horse_key, locked_production.quantity)
 

@@ -173,7 +173,7 @@ def generate_report_task(
         battle_guests = cast(list[Guest], guests)
 
         if mission and mission.is_defense:
-            from battle.combatants import build_named_ai_guests
+            from battle.combatants_pkg import build_named_ai_guests
             from core.game_data.technology import get_guest_stat_bonuses, resolve_enemy_tech_levels
 
             tech_conf = _normalize_enemy_technology_config(mission.enemy_technology)

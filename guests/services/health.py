@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, Dict
 
 from django.db import transaction
@@ -13,19 +14,20 @@ from core.exceptions import GuestFullHpError, GuestNotIdleError, InsufficientSto
 from core.utils import safe_int
 from core.utils.time_scale import scale_value
 
+from .. import guest_health_rules as _guest_health_rules
 from ..constants import TimeConstants
 from ..models import Guest, GuestStatus
+from .guest_platform import consume_inventory_item_locked
 
 if TYPE_CHECKING:
-    from gameplay.models import Manor
-
-# 重伤恢复阈值：HP达到此比例时解除重伤状态
-INJURY_RECOVERY_THRESHOLD = 0.20
-# 重伤自动回血速率（相对普通状态）
-INJURED_RECOVERY_RATE_FACTOR = 0.1
+    from gameplay.models import InventoryItem, Manor
 
 
-def recover_guest_hp(guest: Guest, now: timezone.datetime | None = None) -> None:
+INJURY_RECOVERY_THRESHOLD = _guest_health_rules.INJURY_RECOVERY_THRESHOLD
+INJURED_RECOVERY_RATE_FACTOR = _guest_health_rules.INJURED_RECOVERY_RATE_FACTOR
+
+
+def recover_guest_hp(guest: Guest, now: datetime | None = None) -> None:
     """
     恢复门客生命值。
 
@@ -53,26 +55,25 @@ def recover_guest_hp(guest: Guest, now: timezone.datetime | None = None) -> None
     elapsed = (now - last).total_seconds()
     if elapsed < TimeConstants.HP_RECOVERY_INTERVAL:
         return
-    intervals = int(elapsed // TimeConstants.HP_RECOVERY_INTERVAL)
-    # 从1点到满血耗时24小时，线性恢复
     per_second = max(1, (guest.max_hp - 1) / TimeConstants.HP_FULL_RECOVERY_TIME)
 
     # 应用澡堂加成
     hp_multiplier = 1.0
     if hasattr(guest, "manor") and guest.manor:
         hp_multiplier = guest.manor.hp_recovery_multiplier
-    status_recovery_factor = INJURED_RECOVERY_RATE_FACTOR if guest.status == GuestStatus.INJURED else 1.0
-
-    recovered = int(
-        scale_value(per_second)
-        * intervals
-        * TimeConstants.HP_RECOVERY_INTERVAL
-        * hp_multiplier
-        * status_recovery_factor
+    guest.current_hp, intervals = _guest_health_rules.compute_recovered_hp(
+        current_hp=guest.current_hp,
+        max_hp=guest.max_hp,
+        elapsed_seconds=elapsed,
+        recovery_interval_seconds=TimeConstants.HP_RECOVERY_INTERVAL,
+        scaled_recovery_per_second=scale_value(per_second),
+        hp_multiplier=hp_multiplier,
+        is_injured=guest.status == GuestStatus.INJURED,
+        injured_recovery_rate_factor=INJURED_RECOVERY_RATE_FACTOR,
     )
-    new_hp = min(guest.max_hp, guest.current_hp + recovered)
-    guest.current_hp = max(1, new_hp)
-    guest.last_hp_recovery_at = last + timezone.timedelta(seconds=intervals * TimeConstants.HP_RECOVERY_INTERVAL)
+    if intervals <= 0:
+        return
+    guest.last_hp_recovery_at = last + timedelta(seconds=intervals * TimeConstants.HP_RECOVERY_INTERVAL)
     update_fields = ["current_hp", "last_hp_recovery_at"]
     if guest.status == GuestStatus.INJURED and guest.current_hp >= guest.max_hp:
         guest.status = GuestStatus.IDLE
@@ -119,8 +120,7 @@ def heal_guest(guest: Guest, heal_amount: int) -> dict:
 
     # 检查是否解除重伤状态
     if guest.status == GuestStatus.INJURED:
-        hp_ratio = new_hp / guest.max_hp
-        if hp_ratio >= INJURY_RECOVERY_THRESHOLD:
+        if _guest_health_rules.should_clear_injured_status(current_hp=new_hp, max_hp=guest.max_hp):
             guest.status = GuestStatus.IDLE
             update_fields.append("status")
             injury_cured = True
@@ -134,7 +134,7 @@ def heal_guest(guest: Guest, heal_amount: int) -> dict:
     }
 
 
-def _load_locked_medicine_item(manor: Manor, item_id: int):
+def _load_locked_medicine_item(manor: Manor, item_id: int) -> InventoryItem:
     from gameplay.models import InventoryItem, ItemTemplate
 
     locked_item = (
@@ -166,7 +166,6 @@ def use_medicine_item_for_guest(manor: Manor, guest: Guest, item_id: int, heal_a
     - 锁顺序统一为 Manor -> InventoryItem -> Guest
     """
     from gameplay.models import Manor as ManorModel
-    from gameplay.services.inventory.core import consume_inventory_item_locked
 
     ManorModel.objects.select_for_update().get(pk=manor.pk)
     locked_item = _load_locked_medicine_item(manor, item_id)

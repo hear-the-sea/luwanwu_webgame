@@ -16,12 +16,11 @@ from django.utils import timezone
 
 from core.config import TRADE
 from core.utils.yaml_loader import load_yaml_data
-from gameplay.models import InventoryItem, ItemTemplate, Manor, ResourceEvent
+from gameplay.models import InventoryItem, ItemTemplate, Manor
 from gameplay.models.items import LEGACY_TOOL_EFFECT_TYPES
-from gameplay.services.resources import grant_resources_locked, spend_resources_locked
-from gameplay.services.utils.messages import create_message
-from gameplay.services.utils.notifications import notify_user
 from trade.models import MarketListing, MarketTransaction
+from trade.services import market_notification_helpers as _market_notification_helpers
+from trade.services import market_purchase_helpers as _market_purchase_helpers
 from trade.services.market_expiration import expire_listings_queryset as _expire_listings_queryset_impl
 from trade.services.market_listing_helpers import (
     create_listing_record,
@@ -33,25 +32,17 @@ from trade.services.market_listing_helpers import (
     validate_listing_inventory,
     validate_listing_total_price,
 )
-from trade.services.market_notification_helpers import build_cancel_listing_result as _build_cancel_listing_result_impl
-from trade.services.market_notification_helpers import (
-    restore_cancelled_listing_inventory as _restore_cancelled_listing_inventory_impl,
+from trade.services.market_platform import (
+    charge_listing_fee,
+    pay_market_purchase,
+    send_market_message,
+    send_market_notification,
+    settle_market_sale_proceeds,
 )
-from trade.services.market_notification_helpers import send_purchase_notifications as _send_purchase_notifications_impl
-from trade.services.market_purchase_helpers import (
-    get_locked_listing_for_purchase as _get_locked_listing_for_purchase_impl,
-)
-from trade.services.market_purchase_helpers import (
-    grant_listing_item_to_buyer_locked as _grant_listing_item_to_buyer_locked_impl,
-)
-from trade.services.market_purchase_helpers import lock_purchase_parties as _lock_purchase_parties_impl
-from trade.services.market_purchase_helpers import validate_listing_for_purchase as _validate_listing_for_purchase_impl
 from trade.services.market_rules import DEFAULT_TRADE_MARKET_RULES
 from trade.services.market_rules import normalize_trade_market_rules as _normalize_trade_market_rules
 
 logger = logging.getLogger(__name__)
-_build_cancel_listing_result = _build_cancel_listing_result_impl
-_restore_cancelled_listing_inventory = _restore_cancelled_listing_inventory_impl
 
 TRADE_MARKET_RULES_PATH = Path(settings.BASE_DIR) / "data" / "trade_market_rules.yaml"
 
@@ -107,7 +98,7 @@ def _safe_int(value, default: int) -> int:
 
 def _safe_create_message(**kwargs) -> bool:
     try:
-        create_message(**kwargs)
+        send_market_message(**kwargs)
     except Exception as exc:
         logger.warning("market create_message failed: %s", exc, exc_info=True)
         return False
@@ -116,7 +107,7 @@ def _safe_create_message(**kwargs) -> bool:
 
 def _safe_notify_user(user_id: int, payload: dict, *, log_context: str) -> None:
     try:
-        notify_user(user_id, payload, log_context=log_context)
+        send_market_notification(user_id, payload, log_context=log_context)
     except Exception as exc:
         logger.warning("market notify_user failed: user_id=%s error=%s", user_id, exc, exc_info=True)
 
@@ -205,12 +196,7 @@ def create_listing(
         listing_fee = get_listing_fee(duration)
 
         # 步骤1：消耗手续费（已包含并发安全检查和资源验证）
-        spend_resources_locked(
-            locked_manor,
-            {"silver": listing_fee},
-            note="交易行挂单手续费",
-            reason=ResourceEvent.Reason.MARKET_LISTING_FEE,
-        )
+        charge_listing_fee(locked_manor, listing_fee)
 
         # 步骤2：锁定物品库存行并验证数量
         # IMPORTANT: 必须指定storage_location避免仓库和藏宝阁的同名物品冲突
@@ -294,44 +280,6 @@ def get_active_listings(
     return queryset.order_by(safe_order_by)
 
 
-def _get_locked_listing_for_purchase(listing_id: int) -> MarketListing:
-    return _get_locked_listing_for_purchase_impl(market_listing_model=MarketListing, listing_id=listing_id)
-
-
-def _validate_listing_for_purchase(listing: MarketListing, buyer: Manor) -> None:
-    _validate_listing_for_purchase_impl(listing, buyer, active_status=MarketListing.Status.ACTIVE)
-
-
-def _lock_purchase_parties(buyer_pk: int, seller_pk: int | None) -> tuple[Manor, Manor | None]:
-    return _lock_purchase_parties_impl(manor_model=Manor, buyer_pk=buyer_pk, seller_pk=seller_pk)
-
-
-def _grant_listing_item_to_buyer_locked(buyer_locked: Manor, item_template: ItemTemplate, quantity: int) -> None:
-    _grant_listing_item_to_buyer_locked_impl(
-        inventory_item_model=InventoryItem,
-        buyer_locked=buyer_locked,
-        item_template=item_template,
-        quantity=quantity,
-    )
-
-
-def _send_purchase_notifications(
-    *,
-    buyer: Manor,
-    listing: MarketListing,
-    tax_amount: int,
-    seller_received: int,
-) -> tuple[bool, bool]:
-    return _send_purchase_notifications_impl(
-        buyer=buyer,
-        listing=listing,
-        tax_amount=tax_amount,
-        seller_received=seller_received,
-        safe_create_message=_safe_create_message,
-        safe_notify_user=_safe_notify_user,
-    )
-
-
 def purchase_listing(buyer: Manor, listing_id: int) -> MarketTransaction:
     """
     购买挂单物品（并发安全版本）
@@ -356,27 +304,35 @@ def purchase_listing(buyer: Manor, listing_id: int) -> MarketTransaction:
         ValueError: 验证失败时抛出异常
     """
     with transaction.atomic():
-        listing = _get_locked_listing_for_purchase(listing_id)
-        _validate_listing_for_purchase(listing, buyer)
-        buyer_locked, seller_locked = _lock_purchase_parties(buyer.pk, listing.seller_id)
+        listing = _market_purchase_helpers.get_locked_listing_for_purchase(
+            market_listing_model=MarketListing,
+            listing_id=listing_id,
+        )
+        _market_purchase_helpers.validate_listing_for_purchase(
+            listing,
+            buyer,
+            active_status=MarketListing.Status.ACTIVE,
+        )
+        buyer_locked, seller_locked = _market_purchase_helpers.lock_purchase_parties(
+            manor_model=Manor,
+            buyer_pk=buyer.pk,
+            seller_pk=listing.seller_id,
+        )
 
-        spend_resources_locked(
+        pay_market_purchase(
             buyer_locked,
-            {"silver": listing.total_price},
-            note=f"购买{listing.item_template.name}",
-            reason=ResourceEvent.Reason.MARKET_PURCHASE,
+            item_name=listing.item_template.name,
+            total_price=listing.total_price,
         )
 
         tax_amount = int(listing.total_price * TRANSACTION_TAX_RATE)
         seller_received = listing.total_price - tax_amount
 
         if seller_locked is not None:
-            grant_resources_locked(
+            settle_market_sale_proceeds(
                 seller_locked,
-                {"silver": seller_received},
-                note=f"出售{listing.item_template.name}",
-                reason=ResourceEvent.Reason.ITEM_SOLD,
-                sync_production=False,
+                item_name=listing.item_template.name,
+                silver_amount=seller_received,
             )
 
         now = timezone.now()
@@ -393,13 +349,20 @@ def purchase_listing(buyer: Manor, listing_id: int) -> MarketTransaction:
             seller_received=seller_received,
         )
 
-        _grant_listing_item_to_buyer_locked(buyer_locked, listing.item_template, listing.quantity)
+        _market_purchase_helpers.grant_listing_item_to_buyer_locked(
+            inventory_item_model=InventoryItem,
+            buyer_locked=buyer_locked,
+            item_template=listing.item_template,
+            quantity=listing.quantity,
+        )
 
-    buyer_mail_sent, seller_mail_sent = _send_purchase_notifications(
+    buyer_mail_sent, seller_mail_sent = _market_notification_helpers.send_purchase_notifications(
         buyer=buyer,
         listing=listing,
         tax_amount=tax_amount,
         seller_received=seller_received,
+        safe_create_message=_safe_create_message,
+        safe_notify_user=_safe_notify_user,
     )
 
     transaction_record.buyer_mail_sent = buyer_mail_sent
@@ -440,20 +403,12 @@ def cancel_listing(manor: Manor, listing_id: int) -> Dict:
     listing.status = MarketListing.Status.CANCELLED
     listing.save(update_fields=["status"])
 
-    _restore_cancelled_listing_inventory(
+    _market_notification_helpers.restore_cancelled_listing_inventory(
         inventory_item_model=InventoryItem,
         manor=manor,
         listing=listing,
     )
-    return _build_cancel_listing_result(listing=listing)
-
-
-def _return_expired_listing_inventory(*, manor: Manor, listing: MarketListing) -> None:
-    _restore_cancelled_listing_inventory(
-        inventory_item_model=InventoryItem,
-        manor=manor,
-        listing=listing,
-    )
+    return _market_notification_helpers.build_cancel_listing_result(listing=listing)
 
 
 def _expire_listings_queryset(expired_listings: QuerySet, log_label: str, limit: int | None = None) -> int:
@@ -461,9 +416,13 @@ def _expire_listings_queryset(expired_listings: QuerySet, log_label: str, limit:
         expired_listings,
         log_label,
         market_listing_model=MarketListing,
-        return_inventory_func=_return_expired_listing_inventory,
-        create_message_func=create_message,
-        notify_user_func=notify_user,
+        return_inventory_func=lambda *, manor, listing: _market_notification_helpers.restore_cancelled_listing_inventory(
+            inventory_item_model=InventoryItem,
+            manor=manor,
+            listing=listing,
+        ),
+        create_message_func=send_market_message,
+        notify_user_func=send_market_notification,
         logger=logger,
         limit=limit,
     )

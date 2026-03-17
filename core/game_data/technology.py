@@ -164,5 +164,10 @@ def get_guest_stat_bonuses(config: Dict[str, Any]) -> Dict[str, float]:
 
 def clear_technology_cache() -> None:
     """Clear YAML caches (useful for tests or runtime reload)."""
-    load_technology_templates.cache_clear()
-    _build_troop_to_class_index.cache_clear()
+    load_cache_clear = getattr(load_technology_templates, "cache_clear", None)
+    if callable(load_cache_clear):
+        load_cache_clear()
+
+    index_cache_clear = getattr(_build_troop_to_class_index, "cache_clear", None)
+    if callable(index_cache_clear):
+        index_cache_clear()

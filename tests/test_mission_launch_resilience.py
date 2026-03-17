@@ -36,7 +36,7 @@ def test_launch_mission_survives_dispatch_failure(game_data, mission_templates, 
 
     monkeypatch.setattr(mission_execution, "refresh_mission_runs", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(mission_execution, "_import_launch_post_action_tasks", lambda: (object(), object()))
-    monkeypatch.setattr(mission_execution, "_dispatch_or_sync_launch_report", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(mission_execution, "dispatch_or_sync_launch_report", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         mission_execution,
         "_schedule_mission_completion_task",
@@ -69,7 +69,7 @@ def test_launch_mission_survives_report_failure(game_data, mission_templates, ma
     monkeypatch.setattr(mission_execution, "_import_launch_post_action_tasks", lambda: (object(), object()))
     monkeypatch.setattr(
         mission_execution,
-        "_dispatch_or_sync_launch_report",
+        "dispatch_or_sync_launch_report",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("report generation exploded")),
     )
     monkeypatch.setattr(mission_execution, "_schedule_mission_completion_task", lambda *_args, **_kwargs: None)

@@ -12,7 +12,7 @@ from django.db.models.functions import Greatest
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async_with_dedup
-from core.config import GUEST_LOYALTY
+from core.config import GUEST, GUEST_LOYALTY
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ def _is_expected_task_error(exc: Exception) -> bool:
 @shared_task(name="guests.complete_training", bind=True, max_retries=2, default_retry_delay=30)
 def complete_guest_training(self, guest_id: int) -> str:
     from guests.models import Guest
-    from guests.services import finalize_guest_training
+    from guests.services.training import finalize_guest_training
 
     try:
         guest = Guest.objects.select_related("manor").filter(pk=guest_id).first()
@@ -86,7 +86,7 @@ def scan_guest_training(limit: int = 200) -> int:
     per invocation.
     """
     from guests.models import Guest
-    from guests.services import finalize_guest_training
+    from guests.services.training import finalize_guest_training
 
     now = timezone.now()
     qs = (
@@ -111,7 +111,7 @@ def scan_guest_training(limit: int = 200) -> int:
 @shared_task(name="guests.complete_recruitment", bind=True, max_retries=2, default_retry_delay=30)
 def complete_guest_recruitment(self, recruitment_id: int) -> str:
     from guests.models import GuestRecruitment
-    from guests.services import finalize_guest_recruitment
+    from guests.services.recruitment import finalize_guest_recruitment
 
     try:
         recruitment = (
@@ -166,7 +166,7 @@ def scan_guest_recruitments(limit: int = 200) -> int:
     passed, processing up to *limit* recruitments per invocation.
     """
     from guests.models import GuestRecruitment
-    from guests.services import finalize_guest_recruitment
+    from guests.services.recruitment import finalize_guest_recruitment
 
     now = timezone.now()
     qs = (
@@ -201,14 +201,14 @@ def scan_passive_hp_recovery(limit: int = 200) -> int:
     regardless of scan frequency.
     """
     from guests.constants import TimeConstants
-    from guests.models import DEFENSE_TO_HP_MULTIPLIER, MIN_HP_FLOOR, Guest, GuestStatus
+    from guests.models import Guest, GuestStatus
     from guests.services.health import recover_guest_hp
 
     now = timezone.now()
     cutoff = now - timedelta(seconds=TimeConstants.HP_RECOVERY_INTERVAL)
     max_hp_expr = Greatest(
-        F("template__base_hp") + F("hp_bonus") + F("defense_stat") * DEFENSE_TO_HP_MULTIPLIER,
-        Value(MIN_HP_FLOOR),
+        F("template__base_hp") + F("hp_bonus") + F("defense_stat") * int(GUEST.DEFENSE_TO_HP_MULTIPLIER),
+        Value(int(GUEST.MIN_HP_FLOOR)),
         output_field=IntegerField(),
     )
     qs = (

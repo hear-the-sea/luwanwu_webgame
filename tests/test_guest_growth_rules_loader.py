@@ -1,5 +1,4 @@
 from guests import growth_rules
-from guests import models as guest_models
 from guests.utils import attribute_growth
 
 
@@ -51,7 +50,6 @@ def test_clear_guest_growth_rules_cache_refreshes_exported_constants(monkeypatch
         growth_rules.clear_guest_growth_rules_cache()
 
         assert growth_rules.RARITY_HP_PROFILES["blue"]["base"] == 777
-        assert guest_models.RARITY_HP_PROFILES["blue"]["base"] == 777
         assert growth_rules.RARITY_ATTRIBUTE_GROWTH_RANGE["blue"] == (7, 12)
         assert attribute_growth.RARITY_ATTRIBUTE_GROWTH_RANGE["blue"] == (7, 12)
         assert attribute_growth.MILITARY_ATTRIBUTE_WEIGHTS["force"] == 55

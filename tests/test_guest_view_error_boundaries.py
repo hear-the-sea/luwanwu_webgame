@@ -159,7 +159,7 @@ def _stub_equip_form(monkeypatch, guest: Guest, gear: GearItem) -> None:
             return True
 
     monkeypatch.setattr("guests.views.equipment.EquipForm", DummyEquipForm)
-    monkeypatch.setattr("guests.services.ensure_inventory_gears", lambda *_a, **_k: None)
+    monkeypatch.setattr("guests.services.equipment.ensure_inventory_gears", lambda *_a, **_k: None)
 
 
 @pytest.mark.django_db
@@ -169,7 +169,9 @@ def test_equip_view_game_error_shows_business_message(django_user_model, monkeyp
     gear = _create_gear(manor)
     _stub_equip_form(monkeypatch, guest, gear)
 
-    monkeypatch.setattr("guests.services.equip_guest", lambda *_a, **_k: (_ for _ in ()).throw(GameError("装备受限")))
+    monkeypatch.setattr(
+        "guests.services.equipment.equip_guest", lambda *_a, **_k: (_ for _ in ()).throw(GameError("装备受限"))
+    )
 
     response = client.post(
         reverse("guests:equip"),
@@ -189,7 +191,7 @@ def test_equip_view_database_error_degrades_with_message(django_user_model, monk
     _stub_equip_form(monkeypatch, guest, gear)
 
     monkeypatch.setattr(
-        "guests.services.equip_guest",
+        "guests.services.equipment.equip_guest",
         lambda *_a, **_k: (_ for _ in ()).throw(DatabaseError("db down")),
     )
 
@@ -210,7 +212,9 @@ def test_equip_view_runtime_error_degrades_with_message(django_user_model, monke
     gear = _create_gear(manor)
     _stub_equip_form(monkeypatch, guest, gear)
 
-    monkeypatch.setattr("guests.services.equip_guest", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr(
+        "guests.services.equipment.equip_guest", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("boom"))
+    )
 
     response = client.post(
         reverse("guests:equip"),
@@ -229,7 +233,7 @@ def test_equip_view_cache_invalidation_failure_does_not_hide_success(django_user
     gear = _create_gear(manor)
     _stub_equip_form(monkeypatch, guest, gear)
 
-    monkeypatch.setattr("guests.services.equip_guest", lambda *_a, **_k: None)
+    monkeypatch.setattr("guests.services.equipment.equip_guest", lambda *_a, **_k: None)
     monkeypatch.setattr(
         "guests.views.equipment.cache.delete_many",
         lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down")),
@@ -252,7 +256,7 @@ def test_unequip_view_database_error_degrades_with_message(django_user_model, mo
     gear = _create_gear(manor, guest=guest)
 
     monkeypatch.setattr(
-        "guests.services.unequip_guest_item",
+        "guests.services.equipment.unequip_guest_item",
         lambda *_a, **_k: (_ for _ in ()).throw(DatabaseError("db down")),
     )
 
@@ -270,7 +274,7 @@ def test_unequip_view_runtime_error_degrades_with_message(django_user_model, mon
     gear = _create_gear(manor, guest=guest)
 
     monkeypatch.setattr(
-        "guests.services.unequip_guest_item",
+        "guests.services.equipment.unequip_guest_item",
         lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
@@ -287,7 +291,7 @@ def test_unequip_view_cache_invalidation_failure_does_not_hide_success(django_us
     guest = _create_guest(manor, prefix="unequip_cache")
     gear = _create_gear(manor, guest=guest)
 
-    monkeypatch.setattr("guests.services.unequip_guest_item", lambda *_a, **_k: None)
+    monkeypatch.setattr("guests.services.equipment.unequip_guest_item", lambda *_a, **_k: None)
     monkeypatch.setattr(
         "guests.views.equipment.cache.delete_many",
         lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down")),

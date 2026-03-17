@@ -11,6 +11,7 @@ from battle.models import TroopTemplate
 from gameplay.models import PlayerTroop, RaidRun
 from gameplay.services.manor.core import ensure_manor
 from gameplay.services.raid.combat import battle as combat_battle
+from gameplay.services.raid.combat import runs as combat_runs
 from guests.models import Guest, GuestStatus, GuestTemplate
 
 
@@ -124,10 +125,7 @@ def test_dispatch_complete_raid_task_finalizes_sync_when_due_dispatch_fails(monk
 
     monkeypatch.setattr(gameplay_tasks, "complete_raid_task", object(), raising=False)
     monkeypatch.setattr(combat_battle, "safe_apply_async", lambda *_args, **_kwargs: False)
-    monkeypatch.setattr(
-        "gameplay.services.raid.combat.runs.finalize_raid",
-        lambda run, now=None: finalized.append((run.id, now)),
-    )
+    monkeypatch.setattr(combat_runs, "finalize_raid", lambda run, now=None: finalized.append((run.id, now)))
 
     run = SimpleNamespace(id=77, return_at=now, travel_time=600)
     combat_battle._dispatch_complete_raid_task(run, now=now)

@@ -17,7 +17,7 @@ def extract_guest_ids(guests: Iterable[Any]) -> list[int]:
     for guest in guests:
         guest_id = getattr(guest, "pk", None) or getattr(guest, "id", None)
         try:
-            parsed_id = int(guest_id)
+            parsed_id = int(guest_id)  # type: ignore[arg-type]
         except (TypeError, ValueError):
             continue
         if parsed_id <= 0 or parsed_id in seen:

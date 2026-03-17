@@ -17,13 +17,19 @@ from guests.models import Guest, GuestStatus
 
 from ....models import Manor, RaidRun, ResourceEvent
 from ...utils.messages import create_message
+from .finalize import finalize_raid as _finalize_raid_command
 from .loot import _grant_loot_items
 from .raid_inputs import (
     _load_and_validate_attacker_guests,
     _normalize_and_validate_raid_loadout,
     _validate_and_normalize_raid_inputs,
 )
+from .refresh import refresh_raid_runs as _refresh_raid_runs_command
 from .refresh_flow import collect_due_raid_run_ids, dispatch_async_raid_refresh, process_due_raid_run_ids
+from .retreat import can_raid_retreat as _can_raid_retreat_command
+from .retreat import finalize_raid_retreat as _finalize_raid_retreat_command
+from .retreat import request_raid_retreat as _request_raid_retreat_command
+from .start import start_raid as _start_raid_command
 from .travel import calculate_raid_travel_time, get_active_raid_count
 
 # Import troop management helpers (moved to troop_ops, re-exported for callers).
@@ -158,6 +164,20 @@ def _dispatch_raid_battle_task(run: RaidRun, travel_time: int) -> None:
 # ============ Public API: raid lifecycle ============
 
 
+def _load_locked_raid_run(run_pk: int) -> RaidRun | None:
+    return (
+        RaidRun.objects.select_for_update()
+        .select_related("attacker", "defender", "battle_report")
+        .prefetch_related("guests")
+        .filter(pk=run_pk)
+        .first()
+    )
+
+
+def _load_locked_attacker(attacker_id: int) -> Manor:
+    return Manor.objects.select_for_update().get(pk=attacker_id)
+
+
 def start_raid(
     attacker: Manor, defender: Manor, guest_ids: List[int], troop_loadout: Dict[str, int], seed: Optional[int] = None
 ) -> RaidRun:
@@ -177,44 +197,29 @@ def start_raid(
     Raises:
         ValueError: 无法发起踢馆时
     """
-    guest_ids, troop_loadout = _validate_and_normalize_raid_inputs(attacker, defender, guest_ids, troop_loadout)
-
-    with transaction.atomic():
-        attacker_locked, defender_locked = _lock_manor_pair(attacker.pk, defender.pk)
-        now = timezone.now()
-
-        can_attack, reason = _recheck_can_attack_target(attacker_locked, defender_locked, now=now)
-        if not can_attack:
-            raise ValueError(reason)
-
-        active_count = get_active_raid_count(attacker_locked)
-        if active_count >= combat_pkg.PVPConstants.RAID_MAX_CONCURRENT:
-            raise ValueError(f"同时最多进行 {combat_pkg.PVPConstants.RAID_MAX_CONCURRENT} 次出征")
-
-        guests = _load_and_validate_attacker_guests(attacker_locked, guest_ids)
-        loadout = _normalize_and_validate_raid_loadout(guests, troop_loadout)
-        _deduct_troops(attacker_locked, loadout)
-        travel_time = calculate_raid_travel_time(attacker_locked, defender_locked, guests, loadout)
-        run = _create_raid_run_record(attacker_locked, defender_locked, guests, loadout, travel_time)
-        if attacker_locked.defeat_protection_until and attacker_locked.defeat_protection_until > now:
-            attacker_locked.defeat_protection_until = None
-            attacker_locked.save(update_fields=["defeat_protection_until"])
-        _invalidate_recent_attacks_cache_on_commit(defender_locked.pk)
-
-    try:
-        _send_raid_incoming_message(run)
-    except Exception as exc:
-        logger.warning(
-            "raid incoming message failed: run_id=%s attacker=%s defender=%s error=%s",
-            getattr(run, "id", None),
-            getattr(run, "attacker_id", getattr(getattr(run, "attacker", None), "id", None)),
-            getattr(run, "defender_id", getattr(getattr(run, "defender", None), "id", None)),
-            exc,
-            exc_info=True,
-        )
-    _dispatch_raid_battle_task(run, travel_time)
-
-    return run
+    del seed
+    return _start_raid_command(
+        attacker,
+        defender,
+        guest_ids,
+        troop_loadout,
+        validate_and_normalize_inputs=_validate_and_normalize_raid_inputs,
+        transaction_atomic=transaction.atomic,
+        lock_manor_pair=_lock_manor_pair,
+        now_func=timezone.now,
+        recheck_can_attack_target=_recheck_can_attack_target,
+        get_active_raid_count=get_active_raid_count,
+        raid_max_concurrent=combat_pkg.PVPConstants.RAID_MAX_CONCURRENT,
+        load_and_validate_attacker_guests=_load_and_validate_attacker_guests,
+        normalize_and_validate_raid_loadout=_normalize_and_validate_raid_loadout,
+        deduct_troops=_deduct_troops,
+        calculate_raid_travel_time=calculate_raid_travel_time,
+        create_raid_run_record=_create_raid_run_record,
+        invalidate_recent_attacks_cache_on_commit=_invalidate_recent_attacks_cache_on_commit,
+        send_raid_incoming_message=_send_raid_incoming_message,
+        dispatch_raid_battle_task=_dispatch_raid_battle_task,
+        logger=logger,
+    )
 
 
 def _send_raid_incoming_message(run: RaidRun) -> None:
@@ -244,56 +249,48 @@ def finalize_raid(run: RaidRun, now: Optional[datetime] = None) -> None:
         run: 踢馆记录
         now: 当前时间（可选）
     """
-    now = now or timezone.now()
+    from gameplay.services.resources import grant_resources_locked
 
-    with transaction.atomic():
-        locked_run = (
-            RaidRun.objects.select_for_update()
-            .select_related("attacker", "defender", "battle_report")
-            .prefetch_related("guests")
-            .filter(pk=run.pk)
-            .first()
+    _finalize_raid_command(
+        run,
+        now=now,
+        load_locked_raid_run=_load_locked_raid_run,
+        normalize_positive_int_mapping=_normalize_positive_int_mapping,
+        return_surviving_troops=_return_surviving_troops,
+        load_locked_attacker=_load_locked_attacker,
+        grant_resources_locked=grant_resources_locked,
+        grant_loot_items=_grant_loot_items,
+        battle_reward_reason=ResourceEvent.Reason.BATTLE_REWARD,
+    )
+
+
+def _schedule_raid_retreat_completion(run_id: int, countdown: int) -> None:
+    try:
+        from gameplay.tasks import complete_raid_task
+    except Exception as exc:
+        logger.warning(
+            "complete_raid_task dispatch failed for retreat: run_id=%s error=%s",
+            run_id,
+            exc,
+            exc_info=True,
         )
+        return
 
-        if not locked_run:
-            return
-
-        if locked_run.status == RaidRun.Status.COMPLETED:
-            return
-
-        guests = list(locked_run.guests.select_for_update())
-        guests_to_update = []
-        for guest in guests:
-            if guest.status == GuestStatus.DEPLOYED:
-                guest.status = GuestStatus.IDLE
-                guests_to_update.append(guest)
-
-        if guests_to_update:
-            Guest.objects.bulk_update(guests_to_update, ["status"])
-
-        _return_surviving_troops(locked_run)
-
-        if locked_run.is_attacker_victory:
-            from gameplay.models import Manor as ManorModel
-            from gameplay.services.resources import grant_resources_locked
-
-            attacker_locked = ManorModel.objects.select_for_update().get(pk=locked_run.attacker_id)
-            loot_resources = _normalize_positive_int_mapping(locked_run.loot_resources)
-            if loot_resources:
-                grant_resources_locked(
-                    attacker_locked,
-                    loot_resources,
-                    note="踢馆掠夺",
-                    reason=ResourceEvent.Reason.BATTLE_REWARD,
-                    sync_production=False,
-                )
-            loot_items = _normalize_positive_int_mapping(locked_run.loot_items)
-            if loot_items:
-                _grant_loot_items(attacker_locked, loot_items)
-
-        locked_run.status = RaidRun.Status.COMPLETED
-        locked_run.completed_at = now
-        locked_run.save(update_fields=["status", "completed_at"])
+    dispatched = safe_apply_async(
+        complete_raid_task,
+        args=[run_id],
+        countdown=countdown,
+        logger=logger,
+        log_message="complete_raid_task dispatch failed for retreat",
+    )
+    if not dispatched:
+        logger.error(
+            "complete_raid_task dispatch returned False after retreat request; raid may remain retreated",
+            extra={
+                "task_name": "complete_raid_task",
+                "run_id": run_id,
+            },
+        )
 
 
 def request_raid_retreat(run: RaidRun) -> None:
@@ -306,114 +303,44 @@ def request_raid_retreat(run: RaidRun) -> None:
     Raises:
         ValueError: 无法撤退时
     """
-    if run.status != RaidRun.Status.MARCHING:
-        raise ValueError("当前状态无法撤退")
-
-    if run.is_retreating:
-        raise ValueError("已在撤退中")
-
-    now = timezone.now()
-    elapsed = max(0, int((now - run.started_at).total_seconds()))
-
-    with transaction.atomic():
-        locked_run = RaidRun.objects.select_for_update().filter(pk=run.pk).first()
-        if not locked_run or locked_run.status != RaidRun.Status.MARCHING:
-            raise ValueError("当前状态无法撤退")
-
-        locked_run.is_retreating = True
-        locked_run.status = RaidRun.Status.RETREATED
-        locked_run.return_at = now + timedelta(seconds=max(1, elapsed))
-        locked_run.save(update_fields=["is_retreating", "status", "return_at"])
-
-    try:
-        from gameplay.tasks import complete_raid_task
-    except Exception as exc:
-        logger.warning(
-            "complete_raid_task dispatch failed for retreat: run_id=%s error=%s",
-            run.id,
-            exc,
-            exc_info=True,
-        )
-    else:
-        countdown = max(1, elapsed)
-        dispatched = safe_apply_async(
-            complete_raid_task,
-            args=[run.id],
-            countdown=countdown,
-            logger=logger,
-            log_message="complete_raid_task dispatch failed for retreat",
-        )
-        if not dispatched:
-            logger.error(
-                "complete_raid_task dispatch returned False after retreat request; raid may remain retreated",
-                extra={
-                    "task_name": "complete_raid_task",
-                    "run_id": run.id,
-                    "attacker_id": getattr(run, "attacker_id", None),
-                    "defender_id": getattr(run, "defender_id", None),
-                },
-            )
+    _request_raid_retreat_command(
+        run,
+        raid_run_model=RaidRun,
+        schedule_retreat_completion=_schedule_raid_retreat_completion,
+    )
 
 
 def _finalize_raid_retreat(run: RaidRun, now: Optional[datetime] = None) -> None:
     """完成撤退，归还所有护院和门客"""
-    now = now or timezone.now()
-
-    guests = list(run.guests.select_for_update())
-    guests_to_update = []
-    for guest in guests:
-        if guest.status == GuestStatus.DEPLOYED:
-            guest.status = GuestStatus.IDLE
-            guests_to_update.append(guest)
-    if guests_to_update:
-        Guest.objects.bulk_update(guests_to_update, ["status"])
-
-    loadout = _normalize_positive_int_mapping(getattr(run, "troop_loadout", {}))
-    if loadout:
-        _add_troops_batch(run.attacker, loadout)
-
-    run.status = RaidRun.Status.COMPLETED
-    run.completed_at = now
-    run.save(update_fields=["status", "completed_at"])
+    _finalize_raid_retreat_command(
+        run,
+        now=now,
+        normalize_positive_int_mapping=_normalize_positive_int_mapping,
+        add_troops_batch=_add_troops_batch,
+        completed_status=RaidRun.Status.COMPLETED,
+    )
 
 
 def can_raid_retreat(run: RaidRun, now: Optional[datetime] = None) -> bool:
     """判断踢馆是否可以撤退"""
-    if run.status != RaidRun.Status.MARCHING:
-        return False
-    if run.is_retreating:
-        return False
-    return True
+    return _can_raid_retreat_command(run, marching_status=RaidRun.Status.MARCHING, now=now)
 
 
 def refresh_raid_runs(manor: Manor, *, prefer_async: bool = False) -> None:
     """刷新庄园的踢馆状态（支持异步优先结算）。"""
     from .battle import process_raid_battle
 
-    now = timezone.now()
-    marching_ids, returning_ids, retreated_ids = collect_due_raid_run_ids(manor, now, RaidRun)
-
-    if not marching_ids and not returning_ids and not retreated_ids:
-        return
-
-    if prefer_async:
-        marching_ids, returning_ids, retreated_ids, done_async = dispatch_async_raid_refresh(
-            marching_ids,
-            returning_ids,
-            retreated_ids,
-            logger=logger,
-            import_tasks=_import_raid_refresh_tasks,
-            dispatch_refresh_task=_try_dispatch_raid_refresh_task,
-        )
-        if done_async:
-            return
-
-    process_due_raid_run_ids(
-        now,
-        marching_ids,
-        returning_ids,
-        retreated_ids,
+    _refresh_raid_runs_command(
+        manor,
+        prefer_async=prefer_async,
+        now_func=timezone.now,
         raid_run_model=RaidRun,
+        collect_due_raid_run_ids=collect_due_raid_run_ids,
+        dispatch_async_raid_refresh=dispatch_async_raid_refresh,
+        logger=logger,
+        import_raid_refresh_tasks=_import_raid_refresh_tasks,
+        try_dispatch_raid_refresh_task=_try_dispatch_raid_refresh_task,
+        process_due_raid_run_ids=process_due_raid_run_ids,
         process_raid_battle=process_raid_battle,
         finalize_raid=finalize_raid,
     )

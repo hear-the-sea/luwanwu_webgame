@@ -15,13 +15,11 @@ from django.db import transaction
 from django.utils import timezone
 
 from core.exceptions import GuestOwnershipError, InsufficientResourceError, NoGuestsError, SalaryAlreadyPaidError
-from guests.models import RARITY_SALARY, Guest, GuestRarity, SalaryPayment
+from guests.guest_upkeep_rules import get_guest_salary_for_rarity
+from guests.models import Guest, SalaryPayment
 
 if TYPE_CHECKING:
     from gameplay.models import Manor
-
-# 默认工资（用于未配置稀有度的兜底情况，与灰色门客工资相同）
-DEFAULT_SALARY = RARITY_SALARY.get(GuestRarity.GRAY, 1000)
 
 
 def get_guest_salary(guest: Guest) -> int:
@@ -34,7 +32,7 @@ def get_guest_salary(guest: Guest) -> int:
     Returns:
         工资金额
     """
-    return RARITY_SALARY.get(guest.rarity, DEFAULT_SALARY)
+    return get_guest_salary_for_rarity(guest.rarity)
 
 
 def check_salary_paid(guest: Guest, for_date: date = None) -> bool:

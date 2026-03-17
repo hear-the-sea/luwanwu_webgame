@@ -71,9 +71,10 @@ def test_arena_guest_snapshot_proxy_exposes_expected_fields():
     assert proxy.display_name == "快照门客"
     assert proxy.rarity == "purple"
     assert proxy.template.key == "proxy_tpl"
-    assert proxy.stat_block() == {"attack": 150, "defense": 120, "intellect": 90, "hp": 1000}
+    assert proxy.attack == 150
+    assert proxy.defense == 120
+    assert proxy.max_hp == 1000
     assert proxy._override_skills == ["skill_x", "skill_y"]
-    assert proxy.troop_capacity == 0
 
 
 def test_load_entry_guests_uses_snapshot_and_falls_back_to_live_guest_snapshot():

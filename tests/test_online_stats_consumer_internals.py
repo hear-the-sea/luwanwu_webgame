@@ -75,6 +75,21 @@ class _FakeRedis:
     def zcard(self, key: str):
         return len(self._zsets.get(key, {}))
 
+    def zunionstore(self, dest: str, keys: list[str], aggregate: str = "SUM") -> int:
+        result: dict[int, float] = {}
+        for key in keys:
+            for user_id, score in self._zsets.get(key, {}).items():
+                if user_id not in result:
+                    result[user_id] = score
+                elif aggregate == "MAX":
+                    result[user_id] = max(result[user_id], score)
+                elif aggregate == "MIN":
+                    result[user_id] = min(result[user_id], score)
+                else:
+                    result[user_id] += score
+        self._zsets[dest] = result
+        return len(result)
+
     def eval(self, _script: str, _numkeys: int, count_key: str, zset_key: str, user_id: str, ttl: str):
         self.eval_called += 1
         # Simple behavior: always remove user.
@@ -145,8 +160,8 @@ class OnlineStatsConsumerInternalTests(SimpleTestCase):
         consumer._get_redis = lambda: fake
 
         now_ts = time.time()
-        fake.zadd(consumer.ONLINE_USERS_KEY, {1: now_ts})
-        fake.zadd(consumer.ONLINE_USERS_KEY, {2: now_ts - consumer.ONLINE_USERS_TTL - 10})
+        fake.zadd(consumer.ONLINE_WS_USERS_KEY, {1: now_ts})
+        fake.zadd(consumer.ONLINE_WS_USERS_KEY, {2: now_ts - consumer.ONLINE_USERS_TTL - 10})
 
         cache.delete(consumer.ONLINE_COUNT_CACHE_KEY)
         count = consumer._get_online_count_sync()
@@ -161,7 +176,7 @@ class OnlineStatsConsumerInternalTests(SimpleTestCase):
         consumer._get_redis = lambda: fake
 
         now_ts = time.time()
-        fake.zadd(consumer.ONLINE_USERS_KEY, {1: now_ts})
+        fake.zadd(consumer.ONLINE_WS_USERS_KEY, {1: now_ts})
 
         original_get = cache.get
         original_set = cache.set

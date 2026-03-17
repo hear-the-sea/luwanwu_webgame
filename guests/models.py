@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from core.config import GUEST
 
-from . import growth_rules as _growth_rules
+from . import guest_rules as _guest_rules
 
 if TYPE_CHECKING:
     from .managers import GuestManager as GuestManagerType
@@ -18,19 +18,6 @@ GENDER_CHOICES = [
     ("female", "女"),
     ("unknown", "未知"),
 ]
-
-# 从 core.config 导入配置，保持向后兼容
-MAX_GUEST_SKILL_SLOTS = GUEST.MAX_SKILL_SLOTS
-MAX_GUEST_LEVEL = GUEST.MAX_LEVEL
-DEFENSE_TO_HP_MULTIPLIER = GUEST.DEFENSE_TO_HP_MULTIPLIER
-MIN_HP_FLOOR = GUEST.MIN_HP_FLOOR
-BASE_TROOP_CAPACITY = GUEST.BASE_TROOP_CAPACITY
-BONUS_TROOP_CAPACITY = GUEST.BONUS_TROOP_CAPACITY
-TROOP_CAPACITY_LEVEL_THRESHOLD = GUEST.TROOP_CAPACITY_LEVEL_THRESHOLD
-CIVIL_FORCE_WEIGHT = GUEST.CIVIL_FORCE_WEIGHT
-CIVIL_INTELLECT_WEIGHT = GUEST.CIVIL_INTELLECT_WEIGHT
-MILITARY_FORCE_WEIGHT = GUEST.MILITARY_FORCE_WEIGHT
-MILITARY_INTELLECT_WEIGHT = GUEST.MILITARY_INTELLECT_WEIGHT
 
 
 class GuestRarity(models.TextChoices):
@@ -56,10 +43,6 @@ class GuestStatus(models.TextChoices):
     DEPLOYED = "deployed", "出征中"
     INJURED = "injured", "重伤"
 
-
-# 门客全局成长默认值改由 data/guest_growth_rules.yaml 提供
-RARITY_HP_PROFILES = _growth_rules.RARITY_HP_PROFILES
-RARITY_SKILL_POINT_GAINS = _growth_rules.RARITY_SKILL_POINT_GAINS
 
 # 成长率配置已移除，改用直接数值成长
 # 属性分配逻辑见 guests/utils/attribute_growth.py
@@ -278,78 +261,25 @@ class Guest(models.Model):
 
     @property
     def max_hp(self) -> int:
-        """
-        血量计算：基础HP + 防御加成
-
-        取消升级HP成长，血量完全由防御属性决定。
-        每点防御提供DEFENSE_TO_HP_MULTIPLIER点额外血量上限。
-
-        设计理念：
-        - 强制玩家在攻击和防御间权衡
-        - 全加攻击 → 高输出但脆皮
-        - 全加防御 → 超级坦克但低伤
-        - 平衡分配 → 攻防兼备
-
-        示例（100级紫色武门客，防御264）：
-        - 全加武力：HP = 2400 + 264×50 = 15,600
-        - 全加防御：HP = 2400 + 363×50 = 20,550
-        """
-        base_hp = self.template.base_hp + self.hp_bonus
-        defense_hp = self.defense_stat * DEFENSE_TO_HP_MULTIPLIER
-        total = max(MIN_HP_FLOOR, base_hp + defense_hp)
-        return int(total)
+        return _guest_rules.compute_guest_max_hp(self)
 
     def restore_full_hp(self) -> None:
-        self.current_hp = self.max_hp
-        update_fields = ["current_hp"]
-        # 恢复满血时解除重伤状态
-        if self.status == GuestStatus.INJURED:
-            self.status = GuestStatus.IDLE
-            update_fields.append("status")
+        update_fields = _guest_rules.restore_guest_full_hp(
+            self,
+            injured_status=GuestStatus.INJURED,
+            idle_status=GuestStatus.IDLE,
+        )
         self.save(update_fields=update_fields)
 
     # 成长倍率相关方法已移除，改用直接数值成长
     # 升级时直接增加门客的实际属性值
 
     def stat_block(self) -> Dict[str, int]:
-        """
-        战斗属性计算（直接使用真实属性，不再乘倍率）
-
-        - 攻击力：文武门客使用不同公式
-          * 文官（civil）：武力×CIVIL_FORCE_WEIGHT + 智力×CIVIL_INTELLECT_WEIGHT
-          * 武将（military）：武力×MILITARY_FORCE_WEIGHT + 智力×MILITARY_INTELLECT_WEIGHT
-        - 防御力：由防御属性决定
-        - 智力：在技能伤害公式中生效
-        """
-        # 直接使用门客的真实属性，不再乘成长倍率
-        if self.archetype == GuestArchetype.CIVIL:
-            # 文官：武智均衡
-            raw_attack = self.force * CIVIL_FORCE_WEIGHT + self.intellect * CIVIL_INTELLECT_WEIGHT
-        else:
-            # 武将：更依赖武力
-            raw_attack = self.force * MILITARY_FORCE_WEIGHT + self.intellect * MILITARY_INTELLECT_WEIGHT
-
-        return {
-            "attack": int(raw_attack),
-            "defense": self.defense_stat,
-            "intellect": self.intellect,
-            "hp": self.max_hp,
-        }
+        return _guest_rules.build_guest_stat_block(self)
 
     @property
     def troop_capacity(self) -> int:
-        """
-        计算门客的带兵数量上限
-
-        规则：
-        - 基础带兵数量：BASE_TROOP_CAPACITY
-        - 满级额外增加：BONUS_TROOP_CAPACITY
-        - 总计：达到等级门槛的门客可带更多兵
-        """
-        base_capacity = BASE_TROOP_CAPACITY
-        if self.level >= TROOP_CAPACITY_LEVEL_THRESHOLD:
-            base_capacity += BONUS_TROOP_CAPACITY
-        return max(0, base_capacity + int(self.troop_capacity_bonus or 0))
+        return _guest_rules.compute_guest_troop_capacity(self)
 
 
 class GearSlot(models.TextChoices):
@@ -496,7 +426,7 @@ class GuestSkill(models.Model):
         if not self.guest_id:
             return
         current = GuestSkill.objects.filter(guest_id=self.guest_id).exclude(pk=self.pk).count()
-        if current >= MAX_GUEST_SKILL_SLOTS:
+        if current >= int(GUEST.MAX_SKILL_SLOTS):
             raise ValidationError("技能位已满，无法继续学习新的技能。")
 
 
@@ -514,18 +444,6 @@ class RecruitmentCandidate(models.Model):
         verbose_name = "招募候选"
         verbose_name_plural = "招募候选"
         ordering = ("created_at",)
-
-
-# 稀有度工资配置
-RARITY_SALARY = {
-    GuestRarity.BLACK: 500,
-    GuestRarity.GRAY: 1000,
-    GuestRarity.GREEN: 2000,
-    GuestRarity.RED: 3000,
-    GuestRarity.BLUE: 4000,
-    GuestRarity.PURPLE: 15000,
-    GuestRarity.ORANGE: 30000,
-}
 
 
 class SalaryPayment(models.Model):

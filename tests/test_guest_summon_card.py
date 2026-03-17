@@ -4,7 +4,7 @@ import pytest
 
 from core.exceptions import GuestCapacityFullError, InsufficientStockError
 from gameplay.models import InventoryItem, ItemTemplate
-from gameplay.services.inventory import use_inventory_item
+from gameplay.services.inventory.use import use_inventory_item
 from gameplay.services.manor.core import ensure_manor
 from guests.models import GearSlot, GearTemplate, Guest, GuestTemplate
 
@@ -55,7 +55,7 @@ def test_summon_card_rolls_blue(monkeypatch, django_user_model):
         storage_location=InventoryItem.StorageLocation.WAREHOUSE,
     )
 
-    monkeypatch.setattr("gameplay.services.inventory.random.random", lambda: 0.05)
+    monkeypatch.setattr("gameplay.services.inventory.use.inventory_random.random", lambda: 0.05)
     payload = use_inventory_item(item)
 
     assert payload["获得门客"] == "蒲巴乙"
@@ -92,7 +92,7 @@ def test_summon_card_rolls_green(monkeypatch, django_user_model):
         storage_location=InventoryItem.StorageLocation.WAREHOUSE,
     )
 
-    monkeypatch.setattr("gameplay.services.inventory.random.random", lambda: 0.50)
+    monkeypatch.setattr("gameplay.services.inventory.use.inventory_random.random", lambda: 0.50)
     payload = use_inventory_item(item)
 
     assert payload["获得门客"] == "蒲巴乙"
@@ -145,7 +145,7 @@ def test_summon_card_respects_guest_capacity(monkeypatch, django_user_model):
         storage_location=InventoryItem.StorageLocation.WAREHOUSE,
     )
 
-    monkeypatch.setattr("gameplay.services.inventory.random.random", lambda: 0.05)
+    monkeypatch.setattr("gameplay.services.inventory.use.inventory_random.random", lambda: 0.05)
     with pytest.raises(GuestCapacityFullError):
         use_inventory_item(item)
 
@@ -177,8 +177,8 @@ def test_loot_box_logs_and_tracks_skipped_bonus_items(monkeypatch, caplog, djang
         storage_location=InventoryItem.StorageLocation.WAREHOUSE,
     )
 
-    monkeypatch.setattr("gameplay.services.inventory.random.random", lambda: 0.0)
-    monkeypatch.setattr("gameplay.services.inventory.random.choice", lambda keys: keys[0])
+    monkeypatch.setattr("gameplay.services.inventory.use.inventory_random.random", lambda: 0.0)
+    monkeypatch.setattr("gameplay.services.inventory.use.inventory_random.choice", lambda keys: keys[0])
 
     def _raise_bonus_item_error(*_args, **_kwargs):
         raise ValueError("bonus item template missing")
@@ -249,9 +249,9 @@ def test_work_loot_box_grants_random_silver_and_single_gear_drop(monkeypatch, dj
 
     # gear roll + skill roll 都命中；装备/技能都选第一项；银两固定 8888
     roll_iter = iter([0.01, 0.01])
-    monkeypatch.setattr("gameplay.services.inventory.random.random", lambda: next(roll_iter))
-    monkeypatch.setattr("gameplay.services.inventory.random.choice", lambda seq: seq[0])
-    monkeypatch.setattr("gameplay.services.inventory.random.randint", lambda _a, _b: 8888)
+    monkeypatch.setattr("gameplay.services.inventory.use.inventory_random.random", lambda: next(roll_iter))
+    monkeypatch.setattr("gameplay.services.inventory.use.inventory_random.choice", lambda seq: seq[0])
+    monkeypatch.setattr("gameplay.services.inventory.use.inventory_random.randint", lambda _a, _b: 8888)
 
     payload = use_inventory_item(chest)
 

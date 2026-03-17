@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from django.db import DatabaseError
 
+from guests.guest_combat_stats import resolve_guest_combat_stats
 from guests.models import Guest, Skill, SkillKind
 
 from .core import Combatant
@@ -180,7 +181,7 @@ def build_guest_combatants(
     MAX_STAT_VALUE = 999999
 
     for guest in guests[:use_limit]:
-        stats = guest.stat_block()
+        stats = resolve_guest_combat_stats(guest)
 
         bonuses = stat_bonuses or {}
         attack_mult = 1.0 + bonuses.get("attack", 0)
@@ -188,19 +189,18 @@ def build_guest_combatants(
         hp_mult = 1.0 + bonuses.get("hp", 0)
         agility_mult = 1.0 + bonuses.get("agility", 0)
 
-        attack = min(MAX_STAT_VALUE, int(stats["attack"] * attack_mult))
-        defense = min(MAX_STAT_VALUE, int(stats["defense"] * defense_mult))
-        max_hp = min(MAX_STAT_VALUE, int(stats["hp"] * hp_mult))
+        attack = min(MAX_STAT_VALUE, int(stats.attack * attack_mult))
+        defense = min(MAX_STAT_VALUE, int(stats.defense * defense_mult))
+        max_hp = min(MAX_STAT_VALUE, int(stats.max_hp * hp_mult))
 
-        if getattr(guest, "pk", None) is not None:
-            raw_current_hp = getattr(guest, "current_hp", 0) or 0
-            hp = min(max_hp, int(raw_current_hp * hp_mult))
+        if stats.current_hp is not None:
+            hp = min(max_hp, int(stats.current_hp * hp_mult))
             hp = max(1, hp)
         else:
             hp = max_hp
 
         base_agility = getattr(guest, "agility", DEFAULT_GUEST_AGILITY)
-        intellect_value = stats.get("intellect", getattr(guest, "intellect", DEFAULT_GUEST_AGILITY))
+        intellect_value = stats.intellect or getattr(guest, "intellect", DEFAULT_GUEST_AGILITY)
         troop_speed = max(MIN_SPEED_BONUS, intellect_value // INTELLECT_TO_SPEED_DIVISOR)
         agility = int((base_agility + troop_speed) * agility_mult)
 
@@ -225,7 +225,7 @@ def build_guest_combatants(
                 skills=serialize_skills(guest, override_skill_keys=override_skill_keys),
                 force_attr=getattr(guest, "force", 100),
                 intellect_attr=getattr(guest, "intellect", 100),
-                defense_attr=getattr(guest, "defense_stat", stats["defense"]),
+                defense_attr=getattr(guest, "defense_stat", stats.defense),
                 level=getattr(guest, "level", 1),
             )
         )

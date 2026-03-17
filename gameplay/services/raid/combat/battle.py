@@ -18,6 +18,7 @@ from guests.query_utils import guest_template_rarity_rank_case
 
 from ....models import Manor, PlayerTroop, RaidRun
 from ...recruitment.troops import apply_defender_troop_losses
+from . import runs as combat_runs
 
 # Re-export capture helpers so existing imports from battle keep working.
 from .capture import (  # noqa: F401
@@ -34,7 +35,6 @@ from .loot import _apply_loot, _calculate_loot
 
 # Re-export messaging helpers.
 from .messaging import _send_raid_battle_messages  # noqa: F401
-from .runs import _add_troops_batch, _finalize_raid_retreat
 from .travel import _dismiss_marching_raids_if_protected
 from .troops import _coerce_positive_int, _normalize_mapping, _normalize_positive_int_mapping
 
@@ -63,7 +63,7 @@ def _prepare_run_for_battle(run_pk: int, now: datetime) -> Optional[RaidRun]:
     if locked_run.status == RaidRun.Status.RETREATED:
         if locked_run.return_at and locked_run.return_at > now:
             return None
-        _finalize_raid_retreat(locked_run, now)
+        combat_runs._finalize_raid_retreat(locked_run, now=now)
         return None
 
     if locked_run.status != RaidRun.Status.MARCHING:
@@ -189,7 +189,7 @@ def _fail_raid_run_due_missing_manor(locked_run: RaidRun, *, now: Optional[datet
     if attacker_locked is not None:
         loadout = _normalize_positive_int_mapping(getattr(locked_run, "troop_loadout", {}))
         if loadout:
-            _add_troops_batch(attacker_locked, loadout)
+            combat_runs._add_troops_batch(attacker_locked, loadout)
         locked_run.attacker = attacker_locked
 
     locked_run.status = RaidRun.Status.COMPLETED

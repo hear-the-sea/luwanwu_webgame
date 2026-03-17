@@ -35,31 +35,9 @@ from gameplay.services.recruitment.recruitment import get_player_troops
 from gameplay.services.resources import sync_resource_production
 from guests.models import Guest, GuestStatus, GuestTemplate, SkillBook
 
-from .mission_helpers import (
-    MISSION_CARD_KEY,
-    acquire_mission_action_lock,
-    build_drop_lists,
-    build_mission_data,
-    build_selection_summary,
-    build_troop_config,
-    collect_mission_asset_keys,
-    handle_known_mission_error,
-    handle_unexpected_mission_error,
-    mission_tasks_redirect,
-    parse_positive_ids,
-    release_mission_action_lock,
-    resolve_mission_or_redirect,
-)
+from . import mission_helpers
 
 logger = logging.getLogger(__name__)
-
-# Backward-compatible aliases for existing tests and internal monkeypatch hooks.
-_acquire_mission_action_lock = acquire_mission_action_lock
-_release_mission_action_lock = release_mission_action_lock
-_resolve_mission_or_redirect = resolve_mission_or_redirect
-_mission_tasks_redirect = mission_tasks_redirect
-_parse_positive_ids = parse_positive_ids
-_build_drop_lists = build_drop_lists
 
 
 class TaskBoardView(LoginRequiredMixin, TemplateView):
@@ -73,7 +51,7 @@ class TaskBoardView(LoginRequiredMixin, TemplateView):
         attempts: dict[str, int],
         extra_attempts: dict[str, int],
     ) -> list[dict[str, Any]]:
-        return build_mission_data(missions, attempts, extra_attempts)
+        return mission_helpers.build_mission_data(missions, attempts, extra_attempts)
 
     def _build_selection_summary(
         self,
@@ -82,10 +60,10 @@ class TaskBoardView(LoginRequiredMixin, TemplateView):
         attempts: dict[str, int],
         extra_attempts: dict[str, int],
     ) -> tuple[MissionTemplate | None, int, int, int]:
-        return build_selection_summary(selected_key, missions_by_key, attempts, extra_attempts)
+        return mission_helpers.build_selection_summary(selected_key, missions_by_key, attempts, extra_attempts)
 
     def _build_troop_config(self) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
-        return build_troop_config()
+        return mission_helpers.build_troop_config()
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -95,7 +73,7 @@ class TaskBoardView(LoginRequiredMixin, TemplateView):
         missions_by_key = {mission.key: mission for mission in missions}
         attempts = bulk_mission_attempts_today(manor, missions)
         extra_attempts = bulk_get_mission_extra_attempts(manor, missions)
-        enemy_keys, troop_keys, drop_keys = collect_mission_asset_keys(missions)
+        enemy_keys, troop_keys, drop_keys = mission_helpers.collect_mission_asset_keys(missions)
         guest_templates = {
             tpl.key: tpl for tpl in GuestTemplate.objects.filter(key__in=enemy_keys).only("key", "name", "avatar")
         }
@@ -144,7 +122,7 @@ class TaskBoardView(LoginRequiredMixin, TemplateView):
         )
 
         # 获取任务卡数量
-        mission_card_count = get_item_quantity(manor, MISSION_CARD_KEY)
+        mission_card_count = get_item_quantity(manor, mission_helpers.MISSION_CARD_KEY)
 
         troop_templates, config_items = self._build_troop_config()
         active_runs = (
@@ -167,7 +145,7 @@ class TaskBoardView(LoginRequiredMixin, TemplateView):
         context["selected_drop_items"] = []
         context["selected_probability_drop_items"] = []
         if selected_mission:
-            guaranteed_drops, probability_drops = _build_drop_lists(
+            guaranteed_drops, probability_drops = mission_helpers.build_drop_lists(
                 selected_mission,
                 drop_labels,
                 item_templates,
@@ -199,25 +177,27 @@ class AcceptMissionView(LoginRequiredMixin, TemplateView):
 
     def post(self, request, *args, **kwargs):
         manor = get_manor(request.user)
-        mission, redirect_response = _resolve_mission_or_redirect(request, request.POST.get("mission_key"))
+        mission, redirect_response = mission_helpers.resolve_mission_or_redirect(
+            request, request.POST.get("mission_key")
+        )
         if redirect_response is not None:
             return redirect_response
         if mission is None:
-            return _mission_tasks_redirect()
+            return mission_helpers.mission_tasks_redirect()
 
         if mission.is_defense:
             guest_ids = []
             raw_loadout = {}
         else:
             raw_guest_ids = request.POST.getlist("guest_ids")
-            guest_ids = _parse_positive_ids(raw_guest_ids)
+            guest_ids = mission_helpers.parse_positive_ids(raw_guest_ids)
             if guest_ids is None:
                 messages.error(request, "门客选择有误")
-                return _mission_tasks_redirect(mission.key)
+                return mission_helpers.mission_tasks_redirect(mission.key)
             limit = getattr(manor, "max_squad_size", 5)
             if len(guest_ids) > limit:
                 messages.error(request, f"本次出征最多选择 {limit} 名门客")
-                return _mission_tasks_redirect(mission.key)
+                return mission_helpers.mission_tasks_redirect(mission.key)
             if mission.guest_only:
                 raw_loadout = {}
             else:
@@ -229,13 +209,15 @@ class AcceptMissionView(LoginRequiredMixin, TemplateView):
                     quantity = safe_int(raw_value, default=None, min_val=0)
                     if quantity is None:
                         messages.error(request, "护院配置有误")
-                        return _mission_tasks_redirect(mission.key)
+                        return mission_helpers.mission_tasks_redirect(mission.key)
                     raw_loadout[item["key"]] = quantity
 
-        lock_ok, lock_key, lock_token = _acquire_mission_action_lock("accept", int(manor.id), mission.key)
+        lock_ok, lock_key, lock_token = mission_helpers.acquire_mission_action_lock(
+            "accept", int(manor.id), mission.key
+        )
         if not lock_ok:
             messages.warning(request, "任务请求处理中，请稍候重试")
-            return _mission_tasks_redirect(mission.key)
+            return mission_helpers.mission_tasks_redirect(mission.key)
 
         try:
             try:
@@ -246,9 +228,9 @@ class AcceptMissionView(LoginRequiredMixin, TemplateView):
                 else:
                     messages.success(request, f"{mission.name} 已出征，战报稍后送达。")
             except (GameError, ValueError) as exc:
-                handle_known_mission_error(request, exc)
+                mission_helpers.handle_known_mission_error(request, exc)
             except DatabaseError as exc:
-                handle_unexpected_mission_error(
+                mission_helpers.handle_unexpected_mission_error(
                     request,
                     exc,
                     log_message="Unexpected mission accept error: manor_id=%s user_id=%s mission_key=%s mission_id=%s",
@@ -261,8 +243,8 @@ class AcceptMissionView(LoginRequiredMixin, TemplateView):
                     logger_instance=logger,
                 )
         finally:
-            _release_mission_action_lock(lock_key, lock_token)
-        return _mission_tasks_redirect(mission.key)
+            mission_helpers.release_mission_action_lock(lock_key, lock_token)
+        return mission_helpers.mission_tasks_redirect(mission.key)
 
 
 @login_required
@@ -275,7 +257,9 @@ def retreat_mission_view(request: HttpRequest, pk: int) -> HttpResponse:
         pk=pk,
         status=MissionRun.Status.ACTIVE,
     )
-    lock_ok, lock_key, lock_token = _acquire_mission_action_lock("retreat_mission", int(manor.id), str(pk))
+    lock_ok, lock_key, lock_token = mission_helpers.acquire_mission_action_lock(
+        "retreat_mission", int(manor.id), str(pk)
+    )
     if not lock_ok:
         messages.warning(request, "任务请求处理中，请稍候重试")
         return redirect("gameplay:dashboard")
@@ -286,9 +270,9 @@ def retreat_mission_view(request: HttpRequest, pk: int) -> HttpResponse:
             eta = run.return_at.strftime("%H:%M:%S") if run.return_at else ""
             messages.info(request, f"{run.mission.name} 已撤退，预计返程：{eta}")
         except (GameError, ValueError) as exc:
-            handle_known_mission_error(request, exc)
+            mission_helpers.handle_known_mission_error(request, exc)
         except DatabaseError as exc:
-            handle_unexpected_mission_error(
+            mission_helpers.handle_unexpected_mission_error(
                 request,
                 exc,
                 log_message="Unexpected mission retreat error: manor_id=%s user_id=%s run_id=%s mission_id=%s",
@@ -301,7 +285,7 @@ def retreat_mission_view(request: HttpRequest, pk: int) -> HttpResponse:
                 logger_instance=logger,
             )
     finally:
-        _release_mission_action_lock(lock_key, lock_token)
+        mission_helpers.release_mission_action_lock(lock_key, lock_token)
     return redirect("gameplay:dashboard")
 
 
@@ -319,7 +303,7 @@ def retreat_scout_view(request: HttpRequest, pk: int) -> HttpResponse:
         attacker=manor,
         status=ScoutRecord.Status.SCOUTING,
     )
-    lock_ok, lock_key, lock_token = _acquire_mission_action_lock("retreat_scout", int(manor.id), str(pk))
+    lock_ok, lock_key, lock_token = mission_helpers.acquire_mission_action_lock("retreat_scout", int(manor.id), str(pk))
     if not lock_ok:
         messages.warning(request, "任务请求处理中，请稍候重试")
         return redirect("home")
@@ -329,9 +313,9 @@ def retreat_scout_view(request: HttpRequest, pk: int) -> HttpResponse:
             request_scout_retreat(record)
             messages.info(request, f"侦察 {record.defender.display_name} 已撤退，探子正在返程")
         except (GameError, ValueError) as exc:
-            handle_known_mission_error(request, exc)
+            mission_helpers.handle_known_mission_error(request, exc)
         except DatabaseError as exc:
-            handle_unexpected_mission_error(
+            mission_helpers.handle_unexpected_mission_error(
                 request,
                 exc,
                 log_message="Unexpected scout retreat error: manor_id=%s user_id=%s record_id=%s defender_id=%s",
@@ -344,7 +328,7 @@ def retreat_scout_view(request: HttpRequest, pk: int) -> HttpResponse:
                 logger_instance=logger,
             )
     finally:
-        _release_mission_action_lock(lock_key, lock_token)
+        mission_helpers.release_mission_action_lock(lock_key, lock_token)
     return redirect("home")
 
 
@@ -359,33 +343,33 @@ def use_mission_card_view(request: HttpRequest) -> HttpResponse:
     from django.db import transaction
 
     manor = get_manor(request.user)
-    mission, redirect_response = _resolve_mission_or_redirect(request, request.POST.get("mission_key"))
+    mission, redirect_response = mission_helpers.resolve_mission_or_redirect(request, request.POST.get("mission_key"))
     if redirect_response is not None:
         return redirect_response
     if mission is None:
-        return _mission_tasks_redirect()
+        return mission_helpers.mission_tasks_redirect()
 
-    lock_ok, lock_key, lock_token = _acquire_mission_action_lock("use_card", int(manor.id), mission.key)
+    lock_ok, lock_key, lock_token = mission_helpers.acquire_mission_action_lock("use_card", int(manor.id), mission.key)
     if not lock_ok:
         messages.warning(request, "任务请求处理中，请稍候重试")
-        return _mission_tasks_redirect(mission.key)
+        return mission_helpers.mission_tasks_redirect(mission.key)
 
     try:
         try:
             # 使用事务确保原子性：消耗任务卡和增加次数必须同时成功或同时失败
             with transaction.atomic():
                 # 消耗任务卡（内部会检查数量并抛出异常）
-                from gameplay.services.inventory import consume_inventory_item_for_manor_locked
+                from gameplay.services.inventory.core import consume_inventory_item_for_manor_locked
 
-                consume_inventory_item_for_manor_locked(manor, MISSION_CARD_KEY, 1)
+                consume_inventory_item_for_manor_locked(manor, mission_helpers.MISSION_CARD_KEY, 1)
                 # 增加额外次数
                 add_mission_extra_attempt(manor, mission, 1)
             messages.success(request, f"使用任务卡成功，{mission.name} 今日次数+1")
         except (GameError, ValueError) as exc:
             # 任务卡不足等业务错误
-            handle_known_mission_error(request, exc)
+            mission_helpers.handle_known_mission_error(request, exc)
         except DatabaseError as exc:
-            handle_unexpected_mission_error(
+            mission_helpers.handle_unexpected_mission_error(
                 request,
                 exc,
                 log_message="Unexpected mission card use error: manor_id=%s user_id=%s mission_key=%s mission_id=%s",
@@ -398,6 +382,6 @@ def use_mission_card_view(request: HttpRequest) -> HttpResponse:
                 logger_instance=logger,
             )
     finally:
-        _release_mission_action_lock(lock_key, lock_token)
+        mission_helpers.release_mission_action_lock(lock_key, lock_token)
 
-    return _mission_tasks_redirect(mission.key)
+    return mission_helpers.mission_tasks_redirect(mission.key)

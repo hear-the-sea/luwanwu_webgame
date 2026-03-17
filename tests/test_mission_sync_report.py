@@ -17,7 +17,7 @@ def test_generate_sync_battle_report_defense_tolerates_invalid_enemy_technology(
         captured.update(kwargs)
         return {"ok": True}
 
-    monkeypatch.setattr("battle.combatants.build_named_ai_guests", _build_named_ai_guests)
+    monkeypatch.setattr("battle.combatants_pkg.build_named_ai_guests", _build_named_ai_guests)
     monkeypatch.setattr("battle.services.simulate_report", _fake_simulate_report)
 
     mission = SimpleNamespace(

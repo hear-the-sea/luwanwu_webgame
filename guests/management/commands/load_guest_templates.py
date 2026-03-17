@@ -10,17 +10,9 @@ from django.core.management.base import BaseCommand, CommandError
 
 from core.utils.image_utils import compress_and_resize_image
 from core.utils.yaml_loader import ensure_mapping, load_yaml_data
-from guests.models import (
-    RARITY_HP_PROFILES,
-    GuestRarity,
-    GuestTemplate,
-    RecruitmentPool,
-    RecruitmentPoolEntry,
-    Skill,
-    SkillBook,
-    SkillKind,
-)
-from guests.services.recruitment import clear_template_cache
+from guests.growth_rules import RARITY_HP_PROFILES
+from guests.models import GuestRarity, GuestTemplate, RecruitmentPool, RecruitmentPoolEntry, Skill, SkillBook, SkillKind
+from guests.services.recruitment_templates import clear_template_cache
 
 logger = logging.getLogger(__name__)
 

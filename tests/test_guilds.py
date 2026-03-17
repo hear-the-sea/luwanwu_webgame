@@ -2,6 +2,8 @@
 帮会系统测试
 """
 
+import logging
+
 import pytest
 
 from gameplay.models import InventoryItem, ItemTemplate, Manor
@@ -9,6 +11,7 @@ from guilds.models import GuildMember
 from guilds.services import contribution as contribution_service
 from guilds.services import guild as guild_service
 from guilds.services import member as member_service
+from guilds.services import member_notifications
 
 
 @pytest.fixture
@@ -143,7 +146,7 @@ class TestGuildMembership:
         def _raise_announcement(*_args, **_kwargs):
             raise RuntimeError("announcement backend down")
 
-        monkeypatch.setattr(member_service, "create_message", _raise_message)
+        monkeypatch.setattr(member_service, "send_system_message_to_user", _raise_message)
         monkeypatch.setattr(member_service, "create_announcement", _raise_announcement)
 
         member_service.approve_application(application, user_with_gold_bars)
@@ -170,7 +173,7 @@ class TestGuildMembership:
         def _raise_followup(*_args, **_kwargs):
             raise RuntimeError("notification backend down")
 
-        monkeypatch.setattr(member_service, "create_message", _raise_followup)
+        monkeypatch.setattr(member_service, "send_system_message_to_user", _raise_followup)
         monkeypatch.setattr(member_service, "create_announcement", _raise_followup)
 
         if operation == "reject_application":
@@ -224,6 +227,50 @@ class TestGuildMembership:
         target_member.refresh_from_db()
         assert target_member.is_active is False
         assert target_member.left_at is not None
+
+
+@pytest.mark.django_db
+def test_send_system_message_to_user_returns_false_when_manor_missing(monkeypatch, caplog):
+    class _EmptyQuerySet:
+        @staticmethod
+        def first():
+            return None
+
+    monkeypatch.setattr(member_notifications.Manor.objects, "filter", lambda **_kwargs: _EmptyQuerySet())
+
+    with caplog.at_level(logging.WARNING):
+        result = member_notifications.send_system_message_to_user(
+            9999,
+            title="系统消息",
+            body="正文",
+            action="approve_application",
+            guild_name="测试帮会",
+            logger=logging.getLogger("tests.guilds.member_notifications"),
+        )
+
+    assert result is False
+    assert any("manor missing" in record.getMessage() for record in caplog.records)
+
+
+@pytest.mark.django_db
+def test_send_system_message_to_user_returns_false_when_create_message_fails(second_user, monkeypatch, caplog):
+    def _boom(**_kwargs):
+        raise RuntimeError("message backend down")
+
+    monkeypatch.setattr(member_notifications, "create_message", _boom)
+
+    with caplog.at_level(logging.WARNING):
+        result = member_notifications.send_system_message_to_user(
+            second_user.id,
+            title="系统消息",
+            body="正文",
+            action="approve_application",
+            guild_name="测试帮会",
+            logger=logging.getLogger("tests.guilds.member_notifications"),
+        )
+
+    assert result is False
+    assert any("follow-up message failed" in record.getMessage() for record in caplog.records)
 
     def test_leave_guild(self, user_with_gold_bars, second_user):
         """测试主动退出帮会"""

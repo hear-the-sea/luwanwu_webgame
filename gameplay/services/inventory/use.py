@@ -7,15 +7,12 @@ This module depends on the core inventory operations in `core.py`.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 from django.db import transaction
 
 from core.exceptions import GuestCapacityFullError, ItemNotConfiguredError, ItemNotUsableError
 from gameplay.models import InventoryItem, ItemTemplate, Manor, ResourceEvent
-
-# Do NOT `import random` here: tests monkeypatch `gameplay.services.inventory.random.random`.
-from gameplay.services import inventory as inventory_pkg
 from gameplay.services.resources import grant_resources, grant_resources_locked
 
 from .core import add_item_to_inventory, consume_inventory_item_for_manor_locked, consume_inventory_item_locked
@@ -26,11 +23,14 @@ from .guest_items import (  # noqa: F401
     use_xidianka,
     use_xisuidan,
 )
+from .random_source import inventory_random
 
 logger = logging.getLogger(__name__)
 
+ItemEffectHandler = Callable[[InventoryItem], dict[str, Any]]
+
 # 不在仓库使用的物品提示信息
-NON_WAREHOUSE_MESSAGES = {
+NON_WAREHOUSE_MESSAGES: dict[str, str] = {
     ItemTemplate.EffectType.SKILL_BOOK: "技能书请在门客详情页为指定门客使用",
     ItemTemplate.EffectType.EXPERIENCE_ITEM: "经验道具请在门客详情页为指定门客使用",
     ItemTemplate.EffectType.MEDICINE: "药品道具请在门客详情页为指定门客使用",
@@ -59,7 +59,7 @@ def _collect_weighted_template_choices(choices: list) -> tuple[list[str], list[i
 
 def _weighted_choose_template_key(template_keys: List[str], weights: List[int]) -> str:
     total_weight = sum(weights)
-    roll = inventory_pkg.random.random() * total_weight
+    roll = inventory_random.random() * total_weight
     chosen_key = template_keys[-1]
     cumulative = 0
     for template_key, weight in zip(template_keys, weights):
@@ -129,10 +129,12 @@ def _apply_resource_pack(item: InventoryItem) -> Dict[str, Any]:
     payload = item.template.effect_payload or {}
     if not payload:
         raise ItemNotConfiguredError()
-    result = _grant_item_resources(item.manor, payload, item.template.name)
-    parts = [f"{key}+{value}" for key, value in result.items()]
-    result["_message"] = f"获得 {'、'.join(parts)}"
-    return result
+    granted_resources = _grant_item_resources(item.manor, payload, item.template.name)
+    parts = [f"{key}+{value}" for key, value in granted_resources.items()]
+    return {
+        **granted_resources,
+        "_message": f"获得 {'、'.join(parts)}",
+    }
 
 
 def _apply_peace_shield(item: InventoryItem) -> Dict[str, Any]:
@@ -184,7 +186,7 @@ def _apply_guest_summon(item: InventoryItem) -> Dict[str, Any]:
     _ensure_guest_capacity(manor)
 
     from guests.models import GuestTemplate
-    from guests.services.recruitment import create_guest_from_template
+    from guests.services.recruitment_guests import create_guest_from_template
 
     template = GuestTemplate.objects.filter(key=chosen_key).first()
     if not template:
@@ -201,7 +203,7 @@ def _apply_guest_summon(item: InventoryItem) -> Dict[str, Any]:
     guest = create_guest_from_template(
         manor=manor,
         template=template,
-        rng=inventory_pkg.random.Random(),
+        rng=inventory_random.Random(),
     )
 
     rarity_display = template.get_rarity_display()
@@ -263,7 +265,7 @@ def _apply_loot_box(item: InventoryItem) -> Dict[str, Any]:
         if silver_max < silver_min:
             silver_min, silver_max = silver_max, silver_min
 
-        rolled_silver = inventory_pkg.random.randint(silver_min, silver_max)
+        rolled_silver = inventory_random.randint(silver_min, silver_max)
         if rolled_silver > 0:
             silver_result = _grant_item_resources(manor, {"silver": rolled_silver}, item.template.name)
             granted_silver = int(silver_result.get("silver", 0) or 0)
@@ -274,11 +276,11 @@ def _apply_loot_box(item: InventoryItem) -> Dict[str, Any]:
     gear_keys = payload.get("gear_keys") or []
     gear_chance = _normalize_probability(payload.get("gear_chance", 0))
     skipped_bonus_items: List[str] = []
-    if gear_chance > 0 and gear_keys and inventory_pkg.random.random() < gear_chance:
+    if gear_chance > 0 and gear_keys and inventory_random.random() < gear_chance:
         from guests.models import GearTemplate
         from guests.services.equipment import give_gear
 
-        gear_key = inventory_pkg.random.choice(gear_keys)
+        gear_key = inventory_random.choice(gear_keys)
         gear_template = GearTemplate.objects.filter(key=gear_key).first()
         if not gear_template:
             skipped_bonus_items.append(gear_key)
@@ -289,8 +291,8 @@ def _apply_loot_box(item: InventoryItem) -> Dict[str, Any]:
     # 4. 技能书掉落（概率，随机一本）
     skill_book_chance = _normalize_probability(payload.get("skill_book_chance", 0))
     skill_book_keys = payload.get("skill_book_keys", [])
-    if skill_book_chance > 0 and skill_book_keys and inventory_pkg.random.random() < skill_book_chance:
-        book_key = inventory_pkg.random.choice(skill_book_keys)
+    if skill_book_chance > 0 and skill_book_keys and inventory_random.random() < skill_book_chance:
+        book_key = inventory_random.choice(skill_book_keys)
         try:
             add_item_to_inventory(manor, book_key, 1)
             book_template = ItemTemplate.objects.filter(key=book_key).first()
@@ -314,7 +316,7 @@ def _apply_loot_box(item: InventoryItem) -> Dict[str, Any]:
     }
 
 
-ITEM_EFFECT_HANDLERS = {
+ITEM_EFFECT_HANDLERS: dict[str, ItemEffectHandler] = {
     ItemTemplate.EffectType.RESOURCE_PACK: _apply_resource_pack,
     ItemTemplate.EffectType.TOOL: _apply_tool,
     ItemTemplate.EffectType.LOOT_BOX: _apply_loot_box,
@@ -350,7 +352,7 @@ def use_inventory_item(item: InventoryItem, manor: Manor | None = None) -> Dict[
         Manor.objects.select_for_update().get(pk=target_manor_id)
 
     # 构建查询条件
-    query_filter = {"pk": item.pk}
+    query_filter: dict[str, object] = {"pk": item.pk}
     if manor is not None:
         # 如果提供了manor，校验物品归属
         query_filter["manor"] = manor

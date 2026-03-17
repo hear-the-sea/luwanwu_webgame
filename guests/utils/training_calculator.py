@@ -11,9 +11,10 @@ from typing import TYPE_CHECKING, Dict, cast
 if TYPE_CHECKING:
     from ..models import Guest
 
+from core.config import GUEST
 from core.utils.time_scale import scale_duration
 
-from ..models import MAX_GUEST_LEVEL, GuestRarity
+from ..models import GuestRarity
 
 # 稀有度训练时间系数
 RARITY_TIME_COEFFICIENT = {
@@ -65,8 +66,9 @@ def calculate_level_up_cost(current_level: int, target_levels: int = 1) -> Dict[
         raise ValueError(f"升级等级数必须>=1，收到: {target_levels}")
 
     target_level = current_level + target_levels
-    if target_level > MAX_GUEST_LEVEL:
-        raise ValueError(f"已达等级上限 {MAX_GUEST_LEVEL}")
+    max_guest_level = int(GUEST.MAX_LEVEL)
+    if target_level > max_guest_level:
+        raise ValueError(f"已达等级上限 {max_guest_level}")
 
     # 粮食成本随等级递增
     grain_cost = sum((current_level + i) * GRAIN_COST_PER_LEVEL for i in range(1, target_levels + 1))

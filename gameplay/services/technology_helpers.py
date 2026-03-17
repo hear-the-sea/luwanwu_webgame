@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, Sequence
+from typing import Any, Callable, Dict, Iterable, Sequence
 
 MARTIAL_TECH_GROUP_ORDER = ("dao", "qiang", "jian", "quan", "gong")
 
@@ -8,9 +8,9 @@ MARTIAL_TECH_GROUP_ORDER = ("dao", "qiang", "jian", "quan", "gong")
 def build_technology_display_entry(
     *,
     tech: Dict[str, Any],
-    player_tech,
-    calculate_upgrade_cost,
-    scale_duration,
+    player_tech: Any,
+    calculate_upgrade_cost: Callable[[str, int], int],
+    scale_duration: Callable[..., int],
 ) -> Dict[str, Any]:
     tech_key = tech["key"]
     level = player_tech.level if player_tech else 0
@@ -74,12 +74,12 @@ def group_martial_technology_entries(
 
 
 def schedule_technology_completion_task(
-    tech,
+    tech: Any,
     eta_seconds: int,
     *,
-    logger,
-    transaction_module,
-    safe_apply_async_func,
+    logger: Any,
+    transaction_module: Any,
+    safe_apply_async_func: Callable[..., Any],
 ) -> None:
     countdown = max(0, int(eta_seconds))
     try:
@@ -111,7 +111,13 @@ def resolve_technology_name(template: Dict[str, Any] | None, tech_key: str) -> s
     return str(template.get("name") or tech_key) if template else tech_key
 
 
-def send_technology_completion_notification(*, tech, tech_name: str, logger, notify_user_func) -> None:
+def send_technology_completion_notification(
+    *,
+    tech: Any,
+    tech_name: str,
+    logger: Any,
+    notify_user_func: Callable[..., Any],
+) -> None:
     from ..models import Message
     from .utils.messages import create_message
 

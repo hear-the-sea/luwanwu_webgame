@@ -4,7 +4,7 @@ import pytest
 
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.buildings import forge as forge_service
-from gameplay.services.inventory import get_item_quantity
+from gameplay.services.inventory.core import get_item_quantity
 from gameplay.services.manor.core import ensure_manor
 
 

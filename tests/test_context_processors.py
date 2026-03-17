@@ -242,11 +242,11 @@ def test_notifications_ajax_requests_skip_global_stats_queries(monkeypatch):
     request.user = AnonymousUser()
 
     monkeypatch.setattr(
-        "gameplay.context_processors._load_total_user_count",
+        "gameplay.selectors.stats.load_total_user_count",
         lambda: (_ for _ in ()).throw(AssertionError("global stats should be skipped for ajax")),
     )
     monkeypatch.setattr(
-        "gameplay.context_processors._load_online_user_count",
+        "gameplay.selectors.stats.load_online_user_count",
         lambda: (_ for _ in ()).throw(AssertionError("online stats should be skipped for ajax")),
     )
 
@@ -281,7 +281,7 @@ def test_notifications_total_user_count_uses_local_fallback_when_cache_reads_fai
         )(),
     )
     monkeypatch.setattr(
-        "gameplay.context_processors._load_online_user_count",
+        "gameplay.selectors.stats.load_online_user_count",
         lambda: 0,
     )
 
@@ -314,7 +314,7 @@ def test_notifications_online_user_count_uses_local_fallback_when_cache_and_redi
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("redis down")),
     )
     monkeypatch.setattr(
-        "gameplay.context_processors._load_total_user_count",
+        "gameplay.selectors.stats.load_total_user_count",
         lambda: 0,
     )
     monkeypatch.setattr(

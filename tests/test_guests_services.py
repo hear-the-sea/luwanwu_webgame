@@ -12,7 +12,9 @@ from gameplay.services.manor.core import ensure_manor
 from guests.constants import TimeConstants
 from guests.models import Guest, GuestArchetype, GuestRarity, GuestStatus, GuestTemplate
 from guests.rarity import GUEST_RARITY_ORDER
-from guests.services import allocate_attribute_points, available_guests, list_pools, recover_guest_hp
+from guests.services.health import recover_guest_hp
+from guests.services.recruitment_guests import allocate_attribute_points
+from guests.services.recruitment_queries import available_guests, list_pools
 from guests.tasks import scan_passive_hp_recovery
 
 User = get_user_model()

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import gameplay.services.technology as tech_service
 from gameplay.constants import BUILDING_MAX_LEVELS, BuildingKeys
-from gameplay.services import technology as tech_service
 from gameplay.services.manor.core import calculate_building_capacity
 
 

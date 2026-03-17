@@ -5,8 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
+import guests.services.recruitment_finalize_helpers as recruitment_finalize_helpers
 from core.exceptions import GuestCapacityFullError
-from guests.services import recruitment_finalize_helpers
 
 
 def test_split_candidates_by_capacity_splits_success_and_failed_lists():

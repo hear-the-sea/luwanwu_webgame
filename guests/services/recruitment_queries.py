@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import timedelta
-from typing import TYPE_CHECKING, Iterable, Sequence
+from datetime import datetime, timedelta
+from typing import TYPE_CHECKING, Iterable
 
 from django.db.models import QuerySet
 from django.utils import timezone
@@ -47,7 +47,7 @@ def list_pools(core_only: bool = False, *, include_entries: bool = True) -> Iter
     }
 
     pools = list(qs)
-    pools.sort(key=lambda pool: tier_priority.get(pool.tier, 99))
+    pools.sort(key=lambda pool: tier_priority.get(pool.tier, 99))  # type: ignore[call-overload]
     return pools
 
 
@@ -65,7 +65,7 @@ def _get_pool_daily_draw_limit() -> int:
     return max(1, value)
 
 
-def _count_pool_draws_today(manor_id: int, pool_id: int, *, now=None) -> int:
+def _count_pool_draws_today(manor_id: int, pool_id: int, *, now: datetime | None = None) -> int:
     """统计指定庄园今日对指定卡池已发起的招募次数。"""
     current_time = now or timezone.now()
     local_now = timezone.localtime(current_time)
@@ -96,7 +96,7 @@ def get_active_guest_recruitment(manor: Manor) -> GuestRecruitment | None:
     )
 
 
-def available_guests(manor: Manor) -> Sequence[Guest]:
+def available_guests(manor: Manor) -> QuerySet[Guest]:
     """获取庄园所有可用门客。"""
     return (
         manor.guests.select_related("template")

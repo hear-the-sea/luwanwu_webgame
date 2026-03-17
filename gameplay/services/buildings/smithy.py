@@ -190,7 +190,7 @@ def get_metal_options(manor: Manor) -> List[Dict[str, Any]]:
     Returns:
         物品选项列表
     """
-    from ..inventory import get_item_quantity
+    from ..inventory.core import get_item_quantity
     from ..technology import get_player_technology_level
 
     smelting_level = get_player_technology_level(manor, "smelting")
@@ -292,7 +292,7 @@ def start_smelting_production(manor: Manor, metal_key: str, quantity: int = 1) -
         from gameplay.models import Manor as ManorModel
 
         from ...models import InventoryItem, ResourceEvent
-        from ..inventory import consume_inventory_item_locked
+        from ..inventory.core import consume_inventory_item_locked
         from ..resources import spend_resources_locked
 
         locked_manor = ManorModel.objects.select_for_update().get(pk=manor.pk)
@@ -418,7 +418,7 @@ def finalize_smelting_production(production: SmeltingProduction, send_notificati
             return False
 
         # 添加物品到仓库（按数量添加）
-        from ..inventory import add_item_to_inventory_locked
+        from ..inventory.core import add_item_to_inventory_locked
 
         add_item_to_inventory_locked(locked_production.manor, locked_production.metal_key, locked_production.quantity)
 

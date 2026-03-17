@@ -9,9 +9,9 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from gameplay.models import InventoryItem, Manor
-from gameplay.services.inventory import get_item_quantity
 from trade.models import AuctionBid, FrozenGoldBar
 from trade.services.auction.constants import GOLD_BAR_ITEM_KEY
+from trade.services.trade_platform import consume_inventory_item_for_manor_locked, get_item_quantity
 
 
 def get_total_gold_bars(manor: Manor) -> int:
@@ -92,8 +92,6 @@ def unfreeze_gold_bars(frozen_record: FrozenGoldBar) -> None:
 
 def consume_frozen_gold_bars(frozen_record: FrozenGoldBar, manor: Manor) -> None:
     """消耗冻结的金条（中标时调用）"""
-    from gameplay.services.inventory import consume_inventory_item_for_manor_locked
-
     with transaction.atomic():
         locked = (
             FrozenGoldBar.objects.select_for_update().select_related("auction_bid").filter(pk=frozen_record.pk).first()

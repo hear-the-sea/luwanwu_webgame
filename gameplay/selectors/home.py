@@ -7,10 +7,13 @@ from django.core.cache import cache
 from django.utils import timezone
 
 from core.utils import safe_int
-from guests.models import RARITY_SALARY, GuestStatus
+from guests.guest_upkeep_rules import get_guest_salary_for_rarity
+from guests.models import GuestStatus
 
 from ..models import MissionRun, ResourceType
-from ..services import can_retreat, get_technology_template, sync_resource_production
+from ..services.missions import can_retreat
+from ..services.resources import sync_resource_production
+from ..services.technology import get_technology_template
 from ..services.utils.cache import CacheKeys
 from ..services.utils.query_optimization import optimize_guest_queryset
 
@@ -80,7 +83,7 @@ def get_home_context(manor) -> dict:
         tpl = get_technology_template(tech.tech_key) or {}
         tech.display_name = tpl.get("name", tech.tech_key)
 
-    total_guest_salary = sum(RARITY_SALARY.get(g.rarity, 1000) for g in guests)
+    total_guest_salary = sum(get_guest_salary_for_rarity(g.rarity) for g in guests)
 
     from ..utils.resource_calculator import get_hourly_rates, get_personnel_grain_cost_per_hour
 

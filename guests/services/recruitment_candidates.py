@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import random
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, TypedDict
 
 from ..models import GuestRarity, GuestTemplate, RecruitmentCandidate
 
@@ -12,6 +12,15 @@ if TYPE_CHECKING:
 
 ChooseTemplateFunc = Callable[..., GuestTemplate]
 GenerateNameFunc = Callable[[random.Random], str]
+
+
+class CandidateGenerationContext(TypedDict):
+    pool_entries: list[RecruitmentPoolEntry]
+    rng: random.Random
+    templates_by_rarity: dict[str, list[GuestTemplate]]
+    hermit_templates: list[GuestTemplate]
+    resolved_draw_count: int
+    excluded_ids: set[int]
 
 
 def resolve_candidate_draw_count(*, pool: RecruitmentPool, manor: Manor, total_draw_count: int | None) -> int:
@@ -49,8 +58,8 @@ def build_candidate_batch(
     excluded_ids: set[int],
     rng: random.Random,
     choose_template_from_entries: ChooseTemplateFunc,
-    templates_by_rarity,
-    hermit_templates,
+    templates_by_rarity: dict[str, list[GuestTemplate]],
+    hermit_templates: list[GuestTemplate],
     generate_random_name: GenerateNameFunc,
     non_repeatable_rarities: frozenset[str],
 ) -> list[RecruitmentCandidate]:
@@ -89,10 +98,10 @@ def load_candidate_generation_context(
     pool: RecruitmentPool,
     seed: int | None,
     total_draw_count: int | None,
-    get_recruitable_templates_by_rarity,
-    get_hermit_templates,
-    get_excluded_template_ids,
-) -> dict[str, object]:
+    get_recruitable_templates_by_rarity: Callable[[], dict[str, list[GuestTemplate]]],
+    get_hermit_templates: Callable[[], list[GuestTemplate]],
+    get_excluded_template_ids: Callable[[Manor], set[int]],
+) -> CandidateGenerationContext:
     return {
         "pool_entries": list(pool.entries.select_related("template")),
         "rng": random.Random(seed),
@@ -104,8 +113,12 @@ def load_candidate_generation_context(
 
 
 def persist_candidate_batch(
-    *, recruitment_candidate_model, manor: Manor, candidates_to_create: list, invalidate_cache
-) -> list:
+    *,
+    recruitment_candidate_model: type[RecruitmentCandidate],
+    manor: Manor,
+    candidates_to_create: list[RecruitmentCandidate],
+    invalidate_cache: Callable[[int | None], None],
+) -> list[RecruitmentCandidate]:
     candidates = recruitment_candidate_model.objects.bulk_create(candidates_to_create)
     invalidate_cache(getattr(manor, "id", None))
     return candidates

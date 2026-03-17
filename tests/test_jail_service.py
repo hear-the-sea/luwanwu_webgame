@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from gameplay.services import jail as jail_service
+import gameplay.services.jail as jail_service
 
 pytestmark = pytest.mark.django_db
 

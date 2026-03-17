@@ -7,10 +7,23 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from core.exceptions import GuestNotIdleError
+import guests.services.recruitment as recruitment_command_service
+import guests.services.recruitment_guests as recruitment_guest_service
+import guests.services.recruitment_queries as recruitment_query_service
+import guests.services.recruitment_shared as recruitment_shared
+import guests.services.recruitment_templates as recruitment_template_service
+from core.exceptions import GuestNotIdleError, InvalidAllocationError
 from gameplay.services.manor.core import ensure_manor
-from guests.models import Guest, GuestRarity, GuestStatus, GuestTemplate, Skill
-from guests.services import recruitment as recruitment_service
+from guests.models import (
+    Guest,
+    GuestRarity,
+    GuestStatus,
+    GuestTemplate,
+    RecruitmentCandidate,
+    RecruitmentPool,
+    RecruitmentRecord,
+    Skill,
+)
 from guests.utils.recruitment_utils import HERMIT_RARITY, RARITY_DISTRIBUTION, RARITY_WEIGHTS, TOTAL_WEIGHT
 
 # ============ get_excluded_template_ids tests ============
@@ -25,7 +38,7 @@ def test_get_excluded_template_ids_excludes_green_and_above():
         (3, GuestRarity.GRAY, False),  # Should NOT be excluded
     ]
 
-    excluded = recruitment_service.get_excluded_template_ids(manor)
+    excluded = recruitment_query_service.get_excluded_template_ids(manor)
 
     assert 1 in excluded  # GREEN excluded
     assert 2 in excluded  # BLUE excluded
@@ -40,7 +53,7 @@ def test_get_excluded_template_ids_excludes_black_hermit():
         (2, GuestRarity.BLACK, False),  # Not hermit - not excluded
     ]
 
-    excluded = recruitment_service.get_excluded_template_ids(manor)
+    excluded = recruitment_query_service.get_excluded_template_ids(manor)
 
     assert 1 in excluded  # BLACK hermit excluded
     assert 2 not in excluded  # BLACK non-hermit not excluded
@@ -51,7 +64,7 @@ def test_get_excluded_template_ids_empty_when_no_guests():
     manor = MagicMock()
     manor.guests.values_list.return_value = []
 
-    excluded = recruitment_service.get_excluded_template_ids(manor)
+    excluded = recruitment_query_service.get_excluded_template_ids(manor)
 
     assert excluded == set()
 
@@ -68,13 +81,13 @@ def test_non_repeatable_rarities_includes_expected():
         GuestRarity.PURPLE,
         GuestRarity.ORANGE,
     }
-    assert recruitment_service.NON_REPEATABLE_RARITIES == expected
+    assert recruitment_shared.NON_REPEATABLE_RARITIES == expected
 
 
 def test_non_repeatable_rarities_excludes_gray_and_black():
     """Test that gray and black are not in NON_REPEATABLE_RARITIES."""
-    assert GuestRarity.GRAY not in recruitment_service.NON_REPEATABLE_RARITIES
-    assert GuestRarity.BLACK not in recruitment_service.NON_REPEATABLE_RARITIES
+    assert GuestRarity.GRAY not in recruitment_shared.NON_REPEATABLE_RARITIES
+    assert GuestRarity.BLACK not in recruitment_shared.NON_REPEATABLE_RARITIES
 
 
 def test_recruitment_weights_raise_hermit_and_disable_red_for_testing():
@@ -98,7 +111,7 @@ def test_filter_templates_removes_excluded():
     templates = [t1, t2, t3]
     excluded = {2}
 
-    result = recruitment_service._filter_templates(templates, excluded)
+    result = recruitment_template_service._filter_templates(templates, excluded)
 
     assert len(result) == 2
     assert t1 in result
@@ -112,13 +125,13 @@ def test_filter_templates_returns_all_when_no_exclusions():
     t2 = SimpleNamespace(id=2)
     templates = [t1, t2]
 
-    result = recruitment_service._filter_templates(templates, set())
+    result = recruitment_template_service._filter_templates(templates, set())
 
     assert result == templates
 
 
 def test_build_rarity_search_order_starts_with_target_and_covers_all_rarities():
-    order = recruitment_service._build_rarity_search_order(GuestRarity.BLUE)
+    order = recruitment_template_service._build_rarity_search_order(GuestRarity.BLUE)
 
     assert order[0] == GuestRarity.BLUE
     assert len(order) == len(set(order))
@@ -137,7 +150,7 @@ def test_choose_template_by_rarity_cached_falls_back_to_next_available_rarity():
     green_template = SimpleNamespace(id=11, key="green_tpl")
     blue_template = SimpleNamespace(id=12, key="blue_tpl")
 
-    result = recruitment_service._choose_template_by_rarity_cached(
+    result = recruitment_template_service._choose_template_by_rarity_cached(
         GuestRarity.RED,
         excluded_ids=set(),
         rng=__import__("random").Random(1),
@@ -193,8 +206,8 @@ def test_allocate_attribute_points_rejects_zero_points(django_user_model):
     """Test that zero points allocation is rejected."""
     guest = _create_guest_for_allocation_tests(django_user_model, "zero")
 
-    with pytest.raises(recruitment_service.InvalidAllocationError):
-        recruitment_service.allocate_attribute_points(guest, "force", 0)
+    with pytest.raises(InvalidAllocationError):
+        recruitment_guest_service.allocate_attribute_points(guest, "force", 0)
 
 
 @pytest.mark.django_db
@@ -202,8 +215,8 @@ def test_allocate_attribute_points_rejects_negative_points(django_user_model):
     """Test that negative points allocation is rejected."""
     guest = _create_guest_for_allocation_tests(django_user_model, "negative")
 
-    with pytest.raises(recruitment_service.InvalidAllocationError):
-        recruitment_service.allocate_attribute_points(guest, "force", -5)
+    with pytest.raises(InvalidAllocationError):
+        recruitment_guest_service.allocate_attribute_points(guest, "force", -5)
 
 
 @pytest.mark.django_db
@@ -213,8 +226,8 @@ def test_allocate_attribute_points_rejects_insufficient_points(django_user_model
     guest.attribute_points = 5
     guest.save(update_fields=["attribute_points"])
 
-    with pytest.raises(recruitment_service.InvalidAllocationError):
-        recruitment_service.allocate_attribute_points(guest, "force", 10)
+    with pytest.raises(InvalidAllocationError):
+        recruitment_guest_service.allocate_attribute_points(guest, "force", 10)
 
 
 @pytest.mark.django_db
@@ -222,8 +235,8 @@ def test_allocate_attribute_points_rejects_unknown_attribute(django_user_model):
     """Test that unknown attribute is rejected."""
     guest = _create_guest_for_allocation_tests(django_user_model, "unknown")
 
-    with pytest.raises(recruitment_service.InvalidAllocationError):
-        recruitment_service.allocate_attribute_points(guest, "unknown_attr", 5)
+    with pytest.raises(InvalidAllocationError):
+        recruitment_guest_service.allocate_attribute_points(guest, "unknown_attr", 5)
 
 
 @pytest.mark.django_db
@@ -234,8 +247,8 @@ def test_allocate_attribute_points_rejects_overflow(django_user_model):
     guest.force = 9950  # Near max
     guest.save(update_fields=["attribute_points", "force"])
 
-    with pytest.raises(recruitment_service.InvalidAllocationError):
-        recruitment_service.allocate_attribute_points(guest, "force", 100)
+    with pytest.raises(InvalidAllocationError):
+        recruitment_guest_service.allocate_attribute_points(guest, "force", 100)
 
 
 @pytest.mark.django_db
@@ -245,7 +258,7 @@ def test_allocate_attribute_points_rejects_non_idle_guest(django_user_model):
     guest.save(update_fields=["status"])
 
     with pytest.raises(GuestNotIdleError):
-        recruitment_service.allocate_attribute_points(guest, "force", 1)
+        recruitment_guest_service.allocate_attribute_points(guest, "force", 1)
 
 
 @pytest.mark.django_db
@@ -253,7 +266,7 @@ def test_allocate_attribute_points_success(django_user_model):
     """Test successful attribute point allocation."""
     guest = _create_guest_for_allocation_tests(django_user_model, "success")
 
-    result = recruitment_service.allocate_attribute_points(guest, "force", 5)
+    result = recruitment_guest_service.allocate_attribute_points(guest, "force", 5)
     result.refresh_from_db()
 
     assert result.attribute_points == 5
@@ -267,7 +280,26 @@ def test_allocate_attribute_points_success(django_user_model):
 def test_clear_template_cache_clears_both_caches():
     """Test that clear_template_cache clears both caches."""
     # Just verify it doesn't raise
-    recruitment_service.clear_template_cache()
+    recruitment_template_service.clear_template_cache()
+
+
+@pytest.mark.django_db
+def test_guest_template_signal_clears_recruitment_template_cache(monkeypatch):
+    calls: list[str] = []
+
+    def _spy_clear_template_cache():
+        calls.append("cleared")
+
+    monkeypatch.setattr(recruitment_template_service, "clear_template_cache", _spy_clear_template_cache)
+
+    GuestTemplate.objects.create(
+        key="signal_clear_tpl",
+        name="信号清缓存模板",
+        archetype="civil",
+        rarity="gray",
+    )
+
+    assert calls == ["cleared"]
 
 
 # ============ CORE_POOL_TIERS tests ============
@@ -283,7 +315,7 @@ def test_core_pool_tiers_has_expected_tiers():
         RecruitmentPool.Tier.HUISHI,
         RecruitmentPool.Tier.DIANSHI,
     )
-    assert recruitment_service.CORE_POOL_TIERS == expected
+    assert recruitment_shared.CORE_POOL_TIERS == expected
 
 
 # ============ reveal_candidate_rarity tests ============
@@ -294,7 +326,7 @@ def test_reveal_candidate_rarity_updates_unrevealed():
     manor = MagicMock()
     manor.candidates.filter.return_value.update.return_value = 3
 
-    count = recruitment_service.reveal_candidate_rarity(manor)
+    count = recruitment_command_service.reveal_candidate_rarity(manor)
 
     assert count == 3
     manor.candidates.filter.assert_called_once_with(rarity_revealed=False)
@@ -326,18 +358,18 @@ def test_bulk_finalize_candidates_respects_capacity_and_grants_template_skills(d
     )
     template.initial_skills.add(skill_a, skill_b)
 
-    pool = recruitment_service.RecruitmentPool.objects.create(
+    pool = RecruitmentPool.objects.create(
         key="bulk_finalize_pool",
         name="批量测试卡池",
         cost={},
-        tier=recruitment_service.RecruitmentPool.Tier.CUNMU,
+        tier=RecruitmentPool.Tier.CUNMU,
         draw_count=1,
     )
 
     for idx in range(3):
         Guest.objects.create(manor=manor, template=template, custom_name=f"已有门客{idx}")
 
-    candidate_1 = recruitment_service.RecruitmentCandidate.objects.create(
+    candidate_1 = RecruitmentCandidate.objects.create(
         manor=manor,
         pool=pool,
         template=template,
@@ -345,7 +377,7 @@ def test_bulk_finalize_candidates_respects_capacity_and_grants_template_skills(d
         rarity="gray",
         archetype="civil",
     )
-    candidate_2 = recruitment_service.RecruitmentCandidate.objects.create(
+    candidate_2 = RecruitmentCandidate.objects.create(
         manor=manor,
         pool=pool,
         template=template,
@@ -354,17 +386,17 @@ def test_bulk_finalize_candidates_respects_capacity_and_grants_template_skills(d
         archetype="civil",
     )
 
-    created, failed = recruitment_service.bulk_finalize_candidates([candidate_1, candidate_2])
+    created, failed = recruitment_guest_service.bulk_finalize_candidates([candidate_1, candidate_2])
 
     assert len(created) == 1
     assert len(failed) == 1
     assert failed[0].id == candidate_2.id
     created_guest = created[0]
     assert created_guest.custom_name == "候选一"
-    assert recruitment_service.RecruitmentRecord.objects.filter(manor=manor, guest=created_guest).count() == 1
+    assert RecruitmentRecord.objects.filter(manor=manor, guest=created_guest).count() == 1
     assert set(created_guest.guest_skills.values_list("skill__key", flat=True)) == {
         "bulk_finalize_skill_a",
         "bulk_finalize_skill_b",
     }
-    assert recruitment_service.RecruitmentCandidate.objects.filter(id=candidate_1.id).exists() is False
-    assert recruitment_service.RecruitmentCandidate.objects.filter(id=candidate_2.id).exists() is True
+    assert RecruitmentCandidate.objects.filter(id=candidate_1.id).exists() is False
+    assert RecruitmentCandidate.objects.filter(id=candidate_2.id).exists() is True

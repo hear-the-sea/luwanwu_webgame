@@ -1,19 +1,20 @@
 from __future__ import annotations
 
-import logging
 import os
-import warnings
-
-from channels.auth import AuthMiddlewareStack
-from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.security.websocket import AllowedHostsOriginValidator
-from django.conf import settings
-from django.contrib.staticfiles.handlers import ASGIStaticFilesHandler
-from django.core.asgi import get_asgi_application
-
-from websocket.routing_status import set_websocket_routing_status
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+
+import logging  # noqa: E402
+import warnings  # noqa: E402
+
+from channels.auth import AuthMiddlewareStack  # noqa: E402
+from channels.routing import ProtocolTypeRouter, URLRouter  # noqa: E402
+from channels.security.websocket import AllowedHostsOriginValidator  # noqa: E402
+from django.conf import settings  # noqa: E402
+from django.contrib.staticfiles.handlers import ASGIStaticFilesHandler  # noqa: E402
+from django.core.asgi import get_asgi_application  # noqa: E402
+
+from websocket.routing_status import set_websocket_routing_status  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

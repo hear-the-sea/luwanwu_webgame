@@ -37,33 +37,32 @@ def test_gameplay_services_import_is_lazy():
         assert "gameplay.services.manor" not in sys.modules
         assert "gameplay.services.technology" not in sys.modules
         assert "gameplay.services.technology_helpers" not in sys.modules
-        assert "ensure_manor" in dir(services)
-        assert "jail" in dir(services)
+        assert not hasattr(services, "__getattr__")
+        assert "ensure_manor" not in dir(services)
 
 
-def test_gameplay_services_attribute_export_loads_only_requested_module():
+def test_gameplay_services_direct_submodule_import_loads_only_requested_module():
     with isolated_service_imports():
-        services = importlib.import_module("gameplay.services")
+        importlib.import_module("gameplay.services")
 
-        ensure_manor = services.ensure_manor
+        manor_module = importlib.import_module("gameplay.services.manor")
+        manor_core_module = importlib.import_module("gameplay.services.manor.core")
 
-        assert callable(ensure_manor)
+        assert manor_module is sys.modules["gameplay.services.manor"]
+        assert hasattr(manor_core_module, "ensure_manor")
         assert "gameplay.services.manor" in sys.modules
         assert "gameplay.services.technology" not in sys.modules
-        assert services.ensure_manor is ensure_manor
 
 
-def test_gameplay_services_module_exports_remain_compatible():
+def test_gameplay_services_submodule_imports_remain_compatible():
     with isolated_service_imports():
         from gameplay.services import jail as jail_service
         from gameplay.services import technology as technology_service
         from gameplay.services import technology_helpers
 
-        services = sys.modules["gameplay.services"]
-
-        assert jail_service is services.jail
-        assert technology_service is services.technology
-        assert technology_helpers is services.technology_helpers
+        assert jail_service is sys.modules["gameplay.services.jail"]
+        assert technology_service is sys.modules["gameplay.services.technology"]
+        assert technology_helpers is sys.modules["gameplay.services.technology_helpers"]
         assert "gameplay.services.jail" in sys.modules
         assert "gameplay.services.technology" in sys.modules
         assert "gameplay.services.technology_helpers" in sys.modules

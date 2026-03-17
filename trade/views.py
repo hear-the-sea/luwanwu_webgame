@@ -12,7 +12,7 @@ from django.views.generic import TemplateView
 from core.utils import safe_int
 from core.utils.rate_limit import rate_limit_redirect
 from gameplay.models import Manor
-from gameplay.services.manor import get_manor
+from gameplay.services.manor.core import get_manor
 from trade.selectors import get_trade_context
 from trade.services.auction_service import place_bid
 from trade.services.bank_service import exchange_gold_bar

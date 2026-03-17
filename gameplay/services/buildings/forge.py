@@ -209,7 +209,7 @@ def synthesize_equipment_with_blueprint(manor: Manor, blueprint_key: str, quanti
     """按图纸合成装备。"""
     from ...models import InventoryItem, ItemTemplate
     from ...models import Manor as ManorModel
-    from ..inventory import add_item_to_inventory_locked, consume_inventory_item_locked
+    from ..inventory.core import add_item_to_inventory_locked, consume_inventory_item_locked
     from ..technology import get_player_technology_level
 
     if quantity < 1:
@@ -371,7 +371,7 @@ def decompose_equipment(manor: Manor, equipment_key: str, quantity: int = 1) -> 
     """
     from ...models import InventoryItem
     from ...models import Manor as ManorModel
-    from ..inventory import add_item_to_inventory_locked, consume_inventory_item_locked
+    from ..inventory.core import add_item_to_inventory_locked, consume_inventory_item_locked
 
     if quantity < 1:
         raise ValueError("分解数量至少为1")
@@ -591,7 +591,7 @@ def start_equipment_forging(manor: Manor, equipment_key: str, quantity: int = 1)
         from gameplay.models import Manor as ManorModel
 
         from ...models import InventoryItem
-        from ..inventory import consume_inventory_item_locked
+        from ..inventory.core import consume_inventory_item_locked
 
         locked_manor = ManorModel.objects.select_for_update().get(pk=manor.pk)
 
@@ -657,7 +657,7 @@ def finalize_equipment_forging(production: EquipmentProduction, send_notificatio
     Returns:
         是否成功完成
     """
-    from ..inventory import add_item_to_inventory_locked
+    from ..inventory.core import add_item_to_inventory_locked
     from ..utils.notifications import notify_user
 
     with transaction.atomic():

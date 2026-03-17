@@ -48,7 +48,7 @@ def calculate_raid_travel_time(
         total_time *= 1 - agility_reduction
 
     # 骑兵加成：检查是否有骑兵类兵种
-    from ...recruitment import load_troop_templates
+    from ...recruitment.recruitment import load_troop_templates
 
     templates_data = load_troop_templates()
     cavalry_keys = {"scout"}  # 探子算骑兵

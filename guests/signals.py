@@ -3,7 +3,7 @@ from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
 from .models import GearTemplate, GuestTemplate
-from .services import give_gear
+from .services.equipment import give_gear
 
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
@@ -27,7 +27,7 @@ def clear_guest_template_cache(sender, **kwargs):
         return
 
     try:
-        from .services.recruitment import clear_template_cache
+        from .services.recruitment_templates import clear_template_cache
 
         clear_template_cache()
     except Exception as e:

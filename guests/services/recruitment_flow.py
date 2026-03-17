@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import logging
 import random
-from datetime import timedelta
-from typing import TYPE_CHECKING, Callable
+from datetime import datetime, timedelta
+from typing import TYPE_CHECKING, Any, Callable
 
 from django.db import transaction
 
 from common.utils.celery import safe_apply_async
 
 from ..models import GuestRecruitment
+from .guest_platform import create_message, notify_user
 
 if TYPE_CHECKING:
     from gameplay.models import Manor
@@ -29,15 +30,15 @@ def resolve_recruitment_cost(pool: RecruitmentPool) -> dict:
 
 def create_pending_recruitment(
     *,
-    recruitment_model,
+    recruitment_model: type[GuestRecruitment],
     manor: Manor,
     pool: RecruitmentPool,
-    current_time,
-    cost: dict,
+    current_time: datetime,
+    cost: dict[str, Any],
     draw_count: int,
     duration_seconds: int,
     seed: int,
-):
+) -> GuestRecruitment:
     resolved_duration_seconds = max(0, int(duration_seconds))
     return recruitment_model.objects.create(
         manor=manor,
@@ -88,7 +89,7 @@ def schedule_guest_recruitment_completion(
 def mark_recruitment_failed_locked(
     recruitment: GuestRecruitment,
     *,
-    current_time,
+    current_time: datetime,
     reason: str,
     invalidate_cache: InvalidateCacheFunc,
 ) -> None:
@@ -102,7 +103,7 @@ def mark_recruitment_failed_locked(
 def mark_recruitment_completed_locked(
     recruitment: GuestRecruitment,
     *,
-    current_time,
+    current_time: datetime,
     result_count: int,
     invalidate_cache: InvalidateCacheFunc,
 ) -> None:
@@ -127,9 +128,6 @@ def send_recruitment_completion_notification(
     title = f"{pool.name}招募完成"
     body = f"您的{pool.name}已完成，生成 {candidate_count} 名候选门客，请前往聚贤庄挑选。"
     try:
-        from gameplay.services.utils.messages import create_message
-        from gameplay.services.utils.notifications import notify_user
-
         create_message(
             manor=manor,
             kind=Message.Kind.SYSTEM,
@@ -158,12 +156,12 @@ def send_recruitment_completion_notification(
 
 def validate_recruitment_start_allowed(
     *,
-    locked_manor,
-    pool,
-    current_time,
-    has_active_guest_recruitment,
+    locked_manor: Manor,
+    pool: RecruitmentPool,
+    current_time: datetime,
+    has_active_guest_recruitment: Callable[[Manor], bool],
     daily_limit: int,
-    count_pool_draws_today,
+    count_pool_draws_today: Callable[..., int],
 ) -> None:
     if has_active_guest_recruitment(locked_manor):
         raise ValueError("已有招募正在进行中，请等待当前招募完成。")
@@ -174,7 +172,12 @@ def validate_recruitment_start_allowed(
 
 
 def spend_recruitment_cost_if_needed(
-    *, manor, cost: dict, pool_name: str, spend_resources, recruit_cost_reason
+    *,
+    manor: Manor,
+    cost: dict[str, Any],
+    pool_name: str,
+    spend_resources: Callable[..., object],
+    recruit_cost_reason: object,
 ) -> None:
     if not cost:
         return
@@ -186,5 +189,5 @@ def spend_recruitment_cost_if_needed(
     )
 
 
-def clear_manor_candidates(manor) -> None:
+def clear_manor_candidates(manor: Manor) -> None:
     manor.candidates.all().delete()

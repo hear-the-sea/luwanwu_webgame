@@ -79,7 +79,7 @@ def generate_sync_battle_report(
     from battle.services import simulate_report
 
     if mission.is_defense:
-        from battle.combatants import build_named_ai_guests
+        from battle.combatants_pkg import build_named_ai_guests
         from gameplay.services.technology import get_guest_stat_bonuses, resolve_enemy_tech_levels
 
         tech_conf = _normalize_enemy_technology_config(mission.enemy_technology)

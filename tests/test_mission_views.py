@@ -72,7 +72,10 @@ class TestMissionViews:
         )
         called = {"count": 0}
 
-        monkeypatch.setattr("gameplay.views.missions._acquire_mission_action_lock", lambda *_a, **_k: (False, "", None))
+        monkeypatch.setattr(
+            "gameplay.views.mission_helpers.acquire_mission_action_lock",
+            lambda *_a, **_k: (False, "", None),
+        )
 
         def _unexpected_launch(*_args, **_kwargs):
             called["count"] += 1
@@ -94,7 +97,10 @@ class TestMissionViews:
         )
         called = {"count": 0}
 
-        monkeypatch.setattr("gameplay.views.missions._acquire_mission_action_lock", lambda *_a, **_k: (False, "", None))
+        monkeypatch.setattr(
+            "gameplay.views.mission_helpers.acquire_mission_action_lock",
+            lambda *_a, **_k: (False, "", None),
+        )
 
         def _unexpected_add(*_args, **_kwargs):
             called["count"] += 1
@@ -118,7 +124,10 @@ class TestMissionViews:
         run = MissionRun.objects.create(manor=manor, mission=mission, status=MissionRun.Status.ACTIVE)
         called = {"count": 0}
 
-        monkeypatch.setattr("gameplay.views.missions._acquire_mission_action_lock", lambda *_a, **_k: (False, "", None))
+        monkeypatch.setattr(
+            "gameplay.views.mission_helpers.acquire_mission_action_lock",
+            lambda *_a, **_k: (False, "", None),
+        )
 
         def _unexpected_retreat(*_args, **_kwargs):
             called["count"] += 1
@@ -147,7 +156,10 @@ class TestMissionViews:
         )
         called = {"count": 0}
 
-        monkeypatch.setattr("gameplay.views.missions._acquire_mission_action_lock", lambda *_a, **_k: (False, "", None))
+        monkeypatch.setattr(
+            "gameplay.views.mission_helpers.acquire_mission_action_lock",
+            lambda *_a, **_k: (False, "", None),
+        )
 
         def _unexpected_retreat(*_args, **_kwargs):
             called["count"] += 1
@@ -357,7 +369,7 @@ class TestMissionViews:
         )
 
         monkeypatch.setattr(
-            "gameplay.services.inventory.consume_inventory_item_for_manor_locked",
+            "gameplay.services.inventory.core.consume_inventory_item_for_manor_locked",
             lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
@@ -375,7 +387,7 @@ class TestMissionViews:
         )
 
         monkeypatch.setattr(
-            "gameplay.services.inventory.consume_inventory_item_for_manor_locked",
+            "gameplay.services.inventory.core.consume_inventory_item_for_manor_locked",
             lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
         )
 

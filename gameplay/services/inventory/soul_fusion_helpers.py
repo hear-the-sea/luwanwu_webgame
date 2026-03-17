@@ -7,8 +7,9 @@ from __future__ import annotations
 from typing import Any
 from uuid import uuid4
 
+from core.config import GUEST
 from gameplay.models import ItemTemplate
-from guests.models import MAX_GUEST_LEVEL, Guest, GuestArchetype, GuestRarity, GuestStatus
+from guests.models import Guest, GuestArchetype, GuestRarity, GuestStatus
 
 SOUL_FUSION_DEFAULT_MIN_LEVEL = 30
 SOUL_FUSION_STAT_KEYS = ("force", "intellect", "agility", "luck")
@@ -97,7 +98,7 @@ def guest_is_eligible_for_soul_fusion(guest: Guest, *, min_level: int, allowed_r
 
 
 def _guest_level_ratio(guest: Guest) -> float:
-    max_level = max(SOUL_FUSION_DEFAULT_MIN_LEVEL, int(MAX_GUEST_LEVEL))
+    max_level = max(SOUL_FUSION_DEFAULT_MIN_LEVEL, int(GUEST.MAX_LEVEL))
     if guest.level <= SOUL_FUSION_DEFAULT_MIN_LEVEL:
         return 0.0
     if guest.level >= max_level:

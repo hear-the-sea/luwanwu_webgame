@@ -2,27 +2,23 @@ import pytest
 from django.core.management import call_command
 from django.utils import timezone
 
+import guests.services.recruitment_queries as recruitment_query_service
+import guests.services.recruitment_templates as recruitment_template_service
+from core.config import GUEST
 from core.exceptions import GuestNotIdleError, RetainerCapacityFullError
 from gameplay.services.manor.core import ensure_manor
-from guests.models import (
-    MAX_GUEST_LEVEL,
-    Guest,
-    GuestRecruitment,
-    GuestStatus,
-    GuestTemplate,
-    RecruitmentCandidate,
-    RecruitmentPool,
-)
-from guests.services import (
-    convert_candidate_to_retainer,
-    finalize_candidate,
+from guests.models import Guest, GuestRecruitment, GuestStatus, GuestTemplate, RecruitmentCandidate, RecruitmentPool
+from guests.services.recruitment import (
     finalize_guest_recruitment,
-    get_pool_recruitment_duration_seconds,
     recruit_guest,
+    reveal_candidate_rarity,
+    start_guest_recruitment,
 )
-from guests.services import recruitment as recruitment_service
-from guests.services import reveal_candidate_rarity, start_guest_recruitment, train_guest
-from guests.services.training import finalize_guest_training
+from guests.services.recruitment_guests import convert_candidate_to_retainer, finalize_candidate
+from guests.services.recruitment_queries import get_pool_recruitment_duration_seconds
+from guests.services.training import finalize_guest_training, train_guest
+
+MAX_GUEST_LEVEL = int(GUEST.MAX_LEVEL)
 
 
 @pytest.fixture
@@ -62,8 +58,8 @@ def test_recruit_guest_preloads_template_data_once_per_batch(
     pool.save(update_fields=["draw_count"])
 
     calls = {"by_rarity": 0, "hermit": 0}
-    original_by_rarity = recruitment_service._get_recruitable_templates_by_rarity
-    original_hermit = recruitment_service._get_hermit_templates
+    original_by_rarity = recruitment_template_service._get_recruitable_templates_by_rarity
+    original_hermit = recruitment_template_service._get_hermit_templates
 
     def _counted_by_rarity():
         calls["by_rarity"] += 1
@@ -73,8 +69,8 @@ def test_recruit_guest_preloads_template_data_once_per_batch(
         calls["hermit"] += 1
         return original_hermit()
 
-    monkeypatch.setattr(recruitment_service, "_get_recruitable_templates_by_rarity", _counted_by_rarity)
-    monkeypatch.setattr(recruitment_service, "_get_hermit_templates", _counted_hermit)
+    monkeypatch.setattr(recruitment_template_service, "_get_recruitable_templates_by_rarity", _counted_by_rarity)
+    monkeypatch.setattr(recruitment_template_service, "_get_hermit_templates", _counted_hermit)
 
     candidates = recruit_guest(manor, pool, seed=3)
 
@@ -161,7 +157,7 @@ def test_start_guest_recruitment_rejects_when_pool_daily_limit_reached(
     manor.save(update_fields=["silver", "grain"])
     pool = RecruitmentPool.objects.get(key="cunmu")
 
-    monkeypatch.setattr(recruitment_service, "_get_pool_daily_draw_limit", lambda: 2)
+    monkeypatch.setattr(recruitment_query_service, "_get_pool_daily_draw_limit", lambda: 2)
     now = timezone.now()
     GuestRecruitment.objects.create(
         manor=manor,
@@ -203,7 +199,7 @@ def test_start_guest_recruitment_daily_limit_is_per_pool(game_data, django_user_
     second_pool.cost = {}
     second_pool.save(update_fields=["cost"])
 
-    monkeypatch.setattr(recruitment_service, "_get_pool_daily_draw_limit", lambda: 1)
+    monkeypatch.setattr(recruitment_query_service, "_get_pool_daily_draw_limit", lambda: 1)
     now = timezone.now()
     GuestRecruitment.objects.create(
         manor=manor,

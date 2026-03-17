@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from ..models import GuestRarity, RecruitmentPool
+from .guest_platform import invalidate_recruitment_hall_cache as _invalidate_recruitment_hall_cache
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +29,7 @@ def invalidate_recruitment_hall_cache(manor_id: int | None) -> None:
     if not manor_id:
         return
     try:
-        from gameplay.services.utils.cache import invalidate_recruitment_hall_cache
-
-        invalidate_recruitment_hall_cache(int(manor_id))
+        _invalidate_recruitment_hall_cache(int(manor_id))
     except Exception:
         logger.debug("Failed to invalidate recruitment hall cache for manor_id=%s", manor_id, exc_info=True)
 

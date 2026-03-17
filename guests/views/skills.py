@@ -14,14 +14,16 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
+from core.config import GUEST
 from core.decorators import handle_game_errors
 from core.exceptions import GameError
 from core.utils import is_ajax_request, json_error
 from core.utils.validation import safe_positive_int, safe_redirect_url, sanitize_error_message
 
-from ..models import MAX_GUEST_SKILL_SLOTS, Guest, GuestSkill, GuestStatus, Skill
+from ..models import Guest, GuestSkill, GuestStatus, Skill
 
 logger = logging.getLogger(__name__)
+MAX_GUEST_SKILL_SLOTS = int(GUEST.MAX_SKILL_SLOTS)
 
 
 def _get_guest_and_next_url(request, pk: int):
@@ -87,7 +89,7 @@ def _validate_learn_skill_preconditions(guest: Guest, skill: Skill) -> Tuple[str
 
 def _persist_skill_learning(guest: Guest, skill: Skill, inventory_item) -> None:
     from gameplay.models import InventoryItem
-    from gameplay.services.inventory import consume_inventory_item_locked
+    from gameplay.services.inventory.core import consume_inventory_item_locked
 
     with transaction.atomic():
         # Lock guest to prevent concurrent skill learning exceeding limits

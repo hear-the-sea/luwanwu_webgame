@@ -27,7 +27,7 @@ from core.utils.yaml_loader import ensure_list, ensure_mapping, load_yaml_data
 
 from ...constants import BuildingKeys
 from ...models import Manor, TroopRecruitment
-from ..inventory import get_item_quantity
+from ..inventory.core import get_item_quantity
 from ..technology import get_player_technology_level, get_technology_template
 from .lifecycle import finalize_troop_recruitment
 from .lifecycle import schedule_recruitment_completion as _schedule_recruitment_completion

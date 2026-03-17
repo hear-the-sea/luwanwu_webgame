@@ -18,7 +18,7 @@ def clear_technology_template_cache() -> None:
 def clear_troop_template_caches() -> None:
     from battle.troops import invalidate_troop_templates_cache
 
-    from ..recruitment import clear_troop_cache
+    from ..recruitment.recruitment import clear_troop_cache
 
     invalidate_troop_templates_cache()
     clear_troop_cache()

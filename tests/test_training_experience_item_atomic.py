@@ -8,8 +8,9 @@ from django.utils import timezone
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.manor.core import ensure_manor
 from guests.models import RecruitmentPool
-from guests.services import finalize_candidate, recruit_guest, use_experience_item_for_guest
-from guests.services.training import ensure_auto_training
+from guests.services.recruitment import recruit_guest
+from guests.services.recruitment_guests import finalize_candidate
+from guests.services.training import ensure_auto_training, use_experience_item_for_guest
 
 
 def _bootstrap_training_guest(game_data, django_user_model, *, username: str):

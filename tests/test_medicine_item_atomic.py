@@ -8,7 +8,9 @@ from core.exceptions import GuestNotIdleError
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.manor.core import ensure_manor
 from guests.models import GuestStatus, RecruitmentPool
-from guests.services import finalize_candidate, recruit_guest, use_medicine_item_for_guest
+from guests.services.health import use_medicine_item_for_guest
+from guests.services.recruitment import recruit_guest
+from guests.services.recruitment_guests import finalize_candidate
 
 
 def _bootstrap_injured_guest(game_data, django_user_model, *, username: str):

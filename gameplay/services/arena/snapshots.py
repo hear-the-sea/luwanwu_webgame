@@ -3,6 +3,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
+from guests.guest_combat_stats import resolve_guest_combat_stats
+
 
 class _EmptySkillSet:
     @staticmethod
@@ -11,7 +13,7 @@ class _EmptySkillSet:
 
 
 class ArenaGuestSnapshotProxy:
-    """将报名快照转换为 battle.build_guest_combatants 可消费对象。"""
+    """竞技场报名快照，只保留战斗构建所需显式字段。"""
 
     def __init__(self, snapshot: dict[str, Any]):
         self.pk = None
@@ -29,9 +31,9 @@ class ArenaGuestSnapshotProxy:
         self.agility = int(snapshot.get("agility") or 0)
         self.luck = int(snapshot.get("luck") or 0)
         self.current_hp = max(1, int(snapshot.get("current_hp") or 1))
-        self._attack = max(1, int(snapshot.get("attack") or 1))
-        self._defense = max(1, int(snapshot.get("defense") or 1))
-        self._max_hp = max(1, int(snapshot.get("max_hp") or 1))
+        self.attack = max(1, int(snapshot.get("attack") or 1))
+        self.defense = max(1, int(snapshot.get("defense") or 1))
+        self.max_hp = max(1, int(snapshot.get("max_hp") or 1))
         self._override_skills = [str(key).strip() for key in (snapshot.get("skill_keys") or []) if str(key).strip()]
 
     @property
@@ -42,28 +44,19 @@ class ArenaGuestSnapshotProxy:
     def rarity(self) -> str:
         return self._rarity
 
-    def stat_block(self) -> dict[str, int]:
-        return {
-            "attack": self._attack,
-            "defense": self._defense,
-            "intellect": self.intellect,
-            "hp": self._max_hp,
-        }
-
-    @property
-    def troop_capacity(self) -> int:
-        return 0
-
 
 def serialize_guest_skill_keys(guest) -> list[str]:
-    return [str(key).strip() for key in guest.skills.values_list("key", flat=True) if str(key).strip()]
+    skills = getattr(guest, "skills", None)
+    values_list = getattr(skills, "values_list", None)
+    if callable(values_list):
+        return [str(key).strip() for key in values_list("key", flat=True) if str(key).strip()]
+    return [str(key).strip() for key in (getattr(guest, "_override_skills", None) or []) if str(key).strip()]
 
 
 def build_entry_guest_snapshot(guest) -> dict[str, Any]:
-    stats = guest.stat_block()
-    max_hp = max(1, int(stats.get("hp") or guest.max_hp or 1))
+    stats = resolve_guest_combat_stats(guest)
     current_hp = int(getattr(guest, "current_hp", 0) or 0)
-    current_hp = min(max_hp, max(1, current_hp if current_hp > 0 else max_hp))
+    current_hp = min(stats.max_hp, max(1, current_hp if current_hp > 0 else stats.max_hp))
     return {
         "snapshot_version": 1,
         "display_name": guest.display_name,
@@ -75,9 +68,9 @@ def build_entry_guest_snapshot(guest) -> dict[str, Any]:
         "defense_stat": int(guest.defense_stat),
         "agility": int(guest.agility),
         "luck": int(guest.luck),
-        "attack": max(1, int(stats.get("attack") or 1)),
-        "defense": max(1, int(stats.get("defense") or 1)),
-        "max_hp": max_hp,
+        "attack": stats.attack,
+        "defense": stats.defense,
+        "max_hp": stats.max_hp,
         "current_hp": current_hp,
         "skill_keys": serialize_guest_skill_keys(guest),
     }

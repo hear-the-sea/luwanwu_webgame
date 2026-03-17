@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from gameplay.services import technology_helpers
+import gameplay.services.technology_helpers as technology_helpers
 
 
 def test_build_technology_display_entry_calculates_upgrade_fields():

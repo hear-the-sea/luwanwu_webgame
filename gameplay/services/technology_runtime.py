@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable
 
 from django.db.models import F
 
@@ -8,7 +8,7 @@ from django.db.models import F
 def should_skip_tech_refresh_by_local_fallback(
     local_refresh_state: dict[int, float],
     *,
-    state_lock,
+    state_lock: Any,
     max_size: int,
     manor_id: int,
     min_interval: int,
@@ -37,21 +37,21 @@ def should_skip_tech_refresh_by_local_fallback(
 
 
 def upgrade_technology(
-    manor,
+    manor: Any,
     tech_key: str,
     *,
-    get_technology_template_func,
-    calculate_upgrade_cost_func,
+    get_technology_template_func: Callable[[str], dict[str, Any] | None],
+    calculate_upgrade_cost_func: Callable[[str, int], int],
     max_concurrent_tech_upgrades: int,
-    schedule_technology_completion_func,
-    build_technology_upgrade_response_func,
-    transaction_module,
-    technology_not_found_error_cls,
-    technology_upgrade_in_progress_error_cls,
-    technology_max_level_error_cls,
-    technology_concurrent_upgrade_limit_error_cls,
-    insufficient_resource_error_cls,
-):
+    schedule_technology_completion_func: Callable[[Any, int], None],
+    build_technology_upgrade_response_func: Callable[..., dict[str, Any]],
+    transaction_module: Any,
+    technology_not_found_error_cls: type[Exception],
+    technology_upgrade_in_progress_error_cls: type[Exception],
+    technology_max_level_error_cls: type[Exception],
+    technology_concurrent_upgrade_limit_error_cls: type[Exception],
+    insufficient_resource_error_cls: type[Exception],
+) -> dict[str, Any]:
     from datetime import timedelta
 
     from django.utils import timezone
@@ -105,14 +105,14 @@ def upgrade_technology(
 
 
 def finalize_technology_upgrade(
-    tech,
+    tech: Any,
     *,
-    get_technology_template_func,
-    resolve_technology_name_func,
-    send_technology_completion_notification_func,
-    notify_user_func,
-    invalidate_home_stats_cache_func,
-    logger,
+    get_technology_template_func: Callable[[str], dict[str, Any] | None],
+    resolve_technology_name_func: Callable[[dict[str, Any] | None, str], str],
+    send_technology_completion_notification_func: Callable[..., None],
+    notify_user_func: Callable[..., Any],
+    invalidate_home_stats_cache_func: Callable[[int], None],
+    logger: Any,
     send_notification: bool = False,
 ) -> bool:
     from django.utils import timezone
@@ -151,13 +151,13 @@ def finalize_technology_upgrade(
 
 
 def refresh_technology_upgrades(
-    manor,
+    manor: Any,
     *,
-    settings_obj,
-    cache_backend,
-    logger,
-    should_skip_tech_refresh_by_local_fallback_func,
-    finalize_technology_upgrade_func,
+    settings_obj: Any,
+    cache_backend: Any,
+    logger: Any,
+    should_skip_tech_refresh_by_local_fallback_func: Callable[[int, int], bool],
+    finalize_technology_upgrade_func: Callable[..., bool],
 ) -> int:
     from django.utils import timezone
 

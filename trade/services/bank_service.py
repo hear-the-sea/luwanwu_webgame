@@ -18,8 +18,8 @@ from django.utils import timezone
 
 from core.utils.cache_lock import release_cache_key_if_owner
 from gameplay.models import InventoryItem, ItemTemplate, Manor, ResourceEvent
-from gameplay.services.resources import spend_resources_locked
 from trade.models import GoldBarExchangeLog
+from trade.services.trade_platform import spend_resources_locked
 
 from . import rate_calculations as _rate_calculations
 

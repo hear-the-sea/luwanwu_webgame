@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from gameplay.services import technology as tech_service
+import gameplay.services.technology as tech_service
+import gameplay.services.technology_refresh_state as tech_refresh_state
 
 
 def test_get_tech_bonus_from_levels_tolerates_invalid_level_and_template_rows(monkeypatch):
@@ -113,7 +114,7 @@ def test_get_guest_stat_bonuses_tolerates_invalid_guest_bonus():
 
 def test_refresh_technology_upgrades_local_fallback_throttles_when_cache_unavailable(monkeypatch, settings):
     settings.MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS = 5
-    tech_service._LOCAL_TECH_REFRESH_FALLBACK.clear()
+    tech_refresh_state.clear_local_tech_refresh_fallback()
 
     monkeypatch.setattr(
         tech_service.cache,
@@ -148,12 +149,12 @@ def test_refresh_technology_upgrades_local_fallback_throttles_when_cache_unavail
     assert first == 2
     assert second == 0
     assert calls["finalize"] == 2
-    tech_service._LOCAL_TECH_REFRESH_FALLBACK.clear()
+    tech_refresh_state.clear_local_tech_refresh_fallback()
 
 
 def test_refresh_technology_upgrades_local_fallback_allows_after_interval(monkeypatch, settings):
     settings.MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS = 5
-    tech_service._LOCAL_TECH_REFRESH_FALLBACK.clear()
+    tech_refresh_state.clear_local_tech_refresh_fallback()
 
     monkeypatch.setattr(
         tech_service.cache,
@@ -192,4 +193,4 @@ def test_refresh_technology_upgrades_local_fallback_allows_after_interval(monkey
     assert second == 0
     assert third == 1
     assert calls["finalize"] == 2
-    tech_service._LOCAL_TECH_REFRESH_FALLBACK.clear()
+    tech_refresh_state.clear_local_tech_refresh_fallback()

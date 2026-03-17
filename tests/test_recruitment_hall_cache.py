@@ -9,7 +9,7 @@ from gameplay.services.utils.cache import (
     recruitment_hall_context_cache_key,
 )
 from guests.models import RecruitmentPool
-from guests.services import recruit_guest
+from guests.services.recruitment import recruit_guest
 
 
 @pytest.mark.django_db

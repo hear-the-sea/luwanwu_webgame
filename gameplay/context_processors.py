@@ -6,38 +6,13 @@ from typing import Any
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import DatabaseError
 
-from gameplay.selectors.sidebar import SIDEBAR_RANK_CACHE_TIMEOUT, load_sidebar_rank  # noqa: F401
-from gameplay.selectors.stats import (  # noqa: F401
-    _LOCAL_STATS_CACHE,
-    _LOCAL_STATS_CACHE_GUARD,
-    _LOCAL_STATS_CACHE_MAX_SIZE,
-    ONLINE_USERS_CACHE_KEY,
-    ONLINE_USERS_CACHE_TIMEOUT,
-    ONLINE_USERS_FALLBACK_CACHE_TIMEOUT,
-    TOTAL_USERS_CACHE_KEY,
-    TOTAL_USERS_CACHE_TIMEOUT,
-    User,
-    _load_online_user_count_from_db,
-    _load_online_user_count_from_redis,
-    get_redis_connection,
-    load_online_user_count,
-    load_total_user_count,
-)
+from gameplay.selectors import sidebar as sidebar_selector
+from gameplay.selectors import stats as stats_selector
 from gameplay.services.utils.messages import unread_message_count
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_PROTECTION_STATUS = {"is_protected": False, "type_display": "", "remaining_display": ""}
-
-# ---------------------------------------------------------------------------
-# Backwards-compatible aliases so existing monkeypatch / import call-sites
-# that reference ``gameplay.context_processors.<name>`` keep working.
-# ---------------------------------------------------------------------------
-_load_total_user_count = load_total_user_count
-_load_online_user_count = load_online_user_count
-_load_online_user_count_from_redis = _load_online_user_count_from_redis  # noqa: F811 – re-export
-_load_online_user_count_from_db = _load_online_user_count_from_db  # noqa: F811 – re-export
-_load_sidebar_rank = load_sidebar_rank
 
 
 def _build_default_context() -> dict[str, Any]:
@@ -92,7 +67,7 @@ def _populate_authenticated_context(context: dict[str, Any], request) -> None:
     context["sidebar_prestige"] = manor.prestige
 
     try:
-        context["sidebar_rank"] = load_sidebar_rank(manor)
+        context["sidebar_rank"] = sidebar_selector.load_sidebar_rank(manor)
     except DatabaseError:
         logger.warning("Failed to load sidebar rank", exc_info=True)
 
@@ -112,8 +87,8 @@ def notifications(request):
     """
     context = _build_default_context()
     if _should_load_global_stats(request):
-        context["total_user_count"] = _load_total_user_count()
-        context["online_user_count"] = _load_online_user_count()
+        context["total_user_count"] = stats_selector.load_total_user_count()
+        context["online_user_count"] = stats_selector.load_online_user_count()
 
     if not request.user.is_authenticated:
         return context

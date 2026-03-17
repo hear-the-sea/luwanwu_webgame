@@ -25,7 +25,8 @@ from core.utils.validation import safe_redirect_url, sanitize_error_message
 
 from ..forms import AllocateSkillPointsForm, TrainGuestForm
 from ..models import Guest
-from ..services import allocate_attribute_points, train_guest, use_experience_item_for_guest
+from ..services.recruitment_guests import allocate_attribute_points
+from ..services.training import finalize_guest_training, train_guest, use_experience_item_for_guest
 from .common import unexpected_action_error_response
 
 logger = logging.getLogger(__name__)
@@ -178,8 +179,6 @@ def check_training_view(request, pk: int):
     使用 manager 方法简化查询
     """
     from gameplay.services.manor.core import get_manor
-
-    from ..services import finalize_guest_training
 
     manor = get_manor(request.user)
     # 使用 manager 方法获取门客，避免重复的 select_related

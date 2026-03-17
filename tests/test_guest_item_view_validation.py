@@ -8,7 +8,8 @@ from django.urls import reverse
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.manor.core import ensure_manor
 from guests.models import GearSlot, RecruitmentCandidate, RecruitmentPool
-from guests.services import finalize_candidate, recruit_guest
+from guests.services.recruitment import recruit_guest
+from guests.services.recruitment_guests import finalize_candidate
 from guests.views import recruit as recruit_views
 
 
@@ -182,7 +183,7 @@ def test_gear_options_view_tolerates_cache_backend_failure(game_data, django_use
     client = Client()
     assert client.login(username="view_gear_options_cache_failure", password="pass123")
 
-    monkeypatch.setattr("guests.services.ensure_inventory_gears", lambda *_a, **_k: None)
+    monkeypatch.setattr("guests.services.equipment.ensure_inventory_gears", lambda *_a, **_k: None)
     monkeypatch.setattr(
         "guests.views.equipment.cache.get",
         lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down")),

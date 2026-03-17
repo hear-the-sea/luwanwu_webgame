@@ -65,7 +65,7 @@ def build_named_ai_guests(guest_keys: List[str | Dict[str, Any]], level: int = 5
     Returns:
         AI guest list with attributes grown based on level
     """
-    from guests.models import RARITY_SKILL_POINT_GAINS
+    from guests.growth_rules import RARITY_SKILL_POINT_GAINS
     from guests.utils.attribute_growth import allocate_level_up_attributes
 
     parsed_configs: List[Dict[str, Any]] = []

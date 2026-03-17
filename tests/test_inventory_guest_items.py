@@ -1,7 +1,13 @@
 import pytest
 
 from gameplay.models import InventoryItem, ItemTemplate
-from gameplay.services.inventory import use_guest_rarity_upgrade_item, use_soul_container, use_xisuidan
+from gameplay.services.inventory.guest_items import (
+    use_guest_rarity_upgrade_item,
+    use_guest_rebirth_card,
+    use_soul_container,
+    use_xidianka,
+    use_xisuidan,
+)
 from gameplay.services.manor.core import ensure_manor
 from guests.models import GearItem, GearSlot, GearTemplate, Guest, GuestSkill, GuestStatus, GuestTemplate, Skill
 from guests.services.equipment import ensure_inventory_gears, equip_guest, unequip_guest_item
@@ -212,6 +218,129 @@ def _prepare_rarity_upgrade_blue_to_purple_case(django_user_model, suffix: str):
     return manor, guest, item, blue_template, purple_template
 
 
+def _prepare_rebirth_case(django_user_model, suffix: str):
+    user = django_user_model.objects.create_user(username=f"rebirth_{suffix}", password="pass123")
+    manor = ensure_manor(user)
+
+    template = GuestTemplate.objects.create(
+        key=f"rebirth_guest_tpl_{suffix}",
+        name="重生测试门客",
+        archetype="military",
+        rarity="green",
+        base_attack=90,
+        base_intellect=70,
+        base_defense=80,
+        base_agility=75,
+        base_luck=45,
+        base_hp=1200,
+        default_gender="male",
+        default_morality=60,
+    )
+    guest = Guest.objects.create(
+        manor=manor,
+        template=template,
+        level=35,
+        experience=987,
+        force=180,
+        intellect=120,
+        defense_stat=150,
+        agility=142,
+        luck=55,
+        loyalty=80,
+        gender="male",
+        morality=60,
+        status=GuestStatus.IDLE,
+        attribute_points=11,
+        attack_bonus=5,
+        defense_bonus=6,
+        hp_bonus=120,
+        initial_force=70,
+        initial_intellect=55,
+        initial_defense=60,
+        initial_agility=58,
+        allocated_force=9,
+        allocated_intellect=5,
+        allocated_defense=4,
+        allocated_agility=3,
+        xisuidan_used=4,
+        training_target_level=40,
+    )
+    guest.restore_full_hp()
+
+    item_template = ItemTemplate.objects.create(
+        key=f"rebirth_item_tpl_{suffix}",
+        name="门客重生卡",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=True,
+        effect_payload={"action": "rebirth_guest"},
+    )
+    item = InventoryItem.objects.create(
+        manor=manor,
+        template=item_template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+    return manor, guest, item
+
+
+def _prepare_xidianka_case(django_user_model, suffix: str):
+    user = django_user_model.objects.create_user(username=f"xidianka_{suffix}", password="pass123")
+    manor = ensure_manor(user)
+
+    template = GuestTemplate.objects.create(
+        key=f"xidianka_guest_tpl_{suffix}",
+        name="洗点测试门客",
+        archetype="civil",
+        rarity="blue",
+        base_attack=88,
+        base_intellect=96,
+        base_defense=82,
+        base_agility=86,
+        base_luck=50,
+        base_hp=1300,
+        default_gender="male",
+        default_morality=60,
+    )
+    guest = Guest.objects.create(
+        manor=manor,
+        template=template,
+        level=42,
+        force=166,
+        intellect=194,
+        defense_stat=154,
+        agility=161,
+        luck=58,
+        loyalty=82,
+        gender="male",
+        morality=60,
+        status=GuestStatus.IDLE,
+        attribute_points=7,
+        initial_force=90,
+        initial_intellect=100,
+        initial_defense=86,
+        initial_agility=88,
+        allocated_force=12,
+        allocated_intellect=9,
+        allocated_defense=7,
+        allocated_agility=5,
+    )
+
+    item_template = ItemTemplate.objects.create(
+        key=f"xidianka_item_tpl_{suffix}",
+        name="洗点卡",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=True,
+        effect_payload={"action": "reset_allocation"},
+    )
+    item = InventoryItem.objects.create(
+        manor=manor,
+        template=item_template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+    return manor, guest, item
+
+
 def _prepare_soul_container_case(
     django_user_model,
     suffix: str,
@@ -338,6 +467,84 @@ def test_use_xisuidan_rejects_non_idle_guest(django_user_model):
 
     item.refresh_from_db()
     assert item.quantity == 1
+
+
+@pytest.mark.django_db
+def test_use_guest_rebirth_card_resets_guest_progression_and_clears_gear(django_user_model):
+    manor, guest, item = _prepare_rebirth_case(django_user_model, "ok")
+
+    gear_template = GearTemplate.objects.create(
+        key="rebirth_test_blade",
+        name="重生测试佩刀",
+        slot=GearSlot.WEAPON,
+        rarity="green",
+    )
+    returned_item_template = ItemTemplate.objects.create(
+        key="rebirth_test_blade",
+        name="重生测试佩刀",
+        effect_type="equip_weapon",
+        rarity="green",
+    )
+    GearItem.objects.create(manor=manor, template=gear_template, guest=guest)
+    skill = Skill.objects.create(key="rebirth_test_skill", name="重生测试技能")
+    GuestSkill.objects.create(guest=guest, skill=skill)
+
+    result = use_guest_rebirth_card(manor, item, guest.id)
+
+    guest.refresh_from_db()
+    assert guest.level == 1
+    assert guest.experience == 0
+    assert guest.attribute_points == 0
+    assert guest.attack_bonus == 0
+    assert guest.defense_bonus == 0
+    assert guest.hp_bonus == 0
+    assert guest.training_target_level == 2
+    assert guest.training_complete_at is not None
+    assert guest.xisuidan_used == 0
+    assert guest.allocated_force == 0
+    assert guest.allocated_intellect == 0
+    assert guest.allocated_defense == 0
+    assert guest.allocated_agility == 0
+    assert guest.status == GuestStatus.IDLE
+    assert guest.current_hp == guest.max_hp
+    assert guest.gear_items.count() == 0
+    assert guest.guest_skills.count() == 0
+    assert guest.initial_force == guest.force
+    assert guest.initial_intellect == guest.intellect
+    assert guest.initial_defense == guest.defense_stat
+    assert guest.initial_agility == guest.agility
+    assert result["old_level"] == 35
+    assert result["unequipped_count"] == 1
+    assert result["skills_cleared"] == 1
+    assert "技能已清空（1个）" in result["_message"]
+    assert "装备已卸下（1件）" in result["_message"]
+    assert not InventoryItem.objects.filter(pk=item.pk).exists()
+    returned_weapon = InventoryItem.objects.get(manor=manor, template=returned_item_template)
+    assert returned_weapon.quantity == 1
+
+
+@pytest.mark.django_db
+def test_use_xidianka_resets_allocated_points_and_refunds_attribute_points(django_user_model):
+    manor, guest, item = _prepare_xidianka_case(django_user_model, "ok")
+
+    result = use_xidianka(manor, item, guest.id)
+
+    guest.refresh_from_db()
+    assert guest.force == 154
+    assert guest.intellect == 185
+    assert guest.defense_stat == 147
+    assert guest.agility == 156
+    assert guest.attribute_points == 40
+    assert guest.allocated_force == 0
+    assert guest.allocated_intellect == 0
+    assert guest.allocated_defense == 0
+    assert guest.allocated_agility == 0
+    assert result["total_returned"] == 33
+    assert result["details"] == {"force": 12, "intellect": 9, "defense": 7, "agility": 5}
+    assert "返还 33 属性点" in result["_message"]
+    assert "武力-12" in result["_message"]
+    assert "智力-9" in result["_message"]
+    assert not InventoryItem.objects.filter(pk=item.pk).exists()
 
 
 class _RangeSpyRng:
@@ -516,7 +723,9 @@ def test_use_soul_container_generates_green_ornament_with_military_bias_and_retu
         agility=190,
         luck=72,
     )
-    monkeypatch.setattr("gameplay.services.inventory.random.Random", lambda: _SoulFusionFixedRng())
+    monkeypatch.setattr(
+        "gameplay.services.inventory.guest_items.inventory_random.Random", lambda: _SoulFusionFixedRng()
+    )
 
     gear_item_template = _attach_soul_fusion_gear_state(
         guest,
@@ -580,7 +789,9 @@ def test_use_soul_container_ignores_equipment_and_set_bonuses_when_rolling_stats
         set_bonus={"force": 10, "agility": 7, "defense": 60},
     )
 
-    monkeypatch.setattr("gameplay.services.inventory.random.Random", lambda: _SoulFusionFixedRng())
+    monkeypatch.setattr(
+        "gameplay.services.inventory.guest_items.inventory_random.Random", lambda: _SoulFusionFixedRng()
+    )
 
     equipped_result = use_soul_container(equipped_manor, equipped_item, equipped_guest.id)
     plain_result = use_soul_container(plain_manor, plain_item, plain_guest.id)
@@ -616,7 +827,9 @@ def test_use_soul_container_generated_ornament_can_be_equipped_and_unequipped(mo
         agility=162,
         luck=112,
     )
-    monkeypatch.setattr("gameplay.services.inventory.random.Random", lambda: _SoulFusionFixedRng())
+    monkeypatch.setattr(
+        "gameplay.services.inventory.guest_items.inventory_random.Random", lambda: _SoulFusionFixedRng()
+    )
 
     result = use_soul_container(manor, item, guest.id)
     generated_item = InventoryItem.objects.select_related("template").get(pk=result["generated_item_id"])
@@ -700,7 +913,9 @@ def test_use_soul_container_generates_blue_ornament_with_civil_bias(monkeypatch,
         agility=166,
         luck=104,
     )
-    monkeypatch.setattr("gameplay.services.inventory.random.Random", lambda: _SoulFusionFixedRng())
+    monkeypatch.setattr(
+        "gameplay.services.inventory.guest_items.inventory_random.Random", lambda: _SoulFusionFixedRng()
+    )
 
     result = use_soul_container(manor, item, guest.id)
 

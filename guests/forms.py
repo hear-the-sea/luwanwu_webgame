@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from django import forms
 
-from .models import MAX_GUEST_LEVEL, GearItem, Guest, RecruitmentPool
+from core.config import GUEST
+
+from .models import GearItem, Guest, RecruitmentPool
 
 
 class RecruitForm(forms.Form):
@@ -28,10 +30,11 @@ class TrainGuestForm(forms.Form):
         guest = cleaned.get("guest")
         levels = cleaned.get("levels")
         if guest and levels:
-            if guest.level >= MAX_GUEST_LEVEL:
-                raise forms.ValidationError(f"{guest.display_name} 已达等级上限 {MAX_GUEST_LEVEL}")
-            if guest.level + levels > MAX_GUEST_LEVEL:
-                cleaned["levels"] = MAX_GUEST_LEVEL - guest.level
+            max_guest_level = int(GUEST.MAX_LEVEL)
+            if guest.level >= max_guest_level:
+                raise forms.ValidationError(f"{guest.display_name} 已达等级上限 {max_guest_level}")
+            if guest.level + levels > max_guest_level:
+                cleaned["levels"] = max_guest_level - guest.level
         return cleaned
 
 

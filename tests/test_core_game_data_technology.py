@@ -103,10 +103,10 @@ def test_get_troop_class_for_key_ignores_invalid_troop_classes_shape(monkeypatch
             }
         },
     )
-    tech._build_troop_to_class_index.cache_clear()
+    tech.clear_technology_cache()
     assert tech.get_troop_class_for_key("dao_ke") == "dao"
     assert tech.get_troop_class_for_key("unknown") is None
-    tech._build_troop_to_class_index.cache_clear()
+    tech.clear_technology_cache()
 
 
 def test_get_guest_stat_bonuses_tolerates_invalid_guest_bonus():

@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.utils.html import format_html
 
 from ..models import GlobalMailCampaign, GlobalMailDelivery, Manor, Message
-from ..services import create_message
+from ..services.utils.messages import create_message
 
 User = get_user_model()
 

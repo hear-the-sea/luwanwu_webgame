@@ -2,7 +2,7 @@ from django.conf import settings
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
-from .services import bootstrap_manor
+from .services.manor.core import bootstrap_manor
 
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)

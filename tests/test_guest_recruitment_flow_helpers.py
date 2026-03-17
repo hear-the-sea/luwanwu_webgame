@@ -3,8 +3,9 @@ from __future__ import annotations
 import random
 from types import SimpleNamespace
 
+import guests.services.recruitment_candidates as recruitment_candidates
+import guests.services.recruitment_flow as recruitment_flow
 from guests.models import GuestRarity
-from guests.services import recruitment_candidates, recruitment_flow
 
 
 def test_resolve_recruitment_seed_keeps_explicit_value():

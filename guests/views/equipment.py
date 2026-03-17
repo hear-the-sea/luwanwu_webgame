@@ -23,6 +23,7 @@ from core.utils.validation import safe_positive_int, safe_redirect_url, sanitize
 
 from ..forms import EquipForm
 from ..models import GearSlot, GearTemplate, Guest
+from ..services import equipment as equipment_service
 from ..templatetags.guest_extras import gear_summary, rarity_class, rarity_label
 from .common import unexpected_action_error_response
 
@@ -63,14 +64,11 @@ def equip_view(request):
     """
     from gameplay.services.manor.core import get_manor
 
-    from ..services import ensure_inventory_gears
-    from ..services import equip_guest as equip_guest_service
-
     manor = get_manor(request.user)
 
     try:
         slot = request.POST.get("slot") or ""
-        ensure_inventory_gears(manor, slot=slot or None)
+        equipment_service.ensure_inventory_gears(manor, slot=slot or None)
         form = EquipForm(request.POST, manor=manor)
 
         if not form.is_valid():
@@ -79,7 +77,7 @@ def equip_view(request):
         gear = form.cleaned_data["gear"]
         guest = form.cleaned_data["guest"]
 
-        equip_guest_service(gear, guest)
+        equipment_service.equip_guest(gear, guest)
         _clear_gear_options_cache(manor.id, slots={gear.template.slot})
     except DatabaseError as exc:
         logger.exception(
@@ -127,8 +125,6 @@ def unequip_view(request):
     """
     from gameplay.services.manor.core import get_manor
 
-    from ..services import unequip_guest_item
-
     manor = get_manor(request.user)
     guest_id = safe_positive_int(request.POST.get("guest"), default=None)
     raw_gear_ids = request.POST.getlist("gear")
@@ -174,7 +170,7 @@ def unequip_view(request):
         removed = 0
         changed_slots = set()
         for gear in gears:
-            unequip_guest_item(gear, guest)
+            equipment_service.unequip_guest_item(gear, guest)
             changed_slots.add(gear.template.slot)
             removed += 1
         if removed:
@@ -222,9 +218,7 @@ def gear_options_view(request):
     if cached is not None:
         return JsonResponse(cached)
 
-    from ..services import ensure_inventory_gears
-
-    ensure_inventory_gears(manor, slot=slot)
+    equipment_service.ensure_inventory_gears(manor, slot=slot)
     rows = (
         manor.gears.filter(guest__isnull=True, template__slot=slot)
         .values("template_id", "template__name", "template__rarity")

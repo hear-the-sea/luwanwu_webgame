@@ -3,7 +3,7 @@ from django.utils import timezone
 
 from core.exceptions import InsufficientStockError
 from gameplay.models import InventoryItem, ItemTemplate, PlayerTechnology
-from gameplay.services.inventory import add_item_to_inventory, consume_inventory_item
+from gameplay.services.inventory.core import add_item_to_inventory, consume_inventory_item
 from gameplay.services.manor.core import ensure_manor, finalize_building_upgrade
 from gameplay.services.technology import finalize_technology_upgrade
 
@@ -175,7 +175,7 @@ def test_finalize_technology_upgrade_keeps_success_when_notification_ws_fails(mo
     )
 
     monkeypatch.setattr(
-        "gameplay.services.technology.notify_user",
+        "gameplay.services.utils.notifications.notify_user",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("ws backend down")),
     )
 

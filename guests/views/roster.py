@@ -16,14 +16,18 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
+from core.config import GUEST
 from core.exceptions import GameError, GuestNotIdleError
 from core.utils import sanitize_error_message
 
 from ..forms import AllocateSkillPointsForm
-from ..models import MAX_GUEST_SKILL_SLOTS, GearItem, GearSlot, GearTemplate, GuestSkill, GuestStatus, Skill
-from ..services import available_guests
+from ..models import GearItem, GearSlot, GearTemplate, GuestSkill, GuestStatus, Skill
+from ..services import equipment as equipment_service
+from ..services.recruitment_queries import available_guests
+from ..utils.guest_state import refresh_guest_state, refresh_guests_state
 
 logger = logging.getLogger(__name__)
+MAX_GUEST_SKILL_SLOTS = int(GUEST.MAX_SKILL_SLOTS)
 
 
 def _load_guest_detail(manor, guest_pk: int):
@@ -174,6 +178,7 @@ class RosterView(LoginRequiredMixin, TemplateView):
         manor = get_manor(self.request.user)
         sync_resource_production(manor, persist=False)
         guests = list(available_guests(manor))
+        refresh_guests_state(guests, now=timezone.now(), refresh=True)
         exp_items = list(
             manor.inventory_items.select_related("template").filter(
                 template__effect_type=ItemTemplate.EffectType.EXPERIENCE_ITEM,
@@ -226,6 +231,7 @@ class GuestDetailView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
         guest = _load_guest_detail(manor, self.kwargs["pk"])
+        refresh_guest_state(guest, now=timezone.now(), refresh=True)
         slots = [(choice.value, choice.label) for choice in GearSlot]
         slot_capacity = {
             GearSlot.DEVICE.value: 3,
@@ -294,11 +300,9 @@ def dismiss_guest_view(request, pk: int):
             gear_items = list(locked_guest.gear_items.select_related("template"))
             gear_summary = Counter(gear.template.name for gear in gear_items)
             if gear_items:
-                from ..services import unequip_guest_item
-
                 for gear in gear_items:
                     # 如果任何装备卸下失败，整个事务回滚
-                    unequip_guest_item(gear, locked_guest, allow_injured=True)
+                    equipment_service.unequip_guest_item(gear, locked_guest, allow_injured=True)
             locked_guest.delete()
     except (GameError, ValueError) as exc:
         messages.error(request, f"辞退失败：{sanitize_error_message(exc)}")

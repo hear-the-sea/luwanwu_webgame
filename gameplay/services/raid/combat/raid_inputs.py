@@ -72,7 +72,7 @@ def _load_and_validate_attacker_guests(attacker: Manor, guest_ids: List[int]) ->
 
 
 def _normalize_and_validate_raid_loadout(guests: list[Guest], troop_loadout: Dict[str, int]) -> Dict[str, int]:
-    from battle.combatants import normalize_troop_loadout
+    from battle.combatants_pkg import normalize_troop_loadout
     from battle.services import validate_troop_capacity
 
     loadout = normalize_troop_loadout(troop_loadout, default_if_empty=False)

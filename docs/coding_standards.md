@@ -10,7 +10,7 @@
 
 ```python
 # 从项目根目录开始的完整导入路径
-from gameplay.services.manor import ensure_manor
+from gameplay.services.manor.core import ensure_manor
 from core.exceptions import GuestCapacityFullError
 from guests.services.recruitment import recruit_guest
 ```
@@ -19,7 +19,7 @@ from guests.services.recruitment import recruit_guest
 
 ```python
 # 使用相对点的导入
-from ..services.manor import ensure_manor
+from ..services.manor.core import ensure_manor
 from ....core.exceptions import GuestCapacityFullError
 from .recruitment import recruit_guest
 ```
@@ -52,7 +52,7 @@ from .resources import grant_resources
 
 ```python
 # ✅ 推荐
-from gameplay.services.inventory import add_item_to_inventory
+from gameplay.services.inventory.core import add_item_to_inventory
 
 # ❌ 避免
 from ..inventory import add_item_to_inventory
@@ -60,22 +60,19 @@ from ..inventory import add_item_to_inventory
 
 ### __init__.py 文件
 
-在 `__init__.py` 文件中，为了向后兼容，可以保留相对导入：
+在 `__init__.py` 文件中，不要继续扩展函数级聚合导出：
 
 ```python
 # gameplay/services/__init__.py
-from .manor import ensure_manor
-from .resources import grant_resources
-# ... 其他导出
+"""Import concrete submodules instead of re-exporting service functions."""
 ```
 
-但推荐在新代码中使用绝对导入：
+新代码直接使用具体子模块：
 
 ```python
 # gameplay/services/__init__.py
-from gameplay.services.manor import ensure_manor
+from gameplay.services.manor.core import ensure_manor
 from gameplay.services.resources import grant_resources
-# ... 其他导出
 ```
 
 ## 自动化工具
@@ -115,18 +112,16 @@ pyupgrade --py3-plus --keep-percent-format gameplay/ guests/ trade/ guilds/ batt
 ```python
 # 文件：gameplay/views/building.py
 # 旧代码
-from ..services import ensure_manor
+from ..services.manor import ensure_manor
 
 # 新代码
-from gameplay.services import ensure_manor
-# 或者更具体
-from gameplay.services.manor import ensure_manor
+from gameplay.services.manor.core import ensure_manor
 ```
 
 ## 注意事项
 
 1. **不要修改 migrations 文件**: Django 的 migrations 文件应该保持原样
-2. **保留 __init__.py**: `__init__.py` 文件中的相对导入可以保留，用于包级别的导出
+2. **收缩 __init__.py**: `__init__.py` 应保持轻量，不再承担函数级兼容导出
 3. **逐步迁移**: 可以逐步迁移，不必一次性修改所有文件
 4. **测试覆盖**: 每次迁移后都要运行测试确保功能正常
 

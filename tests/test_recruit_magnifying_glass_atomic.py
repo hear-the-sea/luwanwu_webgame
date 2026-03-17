@@ -5,7 +5,7 @@ import pytest
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.manor.core import ensure_manor
 from guests.models import RecruitmentPool
-from guests.services import recruit_guest, use_magnifying_glass_for_candidates
+from guests.services.recruitment import recruit_guest, use_magnifying_glass_for_candidates
 
 
 def _bootstrap_candidates(game_data, django_user_model, *, username: str) -> tuple:

@@ -391,7 +391,9 @@ def test_guest_training_fractional_remaining(monkeypatch):
     monkeypatch.setattr("guests.tasks.timezone.now", lambda: now)
 
     finalized = []
-    monkeypatch.setattr("guests.services.finalize_guest_training", lambda *_args, **_kwargs: finalized.append(True))
+    monkeypatch.setattr(
+        "guests.services.training.finalize_guest_training", lambda *_args, **_kwargs: finalized.append(True)
+    )
 
     called = {}
 
@@ -418,7 +420,7 @@ def test_guest_training_dispatch_false(monkeypatch, caplog):
     monkeypatch.setattr("guests.models.Guest", SimpleNamespace(objects=_Chain(first_result=guest)))
     monkeypatch.setattr("guests.tasks.timezone.now", lambda: now)
     monkeypatch.setattr("guests.tasks.safe_apply_async_with_dedup", lambda *_args, **_kwargs: False)
-    monkeypatch.setattr("guests.services.finalize_guest_training", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr("guests.services.training.finalize_guest_training", lambda *_args, **_kwargs: False)
 
     with caplog.at_level(logging.WARNING):
         assert guest_tasks.complete_guest_training.run(102) == "reschedule_failed"

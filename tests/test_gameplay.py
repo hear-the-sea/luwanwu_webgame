@@ -8,7 +8,8 @@ from gameplay.models import MissionTemplate
 from gameplay.services.manor.core import ensure_manor, refresh_manor_state, start_upgrade
 from gameplay.services.missions import launch_mission, refresh_mission_runs
 from guests.models import GuestStatus
-from guests.services import finalize_candidate, recruit_guest
+from guests.services.recruitment import recruit_guest
+from guests.services.recruitment_guests import finalize_candidate
 
 
 @pytest.mark.django_db

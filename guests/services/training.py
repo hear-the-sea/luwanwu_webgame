@@ -5,12 +5,14 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Dict
+from datetime import datetime, timedelta
+from typing import TYPE_CHECKING, Any, Dict, TypedDict
 
 from django.db import connection, transaction
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
+from core.config import GUEST
 from core.exceptions import (
     GuestError,
     GuestMaxLevelError,
@@ -21,13 +23,23 @@ from core.exceptions import (
 from core.utils import safe_int
 
 if TYPE_CHECKING:
+    from gameplay.models import InventoryItem
     from gameplay.models import Manor
 
-from ..models import MAX_GUEST_LEVEL, RARITY_SKILL_POINT_GAINS, Guest, GuestStatus, TrainingLog
+from ..growth_engine import apply_training_completion
+from ..models import Guest, GuestStatus, TrainingLog
 from ..utils.training_calculator import get_level_up_cost, get_training_duration
 from ..utils.training_timer import ensure_training_timer, remaining_training_seconds
+from .guest_platform import consume_inventory_item_locked, spend_resources
 
 logger = logging.getLogger(__name__)
+MAX_GUEST_LEVEL = int(GUEST.MAX_LEVEL)
+
+
+class GuestTrainingReductionResult(TypedDict):
+    time_reduced: int
+    applied_levels: int
+    next_eta: datetime | None
 
 
 def _try_enqueue_complete_guest_training(guest: Guest, *, countdown: int, source: str) -> None:
@@ -87,10 +99,10 @@ def ensure_auto_training(guest: Guest) -> None:
     target_level = min(MAX_GUEST_LEVEL, guest.level + 1)
     duration = get_training_duration(guest, levels=1)
     guest.training_target_level = target_level
-    guest.training_complete_at = timezone.now() + timezone.timedelta(seconds=duration)
+    guest.training_complete_at = timezone.now() + timedelta(seconds=duration)
     guest.save(update_fields=["training_target_level", "training_complete_at"])
 
-    def enqueue_training():
+    def enqueue_training() -> None:
         _try_enqueue_complete_guest_training(
             guest,
             countdown=max(0, int(duration)),
@@ -121,7 +133,9 @@ def _reduce_guest_training_once(guest: Guest, remaining_seconds: int) -> tuple[i
             ensure_auto_training(guest)
             guest.refresh_from_db()
     else:
-        guest.training_complete_at = guest.training_complete_at - timezone.timedelta(seconds=consume)
+        training_complete_at = guest.training_complete_at
+        assert training_complete_at is not None
+        guest.training_complete_at = training_complete_at - timedelta(seconds=consume)
         guest.save(update_fields=["training_complete_at"])
     return consume, remaining_seconds - consume, consume > 0
 
@@ -136,7 +150,7 @@ def _reschedule_guest_training_if_needed(guest: Guest, source: str) -> None:
 
     countdown = max(0, int((guest.training_complete_at - timezone.now()).total_seconds()))
 
-    def enqueue_training():
+    def enqueue_training() -> None:
         _try_enqueue_complete_guest_training(
             guest,
             countdown=countdown,
@@ -146,7 +160,7 @@ def _reschedule_guest_training_if_needed(guest: Guest, source: str) -> None:
     transaction.on_commit(enqueue_training)
 
 
-def _load_locked_experience_item(manor: Manor, item_id: int):
+def _load_locked_experience_item(manor: Manor, item_id: int) -> InventoryItem:
     from gameplay.models import InventoryItem, ItemTemplate
 
     locked_item = (
@@ -181,7 +195,6 @@ def use_experience_item_for_guest(manor: Manor, guest: Guest, item_id: int, redu
         raise ValueError("道具未配置有效时间")
 
     from gameplay.models import Manor as ManorModel
-    from gameplay.services.inventory.core import consume_inventory_item_locked
 
     ManorModel.objects.select_for_update().get(pk=manor.pk)
     locked_item = _load_locked_experience_item(manor, item_id)
@@ -276,7 +289,7 @@ def reduce_training_time(manor: Manor, seconds: int) -> Dict[str, int]:
     return {"time_reduced": total_reduced, "applied_guests": applied}
 
 
-def reduce_training_time_for_guest(guest: Guest, seconds: int) -> Dict[str, int]:
+def reduce_training_time_for_guest(guest: Guest, seconds: int) -> GuestTrainingReductionResult:
     """
     缩短单个门客的训练时间。多余的时间继续用于后续等级。
 
@@ -291,7 +304,7 @@ def reduce_training_time_for_guest(guest: Guest, seconds: int) -> Dict[str, int]
         GuestMaxLevelError: 门客已达等级上限时抛出
     """
     if seconds <= 0:
-        return {"time_reduced": 0, "applied_levels": 0}
+        return {"time_reduced": 0, "applied_levels": 0, "next_eta": guest.training_complete_at}
     if guest.status != GuestStatus.IDLE:
         raise GuestNotIdleError(guest)
     now = timezone.now()
@@ -345,7 +358,6 @@ def train_guest(guest: Guest, levels: int = 1) -> Guest:
     manor = locked_guest.manor
     cost = get_level_up_cost(locked_guest, levels)
     from gameplay.models import ResourceEvent
-    from gameplay.services.resources import spend_resources
 
     spend_resources(
         manor,
@@ -355,12 +367,12 @@ def train_guest(guest: Guest, levels: int = 1) -> Guest:
     )
     duration = get_training_duration(locked_guest, levels)
     locked_guest.training_target_level = locked_guest.level + levels
-    locked_guest.training_complete_at = timezone.now() + timezone.timedelta(seconds=duration)
+    locked_guest.training_complete_at = timezone.now() + timedelta(seconds=duration)
     locked_guest.save(update_fields=["training_target_level", "training_complete_at"])
     TrainingLog.objects.create(manor=manor, guest=locked_guest, delta_level=levels, resource_cost=cost)
 
     # Celery 不可用时直接完成训练，确保调用方立即看到等级变更（测试/开发环境友好）。
-    def enqueue_training():
+    def enqueue_training() -> None:
         _try_enqueue_complete_guest_training(
             locked_guest,
             countdown=max(0, int(duration)),
@@ -371,7 +383,7 @@ def train_guest(guest: Guest, levels: int = 1) -> Guest:
     return locked_guest
 
 
-def finalize_guest_training(guest: Guest, now=None) -> bool:
+def finalize_guest_training(guest: Guest, now: datetime | None = None) -> bool:
     """
     完成门客训练，提升等级并随机增加属性。
 
@@ -382,8 +394,6 @@ def finalize_guest_training(guest: Guest, now=None) -> bool:
     Returns:
         是否成功完成训练
     """
-    from guests.utils.attribute_growth import allocate_level_up_attributes, apply_attribute_growth
-
     now = now or timezone.now()
     if not getattr(guest, "pk", None):
         return False
@@ -398,20 +408,9 @@ def finalize_guest_training(guest: Guest, now=None) -> bool:
         target_level = max(locked_guest.level, locked_guest.training_target_level or locked_guest.level)
         levels_gained = max(0, target_level - locked_guest.level)
 
-        # 随机分配属性增长
-        if levels_gained > 0:
-            allocation = allocate_level_up_attributes(locked_guest, levels=levels_gained)
-            apply_attribute_growth(locked_guest, allocation)
-
-        # 更新等级和属性点
-        locked_guest.level = min(target_level, MAX_GUEST_LEVEL)
+        apply_training_completion(locked_guest, levels_gained=levels_gained)
         locked_guest.training_complete_at = None
         locked_guest.training_target_level = 0
-
-        per_level_points = RARITY_SKILL_POINT_GAINS.get(locked_guest.rarity, 1)
-        locked_guest.attribute_points += per_level_points * levels_gained
-        locked_guest.experience = 0
-        locked_guest.current_hp = locked_guest.max_hp
 
         locked_guest.save(
             update_fields=[

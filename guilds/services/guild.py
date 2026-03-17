@@ -14,6 +14,7 @@ from ..constants import (
     GUILD_UPGRADE_BASE_COST,
 )
 from ..models import Guild, GuildAnnouncement, GuildHeroPoolEntry, GuildMember, GuildTechnology
+from .guild_platform import bulk_create_messages
 from .utils import get_active_membership
 
 logger = logging.getLogger(__name__)
@@ -270,9 +271,6 @@ def disband_guild(guild, operator):
             left_at=timezone.now(),
         )
         GuildHeroPoolEntry.objects.filter(guild=guild).delete()
-
-    # 发送解散通知（移到事务外，避免长事务）
-    from gameplay.services.utils.messages import bulk_create_messages
 
     messages_data = []
     for user_id in member_user_ids:

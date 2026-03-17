@@ -6,11 +6,13 @@ from typing import Any, Callable, Dict, List
 
 from django.utils import timezone
 
+from guests.guest_combat_stats import is_live_guest_model
+from guests.guest_rules import compute_guest_troop_capacity
 from guests.models import Guest, GuestStatus
 from guests.services.health import recover_guest_hp
 from guests.services.loyalty import grant_battle_victory_loyalty
 
-from .combatants import (
+from .combatants_pkg import (
     Combatant,
     assign_agility_based_priorities,
     build_ai_guests,
@@ -92,9 +94,9 @@ def _normalize_troop_loadout_input(raw: Any) -> Dict[str, int] | None:
     return None
 
 
-def _recover_guest_hp_batch(guests: List[Guest], now) -> None:
+def _recover_guest_hp_batch(guests: List[Any], now) -> None:
     for guest in guests:
-        if getattr(guest, "pk", None):
+        if is_live_guest_model(guest) and guest.pk:
             recover_guest_hp(guest, now=now)
 
 
@@ -176,7 +178,7 @@ def validate_troop_capacity(guests: List[Guest], troop_loadout: Dict[str, int]) 
     if not guests:
         return
 
-    total_capacity = sum(guest.troop_capacity for guest in guests)
+    total_capacity = sum(compute_guest_troop_capacity(guest) for guest in guests)
     total_troops = sum(troop_loadout.values())
     if total_troops > total_capacity:
         guest_count = len(guests)
@@ -270,7 +272,7 @@ def _execute_simulation(
 
 
 def apply_guest_hp_updates(
-    guests: List[Guest],
+    guests: List[Any],
     combatants: List[Combatant],
     apply_damage: bool,
 ) -> Dict[int, int]:
@@ -285,7 +287,7 @@ def apply_guest_hp_updates(
         defeated = comb.hp <= 0
         remaining_hp = 1 if defeated else max(1, min(guest.max_hp, comb.hp))
         hp_updates[guest.pk] = remaining_hp
-        if apply_damage and guest.pk:
+        if apply_damage and is_live_guest_model(guest) and guest.pk:
             guest.current_hp = remaining_hp
             guest.last_hp_recovery_at = now
             if defeated:

@@ -34,3 +34,10 @@ def test_asgi_warns_when_websocket_routing_import_fails(monkeypatch):
     monkeypatch.setattr(builtins, "__import__", original_import)
     sys.modules.pop("config.asgi", None)
     importlib.import_module("config.asgi")
+
+
+def test_websocket_package_exposes_routing_and_consumers_modules():
+    import websocket
+
+    assert websocket.routing is importlib.import_module("websocket.routing")
+    assert websocket.consumers is importlib.import_module("websocket.consumers")

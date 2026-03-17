@@ -7,7 +7,7 @@ from django.db import transaction
 from django.db.models import F, Sum
 
 from gameplay.models import ArenaExchangeRecord, Manor, Message
-from gameplay.services.inventory import add_item_to_inventory_locked
+from gameplay.services.inventory.core import add_item_to_inventory_locked
 from gameplay.services.resources import grant_resources_locked
 from gameplay.services.utils.messages import create_message
 

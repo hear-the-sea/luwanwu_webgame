@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from functools import partial
 from typing import Iterable
 
 from django.db import transaction
@@ -17,19 +18,15 @@ from guests.services.loyalty import increase_guest_loyalty_by_ids
 from . import helpers as _arena_helpers
 from .exchange_helpers import ArenaExchangeResult, exchange_arena_reward  # noqa: F401
 from .lifecycle_helpers import cleanup_expired_tournaments as _cleanup_expired_tournaments
-from .lifecycle_helpers import finalize_tournament_locked as _finalize_tournament_locked_impl
-from .lifecycle_helpers import schedule_round_locked as _schedule_round_locked_impl
-from .match_helpers import resolve_match_locked as _resolve_match_locked_impl
-from .match_helpers import save_resolved_match as _save_resolved_match_impl
+from .lifecycle_helpers import finalize_tournament_locked, schedule_round_locked
+from .match_helpers import resolve_match_locked, save_resolved_match
 from .registration_helpers import (
     collect_cancelable_recruiting_entries_locked,
     create_arena_entry_with_guests_locked,
     deduct_registration_silver_locked,
     load_selected_registration_guests_locked,
 )
-from .round_helpers import finalize_round_state_locked as _finalize_round_state_locked_impl
-from .round_helpers import load_round_entries_for_matches as _load_round_entries_for_matches_impl
-from .round_helpers import resolve_pending_round_matches as _resolve_pending_round_matches_impl
+from .round_helpers import finalize_round_state_locked, load_round_entries_for_matches, resolve_pending_round_matches
 from .rules import load_arena_rules
 from .snapshots import build_entry_guest_snapshot
 from .state_helpers import sync_daily_participation_counter_locked as _sync_daily_participation_counter_locked
@@ -103,13 +100,6 @@ def _normalize_guest_ids(guest_ids: Iterable[int]) -> list[int]:
 
 def _round_interval_seconds() -> int:
     return _arena_helpers.round_interval_seconds(ARENA_ROUND_INTERVAL_SECONDS)
-
-
-_load_round_entries_for_matches = _load_round_entries_for_matches_impl
-_resolve_pending_round_matches = _resolve_pending_round_matches_impl
-
-
-_build_entry_guest_snapshot = build_entry_guest_snapshot
 
 
 def _get_or_create_recruiting_tournament_locked() -> ArenaTournament:
@@ -194,13 +184,18 @@ _build_round_pairings = _arena_helpers.build_round_pairings
 
 
 def _schedule_round_locked(tournament: ArenaTournament, *, round_number: int, now: datetime) -> bool:
-    return _schedule_round_locked_impl(
+    return schedule_round_locked(
         tournament,
         round_number=round_number,
         now=now,
         build_round_pairings=_build_round_pairings,
         round_interval_delta=_round_interval_delta,
-        finalize_tournament_locked=_finalize_tournament_locked,
+        finalize_tournament_locked=partial(
+            finalize_tournament_locked,
+            calculate_ranked_entries=_arena_helpers.calculate_ranked_entries,
+            reward_for_rank=_reward_for_rank,
+            logger=logger,
+        ),
     )
 
 
@@ -225,7 +220,7 @@ def register_arena_entry(manor: Manor, guest_ids: Iterable[int]) -> ArenaRegistr
         tournament=tournament,
         locked_manor=locked_manor,
         selected_guests=selected_guests,
-        build_entry_guest_snapshot=_build_entry_guest_snapshot,
+        build_entry_guest_snapshot=build_entry_guest_snapshot,
     )
 
     entry_count = tournament.entries.count()
@@ -282,49 +277,11 @@ def start_ready_tournaments(limit: int = 20) -> int:
     return started_count
 
 
-def _resolve_match_locked(
-    *,
-    tournament: ArenaTournament,
-    round_number: int,
-    match_index: int,
-    attacker_entry: ArenaEntry,
-    defender_entry: ArenaEntry,
-    now: datetime,
-    match: ArenaMatch | None = None,
-) -> ArenaEntry:
-    return _resolve_match_locked_impl(
-        tournament=tournament,
-        round_number=round_number,
-        match_index=match_index,
-        attacker_entry=attacker_entry,
-        defender_entry=defender_entry,
-        now=now,
-        max_guests_per_entry=ARENA_MAX_GUESTS_PER_ENTRY,
-        arena_match_resolution_error=ArenaMatchResolutionError,
-        match=match,
-        logger=logger,
-    )
-
-
-_calculate_ranked_entries = _arena_helpers.calculate_ranked_entries
-
-
 def _reward_for_rank(rank: int) -> int:
     return _arena_helpers.reward_for_rank(
         rank,
         base_participation_coins=ARENA_BASE_PARTICIPATION_COINS,
         rank_bonus_coins=ARENA_RANK_BONUS_COINS,
-    )
-
-
-def _finalize_tournament_locked(tournament: ArenaTournament, *, winner_entry: ArenaEntry | None, now: datetime) -> None:
-    _finalize_tournament_locked_impl(
-        tournament,
-        winner_entry=winner_entry,
-        now=now,
-        calculate_ranked_entries=_calculate_ranked_entries,
-        reward_for_rank=_reward_for_rank,
-        logger=logger,
     )
 
 
@@ -366,25 +323,30 @@ def _run_tournament_round(tournament_id: int, *, now: datetime) -> bool:
         tournament.next_round_at = now + _round_interval_delta(tournament)
         tournament.save(update_fields=["next_round_at", "updated_at"])
 
-    pending_matches, entry_map = _load_round_entries_for_matches(
+    pending_matches, entry_map = load_round_entries_for_matches(
         arena_match_model=ArenaMatch,
         arena_entry_model=ArenaEntry,
         pending_match_ids=pending_match_ids,
     )
-    resolution_failed = _resolve_pending_round_matches(
+    resolution_failed = resolve_pending_round_matches(
         pending_matches=pending_matches,
         entry_map=entry_map,
         round_number=round_number,
         now=now,
         bye_status=ArenaMatch.Status.BYE,
         forfeit_status=ArenaMatch.Status.FORFEIT,
-        save_resolved_match=_save_resolved_match_impl,
-        resolve_match_locked=_resolve_match_locked,
+        save_resolved_match=save_resolved_match,
+        resolve_match_locked=partial(
+            resolve_match_locked,
+            max_guests_per_entry=ARENA_MAX_GUESTS_PER_ENTRY,
+            arena_match_resolution_error=ArenaMatchResolutionError,
+            logger=logger,
+        ),
         arena_match_resolution_error=ArenaMatchResolutionError,
     )
 
     with transaction.atomic():
-        return _finalize_round_state_locked_impl(
+        return finalize_round_state_locked(
             arena_tournament_model=ArenaTournament,
             arena_match_model=ArenaMatch,
             arena_entry_model=ArenaEntry,
@@ -399,7 +361,12 @@ def _run_tournament_round(tournament_id: int, *, now: datetime) -> bool:
             resolution_failed=resolution_failed,
             collect_round_outcome_entry_ids=_collect_round_outcome_entry_ids,
             schedule_round_retry_locked=_schedule_round_retry_locked,
-            finalize_tournament_locked=_finalize_tournament_locked,
+            finalize_tournament_locked=partial(
+                finalize_tournament_locked,
+                calculate_ranked_entries=_arena_helpers.calculate_ranked_entries,
+                reward_for_rank=_reward_for_rank,
+                logger=logger,
+            ),
             schedule_round_locked=_schedule_round_locked,
             increase_guest_loyalty_by_ids=increase_guest_loyalty_by_ids,
         )

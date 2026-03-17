@@ -166,7 +166,7 @@ def test_generate_report_task_defense_tolerates_invalid_enemy_technology(monkeyp
         assert kwargs["validate_attacker_troop_capacity"] is False
         return SimpleNamespace(pk=321)
 
-    monkeypatch.setattr("battle.combatants.build_named_ai_guests", _build_named_ai_guests)
+    monkeypatch.setattr("battle.combatants_pkg.build_named_ai_guests", _build_named_ai_guests)
     monkeypatch.setattr("battle.tasks.simulate_report", _fake_simulate_report)
     monkeypatch.setattr(
         generate_report_task,

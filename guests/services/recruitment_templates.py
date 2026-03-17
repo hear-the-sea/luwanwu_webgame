@@ -4,10 +4,17 @@ import logging
 import random
 from typing import Dict, List, Tuple
 
+from django.core.cache import cache
+
 from core.exceptions import NoTemplateAvailableError
 
 from ..models import GuestRarity, GuestTemplate, RecruitmentPoolEntry
 from ..utils.recruitment_utils import HERMIT_RARITY, RARITY_ORDER, choose_rarity, filter_entries, weighted_choice
+from .guest_platform import (
+    get_config_cache_timeout,
+    get_guest_templates_by_rarity_cache_key,
+    get_hermit_templates_cache_key,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,26 +29,24 @@ def _get_recruitable_templates_by_rarity() -> Dict[str, List[GuestTemplate]]:
     Returns:
         按稀有度分组的模板字典
     """
-    from django.core.cache import cache
-
-    from gameplay.services.utils.cache import CACHE_TIMEOUT_CONFIG, CacheKeys
-
-    cache_key = CacheKeys.GUEST_TEMPLATES_BY_RARITY
+    cache_key = get_guest_templates_by_rarity_cache_key()
     cached = cache.get(cache_key)
     if cached is not None:
-        template_ids_by_rarity = cached
-        all_template_ids = [template_id for ids in template_ids_by_rarity.values() for template_id in ids]
-        templates = {template.id: template for template in GuestTemplate.objects.filter(id__in=all_template_ids)}
-        result = {}
-        for rarity, ids in template_ids_by_rarity.items():
-            result[rarity] = [templates[template_id] for template_id in ids if template_id in templates]
-        return result
+        cached_template_ids_by_rarity: Dict[str, List[int]] = cached
+        all_template_ids = [template_id for ids in cached_template_ids_by_rarity.values() for template_id in ids]
+        templates_by_id = {template.id: template for template in GuestTemplate.objects.filter(id__in=all_template_ids)}
+        cached_result: Dict[str, List[GuestTemplate]] = {}
+        for rarity, ids in cached_template_ids_by_rarity.items():
+            cached_result[rarity] = [
+                templates_by_id[template_id] for template_id in ids if template_id in templates_by_id
+            ]
+        return cached_result
 
-    templates = list(GuestTemplate.objects.filter(recruitable=True))
+    all_templates = list(GuestTemplate.objects.filter(recruitable=True))
     result: Dict[str, List[GuestTemplate]] = {}
     template_ids_by_rarity: Dict[str, List[int]] = {}
 
-    for template in templates:
+    for template in all_templates:
         if template.is_hermit:
             continue
 
@@ -51,7 +56,7 @@ def _get_recruitable_templates_by_rarity() -> Dict[str, List[GuestTemplate]]:
         result[template.rarity].append(template)
         template_ids_by_rarity[template.rarity].append(template.id)
 
-    cache.set(cache_key, template_ids_by_rarity, timeout=CACHE_TIMEOUT_CONFIG)
+    cache.set(cache_key, template_ids_by_rarity, timeout=get_config_cache_timeout())
     return result
 
 
@@ -62,11 +67,7 @@ def _get_hermit_templates() -> List[GuestTemplate]:
     Returns:
         隐士模板列表
     """
-    from django.core.cache import cache
-
-    from gameplay.services.utils.cache import CACHE_TIMEOUT_CONFIG, CacheKeys
-
-    cache_key = CacheKeys.HERMIT_TEMPLATES
+    cache_key = get_hermit_templates_cache_key()
     cached = cache.get(cache_key)
     if cached is not None:
         return list(GuestTemplate.objects.filter(id__in=cached))
@@ -79,7 +80,7 @@ def _get_hermit_templates() -> List[GuestTemplate]:
         )
     )
     template_ids = [template.id for template in templates]
-    cache.set(cache_key, template_ids, timeout=CACHE_TIMEOUT_CONFIG)
+    cache.set(cache_key, template_ids, timeout=get_config_cache_timeout())
     return templates
 
 
@@ -89,14 +90,10 @@ def clear_template_cache() -> None:
 
     当 GuestTemplate 数据变更时调用此函数刷新缓存。
     """
-    from django.core.cache import cache
-
-    from gameplay.services.utils.cache import CacheKeys
-
     cache.delete_many(
         [
-            CacheKeys.GUEST_TEMPLATES_BY_RARITY,
-            CacheKeys.HERMIT_TEMPLATES,
+            get_guest_templates_by_rarity_cache_key(),
+            get_hermit_templates_cache_key(),
         ]
     )
 
@@ -128,7 +125,10 @@ def _resolve_entry_template(
     rng: random.Random,
 ) -> GuestTemplate | None:
     if entry.template_id:
-        return entry.template if entry.template.recruitable else None
+        template = entry.template
+        if template is None:
+            return None
+        return template if template.recruitable else None
 
     rarity_value = entry.rarity or rarity_hint
     if not rarity_value:

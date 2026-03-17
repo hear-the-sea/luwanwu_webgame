@@ -3,7 +3,9 @@ from django.utils import timezone
 
 from gameplay.services.manor.core import ensure_manor
 from guests.models import RecruitmentPool
-from guests.services import ensure_auto_training, finalize_candidate, recruit_guest, reduce_training_time_for_guest
+from guests.services.recruitment import recruit_guest
+from guests.services.recruitment_guests import finalize_candidate
+from guests.services.training import ensure_auto_training, reduce_training_time_for_guest
 from guests.utils.training_timer import ensure_training_timer, remaining_training_seconds
 
 

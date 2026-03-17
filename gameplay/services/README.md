@@ -4,16 +4,9 @@
 
 ```python
 # 直接从子模块导入，更清晰
-from gameplay.services.manor import ensure_manor
+from gameplay.services.manor.core import ensure_manor
 from gameplay.services.resources import grant_resources
-from gameplay.services.inventory import add_item_to_inventory
-```
-
-## 向后兼容用法
-
-```python
-# 从主模块导入（保持向后兼容）
-from gameplay.services import ensure_manor, grant_resources
+from gameplay.services.inventory.core import add_item_to_inventory
 ```
 
 ## 模块列表
@@ -50,7 +43,7 @@ from gameplay.services import ensure_manor, grant_resources
 推荐使用绝对导入而非相对导入：
 ```python
 # ✅ 推荐：绝对导入
-from gameplay.services.manor import ensure_manor
+from gameplay.services.manor.core import ensure_manor
 from gameplay.services.resources import grant_resources
 
 # ❌ 避免：相对导入
@@ -103,15 +96,12 @@ spend_resources(manor, {"silver": 500}, note="购买物品")
 
 示例：
 ```python
-# 旧代码
-from gameplay.services import ensure_manor
-
-# 新代码
-from gameplay.services.manor import ensure_manor
+# 推荐代码
+from gameplay.services.manor.core import ensure_manor
 ```
 
 ## 注意事项
 
-1. **向后兼容**: 主模块 `__init__.py` 仍然导出所有公共函数，保持向后兼容
-2. **性能差异**: 两种导入方式在性能上没有显著差异
-3. **IDE支持**: 直接从子模块导入可以获得更好的IDE自动补全和类型推断
+1. **聚合入口收缩**: `gameplay.services` 保留模块级入口，不再承诺继续直出各域函数
+2. **推荐风格**: 直接从子模块导入可以获得更好的IDE自动补全和类型推断
+3. **迁移原则**: 仓内代码优先使用具体子模块，而不是继续扩展总聚合入口

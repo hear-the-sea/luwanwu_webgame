@@ -9,13 +9,30 @@ from django.core.cache import cache
 from django.utils import timezone
 
 from battle.models import TroopTemplate
-from gameplay.models import InventoryItem, ItemTemplate, Message, PlayerTroop, RaidRun, ResourceEvent, ResourceType
+from gameplay.models import (
+    InventoryItem,
+    ItemTemplate,
+    Message,
+    MissionRun,
+    MissionTemplate,
+    PlayerTroop,
+    RaidRun,
+    ResourceEvent,
+    ResourceType,
+)
 from gameplay.services.manor.core import ensure_manor
+from gameplay.services.missions import launch_mission, refresh_mission_runs
 from gameplay.services.raid import request_raid_retreat, start_raid
 from gameplay.services.utils.cache import CacheKeys
 from gameplay.services.utils.messages import claim_message_attachments
 from guests.models import RecruitmentPool
-from guests.services import finalize_candidate, recruit_guest
+from guests.services.recruitment import recruit_guest
+from guests.services.recruitment_guests import finalize_candidate
+from guilds.constants import CONTRIBUTION_RATES, GUILD_CREATION_COST
+from guilds.models import GuildAnnouncement, GuildDonationLog, GuildMember, GuildResourceLog
+from guilds.services.contribution import donate_resource
+from guilds.services.guild import create_guild
+from guilds.services.member import apply_to_guild, approve_application
 from trade.models import AuctionBid, AuctionRound, AuctionSlot, MarketListing
 from trade.services.auction_service import place_bid, settle_auction_round
 from trade.services.market_service import create_listing, purchase_listing
@@ -190,6 +207,125 @@ def test_integration_raid_start_and_retreat_flow(require_env_services, game_data
 
     assert run.status == RaidRun.Status.RETREATED
     assert run.is_retreating is True
+
+
+@pytest.mark.django_db(transaction=True)
+def test_integration_mission_launch_refresh_and_report_flow(
+    require_env_services, game_data, mission_templates, django_user_model
+):
+    user = django_user_model.objects.create_user(
+        username=f"intg_mission_{uuid.uuid4().hex[:8]}",
+        password="pass123",
+    )
+    manor = ensure_manor(user)
+    manor.silver = max(int(manor.silver or 0), 50_000)
+    manor.grain = max(int(manor.grain or 0), 50_000)
+    manor.save(update_fields=["silver", "grain"])
+
+    mission = MissionTemplate.objects.filter(guest_only=False, is_defense=False).first()
+    if mission is None:
+        pytest.skip("No offense mission available for integration coverage")
+
+    pool = RecruitmentPool.objects.get(key="cunmu")
+    candidate = recruit_guest(manor, pool, seed=17)[0]
+    guest = finalize_candidate(candidate)
+
+    troop_template = TroopTemplate.objects.filter(key="archer").first() or TroopTemplate.objects.first()
+    assert troop_template is not None
+
+    PlayerTroop.objects.update_or_create(
+        manor=manor,
+        troop_template=troop_template,
+        defaults={"count": 200},
+    )
+
+    run = launch_mission(manor, mission, [guest.id], {troop_template.key: 20})
+    run.refresh_from_db()
+    guest.refresh_from_db()
+
+    assert run.status == MissionRun.Status.ACTIVE
+    assert run.battle_report is not None
+    assert guest.status == guest.Status.DEPLOYED
+
+    run.return_at = timezone.now() - timedelta(seconds=1)
+    run.save(update_fields=["return_at"])
+
+    refresh_mission_runs(manor)
+
+    run.refresh_from_db()
+    guest.refresh_from_db()
+
+    assert run.status == MissionRun.Status.COMPLETED
+    assert run.completed_at is not None
+    assert guest.status in [guest.Status.IDLE, guest.Status.INJURED]
+    assert Message.objects.filter(manor=manor, title=f"{mission.name} 战报", battle_report=run.battle_report).exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_integration_guild_application_approval_and_donation_flow(require_env_services, django_user_model):
+    founder_user = django_user_model.objects.create_user(
+        username=f"intg_guild_founder_{uuid.uuid4().hex[:8]}",
+        password="pass123",
+    )
+    applicant_user = django_user_model.objects.create_user(
+        username=f"intg_guild_member_{uuid.uuid4().hex[:8]}",
+        password="pass123",
+    )
+    founder_manor = ensure_manor(founder_user)
+    applicant_manor = ensure_manor(applicant_user)
+    applicant_manor.silver = 10_000
+    applicant_manor.save(update_fields=["silver"])
+
+    gold_bar_tpl, _ = ItemTemplate.objects.get_or_create(
+        key="gold_bar",
+        defaults={
+            "name": "金条",
+            "effect_type": ItemTemplate.EffectType.TOOL,
+            "is_usable": False,
+            "tradeable": False,
+        },
+    )
+    InventoryItem.objects.update_or_create(
+        manor=founder_manor,
+        template=gold_bar_tpl,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        defaults={"quantity": GUILD_CREATION_COST["gold_bar"] + 2},
+    )
+
+    guild = create_guild(founder_user, name=f"帮测{uuid.uuid4().hex[:6]}", description="integration guild")
+    application = apply_to_guild(applicant_user, guild, "求加入")
+    approve_application(application, founder_user)
+
+    applicant_member = GuildMember.objects.get(user=applicant_user)
+    donate_resource(applicant_member, "silver", 1000)
+
+    guild.refresh_from_db()
+    applicant_member.refresh_from_db()
+    application.refresh_from_db()
+
+    assert application.status == "approved"
+    assert applicant_member.is_active is True
+    assert applicant_member.current_contribution == 1000 * CONTRIBUTION_RATES["silver"]
+    assert guild.silver == 1000
+    assert Message.objects.filter(manor=applicant_manor, title="入帮申请通过").exists()
+    assert GuildAnnouncement.objects.filter(guild=guild, content__contains=applicant_manor.display_name).exists()
+    assert GuildDonationLog.objects.filter(
+        guild=guild,
+        member=applicant_member,
+        resource_type="silver",
+        amount=1000,
+    ).exists()
+    assert GuildResourceLog.objects.filter(
+        guild=guild,
+        action="donation",
+        silver_change=1000,
+        related_user=applicant_user,
+    ).exists()
+    assert ResourceEvent.objects.filter(
+        manor=applicant_manor,
+        resource_type=ResourceType.SILVER,
+        reason=ResourceEvent.Reason.GUILD_DONATION,
+    ).exists()
 
 
 @pytest.mark.django_db(transaction=True)

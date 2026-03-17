@@ -17,10 +17,10 @@ from gameplay.models.items import (
     get_item_effect_type_label,
     normalize_item_effect_type,
 )
-from gameplay.services.resources import grant_resources_locked, spend_resources_locked
 from gameplay.utils.template_loader import get_item_templates_by_keys
 from trade.models import ShopPurchaseLog, ShopSellLog, ShopStock
 from trade.services.shop_config import get_sell_price_by_template, get_shop_config, get_shop_item_config
+from trade.services.trade_platform import grant_resources_locked, spend_resources_locked
 
 
 @dataclass

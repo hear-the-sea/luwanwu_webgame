@@ -9,7 +9,7 @@ from typing import Tuple
 
 from core.exceptions import InsufficientStockError
 from gameplay.models import Manor
-from gameplay.services.inventory import add_item_to_inventory, consume_inventory_item
+from gameplay.services.inventory.core import add_item_to_inventory, consume_inventory_item
 
 logger = logging.getLogger(__name__)
 

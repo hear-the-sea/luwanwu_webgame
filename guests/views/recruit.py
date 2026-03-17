@@ -23,12 +23,8 @@ from core.utils.rate_limit import rate_limit_redirect
 
 from ..forms import RecruitForm
 from ..models import RecruitmentCandidate
-from ..services import (
-    bulk_finalize_candidates,
-    convert_candidate_to_retainer,
-    start_guest_recruitment,
-    use_magnifying_glass_for_candidates,
-)
+from ..services.recruitment import start_guest_recruitment, use_magnifying_glass_for_candidates
+from ..services.recruitment_guests import bulk_finalize_candidates, convert_candidate_to_retainer
 from .common import unexpected_action_error_response
 
 logger = logging.getLogger(__name__)

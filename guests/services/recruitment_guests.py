@@ -5,19 +5,10 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 from django.db import transaction
 
+from core.config import GUEST
 from core.exceptions import GuestNotIdleError, InvalidAllocationError
 
-from ..models import (
-    DEFENSE_TO_HP_MULTIPLIER,
-    MAX_GUEST_SKILL_SLOTS,
-    MIN_HP_FLOOR,
-    Guest,
-    GuestSkill,
-    GuestStatus,
-    GuestTemplate,
-    RecruitmentCandidate,
-    RecruitmentRecord,
-)
+from ..models import Guest, GuestSkill, GuestStatus, GuestTemplate, RecruitmentCandidate, RecruitmentRecord
 from ..utils.recruitment_variance import apply_recruitment_variance
 from . import recruitment_batch as _recruitment_batch
 from . import recruitment_finalize_helpers as _recruitment_finalize_helpers
@@ -46,11 +37,11 @@ def grant_template_skills(guest: Guest) -> None:
     if not initial_skills:
         return
     existing_skill_ids = set(guest.guest_skills.values_list("skill_id", flat=True))
-    capacity_left = MAX_GUEST_SKILL_SLOTS - len(existing_skill_ids)
+    capacity_left = int(GUEST.MAX_SKILL_SLOTS) - len(existing_skill_ids)
     if capacity_left <= 0:
         return
 
-    skills_to_create = []
+    skills_to_create: list[GuestSkill] = []
     for skill in initial_skills:
         if skill.id in existing_skill_ids:
             continue
@@ -104,8 +95,8 @@ def create_guest_from_template(
     )
 
     initial_hp = max(
-        MIN_HP_FLOOR,
-        template.base_hp + varied_attrs["defense"] * DEFENSE_TO_HP_MULTIPLIER,
+        int(GUEST.MIN_HP_FLOOR),
+        template.base_hp + varied_attrs["defense"] * int(GUEST.DEFENSE_TO_HP_MULTIPLIER),
     )
 
     guest = Guest(
@@ -138,7 +129,7 @@ def create_guest_from_template(
 def _prepare_guest_objects(
     candidates: List[RecruitmentCandidate],
     template_map: Dict[int, GuestTemplate],
-    manor,
+    manor: Manor,
     rng: random.Random,
 ) -> tuple[List[Guest], List[GuestTemplate], List[int]]:
     return _recruitment_batch.prepare_guest_objects(
@@ -211,7 +202,7 @@ def bulk_finalize_candidates(
     all_skills_to_create = _recruitment_batch.build_template_skill_rows(
         created_guests=created_guests,
         templates_for_guests=templates_for_guests,
-        max_guest_skill_slots=MAX_GUEST_SKILL_SLOTS,
+        max_guest_skill_slots=int(GUEST.MAX_SKILL_SLOTS),
     )
     if all_skills_to_create:
         GuestSkill.objects.bulk_create(all_skills_to_create)

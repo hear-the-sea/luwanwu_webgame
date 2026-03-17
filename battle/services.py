@@ -7,10 +7,11 @@ from typing import Any, Callable, Dict, Generator, List
 
 from django.db import transaction
 
+from guests.guest_combat_stats import is_live_guest_model
 from guests.models import Guest, GuestStatus
 
 from . import execution as _execution
-from .combatants import (
+from .combatants_pkg import (
     build_ai_guests,
     build_guest_combatants,
     build_named_ai_guests,
@@ -158,7 +159,7 @@ def _build_defender_guest_and_loadout(
         from guests.services.health import recover_guest_hp
 
         for guest in defender_guests[:defender_limit]:
-            if getattr(guest, "pk", None):
+            if is_live_guest_model(guest) and guest.pk:
                 recover_guest_hp(guest, now=now)
         defender_guests_comb = build_guest_combatants(defender_guests, side="defender", limit=defender_limit)
         loadout_raw = defender_setup.get("troop_loadout") if isinstance(defender_setup, dict) else None

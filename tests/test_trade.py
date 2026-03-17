@@ -227,25 +227,27 @@ class TestMarketPurchase:
         )
 
         observed: dict[str, object] = {}
-        original_grant_resources_locked = market_service.grant_resources_locked
+        original_settle_market_sale_proceeds = market_service.settle_market_sale_proceeds
 
-        def _capture_grant_resources_locked(manor, rewards, note, reason, *, sync_production=True):
-            observed["sync_production"] = sync_production
-            observed["rewards"] = rewards
-            return original_grant_resources_locked(
+        def _capture_settle_market_sale_proceeds(manor, *, item_name: str, silver_amount: int):
+            observed["item_name"] = item_name
+            observed["rewards"] = {"silver": silver_amount}
+            return original_settle_market_sale_proceeds(
                 manor,
-                rewards,
-                note,
-                reason,
-                sync_production=sync_production,
+                item_name=item_name,
+                silver_amount=silver_amount,
             )
 
-        monkeypatch.setattr(market_service, "grant_resources_locked", _capture_grant_resources_locked)
+        monkeypatch.setattr(
+            market_service,
+            "settle_market_sale_proceeds",
+            _capture_settle_market_sale_proceeds,
+        )
 
         transaction = market_service.purchase_listing(buyer_manor, listing.id)
 
         assert transaction.seller_received == 18000
-        assert observed == {"sync_production": False, "rewards": {"silver": 18000}}
+        assert observed == {"item_name": "测试可交易物品", "rewards": {"silver": 18000}}
 
     def test_purchase_own_listing(self, seller_manor):
         """测试购买自己的挂单"""
@@ -308,7 +310,7 @@ class TestMarketPurchase:
         def _raise_message_error(**_kwargs):
             raise RuntimeError("message backend unavailable")
 
-        monkeypatch.setattr(market_service, "create_message", _raise_message_error)
+        monkeypatch.setattr(market_service, "send_market_message", _raise_message_error)
 
         transaction = market_service.purchase_listing(buyer_manor, listing.id)
 
@@ -471,7 +473,7 @@ class TestMarketExpire:
         def _raise_message_error(*_args, **_kwargs):
             raise RuntimeError("message backend down")
 
-        monkeypatch.setattr(market_service, "create_message", _raise_message_error)
+        monkeypatch.setattr(market_service, "send_market_message", _raise_message_error)
 
         count = market_service.expire_listings()
 
@@ -504,7 +506,7 @@ class TestMarketExpire:
         def _raise_notify_error(*_args, **_kwargs):
             raise RuntimeError("ws unavailable")
 
-        monkeypatch.setattr(market_service, "notify_user", _raise_notify_error)
+        monkeypatch.setattr(market_service, "send_market_notification", _raise_notify_error)
 
         count = market_service.expire_listings()
         assert count == 1

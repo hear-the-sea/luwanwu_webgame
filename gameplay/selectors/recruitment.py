@@ -5,7 +5,7 @@ import logging
 from django.core.cache import cache
 
 from common.constants.resources import ResourceType
-from guests.services import (
+from guests.services.recruitment_queries import (
     get_active_guest_recruitment,
     get_pool_recruitment_duration_seconds,
     list_candidates,
@@ -13,7 +13,7 @@ from guests.services import (
 )
 
 from ..models import InventoryItem
-from ..services import sync_resource_production
+from ..services.resources import sync_resource_production
 from ..services.utils.cache import CACHE_TIMEOUT_SHORT, recruitment_hall_context_cache_key
 
 logger = logging.getLogger(__name__)

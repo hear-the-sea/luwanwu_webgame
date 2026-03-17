@@ -4,7 +4,6 @@ from typing import Any
 
 from guests.models import GuestStatus
 
-from ..services import sync_resource_production
 from ..services.raid import (
     can_attack_target,
     get_active_raids,
@@ -14,7 +13,8 @@ from ..services.raid import (
     get_protection_status,
     get_scout_count,
 )
-from ..services.recruitment import get_player_troops
+from ..services.recruitment.queries import get_player_troops
+from ..services.resources import sync_resource_production
 
 
 def _resolve_attack_fields(target_info: dict[str, Any], manor, target_manor) -> tuple[bool, str]:

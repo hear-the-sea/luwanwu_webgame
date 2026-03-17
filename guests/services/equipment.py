@@ -39,10 +39,12 @@ def _slot_capacity(slot: str) -> int:
     return {
         GearSlot.DEVICE: 3,
         GearSlot.ORNAMENT: 3,
-    }.get(slot, 1)
+    }.get(
+        slot, 1
+    )  # type: ignore[call-overload]
 
 
-def _apply_template_stats_to_guest(guest: Guest, template, sign: int, updates: set[str]) -> None:
+def _apply_template_stats_to_guest(guest: Guest, template: GearTemplate, sign: int, updates: set[str]) -> None:
     guest.attack_bonus += sign * template.attack_bonus
     guest.defense_bonus += sign * template.defense_bonus
     for key, field in _GEAR_EXTRA_STAT_FIELDS.items():
@@ -143,13 +145,13 @@ def apply_set_bonuses(guest: Guest) -> Dict[str, int]:
 
     # 应用当前套装效果
     for stat, value in current.items():
-        field = SET_STAT_FIELD_MAP.get(stat)
-        if not field:
+        set_bonus_field = SET_STAT_FIELD_MAP.get(stat)
+        if not set_bonus_field:
             continue
         val = int(value or 0)
         if val:
-            setattr(guest, field, getattr(guest, field) + val)
-            updates.add(field)
+            setattr(guest, set_bonus_field, getattr(guest, set_bonus_field) + val)
+            updates.add(set_bonus_field)
 
     guest.gear_set_bonus = current
     updates.add("gear_set_bonus")

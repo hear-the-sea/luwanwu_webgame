@@ -151,7 +151,7 @@ def grant_battle_salvage(manor, exp_fruit_count: int, equipment_recovery: Dict[s
     """
     发放“战斗回收”奖励到庄园仓库（经验果 + 装备回收）。
     """
-    from .inventory import add_item_to_inventory
+    from .inventory.core import add_item_to_inventory
 
     if exp_fruit_count > 0:
         add_item_to_inventory(manor, "experience_fruit", exp_fruit_count)

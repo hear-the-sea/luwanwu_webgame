@@ -20,8 +20,9 @@ from gameplay.models import (
     ResourceType,
     TroopBankStorage,
 )
-from gameplay.services import ensure_manor, grant_resources, spend_resources, sync_resource_production
 from gameplay.services.manor import core as manor_service
+from gameplay.services.manor.core import ensure_manor
+from gameplay.services.resources import grant_resources, spend_resources, sync_resource_production
 from gameplay.utils.resource_calculator import get_personnel_grain_cost_per_hour
 from guests.models import Guest, GuestTemplate
 

@@ -133,7 +133,12 @@ def test_build_defender_setup_and_drop_table_sanitizes_invalid_mission_json():
         drop_table="bad-drops",
     )
 
-    defender_setup, drop_table = mission_execution._build_defender_setup_and_drop_table(mission, loadout={})
+    defender_setup, drop_table = mission_execution.build_defender_setup_and_drop_table(
+        mission,
+        loadout={},
+        normalize_guest_configs=mission_execution._normalize_guest_configs,
+        normalize_mapping=mission_execution._normalize_mapping,
+    )
 
     assert defender_setup["guest_keys"] == []
     assert defender_setup["troop_loadout"] == {}
@@ -145,7 +150,12 @@ def test_build_defender_setup_and_drop_table_for_defense_keeps_runtime_loadout()
     mission = SimpleNamespace(is_defense=True)
     loadout = {"archer": 10}
 
-    defender_setup, drop_table = mission_execution._build_defender_setup_and_drop_table(mission, loadout=loadout)
+    defender_setup, drop_table = mission_execution.build_defender_setup_and_drop_table(
+        mission,
+        loadout=loadout,
+        normalize_guest_configs=mission_execution._normalize_guest_configs,
+        normalize_mapping=mission_execution._normalize_mapping,
+    )
 
     assert defender_setup == {"troop_loadout": loadout}
     assert drop_table == {}
@@ -167,7 +177,14 @@ def test_send_mission_report_message_ignores_message_failure(monkeypatch):
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
     )
 
-    mission_execution._send_mission_report_message(run, report)
+    mission_execution.send_mission_report_message(
+        run,
+        report,
+        logger=mission_execution.logger,
+        create_message=mission_execution.create_message,
+        notify_user=mission_execution.notify_user,
+        notification_infrastructure_exceptions=mission_execution.MISSION_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
+    )
 
 
 def test_schedule_mission_completion_task_finalizes_sync_when_due_dispatch_fails(monkeypatch):

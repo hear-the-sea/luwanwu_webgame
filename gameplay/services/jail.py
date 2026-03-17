@@ -14,14 +14,15 @@ from typing import List
 
 from django.db import transaction
 
+from core.config import GUEST
 from core.exceptions import GuestCapacityFullError, GuestNotIdleError
-from guests.models import DEFENSE_TO_HP_MULTIPLIER, MIN_HP_FLOOR, Guest, GuestStatus, GuestTemplate
-from guests.services.recruitment import grant_template_skills
+from guests.models import Guest, GuestStatus, GuestTemplate
+from guests.services.recruitment_guests import grant_template_skills
 from guests.utils.recruitment_variance import apply_recruitment_variance
 
 from ..constants import PVPConstants
 from ..models import JailPrisoner, Manor, OathBond
-from .inventory import consume_inventory_item, get_item_quantity
+from .inventory.core import consume_inventory_item, get_item_quantity
 
 GOLD_BAR_ITEM_KEY = "gold_bar"
 
@@ -157,7 +158,7 @@ def draw_pie(manor: Manor, prisoner_id: int) -> JailPrisoner:
     prisoner.loyalty = max(0, prisoner.loyalty - loyalty_reduction)
     prisoner.save(update_fields=["loyalty"])
     # 存储减少值供视图使用
-    prisoner._reduction = loyalty_reduction
+    setattr(prisoner, "_reduction", loyalty_reduction)
 
     return prisoner
 
@@ -222,8 +223,8 @@ def recruit_prisoner(manor: Manor, prisoner_id: int) -> Guest:
     )
 
     initial_hp = max(
-        MIN_HP_FLOOR,
-        template.base_hp + varied_attrs["defense"] * DEFENSE_TO_HP_MULTIPLIER,
+        int(GUEST.MIN_HP_FLOOR),
+        template.base_hp + varied_attrs["defense"] * int(GUEST.DEFENSE_TO_HP_MULTIPLIER),
     )
 
     custom_name = ""

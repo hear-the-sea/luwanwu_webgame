@@ -18,7 +18,7 @@ from core.utils import is_ajax_request, json_error, json_success, safe_int, safe
 from core.utils.validation import safe_redirect_url, sanitize_error_message
 
 from ..models import Guest
-from ..services import use_medicine_item_for_guest
+from ..services.health import use_medicine_item_for_guest
 from .common import unexpected_action_error_response
 
 logger = logging.getLogger(__name__)

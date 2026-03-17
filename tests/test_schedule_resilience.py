@@ -6,7 +6,7 @@ import pytest
 from django.db import transaction
 from django.test import TestCase
 
-from gameplay.services import technology
+import gameplay.services.technology as technology
 from gameplay.services.buildings import forge, ranch, smithy, stable
 from gameplay.services.manor import core as manor_core
 from gameplay.services.recruitment import recruitment

@@ -547,7 +547,9 @@ def test_rounds_module_settle_slot_partial_refund_flow(monkeypatch, django_user_
     )
 
     # Avoid inventory manipulation during unit test; we only need to cover control-flow.
-    monkeypatch.setattr("gameplay.services.inventory.consume_inventory_item_for_manor_locked", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "trade.services.auction.gold_bars.consume_inventory_item_for_manor_locked", lambda *a, **k: None
+    )
     monkeypatch.setattr("trade.services.auction.rounds.create_message", lambda *a, **k: None)
     monkeypatch.setattr("trade.services.auction.rounds.notify_user", lambda *a, **k: True)
 
@@ -865,7 +867,9 @@ def test_rounds_module_settle_slot_ignores_notify_failure(monkeypatch, django_us
         is_frozen=True,
     )
 
-    monkeypatch.setattr("gameplay.services.inventory.consume_inventory_item_for_manor_locked", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "trade.services.auction.gold_bars.consume_inventory_item_for_manor_locked", lambda *a, **k: None
+    )
     monkeypatch.setattr("trade.services.auction.rounds.create_message", lambda *a, **k: None)
     monkeypatch.setattr(
         "trade.services.auction.rounds.notify_user",

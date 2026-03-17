@@ -13,8 +13,6 @@ from django.db.models import F
 from django.utils import timezone
 
 from gameplay.models import InventoryItem, ItemTemplate, Manor
-from gameplay.services.utils.messages import create_message
-from gameplay.services.utils.notifications import notify_user
 from trade.models import AuctionBid, AuctionRound, AuctionSlot, FrozenGoldBar
 from trade.services.auction.bidding import get_slot_ranking
 from trade.services.auction.constants import (
@@ -31,6 +29,7 @@ from trade.services.auction_config import (
     get_auction_settings,
     get_enabled_auction_items,
 )
+from trade.services.trade_platform import consume_inventory_item_for_manor_locked, create_message, notify_user
 
 logger = logging.getLogger(__name__)
 
@@ -426,8 +425,6 @@ def _settle_slot(slot: AuctionSlot) -> Dict:
 
 def _partial_consume_frozen_gold_bars(bid: AuctionBid, manor: Manor, consume_amount: int, refund_amount: int) -> None:
     """部分消耗冻结金条（用于维克里拍卖，出价高于结算价的情况）。"""
-    from gameplay.services.inventory import consume_inventory_item_for_manor_locked
-
     frozen_record = try_get_frozen_record(bid)
     if not frozen_record:
         raise RuntimeError(f"partial consume missing frozen record: bid_id={bid.id}")

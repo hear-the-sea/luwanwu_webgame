@@ -7,9 +7,9 @@ import pytest
 from django.db import connection
 from django.utils import timezone
 
+import gameplay.services.work as work_service
 from core.exceptions import WorkError, WorkLimitExceededError, WorkNotInProgressError, WorkRewardClaimedError
 from gameplay.models import WorkAssignment, WorkTemplate
-from gameplay.services import work as work_service
 from gameplay.services.manor.core import ensure_manor
 from gameplay.services.work import assign_guest_to_work, claim_work_reward, recall_guest_from_work
 from guests.models import Guest, GuestArchetype, GuestRarity, GuestStatus, GuestTemplate

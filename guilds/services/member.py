@@ -6,12 +6,10 @@ from django.db import transaction
 from django.db.utils import IntegrityError
 from django.utils import timezone
 
-from gameplay.models import Manor
-from gameplay.services.utils.messages import create_message
-
 from ..models import Guild, GuildApplication, GuildMember
 from .guild import create_announcement
 from .hero_pool import invalidate_member_hero_pool
+from .member_notifications import resolve_display_name, send_system_message_to_user
 from .utils import get_active_membership
 
 logger = logging.getLogger(__name__)
@@ -30,13 +28,6 @@ def _run_followup(action, callback, **context):
         callback()
     except Exception:
         _log_followup_failure(action, **context)
-
-
-def _get_manor_and_display_name(user_id):
-    manor = Manor.objects.filter(user_id=user_id).first()
-    if manor is None:
-        return None, f"用户{user_id}"
-    return manor, manor.display_name
 
 
 def apply_to_guild(user, guild, message=""):
@@ -158,25 +149,20 @@ def approve_application(application, reviewer, auto=False):
         guild_name = guild_locked.name
 
     # 事务外发送消息，减少锁持有时间。通知失败不应回滚已完成的审批流程。
-    applicant_manor, display_name = _get_manor_and_display_name(applicant_user_id)
-    if applicant_manor is None:
-        logger.warning(
-            "Guild approve follow-up message skipped because manor missing: applicant_user_id=%s guild=%s",
+    display_name = resolve_display_name(applicant_user_id)
+    _run_followup(
+        "approve message",
+        lambda: send_system_message_to_user(
             applicant_user_id,
-            guild_name,
-        )
-    else:
-        _run_followup(
-            "approve message",
-            lambda: create_message(
-                manor=applicant_manor,
-                kind="system",
-                title="入帮申请通过",
-                body=f"您的入帮申请已通过，欢迎加入【{guild_name}】！",
-            ),
-            applicant_user_id=applicant_user_id,
-            guild=guild_name,
-        )
+            title="入帮申请通过",
+            body=f"您的入帮申请已通过，欢迎加入【{guild_name}】！",
+            action="approve",
+            guild_name=guild_name,
+            logger=logger,
+        ),
+        applicant_user_id=applicant_user_id,
+        guild_name=guild_name,
+    )
 
     _run_followup(
         "approve announcement",
@@ -224,25 +210,18 @@ def reject_application(application, reviewer, note=""):
         applicant_user_id = application_locked.applicant_id
         guild_name = application_locked.guild.name
 
-    applicant_manor, _ = _get_manor_and_display_name(applicant_user_id)
-    if applicant_manor is None:
-        logger.warning(
-            "Guild reject follow-up message skipped because manor missing: applicant_user_id=%s guild=%s",
-            applicant_user_id,
-            guild_name,
-        )
-        return
-
     _run_followup(
         "reject message",
-        lambda: create_message(
-            manor=applicant_manor,
-            kind="system",
+        lambda: send_system_message_to_user(
+            applicant_user_id,
             title="入帮申请被拒绝",
             body=f"您的入帮申请被拒绝。\n拒绝原因：{note if note else '无'}",
+            action="reject",
+            guild_name=guild_name,
+            logger=logger,
         ),
         applicant_user_id=applicant_user_id,
-        guild=guild_name,
+        guild_name=guild_name,
     )
 
 
@@ -278,7 +257,7 @@ def leave_guild(member):
         member_locked.save(update_fields=["is_active", "left_at"])
         invalidate_member_hero_pool(member_locked)
 
-    _, display_name = _get_manor_and_display_name(member_user_id)
+    display_name = resolve_display_name(member_user_id)
     _run_followup(
         "leave announcement",
         lambda: create_announcement(
@@ -332,25 +311,20 @@ def kick_member(target_member, operator):
         target_locked.save(update_fields=["is_active", "left_at"])
         invalidate_member_hero_pool(target_locked)
 
-    target_manor, display_name = _get_manor_and_display_name(target_user_id)
-    if target_manor is None:
-        logger.warning(
-            "Guild kick follow-up message skipped because manor missing: target_user_id=%s guild=%s",
+    display_name = resolve_display_name(target_user_id)
+    _run_followup(
+        "kick message",
+        lambda: send_system_message_to_user(
             target_user_id,
-            guild_name,
-        )
-    else:
-        _run_followup(
-            "kick message",
-            lambda: create_message(
-                manor=target_manor,
-                kind="system",
-                title="被移出帮会",
-                body=f"您已被移出帮会【{guild_name}】。",
-            ),
-            target_user_id=target_user_id,
-            guild=guild_name,
-        )
+            title="被移出帮会",
+            body=f"您已被移出帮会【{guild_name}】。",
+            action="kick",
+            guild_name=guild_name,
+            logger=logger,
+        ),
+        target_user_id=target_user_id,
+        guild_name=guild_name,
+    )
 
     _run_followup(
         "kick announcement",
@@ -407,26 +381,21 @@ def appoint_admin(target_member, operator):
         target_locked.position = "admin"
         target_locked.save(update_fields=["position"])
 
-    _, operator_display_name = _get_manor_and_display_name(operator_user_id)
-    target_manor, target_display_name = _get_manor_and_display_name(target_user_id)
-    if target_manor is None:
-        logger.warning(
-            "Guild appoint-admin follow-up message skipped because manor missing: target_user_id=%s guild=%s",
+    operator_display_name = resolve_display_name(operator_user_id)
+    target_display_name = resolve_display_name(target_user_id)
+    _run_followup(
+        "appoint-admin message",
+        lambda: send_system_message_to_user(
             target_user_id,
-            guild_name,
-        )
-    else:
-        _run_followup(
-            "appoint-admin message",
-            lambda: create_message(
-                manor=target_manor,
-                kind="system",
-                title="职位变更",
-                body=f"您已被任命为帮会【{guild_name}】的管理员！",
-            ),
-            target_user_id=target_user_id,
-            guild=guild_name,
-        )
+            title="职位变更",
+            body=f"您已被任命为帮会【{guild_name}】的管理员！",
+            action="appoint-admin",
+            guild_name=guild_name,
+            logger=logger,
+        ),
+        target_user_id=target_user_id,
+        guild_name=guild_name,
+    )
 
     _run_followup(
         "appoint-admin announcement",
@@ -470,25 +439,20 @@ def demote_admin(target_member, operator):
         target_member.position = "member"
         target_member.save(update_fields=["position"])
 
-    target_manor, target_display_name = _get_manor_and_display_name(target_user_id)
-    if target_manor is None:
-        logger.warning(
-            "Guild demote-admin follow-up message skipped because manor missing: target_user_id=%s guild=%s",
+    target_display_name = resolve_display_name(target_user_id)
+    _run_followup(
+        "demote-admin message",
+        lambda: send_system_message_to_user(
             target_user_id,
-            guild_name,
-        )
-    else:
-        _run_followup(
-            "demote-admin message",
-            lambda: create_message(
-                manor=target_manor,
-                kind="system",
-                title="职位变更",
-                body="您已被罢免管理员职位，降为普通成员。",
-            ),
-            target_user_id=target_user_id,
-            guild=guild_name,
-        )
+            title="职位变更",
+            body="您已被罢免管理员职位，降为普通成员。",
+            action="demote-admin",
+            guild_name=guild_name,
+            logger=logger,
+        ),
+        target_user_id=target_user_id,
+        guild_name=guild_name,
+    )
 
     _run_followup(
         "demote-admin announcement",
@@ -551,26 +515,21 @@ def transfer_leadership(current_leader_member, new_leader_member):
         new_locked.position = "leader"
         new_locked.save(update_fields=["position"])
 
-    _, current_leader_display_name = _get_manor_and_display_name(current_leader_user_id)
-    new_leader_manor, new_leader_display_name = _get_manor_and_display_name(new_leader_user_id)
-    if new_leader_manor is None:
-        logger.warning(
-            "Guild transfer-leadership follow-up message skipped because manor missing: new_leader_user_id=%s guild=%s",
+    current_leader_display_name = resolve_display_name(current_leader_user_id)
+    new_leader_display_name = resolve_display_name(new_leader_user_id)
+    _run_followup(
+        "transfer-leadership message",
+        lambda: send_system_message_to_user(
             new_leader_user_id,
-            guild_name,
-        )
-    else:
-        _run_followup(
-            "transfer-leadership message",
-            lambda: create_message(
-                manor=new_leader_manor,
-                kind="system",
-                title="职位变更",
-                body=f"您已成为帮会【{guild_name}】的新任帮主！",
-            ),
-            new_leader_user_id=new_leader_user_id,
-            guild=guild_name,
-        )
+            title="职位变更",
+            body=f"您已成为帮会【{guild_name}】的新任帮主！",
+            action="transfer-leadership",
+            guild_name=guild_name,
+            logger=logger,
+        ),
+        new_leader_user_id=new_leader_user_id,
+        guild_name=guild_name,
+    )
 
     _run_followup(
         "transfer-leadership announcement",

@@ -9,7 +9,9 @@ from core.exceptions import GuestNotIdleError
 from gameplay.services.battle_snapshots import build_guest_battle_snapshots, build_guest_snapshot_proxies
 from gameplay.services.manor.core import ensure_manor
 from guests.models import GuestStatus, RecruitmentPool
-from guests.services import finalize_candidate, recruit_guest
+from guests.services.health import INJURY_RECOVERY_THRESHOLD, heal_guest
+from guests.services.recruitment import recruit_guest
+from guests.services.recruitment_guests import finalize_candidate
 
 
 def _recruit_frontline(manor, draws: int = 3) -> None:
@@ -282,7 +284,6 @@ def test_lock_guests_for_battle_releases_transaction_before_battle_body(game_dat
 @pytest.mark.django_db
 def test_heal_guest_cures_injury(django_user_model):
     """药品治疗可解除重伤状态（HP>=30%时）"""
-    from guests.services import INJURY_RECOVERY_THRESHOLD, heal_guest
 
     user = django_user_model.objects.create_user(username="healer", password="pass123")
     manor = ensure_manor(user)
@@ -319,8 +320,6 @@ def test_heal_guest_cures_injury(django_user_model):
 
 @pytest.mark.django_db
 def test_heal_guest_rejects_busy_non_injured_status(django_user_model):
-    from guests.services import heal_guest
-
     user = django_user_model.objects.create_user(username="busy_healer", password="pass123")
     manor = ensure_manor(user)
     manor.silver = 3000

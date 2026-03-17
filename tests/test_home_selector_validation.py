@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import gameplay.services.raid as raid_service
 from gameplay.selectors.home import _normalize_hourly_rates, get_home_context
 
 
@@ -63,9 +64,9 @@ def test_get_home_context_tolerates_cache_backend_failure(monkeypatch):
         "gameplay.utils.resource_calculator.get_hourly_rates", lambda *_a, **_k: {"grain": "12", "silver": 8}
     )
     monkeypatch.setattr("gameplay.utils.resource_calculator.get_personnel_grain_cost_per_hour", lambda *_a, **_k: 3)
-    monkeypatch.setattr("gameplay.services.raid.get_active_scouts", lambda *_a, **_k: [])
-    monkeypatch.setattr("gameplay.services.raid.get_active_raids", lambda *_a, **_k: [])
-    monkeypatch.setattr("gameplay.services.raid.get_incoming_raids", lambda *_a, **_k: [])
+    monkeypatch.setattr(raid_service, "get_active_scouts", lambda *_a, **_k: [])
+    monkeypatch.setattr(raid_service, "get_active_raids", lambda *_a, **_k: [])
+    monkeypatch.setattr(raid_service, "get_incoming_raids", lambda *_a, **_k: [])
 
     manor = SimpleNamespace(
         pk=1,

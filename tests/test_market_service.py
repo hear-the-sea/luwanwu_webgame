@@ -418,7 +418,7 @@ def test_expire_listings_queryset_skips_when_row_no_longer_active(monkeypatch):
 
     with patch.object(market_service.MarketListing, "objects", objects_mock):
         create_message_mock = MagicMock()
-        monkeypatch.setattr(market_service, "create_message", create_message_mock)
+        monkeypatch.setattr(market_service, "send_market_message", create_message_mock)
 
         result = market_service._expire_listings_queryset(queryset, "test", limit=None)
 

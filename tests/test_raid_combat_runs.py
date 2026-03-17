@@ -10,6 +10,8 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
 
+from gameplay.services.raid import utils as raid_utils
+from gameplay.services.raid.combat import battle as combat_battle
 from gameplay.services.raid.combat import runs as combat_runs
 from gameplay.services.raid.combat import troop_ops
 
@@ -166,7 +168,8 @@ def test_refresh_raid_runs_prefers_async_dispatch(monkeypatch):
 
     called = {"battle": 0, "finalize": 0}
     monkeypatch.setattr(
-        "gameplay.services.raid.combat.battle.process_raid_battle",
+        combat_battle,
+        "process_raid_battle",
         lambda *_args, **_kwargs: called.__setitem__("battle", called["battle"] + 1),
     )
     monkeypatch.setattr(
@@ -179,6 +182,35 @@ def test_refresh_raid_runs_prefers_async_dispatch(monkeypatch):
 
     assert set(dispatched) == {(1, "battle"), (2, "battle"), (3, "return"), (4, "return")}
     assert called == {"battle": 0, "finalize": 0}
+
+
+def test_prepare_run_for_battle_uses_runs_retreat_wrapper(monkeypatch):
+    class _Status:
+        RETREATED = "retreated"
+        MARCHING = "marching"
+        COMPLETED = "completed"
+
+    dummy_raid_run = type("_RaidRun", (), {"Status": _Status})
+    monkeypatch.setattr(combat_battle, "RaidRun", dummy_raid_run)
+
+    called = {}
+
+    def _finalize_retreat(run, **kwargs):
+        called["run"] = run
+        called["kwargs"] = kwargs
+
+    monkeypatch.setattr(combat_runs, "_finalize_raid_retreat", _finalize_retreat)
+    monkeypatch.setattr(combat_runs, "_add_troops_batch", lambda *_args, **_kwargs: None)
+
+    locked_run = SimpleNamespace(
+        status=_Status.RETREATED,
+        return_at=timezone.now() - timedelta(seconds=1),
+    )
+    monkeypatch.setattr(combat_battle, "_load_locked_raid_run", lambda _run_pk: locked_run)
+
+    assert combat_battle._prepare_run_for_battle(run_pk=1, now=timezone.now()) is None
+    assert called["run"] is locked_run
+    assert set(called["kwargs"]) == {"now"}
 
 
 def test_bulk_create_troops_with_fallback_upserts_without_losing_counts(monkeypatch):
@@ -390,10 +422,7 @@ def test_dispatch_raid_battle_task_processes_sync_when_due_dispatch_fails(monkey
 
     monkeypatch.setattr(gameplay_tasks, "process_raid_battle_task", object(), raising=False)
     monkeypatch.setattr(combat_runs, "safe_apply_async", lambda *_args, **_kwargs: False)
-    monkeypatch.setattr(
-        "gameplay.services.raid.combat.battle.process_raid_battle",
-        lambda run, **_kwargs: processed.append(run.id),
-    )
+    monkeypatch.setattr(combat_battle, "process_raid_battle", lambda run, **_kwargs: processed.append(run.id))
 
     combat_runs._dispatch_raid_battle_task(SimpleNamespace(id=123), travel_time=0)
 
@@ -409,7 +438,7 @@ def test_validate_and_normalize_raid_inputs_uses_uncached_attack_check(monkeypat
         seen["use_cached_recent_attacks"] = kwargs.get("use_cached_recent_attacks")
         return True, ""
 
-    monkeypatch.setattr("gameplay.services.raid.utils.can_attack_target", _fake_can_attack)
+    monkeypatch.setattr(raid_utils, "can_attack_target", _fake_can_attack)
     monkeypatch.setattr(combat_runs, "get_active_raid_count", lambda *_args, **_kwargs: 0)
 
     guest_ids, troop_loadout = combat_runs._validate_and_normalize_raid_inputs(
