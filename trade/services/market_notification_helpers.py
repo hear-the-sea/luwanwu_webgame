@@ -1,8 +1,28 @@
 from __future__ import annotations
 
-from django.db import IntegrityError
-from django.db.models import F
-from django.utils import timezone
+
+def safe_send_market_message(*, create_message_func, logger, log_message: str, **kwargs) -> bool:
+    try:
+        create_message_func(**kwargs)
+    except Exception as exc:
+        logger.warning("%s: %s", log_message, exc, exc_info=True)
+        return False
+    return True
+
+
+def safe_send_market_notification(
+    *,
+    notify_user_func,
+    logger,
+    user_id: int,
+    payload: dict,
+    log_context: str,
+    log_message: str,
+) -> None:
+    try:
+        notify_user_func(user_id, payload, log_context=log_context)
+    except Exception as exc:
+        logger.warning("%s: user_id=%s error=%s", log_message, user_id, exc, exc_info=True)
 
 
 def send_purchase_notifications(
@@ -68,32 +88,8 @@ def send_purchase_notifications(
     return buyer_mail_sent, seller_mail_sent
 
 
-def restore_cancelled_listing_inventory(*, inventory_item_model, manor, listing) -> None:
-    filter_kwargs = {
-        "manor": manor,
-        "template": listing.item_template,
-        "storage_location": inventory_item_model.StorageLocation.WAREHOUSE,
-    }
-    inventory_item = inventory_item_model.objects.select_for_update().filter(**filter_kwargs).first()
-
-    if inventory_item:
-        inventory_item_model.objects.filter(pk=inventory_item.pk).update(
-            quantity=F("quantity") + listing.quantity,
-            updated_at=timezone.now(),
-        )
-        return
-
-    try:
-        inventory_item_model.objects.create(
-            **filter_kwargs,
-            quantity=listing.quantity,
-        )
-    except IntegrityError:
-        # Another transaction may have created the row after our select-for-update lookup.
-        inventory_item_model.objects.filter(**filter_kwargs).update(
-            quantity=F("quantity") + listing.quantity,
-            updated_at=timezone.now(),
-        )
+def restore_cancelled_listing_inventory(*, manor, listing, grant_item_locked) -> None:
+    grant_item_locked(manor, item_key=listing.item_template.key, quantity=listing.quantity)
 
 
 def build_cancel_listing_result(*, listing) -> dict[str, object]:

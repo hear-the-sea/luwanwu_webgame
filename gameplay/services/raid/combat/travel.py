@@ -11,12 +11,12 @@ from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
 from core.utils.time_scale import scale_duration
-from gameplay.services.raid import combat as combat_pkg
 from guests.models import Guest
 
 from ....models import Manor, RaidRun
 from ...utils.messages import create_message
 from ..utils import calculate_distance, is_same_region
+from .config import PVPConstants
 
 logger = logging.getLogger(__name__)
 
@@ -31,13 +31,13 @@ def calculate_raid_travel_time(
     单程时间 = (基础时间 + 距离 × 速度系数) × 跨区系数 × 敏捷修正
     """
     distance = calculate_distance(attacker, defender)
-    base_time = combat_pkg.PVPConstants.RAID_BASE_TRAVEL_TIME
-    distance_time = distance * combat_pkg.PVPConstants.RAID_TRAVEL_TIME_PER_DISTANCE
+    base_time = PVPConstants.RAID_BASE_TRAVEL_TIME
+    distance_time = distance * PVPConstants.RAID_TRAVEL_TIME_PER_DISTANCE
 
     # 跨区惩罚
     cross_region_mult = 1.0
     if not is_same_region(attacker, defender):
-        cross_region_mult = combat_pkg.PVPConstants.RAID_CROSS_REGION_MULTIPLIER
+        cross_region_mult = PVPConstants.RAID_CROSS_REGION_MULTIPLIER
 
     total_time = (base_time + distance_time) * cross_region_mult
 
@@ -104,7 +104,7 @@ def _dismiss_marching_raids_if_protected(defender: Manor) -> int:
         .count()
     )
 
-    if recent_attacks < combat_pkg.PVPConstants.RAID_MAX_DAILY_ATTACKS_RECEIVED:
+    if recent_attacks < PVPConstants.RAID_MAX_DAILY_ATTACKS_RECEIVED:
         return 0
 
     # 查找所有正在行军中的、目标是该防守方的队伍

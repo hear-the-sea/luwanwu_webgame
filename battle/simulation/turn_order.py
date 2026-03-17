@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, List, Tuple
 from .utils import alive
 
 if TYPE_CHECKING:
-    from ..combatants import Combatant
+    from ..combatants_pkg.core import Combatant
 
 
 def determine_turn_order(

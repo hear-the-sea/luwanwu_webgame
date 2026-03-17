@@ -9,6 +9,12 @@ TARGET_MODULES = (
     "gameplay.services.technology",
     "gameplay.services.technology_helpers",
 )
+UTILS_TARGET_MODULES = (
+    "gameplay.services.utils",
+    "gameplay.services.utils.cache",
+    "gameplay.services.utils.messages",
+    "gameplay.services.utils.notifications",
+)
 
 
 @contextmanager
@@ -22,6 +28,24 @@ def isolated_service_imports():
         yield
     finally:
         for name in TARGET_MODULES:
+            sys.modules.pop(name, None)
+
+        for name, module in originals.items():
+            if module is not None:
+                sys.modules[name] = module
+
+
+@contextmanager
+def isolated_utils_imports():
+    originals = {name: sys.modules.get(name) for name in UTILS_TARGET_MODULES}
+
+    for name in UTILS_TARGET_MODULES:
+        sys.modules.pop(name, None)
+
+    try:
+        yield
+    finally:
+        for name in UTILS_TARGET_MODULES:
             sys.modules.pop(name, None)
 
         for name, module in originals.items():
@@ -66,3 +90,22 @@ def test_gameplay_services_submodule_imports_remain_compatible():
         assert "gameplay.services.jail" in sys.modules
         assert "gameplay.services.technology" in sys.modules
         assert "gameplay.services.technology_helpers" in sys.modules
+
+
+def test_gameplay_services_utils_package_is_not_a_compat_aggregator():
+    with isolated_utils_imports():
+        utils_pkg = importlib.import_module("gameplay.services.utils")
+
+        assert not hasattr(utils_pkg, "__getattr__")
+        assert "create_message" not in dir(utils_pkg)
+        assert "notify_user" not in dir(utils_pkg)
+
+
+def test_gameplay_services_utils_direct_submodule_imports_remain_compatible():
+    with isolated_utils_imports():
+        from gameplay.services.utils import messages as message_service
+
+        cache_module = importlib.import_module("gameplay.services.utils.cache")
+
+        assert message_service is sys.modules["gameplay.services.utils.messages"]
+        assert cache_module is sys.modules["gameplay.services.utils.cache"]

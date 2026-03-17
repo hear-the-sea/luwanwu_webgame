@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Dict, List, Tuple
 from .constants import BASE_CRIT_CHANCE
 
 if TYPE_CHECKING:
-    from ..combatants import Combatant
+    from ..combatants_pkg.core import Combatant
 
 
 def build_rng(seed: int | None = None) -> Tuple[int, random.Random]:

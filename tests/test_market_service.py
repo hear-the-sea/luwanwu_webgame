@@ -142,9 +142,7 @@ def test_create_listing_rejects_nonexistent_item():
     """Test that nonexistent item is rejected."""
     manor = MagicMock()
 
-    with patch.object(market_service.ItemTemplate, "objects") as mock_qs:
-        mock_qs.filter.return_value.first.return_value = None
-
+    with patch.object(market_service, "load_market_item_template", side_effect=ValueError("物品不存在")):
         with pytest.raises(ValueError, match="物品不存在"):
             market_service.create_listing(manor, "fake_item", 1, 1000, 7200)
 
@@ -152,11 +150,8 @@ def test_create_listing_rejects_nonexistent_item():
 def test_create_listing_rejects_non_tradeable_item():
     """Test that non-tradeable item is rejected."""
     manor = MagicMock()
-    item_template = SimpleNamespace(key="item", tradeable=False, price=100)
 
-    with patch.object(market_service.ItemTemplate, "objects") as mock_qs:
-        mock_qs.filter.return_value.first.return_value = item_template
-
+    with patch.object(market_service, "load_market_item_template", side_effect=ValueError("该物品不可交易")):
         with pytest.raises(ValueError, match="该物品不可交易"):
             market_service.create_listing(manor, "item", 1, 1000, 7200)
 
@@ -166,9 +161,7 @@ def test_create_listing_rejects_zero_quantity():
     manor = MagicMock()
     item_template = SimpleNamespace(key="item", tradeable=True, price=100)
 
-    with patch.object(market_service.ItemTemplate, "objects") as mock_qs:
-        mock_qs.filter.return_value.first.return_value = item_template
-
+    with patch.object(market_service, "load_market_item_template", return_value=item_template):
         with pytest.raises(ValueError, match="数量必须大于0"):
             market_service.create_listing(manor, "item", 0, 1000, 7200)
 
@@ -178,9 +171,7 @@ def test_create_listing_rejects_negative_quantity():
     manor = MagicMock()
     item_template = SimpleNamespace(key="item", tradeable=True, price=100)
 
-    with patch.object(market_service.ItemTemplate, "objects") as mock_qs:
-        mock_qs.filter.return_value.first.return_value = item_template
-
+    with patch.object(market_service, "load_market_item_template", return_value=item_template):
         with pytest.raises(ValueError, match="数量必须大于0"):
             market_service.create_listing(manor, "item", -1, 1000, 7200)
 
@@ -190,9 +181,7 @@ def test_create_listing_rejects_non_integer_quantity():
     manor = MagicMock()
     item_template = SimpleNamespace(key="item", tradeable=True, price=100)
 
-    with patch.object(market_service.ItemTemplate, "objects") as mock_qs:
-        mock_qs.filter.return_value.first.return_value = item_template
-
+    with patch.object(market_service, "load_market_item_template", return_value=item_template):
         with pytest.raises(ValueError, match="数量必须大于0"):
             market_service.create_listing(manor, "item", cast(int, "abc"), 1000, 7200)
 
@@ -202,9 +191,7 @@ def test_create_listing_rejects_non_integer_unit_price():
     manor = MagicMock()
     item_template = SimpleNamespace(key="item", tradeable=True, price=100)
 
-    with patch.object(market_service.ItemTemplate, "objects") as mock_qs:
-        mock_qs.filter.return_value.first.return_value = item_template
-
+    with patch.object(market_service, "load_market_item_template", return_value=item_template):
         with pytest.raises(ValueError, match="单价不能低于"):
             market_service.create_listing(manor, "item", 1, cast(int, "abc"), 7200)
 
@@ -363,18 +350,13 @@ def test_get_market_stats_returns_expected_keys():
 def test_get_tradeable_inventory_filters_correctly():
     """Test that get_tradeable_inventory applies correct filters."""
     manor = MagicMock()
+    expected_queryset = MagicMock()
 
-    with patch.object(market_service.InventoryItem, "objects") as mock_qs:
-        mock_filter = MagicMock()
-        mock_qs.filter.return_value.select_related.return_value = mock_filter
+    with patch.object(market_service, "get_tradeable_inventory_queryset", return_value=expected_queryset) as mock_get:
+        result = market_service.get_tradeable_inventory(manor)
 
-        market_service.get_tradeable_inventory(manor)
-
-        # Verify filter was called with expected parameters
-        call_kwargs = mock_qs.filter.call_args[1]
-        assert call_kwargs["manor"] == manor
-        assert call_kwargs["template__tradeable"] is True
-        assert call_kwargs["quantity__gt"] == 0
+    mock_get.assert_called_once_with(manor)
+    assert result is expected_queryset
 
 
 # ============ expire listings limit handling tests ============

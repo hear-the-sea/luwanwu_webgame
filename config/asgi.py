@@ -21,9 +21,9 @@ logger = logging.getLogger(__name__)
 # Initialize Django ASGI application early to ensure app registry is ready
 django_asgi_app = get_asgi_application()
 
-# Lazy import websocket routing to avoid loading Django before settings are set
+# Import websocket routing only after Django ASGI initialization is ready.
 try:
-    from websocket import routing as websocket_routing
+    import websocket.routing as websocket_routing
 except Exception as exc:  # pragma: no cover - fallback if apps not ready
     # Import failures can surface as ImportError, AppRegistryNotReady (a subclass
     # of RuntimeError), or OSError depending on Django's initialisation order.

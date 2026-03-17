@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from .types import _DamageApplication
 
 if TYPE_CHECKING:
-    from ..combatants import Combatant
+    from ..combatants_pkg.core import Combatant
 
 
 def _mark_actor_troop_damage(

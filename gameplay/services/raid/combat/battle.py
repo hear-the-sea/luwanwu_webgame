@@ -12,7 +12,6 @@ from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
 from gameplay.services.battle_snapshots import build_guest_battle_snapshots, build_guest_snapshot_proxies
-from gameplay.services.raid import combat as combat_pkg
 from guests.models import Guest, GuestStatus
 from guests.query_utils import guest_template_rarity_rank_case
 
@@ -31,6 +30,7 @@ from .capture import (  # noqa: F401
     _select_capture_target,
     _try_capture_guest,
 )
+from .config import PVPConstants
 from .loot import _apply_loot, _calculate_loot
 
 # Re-export messaging helpers.
@@ -104,7 +104,7 @@ def _apply_defeat_protection(run: RaidRun, is_attacker_victory: bool, *, now: Op
     if not is_attacker_victory:
         return
     now = now or timezone.now()
-    duration_seconds = int(getattr(combat_pkg.PVPConstants, "RAID_DEFEAT_PROTECTION_SECONDS", 1800) or 0)
+    duration_seconds = int(getattr(PVPConstants, "RAID_DEFEAT_PROTECTION_SECONDS", 1800) or 0)
     if duration_seconds <= 0:
         return
 
@@ -502,11 +502,11 @@ def _apply_prestige_changes(run: RaidRun, is_attacker_victory: bool) -> None:
     from ...manor.prestige import PRESTIGE_SILVER_THRESHOLD
 
     if is_attacker_victory:
-        attacker_change = combat_pkg.PVPConstants.RAID_ATTACKER_WIN_PRESTIGE
-        defender_change = combat_pkg.PVPConstants.RAID_DEFENDER_LOSE_PRESTIGE
+        attacker_change = PVPConstants.RAID_ATTACKER_WIN_PRESTIGE
+        defender_change = PVPConstants.RAID_DEFENDER_LOSE_PRESTIGE
     else:
-        attacker_change = combat_pkg.PVPConstants.RAID_ATTACKER_LOSE_PRESTIGE
-        defender_change = combat_pkg.PVPConstants.RAID_DEFENDER_WIN_PRESTIGE
+        attacker_change = PVPConstants.RAID_ATTACKER_LOSE_PRESTIGE
+        defender_change = PVPConstants.RAID_DEFENDER_WIN_PRESTIGE
 
     def _apply_pvp_delta(manor: Manor, delta: int) -> int:
         before_total = manor.prestige

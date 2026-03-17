@@ -6,10 +6,10 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from gameplay.constants import get_raid_capture_guest_rate
-from gameplay.services.raid import combat as combat_pkg
 from guests.models import Guest
 
 from ....models import JailPrisoner, Manor, OathBond, RaidRun
+from .config import random
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ def _can_attempt_capture(winner: Manor) -> bool:
     capture_rate = get_raid_capture_guest_rate()
     if capture_rate <= 0:
         return False
-    if combat_pkg.random.random() >= capture_rate:
+    if random.random() >= capture_rate:
         return False
 
     return True
@@ -60,7 +60,7 @@ def _filter_capture_candidates(losing_guest_ids: List[int]) -> List[int]:
 
 
 def _select_capture_target(candidates: List[int], loser: Manor) -> Optional[Guest]:
-    target_guest_id = combat_pkg.random.choice(candidates)
+    target_guest_id = random.choice(candidates)
     target = (
         Guest.objects.select_for_update()
         .select_related("template", "manor")

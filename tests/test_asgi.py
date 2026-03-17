@@ -17,7 +17,7 @@ def test_asgi_warns_when_websocket_routing_import_fails(monkeypatch):
     original_import = builtins.__import__
 
     def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
-        if name == "websocket" and "routing" in fromlist:
+        if name == "websocket.routing":
             raise ImportError("routing boom")
         return original_import(name, globals, locals, fromlist, level)
 
@@ -36,8 +36,9 @@ def test_asgi_warns_when_websocket_routing_import_fails(monkeypatch):
     importlib.import_module("config.asgi")
 
 
-def test_websocket_package_exposes_routing_and_consumers_modules():
-    import websocket
+def test_websocket_direct_submodule_imports_work_without_package_lazy_exports():
+    websocket_pkg = importlib.import_module("websocket")
 
-    assert websocket.routing is importlib.import_module("websocket.routing")
-    assert websocket.consumers is importlib.import_module("websocket.consumers")
+    assert not hasattr(websocket_pkg, "__getattr__")
+    assert importlib.import_module("websocket.routing").websocket_urlpatterns
+    assert importlib.import_module("websocket.consumers").WorldChatConsumer is not None

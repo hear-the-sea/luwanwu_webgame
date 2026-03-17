@@ -9,19 +9,23 @@
 """
 
 import logging
+import sys
 from typing import Any
 
 from django.core.cache import cache
 from django.db import DatabaseError, transaction
-from django.db.models import F, Sum
+from django.db.models import Sum
 from django.utils import timezone
 
 from core.utils.cache_lock import release_cache_key_if_owner
-from gameplay.models import InventoryItem, ItemTemplate, Manor, ResourceEvent
+from gameplay.models import Manor, ResourceEvent
 from trade.models import GoldBarExchangeLog
-from trade.services.trade_platform import spend_resources_locked
+from trade.services.trade_platform import add_item_to_inventory_locked, spend_resources_locked
 
 from . import rate_calculations as _rate_calculations
+from .bank_facade import exchange_gold_bar_entry, get_bank_info_entry
+from .bank_flows import build_exchange_result as build_exchange_result_payload
+from .bank_flows import resolve_pricing_status
 
 # Pure pricing constants and math functions extracted to bank_pricing.
 from .bank_pricing import (  # noqa: F401
@@ -45,118 +49,132 @@ from .bank_pricing import (  # noqa: F401
     _safe_int,
     calculate_progressive_factor,
 )
+from .bank_runtime import build_exchange_result as runtime_build_exchange_result
+from .bank_runtime import configure_rate_calculation_hooks
+from .bank_runtime import get_today_exchange_count as runtime_get_today_exchange_count
+from .bank_runtime import grant_gold_bars_locked as runtime_grant_gold_bars_locked
+from .bank_runtime import record_gold_bar_exchange_locked as runtime_record_gold_bar_exchange_locked
+from .bank_runtime import release_cache_lock_if_owner_entry
+from .bank_runtime import safe_cache_add as runtime_safe_cache_add
+from .bank_runtime import safe_cache_delete as runtime_safe_cache_delete
+from .bank_runtime import safe_cache_get as runtime_safe_cache_get
+from .bank_runtime import safe_cache_set as runtime_safe_cache_set
+from .bank_runtime import spend_exchange_cost_locked as runtime_spend_exchange_cost_locked
+from .bank_runtime import strict_cache_add_entry, strict_cache_get_entry
 
 logger = logging.getLogger(__name__)
 
 
 BANK_INFRASTRUCTURE_EXCEPTIONS = (DatabaseError, ConnectionError, OSError, TimeoutError)
+BANK_CACHE_COMPONENT = "bank_cache"
+
+
+# Dynamic facade assembly in bank_facade.py resolves these names from this module at runtime.
+_FACADE_EXPORTS = (
+    transaction,
+    Manor,
+    _normalize_positive_quantity,
+    _calculate_supply_factor_from_supply,
+    GOLD_BAR_BASE_PRICE,
+    GOLD_BAR_FEE_RATE,
+    GOLD_BAR_MIN_PRICE,
+    GOLD_BAR_MAX_PRICE,
+    calculate_progressive_factor,
+)
 
 
 def _safe_cache_get(key: str, default: Any = None) -> Any:
-    try:
-        return cache.get(key, default)
-    except Exception:
-        logger.warning(
-            "Failed to read cache key: %s", key, exc_info=True, extra={"degraded": True, "component": "bank_cache"}
-        )
-        return default
+    return runtime_safe_cache_get(
+        key,
+        default,
+        cache_backend=cache,
+        logger=logger,
+        component=BANK_CACHE_COMPONENT,
+        infrastructure_exceptions=BANK_INFRASTRUCTURE_EXCEPTIONS,
+    )
 
 
 def _safe_cache_set(key: str, value: Any, timeout: int) -> None:
-    try:
-        cache.set(key, value, timeout=timeout)
-    except Exception:
-        logger.warning(
-            "Failed to write cache key: %s", key, exc_info=True, extra={"degraded": True, "component": "bank_cache"}
-        )
+    runtime_safe_cache_set(
+        key,
+        value,
+        timeout,
+        cache_backend=cache,
+        logger=logger,
+        component=BANK_CACHE_COMPONENT,
+        infrastructure_exceptions=BANK_INFRASTRUCTURE_EXCEPTIONS,
+    )
 
 
 def _safe_cache_add(key: str, value: Any, timeout: int) -> bool:
-    try:
-        return bool(cache.add(key, value, timeout=timeout))
-    except Exception:
-        logger.warning(
-            "Failed to add cache key: %s", key, exc_info=True, extra={"degraded": True, "component": "bank_cache"}
-        )
-        return False
+    return runtime_safe_cache_add(
+        key,
+        value,
+        timeout,
+        cache_backend=cache,
+        logger=logger,
+        component=BANK_CACHE_COMPONENT,
+        infrastructure_exceptions=BANK_INFRASTRUCTURE_EXCEPTIONS,
+    )
 
 
 def _safe_cache_delete(key: str) -> None:
-    try:
-        cache.delete(key)
-    except Exception:
-        logger.warning(
-            "Failed to delete cache key: %s", key, exc_info=True, extra={"degraded": True, "component": "bank_cache"}
-        )
+    runtime_safe_cache_delete(
+        key,
+        cache_backend=cache,
+        logger=logger,
+        component=BANK_CACHE_COMPONENT,
+        infrastructure_exceptions=BANK_INFRASTRUCTURE_EXCEPTIONS,
+    )
 
 
 def _strict_cache_get(key: str, default: Any = None) -> Any:
-    try:
-        return cache.get(key, default)
-    except BANK_INFRASTRUCTURE_EXCEPTIONS as exc:
-        logger.error(
-            "Strict gold supply cache.get failed: key=%s",
-            key,
-            exc_info=True,
-            extra={"degraded": True, "component": "bank_cache"},
-        )
-        raise GoldBarPricingUnavailableError() from exc
-    except Exception:
-        logger.error(
-            "Unexpected strict gold supply cache.get failure: key=%s",
-            key,
-            exc_info=True,
-            extra={"degraded": True, "component": "bank_cache"},
-        )
-        raise
+    return strict_cache_get_entry(
+        key,
+        default,
+        cache_backend=cache,
+        logger=logger,
+        component=BANK_CACHE_COMPONENT,
+        infrastructure_exceptions=BANK_INFRASTRUCTURE_EXCEPTIONS,
+        unavailable_error_factory=GoldBarPricingUnavailableError,
+    )
 
 
 def _strict_cache_add(key: str, value: Any, timeout: int) -> bool:
-    try:
-        return bool(cache.add(key, value, timeout=timeout))
-    except BANK_INFRASTRUCTURE_EXCEPTIONS as exc:
-        logger.error(
-            "Strict gold supply cache.add failed: key=%s",
-            key,
-            exc_info=True,
-            extra={"degraded": True, "component": "bank_cache"},
-        )
-        raise GoldBarPricingUnavailableError() from exc
-    except Exception:
-        logger.error(
-            "Unexpected strict gold supply cache.add failure: key=%s",
-            key,
-            exc_info=True,
-            extra={"degraded": True, "component": "bank_cache"},
-        )
-        raise
+    return strict_cache_add_entry(
+        key,
+        value,
+        timeout,
+        cache_backend=cache,
+        logger=logger,
+        component=BANK_CACHE_COMPONENT,
+        infrastructure_exceptions=BANK_INFRASTRUCTURE_EXCEPTIONS,
+        unavailable_error_factory=GoldBarPricingUnavailableError,
+    )
 
 
 def _release_cache_lock_if_owner(lock_key: str, lock_token: str) -> None:
-    """Best-effort lock release with ownership check."""
-    released = release_cache_key_if_owner(
+    release_cache_lock_if_owner_entry(
         lock_key,
-        lock_token=lock_token,
+        lock_token,
+        release_cache_key_if_owner=release_cache_key_if_owner,
         logger=logger,
         log_context="gold supply cache lock release",
+        safe_cache_get=_safe_cache_get,
+        safe_cache_delete=_safe_cache_delete,
     )
-    if released:
-        return
-
-    # Fallback path for non-Redis cache backends or test monkeypatches.
-    current_token = _safe_cache_get(lock_key)
-    if current_token == lock_token:
-        _safe_cache_delete(lock_key)
 
 
 def get_today_exchange_count(manor: Manor) -> int:
     """获取今日已兑换金条数量"""
-    # 安全修复：使用 timezone.now().date() 保持时区一致性
-    today = timezone.now().date()
-    count = GoldBarExchangeLog.objects.filter(manor=manor, exchange_date=today).aggregate(total=Sum("quantity"))[
-        "total"
-    ]
-    return max(0, _safe_int(count, 0))
+    return runtime_get_today_exchange_count(
+        manor,
+        aggregate_quantity=lambda **filters: GoldBarExchangeLog.objects.filter(**filters).aggregate(
+            total=Sum("quantity")
+        ),
+        now_func=timezone.now,
+        safe_int=_safe_int,
+    )
 
 
 # ============ 动态汇率计算 ============
@@ -173,20 +191,54 @@ from .rate_calculations import (  # noqa: E402,F401
 _IMPORTED_GET_EFFECTIVE_GOLD_SUPPLY = get_effective_gold_supply
 _IMPORTED_CALCULATE_SUPPLY_FACTOR = calculate_supply_factor
 
-_rate_calculations.configure_bank_service_hooks(
-    safe_cache_get=lambda key, default=None: _safe_cache_get(key, default),  # type: ignore[misc]
-    safe_cache_set=lambda key, value, timeout: _safe_cache_set(key, value, timeout),
-    safe_cache_add=lambda key, value, timeout: _safe_cache_add(key, value, timeout),
-    safe_cache_delete=lambda key: _safe_cache_delete(key),
-    release_cache_lock_if_owner=lambda lock_key, lock_token: _release_cache_lock_if_owner(lock_key, lock_token),
-    get_today_exchange_count=lambda manor: get_today_exchange_count(manor),
-    get_effective_gold_supply_override=lambda: (
-        get_effective_gold_supply if get_effective_gold_supply is not _IMPORTED_GET_EFFECTIVE_GOLD_SUPPLY else None
-    ),
-    calculate_supply_factor_override=lambda: (
-        calculate_supply_factor if calculate_supply_factor is not _IMPORTED_CALCULATE_SUPPLY_FACTOR else None
-    ),
+configure_rate_calculation_hooks(
+    _rate_calculations,
+    service_module=sys.modules[__name__],
+    imported_get_effective_gold_supply=_IMPORTED_GET_EFFECTIVE_GOLD_SUPPLY,
+    imported_calculate_supply_factor=_IMPORTED_CALCULATE_SUPPLY_FACTOR,
 )
+
+
+def _grant_gold_bars_locked(manor: Manor, quantity: int) -> None:
+    runtime_grant_gold_bars_locked(
+        manor,
+        quantity,
+        add_item_to_inventory_locked=add_item_to_inventory_locked,
+        gold_bar_item_key=GOLD_BAR_ITEM_KEY,
+    )
+
+
+def _spend_exchange_cost_locked(manor: Manor, quantity: int, cost_info: dict[str, Any]) -> int:
+    return runtime_spend_exchange_cost_locked(
+        manor,
+        quantity,
+        cost_info,
+        spend_resources_locked=spend_resources_locked,
+        bank_exchange_reason=ResourceEvent.Reason.BANK_EXCHANGE,
+    )
+
+
+def _record_gold_bar_exchange_locked(manor: Manor, quantity: int, total_cost: int) -> None:
+    runtime_record_gold_bar_exchange_locked(
+        manor,
+        quantity,
+        total_cost,
+        gold_bar_exchange_log_model=GoldBarExchangeLog,
+    )
+
+
+def _build_exchange_result(manor: Manor, quantity: int, cost_info: dict[str, Any]) -> dict[str, Any]:
+    return runtime_build_exchange_result(
+        manor,
+        quantity,
+        cost_info,
+        build_exchange_result_payload=build_exchange_result_payload,
+        calculate_next_rate=calculate_next_rate,
+    )
+
+
+def _resolve_pricing_status(pricing_source: str) -> tuple[bool, str]:
+    return resolve_pricing_status(pricing_source)
 
 
 def exchange_gold_bar(manor: Manor, quantity: int) -> dict:
@@ -207,75 +259,7 @@ def exchange_gold_bar(manor: Manor, quantity: int) -> dict:
     Raises:
         ValueError: 参数错误、银两不足等
     """
-    quantity = _normalize_positive_quantity(quantity)
-
-    # 检查金条物品模板是否存在
-    try:
-        gold_bar_template = ItemTemplate.objects.get(key=GOLD_BAR_ITEM_KEY)
-    except ItemTemplate.DoesNotExist:
-        raise ValueError("金条物品不存在，请联系管理员")
-
-    # 执行兑换（并发安全版本）
-    with transaction.atomic():
-        manor_locked = Manor.objects.select_for_update().get(pk=manor.pk)
-
-        # 安全修复：在锁内重新计算价格，确保基于最新的今日已兑换数量
-        # 防止并发请求利用旧的低价买入
-        cost_info = calculate_gold_bar_cost(manor_locked, quantity, fail_closed=True)
-        total_cost = cost_info["total_cost"]
-
-        try:
-            spend_resources_locked(
-                manor_locked,
-                {"silver": total_cost},
-                note=f"兑换金条 x{quantity}",
-                reason=ResourceEvent.Reason.BANK_EXCHANGE,
-            )
-        except ValueError as exc:
-            raise ValueError(
-                f"银两不足，需要 {total_cost:,} 银两"
-                f"（基础 {cost_info['base_cost']:,} + 手续费 {cost_info['fee']:,}）"
-            ) from exc
-
-        # 步骤2：锁定并增加金条库存
-        # 锁定现有记录避免并发时数量增加被覆盖
-        inventory_item = (
-            InventoryItem.objects.select_for_update()
-            .filter(
-                manor=manor_locked,
-                template=gold_bar_template,
-                storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-            )
-            .first()
-        )
-
-        if inventory_item:
-            # 已有金条，使用F()表达式增加数量
-            InventoryItem.objects.filter(pk=inventory_item.pk).update(quantity=F("quantity") + quantity)
-        else:
-            # 首次获得金条，创建新记录
-            InventoryItem.objects.create(
-                manor=manor_locked,
-                template=gold_bar_template,
-                storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-                quantity=quantity,
-            )
-
-        # 步骤3：记录兑换日志
-        GoldBarExchangeLog.objects.create(manor=manor_locked, quantity=quantity, silver_cost=total_cost)
-
-    # 清除供应量缓存，让下次查询获取最新数据
-    _safe_cache_delete(SUPPLY_CACHE_KEY)
-
-    return {
-        "quantity": quantity,
-        "total_cost": total_cost,
-        "base_cost": cost_info["base_cost"],
-        "fee": cost_info["fee"],
-        "avg_rate": cost_info["avg_rate"],
-        "rate_details": cost_info["rate_details"],
-        "next_rate": calculate_next_rate(manor, fail_closed=True),
-    }
+    return exchange_gold_bar_entry(manor, quantity, service_module=sys.modules[__name__])
 
 
 def get_bank_info(manor: Manor) -> dict:
@@ -285,41 +269,4 @@ def get_bank_info(manor: Manor) -> dict:
     Returns:
         dict: 包含动态汇率、手续费率、今日兑换情况等信息
     """
-    effective_supply, pricing_source = _get_effective_gold_supply_data()
-    pricing_degraded = pricing_source in DEGRADED_PRICING_SOURCES
-    pricing_status_message = ""
-    if pricing_source == "stale_cache":
-        pricing_status_message = "钱庄汇率数据正在降级展示，当前价格可能不是最新值，已暂时关闭兑换。"
-    elif pricing_source == "default":
-        pricing_status_message = "钱庄汇率数据暂时不可用，已暂时关闭兑换。"
-
-    today_count = get_today_exchange_count(manor)
-    supply_factor = _calculate_supply_factor_from_supply(effective_supply)
-    current_rate = calculate_dynamic_rate(manor, supply_factor=supply_factor)
-    next_rate = calculate_next_rate(manor, supply_factor=supply_factor)
-    progressive_factor = calculate_progressive_factor(today_count)
-
-    # 计算单根金条的总费用（含手续费）
-    cost_info = calculate_gold_bar_cost(manor, 1, supply_factor=supply_factor)
-
-    return {
-        # 基础配置
-        "gold_bar_base_price": GOLD_BAR_BASE_PRICE,
-        "gold_bar_fee_rate": float(GOLD_BAR_FEE_RATE) * 100,  # 转换为百分比
-        "gold_bar_min_price": GOLD_BAR_MIN_PRICE,
-        "gold_bar_max_price": GOLD_BAR_MAX_PRICE,
-        # 动态汇率信息
-        "current_rate": current_rate,
-        "next_rate": next_rate,
-        "total_cost_per_bar": cost_info["total_cost"],
-        "supply_factor": round(supply_factor, 3),
-        "progressive_factor": round(progressive_factor, 3),
-        "effective_supply": effective_supply,
-        "pricing_source": pricing_source,
-        "pricing_degraded": pricing_degraded,
-        "pricing_status_message": pricing_status_message,
-        "exchange_available": not pricing_degraded,
-        # 个人兑换情况
-        "today_count": today_count,
-        "manor_silver": manor.silver,
-    }
+    return get_bank_info_entry(manor, service_module=sys.modules[__name__])

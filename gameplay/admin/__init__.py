@@ -23,7 +23,6 @@ from ..models import (
     WorkAssignment,
     WorkTemplate,
 )
-from ..tasks.global_mail import enqueue_global_mail_backfill  # noqa: F401 – re-exported for monkeypatch compatibility
 
 apply_common_field_labels(
     Manor,

@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from django.db.models import F
-from django.utils import timezone
-
 from gameplay.models import Manor
 
 
@@ -42,28 +39,9 @@ def lock_purchase_parties(*, manor_model, buyer_pk: int, seller_pk: int | None):
 
 def grant_listing_item_to_buyer_locked(
     *,
-    inventory_item_model,
     buyer_locked: Manor,
     item_template,
     quantity: int,
+    grant_item_locked,
 ) -> None:
-    inventory_item = (
-        inventory_item_model.objects.select_for_update()
-        .filter(
-            manor=buyer_locked,
-            template=item_template,
-            storage_location=inventory_item_model.StorageLocation.WAREHOUSE,
-        )
-        .first()
-    )
-    if inventory_item:
-        inventory_item_model.objects.filter(pk=inventory_item.pk).update(
-            quantity=F("quantity") + quantity, updated_at=timezone.now()
-        )
-        return
-    inventory_item_model.objects.create(
-        manor=buyer_locked,
-        template=item_template,
-        storage_location=inventory_item_model.StorageLocation.WAREHOUSE,
-        quantity=quantity,
-    )
+    grant_item_locked(buyer_locked, item_key=item_template.key, quantity=quantity)

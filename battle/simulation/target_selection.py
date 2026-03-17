@@ -12,7 +12,7 @@ from .types import AttackSkill, _SelectedAttackTargets
 from .utils import alive
 
 if TYPE_CHECKING:
-    from ..combatants import Combatant
+    from ..combatants_pkg.core import Combatant
 
 
 def is_ranged_attack(actor: "Combatant", round_priority: int) -> bool:

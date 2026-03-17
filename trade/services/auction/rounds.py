@@ -8,11 +8,10 @@ from datetime import timedelta
 from typing import Any, Callable, Dict, List, Optional
 
 from django.core.cache import cache
-from django.db import IntegrityError, transaction
-from django.db.models import F
+from django.db import DatabaseError, IntegrityError, transaction
 from django.utils import timezone
 
-from gameplay.models import InventoryItem, ItemTemplate, Manor
+from gameplay.models import ItemTemplate, Manor
 from trade.models import AuctionBid, AuctionRound, AuctionSlot, FrozenGoldBar
 from trade.services.auction.bidding import get_slot_ranking
 from trade.services.auction.constants import (
@@ -29,9 +28,19 @@ from trade.services.auction_config import (
     get_auction_settings,
     get_enabled_auction_items,
 )
-from trade.services.trade_platform import consume_inventory_item_for_manor_locked, create_message, notify_user
+from trade.services.cache_resilience import best_effort_cache_add, best_effort_cache_delete, best_effort_cache_get
+from trade.services.trade_platform import (
+    add_item_to_inventory_locked,
+    consume_inventory_item_for_manor_locked,
+    create_message,
+    notify_user,
+)
 
 logger = logging.getLogger(__name__)
+
+
+AUCTION_INFRASTRUCTURE_EXCEPTIONS = (DatabaseError, ConnectionError, OSError, TimeoutError)
+AUCTION_CACHE_COMPONENT = "auction_cache"
 
 
 def _safe_int(value, default: int) -> int:
@@ -41,28 +50,37 @@ def _safe_int(value, default: int) -> int:
         return default
 
 
-def _safe_cache_add(key: str, value: str, timeout: int) -> bool:
-    try:
-        return bool(cache.add(key, value, timeout=timeout))
-    except Exception as exc:
-        logger.error("cache.add failed for key=%s, fail-closed lock path: %s", key, exc, exc_info=True)
-        # 安全优先：缓存异常时不放行，避免无锁并发导致重复创建/结算。
-        return False
+def _safe_cache_add(key: str, value: Any, timeout: int) -> bool:
+    return best_effort_cache_add(
+        cache,
+        key,
+        value,
+        timeout,
+        logger=logger,
+        component=AUCTION_CACHE_COMPONENT,
+        infrastructure_exceptions=AUCTION_INFRASTRUCTURE_EXCEPTIONS,
+    )
 
 
-def _safe_cache_get(key: str, default=None):
-    try:
-        return cache.get(key, default)
-    except Exception as exc:
-        logger.warning("cache.get failed for key=%s: %s", key, exc, exc_info=True)
-        return default
+def _safe_cache_get(key: str, default: Any = None) -> Any:
+    return best_effort_cache_get(
+        cache,
+        key,
+        default,
+        logger=logger,
+        component=AUCTION_CACHE_COMPONENT,
+        infrastructure_exceptions=AUCTION_INFRASTRUCTURE_EXCEPTIONS,
+    )
 
 
 def _safe_cache_delete(key: str) -> None:
-    try:
-        cache.delete(key)
-    except Exception as exc:
-        logger.warning("cache.delete failed for key=%s: %s", key, exc, exc_info=True)
+    best_effort_cache_delete(
+        cache,
+        key,
+        logger=logger,
+        component=AUCTION_CACHE_COMPONENT,
+        infrastructure_exceptions=AUCTION_INFRASTRUCTURE_EXCEPTIONS,
+    )
 
 
 def _safe_notify_user(user_id: int, payload: dict, *, log_context: str) -> None:
@@ -508,12 +526,4 @@ def _grant_auction_item_directly(manor: Manor, item_template: ItemTemplate, quan
         return
 
     with transaction.atomic():
-        inventory_item, _created = InventoryItem.objects.select_for_update().get_or_create(
-            manor=manor,
-            template=item_template,
-            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-            defaults={"quantity": 0},
-        )
-        InventoryItem.objects.filter(pk=inventory_item.pk).update(
-            quantity=F("quantity") + quantity, updated_at=timezone.now()
-        )
+        add_item_to_inventory_locked(manor, item_template.key, quantity)

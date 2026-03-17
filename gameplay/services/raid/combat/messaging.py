@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from gameplay.services.raid import combat as combat_pkg
-
 if TYPE_CHECKING:
     from ....models import RaidRun
 
 from ...utils.messages import create_message
+from .config import PVPConstants
 from .loot import _format_battle_rewards_description, _format_capture_description, _format_loot_description
 from .troops import _normalize_mapping, _normalize_positive_int_mapping
 
@@ -22,7 +21,7 @@ def _send_raid_battle_messages(run: RaidRun) -> None:
     loot_items = _normalize_positive_int_mapping(run.loot_items)
     battle_rewards_desc = _format_battle_rewards_description(battle_rewards)
     capture_desc = _format_capture_description(battle_rewards.get("capture"))
-    defeat_protection_seconds = int(getattr(combat_pkg.PVPConstants, "RAID_DEFEAT_PROTECTION_SECONDS", 1800) or 1800)
+    defeat_protection_seconds = int(getattr(PVPConstants, "RAID_DEFEAT_PROTECTION_SECONDS", 1800) or 1800)
     defeat_protection_minutes = max(1, defeat_protection_seconds // 60)
 
     # 进攻方消息

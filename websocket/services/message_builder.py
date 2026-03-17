@@ -1,4 +1,4 @@
-"""Message builder – constructs outgoing world chat message dicts."""
+"""Message builder - constructs outgoing world chat message dicts."""
 
 from __future__ import annotations
 
@@ -14,10 +14,10 @@ _re_control_chars = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
 def _now_ts() -> float:
-    # Keep backwards-compatible monkeypatching via `websocket.consumers.time.time`.
-    from websocket import consumers as consumers_module
+    # Preserve test monkeypatching via `websocket.consumers.time.time`.
+    from websocket.consumers import time as consumers_time
 
-    return float(consumers_module.time.time())
+    return float(consumers_time.time())
 
 
 def normalize_text(text: str) -> str:

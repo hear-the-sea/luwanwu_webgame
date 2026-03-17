@@ -72,7 +72,7 @@ def test_global_mail_campaign_admin_save_model_enqueues_backfill_with_batch(monk
         enqueued.append((campaign_id, batch_size))
         return SimpleNamespace(id="task-admin-save")
 
-    monkeypatch.setattr("gameplay.admin.enqueue_global_mail_backfill", _fake_enqueue)
+    monkeypatch.setattr("gameplay.admin.messages.enqueue_global_mail_backfill", _fake_enqueue)
     monkeypatch.setattr(admin_obj, "message_user", lambda _request, message, **_kwargs: messages.append(str(message)))
 
     form = GlobalMailCampaignForm(
@@ -122,7 +122,7 @@ def test_global_mail_campaign_admin_actions_enqueue_and_toggle(monkeypatch):
         enqueued_ids.append(campaign_id)
         return SimpleNamespace(id=f"task-{campaign_id}")
 
-    monkeypatch.setattr("gameplay.admin.enqueue_global_mail_backfill", _fake_enqueue)
+    monkeypatch.setattr("gameplay.admin.messages.enqueue_global_mail_backfill", _fake_enqueue)
     monkeypatch.setattr(admin_obj, "message_user", lambda _request, message, **_kwargs: messages.append(str(message)))
 
     queryset = GlobalMailCampaign.objects.filter(pk__in=[campaign_a.pk, campaign_b.pk]).order_by("pk")

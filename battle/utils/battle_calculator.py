@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, Dict, List
 from common.utils.random_utils import binomial_sample
 
 if TYPE_CHECKING:
-    from ..combatants import Combatant
+    from ..combatants_pkg.core import Combatant
 
 
 # 属性映射表

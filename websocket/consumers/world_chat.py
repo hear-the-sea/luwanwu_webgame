@@ -46,11 +46,11 @@ WORLD_CHAT_EXPECTED_INFRASTRUCTURE_ERRORS = (
 
 
 def _now_ts() -> float:
-    # Keep backwards-compatible monkeypatching via `websocket.consumers.time.time`.
+    # Preserve test monkeypatching via `websocket.consumers.time.time`.
     # Import inside the helper to avoid circular imports at module import time.
-    from websocket import consumers as consumers_module
+    from websocket.consumers import time as consumers_time
 
-    return float(consumers_module.time.time())
+    return float(consumers_time.time())
 
 
 class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer):

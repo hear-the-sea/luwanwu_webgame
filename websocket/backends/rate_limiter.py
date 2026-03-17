@@ -43,10 +43,10 @@ return {1, 0}
 
 
 def _now_ts() -> float:
-    # Keep backwards-compatible monkeypatching via `websocket.consumers.time.time`.
-    from websocket import consumers as consumers_module
+    # Preserve test monkeypatching via `websocket.consumers.time.time`.
+    from websocket.consumers import time as consumers_time
 
-    return float(consumers_module.time.time())
+    return float(consumers_time.time())
 
 
 def _direct_rate_limit_sync(

@@ -1,8 +1,41 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 from trade.services import market_notification_helpers
+
+
+def test_safe_send_market_message_returns_false_on_exception():
+    logger = MagicMock()
+
+    result = market_notification_helpers.safe_send_market_message(
+        create_message_func=lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("mail down")),
+        logger=logger,
+        log_message="market create_message failed",
+        manor=SimpleNamespace(id=1),
+        kind="system",
+        title="t",
+        body="b",
+    )
+
+    assert result is False
+    logger.warning.assert_called_once()
+
+
+def test_safe_send_market_notification_swallows_exception():
+    logger = MagicMock()
+
+    market_notification_helpers.safe_send_market_notification(
+        notify_user_func=lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("notify down")),
+        logger=logger,
+        user_id=9,
+        payload={"kind": "market_sold"},
+        log_context="market sold notification",
+        log_message="market notify_user failed",
+    )
+
+    logger.warning.assert_called_once()
 
 
 def test_send_purchase_notifications_returns_mail_flags_and_notifies_seller():
@@ -90,3 +123,17 @@ def test_build_cancel_listing_result_returns_expected_shape():
         "item_name": "铁甲",
         "quantity": 3,
     }
+
+
+def test_restore_cancelled_listing_inventory_delegates_to_inventory_platform():
+    calls: list[tuple[object, str, int]] = []
+    manor = SimpleNamespace(id=7)
+    listing = SimpleNamespace(item_template=SimpleNamespace(key="equip_tiejia"), quantity=3)
+
+    market_notification_helpers.restore_cancelled_listing_inventory(
+        manor=manor,
+        listing=listing,
+        grant_item_locked=lambda locked_manor, *, item_key, quantity: calls.append((locked_manor, item_key, quantity)),
+    )
+
+    assert calls == [(manor, "equip_tiejia", 3)]

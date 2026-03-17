@@ -6,6 +6,8 @@ from django.db import transaction
 from django.db.models import QuerySet
 from django.utils import timezone
 
+from . import market_notification_helpers as _market_notification_helpers
+
 
 def normalize_expire_limit(limit: int | None) -> int | None:
     if limit is None:
@@ -104,30 +106,23 @@ def expire_listings_queryset(
                 listing.delete()
                 count += 1
 
-            try:
-                create_message_func(**message_payload)
-            except Exception as exc:
-                logger.warning(
-                    "market create_message failed: listing_id=%s seller_id=%s error=%s",
-                    listing_id,
-                    getattr(seller, "id", None),
-                    exc,
-                    exc_info=True,
-                )
+            _market_notification_helpers.safe_send_market_message(
+                create_message_func=create_message_func,
+                logger=logger,
+                log_message=(
+                    f"market create_message failed: listing_id={listing_id} " f"seller_id={getattr(seller, 'id', None)}"
+                ),
+                **message_payload,
+            )
 
-            try:
-                notify_user_func(
-                    seller.user_id,
-                    notify_payload,
-                    log_context="market expired notification",
-                )
-            except Exception as exc:
-                logger.warning(
-                    "market notify_user failed: user_id=%s error=%s",
-                    seller.user_id,
-                    exc,
-                    exc_info=True,
-                )
+            _market_notification_helpers.safe_send_market_notification(
+                notify_user_func=notify_user_func,
+                logger=logger,
+                user_id=seller.user_id,
+                payload=notify_payload,
+                log_context="market expired notification",
+                log_message="market notify_user failed",
+            )
         except Exception as exc:
             logger.exception("%s %s 时出错: %s", log_label, listing_id, exc)
             continue

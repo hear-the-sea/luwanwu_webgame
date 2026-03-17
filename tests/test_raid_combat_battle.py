@@ -196,7 +196,7 @@ def test_apply_defeat_protection_sets_defender_until(django_user_model):
     combat_battle._apply_defeat_protection(run, is_attacker_victory=True, now=now)
 
     defender.refresh_from_db()
-    expected = now + timedelta(seconds=combat_battle.combat_pkg.PVPConstants.RAID_DEFEAT_PROTECTION_SECONDS)
+    expected = now + timedelta(seconds=combat_battle.PVPConstants.RAID_DEFEAT_PROTECTION_SECONDS)
     assert defender.defeat_protection_until is not None
     assert abs((defender.defeat_protection_until - expected).total_seconds()) <= 1
 

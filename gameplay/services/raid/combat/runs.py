@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+import sys
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from django.db import transaction
@@ -12,24 +13,46 @@ from django.utils import timezone
 
 from common.utils.celery import safe_apply_async, safe_apply_async_with_dedup
 from gameplay.services.battle_snapshots import build_guest_battle_snapshots
-from gameplay.services.raid import combat as combat_pkg
 from guests.models import Guest, GuestStatus
 
 from ....models import Manor, RaidRun, ResourceEvent
 from ...utils.messages import create_message
-from .finalize import finalize_raid as _finalize_raid_command
+from .config import PVPConstants
 from .loot import _grant_loot_items
 from .raid_inputs import (
     _load_and_validate_attacker_guests,
     _normalize_and_validate_raid_loadout,
     _validate_and_normalize_raid_inputs,
 )
-from .refresh import refresh_raid_runs as _refresh_raid_runs_command
 from .refresh_flow import collect_due_raid_run_ids, dispatch_async_raid_refresh, process_due_raid_run_ids
 from .retreat import can_raid_retreat as _can_raid_retreat_command
 from .retreat import finalize_raid_retreat as _finalize_raid_retreat_command
 from .retreat import request_raid_retreat as _request_raid_retreat_command
-from .start import start_raid as _start_raid_command
+from .run_facade import finalize_raid_entry
+from .run_facade import refresh_raid_runs_entry as facade_refresh_raid_runs_entry
+from .run_facade import start_raid_entry
+from .run_persistence import create_raid_run_record as persistence_create_raid_run_record
+from .run_persistence import get_active_raids as persistence_get_active_raids
+from .run_persistence import get_raid_history as persistence_get_raid_history
+from .run_persistence import (
+    invalidate_recent_attacks_cache_on_commit as persistence_invalidate_recent_attacks_cache_on_commit,
+)
+from .run_persistence import lock_manor_pair as persistence_lock_manor_pair
+from .run_persistence import recheck_can_attack_target as persistence_recheck_can_attack_target
+from .run_runtime import can_raid_retreat_entry
+from .run_runtime import import_raid_refresh_tasks as runtime_import_raid_refresh_tasks
+from .run_runtime import (
+    load_locked_attacker,
+    load_locked_raid_run,
+    request_raid_retreat_entry,
+    schedule_raid_retreat_completion_entry,
+)
+from .run_runtime import try_dispatch_raid_refresh_task as runtime_try_dispatch_raid_refresh_task
+from .run_side_effects import (
+    dispatch_raid_battle_task_best_effort,
+    schedule_raid_retreat_completion_best_effort,
+    send_raid_incoming_message,
+)
 from .travel import calculate_raid_travel_time, get_active_raid_count
 
 # Import troop management helpers (moved to troop_ops, re-exported for callers).
@@ -50,45 +73,55 @@ logger = logging.getLogger(__name__)
 _REFRESH_DISPATCH_DEDUP_SECONDS = 5
 
 
+# Dynamic facade assembly in run_facade.py resolves these names from this module at runtime.
+_FACADE_EXPORTS = (
+    _validate_and_normalize_raid_inputs,
+    PVPConstants,
+    _load_and_validate_attacker_guests,
+    _normalize_and_validate_raid_loadout,
+    calculate_raid_travel_time,
+    get_active_raid_count,
+    _grant_loot_items,
+    ResourceEvent,
+    collect_due_raid_run_ids,
+    dispatch_async_raid_refresh,
+    process_due_raid_run_ids,
+)
+
+
 def _try_dispatch_raid_refresh_task(task: Any, run_id: int, stage: str) -> bool:
-    return safe_apply_async_with_dedup(
+    return runtime_try_dispatch_raid_refresh_task(
         task,
-        dedup_key=f"pvp:refresh_dispatch:raid:{stage}:{run_id}",
-        dedup_timeout=_REFRESH_DISPATCH_DEDUP_SECONDS,
-        args=[run_id],
-        countdown=0,
+        run_id,
+        stage,
+        safe_apply_async_with_dedup=safe_apply_async_with_dedup,
         logger=logger,
-        log_message=f"raid refresh dispatch failed: stage={stage} run_id={run_id}",
+        dedup_seconds=_REFRESH_DISPATCH_DEDUP_SECONDS,
     )
 
 
 def _import_raid_refresh_tasks() -> tuple[Any, Any]:
-    from gameplay.tasks import complete_raid_task, process_raid_battle_task
-
-    return complete_raid_task, process_raid_battle_task
+    return runtime_import_raid_refresh_tasks()
 
 
 def _lock_manor_pair(attacker_id: int, defender_id: int) -> tuple[Manor, Manor]:
-    """Lock attacker/defender rows in a stable order to avoid deadlocks."""
-    ids = [attacker_id] if attacker_id == defender_id else sorted([attacker_id, defender_id])
-    locked = {m.pk: m for m in Manor.objects.select_for_update().filter(pk__in=ids).order_by("pk")}
-    attacker = locked.get(attacker_id)
-    defender = locked.get(defender_id)
-    if attacker is None or defender is None:
-        raise ValueError("目标庄园不存在")
-    return attacker, defender
+    return persistence_lock_manor_pair(attacker_id, defender_id, manor_model=Manor)
 
 
 def _recheck_can_attack_target(attacker: Manor, defender: Manor, now: datetime) -> tuple[bool, str]:
     from ..utils import can_attack_target
 
-    return can_attack_target(attacker, defender, now=now, use_cached_recent_attacks=False)
+    return persistence_recheck_can_attack_target(attacker, defender, now, can_attack_target=can_attack_target)
 
 
 def _invalidate_recent_attacks_cache_on_commit(defender_id: int) -> None:
     from ..utils import invalidate_recent_attacks_cache
 
-    transaction.on_commit(lambda: invalidate_recent_attacks_cache(defender_id))
+    persistence_invalidate_recent_attacks_cache_on_commit(
+        defender_id,
+        on_commit=transaction.on_commit,
+        invalidate_recent_attacks_cache=invalidate_recent_attacks_cache,
+    )
 
 
 def _create_raid_run_record(
@@ -98,84 +131,44 @@ def _create_raid_run_record(
     loadout: Dict[str, int],
     travel_time: int,
 ) -> RaidRun:
-    for guest in guests:
-        guest.status = GuestStatus.DEPLOYED
-    Guest.objects.bulk_update(guests, ["status"])
-
-    now = timezone.now()
-    guest_snapshots = build_guest_battle_snapshots(guests, include_identity=True)
-    run = RaidRun.objects.create(
-        attacker=attacker,
-        defender=defender,
-        guest_snapshots=guest_snapshots,
-        troop_loadout=loadout,
-        status=RaidRun.Status.MARCHING,
-        travel_time=travel_time,
-        battle_at=now + timedelta(seconds=travel_time),
-        return_at=now + timedelta(seconds=travel_time * 2),
+    return persistence_create_raid_run_record(
+        attacker,
+        defender,
+        guests,
+        loadout,
+        travel_time,
+        guest_model=Guest,
+        deployed_status=GuestStatus.DEPLOYED,
+        build_guest_battle_snapshots=build_guest_battle_snapshots,
+        raid_run_model=RaidRun,
+        now_func=timezone.now,
     )
-    run.guests.set(guests)
-    return run
 
 
 def _dispatch_raid_battle_task(run: RaidRun, travel_time: int) -> None:
-    def _fallback_sync_when_due() -> None:
-        if travel_time > 0:
-            return
-        logger.warning(
-            "process_raid_battle_task dispatch failed for due raid; processing synchronously: run_id=%s", run.id
-        )
-        from .battle import process_raid_battle
+    from .battle import process_raid_battle
 
-        process_raid_battle(run)
-
-    try:
-        from gameplay.tasks import process_raid_battle_task
-    except Exception as exc:
-        logger.warning(
-            "process_raid_battle_task dispatch failed: run_id=%s error=%s",
-            run.id,
-            exc,
-            exc_info=True,
-        )
-        _fallback_sync_when_due()
-        return
-
-    dispatched = safe_apply_async(
-        process_raid_battle_task,
-        args=[run.id],
-        countdown=travel_time,
+    dispatch_raid_battle_task_best_effort(
+        run,
+        travel_time,
         logger=logger,
-        log_message="process_raid_battle_task dispatch failed",
+        import_process_raid_battle_task=lambda: __import__(
+            "gameplay.tasks", fromlist=["process_raid_battle_task"]
+        ).process_raid_battle_task,
+        safe_apply_async=safe_apply_async,
+        process_raid_battle=process_raid_battle,
     )
-    if not dispatched:
-        logger.error(
-            "process_raid_battle_task dispatch returned False; raid battle may not execute",
-            extra={
-                "task_name": "process_raid_battle_task",
-                "run_id": run.id,
-                "attacker_id": getattr(run, "attacker_id", None),
-                "defender_id": getattr(run, "defender_id", None),
-            },
-        )
-        _fallback_sync_when_due()
 
 
 # ============ Public API: raid lifecycle ============
 
 
 def _load_locked_raid_run(run_pk: int) -> RaidRun | None:
-    return (
-        RaidRun.objects.select_for_update()
-        .select_related("attacker", "defender", "battle_report")
-        .prefetch_related("guests")
-        .filter(pk=run_pk)
-        .first()
-    )
+    return load_locked_raid_run(raid_run_model=RaidRun, run_pk=run_pk)
 
 
 def _load_locked_attacker(attacker_id: int) -> Manor:
-    return Manor.objects.select_for_update().get(pk=attacker_id)
+    return load_locked_attacker(manor_model=Manor, attacker_id=attacker_id)
 
 
 def start_raid(
@@ -198,47 +191,18 @@ def start_raid(
         ValueError: 无法发起踢馆时
     """
     del seed
-    return _start_raid_command(
+    return start_raid_entry(
         attacker,
         defender,
         guest_ids,
         troop_loadout,
-        validate_and_normalize_inputs=_validate_and_normalize_raid_inputs,
-        transaction_atomic=transaction.atomic,
-        lock_manor_pair=_lock_manor_pair,
-        now_func=timezone.now,
-        recheck_can_attack_target=_recheck_can_attack_target,
-        get_active_raid_count=get_active_raid_count,
-        raid_max_concurrent=combat_pkg.PVPConstants.RAID_MAX_CONCURRENT,
-        load_and_validate_attacker_guests=_load_and_validate_attacker_guests,
-        normalize_and_validate_raid_loadout=_normalize_and_validate_raid_loadout,
-        deduct_troops=_deduct_troops,
-        calculate_raid_travel_time=calculate_raid_travel_time,
-        create_raid_run_record=_create_raid_run_record,
-        invalidate_recent_attacks_cache_on_commit=_invalidate_recent_attacks_cache_on_commit,
-        send_raid_incoming_message=_send_raid_incoming_message,
-        dispatch_raid_battle_task=_dispatch_raid_battle_task,
-        logger=logger,
+        service_module=sys.modules[__name__],
     )
 
 
 def _send_raid_incoming_message(run: RaidRun) -> None:
     """发送来袭警报消息"""
-    battle_at = run.battle_at
-    arrive_time = battle_at.strftime("%Y-%m-%d %H:%M:%S") if battle_at else "未知"
-
-    body = f"""来自 {run.attacker.location_display} 的 {run.attacker.display_name} 正在向你发起进攻！
-
-预计抵达时间：{arrive_time}
-
-请立即做好防守准备！"""
-
-    create_message(
-        manor=run.defender,
-        kind="system",
-        title="紧急警报 - 敌军来袭！",
-        body=body,
-    )
+    send_raid_incoming_message(run, create_message=create_message)
 
 
 def finalize_raid(run: RaidRun, now: Optional[datetime] = None) -> None:
@@ -249,48 +213,23 @@ def finalize_raid(run: RaidRun, now: Optional[datetime] = None) -> None:
         run: 踢馆记录
         now: 当前时间（可选）
     """
-    from gameplay.services.resources import grant_resources_locked
-
-    _finalize_raid_command(
-        run,
-        now=now,
-        load_locked_raid_run=_load_locked_raid_run,
-        normalize_positive_int_mapping=_normalize_positive_int_mapping,
-        return_surviving_troops=_return_surviving_troops,
-        load_locked_attacker=_load_locked_attacker,
-        grant_resources_locked=grant_resources_locked,
-        grant_loot_items=_grant_loot_items,
-        battle_reward_reason=ResourceEvent.Reason.BATTLE_REWARD,
-    )
+    finalize_raid_entry(run, now=now, service_module=sys.modules[__name__])
 
 
 def _schedule_raid_retreat_completion(run_id: int, countdown: int) -> None:
-    try:
-        from gameplay.tasks import complete_raid_task
-    except Exception as exc:
-        logger.warning(
-            "complete_raid_task dispatch failed for retreat: run_id=%s error=%s",
-            run_id,
-            exc,
-            exc_info=True,
-        )
-        return
-
-    dispatched = safe_apply_async(
-        complete_raid_task,
-        args=[run_id],
-        countdown=countdown,
-        logger=logger,
-        log_message="complete_raid_task dispatch failed for retreat",
+    schedule_raid_retreat_completion_entry(
+        run_id,
+        countdown,
+        schedule_retreat_completion=lambda scheduled_run_id, scheduled_countdown: schedule_raid_retreat_completion_best_effort(
+            scheduled_run_id,
+            scheduled_countdown,
+            logger=logger,
+            import_complete_raid_task=lambda: __import__(
+                "gameplay.tasks", fromlist=["complete_raid_task"]
+            ).complete_raid_task,
+            safe_apply_async=safe_apply_async,
+        ),
     )
-    if not dispatched:
-        logger.error(
-            "complete_raid_task dispatch returned False after retreat request; raid may remain retreated",
-            extra={
-                "task_name": "complete_raid_task",
-                "run_id": run_id,
-            },
-        )
 
 
 def request_raid_retreat(run: RaidRun) -> None:
@@ -303,8 +242,9 @@ def request_raid_retreat(run: RaidRun) -> None:
     Raises:
         ValueError: 无法撤退时
     """
-    _request_raid_retreat_command(
+    request_raid_retreat_entry(
         run,
+        request_raid_retreat_command=_request_raid_retreat_command,
         raid_run_model=RaidRun,
         schedule_retreat_completion=_schedule_raid_retreat_completion,
     )
@@ -323,49 +263,28 @@ def _finalize_raid_retreat(run: RaidRun, now: Optional[datetime] = None) -> None
 
 def can_raid_retreat(run: RaidRun, now: Optional[datetime] = None) -> bool:
     """判断踢馆是否可以撤退"""
-    return _can_raid_retreat_command(run, marching_status=RaidRun.Status.MARCHING, now=now)
+    return can_raid_retreat_entry(
+        run,
+        can_raid_retreat_command=_can_raid_retreat_command,
+        marching_status=RaidRun.Status.MARCHING,
+        now=now,
+    )
 
 
 def refresh_raid_runs(manor: Manor, *, prefer_async: bool = False) -> None:
     """刷新庄园的踢馆状态（支持异步优先结算）。"""
-    from .battle import process_raid_battle
-
-    _refresh_raid_runs_command(
+    facade_refresh_raid_runs_entry(
         manor,
         prefer_async=prefer_async,
-        now_func=timezone.now,
-        raid_run_model=RaidRun,
-        collect_due_raid_run_ids=collect_due_raid_run_ids,
-        dispatch_async_raid_refresh=dispatch_async_raid_refresh,
-        logger=logger,
-        import_raid_refresh_tasks=_import_raid_refresh_tasks,
-        try_dispatch_raid_refresh_task=_try_dispatch_raid_refresh_task,
-        process_due_raid_run_ids=process_due_raid_run_ids,
-        process_raid_battle=process_raid_battle,
-        finalize_raid=finalize_raid,
+        service_module=sys.modules[__name__],
     )
 
 
 def get_active_raids(manor: Manor) -> List[RaidRun]:
     """获取进行中的踢馆列表"""
-    return list(
-        RaidRun.objects.filter(
-            attacker=manor,
-            status__in=[
-                RaidRun.Status.MARCHING,
-                RaidRun.Status.RETURNING,
-                RaidRun.Status.RETREATED,
-            ],
-        )
-        .select_related("defender", "battle_report")
-        .order_by("-started_at")
-    )
+    return persistence_get_active_raids(manor, raid_run_model=RaidRun)
 
 
 def get_raid_history(manor: Manor, limit: int = 20) -> List[RaidRun]:
     """获取踢馆历史记录"""
-    return list(
-        RaidRun.objects.filter(Q(attacker=manor) | Q(defender=manor))
-        .select_related("attacker", "defender", "battle_report")
-        .order_by("-started_at")[:limit]
-    )
+    return persistence_get_raid_history(manor, raid_run_model=RaidRun, q_object=Q, limit=limit)

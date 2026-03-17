@@ -17,7 +17,7 @@ from .turn_order import determine_turn_order
 from .utils import alive, roll_loot, summarize_losses
 
 if TYPE_CHECKING:
-    from ..combatants import BattleSimulationResult, Combatant
+    from ..combatants_pkg.core import BattleSimulationResult, Combatant
 
 logger = logging.getLogger(__name__)
 
@@ -204,7 +204,7 @@ def simulate_battle(
     drop_table: Dict[str, Any] | None = None,
     max_rounds: int | None = None,
 ) -> "BattleSimulationResult":
-    from ..combatants import BattleSimulationResult
+    from ..combatants_pkg.core import BattleSimulationResult
     from ..constants import MAX_ROUNDS
 
     if max_rounds is None:

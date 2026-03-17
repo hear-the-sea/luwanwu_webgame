@@ -7,26 +7,23 @@ from __future__ import annotations
 import logging
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict
+from typing import TYPE_CHECKING, Dict
 
 from django.conf import settings
-from django.db import transaction
 from django.db.models import QuerySet
 from django.utils import timezone
 
 from core.config import TRADE
 from core.utils.yaml_loader import load_yaml_data
-from gameplay.models import InventoryItem, ItemTemplate, Manor
+from gameplay.models import Manor
 from gameplay.models.items import LEGACY_TOOL_EFFECT_TYPES
 from trade.models import MarketListing, MarketTransaction
+from trade.services import market_commands as _market_commands
 from trade.services import market_notification_helpers as _market_notification_helpers
 from trade.services import market_purchase_helpers as _market_purchase_helpers
 from trade.services.market_expiration import expire_listings_queryset as _expire_listings_queryset_impl
 from trade.services.market_listing_helpers import (
     create_listing_record,
-    decrement_listing_inventory,
-    load_tradeable_item_template,
-    lock_listing_inventory_item,
     normalize_listing_inputs,
     validate_gold_bar_availability,
     validate_listing_inventory,
@@ -34,13 +31,29 @@ from trade.services.market_listing_helpers import (
 )
 from trade.services.market_platform import (
     charge_listing_fee,
+    decrement_market_listing_inventory,
+    get_tradeable_inventory_queryset,
+    grant_market_item_locked,
+    load_market_item_template,
+    lock_market_listing_inventory_item,
     pay_market_purchase,
     send_market_message,
     send_market_notification,
     settle_market_sale_proceeds,
 )
+from trade.services.market_queries import (
+    get_active_listings_queryset,
+    get_expired_listings_queryset,
+    get_market_stats_payload,
+    get_my_listings_queryset,
+    get_user_expired_listings_queryset,
+)
 from trade.services.market_rules import DEFAULT_TRADE_MARKET_RULES
 from trade.services.market_rules import normalize_trade_market_rules as _normalize_trade_market_rules
+from trade.services.market_runtime import expire_listings_queryset_entry, send_purchase_notifications_entry
+
+if TYPE_CHECKING:
+    from gameplay.models import ItemTemplate
 
 logger = logging.getLogger(__name__)
 
@@ -94,22 +107,6 @@ def _safe_int(value, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
-
-
-def _safe_create_message(**kwargs) -> bool:
-    try:
-        send_market_message(**kwargs)
-    except Exception as exc:
-        logger.warning("market create_message failed: %s", exc, exc_info=True)
-        return False
-    return True
-
-
-def _safe_notify_user(user_id: int, payload: dict, *, log_context: str) -> None:
-    try:
-        send_market_notification(user_id, payload, log_context=log_context)
-    except Exception as exc:
-        logger.warning("market notify_user failed: user_id=%s error=%s", user_id, exc, exc_info=True)
 
 
 def get_listing_fee(duration: int) -> int:
@@ -174,71 +171,32 @@ def create_listing(
     Raises:
         ValueError: 验证失败时抛出异常
     """
-    quantity, unit_price, duration = normalize_listing_inputs(quantity, unit_price, duration, safe_int=_safe_int)
+    from .auction_service import get_frozen_gold_bars
 
-    # 验证时长
-    if duration not in LISTING_FEES:
-        raise ValueError(f"无效的上架时长，请选择 {list(LISTING_FEES.keys())}")
-
-    # 获取物品模板
-    item_template = load_tradeable_item_template(item_template_model=ItemTemplate, item_key=item_key)
-
-    # 验证价格
-    validate_listing_price(item_template, unit_price)
-
-    # 验证数量
-    if quantity <= 0:
-        raise ValueError("数量必须大于0")
-
-    # 并发安全的事务处理
-    with transaction.atomic():
-        locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
-        listing_fee = get_listing_fee(duration)
-
-        # 步骤1：消耗手续费（已包含并发安全检查和资源验证）
-        charge_listing_fee(locked_manor, listing_fee)
-
-        # 步骤2：锁定物品库存行并验证数量
-        # IMPORTANT: 必须指定storage_location避免仓库和藏宝阁的同名物品冲突
-        inventory_item = lock_listing_inventory_item(
-            inventory_item_model=InventoryItem,
-            locked_manor=locked_manor,
-            item_template=item_template,
-        )
-        validate_listing_inventory(inventory_item=inventory_item, quantity=quantity)
-
-        # 金条需要特殊检查：考虑拍卖冻结的金条
-        if item_template.key == "gold_bar":
-            from .auction_service import get_frozen_gold_bars
-
-            frozen = get_frozen_gold_bars(manor)
-            validate_gold_bar_availability(inventory_item=inventory_item, quantity=quantity, frozen=frozen)
-
-        # 步骤3：使用F()表达式+条件约束原子性扣减库存
-        # quantity__gte条件确保不会扣成负数（双重保险）
-        decrement_listing_inventory(
-            inventory_item_model=InventoryItem, inventory_item=inventory_item, quantity=quantity
-        )
-
-        # 步骤4：创建挂单记录
-        total_price = validate_listing_total_price(
-            unit_price=unit_price,
-            quantity=quantity,
-            max_total_price=MAX_TOTAL_PRICE,
-        )
-
-        listing = create_listing_record(
-            market_listing_model=MarketListing,
-            locked_manor=locked_manor,
-            item_template=item_template,
-            quantity=quantity,
-            unit_price=unit_price,
-            total_price=total_price,
-            duration=duration,
-            listing_fee=listing_fee,
-        )
-
-    return listing
+    return _market_commands.create_market_listing(
+        manor,
+        item_key,
+        quantity,
+        unit_price,
+        duration,
+        normalize_listing_inputs=normalize_listing_inputs,
+        listing_fees=LISTING_FEES,
+        load_market_item_template=load_market_item_template,
+        validate_listing_price=validate_listing_price,
+        manor_model=Manor,
+        get_listing_fee=get_listing_fee,
+        charge_listing_fee=charge_listing_fee,
+        lock_market_listing_inventory_item=lock_market_listing_inventory_item,
+        get_frozen_gold_bars=get_frozen_gold_bars,
+        validate_gold_bar_availability=validate_gold_bar_availability,
+        validate_listing_inventory=validate_listing_inventory,
+        decrement_market_listing_inventory=decrement_market_listing_inventory,
+        validate_listing_total_price=validate_listing_total_price,
+        create_listing_record=create_listing_record,
+        market_listing_model=MarketListing,
+        max_total_price=MAX_TOTAL_PRICE,
+        safe_int=_safe_int,
+    )
 
 
 def get_active_listings(
@@ -259,25 +217,16 @@ def get_active_listings(
     Returns:
         挂单查询集
     """
-    queryset = MarketListing.objects.filter(
-        status=MarketListing.Status.ACTIVE,
-        expires_at__gt=timezone.now(),
-    ).select_related("seller__user", "item_template")
-
-    if item_template_id:
-        queryset = queryset.filter(item_template_id=item_template_id)
-
-    if category and category != "all":
-        if category in LEGACY_TOOL_EFFECT_TYPES:
-            queryset = queryset.filter(item_template__effect_type__in=LEGACY_TOOL_EFFECT_TYPES)
-        else:
-            queryset = queryset.filter(item_template__effect_type=category)
-
-    if rarity and rarity != "all":
-        queryset = queryset.filter(item_template__rarity=rarity)
-
-    safe_order_by = order_by if order_by in ALLOWED_LISTING_ORDER_BY else "-listed_at"
-    return queryset.order_by(safe_order_by)
+    return get_active_listings_queryset(
+        market_listing_model=MarketListing,
+        now=timezone.now(),
+        order_by=order_by,
+        allowed_order_by=ALLOWED_LISTING_ORDER_BY,
+        legacy_tool_effect_types=LEGACY_TOOL_EFFECT_TYPES,
+        item_template_id=item_template_id,
+        category=category,
+        rarity=rarity,
+    )
 
 
 def purchase_listing(buyer: Manor, listing_id: int) -> MarketTransaction:
@@ -303,76 +252,35 @@ def purchase_listing(buyer: Manor, listing_id: int) -> MarketTransaction:
     Raises:
         ValueError: 验证失败时抛出异常
     """
-    with transaction.atomic():
-        listing = _market_purchase_helpers.get_locked_listing_for_purchase(
-            market_listing_model=MarketListing,
-            listing_id=listing_id,
-        )
-        _market_purchase_helpers.validate_listing_for_purchase(
-            listing,
-            buyer,
-            active_status=MarketListing.Status.ACTIVE,
-        )
-        buyer_locked, seller_locked = _market_purchase_helpers.lock_purchase_parties(
-            manor_model=Manor,
-            buyer_pk=buyer.pk,
-            seller_pk=listing.seller_id,
-        )
-
-        pay_market_purchase(
-            buyer_locked,
-            item_name=listing.item_template.name,
-            total_price=listing.total_price,
-        )
-
-        tax_amount = int(listing.total_price * TRANSACTION_TAX_RATE)
-        seller_received = listing.total_price - tax_amount
-
-        if seller_locked is not None:
-            settle_market_sale_proceeds(
-                seller_locked,
-                item_name=listing.item_template.name,
-                silver_amount=seller_received,
-            )
-
-        now = timezone.now()
-        listing.status = MarketListing.Status.SOLD
-        listing.buyer = buyer_locked
-        listing.sold_at = now
-        listing.save(update_fields=["status", "buyer", "sold_at"])
-
-        transaction_record = MarketTransaction.objects.create(
+    return _market_commands.purchase_market_listing(
+        buyer,
+        listing_id,
+        market_listing_model=MarketListing,
+        market_transaction_model=MarketTransaction,
+        manor_model=Manor,
+        get_locked_listing_for_purchase=_market_purchase_helpers.get_locked_listing_for_purchase,
+        validate_listing_for_purchase=_market_purchase_helpers.validate_listing_for_purchase,
+        lock_purchase_parties=_market_purchase_helpers.lock_purchase_parties,
+        pay_market_purchase=pay_market_purchase,
+        settle_market_sale_proceeds=settle_market_sale_proceeds,
+        grant_listing_item_to_buyer_locked=_market_purchase_helpers.grant_listing_item_to_buyer_locked,
+        grant_market_item_locked=grant_market_item_locked,
+        transaction_tax_rate=TRANSACTION_TAX_RATE,
+        send_purchase_notifications=lambda *, buyer, listing, tax_amount, seller_received: send_purchase_notifications_entry(
+            buyer=buyer,
             listing=listing,
-            buyer=buyer_locked,
-            total_price=listing.total_price,
             tax_amount=tax_amount,
             seller_received=seller_received,
-        )
-
-        _market_purchase_helpers.grant_listing_item_to_buyer_locked(
-            inventory_item_model=InventoryItem,
-            buyer_locked=buyer_locked,
-            item_template=listing.item_template,
-            quantity=listing.quantity,
-        )
-
-    buyer_mail_sent, seller_mail_sent = _market_notification_helpers.send_purchase_notifications(
-        buyer=buyer,
-        listing=listing,
-        tax_amount=tax_amount,
-        seller_received=seller_received,
-        safe_create_message=_safe_create_message,
-        safe_notify_user=_safe_notify_user,
+            send_purchase_notifications=_market_notification_helpers.send_purchase_notifications,
+            safe_send_market_message=_market_notification_helpers.safe_send_market_message,
+            safe_send_market_notification=_market_notification_helpers.safe_send_market_notification,
+            create_message_func=send_market_message,
+            notify_user_func=send_market_notification,
+            logger=logger,
+        ),
     )
 
-    transaction_record.buyer_mail_sent = buyer_mail_sent
-    transaction_record.seller_mail_sent = seller_mail_sent
-    transaction_record.save(update_fields=["buyer_mail_sent", "seller_mail_sent"])
 
-    return transaction_record
-
-
-@transaction.atomic
 def cancel_listing(manor: Manor, listing_id: int) -> Dict:
     """
     取消挂单（仅限卖家本人）
@@ -387,40 +295,24 @@ def cancel_listing(manor: Manor, listing_id: int) -> Dict:
     Raises:
         ValueError: 验证失败时抛出异常
     """
-    listing = (
-        MarketListing.objects.select_for_update()
-        .select_related("item_template")
-        .filter(id=listing_id, seller=manor)
-        .first()
+    return _market_commands.cancel_market_listing(
+        manor,
+        listing_id,
+        market_listing_model=MarketListing,
+        restore_cancelled_listing_inventory=_market_notification_helpers.restore_cancelled_listing_inventory,
+        build_cancel_listing_result=_market_notification_helpers.build_cancel_listing_result,
+        grant_market_item_locked=grant_market_item_locked,
     )
-
-    if not listing:
-        raise ValueError("挂单不存在或无权取消")
-
-    if listing.status != MarketListing.Status.ACTIVE:
-        raise ValueError("该挂单已经不在售状态，无法取消")
-
-    listing.status = MarketListing.Status.CANCELLED
-    listing.save(update_fields=["status"])
-
-    _market_notification_helpers.restore_cancelled_listing_inventory(
-        inventory_item_model=InventoryItem,
-        manor=manor,
-        listing=listing,
-    )
-    return _market_notification_helpers.build_cancel_listing_result(listing=listing)
 
 
 def _expire_listings_queryset(expired_listings: QuerySet, log_label: str, limit: int | None = None) -> int:
-    return _expire_listings_queryset_impl(
+    return expire_listings_queryset_entry(
         expired_listings,
         log_label,
+        expire_listings_queryset_impl=_expire_listings_queryset_impl,
         market_listing_model=MarketListing,
-        return_inventory_func=lambda *, manor, listing: _market_notification_helpers.restore_cancelled_listing_inventory(
-            inventory_item_model=InventoryItem,
-            manor=manor,
-            listing=listing,
-        ),
+        restore_cancelled_listing_inventory=_market_notification_helpers.restore_cancelled_listing_inventory,
+        grant_market_item_locked=grant_market_item_locked,
         create_message_func=send_market_message,
         notify_user_func=send_market_notification,
         logger=logger,
@@ -438,10 +330,7 @@ def expire_listings(limit: int = 1000) -> int:
     Returns:
         处理的挂单数量
     """
-    expired_listings = MarketListing.objects.filter(
-        status=MarketListing.Status.ACTIVE,
-        expires_at__lte=timezone.now(),
-    )
+    expired_listings = get_expired_listings_queryset(market_listing_model=MarketListing, now=timezone.now())
     return _expire_listings_queryset(expired_listings, "处理过期挂单", limit=limit)
 
 
@@ -455,10 +344,8 @@ def expire_user_listings(manor: Manor) -> int:
     Returns:
         处理的挂单数量
     """
-    expired_listings = MarketListing.objects.filter(
-        seller=manor,
-        status=MarketListing.Status.ACTIVE,
-        expires_at__lte=timezone.now(),
+    expired_listings = get_user_expired_listings_queryset(
+        market_listing_model=MarketListing, manor=manor, now=timezone.now()
     )
     return _expire_listings_queryset(expired_listings, f"处理用户 {manor.id} 的过期挂单")
 
@@ -474,12 +361,7 @@ def get_my_listings(manor: Manor, status: str = None) -> QuerySet:
     Returns:
         挂单查询集
     """
-    queryset = MarketListing.objects.filter(seller=manor).select_related("item_template", "buyer__user")
-
-    if status and status != "all":
-        queryset = queryset.filter(status=status)
-
-    return queryset.order_by("-listed_at")
+    return get_my_listings_queryset(market_listing_model=MarketListing, manor=manor, status=status)
 
 
 def get_market_stats() -> Dict:
@@ -489,14 +371,11 @@ def get_market_stats() -> Dict:
     Returns:
         统计信息字典
     """
-    active_count = MarketListing.objects.filter(status=MarketListing.Status.ACTIVE).count()
-
-    sold_today = MarketTransaction.objects.filter(transaction_at__date=timezone.now().date()).count()
-
-    return {
-        "active_count": active_count,
-        "sold_today": sold_today,
-    }
+    return get_market_stats_payload(
+        market_listing_model=MarketListing,
+        market_transaction_model=MarketTransaction,
+        now=timezone.now(),
+    )
 
 
 def get_tradeable_inventory(manor: Manor) -> QuerySet:
@@ -511,9 +390,4 @@ def get_tradeable_inventory(manor: Manor) -> QuerySet:
     Returns:
         可交易的库存物品查询集
     """
-    return InventoryItem.objects.filter(
-        manor=manor,
-        template__tradeable=True,
-        quantity__gt=0,
-        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-    ).select_related("template")
+    return get_tradeable_inventory_queryset(manor)

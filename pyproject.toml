@@ -96,7 +96,6 @@ ignore_errors = true
 [[tool.mypy.overrides]]
 module = [
     "accounts.utils",
-    "battle.combatants",
     "battle.simulation_core",
     "common.utils.celery",
     "core.middleware.*",

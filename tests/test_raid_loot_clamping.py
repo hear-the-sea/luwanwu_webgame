@@ -4,7 +4,7 @@ from django.db import transaction
 
 from gameplay.models import InventoryItem, ItemTemplate, ResourceEvent
 from gameplay.services.manor.core import ensure_manor
-from gameplay.services.raid.combat import (
+from gameplay.services.raid.combat.loot import (
     _apply_loot,
     _format_battle_rewards_description,
     _format_loot_description,

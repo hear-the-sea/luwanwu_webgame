@@ -7,10 +7,15 @@ from typing import Any, Dict, Iterable, Tuple
 from django.db import IntegrityError
 from django.db.models import F, QuerySet
 
-from gameplay.services.raid import combat as combat_pkg
-
 from ....models import InventoryItem, ItemTemplate, Manor, ResourceEvent
 from ...resources import log_resource_gain
+from .config import (
+    LOOT_ITEM_SAMPLE_BATCH_SIZE,
+    LOOT_ITEM_SAMPLE_MAX_BATCHES,
+    LOOT_ITEM_SMALL_INVENTORY_THRESHOLD,
+    PVPConstants,
+    random,
+)
 from .troops import _coerce_positive_int, _normalize_mapping, _normalize_positive_int_mapping
 
 
@@ -55,17 +60,17 @@ def _parse_loot_candidate(row: Dict[str, Any], loot_items: Dict[str, int]) -> Tu
     if not isinstance(rarity, str):
         rarity = str(rarity)
 
-    rarity_mult = combat_pkg.PVPConstants.RARITY_LOOT_MULTIPLIER.get(rarity, 1.0)
-    loot_chance = combat_pkg.PVPConstants.LOOT_ITEM_BASE_CHANCE * rarity_mult
+    rarity_mult = PVPConstants.RARITY_LOOT_MULTIPLIER.get(rarity, 1.0)
+    loot_chance = PVPConstants.LOOT_ITEM_BASE_CHANCE * rarity_mult
     return template_key, quantity, loot_chance
 
 
 def _roll_loot_quantity(quantity: int) -> int:
     max_qty = min(
-        int(quantity * combat_pkg.PVPConstants.LOOT_ITEM_MAX_QUANTITY_PERCENT),
-        combat_pkg.PVPConstants.LOOT_ITEM_MAX_QUANTITY,
+        int(quantity * PVPConstants.LOOT_ITEM_MAX_QUANTITY_PERCENT),
+        PVPConstants.LOOT_ITEM_MAX_QUANTITY,
     )
-    loot_qty = combat_pkg.random.randint(1, max(1, max_qty))
+    loot_qty = random.randint(1, max(1, max_qty))
     return min(loot_qty, quantity)
 
 
@@ -75,7 +80,7 @@ def _try_loot_from_row(row: Dict[str, Any], loot_items: Dict[str, int]) -> Tuple
         return None
 
     template_key, quantity, loot_chance = candidate
-    if combat_pkg.random.random() >= loot_chance:
+    if random.random() >= loot_chance:
         return None
 
     loot_qty = _roll_loot_quantity(quantity)
@@ -108,21 +113,21 @@ def _collect_loot_from_rows(
 
 def _build_small_inventory_rows(base_qs: QuerySet[InventoryItem]) -> list[Dict[str, Any]]:
     rows: list[Dict[str, Any]] = list(base_qs.values("quantity", "template__key", "template__rarity"))  # type: ignore[arg-type]
-    combat_pkg.random.shuffle(rows)
+    random.shuffle(rows)
     return rows
 
 
 def _iter_sample_batches(base_qs: QuerySet[InventoryItem]) -> Iterable[list[Dict[str, Any]]]:
     seen_ids: set[int] = set()
-    for _ in range(combat_pkg.LOOT_ITEM_SAMPLE_MAX_BATCHES):
+    for _ in range(LOOT_ITEM_SAMPLE_MAX_BATCHES):
         remaining_qs = base_qs.exclude(id__in=seen_ids) if seen_ids else base_qs
         remaining_count = remaining_qs.count()
         if remaining_count <= 0:
             break
 
-        batch_size = min(combat_pkg.LOOT_ITEM_SAMPLE_BATCH_SIZE, remaining_count)
+        batch_size = min(LOOT_ITEM_SAMPLE_BATCH_SIZE, remaining_count)
         max_offset = max(0, remaining_count - batch_size)
-        offset = combat_pkg.random.randint(0, max_offset) if max_offset else 0
+        offset = random.randint(0, max_offset) if max_offset else 0
 
         batch_rows: list[Dict[str, Any]] = list(
             remaining_qs.order_by("id").values("id", "quantity", "template__key", "template__rarity")[  # type: ignore[arg-type]
@@ -135,17 +140,17 @@ def _iter_sample_batches(base_qs: QuerySet[InventoryItem]) -> Iterable[list[Dict
         for row in batch_rows:
             seen_ids.add(int(row["id"]))
 
-        combat_pkg.random.shuffle(batch_rows)
+        random.shuffle(batch_rows)
         yield batch_rows
 
 
 def _calculate_loot_items(base_qs: QuerySet[InventoryItem]) -> Dict[str, int]:
     loot_items: Dict[str, int] = {}
     items_looted = 0
-    max_loot_items = combat_pkg.PVPConstants.LOOT_ITEM_MAX_COUNT
+    max_loot_items = PVPConstants.LOOT_ITEM_MAX_COUNT
 
     total_candidates = base_qs.count()
-    if total_candidates <= combat_pkg.LOOT_ITEM_SMALL_INVENTORY_THRESHOLD:
+    if total_candidates <= LOOT_ITEM_SMALL_INVENTORY_THRESHOLD:
         rows = _build_small_inventory_rows(base_qs)
         _collect_loot_from_rows(rows, loot_items, items_looted=items_looted, max_loot_items=max_loot_items)
         return loot_items
@@ -170,9 +175,9 @@ def _calculate_loot(defender: Manor) -> Tuple[Dict[str, int], Dict[str, int]]:
     Returns:
         (掠夺的资源, 掠夺的物品)
     """
-    loot_percent = combat_pkg.random.uniform(
-        combat_pkg.PVPConstants.LOOT_RESOURCE_MIN_PERCENT,
-        combat_pkg.PVPConstants.LOOT_RESOURCE_MAX_PERCENT,
+    loot_percent = random.uniform(
+        PVPConstants.LOOT_RESOURCE_MIN_PERCENT,
+        PVPConstants.LOOT_RESOURCE_MAX_PERCENT,
     )
     loot_resources = _calculate_resource_loot(defender, loot_percent)
     loot_items = _calculate_loot_items(_build_loot_item_queryset(defender))

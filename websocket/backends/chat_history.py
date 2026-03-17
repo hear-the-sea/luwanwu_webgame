@@ -1,4 +1,4 @@
-"""Chat history backend – Redis-backed storage for world chat messages."""
+"""Chat history backend - Redis-backed storage for world chat messages."""
 
 from __future__ import annotations
 
@@ -36,10 +36,10 @@ return removed
 
 
 def _now_ts() -> float:
-    # Keep backwards-compatible monkeypatching via `websocket.consumers.time.time`.
-    from websocket import consumers as consumers_module
+    # Preserve test monkeypatching via `websocket.consumers.time.time`.
+    from websocket.consumers import time as consumers_time
 
-    return float(consumers_module.time.time())
+    return float(consumers_time.time())
 
 
 def trim_history_by_time_fallback(

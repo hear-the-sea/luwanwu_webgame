@@ -23,7 +23,7 @@ def test_start_raid_concurrent_requests_respect_limit_inside_lock(monkeypatch, d
     attacker = ensure_manor(attacker_user)
     defender = ensure_manor(defender_user)
 
-    monkeypatch.setattr(combat_runs.combat_pkg.PVPConstants, "RAID_MAX_CONCURRENT", 1)
+    monkeypatch.setattr(combat_runs.PVPConstants, "RAID_MAX_CONCURRENT", 1)
     monkeypatch.setattr(
         combat_runs,
         "_validate_and_normalize_raid_inputs",

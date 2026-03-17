@@ -14,7 +14,7 @@ from .types import AttackLogEntry, AttackSkill, AttackType
 from .utils import calculate_dodge_chance
 
 if TYPE_CHECKING:
-    from ..combatants import Combatant
+    from ..combatants_pkg.core import Combatant
 
 
 def _trigger_attack_skills(actor: "Combatant", rng: random.Random) -> list[AttackSkill]:

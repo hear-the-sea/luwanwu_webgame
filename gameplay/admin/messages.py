@@ -1,5 +1,4 @@
 import json
-import sys
 
 from django import forms
 from django.contrib import admin
@@ -10,6 +9,7 @@ from django.utils.html import format_html
 
 from ..models import GlobalMailCampaign, GlobalMailDelivery, Manor, Message
 from ..services.utils.messages import create_message
+from ..tasks.global_mail import enqueue_global_mail_backfill
 
 User = get_user_model()
 
@@ -242,10 +242,9 @@ class GlobalMailCampaignAdmin(admin.ModelAdmin):
 
     @admin.action(description="补发给当前所有玩家（幂等）")
     def backfill_selected_campaigns(self, request, queryset):
-        _enqueue = sys.modules[__package__].enqueue_global_mail_backfill
         queued = 0
         for campaign in queryset:
-            async_result = _enqueue(campaign.id)
+            async_result = enqueue_global_mail_backfill(campaign.id)
             queued += 1
             self.message_user(request, f"活动 {campaign.key} 已提交补发任务（task_id={async_result.id}）")
         if queued > 1:
@@ -254,9 +253,8 @@ class GlobalMailCampaignAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
         if form.cleaned_data.get("send_to_existing_now"):
-            _enqueue = sys.modules[__package__].enqueue_global_mail_backfill
             batch_size = int(form.cleaned_data.get("backfill_batch_size") or 500)
-            async_result = _enqueue(obj.id, batch_size=batch_size)
+            async_result = enqueue_global_mail_backfill(obj.id, batch_size=batch_size)
             self.message_user(
                 request,
                 f"已提交补发任务（task_id={async_result.id}，batch_size={batch_size}）",

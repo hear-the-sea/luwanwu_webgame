@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-from gameplay.services.raid import combat as combat_pkg
 from guests.models import Guest, GuestStatus
 
 from ....models import Manor
+from .config import PVPConstants
 from .travel import get_active_raid_count
 
 
@@ -32,8 +32,8 @@ def _validate_and_normalize_raid_inputs(
         raise ValueError(reason)
 
     active_count = _get_active_raid_count(attacker)
-    if active_count >= combat_pkg.PVPConstants.RAID_MAX_CONCURRENT:
-        raise ValueError(f"同时最多进行 {combat_pkg.PVPConstants.RAID_MAX_CONCURRENT} 次出征")
+    if active_count >= PVPConstants.RAID_MAX_CONCURRENT:
+        raise ValueError(f"同时最多进行 {PVPConstants.RAID_MAX_CONCURRENT} 次出征")
 
     if not guest_ids:
         raise ValueError("请选择至少一名门客")

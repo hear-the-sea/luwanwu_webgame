@@ -28,7 +28,7 @@ from .target_selection import is_ranged_attack
 from .types import AttackSkill, _DamageCalculation
 
 if TYPE_CHECKING:
-    from ..combatants import Combatant
+    from ..combatants_pkg.core import Combatant
 
 
 def _at_least_one(value: int) -> int:

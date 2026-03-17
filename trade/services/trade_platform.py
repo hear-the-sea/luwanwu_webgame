@@ -1,6 +1,12 @@
 from __future__ import annotations
 
 
+def add_item_to_inventory_locked(*args, **kwargs):
+    from gameplay.services.inventory.core import add_item_to_inventory_locked as impl
+
+    return impl(*args, **kwargs)
+
+
 def consume_inventory_item_for_manor_locked(*args, **kwargs):
     from gameplay.services.inventory.core import consume_inventory_item_for_manor_locked as impl
 
@@ -38,6 +44,7 @@ def notify_user(*args, **kwargs):
 
 
 __all__ = [
+    "add_item_to_inventory_locked",
     "consume_inventory_item_for_manor_locked",
     "create_message",
     "get_item_quantity",
