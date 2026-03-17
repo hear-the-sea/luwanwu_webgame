@@ -117,9 +117,15 @@ def test_process_single_guild_production_does_not_mark_timestamp_on_failure(monk
     from guilds.models import Guild, GuildTechnology
     from guilds.tasks import process_single_guild_production
 
+    captured: dict[str, object] = {}
+
     monkeypatch.setattr(
         "guilds.tasks.produce_equipment",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+    monkeypatch.setattr(
+        "common.utils.celery.safe_apply_async",
+        lambda *_args, **kwargs: captured.setdefault("kwargs", kwargs) or True,
     )
 
     founder = django_user_model.objects.create_user(username="g_founder_daily_fail", password="pass")
@@ -129,8 +135,41 @@ def test_process_single_guild_production_does_not_mark_timestamp_on_failure(monk
     result = process_single_guild_production.run(guild.id)
 
     tech.refresh_from_db()
-    assert result == f"processed guild {guild.id}: "
+    assert result == f"processed guild {guild.id}: ; failed_guild_ids={[guild.id]}"
     assert tech.last_production_at is None
+    assert captured["kwargs"]["args"] == [None, [guild.id], 1]
+
+
+@pytest.mark.django_db
+def test_process_single_guild_production_persists_failed_ids_when_retry_dispatch_fails(monkeypatch, django_user_model):
+    from django.core.cache import cache
+
+    from guilds.models import Guild, GuildTechnology
+    from guilds.tasks import (
+        FAILED_GUILD_PRODUCTION_IDS_CACHE_KEY,
+        get_failed_guild_ids,
+        process_single_guild_production,
+    )
+
+    cache.delete(FAILED_GUILD_PRODUCTION_IDS_CACHE_KEY)
+
+    monkeypatch.setattr(
+        "guilds.tasks.produce_equipment",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+    monkeypatch.setattr("common.utils.celery.safe_apply_async", lambda *_args, **_kwargs: False)
+
+    founder = django_user_model.objects.create_user(username="g_founder_dispatch_persist", password="pass")
+    guild = Guild.objects.create(name="G-dispatch-persist", founder=founder, is_active=True)
+    GuildTechnology.objects.create(guild=guild, tech_key="equipment_forge", level=2)
+
+    result = process_single_guild_production.run(guild.id)
+
+    assert result == f"processed guild {guild.id}: ; failed_guild_ids={[guild.id]}"
+    assert cache.get(FAILED_GUILD_PRODUCTION_IDS_CACHE_KEY) == [guild.id]
+    assert get_failed_guild_ids() == [guild.id]
+
+    cache.delete(FAILED_GUILD_PRODUCTION_IDS_CACHE_KEY)
 
 
 @pytest.mark.django_db

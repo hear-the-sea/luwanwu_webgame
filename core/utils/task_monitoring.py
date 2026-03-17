@@ -12,10 +12,11 @@ race condition present in multi-worker deployments.
 
 Key layout::
 
-    TASK_METRICS_CACHE_KEY          → set of known task names  (registry)
-    metrics:celery:{task}:success   → int counter
-    metrics:celery:{task}:failure   → int counter
-    metrics:celery:{task}:retry     → int counter
+    metrics:celery:task_monitoring:index  → Redis set of known task names
+    task_name_registry:{task_name}        → per-task presence marker
+    metrics:celery:{task}:success         → int counter
+    metrics:celery:{task}:failure         → int counter
+    metrics:celery:{task}:retry           → int counter
 
 Usage::
 
@@ -31,6 +32,7 @@ from __future__ import annotations
 import logging
 import threading
 from collections import defaultdict
+from typing import Any
 
 from django.core.cache import cache
 
@@ -38,8 +40,10 @@ from core.utils.degradation import CELERY_TASK_RETRY, record_degradation
 
 logger = logging.getLogger(__name__)
 
-# Registry key: stores a set of task names that have ever been recorded.
+# Legacy/non-Redis registry key: stores a set of known task names.
 TASK_METRICS_CACHE_KEY = "metrics:celery:task_monitoring"
+_TASK_METRICS_REDIS_REGISTRY_KEY = "metrics:celery:task_monitoring:index"
+_TASK_NAME_REGISTRY_KEY_PREFIX = "task_name_registry:"
 
 # Prefix for per-metric atomic counter keys.
 _TASK_METRIC_KEY_PREFIX = "metrics:celery:"
@@ -47,6 +51,7 @@ _TASK_METRIC_KEY_PREFIX = "metrics:celery:"
 # In-process fallback state (used only when cache is unavailable).
 _metrics: dict[str, dict[str, int]] = defaultdict(lambda: {"success": 0, "failure": 0, "retry": 0})
 _metrics_lock = threading.Lock()
+_registry_lock = threading.Lock()
 
 _FIELDS = ("success", "failure", "retry")
 
@@ -70,11 +75,114 @@ def _metric_key(task_name: str, field: str) -> str:
     return f"{_TASK_METRIC_KEY_PREFIX}{task_name}:{field}"
 
 
+def _registry_member_key(task_name: str) -> str:
+    """Return the per-task registry marker cache key."""
+    return f"{_TASK_NAME_REGISTRY_KEY_PREFIX}{task_name}"
+
+
+def _coerce_registry(value: object) -> set[str]:
+    """Normalise a registry cache payload into a task-name set."""
+    if value is None:
+        return set()
+    if isinstance(value, set):
+        return set(value)
+    if isinstance(value, dict):
+        return {str(task_name) for task_name in value.keys()}
+    if isinstance(value, (frozenset, list, tuple)):
+        return {str(task_name) for task_name in value}
+    return set()
+
+
+def _get_redis_registry_client() -> Any | None:
+    # django-redis may return different backend client types; `Any` keeps this helper backend-agnostic.
+    """Return the default Redis client when django-redis is available."""
+    try:
+        from django_redis import get_redis_connection
+    except Exception:
+        return None
+
+    try:
+        return get_redis_connection("default")
+    except NotImplementedError:
+        return None
+    except Exception:
+        logger.warning("Failed to acquire Redis client for task metrics registry", exc_info=True)
+        return None
+
+
+def _decode_redis_value(value: object) -> str:
+    """Decode a Redis set member or key into text."""
+    if isinstance(value, bytes):
+        return value.decode("utf-8")
+    return str(value)
+
+
+def _get_redis_registry_key() -> str:
+    """Return the concrete cache backend key for the Redis registry index."""
+    if hasattr(cache, "make_key"):
+        return cache.make_key(_TASK_METRICS_REDIS_REGISTRY_KEY)
+    return _TASK_METRICS_REDIS_REGISTRY_KEY
+
+
+def _get_redis_registry_member_prefix() -> str:
+    """Return the concrete cache backend prefix for per-task marker keys."""
+    if hasattr(cache, "make_key"):
+        return cache.make_key(_TASK_NAME_REGISTRY_KEY_PREFIX)
+    return _TASK_NAME_REGISTRY_KEY_PREFIX
+
+
+def _get_registry_from_redis() -> set[str] | None:
+    """Return task names from Redis-native registry structures, or None if unavailable."""
+    redis_client = _get_redis_registry_client()
+    if redis_client is None:
+        return None
+
+    registry: set[str] = set()
+    read_succeeded = False
+
+    try:
+        registry.update(_decode_redis_value(value) for value in redis_client.smembers(_get_redis_registry_key()))
+        read_succeeded = True
+    except Exception:
+        logger.warning("Failed to read Redis task metrics registry index", exc_info=True)
+
+    try:
+        prefix = _get_redis_registry_member_prefix()
+        for key in redis_client.scan_iter(match=f"{prefix}*"):
+            member_key = _decode_redis_value(key)
+            if member_key.startswith(prefix):
+                registry.add(member_key[len(prefix) :])
+        read_succeeded = True
+    except Exception:
+        logger.warning("Failed to scan Redis task metrics registry markers", exc_info=True)
+
+    if read_succeeded:
+        return registry
+    return None
+
+
 def _register_task_name(task_name: str) -> None:
     """Add *task_name* to the shared task-name registry."""
+    marker_key = _registry_member_key(task_name)
     try:
-        registry: set[str] = cache.get(TASK_METRICS_CACHE_KEY) or set()
-        if task_name not in registry:
+        cache.add(marker_key, 1, timeout=None)
+    except Exception:
+        logger.warning("Failed to write task metrics registry marker for %s", task_name, exc_info=True)
+
+    redis_client = _get_redis_registry_client()
+    if redis_client is not None:
+        try:
+            redis_client.sadd(_get_redis_registry_key(), task_name)
+            return
+        except Exception:
+            logger.warning("Failed to update Redis task metrics registry index", exc_info=True)
+            return
+
+    try:
+        with _registry_lock:
+            registry = _coerce_registry(cache.get(TASK_METRICS_CACHE_KEY))
+            if task_name in registry:
+                return
             registry.add(task_name)
             cache.set(TASK_METRICS_CACHE_KEY, registry, timeout=None)
     except Exception:
@@ -83,16 +191,12 @@ def _register_task_name(task_name: str) -> None:
 
 def _get_registry() -> set[str] | None:
     """Return the set of known task names, or None on cache error."""
+    redis_registry = _get_registry_from_redis()
+    if redis_registry is not None:
+        return redis_registry
+
     try:
-        value = cache.get(TASK_METRICS_CACHE_KEY)
-        if value is None:
-            return set()
-        if isinstance(value, set):
-            return value
-        # Tolerate legacy dict format written by old code.
-        if isinstance(value, dict):
-            return set(value.keys())
-        return set()
+        return _coerce_registry(cache.get(TASK_METRICS_CACHE_KEY))
     except Exception:
         logger.warning("Failed to read task metrics registry", exc_info=True)
         return None
@@ -109,9 +213,14 @@ def _increment_metric_atomic(task_name: str, field: str) -> None:
     try:
         cache.incr(key, delta=1)
     except ValueError:
-        # Key does not exist yet; initialise it to 1.
+        # Key does not exist yet; initialise it with add() to avoid
+        # a first-write lost-update race across workers.
         try:
-            cache.set(key, 1, timeout=None)
+            if not cache.add(key, 1, timeout=None):
+                try:
+                    cache.incr(key, delta=1)
+                except ValueError:
+                    cache.set(key, 1, timeout=None)
         except Exception:
             logger.warning("Failed to initialise task metric %s.%s", task_name, field, exc_info=True)
             with _metrics_lock:
@@ -188,8 +297,9 @@ def reset_task_metrics() -> None:
         _metrics.clear()
 
     registry = _get_registry() or set()
-    keys_to_delete = [TASK_METRICS_CACHE_KEY]
+    keys_to_delete = [TASK_METRICS_CACHE_KEY, _TASK_METRICS_REDIS_REGISTRY_KEY]
     for task_name in registry:
+        keys_to_delete.append(_registry_member_key(task_name))
         for field in _FIELDS:
             keys_to_delete.append(_metric_key(task_name, field))
 

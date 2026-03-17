@@ -10,8 +10,9 @@ from common.utils.celery import safe_apply_async_with_dedup
 
 logger = logging.getLogger(__name__)
 
-# 任务去重超时时间（秒）
-_TASK_DEDUP_TIMEOUT = 5
+
+def _dedup_timeout_for_countdown(countdown: int) -> int:
+    return max(int(countdown) + 60, 5)
 
 
 # ============ Scout Tasks ============
@@ -42,7 +43,7 @@ def complete_scout_task(self, record_id: int):
                 dispatched = safe_apply_async_with_dedup(
                     complete_scout_task,
                     dedup_key=f"pvp:scout:complete:{record_id}",
-                    dedup_timeout=_TASK_DEDUP_TIMEOUT,
+                    dedup_timeout=_dedup_timeout_for_countdown(remaining),
                     args=[record_id],
                     countdown=remaining,
                     logger=logger,
@@ -86,7 +87,7 @@ def complete_scout_return_task(self, record_id: int):
                 dispatched = safe_apply_async_with_dedup(
                     complete_scout_return_task,
                     dedup_key=f"pvp:scout:return:{record_id}",
-                    dedup_timeout=_TASK_DEDUP_TIMEOUT,
+                    dedup_timeout=_dedup_timeout_for_countdown(remaining),
                     args=[record_id],
                     countdown=remaining,
                     logger=logger,
@@ -178,7 +179,7 @@ def process_raid_battle_task(self, run_id: int):
                     dispatched = safe_apply_async_with_dedup(
                         complete_raid_task,
                         dedup_key=f"pvp:raid:complete:{run_id}",
-                        dedup_timeout=_TASK_DEDUP_TIMEOUT,
+                        dedup_timeout=_dedup_timeout_for_countdown(remaining),
                         args=[run_id],
                         countdown=remaining,
                         logger=logger,
@@ -190,7 +191,7 @@ def process_raid_battle_task(self, run_id: int):
             dispatched = safe_apply_async_with_dedup(
                 complete_raid_task,
                 dedup_key=f"pvp:raid:complete:{run_id}",
-                dedup_timeout=_TASK_DEDUP_TIMEOUT,
+                dedup_timeout=_dedup_timeout_for_countdown(0),
                 args=[run_id],
                 countdown=0,
                 logger=logger,
@@ -206,7 +207,7 @@ def process_raid_battle_task(self, run_id: int):
                 dispatched = safe_apply_async_with_dedup(
                     process_raid_battle_task,
                     dedup_key=f"pvp:raid:battle:{run_id}",
-                    dedup_timeout=_TASK_DEDUP_TIMEOUT,
+                    dedup_timeout=_dedup_timeout_for_countdown(remaining),
                     args=[run_id],
                     countdown=remaining,
                     logger=logger,
@@ -254,7 +255,7 @@ def complete_raid_task(self, run_id: int):
                     dispatched = safe_apply_async_with_dedup(
                         complete_raid_task,
                         dedup_key=f"pvp:raid:complete:{run_id}",
-                        dedup_timeout=_TASK_DEDUP_TIMEOUT,
+                        dedup_timeout=_dedup_timeout_for_countdown(remaining),
                         args=[run_id],
                         countdown=remaining,
                         logger=logger,
@@ -274,7 +275,7 @@ def complete_raid_task(self, run_id: int):
                     dispatched = safe_apply_async_with_dedup(
                         complete_raid_task,
                         dedup_key=f"pvp:raid:complete:{run_id}",
-                        dedup_timeout=_TASK_DEDUP_TIMEOUT,
+                        dedup_timeout=_dedup_timeout_for_countdown(remaining),
                         args=[run_id],
                         countdown=remaining,
                         logger=logger,

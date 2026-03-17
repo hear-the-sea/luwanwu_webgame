@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import logging
+import math
 from datetime import timedelta
 from typing import Callable
 
 from celery import shared_task
-from django.db import DatabaseError
+from django.db import DatabaseError, transaction
 from django.db.models import F, IntegerField, Q, Value
 from django.db.models.functions import Greatest
 from django.utils import timezone
@@ -15,12 +16,14 @@ from core.config import GUEST_LOYALTY
 
 logger = logging.getLogger(__name__)
 
-# 任务去重超时时间（秒）
-_TASK_DEDUP_TIMEOUT = 5
 # 向后兼容导出：供测试与外部调用方使用
 DEFECTION_PROBABILITY = GUEST_LOYALTY.DEFECTION_PROBABILITY
 DEFECTION_BATCH_SIZE = GUEST_LOYALTY.DEFECTION_BATCH_SIZE
 DEFECTION_QUERY_CHUNK_SIZE = GUEST_LOYALTY.DEFECTION_QUERY_CHUNK_SIZE
+
+
+def _dedup_timeout_for_remaining(remaining: int) -> int:
+    return max(int(remaining) + 60, 60)
 
 
 def _is_expected_task_error(exc: Exception) -> bool:
@@ -40,17 +43,24 @@ def complete_guest_training(self, guest_id: int) -> str:
             return "not_found"
         now = timezone.now()
         if guest.training_complete_at and guest.training_complete_at > now:
-            remaining = int((guest.training_complete_at - now).total_seconds())
+            remaining = math.ceil((guest.training_complete_at - now).total_seconds())
             if remaining > 0:
-                safe_apply_async_with_dedup(
+                dispatched = safe_apply_async_with_dedup(
                     complete_guest_training,
                     dedup_key=f"guest:training:{guest_id}",
-                    dedup_timeout=_TASK_DEDUP_TIMEOUT,
+                    dedup_timeout=_dedup_timeout_for_remaining(remaining),
                     args=[guest_id],
                     countdown=remaining,
                     logger=logger,
                     log_message=f"guest training reschedule failed: guest_id={guest_id}",
                 )
+                if not dispatched:
+                    logger.warning(
+                        "guest training reschedule dispatch returned False: guest_id=%d — "
+                        "scan_guest_training fallback will handle completion",
+                        guest_id,
+                    )
+                    return "reschedule_failed"
                 return "rescheduled"
         finalized = finalize_guest_training(guest, now=now)
         return "completed" if finalized else "skipped"
@@ -113,17 +123,24 @@ def complete_guest_recruitment(self, recruitment_id: int) -> str:
 
         now = timezone.now()
         if recruitment.complete_at and recruitment.complete_at > now:
-            remaining = int((recruitment.complete_at - now).total_seconds())
+            remaining = math.ceil((recruitment.complete_at - now).total_seconds())
             if remaining > 0:
-                safe_apply_async_with_dedup(
+                dispatched = safe_apply_async_with_dedup(
                     complete_guest_recruitment,
                     dedup_key=f"guest:recruitment:{recruitment_id}",
-                    dedup_timeout=_TASK_DEDUP_TIMEOUT,
+                    dedup_timeout=_dedup_timeout_for_remaining(remaining),
                     args=[recruitment_id],
                     countdown=remaining,
                     logger=logger,
                     log_message=f"guest recruitment reschedule failed: recruitment_id={recruitment_id}",
                 )
+                if not dispatched:
+                    logger.warning(
+                        "guest recruitment reschedule dispatch returned False: recruitment_id=%d — "
+                        "scan_guest_recruitments fallback will handle completion",
+                        recruitment_id,
+                    )
+                    return "reschedule_failed"
                 return "rescheduled"
 
         finalized = finalize_guest_recruitment(recruitment, now=now, send_notification=True)
@@ -297,43 +314,80 @@ def _should_defect(guest_id: int, date_value, *, probability: float, hasher) -> 
     return value < float(probability)
 
 
+def _build_defection_message_payload(guest) -> dict:
+    rarity_display = guest.template.get_rarity_display()
+    return {
+        "manor": guest.manor,
+        "kind": "system",
+        "title": "【门客叛逃】门客离开了庄园",
+        "body": (
+            f"由于长期未支付工资，您的门客 {guest.display_name} (Lv{guest.level}) "
+            f"对您失去了信任，已经离开了庄园。\n\n"
+            f"门客信息：\n"
+            f"- 名称：{guest.display_name}\n"
+            f"- 等级：{guest.level}\n"
+            f"- 稀有度：{rarity_display}\n"
+            f"- 叛逃时忠诚度：{guest.loyalty}\n\n"
+            f"提示：请及时支付门客工资以保持他们的忠诚。"
+        ),
+    }
+
+
 def _process_defection_batch(guest_ids: list[int], *, create_message: Callable) -> int:
     from guests.models import Guest, GuestDefection
 
     defection_count = 0
-    for guest in Guest.objects.select_related("manor__user", "template").filter(id__in=guest_ids):
+    for guest_id in guest_ids:
         try:
-            GuestDefection.objects.create(
-                manor=guest.manor,
-                guest_name=guest.display_name,
-                guest_level=guest.level,
-                guest_rarity=guest.rarity,
-                loyalty_at_defection=guest.loyalty,
-            )
+            message_payload = None
+            processed = False
 
-            create_message(
-                manor=guest.manor,
-                kind="system",
-                title="【门客叛逃】门客离开了庄园",
-                body=(
-                    f"由于长期未支付工资，您的门客 {guest.display_name} (Lv{guest.level}) "
-                    f"对您失去了信任，已经离开了庄园。\n\n"
-                    f"门客信息：\n"
-                    f"- 名称：{guest.display_name}\n"
-                    f"- 等级：{guest.level}\n"
-                    f"- 稀有度：{guest.get_rarity_display()}\n"
-                    f"- 叛逃时忠诚度：{guest.loyalty}\n\n"
-                    f"提示：请及时支付门客工资以保持他们的忠诚。"
-                ),
-            )
+            with transaction.atomic():
+                guest = (
+                    Guest.objects.select_for_update()
+                    .select_related("manor__user", "template")
+                    .filter(id=guest_id)
+                    .first()
+                )
+                if guest is None:
+                    continue
 
-            guest.delete()
-            defection_count += 1
+                defection, created = GuestDefection.objects.get_or_create(
+                    guest_id=guest.id,
+                    defaults={
+                        "manor": guest.manor,
+                        "guest_name": guest.display_name,
+                        "guest_level": guest.level,
+                        "guest_rarity": guest.rarity,
+                        "loyalty_at_defection": guest.loyalty,
+                    },
+                )
+                if created:
+                    message_payload = _build_defection_message_payload(guest)
+                else:
+                    logger.warning(
+                        "Guest defection already recorded; deleting lingering guest record: "
+                        "guest_id=%d defection_id=%d",
+                        guest.id,
+                        defection.id,
+                    )
+
+                guest.delete()
+                processed = True
+
+            if message_payload is not None:
+                try:
+                    create_message(**message_payload)
+                except Exception:
+                    logger.exception("Failed to send defection message for guest %d", guest_id)
+
+            if processed:
+                defection_count += 1
         except Exception as exc:
             if not _is_expected_task_error(exc):
                 raise
             # Per-guest defection failure should not abort the batch; the guest
             # will remain with low loyalty and be retried on the next daily run.
-            logger.exception("Failed to process defection for guest %d", guest.id)
+            logger.exception("Failed to process defection for guest %d", guest_id)
 
     return defection_count

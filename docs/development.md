@@ -395,45 +395,57 @@ tests/
 └── ...
 ```
 
-### 测试层级与语义边界
+### 测试层级说明
 
-> **重要**：`make test`（默认测试道）和真实生产语义之间存在明确差距，**务必理解以下分层**。
+> **重要**：本仓库正式区分两套测试道。`make test` 通过，只能说明业务逻辑在 hermetic 替身环境上基本正确；**不能**据此推断真实 MySQL / Redis / broker / Channels 语义已经验证。
 
-| 层级 | 命令 | 依赖 | 覆盖能力 | 未覆盖能力 |
-|------|------|------|----------|-----------|
-| 单元/hermetic | `make test` / `make test-unit` | SQLite, LocMem, InMemory Channel | 业务逻辑、状态机、计算规则 | `select_for_update` 行锁、Redis 原子操作、Channels 广播 |
-| 关键并发 | `make test-critical` | 同上（默认跳过） | 并发基本路径 | 真实 MySQL 隔离级别 |
-| 集成 | `make test-integration` | MySQL, Redis, Celery, Channels | 全路径语义、并发一致性 | 性能/容量 |
+| 层级 | 命令 | 依赖 | 能证明什么 | 不能证明什么 |
+|------|------|------|------------|--------------|
+| Hermetic 套件 | `make test` / `make test-unit` | SQLite + `LocMem` cache + in-memory broker/channel layer | 业务逻辑、状态机、计算规则、同步降级分支在本地替身环境下基本正确 | 真实数据库锁与事务语义、Redis 共享锁/去重语义、真实 Celery broker dispatch/retry/fallback、Channels 经 Redis 的跨进程广播/聊天链路 |
+| Infra-backed 集成测试 | `DJANGO_TEST_USE_ENV_SERVICES=1 make test-integration` | MySQL + Redis + 真实 Celery broker / Channels transport | 真实依赖交互、一致性边界、跨进程并发、外部基础设施降级与恢复路径 | 性能/容量上限仍需额外压测或 profile 测试 |
 
-**何时必须运行 `make test-integration`（需 Docker 或真实服务）：**
+`make test-critical` 是一个便捷目标，不是单独的验收层级；它只是在启用外部服务时补跑若干并发敏感用例，不能替代完整的 `make test-integration` 门禁。
 
-- 修改了涉及 `select_for_update`、`F()` 表达式、`cache.incr()` 的逻辑
-- 修改了资源扣减、库存变更、护院出征/归还等并发敏感路径
-- 修改了 WebSocket 消费者或 Channels 广播逻辑
-- 修改了 Celery 任务的重试/事务边界
+**Hermetic 套件主要回答的问题：**
 
-### 集成测试门禁（合并前必读）
+- 业务逻辑是否基本正确，核心服务/模型/视图在 SQLite + 本地内存替身下是否按预期运行
+- 基本状态机、数值计算、权限/校验、同步 fallback 分支是否按预期执行
 
-以下模块属于**高风险区域**，改动后**必须**配套集成测试才能合并，hermetic 单元测试无法覆盖其真实语义：
+**Hermetic 套件不能回答的问题：**
 
-| 模块 / 路径 | 风险类型 | 原因 |
-|-------------|----------|------|
-| `core/utils/cache_lock.py` | 分布式锁 | `locmem` 锁是进程内的，无法验证跨进程/跨实例的锁互斥行为 |
-| `gameplay/services/arena/` | 并发状态机 | arena 回合推进依赖 `select_for_update` 行锁，SQLite 下该语义是 no-op |
-| `gameplay/models/arena.py` | DB 约束变更 | MySQL 约束（唯一索引、外键、CHECK）在 SQLite 下部分不生效 |
-| `common/utils/celery.py` | 任务调度 | broker 相关行为（重试、路由、序列化）仅在真实 Redis broker 下可验证 |
-| 任何含 `select_for_update()` 的路径 | 行锁并发 | SQLite 无行锁，并发冲突无法在 hermetic 环境复现 |
-| 任何含分布式锁（`cache_lock`）的路径 | 跨进程锁 | `locmem` cache 锁是单进程的，分布式互斥需要真实 Redis |
+- `select_for_update()`、事务等待、死锁/锁顺序等真实数据库语义是否成立
+- Redis 共享缓存锁、去重键、原子 `add` / `delete` / `incr` 是否符合跨进程预期
+- Celery dispatch、retry、broker 不可用时的 scanner fallback / 降级路径是否在真实 broker 下成立
+- Django Channels 是否能通过 Redis channel layer 把聊天/广播消息正确送到真实消费者
 
-**hermetic 单元测试（SQLite）无法验证的语义：**
+**Infra-backed 集成测试重点覆盖的真实风险：**
 
-- `select_for_update()` 在 SQLite 下是 no-op，行锁并发冲突不会被触发
-- 缓存锁（`cache_lock`）在 `locmem` 下是进程内锁，跨进程/跨实例互斥无法验证
-- Celery broker 相关行为（任务入队、路由、序列化、broker 不可用降级）
-- MySQL 特定约束（唯一索引冲突、`SELECT ... FOR UPDATE` 死锁检测等）
-- Channels / WebSocket 真实广播到多个消费者
+- MySQL 行锁、唯一约束、事务隔离级别、`select_for_update()` 冲突与等待
+- Redis 共享锁、dedup、计数器和 TTL 在多进程下的真实行为
+- Celery 在真实 broker 上的投递、重试、去重回滚、scanner fallback 和 dispatch 降级
+- Django Channels / WebSocket 通过 Redis 的聊天链路、group fan-out 和多消费者广播
 
-**本地运行集成测试：**
+### 高风险改动的强制 infra-backed 验证
+
+以下任一条件命中时，提交前**必须**运行 `DJANGO_TEST_USE_ENV_SERVICES=1 make test-integration`，并确保对应集成测试通过。仅 `make test` 绿灯不构成合并依据：
+
+- 改动涉及 `select_for_update()`、显式数据库锁或任何依赖真实锁等待/事务语义的路径
+- 改动涉及共享缓存锁、`cache_lock`、dedup key、`cache.add()` / `cache.delete()` / `cache.incr()` 等 Redis 语义
+- 改动涉及 Celery dispatch、retry、任务扫描器（scanner）fallback、broker 不可用降级或 `safe_apply_async(_with_dedup)` 相关行为
+- 改动涉及 Django Channels、channel layer、Redis 聊天链路、WebSocket 广播或多消费者 fan-out
+
+**典型高风险路径示例：**
+
+| 模块 / 路径 | 风险类型 | 为什么必须跑 infra-backed |
+|-------------|----------|---------------------------|
+| `core/utils/cache_lock.py` | Redis 共享锁 | `locmem` 只提供单进程锁，无法证明跨进程互斥 |
+| `gameplay/services/arena/` | 数据库锁 / 并发状态机 | arena 推进依赖 `select_for_update()` 行锁，SQLite 下该语义是 no-op |
+| `gameplay/models/arena.py` | MySQL 约束 | MySQL 约束与事务细节在 SQLite 下不能等价验证 |
+| `common/utils/celery.py` | Celery dispatch / retry / fallback | 真实 broker 的投递、失败、重试与回滚语义无法由 in-memory broker 代表 |
+| `websocket/consumers/world_chat.py` | Channels / Redis 聊天链路 | 单进程 channel layer 无法证明真实 Redis fan-out 与消费者广播路径 |
+| `websocket/backends/` | Redis 聊天后端 | 聊天历史、限流、ID 分配等 Redis 语义必须在真实 Redis 下验证 |
+
+**本地运行 infra-backed 集成测试：**
 
 ```bash
 # 需要先启动 MySQL 和 Redis（推荐 Docker Compose）

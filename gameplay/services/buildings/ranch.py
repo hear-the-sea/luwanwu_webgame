@@ -289,15 +289,25 @@ def _schedule_livestock_completion(production: LivestockProduction, eta_seconds:
         logger.warning("Unable to import complete_livestock_production task; skip scheduling", exc_info=True)
         return
 
-    db_transaction.on_commit(
-        lambda: safe_apply_async(
+    def _dispatch_completion() -> None:
+        dispatched = safe_apply_async(
             complete_livestock_production,
             args=[production.id],
             countdown=countdown,
             logger=logger,
             log_message="complete_livestock_production dispatch failed",
         )
-    )
+        if not dispatched:
+            logger.error(
+                "complete_livestock_production dispatch returned False; production may remain pending",
+                extra={
+                    "task_name": "complete_livestock_production",
+                    "production_id": getattr(production, "id", None),
+                    "manor_id": getattr(production, "manor_id", None),
+                },
+            )
+
+    db_transaction.on_commit(_dispatch_completion)
 
 
 def finalize_livestock_production(production: LivestockProduction, send_notification: bool = False) -> bool:
@@ -313,50 +323,68 @@ def finalize_livestock_production(production: LivestockProduction, send_notifica
     """
     from ...models import Message
 
-    if production.status != LivestockProduction.Status.PRODUCING:
-        return False
-
     if production.complete_at > timezone.now():
         return False
 
+    completed_production = production
     with transaction.atomic():
+        # 先在事务内锁定并重新读取养殖记录，确保并发 worker 只有一个能看到 PRODUCING 并发货；
+        # 其余 worker 读到最新状态后直接返回，保证完成结算幂等。
+        locked_production = (
+            LivestockProduction.objects.select_for_update().select_related("manor").get(pk=production.pk)
+        )
+        if locked_production.status != LivestockProduction.Status.PRODUCING:
+            production.status = locked_production.status
+            production.finished_at = locked_production.finished_at
+            return False
+        if locked_production.complete_at > timezone.now():
+            return False
+
         # 添加家畜到仓库（按数量添加）
         from ..inventory import add_item_to_inventory_locked
 
-        add_item_to_inventory_locked(production.manor, production.livestock_key, production.quantity)
+        add_item_to_inventory_locked(
+            locked_production.manor,
+            locked_production.livestock_key,
+            locked_production.quantity,
+        )
 
         # 更新养殖状态
-        production.status = LivestockProduction.Status.COMPLETED
-        production.finished_at = timezone.now()
-        production.save(update_fields=["status", "finished_at"])
+        finished_at = timezone.now()
+        locked_production.status = LivestockProduction.Status.COMPLETED
+        locked_production.finished_at = finished_at
+        locked_production.save(update_fields=["status", "finished_at"])
+        production.status = locked_production.status
+        production.finished_at = finished_at
+        completed_production = locked_production
 
     if send_notification:
         from ..utils.messages import create_message
 
-        quantity_text = f"x{production.quantity}" if production.quantity > 1 else ""
+        quantity_text = f"x{completed_production.quantity}" if completed_production.quantity > 1 else ""
         try:
             create_message(
-                manor=production.manor,
+                manor=completed_production.manor,
                 kind=Message.Kind.SYSTEM,
-                title=f"{production.livestock_name}{quantity_text}养殖完成",
-                body=f"您的{production.livestock_name}{quantity_text}已养殖完成，请到仓库查收。",
+                title=f"{completed_production.livestock_name}{quantity_text}养殖完成",
+                body=f"您的{completed_production.livestock_name}{quantity_text}已养殖完成，请到仓库查收。",
             )
 
             notify_user(
-                production.manor.user_id,
+                completed_production.manor.user_id,
                 {
                     "kind": "system",
-                    "title": f"{production.livestock_name}{quantity_text}养殖完成",
-                    "livestock_key": production.livestock_key,
-                    "quantity": production.quantity,
+                    "title": f"{completed_production.livestock_name}{quantity_text}养殖完成",
+                    "livestock_key": getattr(completed_production, "livestock_key", None),
+                    "quantity": getattr(completed_production, "quantity", None),
                 },
                 log_context="livestock production notification",
             )
         except Exception as exc:
             logger.warning(
                 "livestock production notification failed: production_id=%s manor_id=%s error=%s",
-                production.id,
-                production.manor_id,
+                completed_production.id,
+                completed_production.manor_id,
                 exc,
                 exc_info=True,
             )

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import warnings
 
 from channels.auth import AuthMiddlewareStack
 from channels.routing import ProtocolTypeRouter, URLRouter
@@ -9,6 +10,8 @@ from channels.security.websocket import AllowedHostsOriginValidator
 from django.conf import settings
 from django.contrib.staticfiles.handlers import ASGIStaticFilesHandler
 from django.core.asgi import get_asgi_application
+
+from websocket.routing_status import set_websocket_routing_status
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
@@ -27,11 +30,15 @@ except Exception as exc:  # pragma: no cover - fallback if apps not ready
     if not isinstance(exc, (ImportError, OSError, RuntimeError)):
         raise
     if settings.DEBUG:
+        warnings.warn(f"WebSocket routing disabled: {exc}", RuntimeWarning, stacklevel=2)
         logger.exception("Failed to import websocket routing in DEBUG mode; WebSocket endpoints disabled: %s", exc)
+        set_websocket_routing_status(ok=False, error=str(exc))
         websocket_routing = None  # type: ignore[assignment]
     else:
         logger.exception("Failed to import websocket routing; refusing to start in production: %s", exc)
         raise
+else:
+    set_websocket_routing_status(ok=True)
 
 websocket_urlpatterns = []
 if websocket_routing and getattr(websocket_routing, "websocket_urlpatterns", None):

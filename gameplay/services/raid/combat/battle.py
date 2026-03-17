@@ -7,7 +7,7 @@ import math
 from datetime import timedelta
 from typing import Dict, Optional
 
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
@@ -39,6 +39,10 @@ from .travel import _dismiss_marching_raids_if_protected
 from .troops import _coerce_positive_int, _normalize_mapping, _normalize_positive_int_mapping
 
 logger = logging.getLogger(__name__)
+
+
+RAID_BATTLE_INFRASTRUCTURE_EXCEPTIONS = (DatabaseError, ConnectionError, OSError, TimeoutError)
+RAID_CAPTURE_DEGRADED_EXCEPTIONS = (ConnectionError, OSError, TimeoutError)
 
 
 def _load_locked_raid_run(run_pk: int) -> Optional[RaidRun]:
@@ -120,7 +124,7 @@ def _apply_capture_reward(locked_run: RaidRun, report, is_attacker_victory: bool
         if capture_info:
             battle_rewards = _normalize_mapping(locked_run.battle_rewards)
             locked_run.battle_rewards = {**battle_rewards, "capture": capture_info}
-    except Exception as exc:
+    except RAID_CAPTURE_DEGRADED_EXCEPTIONS as exc:
         logger.warning(
             "raid capture failed: run_id=%s attacker=%s defender=%s error=%s",
             locked_run.id,
@@ -128,7 +132,26 @@ def _apply_capture_reward(locked_run: RaidRun, report, is_attacker_victory: bool
             locked_run.defender_id,
             exc,
             exc_info=True,
+            extra={
+                "degraded": True,
+                "component": "raid_capture_reward",
+                "run_id": locked_run.id,
+            },
         )
+    except Exception:
+        logger.error(
+            "Unexpected raid capture failure: run_id=%s attacker=%s defender=%s",
+            locked_run.id,
+            locked_run.attacker_id,
+            locked_run.defender_id,
+            exc_info=True,
+            extra={
+                "degraded": True,
+                "component": "raid_capture_reward",
+                "run_id": locked_run.id,
+            },
+        )
+        raise
 
 
 def _apply_salvage_reward(locked_run: RaidRun, report, is_attacker_victory: bool) -> None:
@@ -187,17 +210,26 @@ def _dispatch_complete_raid_task(run: RaidRun, *, now=None) -> None:
 
     try:
         from gameplay.tasks import complete_raid_task
-    except Exception as exc:
+    except ImportError as exc:
         logger.warning(
-            "complete_raid_task dispatch failed: run_id=%s error=%s",
+            "complete_raid_task import failed: run_id=%s error=%s",
             run.id,
             exc,
             exc_info=True,
+            extra={"degraded": True, "component": "raid_task_import", "run_id": run.id},
         )
         current_time = now or timezone.now()
         remaining = 0 if not run.return_at else max(0, math.ceil((run.return_at - current_time).total_seconds()))
         _fallback_sync_when_due(remaining)
         return
+    except Exception:
+        logger.error(
+            "Unexpected complete_raid_task import failure: run_id=%s",
+            run.id,
+            exc_info=True,
+            extra={"degraded": True, "component": "raid_task_import", "run_id": run.id},
+        )
+        raise
 
     current_time = now or timezone.now()
     if run.return_at:
@@ -262,7 +294,7 @@ def process_raid_battle(run: RaidRun, now=None) -> None:
 
     try:
         _send_raid_battle_messages(locked_run)
-    except Exception as exc:
+    except RAID_BATTLE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning(
             "raid battle messages failed: run_id=%s attacker=%s defender=%s error=%s",
             locked_run.id,
@@ -270,17 +302,54 @@ def process_raid_battle(run: RaidRun, now=None) -> None:
             locked_run.defender_id,
             exc,
             exc_info=True,
+            extra={
+                "degraded": True,
+                "component": "raid_battle_message",
+                "run_id": locked_run.id,
+            },
+        )
+    except Exception:
+        # 消息通知属于边缘副作用，任何异常都不应回滚已提交的战斗结果
+        logger.error(
+            "Unexpected raid battle message failure: run_id=%s attacker=%s defender=%s",
+            locked_run.id,
+            locked_run.attacker_id,
+            locked_run.defender_id,
+            exc_info=True,
+            extra={
+                "degraded": True,
+                "component": "raid_battle_message",
+                "run_id": locked_run.id,
+            },
         )
 
     try:
         _dismiss_marching_raids_if_protected(locked_run.defender)
-    except Exception as exc:
+    except RAID_BATTLE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning(
             "dismiss marching raids failed: run_id=%s defender=%s error=%s",
             locked_run.id,
             locked_run.defender_id,
             exc,
             exc_info=True,
+            extra={
+                "degraded": True,
+                "component": "raid_protection_cleanup",
+                "run_id": locked_run.id,
+            },
+        )
+    except Exception:
+        # 战斗保护清理是边缘副作用，失败不回滚已提交的战斗结果
+        logger.error(
+            "Unexpected dismiss marching raids failure: run_id=%s defender=%s",
+            locked_run.id,
+            locked_run.defender_id,
+            exc_info=True,
+            extra={
+                "degraded": True,
+                "component": "raid_protection_cleanup",
+                "run_id": locked_run.id,
+            },
         )
     _dispatch_complete_raid_task(locked_run, now=now)
 

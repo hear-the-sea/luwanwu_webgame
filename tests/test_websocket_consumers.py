@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from unittest.mock import AsyncMock
 
 from django.core.cache import cache
@@ -34,6 +35,7 @@ class NotificationConsumerTests(SimpleTestCase):
         consumer.close = AsyncMock()
         consumer.accept = AsyncMock()
         consumer.channel_layer = AsyncMock()
+        consumer._ensure_valid_session = AsyncMock(return_value=True)
 
         asyncio.run(consumer.connect())
 
@@ -41,6 +43,23 @@ class NotificationConsumerTests(SimpleTestCase):
         consumer.channel_layer.group_add.assert_awaited_once_with("user_7", "chan")
         consumer.accept.assert_awaited_once()
         consumer.close.assert_not_awaited()
+
+    def test_connect_rejects_stale_single_session(self):
+        class _User:
+            id = 7
+            is_authenticated = True
+
+        consumer = NotificationConsumer()
+        consumer.scope = {"user": _User(), "path": "/ws/", "client": ("127.0.0.1", 1234)}
+        consumer.close = AsyncMock()
+        consumer.accept = AsyncMock()
+        consumer.channel_layer = AsyncMock()
+        consumer._ensure_valid_session = AsyncMock(return_value=False)
+
+        asyncio.run(consumer.connect())
+
+        consumer.close.assert_awaited_once_with()
+        consumer.accept.assert_not_awaited()
 
     def test_notify_message_filters_payload(self):
         consumer = NotificationConsumer()
@@ -65,6 +84,40 @@ class NotificationConsumerTests(SimpleTestCase):
 
 
 class OnlineStatsConsumerTests(SimpleTestCase):
+    class _PresenceRedis:
+        def __init__(self):
+            self._zsets: dict[str, dict[str, float]] = {}
+
+        def zadd(self, key: str, mapping: dict[object, float]):
+            zset = self._zsets.setdefault(key, {})
+            for member, score in mapping.items():
+                zset[str(member)] = float(score)
+            return len(mapping)
+
+        def expire(self, *_args, **_kwargs):
+            return True
+
+        def zcard(self, key: str):
+            return len(self._zsets.get(key, {}))
+
+        def zremrangebyscore(self, key: str, min_score, max_score):
+            zset = self._zsets.setdefault(key, {})
+            lower = float("-inf") if min_score == "-inf" else float(min_score)
+            upper = float(max_score)
+            removed = [member for member, score in zset.items() if lower <= score <= upper]
+            for member in removed:
+                zset.pop(member, None)
+            return len(removed)
+
+        def zunionstore(self, dest: str, keys, aggregate=None):
+            del aggregate
+            union: dict[str, float] = {}
+            for key in keys:
+                for member, score in self._zsets.get(key, {}).items():
+                    union[member] = max(union.get(member, float("-inf")), float(score))
+            self._zsets[dest] = union
+            return len(union)
+
     def _build_consumer(self) -> OnlineStatsConsumer:
         consumer = OnlineStatsConsumer()
         # Disable debouncing so assertions on group_send are deterministic.
@@ -94,6 +147,7 @@ class OnlineStatsConsumerTests(SimpleTestCase):
 
         consumer = self._build_consumer()
         consumer.scope = {"user": _User(), "path": "/ws/", "client": ("127.0.0.1", 1234)}
+        consumer._ensure_valid_session = AsyncMock(return_value=True)
 
         async def _noop_heartbeat():
             return None
@@ -109,6 +163,22 @@ class OnlineStatsConsumerTests(SimpleTestCase):
         consumer.add_online_connection.assert_awaited_once_with(11)
         consumer.send_json.assert_awaited_once_with({"online_count": 1, "total_count": 2})
         consumer.channel_layer.group_send.assert_awaited_once()
+
+    def test_connect_rejects_stale_single_session(self):
+        class _User:
+            id = 11
+            is_authenticated = True
+            is_staff = False
+            is_superuser = False
+
+        consumer = self._build_consumer()
+        consumer.scope = {"user": _User(), "path": "/ws/", "client": ("127.0.0.1", 1234)}
+        consumer._ensure_valid_session = AsyncMock(return_value=False)
+
+        asyncio.run(consumer.connect())
+
+        consumer.close.assert_awaited_once_with()
+        consumer.accept.assert_not_awaited()
 
     def test_disconnect_removes_connection_and_broadcasts(self):
         consumer = self._build_consumer()
@@ -131,21 +201,62 @@ class OnlineStatsConsumerTests(SimpleTestCase):
         consumer = OnlineStatsConsumer()
         cache.delete(consumer.ONLINE_COUNT_CACHE_KEY)
 
-        calls = {"zcard": 0}
+        calls = {"zcard": 0, "zunionstore": 0}
+        redis = self._PresenceRedis()
+        now = time.time()
+        redis.zadd("online_users_http_zset", {"1": now, "2": now})
+        redis.zadd("online_users_ws_zset", {"2": now + 1, "3": now + 1})
 
-        class _Redis:
-            def zcard(self, *_args, **_kwargs):
-                calls["zcard"] += 1
-                return 3
+        original_zcard = redis.zcard
+        original_zunionstore = redis.zunionstore
 
-        consumer._get_redis = lambda: _Redis()  # type: ignore[method-assign]
-        consumer._cleanup_expired_users_sync = lambda *_args, **_kwargs: 0  # type: ignore[method-assign]
+        def _zcard(*args, **kwargs):
+            calls["zcard"] += 1
+            return original_zcard(*args, **kwargs)
+
+        def _zunionstore(*args, **kwargs):
+            calls["zunionstore"] += 1
+            return original_zunionstore(*args, **kwargs)
+
+        redis.zcard = _zcard  # type: ignore[method-assign]
+        redis.zunionstore = _zunionstore  # type: ignore[method-assign]
+
+        consumer._get_redis = lambda: redis  # type: ignore[method-assign]
 
         # First call should hit Redis.
         assert consumer._get_online_count_sync() == 3
         # Second call should hit cache.
         assert consumer._get_online_count_sync() == 3
         assert calls["zcard"] == 1
+        assert calls["zunionstore"] == 1
+
+    def test_remove_online_connection_keeps_recent_http_presence_counted(self):
+        consumer = OnlineStatsConsumer()
+        cache.delete(consumer.ONLINE_COUNT_CACHE_KEY)
+        redis = self._PresenceRedis()
+        user_id = 7
+        now = time.time()
+        redis.zadd("online_users_http_zset", {str(user_id): now})
+        redis.zadd("online_users_ws_zset", {str(user_id): now + 1})
+
+        class _RedisWithScript(self._PresenceRedis):
+            def __init__(self, backing):
+                self._zsets = backing._zsets
+                self._counters = {f"{consumer.ONLINE_USER_CONN_COUNT_KEY_PREFIX}{user_id}": 1}
+
+            def script_load(self, *_args, **_kwargs):
+                return "sha"
+
+            def evalsha(self, *_args, **_kwargs):
+                self._zsets["online_users_ws_zset"].pop(str(user_id), None)
+                self._counters.pop(f"{consumer.ONLINE_USER_CONN_COUNT_KEY_PREFIX}{user_id}", None)
+                return 0
+
+        redis_with_script = _RedisWithScript(redis)
+        consumer._get_redis = lambda: redis_with_script  # type: ignore[method-assign]
+
+        assert consumer._remove_online_connection_sync(user_id) == 0
+        assert consumer._get_online_count_sync() == 1
 
     def test_cleanup_expired_users_sync_handles_redis_error(self):
         consumer = OnlineStatsConsumer()

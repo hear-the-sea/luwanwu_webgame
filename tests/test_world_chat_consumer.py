@@ -21,6 +21,8 @@ class WorldChatConsumerTests(SimpleTestCase):
         consumer.channel_name = "test-channel"
         consumer.channel_layer = AsyncMock()
         consumer.send_json = AsyncMock()
+        consumer.close = AsyncMock()
+        consumer._ensure_valid_session = AsyncMock(return_value=True)
         return consumer
 
     def test_chat_message_forwards_expected_fields(self):
@@ -188,6 +190,7 @@ class WorldChatConsumerTests(SimpleTestCase):
         consumer._consume_trumpet = AsyncMock(return_value=(True, ""))
         consumer._refund_trumpet = AsyncMock(return_value=False)
         consumer._append_history = AsyncMock()
+        consumer._remove_history_compensation = AsyncMock(return_value=True)
         consumer.channel_layer.group_send = AsyncMock(side_effect=OSError("channel layer down"))
 
         message = {
@@ -202,6 +205,7 @@ class WorldChatConsumerTests(SimpleTestCase):
 
         asyncio.run(consumer.receive_json({"type": "send", "text": "hello"}))
 
+        consumer._remove_history_compensation.assert_awaited_once_with(message)
         consumer._refund_trumpet.assert_awaited_once_with()
         self.assertEqual(
             consumer.send_json.await_args.args[0],
@@ -209,6 +213,39 @@ class WorldChatConsumerTests(SimpleTestCase):
                 "type": "error",
                 "code": "chat_unavailable",
                 "message": consumer.CHAT_UNAVAILABLE_REFUND_FAILED_MESSAGE,
+            },
+        )
+
+    def test_receive_json_removes_history_and_refunds_when_broadcast_fails_after_persist(self):
+        consumer = self._build_consumer()
+        consumer._rate_limit = AsyncMock(return_value=(True, None))
+        consumer._consume_trumpet = AsyncMock(return_value=(True, ""))
+        consumer._refund_trumpet = AsyncMock(return_value=True)
+        consumer._append_history = AsyncMock()
+        consumer._remove_history_compensation = AsyncMock(return_value=True)
+        consumer.channel_layer.group_send = AsyncMock(side_effect=OSError("channel layer down"))
+
+        message = {
+            "type": "message",
+            "channel": "world",
+            "id": 1,
+            "ts": 1700000000000,
+            "sender": {"id": 1, "name": "玩家A"},
+            "text": "hello",
+        }
+        consumer._build_message = AsyncMock(return_value=message)
+
+        asyncio.run(consumer.receive_json({"type": "send", "text": "hello"}))
+
+        consumer._append_history.assert_awaited_once_with(message)
+        consumer._remove_history_compensation.assert_awaited_once_with(message)
+        consumer._refund_trumpet.assert_awaited_once_with()
+        self.assertEqual(
+            consumer.send_json.await_args.args[0],
+            {
+                "type": "error",
+                "code": "chat_unavailable",
+                "message": consumer.CHAT_UNAVAILABLE_REFUNDED_MESSAGE,
             },
         )
 
@@ -227,7 +264,9 @@ class WorldChatConsumerTests(SimpleTestCase):
         consumer.channel_name = "test-channel"
         consumer.channel_layer = AsyncMock()
         consumer.accept = AsyncMock()
+        consumer.close = AsyncMock()
         consumer.send_json = AsyncMock()
+        consumer._ensure_valid_session = AsyncMock(return_value=True)
         consumer._get_display_name = AsyncMock(return_value="玩家A")
         consumer._get_history = AsyncMock(return_value=[])
         consumer._history_degraded = True
@@ -242,3 +281,16 @@ class WorldChatConsumerTests(SimpleTestCase):
         self.assertEqual(history_payload["type"], "history")
         self.assertTrue(status_payload["history_degraded"])
         self.assertEqual(status_payload["history_status_message"], consumer.HISTORY_UNAVAILABLE_MESSAGE)
+
+    def test_connect_closes_when_single_session_is_invalid(self):
+        consumer = WorldChatConsumer()
+        consumer.scope = {"user": SimpleNamespace(is_authenticated=True, id=7)}
+        consumer.channel_layer = AsyncMock()
+        consumer.close = AsyncMock()
+        consumer.accept = AsyncMock()
+        consumer._ensure_valid_session = AsyncMock(return_value=False)
+
+        asyncio.run(consumer.connect())
+
+        consumer.close.assert_awaited_once_with()
+        consumer.accept.assert_not_awaited()

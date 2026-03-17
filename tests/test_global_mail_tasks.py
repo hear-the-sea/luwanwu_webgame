@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from types import SimpleNamespace
 
 import pytest
 from django.utils import timezone
@@ -84,16 +83,52 @@ def test_backfill_global_mail_campaign_task_is_idempotent(django_user_model):
     assert Message.objects.filter(title="任务补发奖励").count() == 2
 
 
+@pytest.mark.django_db
+def test_backfill_global_mail_campaign_task_records_failed_manor_ids(monkeypatch, django_user_model):
+    user_a = django_user_model.objects.create_user(username="global_mail_task_fail_user_a", password="pass123")
+    user_b = django_user_model.objects.create_user(username="global_mail_task_fail_user_b", password="pass123")
+    manor_a = ensure_manor(user_a)
+    manor_b = ensure_manor(user_b)
+
+    campaign = GlobalMailCampaign.objects.create(
+        key="global_mail_task_partial_failure",
+        kind=Message.Kind.REWARD,
+        title="任务补发失败记录",
+        body="失败列表测试",
+        attachments={"resources": {"wood": 10}},
+        is_active=True,
+    )
+
+    original_deliver = backfill_global_mail_campaign_task.run.__globals__["deliver_campaign_to_manor"]
+
+    def _deliver_with_failure(current_campaign, manor, now):
+        if manor.id == manor_b.id:
+            raise RuntimeError("boom")
+        return original_deliver(current_campaign, manor, now=now)
+
+    monkeypatch.setattr("gameplay.tasks.global_mail.deliver_campaign_to_manor", _deliver_with_failure)
+
+    result = backfill_global_mail_campaign_task.run(campaign.id, batch_size=1)
+
+    assert result["status"] == "partial_failure"
+    assert result["delivered"] == 1
+    assert result["failed"] == 1
+    assert result["failed_manor_ids"] == [manor_b.id]
+    assert str(manor_b.id) in result["summary"]
+    assert GlobalMailDelivery.objects.filter(campaign=campaign, manor=manor_a).exists()
+    assert not GlobalMailDelivery.objects.filter(campaign=campaign, manor=manor_b).exists()
+
+
 def test_enqueue_global_mail_backfill_submits_expected_args(monkeypatch):
     captured: dict[str, object] = {}
 
     def _fake_apply_async(*_args, **kwargs):
         captured["args"] = kwargs.get("args")
-        return SimpleNamespace(id="task-123")
+        return None
 
     monkeypatch.setattr(backfill_global_mail_campaign_task, "apply_async", _fake_apply_async)
 
     result = enqueue_global_mail_backfill(7, batch_size=123)
 
-    assert result.id == "task-123"
+    assert result is True
     assert captured["args"] == [7, 123]

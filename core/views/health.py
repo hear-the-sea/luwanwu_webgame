@@ -17,6 +17,7 @@ from core.tasks import CELERY_BEAT_HEARTBEAT_CACHE_KEY, celery_health_ping
 from core.utils.degradation import get_degradation_counts
 from core.utils.network import get_client_ip, is_trusted_proxy_ip
 from core.utils.task_monitoring import get_degraded_counter, get_task_metrics
+from websocket.routing_status import get_websocket_routing_status
 
 _DEGRADED_COMPONENTS = [
     "cache_lock_fail_closed",
@@ -212,6 +213,12 @@ def health_ready(request):
         checks["celery_roundtrip"] = roundtrip_ok
         if roundtrip_error:
             errors["celery_roundtrip"] = roundtrip_error
+
+    websocket_routing_ok, websocket_routing_error = get_websocket_routing_status()
+    if not websocket_routing_ok:
+        checks["websocket_routing"] = False
+        if settings.DEBUG and websocket_routing_error:
+            errors["websocket_routing"] = websocket_routing_error
 
     ok = all(checks.values())
     payload: dict[str, object] = {"status": "ok" if ok else "error", "checks": checks}

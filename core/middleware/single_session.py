@@ -77,6 +77,30 @@ def _should_verify_matching_session(user_id: int) -> bool:
         return True
 
 
+def _validate_active_session_key(user_id: int, current_session_key: str) -> bool:
+    active_session_key = _load_active_session_key(user_id)
+    if not active_session_key:
+        active_session_key = _ensure_active_session_key(user_id, current_session_key)
+    elif active_session_key == current_session_key and _should_verify_matching_session(user_id):
+        active_session_key = _ensure_active_session_key(user_id, current_session_key)
+
+    if active_session_key and active_session_key != current_session_key:
+        db_session_key = _load_active_session_key_from_db(user_id)
+        if not db_session_key:
+            active_session_key = _ensure_active_session_key(user_id, current_session_key)
+            db_session_key = active_session_key
+        if db_session_key and db_session_key != current_session_key:
+            return False
+
+    return True
+
+
+def is_single_session_request_valid(user_id: int, current_session_key: str | None) -> bool:
+    if not user_id or not current_session_key:
+        return False
+    return _validate_active_session_key(int(user_id), str(current_session_key))
+
+
 class SingleSessionMiddleware:
     def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
         self.get_response = get_response
@@ -88,7 +112,7 @@ class SingleSessionMiddleware:
             current_session_key = getattr(session, "session_key", None)
             if current_session_key:
                 try:
-                    active_session_key = _load_active_session_key(user.id)
+                    session_is_valid = is_single_session_request_valid(user.id, current_session_key)
                 except Exception:
                     record_degradation(
                         SESSION_SYNC_FAILURE,
@@ -98,16 +122,7 @@ class SingleSessionMiddleware:
                     )
                     logout(request)
                 else:
-                    if not active_session_key:
-                        active_session_key = _ensure_active_session_key(user.id, current_session_key)
-                    elif active_session_key == current_session_key and _should_verify_matching_session(user.id):
-                        active_session_key = _ensure_active_session_key(user.id, current_session_key)
-                    if active_session_key and active_session_key != current_session_key:
-                        db_session_key = _load_active_session_key_from_db(user.id)
-                        if not db_session_key:
-                            active_session_key = _ensure_active_session_key(user.id, current_session_key)
-                            db_session_key = active_session_key
-                        if db_session_key and db_session_key != current_session_key:
-                            logout(request)
+                    if not session_is_valid:
+                        logout(request)
 
         return self.get_response(request)

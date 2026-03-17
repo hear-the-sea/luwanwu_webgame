@@ -217,3 +217,18 @@ def test_health_channel_layer_check_times_out(monkeypatch):
     assert ok is False
     assert error is not None
     assert "timed out" in error
+
+
+@pytest.mark.django_db
+@override_settings(DEBUG=True)
+def test_health_ready_reports_disabled_websocket_routing(monkeypatch, client):
+    monkeypatch.setattr("core.views.health._check_database_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health._check_cache_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health.get_websocket_routing_status", lambda: (False, "routing import failed"))
+
+    resp = client.get("/health/ready")
+
+    assert resp.status_code == 503
+    data = resp.json()
+    assert data["checks"]["websocket_routing"] is False
+    assert data["errors"]["websocket_routing"] == "routing import failed"

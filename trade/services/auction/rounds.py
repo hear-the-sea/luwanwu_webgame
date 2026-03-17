@@ -129,17 +129,6 @@ def create_auction_round(
             last_round = AuctionRound.objects.select_for_update().order_by("-round_number").first()
             round_number = (last_round.round_number + 1) if last_round else 1
 
-            try:
-                auction_round = AuctionRound.objects.create(
-                    round_number=round_number,
-                    status=AuctionRound.Status.ACTIVE,
-                    start_at=now,
-                    end_at=end_at,
-                )
-            except IntegrityError:
-                logger.warning("创建拍卖轮次时发生编号冲突，跳过本次创建")
-                return None
-
             item_keys = [item_config.item_key for item_config in enabled_items]
             from core.utils.template_loader import load_templates_by_key
 
@@ -154,21 +143,36 @@ def create_auction_round(
 
                 for slot_index in range(item_config.slots):
                     slots_to_create.append(
-                        AuctionSlot(
-                            round=auction_round,
-                            item_template=item_template,
-                            quantity=item_config.quantity_per_slot,
-                            starting_price=item_config.starting_price,
-                            current_price=item_config.starting_price,
-                            min_increment=item_config.min_increment,
-                            status=AuctionSlot.Status.ACTIVE,
-                            config_key=item_config.item_key,
-                            slot_index=slot_index,
-                        )
+                        {
+                            "item_template": item_template,
+                            "quantity": item_config.quantity_per_slot,
+                            "starting_price": item_config.starting_price,
+                            "current_price": item_config.starting_price,
+                            "min_increment": item_config.min_increment,
+                            "status": AuctionSlot.Status.ACTIVE,
+                            "config_key": item_config.item_key,
+                            "slot_index": slot_index,
+                        }
                     )
 
-            if slots_to_create:
-                AuctionSlot.objects.bulk_create(slots_to_create)
+            if not slots_to_create:
+                logger.warning("本轮拍卖没有可创建的拍卖位，跳过创建轮次")
+                return None
+
+            try:
+                auction_round = AuctionRound.objects.create(
+                    round_number=round_number,
+                    status=AuctionRound.Status.ACTIVE,
+                    start_at=now,
+                    end_at=end_at,
+                )
+            except IntegrityError:
+                logger.warning("创建拍卖轮次时发生编号冲突，跳过本次创建")
+                return None
+
+            AuctionSlot.objects.bulk_create(
+                [AuctionSlot(round=auction_round, **slot_data) for slot_data in slots_to_create]
+            )
 
             logger.info("创建拍卖轮次 #%d，共 %d 个拍卖位", round_number, len(slots_to_create))
 

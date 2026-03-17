@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 from types import SimpleNamespace
 
@@ -377,3 +378,83 @@ def test_scan_scout_records_counts_both_phases(monkeypatch):
     assert tasks.scan_scout_records() == 3
     assert called["scout"] == 2
     assert called["return"] == 1
+
+
+@pytest.mark.django_db
+def test_guest_training_fractional_remaining(monkeypatch):
+    import guests.tasks as guest_tasks
+
+    now = timezone.now()
+    guest = SimpleNamespace(training_complete_at=now + timedelta(milliseconds=300))
+
+    monkeypatch.setattr("guests.models.Guest", SimpleNamespace(objects=_Chain(first_result=guest)))
+    monkeypatch.setattr("guests.tasks.timezone.now", lambda: now)
+
+    finalized = []
+    monkeypatch.setattr("guests.services.finalize_guest_training", lambda *_args, **_kwargs: finalized.append(True))
+
+    called = {}
+
+    def _safe_apply_async_with_dedup(*_args, args=None, countdown=None, **_kwargs):
+        called["args"] = args
+        called["countdown"] = countdown
+        return True
+
+    monkeypatch.setattr("guests.tasks.safe_apply_async_with_dedup", _safe_apply_async_with_dedup)
+
+    assert guest_tasks.complete_guest_training.run(101) == "rescheduled"
+    assert called["args"] == [101]
+    assert called["countdown"] == 1
+    assert not finalized
+
+
+@pytest.mark.django_db
+def test_guest_training_dispatch_false(monkeypatch, caplog):
+    import guests.tasks as guest_tasks
+
+    now = timezone.now()
+    guest = SimpleNamespace(training_complete_at=now + timedelta(seconds=5))
+
+    monkeypatch.setattr("guests.models.Guest", SimpleNamespace(objects=_Chain(first_result=guest)))
+    monkeypatch.setattr("guests.tasks.timezone.now", lambda: now)
+    monkeypatch.setattr("guests.tasks.safe_apply_async_with_dedup", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr("guests.services.finalize_guest_training", lambda *_args, **_kwargs: False)
+
+    with caplog.at_level(logging.WARNING):
+        assert guest_tasks.complete_guest_training.run(102) == "reschedule_failed"
+
+    assert "guest training reschedule dispatch returned False: guest_id=102" in caplog.text
+
+
+@pytest.mark.django_db
+def test_guest_training_via_safe_apply_async(monkeypatch):
+    import guests.services.training as guest_training_service
+    import guests.tasks as guest_tasks
+
+    called = {}
+
+    def _safe_apply_async(task, *, args=None, countdown=None, logger=None, log_message="", **_kwargs):
+        called["task"] = task
+        called["args"] = args
+        called["countdown"] = countdown
+        called["logger"] = logger
+        called["log_message"] = log_message
+        return True
+
+    def _apply_async_should_not_run(*_args, **_kwargs):
+        raise AssertionError("direct apply_async should not be used")
+
+    monkeypatch.setattr(guest_training_service, "safe_apply_async", _safe_apply_async)
+    monkeypatch.setattr(guest_tasks.complete_guest_training, "apply_async", _apply_async_should_not_run)
+
+    guest_training_service._try_enqueue_complete_guest_training(
+        SimpleNamespace(id=77, training_complete_at=timezone.now()),
+        countdown=5,
+        source="test",
+    )
+
+    assert called["task"] is guest_tasks.complete_guest_training
+    assert called["args"] == [77]
+    assert called["countdown"] == 5
+    assert called["logger"] is guest_training_service.logger
+    assert called["log_message"] == "guest training task dispatch failed"

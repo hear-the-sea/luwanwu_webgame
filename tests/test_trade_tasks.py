@@ -57,13 +57,13 @@ def test_refresh_shop_stock_returns_failure_summary(monkeypatch):
     monkeypatch.setattr(ShopStock.objects, "update_or_create", _update_or_create)
 
     result = refresh_shop_stock.run()
-    assert result == "refreshed 1 items, 1 failed"
+    assert result == "refreshed 1 items, 1 failed, failed_item_keys=['bad']"
 
     assert ShopStock.objects.get(item_key="ok").current_stock == 2
 
 
 @pytest.mark.django_db
-def test_settle_auction_round_task_does_not_fail_when_create_round_dispatch_fails(monkeypatch):
+def test_settle_auction_round_task_falls_back_to_sync_create_when_dispatch_fails(monkeypatch):
     monkeypatch.setattr(
         "trade.services.auction_service.settle_auction_round",
         lambda: {"settled": 1, "sold": 2, "unsold": 0, "total_gold_bars": 20},
@@ -73,10 +73,16 @@ def test_settle_auction_round_task_does_not_fail_when_create_round_dispatch_fail
         raise ConnectionError("dispatch failed")
 
     monkeypatch.setattr("trade.tasks.create_auction_round_task.delay", _raise_dispatch_error)
+    called = {"sync_create": 0}
+    monkeypatch.setattr(
+        "trade.services.auction_service.create_auction_round",
+        lambda: called.__setitem__("sync_create", called["sync_create"] + 1),
+    )
 
     result = settle_auction_round_task.run()
     assert "结算完成" in result
     assert "售出 2 件" in result
+    assert called["sync_create"] == 1
 
 
 @pytest.mark.django_db

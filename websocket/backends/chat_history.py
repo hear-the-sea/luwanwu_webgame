@@ -163,3 +163,15 @@ def append_history_sync(
 
     cutoff_ms = int((_now_ts() - float(history_message_ttl_seconds)) * 1000)
     trim_history_by_time_sync(cutoff_ms, redis, history_key=history_key, history_limit=history_limit)
+
+
+def remove_history_sync(message: dict, redis, *, history_key: str) -> None:
+    """Best-effort removal for a previously appended message."""
+    from websocket.consumers.world_chat import WorldChatInfrastructureError
+
+    payload = json.dumps(message, ensure_ascii=False, separators=(",", ":"))
+    try:
+        redis.lrem(history_key, 1, payload)
+    except (RedisError, ConnectionError, OSError, TimeoutError) as exc:
+        logger.warning("World chat history compensation delete failed: %s", exc)
+        raise WorldChatInfrastructureError("world chat history compensation unavailable") from exc

@@ -4,15 +4,17 @@ import logging
 import time
 
 from django.core.cache import cache
-from django_redis import get_redis_connection
+
+from .online_presence_backend import (
+    ONLINE_USER_TOUCH_CACHE_KEY_PREFIX,
+    ONLINE_USER_TOUCH_CACHE_TIMEOUT,
+    ONLINE_USERS_CACHE_KEY,
+    ONLINE_USERS_TTL_SECONDS,
+    get_redis_connection_if_supported,
+    touch_http_presence,
+)
 
 logger = logging.getLogger(__name__)
-
-ONLINE_USERS_ZSET_KEY = "online_users_zset"
-ONLINE_USERS_TTL_SECONDS = 1800
-ONLINE_USER_TOUCH_CACHE_KEY_PREFIX = "stats:online_users:touch:"
-ONLINE_USER_TOUCH_CACHE_TIMEOUT = 60
-ONLINE_USERS_CACHE_KEY = "stats:online_users_count"
 
 
 def _safe_cache_add(key: str, value, timeout: int):
@@ -28,13 +30,6 @@ def _safe_cache_delete(key: str) -> None:
         cache.delete(key)
     except Exception:
         logger.warning("Failed to delete cache key: %s", key, exc_info=True)
-
-
-def get_redis_connection_if_supported():
-    try:
-        return get_redis_connection("default")
-    except NotImplementedError:
-        return None
 
 
 def refresh_online_presence_from_request(user) -> None:
@@ -58,8 +53,7 @@ def refresh_online_presence_from_request(user) -> None:
         if redis is None:
             return
         now_ts = float(time.time())
-        redis.zadd(ONLINE_USERS_ZSET_KEY, {int(user_id): now_ts})
-        redis.expire(ONLINE_USERS_ZSET_KEY, ONLINE_USERS_TTL_SECONDS * 2)
+        touch_http_presence(redis, user_id=int(user_id), now_ts=now_ts, ttl_seconds=ONLINE_USERS_TTL_SECONDS)
         _safe_cache_delete(ONLINE_USERS_CACHE_KEY)
     except NotImplementedError:
         return

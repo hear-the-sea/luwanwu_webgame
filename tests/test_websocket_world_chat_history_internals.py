@@ -44,6 +44,7 @@ class _FakeRedis:
     def __init__(self):
         self._lists: dict[str, list[str]] = {}
         self._counters: dict[str, int] = {}
+        self._zsets: dict[str, dict[str, float]] = {}
 
     def lrange(self, key: str, start: int, end: int):
         items = list(self._lists.get(key, []))
@@ -94,6 +95,41 @@ class _FakeRedis:
     def incr(self, key: str):
         self._counters[key] = int(self._counters.get(key, 0)) + 1
         return self._counters[key]
+
+    def zadd(self, key: str, mapping: dict[object, float]):
+        zset = self._zsets.setdefault(key, {})
+        for member, score in mapping.items():
+            zset[str(member)] = float(score)
+        return len(mapping)
+
+    def zcard(self, key: str):
+        return len(self._zsets.get(key, {}))
+
+    def zremrangebyscore(self, key: str, min_score, max_score):
+        zset = self._zsets.get(key, {})
+        lower = float("-inf") if min_score == "-inf" else float(min_score)
+        upper = float(max_score)
+        removed = [member for member, score in zset.items() if lower <= score <= upper]
+        for member in removed:
+            zset.pop(member, None)
+        return len(removed)
+
+    def zrange(self, key: str, start: int, end: int, withscores: bool = False):
+        zset = self._zsets.get(key, {})
+        items = sorted(zset.items(), key=lambda item: (item[1], item[0]))
+        if not items:
+            return []
+        if end < 0:
+            end = len(items) + end
+        end = min(end, len(items) - 1)
+        if start < 0:
+            start = 0
+        if start > end:
+            return []
+        sliced = items[start : end + 1]
+        if withscores:
+            return [(member, score) for member, score in sliced]
+        return [member for member, _score in sliced]
 
 
 def _build_consumer(fake_redis: _FakeRedis) -> WorldChatConsumer:
@@ -174,7 +210,7 @@ def test_world_chat_rate_limit_sync_handles_no_user_id():
 
 def test_world_chat_rate_limit_sync_raises_when_redis_errors(monkeypatch):
     class _BrokenRedis(_FakeRedis):
-        def incr(self, key: str):
+        def eval(self, *args, **kwargs):
             raise RedisError("down")
 
     consumer = _build_consumer(_BrokenRedis())
@@ -196,6 +232,30 @@ def test_world_chat_rate_limit_sync_rejects_after_limit(monkeypatch):
     assert consumer._rate_limit_sync(1) == (True, None)
     assert consumer._rate_limit_sync(1) == (True, None)
     assert consumer._rate_limit_sync(1) == (False, 8)
+
+
+def test_world_chat_rate_limit_sync_blocks_burst_across_sliding_window_boundary(monkeypatch):
+    fake = _FakeRedis()
+    consumer = _build_consumer(fake)
+    consumer.RATE_LIMIT_WINDOW_SECONDS = 8
+    consumer.RATE_LIMIT_MAX_MESSAGES = 2
+
+    # Exhaust quota near a nominal bucket boundary.
+    monkeypatch.setattr("websocket.consumers.time.time", lambda: 15.999)
+    assert consumer._rate_limit_sync(1) == (True, None)
+    assert consumer._rate_limit_sync(1) == (True, None)
+
+    # Sliding-window throttling keeps the previous sends inside the last 8s window,
+    # so the quota is still exhausted immediately after t=16.0.
+    monkeypatch.setattr("websocket.consumers.time.time", lambda: 16.0)
+    allowed, retry_after = consumer._rate_limit_sync(1)
+    assert allowed is False
+    assert retry_after == 8
+
+    # Once the oldest send has fallen out of the 8s sliding window, sends are
+    # admitted again.
+    monkeypatch.setattr("websocket.consumers.time.time", lambda: 24.0)
+    assert consumer._rate_limit_sync(1) == (True, None)
 
 
 def test_world_chat_next_id_sync_raises_on_redis_error(monkeypatch):

@@ -34,6 +34,7 @@ class ScoutRecord(models.Model):
     return_at = models.DateTimeField("返程完成时间", null=True, blank=True)
     completed_at = models.DateTimeField("实际完成时间", null=True, blank=True)
     is_success = models.BooleanField("是否成功", null=True, blank=True)
+    was_retreated = models.BooleanField("是否主动撤退", default=False)
 
     # 侦察结果（成功时填充）
     intel_data = models.JSONField(
@@ -47,6 +48,7 @@ class ScoutRecord(models.Model):
         indexes = [
             models.Index(fields=["attacker", "defender", "-started_at"]),
             models.Index(fields=["status", "complete_at"]),
+            models.Index(fields=["status", "return_at"], name="scout_status_return_at_idx"),
         ]
 
     def __str__(self) -> str:

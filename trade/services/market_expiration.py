@@ -24,6 +24,7 @@ def expire_listings_queryset(
     log_label: str,
     *,
     market_listing_model,
+    return_inventory_func: Callable[..., object],
     create_message_func: Callable[..., object],
     notify_user_func: Callable[..., object],
     logger,
@@ -44,6 +45,9 @@ def expire_listings_queryset(
     count = 0
     for listing_id in candidate_ids:
         try:
+            seller = None
+            message_payload = None
+            notify_payload = None
             with transaction.atomic():
                 listing = (
                     market_listing_model.objects.select_for_update(skip_locked=True)
@@ -72,49 +76,58 @@ def expire_listings_queryset(
                 listing.status = market_listing_model.Status.EXPIRED
                 listing.save(update_fields=["status"])
 
-                create_message_func(
-                    manor=seller,
-                    kind="system",
-                    title="【交易过期】您的物品已退回",
-                    body=(
-                        f"您上架的 {item_name} x{quantity} 已过期，物品已通过附件退回。\n\n"
+                return_inventory_func(manor=seller, listing=listing)
+
+                message_payload = {
+                    "manor": seller,
+                    "kind": "system",
+                    "title": "【交易过期】您的物品已退回",
+                    "body": (
+                        f"您上架的 {item_name} x{quantity} 已过期，物品已直接退回仓库。\n\n"
                         f"挂单信息：\n"
                         f"- 物品：{item_name}\n"
                         f"- 数量：{quantity}\n"
                         f"- 定价：{unit_price:,} 银两/件\n"
                         f"- 上架时间：{listed_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
                         f"- 过期时间：{expires_at.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-                        f"注意：手续费 {listing_fee:,} 银两不予退还。\n"
-                        f"请在消息中领取附件以取回物品。"
+                        f"注意：手续费 {listing_fee:,} 银两不予退还。"
                     ),
-                    attachments={
-                        "items": {item_key: quantity},
-                    },
-                )
+                }
+                notify_payload = {
+                    "kind": "market_expired",
+                    "title": "【交易过期】您的物品已退回",
+                    "item_name": item_name,
+                    "item_key": item_key,
+                    "quantity": quantity,
+                }
 
                 listing.delete()
-
-                try:
-                    notify_user_func(
-                        seller.user_id,
-                        {
-                            "kind": "market_expired",
-                            "title": "【交易过期】您的物品已退回",
-                            "item_name": item_name,
-                            "item_key": item_key,
-                            "quantity": quantity,
-                        },
-                        log_context="market expired notification",
-                    )
-                except Exception as exc:
-                    logger.warning(
-                        "market notify_user failed: user_id=%s error=%s",
-                        seller.user_id,
-                        exc,
-                        exc_info=True,
-                    )
-
                 count += 1
+
+            try:
+                create_message_func(**message_payload)
+            except Exception as exc:
+                logger.warning(
+                    "market create_message failed: listing_id=%s seller_id=%s error=%s",
+                    listing_id,
+                    getattr(seller, "id", None),
+                    exc,
+                    exc_info=True,
+                )
+
+            try:
+                notify_user_func(
+                    seller.user_id,
+                    notify_payload,
+                    log_context="market expired notification",
+                )
+            except Exception as exc:
+                logger.warning(
+                    "market notify_user failed: user_id=%s error=%s",
+                    seller.user_id,
+                    exc,
+                    exc_info=True,
+                )
         except Exception as exc:
             logger.exception("%s %s 时出错: %s", log_label, listing_id, exc)
             continue

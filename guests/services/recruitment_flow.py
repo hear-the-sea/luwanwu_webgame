@@ -63,15 +63,26 @@ def schedule_guest_recruitment_completion(
         logger.warning("Unable to import complete_guest_recruitment task; skip scheduling", exc_info=True)
         return
 
-    transaction.on_commit(
-        lambda: safe_apply_async(
+    def _dispatch_completion() -> None:
+        dispatched = safe_apply_async(
             complete_guest_recruitment,
             args=[recruitment.id],
             countdown=countdown,
             logger=logger,
             log_message="complete_guest_recruitment dispatch failed",
         )
-    )
+        if not dispatched:
+            logger.error(
+                "complete_guest_recruitment dispatch returned False; recruitment may remain pending",
+                extra={
+                    "task_name": "complete_guest_recruitment",
+                    "recruitment_id": recruitment.id,
+                    "manor_id": recruitment.manor_id,
+                    "pool_id": recruitment.pool_id,
+                },
+            )
+
+    transaction.on_commit(_dispatch_completion)
 
 
 def mark_recruitment_failed_locked(

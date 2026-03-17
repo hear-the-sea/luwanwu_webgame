@@ -1,6 +1,8 @@
 # 项目技术审计与优化清单（2026-03）
 
-本文档基于 2026-03-16 对仓库的静态审查、配置检查与代表性测试验证整理，只保留当前代码里仍然成立的问题。已闭环或本轮未再观察到反例的事项已从正文移除，避免把历史问题继续挂在当前审计结果里。
+本文档基于 2026-03-17 的代码复核、针对性回归测试与部署门禁检查整理，只保留当前代码里仍然成立的问题。已经闭环且有代码/测试证据支撑的事项，已从正文和待跟踪列表移除，避免历史问题继续混入当前审计结果。
+
+最近更新：2026-03-17（第九批推进：再核销 2 项剩余条目）
 
 相关文档：
 
@@ -10,46 +12,45 @@
 
 ## 1. 审计范围与方法
 
-本次审计覆盖：
+本次复核覆盖：
 
 - Django 配置层：`config/settings/*`、`config/asgi.py`
 - 核心通用能力：`core/*`、`common/utils/celery.py`
-- 关键业务路径：`gameplay`、`guests`、`trade`、`accounts`、`websocket`
+- 关键业务路径：`gameplay`、`guests`、`trade`、`guilds`、`websocket`
+- 会话与部署链路：`accounts/*`、`docker/*`、`Dockerfile`
 - 质量门禁：`pyproject.toml`、`Makefile`、`.github/workflows/ci.yml`
 - 测试结构与代表性回归：`tests/*`
-- 当前技术债文档：`docs/technical_audit_2026-03.md`
 
-本次实际执行的验证：
+本轮实际执行的验证：
 
-- `pytest -q tests/test_common_celery_utils.py tests/test_cache_lock_utils.py tests/test_bank_service_rates.py tests/test_raid_combat_runs.py`
-- `pytest -q tests/test_accounts.py -k 'fail_closed or login_attempts'`
-- `python manage.py check --deploy`
+- 逐项复核文档中标记为 `✅ 已完成` 的条目，对照实现与回归测试确认是否真正闭环
+- `pytest -q tests/test_mission_launch_resilience.py tests/test_mission_refresh_async.py tests/test_raid_scout_refresh.py tests/test_world_chat_consumer.py tests/test_websocket_world_chat_history_internals.py tests/test_websocket_consumers.py tests/test_context_processors.py tests/test_gameplay_tasks.py tests/test_global_mail_tasks.py tests/test_guilds_tasks.py tests/test_health.py tests/test_asgi.py tests/test_work_service_concurrency.py tests/test_guests_defection.py tests/test_trade.py tests/test_trade_auction_bidding.py tests/test_trade_tasks.py tests/test_raid_combat_runs.py`
+- `python -m mypy gameplay/services/online_presence_backend.py gameplay/services/raid/combat/refresh_flow.py`
+- `DJANGO_DEBUG=0 DJANGO_ALLOWED_HOSTS=localhost DJANGO_SECRET_KEY=test-secret-key REDIS_PASSWORD=ci-test-dummy python manage.py check --deploy`
 
 当前抽样结果：
 
-- 代表性回归测试 `57 passed, 10 deselected`
-- `manage.py check --deploy` 在当前本地开发环境下返回 `6` 条安全告警；这说明默认运行态仍偏开发模式，但不单独作为代码缺陷条目展开
+- 针对性回归测试 `183 passed, 1 skipped`
+- `check --deploy` 可正常进入 Django deploy checks 并执行完成
+- 唯一告警为测试用 `SECRET_KEY` 过短，不属于本次代码回归问题
+- 新增 helper 模块已通过 targeted mypy 检查，说明“拆分后立即纳入门禁”这条路径已开始落地
+- 本轮复核确认：所有 `P0` 条目已闭环；`P1-7`、`P2-5` 已关闭；当前剩余问题集中在类型门禁和热点模块复杂度
 
 ## 2. 当前状态快照
 
-量化信号：
-
-- 核心业务与配置目录 Python 文件约 `610` 个
-- 测试 Python 文件约 `183` 个
-- `data/` 顶层 YAML 配置文件 `22` 个
-- 业务代码中 `except Exception` / 裸 `except:` / `except BaseException` 约 `249` 处
-- 当前仍显著偏大的热点文件：
-  - `gameplay/services/inventory/guest_items.py` `837` 行
-  - `gameplay/services/raid/combat/runs.py` `534` 行
-  - `guests/views/recruit.py` `517` 行
-  - `trade/services/bank_service.py` `489` 行
-  - `gameplay/services/arena/core.py` `444` 行
-  - `gameplay/services/__init__.py` `335` 行
-
 整体判断：
 
-- 优点：文档、测试、CI、并发敏感路径的工程意识已经铺开，项目不是“没工程化”。
-- 问题：当前主要短板不是功能缺失，而是硬约束、门禁和可观测性之间仍有漏口。很多地方已经有封装和补偿，但还没把这些封装变成真正被所有调用方遵守的系统约束。
+- 优点：关键状态一致性、通知解耦、补偿链路、部署门禁、会话治理和完成态幂等保护已经明显收口。
+- 现状：当前主要短板已经从“状态机会不会出错”转移为“高风险代码能否被持续约束”和“热点流程文件能否持续收缩”。
+- 风险：剩余问题虽然不再是大面积 `P0` 事故源，但仍会持续拉低维护效率和后续演进稳定性。
+
+本轮已核销并从正文移除的条目：
+
+- `P0-1` 到 `P0-7`：任务启动半完成、侦察撤退语义、聊天补偿守恒、dispatch 失败收口、CI deploy gate、任务结算通知、帮会成员事务治理均已闭环。
+- `P1-1`、`P1-2`、`P1-3`、`P1-5`、`P1-6`、`P1-8`、`P1-9`、`P1-10`、`P1-11`、`P1-12`、`P1-13`、`P1-14`、`P1-15`：高风险验证要求、任务监控并发计数、帮会产出补偿、训练/打工/生产/叛逃并发硬化、拍卖与交易链路语义错误、全服邮件补偿、单会话治理等已完成。
+- `P1-7`：世界聊天限流已从 fixed-window 升级为 sliding-window，桶边界穿透问题已关闭。
+- `P2-1`、`P2-3`、`P2-4`：DEBUG 下 WebSocket 路由告警、默认容器启动链路、nginx readiness 代理配置均已对齐。
+- `P2-5`：HTTP 活跃态与 WS 连接态已拆成独立 zset 来源，再统一汇总在线人数。
 
 ## 3. 优先级总览
 
@@ -57,144 +58,29 @@
 
 | 优先级 | 主题 | 目标 |
 | --- | --- | --- |
-| P0 | 关键状态一致性硬化 | 避免任务调度异常后出现“数据库已改、收尾没做”的半完成状态 |
-| P0 | 生产语义验证收口 | 降低团队把 hermetic 测试通过误判为生产语义正确的风险 |
-| P1 | 质量门禁升级 | 让类型检查和运行时指标真正覆盖高风险区域 |
-| P1 | 复杂度收敛 | 把热点模块继续拆小，减少伪分层和隐式耦合 |
-| P2 | 审计与观测治理闭环 | 让技术审计、指标和代码状态保持同步 |
+| P1 | 高风险区类型门禁 | 让 mypy 真正约束核心服务层，而不是只覆盖低风险模块 |
+| P2 | 热点模块持续拆分 | 降低“大而全”流程文件继续长出状态边界问题的概率 |
 
-## 4. P0：关键状态一致性硬化
+## 4. P1：仍需收口的高优先级项
 
-### P0-1 多个关键状态流没有兑现 `safe_apply_async()` 的契约
+### P1-4 mypy 仍不是高信噪比门禁
 
 现象：
 
-- `common/utils/celery.py` 已经明确约定：对“must-execute”场景，调用方必须检查返回值并在失败时走同步 fallback 或显式报错。
-- 但多个关键状态流仍只是调用 `safe_apply_async()`，没有消费返回值：
-  - `gameplay/services/raid/combat/runs.py`
-  - `gameplay/services/raid/scout.py`
-  - `gameplay/services/buildings/ranch.py`
-  - `gameplay/services/buildings/stable.py`
-  - `gameplay/services/buildings/smithy.py`
-  - `gameplay/services/manor/core.py`
-- 同一项目中也存在对比鲜明的正例：`gameplay/services/missions_impl/execution.py`、`gameplay/services/raid/combat/runs.py` 的部分路径已经会在 dispatch 失败后同步补偿或显式记录。
+- 全局仍是宽松模式：
+  - `disallow_untyped_defs = false`
+  - `ignore_missing_imports = true`
+- 高风险区域仍在 `ignore_errors` 清单里，包括：
+  - `gameplay.models.*`
+  - `gameplay.services.raid.*`
+  - `guests.services.*`
+  - `*.views`
+- 虽然 `gameplay.services.buildings.*` 等模块已经进入 stricter override，但最复杂的状态机和服务层仍未被真正约束。
 
 影响：
 
-- 这不是单纯的“消息延迟”问题，而是状态机一致性问题。
-- 一旦 broker / worker / import 链异常，数据库状态可能已经切到“撤退中”“返程中”“生产中”，但后续完成动作没人执行，只能寄希望于用户刷新、扫描任务或人工补偿。
-- 同一封装在不同调用点语义不一致，会让维护者误以为“用了统一 helper 就安全”，实际上安全性仍取决于调用者是否记得补返回值处理。
-
-证据：
-
-- `common/utils/celery.py`
-- `gameplay/services/raid/combat/runs.py`
-- `gameplay/services/raid/scout.py`
-- `gameplay/services/buildings/ranch.py`
-- `gameplay/services/buildings/stable.py`
-- `gameplay/services/buildings/smithy.py`
-- `gameplay/services/manor/core.py`
-
-建议：
-
-- 给 `safe_apply_async()` 的调用点做一次分级清点：
-  - 纯优化型任务：允许 best-effort
-  - 状态推进型任务：必须检查返回值
-- 对撤退、返程、生产完成、建筑升级完成这类状态推进链路，统一补：
-  - dispatch 失败后的同步补偿
-  - 或显式 fail-closed
-- 为关键调用点补测试，直接断言“dispatch 返回 False 时状态如何收口”。
-
-完成标准：
-
-- 所有关键状态推进动作都能回答“调度失败后谁来收尾”。
-- 不再存在“helper 契约要求处理失败，但调用方直接忽略返回值”的路径。
-
-### P0-2 默认测试路径与真实生产语义仍有明显距离
-
-现象：
-
-- 默认测试设置仍使用 SQLite、LocMem cache、InMemory channel layer、memory broker。
-- `CI` 虽已加入 MySQL + Redis 集成测试 job，也在注释里说明了 hermetic 套件无法覆盖真实语义。
-- 但团队最常运行的本地反馈回路，依然不是 MySQL / Redis / 真实 Channels / 真实 broker 语义。
-
-影响：
-
-- `select_for_update()`、共享缓存锁、分布式去重、Celery broker、Channels Redis 行为这类问题，依旧容易在日常开发阶段被低估。
-- 当前流程已经“知道边界”，但还没把“高风险改动必须跑真实依赖验证”收紧成真正的默认约束。
-
-证据：
-
-- `config/settings/testing.py`
-- `Makefile`
-- `.github/workflows/ci.yml`
-- `docs/development.md`
-
-建议：
-
-- 保留 hermetic 套件，但在开发文档和 PR 约束里更直接地区分：
-  - 能证明业务基本正确的测试
-  - 只能证明代码在假依赖下可运行的测试
-- 对包含以下特征的改动，要求显式跑 infra-backed 验证：
-  - `select_for_update()`
-  - 共享缓存锁 / dedup
-  - Celery dispatch / retry / scanner fallback
-  - Channels / Redis 聊天链路
-- 把“哪些改动必须附集成测试验证结果”写成仓库规则，而不只写在注释里。
-
-完成标准：
-
-- 高风险模块改动不再默认只靠 hermetic 套件背书。
-- 团队不会把“默认测试通过”误读为“生产语义已经验证”。
-
-### P0-3 broad catch 仍然大量存在，灰色故障风险依旧高
-
-现象：
-
-- 当前业务代码中仍有约 `249` 处 broad catch。
-- 虽然部分路径已经补了 `degraded=True` 或 fallback 注释，但仍有大量逻辑采用“记 warning 然后继续跑”的模式。
-
-影响：
-
-- 它会持续制造“看起来没挂，但结果不完整”的灰色故障。
-- 这类故障最难排查，因为表面功能往往还能继续使用，真正的问题会被拖到后续状态校正、客服反馈或数据核对时才暴露。
-
-典型位置：
-
-- `trade/services/bank_service.py`
-- `common/utils/celery.py`
-- `websocket/consumers/world_chat.py`
-- `gameplay/services/raid/combat/battle.py`
-- `gameplay/services/missions_impl/execution.py`
-- `accounts/views.py`
-
-建议：
-
-- 继续推进异常分级收口：
-  - 可预期业务异常：正常返回
-  - 明确的基础设施异常：允许降级，但必须带结构化上下文
-  - 未知异常：直接抛出
-- 优先收敛资金、库存、聊天消费、异步状态推进相关路径。
-
-完成标准：
-
-- 未知异常不再被大范围吞掉。
-- 每一条保留的 broad catch 都能清楚说明“为何允许继续”和“如何观测”。
-
-## 5. P1：质量门禁与复杂度收敛
-
-### P1-1 mypy 已接入，但仍不是高信噪比门禁
-
-现象：
-
-- 全局 `disallow_untyped_defs = false`。
-- `ignore_missing_imports = true`。
-- `*.views`、`gameplay.models.*`、`gameplay.services.raid.*`、`guests.services.*` 等高风险区域仍在 `ignore_errors` 名单中。
-
-影响：
-
-- 最复杂、最容易出错的区域，恰恰没有被静态检查真正约束。
-- 当前 mypy 更像“项目已接入类型检查”，还不是“高风险回归的可靠门禁”。
+- 最容易出现事务边界、并发和状态语义问题的模块，仍可以在类型层面“裸奔”。
+- 当前 mypy 更像“项目已接入类型检查”，还不是“关键路径可依赖的回归门禁”。
 
 证据：
 
@@ -202,154 +88,99 @@
 
 建议：
 
-- 缩小 `ignore_errors` 时优先清理高风险服务层，而不是先做边角模块。
-- 对新建核心模块直接要求完整注解，不允许进入豁免名单。
-- 在 PR 审查中把“是否新增类型豁免”列为显式检查项。
+- 下一轮缩减豁免名单时优先处理 `gameplay.services.raid.*` 和 `guests.services.*`，不要继续先做边角模块。
+- 保持“新增核心模块禁止进入 `ignore_errors`”这条治理规则，同时把老的高风险豁免逐步拆掉。
+- 对已经拆出的 helper 模块优先补标注，借此把 strict 范围往核心流程推进。
 
 完成标准：
 
-- 高风险服务层的类型豁免范围持续缩小。
-- 新核心逻辑默认处于严格类型检查之下。
+- 高风险区的类型豁免范围继续缩小。
+- mypy 结果能真正拦截核心服务层的回归，而不只是装饰性绿灯。
 
-### P1-2 `task_monitoring` 的任务注册表仍有丢更新竞态
+## 5. P2：复杂度与数据面治理
+
+### P2-2 热点模块仍然把规则、状态、调度和通知揉在一起
 
 现象：
 
-- `core/utils/task_monitoring.py` 的计数本身通过 `cache.incr()` 做了原子化。
-- 但任务名注册表仍然是 `cache.get()` -> 修改集合 -> `cache.set()` 的 read-modify-write。
-- 当前测试主要验证单线程 / 单进程快照，不覆盖多 worker 并发首次写入不同 task name 的情况。
+- 多个热点文件已开始拆分，但职责仍偏混合，典型如：
+  - `gameplay/services/missions_impl/execution.py`
+  - `gameplay/services/raid/combat/runs.py`
+  - `trade/services/bank_service.py`
+  - `gameplay/services/inventory/guest_items.py`
+- 本轮虽然已新增：
+  - `gameplay/services/inventory/soul_fusion_helpers.py`
+  - `trade/services/rate_calculations.py`
+  - `gameplay/services/raid/combat/raid_inputs.py`
+  - `gameplay/services/raid/combat/refresh_flow.py`
+- 但主流程文件体量和职责密度仍然偏高。
 
 影响：
 
-- 指标数值可能是对的，但“哪些任务出现在快照里”并不完全可信。
-- 一旦注册表丢写，`health_ready` 等依赖快照枚举的地方会表现出“部分任务从监控里消失”的问题。
-
-证据：
-
-- `core/utils/task_monitoring.py`
-- `tests/test_task_monitoring.py`
-- `core/views/health.py`
+- 只要继续往这些“大而全”文件堆逻辑，本轮已经修掉的事务边界和补偿问题就容易换个位置重新长出来。
+- 复杂度不是抽象审美问题，而是直接提高状态机再次退化的概率。
 
 建议：
 
-- 把任务名注册从集合读改写，换成真正的原子方案：
-  - Redis set / hash 原子写
-  - 或单独的 append-only key 设计
-- 为并发首次注册补集成测试，而不是只测串行快照。
+- 下一轮拆分优先按职责边界切，而不是按“顺手提个 helper”切：
+  - 规则计算
+  - 状态持久化
+  - 任务调度
+  - 通知与观测
+- 对超过团队可读阈值的主流程文件，建立持续拆分清单，不再接受无限增长。
 
 完成标准：
 
-- 任务注册表不再依赖非原子的 `get/set` 回写。
-- 监控快照在多 worker 并发下仍然稳定完整。
+- 热点模块的事务边界和副作用边界继续变清晰。
+- 新问题不再持续从同一类“大而全”文件里长出来。
 
-### P1-3 热点模块虽然已有拆分，但复杂度仍然集中
+## 6. 建议执行顺序
 
-现象：
+### 第一阶段：1 周内完成
 
-- `yaml_schema.py`、`arena/core.py`、`runs.py` 已经比旧版本明显收缩，说明拆分在起作用。
-- 但当前仍有多处热点文件超过或逼近 `500` 行，且内部职责仍偏混合。
+- 缩小 `gameplay.services.raid.*`、`guests.services.*` 的 mypy 豁免范围。
+- 继续把已拆出的 raid / online-presence helper 模块纳入 strict 检查，并从大包级 `ignore_errors` 中逐步剥离。
 
-影响：
+### 第二阶段：1-2 周内完成
 
-- 复杂度不是“没有下降”，而是还没降到足够安全的水平。
-- 新逻辑如果继续往这些热点文件堆，后续维护成本会很快反弹。
-
-重点对象：
-
-- `gameplay/services/inventory/guest_items.py`
-- `gameplay/services/raid/combat/runs.py`
-- `guests/views/recruit.py`
-- `trade/services/bank_service.py`
-- `gameplay/services/arena/core.py`
-- `gameplay/services/__init__.py`
-
-建议：
-
-- 下一轮拆分优先看“一个文件里同时承担规则计算、状态变更、任务调度、消息通知”的模块。
-- 聚合导出层只保留稳定兼容入口，避免继续扩张。
-- 给热点文件设明确预算，超过阈值必须在 PR 描述里解释原因。
-
-完成标准：
-
-- 热点文件继续收缩到职责明确的单元。
-- 聚合层不再成为隐藏耦合的总入口。
-
-## 6. P2：审计与观测治理闭环
-
-### P2-1 技术审计文档已经出现与代码状态不一致的内容
-
-现象：
-
-- 当前文档旧版本仍保留了已解决问题和过期数字，例如：
-  - `core/utils/yaml_schema.py` 仍写成 `1807` 行
-  - `gameplay/services/arena/core.py` 仍写成 `757` 行
-  - `gameplay/services/raid/combat/runs.py` 仍写成 `639` 行
-- 跟踪模板中也混入了大量“已完成”条目，与“正文只保留当前问题”的目标冲突。
-
-影响：
-
-- 技术审计文档一旦和代码状态脱节，就会失去治理价值。
-- 团队会分不清哪些风险仍在，哪些只是历史记录。
-
-证据：
-
-- `docs/technical_audit_2026-03.md`
-- 当前仓库实际文件行数统计
-
-建议：
-
-- 审计文档只保留当前仍成立的问题；已完成事项迁到独立 changelog 或优化记录。
-- 文档中的量化数字必须来自本轮实际命令输出，不接受手工沿用旧值。
-- 在每次较大重构后，把“同步更新审计文档”作为收尾步骤，而不是可选动作。
-
-完成标准：
-
-- 审计文档与当前代码状态保持同步。
-- 历史完成项与当前待办项分离，避免继续混杂。
-
-## 7. 建议执行顺序
-
-### 第一阶段：1-2 周内完成
-
-- 逐一清点 `safe_apply_async()` 的关键调用点，补齐失败返回值处理。
-- 为撤退、返程、生产完成、建筑升级完成这类状态推进链路补回归测试。
-- 在开发文档和 PR 要求中收紧 infra-backed 验证规则。
-
-### 第二阶段：2-4 周内完成
-
-- 修复 `task_monitoring` 注册表的并发写入方案。
-- 继续收敛资金、库存、聊天消费、异步状态推进相关 broad catch。
-- 缩小 mypy 的高风险豁免范围。
+- 继续拆分 `execution.py`、`runs.py` 等热点文件，把规则、持久化、调度、副作用进一步解耦。
 
 ### 第三阶段：持续推进
 
-- 继续拆分热点模块和聚合导出层。
-- 让审计文档、指标暴露和代码状态维持同频更新。
+- 对拆分后的新模块同步补类型标注和门禁，避免复杂度只是平移。
+- 观察运行期 degraded counter 和关键状态流，确认剩余问题不是“代码看起来对了”而是“运行上也稳定了”。
 
-## 8. 当前待跟踪项模板
+## 7. 当前待跟踪项
 
-后续可按以下模板登记当前仍需推进的事项：
+| 编号 | 主题 | 优先级 | 状态 | 验证方式 |
+| --- | --- | --- | --- | --- |
+| P1-4 | mypy 高风险区治理 | P1 | 🔄 部分完成 | 新增 `online_presence_backend.py`、`refresh_flow.py` 已进入 strict；`gameplay.services.raid.*`、`guests.services.*` 仍存在包级豁免 |
+| P2-2 | 热点模块职责继续拆分 | P2 | 🔄 部分完成 | `runs.py` 已继续抽出 `refresh_flow.py`；`execution.py`、`bank_service.py`、`guest_items.py` 仍偏大 |
 
-| 编号 | 主题 | 优先级 | 状态 | 负责人 | 目标完成时间 | 验证方式 |
-| --- | --- | --- | --- | --- | --- | --- |
-| P0-1 | 关键状态流补齐异步调度失败收口 | P0 | 待处理 | TBD | TBD | 新增 dispatch=False 回归测试；关键路径不再忽略返回值 |
-| P0-2 | 高风险改动的真实依赖验证约束 | P0 | 待处理 | TBD | TBD | 文档、PR 规范、CI 说明同步更新 |
-| P0-3 | broad catch 收敛专项 | P0 | 待处理 | TBD | TBD | 关键路径未知异常不再被吞掉 |
-| P1-1 | mypy 高风险区治理 | P1 | 待处理 | TBD | TBD | 缩小 `ignore_errors` 清单 |
-| P1-2 | task_monitoring 并发注册修复 | P1 | 待处理 | TBD | TBD | 并发写入测试通过；快照稳定完整 |
-| P1-3 | 热点模块继续拆分 | P1 | 待处理 | TBD | TBD | 热点文件行数和职责继续下降 |
-| P2-1 | 审计与指标文档同步机制 | P2 | 待处理 | TBD | TBD | 当前问题与历史完成项分离维护 |
+## 8. 达成 9 分以上的条件
+
+如果目标是把综合评分稳定拉到 `9.0/10` 以上，剩余要求已经不再是清理 `P0`，而是把最后几个“会长期侵蚀可维护性”的问题彻底收口：
+
+- `P1-4` 必须闭环，不能继续让高风险服务层长期处于弱门禁状态。
+- `P2-2` 需要继续推进，直到 `execution.py`、`bank_service.py`、`guest_items.py` 这类热点文件也被实质性拆解。
+- 新增的拆分和门禁必须带测试或运行证据，避免“复杂度治理”和“类型治理”只停留在文档层。
+- 需要有一轮真实运行期验证，确认：
+  - 关键 degraded counter 没有持续增长
+  - 关键状态流不再出现新的复杂度回潮
+
+一句话标准：
+
+- `9 分以上` 不再取决于有没有大事故项，而取决于“剩余高风险治理是不是也变成了可持续、可验证的工程约束”。
 
 ## 9. 本次审计结论
 
-这个项目当前的主要问题，不再是“完全缺少工程化”，而是“封装、门禁和治理闭环还没有完全落到调用方和流程上”。你已经有了统一 helper、集成测试、健康检查和技术审计，但其中仍有几处关键漏口：
+项目当前已经明显脱离了最危险的阶段。任务启动半完成、侦察状态机、聊天补偿守恒、任务结算通知、dispatch 失败假阳性、deploy gate、生产完成幂等、叛逃原子性、单会话治理、默认容器与 readiness 链路这批真正会引发事故的点，本轮复核均已确认闭环并从审计正文移除。
 
-1. `helper` 的契约没有被所有关键调用点真正执行。
-2. 默认测试路径和生产语义之间仍有明确距离。
-3. 审计文档和指标体系还没有完全做到与代码状态同步演进。
+当前剩余问题，更多是“怎样把现在的正确实现持续守住”：
 
-下一阶段最值得优先做的三件事：
+1. 类型门禁还没真正压到最复杂的服务层。
+2. 少数热点文件仍然承担过多职责，后续仍有再次退化风险。
 
-1. 先把关键状态推进链路做硬，别再把一致性寄希望于 scanner 和下次刷新。
-2. 让高风险改动默认接受真实依赖验证，而不只靠 hermetic 套件。
-3. 把技术审计、指标和代码状态真正收成一个闭环。
+综合评分：`8.5/10`
+
+一句话结论：项目的关键状态机、聊天风控和在线态数据面已经进入“基本可信”区间，下一步最该做的是继续把类型门禁压到核心服务层，并把剩余热点流程文件拆到足够清晰。

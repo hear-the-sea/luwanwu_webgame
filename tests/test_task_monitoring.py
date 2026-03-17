@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import threading
+
 from django.core.cache import cache
 
+import core.utils.task_monitoring as task_monitoring
 from core.utils.task_monitoring import (
     TASK_METRICS_CACHE_KEY,
     _metric_key,
@@ -99,3 +102,79 @@ class TestTaskMonitoringCounters:
         counts = get_degradation_counts()
         assert counts.get(CELERY_TASK_RETRY, 0) >= 1
         reset_degradation_counts()
+
+    def test_concurrent_first_registration_keeps_both_tasks(self, monkeypatch):
+        original_get = cache.get
+        registry_read_barrier = threading.Barrier(2)
+
+        def delayed_registry_get(key, *args, **kwargs):
+            value = original_get(key, *args, **kwargs)
+            if key == TASK_METRICS_CACHE_KEY:
+                try:
+                    registry_read_barrier.wait(timeout=0.2)
+                except threading.BrokenBarrierError:
+                    pass
+            return value
+
+        monkeypatch.setattr(task_monitoring.cache, "get", delayed_registry_get)
+
+        threads = [
+            threading.Thread(target=record_task_success, args=("thread_task_a",)),
+            threading.Thread(target=record_task_success, args=("thread_task_b",)),
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=2)
+
+        assert all(not thread.is_alive() for thread in threads)
+
+        metrics = get_task_metrics()
+        assert metrics["thread_task_a"]["success"] == 1
+        assert metrics["thread_task_b"]["success"] == 1
+
+    def test_concurrent_first_increment_same_task_counts_both_writes(self, monkeypatch):
+        task_name = "shared_first_write_task"
+        metric_key = _metric_key(task_name, "success")
+        store: dict[str, int] = {}
+        store_lock = threading.Lock()
+        missing_key_barrier = threading.Barrier(2)
+
+        class FakeCache:
+            def incr(self, key, delta=1):
+                with store_lock:
+                    if key in store:
+                        store[key] += delta
+                        return store[key]
+
+                try:
+                    missing_key_barrier.wait(timeout=0.2)
+                except threading.BrokenBarrierError:
+                    pass
+                raise ValueError("key does not exist")
+
+            def add(self, key, value, timeout=None):
+                del timeout
+                with store_lock:
+                    if key in store:
+                        return False
+                    store[key] = value
+                    return True
+
+            def set(self, key, value, timeout=None):
+                del timeout
+                with store_lock:
+                    store[key] = value
+                return True
+
+        monkeypatch.setattr(task_monitoring, "cache", FakeCache())
+        monkeypatch.setattr(task_monitoring, "_register_task_name", lambda *_args, **_kwargs: None)
+
+        threads = [threading.Thread(target=record_task_success, args=(task_name,)) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=2)
+
+        assert all(not thread.is_alive() for thread in threads)
+        assert store[metric_key] == 2

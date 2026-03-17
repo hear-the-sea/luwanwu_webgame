@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import random
 from datetime import timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from django.db import models, transaction
 from django.utils import timezone
@@ -40,6 +40,25 @@ def _coerce_non_negative_int(raw: Any, default: int = 0) -> int:
     except (TypeError, ValueError):
         parsed = default
     return parsed if parsed >= 0 else 0
+
+
+def _log_scout_followup_failure(action: str, **context: Any) -> None:
+    context_str = " ".join(f"{key}={value}" for key, value in context.items())
+    if context_str:
+        logger.warning("Scout %s follow-up failed: %s", action, context_str, exc_info=True)
+    else:
+        logger.warning("Scout %s follow-up failed", action, exc_info=True)
+
+
+def _run_scout_followup(action: str, callback: Callable[[], None], **context: Any) -> None:
+    try:
+        callback()
+    except Exception:
+        _log_scout_followup_failure(action, **context)
+
+
+def _schedule_scout_followup(action: str, callback: Callable[[], None], **context: Any) -> None:
+    transaction.on_commit(lambda: _run_scout_followup(action, callback, **context))
 
 
 def _try_dispatch_scout_refresh_task(task, record_id: int, phase: str) -> bool:
@@ -286,13 +305,23 @@ def start_scout(attacker: Manor, defender: Manor) -> ScoutRecord:
             exc_info=True,
         )
     else:
-        safe_apply_async(
+        dispatched = safe_apply_async(
             complete_scout_task,
             args=[record.id],
             countdown=travel_time,
             logger=logger,
             log_message="complete_scout_task dispatch failed",
         )
+        if not dispatched:
+            logger.error(
+                "complete_scout_task dispatch returned False; scout may remain in outbound state",
+                extra={
+                    "task_name": "complete_scout_task",
+                    "record_id": record.id,
+                    "attacker_id": record.attacker_id,
+                    "defender_id": record.defender_id,
+                },
+            )
 
     return record
 
@@ -303,7 +332,7 @@ def finalize_scout(record: ScoutRecord, now=None) -> None:
 
     流程：
     1. 去程到达 → 判定成功/失败
-    2. 如果失败 → 立即给防守方发送警告消息
+    2. 如果失败 → 事务提交后给防守方发送警告消息
     3. 设置状态为 RETURNING，计算 return_at
     4. 返程完成后才给进攻方发送结果消息（通过 finalize_scout_return）
 
@@ -321,6 +350,9 @@ def finalize_scout(record: ScoutRecord, now=None) -> None:
         if not locked_record or locked_record.status != ScoutRecord.Status.SCOUTING:
             return
 
+        followup_action: str | None = None
+        followup_callback: Callable[[], None] | None = None
+
         # 判定成功/失败
         is_success = random.random() < locked_record.success_rate
         locked_record.is_success = is_success
@@ -329,8 +361,11 @@ def finalize_scout(record: ScoutRecord, now=None) -> None:
             # 收集情报（成功时）
             locked_record.intel_data = _gather_scout_intel(locked_record.defender)
         else:
-            # 失败时：立即给防守方发送警告消息（探子被发现）
-            _send_scout_detected_message(locked_record)
+            # 失败时：事务提交后给防守方发送警告消息（探子被发现）
+            followup_action = "detected message"
+
+            def followup_callback(record=locked_record):  # noqa: F811
+                _send_scout_detected_message(record)
 
         # 进入返程阶段
         locked_record.status = ScoutRecord.Status.RETURNING
@@ -345,6 +380,15 @@ def finalize_scout(record: ScoutRecord, now=None) -> None:
             defaults={"cooldown_until": cooldown_until},
         )
 
+        if followup_callback is not None and followup_action is not None:
+            _schedule_scout_followup(
+                followup_action,
+                followup_callback,
+                record_id=locked_record.id,
+                attacker_id=locked_record.attacker_id,
+                defender_id=locked_record.defender_id,
+            )
+
     # 调度返程完成任务
     try:
         from gameplay.tasks import complete_scout_return_task
@@ -356,13 +400,23 @@ def finalize_scout(record: ScoutRecord, now=None) -> None:
             exc_info=True,
         )
     else:
-        safe_apply_async(
+        dispatched = safe_apply_async(
             complete_scout_return_task,
             args=[locked_record.id],
             countdown=locked_record.travel_time,
             logger=logger,
             log_message="complete_scout_return_task dispatch failed",
         )
+        if not dispatched:
+            logger.error(
+                "complete_scout_return_task dispatch returned False; scout may remain returning",
+                extra={
+                    "task_name": "complete_scout_return_task",
+                    "record_id": locked_record.id,
+                    "attacker_id": locked_record.attacker_id,
+                    "defender_id": locked_record.defender_id,
+                },
+            )
 
 
 def finalize_scout_return(record: ScoutRecord, now=None) -> None:
@@ -383,8 +437,18 @@ def finalize_scout_return(record: ScoutRecord, now=None) -> None:
         if not locked_record or locked_record.status != ScoutRecord.Status.RETURNING:
             return
 
-        # 根据 is_success 设置最终状态并发送消息
-        if locked_record.is_success:
+        followup_action: str
+        followup_callback: Callable[[], None]
+
+        # 根据返回语义设置最终状态并在事务提交后发送消息
+        if locked_record.was_retreated:
+            locked_record.status = ScoutRecord.Status.FAILED
+            followup_action = "retreat result message"
+
+            def followup_callback(record=locked_record):
+                _send_scout_retreat_message(record)
+
+        elif locked_record.is_success:
             locked_record.status = ScoutRecord.Status.SUCCESS
             # 归还探子（成功时探子安全返回）
             try:
@@ -395,15 +459,27 @@ def finalize_scout_return(record: ScoutRecord, now=None) -> None:
                 troop.save(update_fields=["count"])
             except PlayerTroop.DoesNotExist:
                 pass
-            # 发送成功消息给进攻方
-            _send_scout_success_message(locked_record)
+            followup_action = "success result message"
+
+            def followup_callback(record=locked_record):  # noqa: F811
+                _send_scout_success_message(record)
+
         else:
             locked_record.status = ScoutRecord.Status.FAILED
-            # 发送失败消息给进攻方（探子损失，不归还）
-            _send_scout_fail_message(locked_record)
+            followup_action = "failure result message"
+
+            def followup_callback(record=locked_record):  # noqa: F811
+                _send_scout_fail_message(record)
 
         locked_record.completed_at = now
         locked_record.save(update_fields=["status", "completed_at"])
+        _schedule_scout_followup(
+            followup_action,
+            followup_callback,
+            record_id=locked_record.id,
+            attacker_id=locked_record.attacker_id,
+            defender_id=locked_record.defender_id,
+        )
 
 
 def _gather_scout_intel(defender: Manor) -> Dict[str, Any]:
@@ -463,6 +539,19 @@ def _send_scout_fail_message(record: ScoutRecord) -> None:
         manor=record.attacker,
         kind="system",
         title="侦察失败",
+        body=body,
+    )
+
+
+def _send_scout_retreat_message(record: ScoutRecord) -> None:
+    """发送侦察撤退消息"""
+    body = f"""派往 {record.defender.display_name} 的探子已按命令撤回。
+探子已安全返回，未获得情报。"""
+
+    create_message(
+        manor=record.attacker,
+        kind="system",
+        title="侦察已撤退",
         body=body,
     )
 
@@ -546,11 +635,12 @@ def request_scout_retreat(record: ScoutRecord) -> None:
         if not locked_record or locked_record.status != ScoutRecord.Status.SCOUTING:
             raise ValueError("当前状态无法撤退")
 
-        # 设置为失败状态（撤退视为失败，但不扣探子）
+        # 标记为主动撤退并进入返程；撤退不是侦察失败，不复用 is_success=False 语义。
         locked_record.status = ScoutRecord.Status.RETURNING
-        locked_record.is_success = False
+        locked_record.is_success = None
+        locked_record.was_retreated = True
         locked_record.return_at = now + timedelta(seconds=max(1, elapsed))
-        locked_record.save(update_fields=["status", "is_success", "return_at"])
+        locked_record.save(update_fields=["status", "is_success", "was_retreated", "return_at"])
 
         # 归还探子（撤退不消耗探子）
         try:
@@ -574,10 +664,20 @@ def request_scout_retreat(record: ScoutRecord) -> None:
         )
     else:
         countdown = max(1, elapsed)
-        safe_apply_async(
+        dispatched = safe_apply_async(
             complete_scout_return_task,
             args=[locked_record.id],
             countdown=countdown,
             logger=logger,
             log_message="complete_scout_return_task dispatch failed for retreat",
         )
+        if not dispatched:
+            logger.error(
+                "complete_scout_return_task dispatch returned False after scout retreat; scout may remain returning",
+                extra={
+                    "task_name": "complete_scout_return_task",
+                    "record_id": locked_record.id,
+                    "attacker_id": locked_record.attacker_id,
+                    "defender_id": locked_record.defender_id,
+                },
+            )

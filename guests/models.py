@@ -556,6 +556,7 @@ class GuestDefection(models.Model):
     """门客叛逃记录"""
 
     manor = models.ForeignKey("gameplay.Manor", on_delete=models.CASCADE, related_name="guest_defections")
+    guest_id = models.PositiveBigIntegerField("原门客ID", unique=True, null=True, blank=True)
     guest_name = models.CharField(max_length=64, verbose_name="门客名称")
     guest_level = models.PositiveIntegerField("门客等级")
     guest_rarity = models.CharField(max_length=16, choices=GuestRarity.choices, verbose_name="稀有度")

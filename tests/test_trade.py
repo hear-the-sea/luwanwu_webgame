@@ -412,7 +412,10 @@ class TestMarketExpire:
     """交易行过期处理测试"""
 
     def test_expire_listings(self, seller_manor, tradeable_item_template):
-        """测试过期挂单处理 - 验证挂单被删除并通过邮件退回物品"""
+        """测试过期挂单处理 - 验证挂单被删除且物品直接退回仓库"""
+        initial_quantity = InventoryItem.objects.get(
+            manor=seller_manor, template=tradeable_item_template, storage_location="warehouse"
+        ).quantity
         listing = market_service.create_listing(
             manor=seller_manor,
             item_key="test_tradeable_item",
@@ -434,15 +437,58 @@ class TestMarketExpire:
         # 验证挂单记录已删除
         assert not MarketListing.objects.filter(id=listing_id).exists()
 
-        # 验证卖家收到了退回物品的邮件
+        # 验证卖家库存已恢复
+        inventory = InventoryItem.objects.get(
+            manor=seller_manor, template=tradeable_item_template, storage_location="warehouse"
+        )
+        assert inventory.quantity == initial_quantity
+
+        # 验证卖家收到了通知消息，但资产不再依赖附件退回
         from gameplay.models import Message
 
         message = Message.objects.filter(manor=seller_manor, kind="system", title__contains="交易过期").first()
         assert message is not None
-        assert message.attachments.get("items", {}).get("test_tradeable_item") == 10
+        assert message.attachments == {}
 
-    def test_expire_listings_still_completes_when_notify_fails(self, seller_manor, monkeypatch):
+    def test_expire_listings_still_returns_inventory_when_create_message_fails(
+        self, seller_manor, tradeable_item_template, monkeypatch
+    ):
+        initial_quantity = InventoryItem.objects.get(
+            manor=seller_manor, template=tradeable_item_template, storage_location="warehouse"
+        ).quantity
+        listing = market_service.create_listing(
+            manor=seller_manor,
+            item_key="test_tradeable_item",
+            quantity=10,
+            unit_price=2000,
+            duration=7200,
+        )
+        listing_id = listing.id
+
+        listing.expires_at = timezone.now() - timedelta(hours=1)
+        listing.save()
+
+        def _raise_message_error(*_args, **_kwargs):
+            raise RuntimeError("message backend down")
+
+        monkeypatch.setattr(market_service, "create_message", _raise_message_error)
+
+        count = market_service.expire_listings()
+
+        assert count == 1
+        assert not MarketListing.objects.filter(id=listing_id).exists()
+        inventory = InventoryItem.objects.get(
+            manor=seller_manor, template=tradeable_item_template, storage_location="warehouse"
+        )
+        assert inventory.quantity == initial_quantity
+
+    def test_expire_listings_still_completes_when_notify_fails(
+        self, seller_manor, tradeable_item_template, monkeypatch
+    ):
         """测试过期处理过程中推送失败不会回滚主流程"""
+        initial_quantity = InventoryItem.objects.get(
+            manor=seller_manor, template=tradeable_item_template, storage_location="warehouse"
+        ).quantity
         listing = market_service.create_listing(
             manor=seller_manor,
             item_key="test_tradeable_item",
@@ -463,6 +509,10 @@ class TestMarketExpire:
         count = market_service.expire_listings()
         assert count == 1
         assert not MarketListing.objects.filter(id=listing_id).exists()
+        inventory = InventoryItem.objects.get(
+            manor=seller_manor, template=tradeable_item_template, storage_location="warehouse"
+        )
+        assert inventory.quantity == initial_quantity
 
 
 @pytest.mark.django_db

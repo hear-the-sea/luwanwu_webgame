@@ -27,10 +27,11 @@ def maybe_reschedule_for_future(
     if eta_value and eta_value > now:
         remaining = math.ceil((eta_value - now).total_seconds())
         if remaining > 0:
+            effective_dedup_timeout = max(int(remaining) + 60, dedup_timeout, 60)
             dispatched = schedule_func(
                 task_func,
                 dedup_key=dedup_key,
-                dedup_timeout=dedup_timeout,
+                dedup_timeout=effective_dedup_timeout,
                 args=[record_id],
                 countdown=remaining,
                 logger=logger,

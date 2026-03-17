@@ -7,9 +7,10 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, Dict
 
-from django.db import transaction
+from django.db import connection, transaction
 from django.utils import timezone
 
+from common.utils.celery import safe_apply_async
 from core.exceptions import (
     GuestError,
     GuestMaxLevelError,
@@ -27,19 +28,6 @@ from ..utils.training_calculator import get_level_up_cost, get_training_duration
 from ..utils.training_timer import ensure_training_timer, remaining_training_seconds
 
 logger = logging.getLogger(__name__)
-
-try:
-    from celery.exceptions import CeleryError
-except ImportError:  # pragma: no cover
-
-    class CeleryError(Exception):
-        pass
-
-
-try:
-    from kombu.exceptions import OperationalError as KombuOperationalError
-except ImportError:  # pragma: no cover
-    KombuOperationalError = OSError
 
 
 def _try_enqueue_complete_guest_training(guest: Guest, *, countdown: int, source: str) -> None:
@@ -63,13 +51,17 @@ def _try_enqueue_complete_guest_training(guest: Guest, *, countdown: int, source
             logger.warning("生产环境：保持训练完成时间，等待定时任务结算")
         return
 
-    try:
-        complete_guest_training.apply_async(args=[guest.id], countdown=countdown, queue="timer")
-    except (CeleryError, KombuOperationalError, OSError, ConnectionError, TimeoutError):
+    dispatched = safe_apply_async(
+        complete_guest_training,
+        args=[guest.id],
+        countdown=countdown,
+        logger=logger,
+        log_message="guest training task dispatch failed",
+    )
+    if not dispatched:
         logger.warning(
             "Failed to enqueue guest training task; finalize guest training immediately",
             extra={"guest_id": guest.id, "countdown": countdown, "source": source},
-            exc_info=True,
         )
         # 仅在开发/测试环境下允许瞬间完成训练
         from django.conf import settings
@@ -234,28 +226,53 @@ def reduce_training_time(manor: Manor, seconds: int) -> Dict[str, int]:
     """
     if seconds <= 0:
         return {"time_reduced": 0, "applied_guests": 0}
-    guests = list(
-        manor.guests.select_related("template")
-        .filter(level__lt=MAX_GUEST_LEVEL, status=GuestStatus.IDLE)
-        .order_by("training_complete_at", "id")
-    )
-    if not guests:
-        raise GuestError("所有门客已达等级上限，无法使用该道具。")
     total_reduced = 0
     applied = 0
     now = timezone.now()
     remaining_seconds = int(seconds)
 
-    for guest in guests:
-        if not ensure_training_timer(guest, now=now):
-            continue
-        while remaining_seconds > 0 and guest.training_complete_at and guest.level < MAX_GUEST_LEVEL:
-            reduced, remaining_seconds, touched = _reduce_guest_training_once(guest, remaining_seconds)
-            total_reduced += reduced
-            if touched:
-                applied += 1
-        if remaining_seconds <= 0:
-            break
+    with transaction.atomic():
+        candidate_ids = list(
+            manor.guests.filter(level__lt=MAX_GUEST_LEVEL, status=GuestStatus.IDLE)
+            .order_by("training_complete_at", "id")
+            .values_list("id", flat=True)
+        )
+        if not candidate_ids:
+            raise GuestError("所有门客已达等级上限，无法使用该道具。")
+
+        locked_guests_qs = (
+            Guest.objects.select_related("template")
+            .filter(id__in=candidate_ids, manor=manor, level__lt=MAX_GUEST_LEVEL, status=GuestStatus.IDLE)
+            .order_by("id")
+        )
+        if connection.features.has_select_for_update_of:
+            locked_guests_qs = locked_guests_qs.select_for_update(of=("self",))
+        else:
+            locked_guests_qs = locked_guests_qs.select_for_update()
+
+        locked_guests_by_id = {guest.id: guest for guest in locked_guests_qs}
+        touched_guest_ids: set[int] = set()
+
+        for guest_id in candidate_ids:
+            guest = locked_guests_by_id.get(guest_id)
+            if guest is None:
+                continue
+            if not ensure_training_timer(guest, now=now):
+                continue
+
+            guest_touched = False
+            while remaining_seconds > 0 and guest.training_complete_at and guest.level < MAX_GUEST_LEVEL:
+                reduced, remaining_seconds, touched = _reduce_guest_training_once(guest, remaining_seconds)
+                total_reduced += reduced
+                if touched:
+                    applied += 1
+                    guest_touched = True
+            if guest_touched and guest.id not in touched_guest_ids:
+                touched_guest_ids.add(guest.id)
+                _reschedule_guest_training_if_needed(guest, source="reduce_training_time")
+            if remaining_seconds <= 0:
+                break
+
     return {"time_reduced": total_reduced, "applied_guests": applied}
 
 

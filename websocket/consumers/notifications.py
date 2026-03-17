@@ -5,11 +5,12 @@ import logging
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
 from ..utils import filter_payload
+from .session_guard import SingleSessionWebSocketMixin
 
 logger = logging.getLogger(__name__)
 
 
-class NotificationConsumer(AsyncJsonWebsocketConsumer):
+class NotificationConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer):
     """WebSocket consumer for per-user notifications."""
 
     group_name: str | None = None
@@ -24,6 +25,9 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
                     "client": self.scope.get("client"),
                 },
             )
+            await self.close()
+            return
+        if not await self._ensure_valid_session(force=True):
             await self.close()
             return
 

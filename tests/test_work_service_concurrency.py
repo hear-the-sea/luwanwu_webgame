@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+from datetime import timedelta
 
 import pytest
 from django.db import connection
@@ -8,6 +9,7 @@ from django.utils import timezone
 
 from core.exceptions import WorkError, WorkLimitExceededError, WorkNotInProgressError, WorkRewardClaimedError
 from gameplay.models import WorkAssignment, WorkTemplate
+from gameplay.services import work as work_service
 from gameplay.services.manor.core import ensure_manor
 from gameplay.services.work import assign_guest_to_work, claim_work_reward, recall_guest_from_work
 from guests.models import Guest, GuestArchetype, GuestRarity, GuestStatus, GuestTemplate
@@ -96,6 +98,155 @@ def test_recall_guest_from_work_rechecks_locked_assignment_state(django_user_mod
     guest.refresh_from_db()
     assert assignment.status == WorkAssignment.Status.COMPLETED
     assert guest.status == GuestStatus.IDLE
+
+
+def _patch_recall_and_reassign_before_bulk_completion(monkeypatch, *, assignment, guest, new_work_template):
+    original_filter = work_service.WorkAssignment.objects.filter
+    triggered = {"value": False}
+    new_assignment_pk: dict[str, int] = {}
+
+    def _patched_filter(*args, **kwargs):
+        target_ids = kwargs.get("id__in")
+        if (
+            not triggered["value"]
+            and kwargs.get("status") == WorkAssignment.Status.WORKING
+            and target_ids is not None
+            and set(target_ids) == {assignment.pk}
+        ):
+            triggered["value"] = True
+            original_filter(pk=assignment.pk).update(
+                status=WorkAssignment.Status.RECALLED,
+                finished_at=timezone.now(),
+            )
+            Guest.objects.filter(pk=guest.pk).update(status=GuestStatus.IDLE)
+            new_assignment = WorkAssignment.objects.create(
+                manor=assignment.manor,
+                guest=guest,
+                work_template=new_work_template,
+                status=WorkAssignment.Status.WORKING,
+                complete_at=timezone.now() + timedelta(minutes=30),
+            )
+            Guest.objects.filter(pk=guest.pk).update(status=GuestStatus.WORKING)
+            new_assignment_pk["value"] = new_assignment.pk
+        return original_filter(*args, **kwargs)
+
+    monkeypatch.setattr(work_service.WorkAssignment.objects, "filter", _patched_filter)
+    return triggered, new_assignment_pk
+
+
+@pytest.mark.django_db
+def test_complete_work_assignments_does_not_idle_reassigned_guest(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="work_complete_reassign_user", password="pass123")
+    manor = ensure_manor(user)
+
+    guest_template = GuestTemplate.objects.create(
+        key=f"work_complete_reassign_tpl_{user.id}",
+        name="自动完成并发模板",
+        archetype=GuestArchetype.CIVIL,
+        rarity=GuestRarity.GRAY,
+    )
+    guest = Guest.objects.create(manor=manor, template=guest_template, status=GuestStatus.WORKING)
+    expired_work_template = WorkTemplate.objects.create(
+        key=f"work_complete_expired_{user.id}",
+        name="已到期旧工作",
+        reward_silver=50,
+        work_duration=60,
+        required_level=1,
+        required_force=0,
+        required_intellect=0,
+    )
+    next_work_template = WorkTemplate.objects.create(
+        key=f"work_complete_next_{user.id}",
+        name="重新派遣新工作",
+        reward_silver=60,
+        work_duration=60,
+        required_level=1,
+        required_force=0,
+        required_intellect=0,
+    )
+    assignment = WorkAssignment.objects.create(
+        manor=manor,
+        guest=guest,
+        work_template=expired_work_template,
+        status=WorkAssignment.Status.WORKING,
+        complete_at=timezone.now() - timedelta(minutes=1),
+    )
+
+    triggered, new_assignment_pk = _patch_recall_and_reassign_before_bulk_completion(
+        monkeypatch,
+        assignment=assignment,
+        guest=guest,
+        new_work_template=next_work_template,
+    )
+
+    updated_count = work_service.complete_work_assignments()
+
+    assignment.refresh_from_db()
+    guest.refresh_from_db()
+    new_assignment = WorkAssignment.objects.get(pk=new_assignment_pk["value"])
+
+    assert triggered["value"] is True
+    assert updated_count == 0
+    assert assignment.status == WorkAssignment.Status.RECALLED
+    assert new_assignment.status == WorkAssignment.Status.WORKING
+    assert guest.status == GuestStatus.WORKING
+
+
+@pytest.mark.django_db
+def test_refresh_work_assignments_does_not_idle_reassigned_guest(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="work_refresh_reassign_user", password="pass123")
+    manor = ensure_manor(user)
+
+    guest_template = GuestTemplate.objects.create(
+        key=f"work_refresh_reassign_tpl_{user.id}",
+        name="刷新并发模板",
+        archetype=GuestArchetype.CIVIL,
+        rarity=GuestRarity.GRAY,
+    )
+    guest = Guest.objects.create(manor=manor, template=guest_template, status=GuestStatus.WORKING)
+    expired_work_template = WorkTemplate.objects.create(
+        key=f"work_refresh_expired_{user.id}",
+        name="刷新旧工作",
+        reward_silver=50,
+        work_duration=60,
+        required_level=1,
+        required_force=0,
+        required_intellect=0,
+    )
+    next_work_template = WorkTemplate.objects.create(
+        key=f"work_refresh_next_{user.id}",
+        name="刷新新工作",
+        reward_silver=60,
+        work_duration=60,
+        required_level=1,
+        required_force=0,
+        required_intellect=0,
+    )
+    assignment = WorkAssignment.objects.create(
+        manor=manor,
+        guest=guest,
+        work_template=expired_work_template,
+        status=WorkAssignment.Status.WORKING,
+        complete_at=timezone.now() - timedelta(minutes=1),
+    )
+
+    triggered, new_assignment_pk = _patch_recall_and_reassign_before_bulk_completion(
+        monkeypatch,
+        assignment=assignment,
+        guest=guest,
+        new_work_template=next_work_template,
+    )
+
+    work_service.refresh_work_assignments(manor)
+
+    assignment.refresh_from_db()
+    guest.refresh_from_db()
+    new_assignment = WorkAssignment.objects.get(pk=new_assignment_pk["value"])
+
+    assert triggered["value"] is True
+    assert assignment.status == WorkAssignment.Status.RECALLED
+    assert new_assignment.status == WorkAssignment.Status.WORKING
+    assert guest.status == GuestStatus.WORKING
 
 
 @pytest.mark.django_db

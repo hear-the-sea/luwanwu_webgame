@@ -11,8 +11,10 @@ from django.core.cache import cache
 from django.utils import timezone
 
 from core.utils.degradation import CACHE_FALLBACK, REDIS_FAILURE, record_degradation
-from gameplay.services.online_presence import ONLINE_USERS_TTL_SECONDS, ONLINE_USERS_ZSET_KEY
-from gameplay.services.online_presence import get_redis_connection_if_supported as _get_redis_connection_if_supported
+from gameplay.services.online_presence_backend import ONLINE_USERS_TTL_SECONDS, count_online_users
+from gameplay.services.online_presence_backend import (
+    get_redis_connection_if_supported as _get_redis_connection_if_supported,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -138,9 +140,7 @@ def _load_online_user_count_from_redis() -> int:
     redis = get_redis_connection()
     if redis is None:
         raise NotImplementedError("Redis operations are unavailable for the configured cache backend")
-    cutoff = float(time.time()) - float(ONLINE_USERS_TTL_SECONDS)
-    redis.zremrangebyscore(ONLINE_USERS_ZSET_KEY, "-inf", cutoff)
-    return _safe_int(redis.zcard(ONLINE_USERS_ZSET_KEY))
+    return _safe_int(count_online_users(redis, now_ts=float(time.time()), ttl_seconds=ONLINE_USERS_TTL_SECONDS))
 
 
 def _load_online_user_count_from_db() -> int:

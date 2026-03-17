@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 import contextlib
+from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
+from django.utils import timezone
 
+from battle.models import TroopTemplate
+from gameplay.constants import PVPConstants
+from gameplay.models import PlayerTroop, ScoutRecord
+from gameplay.services.manor.core import ensure_manor
 from gameplay.services.raid import scout as scout_service
 
 
@@ -119,3 +125,119 @@ def test_start_scout_precheck_uses_uncached_attack_check(monkeypatch):
 
     assert seen["use_cached_recent_attacks"] is False
     assert seen["check_defeat_protection"] is False
+
+
+@pytest.mark.django_db(transaction=True)
+def test_finalize_scout_return_marks_retreated_records_without_failure_message(django_user_model, monkeypatch):
+    attacker = ensure_manor(
+        django_user_model.objects.create_user(username="scout_retreat_attacker", password="pass123")
+    )
+    defender = ensure_manor(
+        django_user_model.objects.create_user(username="scout_retreat_defender", password="pass123")
+    )
+    scout_template, _ = TroopTemplate.objects.get_or_create(key=PVPConstants.SCOUT_TROOP_KEY, defaults={"name": "探子"})
+    troop, _ = PlayerTroop.objects.update_or_create(
+        manor=attacker,
+        troop_template=scout_template,
+        defaults={"count": 3},
+    )
+
+    record = ScoutRecord.objects.create(
+        attacker=attacker,
+        defender=defender,
+        status=ScoutRecord.Status.SCOUTING,
+        scout_cost=1,
+        success_rate=0.5,
+        travel_time=60,
+        complete_at=timezone.now() + timedelta(seconds=60),
+    )
+
+    request_time = timezone.now()
+    monkeypatch.setattr(scout_service.timezone, "now", lambda: request_time)
+    monkeypatch.setattr(scout_service, "safe_apply_async", lambda *_args, **_kwargs: True)
+
+    scout_service.request_scout_retreat(record)
+
+    record.refresh_from_db()
+    troop.refresh_from_db()
+    assert record.status == ScoutRecord.Status.RETURNING
+    assert record.was_retreated is True
+    assert record.is_success is None
+    assert troop.count == 4
+
+    sent = {"retreat": 0, "fail": 0}
+    monkeypatch.setattr(
+        scout_service,
+        "_send_scout_retreat_message",
+        lambda *_args, **_kwargs: sent.__setitem__("retreat", sent["retreat"] + 1),
+    )
+    monkeypatch.setattr(
+        scout_service,
+        "_send_scout_fail_message",
+        lambda *_args, **_kwargs: sent.__setitem__("fail", sent["fail"] + 1),
+    )
+    callbacks = []
+    monkeypatch.setattr(scout_service.transaction, "on_commit", lambda callback: callbacks.append(callback))
+
+    complete_time = request_time + timedelta(seconds=5)
+    scout_service.finalize_scout_return(record, now=complete_time)
+
+    record.refresh_from_db()
+    troop.refresh_from_db()
+    assert record.status == ScoutRecord.Status.FAILED
+    assert record.was_retreated is True
+    assert record.completed_at == complete_time
+    assert troop.count == 4
+    assert len(callbacks) == 1
+    assert sent == {"retreat": 0, "fail": 0}
+
+    callbacks[0]()
+
+    assert sent == {"retreat": 1, "fail": 0}
+
+
+@pytest.mark.django_db(transaction=True)
+def test_finalize_scout_detected_message_runs_after_commit_and_failure_does_not_rollback(
+    django_user_model, monkeypatch
+):
+    attacker = ensure_manor(django_user_model.objects.create_user(username="scout_detect_attacker", password="pass123"))
+    defender = ensure_manor(django_user_model.objects.create_user(username="scout_detect_defender", password="pass123"))
+    record = ScoutRecord.objects.create(
+        attacker=attacker,
+        defender=defender,
+        status=ScoutRecord.Status.SCOUTING,
+        scout_cost=1,
+        success_rate=0.0,
+        travel_time=45,
+        complete_at=timezone.now() + timedelta(seconds=45),
+    )
+
+    monkeypatch.setattr(scout_service.random, "random", lambda: 0.5)
+    monkeypatch.setattr(scout_service, "safe_apply_async", lambda *_args, **_kwargs: True)
+
+    sent = {"count": 0}
+
+    def _fail_detected(*_args, **_kwargs):
+        sent["count"] += 1
+        raise RuntimeError("notify failed")
+
+    monkeypatch.setattr(scout_service, "_send_scout_detected_message", _fail_detected)
+    callbacks = []
+    monkeypatch.setattr(scout_service.transaction, "on_commit", lambda callback: callbacks.append(callback))
+
+    now = timezone.now()
+    scout_service.finalize_scout(record, now=now)
+
+    record.refresh_from_db()
+    assert record.status == ScoutRecord.Status.RETURNING
+    assert record.is_success is False
+    assert record.return_at == now + timedelta(seconds=record.travel_time)
+    assert sent["count"] == 0
+    assert len(callbacks) == 1
+
+    callbacks[0]()
+
+    record.refresh_from_db()
+    assert record.status == ScoutRecord.Status.RETURNING
+    assert record.is_success is False
+    assert sent["count"] == 1

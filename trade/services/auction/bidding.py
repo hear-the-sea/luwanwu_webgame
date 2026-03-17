@@ -262,6 +262,7 @@ def place_bid(
             Defaults to internal `_notify_outbid_vickrey`.
     """
     outbid_player = None  # 被挤出前N名的玩家
+    outbid_cutoff_price: int | None = None
     winner_count = 0
     slot: AuctionSlot | None = None
     amount = _normalize_bid_amount(amount)
@@ -297,16 +298,18 @@ def place_bid(
 
         ranking_after = get_slot_ranking(slot)
         outbid_player = _kick_out_player_if_needed(player_to_kick, manor, ranking_after, winner_count)
+        if outbid_player is not None:
+            outbid_cutoff_price = get_cutoff_price(slot, ranking=ranking_after)
         _update_slot_snapshot(slot, ranking_after, winner_count, manor)
 
-    if outbid_player and slot is not None:
-        (notify_outbid_func or _notify_outbid_vickrey)(outbid_player, slot, amount, manor, winner_count)
+    if outbid_player and slot is not None and outbid_cutoff_price is not None:
+        (notify_outbid_func or _notify_outbid_vickrey)(outbid_player, slot, outbid_cutoff_price, manor, winner_count)
 
     return new_bid, is_first_bid
 
 
 def _notify_outbid_vickrey(
-    manor: Manor, slot: AuctionSlot, new_price: int, new_bidder: Manor, winner_count: int
+    manor: Manor, slot: AuctionSlot, cutoff_price: int, new_bidder: Manor, winner_count: int
 ) -> None:
     """通知玩家被挤出中标范围（维克里拍卖）。"""
     _safe_create_message(
@@ -315,7 +318,7 @@ def _notify_outbid_vickrey(
         title="【拍卖行】您已被挤出中标范围",
         body=(
             f"在 {slot.item_template.name} 的拍卖中，您已被挤出前 {winner_count} 名！\n\n"
-            f"当前最低中标价：{new_price} 金条\n\n"
+            f"当前最低中标价：{cutoff_price} 金条\n\n"
             f"您冻结的金条已自动退还，如需继续竞拍请尽快加价。"
         ),
     )
@@ -327,7 +330,7 @@ def _notify_outbid_vickrey(
             "title": "【拍卖行】您已被挤出中标范围",
             "item_name": slot.item_template.name,
             "item_key": slot.item_template.key,
-            "new_price": new_price,
+            "new_price": cutoff_price,
             "winner_count": winner_count,
         },
         log_context="auction outbid notification",

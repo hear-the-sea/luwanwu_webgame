@@ -10,6 +10,7 @@ from celery import shared_task
 from django.db import DatabaseError
 from django.utils import timezone
 
+from core.utils.task_monitoring import increment_degraded_counter
 from trade.models import ShopStock
 from trade.services.shop_config import get_shop_config, reload_shop_config
 
@@ -88,11 +89,25 @@ def refresh_shop_stock(self):
 
         # 记录失败统计，便于监控告警
         if failed_items:
+            failed_item_keys = [failed_item["item_key"] for failed_item in failed_items]
             logger.error(
-                f"Shop stock refresh completed with {len(failed_items)} failures: "
-                f"{[f['item_key'] for f in failed_items]}"
+                "batch partial failure",
+                extra={
+                    "task": "trade.refresh_shop_stock",
+                    "failed_ids": failed_item_keys,
+                    "degraded": True,
+                },
             )
-            return f"refreshed {refreshed_count} items, {len(failed_items)} failed"
+            increment_degraded_counter("shop_stock")
+            logger.error(
+                "Shop stock refresh completed with %s failures: %s",
+                len(failed_items),
+                failed_item_keys,
+            )
+            return (
+                f"refreshed {refreshed_count} items, {len(failed_items)} failed, "
+                f"failed_item_keys={failed_item_keys}"
+            )
 
         return f"refreshed {refreshed_count} items"
     except Exception as exc:
@@ -144,7 +159,7 @@ def settle_auction_round_task(self):
     结算完成后自动触发创建新轮次任务。
     """
     try:
-        from trade.services.auction_service import settle_auction_round
+        from trade.services.auction_service import create_auction_round, settle_auction_round
 
         settled, sold, unsold, total_gold_bars = _normalize_settlement_stats(settle_auction_round())
 
@@ -155,9 +170,11 @@ def settle_auction_round_task(self):
             except Exception as exc:
                 if not _is_expected_task_error(exc):
                     raise
-                # Failure to enqueue the follow-up task is non-fatal; the
-                # periodic scheduler will pick it up on the next cycle.
-                logger.warning("拍卖结算后触发新轮次任务失败: %s", exc, exc_info=True)
+                logger.warning("拍卖结算后触发新轮次任务失败，立即切换为同步创建: %s", exc, exc_info=True)
+                try:
+                    create_auction_round()
+                except Exception as fallback_exc:
+                    logger.warning("拍卖结算后同步创建新轮次失败: %s", fallback_exc, exc_info=True)
             logger.info(f"拍卖轮次结算完成：售出 {sold} 件，" f"流拍 {unsold} 件，" f"共收取 {total_gold_bars} 金条")
             return f"结算完成：售出 {sold} 件，流拍 {unsold} 件，" f"共 {total_gold_bars} 金条"
         else:

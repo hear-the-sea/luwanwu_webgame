@@ -75,6 +75,7 @@ exclude = "(^|/)(migrations|\\.venv|scripts|battle_debugger|tests|docs)/"
 
 # Modules with real type errors — keep suppressed until fixed.
 # Governance goal: shrink this list each sprint.
+# 新增核心模块禁止进入 ignore_errors 名单
 [[tool.mypy.overrides]]
 module = [
     "*.views",
@@ -113,10 +114,13 @@ module = [
     "core.utils.yaml_schema",
     "gameplay.services.arena.core",
     "gameplay.services.arena.rules",
+    "gameplay.services.online_presence_backend",
+    "gameplay.services.buildings.*",
     "gameplay.services.buildings.forge",
     "gameplay.services.buildings.ranch",
     "gameplay.services.buildings.smithy",
     "gameplay.services.buildings.stable",
+    "gameplay.services.raid.combat.refresh_flow",
     "gameplay.services.recruitment.*",
     "gameplay.services.resources",
     "gameplay.services.runtime_configs",

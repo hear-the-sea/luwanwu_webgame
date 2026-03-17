@@ -107,6 +107,30 @@ def assign_guest_to_work(guest: Guest, work_template: WorkTemplate) -> WorkAssig
     return assignment
 
 
+def _complete_assignment_batch(assignment_ids: List[int], now) -> int:
+    """批量完成仍处于打工中的任务，并仅回写实际完成的门客状态。"""
+    updated_count = WorkAssignment.objects.filter(
+        id__in=assignment_ids,
+        status=WorkAssignment.Status.WORKING,
+    ).update(status=WorkAssignment.Status.COMPLETED, finished_at=now)
+
+    if updated_count <= 0:
+        return 0
+
+    completed_guest_ids = list(
+        WorkAssignment.objects.filter(
+            id__in=assignment_ids,
+            status=WorkAssignment.Status.COMPLETED,
+        )
+        .values_list("guest_id", flat=True)
+        .distinct()
+    )
+    if completed_guest_ids:
+        Guest.objects.filter(id__in=completed_guest_ids, status=GuestStatus.WORKING).update(status=GuestStatus.IDLE)
+
+    return updated_count
+
+
 def complete_work_assignments() -> int:
     """
     完成所有到期的打工任务
@@ -120,28 +144,17 @@ def complete_work_assignments() -> int:
     with transaction.atomic():
         # 查找所有到期的打工任务
         assignments = list(
-            WorkAssignment.objects.filter(status=WorkAssignment.Status.WORKING, complete_at__lte=now).select_related(
-                "guest"
-            )
+            WorkAssignment.objects.select_for_update()
+            .filter(status=WorkAssignment.Status.WORKING, complete_at__lte=now)
+            .select_related("guest")
         )
 
         if not assignments:
             return 0
 
-        # 收集需要更新的门客ID
-        guest_ids = [a.guest_id for a in assignments]
         assignment_ids = [a.id for a in assignments]
 
-        # 仅更新仍处于 WORKING 的记录，避免并发召回时覆盖状态
-        updated_count = WorkAssignment.objects.filter(
-            id__in=assignment_ids,
-            status=WorkAssignment.Status.WORKING,
-        ).update(status=WorkAssignment.Status.COMPLETED, finished_at=now)
-
-        # 批量更新门客状态（1次查询）
-        Guest.objects.filter(id__in=guest_ids).update(status=GuestStatus.IDLE)
-
-        return updated_count
+        return _complete_assignment_batch(assignment_ids, now)
 
 
 def recall_guest_from_work(assignment: WorkAssignment) -> bool:
@@ -229,21 +242,16 @@ def refresh_work_assignments(manor: Manor) -> None:
     with transaction.atomic():
         # 查找该庄园所有到期的打工任务
         assignments = list(
-            WorkAssignment.objects.filter(manor=manor, status=WorkAssignment.Status.WORKING, complete_at__lte=now)
+            WorkAssignment.objects.select_for_update().filter(
+                manor=manor,
+                status=WorkAssignment.Status.WORKING,
+                complete_at__lte=now,
+            )
         )
 
         if not assignments:
             return
 
-        # 收集需要更新的ID
-        guest_ids = [a.guest_id for a in assignments]
         assignment_ids = [a.id for a in assignments]
 
-        # 仅更新仍处于 WORKING 的记录，避免并发召回时覆盖状态
-        WorkAssignment.objects.filter(
-            id__in=assignment_ids,
-            status=WorkAssignment.Status.WORKING,
-        ).update(status=WorkAssignment.Status.COMPLETED, finished_at=now)
-
-        # 批量更新门客状态（1次查询）
-        Guest.objects.filter(id__in=guest_ids).update(status=GuestStatus.IDLE)
+        _complete_assignment_batch(assignment_ids, now)

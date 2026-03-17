@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 _MISSION_REFRESH_DISPATCH_DEDUP_SECONDS = 5
+MISSION_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS = (ConnectionError, OSError, TimeoutError)
 
 
 def _normalize_mapping(raw: Any) -> Dict[str, object]:
@@ -81,12 +82,19 @@ def refresh_mission_runs(manor: Manor, *, prefer_async: bool = False) -> None:
     if should_try_async:
         try:
             from gameplay.tasks import complete_mission_task
-        except Exception:
+        except ImportError:
             logger.warning(
                 "Failed to import mission task, falling back to sync refresh",
                 exc_info=True,
                 extra={"degraded": True, "component": "mission_task_import"},
             )
+        except Exception:
+            logger.error(
+                "Unexpected mission task import failure during refresh",
+                exc_info=True,
+                extra={"degraded": True, "component": "mission_task_import"},
+            )
+            raise
         else:
             sync_run_ids = []
             for run_id in due_run_ids:
@@ -320,6 +328,17 @@ def _send_mission_report_message(locked_run: MissionRun, report: Any) -> None:
             body="",
             battle_report=report,
         )
+    except Exception:
+        logger.error(
+            "Mission report message creation failed: run_id=%s manor_id=%s",
+            locked_run.id,
+            locked_run.manor_id,
+            exc_info=True,
+            extra={"degraded": True, "component": "mission_report_message", "run_id": locked_run.id},
+        )
+        return
+
+    try:
         notify_user(
             locked_run.manor.user_id,
             {
@@ -331,13 +350,23 @@ def _send_mission_report_message(locked_run: MissionRun, report: Any) -> None:
             },
             log_context="mission battle notification",
         )
-    except Exception as exc:
+    except MISSION_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning(
             "mission report notification failed: run_id=%s manor_id=%s report_id=%s error=%s",
             locked_run.id,
             locked_run.manor_id,
             getattr(report, "id", None),
             exc,
+            exc_info=True,
+            extra={"degraded": True, "component": "mission_notification", "run_id": locked_run.id},
+        )
+    except Exception:
+        # 通知属于边缘副作用，失败不回滚主结算流程
+        logger.error(
+            "Unexpected mission report notification failure: run_id=%s manor_id=%s report_id=%s",
+            locked_run.id,
+            locked_run.manor_id,
+            getattr(report, "id", None),
             exc_info=True,
             extra={"degraded": True, "component": "mission_notification", "run_id": locked_run.id},
         )
@@ -515,7 +544,7 @@ def _dispatch_or_sync_launch_report(
     drop_table: Dict[str, object],
     travel_seconds: int,
     seed,
-    generate_report_task,
+    generate_report_task=None,
 ):
     if mission.is_defense:
         return None
@@ -528,7 +557,7 @@ def _dispatch_or_sync_launch_report(
         battle_guests = guests
 
     force_sync = bool(getattr(settings, "DEBUG", False) or os.environ.get("PYTEST_CURRENT_TEST"))
-    if force_sync:
+    if force_sync or generate_report_task is None:
         return _sync_report_for_launch(manor, mission, battle_guests, loadout, defender_setup, travel_seconds, seed)
 
     ok = safe_apply_async(
@@ -582,6 +611,109 @@ def _schedule_mission_completion_task(run: MissionRun, complete_mission_task) ->
         finalize_mission_run(run)
 
 
+def _import_launch_post_action_tasks() -> tuple[Any | None, Any | None]:
+    generate_report_task = None
+    complete_mission_task = None
+
+    try:
+        from battle.tasks import generate_report_task as imported_generate_report_task
+
+        generate_report_task = imported_generate_report_task
+    except Exception:
+        logger.error(
+            "Failed to import generate_report_task during mission launch",
+            exc_info=True,
+            extra={"degraded": True, "component": "mission_launch_report_import"},
+        )
+
+    try:
+        from gameplay.tasks import complete_mission_task as imported_complete_mission_task
+
+        complete_mission_task = imported_complete_mission_task
+    except Exception:
+        logger.error(
+            "Failed to import complete_mission_task during mission launch",
+            exc_info=True,
+            extra={"degraded": True, "component": "mission_launch_completion_import"},
+        )
+
+    return generate_report_task, complete_mission_task
+
+
+def _try_prepare_launch_report(
+    manor: Manor,
+    mission: MissionTemplate,
+    run: MissionRun,
+    guests: List[Any],
+    loadout: Dict[str, int],
+    travel_seconds: int,
+    seed,
+    generate_report_task,
+) -> None:
+    try:
+        defender_setup, drop_table = _build_defender_setup_and_drop_table(mission, loadout)
+        report = _dispatch_or_sync_launch_report(
+            manor,
+            mission,
+            run,
+            guests,
+            loadout,
+            defender_setup,
+            drop_table,
+            travel_seconds,
+            seed,
+            generate_report_task,
+        )
+        _attach_run_report_if_empty(run, report)
+    except Exception:
+        logger.error(
+            "Mission launch report preparation failed: run_id=%s manor_id=%s mission_id=%s",
+            run.id,
+            manor.id,
+            mission.id,
+            exc_info=True,
+            extra={
+                "degraded": True,
+                "component": "mission_launch_report",
+                "run_id": run.id,
+                "manor_id": manor.id,
+                "mission_id": mission.id,
+            },
+        )
+
+
+def _dispatch_complete_mission_task(run: MissionRun, complete_mission_task) -> None:
+    if complete_mission_task is None:
+        logger.error(
+            "Mission completion task unavailable after launch: run_id=%s manor_id=%s",
+            run.id,
+            run.manor_id,
+            extra={
+                "degraded": True,
+                "component": "mission_completion_dispatch",
+                "run_id": run.id,
+                "manor_id": run.manor_id,
+            },
+        )
+        return
+
+    try:
+        _schedule_mission_completion_task(run, complete_mission_task)
+    except Exception:
+        logger.error(
+            "Mission completion dispatch failed after launch: run_id=%s manor_id=%s",
+            run.id,
+            run.manor_id,
+            exc_info=True,
+            extra={
+                "degraded": True,
+                "component": "mission_completion_dispatch",
+                "run_id": run.id,
+                "manor_id": run.manor_id,
+            },
+        )
+
+
 def launch_mission(
     manor: Manor,
     mission: MissionTemplate,
@@ -603,39 +735,19 @@ def launch_mission(
         guest_snapshots = build_guest_battle_snapshots(guests, include_identity=True)
         run = _create_mission_run_record(manor, mission, guests, guest_snapshots, loadout, travel_seconds)
 
-    try:
-        from battle.tasks import generate_report_task
-        from gameplay.tasks import complete_mission_task
-
-        defender_setup, drop_table = _build_defender_setup_and_drop_table(mission, loadout)
-        report = _dispatch_or_sync_launch_report(
-            manor,
-            mission,
-            run,
-            guests,
-            loadout,
-            defender_setup,
-            drop_table,
-            travel_seconds,
-            seed,
-            generate_report_task,
-        )
-        _attach_run_report_if_empty(run, report)
-        _schedule_mission_completion_task(run, complete_mission_task)
-        return run
-    except ValueError as exc:
-        logger.warning(
-            "launch_mission validation failed: %s",
-            exc,
-            extra={"manor_id": manor.id, "mission_id": mission.id},
-        )
-        raise
-    except Exception as exc:
-        logger.exception(
-            "launch_mission unexpected error",
-            extra={"manor_id": manor.id, "mission_id": mission.id, "error": str(exc)},
-        )
-        raise
+    generate_report_task, complete_mission_task = _import_launch_post_action_tasks()
+    _try_prepare_launch_report(
+        manor,
+        mission,
+        run,
+        guests,
+        loadout,
+        travel_seconds,
+        seed,
+        generate_report_task,
+    )
+    _dispatch_complete_mission_task(run, complete_mission_task)
+    return run
 
 
 def schedule_mission_completion(run: MissionRun) -> None:
@@ -644,7 +756,7 @@ def schedule_mission_completion(run: MissionRun) -> None:
     countdown = max(0, math.ceil((run.return_at - timezone.now()).total_seconds()))
     try:
         from gameplay.tasks import complete_mission_task
-    except Exception:
+    except ImportError:
         logger.warning(
             "Unable to import complete_mission_task; relying on sync fallback when due",
             exc_info=True,
@@ -653,6 +765,13 @@ def schedule_mission_completion(run: MissionRun) -> None:
         if countdown <= 0:
             finalize_mission_run(run)
         return
+    except Exception:
+        logger.error(
+            "Unexpected complete_mission_task import failure",
+            exc_info=True,
+            extra={"degraded": True, "component": "mission_task_import"},
+        )
+        raise
 
     dispatched = safe_apply_async(
         complete_mission_task,

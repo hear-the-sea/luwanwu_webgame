@@ -17,6 +17,7 @@ from websocket.backends.chat_history import (
     TRIM_HISTORY_SCRIPT,
     append_history_sync,
     get_history_sync,
+    remove_history_sync,
     trim_history_by_time_fallback,
     trim_history_by_time_sync,
 )
@@ -24,6 +25,7 @@ from websocket.backends.rate_limiter import rate_limit_sync
 from websocket.services.message_builder import build_message_sync, next_id_sync, normalize_text
 
 from ..utils import filter_payload
+from .session_guard import SingleSessionWebSocketMixin
 
 User = get_user_model()
 
@@ -34,6 +36,15 @@ class WorldChatInfrastructureError(RuntimeError):
     """Expected infrastructure/runtime dependency failure for world chat operations."""
 
 
+WORLD_CHAT_EXPECTED_INFRASTRUCTURE_ERRORS = (
+    WorldChatInfrastructureError,
+    RedisError,
+    ConnectionError,
+    OSError,
+    TimeoutError,
+)
+
+
 def _now_ts() -> float:
     # Keep backwards-compatible monkeypatching via `websocket.consumers.time.time`.
     # Import inside the helper to avoid circular imports at module import time.
@@ -42,7 +53,7 @@ def _now_ts() -> float:
     return float(consumers_module.time.time())
 
 
-class WorldChatConsumer(AsyncJsonWebsocketConsumer):
+class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer):
     """WebSocket consumer for the world chat channel."""
 
     CHANNEL = "world"
@@ -77,7 +88,7 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
     _history_degraded: bool = False
 
     def _is_expected_infrastructure_error(self, exc: Exception) -> bool:
-        return isinstance(exc, (WorldChatInfrastructureError, RedisError, ConnectionError, OSError, TimeoutError))
+        return isinstance(exc, WORLD_CHAT_EXPECTED_INFRASTRUCTURE_ERRORS)
 
     async def connect(self):
         user = self.scope.get("user")
@@ -89,6 +100,9 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
                     "client": self.scope.get("client"),
                 },
             )
+            await self.close()
+            return
+        if not await self._ensure_valid_session(force=True):
             await self.close()
             return
 
@@ -151,9 +165,11 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
             await self.send_json({"type": "error", "code": "no_trumpet", "message": error_msg})
             return
 
+        history_written = False
         try:
             message = await self._build_message(text)
             await self._append_history(message)
+            history_written = True
             await self.channel_layer.group_send(
                 self.GROUP_NAME,
                 {
@@ -161,20 +177,29 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
                     "payload": message,
                 },
             )
-        except Exception as exc:
-            if not self._is_expected_infrastructure_error(exc):
-                raise
+        except WORLD_CHAT_EXPECTED_INFRASTRUCTURE_ERRORS:
+            history_removed = True
+            if history_written:
+                history_removed = await self._remove_history_compensation(message)
             refunded = await self._refund_trumpet()
             record_degradation(
                 WORLD_CHAT_REFUND,
                 component="world_chat",
-                detail=f"publish failed, refunded={refunded}",
+                detail=f"publish failed, refunded={refunded}, history_removed={history_removed}",
                 user_id=self.user_id,
             )
             logger.exception(
-                "World chat publish failed after consuming trumpet: user_id=%s refunded=%s",
+                "World chat publish failed after consuming trumpet: user_id=%s refunded=%s history_removed=%s",
                 self.user_id,
                 refunded,
+                history_removed,
+                extra={
+                    "degraded": True,
+                    "component": "world_chat_publish",
+                    "user_id": self.user_id,
+                    "refunded": refunded,
+                    "history_removed": history_removed,
+                },
             )
             await self.send_json(
                 {
@@ -187,9 +212,21 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
                     ),
                 }
             )
+        except Exception:
+            logger.error(
+                "Unexpected world chat publish failure: user_id=%s",
+                self.user_id,
+                exc_info=True,
+                extra={"degraded": True, "component": "world_chat_publish", "user_id": self.user_id},
+            )
+            raise
 
     async def receive_json(self, content, **kwargs):
         try:
+            if not await self._ensure_valid_session():
+                await self.close()
+                return
+
             msg_type = content.get("type")
 
             if msg_type == "ping":
@@ -340,6 +377,28 @@ class WorldChatConsumer(AsyncJsonWebsocketConsumer):
 
     async def _append_history(self, message: dict) -> None:
         await sync_to_async(self._append_history_sync, thread_sensitive=True)(message)
+
+    def _remove_history_sync(self, message: dict) -> None:
+        redis = self._get_redis()
+        remove_history_sync(message, redis, history_key=self.HISTORY_KEY)
+
+    async def _remove_history_compensation(self, message: dict) -> bool:
+        try:
+            await sync_to_async(self._remove_history_sync, thread_sensitive=True)(message)
+            return True
+        except WORLD_CHAT_EXPECTED_INFRASTRUCTURE_ERRORS:
+            logger.exception(
+                "World chat compensation delete failed: user_id=%s message_id=%s",
+                self.user_id,
+                message.get("id"),
+                extra={
+                    "degraded": True,
+                    "component": "world_chat_publish",
+                    "user_id": self.user_id,
+                    "message_id": message.get("id"),
+                },
+            )
+            return False
 
     def _rate_limit_sync(self, user_id: int | None) -> tuple[bool, int | None]:
         redis = self._get_redis()

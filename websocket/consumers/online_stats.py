@@ -14,22 +14,33 @@ from django_redis import get_redis_connection
 from redis.exceptions import RedisError
 
 from core.utils.cache_lock import acquire_best_effort_lock
+from gameplay.services.online_presence_backend import (
+    ONLINE_USERS_CACHE_KEY,
+    ONLINE_USERS_TTL_SECONDS,
+    ONLINE_USERS_ZSET_KEY,
+    ONLINE_WS_USERS_ZSET_KEY,
+    count_online_users,
+    touch_ws_presence,
+)
+
+from .session_guard import SingleSessionWebSocketMixin
 
 User = get_user_model()
 
 logger = logging.getLogger(__name__)
 
 
-class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
+class OnlineStatsConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer):
     """WebSocket consumer for real-time online user statistics."""
 
     STATS_GROUP = "online_stats"
-    ONLINE_USERS_KEY = "online_users_zset"
-    ONLINE_USERS_TTL = 1800  # 30 minutes window for auto-cleanup
+    ONLINE_USERS_KEY = ONLINE_USERS_ZSET_KEY
+    ONLINE_WS_USERS_KEY = ONLINE_WS_USERS_ZSET_KEY
+    ONLINE_USERS_TTL = ONLINE_USERS_TTL_SECONDS  # 30 minutes window for auto-cleanup
     ONLINE_USERS_HEARTBEAT_INTERVAL = 300  # refresh every 5 minutes
     ONLINE_USER_CONN_COUNT_KEY_PREFIX = "online_user_conn_count:"
 
-    ONLINE_COUNT_CACHE_KEY = "stats:online_users_count"
+    ONLINE_COUNT_CACHE_KEY = ONLINE_USERS_CACHE_KEY
     TOTAL_COUNT_CACHE_KEY = "stats:total_users_count"
     ONLINE_COUNT_CACHE_TTL = 15
     TOTAL_COUNT_CACHE_TTL = 300
@@ -51,6 +62,9 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
                     "client": self.scope.get("client"),
                 },
             )
+            await self.close()
+            return
+        if not await self._ensure_valid_session(force=True):
             await self.close()
             return
 
@@ -134,9 +148,9 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
     def _touch_online_user_sync(self, user_id: int, now_ts: float) -> None:
         redis = self._get_redis()
         count_key = f"{self.ONLINE_USER_CONN_COUNT_KEY_PREFIX}{int(user_id)}"
-        redis.zadd(self.ONLINE_USERS_KEY, {int(user_id): float(now_ts)})
-        redis.expire(self.ONLINE_USERS_KEY, self.ONLINE_USERS_TTL * 2)
+        touch_ws_presence(redis, user_id=int(user_id), now_ts=float(now_ts), ttl_seconds=self.ONLINE_USERS_TTL)
         redis.expire(count_key, self.ONLINE_USERS_TTL * 2)
+        self._safe_cache_delete(self.ONLINE_COUNT_CACHE_KEY)
 
     def _add_online_connection_sync(self, user_id: int, now_ts: float) -> None:
         redis = self._get_redis()
@@ -144,8 +158,8 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
         pipe = redis.pipeline()
         pipe.incr(count_key)
         pipe.expire(count_key, self.ONLINE_USERS_TTL * 2)
-        pipe.zadd(self.ONLINE_USERS_KEY, {int(user_id): float(now_ts)})
-        pipe.expire(self.ONLINE_USERS_KEY, self.ONLINE_USERS_TTL * 2)
+        pipe.zadd(self.ONLINE_WS_USERS_KEY, {int(user_id): float(now_ts)})
+        pipe.expire(self.ONLINE_WS_USERS_KEY, self.ONLINE_USERS_TTL * 2)
         pipe.execute()
 
         self._safe_cache_delete(self.ONLINE_COUNT_CACHE_KEY)
@@ -156,19 +170,19 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
 
         script = """
         local count_key = KEYS[1]
-        local zset_key = KEYS[2]
+        local ws_zset_key = KEYS[2]
         local user_id = ARGV[1]
         local ttl = tonumber(ARGV[2])
 
         local current = redis.call('GET', count_key)
         if not current then
-          redis.call('ZREM', zset_key, user_id)
+          redis.call('ZREM', ws_zset_key, user_id)
           return 0
         end
         current = tonumber(current)
         if current <= 1 then
           redis.call('DEL', count_key)
-          redis.call('ZREM', zset_key, user_id)
+          redis.call('ZREM', ws_zset_key, user_id)
           return 0
         end
 
@@ -184,7 +198,7 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
                 self._online_stats_remove_script_sha,
                 2,
                 count_key,
-                self.ONLINE_USERS_KEY,
+                self.ONLINE_WS_USERS_KEY,
                 str(int(user_id)),
                 str(int(self.ONLINE_USERS_TTL * 2)),
             )
@@ -193,7 +207,7 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
                 script,
                 2,
                 count_key,
-                self.ONLINE_USERS_KEY,
+                self.ONLINE_WS_USERS_KEY,
                 str(int(user_id)),
                 str(int(self.ONLINE_USERS_TTL * 2)),
             )
@@ -204,11 +218,11 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
 
     def _cleanup_expired_users_sync(self, now_ts: float) -> int:
         redis = self._get_redis()
-        cutoff = float(now_ts) - float(self.ONLINE_USERS_TTL)
         try:
-            return int(redis.zremrangebyscore(self.ONLINE_USERS_KEY, "-inf", cutoff) or 0)
+            count_online_users(redis, now_ts=float(now_ts), ttl_seconds=self.ONLINE_USERS_TTL)
+            return 0
         except RedisError as exc:
-            logger.warning("Online stats Redis cleanup failed; skipping (cutoff=%s): %s", cutoff, exc)
+            logger.warning("Online stats Redis cleanup failed; skipping: %s", exc)
             return 0
 
     def _get_online_count_sync(self) -> int:
@@ -217,9 +231,8 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
             return int(cached_count)
 
         now_ts = time.time()
-        self._cleanup_expired_users_sync(now_ts)
         redis = self._get_redis()
-        count = int(redis.zcard(self.ONLINE_USERS_KEY) or 0)
+        count = int(count_online_users(redis, now_ts=now_ts, ttl_seconds=self.ONLINE_USERS_TTL) or 0)
         self._safe_cache_set(self.ONLINE_COUNT_CACHE_KEY, count, timeout=self.ONLINE_COUNT_CACHE_TTL)
         return count
 

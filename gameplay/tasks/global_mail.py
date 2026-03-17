@@ -4,8 +4,11 @@ import logging
 from typing import Any
 
 from celery import shared_task
+from django.core.cache import cache
 from django.utils import timezone
 
+from common.utils.celery import safe_apply_async
+from core.utils.task_monitoring import increment_degraded_counter
 from gameplay.models import GlobalMailCampaign, Manor
 from gameplay.services.global_mail import deliver_campaign_to_manor
 
@@ -14,6 +17,62 @@ logger = logging.getLogger(__name__)
 GLOBAL_MAIL_BACKFILL_DEFAULT_BATCH_SIZE = 500
 GLOBAL_MAIL_BACKFILL_MIN_BATCH_SIZE = 50
 GLOBAL_MAIL_BACKFILL_ERROR_LOG_LIMIT = 5
+FAILED_GLOBAL_MAIL_MANOR_IDS_CACHE_KEY = "gameplay:global_mail:failed_manor_ids:{campaign_id}"
+FAILED_GLOBAL_MAIL_MANOR_IDS_TTL = 86400 * 7  # 7 days
+
+
+def _get_failed_manor_ids_cache_key(campaign_id: int) -> str:
+    return FAILED_GLOBAL_MAIL_MANOR_IDS_CACHE_KEY.format(campaign_id=int(campaign_id))
+
+
+def persist_failed_manor_ids(campaign_id: int, failed_ids: list[int]) -> None:
+    """Persist failed manor IDs to cache for later retry inspection."""
+    if not failed_ids:
+        return
+    key = _get_failed_manor_ids_cache_key(campaign_id)
+    try:
+        existing = cache.get(key) or []
+        if isinstance(existing, list):
+            merged = list({int(x) for x in existing} | {int(x) for x in failed_ids})
+        else:
+            merged = [int(x) for x in failed_ids]
+        cache.set(key, merged, timeout=FAILED_GLOBAL_MAIL_MANOR_IDS_TTL)
+    except Exception:
+        logger.warning(
+            "Failed to persist global mail failed manor IDs: campaign_id=%s",
+            campaign_id,
+            exc_info=True,
+        )
+
+
+def get_failed_manor_ids(campaign_id: int) -> list[int]:
+    """Read persisted failed manor IDs for a campaign."""
+    key = _get_failed_manor_ids_cache_key(campaign_id)
+    try:
+        value = cache.get(key)
+        if isinstance(value, list):
+            return [int(x) for x in value]
+        return []
+    except Exception:
+        logger.warning(
+            "Failed to read global mail failed manor IDs: campaign_id=%s",
+            campaign_id,
+            exc_info=True,
+        )
+        return []
+
+
+def clear_failed_manor_ids(campaign_id: int) -> None:
+    """Clear persisted failed manor IDs for a campaign after successful retry."""
+    key = _get_failed_manor_ids_cache_key(campaign_id)
+    try:
+        cache.delete(key)
+    except Exception:
+        logger.warning(
+            "Failed to clear global mail failed manor IDs: campaign_id=%s",
+            campaign_id,
+            exc_info=True,
+        )
 
 
 @shared_task(name="gameplay.backfill_global_mail_campaign")
@@ -37,6 +96,8 @@ def backfill_global_mail_campaign_task(
             "scanned": 0,
             "delivered": 0,
             "failed": 0,
+            "failed_manor_ids": [],
+            "summary": f"campaign {int(campaign_id)} not found",
         }
 
     current_time = timezone.now()
@@ -52,6 +113,8 @@ def backfill_global_mail_campaign_task(
             "scanned": 0,
             "delivered": 0,
             "failed": 0,
+            "failed_manor_ids": [],
+            "summary": f"campaign {int(campaign.id)} inactive",
         }
 
     normalized_batch_size = max(
@@ -60,6 +123,7 @@ def backfill_global_mail_campaign_task(
     delivered_count = 0
     failed_count = 0
     scanned_count = 0
+    failed_manor_ids: list[int] = []
 
     for manor in Manor.objects.only("id").order_by("id").iterator(chunk_size=normalized_batch_size):
         scanned_count += 1
@@ -68,6 +132,7 @@ def backfill_global_mail_campaign_task(
                 delivered_count += 1
         except Exception as exc:
             failed_count += 1
+            failed_manor_ids.append(int(manor.id))
             if failed_count <= GLOBAL_MAIL_BACKFILL_ERROR_LOG_LIMIT:
                 logger.exception(
                     "Global mail backfill delivery failed: campaign_id=%s manor_id=%s error=%s",
@@ -76,23 +141,48 @@ def backfill_global_mail_campaign_task(
                     exc,
                 )
 
+    if failed_manor_ids:
+        logger.error(
+            "batch partial failure",
+            extra={
+                "task": "gameplay.backfill_global_mail_campaign",
+                "failed_ids": failed_manor_ids,
+                "degraded": True,
+            },
+        )
+        increment_degraded_counter("global_mail")
+        persist_failed_manor_ids(campaign.id, failed_manor_ids)
+
+    final_status = "partial_failure" if failed_manor_ids else "ok"
     logger.info(
-        "Global mail backfill completed: campaign_id=%s key=%s scanned=%s delivered=%s failed=%s",
+        "Global mail backfill completed: campaign_id=%s key=%s scanned=%s delivered=%s failed=%s status=%s",
         campaign.id,
         campaign.key,
         scanned_count,
         delivered_count,
         failed_count,
+        final_status,
     )
     return {
-        "status": "ok",
+        "status": final_status,
         "campaign_id": int(campaign.id),
         "scanned": int(scanned_count),
         "delivered": int(delivered_count),
         "failed": int(failed_count),
+        "failed_manor_ids": failed_manor_ids,
+        "summary": (
+            f"campaign {int(campaign.id)} backfill completed: "
+            f"scanned={int(scanned_count)} delivered={int(delivered_count)} "
+            f"failed={int(failed_count)} failed_manor_ids={failed_manor_ids}"
+        ),
     }
 
 
 def enqueue_global_mail_backfill(campaign_id: int, *, batch_size: int = GLOBAL_MAIL_BACKFILL_DEFAULT_BATCH_SIZE):
-    """提交异步补发任务并返回 Celery AsyncResult。"""
-    return backfill_global_mail_campaign_task.apply_async(args=[int(campaign_id), int(batch_size)])
+    """提交异步补发任务并返回是否成功入队。"""
+    return safe_apply_async(
+        backfill_global_mail_campaign_task,
+        args=[int(campaign_id), int(batch_size)],
+        logger=logger,
+        log_message="global mail backfill task dispatch failed",
+    )

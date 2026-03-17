@@ -42,7 +42,7 @@ jobs:
           DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1"
           DJANGO_SECRET_KEY: "ci-only-not-a-real-secret-key-change-me-1234567890"
         run: |
-          python manage.py check --deploy
+          DJANGO_DB_ENGINE=django.db.backends.mysql DJANGO_DB_NAME=ci_deploy_check REDIS_PASSWORD=ci-test-dummy python manage.py check --deploy
           python -m coverage run -m pytest -q -m "not integration"
           # Coverage target: incrementally raise from 60% → 65% → 70% → 75%
           python -m coverage report --fail-under=75
@@ -138,7 +138,7 @@ jobs:
           REDIS_CACHE_URL: "redis://127.0.0.1:6379/2"
         run: |
           python manage.py migrate --noinput
-          python manage.py check --deploy
+          REDIS_PASSWORD=ci-test-dummy python manage.py check --deploy
           python -m coverage run -m pytest -m integration -q
           python -m coverage report -m
           python -m coverage xml -o coverage-integration.xml

@@ -33,6 +33,15 @@ class _FakeRedis:
     def zcard(self, key: str):
         return len(self._zsets.get(key, {}))
 
+    def zunionstore(self, dest: str, keys, aggregate=None):
+        del aggregate
+        union: dict[int, float] = {}
+        for key in keys:
+            for member, score in self._zsets.get(key, {}).items():
+                union[int(member)] = max(union.get(int(member), float("-inf")), float(score))
+        self._zsets[dest] = union
+        return len(union)
+
 
 def test_notifications_anonymous_tolerates_cache_and_redis_failures(monkeypatch):
     request = RequestFactory().get("/")

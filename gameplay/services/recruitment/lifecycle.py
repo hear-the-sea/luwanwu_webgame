@@ -51,15 +51,26 @@ def schedule_recruitment_completion(recruitment: TroopRecruitment, eta_seconds: 
         logger.warning("Unable to import complete_troop_recruitment task; skip scheduling", exc_info=True)
         return
 
-    db_transaction.on_commit(
-        lambda: safe_apply_async(
+    def _dispatch_completion() -> None:
+        dispatched = safe_apply_async(
             complete_troop_recruitment,
             args=[recruitment.id],
             countdown=countdown,
             logger=logger,
             log_message="complete_troop_recruitment dispatch failed",
         )
-    )
+        if not dispatched:
+            logger.error(
+                "complete_troop_recruitment dispatch returned False; recruitment may remain recruiting",
+                extra={
+                    "task_name": "complete_troop_recruitment",
+                    "recruitment_id": getattr(recruitment, "id", None),
+                    "manor_id": getattr(recruitment, "manor_id", None),
+                    "troop_key": getattr(recruitment, "troop_key", None),
+                },
+            )
+
+    db_transaction.on_commit(_dispatch_completion)
 
 
 def _get_or_create_battle_troop_template(recruitment: TroopRecruitment) -> TroopTemplate | None:
@@ -155,8 +166,8 @@ def finalize_troop_recruitment(recruitment: TroopRecruitment, send_notification:
                 {
                     "kind": "system",
                     "title": f"{recruitment.troop_name}{quantity_text}募兵完成",
-                    "troop_key": recruitment.troop_key,
-                    "quantity": recruitment.quantity,
+                    "troop_key": getattr(recruitment, "troop_key", None),
+                    "quantity": getattr(recruitment, "quantity", None),
                 },
                 log_context="troop recruitment notification",
             )

@@ -285,15 +285,26 @@ def schedule_building_completion(building: Building, eta_seconds: int) -> None:
     except Exception:
         logger.warning("Unable to import complete_building_upgrade task; skip scheduling", exc_info=True)
         return
-    transaction.on_commit(
-        lambda: safe_apply_async(
+
+    def _dispatch_completion() -> None:
+        dispatched = safe_apply_async(
             complete_building_upgrade,
             args=[building.id],
             countdown=countdown,
             logger=logger,
             log_message="complete_building_upgrade dispatch failed",
         )
-    )
+        if not dispatched:
+            logger.error(
+                "complete_building_upgrade dispatch returned False; building may remain upgrading",
+                extra={
+                    "task_name": "complete_building_upgrade",
+                    "building_id": getattr(building, "id", None),
+                    "manor_id": getattr(building, "manor_id", None),
+                },
+            )
+
+    transaction.on_commit(_dispatch_completion)
 
 
 def start_upgrade(building: Building) -> None:

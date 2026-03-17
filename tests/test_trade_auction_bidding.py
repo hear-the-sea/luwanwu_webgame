@@ -205,6 +205,50 @@ def test_place_bid_succeeds_when_outbid_notification_fails(monkeypatch, django_u
 
 
 @pytest.mark.django_db
+def test_place_bid_notifies_outbid_player_with_cutoff_price_in_multi_winner_slot(monkeypatch, django_user_model):
+    user1 = django_user_model.objects.create_user(username="auction_cutoff_1", password="pass12345")
+    user2 = django_user_model.objects.create_user(username="auction_cutoff_2", password="pass12345")
+    user3 = django_user_model.objects.create_user(username="auction_cutoff_3", password="pass12345")
+    manor1 = ensure_manor(user1)
+    manor2 = ensure_manor(user2)
+    manor3 = ensure_manor(user3)
+    _set_gold_bars(manor1, 20)
+    _set_gold_bars(manor2, 20)
+    _set_gold_bars(manor3, 20)
+
+    slot = _create_active_round_and_slot(item_key="auction_cutoff_item", quantity=2)
+
+    auction_service.place_bid(manor1, slot.id, 10)
+    auction_service.place_bid(manor2, slot.id, 9)
+
+    notifications: list[dict] = []
+
+    def _capture_outbid(manor, slot, new_price, new_bidder, winner_count):
+        notifications.append(
+            {
+                "manor_id": manor.id,
+                "slot_id": slot.id,
+                "new_price": new_price,
+                "new_bidder_id": new_bidder.id,
+                "winner_count": winner_count,
+            }
+        )
+
+    monkeypatch.setattr(auction_service, "_notify_outbid_vickrey", _capture_outbid)
+    auction_service.place_bid(manor3, slot.id, 11)
+
+    assert notifications == [
+        {
+            "manor_id": manor2.id,
+            "slot_id": slot.id,
+            "new_price": 10,
+            "new_bidder_id": manor3.id,
+            "winner_count": 2,
+        }
+    ]
+
+
+@pytest.mark.django_db
 def test_validate_bid_amount_rejects_non_positive_amount(django_user_model):
     user = django_user_model.objects.create_user(username="auction_validate_non_positive", password="pass12345")
     _ = ensure_manor(user)

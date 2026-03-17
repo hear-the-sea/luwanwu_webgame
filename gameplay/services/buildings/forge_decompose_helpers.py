@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import random
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ...models import InventoryItem
 
 
 def build_decomposable_equipment_option(
-    item,
+    item: InventoryItem,
     *,
     rarity_labels: dict[str, str],
     category_labels: dict[str, str],

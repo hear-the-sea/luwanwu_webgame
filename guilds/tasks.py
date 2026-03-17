@@ -5,8 +5,12 @@ import logging
 from datetime import timedelta
 
 from celery import shared_task
+from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
+
+from common.utils import celery as celery_utils
+from core.utils.task_monitoring import increment_degraded_counter
 
 from .models import Guild, GuildDonationLog, GuildExchangeLog, GuildResourceLog, GuildTechnology
 from .services.contribution import reset_weekly_contributions
@@ -14,6 +18,8 @@ from .services.hero_pool import cleanup_invalid_hero_pool_entries
 from .services.warehouse import produce_equipment, produce_experience_items, produce_resource_packs
 
 logger = logging.getLogger(__name__)
+GUILD_PRODUCTION_PARTIAL_RETRY_LIMIT = 1
+FAILED_GUILD_PRODUCTION_IDS_CACHE_KEY = "guilds:daily_production:failed_guild_ids"
 
 
 def _process_daily_technology_production(
@@ -37,56 +43,168 @@ def _process_daily_technology_production(
         return True
 
 
+def _normalize_failed_guild_ids(failed_ids) -> list[int]:
+    normalized_ids: list[int] = []
+    for guild_id in failed_ids or []:
+        try:
+            normalized = int(guild_id)
+        except (TypeError, ValueError):
+            continue
+        if normalized not in normalized_ids:
+            normalized_ids.append(normalized)
+    return normalized_ids
+
+
+def _persist_failed_guild_ids(failed_guild_ids: list[int]) -> None:
+    normalized_ids = _normalize_failed_guild_ids(failed_guild_ids)
+    if not normalized_ids:
+        return
+
+    try:
+        existing_ids = _normalize_failed_guild_ids(cache.get(FAILED_GUILD_PRODUCTION_IDS_CACHE_KEY))
+        merged_ids = existing_ids + [guild_id for guild_id in normalized_ids if guild_id not in existing_ids]
+        cache.set(FAILED_GUILD_PRODUCTION_IDS_CACHE_KEY, merged_ids, timeout=None)
+    except Exception:
+        logger.warning("Failed to persist failed guild production IDs", exc_info=True)
+
+
+def _clear_failed_guild_ids() -> None:
+    try:
+        cache.delete(FAILED_GUILD_PRODUCTION_IDS_CACHE_KEY)
+    except Exception:
+        logger.warning("Failed to clear failed guild production IDs", exc_info=True)
+
+
+def get_failed_guild_ids() -> list[int]:
+    try:
+        return _normalize_failed_guild_ids(cache.get(FAILED_GUILD_PRODUCTION_IDS_CACHE_KEY))
+    except Exception:
+        logger.warning("Failed to read failed guild production IDs", exc_info=True)
+        return []
+
+
+def _process_guild_production_once(guild_id: int) -> tuple[str, bool]:
+    guild = Guild.objects.get(pk=guild_id)
+    if not guild.is_active:
+        return f"guild {guild_id} is inactive", False
+
+    produced_items = []
+    now = timezone.now()
+    partial_failure = False
+
+    # 装备锻造
+    try:
+        if _process_daily_technology_production(
+            guild,
+            tech_key="equipment_forge",
+            producer=produce_equipment,
+            now=now,
+        ):
+            produced_items.append("equipment")
+    except Exception as exc:
+        partial_failure = True
+        logger.error("Failed to produce equipment for guild %s: %s", guild.id, exc)
+
+    # 经验炼制
+    try:
+        if _process_daily_technology_production(
+            guild,
+            tech_key="experience_refine",
+            producer=produce_experience_items,
+            now=now,
+        ):
+            produced_items.append("experience")
+    except Exception as exc:
+        partial_failure = True
+        logger.error("Failed to produce experience items for guild %s: %s", guild.id, exc)
+
+    # 资源补给
+    try:
+        if _process_daily_technology_production(
+            guild,
+            tech_key="resource_supply",
+            producer=produce_resource_packs,
+            now=now,
+        ):
+            produced_items.append("resource")
+    except Exception as exc:
+        partial_failure = True
+        logger.error("Failed to produce resource packs for guild %s: %s", guild.id, exc)
+
+    summary = f"processed guild {guild_id}: {', '.join(produced_items)}"
+    if partial_failure:
+        summary = f"{summary}; failed_guild_ids={[guild_id]}"
+    return summary, partial_failure
+
+
+def _handle_guild_production_partial_failure(failed_guild_ids: list[int], retry_attempt: int) -> None:
+    if not failed_guild_ids:
+        return
+
+    logger.error(
+        "batch partial failure",
+        extra={
+            "task": "guilds.process_single_guild_production",
+            "failed_ids": failed_guild_ids,
+            "degraded": True,
+        },
+    )
+    increment_degraded_counter("guilds_production")
+
+    if retry_attempt >= GUILD_PRODUCTION_PARTIAL_RETRY_LIMIT:
+        return
+
+    dispatched = celery_utils.safe_apply_async(
+        process_single_guild_production,
+        args=[None, failed_guild_ids, retry_attempt + 1],
+        logger=logger,
+        log_message="Failed to dispatch guild production partial failure retry",
+    )
+    if dispatched:
+        _clear_failed_guild_ids()
+        return
+
+    _persist_failed_guild_ids(failed_guild_ids)
+
+
 @shared_task(name="guilds.process_single_guild_production", bind=True, max_retries=3, default_retry_delay=60)
-def process_single_guild_production(self, guild_id: int):
+def process_single_guild_production(self, guild_id: int | None = None, failed_ids=None, retry_attempt: int = 0):
     """
     处理单个帮会的每日科技产出
     """
+    normalized_failed_ids = _normalize_failed_guild_ids(failed_ids)
+    if normalized_failed_ids:
+        failed_guild_ids: list[int] = []
+        processed_count = 0
+
+        for failed_guild_id in normalized_failed_ids:
+            try:
+                _summary, partial_failure = _process_guild_production_once(failed_guild_id)
+                processed_count += 1
+                if partial_failure:
+                    failed_guild_ids.append(failed_guild_id)
+            except Guild.DoesNotExist:
+                logger.warning("Guild %s not found during daily production", failed_guild_id)
+            except Exception as exc:
+                logger.exception("Failed to process guild %s production: %s", failed_guild_id, exc)
+                raise self.retry(exc=exc)
+
+        if failed_guild_ids:
+            _handle_guild_production_partial_failure(failed_guild_ids, retry_attempt)
+
+        summary = f"processed {processed_count} guilds"
+        if failed_guild_ids:
+            summary = f"{summary}; failed_guild_ids={failed_guild_ids}"
+        return summary
+
     try:
-        guild = Guild.objects.get(pk=guild_id)
-        if not guild.is_active:
-            return f"guild {guild_id} is inactive"
+        if guild_id is None:
+            raise ValueError("guild_id is required when failed_ids is empty")
 
-        produced_items = []
-        now = timezone.now()
-
-        # 装备锻造
-        try:
-            if _process_daily_technology_production(
-                guild,
-                tech_key="equipment_forge",
-                producer=produce_equipment,
-                now=now,
-            ):
-                produced_items.append("equipment")
-        except Exception as exc:
-            logger.error("Failed to produce equipment for guild %s: %s", guild.id, exc)
-
-        # 经验炼制
-        try:
-            if _process_daily_technology_production(
-                guild,
-                tech_key="experience_refine",
-                producer=produce_experience_items,
-                now=now,
-            ):
-                produced_items.append("experience")
-        except Exception as exc:
-            logger.error("Failed to produce experience items for guild %s: %s", guild.id, exc)
-
-        # 资源补给
-        try:
-            if _process_daily_technology_production(
-                guild,
-                tech_key="resource_supply",
-                producer=produce_resource_packs,
-                now=now,
-            ):
-                produced_items.append("resource")
-        except Exception as exc:
-            logger.error("Failed to produce resource packs for guild %s: %s", guild.id, exc)
-
-        return f"processed guild {guild_id}: {', '.join(produced_items)}"
+        summary, partial_failure = _process_guild_production_once(int(guild_id))
+        if partial_failure:
+            _handle_guild_production_partial_failure([int(guild_id)], retry_attempt)
+        return summary
     except Guild.DoesNotExist:
         logger.warning("Guild %s not found during daily production", guild_id)
         return "guild not found"
@@ -103,14 +221,12 @@ def guild_tech_daily_production(self):
     采用 Fan-out 模式分发任务，避免单次任务超时
     """
     try:
-        from common.utils.celery import safe_apply_async
-
         # 获取所有活跃帮会ID
         guild_ids = list(Guild.objects.filter(is_active=True).values_list("id", flat=True))
         dispatched_count = 0
 
         for guild_id in guild_ids:
-            dispatched = safe_apply_async(
+            dispatched = celery_utils.safe_apply_async(
                 process_single_guild_production,
                 args=[guild_id],
                 logger=logger,

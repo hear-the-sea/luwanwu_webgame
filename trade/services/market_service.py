@@ -448,11 +448,20 @@ def cancel_listing(manor: Manor, listing_id: int) -> Dict:
     return _build_cancel_listing_result(listing=listing)
 
 
+def _return_expired_listing_inventory(*, manor: Manor, listing: MarketListing) -> None:
+    _restore_cancelled_listing_inventory(
+        inventory_item_model=InventoryItem,
+        manor=manor,
+        listing=listing,
+    )
+
+
 def _expire_listings_queryset(expired_listings: QuerySet, log_label: str, limit: int | None = None) -> int:
     return _expire_listings_queryset_impl(
         expired_listings,
         log_label,
         market_listing_model=MarketListing,
+        return_inventory_func=_return_expired_listing_inventory,
         create_message_func=create_message,
         notify_user_func=notify_user,
         logger=logger,

@@ -1,7 +1,11 @@
 from __future__ import annotations
 
-from datetime import timedelta
-from typing import Any, Callable, Iterable
+from datetime import datetime, timedelta
+from logging import Logger
+from typing import TYPE_CHECKING, Any, Callable, Iterable
+
+if TYPE_CHECKING:
+    from ...models import EquipmentProduction, InventoryItem, Manor
 
 FilteredConfigs = list[tuple[str, dict[str, Any]]]
 
@@ -20,8 +24,8 @@ def build_filtered_equipment_configs(
 
 def load_material_quantity_map(
     *,
-    inventory_item_model,
-    manor,
+    inventory_item_model: type[InventoryItem],
+    manor: Manor,
     material_keys: set[str],
     build_inventory_quantity_map: Callable[[Iterable[Any]], dict[str, int]],
 ) -> dict[str, int]:
@@ -42,13 +46,13 @@ def load_material_quantity_map(
 
 def build_equipment_options(
     *,
-    manor,
+    manor: Manor,
     filtered_configs: FilteredConfigs,
     item_name_map: dict[str, str],
     material_quantities: dict[str, int],
     material_name_fallback_map: dict[str, str],
     equipment_categories: dict[str, str],
-    calculate_forging_duration: Callable[[int, Any], int],
+    calculate_forging_duration: Callable[[int, Manor], int],
     build_equipment_option: Callable[..., dict[str, Any]],
     forging_level: int,
     max_quantity: int,
@@ -85,12 +89,12 @@ def build_total_material_costs(*, materials: dict[str, int], quantity: int) -> d
 
 def consume_forging_materials_locked(
     *,
-    inventory_item_model,
-    locked_manor,
+    inventory_item_model: type[InventoryItem],
+    locked_manor: Manor,
     total_costs: dict[str, int],
     material_name_map: dict[str, str],
     material_name_fallback_map: dict[str, str],
-    consume_inventory_item_locked,
+    consume_inventory_item_locked: Callable[[InventoryItem, int], None],
 ) -> None:
     for mat_key, total_amount in total_costs.items():
         item = (
@@ -111,16 +115,16 @@ def consume_forging_materials_locked(
 
 def create_equipment_production_record(
     *,
-    equipment_production_model,
-    locked_manor,
+    equipment_production_model: type[EquipmentProduction],
+    locked_manor: Manor,
     equipment_key: str,
     equipment_name: str,
     quantity: int,
     total_costs: dict[str, int],
     base_duration: int,
     actual_duration: int,
-    current_time,
-):
+    current_time: datetime,
+) -> EquipmentProduction:
     return equipment_production_model.objects.create(
         manor=locked_manor,
         equipment_key=equipment_key,
@@ -134,12 +138,12 @@ def create_equipment_production_record(
 
 
 def schedule_forging_completion_task(
-    production,
+    production: EquipmentProduction,
     eta_seconds: int,
     *,
-    logger,
-    transaction_module,
-    safe_apply_async_func,
+    logger: Logger,
+    transaction_module: Any,
+    safe_apply_async_func: Callable[..., Any],
 ) -> None:
     countdown = max(0, int(eta_seconds))
     try:
@@ -161,11 +165,11 @@ def schedule_forging_completion_task(
 
 def finalize_equipment_production_locked(
     *,
-    equipment_production_model,
-    production,
-    current_time,
-    add_item_to_inventory_locked,
-):
+    equipment_production_model: type[EquipmentProduction],
+    production: EquipmentProduction,
+    current_time: datetime,
+    add_item_to_inventory_locked: Callable[[Manor, str, int], Any],
+) -> EquipmentProduction | None:
     if not getattr(production, "pk", None):
         return None
 
@@ -194,7 +198,12 @@ def build_forging_quantity_text(quantity: int) -> str:
     return f"x{quantity}" if int(quantity) > 1 else ""
 
 
-def send_equipment_forging_completion_notification(*, production, logger, notify_user_func) -> None:
+def send_equipment_forging_completion_notification(
+    *,
+    production: EquipmentProduction,
+    logger: Logger,
+    notify_user_func: Callable[..., Any],
+) -> None:
     from ...models import Message
     from ..utils.messages import create_message
 

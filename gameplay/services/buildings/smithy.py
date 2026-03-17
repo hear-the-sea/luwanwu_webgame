@@ -368,15 +368,25 @@ def _schedule_smelting_completion(production: SmeltingProduction, eta_seconds: i
         logger.warning("Unable to import complete_smelting_production task; skip scheduling", exc_info=True)
         return
 
-    db_transaction.on_commit(
-        lambda: safe_apply_async(
+    def _dispatch_completion() -> None:
+        dispatched = safe_apply_async(
             complete_smelting_production,
             args=[production.id],
             countdown=countdown,
             logger=logger,
             log_message="complete_smelting_production dispatch failed",
         )
-    )
+        if not dispatched:
+            logger.error(
+                "complete_smelting_production dispatch returned False; production may remain pending",
+                extra={
+                    "task_name": "complete_smelting_production",
+                    "production_id": getattr(production, "id", None),
+                    "manor_id": getattr(production, "manor_id", None),
+                },
+            )
+
+    db_transaction.on_commit(_dispatch_completion)
 
 
 def finalize_smelting_production(production: SmeltingProduction, send_notification: bool = False) -> bool:
@@ -392,50 +402,62 @@ def finalize_smelting_production(production: SmeltingProduction, send_notificati
     """
     from ...models import Message
 
-    if production.status != SmeltingProduction.Status.PRODUCING:
-        return False
-
     if production.complete_at > timezone.now():
         return False
 
+    completed_production = production
     with transaction.atomic():
+        # 先在事务内锁定并重新读取制作记录，确保并发 worker 只有一个能看到 PRODUCING 并发货；
+        # 其余 worker 读到最新状态后直接返回，保证完成结算幂等。
+        locked_production = SmeltingProduction.objects.select_for_update().select_related("manor").get(pk=production.pk)
+        if locked_production.status != SmeltingProduction.Status.PRODUCING:
+            production.status = locked_production.status
+            production.finished_at = locked_production.finished_at
+            return False
+        if locked_production.complete_at > timezone.now():
+            return False
+
         # 添加物品到仓库（按数量添加）
         from ..inventory import add_item_to_inventory_locked
 
-        add_item_to_inventory_locked(production.manor, production.metal_key, production.quantity)
+        add_item_to_inventory_locked(locked_production.manor, locked_production.metal_key, locked_production.quantity)
 
         # 更新制作状态
-        production.status = SmeltingProduction.Status.COMPLETED
-        production.finished_at = timezone.now()
-        production.save(update_fields=["status", "finished_at"])
+        finished_at = timezone.now()
+        locked_production.status = SmeltingProduction.Status.COMPLETED
+        locked_production.finished_at = finished_at
+        locked_production.save(update_fields=["status", "finished_at"])
+        production.status = locked_production.status
+        production.finished_at = finished_at
+        completed_production = locked_production
 
     if send_notification:
         from ..utils.messages import create_message
 
-        quantity_text = f"x{production.quantity}" if production.quantity > 1 else ""
+        quantity_text = f"x{completed_production.quantity}" if completed_production.quantity > 1 else ""
         try:
             create_message(
-                manor=production.manor,
+                manor=completed_production.manor,
                 kind=Message.Kind.SYSTEM,
-                title=f"{production.metal_name}{quantity_text}制作完成",
-                body=f"您的{production.metal_name}{quantity_text}已制作完成，请到仓库查收。",
+                title=f"{completed_production.metal_name}{quantity_text}制作完成",
+                body=f"您的{completed_production.metal_name}{quantity_text}已制作完成，请到仓库查收。",
             )
 
             notify_user(
-                production.manor.user_id,
+                completed_production.manor.user_id,
                 {
                     "kind": "system",
-                    "title": f"{production.metal_name}{quantity_text}制作完成",
-                    "metal_key": production.metal_key,
-                    "quantity": production.quantity,
+                    "title": f"{completed_production.metal_name}{quantity_text}制作完成",
+                    "metal_key": getattr(completed_production, "metal_key", None),
+                    "quantity": getattr(completed_production, "quantity", None),
                 },
                 log_context="smelting production notification",
             )
         except Exception as exc:
             logger.warning(
                 "smelting production notification failed: production_id=%s manor_id=%s error=%s",
-                production.id,
-                production.manor_id,
+                completed_production.id,
+                completed_production.manor_id,
                 exc,
                 exc_info=True,
             )

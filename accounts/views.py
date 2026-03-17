@@ -10,7 +10,7 @@ from django.contrib.auth import login
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView as DjangoLoginView
 from django.core.cache import cache
-from django.db import IntegrityError, transaction
+from django.db import DatabaseError, IntegrityError, transaction
 from django.shortcuts import redirect, render
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, TemplateView
@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 _LOCAL_LOGIN_CACHE: dict[str, tuple[object, float]] = {}
 _LOCAL_LOGIN_CACHE_GUARD = Lock()
 _LOCAL_LOGIN_CACHE_MAX_SIZE = 5000
+LOGIN_CACHE_INFRASTRUCTURE_EXCEPTIONS = (DatabaseError, ConnectionError, OSError, TimeoutError)
 
 
 def _get_client_ip(request) -> str:
@@ -154,8 +155,22 @@ def _normalize_lock_ttl(lock_key: str) -> int:
         return LOGIN_LOCKOUT_DURATION
     try:
         ttl = cache.ttl(lock_key)
+    except LOGIN_CACHE_INFRASTRUCTURE_EXCEPTIONS:
+        logger.warning(
+            "Failed to read lock TTL from cache: key=%s",
+            lock_key,
+            exc_info=True,
+            extra={"degraded": True, "component": "login_cache"},
+        )
+        return LOGIN_LOCKOUT_DURATION
     except Exception:
-        logger.warning("Failed to read lock TTL from cache: key=%s", lock_key, exc_info=True)
+        # 任何 cache.ttl 异常都视为基础设施故障，回退到默认锁定时长
+        logger.error(
+            "Unexpected lock TTL cache failure: key=%s",
+            lock_key,
+            exc_info=True,
+            extra={"degraded": True, "component": "login_cache"},
+        )
         return LOGIN_LOCKOUT_DURATION
     if ttl is None:
         return LOGIN_LOCKOUT_DURATION
@@ -172,8 +187,22 @@ def _increment_attempt_counter(key: str) -> int:
     added: bool | None = None
     try:
         added = bool(cache.add(key, 1, timeout=LOGIN_ATTEMPT_WINDOW))
+    except LOGIN_CACHE_INFRASTRUCTURE_EXCEPTIONS:
+        logger.warning(
+            "Failed to add login attempts cache key: %s",
+            key,
+            exc_info=True,
+            extra={"degraded": True, "component": "login_cache"},
+        )
+        added = None
     except Exception:
-        logger.warning("Failed to add login attempts cache key: %s", key, exc_info=True)
+        # 任何 cache.add 异常都视为基础设施故障，设为 None 走降级路径
+        logger.error(
+            "Unexpected login attempts cache.add failure: key=%s",
+            key,
+            exc_info=True,
+            extra={"degraded": True, "component": "login_cache"},
+        )
         added = None
 
     if added is True:
@@ -185,11 +214,12 @@ def _increment_attempt_counter(key: str) -> int:
             attempts = int(cache.incr(key))
             _local_login_cache_set(key, attempts, timeout=LOGIN_ATTEMPT_WINDOW)
             return attempts
-        except Exception:
+        except LOGIN_CACHE_INFRASTRUCTURE_EXCEPTIONS:
             logger.warning(
                 "Failed to increment login attempts cache key: key=%s degraded=True",
                 key,
                 exc_info=True,
+                extra={"degraded": True, "component": "login_cache"},
             )
             if not settings.DEBUG:
                 # 生产环境：缓存故障时 fail-closed，返回限制值触发锁定
@@ -204,6 +234,28 @@ def _increment_attempt_counter(key: str) -> int:
                 return LOGIN_ATTEMPT_LIMIT
             # DEBUG 模式：回落到本地计数，避免阻断开发调试
             logger.warning("Fallback to local login attempt counter path: key=%s", key)
+            attempts = 1
+            try:
+                raw_attempts = _safe_cache_get(key, 0)
+                attempts = int(raw_attempts or 0) + 1
+            except (TypeError, ValueError):
+                attempts = 1
+            _safe_cache_set(key, attempts, timeout=LOGIN_ATTEMPT_WINDOW)
+            return attempts
+        except Exception:
+            # 任何 cache.incr 异常都视为基础设施故障，按 fail-closed 降级处理
+            logger.error(
+                "Unexpected login attempts cache.incr failure: key=%s",
+                key,
+                exc_info=True,
+                extra={"degraded": True, "component": "login_cache"},
+            )
+            if not settings.DEBUG:
+                from core.utils.task_monitoring import increment_degraded_counter
+
+                increment_degraded_counter("login_security_degraded")
+                return LOGIN_ATTEMPT_LIMIT
+            # DEBUG 模式：回落到本地计数
             attempts = 1
             try:
                 raw_attempts = _safe_cache_get(key, 0)
@@ -278,8 +330,22 @@ def _safe_cache_get(key: str, default=None):
     local_value = _local_login_cache_get(key, default)
     try:
         cached = cache.get(key, _CACHE_MISS)
+    except LOGIN_CACHE_INFRASTRUCTURE_EXCEPTIONS:
+        logger.warning(
+            "Failed to read cache key: %s",
+            key,
+            exc_info=True,
+            extra={"degraded": True, "component": "login_cache"},
+        )
+        return local_value
     except Exception:
-        logger.warning("Failed to read cache key: %s", key, exc_info=True)
+        # 任何 cache.get 异常都视为基础设施故障，回退到本地缓存值
+        logger.error(
+            "Unexpected login cache.get failure: key=%s",
+            key,
+            exc_info=True,
+            extra={"degraded": True, "component": "login_cache"},
+        )
         return local_value
     if cached is _CACHE_MISS:
         return local_value
@@ -292,16 +358,42 @@ def _safe_cache_set(key: str, value, timeout: int) -> None:
     _local_login_cache_set(key, value, timeout=timeout)
     try:
         cache.set(key, value, timeout=timeout)
+    except LOGIN_CACHE_INFRASTRUCTURE_EXCEPTIONS:
+        logger.warning(
+            "Failed to write cache key: %s",
+            key,
+            exc_info=True,
+            extra={"degraded": True, "component": "login_cache"},
+        )
     except Exception:
-        logger.warning("Failed to write cache key: %s", key, exc_info=True)
+        # 任何 cache.set 异常都视为基础设施故障，本地缓存已在前一步写入
+        logger.error(
+            "Unexpected login cache.set failure: key=%s",
+            key,
+            exc_info=True,
+            extra={"degraded": True, "component": "login_cache"},
+        )
 
 
 def _safe_cache_delete(key: str) -> None:
     _local_login_cache_delete(key)
     try:
         cache.delete(key)
+    except LOGIN_CACHE_INFRASTRUCTURE_EXCEPTIONS:
+        logger.warning(
+            "Failed to delete cache key: %s",
+            key,
+            exc_info=True,
+            extra={"degraded": True, "component": "login_cache"},
+        )
     except Exception:
-        logger.warning("Failed to delete cache key: %s", key, exc_info=True)
+        # 任何 cache.delete 异常都视为基础设施故障，本地缓存已在前一步清除
+        logger.error(
+            "Unexpected login cache.delete failure: key=%s",
+            key,
+            exc_info=True,
+            extra={"degraded": True, "component": "login_cache"},
+        )
 
 
 class LoginView(DjangoLoginView):

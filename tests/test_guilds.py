@@ -153,6 +153,47 @@ class TestGuildMembership:
         membership = GuildMember.objects.get(user=second_user, guild=guild)
         assert membership.is_active is True
 
+    @pytest.mark.parametrize(
+        ("operation", "guild_name"),
+        [
+            ("reject_application", "拒申稳健会"),
+            ("leave_guild", "离帮稳健会"),
+            ("kick_member", "踢人稳健会"),
+        ],
+    )
+    def test_membership_mutation_keeps_success_when_followup_notifications_fail(
+        self, user_with_gold_bars, second_user, monkeypatch, operation, guild_name
+    ):
+        """成员变更主流程成功后，后续通知失败不应导致状态回滚。"""
+        guild = guild_service.create_guild(user=user_with_gold_bars, name=guild_name, description="")
+
+        def _raise_followup(*_args, **_kwargs):
+            raise RuntimeError("notification backend down")
+
+        monkeypatch.setattr(member_service, "create_message", _raise_followup)
+        monkeypatch.setattr(member_service, "create_announcement", _raise_followup)
+
+        if operation == "reject_application":
+            application = member_service.apply_to_guild(second_user, guild, "请收留我")
+
+            member_service.reject_application(application, user_with_gold_bars, note="名额已满")
+            application.refresh_from_db()
+
+            assert application.status == "rejected"
+            assert application.review_note == "名额已满"
+            return
+
+        member = GuildMember.objects.create(guild=guild, user=second_user, position="member")
+
+        if operation == "leave_guild":
+            member_service.leave_guild(member)
+        else:
+            member_service.kick_member(member, user_with_gold_bars)
+
+        member.refresh_from_db()
+        assert member.is_active is False
+        assert member.left_at is not None
+
     def test_apply_to_full_guild(self, user_with_gold_bars, second_user, django_user_model):
         """测试申请已满员帮会"""
         guild = guild_service.create_guild(user=user_with_gold_bars, name="小帮会", description="")

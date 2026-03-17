@@ -5,7 +5,11 @@ from __future__ import annotations
 import hashlib
 from datetime import date
 
+import pytest
+
+from gameplay.services.manor.core import ensure_manor
 from guests import tasks as guest_tasks
+from guests.models import Guest, GuestDefection, GuestTemplate
 
 
 def test_should_defect_deterministic_for_same_input():
@@ -23,15 +27,12 @@ def test_should_defect_different_for_different_dates():
     """Test that different dates can produce different results."""
     guest_id = 12345
 
-    # Collect results for multiple dates
     results = set()
     for day in range(1, 100):
         test_date = date(2026, 1, 1)
-        # Use day as part of guest_id to vary input
         result = guest_tasks._should_defect(guest_id + day * 1000, test_date, probability=0.5, hasher=hashlib.sha256)
         results.add(result)
 
-    # With probability 0.5 and 99 different inputs, we should see both True and False
     assert len(results) == 2
 
 
@@ -54,12 +55,9 @@ def test_should_defect_uses_hasher_correctly():
     guest_id = 99999
     test_date = date(2026, 2, 8)
 
-    # SHA256 and SHA512 should produce different hash values
     result_sha256 = guest_tasks._should_defect(guest_id, test_date, probability=0.5, hasher=hashlib.sha256)
     result_sha512 = guest_tasks._should_defect(guest_id, test_date, probability=0.5, hasher=hashlib.sha512)
 
-    # Results might be same or different, but the function should work with both
-    # This just verifies no errors occur
     assert isinstance(result_sha256, bool)
     assert isinstance(result_sha512, bool)
 
@@ -73,3 +71,57 @@ def test_defection_constants_are_defined():
     assert guest_tasks.DEFECTION_PROBABILITY == 0.3
     assert guest_tasks.DEFECTION_BATCH_SIZE == 500
     assert guest_tasks.DEFECTION_QUERY_CHUNK_SIZE == 2000
+
+
+def _create_guest_for_defection(django_user_model, *, username: str) -> Guest:
+    user = django_user_model.objects.create_user(username=username, password="pass12345")
+    manor = ensure_manor(user)
+    template = GuestTemplate.objects.create(
+        key=f"{username}_guest_tpl",
+        name="叛逃测试门客",
+        archetype="civil",
+        rarity="green",
+    )
+    return Guest.objects.create(
+        manor=manor,
+        template=template,
+        level=12,
+        loyalty=8,
+        custom_name="韩信",
+    )
+
+
+@pytest.mark.django_db
+def test_process_defection_batch_records_once_and_deletes_guest(django_user_model):
+    guest = _create_guest_for_defection(django_user_model, username="defection_once")
+    calls: list[dict] = []
+
+    count = guest_tasks._process_defection_batch(
+        [guest.id, guest.id],
+        create_message=lambda **kwargs: calls.append(kwargs),
+    )
+
+    assert count == 1
+    assert Guest.objects.filter(id=guest.id).exists() is False
+
+    defections = list(GuestDefection.objects.filter(guest_id=guest.id))
+    assert len(defections) == 1
+    assert defections[0].guest_name == "韩信"
+    assert len(calls) == 1
+    assert "韩信" in calls[0]["body"]
+
+
+@pytest.mark.django_db
+def test_process_defection_batch_keeps_deletion_when_message_fails(django_user_model):
+    guest = _create_guest_for_defection(django_user_model, username="defection_message_fail")
+
+    count = guest_tasks._process_defection_batch(
+        [guest.id],
+        create_message=lambda **kwargs: (_ for _ in ()).throw(RuntimeError("message down")),
+    )
+
+    assert count == 1
+    assert Guest.objects.filter(id=guest.id).exists() is False
+
+    defection = GuestDefection.objects.get(guest_id=guest.id)
+    assert defection.guest_name == "韩信"
