@@ -26,6 +26,15 @@ from ..models import RecruitmentCandidate
 from ..services.recruitment import start_guest_recruitment, use_magnifying_glass_for_candidates
 from ..services.recruitment_guests import bulk_finalize_candidates, convert_candidate_to_retainer
 from .common import unexpected_action_error_response
+from .recruit_runtime import (
+    CandidateActionOutcome,
+    CandidateSelection,
+    RecruitViewResolutionError,
+    execute_candidate_action,
+    resolve_all_candidate_selection,
+    resolve_selected_candidate_selection,
+    reveal_candidate_rarities,
+)
 
 logger = logging.getLogger(__name__)
 RECRUIT_ACTION_LOCK_SECONDS = 5
@@ -212,6 +221,144 @@ def _json_recruitment_hall_success(
     )
 
 
+def _recruitment_hall_response(
+    request,
+    manor,
+    message: str,
+    *,
+    is_ajax: bool,
+    status: int = 200,
+    message_level: str = "success",
+    use_cache: bool = True,
+):
+    if is_ajax:
+        if status >= 400:
+            return json_error(message, status=status)
+        return _json_recruitment_hall_success(
+            request,
+            manor,
+            message,
+            message_level=message_level,
+            use_cache=use_cache,
+        )
+
+    getattr(messages, message_level)(request, message)
+    return redirect("gameplay:recruitment_hall")
+
+
+def _recruitment_hall_resolution_error_response(
+    request,
+    manor,
+    resolution_error: RecruitViewResolutionError,
+    *,
+    is_ajax: bool,
+):
+    return _recruitment_hall_response(
+        request,
+        manor,
+        resolution_error.message,
+        is_ajax=is_ajax,
+        status=resolution_error.status,
+        message_level=resolution_error.message_level,
+    )
+
+
+def _candidate_action_success_response(
+    request,
+    manor,
+    outcome: CandidateActionOutcome,
+    *,
+    is_ajax: bool,
+):
+    manor_id = getattr(manor, "id", None)
+
+    if outcome.action == "discard":
+        message = f"已放弃 {outcome.affected_count} 名候选门客。"
+        cache_ok = _invalidate_recruitment_hall_cache_for_manor(manor_id)
+        return _recruitment_hall_response(
+            request,
+            manor,
+            message,
+            is_ajax=is_ajax,
+            message_level="warning" if is_ajax else "info",
+            use_cache=cache_ok,
+        )
+
+    if outcome.action == "retain":
+        if outcome.affected_count:
+            cache_ok = _invalidate_recruitment_hall_cache_for_manor(manor_id)
+            success_message = f"已将 {outcome.affected_count} 名候选收为家丁。"
+            if is_ajax:
+                message = success_message
+                if outcome.error_message:
+                    message = f"{message} {outcome.error_message}"
+                return _recruitment_hall_response(
+                    request,
+                    manor,
+                    message,
+                    is_ajax=is_ajax,
+                    use_cache=cache_ok,
+                )
+            messages.success(request, success_message)
+            if outcome.error_message:
+                messages.error(request, outcome.error_message)
+            return redirect("gameplay:recruitment_hall")
+        if outcome.error_message:
+            return _recruitment_hall_response(
+                request,
+                manor,
+                outcome.error_message,
+                is_ajax=is_ajax,
+                status=400,
+            )
+        return _recruitment_hall_response(
+            request,
+            manor,
+            "当前没有可操作的候选门客。",
+            is_ajax=is_ajax,
+            status=400,
+        )
+
+    if outcome.succeeded:
+        cache_ok = _invalidate_recruitment_hall_cache_for_manor(manor_id)
+        success_message = _format_bulk_recruit_success_message(outcome.succeeded)
+        if is_ajax:
+            message = success_message
+            if outcome.failed:
+                message = f"{message}；门客容量不足，{len(outcome.failed)} 名候选未能招募"
+            return _recruitment_hall_response(
+                request,
+                manor,
+                message,
+                is_ajax=is_ajax,
+                use_cache=cache_ok,
+            )
+        messages.success(request, success_message)
+        if outcome.failed:
+            messages.warning(request, f"门客容量不足，{len(outcome.failed)} 名候选未能招募")
+        return redirect("gameplay:recruitment_hall")
+
+    if outcome.failed:
+        cache_ok = _invalidate_recruitment_hall_cache_for_manor(manor_id)
+        return _recruitment_hall_response(
+            request,
+            manor,
+            f"门客容量不足，{len(outcome.failed)} 名候选未能招募",
+            is_ajax=is_ajax,
+            status=200,
+            message_level="warning",
+            use_cache=cache_ok,
+        )
+
+    return _recruitment_hall_response(
+        request,
+        manor,
+        "当前没有可操作的候选门客。",
+        is_ajax=is_ajax,
+        status=400,
+    )
+
+
 @method_decorator(require_POST, name="dispatch")
 @method_decorator(rate_limit_redirect("recruit_draw", limit=10, window_seconds=60), name="dispatch")
 class RecruitView(LoginRequiredMixin, TemplateView):
@@ -287,145 +434,82 @@ def accept_candidate_view(request):
     is_ajax = is_json_request(request)
     scope = _normalize_candidate_scope(request.POST.get("scope"))
     if scope is None:
-        if is_ajax:
-            return json_error("选择范围无效", status=400)
-        messages.error(request, "选择范围无效")
-        return redirect("gameplay:recruitment_hall")
+        return _recruitment_hall_response(request, manor, "选择范围无效", is_ajax=is_ajax, status=400)
 
+    raw_candidate_ids = request.POST.getlist("candidate_ids")
+    selection: CandidateSelection | None = None
     candidate_ids: list[int] | None = None
-    if scope == "all":
-        queryset = RecruitmentCandidate.objects.filter(manor=manor).order_by("id")
-        candidates = []
-    else:
-        raw_candidate_ids = request.POST.getlist("candidate_ids")
-        if not raw_candidate_ids:
-            if is_ajax:
-                return json_error("请先勾选候选门客。", status=400)
-            messages.warning(request, "请先勾选候选门客。")
-            return redirect("gameplay:recruitment_hall")
-
-        parsed_ids = _parse_positive_candidate_ids(raw_candidate_ids)
-        if parsed_ids is None:
-            if is_ajax:
-                return json_error("候选门客选择有误", status=400)
-            messages.error(request, "候选门客选择有误")
-            return redirect("gameplay:recruitment_hall")
-        candidate_ids = parsed_ids
-        queryset, candidates = _load_selected_candidates(manor, candidate_ids)
+    if scope == "selected":
+        selection, resolution_error = resolve_selected_candidate_selection(
+            manor=manor,
+            raw_candidate_ids=raw_candidate_ids,
+            parse_positive_candidate_ids=_parse_positive_candidate_ids,
+            load_selected_candidates=_load_selected_candidates,
+        )
+        if resolution_error is not None:
+            return _recruitment_hall_resolution_error_response(request, manor, resolution_error, is_ajax=is_ajax)
+        assert selection is not None
+        candidate_ids = selection.candidate_ids
 
     action = _normalize_candidate_action(request.POST.get("action"))
     if action is None:
-        if is_ajax:
-            return json_error("操作类型无效", status=400)
-        messages.error(request, "操作类型无效")
-        return redirect("gameplay:recruitment_hall")
+        return _recruitment_hall_response(request, manor, "操作类型无效", is_ajax=is_ajax, status=400)
 
     if scope == "all":
-        if action == "discard":
-            candidate_total = queryset.count()
-            if candidate_total <= 0:
-                if is_ajax:
-                    return json_error("当前没有可操作的候选门客。", status=400)
-                messages.error(request, "当前没有可操作的候选门客。")
-                return redirect("gameplay:recruitment_hall")
-        else:
-            candidates = list(queryset)
-            if not candidates:
-                if is_ajax:
-                    return json_error("当前没有可操作的候选门客。", status=400)
-                messages.error(request, "当前没有可操作的候选门客。")
-                return redirect("gameplay:recruitment_hall")
-    elif not candidates:
-        if is_ajax:
-            return json_error("未找到选中的候选门客。", status=400)
-        messages.error(request, "未找到选中的候选门客。")
-        return redirect("gameplay:recruitment_hall")
+        selection, resolution_error = resolve_all_candidate_selection(
+            manor=manor,
+            action=action,
+            candidate_model=RecruitmentCandidate,
+        )
+        if resolution_error is not None:
+            return _recruitment_hall_resolution_error_response(request, manor, resolution_error, is_ajax=is_ajax)
+        assert selection is not None
 
     lock_scope = _candidate_scope_digest(action, scope, candidate_ids)
     lock_ok, lock_key, lock_token = _acquire_recruit_action_lock("accept", int(manor.id), lock_scope)
     if not lock_ok:
-        if is_ajax:
-            return json_error("请求处理中，请稍候重试", status=409)
-        messages.warning(request, "请求处理中，请稍候重试")
-        return redirect("gameplay:recruitment_hall")
+        return _recruitment_hall_response(request, manor, "请求处理中，请稍候重试", is_ajax=is_ajax, status=409)
 
     try:
         try:
-            if action == "discard":
-                deleted = queryset.count() if scope == "all" else len(candidates)
-                queryset.delete()
-                msg = f"已放弃 {deleted} 名候选门客。"
-                cache_ok = _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
-                if is_ajax:
-                    return _json_recruitment_hall_success(
-                        request, manor, msg, message_level="warning", use_cache=cache_ok
-                    )
-                messages.info(request, f"已放弃 {deleted} 名候选门客。")
-            elif action == "retain":
-                retained, error_message = _retain_candidates(candidates)
-                if is_ajax:
-                    if retained:
-                        cache_ok = _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
-                        msg = f"已将 {retained} 名候选收为家丁。"
-                        if error_message:
-                            msg = f"{msg} {error_message}"
-                        return _json_recruitment_hall_success(request, manor, msg, use_cache=cache_ok)
-                    if error_message:
-                        return json_error(error_message, status=400)
-                    return json_error("当前没有可操作的候选门客。", status=400)
-                if retained:
-                    messages.success(request, f"已将 {retained} 名候选收为家丁。")
-                    _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
-                if error_message:
-                    messages.error(request, error_message)
-            else:
-                # 使用批量确认函数优化性能
-                succeeded, failed = _finalize_candidates(candidates)
-                if is_ajax:
-                    if succeeded:
-                        cache_ok = _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
-                        msg = _format_bulk_recruit_success_message(succeeded)
-                        if failed:
-                            msg = f"{msg}；门客容量不足，{len(failed)} 名候选未能招募"
-                        return _json_recruitment_hall_success(request, manor, msg, use_cache=cache_ok)
-                    if failed:
-                        msg = f"门客容量不足，{len(failed)} 名候选未能招募"
-                        cache_ok = _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
-                        return _json_recruitment_hall_success(
-                            request,
-                            manor,
-                            msg,
-                            message_level="warning",
-                            use_cache=cache_ok,
-                        )
-                    return json_error("当前没有可操作的候选门客。", status=400)
-                if succeeded:
-                    messages.success(request, _format_bulk_recruit_success_message(succeeded))
-                    _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
-                if failed:
-                    messages.warning(request, f"门客容量不足，{len(failed)} 名候选未能招募")
+            assert selection is not None
+            outcome = execute_candidate_action(
+                action=action,
+                selection=selection,
+                retain_candidates=_retain_candidates,
+                finalize_candidates=_finalize_candidates,
+            )
+            return _candidate_action_success_response(request, manor, outcome, is_ajax=is_ajax)
         except (GameError, ValueError) as exc:
-            if is_ajax:
-                return json_error(sanitize_error_message(exc), status=400)
-            messages.error(request, sanitize_error_message(exc))
+            return _recruitment_hall_response(
+                request,
+                manor,
+                sanitize_error_message(exc),
+                is_ajax=is_ajax,
+                status=400,
+            )
         except DatabaseError as exc:
             logger.exception(
                 "Unexpected recruit accept database error: manor_id=%s user_id=%s action=%s candidate_count=%s",
                 getattr(manor, "id", None),
                 getattr(request.user, "id", None),
                 action,
-                len(candidates),
+                selection.target_count,
             )
-            if is_ajax:
-                return json_error(sanitize_error_message(exc), status=500)
-            messages.error(request, sanitize_error_message(exc))
+            return _recruitment_hall_response(
+                request,
+                manor,
+                sanitize_error_message(exc),
+                is_ajax=is_ajax,
+                status=500,
+            )
         except Exception as exc:
             logger.exception(
                 "Unexpected recruit accept error: manor_id=%s user_id=%s action=%s candidate_count=%s",
                 getattr(manor, "id", None),
                 getattr(request.user, "id", None),
                 action,
-                len(candidates),
+                selection.target_count,
             )
             return unexpected_action_error_response(
                 request,
@@ -451,38 +535,44 @@ def use_magnifying_glass_view(request):
     is_ajax = is_json_request(request)
     item_id_int = safe_positive_int(item_id, default=None)
     if item_id_int is None:
-        error_msg = "未找到放大镜道具"
-        if is_ajax:
-            return json_error(error_msg, status=400)
-        messages.error(request, error_msg)
-        return redirect("gameplay:recruitment_hall")
+        return _recruitment_hall_response(request, manor, "未找到放大镜道具", is_ajax=is_ajax, status=400)
 
     lock_ok, lock_key, lock_token = _acquire_recruit_action_lock("reveal", int(manor.id), str(item_id_int))
     if not lock_ok:
-        if is_ajax:
-            return json_error("请求处理中，请稍候重试", status=409)
-        messages.warning(request, "请求处理中，请稍候重试")
-        return redirect("gameplay:recruitment_hall")
+        return _recruitment_hall_response(request, manor, "请求处理中，请稍候重试", is_ajax=is_ajax, status=409)
 
     try:
         try:
-            count = use_magnifying_glass_for_candidates(manor, item_id_int)
+            count = reveal_candidate_rarities(
+                manor=manor,
+                item_id=item_id_int,
+                use_magnifying_glass_for_candidates=use_magnifying_glass_for_candidates,
+            )
             if count > 0:
-                msg = f"使用放大镜成功：显现 {count} 位候选门客的稀有度"
                 cache_ok = _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
-                if is_ajax:
-                    return _json_recruitment_hall_success(request, manor, msg, use_cache=cache_ok)
-                messages.success(request, msg)
-            else:
-                msg = "当前候选门客的稀有度已全部显现"
-                if is_ajax:
-                    return json_error(msg, status=400)
-                messages.info(request, msg)
+                return _recruitment_hall_response(
+                    request,
+                    manor,
+                    f"使用放大镜成功：显现 {count} 位候选门客的稀有度",
+                    is_ajax=is_ajax,
+                    use_cache=cache_ok,
+                )
+            return _recruitment_hall_response(
+                request,
+                manor,
+                "当前候选门客的稀有度已全部显现",
+                is_ajax=is_ajax,
+                status=400,
+                message_level="info",
+            )
         except (GameError, ValueError) as exc:
-            error_msg = sanitize_error_message(exc)
-            if is_ajax:
-                return json_error(error_msg, status=400)
-            messages.error(request, error_msg)
+            return _recruitment_hall_response(
+                request,
+                manor,
+                sanitize_error_message(exc),
+                is_ajax=is_ajax,
+                status=400,
+            )
         except DatabaseError as exc:
             logger.exception(
                 "Unexpected magnifying-glass database error: manor_id=%s user_id=%s item_id=%s",
@@ -490,10 +580,13 @@ def use_magnifying_glass_view(request):
                 getattr(request.user, "id", None),
                 item_id_int,
             )
-            error_msg = sanitize_error_message(exc)
-            if is_ajax:
-                return json_error(error_msg, status=500)
-            messages.error(request, error_msg)
+            return _recruitment_hall_response(
+                request,
+                manor,
+                sanitize_error_message(exc),
+                is_ajax=is_ajax,
+                status=500,
+            )
         except Exception as exc:
             logger.exception(
                 "Unexpected magnifying-glass error: manor_id=%s user_id=%s item_id=%s",

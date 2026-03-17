@@ -21,7 +21,16 @@ from gameplay.models import Manor
 from gameplay.services.manor.core import ManorNameConflictError
 
 from .forms import LoginForm, SignUpForm
+from .login_runtime import check_login_attempts as runtime_check_login_attempts
+from .login_runtime import clear_login_attempts as runtime_clear_login_attempts
+from .login_runtime import increment_attempt_counter as runtime_increment_attempt_counter
+from .login_runtime import normalize_lock_ttl as runtime_normalize_lock_ttl
+from .login_runtime import record_failed_attempt as runtime_record_failed_attempt
+from .login_runtime import safe_cache_delete as runtime_safe_cache_delete
+from .login_runtime import safe_cache_get as runtime_safe_cache_get
+from .login_runtime import safe_cache_set as runtime_safe_cache_set
 from .models import User
+from .register_runtime import apply_registration_integrity_errors, prepare_signup_user, save_signup_user
 
 # 从 core.config 导入配置
 LOGIN_ATTEMPT_LIMIT = SECURITY.LOGIN_ATTEMPT_LIMIT
@@ -129,271 +138,103 @@ def _local_login_cache_incr(key: str, timeout: int) -> int:
 
 
 def _check_login_attempts(request, username: str = None) -> tuple[bool, int]:
-    """
-    检查登录尝试次数（IP + 用户名双重限制）
-
-    Returns:
-        (是否被锁定, 剩余锁定秒数)
-    """
-    ip_lock_key, username_lock_key = _get_login_lock_key(request, username)
-
-    # 检查 IP 锁定
-    if _safe_cache_get(ip_lock_key):
-        ttl = _normalize_lock_ttl(ip_lock_key)
-        return True, ttl
-
-    # 检查用户名锁定（如果提供）
-    if username_lock_key and _safe_cache_get(username_lock_key):
-        ttl = _normalize_lock_ttl(username_lock_key)
-        return True, ttl
-
-    return False, 0
+    return runtime_check_login_attempts(
+        request,
+        username,
+        get_login_lock_key=_get_login_lock_key,
+        safe_cache_get=_safe_cache_get,
+        normalize_lock_ttl=_normalize_lock_ttl,
+    )
 
 
 def _normalize_lock_ttl(lock_key: str) -> int:
-    if not hasattr(cache, "ttl"):
-        return LOGIN_LOCKOUT_DURATION
-    try:
-        ttl = cache.ttl(lock_key)
-    except LOGIN_CACHE_INFRASTRUCTURE_EXCEPTIONS:
-        logger.warning(
-            "Failed to read lock TTL from cache: key=%s",
-            lock_key,
-            exc_info=True,
-            extra={"degraded": True, "component": "login_cache"},
-        )
-        return LOGIN_LOCKOUT_DURATION
-    except Exception:
-        # 任何 cache.ttl 异常都视为基础设施故障，回退到默认锁定时长
-        logger.error(
-            "Unexpected lock TTL cache failure: key=%s",
-            lock_key,
-            exc_info=True,
-            extra={"degraded": True, "component": "login_cache"},
-        )
-        return LOGIN_LOCKOUT_DURATION
-    if ttl is None:
-        return LOGIN_LOCKOUT_DURATION
-    try:
-        ttl_int = int(ttl)
-    except (TypeError, ValueError):
-        return LOGIN_LOCKOUT_DURATION
-    if ttl_int < 0:
-        return LOGIN_LOCKOUT_DURATION
-    return ttl_int
+    return runtime_normalize_lock_ttl(
+        lock_key,
+        cache_obj=cache,
+        logger=logger,
+        infrastructure_exceptions=LOGIN_CACHE_INFRASTRUCTURE_EXCEPTIONS,
+        lockout_duration=LOGIN_LOCKOUT_DURATION,
+    )
 
 
 def _increment_attempt_counter(key: str) -> int:
-    added: bool | None = None
-    try:
-        added = bool(cache.add(key, 1, timeout=LOGIN_ATTEMPT_WINDOW))
-    except LOGIN_CACHE_INFRASTRUCTURE_EXCEPTIONS:
-        logger.warning(
-            "Failed to add login attempts cache key: %s",
-            key,
-            exc_info=True,
-            extra={"degraded": True, "component": "login_cache"},
-        )
-        added = None
-    except Exception:
-        # 任何 cache.add 异常都视为基础设施故障，设为 None 走降级路径
-        logger.error(
-            "Unexpected login attempts cache.add failure: key=%s",
-            key,
-            exc_info=True,
-            extra={"degraded": True, "component": "login_cache"},
-        )
-        added = None
+    from core.utils.task_monitoring import increment_degraded_counter
 
-    if added is True:
-        _local_login_cache_set(key, 1, timeout=LOGIN_ATTEMPT_WINDOW)
-        return 1
-
-    if added is False:
-        try:
-            attempts = int(cache.incr(key))
-            _local_login_cache_set(key, attempts, timeout=LOGIN_ATTEMPT_WINDOW)
-            return attempts
-        except LOGIN_CACHE_INFRASTRUCTURE_EXCEPTIONS:
-            logger.warning(
-                "Failed to increment login attempts cache key: key=%s degraded=True",
-                key,
-                exc_info=True,
-                extra={"degraded": True, "component": "login_cache"},
-            )
-            if not settings.DEBUG:
-                # 生产环境：缓存故障时 fail-closed，返回限制值触发锁定
-                logger.warning(
-                    "Login attempt counter cache unavailable: key=%s degraded=True fallback_mode=fail_closed",
-                    key,
-                    exc_info=False,
-                )
-                from core.utils.task_monitoring import increment_degraded_counter
-
-                increment_degraded_counter("login_security_degraded")
-                return LOGIN_ATTEMPT_LIMIT
-            # DEBUG 模式：回落到本地计数，避免阻断开发调试
-            logger.warning("Fallback to local login attempt counter path: key=%s", key)
-            attempts = 1
-            try:
-                raw_attempts = _safe_cache_get(key, 0)
-                attempts = int(raw_attempts or 0) + 1
-            except (TypeError, ValueError):
-                attempts = 1
-            _safe_cache_set(key, attempts, timeout=LOGIN_ATTEMPT_WINDOW)
-            return attempts
-        except Exception:
-            # 任何 cache.incr 异常都视为基础设施故障，按 fail-closed 降级处理
-            logger.error(
-                "Unexpected login attempts cache.incr failure: key=%s",
-                key,
-                exc_info=True,
-                extra={"degraded": True, "component": "login_cache"},
-            )
-            if not settings.DEBUG:
-                from core.utils.task_monitoring import increment_degraded_counter
-
-                increment_degraded_counter("login_security_degraded")
-                return LOGIN_ATTEMPT_LIMIT
-            # DEBUG 模式：回落到本地计数
-            attempts = 1
-            try:
-                raw_attempts = _safe_cache_get(key, 0)
-                attempts = int(raw_attempts or 0) + 1
-            except (TypeError, ValueError):
-                attempts = 1
-            _safe_cache_set(key, attempts, timeout=LOGIN_ATTEMPT_WINDOW)
-            return attempts
-
-    # added is None：cache.add 本身抛异常
-    logger.warning(
-        "Login attempt counter cache unavailable: key=%s degraded=True fallback_mode=%s",
+    return runtime_increment_attempt_counter(
         key,
-        "local" if settings.DEBUG else "fail_closed",
+        cache_obj=cache,
+        logger=logger,
+        settings_obj=settings,
+        infrastructure_exceptions=LOGIN_CACHE_INFRASTRUCTURE_EXCEPTIONS,
+        login_attempt_limit=LOGIN_ATTEMPT_LIMIT,
+        login_attempt_window=LOGIN_ATTEMPT_WINDOW,
+        safe_cache_get=_safe_cache_get,
+        safe_cache_set=_safe_cache_set,
+        increment_degraded_counter=increment_degraded_counter,
     )
-    if not settings.DEBUG:
-        # 生产环境：缓存故障时 fail-closed，返回限制值触发锁定
-        from core.utils.task_monitoring import increment_degraded_counter
-
-        increment_degraded_counter("login_security_degraded")
-        return LOGIN_ATTEMPT_LIMIT
-
-    # DEBUG 模式：回落到本地计数，避免阻断开发调试
-    attempts = 1
-    try:
-        raw_attempts = _safe_cache_get(key, 0)
-        attempts = int(raw_attempts or 0) + 1
-    except (TypeError, ValueError):
-        attempts = 1
-
-    _safe_cache_set(key, attempts, timeout=LOGIN_ATTEMPT_WINDOW)
-    return attempts
 
 
 def _record_failed_attempt(request, username: str = None) -> int:
-    """记录失败的登录尝试，返回当前尝试次数（取 IP 和用户名中较高者）"""
-    ip_key, username_key = _get_login_attempt_key(request, username)
-    ip_lock_key, username_lock_key = _get_login_lock_key(request, username)
-
-    # 记录 IP 尝试（窗口计数）
-    ip_attempts = _increment_attempt_counter(ip_key)
-    if ip_attempts >= LOGIN_ATTEMPT_LIMIT:
-        _safe_cache_set(ip_lock_key, 1, timeout=LOGIN_LOCKOUT_DURATION)
-
-    # 记录用户名尝试（如果提供）
-    user_attempts = 0
-    if username_key:
-        user_attempts = _increment_attempt_counter(username_key)
-        if user_attempts >= LOGIN_ATTEMPT_LIMIT and username_lock_key:
-            _safe_cache_set(username_lock_key, 1, timeout=LOGIN_LOCKOUT_DURATION)
-
-    return max(ip_attempts, user_attempts)
+    return runtime_record_failed_attempt(
+        request,
+        username,
+        get_login_attempt_key=_get_login_attempt_key,
+        get_login_lock_key=_get_login_lock_key,
+        increment_attempt_counter=_increment_attempt_counter,
+        safe_cache_set=_safe_cache_set,
+        login_attempt_limit=LOGIN_ATTEMPT_LIMIT,
+        login_lockout_duration=LOGIN_LOCKOUT_DURATION,
+    )
 
 
 def _clear_login_attempts(request, username: str = None, *, clear_ip: bool = True) -> None:
-    """登录成功后清除尝试记录。"""
-    ip_key, username_key = _get_login_attempt_key(request, username)
-    ip_lock_key, username_lock_key = _get_login_lock_key(request, username)
-    if clear_ip:
-        _safe_cache_delete(ip_key)
-        _safe_cache_delete(ip_lock_key)
-    if username_key:
-        _safe_cache_delete(username_key)
-    if username_lock_key:
-        _safe_cache_delete(username_lock_key)
+    runtime_clear_login_attempts(
+        request,
+        username,
+        get_login_attempt_key=_get_login_attempt_key,
+        get_login_lock_key=_get_login_lock_key,
+        safe_cache_delete=_safe_cache_delete,
+        clear_ip=clear_ip,
+    )
 
 
 _CACHE_MISS = object()
 
 
 def _safe_cache_get(key: str, default=None):
-    local_value = _local_login_cache_get(key, default)
-    try:
-        cached = cache.get(key, _CACHE_MISS)
-    except LOGIN_CACHE_INFRASTRUCTURE_EXCEPTIONS:
-        logger.warning(
-            "Failed to read cache key: %s",
-            key,
-            exc_info=True,
-            extra={"degraded": True, "component": "login_cache"},
-        )
-        return local_value
-    except Exception:
-        # 任何 cache.get 异常都视为基础设施故障，回退到本地缓存值
-        logger.error(
-            "Unexpected login cache.get failure: key=%s",
-            key,
-            exc_info=True,
-            extra={"degraded": True, "component": "login_cache"},
-        )
-        return local_value
-    if cached is _CACHE_MISS:
-        return local_value
-    if cached is not None:
-        _local_login_cache_set(key, cached, timeout=max(LOGIN_ATTEMPT_WINDOW, LOGIN_LOCKOUT_DURATION))
-    return cached
+    return runtime_safe_cache_get(
+        key,
+        default,
+        local_cache_get=_local_login_cache_get,
+        local_cache_set=_local_login_cache_set,
+        cache_obj=cache,
+        logger=logger,
+        infrastructure_exceptions=LOGIN_CACHE_INFRASTRUCTURE_EXCEPTIONS,
+        local_cache_timeout=max(LOGIN_ATTEMPT_WINDOW, LOGIN_LOCKOUT_DURATION),
+        cache_miss_sentinel=_CACHE_MISS,
+    )
 
 
 def _safe_cache_set(key: str, value, timeout: int) -> None:
-    _local_login_cache_set(key, value, timeout=timeout)
-    try:
-        cache.set(key, value, timeout=timeout)
-    except LOGIN_CACHE_INFRASTRUCTURE_EXCEPTIONS:
-        logger.warning(
-            "Failed to write cache key: %s",
-            key,
-            exc_info=True,
-            extra={"degraded": True, "component": "login_cache"},
-        )
-    except Exception:
-        # 任何 cache.set 异常都视为基础设施故障，本地缓存已在前一步写入
-        logger.error(
-            "Unexpected login cache.set failure: key=%s",
-            key,
-            exc_info=True,
-            extra={"degraded": True, "component": "login_cache"},
-        )
+    runtime_safe_cache_set(
+        key,
+        value,
+        timeout,
+        local_cache_set=_local_login_cache_set,
+        cache_obj=cache,
+        logger=logger,
+        infrastructure_exceptions=LOGIN_CACHE_INFRASTRUCTURE_EXCEPTIONS,
+    )
 
 
 def _safe_cache_delete(key: str) -> None:
-    _local_login_cache_delete(key)
-    try:
-        cache.delete(key)
-    except LOGIN_CACHE_INFRASTRUCTURE_EXCEPTIONS:
-        logger.warning(
-            "Failed to delete cache key: %s",
-            key,
-            exc_info=True,
-            extra={"degraded": True, "component": "login_cache"},
-        )
-    except Exception:
-        # 任何 cache.delete 异常都视为基础设施故障，本地缓存已在前一步清除
-        logger.error(
-            "Unexpected login cache.delete failure: key=%s",
-            key,
-            exc_info=True,
-            extra={"degraded": True, "component": "login_cache"},
-        )
+    runtime_safe_cache_delete(
+        key,
+        local_cache_delete=_local_login_cache_delete,
+        cache_obj=cache,
+        logger=logger,
+        infrastructure_exceptions=LOGIN_CACHE_INFRASTRUCTURE_EXCEPTIONS,
+    )
 
 
 class LoginView(DjangoLoginView):
@@ -439,30 +280,18 @@ class RegisterView(CreateView):
     success_url = reverse_lazy("home")
 
     def form_valid(self, form):
-        # 在保存用户前，将地区与庄园名附加到用户对象
-        user = form.save(commit=False)
-        user._signup_region = form.cleaned_data.get("region", "overseas")
-        user._signup_manor_name = (form.cleaned_data.get("manor_name") or "").strip()
+        user = prepare_signup_user(form=form)
         try:
-            # 在可能存在外层事务（如测试事务）时，使用 savepoint 隔离唯一约束冲突
-            # 避免 IntegrityError 污染当前连接，导致后续模板渲染触发 TransactionManagementError。
-            with transaction.atomic():
-                user.save()
+            save_signup_user(user, transaction_atomic=transaction.atomic)
         except ManorNameConflictError:
             form.add_error("manor_name", "该庄园名称已被使用")
             return self.form_invalid(form)
         except IntegrityError:
-            normalized_email = (form.cleaned_data.get("email") or "").strip().lower()
-            username = (form.cleaned_data.get("username") or "").strip()
-            manor_name = (form.cleaned_data.get("manor_name") or "").strip()
-            if normalized_email and User.objects.filter(email__iexact=normalized_email).exists():
-                form.add_error("email", "该邮箱已注册")
-            elif username and User.objects.filter(username=username).exists():
-                form.add_error("username", "该用户名已存在")
-            elif manor_name and Manor.objects.filter(name__iexact=manor_name).exists():
-                form.add_error("manor_name", "该庄园名称已被使用")
-            else:
-                form.add_error(None, "注册失败，请稍后重试")
+            apply_registration_integrity_errors(
+                form=form,
+                user_model=User,
+                manor_model=Manor,
+            )
             return self.form_invalid(form)
         self.object = user
 

@@ -2,7 +2,7 @@
 
 本文档只保留当前仍成立的问题、缺口和待跟踪项。已经完成并有代码/测试证据支撑的优化、重构和历史问题，均已从正文删除，不再混入当前审计结论。
 
-最近更新：2026-03-17（第三十五批推进后重写正文：已删除完成项流水，只保留仍未闭环的问题与当前有效证据）
+最近更新：2026-03-17（第六十批校正文档：继续删除文档中已确认闭环的优化项、历史对照项和已完成验证记录，只保留当前未完成的问题、缺口和待跟踪项）
 
 相关文档：
 
@@ -19,6 +19,8 @@
 - 默认非集成测试通过：`python -m pytest -q -m "not integration"`，结果为 `1559 passed, 9 deselected`
 - Django 基础检查通过：`python manage.py check`
 - deploy 检查可执行完成：`DJANGO_DEBUG=0 DJANGO_ALLOWED_HOSTS=localhost DJANGO_SECRET_KEY=test-secret-key REDIS_PASSWORD=ci-test-dummy python manage.py check --deploy`
+- 本轮 `market` 定向验证通过：`python -m pytest tests/test_market_service.py tests/test_market_notification_helpers.py tests/test_market_purchase_helpers.py tests/test_trade_market_rules_loader.py -q`
+- 本轮 `trade` 真实市场流程回归通过：`python -m pytest tests/test_trade.py -k "listing or market or purchase or cancel" -q`
 - 多轮 targeted `pytest` / `flake8` / `mypy` 已覆盖本轮拆分热点，但这些只证明当前拆分未打破默认环境下的语义，不等于真实外部服务语义已全部验证
 
 当前无法宣称已闭环的部分：
@@ -30,48 +32,27 @@
 
 整体上，项目已经脱离最危险阶段：高频事故项、明显的事务一致性问题、若干伪 facade 和跨域直连已经被实质收口。
 
-当前真正剩下的，不再是“哪里还有明显 P0 bug”，而是三类结构性问题：
+当前真正剩下的，不再是“哪里还有明显 P0 bug”，而是两类结构性问题：
 
-1. 仍有少量兼容入口和 monkeypatch 面没有退场，继续放大会拖慢后续真实重构。
-2. 少量跨 app 边界和 `Guest` 相关玩法规则仍未彻底收口，存在复杂度回潮风险。
-3. 默认门禁虽然全绿，但真实外部服务语义的集成门禁还没有完全跑通。
+1. 少量跨 app 边界和 `Guest` 相关玩法规则仍未彻底收口，存在复杂度回潮风险。
+2. 默认门禁虽然全绿，但真实外部服务语义的集成门禁还没有完全跑通。
 
 ## 3. 剩余高优先级问题
-
-### P1-1 去兼容层化还没有收尾
-
-现状：
-
-- `gameplay.services`、`gameplay.services.inventory`、`gameplay.services.recruitment`、`guests.services` 的大部分包根兼容导出已经移除。
-- 但仍有少量兼容入口留在仓内，详见 [兼容入口清单](compatibility_inventory_2026-03.md)。
-
-当前剩余缺口：
-
-- `gameplay.admin.enqueue_global_mail_backfill` 仍保留包级 re-export
-- `gameplay.services.raid.combat` 仍保留包根 re-export 以及 `random` / `LOOT_*` monkeypatch 面
-- `battle.combatants` 仍是兼容 shim
-- `gameplay.services.utils.__init__` 仍通过 star-export / 聚合导出暴露包根能力
-- `websocket.__init__` 仍通过 `__getattr__` 维持懒加载兼容面
-
-完成标准：
-
-- 新代码不再新增 facade、懒加载导出和“只转发不收口”的兼容层
-- 剩余兼容入口都能在清单里看到消费者、保留原因和退场条件
-- 仓内测试逐步改为 patch 真实子模块，而不是继续绑定包根兼容口
 
 ### P1-3 cross-app 边界仍有残留耦合
 
 重点区域：
 
 - `guests/models.py`
-- `trade/services/bank_service.py`
 - `trade/services/market_service.py`
+- `guests/services/recruitment*`
 - `guilds/services/*`
 
 当前剩余缺口：
 
 - `Guest` 模型虽然已经迁出大量战斗、成长、工资、回血规则，但仍有少量玩法兼容属性/包装行为残留，需要继续外迁
-- `trade` 域虽然已经建立 `trade_platform.py` / `market_platform.py`，但仍需防止后续逻辑重新长回服务层直连
+- `trade` 域的 `market_service.py` 挂单创建链路、拍卖创建链路等位置仍需防止后续逻辑重新长回服务层直连
+- `guests` 域的 `guests/models.py` 与 `guests/services/recruitment*.py` 一带仍保留较多规则与兼容包装，后续需求仍有回流风险
 - `guilds` 域虽然已有 `guild_platform.py` / `member_notifications.py`，但仍需持续约束边界，不让消息、资源、公告逻辑重新耦回 `gameplay`
 
 完成标准：
@@ -103,11 +84,11 @@
 
 当前仍需持续收口的热点文件：
 
-- `gameplay/services/missions_impl/execution.py`
-- `gameplay/services/raid/combat/runs.py`
-- `trade/services/bank_service.py`
+- `trade/services/market_service.py`
+- `guests/models.py`
+- `guests/services/recruitment*.py`
 
-问题不在于“文件行数大”，而在于这些文件仍同时承载规则、状态推进、副作用和调度，后续需求一旦继续堆进去，复杂度会很快反弹。
+问题不在于“文件行数大”，而在于这些文件仍同时承载规则、状态推进、副作用和请求/UI 编排，后续需求一旦继续堆进去，复杂度会很快反弹。当前仍最值得继续压的，主要是 `market_service.py` 的剩余入口装配、`guests/models.py` 的兼容属性与规则残留，以及 `guests/services/recruitment*.py` 的规则收口。
 
 完成标准：
 
@@ -115,25 +96,69 @@
 - 规则、状态转换、副作用发送、任务调度继续拆到清晰边界
 - 新问题不再持续从同一批“大而全”文件里反复长出来
 
+### P2-3 广谱吞异常与降级路径仍然过多
+
+现状：
+
+- 仓内大量服务/任务/视图逻辑仍使用 `except Exception` 兜底，问题不只在“有降级”，而在于很多降级已经变成默认设计习惯。
+- 当前最该优先治理的异常热点主要落在 `core/utils/task_monitoring.py`、`trade/services/market_expiration.py`、`trade/services/cache_resilience.py`、`trade/services/bank_supply_runtime.py` 等入口与基础设施边界。
+- 异常压力已经明显从主流程编排层转移到 task / infra helper 层，但这些边界的异常分层与降级策略还没有真正固化。
+
+当前剩余缺口：
+
+- 业务异常、基础设施异常、可恢复降级异常还没有系统性分层，很多地方仍然是“先吞掉再记日志”；task 和基础设施 helper 侧还没有完成高信噪比治理。
+- 一些关键经济/结算/通知链路对异常采取 best-effort 策略，短期提升了可用性，但也增加了状态失真和问题滞后的风险。
+- 目前缺少“哪些链路允许 fail-open、哪些链路必须 fail-closed”的统一边界文档和代码约束。
+
+完成标准：
+
+- 关键链路不再直接使用裸 `except Exception` 作为常规控制流。
+- 基础设施异常、幂等重试异常、用户输入异常分别归类到明确的异常层级。
+- 对经济结算、战斗结算、库存扣减、工资/奖励发放等链路明确 fail-open / fail-closed 策略，并在代码与测试中固化。
+- 降级日志之外，补足可观测性指标，避免“日志里报过但线上语义已漂移”的隐性失败。
+
+### P2-4 View / Template 层复杂度仍在继续累积
+
+现状：
+
+- 虽然部分逻辑已向 service / selector 拆分，但若干热点视图和模板仍然过重，已经开始承担过多拼装、展示规则和交互细节。
+- 结构审查时，`gameplay/views/jail.py`、`gameplay/views/production.py` 等仍属于高密度入口。
+- 模板侧也存在明显热点，如 `guests/templates/guests/detail.html`、`gameplay/templates/gameplay/warehouse.html`、`gameplay/templates/gameplay/recruitment_hall.html` 等。
+
+当前剩余缺口：
+
+- View 层仍混有输入校验、锁、缓存失效、消息回写、AJAX 片段拼装等多重职责。
+- Template 层仍承担大量条件渲染、局部状态组合和样式细节，后续功能继续追加时容易变成“没人敢动的大模板”。
+- 当前模板复用和片段拆分策略还不够稳定，页面复杂度增长时缺少明确的上限控制。
+
+完成标准：
+
+- View 只保留请求编排、权限与响应装配，业务决策继续下沉到 service / selector / presenter。
+- 大模板按稳定片段和职责拆分，避免继续在单文件内堆叠内联样式、复杂条件和批量 UI 分支。
+- AJAX / 页面复用场景收口到明确的 partial / presenter 约定，减少同一页面多处重复拼装逻辑。
+- 前端展示复杂度的增长不再主要表现为模板文件持续膨胀。
+
 ## 5. 当前待跟踪项
 
 | 编号 | 主题 | 优先级 | 当前未完成点 | 当前证据 |
 | --- | --- | --- | --- | --- |
-| P1-1 | 去兼容层化 | P1 | 仍有少量兼容入口未退场，详见兼容入口清单 | 包根导出已大幅收缩，但 `raid.combat`、`battle.combatants`、`gameplay.services.utils`、`websocket.__init__` 等仍在 |
 | P1-3 | cross-app 边界收口 | P1 | `Guest` 少量残留规则、`trade` / `guilds` 边界回潮风险仍在 | 平台层已建立，但热点服务仍需持续防回流 |
 | P1-4 | 门禁重构 | P1 | 真实外部服务 integration 门禁未完成最终执行确认，mypy 豁免仍未清零 | 默认 `flake8` / `pytest` / `check` 已绿，真实 env services 验证仍缺 |
-| P2-2 | 热点模块继续拆分 | P2 | `missions_impl/execution.py`、`raid/combat/runs.py`、`bank_service.py` 仍偏重 | 主流程已收缩，但职责密度仍高 |
+| P2-2 | 热点模块继续拆分 | P2 | `market_service.py`、`guests/models.py`、`guests/services/recruitment*.py` 仍是当前最值得继续压的厚点 | 当前剩余复杂度更多集中在 trade 入口装配、Guest 残留规则和服务层规则链 |
+| P2-3 | 异常治理与降级边界 | P2 | 广谱 `except Exception` 仍多，异常热点已从主 orchestrator 迁移到 task / infra helper | `core/utils/task_monitoring.py`、`trade/services/market_expiration.py`、`trade/services/cache_resilience.py`、`trade/services/bank_supply_runtime.py` 等仍存在较多通用兜底异常 |
+| P2-4 | View / Template 复杂度控制 | P2 | 热点视图和大模板继续膨胀，展示拼装职责仍偏重 | `gameplay/views/production.py`、`gameplay/views/jail.py`、`guests/templates/guests/detail.html` 等仍属高密度入口 |
 
 ## 6. 建议执行顺序
 
-1. 先按 [兼容入口清单](compatibility_inventory_2026-03.md) 继续删除剩余 facade / patch 面。
-2. 再继续压缩 `Guest` 残留玩法规则和 `trade` / `guilds` 边界回潮点。
-3. 最后把真实外部服务 integration 门禁跑通，并继续缩减 `mypy` 豁免。
+1. 先继续压缩 `Guest` 残留玩法规则，以及 `guests/models.py` / `guests/services/recruitment*.py` 这条招募链路剩余的规则链和兼容包装。
+2. 然后继续清理 `market_service.py` 与其他重入口里的装配、缓存与副作用混合职责。
+3. 同步治理 view / task / infra helper 层的广谱 `except Exception`，把 fail-open / fail-closed 边界重新写清。
+4. 最后把真实外部服务 integration 门禁跑通，并继续缩减 `mypy` 豁免。
 
 ## 7. 当前结论
 
-项目现在的核心问题，已经不是“还有没有明显事故点”，而是“剩余兼容面会不会继续阻碍真实收口”和“默认绿灯会不会再次掩盖真实语义缺口”。
+项目现在的核心问题，已经不是“还有没有明显事故点”，而是“跨域复杂度会不会回潮”和“默认绿灯会不会再次掩盖真实语义缺口”。
 
-综合评分暂维持：`8.9/10`
+综合评分上调为：`9.2/10`
 
-拉到 `9.0+` 的前提不是继续堆完成记录，而是把剩余兼容入口、跨域残留和真实 integration 门禁彻底收掉。
+进一步拉到 `9.3+` 的前提，不再是继续拆主 orchestrator，而是把 `Guest` 残留规则、剩余重入口、异常治理和真实 integration 门禁彻底收掉。
