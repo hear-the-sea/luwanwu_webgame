@@ -4,8 +4,14 @@ import pytest
 from django.utils import timezone
 
 from battle.models import BattleReport
-from battle.services import _build_defender_guest_and_loadout, _extract_defender_tech_profile, simulate_report
+from battle.services import (
+    _build_defender_guest_and_loadout,
+    _extract_defender_tech_profile,
+    recover_orphaned_deployed_guests,
+    simulate_report,
+)
 from core.exceptions import GuestNotIdleError
+from gameplay.models import ArenaEntry, ArenaEntryGuest, ArenaTournament, MissionRun, MissionTemplate, RaidRun
 from gameplay.services.battle_snapshots import build_guest_battle_snapshots, build_guest_snapshot_proxies
 from gameplay.services.manor.core import ensure_manor
 from guests.models import GuestStatus, RecruitmentPool
@@ -279,6 +285,89 @@ def test_lock_guests_for_battle_releases_transaction_before_battle_body(game_dat
     monkeypatch.setattr(battle_services.transaction, "atomic", _RecordingAtomic())
     with lock_guests_for_battle([guest], manor=manor):
         assert atomic_depth["value"] == 0
+
+
+@pytest.mark.django_db
+def test_lock_guests_for_battle_recovers_orphaned_deployed_guest(game_data, django_user_model):
+    from battle.services import lock_guests_for_battle
+
+    user = django_user_model.objects.create_user(username="battle_lock_orphaned", password="pass123")
+    manor = ensure_manor(user)
+    _recruit_frontline(manor, draws=1)
+    guest = manor.guests.first()
+    guest.status = GuestStatus.DEPLOYED
+    guest.save(update_fields=["status"])
+
+    with lock_guests_for_battle([guest], manor=manor):
+        guest.refresh_from_db(fields=["status"])
+        assert guest.status == GuestStatus.DEPLOYED
+
+    guest.refresh_from_db(fields=["status"])
+    assert guest.status == GuestStatus.IDLE
+
+
+@pytest.mark.django_db
+def test_recover_orphaned_deployed_guests_resets_untracked_guest(game_data, django_user_model, caplog):
+    user = django_user_model.objects.create_user(username="battle_recover_orphaned", password="pass123")
+    manor = ensure_manor(user)
+    _recruit_frontline(manor, draws=1)
+    guest = manor.guests.first()
+    guest.status = GuestStatus.DEPLOYED
+    guest.save(update_fields=["status"])
+
+    caplog.set_level("WARNING", logger="battle.services")
+    recovered = recover_orphaned_deployed_guests(guest_ids=[guest.id])
+
+    guest.refresh_from_db(fields=["status"])
+    assert recovered == 1
+    assert guest.status == GuestStatus.IDLE
+    assert any(
+        "Recovered orphaned deployed guests before battle reuse" in record.getMessage() for record in caplog.records
+    )
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("deployment_kind", ["mission", "raid", "arena"])
+def test_recover_orphaned_deployed_guests_keeps_active_deployments(
+    game_data,
+    django_user_model,
+    deployment_kind,
+):
+    user = django_user_model.objects.create_user(
+        username=f"battle_recover_active_{deployment_kind}", password="pass123"
+    )
+    manor = ensure_manor(user)
+    _recruit_frontline(manor, draws=1)
+    guest = manor.guests.first()
+    guest.status = GuestStatus.DEPLOYED
+    guest.save(update_fields=["status"])
+
+    if deployment_kind == "mission":
+        mission = MissionTemplate.objects.create(key="battle_recover_active_mission", name="Battle Recover Mission")
+        run = MissionRun.objects.create(manor=manor, mission=mission, status=MissionRun.Status.ACTIVE)
+        run.guests.add(guest)
+    elif deployment_kind == "raid":
+        defender_user = django_user_model.objects.create_user(
+            username=f"battle_recover_active_defender_{deployment_kind}",
+            password="pass123",
+        )
+        defender = ensure_manor(defender_user)
+        run = RaidRun.objects.create(attacker=manor, defender=defender, status=RaidRun.Status.MARCHING)
+        run.guests.add(guest)
+    else:
+        tournament = ArenaTournament.objects.create(status=ArenaTournament.Status.RECRUITING, player_limit=8)
+        entry = ArenaEntry.objects.create(
+            tournament=tournament,
+            manor=manor,
+            status=ArenaEntry.Status.REGISTERED,
+        )
+        ArenaEntryGuest.objects.create(entry=entry, guest=guest, snapshot={"guest_id": guest.id})
+
+    recovered = recover_orphaned_deployed_guests(guest_ids=[guest.id])
+
+    guest.refresh_from_db(fields=["status"])
+    assert recovered == 0
+    assert guest.status == GuestStatus.DEPLOYED
 
 
 @pytest.mark.django_db

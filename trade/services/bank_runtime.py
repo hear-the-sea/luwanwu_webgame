@@ -15,29 +15,24 @@ from .cache_resilience import (
 def configure_rate_calculation_hooks(
     rate_calculations_module: Any,
     *,
-    service_module: Any,
-    imported_get_effective_gold_supply: Callable[..., Any],
-    imported_calculate_supply_factor: Callable[..., Any],
+    safe_cache_get: Callable[[str, Any], Any],
+    safe_cache_set: Callable[[str, Any, int], None],
+    safe_cache_add: Callable[[str, Any, int], bool],
+    safe_cache_delete: Callable[[str], None],
+    release_cache_lock_if_owner: Callable[[str, str], None],
+    get_today_exchange_count: Callable[[Any], int],
+    get_effective_gold_supply_override: Callable[[], Callable[..., Any] | None],
+    calculate_supply_factor_override: Callable[[], Callable[..., Any] | None],
 ) -> None:
     rate_calculations_module.configure_bank_service_hooks(
-        safe_cache_get=lambda key, default=None: getattr(service_module, "_safe_cache_get")(key, default),  # type: ignore[misc]
-        safe_cache_set=lambda key, value, timeout: getattr(service_module, "_safe_cache_set")(key, value, timeout),
-        safe_cache_add=lambda key, value, timeout: getattr(service_module, "_safe_cache_add")(key, value, timeout),
-        safe_cache_delete=lambda key: getattr(service_module, "_safe_cache_delete")(key),
-        release_cache_lock_if_owner=lambda lock_key, lock_token: getattr(
-            service_module, "_release_cache_lock_if_owner"
-        )(lock_key, lock_token),
-        get_today_exchange_count=lambda manor: getattr(service_module, "get_today_exchange_count")(manor),
-        get_effective_gold_supply_override=lambda: (
-            getattr(service_module, "get_effective_gold_supply")
-            if getattr(service_module, "get_effective_gold_supply") is not imported_get_effective_gold_supply
-            else None
-        ),
-        calculate_supply_factor_override=lambda: (
-            getattr(service_module, "calculate_supply_factor")
-            if getattr(service_module, "calculate_supply_factor") is not imported_calculate_supply_factor
-            else None
-        ),
+        safe_cache_get=safe_cache_get,
+        safe_cache_set=safe_cache_set,
+        safe_cache_add=safe_cache_add,
+        safe_cache_delete=safe_cache_delete,
+        release_cache_lock_if_owner=release_cache_lock_if_owner,
+        get_today_exchange_count=get_today_exchange_count,
+        get_effective_gold_supply_override=get_effective_gold_supply_override,
+        calculate_supply_factor_override=calculate_supply_factor_override,
     )
 
 

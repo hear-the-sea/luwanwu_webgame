@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 from typing import Any, Dict, List
 
 from django.conf import settings
@@ -25,7 +24,6 @@ from .execution_adapters import (
     normalize_guest_configs,
     normalize_mapping,
 )
-from .execution_facade import finalize_mission_run_entry, launch_mission_entry
 from .execution_launch_runtime import (
     dispatch_complete_mission_task_entry,
     import_launch_post_action_tasks_entry,
@@ -39,6 +37,7 @@ from .execution_runtime import (
     schedule_mission_completion_entry,
 )
 from .execution_runtime import try_dispatch_mission_refresh_task as runtime_try_dispatch_mission_refresh_task
+from .execution_wiring import build_finalize_mission_dependencies, build_launch_mission_dependencies
 from .finalization_helpers import (
     apply_mission_rewards_if_won,
     build_defense_report_if_needed,
@@ -49,6 +48,8 @@ from .finalization_helpers import (
     select_guests_for_finalize,
     send_mission_report_message,
 )
+from .finalize_command import finalize_mission_run as _finalize_mission_run_command
+from .launch_command import launch_mission as _launch_mission_command
 from .launch_post_actions import (
     attach_run_report_if_empty,
     build_defender_setup_and_drop_table,
@@ -68,24 +69,6 @@ logger = logging.getLogger(__name__)
 
 _MISSION_REFRESH_DISPATCH_DEDUP_SECONDS = 5
 MISSION_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS = (ConnectionError, OSError, TimeoutError)
-
-
-# Dynamic facade assembly in execution_facade.py resolves these names from this module at runtime.
-_FACADE_EXPORTS = (
-    scale_duration,
-    guest_template_rarity_rank_case,
-    apply_defender_troop_losses,
-    create_message,
-    notify_user,
-    award_mission_drops_locked,
-    apply_mission_rewards_if_won,
-    build_defense_report_if_needed,
-    extract_report_guest_state,
-    prepare_guest_updates_for_finalize,
-    return_attacker_troops_after_mission,
-    select_guests_for_finalize,
-    send_mission_report_message,
-)
 
 
 def _normalize_mapping(raw: Any) -> Dict[str, object]:
@@ -140,7 +123,30 @@ def _build_mission_drops_with_salvage(locked_run: MissionRun, report: Any, playe
 
 
 def finalize_mission_run(run: MissionRun, now=None) -> None:
-    finalize_mission_run_entry(run, now=now, service_module=sys.modules[__name__])
+    _finalize_mission_run_command(
+        run,
+        now=now,
+        **build_finalize_mission_dependencies(
+            load_locked_mission_run=_load_locked_mission_run,
+            build_defense_report_if_needed=build_defense_report_if_needed,
+            guest_template_rarity_rank_case=guest_template_rarity_rank_case,
+            generate_sync_battle_report=generate_sync_battle_report,
+            extract_report_guest_state=extract_report_guest_state,
+            select_guests_for_finalize=select_guests_for_finalize,
+            prepare_guest_updates_for_finalize=prepare_guest_updates_for_finalize,
+            mark_run_completed=_mark_run_completed,
+            apply_defender_troop_losses=apply_defender_troop_losses,
+            return_attacker_troops_after_mission=return_attacker_troops_after_mission,
+            logger=logger,
+            apply_mission_rewards_if_won=apply_mission_rewards_if_won,
+            resolve_defense_drops_if_missing=resolve_defense_drops_if_missing,
+            award_mission_drops_locked=award_mission_drops_locked,
+            send_mission_report_message=send_mission_report_message,
+            create_message=create_message,
+            notify_user=notify_user,
+            notification_infrastructure_exceptions=MISSION_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
+        ),
+    )
 
 
 def _schedule_mission_completion_task(run: MissionRun, complete_mission_task) -> None:
@@ -214,13 +220,19 @@ def launch_mission(
     troop_loadout: Dict[str, int],
     seed=None,
 ):
-    return launch_mission_entry(
+    return _launch_mission_command(
         manor,
         mission,
         guest_ids,
         troop_loadout,
         seed=seed,
-        service_module=sys.modules[__name__],
+        **build_launch_mission_dependencies(
+            scale_duration=scale_duration,
+            refresh_mission_runs=refresh_mission_runs,
+            import_launch_post_action_tasks=_import_launch_post_action_tasks,
+            try_prepare_launch_report=_try_prepare_launch_report,
+            dispatch_complete_mission_task=_dispatch_complete_mission_task,
+        ),
     )
 
 

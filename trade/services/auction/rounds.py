@@ -12,6 +12,9 @@ from django.db import DatabaseError, IntegrityError, transaction
 from django.utils import timezone
 
 from gameplay.models import ItemTemplate, Manor
+from gameplay.services.inventory.core import add_item_to_inventory_locked, consume_inventory_item_for_manor_locked
+from gameplay.services.utils.messages import create_message
+from gameplay.services.utils.notifications import notify_user
 from trade.models import AuctionBid, AuctionRound, AuctionSlot, FrozenGoldBar
 from trade.services.auction.bidding import get_slot_ranking
 from trade.services.auction.constants import (
@@ -29,12 +32,6 @@ from trade.services.auction_config import (
     get_enabled_auction_items,
 )
 from trade.services.cache_resilience import best_effort_cache_add, best_effort_cache_delete, best_effort_cache_get
-from trade.services.trade_platform import (
-    add_item_to_inventory_locked,
-    consume_inventory_item_for_manor_locked,
-    create_message,
-    notify_user,
-)
 
 logger = logging.getLogger(__name__)
 

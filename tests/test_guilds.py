@@ -378,6 +378,37 @@ class TestGuildUpgrade:
 
 
 @pytest.mark.django_db
+class TestGuildInfoUpdate:
+    """帮会信息更新测试"""
+
+    def test_update_guild_info_success(self, user_with_gold_bars):
+        guild = guild_service.create_guild(user=user_with_gold_bars, name="信息帮会", description="旧简介")
+
+        updated_guild = guild_service.update_guild_info(
+            guild=guild,
+            operator=user_with_gold_bars,
+            description="  新简介  ",
+            auto_accept=True,
+        )
+
+        updated_guild.refresh_from_db()
+        assert updated_guild.description == "新简介"
+        assert updated_guild.auto_accept is True
+
+    def test_non_leader_cannot_update_guild_info(self, user_with_gold_bars, second_user):
+        guild = guild_service.create_guild(user=user_with_gold_bars, name="权限帮会", description="旧简介")
+        GuildMember.objects.create(guild=guild, user=second_user, position="member")
+
+        with pytest.raises(ValueError, match="帮主"):
+            guild_service.update_guild_info(
+                guild=guild,
+                operator=second_user,
+                description="越权简介",
+                auto_accept=True,
+            )
+
+
+@pytest.mark.django_db
 class TestGuildDisband:
     """帮会解散测试"""
 

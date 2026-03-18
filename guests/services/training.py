@@ -21,6 +21,8 @@ from core.exceptions import (
     InsufficientStockError,
 )
 from core.utils import safe_int
+from gameplay.services.inventory.core import consume_inventory_item_locked
+from gameplay.services.resources import spend_resources
 
 if TYPE_CHECKING:
     from gameplay.models import InventoryItem
@@ -30,7 +32,6 @@ from ..growth_engine import apply_training_completion
 from ..models import Guest, GuestStatus, TrainingLog
 from ..utils.training_calculator import get_level_up_cost, get_training_duration
 from ..utils.training_timer import ensure_training_timer, remaining_training_seconds
-from .guest_platform import consume_inventory_item_locked, spend_resources
 
 logger = logging.getLogger(__name__)
 MAX_GUEST_LEVEL = int(GUEST.MAX_LEVEL)

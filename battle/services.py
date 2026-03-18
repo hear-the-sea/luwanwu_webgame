@@ -84,6 +84,115 @@ def _validate_locked_guest_statuses(locked_guests: list[Guest]) -> None:
             raise ValueError(f"门客 {guest.display_name} 处于重伤状态，请先治疗")
 
 
+def _collect_active_deployment_guest_ids(candidate_ids: list[int]) -> set[int]:
+    if not candidate_ids:
+        return set()
+
+    from gameplay.models import ArenaEntry, ArenaEntryGuest, ArenaTournament, MissionRun, RaidRun
+
+    active_ids = set(
+        MissionRun.objects.filter(status=MissionRun.Status.ACTIVE, guests__id__in=candidate_ids).values_list(
+            "guests__id", flat=True
+        )
+    )
+    active_ids.update(
+        RaidRun.objects.filter(
+            status__in=[
+                RaidRun.Status.MARCHING,
+                RaidRun.Status.BATTLING,
+                RaidRun.Status.RETURNING,
+                RaidRun.Status.RETREATED,
+            ],
+            guests__id__in=candidate_ids,
+        ).values_list("guests__id", flat=True)
+    )
+    active_ids.update(
+        ArenaEntryGuest.objects.filter(
+            guest_id__in=candidate_ids,
+            entry__status=ArenaEntry.Status.REGISTERED,
+            entry__tournament__status__in=[
+                ArenaTournament.Status.RECRUITING,
+                ArenaTournament.Status.RUNNING,
+            ],
+        ).values_list("guest_id", flat=True)
+    )
+    return active_ids
+
+
+def _find_orphaned_deployed_guest_ids(candidate_ids: list[int]) -> list[int]:
+    if not candidate_ids:
+        return []
+    active_ids = _collect_active_deployment_guest_ids(candidate_ids)
+    return [guest_id for guest_id in candidate_ids if guest_id not in active_ids]
+
+
+def recover_orphaned_deployed_guests(*, guest_ids: list[int] | None = None) -> int:
+    deployed_guests = Guest.objects.filter(status=GuestStatus.DEPLOYED)
+    if guest_ids is not None:
+        deployed_guests = deployed_guests.filter(id__in=guest_ids)
+
+    candidate_ids = list(deployed_guests.order_by("id").values_list("id", flat=True))
+    if not candidate_ids:
+        return 0
+
+    orphaned_ids = _find_orphaned_deployed_guest_ids(candidate_ids)
+    if not orphaned_ids:
+        return 0
+
+    recovered_count = Guest.objects.filter(id__in=orphaned_ids, status=GuestStatus.DEPLOYED).update(
+        status=GuestStatus.IDLE
+    )
+    if recovered_count:
+        logger.warning(
+            "Recovered orphaned deployed guests before battle reuse: guest_ids=%s count=%s",
+            orphaned_ids,
+            recovered_count,
+        )
+    return recovered_count
+
+
+def _recover_orphaned_locked_guest_statuses(locked_guests: list[Guest]) -> int:
+    deployed_ids = [
+        guest.id for guest in locked_guests if getattr(guest, "status", None) == GuestStatus.DEPLOYED and guest.id
+    ]
+    orphaned_ids = set(_find_orphaned_deployed_guest_ids(deployed_ids))
+    if not orphaned_ids:
+        return 0
+
+    recovered_count = Guest.objects.filter(id__in=orphaned_ids, status=GuestStatus.DEPLOYED).update(
+        status=GuestStatus.IDLE
+    )
+    if recovered_count:
+        logger.warning(
+            "Recovered orphaned deployed guests before battle reuse: guest_ids=%s count=%s",
+            sorted(orphaned_ids),
+            recovered_count,
+        )
+
+    for guest in locked_guests:
+        if guest.id in orphaned_ids and getattr(guest, "status", None) == GuestStatus.DEPLOYED:
+            guest.status = GuestStatus.IDLE
+    return recovered_count
+
+
+def _load_locked_battle_participants(
+    guest_ids: list[int],
+    *,
+    primary_guest_ids: list[int],
+    secondary_guest_ids: list[int],
+) -> tuple[list[Guest], list[Guest], list[Guest]]:
+    locked_guests = _lock_guest_rows(guest_ids)
+    locked_guest_map = {guest.id: guest for guest in locked_guests}
+    missing_guest_ids = [guest_id for guest_id in guest_ids if guest_id not in locked_guest_map]
+    if missing_guest_ids:
+        raise ValueError("部分门客不存在，无法执行战斗")
+
+    locked_primary = [locked_guest_map[guest_id] for guest_id in primary_guest_ids]
+    locked_secondary = [locked_guest_map[guest_id] for guest_id in secondary_guest_ids]
+    locked_participants = list({guest.id: guest for guest in locked_primary + locked_secondary}.values())
+    return locked_primary, locked_secondary, locked_participants
+
+
 def _mark_locked_guests_deployed(locked_guests: list[Guest]) -> None:
     for guest in locked_guests:
         guest.status = GuestStatus.DEPLOYED
@@ -142,6 +251,95 @@ def _validate_attacker_guest_ownership(manor, guests: List[Guest]) -> None:
     owned_ids = set(Guest.objects.filter(id__in=unresolved_ids, manor_id=manor_pk).values_list("id", flat=True))
     if len(owned_ids) != len(set(unresolved_ids)):
         raise ValueError("攻击方门客必须属于当前庄园")
+
+
+def _select_default_attacker_guests(manor, limit: int) -> list[Guest]:
+    guest_qs = manor.guests.select_related("template").prefetch_related("skills")
+    total_guests = guest_qs.count()
+    guests = list(guest_qs.filter(status=GuestStatus.IDLE).order_by("-template__rarity", "-level")[:limit])
+    if guests:
+        return guests
+
+    if total_guests > 0:
+        injured_count = guest_qs.filter(status=GuestStatus.INJURED).count()
+        if injured_count > 0:
+            raise ValueError(f"有{injured_count}名门客处于重伤状态，请使用药品治疗后再出征")
+        raise ValueError("仅空闲门客可出征，请先让门客空闲后再尝试战斗")
+    raise ValueError("请先招募门客后再尝试战斗")
+
+
+def _resolve_attacker_guests(manor, attacker_guests: List[Guest] | None, limit: int) -> tuple[list[Guest], list[Guest]]:
+    if attacker_guests is None:
+        guests = _select_default_attacker_guests(manor, limit)
+    else:
+        guests = attacker_guests
+        if not guests:
+            raise ValueError("请选择可出征的门客")
+        _validate_attacker_guest_ownership(manor, guests)
+    return guests, guests[:limit]
+
+
+def _build_battle_options(
+    *,
+    battle_type: str,
+    seed: int | None,
+    troop_loadout: Dict[str, int] | None,
+    fill_default_troops: bool,
+    defender_setup: Dict[str, Any] | None,
+    defender_guests: List[Guest] | None,
+    defender_limit: int,
+    drop_table: Dict[str, Any] | None,
+    opponent_name: str | None,
+    travel_seconds: int | None,
+    auto_reward: bool,
+    drop_handler: Callable[[Dict[str, int]], None] | None,
+    rng_source: random.Random | None,
+    send_message: bool,
+    limit: int,
+    apply_damage: bool,
+    attacker_tech_levels: Dict[str, int] | None,
+    attacker_guest_bonuses: Dict[str, float] | None,
+    attacker_guest_skills: List[str] | None,
+    attacker_manor,
+    validate_attacker_troop_capacity: bool,
+) -> BattleOptions:
+    return BattleOptions(
+        battle_type=battle_type,
+        seed=seed,
+        troop_loadout=troop_loadout,
+        fill_default_troops=fill_default_troops,
+        defender_setup=defender_setup,
+        defender_guests=defender_guests,
+        defender_limit=defender_limit,
+        drop_table=drop_table,
+        opponent_name=opponent_name,
+        travel_seconds=travel_seconds,
+        auto_reward=auto_reward,
+        drop_handler=drop_handler,
+        rng_source=rng_source,
+        send_message=send_message,
+        limit=limit,
+        apply_damage=apply_damage,
+        attacker_tech_levels=attacker_tech_levels,
+        attacker_guest_bonuses=attacker_guest_bonuses,
+        attacker_guest_skills=attacker_guest_skills,
+        attacker_manor=attacker_manor,
+        validate_attacker_troop_capacity=validate_attacker_troop_capacity,
+    )
+
+
+def _execute_battle_with_optional_lock(
+    *,
+    manor,
+    guests: list[Guest],
+    active_guests: list[Guest],
+    options: BattleOptions,
+    use_lock: bool,
+) -> BattleReport:
+    if use_lock:
+        with lock_guests_for_battle(active_guests, manor=manor, other_guests=options.defender_guests):
+            return _execute_battle(manor, guests, active_guests, options)
+    return _execute_battle(manor, guests, active_guests, options)
 
 
 def _build_defender_guest_and_loadout(
@@ -239,16 +437,13 @@ def lock_guests_for_battle(
         with transaction.atomic():
             # Keep the DB transaction limited to lock acquisition + state transition.
             _lock_manor_rows(_collect_manor_ids(manor, guests, other_guests))
-            locked_guests = _lock_guest_rows(guest_ids)
-            locked_guest_map = {guest.id: guest for guest in locked_guests}
-            missing_guest_ids = [guest_id for guest_id in guest_ids if guest_id not in locked_guest_map]
-            if missing_guest_ids:
-                raise ValueError("部分门客不存在，无法执行战斗")
+            _locked_primary, _locked_secondary, locked_participants = _load_locked_battle_participants(
+                guest_ids,
+                primary_guest_ids=primary_guest_ids,
+                secondary_guest_ids=secondary_guest_ids,
+            )
 
-            locked_primary = [locked_guest_map[guest_id] for guest_id in primary_guest_ids]
-            locked_secondary = [locked_guest_map[guest_id] for guest_id in secondary_guest_ids]
-            locked_participants = list({guest.id: guest for guest in locked_primary + locked_secondary}.values())
-
+            _recover_orphaned_locked_guest_statuses(locked_participants)
             _validate_locked_guest_statuses(locked_participants)
             _mark_locked_guests_deployed(locked_participants)
             locked = True
@@ -322,31 +517,9 @@ def simulate_report(
     """
     # 确定本场上阵人数（默认遵循庄园可上阵上限）
     limit = max_squad or (getattr(manor, "max_squad_size", None) or MAX_SQUAD)
-
-    # 获取出战门客
-    if attacker_guests is None:
-        guest_qs = manor.guests.select_related("template").prefetch_related("skills")
-        total_guests = guest_qs.count()
-        # 仅空闲门客可出征，重伤门客无法出征
-        guests = list(guest_qs.filter(status=GuestStatus.IDLE).order_by("-template__rarity", "-level")[:limit])
-        if not guests:
-            if total_guests > 0:
-                injured_count = guest_qs.filter(status=GuestStatus.INJURED).count()
-                if injured_count > 0:
-                    raise ValueError(f"有{injured_count}名门客处于重伤状态，请使用药品治疗后再出征")
-                raise ValueError("仅空闲门客可出征，请先让门客空闲后再尝试战斗")
-            raise ValueError("请先招募门客后再尝试战斗")
-    else:
-        guests = attacker_guests
-        if not guests:
-            raise ValueError("请选择可出征的门客")
-        _validate_attacker_guest_ownership(manor, guests)
-
+    guests, active_guests = _resolve_attacker_guests(manor, attacker_guests, limit)
     defender_limit = defender_max_squad or limit
-    active_guests = guests[:limit]
-
-    # 使用并发锁执行战斗（防止同一门客同时参与多场战斗）
-    options = BattleOptions(
+    options = _build_battle_options(
         battle_type=battle_type,
         seed=seed,
         troop_loadout=troop_loadout,
@@ -369,10 +542,10 @@ def simulate_report(
         attacker_manor=attacker_manor,
         validate_attacker_troop_capacity=validate_attacker_troop_capacity,
     )
-
-    if use_lock:
-        with lock_guests_for_battle(active_guests, manor=manor, other_guests=options.defender_guests):
-            return _execute_battle(manor, guests, active_guests, options)
-    else:
-        # 不使用锁（用于测试或特殊场景）
-        return _execute_battle(manor, guests, active_guests, options)
+    return _execute_battle_with_optional_lock(
+        manor=manor,
+        guests=guests,
+        active_guests=active_guests,
+        options=options,
+        use_lock=use_lock,
+    )

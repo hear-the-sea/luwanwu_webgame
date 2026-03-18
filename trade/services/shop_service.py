@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterable, List
 
 from django.db import transaction
 from django.db.models import F
@@ -17,10 +17,10 @@ from gameplay.models.items import (
     get_item_effect_type_label,
     normalize_item_effect_type,
 )
+from gameplay.services.resources import grant_resources_locked, spend_resources_locked
 from gameplay.utils.template_loader import get_item_templates_by_keys
 from trade.models import ShopPurchaseLog, ShopSellLog, ShopStock
 from trade.services.shop_config import get_sell_price_by_template, get_shop_config, get_shop_item_config
-from trade.services.trade_platform import grant_resources_locked, spend_resources_locked
 
 
 @dataclass
@@ -153,9 +153,9 @@ def _build_sell_price_overrides() -> dict[str, int]:
     return overrides
 
 
-def get_sellable_inventory(manor: Manor, category: str = None) -> List[SellableItemDisplay]:
+def get_sellable_inventory_queryset(manor: Manor, category: str = None):
     """
-    获取玩家可出售的物品列表
+    获取玩家可出售物品的查询集。
 
     IMPORTANT: Only show WAREHOUSE items since sell_item only operates on WAREHOUSE.
 
@@ -176,6 +176,11 @@ def get_sellable_inventory(manor: Manor, category: str = None) -> List[SellableI
         else:
             items = items.filter(template__effect_type=normalized_category)
 
+    return items
+
+
+def build_sellable_inventory_display_rows(items: Iterable[InventoryItem]) -> List[SellableItemDisplay]:
+    """将库存行转换为可出售展示行。"""
     sell_price_overrides = _build_sell_price_overrides()
     result = []
 
@@ -183,10 +188,25 @@ def get_sellable_inventory(manor: Manor, category: str = None) -> List[SellableI
         sell_price = sell_price_overrides.get(item.template.key)
         if sell_price is None:
             sell_price = _coerce_non_negative_int(item.template.price, 0)
-        if sell_price > 0:  # 只显示有回收价的物品
+        if sell_price > 0:
             result.append(SellableItemDisplay(inventory_item=item, sell_price=sell_price))
 
     return result
+
+
+def get_sellable_inventory(manor: Manor, category: str = None) -> List[SellableItemDisplay]:
+    """
+    获取玩家可出售的物品列表
+
+    IMPORTANT: Only show WAREHOUSE items since sell_item only operates on WAREHOUSE.
+
+    Args:
+        manor: 庄园对象
+        category: 分类筛选（可选），使用 normalized effect_type
+    """
+    items = get_sellable_inventory_queryset(manor, category=category)
+
+    return build_sellable_inventory_display_rows(items)
 
 
 @transaction.atomic

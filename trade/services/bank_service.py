@@ -9,8 +9,7 @@
 """
 
 import logging
-import sys
-from typing import Any
+from typing import Any, Callable
 
 from django.core.cache import cache
 from django.db import DatabaseError, transaction
@@ -19,13 +18,14 @@ from django.utils import timezone
 
 from core.utils.cache_lock import release_cache_key_if_owner
 from gameplay.models import Manor, ResourceEvent
+from gameplay.services.inventory.core import add_item_to_inventory_locked
+from gameplay.services.resources import spend_resources_locked
 from trade.models import GoldBarExchangeLog
-from trade.services.trade_platform import add_item_to_inventory_locked, spend_resources_locked
 
 from . import rate_calculations as _rate_calculations
-from .bank_facade import exchange_gold_bar_entry, get_bank_info_entry
+from .bank_flows import build_bank_info_payload
 from .bank_flows import build_exchange_result as build_exchange_result_payload
-from .bank_flows import resolve_pricing_status
+from .bank_flows import execute_gold_bar_exchange, resolve_pricing_status
 
 # Pure pricing constants and math functions extracted to bank_pricing.
 from .bank_pricing import (  # noqa: F401
@@ -67,20 +67,6 @@ logger = logging.getLogger(__name__)
 
 BANK_INFRASTRUCTURE_EXCEPTIONS = (DatabaseError, ConnectionError, OSError, TimeoutError)
 BANK_CACHE_COMPONENT = "bank_cache"
-
-
-# Dynamic facade assembly in bank_facade.py resolves these names from this module at runtime.
-_FACADE_EXPORTS = (
-    transaction,
-    Manor,
-    _normalize_positive_quantity,
-    _calculate_supply_factor_from_supply,
-    GOLD_BAR_BASE_PRICE,
-    GOLD_BAR_FEE_RATE,
-    GOLD_BAR_MIN_PRICE,
-    GOLD_BAR_MAX_PRICE,
-    calculate_progressive_factor,
-)
 
 
 def _safe_cache_get(key: str, default: Any = None) -> Any:
@@ -191,11 +177,29 @@ from .rate_calculations import (  # noqa: E402,F401
 _IMPORTED_GET_EFFECTIVE_GOLD_SUPPLY = get_effective_gold_supply
 _IMPORTED_CALCULATE_SUPPLY_FACTOR = calculate_supply_factor
 
+
+def _get_effective_gold_supply_override() -> Callable[..., Any] | None:
+    if get_effective_gold_supply is _IMPORTED_GET_EFFECTIVE_GOLD_SUPPLY:
+        return None
+    return get_effective_gold_supply
+
+
+def _calculate_supply_factor_override() -> Callable[..., Any] | None:
+    if calculate_supply_factor is _IMPORTED_CALCULATE_SUPPLY_FACTOR:
+        return None
+    return calculate_supply_factor
+
+
 configure_rate_calculation_hooks(
     _rate_calculations,
-    service_module=sys.modules[__name__],
-    imported_get_effective_gold_supply=_IMPORTED_GET_EFFECTIVE_GOLD_SUPPLY,
-    imported_calculate_supply_factor=_IMPORTED_CALCULATE_SUPPLY_FACTOR,
+    safe_cache_get=_safe_cache_get,
+    safe_cache_set=_safe_cache_set,
+    safe_cache_add=_safe_cache_add,
+    safe_cache_delete=_safe_cache_delete,
+    release_cache_lock_if_owner=_release_cache_lock_if_owner,
+    get_today_exchange_count=get_today_exchange_count,
+    get_effective_gold_supply_override=_get_effective_gold_supply_override,
+    calculate_supply_factor_override=_calculate_supply_factor_override,
 )
 
 
@@ -259,7 +263,19 @@ def exchange_gold_bar(manor: Manor, quantity: int) -> dict:
     Raises:
         ValueError: 参数错误、银两不足等
     """
-    return exchange_gold_bar_entry(manor, quantity, service_module=sys.modules[__name__])
+    return execute_gold_bar_exchange(
+        manor,
+        quantity,
+        transaction_atomic=transaction.atomic,
+        manor_model=Manor,
+        normalize_positive_quantity=_normalize_positive_quantity,
+        calculate_gold_bar_cost=calculate_gold_bar_cost,
+        spend_exchange_cost_locked=_spend_exchange_cost_locked,
+        grant_gold_bars_locked=_grant_gold_bars_locked,
+        record_gold_bar_exchange_locked=_record_gold_bar_exchange_locked,
+        clear_supply_cache=lambda: _safe_cache_delete(SUPPLY_CACHE_KEY),
+        build_exchange_result=_build_exchange_result,
+    )
 
 
 def get_bank_info(manor: Manor) -> dict:
@@ -269,4 +285,18 @@ def get_bank_info(manor: Manor) -> dict:
     Returns:
         dict: 包含动态汇率、手续费率、今日兑换情况等信息
     """
-    return get_bank_info_entry(manor, service_module=sys.modules[__name__])
+    return build_bank_info_payload(
+        manor,
+        get_effective_gold_supply_data=_get_effective_gold_supply_data,
+        resolve_pricing_status=_resolve_pricing_status,
+        get_today_exchange_count=get_today_exchange_count,
+        calculate_supply_factor_from_supply=_calculate_supply_factor_from_supply,
+        calculate_dynamic_rate=calculate_dynamic_rate,
+        calculate_next_rate=calculate_next_rate,
+        calculate_progressive_factor=calculate_progressive_factor,
+        calculate_gold_bar_cost=calculate_gold_bar_cost,
+        gold_bar_base_price=GOLD_BAR_BASE_PRICE,
+        gold_bar_fee_rate=GOLD_BAR_FEE_RATE,
+        gold_bar_min_price=GOLD_BAR_MIN_PRICE,
+        gold_bar_max_price=GOLD_BAR_MAX_PRICE,
+    )

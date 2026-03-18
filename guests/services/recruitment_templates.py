@@ -7,14 +7,10 @@ from typing import Dict, List, Tuple
 from django.core.cache import cache
 
 from core.exceptions import NoTemplateAvailableError
+from gameplay.services.utils.cache import CACHE_TIMEOUT_CONFIG, CacheKeys
 
 from ..models import GuestRarity, GuestTemplate, RecruitmentPoolEntry
 from ..utils.recruitment_utils import HERMIT_RARITY, RARITY_ORDER, choose_rarity, filter_entries, weighted_choice
-from .guest_platform import (
-    get_config_cache_timeout,
-    get_guest_templates_by_rarity_cache_key,
-    get_hermit_templates_cache_key,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +25,7 @@ def _get_recruitable_templates_by_rarity() -> Dict[str, List[GuestTemplate]]:
     Returns:
         按稀有度分组的模板字典
     """
-    cache_key = get_guest_templates_by_rarity_cache_key()
+    cache_key = str(CacheKeys.GUEST_TEMPLATES_BY_RARITY)
     cached = cache.get(cache_key)
     if cached is not None:
         cached_template_ids_by_rarity: Dict[str, List[int]] = cached
@@ -56,7 +52,7 @@ def _get_recruitable_templates_by_rarity() -> Dict[str, List[GuestTemplate]]:
         result[template.rarity].append(template)
         template_ids_by_rarity[template.rarity].append(template.id)
 
-    cache.set(cache_key, template_ids_by_rarity, timeout=get_config_cache_timeout())
+    cache.set(cache_key, template_ids_by_rarity, timeout=int(CACHE_TIMEOUT_CONFIG))
     return result
 
 
@@ -67,7 +63,7 @@ def _get_hermit_templates() -> List[GuestTemplate]:
     Returns:
         隐士模板列表
     """
-    cache_key = get_hermit_templates_cache_key()
+    cache_key = str(CacheKeys.HERMIT_TEMPLATES)
     cached = cache.get(cache_key)
     if cached is not None:
         return list(GuestTemplate.objects.filter(id__in=cached))
@@ -80,7 +76,7 @@ def _get_hermit_templates() -> List[GuestTemplate]:
         )
     )
     template_ids = [template.id for template in templates]
-    cache.set(cache_key, template_ids, timeout=get_config_cache_timeout())
+    cache.set(cache_key, template_ids, timeout=int(CACHE_TIMEOUT_CONFIG))
     return templates
 
 
@@ -92,8 +88,8 @@ def clear_template_cache() -> None:
     """
     cache.delete_many(
         [
-            get_guest_templates_by_rarity_cache_key(),
-            get_hermit_templates_cache_key(),
+            str(CacheKeys.GUEST_TEMPLATES_BY_RARITY),
+            str(CacheKeys.HERMIT_TEMPLATES),
         ]
     )
 

@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import logging
-from collections import Counter
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -17,13 +16,13 @@ from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
 from core.config import GUEST
-from core.exceptions import GameError, GuestNotIdleError
+from core.exceptions import GameError
 from core.utils import sanitize_error_message
 
 from ..forms import AllocateSkillPointsForm
-from ..models import GearItem, GearSlot, GearTemplate, GuestSkill, GuestStatus, Skill
-from ..services import equipment as equipment_service
+from ..models import GearItem, GearSlot, GearTemplate, GuestSkill, Skill
 from ..services.recruitment_queries import available_guests
+from ..services.roster import dismiss_guest
 from ..utils.guest_state import refresh_guest_state, refresh_guests_state
 
 logger = logging.getLogger(__name__)
@@ -280,30 +279,13 @@ class GuestDetailView(LoginRequiredMixin, TemplateView):
 @login_required
 @require_POST
 def dismiss_guest_view(request, pk: int):
-    from django.db import transaction
-
     from gameplay.services.manor.core import get_manor
 
     manor = get_manor(request.user)
     guest = get_object_or_404(manor.guests, pk=pk)
-    guest_name = guest.display_name
 
-    # 使用事务确保装备卸下和门客删除的原子性
     try:
-        with transaction.atomic():
-            locked_guest = manor.guests.select_for_update().filter(pk=pk).first()
-            if not locked_guest:
-                raise ValueError("门客不存在")
-            if locked_guest.status not in {GuestStatus.IDLE, GuestStatus.INJURED}:
-                raise GuestNotIdleError(locked_guest)
-
-            gear_items = list(locked_guest.gear_items.select_related("template"))
-            gear_summary = Counter(gear.template.name for gear in gear_items)
-            if gear_items:
-                for gear in gear_items:
-                    # 如果任何装备卸下失败，整个事务回滚
-                    equipment_service.unequip_guest_item(gear, locked_guest, allow_injured=True)
-            locked_guest.delete()
+        result = dismiss_guest(guest)
     except (GameError, ValueError) as exc:
         messages.error(request, f"辞退失败：{sanitize_error_message(exc)}")
         return redirect("guests:detail", pk=pk)
@@ -311,9 +293,9 @@ def dismiss_guest_view(request, pk: int):
         messages.error(request, f"辞退失败：{sanitize_error_message(exc)}")
         return redirect("guests:detail", pk=pk)
 
-    if gear_items:
-        readable = "、".join(f"{name} x{count}" if count > 1 else name for name, count in gear_summary.items())
-        messages.success(request, f"已辞退 {guest_name}，装备已归还仓库（{readable}）")
+    if result.gear_summary:
+        readable = "、".join(f"{name} x{count}" if count > 1 else name for name, count in result.gear_summary.items())
+        messages.success(request, f"已辞退 {result.guest_name}，装备已归还仓库（{readable}）")
     else:
-        messages.info(request, f"已辞退 {guest_name}。")
+        messages.info(request, f"已辞退 {result.guest_name}。")
     return redirect("guests:roster")

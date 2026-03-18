@@ -19,6 +19,9 @@ from core.exceptions import InsufficientStockError
 if TYPE_CHECKING:
     from gameplay.models import Manor
 
+from gameplay.services.inventory.core import consume_inventory_item_locked
+from gameplay.services.resources import spend_resources
+
 from ..models import GuestRecruitment, RecruitmentCandidate, RecruitmentPool
 from ..utils.name_generator import generate_random_name
 from . import recruitment_candidates as _recruitment_candidates
@@ -26,7 +29,6 @@ from . import recruitment_flow as _recruitment_flow
 from . import recruitment_queries as _recruitment_queries
 from . import recruitment_shared as _recruitment_shared
 from . import recruitment_templates as _recruitment_templates
-from .guest_platform import consume_inventory_item_locked, spend_resources
 
 logger = logging.getLogger(__name__)
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import sys
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -18,19 +17,18 @@ from guests.models import Guest, GuestStatus
 from ....models import Manor, RaidRun, ResourceEvent
 from ...utils.messages import create_message
 from .config import PVPConstants
+from .finalize import finalize_raid as _finalize_raid_command
 from .loot import _grant_loot_items
 from .raid_inputs import (
     _load_and_validate_attacker_guests,
     _normalize_and_validate_raid_loadout,
     _validate_and_normalize_raid_inputs,
 )
+from .refresh import refresh_raid_runs as _refresh_raid_runs_command
 from .refresh_flow import collect_due_raid_run_ids, dispatch_async_raid_refresh, process_due_raid_run_ids
 from .retreat import can_raid_retreat as _can_raid_retreat_command
 from .retreat import finalize_raid_retreat as _finalize_raid_retreat_command
 from .retreat import request_raid_retreat as _request_raid_retreat_command
-from .run_facade import finalize_raid_entry
-from .run_facade import refresh_raid_runs_entry as facade_refresh_raid_runs_entry
-from .run_facade import start_raid_entry
 from .run_persistence import create_raid_run_record as persistence_create_raid_run_record
 from .run_persistence import get_active_raids as persistence_get_active_raids
 from .run_persistence import get_raid_history as persistence_get_raid_history
@@ -53,6 +51,8 @@ from .run_side_effects import (
     schedule_raid_retreat_completion_best_effort,
     send_raid_incoming_message,
 )
+from .run_wiring import build_finalize_raid_dependencies, build_refresh_raid_dependencies, build_start_raid_dependencies
+from .start import start_raid as _start_raid_command
 from .travel import calculate_raid_travel_time, get_active_raid_count
 
 # Import troop management helpers (moved to troop_ops, re-exported for callers).
@@ -71,22 +71,6 @@ logger = logging.getLogger(__name__)
 
 
 _REFRESH_DISPATCH_DEDUP_SECONDS = 5
-
-
-# Dynamic facade assembly in run_facade.py resolves these names from this module at runtime.
-_FACADE_EXPORTS = (
-    _validate_and_normalize_raid_inputs,
-    PVPConstants,
-    _load_and_validate_attacker_guests,
-    _normalize_and_validate_raid_loadout,
-    calculate_raid_travel_time,
-    get_active_raid_count,
-    _grant_loot_items,
-    ResourceEvent,
-    collect_due_raid_run_ids,
-    dispatch_async_raid_refresh,
-    process_due_raid_run_ids,
-)
 
 
 def _try_dispatch_raid_refresh_task(task: Any, run_id: int, stage: str) -> bool:
@@ -191,12 +175,29 @@ def start_raid(
         ValueError: 无法发起踢馆时
     """
     del seed
-    return start_raid_entry(
+    return _start_raid_command(
         attacker,
         defender,
         guest_ids,
         troop_loadout,
-        service_module=sys.modules[__name__],
+        **build_start_raid_dependencies(
+            validate_and_normalize_inputs=_validate_and_normalize_raid_inputs,
+            transaction_atomic=transaction.atomic,
+            lock_manor_pair=_lock_manor_pair,
+            now_func=timezone.now,
+            recheck_can_attack_target=_recheck_can_attack_target,
+            get_active_raid_count=get_active_raid_count,
+            raid_max_concurrent=PVPConstants.RAID_MAX_CONCURRENT,
+            load_and_validate_attacker_guests=_load_and_validate_attacker_guests,
+            normalize_and_validate_raid_loadout=_normalize_and_validate_raid_loadout,
+            deduct_troops=_deduct_troops,
+            calculate_raid_travel_time=calculate_raid_travel_time,
+            create_raid_run_record=_create_raid_run_record,
+            invalidate_recent_attacks_cache_on_commit=_invalidate_recent_attacks_cache_on_commit,
+            send_raid_incoming_message=_send_raid_incoming_message,
+            dispatch_raid_battle_task=_dispatch_raid_battle_task,
+            logger=logger,
+        ),
     )
 
 
@@ -213,7 +214,21 @@ def finalize_raid(run: RaidRun, now: Optional[datetime] = None) -> None:
         run: 踢馆记录
         now: 当前时间（可选）
     """
-    finalize_raid_entry(run, now=now, service_module=sys.modules[__name__])
+    from gameplay.services.resources import grant_resources_locked
+
+    _finalize_raid_command(
+        run,
+        now=now,
+        **build_finalize_raid_dependencies(
+            load_locked_raid_run=_load_locked_raid_run,
+            normalize_positive_int_mapping=_normalize_positive_int_mapping,
+            return_surviving_troops=_return_surviving_troops,
+            load_locked_attacker=_load_locked_attacker,
+            grant_resources_locked=grant_resources_locked,
+            grant_loot_items=_grant_loot_items,
+            battle_reward_reason=ResourceEvent.Reason.BATTLE_REWARD,
+        ),
+    )
 
 
 def _schedule_raid_retreat_completion(run_id: int, countdown: int) -> None:
@@ -273,10 +288,23 @@ def can_raid_retreat(run: RaidRun, now: Optional[datetime] = None) -> bool:
 
 def refresh_raid_runs(manor: Manor, *, prefer_async: bool = False) -> None:
     """刷新庄园的踢馆状态（支持异步优先结算）。"""
-    facade_refresh_raid_runs_entry(
+    from .battle import process_raid_battle
+
+    _refresh_raid_runs_command(
         manor,
         prefer_async=prefer_async,
-        service_module=sys.modules[__name__],
+        **build_refresh_raid_dependencies(
+            now_func=timezone.now,
+            raid_run_model=RaidRun,
+            collect_due_raid_run_ids=collect_due_raid_run_ids,
+            dispatch_async_raid_refresh=dispatch_async_raid_refresh,
+            logger=logger,
+            import_raid_refresh_tasks=_import_raid_refresh_tasks,
+            try_dispatch_raid_refresh_task=_try_dispatch_raid_refresh_task,
+            process_due_raid_run_ids=process_due_raid_run_ids,
+            process_raid_battle=process_raid_battle,
+            finalize_raid=finalize_raid,
+        ),
     )
 
 

@@ -13,11 +13,11 @@ from django.utils import timezone
 from core.exceptions import GuestFullHpError, GuestNotIdleError, InsufficientStockError, InvalidHealAmountError
 from core.utils import safe_int
 from core.utils.time_scale import scale_value
+from gameplay.services.inventory.core import consume_inventory_item_locked
 
 from .. import guest_health_rules as _guest_health_rules
 from ..constants import TimeConstants
 from ..models import Guest, GuestStatus
-from .guest_platform import consume_inventory_item_locked
 
 if TYPE_CHECKING:
     from gameplay.models import InventoryItem, Manor

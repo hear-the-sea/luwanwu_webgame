@@ -9,9 +9,9 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from gameplay.models import InventoryItem, Manor
+from gameplay.services.inventory.core import consume_inventory_item_for_manor_locked, get_item_quantity
 from trade.models import AuctionBid, FrozenGoldBar
 from trade.services.auction.constants import GOLD_BAR_ITEM_KEY
-from trade.services.trade_platform import consume_inventory_item_for_manor_locked, get_item_quantity
 
 
 def get_total_gold_bars(manor: Manor) -> int:

@@ -5,10 +5,10 @@ from django.db.models import F
 from django.utils import timezone
 
 from gameplay.models import Manor, ResourceEvent
+from gameplay.services.resources import spend_resources_locked
 
 from ..constants import CONTRIBUTION_RATES, DAILY_DONATION_LIMITS, MIN_DONATION_AMOUNT
 from ..models import Guild, GuildDonationLog, GuildMember, GuildResourceLog
-from .guild_platform import spend_resources_locked
 
 # 安全修复：贡献度累积上限，防止PositiveIntegerField溢出（最大2147483647）
 MAX_CONTRIBUTION = 2_000_000_000  # 20亿安全上限

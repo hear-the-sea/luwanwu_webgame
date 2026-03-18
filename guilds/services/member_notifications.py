@@ -3,8 +3,7 @@ from __future__ import annotations
 import logging
 
 from gameplay.models import Manor
-
-from .guild_platform import create_message
+from gameplay.services.utils.messages import create_message
 
 
 def resolve_display_name(user_id: int) -> str:

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import logging
 
+from gameplay.services.utils.cache import invalidate_recruitment_hall_cache as _invalidate_recruitment_hall_cache
+
 from ..models import GuestRarity, RecruitmentPool
-from .guest_platform import invalidate_recruitment_hall_cache as _invalidate_recruitment_hall_cache
 
 logger = logging.getLogger(__name__)
 

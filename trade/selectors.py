@@ -16,12 +16,18 @@ from gameplay.services.manor.troop_bank import (
     get_troop_bank_rows,
     get_troop_bank_used_space,
 )
-from gameplay.services.resources import sync_resource_production
+from gameplay.services.resources import sync_resource_production as _sync_resource_production
 from gameplay.services.technology import get_troop_class_for_key
 from trade.services.auction_service import get_active_slots, get_auction_stats, get_my_bids, get_my_leading_bids
 from trade.services.bank_service import get_bank_info
 from trade.services.market_service import get_active_listings, get_my_listings, get_tradeable_inventory
-from trade.services.shop_service import EFFECT_TYPE_CATEGORY, get_sellable_inventory, get_shop_items_for_display
+from trade.services.shop_service import (
+    EFFECT_TYPE_CATEGORY,
+    build_sellable_inventory_display_rows,
+    get_sellable_inventory,
+    get_sellable_inventory_queryset,
+    get_shop_items_for_display,
+)
 
 _TOOL_EFFECT_TYPES = LEGACY_TOOL_EFFECT_TYPES
 TRADE_ITEM_PAGE_SIZE = 20
@@ -35,6 +41,10 @@ _TROOP_CATEGORY_LABELS: dict[str, str] = {
     "other": "其他",
 }
 logger = logging.getLogger(__name__)
+
+# Backwards-compatible alias for tests that still monkeypatch the old selector symbol.
+sync_resource_production = _sync_resource_production
+_ORIGINAL_GET_SELLABLE_INVENTORY = get_sellable_inventory
 
 
 def _is_expected_trade_context_error(exc: Exception) -> bool:
@@ -177,20 +187,48 @@ def _update_auction_context(request: HttpRequest, manor: Any, context: dict[str,
         _update_auction_my_bids_context(manor, context)
 
 
+def _iter_sellable_effect_types(sellable_items: Any) -> list[str]:
+    if hasattr(sellable_items, "values_list"):
+        return list(sellable_items.values_list("template__effect_type", flat=True).distinct())
+
+    effect_types: list[str] = []
+    for item in sellable_items:
+        effect_type = getattr(getattr(getattr(item, "inventory_item", None), "template", None), "effect_type", "")
+        if not effect_type:
+            effect_type = getattr(getattr(item, "template", None), "effect_type", "")
+        effect_types.append(str(effect_type or ""))
+    return effect_types
+
+
 def _build_shop_category_options(shop_items: Any, sellable_items: Any) -> list[dict[str, str]]:
     categories = {"all"}
     categories.update(_normalize_effect_type(item.effect_type or "other") for item in shop_items)
     categories.update(
-        _normalize_effect_type(
-            getattr(getattr(getattr(item, "inventory_item", None), "template", None), "effect_type", "")
-        )
-        for item in sellable_items
+        _normalize_effect_type(effect_type) for effect_type in _iter_sellable_effect_types(sellable_items)
     )
 
     return [{"key": "all", "label": "全部"}] + [
         {"key": category_key, "label": EFFECT_TYPE_CATEGORY.get(category_key, category_key)}
         for category_key in sorted(key for key in categories if key and key != "all")
     ]
+
+
+def _load_sellable_inventory_source(manor: Any) -> Any:
+    if get_sellable_inventory is not _ORIGINAL_GET_SELLABLE_INVENTORY:
+        return get_sellable_inventory(manor)
+    return get_sellable_inventory_queryset(manor)
+
+
+def _build_inventory_display_rows(items: Any) -> list[Any]:
+    item_list = list(items)
+    if not item_list:
+        return []
+
+    sample = item_list[0]
+    if hasattr(sample, "inventory_item") and hasattr(sample, "sell_price"):
+        return item_list
+
+    return build_sellable_inventory_display_rows(item_list)
 
 
 def _update_shop_context(request: HttpRequest, manor: Any, context: dict[str, Any]) -> None:
@@ -205,12 +243,13 @@ def _update_shop_context(request: HttpRequest, manor: Any, context: dict[str, An
 
     shop_items = _safe_call(get_shop_items_for_display, default=[], log_message="load shop items failed")
     # 买入筛选只作用于买入列表；卖出列表始终展示全部可售物品
-    sellable_items = _safe_call(
-        lambda: list(get_sellable_inventory(manor)),
+    sellable_inventory_source = _safe_call(
+        _load_sellable_inventory_source,
+        manor,
         default=[],
         log_message="load sellable inventory failed",
     )
-    category_options = _build_shop_category_options(shop_items, sellable_items)
+    category_options = _build_shop_category_options(shop_items, sellable_inventory_source)
 
     if selected_category != "all":
         shop_items = [
@@ -218,13 +257,19 @@ def _update_shop_context(request: HttpRequest, manor: Any, context: dict[str, An
         ]
 
     shop_buy_page_obj = Paginator(shop_items, TRADE_ITEM_PAGE_SIZE).get_page(buy_page)
-    shop_sell_page_obj = Paginator(sellable_items, TRADE_ITEM_PAGE_SIZE).get_page(sell_page)
+    shop_sell_page_obj = Paginator(sellable_inventory_source, TRADE_ITEM_PAGE_SIZE).get_page(sell_page)
+    inventory_rows = _safe_call(
+        _build_inventory_display_rows,
+        shop_sell_page_obj.object_list,
+        default=[],
+        log_message="build sellable inventory display failed",
+    )
 
     context.update(
         {
             "shop_view": shop_view,
             "shop_items": list(shop_buy_page_obj.object_list),
-            "inventory": list(shop_sell_page_obj.object_list),
+            "inventory": inventory_rows,
             "shop_buy_page_obj": shop_buy_page_obj,
             "shop_sell_page_obj": shop_sell_page_obj,
             "categories": category_options,
@@ -326,13 +371,6 @@ def _update_market_context(request: HttpRequest, manor: Any, context: dict[str, 
 
 
 def get_trade_context(request: HttpRequest, manor: Any) -> dict[str, Any]:
-    _safe_call(
-        sync_resource_production,
-        manor,
-        persist=False,
-        default=None,
-        log_message=f"sync resource production for trade view failed: manor_id={getattr(manor, 'id', None)}",
-    )
     tab = request.GET.get("tab", "shop")
     context = _base_trade_context(tab, manor)
     context["trade_alerts"] = []

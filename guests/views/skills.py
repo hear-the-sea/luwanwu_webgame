@@ -9,7 +9,7 @@ from typing import List, Tuple
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db import DatabaseError, transaction
+from django.db import DatabaseError
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -20,7 +20,8 @@ from core.exceptions import GameError
 from core.utils import is_ajax_request, json_error
 from core.utils.validation import safe_positive_int, safe_redirect_url, sanitize_error_message
 
-from ..models import Guest, GuestSkill, GuestStatus, Skill
+from ..models import Guest, GuestStatus, Skill
+from ..services.skills import forget_guest_skill, learn_guest_skill
 
 logger = logging.getLogger(__name__)
 MAX_GUEST_SKILL_SLOTS = int(GUEST.MAX_SKILL_SLOTS)
@@ -88,48 +89,11 @@ def _validate_learn_skill_preconditions(guest: Guest, skill: Skill) -> Tuple[str
 
 
 def _persist_skill_learning(guest: Guest, skill: Skill, inventory_item) -> None:
-    from gameplay.models import InventoryItem
-    from gameplay.services.inventory.core import consume_inventory_item_locked
-
-    with transaction.atomic():
-        # Lock guest to prevent concurrent skill learning exceeding limits
-        locked_guest = Guest.objects.select_for_update().get(pk=guest.pk)
-        if locked_guest.status != GuestStatus.IDLE:
-            raise ValueError(f"{locked_guest.display_name} 当前非空闲状态，无法学习技能")
-
-        if locked_guest.guest_skills.count() >= MAX_GUEST_SKILL_SLOTS:
-            raise ValueError("技能位已满")
-
-        if locked_guest.guest_skills.filter(skill=skill).exists():
-            raise ValueError(f"{locked_guest.display_name} 已掌握 {skill.name}")
-
-        locked_item = InventoryItem.objects.select_for_update().filter(pk=inventory_item.pk).first()
-        if not locked_item or locked_item.quantity < 1:
-            raise ValueError("技能书数量不足")
-
-        GuestSkill.objects.create(
-            guest=locked_guest,
-            skill=skill,
-            source=GuestSkill.Source.BOOK,
-        )
-        consume_inventory_item_locked(locked_item)
+    learn_guest_skill(guest, skill, inventory_item)
 
 
 def _persist_skill_forget(guest: Guest, guest_skill_id: int) -> str:
-    with transaction.atomic():
-        locked_guest = Guest.objects.select_for_update().select_related("template").filter(pk=guest.pk).first()
-        if locked_guest is None:
-            raise ValueError("门客不存在")
-        if locked_guest.status != GuestStatus.IDLE:
-            raise ValueError(f"{locked_guest.display_name} 当前非空闲状态，无法遗忘技能")
-
-        locked_guest_skill = locked_guest.guest_skills.select_related("skill").filter(pk=guest_skill_id).first()
-        if locked_guest_skill is None:
-            raise ValueError("未找到要遗忘的技能")
-
-        skill_name = locked_guest_skill.skill.name
-        locked_guest_skill.delete()
-        return skill_name
+    return forget_guest_skill(guest, guest_skill_id)
 
 
 @login_required

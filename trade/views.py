@@ -5,6 +5,7 @@ import logging
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import DatabaseError
 from django.http import HttpResponseRedirect
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
@@ -13,6 +14,7 @@ from core.utils import safe_int
 from core.utils.rate_limit import rate_limit_redirect
 from gameplay.models import Manor
 from gameplay.services.manor.core import get_manor
+from gameplay.services.resources import sync_resource_production
 from trade.selectors import get_trade_context
 from trade.services.auction_service import place_bid
 from trade.services.bank_service import exchange_gold_bar
@@ -49,6 +51,18 @@ def _warn_if_threshold_exceeded(
         logger.warning(log_message, *log_args)
 
 
+def _sync_trade_view_resources(manor: Manor) -> None:
+    try:
+        sync_resource_production(manor, persist=False)
+    except (DatabaseError, ConnectionError, OSError, TimeoutError) as exc:
+        logger.warning(
+            "sync resource production for trade view failed: manor_id=%s error=%s",
+            getattr(manor, "id", None),
+            exc,
+            exc_info=True,
+        )
+
+
 class TradeView(LoginRequiredMixin, TemplateView):
     """交易主页面"""
 
@@ -57,6 +71,7 @@ class TradeView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
+        _sync_trade_view_resources(manor)
         context.update(get_trade_context(self.request, manor))
 
         return context

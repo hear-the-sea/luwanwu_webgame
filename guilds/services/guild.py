@@ -5,6 +5,7 @@ from django.db.models import F
 from django.utils import timezone
 
 from gameplay.models import Manor
+from gameplay.services.utils.messages import bulk_create_messages
 
 from ..constants import (
     GUILD_CREATION_COST,
@@ -14,7 +15,6 @@ from ..constants import (
     GUILD_UPGRADE_BASE_COST,
 )
 from ..models import Guild, GuildAnnouncement, GuildHeroPoolEntry, GuildMember, GuildTechnology
-from .guild_platform import bulk_create_messages
 from .utils import get_active_membership
 
 logger = logging.getLogger(__name__)
@@ -202,6 +202,41 @@ def upgrade_guild(guild, operator):
             "system",
             f"{operator_manor.display_name}将帮会提升至{guild_locked.level}级！成员上限增加至{guild_locked.member_capacity}人。",
         )
+
+
+def update_guild_info(guild, operator, description="", auto_accept=False):
+    """
+    更新帮会简介与自动审批配置。
+
+    Args:
+        guild: Guild对象
+        operator: 操作者User对象
+        description: 帮会简介
+        auto_accept: 是否自动接受申请
+
+    Returns:
+        更新后的 Guild 对象
+
+    Raises:
+        ValueError: 验证失败
+    """
+    normalized_description = (description or "").strip()[:200]
+
+    with transaction.atomic():
+        guild_locked = Guild.objects.select_for_update().get(pk=guild.pk, is_active=True)
+        membership = (
+            GuildMember.objects.select_for_update().filter(guild=guild_locked, user=operator, is_active=True).first()
+        )
+        if not membership:
+            raise ValueError("您不是该帮会成员")
+        if not membership.is_leader:
+            raise ValueError("只有帮主可以修改帮会信息")
+
+        guild_locked.description = normalized_description
+        guild_locked.auto_accept = bool(auto_accept)
+        guild_locked.save(update_fields=["description", "auto_accept"])
+
+    return guild_locked
 
 
 def calculate_guild_upgrade_cost(current_level):

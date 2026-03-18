@@ -6,11 +6,13 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from collections.abc import Callable
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import DatabaseError
+from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_POST
@@ -140,6 +142,67 @@ def _candidate_scope_digest(action: str, scope: str, candidate_ids: list[int] | 
         normalized = ",".join(str(i) for i in sorted(set(candidate_ids)))
         payload = f"{payload}|{normalized}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24]
+
+
+def _recruit_action_lock_conflict_response(request, manor, *, is_ajax: bool) -> HttpResponse:
+    return _recruitment_hall_response(
+        request,
+        manor,
+        "请求处理中，请稍候重试",
+        is_ajax=is_ajax,
+        status=409,
+        message_level="warning",
+    )
+
+
+def _run_locked_recruit_action(
+    *,
+    request,
+    manor,
+    is_ajax: bool,
+    lock_action: str,
+    lock_scope: str,
+    operation: Callable[[], HttpResponse],
+    database_log_message: str,
+    unexpected_log_message: str,
+    log_args: tuple[object, ...],
+) -> HttpResponse:
+    lock_ok, lock_key, lock_token = _acquire_recruit_action_lock(lock_action, int(manor.id), lock_scope)
+    if not lock_ok:
+        return _recruit_action_lock_conflict_response(request, manor, is_ajax=is_ajax)
+
+    try:
+        try:
+            return operation()
+        except (GameError, ValueError) as exc:
+            return _recruitment_hall_response(
+                request,
+                manor,
+                sanitize_error_message(exc),
+                is_ajax=is_ajax,
+                status=400,
+                message_level="error",
+            )
+        except DatabaseError as exc:
+            logger.exception(database_log_message, *log_args)
+            return _recruitment_hall_response(
+                request,
+                manor,
+                sanitize_error_message(exc),
+                is_ajax=is_ajax,
+                status=500,
+                message_level="error",
+            )
+        except Exception as exc:
+            logger.exception(unexpected_log_message, *log_args)
+            return unexpected_action_error_response(
+                request,
+                exc,
+                is_ajax=is_ajax,
+                redirect_to="gameplay:recruitment_hall",
+            )
+    finally:
+        _release_recruit_action_lock(lock_key, lock_token)
 
 
 def _normalize_candidate_action(raw_action: str | None) -> str | None:
@@ -376,52 +439,32 @@ class RecruitView(LoginRequiredMixin, TemplateView):
             messages.error(request, "请选择有效的卡池")
             return redirect("gameplay:recruitment_hall")
         pool = form.cleaned_data["pool"]
-        lock_ok, lock_key, lock_token = _acquire_recruit_action_lock("draw", int(manor.id), str(pool.key))
-        if not lock_ok:
+
+        def _perform_draw() -> HttpResponse:
+            recruitment = start_guest_recruitment(manor, pool)
+            eta_text = _format_duration(recruitment.duration_seconds)
+            cache_ok = _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
+            message = f"{pool.name} 已开始招募，预计 {eta_text} 后完成。"
             if is_ajax:
-                return json_error("请求处理中，请稍候重试", status=409)
-            messages.warning(request, "请求处理中，请稍候重试")
+                return _json_recruitment_hall_success(request, manor, message, use_cache=cache_ok)
+            messages.success(request, message)
             return redirect("gameplay:recruitment_hall")
 
-        try:
-            try:
-                recruitment = start_guest_recruitment(manor, pool)
-                eta_text = _format_duration(recruitment.duration_seconds)
-                cache_ok = _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
-                message = f"{pool.name} 已开始招募，预计 {eta_text} 后完成。"
-                if is_ajax:
-                    return _json_recruitment_hall_success(request, manor, message, use_cache=cache_ok)
-                messages.success(request, f"{pool.name} 已开始招募，预计 {eta_text} 后完成。")
-            except (GameError, ValueError) as exc:
-                if is_ajax:
-                    return json_error(sanitize_error_message(exc), status=400)
-                messages.error(request, sanitize_error_message(exc))
-            except DatabaseError as exc:
-                logger.exception(
-                    "Unexpected recruit draw database error: manor_id=%s user_id=%s pool_key=%s",
-                    getattr(manor, "id", None),
-                    getattr(request.user, "id", None),
-                    getattr(pool, "key", None),
-                )
-                if is_ajax:
-                    return json_error(sanitize_error_message(exc), status=500)
-                messages.error(request, sanitize_error_message(exc))
-            except Exception as exc:
-                logger.exception(
-                    "Unexpected recruit draw error: manor_id=%s user_id=%s pool_key=%s",
-                    getattr(manor, "id", None),
-                    getattr(request.user, "id", None),
-                    getattr(pool, "key", None),
-                )
-                return unexpected_action_error_response(
-                    request,
-                    exc,
-                    is_ajax=is_ajax,
-                    redirect_to="gameplay:recruitment_hall",
-                )
-        finally:
-            _release_recruit_action_lock(lock_key, lock_token)
-        return redirect("gameplay:recruitment_hall")
+        return _run_locked_recruit_action(
+            request=request,
+            manor=manor,
+            is_ajax=is_ajax,
+            lock_action="draw",
+            lock_scope=str(pool.key),
+            operation=_perform_draw,
+            database_log_message="Unexpected recruit draw database error: manor_id=%s user_id=%s pool_key=%s",
+            unexpected_log_message="Unexpected recruit draw error: manor_id=%s user_id=%s pool_key=%s",
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                getattr(pool, "key", None),
+            ),
+        )
 
 
 @login_required
@@ -466,60 +509,33 @@ def accept_candidate_view(request):
         assert selection is not None
 
     lock_scope = _candidate_scope_digest(action, scope, candidate_ids)
-    lock_ok, lock_key, lock_token = _acquire_recruit_action_lock("accept", int(manor.id), lock_scope)
-    if not lock_ok:
-        return _recruitment_hall_response(request, manor, "请求处理中，请稍候重试", is_ajax=is_ajax, status=409)
 
-    try:
-        try:
-            assert selection is not None
-            outcome = execute_candidate_action(
-                action=action,
-                selection=selection,
-                retain_candidates=_retain_candidates,
-                finalize_candidates=_finalize_candidates,
-            )
-            return _candidate_action_success_response(request, manor, outcome, is_ajax=is_ajax)
-        except (GameError, ValueError) as exc:
-            return _recruitment_hall_response(
-                request,
-                manor,
-                sanitize_error_message(exc),
-                is_ajax=is_ajax,
-                status=400,
-            )
-        except DatabaseError as exc:
-            logger.exception(
-                "Unexpected recruit accept database error: manor_id=%s user_id=%s action=%s candidate_count=%s",
-                getattr(manor, "id", None),
-                getattr(request.user, "id", None),
-                action,
-                selection.target_count,
-            )
-            return _recruitment_hall_response(
-                request,
-                manor,
-                sanitize_error_message(exc),
-                is_ajax=is_ajax,
-                status=500,
-            )
-        except Exception as exc:
-            logger.exception(
-                "Unexpected recruit accept error: manor_id=%s user_id=%s action=%s candidate_count=%s",
-                getattr(manor, "id", None),
-                getattr(request.user, "id", None),
-                action,
-                selection.target_count,
-            )
-            return unexpected_action_error_response(
-                request,
-                exc,
-                is_ajax=is_ajax,
-                redirect_to="gameplay:recruitment_hall",
-            )
-    finally:
-        _release_recruit_action_lock(lock_key, lock_token)
-    return redirect("gameplay:recruitment_hall")
+    def _perform_accept() -> HttpResponse:
+        assert selection is not None
+        outcome = execute_candidate_action(
+            action=action,
+            selection=selection,
+            retain_candidates=_retain_candidates,
+            finalize_candidates=_finalize_candidates,
+        )
+        return _candidate_action_success_response(request, manor, outcome, is_ajax=is_ajax)
+
+    return _run_locked_recruit_action(
+        request=request,
+        manor=manor,
+        is_ajax=is_ajax,
+        lock_action="accept",
+        lock_scope=lock_scope,
+        operation=_perform_accept,
+        database_log_message="Unexpected recruit accept database error: manor_id=%s user_id=%s action=%s candidate_count=%s",
+        unexpected_log_message="Unexpected recruit accept error: manor_id=%s user_id=%s action=%s candidate_count=%s",
+        log_args=(
+            getattr(manor, "id", None),
+            getattr(request.user, "id", None),
+            action,
+            selection.target_count,
+        ),
+    )
 
 
 @login_required
@@ -537,70 +553,42 @@ def use_magnifying_glass_view(request):
     if item_id_int is None:
         return _recruitment_hall_response(request, manor, "未找到放大镜道具", is_ajax=is_ajax, status=400)
 
-    lock_ok, lock_key, lock_token = _acquire_recruit_action_lock("reveal", int(manor.id), str(item_id_int))
-    if not lock_ok:
-        return _recruitment_hall_response(request, manor, "请求处理中，请稍候重试", is_ajax=is_ajax, status=409)
+    def _perform_reveal() -> HttpResponse:
+        count = reveal_candidate_rarities(
+            manor=manor,
+            item_id=item_id_int,
+            use_magnifying_glass_for_candidates=use_magnifying_glass_for_candidates,
+        )
+        if count > 0:
+            cache_ok = _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
+            return _recruitment_hall_response(
+                request,
+                manor,
+                f"使用放大镜成功：显现 {count} 位候选门客的稀有度",
+                is_ajax=is_ajax,
+                use_cache=cache_ok,
+            )
+        return _recruitment_hall_response(
+            request,
+            manor,
+            "当前候选门客的稀有度已全部显现",
+            is_ajax=is_ajax,
+            status=400,
+            message_level="info",
+        )
 
-    try:
-        try:
-            count = reveal_candidate_rarities(
-                manor=manor,
-                item_id=item_id_int,
-                use_magnifying_glass_for_candidates=use_magnifying_glass_for_candidates,
-            )
-            if count > 0:
-                cache_ok = _invalidate_recruitment_hall_cache_for_manor(getattr(manor, "id", None))
-                return _recruitment_hall_response(
-                    request,
-                    manor,
-                    f"使用放大镜成功：显现 {count} 位候选门客的稀有度",
-                    is_ajax=is_ajax,
-                    use_cache=cache_ok,
-                )
-            return _recruitment_hall_response(
-                request,
-                manor,
-                "当前候选门客的稀有度已全部显现",
-                is_ajax=is_ajax,
-                status=400,
-                message_level="info",
-            )
-        except (GameError, ValueError) as exc:
-            return _recruitment_hall_response(
-                request,
-                manor,
-                sanitize_error_message(exc),
-                is_ajax=is_ajax,
-                status=400,
-            )
-        except DatabaseError as exc:
-            logger.exception(
-                "Unexpected magnifying-glass database error: manor_id=%s user_id=%s item_id=%s",
-                getattr(manor, "id", None),
-                getattr(request.user, "id", None),
-                item_id_int,
-            )
-            return _recruitment_hall_response(
-                request,
-                manor,
-                sanitize_error_message(exc),
-                is_ajax=is_ajax,
-                status=500,
-            )
-        except Exception as exc:
-            logger.exception(
-                "Unexpected magnifying-glass error: manor_id=%s user_id=%s item_id=%s",
-                getattr(manor, "id", None),
-                getattr(request.user, "id", None),
-                item_id_int,
-            )
-            return unexpected_action_error_response(
-                request,
-                exc,
-                is_ajax=is_ajax,
-                redirect_to="gameplay:recruitment_hall",
-            )
-    finally:
-        _release_recruit_action_lock(lock_key, lock_token)
-
-    return redirect("gameplay:recruitment_hall")
+    return _run_locked_recruit_action(
+        request=request,
+        manor=manor,
+        is_ajax=is_ajax,
+        lock_action="reveal",
+        lock_scope=str(item_id_int),
+        operation=_perform_reveal,
+        database_log_message="Unexpected magnifying-glass database error: manor_id=%s user_id=%s item_id=%s",
+        unexpected_log_message="Unexpected magnifying-glass error: manor_id=%s user_id=%s item_id=%s",
+        log_args=(
+            getattr(manor, "id", None),
+            getattr(request.user, "id", None),
+            item_id_int,
+        ),
+    )

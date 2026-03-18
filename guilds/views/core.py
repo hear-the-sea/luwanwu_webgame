@@ -4,7 +4,6 @@
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 
@@ -178,17 +177,21 @@ def guild_info(request, guild_id):
         return redirect("guilds:detail", guild_id=member.guild_id)
 
     if request.method == "POST":
-        description = request.POST.get("description", "").strip()[:200]
+        description = request.POST.get("description", "")
         auto_accept = request.POST.get("auto_accept") == "on"
 
-        with transaction.atomic():
-            guild = Guild.objects.select_for_update().get(pk=guild.pk)
-            guild.description = description
-            guild.auto_accept = auto_accept
-            guild.save(update_fields=["description", "auto_accept"])
-
-        messages.success(request, "帮会信息已更新")
-        return redirect("guilds:detail", guild_id=guild.id)
+        outcome = execute_guild_action(
+            request,
+            action=lambda: guild_service.update_guild_info(
+                guild=guild,
+                operator=request.user,
+                description=description,
+                auto_accept=auto_accept,
+            ),
+            success_message="帮会信息已更新",
+        )
+        if outcome.succeeded:
+            return redirect("guilds:detail", guild_id=guild.id)
 
     context = {
         "guild": guild,

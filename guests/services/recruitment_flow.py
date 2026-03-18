@@ -8,9 +8,10 @@ from typing import TYPE_CHECKING, Any, Callable
 from django.db import transaction
 
 from common.utils.celery import safe_apply_async
+from gameplay.services.utils.messages import create_message
+from gameplay.services.utils.notifications import notify_user
 
 from ..models import GuestRecruitment
-from .guest_platform import create_message, notify_user
 
 if TYPE_CHECKING:
     from gameplay.models import Manor

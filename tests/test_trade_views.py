@@ -34,6 +34,22 @@ def test_trade_view_creates_manor_when_missing(monkeypatch, client, django_user_
 
 
 @pytest.mark.django_db
+def test_trade_view_tolerates_resource_sync_error(monkeypatch, client, django_user_model):
+    monkeypatch.setattr("trade.views.get_trade_context", lambda *_args, **_kwargs: {"current_tab": "shop"})
+    monkeypatch.setattr(
+        "trade.views.sync_resource_production",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("sync failed")),
+    )
+
+    user = django_user_model.objects.create_user(username="trade_view_sync_err", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    resp = client.get(reverse("trade:trade"))
+    assert resp.status_code == 200
+
+
+@pytest.mark.django_db
 def test_trade_view_renders_bank_degraded_banner_and_disables_exchange(monkeypatch, client, django_user_model):
     user = django_user_model.objects.create_user(username="trade_view_bank_degraded", password="pass12345")
     manor = ensure_manor(user)
