@@ -1,31 +1,16 @@
 from __future__ import annotations
 
-from datetime import timedelta
-
 import pytest
-from django.utils import timezone
 
-from gameplay.models import InventoryItem, ItemTemplate
+from gameplay.models import InventoryItem
 from gameplay.services.manor.core import ensure_manor
-from trade.models import AuctionBid, AuctionRound, AuctionSlot
+from tests.helpers.auction import create_active_round_slot, ensure_gold_bar_template
+from trade.models import AuctionBid
 from trade.services import auction_service
 
 
-def _ensure_gold_bar_template() -> ItemTemplate:
-    template, _ = ItemTemplate.objects.get_or_create(
-        key=auction_service.GOLD_BAR_ITEM_KEY,
-        defaults={
-            "name": "金条",
-            "effect_type": ItemTemplate.EffectType.TOOL,
-            "is_usable": False,
-            "tradeable": False,
-        },
-    )
-    return template
-
-
 def _set_gold_bars(manor, quantity: int) -> None:
-    template = _ensure_gold_bar_template()
+    template = ensure_gold_bar_template()
     InventoryItem.objects.update_or_create(
         manor=manor,
         template=template,
@@ -34,42 +19,12 @@ def _set_gold_bars(manor, quantity: int) -> None:
     )
 
 
-def _create_active_round_and_slot(*, item_key: str, quantity: int = 1) -> AuctionSlot:
-    item_template, _ = ItemTemplate.objects.get_or_create(
-        key=item_key,
-        defaults={
-            "name": "拍卖测试物品",
-            "effect_type": ItemTemplate.EffectType.TOOL,
-            "is_usable": False,
-            "tradeable": False,
-        },
-    )
-    auction_round = AuctionRound.objects.create(
-        round_number=20001,
-        status=AuctionRound.Status.ACTIVE,
-        start_at=timezone.now() - timedelta(hours=1),
-        end_at=timezone.now() + timedelta(hours=1),
-    )
-    slot = AuctionSlot.objects.create(
-        round=auction_round,
-        item_template=item_template,
-        quantity=int(quantity),
-        starting_price=2,
-        current_price=2,
-        min_increment=1,
-        status=AuctionSlot.Status.ACTIVE,
-        config_key=item_template.key,
-        slot_index=0,
-    )
-    return slot
-
-
 @pytest.mark.django_db
 def test_validate_bid_amount_rejects_below_starting_price(django_user_model):
     user = django_user_model.objects.create_user(username="auction_validate", password="pass12345")
     _ = ensure_manor(user)
 
-    slot = _create_active_round_and_slot(item_key="auction_validate_item")
+    slot = create_active_round_slot(item_key="auction_validate_item")
     slot.bid_count = 0
 
     with pytest.raises(ValueError, match="起拍价"):
@@ -84,7 +39,7 @@ def test_place_bid_freezes_and_unfreezes_gold_bars(monkeypatch, django_user_mode
     manor = ensure_manor(user)
     _set_gold_bars(manor, 10)
 
-    slot = _create_active_round_and_slot(item_key="auction_freeze_item")
+    slot = create_active_round_slot(item_key="auction_freeze_item")
 
     bid, is_first = auction_service.place_bid(manor, slot.id, 5)
     assert is_first is True
@@ -115,7 +70,7 @@ def test_place_bid_kicks_out_previous_winner_and_refunds(monkeypatch, django_use
     _set_gold_bars(manor1, 10)
     _set_gold_bars(manor2, 10)
 
-    slot = _create_active_round_and_slot(item_key="auction_kick_item", quantity=1)
+    slot = create_active_round_slot(item_key="auction_kick_item", quantity=1)
 
     bid1, _ = auction_service.place_bid(manor1, slot.id, 5)
     bid2, _ = auction_service.place_bid(manor2, slot.id, 6)
@@ -153,7 +108,7 @@ def test_place_bid_allows_same_player_to_raise_bid_and_unfreezes_previous(monkey
     manor = ensure_manor(user)
     _set_gold_bars(manor, 12)
 
-    slot = _create_active_round_and_slot(item_key="auction_raise_item", quantity=2)
+    slot = create_active_round_slot(item_key="auction_raise_item", quantity=2)
 
     bid1, is_first = auction_service.place_bid(manor, slot.id, 5)
     assert is_first is True
@@ -185,7 +140,7 @@ def test_place_bid_succeeds_when_outbid_notification_fails(monkeypatch, django_u
     _set_gold_bars(manor1, 10)
     _set_gold_bars(manor2, 10)
 
-    slot = _create_active_round_and_slot(item_key="auction_notify_fail_item", quantity=1)
+    slot = create_active_round_slot(item_key="auction_notify_fail_item", quantity=1)
 
     auction_service.place_bid(manor1, slot.id, 5)
     monkeypatch.setattr(
@@ -216,7 +171,7 @@ def test_place_bid_notifies_outbid_player_with_cutoff_price_in_multi_winner_slot
     _set_gold_bars(manor2, 20)
     _set_gold_bars(manor3, 20)
 
-    slot = _create_active_round_and_slot(item_key="auction_cutoff_item", quantity=2)
+    slot = create_active_round_slot(item_key="auction_cutoff_item", quantity=2)
 
     auction_service.place_bid(manor1, slot.id, 10)
     auction_service.place_bid(manor2, slot.id, 9)
@@ -253,7 +208,7 @@ def test_validate_bid_amount_rejects_non_positive_amount(django_user_model):
     user = django_user_model.objects.create_user(username="auction_validate_non_positive", password="pass12345")
     _ = ensure_manor(user)
 
-    slot = _create_active_round_and_slot(item_key="auction_validate_non_positive_item")
+    slot = create_active_round_slot(item_key="auction_validate_non_positive_item")
     slot.bid_count = 0
 
     with pytest.raises(ValueError, match="出价金额必须大于0"):
@@ -265,7 +220,7 @@ def test_place_bid_rejects_invalid_amount_type(django_user_model):
     user = django_user_model.objects.create_user(username="auction_invalid_amount_type", password="pass12345")
     manor = ensure_manor(user)
     _set_gold_bars(manor, 10)
-    slot = _create_active_round_and_slot(item_key="auction_invalid_amount_type_item")
+    slot = create_active_round_slot(item_key="auction_invalid_amount_type_item")
 
     with pytest.raises(ValueError, match="出价金额必须大于0"):
         auction_service.place_bid(manor, slot.id, "invalid")
@@ -276,7 +231,7 @@ def test_place_bid_rejects_invalid_winner_count_configuration(django_user_model)
     user = django_user_model.objects.create_user(username="auction_invalid_winner_count", password="pass12345")
     manor = ensure_manor(user)
     _set_gold_bars(manor, 10)
-    slot = _create_active_round_and_slot(item_key="auction_invalid_winner_count_item", quantity=1)
+    slot = create_active_round_slot(item_key="auction_invalid_winner_count_item", quantity=1)
     slot.quantity = 0
     slot.save(update_fields=["quantity"])
 

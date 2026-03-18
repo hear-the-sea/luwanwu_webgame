@@ -11,6 +11,7 @@ from django.core.cache import cache
 _LOCAL_LOCKS: dict[str, tuple[str, float]] = {}
 _LOCAL_LOCKS_GUARD = Lock()
 _LOCAL_LOCKS_MAX_SIZE = 20000
+_LOCAL_LOCK_KEY_PREFIX = "local:"
 _CACHE_RELEASE_IF_OWNER_SCRIPT = """
 local lock_key = KEYS[1]
 local expected_token = ARGV[1]
@@ -183,6 +184,36 @@ def acquire_best_effort_lock(
         return True, False, lock_token
 
 
+def build_action_lock_key(namespace: str, action: str, owner_id: int, scope: str) -> str:
+    return f"{namespace}:{action}:{int(owner_id)}:{scope}"
+
+
+def acquire_action_lock(
+    namespace: str,
+    action: str,
+    owner_id: int,
+    scope: str,
+    *,
+    timeout_seconds: int,
+    logger: logging.Logger,
+    log_context: str,
+    allow_local_fallback: bool | None = None,
+) -> tuple[bool, str, str | None]:
+    key = build_action_lock_key(namespace, action, owner_id, scope)
+    acquired, from_cache, lock_token = acquire_best_effort_lock(
+        key,
+        timeout_seconds=timeout_seconds,
+        logger=logger,
+        log_context=log_context,
+        allow_local_fallback=allow_local_fallback,
+    )
+    if not acquired:
+        return False, "", None
+    if from_cache:
+        return True, key, lock_token
+    return True, f"{_LOCAL_LOCK_KEY_PREFIX}{key}", lock_token
+
+
 def release_best_effort_lock(
     key: str,
     *,
@@ -220,6 +251,31 @@ def release_best_effort_lock(
         if existing[0] != lock_token:
             return
         _LOCAL_LOCKS.pop(key, None)
+
+
+def release_action_lock(
+    lock_key: str,
+    *,
+    lock_token: str | None,
+    logger: logging.Logger,
+    log_context: str,
+) -> None:
+    if not lock_key:
+        return
+
+    from_cache = True
+    actual_key = lock_key
+    if lock_key.startswith(_LOCAL_LOCK_KEY_PREFIX):
+        from_cache = False
+        actual_key = lock_key[len(_LOCAL_LOCK_KEY_PREFIX) :]
+
+    release_best_effort_lock(
+        actual_key,
+        from_cache=from_cache,
+        lock_token=lock_token,
+        logger=logger,
+        log_context=log_context,
+    )
 
 
 def release_cache_key_if_owner(

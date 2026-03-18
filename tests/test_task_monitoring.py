@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import threading
 
 from django.core.cache import cache
@@ -178,3 +179,33 @@ class TestTaskMonitoringCounters:
 
         assert all(not thread.is_alive() for thread in threads)
         assert store[metric_key] == 2
+
+    def test_get_redis_registry_client_returns_none_when_django_redis_missing(self, monkeypatch):
+        original_import = builtins.__import__
+
+        def _fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "django_redis":
+                raise ImportError("django_redis not installed")
+            return original_import(name, globals, locals, fromlist, level)
+
+        with monkeypatch.context() as context:
+            context.setattr(builtins, "__import__", _fake_import)
+            assert task_monitoring._get_redis_registry_client() is None
+
+    def test_get_redis_registry_client_re_raises_unexpected_import_errors(self, monkeypatch):
+        original_import = builtins.__import__
+
+        def _fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "django_redis":
+                raise RuntimeError("broken import hook")
+            return original_import(name, globals, locals, fromlist, level)
+
+        with monkeypatch.context() as context:
+            context.setattr(builtins, "__import__", _fake_import)
+
+            try:
+                task_monitoring._get_redis_registry_client()
+            except RuntimeError as exc:
+                assert str(exc) == "broken import hook"
+            else:
+                raise AssertionError("expected RuntimeError to bubble up")

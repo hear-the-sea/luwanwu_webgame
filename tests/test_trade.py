@@ -471,7 +471,7 @@ class TestMarketExpire:
         listing.save()
 
         def _raise_message_error(*_args, **_kwargs):
-            raise RuntimeError("message backend down")
+            raise ConnectionError("message backend down")
 
         monkeypatch.setattr(market_service, "send_market_message", _raise_message_error)
 
@@ -504,7 +504,7 @@ class TestMarketExpire:
         listing.save()
 
         def _raise_notify_error(*_args, **_kwargs):
-            raise RuntimeError("ws unavailable")
+            raise OSError("ws unavailable")
 
         monkeypatch.setattr(market_service, "send_market_notification", _raise_notify_error)
 
@@ -515,6 +515,28 @@ class TestMarketExpire:
             manor=seller_manor, template=tradeable_item_template, storage_location="warehouse"
         )
         assert inventory.quantity == initial_quantity
+
+    def test_expire_listings_programming_error_bubbles_up_during_inventory_restore(
+        self, seller_manor, tradeable_item_template, monkeypatch
+    ):
+        listing = market_service.create_listing(
+            manor=seller_manor,
+            item_key="test_tradeable_item",
+            quantity=10,
+            unit_price=2000,
+            duration=7200,
+        )
+        listing.expires_at = timezone.now() - timedelta(hours=1)
+        listing.save()
+
+        monkeypatch.setattr(
+            market_service,
+            "grant_market_item_locked",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("inventory restore bug")),
+        )
+
+        with pytest.raises(RuntimeError, match="inventory restore bug"):
+            market_service.expire_listings()
 
 
 @pytest.mark.django_db

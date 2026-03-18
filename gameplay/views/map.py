@@ -19,7 +19,13 @@ from django.views.generic import TemplateView
 from core.decorators import unexpected_error_response
 from core.exceptions import GameError
 from core.utils import json_error, json_success, parse_json_object, safe_int, safe_positive_int, sanitize_error_message
-from core.utils.cache_lock import acquire_best_effort_lock, release_best_effort_lock
+from core.utils.locked_actions import (
+    ActionLockSpec,
+    acquire_scoped_action_lock,
+    build_scoped_action_lock_key,
+    execute_locked_action,
+    release_scoped_action_lock,
+)
 from core.utils.rate_limit import rate_limit_json
 from gameplay.constants import REGION_CHOICES, UIConstants
 from gameplay.models import Manor as ManorModel
@@ -41,8 +47,14 @@ from gameplay.services.raid.protection import get_protection_status
 from gameplay.services.raid.utils import can_attack_target
 
 MAP_ACTION_LOCK_SECONDS = 5
-_LOCAL_LOCK_PREFIX = "local:"
+MAP_ACTION_LOCK_NAMESPACE = "map:view_lock"
 logger = logging.getLogger(__name__)
+MAP_ACTION_LOCK_SPEC = ActionLockSpec(
+    namespace=MAP_ACTION_LOCK_NAMESPACE,
+    timeout_seconds=MAP_ACTION_LOCK_SECONDS,
+    logger=logger,
+    log_context="map action lock",
+)
 
 
 MapActionResult = TypeVar("MapActionResult")
@@ -85,25 +97,24 @@ def _run_locked_map_json_action(
     log_message: str,
     log_args: tuple[object, ...],
 ) -> HttpResponse:
-    lock_ok, lock_key, lock_token = _acquire_map_action_lock(action_name, int(manor.id), scope)
-    if not lock_ok:
-        return _map_action_conflict_response()
-
-    try:
-        try:
-            result = operation()
-        except (GameError, ValueError) as exc:
-            return _map_known_error_response(exc)
-        except DatabaseError as exc:
-            return _map_unexpected_error_response(
-                request,
-                exc,
-                log_message=log_message,
-                log_args=log_args,
-            )
-        return success_response(result)
-    finally:
-        _release_map_action_lock(lock_key, lock_token)
+    return execute_locked_action(
+        action_name=action_name,
+        owner_id=int(manor.id),
+        scope=scope,
+        acquire_lock_fn=_acquire_map_action_lock,
+        release_lock_fn=_release_map_action_lock,
+        operation=operation,
+        on_lock_conflict=_map_action_conflict_response,
+        on_success=success_response,
+        known_exceptions=(GameError, ValueError),
+        on_known_error=_map_known_error_response,
+        on_database_error=lambda exc: _map_unexpected_error_response(
+            request,
+            exc,
+            log_message=log_message,
+            log_args=log_args,
+        ),
+    )
 
 
 def _resolve_attack_fields_from_info(info: dict, viewer_manor, target_manor) -> tuple[bool, str]:
@@ -148,43 +159,15 @@ def _request_target_manor_or_error(
 
 
 def _map_action_lock_key(action: str, manor_id: int, scope: str) -> str:
-    return f"map:view_lock:{action}:{manor_id}:{scope}"
+    return build_scoped_action_lock_key(MAP_ACTION_LOCK_SPEC, action, manor_id, scope)
 
 
 def _acquire_map_action_lock(action: str, manor_id: int, scope: str) -> tuple[bool, str, str | None]:
-    key = _map_action_lock_key(action, manor_id, scope)
-    acquired, from_cache, lock_token = acquire_best_effort_lock(
-        key,
-        timeout_seconds=MAP_ACTION_LOCK_SECONDS,
-        logger=logger,
-        log_context="map action lock",
-    )
-    if not acquired:
-        return False, "", None
-    if from_cache:
-        return True, key, lock_token
-    return True, f"{_LOCAL_LOCK_PREFIX}{key}", lock_token
+    return acquire_scoped_action_lock(MAP_ACTION_LOCK_SPEC, action, manor_id, scope)
 
 
 def _release_map_action_lock(lock_key: str, lock_token: str | None) -> None:
-    if not lock_key:
-        return
-    if lock_key.startswith(_LOCAL_LOCK_PREFIX):
-        release_best_effort_lock(
-            lock_key[len(_LOCAL_LOCK_PREFIX) :],
-            from_cache=False,
-            lock_token=lock_token,
-            logger=logger,
-            log_context="map action lock",
-        )
-        return
-    release_best_effort_lock(
-        lock_key,
-        from_cache=True,
-        lock_token=lock_token,
-        logger=logger,
-        log_context="map action lock",
-    )
+    release_scoped_action_lock(MAP_ACTION_LOCK_SPEC, lock_key, lock_token)
 
 
 class MapView(LoginRequiredMixin, TemplateView):

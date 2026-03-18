@@ -7,6 +7,7 @@ from typing import Any, Callable, Dict, Generator, List
 
 from django.db import transaction
 
+from core.utils.task_monitoring import increment_degraded_counter
 from guests.guest_combat_stats import is_live_guest_model
 from guests.models import Guest, GuestStatus
 
@@ -19,160 +20,35 @@ from .combatants_pkg import (
     normalize_troop_loadout,
 )
 from .constants import DEFAULT_BATTLE_TYPE, MAX_SQUAD
+from .defender_setup import build_defender_guest_and_loadout as _build_defender_guest_and_loadout_from_sources
+from .deployment import BATTLE_ORPHANED_DEPLOYED_RECOVERY_COUNTER as _BATTLE_ORPHANED_DEPLOYED_RECOVERY_COUNTER
+from .deployment import collect_active_deployment_guest_ids as _collect_active_deployment_guest_ids_from_deployment
+from .deployment import find_orphaned_deployed_guest_ids as _find_orphaned_deployed_guest_ids_from_deployment
+from .deployment import record_orphaned_guest_recovery as _record_orphaned_guest_recovery_from_deployment
+from .deployment import recover_orphaned_deployed_guests as _recover_orphaned_deployed_guests_from_deployment
+from .deployment import (
+    recover_orphaned_locked_guest_statuses as _recover_orphaned_locked_guest_statuses_from_deployment,
+)
 from .execution import BattleOptions
 from .execution import execute_battle as _execute_battle
+from .locking import collect_guest_ids as _collect_guest_ids
+from .locking import collect_manor_ids as _collect_manor_ids
+from .locking import load_locked_battle_participants as _load_locked_battle_participants_from_locking
+from .locking import lock_guest_rows as _lock_guest_rows
+from .locking import lock_manor_rows as _lock_manor_rows
+from .locking import mark_locked_guests_deployed as _mark_locked_guests_deployed
+from .locking import refresh_guest_instances as _refresh_guest_instances
+from .locking import release_deployed_guests as _release_deployed_guests
+from .locking import validate_locked_guest_statuses as _validate_locked_guest_statuses
 from .models import BattleReport
+from .setup import build_battle_options as _build_battle_options
+from .setup import resolve_attacker_guests_for_battle as _resolve_attacker_guests
 
 logger = logging.getLogger(__name__)
+BATTLE_ORPHANED_DEPLOYED_RECOVERY_COUNTER = _BATTLE_ORPHANED_DEPLOYED_RECOVERY_COUNTER
 
 _extract_defender_tech_profile = _execution._extract_defender_tech_profile
 validate_troop_capacity = _execution.validate_troop_capacity
-
-
-def _collect_guest_ids(guests: List[Guest]) -> list[int]:
-    return [int(guest.id) for guest in guests if guest.pk]
-
-
-def _collect_manor_ids(manor, *guest_groups: List[Guest] | None) -> list[int]:
-    manor_ids: set[int] = set()
-    if getattr(manor, "pk", None):
-        manor_ids.add(int(manor.pk))
-
-    for guests in guest_groups:
-        for guest in guests or []:
-            guest_manor_id = getattr(guest, "manor_id", None)
-            if guest_manor_id is None:
-                guest_manor = getattr(guest, "manor", None)
-                guest_manor_id = getattr(guest_manor, "pk", None)
-            if guest_manor_id is None:
-                continue
-            try:
-                parsed_id = int(guest_manor_id)
-            except (TypeError, ValueError):
-                continue
-            if parsed_id > 0:
-                manor_ids.add(parsed_id)
-    return sorted(manor_ids)
-
-
-def _lock_manor_rows(manor_ids: list[int]) -> None:
-    if not manor_ids:
-        return
-
-    from gameplay.models import Manor
-
-    locked_ids = set(
-        Manor.objects.select_for_update().filter(pk__in=manor_ids).order_by("id").values_list("id", flat=True)
-    )
-    missing_ids = [manor_id for manor_id in manor_ids if manor_id not in locked_ids]
-    if missing_ids:
-        raise ValueError("部分庄园不存在，无法执行战斗")
-
-
-def _lock_guest_rows(guest_ids: list[int]) -> list[Guest]:
-    # Enforce ordering to prevent deadlocks
-    return list(Guest.objects.select_for_update().filter(id__in=guest_ids).order_by("id"))
-
-
-def _validate_locked_guest_statuses(locked_guests: list[Guest]) -> None:
-    for guest in locked_guests:
-        if guest.status == GuestStatus.DEPLOYED:
-            raise ValueError(f"门客 {guest.display_name} 正在战斗中，请稍后再试")
-        if guest.status == GuestStatus.WORKING:
-            raise ValueError(f"门客 {guest.display_name} 正在打工中，无法出征")
-        if guest.status == GuestStatus.INJURED:
-            raise ValueError(f"门客 {guest.display_name} 处于重伤状态，请先治疗")
-
-
-def _collect_active_deployment_guest_ids(candidate_ids: list[int]) -> set[int]:
-    if not candidate_ids:
-        return set()
-
-    from gameplay.models import ArenaEntry, ArenaEntryGuest, ArenaTournament, MissionRun, RaidRun
-
-    active_ids = set(
-        MissionRun.objects.filter(status=MissionRun.Status.ACTIVE, guests__id__in=candidate_ids).values_list(
-            "guests__id", flat=True
-        )
-    )
-    active_ids.update(
-        RaidRun.objects.filter(
-            status__in=[
-                RaidRun.Status.MARCHING,
-                RaidRun.Status.BATTLING,
-                RaidRun.Status.RETURNING,
-                RaidRun.Status.RETREATED,
-            ],
-            guests__id__in=candidate_ids,
-        ).values_list("guests__id", flat=True)
-    )
-    active_ids.update(
-        ArenaEntryGuest.objects.filter(
-            guest_id__in=candidate_ids,
-            entry__status=ArenaEntry.Status.REGISTERED,
-            entry__tournament__status__in=[
-                ArenaTournament.Status.RECRUITING,
-                ArenaTournament.Status.RUNNING,
-            ],
-        ).values_list("guest_id", flat=True)
-    )
-    return active_ids
-
-
-def _find_orphaned_deployed_guest_ids(candidate_ids: list[int]) -> list[int]:
-    if not candidate_ids:
-        return []
-    active_ids = _collect_active_deployment_guest_ids(candidate_ids)
-    return [guest_id for guest_id in candidate_ids if guest_id not in active_ids]
-
-
-def recover_orphaned_deployed_guests(*, guest_ids: list[int] | None = None) -> int:
-    deployed_guests = Guest.objects.filter(status=GuestStatus.DEPLOYED)
-    if guest_ids is not None:
-        deployed_guests = deployed_guests.filter(id__in=guest_ids)
-
-    candidate_ids = list(deployed_guests.order_by("id").values_list("id", flat=True))
-    if not candidate_ids:
-        return 0
-
-    orphaned_ids = _find_orphaned_deployed_guest_ids(candidate_ids)
-    if not orphaned_ids:
-        return 0
-
-    recovered_count = Guest.objects.filter(id__in=orphaned_ids, status=GuestStatus.DEPLOYED).update(
-        status=GuestStatus.IDLE
-    )
-    if recovered_count:
-        logger.warning(
-            "Recovered orphaned deployed guests before battle reuse: guest_ids=%s count=%s",
-            orphaned_ids,
-            recovered_count,
-        )
-    return recovered_count
-
-
-def _recover_orphaned_locked_guest_statuses(locked_guests: list[Guest]) -> int:
-    deployed_ids = [
-        guest.id for guest in locked_guests if getattr(guest, "status", None) == GuestStatus.DEPLOYED and guest.id
-    ]
-    orphaned_ids = set(_find_orphaned_deployed_guest_ids(deployed_ids))
-    if not orphaned_ids:
-        return 0
-
-    recovered_count = Guest.objects.filter(id__in=orphaned_ids, status=GuestStatus.DEPLOYED).update(
-        status=GuestStatus.IDLE
-    )
-    if recovered_count:
-        logger.warning(
-            "Recovered orphaned deployed guests before battle reuse: guest_ids=%s count=%s",
-            sorted(orphaned_ids),
-            recovered_count,
-        )
-
-    for guest in locked_guests:
-        if guest.id in orphaned_ids and getattr(guest, "status", None) == GuestStatus.DEPLOYED:
-            guest.status = GuestStatus.IDLE
-    return recovered_count
 
 
 def _load_locked_battle_participants(
@@ -181,150 +57,50 @@ def _load_locked_battle_participants(
     primary_guest_ids: list[int],
     secondary_guest_ids: list[int],
 ) -> tuple[list[Guest], list[Guest], list[Guest]]:
-    locked_guests = _lock_guest_rows(guest_ids)
-    locked_guest_map = {guest.id: guest for guest in locked_guests}
-    missing_guest_ids = [guest_id for guest_id in guest_ids if guest_id not in locked_guest_map]
-    if missing_guest_ids:
-        raise ValueError("部分门客不存在，无法执行战斗")
-
-    locked_primary = [locked_guest_map[guest_id] for guest_id in primary_guest_ids]
-    locked_secondary = [locked_guest_map[guest_id] for guest_id in secondary_guest_ids]
-    locked_participants = list({guest.id: guest for guest in locked_primary + locked_secondary}.values())
-    return locked_primary, locked_secondary, locked_participants
+    return _load_locked_battle_participants_from_locking(
+        guest_ids,
+        primary_guest_ids=primary_guest_ids,
+        secondary_guest_ids=secondary_guest_ids,
+        lock_guest_rows_fn=_lock_guest_rows,
+    )
 
 
-def _mark_locked_guests_deployed(locked_guests: list[Guest]) -> None:
-    for guest in locked_guests:
-        guest.status = GuestStatus.DEPLOYED
-    if locked_guests:
-        Guest.objects.bulk_update(locked_guests, ["status"])
+def _collect_active_deployment_guest_ids(candidate_ids: list[int]) -> set[int]:
+    return _collect_active_deployment_guest_ids_from_deployment(candidate_ids)
 
 
-def _refresh_guest_instances(guests: List[Guest]) -> None:
-    for guest in guests:
-        if guest.pk:
-            guest.refresh_from_db()
+def _find_orphaned_deployed_guest_ids(candidate_ids: list[int]) -> list[int]:
+    return _find_orphaned_deployed_guest_ids_from_deployment(candidate_ids)
 
 
-def _release_deployed_guests(guest_ids: list[int]) -> None:
-    Guest.objects.filter(id__in=guest_ids, status=GuestStatus.DEPLOYED).update(status=GuestStatus.IDLE)
+def _record_orphaned_guest_recovery(orphaned_ids: list[int], recovered_count: int) -> None:
+    _record_orphaned_guest_recovery_from_deployment(
+        orphaned_ids,
+        recovered_count,
+        logger_override=logger,
+        increment_counter_fn=increment_degraded_counter,
+    )
 
 
-def _validate_attacker_guest_ownership(manor, guests: List[Guest]) -> None:
-    manor_pk = getattr(manor, "pk", None)
-    if not manor_pk:
-        return
-
-    unresolved_ids: list[int] = []
-    for guest in guests:
-        guest_pk = getattr(guest, "pk", None)
-        if not guest_pk:
-            continue
-        is_snapshot_proxy = bool(getattr(guest, "is_battle_snapshot_proxy", False))
-
-        guest_manor_id = getattr(guest, "manor_id", None)
-        if guest_manor_id is None:
-            guest_manor = getattr(guest, "manor", None)
-            guest_manor_id = getattr(guest_manor, "pk", None)
-
-        if guest_manor_id is None:
-            if is_snapshot_proxy:
-                # Historical snapshot replay should not depend on current DB ownership.
-                continue
-            unresolved_ids.append(int(guest_pk))
-            continue
-
-        try:
-            parsed_manor_id = int(guest_manor_id)
-        except (TypeError, ValueError):
-            if is_snapshot_proxy:
-                continue
-            unresolved_ids.append(int(guest_pk))
-            continue
-
-        if parsed_manor_id != int(manor_pk):
-            raise ValueError("攻击方门客必须属于当前庄园")
-
-    if not unresolved_ids:
-        return
-
-    owned_ids = set(Guest.objects.filter(id__in=unresolved_ids, manor_id=manor_pk).values_list("id", flat=True))
-    if len(owned_ids) != len(set(unresolved_ids)):
-        raise ValueError("攻击方门客必须属于当前庄园")
+def recover_orphaned_deployed_guests(*, guest_ids: list[int] | None = None) -> int:
+    return _recover_orphaned_deployed_guests_from_deployment(
+        guest_model=Guest,
+        deployed_status=GuestStatus.DEPLOYED,
+        idle_status=GuestStatus.IDLE,
+        guest_ids=guest_ids,
+        find_orphaned_deployed_guest_ids_fn=_find_orphaned_deployed_guest_ids,
+        record_orphaned_guest_recovery_fn=_record_orphaned_guest_recovery,
+    )
 
 
-def _select_default_attacker_guests(manor, limit: int) -> list[Guest]:
-    guest_qs = manor.guests.select_related("template").prefetch_related("skills")
-    total_guests = guest_qs.count()
-    guests = list(guest_qs.filter(status=GuestStatus.IDLE).order_by("-template__rarity", "-level")[:limit])
-    if guests:
-        return guests
-
-    if total_guests > 0:
-        injured_count = guest_qs.filter(status=GuestStatus.INJURED).count()
-        if injured_count > 0:
-            raise ValueError(f"有{injured_count}名门客处于重伤状态，请使用药品治疗后再出征")
-        raise ValueError("仅空闲门客可出征，请先让门客空闲后再尝试战斗")
-    raise ValueError("请先招募门客后再尝试战斗")
-
-
-def _resolve_attacker_guests(manor, attacker_guests: List[Guest] | None, limit: int) -> tuple[list[Guest], list[Guest]]:
-    if attacker_guests is None:
-        guests = _select_default_attacker_guests(manor, limit)
-    else:
-        guests = attacker_guests
-        if not guests:
-            raise ValueError("请选择可出征的门客")
-        _validate_attacker_guest_ownership(manor, guests)
-    return guests, guests[:limit]
-
-
-def _build_battle_options(
-    *,
-    battle_type: str,
-    seed: int | None,
-    troop_loadout: Dict[str, int] | None,
-    fill_default_troops: bool,
-    defender_setup: Dict[str, Any] | None,
-    defender_guests: List[Guest] | None,
-    defender_limit: int,
-    drop_table: Dict[str, Any] | None,
-    opponent_name: str | None,
-    travel_seconds: int | None,
-    auto_reward: bool,
-    drop_handler: Callable[[Dict[str, int]], None] | None,
-    rng_source: random.Random | None,
-    send_message: bool,
-    limit: int,
-    apply_damage: bool,
-    attacker_tech_levels: Dict[str, int] | None,
-    attacker_guest_bonuses: Dict[str, float] | None,
-    attacker_guest_skills: List[str] | None,
-    attacker_manor,
-    validate_attacker_troop_capacity: bool,
-) -> BattleOptions:
-    return BattleOptions(
-        battle_type=battle_type,
-        seed=seed,
-        troop_loadout=troop_loadout,
-        fill_default_troops=fill_default_troops,
-        defender_setup=defender_setup,
-        defender_guests=defender_guests,
-        defender_limit=defender_limit,
-        drop_table=drop_table,
-        opponent_name=opponent_name,
-        travel_seconds=travel_seconds,
-        auto_reward=auto_reward,
-        drop_handler=drop_handler,
-        rng_source=rng_source,
-        send_message=send_message,
-        limit=limit,
-        apply_damage=apply_damage,
-        attacker_tech_levels=attacker_tech_levels,
-        attacker_guest_bonuses=attacker_guest_bonuses,
-        attacker_guest_skills=attacker_guest_skills,
-        attacker_manor=attacker_manor,
-        validate_attacker_troop_capacity=validate_attacker_troop_capacity,
+def _recover_orphaned_locked_guest_statuses(locked_guests: list[Guest]) -> int:
+    return _recover_orphaned_locked_guest_statuses_from_deployment(
+        locked_guests,
+        guest_model=Guest,
+        deployed_status=GuestStatus.DEPLOYED,
+        idle_status=GuestStatus.IDLE,
+        find_orphaned_deployed_guest_ids_fn=_find_orphaned_deployed_guest_ids,
+        record_orphaned_guest_recovery_fn=_record_orphaned_guest_recovery,
     )
 
 
@@ -353,48 +129,26 @@ def _build_defender_guest_and_loadout(
     defender_guest_bonuses: Dict[str, float],
     defender_guest_skills: List[str] | None,
 ):
-    if defender_guests is not None:
-        from guests.services.health import recover_guest_hp
+    from guests.services.health import recover_guest_hp
 
-        for guest in defender_guests[:defender_limit]:
-            if is_live_guest_model(guest) and guest.pk:
-                recover_guest_hp(guest, now=now)
-        defender_guests_comb = build_guest_combatants(defender_guests, side="defender", limit=defender_limit)
-        loadout_raw = defender_setup.get("troop_loadout") if isinstance(defender_setup, dict) else None
-        defender_loadout = normalize_troop_loadout(
-            loadout_raw if isinstance(loadout_raw, dict) else None,
-            default_if_empty=fill_default_troops,
-        )
-        return defender_guests_comb, defender_loadout
-
-    if isinstance(defender_setup, dict):
-        guest_keys_raw = defender_setup.get("guest_keys")
-        loadout_raw = defender_setup.get("troop_loadout")
-        guest_keys: list[str | Dict[str, Any]] = []
-        if isinstance(guest_keys_raw, (list, tuple, set)):
-            for entry in guest_keys_raw:
-                if isinstance(entry, str) and entry.strip():
-                    guest_keys.append(entry.strip())
-                elif isinstance(entry, dict):
-                    guest_keys.append(entry)
-        defender_templates = build_named_ai_guests(guest_keys, level=defender_guest_level)
-        defender_guests_comb = build_guest_combatants(
-            defender_templates,
-            side="defender",
-            limit=defender_limit,
-            stat_bonuses=defender_guest_bonuses,
-            override_skill_keys=defender_guest_skills,
-        )
-        defender_loadout = normalize_troop_loadout(
-            loadout_raw if isinstance(loadout_raw, dict) else None,
-            default_if_empty=fill_default_troops,
-        )
-        return defender_guests_comb, defender_loadout
-
-    defender_loadout = generate_ai_loadout(rng)
-    ai_guest_pool = build_ai_guests(rng)
-    defender_guests_comb = build_guest_combatants(ai_guest_pool, side="defender", limit=defender_limit)
-    return defender_guests_comb, defender_loadout
+    return _build_defender_guest_and_loadout_from_sources(
+        defender_guests=defender_guests,
+        defender_setup=defender_setup,
+        defender_limit=defender_limit,
+        fill_default_troops=fill_default_troops,
+        rng=rng,
+        now=now,
+        defender_guest_level=defender_guest_level,
+        defender_guest_bonuses=defender_guest_bonuses,
+        defender_guest_skills=defender_guest_skills,
+        is_live_guest_model_fn=is_live_guest_model,
+        recover_guest_hp_fn=recover_guest_hp,
+        build_guest_combatants_fn=build_guest_combatants,
+        build_named_ai_guests_fn=build_named_ai_guests,
+        generate_ai_loadout_fn=generate_ai_loadout,
+        normalize_troop_loadout_fn=normalize_troop_loadout,
+        build_ai_guests_fn=build_ai_guests,
+    )
 
 
 @contextmanager

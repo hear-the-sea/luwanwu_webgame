@@ -249,6 +249,7 @@ web_game_v5/
 6. 运行测试：
    - 单元/默认测试道：`pytest -m "not integration"`（或 `make test` / `make test-unit`）
    - 外部服务集成测试道：`DJANGO_TEST_USE_ENV_SERVICES=1 pytest -m integration`（或 `make test-integration`）
+   - 固定验收流程：`DJANGO_TEST_USE_ENV_SERVICES=1 make test-gates`（先跑 hermetic，再跑真实外部服务 gate）
    - 默认测试道会自动切到内存 SQLite/locmem/in-memory channel layer；`integration` 测试才会验证外部 MySQL/Redis/Celery/Channels 依赖。
    - 当前仓库还没有独立的 profile/performance 测试道。
 7. Docker 一键拉起全栈依赖（API/Worker/MySQL/Redis/Channels）：

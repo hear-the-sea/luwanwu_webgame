@@ -4,7 +4,7 @@ LOCAL_STATE_DIR ?= .local
 FLAKE8_TARGETS ?= accounts battle gameplay guests guilds trade core websocket config tests
 MYPY_TARGETS ?= accounts battle common config core gameplay guests guilds tasks trade websocket
 
-.PHONY: install install-unpinned install-lock install-dev-lock migrate bootstrap-data dev dev-ws worker beat test test-unit test-critical test-integration test-all format lint lint-strict check clean lock lock-dev
+.PHONY: install install-unpinned install-lock install-dev-lock migrate bootstrap-data dev dev-ws worker beat test test-unit test-unit-cov test-critical test-integration test-all format lint lint-strict check clean lock lock-dev test-real-services test-gates cov cov-html
 
 install:
 	@if [ -f requirements-dev.lock.txt ]; then \
@@ -54,24 +54,51 @@ beat:
 	mkdir -p $(LOCAL_STATE_DIR)
 	celery -A config beat -l info --schedule $(LOCAL_STATE_DIR)/celerybeat-schedule
 
-# Default to the hermetic unit-like suite, then surface critical concurrency coverage explicitly.
+# Default to the hermetic unit-like suite, then document the real-service gate explicitly.
 test:
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	@echo "  Running hermetic unit tests (SQLite / LocMem / InMemory channel layer)"
 	@echo "  NOT verified: select_for_update row-locking, Redis semantics, real Channels"
-	@echo "  For full coverage: make test-integration  (requires Docker / real services)"
+	@echo "  Real external-service gate lives behind 'make test-real-services' (DJANGO_TEST_USE_ENV_SERVICES=1)"
+	@echo "  Run 'make test-integration' if you only need the integration marker suite."
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-	@$(MAKE) test-unit test-critical
+	@$(MAKE) test-unit
 
 test-unit:
 	$(PYTHON) -m pytest -m "not integration"
+
+test-unit-cov:
+	$(PYTHON) -m coverage run -m pytest -m "not integration"
+	$(PYTHON) -m coverage report -m
 
 test-critical:
 	@if [ "$$DJANGO_TEST_USE_ENV_SERVICES" = "1" ]; then \
 		$(PYTHON) -m pytest tests/test_raid_concurrency_integration.py tests/test_work_service_concurrency.py -q; \
 	else \
-		echo "Skipping critical concurrency integration tests; set DJANGO_TEST_USE_ENV_SERVICES=1 to enable non-SQLite verification."; \
+		echo "Skipping critical concurrency integration tests; set DJANGO_TEST_USE_ENV_SERVICES=1 (or run 'make test-real-services') to enable non-SQLite verification."; \
 	fi
+
+test-real-services:
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "  Running real external-service gate (DJANGO_TEST_USE_ENV_SERVICES=1)"
+	@echo "  This includes the critical concurrency regression plus the integration marker suite."
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@DJANGO_TEST_USE_ENV_SERVICES=1 $(MAKE) test-critical
+	@DJANGO_TEST_USE_ENV_SERVICES=1 $(MAKE) test-integration
+
+test-gates:
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "  Running the fixed verification workflow:"
+	@echo "  1. Hermetic rapid gate"
+	@echo "  2. Real external-service gate"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@$(MAKE) test-unit
+	@if [ "$$DJANGO_TEST_USE_ENV_SERVICES" != "1" ]; then \
+		echo "Refusing to skip the real external-service gate."; \
+		echo "Re-run with DJANGO_TEST_USE_ENV_SERVICES=1 make test-gates"; \
+		exit 2; \
+	fi
+	@$(MAKE) test-real-services
 
 test-integration:
 	DJANGO_TEST_USE_ENV_SERVICES=1 $(PYTHON) -m pytest -m integration -q
@@ -80,11 +107,11 @@ test-all:
 	$(PYTHON) -m pytest
 
 cov:
-	$(PYTHON) -m coverage run -m pytest
+	$(PYTHON) -m coverage run -m pytest -m "not integration"
 	$(PYTHON) -m coverage report -m
 
 cov-html:
-	$(PYTHON) -m coverage run -m pytest
+	$(PYTHON) -m coverage run -m pytest -m "not integration"
 	$(PYTHON) -m coverage html
 	@echo "Open htmlcov/index.html"
 

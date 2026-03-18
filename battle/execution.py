@@ -24,6 +24,7 @@ from .combatants_pkg import (
     serialize_guest_for_report,
 )
 from .constants import DEFAULT_BATTLE_TYPE, MAX_SQUAD, get_battle_config
+from .defender_setup import build_defender_guest_and_loadout as _build_defender_guest_and_loadout_from_sources
 from .models import BattleReport
 from .rewards import dispatch_battle_message, grant_battle_rewards
 from .simulation_core import build_rng, simulate_battle
@@ -74,26 +75,6 @@ def _normalize_skill_keys(raw: Any) -> List[str] | None:
     return keys or None
 
 
-def _normalize_guest_configs(raw: Any) -> List[str | Dict[str, Any]]:
-    if not isinstance(raw, (list, tuple, set)):
-        return []
-    normalized: List[str | Dict[str, Any]] = []
-    for entry in raw:
-        if isinstance(entry, str):
-            key = entry.strip()
-            if key:
-                normalized.append(key)
-        elif isinstance(entry, dict):
-            normalized.append(entry)
-    return normalized
-
-
-def _normalize_troop_loadout_input(raw: Any) -> Dict[str, int] | None:
-    if isinstance(raw, dict):
-        return raw
-    return None
-
-
 def _recover_guest_hp_batch(guests: List[Any], now) -> None:
     for guest in guests:
         if is_live_guest_model(guest) and guest.pk:
@@ -141,37 +122,24 @@ def _build_defender_guest_and_loadout(
     defender_guest_bonuses: Dict[str, float],
     defender_guest_skills: List[str] | None,
 ) -> tuple[list[Combatant], Dict[str, int]]:
-    normalized_setup = _normalize_mapping(defender_setup)
-
-    if defender_guests is not None:
-        _recover_guest_hp_batch(defender_guests[:defender_limit], now)
-        defender_guests_comb = build_guest_combatants(defender_guests, side="defender", limit=defender_limit)
-        defender_loadout = normalize_troop_loadout(
-            _normalize_troop_loadout_input(normalized_setup.get("troop_loadout")),
-            default_if_empty=fill_default_troops,
-        )
-        return defender_guests_comb, defender_loadout
-
-    if normalized_setup:
-        defender_guest_keys = _normalize_guest_configs(normalized_setup.get("guest_keys"))
-        defender_templates = build_named_ai_guests(defender_guest_keys, level=defender_guest_level)
-        defender_guests_comb = build_guest_combatants(
-            defender_templates,
-            side="defender",
-            limit=defender_limit,
-            stat_bonuses=defender_guest_bonuses,
-            override_skill_keys=defender_guest_skills,
-        )
-        defender_loadout = normalize_troop_loadout(
-            _normalize_troop_loadout_input(normalized_setup.get("troop_loadout")),
-            default_if_empty=fill_default_troops,
-        )
-        return defender_guests_comb, defender_loadout
-
-    defender_loadout = generate_ai_loadout(rng)
-    ai_guest_pool = build_ai_guests(rng)
-    defender_guests_comb = build_guest_combatants(ai_guest_pool, side="defender", limit=defender_limit)
-    return defender_guests_comb, defender_loadout
+    return _build_defender_guest_and_loadout_from_sources(
+        defender_guests=defender_guests,
+        defender_setup=defender_setup,
+        defender_limit=defender_limit,
+        fill_default_troops=fill_default_troops,
+        rng=rng,
+        now=now,
+        defender_guest_level=defender_guest_level,
+        defender_guest_bonuses=defender_guest_bonuses,
+        defender_guest_skills=defender_guest_skills,
+        is_live_guest_model_fn=is_live_guest_model,
+        recover_guest_hp_fn=recover_guest_hp,
+        build_guest_combatants_fn=build_guest_combatants,
+        build_named_ai_guests_fn=build_named_ai_guests,
+        generate_ai_loadout_fn=generate_ai_loadout,
+        normalize_troop_loadout_fn=normalize_troop_loadout,
+        build_ai_guests_fn=build_ai_guests,
+    )
 
 
 def validate_troop_capacity(guests: List[Guest], troop_loadout: Dict[str, int]) -> None:

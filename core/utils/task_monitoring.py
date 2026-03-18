@@ -98,7 +98,7 @@ def _get_redis_registry_client() -> Any | None:
     """Return the default Redis client when django-redis is available."""
     try:
         from django_redis import get_redis_connection
-    except Exception:
+    except ImportError:
         return None
 
     try:

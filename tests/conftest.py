@@ -4,10 +4,12 @@ Pytest 配置和共享 fixtures
 
 import os
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from django.conf import settings
 from django.core.management import call_command
 from django.db import transaction
 from django.test import Client
@@ -18,6 +20,22 @@ from gameplay.services.manor.core import ensure_manor
 
 # 获取项目根目录
 PROJECT_ROOT = Path(__file__).parent.parent
+
+
+def _test_gate_mode() -> str:
+    if os.environ.get("DJANGO_TEST_USE_ENV_SERVICES", "0") == "1":
+        return "real-external-services"
+    return getattr(settings, "TEST_GATE_MODE", "hermetic")
+
+
+def _test_gate_description(mode: str) -> str:
+    if mode == "real-external-services":
+        return "Real external-service semantics (non-hermetic dependencies)."
+    return getattr(
+        settings,
+        "TEST_GATE_DESCRIPTION",
+        "Hermetic rapid gate (SQLite, LocMem cache, InMemoryChannelLayer, memory Celery).",
+    )
 
 
 def _require_non_sqlite_database(settings) -> None:
@@ -165,6 +183,38 @@ def manor_with_user(authenticated_client):
     return manor, authenticated_client
 
 
+@pytest.fixture
+def user_factory(django_user_model):
+    def _create_user(**overrides):
+        username = overrides.pop("username", f"test_user_{uuid4().hex[:8]}")
+        password = overrides.pop("password", "testpass123")
+        return django_user_model.objects.create_user(username=username, password=password, **overrides)
+
+    return _create_user
+
+
+@pytest.fixture
+def auth_client_factory(user_factory):
+    def _create_client(**user_overrides):
+        user = user_factory(**user_overrides)
+        client = Client()
+        assert client.login(username=user.username, password=user_overrides.get("password", "testpass123"))
+        client.user = user
+        return client, user
+
+    return _create_client
+
+
+@pytest.fixture
+def manor_factory(user_factory):
+    def _create_manor(**user_overrides):
+        user = user_factory(**user_overrides)
+        manor = ensure_manor(user)
+        return manor, user
+
+    return _create_manor
+
+
 @pytest.fixture(scope="session")
 def require_env_services():
     """Skip integration tests unless external DB/cache/channel/celery services are enabled."""
@@ -180,3 +230,15 @@ def require_env_services():
     _require_external_cache_backend(settings, cache)
     _require_external_channel_layer(settings, get_channel_layer())
     _require_external_celery_broker(celery_app)
+
+
+def pytest_report_header(config):
+    gate_mode = _test_gate_mode()
+    if gate_mode == "real-external-services":
+        return (
+            "Test gate: real external-service semantics (DJANGO_TEST_USE_ENV_SERVICES=1). "
+            "Use 'make test-real-services' to run this gate."
+        )
+
+    description = _test_gate_description(gate_mode)
+    return f"Test gate: {description}. Run 'make test-real-services' for real external services."

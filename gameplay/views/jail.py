@@ -19,7 +19,13 @@ from django.views.generic import TemplateView
 
 from core.exceptions import GameError
 from core.utils import json_error, json_success, parse_json_object, safe_positive_int
-from core.utils.cache_lock import acquire_best_effort_lock, release_best_effort_lock
+from core.utils.locked_actions import (
+    ActionLockSpec,
+    acquire_scoped_action_lock,
+    build_scoped_action_lock_key,
+    execute_locked_action,
+    release_scoped_action_lock,
+)
 from core.utils.rate_limit import rate_limit_json
 from core.utils.validation import sanitize_error_message
 from gameplay.constants import PVPConstants, get_raid_capture_guest_rate
@@ -37,49 +43,26 @@ from guests.query_utils import guest_template_rarity_rank_case
 
 logger = logging.getLogger(__name__)
 JAIL_ACTION_LOCK_SECONDS = 5
-_LOCAL_LOCK_PREFIX = "local:"
+JAIL_ACTION_LOCK_NAMESPACE = "jail:view_lock"
+JAIL_ACTION_LOCK_SPEC = ActionLockSpec(
+    namespace=JAIL_ACTION_LOCK_NAMESPACE,
+    timeout_seconds=JAIL_ACTION_LOCK_SECONDS,
+    logger=logger,
+    log_context="jail action lock",
+)
 JailActionResult = TypeVar("JailActionResult")
 
 
 def _jail_action_lock_key(action: str, manor_id: int, scope: str) -> str:
-    return f"jail:view_lock:{action}:{manor_id}:{scope}"
+    return build_scoped_action_lock_key(JAIL_ACTION_LOCK_SPEC, action, manor_id, scope)
 
 
 def _acquire_jail_action_lock(action: str, manor_id: int, scope: str) -> tuple[bool, str, str | None]:
-    key = _jail_action_lock_key(action, manor_id, scope)
-    acquired, from_cache, lock_token = acquire_best_effort_lock(
-        key,
-        timeout_seconds=JAIL_ACTION_LOCK_SECONDS,
-        logger=logger,
-        log_context="jail action lock",
-        allow_local_fallback=False,
-    )
-    if not acquired:
-        return False, "", None
-    if from_cache:
-        return True, key, lock_token
-    return True, f"{_LOCAL_LOCK_PREFIX}{key}", lock_token
+    return acquire_scoped_action_lock(JAIL_ACTION_LOCK_SPEC, action, manor_id, scope)
 
 
 def _release_jail_action_lock(lock_key: str, lock_token: str | None) -> None:
-    if not lock_key:
-        return
-    if lock_key.startswith(_LOCAL_LOCK_PREFIX):
-        release_best_effort_lock(
-            lock_key[len(_LOCAL_LOCK_PREFIX) :],
-            from_cache=False,
-            lock_token=lock_token,
-            logger=logger,
-            log_context="jail action lock",
-        )
-        return
-    release_best_effort_lock(
-        lock_key,
-        from_cache=True,
-        lock_token=lock_token,
-        logger=logger,
-        log_context="jail action lock",
-    )
+    release_scoped_action_lock(JAIL_ACTION_LOCK_SPEC, lock_key, lock_token)
 
 
 def _oath_guest_id_from_json_or_error(request: HttpRequest) -> tuple[int | None, JsonResponse | None]:
@@ -134,21 +117,22 @@ def _execute_locked_jail_action(
     log_message: str,
     log_args: tuple[object, ...],
 ) -> HttpResponse:
-    lock_ok, lock_key, lock_token = _acquire_jail_action_lock(action_name, int(manor.id), scope)
-    if not lock_ok:
-        return on_lock_conflict()
-
-    try:
-        try:
-            result = operation()
-        except (GameError, ValueError) as exc:
-            return on_known_error(exc)
-        except DatabaseError as exc:
-            logger.exception(log_message, *log_args)
-            return on_database_error(exc)
-        return on_success(result)
-    finally:
-        _release_jail_action_lock(lock_key, lock_token)
+    return execute_locked_action(
+        action_name=action_name,
+        owner_id=int(manor.id),
+        scope=scope,
+        acquire_lock_fn=_acquire_jail_action_lock,
+        release_lock_fn=_release_jail_action_lock,
+        operation=operation,
+        on_lock_conflict=on_lock_conflict,
+        on_success=on_success,
+        known_exceptions=(GameError, ValueError),
+        on_known_error=on_known_error,
+        on_database_error=lambda exc: (
+            logger.exception(log_message, *log_args),
+            on_database_error(exc),
+        )[1],
+    )
 
 
 def _run_locked_redirect_action(

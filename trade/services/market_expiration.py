@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.db.models import QuerySet
 from django.utils import timezone
 
@@ -123,8 +123,8 @@ def expire_listings_queryset(
                 log_context="market expired notification",
                 log_message="market notify_user failed",
             )
-        except Exception as exc:
-            logger.exception("%s %s 时出错: %s", log_label, listing_id, exc)
+        except DatabaseError as exc:
+            logger.exception("%s %s 时数据库操作出错: %s", log_label, listing_id, exc)
             continue
 
     return count

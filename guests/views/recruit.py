@@ -10,7 +10,6 @@ from collections.abc import Callable
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db import DatabaseError
 from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.utils.decorators import method_decorator
@@ -19,7 +18,13 @@ from django.views.generic import TemplateView
 
 from core.exceptions import GameError
 from core.utils import is_json_request, json_error, json_success, safe_positive_int, sanitize_error_message
-from core.utils.cache_lock import acquire_best_effort_lock, release_best_effort_lock
+from core.utils.locked_actions import (
+    ActionLockSpec,
+    acquire_scoped_action_lock,
+    build_scoped_action_lock_key,
+    execute_locked_action,
+    release_scoped_action_lock,
+)
 from core.utils.rate_limit import rate_limit_redirect
 
 from ..forms import RecruitForm
@@ -42,7 +47,13 @@ RECRUIT_ACTION_LOCK_SECONDS = 5
 ALLOWED_CANDIDATE_ACTIONS = frozenset({"accept", "retain", "discard"})
 ALLOWED_CANDIDATE_SCOPES = frozenset({"selected", "all"})
 RECRUIT_SUCCESS_NAME_PREVIEW_LIMIT = 12
-_LOCAL_LOCK_PREFIX = "local:"
+RECRUIT_ACTION_LOCK_NAMESPACE = "recruit:view_lock"
+RECRUIT_ACTION_LOCK_SPEC = ActionLockSpec(
+    namespace=RECRUIT_ACTION_LOCK_NAMESPACE,
+    timeout_seconds=RECRUIT_ACTION_LOCK_SECONDS,
+    logger=logger,
+    log_context="recruit action lock",
+)
 
 
 def _load_selected_candidates(manor, candidate_ids):
@@ -95,44 +106,15 @@ def _invalidate_recruitment_hall_cache_for_manor(manor_id: int | None) -> bool:
 
 
 def _recruit_action_lock_key(action: str, manor_id: int, scope: str) -> str:
-    return f"recruit:view_lock:{action}:{manor_id}:{scope}"
+    return build_scoped_action_lock_key(RECRUIT_ACTION_LOCK_SPEC, action, manor_id, scope)
 
 
 def _acquire_recruit_action_lock(action: str, manor_id: int, scope: str) -> tuple[bool, str, str | None]:
-    key = _recruit_action_lock_key(action, manor_id, scope)
-    acquired, from_cache, lock_token = acquire_best_effort_lock(
-        key,
-        timeout_seconds=RECRUIT_ACTION_LOCK_SECONDS,
-        logger=logger,
-        log_context="recruit action lock",
-        allow_local_fallback=False,
-    )
-    if not acquired:
-        return False, "", None
-    if from_cache:
-        return True, key, lock_token
-    return True, f"{_LOCAL_LOCK_PREFIX}{key}", lock_token
+    return acquire_scoped_action_lock(RECRUIT_ACTION_LOCK_SPEC, action, manor_id, scope)
 
 
 def _release_recruit_action_lock(lock_key: str, lock_token: str | None) -> None:
-    if not lock_key:
-        return
-    if lock_key.startswith(_LOCAL_LOCK_PREFIX):
-        release_best_effort_lock(
-            lock_key[len(_LOCAL_LOCK_PREFIX) :],
-            from_cache=False,
-            lock_token=lock_token,
-            logger=logger,
-            log_context="recruit action lock",
-        )
-        return
-    release_best_effort_lock(
-        lock_key,
-        from_cache=True,
-        lock_token=lock_token,
-        logger=logger,
-        log_context="recruit action lock",
-    )
+    release_scoped_action_lock(RECRUIT_ACTION_LOCK_SPEC, lock_key, lock_token)
 
 
 def _candidate_action_lock_scope(manor_id: int) -> str:
@@ -162,42 +144,46 @@ def _run_locked_recruit_action(
     unexpected_log_message: str,
     log_args: tuple[object, ...],
 ) -> HttpResponse:
-    lock_ok, lock_key, lock_token = _acquire_recruit_action_lock(lock_action, int(manor.id), lock_scope)
-    if not lock_ok:
-        return _recruit_action_lock_conflict_response(request, manor, is_ajax=is_ajax)
-
-    try:
-        try:
-            return operation()
-        except (GameError, ValueError) as exc:
-            return _recruitment_hall_response(
-                request,
-                manor,
-                sanitize_error_message(exc),
-                is_ajax=is_ajax,
-                status=400,
-                message_level="error",
-            )
-        except DatabaseError as exc:
-            logger.exception(database_log_message, *log_args)
-            return _recruitment_hall_response(
+    return execute_locked_action(
+        action_name=lock_action,
+        owner_id=int(manor.id),
+        scope=lock_scope,
+        acquire_lock_fn=_acquire_recruit_action_lock,
+        release_lock_fn=_release_recruit_action_lock,
+        operation=operation,
+        on_lock_conflict=lambda: _recruit_action_lock_conflict_response(request, manor, is_ajax=is_ajax),
+        on_success=lambda response: response,
+        known_exceptions=(GameError, ValueError),
+        on_known_error=lambda exc: _recruitment_hall_response(
+            request,
+            manor,
+            sanitize_error_message(exc),
+            is_ajax=is_ajax,
+            status=400,
+            message_level="error",
+        ),
+        on_database_error=lambda exc: (
+            logger.exception(database_log_message, *log_args),
+            _recruitment_hall_response(
                 request,
                 manor,
                 sanitize_error_message(exc),
                 is_ajax=is_ajax,
                 status=500,
                 message_level="error",
-            )
-        except Exception as exc:
-            logger.exception(unexpected_log_message, *log_args)
-            return unexpected_action_error_response(
+            ),
+        )[1],
+        on_unexpected_error=lambda exc: (
+            logger.exception(unexpected_log_message, *log_args),
+            unexpected_action_error_response(
                 request,
                 exc,
                 is_ajax=is_ajax,
                 redirect_to="gameplay:recruitment_hall",
-            )
-    finally:
-        _release_recruit_action_lock(lock_key, lock_token)
+            ),
+        )[1],
+        unexpected_exceptions=(Exception,),
+    )
 
 
 def _normalize_candidate_action(raw_action: str | None) -> str | None:

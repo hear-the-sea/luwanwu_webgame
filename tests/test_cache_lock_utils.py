@@ -5,6 +5,10 @@ import logging
 import core.utils.cache_lock as cache_lock
 
 
+def test_build_action_lock_key_uses_namespace_action_owner_and_scope():
+    assert cache_lock.build_action_lock_key("map:view_lock", "start_raid", 12, "88") == "map:view_lock:start_raid:12:88"
+
+
 def test_cache_lock_falls_back_to_local_lock_when_cache_unavailable(monkeypatch):
     class _BrokenCache:
         def add(self, *_args, **_kwargs):
@@ -54,6 +58,95 @@ def test_cache_lock_falls_back_to_local_lock_when_cache_unavailable(monkeypatch)
     assert bool(token_3)
 
     cache_lock._LOCAL_LOCKS.clear()
+
+
+def test_action_lock_wraps_local_fallback_key_and_releases_it(monkeypatch):
+    class _BrokenCache:
+        def add(self, *_args, **_kwargs):
+            raise RuntimeError("cache down")
+
+        def delete(self, *_args, **_kwargs):
+            raise RuntimeError("cache down")
+
+    logger = logging.getLogger(__name__)
+    cache_lock._LOCAL_LOCKS.clear()
+    monkeypatch.setattr(cache_lock, "cache", _BrokenCache())
+
+    acquired, lock_key, lock_token = cache_lock.acquire_action_lock(
+        "recruit:view_lock",
+        "draw",
+        7,
+        "pool-a",
+        timeout_seconds=5,
+        logger=logger,
+        log_context="test action lock",
+    )
+
+    assert acquired is True
+    assert lock_key == "local:recruit:view_lock:draw:7:pool-a"
+    assert bool(lock_token)
+
+    cache_lock.release_action_lock(
+        lock_key,
+        lock_token=lock_token,
+        logger=logger,
+        log_context="test action lock",
+    )
+
+    reacquired, second_key, second_token = cache_lock.acquire_action_lock(
+        "recruit:view_lock",
+        "draw",
+        7,
+        "pool-a",
+        timeout_seconds=5,
+        logger=logger,
+        log_context="test action lock",
+    )
+
+    assert reacquired is True
+    assert second_key == lock_key
+    assert bool(second_token)
+    cache_lock._LOCAL_LOCKS.clear()
+
+
+def test_action_lock_uses_cache_key_when_cache_is_available(monkeypatch):
+    class _FakeCache:
+        def __init__(self):
+            self._keys: dict[str, str] = {}
+
+        def add(self, key, value, *_args, **_kwargs):
+            if key in self._keys:
+                return False
+            self._keys[key] = value
+            return True
+
+        def get(self, key, default=None):
+            return self._keys.get(key, default)
+
+        def make_key(self, key):
+            return key
+
+        def delete(self, key):
+            self._keys.pop(key, None)
+            return True
+
+    logger = logging.getLogger(__name__)
+    monkeypatch.setattr(cache_lock, "cache", _FakeCache())
+
+    acquired, lock_key, lock_token = cache_lock.acquire_action_lock(
+        "jail:view_lock",
+        "release_api",
+        3,
+        "45",
+        timeout_seconds=5,
+        logger=logger,
+        log_context="test action lock",
+        allow_local_fallback=False,
+    )
+
+    assert acquired is True
+    assert lock_key == "jail:view_lock:release_api:3:45"
+    assert bool(lock_token)
 
 
 def test_cache_lock_can_fail_closed_when_local_fallback_disabled(monkeypatch):

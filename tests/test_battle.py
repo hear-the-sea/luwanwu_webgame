@@ -5,6 +5,7 @@ from django.utils import timezone
 
 from battle.models import BattleReport
 from battle.services import (
+    BATTLE_ORPHANED_DEPLOYED_RECOVERY_COUNTER,
     _build_defender_guest_and_loadout,
     _extract_defender_tech_profile,
     recover_orphaned_deployed_guests,
@@ -324,6 +325,25 @@ def test_recover_orphaned_deployed_guests_resets_untracked_guest(game_data, djan
     assert any(
         "Recovered orphaned deployed guests before battle reuse" in record.getMessage() for record in caplog.records
     )
+    assert any(BATTLE_ORPHANED_DEPLOYED_RECOVERY_COUNTER in record.getMessage() for record in caplog.records)
+
+
+@pytest.mark.django_db
+def test_recover_orphaned_deployed_guests_records_monitoring_signal(game_data, django_user_model, monkeypatch):
+    user = django_user_model.objects.create_user(username="battle_recover_monitor", password="pass123")
+    manor = ensure_manor(user)
+    _recruit_frontline(manor, draws=1)
+    guest = manor.guests.first()
+    guest.status = GuestStatus.DEPLOYED
+    guest.save(update_fields=["status"])
+
+    calls: list[str] = []
+    monkeypatch.setattr("battle.services.increment_degraded_counter", lambda component: calls.append(component))
+
+    recovered = recover_orphaned_deployed_guests(guest_ids=[guest.id])
+
+    assert recovered == 1
+    assert calls == [BATTLE_ORPHANED_DEPLOYED_RECOVERY_COUNTER]
 
 
 @pytest.mark.django_db

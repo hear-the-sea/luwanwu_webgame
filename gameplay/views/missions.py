@@ -20,6 +20,7 @@ from django.views.generic import TemplateView
 
 from core.exceptions import GameError
 from core.utils import safe_int
+from core.utils.locked_actions import execute_locked_action
 from gameplay.constants import UIConstants
 from gameplay.models import MissionRun, MissionTemplate, ResourceType
 from gameplay.services.inventory.core import get_item_quantity
@@ -212,39 +213,53 @@ class AcceptMissionView(LoginRequiredMixin, TemplateView):
                         return mission_helpers.mission_tasks_redirect(mission.key)
                     raw_loadout[item["key"]] = quantity
 
-        lock_ok, lock_key, lock_token = mission_helpers.acquire_mission_action_lock(
-            "accept", int(manor.id), mission.key
-        )
-        if not lock_ok:
-            messages.warning(request, "任务请求处理中，请稍候重试")
+        def _perform_accept() -> None:
+            loadout = normalize_mission_loadout(raw_loadout) if raw_loadout else {}
+            launch_mission(manor, mission, guest_ids, loadout)
+            if mission.is_defense:
+                messages.success(request, f"{mission.name} 已进入防守，战报稍后送达。")
+            else:
+                messages.success(request, f"{mission.name} 已出征，战报稍后送达。")
+
+        def _mission_redirect() -> HttpResponse:
             return mission_helpers.mission_tasks_redirect(mission.key)
 
-        try:
-            try:
-                loadout = normalize_mission_loadout(raw_loadout) if raw_loadout else {}
-                launch_mission(manor, mission, guest_ids, loadout)
-                if mission.is_defense:
-                    messages.success(request, f"{mission.name} 已进入防守，战报稍后送达。")
-                else:
-                    messages.success(request, f"{mission.name} 已出征，战报稍后送达。")
-            except (GameError, ValueError) as exc:
-                mission_helpers.handle_known_mission_error(request, exc)
-            except DatabaseError as exc:
-                mission_helpers.handle_unexpected_mission_error(
-                    request,
-                    exc,
-                    log_message="Unexpected mission accept error: manor_id=%s user_id=%s mission_key=%s mission_id=%s",
-                    log_args=(
-                        getattr(manor, "id", None),
-                        getattr(request.user, "id", None),
-                        mission.key,
-                        getattr(mission, "id", None),
-                    ),
-                    logger_instance=logger,
-                )
-        finally:
-            mission_helpers.release_mission_action_lock(lock_key, lock_token)
-        return mission_helpers.mission_tasks_redirect(mission.key)
+        def _on_lock_conflict() -> HttpResponse:
+            messages.warning(request, "任务请求处理中，请稍候重试")
+            return _mission_redirect()
+
+        def _on_known_error(exc: BaseException) -> HttpResponse:
+            mission_helpers.handle_known_mission_error(request, exc)
+            return _mission_redirect()
+
+        def _on_database_error(exc: DatabaseError) -> HttpResponse:
+            mission_helpers.handle_unexpected_mission_error(
+                request,
+                exc,
+                log_message="Unexpected mission accept error: manor_id=%s user_id=%s mission_key=%s mission_id=%s",
+                log_args=(
+                    getattr(manor, "id", None),
+                    getattr(request.user, "id", None),
+                    mission.key,
+                    getattr(mission, "id", None),
+                ),
+                logger_instance=logger,
+            )
+            return _mission_redirect()
+
+        return execute_locked_action(
+            action_name="accept",
+            owner_id=int(manor.id),
+            scope=mission.key,
+            acquire_lock_fn=mission_helpers.acquire_mission_action_lock,
+            release_lock_fn=mission_helpers.release_mission_action_lock,
+            on_lock_conflict=_on_lock_conflict,
+            operation=_perform_accept,
+            on_success=lambda _result: _mission_redirect(),
+            known_exceptions=(GameError, ValueError),
+            on_known_error=_on_known_error,
+            on_database_error=_on_database_error,
+        )
 
 
 @login_required
@@ -257,36 +272,51 @@ def retreat_mission_view(request: HttpRequest, pk: int) -> HttpResponse:
         pk=pk,
         status=MissionRun.Status.ACTIVE,
     )
-    lock_ok, lock_key, lock_token = mission_helpers.acquire_mission_action_lock(
-        "retreat_mission", int(manor.id), str(pk)
-    )
-    if not lock_ok:
-        messages.warning(request, "任务请求处理中，请稍候重试")
+
+    def _dashboard_redirect() -> HttpResponse:
         return redirect("gameplay:dashboard")
 
-    try:
-        try:
-            request_retreat(run)
-            eta = run.return_at.strftime("%H:%M:%S") if run.return_at else ""
-            messages.info(request, f"{run.mission.name} 已撤退，预计返程：{eta}")
-        except (GameError, ValueError) as exc:
-            mission_helpers.handle_known_mission_error(request, exc)
-        except DatabaseError as exc:
-            mission_helpers.handle_unexpected_mission_error(
-                request,
-                exc,
-                log_message="Unexpected mission retreat error: manor_id=%s user_id=%s run_id=%s mission_id=%s",
-                log_args=(
-                    getattr(manor, "id", None),
-                    getattr(request.user, "id", None),
-                    pk,
-                    getattr(run, "mission_id", None),
-                ),
-                logger_instance=logger,
-            )
-    finally:
-        mission_helpers.release_mission_action_lock(lock_key, lock_token)
-    return redirect("gameplay:dashboard")
+    def _perform_retreat() -> None:
+        request_retreat(run)
+        eta = run.return_at.strftime("%H:%M:%S") if run.return_at else ""
+        messages.info(request, f"{run.mission.name} 已撤退，预计返程：{eta}")
+
+    def _on_lock_conflict() -> HttpResponse:
+        messages.warning(request, "任务请求处理中，请稍候重试")
+        return _dashboard_redirect()
+
+    def _on_known_error(exc: BaseException) -> HttpResponse:
+        mission_helpers.handle_known_mission_error(request, exc)
+        return _dashboard_redirect()
+
+    def _on_database_error(exc: DatabaseError) -> HttpResponse:
+        mission_helpers.handle_unexpected_mission_error(
+            request,
+            exc,
+            log_message="Unexpected mission retreat error: manor_id=%s user_id=%s run_id=%s mission_id=%s",
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                pk,
+                getattr(run, "mission_id", None),
+            ),
+            logger_instance=logger,
+        )
+        return _dashboard_redirect()
+
+    return execute_locked_action(
+        action_name="retreat_mission",
+        owner_id=int(manor.id),
+        scope=str(pk),
+        acquire_lock_fn=mission_helpers.acquire_mission_action_lock,
+        release_lock_fn=mission_helpers.release_mission_action_lock,
+        on_lock_conflict=_on_lock_conflict,
+        operation=_perform_retreat,
+        on_success=lambda _result: _dashboard_redirect(),
+        known_exceptions=(GameError, ValueError),
+        on_known_error=_on_known_error,
+        on_database_error=_on_database_error,
+    )
 
 
 @login_required
@@ -303,33 +333,50 @@ def retreat_scout_view(request: HttpRequest, pk: int) -> HttpResponse:
         attacker=manor,
         status=ScoutRecord.Status.SCOUTING,
     )
-    lock_ok, lock_key, lock_token = mission_helpers.acquire_mission_action_lock("retreat_scout", int(manor.id), str(pk))
-    if not lock_ok:
-        messages.warning(request, "任务请求处理中，请稍候重试")
+
+    def _home_redirect() -> HttpResponse:
         return redirect("home")
 
-    try:
-        try:
-            request_scout_retreat(record)
-            messages.info(request, f"侦察 {record.defender.display_name} 已撤退，探子正在返程")
-        except (GameError, ValueError) as exc:
-            mission_helpers.handle_known_mission_error(request, exc)
-        except DatabaseError as exc:
-            mission_helpers.handle_unexpected_mission_error(
-                request,
-                exc,
-                log_message="Unexpected scout retreat error: manor_id=%s user_id=%s record_id=%s defender_id=%s",
-                log_args=(
-                    getattr(manor, "id", None),
-                    getattr(request.user, "id", None),
-                    pk,
-                    getattr(record, "defender_id", None),
-                ),
-                logger_instance=logger,
-            )
-    finally:
-        mission_helpers.release_mission_action_lock(lock_key, lock_token)
-    return redirect("home")
+    def _perform_retreat() -> None:
+        request_scout_retreat(record)
+        messages.info(request, f"侦察 {record.defender.display_name} 已撤退，探子正在返程")
+
+    def _on_lock_conflict() -> HttpResponse:
+        messages.warning(request, "任务请求处理中，请稍候重试")
+        return _home_redirect()
+
+    def _on_known_error(exc: BaseException) -> HttpResponse:
+        mission_helpers.handle_known_mission_error(request, exc)
+        return _home_redirect()
+
+    def _on_database_error(exc: DatabaseError) -> HttpResponse:
+        mission_helpers.handle_unexpected_mission_error(
+            request,
+            exc,
+            log_message="Unexpected scout retreat error: manor_id=%s user_id=%s record_id=%s defender_id=%s",
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                pk,
+                getattr(record, "defender_id", None),
+            ),
+            logger_instance=logger,
+        )
+        return _home_redirect()
+
+    return execute_locked_action(
+        action_name="retreat_scout",
+        owner_id=int(manor.id),
+        scope=str(pk),
+        acquire_lock_fn=mission_helpers.acquire_mission_action_lock,
+        release_lock_fn=mission_helpers.release_mission_action_lock,
+        on_lock_conflict=_on_lock_conflict,
+        operation=_perform_retreat,
+        on_success=lambda _result: _home_redirect(),
+        known_exceptions=(GameError, ValueError),
+        on_known_error=_on_known_error,
+        on_database_error=_on_database_error,
+    )
 
 
 @login_required
@@ -349,39 +396,53 @@ def use_mission_card_view(request: HttpRequest) -> HttpResponse:
     if mission is None:
         return mission_helpers.mission_tasks_redirect()
 
-    lock_ok, lock_key, lock_token = mission_helpers.acquire_mission_action_lock("use_card", int(manor.id), mission.key)
-    if not lock_ok:
-        messages.warning(request, "任务请求处理中，请稍候重试")
+    def _mission_redirect() -> HttpResponse:
         return mission_helpers.mission_tasks_redirect(mission.key)
 
-    try:
-        try:
-            # 使用事务确保原子性：消耗任务卡和增加次数必须同时成功或同时失败
-            with transaction.atomic():
-                # 消耗任务卡（内部会检查数量并抛出异常）
-                from gameplay.services.inventory.core import consume_inventory_item_for_manor_locked
+    def _perform_use_card() -> None:
+        # 使用事务确保原子性：消耗任务卡和增加次数必须同时成功或同时失败
+        with transaction.atomic():
+            # 消耗任务卡（内部会检查数量并抛出异常）
+            from gameplay.services.inventory.core import consume_inventory_item_for_manor_locked
 
-                consume_inventory_item_for_manor_locked(manor, mission_helpers.MISSION_CARD_KEY, 1)
-                # 增加额外次数
-                add_mission_extra_attempt(manor, mission, 1)
-            messages.success(request, f"使用任务卡成功，{mission.name} 今日次数+1")
-        except (GameError, ValueError) as exc:
-            # 任务卡不足等业务错误
-            mission_helpers.handle_known_mission_error(request, exc)
-        except DatabaseError as exc:
-            mission_helpers.handle_unexpected_mission_error(
-                request,
-                exc,
-                log_message="Unexpected mission card use error: manor_id=%s user_id=%s mission_key=%s mission_id=%s",
-                log_args=(
-                    getattr(manor, "id", None),
-                    getattr(request.user, "id", None),
-                    mission.key,
-                    getattr(mission, "id", None),
-                ),
-                logger_instance=logger,
-            )
-    finally:
-        mission_helpers.release_mission_action_lock(lock_key, lock_token)
+            consume_inventory_item_for_manor_locked(manor, mission_helpers.MISSION_CARD_KEY, 1)
+            # 增加额外次数
+            add_mission_extra_attempt(manor, mission, 1)
+        messages.success(request, f"使用任务卡成功，{mission.name} 今日次数+1")
 
-    return mission_helpers.mission_tasks_redirect(mission.key)
+    def _on_lock_conflict() -> HttpResponse:
+        messages.warning(request, "任务请求处理中，请稍候重试")
+        return _mission_redirect()
+
+    def _on_known_error(exc: BaseException) -> HttpResponse:
+        mission_helpers.handle_known_mission_error(request, exc)
+        return _mission_redirect()
+
+    def _on_database_error(exc: DatabaseError) -> HttpResponse:
+        mission_helpers.handle_unexpected_mission_error(
+            request,
+            exc,
+            log_message="Unexpected mission card use error: manor_id=%s user_id=%s mission_key=%s mission_id=%s",
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                mission.key,
+                getattr(mission, "id", None),
+            ),
+            logger_instance=logger,
+        )
+        return _mission_redirect()
+
+    return execute_locked_action(
+        action_name="use_card",
+        owner_id=int(manor.id),
+        scope=mission.key,
+        acquire_lock_fn=mission_helpers.acquire_mission_action_lock,
+        release_lock_fn=mission_helpers.release_mission_action_lock,
+        on_lock_conflict=_on_lock_conflict,
+        operation=_perform_use_card,
+        on_success=lambda _result: _mission_redirect(),
+        known_exceptions=(GameError, ValueError),
+        on_known_error=_on_known_error,
+        on_database_error=_on_database_error,
+    )

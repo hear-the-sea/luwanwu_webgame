@@ -11,14 +11,25 @@ from django.urls import reverse
 from core.decorators import flash_unexpected_view_error
 from core.exceptions import GameError
 from core.utils import safe_int, sanitize_error_message
-from core.utils.cache_lock import acquire_best_effort_lock, release_best_effort_lock
+from core.utils.locked_actions import (
+    ActionLockSpec,
+    acquire_scoped_action_lock,
+    build_scoped_action_lock_key,
+    release_scoped_action_lock,
+)
 from gameplay.models import MissionTemplate
 
 logger = logging.getLogger(__name__)
 
 MISSION_CARD_KEY = "mission_card"
 MISSION_ACTION_LOCK_SECONDS = 5
-_LOCAL_LOCK_PREFIX = "local:"
+MISSION_ACTION_LOCK_NAMESPACE = "mission:view_lock"
+MISSION_ACTION_LOCK_SPEC = ActionLockSpec(
+    namespace=MISSION_ACTION_LOCK_NAMESPACE,
+    timeout_seconds=MISSION_ACTION_LOCK_SECONDS,
+    logger=logger,
+    log_context="mission action lock",
+)
 
 
 def handle_unexpected_mission_error(
@@ -94,43 +105,15 @@ def parse_positive_ids(raw_values: list[str]) -> list[int] | None:
 
 
 def mission_action_lock_key(action: str, manor_id: int, scope: str) -> str:
-    return f"mission:view_lock:{action}:{manor_id}:{scope}"
+    return build_scoped_action_lock_key(MISSION_ACTION_LOCK_SPEC, action, manor_id, scope)
 
 
 def acquire_mission_action_lock(action: str, manor_id: int, scope: str) -> tuple[bool, str, str | None]:
-    key = mission_action_lock_key(action, manor_id, scope)
-    acquired, from_cache, lock_token = acquire_best_effort_lock(
-        key,
-        timeout_seconds=MISSION_ACTION_LOCK_SECONDS,
-        logger=logger,
-        log_context="mission action lock",
-    )
-    if not acquired:
-        return False, "", None
-    if from_cache:
-        return True, key, lock_token
-    return True, f"{_LOCAL_LOCK_PREFIX}{key}", lock_token
+    return acquire_scoped_action_lock(MISSION_ACTION_LOCK_SPEC, action, manor_id, scope)
 
 
 def release_mission_action_lock(lock_key: str, lock_token: str | None) -> None:
-    if not lock_key:
-        return
-    if lock_key.startswith(_LOCAL_LOCK_PREFIX):
-        release_best_effort_lock(
-            lock_key[len(_LOCAL_LOCK_PREFIX) :],
-            from_cache=False,
-            lock_token=lock_token,
-            logger=logger,
-            log_context="mission action lock",
-        )
-        return
-    release_best_effort_lock(
-        lock_key,
-        from_cache=True,
-        lock_token=lock_token,
-        logger=logger,
-        log_context="mission action lock",
-    )
+    release_scoped_action_lock(MISSION_ACTION_LOCK_SPEC, lock_key, lock_token)
 
 
 def collect_mission_asset_keys(missions: list[MissionTemplate]) -> tuple[set[str], set[str], set[str]]:

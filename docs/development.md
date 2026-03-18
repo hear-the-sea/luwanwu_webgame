@@ -281,6 +281,7 @@ REDIS_CACHE_URL=redis://127.0.0.1:6379/2
 | `make test` | 运行默认单元测试道（排除 `integration`） |
 | `make test-unit` | 同 `make test`，显式运行单元测试道 |
 | `make test-integration` | 运行依赖外部 MySQL/Redis/Celery/Channels 的集成测试 |
+| `DJANGO_TEST_USE_ENV_SERVICES=1 make test-gates` | 固定验收流程：先跑 hermetic，再跑真实外部服务 gate |
 | `make format` | 格式化代码（black + isort） |
 | `make lock` | 生成运行时锁文件 |
 | `make lock-dev` | 生成开发依赖锁文件 |
@@ -405,6 +406,8 @@ tests/
 | Infra-backed 集成测试 | `DJANGO_TEST_USE_ENV_SERVICES=1 make test-integration` | MySQL + Redis + 真实 Celery broker / Channels transport | 真实依赖交互、一致性边界、跨进程并发、外部基础设施降级与恢复路径 | 性能/容量上限仍需额外压测或 profile 测试 |
 
 `make test-critical` 是一个便捷目标，不是单独的验收层级；它只是在启用外部服务时补跑若干并发敏感用例，不能替代完整的 `make test-integration` 门禁。
+
+建议把 `DJANGO_TEST_USE_ENV_SERVICES=1 make test-gates` 作为提交高风险改动前的固定流程。该命令会先跑 hermetic rapid gate，再强制执行真实外部服务 gate；如果没有启用 `DJANGO_TEST_USE_ENV_SERVICES=1`，命令会直接失败，而不是静默跳过第二层验证。
 
 **Hermetic 套件主要回答的问题：**
 

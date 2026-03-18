@@ -1,13 +1,57 @@
 from __future__ import annotations
 
+from django.db import DatabaseError
 
-def safe_send_market_message(*, create_message_func, logger, log_message: str, **kwargs) -> bool:
+INFRASTRUCTURE_RUNTIME_ERROR_MARKERS = (
+    "backend",
+    "cache",
+    "channel",
+    "connection",
+    "down",
+    "redis",
+    "timeout",
+    "unavailable",
+    "ws",
+)
+
+MARKET_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS: tuple[type[BaseException], ...] = (
+    DatabaseError,
+    ConnectionError,
+    OSError,
+    TimeoutError,
+)
+
+
+def _is_infrastructure_runtime_error(exc: Exception) -> bool:
+    if not isinstance(exc, RuntimeError):
+        return False
+    message = str(exc).lower()
+    return any(marker in message for marker in INFRASTRUCTURE_RUNTIME_ERROR_MARKERS)
+
+
+def safe_send_market_message(
+    *,
+    create_message_func,
+    logger,
+    log_message: str,
+    infrastructure_exceptions: tuple[type[BaseException], ...] = MARKET_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
+    **kwargs,
+) -> bool:
     try:
         create_message_func(**kwargs)
-    except Exception as exc:
+        return True
+    except infrastructure_exceptions as exc:
         logger.warning("%s: %s", log_message, exc, exc_info=True)
         return False
-    return True
+    except RuntimeError as exc:
+        if _is_infrastructure_runtime_error(exc):
+            logger.warning("%s: %s", log_message, exc, exc_info=True)
+            return False
+        logger.exception("%s: unexpected error", log_message)
+        raise
+    except Exception:
+        logger.exception("%s: unexpected error", log_message)
+        raise
 
 
 def safe_send_market_notification(
@@ -18,11 +62,33 @@ def safe_send_market_notification(
     payload: dict,
     log_context: str,
     log_message: str,
+    infrastructure_exceptions: tuple[type[BaseException], ...] = MARKET_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
 ) -> None:
     try:
         notify_user_func(user_id, payload, log_context=log_context)
-    except Exception as exc:
-        logger.warning("%s: user_id=%s error=%s", log_message, user_id, exc, exc_info=True)
+    except infrastructure_exceptions as exc:
+        logger.warning(
+            "%s: user_id=%s error=%s",
+            log_message,
+            user_id,
+            exc,
+            exc_info=True,
+        )
+    except RuntimeError as exc:
+        if _is_infrastructure_runtime_error(exc):
+            logger.warning(
+                "%s: user_id=%s error=%s",
+                log_message,
+                user_id,
+                exc,
+                exc_info=True,
+            )
+            return
+        logger.exception("%s unexpected notification error: user_id=%s", log_message, user_id)
+        raise
+    except Exception:
+        logger.exception("%s unexpected notification error: user_id=%s", log_message, user_id)
+        raise
 
 
 def send_purchase_notifications(

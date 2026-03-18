@@ -9,6 +9,8 @@ import os
 import tempfile
 
 logger = logging.getLogger(__name__)
+TEST_GATE_MODE = "hermetic"
+TEST_GATE_DESCRIPTION = "Hermetic rapid gate (SQLite, LocMem cache, InMemoryChannelLayer, memory Celery)."
 
 
 CELERY_ENV_VARS_TO_CLEAR = (
