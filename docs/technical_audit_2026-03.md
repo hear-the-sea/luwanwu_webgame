@@ -1,394 +1,547 @@
-# 项目技术审计与优化清单（2026-03）
+# 项目技术审计（2026-03）
 
-本文档只保留当前仍成立的问题、缺口和待跟踪项。已经完成并有代码/测试证据支撑的优化、重构和历史问题，均已从正文删除，不再混入当前审计结论。
+最近更新：2026-03-18
 
-最近更新：2026-03-18（第七十一批校正文档：根据本轮整仓复审，进一步上调“重复造轮子、边界坍塌、并发控制模型不够硬”的优先级；保留已完成收口结论，但明确当前主风险已从“伪平台层”转为“高密度 orchestrator + 视图层重复基础设施实现 + 状态字段充当业务锁”）
+本文档只记录 2026-03-18 这轮整仓扫描后仍成立的问题、风险和待跟踪项。历史上已经修复、或者本轮核对后确认不再成立的结论，已从正文移除，避免旧问题继续污染当前判断。
 
 相关文档：
 
-- [优化计划](optimization_plan.md)
 - [架构设计](architecture.md)
 - [开发指南](development.md)
 - [兼容入口清单](compatibility_inventory_2026-03.md)
+- [数据流边界](domain_boundaries.md)
 
-## 1. 当前有效证据
+## 1. 审计范围与证据
 
-当前仍有效、且可作为结论依据的验证结果只有这些：
+### 1.1 本轮实际扫描范围
 
-- 历史默认门禁记录仍显示：默认 `flake8` 通过，默认非 integration `pytest` 通过，`manage.py check` / `check --deploy` 可执行完成
-- 本轮抽样回归通过：`python -m pytest -q tests/test_base_settings.py tests/test_health.py tests/test_trade_views.py`
-- 本轮代码审查重点覆盖：
-  - `trade/services/market_service.py`
-  - `trade/services/bank_service.py`
-  - `trade/services/market_commands.py`
-  - `trade/selectors.py`
-  - `battle/services.py`
-  - `gameplay/services/raid/combat/runs.py`
-  - `gameplay/services/missions_impl/execution.py`
-  - `guests/views/recruit.py`
-  - `guilds/views/core.py`
-  - `guilds/services/member.py`
-  - `config/settings/__init__.py`
-  - `config/settings/testing.py`
-  - `tests/conftest.py`
-  - `pytest.ini`
-  - `.coveragerc`
-- 本轮启动了全量 `python -m pytest -q` 抽查，运行进度到约 50% 时未见失败信号，但该次执行未完整收尾，因此不能作为“全量测试再次确认通过”的正式证据
-- 本轮过度抽象收敛回归通过：
-  - `python -m pytest -q tests/test_market_service.py tests/test_trade.py -k "market or listing or purchase or cancel or expire"`
-  - `python -m pytest -q tests/test_trade_views.py tests/test_trade_tasks.py`
-  - `python -m pytest -q tests/test_trade_bank_service.py tests/test_trade_views.py -k "bank or exchange_gold_bar"`
-  - `python -m pytest -q tests/test_raid_combat_runs.py tests/test_raid_concurrency_integration.py tests/test_trade_bank_service.py`
-  - `python -m pytest -q tests/test_mission_launch_resilience.py tests/test_mission_refresh_async.py tests/test_gameplay.py -k "mission"`
-- 本轮 trade 读侧优化回归通过：
-  - `python -m pytest -q tests/test_trade_selectors.py tests/test_trade_views.py tests/test_trade_shop_service.py`
-- 本轮 guilds 写入口收口回归通过：
-  - `python -m pytest -q tests/test_guilds.py`
-- 本轮 battle 锁恢复回归通过：
-  - `python -m pytest -q tests/test_battle.py tests/test_battle_lock_order.py tests/test_raid_combat_runs.py tests/test_raid_concurrency_integration.py`
-- 本轮 guests 技能写入口收口回归通过：
-  - `python -m pytest -q tests/test_guest_skill_service.py tests/test_guest_view_error_boundaries.py -k "learn_skill_view or forget_skill_view or skill_service"`
-  - `python -m pytest -q tests/test_guest_item_view_validation.py -k "learn_skill_view or forget_skill_view"`
-- 本轮 guests / guilds 抽象收口回归通过：
-  - `python -m pytest -q tests/test_guest_roster_service.py tests/test_inventory_views.py -k "dismiss_guest or dismiss"`
-  - `python -m pytest -q tests/test_guilds.py tests/test_guest_roster_service.py tests/test_inventory_views.py -k "guild or dismiss"`
-  - `python -m pytest -q tests/test_guest_skill_service.py tests/test_guests_services.py tests/test_recruitment_hall_cache.py tests/test_guest_recruitment_service.py -k "skill_service or recover_guest_hp or available_guests or list_pools or cache or recruitment"`
-- 本轮 trade 平台层删除回归通过：
-  - `python -m pytest -q tests/test_trade_selectors.py tests/test_trade_views.py tests/test_trade_shop_service.py tests/test_trade_bank_service.py -k "trade or shop or bank or exchange_gold_bar"`
-  - `python -m pytest -q tests/test_market_service.py tests/test_trade.py -k "market or listing or purchase or cancel or expire"`
-  - `python -m pytest -q tests/test_trade_auction_rounds.py tests/test_auction_gold_bars.py tests/test_market_notification_helpers.py -k "auction or gold_bar or notify or message"`
-- 本轮 recruit 视图结构收口回归通过：
-  - `python -m pytest -q tests/test_guest_item_view_validation.py -k "recruit_view or candidate_accept_view or use_magnifying_glass_view"`
-  - `python -m pytest -q tests/test_guest_view_error_boundaries.py -k "recruit_view or accept_candidate_view or use_magnifying_glass_view"`
-- 本轮 guild member 服务收口回归通过：
-  - `python -m pytest -q tests/test_guilds.py tests/test_guild_hero_pool.py`
-- 本轮 battle 服务结构收口回归通过：
-  - `python -m pytest -q tests/test_battle.py tests/test_battle_lock_order.py tests/test_raid_combat_runs.py tests/test_raid_concurrency_integration.py`
-  - `python -m pytest -q tests/test_mission_launch_resilience.py tests/test_gameplay.py -k "mission or DEPLOYED or battle"`
+本轮覆盖了下列区域：
 
-当前无法宣称已闭环的部分：
+- 配置与基础设施：`config/`、`Makefile`、`.github/workflows/ci.yml`、`pyproject.toml`、`.coveragerc`
+- 核心业务：`battle/`、`gameplay/`、`guests/`、`guilds/`、`trade/`
+- 共用能力：`core/`、`common/`
+- 实时与异步：`websocket/`、`tasks/`、Celery 调度封装
+- 模板与静态资源：`templates/`、各 app `templates/`、`static/js/`、`static/css/`
+- 测试体系：`tests/`、`tests/conftest.py`
+- 文档：`README.md`、`docs/architecture.md`
 
-- `DJANGO_TEST_USE_ENV_SERVICES=1` 下的真实 MySQL / Redis / Channels / Celery 关键语义，仍没有本轮重新执行确认
-- 默认测试入口仍显式声明不验证真实锁语义、Redis 语义和真实 Channels 语义
-- `mypy` 仍不是全项目高信噪比硬门禁，views / admin / management commands 等大面积区域仍保留豁免
+### 1.2 本轮确认的事实
 
-## 2. 当前状态判断
+- `python scripts/check_import_cycles.py` 执行通过，结果为 `OK: no top-level import cycles detected.`
+- `python -m pytest -q tests/test_settings_base.py tests/test_settings_testing.py tests/test_asgi.py tests/test_health.py` 执行通过，结果为 `30 passed in 5.72s`
+- 本轮没有重新完整跑完全量 `pytest`
+- 本轮没有重新在 `DJANGO_TEST_USE_ENV_SERVICES=1` 下跑完真实 MySQL / Redis / Channels / Celery 全套门禁
 
-项目的真实状态，不适合再按“接近完成收尾”来描述。
+### 1.3 仓库规模快照
 
-更准确的判断是：
+- 业务与配置目录下 Python 文件约 `667` 个
+- migrations 文件约 `199` 个
+- `tests/` 下测试文件约 `190` 个
+- 代码中裸 `except Exception` 约 `262` 处
+- 页面 view 入口中显式调用 `project_resource_production_for_read(manor)` 约 `17` 处
 
-1. 功能体量和业务复杂度已经明显超过普通练手项目，说明项目有真实的系统设计与实现能力。
-2. 但工程纪律没有同步跟上规模增长，代码组织复杂度已经开始高于业务本身复杂度。
-3. 当前最主要的问题不再是缺一个功能点，或者少几个测试，而是重复造轮子、模块边界坍塌、并发控制模型不够硬、测试可信度和复杂度控制正在同时失守。
+体量热点示例：
 
-这意味着项目并不处于“只差少量扫尾即可进入高分稳定态”的阶段，而是进入了一个更危险的中段：
+- 视图/服务：
+  - `guests/views/recruit.py`：`573` 行
+  - `gameplay/views/production.py`：`502` 行
+  - `gameplay/views/jail.py`：`507` 行
+  - `gameplay/views/missions.py`：`448` 行
+  - `gameplay/services/buildings/forge.py`：`716` 行
+  - `gameplay/services/recruitment/recruitment.py`：`710` 行
+  - `gameplay/services/raid/scout.py`：`684` 行
+  - `trade/services/auction/rounds.py`：`526` 行
+  - `trade/services/market_service.py`：`406` 行
+  - `battle/services.py`：`305` 行
+- 模板/前端：
+  - `guests/templates/guests/detail.html`：`1155` 行
+  - `templates/landing.html`：`717` 行
+  - `gameplay/templates/gameplay/warehouse.html`：`601` 行
+  - `trade/templates/trade/partials/_market.html`：`488` 行
+  - `static/js/chat_widget.js`：`603` 行
+- 测试：
+  - `tests/test_inventory_guest_items.py`：`974` 行
+  - `tests/test_trade_auction_rounds.py`：`871` 行
+  - `tests/test_trade_views.py`：`820` 行
+  - `tests/conftest.py`：`244` 行
 
-- 能继续开发新功能；
-- 也能继续补测试和补修复；
-- 但如果不先收权、收边界、收抽象，后续每次需求迭代都会继续把维护成本抬高。
+## 2. 总体判断
 
-## 3. 剩余高优先级问题
+当前项目已经明显不是“个人练手级别”的小项目，功能覆盖和系统复杂度都很高；但工程治理、边界管理和验证体系没有同步提升到相同水平。
 
-### P1-1 重复造轮子与边界坍塌：服务层没有成为稳定边界，视图层在重复实现基础设施
+这轮扫描后的核心判断是：
 
-重点区域：
+1. 项目具备持续交付功能的能力，但复杂度控制已经开始落后于业务规模。
+2. 最主要的问题不是“少功能”或“少测试”，而是边界持续塌陷，导致视图层、服务层、模型层、模板层都在增厚。
+3. 项目依赖大量 best-effort 降级、锁补丁、状态字段和回退逻辑来维持可用性，这会继续抬高后续迭代成本。
+4. 默认测试绿灯和 CI 绿灯，当前仍强于真实生产语义的保障能力。
 
-- `trade/services/trade_platform.py`
-- `guilds/services/guild_platform.py`
-- `guests/services/guest_platform.py`
-- `guilds/views/core.py`
-- `guilds/services/*`
+结论一句话概括：
 
-当前缺口：
+- 这是一个“明显有开发能力，但治理已经开始跟不上复杂度增长”的项目。
 
-- 一批 `platform` 文件虽然已删除，但问题没有根治，热点入口只是从“伪平台层”转成了“高密度 orchestrator / 巨型 view helper”
-- 同一类基础设施动作在多个视图重复出现：拼锁 key、best-effort lock 获取/释放、JSON/redirect 双通道错误处理、缓存失效、消息回传，各写一套
-- 同一 app 内，部分写路径走 service，部分路径仍让 view 负责锁、异常边界、副作用调度和响应拼装
-- 这说明“服务层是唯一写入口”“view 只做请求解析和响应装配”没有真正落地，分层更像约定而不是约束
+## 3. P1 问题
 
-具体证据：
+### P1-1 视图层和服务层边界持续坍塌，`gameplay` 已经接近超级 app
 
-- `trade/services/trade_platform.py`、`guilds/services/guild_platform.py`、`guests/services/guest_platform.py` 已在本轮全部删除
-- `guilds/views/core.py:guild_info`、`guests/views/skills.py`、`guests/views/roster.py` 已改为委托 service 写入口，`guests/views/recruit.py` 也已统一锁控制与异常分层
-- `guilds/services/member.py` 已在本轮拆成事务状态变更 helper + follow-up helper
-- `battle/services.py` 已在本轮将锁定参与者装配、攻击方门客解析、`BattleOptions` 构建与带锁执行拆为独立 helper，但文件整体仍偏厚
-- `guests/views/recruit.py`、`gameplay/views/jail.py`、`gameplay/views/map.py` 仍分别维护一套高度相似的锁包装、异常分层和响应适配逻辑；差别主要是业务名词和返回类型，不是职责模型
-- `trade/selectors.py` 继续集中 auction / bank / market / shop 多 tab 页面编排，已经不只是 selector，而是 page composer
+当前最明显的问题不是单个文件太长，而是很多热点入口同时承载了多种变化原因。
+
+证据：
+
+- `guests/views/recruit.py` 同时处理锁包装、缓存失效、AJAX 片段渲染、消息回传、异常映射和业务动作
+- `gameplay/views/production.py` 同时处理锻造、分解、图纸合成、分页和页面状态装配
+- `gameplay/views/missions.py` 在一个页面上下文里直接拉取 Mission、Guest、Troop、Item、SkillBook 多个域的数据
+- `trade/views.py` 的钱庄护院存取仍直接调到 `gameplay.services.manor.troop_bank`
+- `gameplay/services/buildings/forge.py`、`gameplay/services/recruitment/recruitment.py`、`gameplay/services/raid/scout.py` 都已经是多职责聚合模块
+
+具体落点：
+
+- `guests/views/recruit.py`
+- `gameplay/views/production.py`
+- `gameplay/views/missions.py`
+- `trade/views.py`
+- `gameplay/services/buildings/forge.py`
+- `gameplay/services/recruitment/recruitment.py`
+- `gameplay/services/raid/scout.py`
+
+风险：
+
+- 入口层与应用层混在一起，导致任一功能微调都容易触发横向回归
+- `gameplay` 正在扮演“总线层”，跨域依赖继续集中到一个 app
+- 重构难度会继续上升，因为任何拆分都必须先穿透巨型 orchestrator
 
 完成标准：
 
-- 平台层仅保留真正需要隔离外部依赖或跨 app 协作的窄端口
-- 同一类基础设施逻辑不再在多个 view / helper 中重复实现
-- view 不再直接承担锁、事务、缓存失效和副作用编排
-- service 成为唯一且清晰的写侧入口；selector / presenter 成为清晰的读侧入口
+- view 只做请求解析、权限和响应装配
+- selector / presenter 只做读侧装配
+- service 成为明确的唯一写入口
+- `gameplay` 不再承担其它 app 的默认协调层角色
 
-### P1-2 并发控制要着重强调：战斗锁与门客状态锁定策略仍有真实一致性风险
+### P1-2 读路径资源投影仍分散，页面读取和状态推进没有完全分离
 
-重点区域：
+这项问题在本轮有实质改善，但还没有完全收口。
+
+证据：
+
+- selector 中对 `sync_resource_production(manor, persist=False)` 的直接调用已移除
+- 代码中仍有约 `17` 处页面 view 入口显式调用 `project_resource_production_for_read(manor)`
+- 同类调用仍散落在 `home`、`map`、`inventory`、`missions`、`production`、`technology`、`trade`、`guests` 多个页面入口
+
+具体落点：
+
+- `gameplay/views/core.py`
+- `gameplay/views/inventory.py`
+- `gameplay/views/map.py`
+- `trade/views.py`
+- `guests/views/roster.py`
+- `gameplay/views/missions.py`
+- `gameplay/views/production.py`
+
+风险：
+
+- 页面读取前仍需显式执行资源状态投影，读路径纯度还不够高
+- 页面渲染、副作用、缓存刷新耦合，后续性能优化和一致性分析会越来越难
+- 同一个读操作在不同调用场景下可能产生不同业务影响
+
+完成标准：
+
+- selector 变成真正的只读组件
+- 资源刷新与状态推进由专门入口显式触发
+- 页面请求不再悄悄承担业务推进职责
+
+### P1-3 并发控制模型仍是“多种半方案叠加”，没有形成统一口径
+
+项目对并发问题不是没处理，而是处理方式过于分散：数据库锁、缓存锁、状态字段、任务补偿、定时兜底同时存在，但缺少统一模型。
+
+证据：
+
+- `battle/services.py:lock_guests_for_battle` 先在事务内把门客状态标记为 `DEPLOYED`，退出事务后执行战斗，最后再开事务释放
+- `common/utils/celery.py` 默认把任务分发视为 best-effort，失败后靠返回值和补偿路径兜底
+- `core/middleware/single_session.py` 在单会话校验不可用时选择放行请求
+- `trade/services/market_purchase_helpers.py`、`guilds/services/member.py`、`guests/services/training.py` 等关键写路径大量依赖 `select_for_update`
+- `core/utils/cache_lock.py`、`core/utils/rate_limit.py`、`core/utils/locked_actions.py` 各自承担不同种类的“轻锁”
+
+具体落点：
 
 - `battle/services.py`
-- `gameplay/services/raid/combat/*`
-- `guests/models.py`
+- `common/utils/celery.py`
+- `core/middleware/single_session.py`
+- `core/utils/cache_lock.py`
+- `core/utils/locked_actions.py`
+- `trade/services/market_purchase_helpers.py`
+- `guilds/services/member.py`
+- `guests/services/training.py`
 
-当前缺口：
+风险：
 
-- 战斗锁并未在完整关键阶段内持有数据库锁，而是先把 `Guest.status` 标记为 `DEPLOYED`，退出事务后再执行战斗，最后再恢复
-- 这本质上是“状态字段充当业务锁/协调锁”的折中实现，而不是强一致并发控制
-- 如果进程崩溃、任务被 kill、补偿路径失效，门客状态可能卡死，需要额外修复逻辑兜底
-- 当前项目在多个热点入口已经形成“数据库行锁 + 缓存锁 + 状态字段 + 任务补偿”叠加的并发模型，但这套模型尚未被统一抽象、统一监控、统一测试
-- 问题已经不只是 `battle/services.py` 一处写法，而是整个项目的并发治理还停留在“按链路局部加固”，尚未形成全局一致的模型
-
-具体证据：
-
-- `battle/services.py:lock_guests_for_battle` 先锁行并批量更新状态，再在事务外 `yield` 执行战斗，最后另起事务恢复状态
-- 本轮已补 `recover_orphaned_deployed_guests(...)`，可在重复出战前自动恢复未被 mission / raid / arena 引用的孤儿 `DEPLOYED` 门客，并留下 warning 日志
-- `battle/services.py` 同时还承担门客锁定、战斗参数装配、AI 组装和执行入口，进一步提高了该链路的变更风险
-- `guests/views/recruit.py`、`gameplay/views/jail.py`、`gameplay/views/map.py` 在视图层各自包装 best-effort lock，说明锁策略并未下沉为统一能力，而是在入口层散落实现
-- 默认测试链路并不验证真实 MySQL / Redis / Channels / Celery 组合下的全部关键并发语义，导致这类问题更容易靠补偿逻辑掩盖
+- 不同链路对“锁失败时该 fail-open 还是 fail-closed”没有统一标准
+- `Guest.status` 继续承担业务锁职责，仍然存在卡死与补偿复杂度
+- 调试并发问题时，需要同时理解 DB 锁、缓存锁、状态机、异步任务与补偿扫描
 
 完成标准：
 
-- 明确“数据库锁”“缓存锁”“状态锁”“任务补偿”分别承担什么职责，避免混淆
-- 为门客卡死在 `DEPLOYED` 的路径建立明确恢复机制、监控和回归测试
-- 把并发控制从“链路局部技巧”升级为“项目级治理规则”
-- 拆分战斗并发协调与战斗业务执行入口，降低单文件风险
+- 为数据库锁、缓存锁、状态锁、异步补偿分别定义职责
+- 为关键链路建立统一的 fail-open / fail-closed 规则
+- 将 battle / mission / raid / recruitment 的并发控制抽象到同一治理口径
 
-### P1-3 默认测试入口的可信度仍明显不足
+### P1-4 默认测试门禁与生产语义差距仍然太大，真实外部服务覆盖偏薄
 
-重点区域：
+当前默认测试流明确不是生产语义门禁，但项目规模已经大到不能长期依赖这种默认。
+
+证据：
+
+- `Makefile` 明确写明 `make test` 只跑 hermetic 套件，不验证真实 `select_for_update`、Redis 语义和真实 Channels 语义
+- `config/settings/testing.py` 默认改成 SQLite + LocMem + InMemoryChannelLayer + memory Celery
+- `tests/conftest.py` 中对外部 DB / cache / channel layer / broker 探测失败时大量 `pytest.skip`
+- 当前真正标记 `integration` 的测试文件只有：
+  - `tests/test_raid_concurrency_integration.py`
+  - `tests/test_work_service_concurrency.py`
+- CI 虽然有 integration job，但覆盖面仍然明显小于项目复杂度
+
+具体落点：
 
 - `Makefile`
 - `config/settings/testing.py`
 - `tests/conftest.py`
+- `.github/workflows/ci.yml`
 - `tests/test_raid_concurrency_integration.py`
 - `tests/test_work_service_concurrency.py`
 
-当前缺口：
+风险：
 
-- 默认 `make test` 只验证 SQLite / LocMem / InMemory channel layer / memory Celery 这一套 hermetic 环境
-- `Makefile` 已明确说明默认门禁不验证 `select_for_update`、Redis、真实 Channels 语义
-- 关键并发 integration 测试依赖 `DJANGO_TEST_USE_ENV_SERVICES=1`，但这条门禁仍不是团队默认工作流
-
-具体证据：
-
-- `Makefile` 明写 hermetic 环境“不验证”真实锁与外部服务语义
-- `config/settings/testing.py` 默认替换为 SQLite、LocMem、InMemoryChannelLayer、memory Celery
-- `tests/conftest.py` 中真实服务探测失败时广泛使用 `pytest.skip`
+- 默认测试全绿很容易被误读成“真实语义已验证”
+- 并发、缓存、Broker、Channel Layer 相关问题会继续依赖线上或灰度环境暴露
+- 本地 `make test-integration` 在环境未配好时偏向 `skip`，不是强失败
 
 完成标准：
 
-- 明确区分“默认快速门禁”和“真实语义门禁”，但后者必须成为持续执行的固定流程
-- 关键并发链路必须有真实外部服务下的稳定执行记录
-- “默认测试全绿”不再被误读为“生产语义已验证”
+- 真实外部服务 gate 成为固定流程，而不是补充流程
+- 本地 integration 环境缺失时要有更强的失败提示，而不是轻描淡写地跳过
+- 扩大真实环境测试覆盖，不再只盯少数并发案例
 
-## 4. P2：结构性复杂度热点
+### P1-5 类型检查仍在回避高风险区域，门禁强度不够
 
-### P2-1 God module 与热点文件继续累积职责，边界继续向内坍塌
+当前 mypy 配置更像“让 CI 可运行”，不是“让类型系统真正约束风险”。
 
-重点区域：
+证据：
 
-- `guests/views/recruit.py`
-- `battle/services.py`
-- `trade/selectors.py`
-- `gameplay/views/production.py`
-- `gameplay/views/jail.py`
-- `guests/models.py`
-- `guests/services/recruitment*.py`
+- `pyproject.toml` 全局关闭 `disallow_untyped_defs`
+- 关闭 `warn_return_any`
+- 开启 `ignore_missing_imports`
+- 对 `*.views`、`*.admin`、`*.management.commands.*`、`gameplay.models.*` 等高变更区域直接 `ignore_errors = true`
 
-当前缺口：
+具体落点：
 
-- `guests/views/recruit.py` 同时承担参数解析、锁控制、缓存失效、AJAX 片段渲染、消息拼装、异常分类和双通道响应
-- `battle/services.py` 同时承担门客锁定、状态恢复、战斗参数准备、AI 组装和执行入口
-- `trade/selectors.py` 已经不只是 selector，而是厚重的页面编排和部分业务触发入口
-- `gameplay/views/jail.py`、`gameplay/views/map.py` 也在复制同类 orchestrator 模式，把请求解析、锁包装、错误分层和响应适配糅在一起
+- `pyproject.toml`
 
-问题不在于“文件行数大”，而在于这些文件同时承载多种变化原因，一旦继续堆需求，就会迅速反弹回“大而全”巨石。
+风险：
+
+- 变更最频繁、最容易出入口错误的区域，恰恰被排除在类型门禁之外
+- 项目规模变大后，这类“局部豁免”会越来越像永久豁免
+- 类型系统在高风险区域提供不了足够的回归保护
 
 完成标准：
 
-- orchestrator 只保留编排职责
-- presenter / selector 只保留读侧装配，不再混入写侧动作和重副作用
-- request parsing、规则判断、副作用派发、AJAX payload 组装等职责拆到稳定边界
-- 高复用的锁包装、错误映射、双通道响应模板不再由每个热点 view 手工复制
+- 收缩 `ignore_errors` 覆盖面
+- 先把热点视图、关键服务和高复杂模型纳入硬门禁
+- 将 mypy 从“文档性规则”升级为“真实阻断规则”
 
-### P2-2 Selector / View 边界模糊，页面读取路径仍有残余装配复杂度
+### P1-6 广谱吞异常和降级路径过多，系统在用“别炸”代替“可证明正确”
 
-重点区域：
+当前项目在基础设施、实时、任务、缓存、限流、登录、监控等多条链路上广泛使用 best-effort 降级。
 
-- `trade/selectors.py`
-- `guests/views/recruit.py`
-- `gameplay/views/*`
+证据：
 
-当前缺口：
+- 代码中裸 `except Exception` 约 `262` 处
+- `common/utils/celery.py` 默认吞掉分发异常，只返回 `False`
+- `config/asgi.py` 在 DEBUG 下可直接禁用 WebSocket routing 并继续启动
+- `core/views/health.py`、`core/utils/task_monitoring.py`、`trade/services/cache_resilience.py` 大量使用 best-effort 路径
+- `core/middleware/single_session.py` 在校验失败时允许保留已认证请求
 
-- `trade/selectors.py` 的资源同步副作用已在本轮移回 `TradeView`，shop 卖出列表也改成先分页库存查询集，再转换当前页展示行
-- 但 `trade/selectors.py` 仍然承担较厚的页面编排职责，auction / bank / market / shop 多个 tab 仍集中在同一文件
-- 其他页面读取路径依然存在“selector / presenter / view 边界不够稳定”的问题
-- View 和 Selector 之间没有建立稳定的职责边界，导致读取路径混入锁、缓存、消息和业务刷新动作
-- 这类问题和写侧重复造轮子是同一根源：稳定边界没有形成，热点页面继续靠局部 helper 拼装维持
+具体落点：
 
-具体证据：
-
-- `trade/selectors.py` 已不再在 `get_trade_context` 中执行资源同步，shop 卖出路径已通过 `InventoryItem` 查询集分页后再构造展示数据
-- `trade/selectors.py` 仍是多 tab 聚合入口，bank / auction / market / shop 的上下文装配继续集中
-- `guests/views/recruit.py` 等热点入口仍同时承担请求编排、锁、缓存和响应拼装
-
-完成标准：
-
-- selector 只读，不再执行资源刷新、状态推进或其他业务动作
-- 数据分页尽量在数据库层完成
-- 页面读取性能与职责边界可以独立分析和优化
-
-### P2-3 广谱吞异常与 fail-open 设计使用过多
-
-重点区域：
-
+- `common/utils/celery.py`
+- `config/asgi.py`
+- `core/views/health.py`
 - `core/utils/task_monitoring.py`
 - `trade/services/cache_resilience.py`
-- `trade/services/market_expiration.py`
-- `trade/services/bank_supply_runtime.py`
-- `guilds/services/member.py`
-- `websocket/consumers/*`
-- `gameplay/tasks/*`
+- `core/middleware/single_session.py`
 
-当前缺口：
+风险：
 
-- 项目中仍存在大量裸 `except Exception` 和 best-effort 降级路径
-- 这些写法短期提高了“别炸”的概率，但也放大了静默失败、状态漂移和问题滞后的风险
-- 目前还缺少统一规则来约束哪些链路允许 fail-open，哪些链路必须 fail-closed
+- 问题更容易被延迟暴露，而不是尽早暴露
+- 状态漂移、任务漏发、缓存不一致和安全策略退化更难追踪
+- 代码阅读者很难判断每个降级策略的边界是否合理
 
 完成标准：
 
-- 经济结算、库存扣减、战斗结算、奖励发放等关键链路不再使用裸 `except Exception` 作为常规控制流
-- 基础设施异常、业务异常、用户输入异常分别归入清晰层级
-- 降级策略在代码、文档和测试中统一表达
+- 将基础设施异常、业务异常、用户输入异常彻底分层
+- 为关键链路定义哪些必须 fail-closed
+- 把“降级策略”从分散写法升级成统一治理规则
 
-## 5. P2：测试体系与门禁组织问题
+## 4. P2 问题
 
-### P2-4 pytest 收集边界和测试组织仍不够专业
+### P2-1 热点模块继续增厚，God module 风险仍在累积
 
-重点区域：
+即使不把所有热点都称为 God module，目前也已经有一批高耦合文件处于危险区。
 
-- `pytest.ini`
-- `tests/`
-- `guilds/tests.py`
-- `trade/tests.py`
-- `guests/management/commands/test_recruitment.py`
+证据：
 
-当前缺口：
+- `guests/views/recruit.py`：`573` 行
+- `gameplay/views/production.py`：`502` 行
+- `gameplay/views/jail.py`：`507` 行
+- `gameplay/views/missions.py`：`448` 行
+- `gameplay/services/buildings/forge.py`：`716` 行
+- `gameplay/services/recruitment/recruitment.py`：`710` 行
+- `gameplay/services/raid/scout.py`：`684` 行
+- `trade/services/auction/rounds.py`：`526` 行
+- `guests/models.py`：`490` 行
+- `gameplay/models/manor.py`：`433` 行
 
-- `pytest.ini` 没有设置 `testpaths`，收集边界过宽
-- 仓库主要测试集中在根 `tests/`，但 app 内仍保留 Django 脚手架式空壳 `tests.py`
-- 存在命名上容易撞入 pytest 收集规则、但实际不是测试的文件，例如 `guests/management/commands/test_recruitment.py`
+风险：
+
+- 单文件承载多条变化路径，任何局部重构都会被迫触碰太多上下文
+- review 成本和回归成本持续增大
+- 新问题更容易用 helper 和 wrapper 再包一层，而不是正面拆分
 
 完成标准：
 
-- 明确仓库的测试组织策略：集中式测试或就近测试，二选一并清理残留
-- 通过 `testpaths` 和更严格的命名约束收紧 pytest 收集边界
-- 移除空壳 `tests.py` 和歧义命名文件带来的噪音
+- 将热点模块按读写、配置、事务、渲染、通知、调度拆开
+- 以“变化原因”而不是“文件太长”作为拆分标准
 
-### P2-5 覆盖率与测试抽象层仍不够可信
+### P2-2 平台层和 facade 清理仍不彻底，概念数量偏多
 
-重点区域：
+这轮已经清掉了一层明显的伪边界，但“平台/包装层容易继续长出来”的风险还在。
+
+本轮已完成：
+
+- `trade/services/market_platform.py` 已删除
+- `trade/services/market_service.py` 已改为直接绑定真实依赖，不再经由 `market_platform` 转发
+
+仍然成立的问题：
+
+- 项目整体仍存在“为了隔离而隔离”的命名层倾向
+- 这类层次在 trade 清掉一层后，后续仍可能在其它热点链路继续反弹
+
+当前落点：
+
+- `trade/services/market_service.py`
+- 其它热点 orchestrator / facade 风格模块
+
+风险：
+
+- 继续增加“名字像边界，实际只是转发”的中间层
+- 让调用链更长，但不减少真实耦合
+- 文档容易和代码再次漂移
+
+完成标准：
+
+- 只保留真正隔离外部依赖或跨域协议的 facade
+- 删除只做转发或命名包装的平台层
+
+### P2-3 模板和前端组织同样在增厚，不只是后端在积债
+
+当前前端主要问题不是技术栈老旧，而是服务端模板和页面脚本都在持续变厚。
+
+证据：
+
+- `guests/templates/guests/detail.html`：`1155` 行
+- `templates/landing.html`：`717` 行
+- `gameplay/templates/gameplay/warehouse.html`：`601` 行
+- `trade/templates/trade/partials/_market.html`：`488` 行
+- `static/js/chat_widget.js`：`603` 行
+- `templates/base.html` 同时承载导航、消息、在线状态、聊天组件和脚本装配
+- `trade/templates/trade/partials/_market.html` 里存在内联 `onclick` 导航切换
+
+具体落点：
+
+- `templates/base.html`
+- `templates/landing.html`
+- `guests/templates/guests/detail.html`
+- `gameplay/templates/gameplay/warehouse.html`
+- `trade/templates/trade/partials/_market.html`
+- `static/js/chat_widget.js`
+
+风险：
+
+- 模板层缺少清晰的组件边界
+- 页面逻辑继续在 HTML 与 JS 间分散增长
+- 前端重构成本会越来越像后端热点模块
+
+完成标准：
+
+- 将高复杂页面拆成更稳定的 partial / component 边界
+- 将内联交互和页面状态逻辑从模板中抽离
+- 降低基模板的“全局大杂烩”程度
+
+### P2-4 测试资产很多，但结构治理一般，超大测试文件继续累积
+
+测试数量多，不等于测试资产可维护。
+
+证据：
+
+- `tests/` 下测试文件约 `190` 个
+- `tests/test_inventory_guest_items.py`：`974` 行
+- `tests/test_trade_auction_rounds.py`：`871` 行
+- `tests/test_trade_views.py`：`820` 行
+- `tests/conftest.py`：`244` 行
+- 测试里 `monkeypatch` / `Mock` / `patch` 搜索命中接近 `1947` 次
+
+当前已确认不是问题的点：
+
+- `pytest.ini` 已经配置 `testpaths = tests`
+
+仍然成立的问题：
+
+- 超长测试文件说明很多测试仍是持续补洞，而不是按领域重构
+- `tests/conftest.py` 已经承担相当多环境切换和共享设施职责
+- 测试代码本身也在累积复杂度
+
+完成标准：
+
+- 继续按业务域拆分超长测试文件
+- 将工厂、fixture、builder 再下沉，降低单文件体积
+- 为 integration 与 hermetic 两条测试道建立更清晰的目录和职责边界
+
+### P2-5 coverage 配置仍在主动绕开部分高变更入口
+
+当前 coverage 配置已经比很多项目好，但仍有几个长期盲区。
+
+证据：
+
+- `.coveragerc` 直接忽略了：
+  - `*/templatetags/*`
+  - `*/tests/*`
+  - `tests/*`
+  - `manage.py`
+- `management/commands` 没有被忽略，但 `templatetags` 这类实际入口被长期排除
+
+具体落点：
 
 - `.coveragerc`
-- `tests/conftest.py`
-- `tests/test_gameplay_services.py`
-- 其他超长测试文件
 
-当前缺口：
+风险：
 
-- 默认测试命令不跑 coverage，覆盖率压力不在默认工作流中
-- `.coveragerc` 仍直接忽略 `management/commands`、`templatetags` 等入口
-- 公共 fixture 和测试工厂抽象还不够强，许多测试仍手工建模、手工造状态
-- 仓库内已有大量 300 行以上的大测试文件，测试代码本身也在累积维护成本
+- 覆盖率数字比真实入口保障更好看
+- 模板过滤器与部分边界层逻辑容易长期无压
 
 完成标准：
 
-- 关键门禁至少具备覆盖率可见性，避免长期盲区
-- 关键入口不因覆盖率配置被长期排除在外
-- 通过更强的 fixture / factory / builder 收缩重复测试搭建代码
+- 重新评估 coverage 盲区是否仍合理
+- 关键入口不要因历史方便被永久排除
 
-## 6. 当前待跟踪项
+### P2-6 文档漂移已经开始影响可信度，连审计文档本身都有过时结论
 
-| 编号 | 主题 | 优先级 | 当前未完成点 | 当前证据 |
+本轮扫描确认，文档层已经出现明显的结构漂移。
+
+证据：
+
+- `docs/architecture.md` 仍写“前端是 Django Templates + Bootstrap 5”，而当前前端实际以自定义 CSS + Tailwind 输出为主
+- `docs/architecture.md` 仍大量使用 `settings.py`、`views.py`、`models.py`、`websocket/consumers.py` 这种单文件结构描述，但代码早已拆成包
+- 本文件旧版本中对 `pytest.ini`、平台层删除状态、热点模块状态的描述已有部分过时，因此本轮已重写
+
+具体落点：
+
+- `docs/architecture.md`
+- `README.md`
+- `docs/technical_audit_2026-03.md`
+
+风险：
+
+- 新开发者会从错误的结构假设出发理解代码
+- 文档越写越多，但和代码越走越远
+- 审计文档如果不持续校正，会失去价值
+
+完成标准：
+
+- 先修正架构文档中的结构与栈描述
+- 建立“架构文档必须跟随目录结构调整”的最小维护纪律
+
+## 5. P3 问题
+
+### P3-1 仓库中的生成资产和手写资产边界不够清晰
+
+这不是最高优先级问题，但已经影响理解成本。
+
+证据：
+
+- `static/css/tailwind.css`：`125147` 字节
+- `static/css/style.css`：`58914` 字节
+- 大量页面样式同时存在于 Tailwind 产物和手写 CSS 中
+- 文档层对前端栈的描述仍停留在旧模型
+
+风险：
+
+- 新样式究竟应该进 `src/input.css` 还是 `static/css/style.css`，约束不够清楚
+- 生成物与源码边界不清，会进一步放大前端维护成本
+
+完成标准：
+
+- 明确前端样式来源约定
+- 在开发文档中说明哪些文件是源码、哪些文件是构建产物
+
+## 6. 建议执行顺序
+
+### 第一阶段：先稳边界
+
+1. 收口高复杂 view / selector / service 的职责边界
+2. 明确 `gameplay` 与其它 app 的交互边界
+3. 停止新增“只转发不隔离”的 platform / facade
+
+### 第二阶段：再稳并发与测试
+
+1. 为 battle / mission / raid / recruitment 梳理统一的并发控制口径
+2. 扩大真实外部服务测试覆盖
+3. 让 integration 缺环境时更明确失败，而不是大量 skip 掩盖
+
+### 第三阶段：收紧门禁
+
+1. 收缩 mypy 忽略范围
+2. 重新评估 coverage 盲区
+3. 降低广谱 `except Exception` 的使用频率
+
+### 第四阶段：治理模板与文档
+
+1. 拆分最大模板和页面脚本
+2. 更新 `docs/architecture.md` 与 README 中的结构说明
+3. 保持审计文档只记录当前事实，不保留历史胜利叙事
+
+## 7. 跟踪表
+
+| 编号 | 主题 | 优先级 | 当前状态 | 主要证据 |
 | --- | --- | --- | --- | --- |
-| P1-1 | 重复造轮子与边界坍塌 | P1 | 伪 platform 已删除，但热点 view / selector 仍在重复实现锁包装、异常边界、响应适配和页面编排 | `guests/views/recruit.py`、`gameplay/views/jail.py`、`gameplay/views/map.py`、`trade/selectors.py` |
-| P1-2 | 并发控制模型 | P1 | 孤儿 `DEPLOYED` 已可恢复，但 `Guest.status` 仍承担业务锁职责，项目级并发模型仍未统一 | `battle/services.py:lock_guests_for_battle`、`recover_orphaned_deployed_guests`、多个 view 层 best-effort lock 包装 |
-| P1-3 | 默认测试可信度 | P1 | 默认门禁仍不验证真实外部服务关键语义 | `Makefile`、`config/settings/testing.py`、`tests/conftest.py` |
-| P2-1 | God module 热点 | P2 | `battle/services.py`、`trade/selectors.py`、`guests/views/recruit.py`、`gameplay/views/jail.py` 等仍高密度耦合 | 本轮结构审查 |
-| P2-2 | View / Selector 边界 | P2 | 页面读取路径仍混入资源同步、缓存、低效分页等职责 | `trade/selectors.py` |
-| P2-3 | 异常治理与降级边界 | P2 | 广谱 `except Exception` 和 fail-open 路径仍多 | `core/utils/task_monitoring.py`、`trade/services/cache_resilience.py` 等 |
-| P2-4 | pytest 收集与测试组织 | P2 | 测试边界宽、空壳 `tests.py` 和歧义命名文件仍在 | `pytest.ini`、`guilds/tests.py`、`trade/tests.py` |
-| P2-5 | 覆盖率与测试抽象 | P2 | coverage 不在默认门禁，测试搭建重复度高 | `.coveragerc`、`tests/conftest.py`、超长测试文件 |
+| P1-1 | 视图/服务边界坍塌 | P1 | 未解决 | `guests/views/recruit.py`、`gameplay/views/production.py`、`gameplay/views/missions.py` |
+| P1-2 | 读路径资源投影仍分散 | P1 | 部分完成 | selector 已移除直接同步；view 入口仍约 `17` 处调用 `project_resource_production_for_read(...)` |
+| P1-3 | 并发治理模型分散 | P1 | 未解决 | `battle/services.py`、`common/utils/celery.py`、`core/middleware/single_session.py` |
+| P1-4 | 默认测试与生产语义偏离 | P1 | 未解决 | `Makefile`、`config/settings/testing.py`、`tests/conftest.py` |
+| P1-5 | 类型门禁过弱 | P1 | 未解决 | `pyproject.toml` |
+| P1-6 | 广谱吞异常与 fail-open | P1 | 未解决 | 裸 `except Exception` 约 `262` 处 |
+| P2-1 | 热点文件持续增厚 | P2 | 未解决 | 多个 400-700 行热点模块 |
+| P2-2 | 平台层清理仍需持续 | P2 | 部分完成 | `trade/services/market_service.py` 已脱离 `market_platform`，但同类伪边界风险仍存在 |
+| P2-3 | 模板与前端增厚 | P2 | 未解决 | `detail.html`、`warehouse.html`、`_market.html`、`chat_widget.js` |
+| P2-4 | 测试结构治理一般 | P2 | 未解决 | `tests/` 约 `190` 文件，超长测试文件持续存在 |
+| P2-5 | coverage 仍有盲区 | P2 | 未解决 | `.coveragerc` |
+| P2-6 | 文档漂移 | P2 | 未解决 | `docs/architecture.md`、README、旧版审计文档 |
+| P3-1 | 前端构建资产边界不清 | P3 | 未解决 | `static/css/tailwind.css`、`static/css/style.css` |
 
-## 7. To Do List
+## 8. 当前评分
 
-1. `[已完成]` 收口 `guilds` 写入口。
-当前结果：`guilds/views/core.py:guild_info` 不再直接开事务和改模型，已统一委托 `guilds/services/guild.py:update_guild_info`，并补齐 leader/越权回归。
-2. `[已完成]` 补 battle 孤儿 `DEPLOYED` 自愈路径。
-当前结果：`battle/services.py` 新增 `recover_orphaned_deployed_guests(...)`，对未被 active mission / raid / arena 占用的孤儿出征状态执行恢复，并由 `lock_guests_for_battle(...)` 自动接入。
-3. `[进行中]` 继续收口剩余非唯一写入口，并消灭视图层重复造轮子。
-当前结果：`guests/views/skills.py` 的学习/遗忘技能事务已迁入 `guests/services/skills.py`，`guests/views/roster.py` 的辞退门客事务已迁入 `guests/services/roster.py`，`trade/services/trade_platform.py`、`guilds/services/guild_platform.py` 与 `guests/services/guest_platform.py` 已全部删除，`guests/views/recruit.py` 已统一锁控制与异常分层，`guilds/services/member.py` 也已拆成事务状态变更 helper + follow-up helper。
-下一批重点：把 `guests/views/recruit.py`、`gameplay/views/jail.py`、`gameplay/views/map.py` 中重复的锁包装、错误映射、双通道响应模板抽成统一能力；同时继续压缩 `trade/selectors.py` 的多 tab 页面编排职责，进一步稳定 selector / view 边界。
-4. `[待执行]` 继续压 battle God module，并单独收口并发治理。
-当前结果：`battle/services.py` 已拆出锁定参与者装配、攻击方门客解析、`BattleOptions` 构建与带锁执行 helper。
-下一批重点：继续压缩 battle 文件体积，必要时再把锁生命周期与战斗装配落到更清晰的具体模块；同时明确数据库锁、状态锁、补偿恢复和监控信号的项目级口径。
-5. `[待执行]` 处理默认测试可信度。
-下一批重点：把真实外部服务 integration 门禁写进固定流程，避免默认 `make test` 继续被误解为生产语义验证。
-
-## 8. 建议执行顺序
-
-1. 先处理 `P1-1`：继续把重复造轮子和边界坍塌收口，不要让热点 view / selector 继续各写一套基础设施模板。
-2. 紧接着处理 `P1-2`：重做或补强门客战斗锁生命周期，并把并发控制从链路局部技巧提升为统一规则，至少先把状态卡死恢复、监控和回归测试补齐。
-3. 同步处理 `P1-3`：把真实外部服务 integration 门禁纳入固定工作流，避免默认绿灯继续掩盖真实语义缺口。
-4. 然后集中压缩 `P2-1` 和 `P2-2`：拆 `guests/views/recruit.py`、`battle/services.py`、`trade/selectors.py` 这几个最容易继续反弹的热点。
-5. 最后处理 `P2-3`、`P2-4`、`P2-5`：重建异常分层、测试收集边界、coverage 可见性和测试抽象层。
-
-## 9. 重构指导原则
-
-后续重构不建议继续沿着“加 facade、加 wrapper、加 platform 名字层”的方向推进。当前项目最需要的是减少概念数量，而不是增加概念数量。
-
-本轮已经证明，market / bank / raid / mission 这几条主链路在去掉动态 facade 之后，行为并没有变差，反而更容易测试和定位问题。因此后续可以默认采用“优先显式依赖，谨慎引入中间层”的策略。
-
-建议遵循以下原则：
-
-1. 一个写侧用例只保留一个权威入口。
-2. facade 只保留稳定边界，不做运行时依赖拼装。
-3. platform 只在确实需要隔离跨 app / 外部依赖时存在。
-4. selector 只做读侧装配，不触发业务动作。
-5. view 只保留请求解析、权限和响应装配，不负责事务、锁和副作用。
-6. 关键链路先定义 fail-open / fail-closed，再写异常处理代码。
-7. 高复用的锁包装、错误映射、缓存失效和双通道响应模板必须统一，不允许热点 view 重复造轮子。
-8. 所有并发设计都要明确“锁对象、锁时长、锁层级、补偿路径、监控信号、测试方式”。
-9. 测试门禁要明确区分“快速反馈”与“真实语义验证”，但两者都必须进入固定流程。
-
-## 10. 当前结论
-
-项目当前的核心问题，不是“还有没有明显 bug 没修掉”，而是“工程组织方式已经开始反噬开发效率和长期可维护性”。
-
-更直接地说：
-
-- 功能能力强于工程纪律；
-- 业务复杂度增长快于模块边界治理；
-- 默认测试绿灯强于真实生产语义保障。
-
-综合评分下调为：`5.7/10`
+综合评分：`6.2/10`
 
 分项参考：
 
 - 功能完成度：`8/10`
 - 业务复杂度承载能力：`7.5/10`
-- 架构设计：`5.5/10`
-- 工程纪律：`5/10`
-- 测试可信度：`4.5/10`
-- 可维护性：`5/10`
+- 架构治理：`5.5/10`
+- 工程纪律：`5.5/10`
+- 测试可信度：`6/10`
+- 可维护性：`5.5/10`
+- 文档可信度：`5/10`
 
-要把项目拉回高分区间，优先级不是“继续拆更多 facade”，而是：
+当前最应该做的，不是继续加新抽象层，而是：
 
-1. 先停止重复造轮子；
-2. 收敛边界；
-3. 收紧写入口；
-4. 把并发控制从局部技巧升级为统一模型；
-5. 把真实语义门禁重新立起来。
+1. 把边界重新划清；
+2. 把读写职责分开；
+3. 把并发控制口径统一；
+4. 把真实语义门禁立起来；
+5. 把已经漂移的文档拉回代码现实。

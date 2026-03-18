@@ -1,5 +1,7 @@
 # 春秋乱世庄园主 - 系统架构文档
 
+> 最近校正：2026-03-18（与当前仓库结构和门禁流程对齐）
+
 ## 概述
 
 本文档描述了"春秋乱世庄园主"游戏的系统架构设计，包括整体架构、模块划分、数据流和关键设计决策。
@@ -17,7 +19,9 @@
 | 消息代理 | Redis 7.x | Celery Broker + Channel Layer |
 | 缓存 | Redis (django-redis) | 会话、缓存、在线状态 |
 | 数据库 | MySQL 8.x / SQLite | 主数据存储 |
-| 前端 | Django Templates + Bootstrap 5 | 服务端渲染 |
+| 前端渲染 | Django Templates | 服务端渲染为主 |
+| 前端样式 | Tailwind CSS + 自定义 CSS | `src/input.css` 构建到 `static/css/tailwind.css`，并配合 `static/css/style.css` |
+| 前端脚本 | 原生 JavaScript | 页面脚本位于 `static/js/*.js` |
 
 ---
 
@@ -73,7 +77,7 @@
 ```
 web_game_v5/
 ├── config/             # 项目配置
-│   ├── settings.py     # Django 设置
+│   ├── settings/       # 分模块 settings（base/security/database/testing/...）
 │   ├── urls.py         # 主路由
 │   ├── celery.py       # Celery 配置
 │   ├── asgi.py         # ASGI 配置（WebSocket）
@@ -84,14 +88,15 @@ web_game_v5/
 │   └── views.py        # 登录/注册/资料
 │
 ├── gameplay/           # 核心玩法模块
-│   ├── models.py       # Manor, Building, Item, Mission...
-│   ├── views.py        # 仪表盘、任务、仓库、消息...
+│   ├── models/         # Manor, Building, Item, Mission...
+│   ├── views/          # 仪表盘、任务、仓库、消息...
+│   ├── selectors/      # 读侧页面上下文装配
 │   ├── services/       # 业务逻辑层
-│   └── tasks.py        # Celery 任务
+│   └── tasks/          # Celery 任务
 │
 ├── guests/             # 门客模块
 │   ├── models.py       # Guest, Skill, Gear...
-│   ├── views.py        # 门客列表、详情、装备
+│   ├── views/          # 门客列表、详情、装备
 │   ├── services/       # 招募、培养、装备、工资
 │   └── tasks.py        # 培养完成任务
 │
@@ -128,6 +133,7 @@ web_game_v5/
 │   ├── guest_templates.yaml
 │   └── guest_skills.yaml
 │
+├── src/                # 前端样式源码（Tailwind 输入）
 ├── templates/          # Django 模板
 ├── static/             # 静态资源
 └── media/              # 用户上传文件
@@ -174,7 +180,7 @@ web_game_v5/
 ### View Layer（视图层）
 
 - **职责**：处理 HTTP 请求，进行基础验证，调用 Service 层
-- **位置**：`{app}/views.py`
+- **位置**：`{app}/views.py` 或 `{app}/views/`
 - **原则**：
   - 不包含业务逻辑
   - 负责权限检查（`@login_required`）
@@ -194,7 +200,7 @@ web_game_v5/
 ### Model Layer（模型层）
 
 - **职责**：定义数据结构，提供 ORM 查询接口
-- **位置**：`{app}/models.py`
+- **位置**：`{app}/models.py` 或 `{app}/models/`
 - **原则**：
   - 包含字段定义和约束
   - 提供 `property` 计算属性
@@ -439,6 +445,32 @@ python manage.py load_item_templates
 python manage.py load_mission_templates
 python manage.py load_guest_templates
 ```
+
+---
+
+## 测试门禁分层（当前执行口径）
+
+项目当前采用两条测试道并行治理：
+
+1. `Hermetic rapid gate`：快速反馈，默认命令为 `make test` / `make test-unit`（`pytest -m "not integration"`）。
+2. `Real external-service gate`：真实语义验证，命令为 `DJANGO_TEST_USE_ENV_SERVICES=1 make test-real-services`（包含 `make test-critical` + `make test-integration`）。
+
+关键说明：
+
+- 默认测试道使用 SQLite、LocMem cache、InMemory channel layer、memory Celery，不覆盖真实外部服务语义。
+- `integration` 用例通过 `pytest.mark.integration` 区分，且依赖 `DJANGO_TEST_USE_ENV_SERVICES=1` 与可达的外部 DB/Redis/Channels/Celery。
+- 固定串行验收可使用 `DJANGO_TEST_USE_ENV_SERVICES=1 make test-gates`（先 hermetic，再 real external services）。
+
+---
+
+## 前端资源边界（源码 vs 构建产物）
+
+- 样式源码：`src/input.css`（Tailwind 输入文件）。
+- 样式构建产物：`static/css/tailwind.css`（由 `npm run build:css` / `npm run build:css:prod` 生成）。
+- 手写全局样式：`static/css/style.css`（非生成文件）。
+- 页面脚本：`static/js/*.js`（手写脚本，不经打包器聚合）。
+
+这条边界用于避免“把生成文件当源码改”与“把手写样式误写进构建输入”两类维护风险。
 
 ---
 

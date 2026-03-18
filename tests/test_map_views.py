@@ -23,6 +23,34 @@ class TestMapViews:
         assert response.status_code == 200
         assert "regions" in response.context
 
+    def test_map_page_syncs_resources_before_loading_context(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        calls = {"sync": 0, "context": 0}
+
+        def _fake_sync(*_args, **_kwargs):
+            calls["sync"] += 1
+
+        def _fake_context(*_args, **_kwargs):
+            calls["context"] += 1
+            return {
+                "manor": manor,
+                "selected_region": manor.region,
+                "search_query": "",
+                "protection_status": {},
+                "active_raids": [],
+                "active_scouts": [],
+                "incoming_raids": [],
+                "scout_count": 0,
+                "player_troops": [],
+            }
+
+        monkeypatch.setattr("gameplay.views.map.project_resource_production_for_read", _fake_sync)
+        monkeypatch.setattr("gameplay.views.map.get_map_context", _fake_context)
+
+        response = client.get(reverse("gameplay:map"))
+        assert response.status_code == 200
+        assert calls == {"sync": 1, "context": 1}
+
     def test_map_region_filter(self, manor_with_user):
         """地图地区过滤"""
         manor, client = manor_with_user

@@ -1,5 +1,7 @@
 # 春秋乱世庄园主 · 概要设计
 
+> 最近校正：2026-03-18（与当前仓库结构、前端资源形态、测试门禁口径对齐）
+
 ## 技术文档
 
 详细技术文档请查阅 [`docs/`](docs/index.md) 目录：
@@ -11,6 +13,27 @@
 | [开发指南](docs/development.md) | 环境搭建、命令行工具、调试 |
 | [API 接口](docs/api.md) | HTTP/WebSocket 接口规范 |
 | [数据库设计](docs/database.md) | 数据模型、表结构、索引 |
+
+---
+
+## 当前工程事实（2026-03）
+
+- 前端并非 Bootstrap 5 体系；当前是 Django Templates + Tailwind 构建产物 + 手写 CSS/JS。
+- 测试门禁分两条：默认 hermetic（快速反馈）与 real external services（真实语义验证）。
+- 样式与脚本存在“源码/产物”边界，见下文“前端资源边界”。
+
+### 测试门禁口径
+
+- 默认快速门禁：`make test`（等价 `make test-unit`，即 `pytest -m "not integration"`）。
+- 真实服务门禁：`DJANGO_TEST_USE_ENV_SERVICES=1 make test-real-services`。
+- 固定串行验收：`DJANGO_TEST_USE_ENV_SERVICES=1 make test-gates`（先 hermetic，再 real external services）。
+
+### 前端资源边界
+
+- 样式源码：`src/input.css`（Tailwind 输入）。
+- 样式产物：`static/css/tailwind.css`（由 `npm run build:css` / `npm run build:css:prod` 生成）。
+- 手写样式：`static/css/style.css`、`static/css/chat_widget.css`。
+- 手写脚本：`static/js/*.js`（不通过 bundler 聚合）。
 
 ---
 
@@ -193,23 +216,30 @@
 
 > 本 README 旨在作为首版设计蓝本，后续可根据测试反馈细化数值、接口与UML文档。
 
-## 十、项目结构（基础框架）
+## 十、项目结构（当前）
 ```
 web_game_v5/
 ├── accounts/                 # 账号体系（注册/登录/资料）
 ├── battle/                   # 战斗推演、战报渲染、兵种模板
 ├── battle_debugger/          # 开发调试工具（仅 DEBUG 下启用路由）
 ├── config/                   # Django 项目配置（settings/urls/asgi/wsgi/celery）
+│   └── settings/             # 分模块 settings（base/security/database/testing/...）
 ├── core/                     # 通用中间件/工具（request_id、health、rate_limit 等）
 ├── data/                     # YAML 数据模板（任务/门客/物品/兵种/商铺/建筑/科技）
 ├── docker/                   # 容器脚本与 Nginx 配置
 ├── docs/                     # 当前技术文档与少量保留的专题说明
 ├── gameplay/                 # 庄园/建筑/任务/仓库/地图/打工等
+│   ├── models/               # 领域模型（包结构）
+│   ├── views/                # 页面入口（包结构）
+│   ├── selectors/            # 读侧上下文装配
+│   ├── services/             # 业务写侧与协作
+│   └── tasks/                # Celery 任务（按域拆分）
 ├── guests/                   # 门客（招募/培养/技能/装备/薪资）
 ├── guilds/                   # 帮会（成员/科技/仓库/公告）
 ├── media/                    # 上传/生成的媒体文件（本地/容器卷）
+├── src/                      # Tailwind 样式输入源码（input.css）
 ├── scripts/                  # 辅助脚本（分析/图片等）
-├── static/                   # Web 端静态资源
+├── static/                   # Web 端静态资源（含 tailwind.css 构建产物与手写 CSS/JS）
 ├── tasks/                    # Celery 任务聚合（部分 app 内也有 tasks.py）
 ├── templates/                # Django Templates（页面/战报等）
 ├── tests/                    # pytest-django 与集成测试
@@ -223,6 +253,7 @@ web_game_v5/
 ├── pyproject.toml
 ├── requirements.txt
 ├── pytest.ini
+├── package.json              # Tailwind 构建脚本（build:css / watch:css）
 ├── .env.example              # 环境变量模板
 ├── .env.docker.example       # Docker Compose 环境变量模板
 └── .env.docker.prod.example  # 生产 Docker Compose 环境变量模板

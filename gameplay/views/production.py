@@ -33,7 +33,7 @@ from gameplay.services.buildings.stable import (
     start_horse_production,
 )
 from gameplay.services.manor.core import get_manor
-from gameplay.services.resources import sync_resource_production
+from gameplay.services.resources import project_resource_production_for_read
 from gameplay.services.technology import get_player_technology_level
 from gameplay.views.production_helpers import (
     annotate_blueprint_synthesis_options,
@@ -170,7 +170,7 @@ class StableView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
-        sync_resource_production(manor, persist=False)
+        project_resource_production_for_read(manor)
 
         horsemanship_level = get_player_technology_level(manor, "horsemanship")
         max_quantity = get_max_production_quantity(manor)
@@ -217,7 +217,7 @@ class RanchView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
-        sync_resource_production(manor, persist=False)
+        project_resource_production_for_read(manor)
 
         from gameplay.services.buildings.ranch import (
             get_active_livestock_productions,
@@ -274,7 +274,7 @@ class SmithyView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
-        sync_resource_production(manor, persist=False)
+        project_resource_production_for_read(manor)
 
         from gameplay.services.buildings.smithy import (
             get_active_smelting_productions,
@@ -333,7 +333,7 @@ class ForgeView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
-        sync_resource_production(manor, persist=False)
+        project_resource_production_for_read(manor)
 
         from gameplay.services.buildings.forge import (
             DECOMPOSE_CATEGORIES,

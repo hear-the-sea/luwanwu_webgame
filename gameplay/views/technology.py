@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -20,7 +21,7 @@ from core.decorators import flash_unexpected_view_error
 from core.exceptions import GameError
 from core.utils import safe_redirect_url, sanitize_error_message
 from gameplay.services.manor.core import get_manor
-from gameplay.services.resources import sync_resource_production
+from gameplay.services.resources import project_resource_production_for_read
 from gameplay.services.technology import (
     get_categories,
     get_martial_technologies_grouped,
@@ -89,10 +90,10 @@ class TechnologyView(LoginRequiredMixin, TemplateView):
 
     template_name = "gameplay/technology.html"
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
-        sync_resource_production(manor, persist=False)
+        project_resource_production_for_read(manor)
 
         # 获取当前选中的分类，默认为 basic
         current_tab = _normalize_technology_tab(self.request.GET.get("tab"))

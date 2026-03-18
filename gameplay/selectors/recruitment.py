@@ -13,7 +13,6 @@ from guests.services.recruitment_queries import (
 )
 
 from ..models import InventoryItem
-from ..services.resources import sync_resource_production
 from ..services.utils.cache import CACHE_TIMEOUT_SHORT, recruitment_hall_context_cache_key
 
 logger = logging.getLogger(__name__)
@@ -105,8 +104,6 @@ def _safe_cache_set(key: str, value: dict, timeout: int) -> None:
 
 
 def get_recruitment_hall_context(manor, records_limit: int, *, use_cache: bool = True) -> dict:
-    sync_resource_production(manor, persist=False)
-
     pools = list(list_pools(core_only=True, include_entries=False))
     for pool in pools:
         duration_seconds = get_pool_recruitment_duration_seconds(pool)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+from typing import Any
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -9,7 +10,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.db import connections
 from django.db.utils import DatabaseError
-from django.http import Http404, JsonResponse
+from django.http import Http404, HttpRequest, JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_GET
 
@@ -35,11 +36,11 @@ def _maybe_debug_error(exc: Exception) -> str | None:
 
 
 @require_GET
-def health_live(request):
+def health_live(request: HttpRequest) -> JsonResponse:
     return JsonResponse({"status": "ok"})
 
 
-def _is_internal_request(request) -> bool:
+def _is_internal_request(request: HttpRequest) -> bool:
     remote_addr = request.META.get("REMOTE_ADDR", "")
     forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR", "")
 
@@ -109,7 +110,7 @@ def _check_cache_ready() -> tuple[bool, str | None]:
             pass
 
 
-async def _channel_layer_roundtrip(channel_layer, timeout_seconds: float) -> dict:
+async def _channel_layer_roundtrip(channel_layer: Any, timeout_seconds: float) -> dict[str, str]:
     channel_name = await channel_layer.new_channel("health.ready")
     payload = {"type": "health.ready", "marker": "ok"}
     await channel_layer.send(channel_name, payload)
@@ -193,14 +194,14 @@ def _check_celery_roundtrip_ready() -> tuple[bool, str | None]:
 
 
 @require_GET
-def health_ready(request):
+def health_ready(request: HttpRequest) -> JsonResponse:
     if getattr(settings, "HEALTH_CHECK_REQUIRE_INTERNAL", False) and not _is_internal_request(request):
         raise Http404()
 
     cached = _load_cached_ready_payload()
     if cached is not None:
-        payload, status_code = cached
-        return JsonResponse(payload, status=status_code)
+        cached_payload, status_code = cached
+        return JsonResponse(cached_payload, status=status_code)
 
     checks: dict[str, bool] = {"db": True, "cache": True}
     errors: dict[str, str] = {}

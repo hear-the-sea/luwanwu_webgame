@@ -90,6 +90,19 @@ module = [
 ]
 ignore_errors = true
 
+# First narrow carve-out from the broad views ignore list.
+# Keep this module on real checks to start shrinking the suppression area.
+[[tool.mypy.overrides]]
+module = [
+    "core.views.health",
+    "gameplay.views.recruitment",
+    "gameplay.views.technology",
+    "gameplay.views.work",
+    "trade.views",
+]
+ignore_errors = false
+disallow_untyped_defs = true
+
 # Strict type checking: all functions must have full annotations.
 # Add modules here as they reach full annotation coverage.
 # Goal: grow this list until disallow_untyped_defs = true can be set globally.

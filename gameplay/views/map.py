@@ -45,6 +45,7 @@ from gameplay.services.raid import (
 from gameplay.services.raid.map_search import get_manor_public_info
 from gameplay.services.raid.protection import get_protection_status
 from gameplay.services.raid.utils import can_attack_target
+from gameplay.services.resources import project_resource_production_for_read
 
 MAP_ACTION_LOCK_SECONDS = 5
 MAP_ACTION_LOCK_NAMESPACE = "map:view_lock"
@@ -178,6 +179,7 @@ class MapView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
+        project_resource_production_for_read(manor)
         # 获取当前选中的地区（默认显示玩家所在地区）
         selected_region = self.request.GET.get("region", manor.region)
 
@@ -198,6 +200,7 @@ class RaidConfigView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
+        project_resource_production_for_read(manor)
 
         target_id = self.kwargs.get("target_id")
 

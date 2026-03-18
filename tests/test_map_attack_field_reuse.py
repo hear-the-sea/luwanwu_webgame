@@ -35,7 +35,6 @@ def test_get_raid_config_context_reuses_attack_fields_from_target_info(monkeypat
     )
     target_manor = SimpleNamespace()
 
-    monkeypatch.setattr(map_selector, "sync_resource_production", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         map_selector,
         "get_manor_public_info",

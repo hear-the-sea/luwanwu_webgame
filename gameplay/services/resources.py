@@ -271,6 +271,16 @@ def sync_resource_production(manor: Manor, *, persist: bool = True) -> None:
     manor.refresh_from_db(fields=RESOURCE_FIELDS + ["resource_updated_at"])
 
 
+def project_resource_production_for_read(manor: Manor) -> None:
+    """
+    在读路径中投影庄园资源状态，但不持久化到数据库。
+
+    这是页面读取入口应使用的显式接口，避免调用方直接依赖
+    `sync_resource_production(..., persist=False)` 的实现细节。
+    """
+    sync_resource_production(manor, persist=False)
+
+
 def log_resource_gain(manor: Manor, payload: Dict[str, int], reason: str, note: str = "") -> None:
     """
     记录资源变化日志。

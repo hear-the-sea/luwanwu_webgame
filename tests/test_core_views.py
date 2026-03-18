@@ -26,6 +26,24 @@ class TestCoreViews:
         assert response.status_code == 200
         assert "manor" in response.context
 
+    def test_home_page_syncs_resources_before_loading_context(self, authenticated_client, monkeypatch):
+        ensure_manor(authenticated_client.user)
+        calls = {"sync": 0, "context": 0}
+
+        def _fake_sync(*_args, **_kwargs):
+            calls["sync"] += 1
+
+        def _fake_context(manor):
+            calls["context"] += 1
+            return {"manor": manor}
+
+        monkeypatch.setattr("gameplay.views.core.project_resource_production_for_read", _fake_sync)
+        monkeypatch.setattr("gameplay.views.core.get_home_context", _fake_context)
+
+        response = authenticated_client.get(reverse("home"))
+        assert response.status_code == 200
+        assert calls == {"sync": 1, "context": 1}
+
     def test_dashboard_requires_login(self, client):
         """仪表盘需要登录"""
         response = client.get(reverse("gameplay:dashboard"))
@@ -42,7 +60,7 @@ class TestCoreViews:
         """数据库故障时仪表盘应降级而不是返回500。"""
         _manor, client = manor_with_user
         monkeypatch.setattr(
-            "gameplay.views.core.sync_resource_production",
+            "gameplay.views.core.project_resource_production_for_read",
             lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
         )
 
@@ -54,7 +72,7 @@ class TestCoreViews:
         """编程错误不应被页面层吞掉。"""
         _manor, client = manor_with_user
         monkeypatch.setattr(
-            "gameplay.views.core.sync_resource_production",
+            "gameplay.views.core.project_resource_production_for_read",
             lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
         )
 

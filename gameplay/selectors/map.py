@@ -14,7 +14,6 @@ from ..services.raid import (
     get_scout_count,
 )
 from ..services.recruitment.queries import get_player_troops
-from ..services.resources import sync_resource_production
 
 
 def _resolve_attack_fields(target_info: dict[str, Any], manor, target_manor) -> tuple[bool, str]:
@@ -26,8 +25,6 @@ def _resolve_attack_fields(target_info: dict[str, Any], manor, target_manor) -> 
 
 
 def get_map_context(manor, selected_region: str, search_query: str) -> dict:
-    sync_resource_production(manor, persist=False)
-
     return {
         "manor": manor,
         "selected_region": selected_region,
@@ -42,7 +39,6 @@ def get_map_context(manor, selected_region: str, search_query: str) -> dict:
 
 
 def get_raid_config_context(manor, target_manor) -> dict:
-    sync_resource_production(manor, persist=False)
     target_info = get_manor_public_info(target_manor, viewer=manor)
     can_attack, attack_reason = _resolve_attack_fields(target_info, manor, target_manor)
     available_guests = list(

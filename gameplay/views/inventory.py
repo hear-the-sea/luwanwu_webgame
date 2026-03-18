@@ -35,7 +35,7 @@ from gameplay.services.inventory.guest_items import (
 from gameplay.services.inventory.use import use_inventory_item
 from gameplay.services.manor.core import get_manor
 from gameplay.services.manor.treasury import move_item_to_treasury, move_item_to_warehouse
-from gameplay.services.resources import sync_resource_production
+from gameplay.services.resources import project_resource_production_for_read
 
 logger = logging.getLogger(__name__)
 
@@ -194,6 +194,7 @@ class RecruitmentHallView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
+        project_resource_production_for_read(manor)
         context.update(get_recruitment_hall_context(manor, UIConstants.RECRUIT_RECORDS_DISPLAY))
         return context
 
@@ -206,7 +207,7 @@ class WarehouseView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
-        sync_resource_production(manor, persist=False)
+        project_resource_production_for_read(manor)
         context["manor"] = manor
 
         current_tab = self.request.GET.get("tab", "warehouse")

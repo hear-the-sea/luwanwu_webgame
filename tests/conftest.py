@@ -22,8 +22,18 @@ from gameplay.services.manor.core import ensure_manor
 PROJECT_ROOT = Path(__file__).parent.parent
 
 
+def _env_services_enabled() -> bool:
+    return os.environ.get("DJANGO_TEST_USE_ENV_SERVICES", "0") == "1"
+
+
+def _gate_outcome(message: str, *, strict: bool) -> None:
+    if strict:
+        pytest.fail(message, pytrace=False)
+    pytest.skip(message)
+
+
 def _test_gate_mode() -> str:
-    if os.environ.get("DJANGO_TEST_USE_ENV_SERVICES", "0") == "1":
+    if _env_services_enabled():
         return "real-external-services"
     return getattr(settings, "TEST_GATE_MODE", "hermetic")
 
@@ -38,34 +48,34 @@ def _test_gate_description(mode: str) -> str:
     )
 
 
-def _require_non_sqlite_database(settings) -> None:
+def _require_non_sqlite_database(settings, *, strict: bool) -> None:
     db_engine = str(settings.DATABASES["default"].get("ENGINE", ""))
     if "sqlite" in db_engine:
-        pytest.skip("integration tests require non-sqlite database backend")
+        _gate_outcome("integration tests require non-sqlite database backend", strict=strict)
 
 
-def _require_external_cache_backend(settings, cache) -> None:
+def _require_external_cache_backend(settings, cache, *, strict: bool) -> None:
     cache_backend = str(settings.CACHES["default"].get("BACKEND", "")).lower()
     if "locmem" in cache_backend:
-        pytest.skip("integration tests require external cache backend")
+        _gate_outcome("integration tests require external cache backend", strict=strict)
 
     probe_key = "integration:services:probe"
     try:
         cache.set(probe_key, "1", timeout=5)
         if cache.get(probe_key) != "1":
-            pytest.skip("integration tests require a writable external cache backend")
+            _gate_outcome("integration tests require a writable external cache backend", strict=strict)
         cache.delete(probe_key)
     except Exception as exc:
-        pytest.skip(f"integration tests require reachable external cache backend: {exc}")
+        _gate_outcome(f"integration tests require reachable external cache backend: {exc}", strict=strict)
 
 
-def _require_external_channel_layer(settings, channel_layer) -> None:
+def _require_external_channel_layer(settings, channel_layer, *, strict: bool) -> None:
     default_layer = settings.CHANNEL_LAYERS.get("default", {})
     backend = str(default_layer.get("BACKEND", "")).lower()
     if "inmemory" in backend:
-        pytest.skip("integration tests require external channel layer backend")
+        _gate_outcome("integration tests require external channel layer backend", strict=strict)
     if channel_layer is None:
-        pytest.skip("integration tests require configured channel layer")
+        _gate_outcome("integration tests require configured channel layer", strict=strict)
 
     try:
         channel_name = async_to_sync(channel_layer.new_channel)("integration.probe.")
@@ -73,24 +83,24 @@ def _require_external_channel_layer(settings, channel_layer) -> None:
         async_to_sync(channel_layer.send)(channel_name, payload)
         received = async_to_sync(channel_layer.receive)(channel_name)
         if received != payload:
-            pytest.skip("integration tests require reliable external channel layer backend")
+            _gate_outcome("integration tests require reliable external channel layer backend", strict=strict)
     except Exception as exc:
-        pytest.skip(f"integration tests require reachable external channel layer backend: {exc}")
+        _gate_outcome(f"integration tests require reachable external channel layer backend: {exc}", strict=strict)
 
 
-def _require_external_celery_broker(celery_app) -> None:
+def _require_external_celery_broker(celery_app, *, strict: bool) -> None:
     broker_url = str(getattr(celery_app.conf, "broker_url", "") or "")
     result_backend = str(getattr(celery_app.conf, "result_backend", "") or "")
     if not broker_url or broker_url.startswith("memory://"):
-        pytest.skip("integration tests require external Celery broker")
+        _gate_outcome("integration tests require external Celery broker", strict=strict)
     if result_backend.startswith("cache+memory://"):
-        pytest.skip("integration tests require external Celery result backend")
+        _gate_outcome("integration tests require external Celery result backend", strict=strict)
 
     try:
         with celery_app.connection() as connection:
             connection.ensure_connection(max_retries=1)
     except Exception as exc:
-        pytest.skip(f"integration tests require reachable Celery broker: {exc}")
+        _gate_outcome(f"integration tests require reachable Celery broker: {exc}", strict=strict)
 
 
 @pytest.fixture(scope="session")
@@ -217,8 +227,8 @@ def manor_factory(user_factory):
 
 @pytest.fixture(scope="session")
 def require_env_services():
-    """Skip integration tests unless external DB/cache/channel/celery services are enabled."""
-    if os.environ.get("DJANGO_TEST_USE_ENV_SERVICES", "0") != "1":
+    """Validate integration external services; strict-fail when explicit real-service gate is enabled."""
+    if not _env_services_enabled():
         pytest.skip("integration tests require DJANGO_TEST_USE_ENV_SERVICES=1")
 
     from django.conf import settings
@@ -226,10 +236,17 @@ def require_env_services():
 
     from config.celery import app as celery_app
 
-    _require_non_sqlite_database(settings)
-    _require_external_cache_backend(settings, cache)
-    _require_external_channel_layer(settings, get_channel_layer())
-    _require_external_celery_broker(celery_app)
+    _require_non_sqlite_database(settings, strict=True)
+    _require_external_cache_backend(settings, cache, strict=True)
+    _require_external_channel_layer(settings, get_channel_layer(), strict=True)
+    _require_external_celery_broker(celery_app, strict=True)
+
+
+def pytest_collection_modifyitems(config, items):
+    """Ensure all integration tests run behind the same external-service gate."""
+    for item in items:
+        if item.get_closest_marker("integration") is not None:
+            item.add_marker(pytest.mark.usefixtures("require_env_services"))
 
 
 def pytest_report_header(config):

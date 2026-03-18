@@ -33,7 +33,7 @@ from gameplay.services.missions_impl.attempts import (
 from gameplay.services.missions_impl.execution import launch_mission, request_retreat
 from gameplay.services.missions_impl.loadout import normalize_mission_loadout
 from gameplay.services.recruitment.recruitment import get_player_troops
-from gameplay.services.resources import sync_resource_production
+from gameplay.services.resources import project_resource_production_for_read
 from guests.models import Guest, GuestStatus, GuestTemplate, SkillBook
 
 from . import mission_helpers
@@ -69,7 +69,7 @@ class TaskBoardView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
-        sync_resource_production(manor, persist=False)
+        project_resource_production_for_read(manor)
         missions = list(MissionTemplate.objects.all().order_by("id"))
         missions_by_key = {mission.key: mission for mission in missions}
         attempts = bulk_mission_attempts_today(manor, missions)

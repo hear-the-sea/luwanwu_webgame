@@ -1,12 +1,13 @@
 """交易视图。"""
 
 import logging
+from typing import Any
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import DatabaseError
-from django.http import HttpResponseRedirect
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
@@ -14,7 +15,7 @@ from core.utils import safe_int
 from core.utils.rate_limit import rate_limit_redirect
 from gameplay.models import Manor
 from gameplay.services.manor.core import get_manor
-from gameplay.services.resources import sync_resource_production
+from gameplay.services.resources import project_resource_production_for_read
 from trade.selectors import get_trade_context
 from trade.services.auction_service import place_bid
 from trade.services.bank_service import exchange_gold_bar
@@ -45,7 +46,7 @@ def _warn_if_threshold_exceeded(
     value: int,
     log_message: str,
     log_args: tuple[object, ...],
-):
+) -> None:
     threshold = _get_positive_int_setting(setting_name, default)
     if value >= threshold:
         logger.warning(log_message, *log_args)
@@ -53,7 +54,7 @@ def _warn_if_threshold_exceeded(
 
 def _sync_trade_view_resources(manor: Manor) -> None:
     try:
-        sync_resource_production(manor, persist=False)
+        project_resource_production_for_read(manor)
     except (DatabaseError, ConnectionError, OSError, TimeoutError) as exc:
         logger.warning(
             "sync resource production for trade view failed: manor_id=%s error=%s",
@@ -68,7 +69,7 @@ class TradeView(LoginRequiredMixin, TemplateView):
 
     template_name = "trade/trade.html"
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
         _sync_trade_view_resources(manor)
@@ -80,7 +81,7 @@ class TradeView(LoginRequiredMixin, TemplateView):
 @login_required
 @require_POST
 @rate_limit_redirect("shop_buy", limit=10, window_seconds=60)
-def shop_buy_view(request):
+def shop_buy_view(request: HttpRequest) -> HttpResponse:
     """购买商品"""
     parsed = _parse_trade_item_quantity_form(request, tab="shop", view="buy")
     if isinstance(parsed, HttpResponseRedirect):
@@ -99,7 +100,7 @@ def shop_buy_view(request):
 @login_required
 @require_POST
 @rate_limit_redirect("shop_sell", limit=10, window_seconds=60)
-def shop_sell_view(request):
+def shop_sell_view(request: HttpRequest) -> HttpResponse:
     """出售物品"""
     parsed = _parse_trade_item_quantity_form(request, tab="shop", view="sell")
     if isinstance(parsed, HttpResponseRedirect):
@@ -118,7 +119,7 @@ def shop_sell_view(request):
 @login_required
 @require_POST
 @rate_limit_redirect("bank_exchange", limit=5, window_seconds=60)
-def exchange_gold_bar_view(request):
+def exchange_gold_bar_view(request: HttpRequest) -> HttpResponse:
     """兑换金条"""
     troop_category = _parse_required_post_text(request, "troop_category") or ""
     quantity = _parse_positive_post_int_or_redirect(
@@ -147,10 +148,10 @@ def exchange_gold_bar_view(request):
 @login_required
 @require_POST
 @rate_limit_redirect("bank_troop_deposit", limit=30, window_seconds=60)
-def deposit_troop_to_bank_view(request):
+def deposit_troop_to_bank_view(request: HttpRequest) -> HttpResponse:
     """钱庄存入护院"""
 
-    def _deposit(manor, troop_key: str, quantity: int):
+    def _deposit(manor: Manor, troop_key: str, quantity: int) -> Any:
         from gameplay.services.manor.troop_bank import deposit_troops_to_bank
 
         return deposit_troops_to_bank(manor, troop_key, quantity)
@@ -166,10 +167,10 @@ def deposit_troop_to_bank_view(request):
 @login_required
 @require_POST
 @rate_limit_redirect("bank_troop_withdraw", limit=30, window_seconds=60)
-def withdraw_troop_from_bank_view(request):
+def withdraw_troop_from_bank_view(request: HttpRequest) -> HttpResponse:
     """钱庄取出护院"""
 
-    def _withdraw(manor, troop_key: str, quantity: int):
+    def _withdraw(manor: Manor, troop_key: str, quantity: int) -> Any:
         from gameplay.services.manor.troop_bank import withdraw_troops_from_bank
 
         return withdraw_troops_from_bank(manor, troop_key, quantity)
@@ -185,7 +186,7 @@ def withdraw_troop_from_bank_view(request):
 @login_required
 @require_POST
 @rate_limit_redirect("market_create", limit=10, window_seconds=60)
-def market_create_listing_view(request):
+def market_create_listing_view(request: HttpRequest) -> HttpResponse:
     """创建交易行挂单"""
     parsed = _parse_market_listing_form(request, allowed_durations=ALLOWED_MARKET_DURATIONS)
     if isinstance(parsed, HttpResponseRedirect):
@@ -209,10 +210,10 @@ def market_create_listing_view(request):
 @login_required
 @require_POST
 @rate_limit_redirect("market_purchase", limit=10, window_seconds=60)
-def market_purchase_view(request, listing_id: int):
+def market_purchase_view(request: HttpRequest, listing_id: int) -> HttpResponse:
     """购买交易行物品"""
 
-    def _purchase(manor: Manor):
+    def _purchase(manor: Manor) -> Any:
         transaction = purchase_listing(manor, listing_id)
         _warn_if_threshold_exceeded(
             setting_name="TRADE_HIGH_VALUE_SILVER_THRESHOLD",
@@ -239,7 +240,7 @@ def market_purchase_view(request, listing_id: int):
 @login_required
 @require_POST
 @rate_limit_redirect("market_cancel", limit=20, window_seconds=60)
-def market_cancel_view(request, listing_id: int):
+def market_cancel_view(request: HttpRequest, listing_id: int) -> HttpResponse:
     """取消交易行挂单"""
     return _execute_manor_trade_action_and_redirect(
         request,
@@ -254,13 +255,13 @@ def market_cancel_view(request, listing_id: int):
 @login_required
 @require_POST
 @rate_limit_redirect("auction_bid", limit=15, window_seconds=60)
-def auction_bid_view(request, slot_id: int):
+def auction_bid_view(request: HttpRequest, slot_id: int) -> HttpResponse:
     """拍卖行出价"""
     amount = _parse_positive_post_int_or_redirect(request, "amount", "出价参数无效", tab="auction")
     if isinstance(amount, HttpResponseRedirect):
         return amount
 
-    def _place_bid(manor: Manor):
+    def _place_bid(manor: Manor) -> bool:
         _bid, is_first_bid = place_bid(manor, slot_id, amount)
         _warn_if_threshold_exceeded(
             setting_name="AUCTION_HIGH_BID_THRESHOLD",

@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any, Callable
 from urllib.parse import urlencode
 
 from django.contrib import messages
@@ -23,7 +24,7 @@ from core.utils import safe_positive_int, sanitize_error_message
 from core.utils.rate_limit import rate_limit_redirect
 from gameplay.constants import BuildingKeys
 from gameplay.services.manor.core import get_manor
-from gameplay.services.resources import sync_resource_production
+from gameplay.services.resources import project_resource_production_for_read
 
 logger = logging.getLogger(__name__)
 
@@ -87,10 +88,10 @@ class TroopRecruitmentView(LoginRequiredMixin, TemplateView):
 
     template_name = "gameplay/troop_recruitment.html"
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
-        sync_resource_production(manor, persist=False)
+        project_resource_production_for_read(manor)
 
         from gameplay.services.recruitment.recruitment import (
             get_active_recruitments,
@@ -157,7 +158,7 @@ def _troop_bank_post_input(request: HttpRequest) -> tuple[str | None, int | None
 def _execute_troop_bank_transfer(
     request: HttpRequest,
     *,
-    transfer_action,
+    transfer_action: Callable[[Any, str, int], Any],
     success_message_template: str,
     log_message: str,
 ) -> HttpResponse:

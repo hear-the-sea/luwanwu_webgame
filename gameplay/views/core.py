@@ -23,7 +23,7 @@ from gameplay.constants import BUILDING_MAX_LEVELS
 from gameplay.models import BuildingCategory
 from gameplay.selectors.home import get_home_context
 from gameplay.services.manor.core import get_manor, get_rename_card_count, rename_manor
-from gameplay.services.resources import sync_resource_production
+from gameplay.services.resources import project_resource_production_for_read
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
         try:
-            sync_resource_production(manor, persist=False)
+            project_resource_production_for_read(manor)
         except DatabaseError as exc:
             _handle_unexpected_core_error(
                 self.request,
@@ -111,6 +111,7 @@ class HomeView(TemplateView):
         user = self.request.user
         if user.is_authenticated:
             manor = get_manor(user)
+            project_resource_production_for_read(manor)
             context.update(get_home_context(manor))
 
         return context

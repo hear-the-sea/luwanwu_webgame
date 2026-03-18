@@ -37,7 +37,7 @@ def test_trade_view_creates_manor_when_missing(monkeypatch, client, django_user_
 def test_trade_view_tolerates_resource_sync_error(monkeypatch, client, django_user_model):
     monkeypatch.setattr("trade.views.get_trade_context", lambda *_args, **_kwargs: {"current_tab": "shop"})
     monkeypatch.setattr(
-        "trade.views.sync_resource_production",
+        "trade.views.project_resource_production_for_read",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("sync failed")),
     )
 

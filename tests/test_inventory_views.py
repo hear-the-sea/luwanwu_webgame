@@ -135,6 +135,31 @@ class TestInventoryViews:
         assert "capacity" not in response.context
         assert "available_gears" not in response.context
 
+    def test_recruitment_hall_page_syncs_resources_before_loading_context(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        calls = {"sync": 0, "context": 0}
+
+        def _fake_sync(*_args, **_kwargs):
+            calls["sync"] += 1
+
+        def _fake_context(*_args, **_kwargs):
+            calls["context"] += 1
+            return {
+                "manor": manor,
+                "pools": [],
+                "candidates_payload": [],
+                "candidate_count": 0,
+                "records": [],
+                "magnifying_glass_items": [],
+            }
+
+        monkeypatch.setattr("gameplay.views.inventory.project_resource_production_for_read", _fake_sync)
+        monkeypatch.setattr("gameplay.views.inventory.get_recruitment_hall_context", _fake_context)
+
+        response = client.get(reverse("gameplay:recruitment_hall"))
+        assert response.status_code == 200
+        assert calls == {"sync": 1, "context": 1}
+
     def test_use_rebirth_card_rejects_non_positive_guest_id(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
         template = ItemTemplate.objects.create(

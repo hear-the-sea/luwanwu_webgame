@@ -12,7 +12,6 @@ from guests.models import GuestStatus
 
 from ..models import MissionRun, ResourceType
 from ..services.missions import can_retreat
-from ..services.resources import sync_resource_production
 from ..services.technology import get_technology_template
 from ..services.utils.cache import CacheKeys
 from ..services.utils.query_optimization import optimize_guest_queryset
@@ -48,8 +47,6 @@ def _safe_cache_set(key: str, value, timeout: int) -> None:
 
 
 def get_home_context(manor) -> dict:
-    sync_resource_production(manor, persist=False)
-
     resources = [
         ("grain", "粮食", manor.grain),
         ("silver", "银两", manor.silver),

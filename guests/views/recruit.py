@@ -26,6 +26,7 @@ from core.utils.locked_actions import (
     release_scoped_action_lock,
 )
 from core.utils.rate_limit import rate_limit_redirect
+from gameplay.services.resources import project_resource_production_for_read
 
 from ..forms import RecruitForm
 from ..models import RecruitmentCandidate
@@ -235,6 +236,7 @@ def _build_recruitment_hall_ajax_payload(request, manor, *, use_cache: bool = Tr
     from gameplay.constants import UIConstants
     from gameplay.selectors.recruitment import get_recruitment_hall_context
 
+    project_resource_production_for_read(manor)
     context = get_recruitment_hall_context(manor, UIConstants.RECRUIT_RECORDS_DISPLAY, use_cache=use_cache)
     return {
         "hall_pools_html": render_to_string(

@@ -170,12 +170,12 @@ class RosterView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         from gameplay.models import InventoryItem, ItemTemplate
         from gameplay.services.manor.core import get_manor
-        from gameplay.services.resources import sync_resource_production
+        from gameplay.services.resources import project_resource_production_for_read
         from guests.services.salary import bulk_check_salary_paid, get_guest_salary, get_unpaid_guests
 
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
-        sync_resource_production(manor, persist=False)
+        project_resource_production_for_read(manor)
         guests = list(available_guests(manor))
         refresh_guests_state(guests, now=timezone.now(), refresh=True)
         exp_items = list(

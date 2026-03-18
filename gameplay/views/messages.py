@@ -23,7 +23,7 @@ from core.utils.validation import safe_redirect_url
 from gameplay.constants import UIConstants
 from gameplay.models import ResourceType
 from gameplay.services.manor.core import get_manor
-from gameplay.services.resources import sync_resource_production
+from gameplay.services.resources import project_resource_production_for_read
 from gameplay.services.utils.messages import (
     claim_message_attachments,
     delete_all_messages,
@@ -218,7 +218,7 @@ class MessageListView(LoginRequiredMixin, TemplateView):
         """
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
-        sync_resource_production(manor, persist=False)
+        project_resource_production_for_read(manor)
         context["manor"] = manor
 
         all_messages = list_messages(manor)

@@ -33,6 +33,14 @@ Docker (MySQL + Redis + web/worker/beat):
 - Lint/type checks: `flake8` and `mypy` (see `pyproject.toml` for exact config).
 - Django conventions: models/classes in `PascalCase`, functions/vars in `snake_case`, constants in `UPPER_SNAKE_CASE`.
 
+## Engineering Expectations
+
+- All code changes must consider performance, security, and maintainability together, not just functional correctness.
+- Performance: avoid unnecessary database queries, N+1 access patterns, repeated template work, and unbounded in-memory processing; prefer `select_related`, `prefetch_related`, bulk operations, and pagination where appropriate.
+- Security: validate and sanitize all external input, enforce authentication and authorization explicitly, avoid exposing secrets, and use safe Django patterns for SQL, templates, uploads, and CSRF-sensitive flows.
+- Maintainability: prefer clear module boundaries, small focused functions, descriptive names, and tests for non-trivial behavior; avoid duplicated logic and document any important tradeoffs or constraints near the code.
+- When tradeoffs are necessary, choose the implementation that preserves safety first, keeps hot paths efficient, and remains easy for future contributors to understand and extend.
+
 ## Testing Guidelines
 
 - Framework: `pytest` + `pytest-django` (`DJANGO_SETTINGS_MODULE=config.settings`).

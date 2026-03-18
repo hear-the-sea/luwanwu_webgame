@@ -50,7 +50,6 @@ class _FakeQuerySet(list):
 
 
 def test_get_home_context_tolerates_cache_backend_failure(monkeypatch):
-    monkeypatch.setattr("gameplay.selectors.home.sync_resource_production", lambda *_a, **_k: None)
     monkeypatch.setattr("gameplay.selectors.home.optimize_guest_queryset", lambda qs: qs)
     monkeypatch.setattr("gameplay.selectors.home.get_technology_template", lambda *_a, **_k: {})
     monkeypatch.setattr("gameplay.selectors.home.can_retreat", lambda *_a, **_k: False)

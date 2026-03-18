@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict
+from typing import Dict
 
 from django.conf import settings
 from django.db.models import QuerySet
@@ -15,8 +15,12 @@ from django.utils import timezone
 
 from core.config import TRADE
 from core.utils.yaml_loader import load_yaml_data
-from gameplay.models import Manor
+from gameplay.models import InventoryItem, ItemTemplate, Manor, ResourceEvent
 from gameplay.models.items import LEGACY_TOOL_EFFECT_TYPES
+from gameplay.services.inventory.core import add_item_to_inventory_locked
+from gameplay.services.resources import grant_resources_locked, spend_resources_locked
+from gameplay.services.utils.messages import create_message
+from gameplay.services.utils.notifications import notify_user
 from trade.models import MarketListing, MarketTransaction
 from trade.services import market_commands as _market_commands
 from trade.services import market_notification_helpers as _market_notification_helpers
@@ -26,30 +30,18 @@ from trade.services.auction_service import get_frozen_gold_bars
 from trade.services.market_expiration import expire_listings_queryset as _expire_listings_queryset_impl
 from trade.services.market_listing_helpers import (
     create_listing_record,
+    decrement_listing_inventory,
+    load_tradeable_item_template,
+    lock_listing_inventory_item,
     normalize_listing_inputs,
     validate_gold_bar_availability,
     validate_listing_inventory,
     validate_listing_total_price,
 )
-from trade.services.market_platform import (
-    charge_listing_fee,
-    decrement_market_listing_inventory,
-    get_tradeable_inventory_queryset,
-    grant_market_item_locked,
-    load_market_item_template,
-    lock_market_listing_inventory_item,
-    pay_market_purchase,
-    send_market_message,
-    send_market_notification,
-    settle_market_sale_proceeds,
-)
 from trade.services.market_rules import DEFAULT_TRADE_MARKET_RULES
 from trade.services.market_rules import normalize_trade_market_rules as _normalize_trade_market_rules
 from trade.services.market_runtime import expire_listings_queryset_entry as _expire_listings_queryset_entry
 from trade.services.market_runtime import send_purchase_notifications_entry as _send_purchase_notifications_entry
-
-if TYPE_CHECKING:
-    from gameplay.models import ItemTemplate
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +95,75 @@ def _safe_int(value, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def charge_listing_fee(locked_manor: Manor, silver_amount: int) -> None:
+    spend_resources_locked(
+        locked_manor,
+        {"silver": silver_amount},
+        note="交易行挂单手续费",
+        reason=ResourceEvent.Reason.MARKET_LISTING_FEE,
+    )
+
+
+def pay_market_purchase(locked_manor: Manor, *, item_name: str, total_price: int) -> None:
+    spend_resources_locked(
+        locked_manor,
+        {"silver": total_price},
+        note=f"购买{item_name}",
+        reason=ResourceEvent.Reason.MARKET_PURCHASE,
+    )
+
+
+def settle_market_sale_proceeds(locked_manor: Manor, *, item_name: str, silver_amount: int) -> None:
+    grant_resources_locked(
+        locked_manor,
+        {"silver": silver_amount},
+        note=f"出售{item_name}",
+        reason=ResourceEvent.Reason.ITEM_SOLD,
+        sync_production=False,
+    )
+
+
+def send_market_message(**kwargs):
+    return create_message(**kwargs)
+
+
+def send_market_notification(user_id: int, payload: dict, *, log_context: str) -> None:
+    notify_user(user_id, payload, log_context=log_context)
+
+
+def grant_market_item_locked(locked_manor: Manor, *, item_key: str, quantity: int) -> None:
+    add_item_to_inventory_locked(locked_manor, item_key, quantity)
+
+
+def load_market_item_template(item_key: str):
+    return load_tradeable_item_template(item_template_model=ItemTemplate, item_key=item_key)
+
+
+def lock_market_listing_inventory_item(*, locked_manor: Manor, item_template: ItemTemplate):
+    return lock_listing_inventory_item(
+        inventory_item_model=InventoryItem,
+        locked_manor=locked_manor,
+        item_template=item_template,
+    )
+
+
+def decrement_market_listing_inventory(*, inventory_item, quantity: int) -> None:
+    decrement_listing_inventory(
+        inventory_item_model=InventoryItem,
+        inventory_item=inventory_item,
+        quantity=quantity,
+    )
+
+
+def get_tradeable_inventory_queryset(manor: Manor):
+    return InventoryItem.objects.filter(
+        manor=manor,
+        template__tradeable=True,
+        quantity__gt=0,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    ).select_related("template")
 
 
 def get_listing_fee(duration: int) -> int:
