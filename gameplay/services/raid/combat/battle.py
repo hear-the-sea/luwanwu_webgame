@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import math
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
@@ -20,6 +19,12 @@ from ...recruitment.troops import apply_defender_troop_losses
 from . import runs as combat_runs
 
 # Re-export capture helpers so existing imports from battle keep working.
+from .battle_guest_damage import apply_guest_damage_from_report as _apply_guest_damage_from_report_impl
+from .battle_guest_damage import extract_side_guest_state as _extract_side_guest_state_impl
+
+# Re-export messaging helpers.
+from .battle_post_actions import dispatch_complete_raid_task as _dispatch_complete_raid_task_impl
+from .battle_post_actions import fail_raid_run_due_missing_manor as _fail_raid_run_due_missing_manor_impl
 from .capture import (  # noqa: F401
     _can_attempt_capture,
     _capture_guest_payload,
@@ -32,8 +37,6 @@ from .capture import (  # noqa: F401
 )
 from .config import PVPConstants
 from .loot import _apply_loot, _calculate_loot
-
-# Re-export messaging helpers.
 from .messaging import _send_raid_battle_messages  # noqa: F401
 from .travel import _dismiss_marching_raids_if_protected
 from .troops import _coerce_positive_int, _normalize_mapping, _normalize_positive_int_mapping
@@ -174,77 +177,31 @@ def _apply_salvage_reward(locked_run: RaidRun, report: Any, is_attacker_victory:
 
 
 def _fail_raid_run_due_missing_manor(locked_run: RaidRun, *, now: Optional[datetime] = None) -> None:
-    now = now or timezone.now()
-
-    guests = list(locked_run.guests.select_for_update())
-    guests_to_update = []
-    for guest in guests:
-        if guest.status == GuestStatus.DEPLOYED:
-            guest.status = GuestStatus.IDLE
-            guests_to_update.append(guest)
-    if guests_to_update:
-        Guest.objects.bulk_update(guests_to_update, ["status"])
-
-    attacker_locked = Manor.objects.select_for_update().filter(pk=locked_run.attacker_id).first()
-    if attacker_locked is not None:
-        loadout = _normalize_positive_int_mapping(getattr(locked_run, "troop_loadout", {}))
-        if loadout:
-            combat_runs._add_troops_batch(attacker_locked, loadout)
-        locked_run.attacker = attacker_locked
-
-    locked_run.status = RaidRun.Status.COMPLETED
-    locked_run.is_attacker_victory = False
-    locked_run.return_at = now
-    locked_run.completed_at = now
-    locked_run.save(update_fields=["status", "is_attacker_victory", "return_at", "completed_at"])
+    _fail_raid_run_due_missing_manor_impl(
+        locked_run,
+        now=now,
+        guest_model=Guest,
+        guest_status=GuestStatus,
+        manor_model=Manor,
+        normalize_positive_int_mapping=_normalize_positive_int_mapping,
+        add_troops_batch=combat_runs._add_troops_batch,
+    )
 
 
 def _dispatch_complete_raid_task(run: RaidRun, *, now: Optional[datetime] = None) -> None:
-    def _fallback_sync_when_due(remaining_seconds: int) -> None:
-        if remaining_seconds > 0:
-            return
-        logger.warning("complete_raid_task dispatch failed for due raid; finalizing synchronously: run_id=%s", run.id)
-        from .runs import finalize_raid
-
-        finalize_raid(run, now=current_time)
-
-    try:
+    def _import_complete_raid_task() -> Any:
         from gameplay.tasks import complete_raid_task
-    except ImportError as exc:
-        logger.warning(
-            "complete_raid_task import failed: run_id=%s error=%s",
-            run.id,
-            exc,
-            exc_info=True,
-            extra={"degraded": True, "component": "raid_task_import", "run_id": run.id},
-        )
-        current_time = now or timezone.now()
-        remaining = 0 if not run.return_at else max(0, math.ceil((run.return_at - current_time).total_seconds()))
-        _fallback_sync_when_due(remaining)
-        return
-    except Exception:
-        logger.error(
-            "Unexpected complete_raid_task import failure: run_id=%s",
-            run.id,
-            exc_info=True,
-            extra={"degraded": True, "component": "raid_task_import", "run_id": run.id},
-        )
-        raise
 
-    current_time = now or timezone.now()
-    if run.return_at:
-        remaining = max(0, math.ceil((run.return_at - current_time).total_seconds()))
-    else:
-        remaining = max(0, int(run.travel_time or 0))
-    dispatched = safe_apply_async(
-        complete_raid_task,
-        args=[run.id],
-        countdown=remaining,
+        return complete_raid_task
+
+    _dispatch_complete_raid_task_impl(
+        run,
+        now=now,
         logger=logger,
-        log_message="complete_raid_task dispatch failed",
+        safe_apply_async_fn=safe_apply_async,
+        complete_raid_task_importer=_import_complete_raid_task,
+        finalize_raid_fn=combat_runs.finalize_raid,
     )
-    if not dispatched:
-        _fallback_sync_when_due(remaining)
 
 
 def process_raid_battle(run: RaidRun, now: Optional[datetime] = None) -> None:
@@ -358,37 +315,7 @@ def process_raid_battle(run: RaidRun, now: Optional[datetime] = None) -> None:
 
 
 def _extract_side_guest_state(report: Any, side: str) -> tuple[Dict[int, int], set[int]]:
-    hp_updates: Dict[int, int] = {}
-    defeated_guest_ids: set[int] = set()
-
-    if not report:
-        return hp_updates, defeated_guest_ids
-
-    team_entries = report.attacker_team if side == "attacker" else report.defender_team
-    for entry in team_entries or []:
-        if not isinstance(entry, dict):
-            continue
-        guest_id_raw = entry.get("guest_id")
-        remaining_hp_raw = entry.get("remaining_hp")
-        try:
-            guest_id = int(guest_id_raw)  # type: ignore[arg-type]
-            remaining_hp = int(remaining_hp_raw)  # type: ignore[arg-type]
-        except (TypeError, ValueError):
-            continue
-        hp_updates[guest_id] = remaining_hp
-        if remaining_hp <= 0:
-            defeated_guest_ids.add(guest_id)
-
-    raw_hp_updates = ((report.losses or {}).get(side) or {}).get("hp_updates") or {}
-    for guest_id_raw, hp_raw in raw_hp_updates.items():
-        try:
-            guest_id = int(guest_id_raw)
-            hp = int(hp_raw)
-        except (TypeError, ValueError):
-            continue
-        hp_updates.setdefault(guest_id, hp)
-
-    return hp_updates, defeated_guest_ids
+    return _extract_side_guest_state_impl(report, side)
 
 
 def _apply_guest_damage_from_report(
@@ -397,39 +324,14 @@ def _apply_guest_damage_from_report(
     attacker_guest_ids: set[int],
     defender_guest_ids: set[int],
 ) -> None:
-    attacker_hp_updates, attacker_defeated_ids = _extract_side_guest_state(report, "attacker")
-    defender_hp_updates, defender_defeated_ids = _extract_side_guest_state(report, "defender")
-
-    target_ids = (attacker_guest_ids | defender_guest_ids) & (
-        set(attacker_hp_updates.keys()) | set(defender_hp_updates.keys())
+    _apply_guest_damage_from_report_impl(
+        report,
+        attacker_guest_ids=attacker_guest_ids,
+        defender_guest_ids=defender_guest_ids,
+        guest_model=Guest,
+        guest_status=GuestStatus,
+        now=timezone.now(),
     )
-    if not target_ids:
-        return
-
-    guests = list(Guest.objects.select_for_update().filter(id__in=target_ids))
-    if not guests:
-        return
-
-    now = timezone.now()
-    dirty_guests: list[Guest] = []
-    for guest in guests:
-        if guest.id in attacker_guest_ids:
-            hp = attacker_hp_updates.get(guest.id)
-            is_defeated = guest.id in attacker_defeated_ids
-        else:
-            hp = defender_hp_updates.get(guest.id)
-            is_defeated = guest.id in defender_defeated_ids
-        if hp is None:
-            continue
-
-        guest.current_hp = max(1, min(guest.max_hp, int(hp)))
-        guest.last_hp_recovery_at = now
-        if is_defeated:
-            guest.status = GuestStatus.INJURED
-        dirty_guests.append(guest)
-
-    if dirty_guests:
-        Guest.objects.bulk_update(dirty_guests, ["current_hp", "last_hp_recovery_at", "status"])
 
 
 def _execute_raid_battle(run: RaidRun) -> Any:

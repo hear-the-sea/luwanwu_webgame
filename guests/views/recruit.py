@@ -17,7 +17,7 @@ from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
 from core.exceptions import GameError
-from core.utils import is_json_request, json_error, json_success, safe_positive_int, sanitize_error_message
+from core.utils import is_json_request, json_error, safe_positive_int, sanitize_error_message
 from core.utils.locked_actions import (
     ActionLockSpec,
     acquire_scoped_action_lock,
@@ -26,13 +26,21 @@ from core.utils.locked_actions import (
     release_scoped_action_lock,
 )
 from core.utils.rate_limit import rate_limit_redirect
-from gameplay.services.resources import project_resource_production_for_read
 
 from ..forms import RecruitForm
 from ..models import RecruitmentCandidate
 from ..services.recruitment import start_guest_recruitment, use_magnifying_glass_for_candidates
 from ..services.recruitment_guests import bulk_finalize_candidates, convert_candidate_to_retainer
 from .common import unexpected_action_error_response
+from .recruit_responses import build_recruitment_hall_ajax_payload as _build_recruitment_hall_ajax_payload_impl
+from .recruit_responses import candidate_action_success_response as _candidate_action_success_response_impl
+from .recruit_responses import format_bulk_recruit_success_message as _format_bulk_recruit_success_message_impl
+from .recruit_responses import format_duration as _format_duration_impl
+from .recruit_responses import json_recruitment_hall_success as _json_recruitment_hall_success_impl
+from .recruit_responses import (
+    recruitment_hall_resolution_error_response as _recruitment_hall_resolution_error_response_impl,
+)
+from .recruit_responses import recruitment_hall_response as _recruitment_hall_response_impl
 from .recruit_runtime import (
     CandidateActionOutcome,
     CandidateSelection,
@@ -204,52 +212,18 @@ def _normalize_candidate_scope(raw_scope: str | None) -> str | None:
 
 
 def _format_duration(seconds: int) -> str:
-    total = max(0, int(seconds))
-    hours, rem = divmod(total, 3600)
-    minutes, sec = divmod(rem, 60)
-    parts = []
-    if hours:
-        parts.append(f"{hours}小时")
-    if minutes:
-        parts.append(f"{minutes}分钟")
-    if sec or not parts:
-        parts.append(f"{sec}秒")
-    return "".join(parts)
+    return _format_duration_impl(seconds)
 
 
 def _format_bulk_recruit_success_message(succeeded_guests: list) -> str:
-    total = len(succeeded_guests)
-    if total <= 0:
-        return ""
-
-    preview_names = [guest.display_name for guest in succeeded_guests[:RECRUIT_SUCCESS_NAME_PREVIEW_LIMIT]]
-    preview = ", ".join(preview_names)
-    if total > RECRUIT_SUCCESS_NAME_PREVIEW_LIMIT:
-        remaining = total - RECRUIT_SUCCESS_NAME_PREVIEW_LIMIT
-        return f"成功招募 {total} 名门客：{preview} 等 {remaining} 名"
-    return f"成功招募 {total} 名门客：{preview}"
+    return _format_bulk_recruit_success_message_impl(
+        succeeded_guests,
+        preview_limit=RECRUIT_SUCCESS_NAME_PREVIEW_LIMIT,
+    )
 
 
 def _build_recruitment_hall_ajax_payload(request, manor, *, use_cache: bool = True) -> dict:
-    from django.template.loader import render_to_string
-
-    from gameplay.constants import UIConstants
-    from gameplay.selectors.recruitment import get_recruitment_hall_context
-
-    project_resource_production_for_read(manor)
-    context = get_recruitment_hall_context(manor, UIConstants.RECRUIT_RECORDS_DISPLAY, use_cache=use_cache)
-    return {
-        "hall_pools_html": render_to_string(
-            "gameplay/partials/recruitment_pools_section.html", context, request=request
-        ),
-        "hall_candidates_html": render_to_string(
-            "gameplay/partials/recruitment_candidates_section.html", context, request=request
-        ),
-        "hall_records_html": render_to_string(
-            "gameplay/partials/recruitment_records_section.html", context, request=request
-        ),
-        "candidate_count": context.get("candidate_count", 0),
-    }
+    return _build_recruitment_hall_ajax_payload_impl(request, manor, use_cache=use_cache)
 
 
 def _json_recruitment_hall_success(
@@ -260,10 +234,12 @@ def _json_recruitment_hall_success(
     message_level: str = "success",
     use_cache: bool = True,
 ):
-    return json_success(
-        message=message,
+    return _json_recruitment_hall_success_impl(
+        request,
+        manor,
+        message,
         message_level=message_level,
-        **_build_recruitment_hall_ajax_payload(request, manor, use_cache=use_cache),
+        use_cache=use_cache,
     )
 
 
@@ -277,19 +253,15 @@ def _recruitment_hall_response(
     message_level: str = "success",
     use_cache: bool = True,
 ):
-    if is_ajax:
-        if status >= 400:
-            return json_error(message, status=status)
-        return _json_recruitment_hall_success(
-            request,
-            manor,
-            message,
-            message_level=message_level,
-            use_cache=use_cache,
-        )
-
-    getattr(messages, message_level)(request, message)
-    return redirect("gameplay:recruitment_hall")
+    return _recruitment_hall_response_impl(
+        request,
+        manor,
+        message,
+        is_ajax=is_ajax,
+        status=status,
+        message_level=message_level,
+        use_cache=use_cache,
+    )
 
 
 def _recruitment_hall_resolution_error_response(
@@ -299,13 +271,11 @@ def _recruitment_hall_resolution_error_response(
     *,
     is_ajax: bool,
 ):
-    return _recruitment_hall_response(
+    return _recruitment_hall_resolution_error_response_impl(
         request,
         manor,
-        resolution_error.message,
+        resolution_error,
         is_ajax=is_ajax,
-        status=resolution_error.status,
-        message_level=resolution_error.message_level,
     )
 
 
@@ -316,92 +286,13 @@ def _candidate_action_success_response(
     *,
     is_ajax: bool,
 ):
-    manor_id = getattr(manor, "id", None)
-
-    if outcome.action == "discard":
-        message = f"已放弃 {outcome.affected_count} 名候选门客。"
-        cache_ok = _invalidate_recruitment_hall_cache_for_manor(manor_id)
-        return _recruitment_hall_response(
-            request,
-            manor,
-            message,
-            is_ajax=is_ajax,
-            message_level="warning" if is_ajax else "info",
-            use_cache=cache_ok,
-        )
-
-    if outcome.action == "retain":
-        if outcome.affected_count:
-            cache_ok = _invalidate_recruitment_hall_cache_for_manor(manor_id)
-            success_message = f"已将 {outcome.affected_count} 名候选收为家丁。"
-            if is_ajax:
-                message = success_message
-                if outcome.error_message:
-                    message = f"{message} {outcome.error_message}"
-                return _recruitment_hall_response(
-                    request,
-                    manor,
-                    message,
-                    is_ajax=is_ajax,
-                    use_cache=cache_ok,
-                )
-            messages.success(request, success_message)
-            if outcome.error_message:
-                messages.error(request, outcome.error_message)
-            return redirect("gameplay:recruitment_hall")
-        if outcome.error_message:
-            return _recruitment_hall_response(
-                request,
-                manor,
-                outcome.error_message,
-                is_ajax=is_ajax,
-                status=400,
-            )
-        return _recruitment_hall_response(
-            request,
-            manor,
-            "当前没有可操作的候选门客。",
-            is_ajax=is_ajax,
-            status=400,
-        )
-
-    if outcome.succeeded:
-        cache_ok = _invalidate_recruitment_hall_cache_for_manor(manor_id)
-        success_message = _format_bulk_recruit_success_message(outcome.succeeded)
-        if is_ajax:
-            message = success_message
-            if outcome.failed:
-                message = f"{message}；门客容量不足，{len(outcome.failed)} 名候选未能招募"
-            return _recruitment_hall_response(
-                request,
-                manor,
-                message,
-                is_ajax=is_ajax,
-                use_cache=cache_ok,
-            )
-        messages.success(request, success_message)
-        if outcome.failed:
-            messages.warning(request, f"门客容量不足，{len(outcome.failed)} 名候选未能招募")
-        return redirect("gameplay:recruitment_hall")
-
-    if outcome.failed:
-        cache_ok = _invalidate_recruitment_hall_cache_for_manor(manor_id)
-        return _recruitment_hall_response(
-            request,
-            manor,
-            f"门客容量不足，{len(outcome.failed)} 名候选未能招募",
-            is_ajax=is_ajax,
-            status=200,
-            message_level="warning",
-            use_cache=cache_ok,
-        )
-
-    return _recruitment_hall_response(
+    return _candidate_action_success_response_impl(
         request,
         manor,
-        "当前没有可操作的候选门客。",
+        outcome,
         is_ajax=is_ajax,
-        status=400,
+        invalidate_cache_fn=_invalidate_recruitment_hall_cache_for_manor,
+        preview_limit=RECRUIT_SUCCESS_NAME_PREVIEW_LIMIT,
     )
 
 

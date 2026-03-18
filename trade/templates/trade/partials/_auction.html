@@ -163,8 +163,14 @@
                     </td>
                     <td>
                         <button type="button"
-                                class="tw-btn-trade tw-btn-bid"
-                                onclick="openBidModal({{ slot.id }}, '{{ slot.item_template.name|escapejs }}', {{ slot.bid_info.cutoff_price }}, {{ slot.quantity }}, {{ slot.bid_info.bidder_count }}, {{ slot.bid_info.my_bid_amount|default:'null' }}, {{ slot.starting_price }})">
+                                class="tw-btn-trade tw-btn-bid js-open-bid-modal"
+                                data-slot-id="{{ slot.id }}"
+                                data-item-name="{{ slot.item_template.name }}"
+                                data-cutoff-price="{{ slot.bid_info.cutoff_price }}"
+                                data-winner-count="{{ slot.quantity }}"
+                                data-bidder-count="{{ slot.bid_info.bidder_count }}"
+                                data-my-bid-amount="{{ slot.bid_info.my_bid_amount|default_if_none:'' }}"
+                                data-starting-price="{{ slot.starting_price }}">
                             {% if slot.bid_info.my_bid_amount %}加价{% else %}出价{% endif %}
                         </button>
                     </td>
@@ -334,7 +340,7 @@
                 <h3>竞拍出价</h3>
                 <p class="tw-bid-modal-subtitle">系统会根据当前局势自动给出最低可出价建议</p>
             </div>
-            <button type="button" class="tw-modal-close" onclick="closeBidModal()">&times;</button>
+            <button type="button" class="tw-modal-close" data-trade-close-modal="bid">&times;</button>
         </div>
 
         <form method="post" id="bidForm" class="tw-modal-form">
@@ -387,7 +393,7 @@
             </div>
 
             <div class="tw-modal-footer">
-                <button type="button" class="tw-btn-secondary" onclick="closeBidModal()">取消</button>
+                <button type="button" class="tw-btn-secondary" data-trade-close-modal="bid">取消</button>
                 <button type="submit" class="tw-btn-trade tw-bid-submit-btn">确认出价</button>
             </div>
         </form>

@@ -3,10 +3,13 @@ from unittest.mock import Mock
 
 import pytest
 from django.contrib.sessions.models import Session
+from django.test import RequestFactory
 from django.utils import timezone
 
+from accounts import signals as account_signals
 from accounts import utils as account_utils
 from accounts.models import UserActiveSession
+from core.utils.degradation import SESSION_SYNC_FAILURE
 
 
 def test_purge_other_sessions_does_not_release_foreign_lock(monkeypatch):
@@ -194,3 +197,54 @@ def test_login_signal_records_active_session(client, django_user_model):
 
     active_session = UserActiveSession.objects.get(user=user)
     assert active_session.session_key == client.session.session_key
+
+
+@pytest.mark.django_db
+def test_login_signal_records_degradation_when_session_purge_returns_false(django_user_model, monkeypatch):
+    user = django_user_model.objects.create_user(username="signal_login_warn", password="pass123")
+    request = RequestFactory().get("/accounts/login")
+    request.session = Mock()
+    request.session.session_key = "session-key"
+
+    recorded: dict[str, object] = {}
+    monkeypatch.setattr(account_signals, "purge_other_sessions", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(
+        account_signals,
+        "record_degradation",
+        lambda code, **kwargs: recorded.update({"code": code, **kwargs}),
+    )
+
+    account_signals.sync_active_session_on_login(sender=None, request=request, user=user)
+
+    request.session.save.assert_called_once_with()
+    assert recorded == {
+        "code": SESSION_SYNC_FAILURE,
+        "component": "sync_active_session_on_login",
+        "detail": "purge_other_sessions returned False",
+        "user_id": user.id,
+    }
+
+
+@pytest.mark.django_db
+def test_login_signal_records_degradation_when_session_save_raises(django_user_model, monkeypatch):
+    user = django_user_model.objects.create_user(username="signal_login_error", password="pass123")
+    request = RequestFactory().get("/accounts/login")
+    request.session = Mock()
+    request.session.session_key = "session-key"
+    request.session.save.side_effect = RuntimeError("session backend down")
+
+    recorded: dict[str, object] = {}
+    monkeypatch.setattr(
+        account_signals,
+        "record_degradation",
+        lambda code, **kwargs: recorded.update({"code": code, **kwargs}),
+    )
+
+    account_signals.sync_active_session_on_login(sender=None, request=request, user=user)
+
+    assert recorded == {
+        "code": SESSION_SYNC_FAILURE,
+        "component": "sync_active_session_on_login",
+        "detail": "RuntimeError: session backend down",
+        "user_id": user.id,
+    }

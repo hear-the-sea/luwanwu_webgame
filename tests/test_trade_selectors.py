@@ -215,6 +215,23 @@ def test_get_trade_context_bank_includes_bank_info(monkeypatch, django_user_mode
 
 
 @pytest.mark.django_db
+def test_get_trade_context_includes_market_duration_options(monkeypatch, django_user_model):
+    monkeypatch.setattr("trade.selectors.LISTING_FEES", {28800: 12000, 7200: 5000, 86400: 20000})
+
+    user = django_user_model.objects.create_user(username="trade_ctx_duration_options", password="pass12345")
+    manor = ensure_manor(user)
+    request = RequestFactory().get("/trade", {"tab": "market"})
+
+    context = get_trade_context(request, manor)
+
+    assert context["market_duration_options"] == [
+        {"value": 7200, "label": "2小时", "fee": 5000},
+        {"value": 28800, "label": "8小时", "fee": 12000},
+        {"value": 86400, "label": "1天", "fee": 20000},
+    ]
+
+
+@pytest.mark.django_db
 def test_get_trade_context_auction_browse_sets_bid_info(monkeypatch, django_user_model):
     monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("trade.selectors.get_auction_stats", lambda *_args, **_kwargs: {"round": 1})

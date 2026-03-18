@@ -19,13 +19,34 @@ from trade.selector_builders import (
 )
 from trade.services.auction_service import get_active_slots, get_auction_stats, get_my_bids, get_my_leading_bids
 from trade.services.bank_service import get_bank_info
-from trade.services.market_service import get_active_listings, get_my_listings, get_tradeable_inventory
+from trade.services.market_service import LISTING_FEES, get_active_listings, get_my_listings, get_tradeable_inventory
 from trade.services.shop_service import (
     build_sellable_inventory_display_rows,
     get_sellable_inventory,
     get_sellable_inventory_queryset,
     get_shop_items_for_display,
 )
+
+
+def _format_market_duration_label(duration_seconds: int) -> str:
+    days, remainder = divmod(max(0, int(duration_seconds)), 86400)
+    hours = remainder // 3600
+    if days > 0 and hours == 0:
+        return f"{days}天"
+    if days > 0:
+        return f"{days}天{hours}小时"
+    return f"{max(1, duration_seconds // 3600)}小时"
+
+
+def _build_market_duration_options() -> list[dict[str, int | str]]:
+    return [
+        {
+            "value": duration,
+            "label": _format_market_duration_label(duration),
+            "fee": fee,
+        }
+        for duration, fee in sorted(LISTING_FEES.items())
+    ]
 
 
 def _base_trade_context(tab: str, manor: Any) -> dict[str, Any]:
@@ -38,6 +59,7 @@ def _base_trade_context(tab: str, manor: Any) -> dict[str, Any]:
             {"key": "market", "name": "集市"},
         ],
         "manor": manor,
+        "market_duration_options": _build_market_duration_options(),
     }
 
 

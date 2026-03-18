@@ -221,8 +221,13 @@
                         <td class="tw-price">{{ item.template.price|floatformat:0 }}</td>
                         <td>
                             <button type="button"
-                                    class="tw-btn-trade"
-                                    onclick="openListingModal('{{ item.template.key|escapejs }}', '{{ item.template.name|escapejs }}', {{ item.quantity }}, {{ item.template.price }}, '{{ item.template.rarity|default:"gray" }}', '{% if item.template.image %}{{ item.template.image.url }}{% endif %}')">
+                                    class="tw-btn-trade js-open-listing-modal"
+                                    data-item-key="{{ item.template.key }}"
+                                    data-item-name="{{ item.template.name }}"
+                                    data-available="{{ item.quantity }}"
+                                    data-min-price="{{ item.template.price }}"
+                                    data-rarity="{{ item.template.rarity|default:'gray' }}"
+                                    data-image-url="{% if item.template.image %}{{ item.template.image.url }}{% endif %}">
                                 上架
                             </button>
                         </td>
@@ -382,7 +387,7 @@
     <div class="tw-modal-content">
         <div class="tw-modal-header">
             <h3>上架物品</h3>
-            <button type="button" class="tw-modal-close" onclick="closeListingModal()">&times;</button>
+            <button type="button" class="tw-modal-close" data-trade-close-modal="listing">&times;</button>
         </div>
 
         <form method="post" action="{% url 'trade:market_create_listing' %}" class="tw-modal-form">
@@ -441,27 +446,19 @@
                 <div class="tw-market-form-group">
                     <label>上架时长</label>
                     <div class="tw-listing-duration-grid">
+                        {% for option in market_duration_options %}
                         <label class="tw-listing-duration-card">
-                            <input type="radio" name="duration" value="7200" checked onchange="updateFee()">
+                            <input type="radio"
+                                   name="duration"
+                                   value="{{ option.value }}"
+                                   data-trade-duration-fee="{{ option.fee }}"
+                                   {% if forloop.first %}checked{% endif %}>
                             <div class="tw-listing-duration-content">
-                                <span class="tw-listing-duration-time">2小时</span>
-                                <span class="tw-listing-duration-fee">手续费 5,000</span>
+                                <span class="tw-listing-duration-time">{{ option.label }}</span>
+                                <span class="tw-listing-duration-fee">手续费 {{ option.fee|floatformat:0 }}</span>
                             </div>
                         </label>
-                        <label class="tw-listing-duration-card">
-                            <input type="radio" name="duration" value="28800" onchange="updateFee()">
-                            <div class="tw-listing-duration-content">
-                                <span class="tw-listing-duration-time">8小时</span>
-                                <span class="tw-listing-duration-fee">手续费 10,000</span>
-                            </div>
-                        </label>
-                        <label class="tw-listing-duration-card">
-                            <input type="radio" name="duration" value="86400" onchange="updateFee()">
-                            <div class="tw-listing-duration-content">
-                                <span class="tw-listing-duration-time">24小时</span>
-                                <span class="tw-listing-duration-fee">手续费 20,000</span>
-                            </div>
-                        </label>
+                        {% endfor %}
                     </div>
                 </div>
 
@@ -480,7 +477,7 @@
             </div>
 
             <div class="tw-modal-footer">
-                <button type="button" class="tw-btn-secondary" onclick="closeListingModal()">取消</button>
+                <button type="button" class="tw-btn-secondary" data-trade-close-modal="listing">取消</button>
                 <button type="submit" class="tw-btn-primary">确认上架</button>
             </div>
         </form>

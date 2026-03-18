@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+from collections.abc import Callable, Iterator
 from typing import Any
 
 from asgiref.sync import async_to_sync
@@ -18,6 +19,7 @@ from core.tasks import CELERY_BEAT_HEARTBEAT_CACHE_KEY, celery_health_ping
 from core.utils.degradation import get_degradation_counts
 from core.utils.network import get_client_ip, is_trusted_proxy_ip
 from core.utils.task_monitoring import get_degraded_counter, get_task_metrics
+from core.views import health_support
 from websocket.routing_status import get_websocket_routing_status
 
 _DEGRADED_COMPONENTS = [
@@ -62,24 +64,44 @@ def _should_include_health_details() -> bool:
 
 
 def _load_cached_ready_payload() -> tuple[dict[str, object], int] | None:
-    ttl_seconds = max(0, int(getattr(settings, "HEALTH_CHECK_CACHE_TTL_SECONDS", 0)))
-    if ttl_seconds <= 0:
-        return None
-    cached = cache.get(_READY_CACHE_KEY)
-    if not isinstance(cached, dict):
-        return None
-    payload = cached.get("payload")
-    status_code = cached.get("status_code")
-    if not isinstance(payload, dict) or not isinstance(status_code, int):
-        return None
-    return payload, status_code
+    return health_support.load_cached_ready_payload(
+        cache_backend=cache,
+        cache_key=_READY_CACHE_KEY,
+        ttl_seconds=health_support.get_ready_cache_ttl(settings),
+    )
 
 
 def _store_cached_ready_payload(payload: dict[str, object], status_code: int) -> None:
-    ttl_seconds = max(0, int(getattr(settings, "HEALTH_CHECK_CACHE_TTL_SECONDS", 0)))
-    if ttl_seconds <= 0:
-        return
-    cache.set(_READY_CACHE_KEY, {"payload": payload, "status_code": status_code}, timeout=ttl_seconds)
+    health_support.store_cached_ready_payload(
+        cache_backend=cache,
+        cache_key=_READY_CACHE_KEY,
+        payload=payload,
+        status_code=status_code,
+        ttl_seconds=health_support.get_ready_cache_ttl(settings),
+    )
+
+
+def _iter_ready_checks() -> Iterator[tuple[str, bool, Callable[[], tuple[bool, str | None]]]]:
+    """Yield enabled ready-check definitions in response order."""
+    yield "db", True, _check_database_ready
+    yield "cache", True, _check_cache_ready
+    yield "channel_layer", bool(settings.HEALTH_CHECK_CHANNEL_LAYER), _check_channel_layer_ready
+    yield "celery_broker", bool(settings.HEALTH_CHECK_CELERY_BROKER), _check_celery_broker_ready
+    yield "celery_workers", bool(getattr(settings, "HEALTH_CHECK_CELERY_WORKERS", False)), _check_celery_workers_ready
+    yield "celery_beat", bool(getattr(settings, "HEALTH_CHECK_CELERY_BEAT", False)), _check_celery_beat_ready
+    yield "celery_roundtrip", bool(
+        getattr(settings, "HEALTH_CHECK_CELERY_ROUNDTRIP", False)
+    ), _check_celery_roundtrip_ready
+
+
+def _collect_health_details() -> dict[str, object]:
+    """Return optional detail sections for the ready payload."""
+    return health_support.build_health_details(
+        degraded_components=_DEGRADED_COMPONENTS,
+        degradation_reader=get_degradation_counts,
+        task_metrics_reader=get_task_metrics,
+        degraded_counter_reader=get_degraded_counter,
+    )
 
 
 def _check_database_ready() -> tuple[bool, str | None]:
@@ -203,48 +225,20 @@ def health_ready(request: HttpRequest) -> JsonResponse:
         cached_payload, status_code = cached
         return JsonResponse(cached_payload, status=status_code)
 
-    checks: dict[str, bool] = {"db": True, "cache": True}
+    checks: dict[str, bool] = {}
     errors: dict[str, str] = {}
 
-    db_ok, db_error = _check_database_ready()
-    checks["db"] = db_ok
-    if db_error:
-        errors["db"] = db_error
-
-    cache_ok, cache_error = _check_cache_ready()
-    checks["cache"] = cache_ok
-    if cache_error:
-        errors["cache"] = cache_error
-
-    if settings.HEALTH_CHECK_CHANNEL_LAYER:
-        channel_ok, channel_error = _check_channel_layer_ready()
-        checks["channel_layer"] = channel_ok
-        if channel_error:
-            errors["channel_layer"] = channel_error
-
-    if settings.HEALTH_CHECK_CELERY_BROKER:
-        celery_ok, celery_error = _check_celery_broker_ready()
-        checks["celery_broker"] = celery_ok
-        if celery_error:
-            errors["celery_broker"] = celery_error
-
-    if getattr(settings, "HEALTH_CHECK_CELERY_WORKERS", False):
-        workers_ok, workers_error = _check_celery_workers_ready()
-        checks["celery_workers"] = workers_ok
-        if workers_error:
-            errors["celery_workers"] = workers_error
-
-    if getattr(settings, "HEALTH_CHECK_CELERY_BEAT", False):
-        beat_ok, beat_error = _check_celery_beat_ready()
-        checks["celery_beat"] = beat_ok
-        if beat_error:
-            errors["celery_beat"] = beat_error
-
-    if getattr(settings, "HEALTH_CHECK_CELERY_ROUNDTRIP", False):
-        roundtrip_ok, roundtrip_error = _check_celery_roundtrip_ready()
-        checks["celery_roundtrip"] = roundtrip_ok
-        if roundtrip_error:
-            errors["celery_roundtrip"] = roundtrip_error
+    for check_name, enabled, checker in _iter_ready_checks():
+        if not enabled:
+            continue
+        ok, error = checker()
+        health_support.apply_check_result(
+            checks=checks,
+            errors=errors,
+            check_name=check_name,
+            ok=ok,
+            error=error,
+        )
 
     websocket_routing_ok, websocket_routing_error = get_websocket_routing_status()
     if not websocket_routing_ok:
@@ -258,18 +252,7 @@ def health_ready(request: HttpRequest) -> JsonResponse:
         payload["errors"] = errors
 
     if _should_include_health_details():
-        degradation = get_degradation_counts()
-        if degradation:
-            payload["degradation_counts"] = degradation
-
-        task_metrics = get_task_metrics()
-        if task_metrics:
-            payload["task_metrics"] = task_metrics
-
-        degraded_counters = {c: get_degraded_counter(c) for c in _DEGRADED_COMPONENTS}
-        nonzero_degraded = {c: v for c, v in degraded_counters.items() if v > 0}
-        if nonzero_degraded:
-            payload["degraded_counters"] = nonzero_degraded
+        payload.update(_collect_health_details())
 
     status_code = 200 if ok else 503
     _store_cached_ready_payload(payload, status_code)

@@ -36,6 +36,7 @@ from typing import Any
 
 from django.core.cache import cache
 
+from core.utils import task_monitoring_registry
 from core.utils.degradation import CELERY_TASK_RETRY, record_degradation
 
 logger = logging.getLogger(__name__)
@@ -71,94 +72,43 @@ def _empty_counts() -> dict[str, int]:
 
 
 def _metric_key(task_name: str, field: str) -> str:
-    """Return the cache key for a single metric counter."""
-    return f"{_TASK_METRIC_KEY_PREFIX}{task_name}:{field}"
+    return task_monitoring_registry.build_metric_key(_TASK_METRIC_KEY_PREFIX, task_name, field)
 
 
 def _registry_member_key(task_name: str) -> str:
-    """Return the per-task registry marker cache key."""
-    return f"{_TASK_NAME_REGISTRY_KEY_PREFIX}{task_name}"
+    return task_monitoring_registry.build_registry_member_key(_TASK_NAME_REGISTRY_KEY_PREFIX, task_name)
 
 
 def _coerce_registry(value: object) -> set[str]:
-    """Normalise a registry cache payload into a task-name set."""
-    if value is None:
-        return set()
-    if isinstance(value, set):
-        return set(value)
-    if isinstance(value, dict):
-        return {str(task_name) for task_name in value.keys()}
-    if isinstance(value, (frozenset, list, tuple)):
-        return {str(task_name) for task_name in value}
-    return set()
+    return task_monitoring_registry.coerce_registry(value)
 
 
 def _get_redis_registry_client() -> Any | None:
-    # django-redis may return different backend client types; `Any` keeps this helper backend-agnostic.
-    """Return the default Redis client when django-redis is available."""
-    try:
-        from django_redis import get_redis_connection
-    except ImportError:
-        return None
-
-    try:
-        return get_redis_connection("default")
-    except NotImplementedError:
-        return None
-    except Exception:
-        logger.warning("Failed to acquire Redis client for task metrics registry", exc_info=True)
-        return None
+    # django-redis may return different backend client types; keep the wrapper untyped here.
+    return task_monitoring_registry.get_redis_registry_client(logger)
 
 
 def _decode_redis_value(value: object) -> str:
-    """Decode a Redis set member or key into text."""
-    if isinstance(value, bytes):
-        return value.decode("utf-8")
-    return str(value)
+    return task_monitoring_registry.decode_redis_value(value)
 
 
 def _get_redis_registry_key() -> str:
-    """Return the concrete cache backend key for the Redis registry index."""
-    if hasattr(cache, "make_key"):
-        return cache.make_key(_TASK_METRICS_REDIS_REGISTRY_KEY)
-    return _TASK_METRICS_REDIS_REGISTRY_KEY
+    return task_monitoring_registry.get_redis_registry_key(cache, _TASK_METRICS_REDIS_REGISTRY_KEY)
 
 
 def _get_redis_registry_member_prefix() -> str:
-    """Return the concrete cache backend prefix for per-task marker keys."""
-    if hasattr(cache, "make_key"):
-        return cache.make_key(_TASK_NAME_REGISTRY_KEY_PREFIX)
-    return _TASK_NAME_REGISTRY_KEY_PREFIX
+    return task_monitoring_registry.get_redis_registry_member_prefix(cache, _TASK_NAME_REGISTRY_KEY_PREFIX)
 
 
 def _get_registry_from_redis() -> set[str] | None:
-    """Return task names from Redis-native registry structures, or None if unavailable."""
-    redis_client = _get_redis_registry_client()
-    if redis_client is None:
-        return None
-
-    registry: set[str] = set()
-    read_succeeded = False
-
-    try:
-        registry.update(_decode_redis_value(value) for value in redis_client.smembers(_get_redis_registry_key()))
-        read_succeeded = True
-    except Exception:
-        logger.warning("Failed to read Redis task metrics registry index", exc_info=True)
-
-    try:
-        prefix = _get_redis_registry_member_prefix()
-        for key in redis_client.scan_iter(match=f"{prefix}*"):
-            member_key = _decode_redis_value(key)
-            if member_key.startswith(prefix):
-                registry.add(member_key[len(prefix) :])
-        read_succeeded = True
-    except Exception:
-        logger.warning("Failed to scan Redis task metrics registry markers", exc_info=True)
-
-    if read_succeeded:
-        return registry
-    return None
+    return task_monitoring_registry.get_registry_from_redis(
+        cache_backend=cache,
+        logger=logger,
+        registry_key=_TASK_METRICS_REDIS_REGISTRY_KEY,
+        marker_prefix=_TASK_NAME_REGISTRY_KEY_PREFIX,
+        get_client=_get_redis_registry_client,
+        decode_value=_decode_redis_value,
+    )
 
 
 def _register_task_name(task_name: str) -> None:

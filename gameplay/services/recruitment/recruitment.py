@@ -12,18 +12,14 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
-from functools import lru_cache
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.utils import timezone
 
 from core.utils import safe_int
 from core.utils.time_scale import scale_duration
-from core.utils.yaml_loader import ensure_list, ensure_mapping, load_yaml_data
 
 from ...constants import BuildingKeys
 from ...models import Manor, TroopRecruitment
@@ -32,6 +28,7 @@ from ..technology import get_player_technology_level, get_technology_template
 from .lifecycle import finalize_troop_recruitment
 from .lifecycle import schedule_recruitment_completion as _schedule_recruitment_completion
 from .queries import get_active_recruitments, get_player_troops, refresh_troop_recruitments
+from .templates import clear_troop_cache, get_recruit_config, get_troop_template, load_troop_templates
 
 logger = logging.getLogger(__name__)
 TROOP_RECRUITMENT_DEFAULT_MAX_QUANTITY = 10
@@ -64,122 +61,6 @@ def _coerce_positive_int(value: Any, default: int = 1) -> int:
     if parsed is None:
         return default
     return max(1, parsed)
-
-
-def _normalize_recruit_config(raw: Any, *, troop_key: str) -> dict[str, Any] | None:
-    if raw is None:
-        return None
-    recruit = ensure_mapping(raw, logger=logger, context=f"troop_templates[{troop_key}].recruit")
-    if not recruit:
-        return None
-
-    equipment_raw = ensure_list(recruit.get("equipment"), logger=logger, context=f"{troop_key}.recruit.equipment")
-    equipment = [item_key for item in equipment_raw if (item_key := str(item or "").strip())]
-    tech_key = str(recruit.get("tech_key") or "").strip() or None
-
-    return {
-        "tech_key": tech_key,
-        "tech_level": _coerce_non_negative_int(recruit.get("tech_level"), 0),
-        "equipment": equipment,
-        "retainer_cost": _coerce_positive_int(recruit.get("retainer_cost"), 1),
-        "base_duration": _coerce_positive_int(recruit.get("base_duration"), 120),
-    }
-
-
-def _normalize_troop_templates_payload(raw: Any) -> Dict[str, Any]:
-    data = ensure_mapping(raw, logger=logger, context="troop_templates root")
-    troops_raw = ensure_list(data.get("troops"), logger=logger, context="troop_templates.troops")
-    normalized_troops: list[dict[str, Any]] = []
-
-    for entry in troops_raw:
-        troop = ensure_mapping(entry, logger=logger, context="troop_templates.troops[]")
-        if not troop:
-            continue
-        key = str(troop.get("key") or "").strip()
-        if not key:
-            logger.warning("Skip troop template without key: %r", troop)
-            continue
-
-        normalized = dict(troop)
-        normalized["key"] = key
-        normalized["name"] = str(troop.get("name") or key)
-        normalized["description"] = str(troop.get("description") or "")
-        normalized["base_attack"] = _coerce_non_negative_int(troop.get("base_attack"), 0)
-        normalized["base_defense"] = _coerce_non_negative_int(troop.get("base_defense"), 0)
-        normalized["base_hp"] = _coerce_non_negative_int(troop.get("base_hp"), 0)
-        normalized["speed_bonus"] = _coerce_non_negative_int(troop.get("speed_bonus"), 0)
-        normalized["avatar"] = str(troop.get("avatar") or "")
-        normalized["recruit"] = _normalize_recruit_config(troop.get("recruit"), troop_key=key)
-        normalized_troops.append(normalized)
-
-    return {"troops": normalized_troops}
-
-
-@lru_cache(maxsize=1)
-def load_troop_templates(file_path: str | None = None) -> Dict[str, Any]:
-    """
-    加载兵种配置文件。
-
-    Returns:
-        包含 troops 列表的字典
-    """
-    path = Path(file_path) if file_path else (settings.BASE_DIR / "data" / "troop_templates.yaml")
-    raw = load_yaml_data(path, logger=logger, context="troop templates", default={})
-    return _normalize_troop_templates_payload(raw)
-
-
-@lru_cache(maxsize=1)
-def _build_troop_index() -> Dict[str, Dict[str, Any]]:
-    """
-    构建兵种索引字典。
-
-    Returns:
-        {troop_key: troop_config} 索引字典
-    """
-    data = load_troop_templates()
-    result: Dict[str, Dict[str, Any]] = {}
-    for troop in data.get("troops", []):
-        if not isinstance(troop, dict):
-            continue
-        key = str(troop.get("key") or "").strip()
-        if key:
-            result[key] = troop
-    return result
-
-
-def clear_troop_cache() -> None:
-    """清理兵种配置缓存。"""
-    load_troop_templates.cache_clear()
-    _build_troop_index.cache_clear()
-
-
-def get_troop_template(troop_key: str) -> Optional[Dict[str, Any]]:
-    """
-    获取单个兵种的配置模板。
-
-    Args:
-        troop_key: 兵种标识
-
-    Returns:
-        兵种配置字典，不存在则返回 None
-    """
-    return _build_troop_index().get(troop_key)
-
-
-def get_recruit_config(troop_key: str) -> Optional[Dict[str, Any]]:
-    """
-    获取兵种的募兵配置。
-
-    Args:
-        troop_key: 兵种标识
-
-    Returns:
-        募兵配置字典，不存在则返回 None
-    """
-    troop = get_troop_template(troop_key)
-    if not troop:
-        return None
-    return troop.get("recruit")
 
 
 def calculate_recruitment_duration(base_duration: int, manor: Manor) -> int:
