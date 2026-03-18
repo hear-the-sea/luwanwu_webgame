@@ -85,6 +85,14 @@ class WorldChatConsumerTests(SimpleTestCase):
 
         consumer.send_json.assert_awaited_once_with({"type": "pong"})
 
+    def test_receive_json_ping_skips_session_revalidation(self):
+        consumer = self._build_consumer()
+        consumer._ensure_valid_session = AsyncMock(side_effect=AssertionError("should not validate ping"))
+
+        asyncio.run(consumer.receive_json({"type": "ping"}))
+
+        consumer.send_json.assert_awaited_once_with({"type": "pong"})
+
     def test_receive_json_rejects_non_string_text(self):
         consumer = self._build_consumer()
 
@@ -153,6 +161,28 @@ class WorldChatConsumerTests(SimpleTestCase):
                 "payload": message,
             },
         )
+
+    def test_receive_json_send_reuses_dispatch_session_validation(self):
+        consumer = self._build_consumer()
+        consumer._single_session_checked_by_dispatch = True
+        consumer._ensure_valid_session = AsyncMock(side_effect=AssertionError("should reuse dispatch validation"))
+        consumer._rate_limit = AsyncMock(return_value=(True, None))
+        consumer._consume_trumpet = AsyncMock(return_value=(True, ""))
+        consumer._append_history = AsyncMock()
+
+        message = {
+            "type": "message",
+            "channel": "world",
+            "id": 1,
+            "ts": 1700000000000,
+            "sender": {"id": 1, "name": "玩家A"},
+            "text": "hello",
+        }
+        consumer._build_message = AsyncMock(return_value=message)
+
+        asyncio.run(consumer.receive_json({"type": "send", "text": "hello"}))
+
+        consumer.channel_layer.group_send.assert_awaited_once()
 
     def test_receive_json_refunds_trumpet_when_history_write_fails(self):
         consumer = self._build_consumer()
@@ -253,10 +283,13 @@ class WorldChatConsumerTests(SimpleTestCase):
         consumer = self._build_consumer()
         consumer._rate_limit = AsyncMock(return_value=(True, None))
         consumer._consume_trumpet = AsyncMock(return_value=(True, ""))
+        consumer._refund_trumpet = AsyncMock(return_value=True)
         consumer._build_message = AsyncMock(side_effect=RuntimeError("bug"))
 
         with self.assertRaisesRegex(RuntimeError, "bug"):
             asyncio.run(consumer.receive_json({"type": "send", "text": "hello"}))
+
+        consumer._refund_trumpet.assert_awaited_once_with()
 
     def test_connect_reports_history_degraded_status(self):
         consumer = WorldChatConsumer()

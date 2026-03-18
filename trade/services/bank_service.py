@@ -190,14 +190,38 @@ def _calculate_supply_factor_override() -> Callable[..., Any] | None:
     return calculate_supply_factor
 
 
+def _hook_safe_cache_get(key: str, default: Any = None) -> Any:
+    return _safe_cache_get(key, default)
+
+
+def _hook_safe_cache_set(key: str, value: Any, timeout: int) -> None:
+    _safe_cache_set(key, value, timeout)
+
+
+def _hook_safe_cache_add(key: str, value: Any, timeout: int) -> bool:
+    return _safe_cache_add(key, value, timeout)
+
+
+def _hook_safe_cache_delete(key: str) -> None:
+    _safe_cache_delete(key)
+
+
+def _hook_release_cache_lock_if_owner(lock_key: str, lock_token: str) -> None:
+    _release_cache_lock_if_owner(lock_key, lock_token)
+
+
+def _hook_get_today_exchange_count(manor: Manor) -> int:
+    return get_today_exchange_count(manor)
+
+
 configure_rate_calculation_hooks(
     _rate_calculations,
-    safe_cache_get=_safe_cache_get,
-    safe_cache_set=_safe_cache_set,
-    safe_cache_add=_safe_cache_add,
-    safe_cache_delete=_safe_cache_delete,
-    release_cache_lock_if_owner=_release_cache_lock_if_owner,
-    get_today_exchange_count=get_today_exchange_count,
+    safe_cache_get=_hook_safe_cache_get,
+    safe_cache_set=_hook_safe_cache_set,
+    safe_cache_add=_hook_safe_cache_add,
+    safe_cache_delete=_hook_safe_cache_delete,
+    release_cache_lock_if_owner=_hook_release_cache_lock_if_owner,
+    get_today_exchange_count=_hook_get_today_exchange_count,
     get_effective_gold_supply_override=_get_effective_gold_supply_override,
     calculate_supply_factor_override=_calculate_supply_factor_override,
 )

@@ -25,6 +25,7 @@ _DEGRADED_COMPONENTS = [
     "login_security_degraded",
     "celery_dispatch_failed",
 ]
+_READY_CACHE_KEY = "health:ready:payload:v1"
 
 
 def _maybe_debug_error(exc: Exception) -> str | None:
@@ -53,6 +54,31 @@ def _is_internal_request(request) -> bool:
     except ValueError:
         return False
     return ip.is_loopback or ip.is_private
+
+
+def _should_include_health_details() -> bool:
+    return bool(getattr(settings, "HEALTH_CHECK_INCLUDE_DETAILS", False))
+
+
+def _load_cached_ready_payload() -> tuple[dict[str, object], int] | None:
+    ttl_seconds = max(0, int(getattr(settings, "HEALTH_CHECK_CACHE_TTL_SECONDS", 0)))
+    if ttl_seconds <= 0:
+        return None
+    cached = cache.get(_READY_CACHE_KEY)
+    if not isinstance(cached, dict):
+        return None
+    payload = cached.get("payload")
+    status_code = cached.get("status_code")
+    if not isinstance(payload, dict) or not isinstance(status_code, int):
+        return None
+    return payload, status_code
+
+
+def _store_cached_ready_payload(payload: dict[str, object], status_code: int) -> None:
+    ttl_seconds = max(0, int(getattr(settings, "HEALTH_CHECK_CACHE_TTL_SECONDS", 0)))
+    if ttl_seconds <= 0:
+        return
+    cache.set(_READY_CACHE_KEY, {"payload": payload, "status_code": status_code}, timeout=ttl_seconds)
 
 
 def _check_database_ready() -> tuple[bool, str | None]:
@@ -171,6 +197,11 @@ def health_ready(request):
     if getattr(settings, "HEALTH_CHECK_REQUIRE_INTERNAL", False) and not _is_internal_request(request):
         raise Http404()
 
+    cached = _load_cached_ready_payload()
+    if cached is not None:
+        payload, status_code = cached
+        return JsonResponse(payload, status=status_code)
+
     checks: dict[str, bool] = {"db": True, "cache": True}
     errors: dict[str, str] = {}
 
@@ -225,17 +256,20 @@ def health_ready(request):
     if errors:
         payload["errors"] = errors
 
-    degradation = get_degradation_counts()
-    if degradation:
-        payload["degradation_counts"] = degradation
+    if _should_include_health_details():
+        degradation = get_degradation_counts()
+        if degradation:
+            payload["degradation_counts"] = degradation
 
-    task_metrics = get_task_metrics()
-    if task_metrics:
-        payload["task_metrics"] = task_metrics
+        task_metrics = get_task_metrics()
+        if task_metrics:
+            payload["task_metrics"] = task_metrics
 
-    degraded_counters = {c: get_degraded_counter(c) for c in _DEGRADED_COMPONENTS}
-    nonzero_degraded = {c: v for c, v in degraded_counters.items() if v > 0}
-    if nonzero_degraded:
-        payload["degraded_counters"] = nonzero_degraded
+        degraded_counters = {c: get_degraded_counter(c) for c in _DEGRADED_COMPONENTS}
+        nonzero_degraded = {c: v for c, v in degraded_counters.items() if v > 0}
+        if nonzero_degraded:
+            payload["degraded_counters"] = nonzero_degraded
 
-    return JsonResponse(payload, status=200 if ok else 503)
+    status_code = 200 if ok else 503
+    _store_cached_ready_payload(payload, status_code)
+    return JsonResponse(payload, status=status_code)

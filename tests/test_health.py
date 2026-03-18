@@ -1,6 +1,7 @@
 import asyncio
 
 import pytest
+from django.core.cache import cache
 from django.test import override_settings
 
 from core.views import health as health_views
@@ -44,6 +45,67 @@ def test_health_ready_returns_503_when_cache_check_fails(monkeypatch, client):
     data = resp.json()
     assert data["status"] == "error"
     assert data["checks"] == {"db": True, "cache": False}
+
+
+@pytest.mark.django_db
+@override_settings(HEALTH_CHECK_CACHE_TTL_SECONDS=30)
+def test_health_ready_uses_cached_payload(monkeypatch, client):
+    cache.delete("health:ready:payload:v1")
+    calls = {"db": 0, "cache": 0}
+
+    def _db():
+        calls["db"] += 1
+        return True, None
+
+    def _cache():
+        calls["cache"] += 1
+        return True, None
+
+    monkeypatch.setattr("core.views.health._check_database_ready", _db)
+    monkeypatch.setattr("core.views.health._check_cache_ready", _cache)
+
+    first = client.get("/health/ready")
+    second = client.get("/health/ready")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert calls == {"db": 1, "cache": 1}
+
+
+@pytest.mark.django_db
+@override_settings(HEALTH_CHECK_INCLUDE_DETAILS=False)
+def test_health_ready_omits_internal_metrics_when_detail_flag_disabled(monkeypatch, client):
+    monkeypatch.setattr("core.views.health._check_database_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health._check_cache_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health.get_degradation_counts", lambda: {"world_chat_refund": 3})
+    monkeypatch.setattr("core.views.health.get_task_metrics", lambda: {"queue_depth": 9})
+    monkeypatch.setattr("core.views.health.get_degraded_counter", lambda _name: 1)
+
+    resp = client.get("/health/ready")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "degradation_counts" not in data
+    assert "task_metrics" not in data
+    assert "degraded_counters" not in data
+
+
+@pytest.mark.django_db
+@override_settings(HEALTH_CHECK_INCLUDE_DETAILS=True)
+def test_health_ready_includes_internal_metrics_when_detail_flag_enabled(monkeypatch, client):
+    monkeypatch.setattr("core.views.health._check_database_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health._check_cache_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health.get_degradation_counts", lambda: {"world_chat_refund": 3})
+    monkeypatch.setattr("core.views.health.get_task_metrics", lambda: {"queue_depth": 9})
+    monkeypatch.setattr("core.views.health.get_degraded_counter", lambda _name: 1)
+
+    resp = client.get("/health/ready")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["degradation_counts"] == {"world_chat_refund": 3}
+    assert data["task_metrics"] == {"queue_depth": 9}
+    assert "degraded_counters" in data
 
 
 @pytest.mark.django_db

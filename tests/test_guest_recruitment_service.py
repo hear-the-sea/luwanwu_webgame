@@ -400,3 +400,58 @@ def test_bulk_finalize_candidates_respects_capacity_and_grants_template_skills(d
     }
     assert RecruitmentCandidate.objects.filter(id=candidate_1.id).exists() is False
     assert RecruitmentCandidate.objects.filter(id=candidate_2.id).exists() is True
+
+
+@pytest.mark.django_db
+def test_bulk_finalize_candidates_marks_missing_candidates_as_failed(django_user_model):
+    user = django_user_model.objects.create_user(
+        username="bulk_finalize_missing_user",
+        password="pass123",
+        email="bulk_finalize_missing_user@test.local",
+    )
+    manor = ensure_manor(user)
+
+    template = GuestTemplate.objects.create(
+        key="bulk_finalize_missing_tpl",
+        name="批量缺失模板",
+        archetype="civil",
+        rarity="gray",
+        base_attack=60,
+        base_intellect=80,
+        base_defense=50,
+        base_agility=40,
+        base_luck=30,
+        base_hp=500,
+    )
+    pool = RecruitmentPool.objects.create(
+        key="bulk_finalize_missing_pool",
+        name="批量缺失卡池",
+        cost={},
+        tier=RecruitmentPool.Tier.CUNMU,
+        draw_count=1,
+    )
+
+    candidate_1 = RecruitmentCandidate.objects.create(
+        manor=manor,
+        pool=pool,
+        template=template,
+        display_name="缺失候选一",
+        rarity="gray",
+        archetype="civil",
+    )
+    candidate_2 = RecruitmentCandidate.objects.create(
+        manor=manor,
+        pool=pool,
+        template=template,
+        display_name="缺失候选二",
+        rarity="gray",
+        archetype="civil",
+    )
+    stale_candidate = RecruitmentCandidate.objects.get(pk=candidate_1.pk)
+    RecruitmentCandidate.objects.filter(pk=candidate_1.pk).delete()
+
+    created, failed = recruitment_guest_service.bulk_finalize_candidates([stale_candidate, candidate_2])
+
+    assert len(created) == 1
+    assert created[0].custom_name == "缺失候选二"
+    assert [candidate.id for candidate in failed] == [candidate_1.id]

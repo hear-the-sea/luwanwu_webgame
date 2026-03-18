@@ -100,9 +100,12 @@ def test_single_session_middleware_rechecks_db_when_verify_marker_cache_write_fa
 
 
 @pytest.mark.django_db
-def test_single_session_middleware_logs_out_when_authoritative_lookup_errors(client, django_user_model, monkeypatch):
-    user = django_user_model.objects.create_user(username="single_session_fail_closed", password="pass123")
+def test_single_session_middleware_keeps_session_when_authoritative_lookup_errors(
+    client, django_user_model, monkeypatch
+):
+    user = django_user_model.objects.create_user(username="single_session_fail_open", password="pass123")
     client.force_login(user)
+    current_session_key = client.session.session_key
 
     def fake_load_active_session_key(_user_id):
         raise DatabaseError("db unavailable")
@@ -112,4 +115,5 @@ def test_single_session_middleware_logs_out_when_authoritative_lookup_errors(cli
     response = client.get("/health/live")
 
     assert response.status_code == 200
-    assert "_auth_user_id" not in client.session
+    assert client.session.get("_auth_user_id") == str(user.id)
+    assert client.session.session_key == current_session_key

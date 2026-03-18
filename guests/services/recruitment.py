@@ -19,7 +19,7 @@ from core.exceptions import InsufficientStockError
 if TYPE_CHECKING:
     from gameplay.models import Manor
 
-from gameplay.services.inventory.core import consume_inventory_item_locked
+from gameplay.services.inventory import core as inventory_core
 from gameplay.services.resources import spend_resources
 
 from ..models import GuestRecruitment, RecruitmentCandidate, RecruitmentPool
@@ -77,7 +77,7 @@ def use_magnifying_glass_for_candidates(manor: Manor, item_id: int) -> int:
     if count <= 0:
         return 0
 
-    consume_inventory_item_locked(locked_item, 1)
+    inventory_core.consume_inventory_item_locked(locked_item, 1)
     _recruitment_shared.invalidate_recruitment_hall_cache(getattr(manor, "id", None))
     return int(count)
 

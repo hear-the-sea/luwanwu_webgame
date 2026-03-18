@@ -102,7 +102,7 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
             )
             await self.close()
             return
-        if not await self._ensure_valid_session(force=True):
+        if not await self._ensure_valid_session():
             await self.close()
             return
 
@@ -166,6 +166,7 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
             return
 
         history_written = False
+        message: dict | None = None
         try:
             message = await self._build_message(text)
             await self._append_history(message)
@@ -178,10 +179,10 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
                 },
             )
         except WORLD_CHAT_EXPECTED_INFRASTRUCTURE_ERRORS:
-            history_removed = True
-            if history_written:
-                history_removed = await self._remove_history_compensation(message)
-            refunded = await self._refund_trumpet()
+            refunded, history_removed = await self._compensate_failed_publish(
+                message=message,
+                history_written=history_written,
+            )
             record_degradation(
                 WORLD_CHAT_REFUND,
                 component="world_chat",
@@ -213,25 +214,44 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
                 }
             )
         except Exception:
+            refunded, history_removed = await self._compensate_failed_publish(
+                message=message,
+                history_written=history_written,
+            )
+            record_degradation(
+                WORLD_CHAT_REFUND,
+                component="world_chat",
+                detail=f"unexpected publish failed, refunded={refunded}, history_removed={history_removed}",
+                user_id=self.user_id,
+            )
             logger.error(
-                "Unexpected world chat publish failure: user_id=%s",
+                "Unexpected world chat publish failure: user_id=%s refunded=%s history_removed=%s",
                 self.user_id,
+                refunded,
+                history_removed,
                 exc_info=True,
-                extra={"degraded": True, "component": "world_chat_publish", "user_id": self.user_id},
+                extra={
+                    "degraded": True,
+                    "component": "world_chat_publish",
+                    "user_id": self.user_id,
+                    "refunded": refunded,
+                    "history_removed": history_removed,
+                },
             )
             raise
 
     async def receive_json(self, content, **kwargs):
         try:
-            if not await self._ensure_valid_session():
-                await self.close()
-                return
-
             msg_type = content.get("type")
 
             if msg_type == "ping":
                 await self.send_json({"type": "pong"})
                 return
+
+            if not getattr(self, "_single_session_checked_by_dispatch", False):
+                if not await self._ensure_valid_session():
+                    await self.close()
+                    return
 
             if msg_type != "send":
                 return
@@ -399,6 +419,13 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
                 },
             )
             return False
+
+    async def _compensate_failed_publish(self, *, message: dict | None, history_written: bool) -> tuple[bool, bool]:
+        history_removed = True
+        if history_written and message is not None:
+            history_removed = await self._remove_history_compensation(message)
+        refunded = await self._refund_trumpet()
+        return refunded, history_removed
 
     def _rate_limit_sync(self, user_id: int | None) -> tuple[bool, int | None]:
         redis = self._get_redis()

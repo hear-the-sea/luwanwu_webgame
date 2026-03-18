@@ -27,7 +27,7 @@ class NotificationConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsum
             )
             await self.close()
             return
-        if not await self._ensure_valid_session(force=True):
+        if not await self._ensure_valid_session():
             await self.close()
             return
 

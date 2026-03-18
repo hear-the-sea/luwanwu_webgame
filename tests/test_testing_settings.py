@@ -48,6 +48,8 @@ def test_testing_settings_force_in_memory_backends(monkeypatch: pytest.MonkeyPat
     assert module.CHANNEL_LAYERS["default"]["BACKEND"] == "channels.layers.InMemoryChannelLayer"
     assert module.HEALTH_CHECK_REQUIRE_INTERNAL is False
     assert module.HEALTH_CHECK_CHANNEL_LAYER is False
+    assert module.HEALTH_CHECK_CACHE_TTL_SECONDS == 0
+    assert module.HEALTH_CHECK_INCLUDE_DETAILS is False
     assert module.HEALTH_CHECK_CELERY_BROKER is False
     assert module.HEALTH_CHECK_CELERY_WORKERS is False
     assert module.HEALTH_CHECK_CELERY_BEAT is False

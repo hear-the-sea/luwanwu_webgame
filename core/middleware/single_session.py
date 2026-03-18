@@ -17,6 +17,10 @@ _SESSION_VERIFY_CACHE_SUFFIX = ":verified"
 _SESSION_VERIFY_CACHE_TTL_SECONDS = min(USER_SESSION_CACHE_TTL, 300) if USER_SESSION_CACHE_TTL > 0 else 300
 
 
+class SessionValidationUnavailable(RuntimeError):
+    """Raised when authoritative single-session validation cannot complete."""
+
+
 def _load_active_session_key(user_id: int) -> str | None:
     cache_key = f"{USER_SESSION_CACHE_PREFIX}{user_id}"
     try:
@@ -98,7 +102,10 @@ def _validate_active_session_key(user_id: int, current_session_key: str) -> bool
 def is_single_session_request_valid(user_id: int, current_session_key: str | None) -> bool:
     if not user_id or not current_session_key:
         return False
-    return _validate_active_session_key(int(user_id), str(current_session_key))
+    try:
+        return _validate_active_session_key(int(user_id), str(current_session_key))
+    except Exception as exc:
+        raise SessionValidationUnavailable("single-session validation unavailable") from exc
 
 
 class SingleSessionMiddleware:
@@ -113,14 +120,18 @@ class SingleSessionMiddleware:
             if current_session_key:
                 try:
                     session_is_valid = is_single_session_request_valid(user.id, current_session_key)
-                except Exception:
+                except SessionValidationUnavailable:
                     record_degradation(
                         SESSION_SYNC_FAILURE,
                         component="single_session_middleware",
-                        detail="session enforcement failed, logging out current request",
+                        detail="session enforcement unavailable, allowing current request",
                         user_id=user.id,
                     )
-                    logout(request)
+                    logger.warning(
+                        "Single-session validation unavailable; keeping authenticated request: user_id=%s",
+                        user.id,
+                        exc_info=True,
+                    )
                 else:
                     if not session_is_valid:
                         logout(request)

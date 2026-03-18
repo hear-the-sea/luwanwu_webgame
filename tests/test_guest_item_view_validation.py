@@ -324,6 +324,36 @@ def test_candidate_accept_view_rejects_when_action_lock_conflicts(game_data, dja
 
 
 @pytest.mark.django_db
+def test_candidate_accept_view_uses_manor_wide_candidate_action_lock(game_data, django_user_model, monkeypatch):
+    user = django_user_model.objects.create_user(username="view_candidate_accept_lock_scope", password="pass123")
+    manor = ensure_manor(user)
+    client = Client()
+    assert client.login(username="view_candidate_accept_lock_scope", password="pass123")
+    pool = RecruitmentPool.objects.get(key="cunmu")
+    candidate = recruit_guest(manor, pool, seed=11)[0]
+    captured: dict[str, str | int | None] = {}
+
+    def _capture_lock(action, manor_id, scope):
+        captured["action"] = action
+        captured["manor_id"] = manor_id
+        captured["scope"] = scope
+        return False, "", None
+
+    monkeypatch.setattr("guests.views.recruit._acquire_recruit_action_lock", _capture_lock)
+
+    response = client.post(
+        reverse("guests:candidate_accept"), {"candidate_ids": [str(candidate.pk)], "action": "retain"}
+    )
+
+    assert response.status_code == 302
+    assert captured == {
+        "action": "candidate_action",
+        "manor_id": manor.id,
+        "scope": f"candidate-actions:{manor.id}",
+    }
+
+
+@pytest.mark.django_db
 def test_candidate_accept_view_retain_ajax_success_returns_recruitment_hall_partials(game_data, django_user_model):
     user = django_user_model.objects.create_user(username="view_candidate_accept_retain_ajax", password="pass123")
     manor = ensure_manor(user)

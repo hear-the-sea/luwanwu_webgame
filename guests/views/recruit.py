@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import logging
 from collections.abc import Callable
 
@@ -136,12 +135,8 @@ def _release_recruit_action_lock(lock_key: str, lock_token: str | None) -> None:
     )
 
 
-def _candidate_scope_digest(action: str, scope: str, candidate_ids: list[int] | None = None) -> str:
-    payload = f"{action}|{scope}"
-    if scope == "selected" and candidate_ids:
-        normalized = ",".join(str(i) for i in sorted(set(candidate_ids)))
-        payload = f"{payload}|{normalized}"
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24]
+def _candidate_action_lock_scope(manor_id: int) -> str:
+    return f"candidate-actions:{int(manor_id)}"
 
 
 def _recruit_action_lock_conflict_response(request, manor, *, is_ajax: bool) -> HttpResponse:
@@ -481,7 +476,6 @@ def accept_candidate_view(request):
 
     raw_candidate_ids = request.POST.getlist("candidate_ids")
     selection: CandidateSelection | None = None
-    candidate_ids: list[int] | None = None
     if scope == "selected":
         selection, resolution_error = resolve_selected_candidate_selection(
             manor=manor,
@@ -492,7 +486,6 @@ def accept_candidate_view(request):
         if resolution_error is not None:
             return _recruitment_hall_resolution_error_response(request, manor, resolution_error, is_ajax=is_ajax)
         assert selection is not None
-        candidate_ids = selection.candidate_ids
 
     action = _normalize_candidate_action(request.POST.get("action"))
     if action is None:
@@ -508,7 +501,7 @@ def accept_candidate_view(request):
             return _recruitment_hall_resolution_error_response(request, manor, resolution_error, is_ajax=is_ajax)
         assert selection is not None
 
-    lock_scope = _candidate_scope_digest(action, scope, candidate_ids)
+    lock_scope = _candidate_action_lock_scope(int(manor.id))
 
     def _perform_accept() -> HttpResponse:
         assert selection is not None
@@ -524,7 +517,7 @@ def accept_candidate_view(request):
         request=request,
         manor=manor,
         is_ajax=is_ajax,
-        lock_action="accept",
+        lock_action="candidate_action",
         lock_scope=lock_scope,
         operation=_perform_accept,
         database_log_message="Unexpected recruit accept database error: manor_id=%s user_id=%s action=%s candidate_count=%s",

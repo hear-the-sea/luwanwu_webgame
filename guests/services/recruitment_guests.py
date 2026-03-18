@@ -177,11 +177,31 @@ def bulk_finalize_candidates(
     from gameplay.models import Manor
 
     manor = Manor.objects.select_for_update().get(pk=candidates[0].manor_id)
-    available_slots = _remaining_guest_capacity(manor)
-    if available_slots <= 0:
+    requested_ids = [int(candidate.id) for candidate in candidates if getattr(candidate, "id", None)]
+    if not requested_ids:
         return [], candidates
 
-    to_process, failed = _split_candidates_by_capacity(candidates, available_slots=available_slots)
+    locked_candidates_map = {
+        candidate.id: candidate
+        for candidate in RecruitmentCandidate.objects.select_for_update()
+        .filter(manor_id=manor.id, id__in=requested_ids)
+        .order_by("id")
+    }
+    locked_candidates = [
+        locked_candidates_map[candidate_id] for candidate_id in requested_ids if candidate_id in locked_candidates_map
+    ]
+    stale_candidates = [
+        candidate for candidate in candidates if getattr(candidate, "id", None) not in locked_candidates_map
+    ]
+    if not locked_candidates:
+        return [], stale_candidates or candidates
+
+    available_slots = _remaining_guest_capacity(manor)
+    if available_slots <= 0:
+        return [], locked_candidates + stale_candidates
+
+    to_process, failed = _split_candidates_by_capacity(locked_candidates, available_slots=available_slots)
+    failed = stale_candidates + failed
 
     rng = random.Random()
     template_ids = {candidate.template_id for candidate in to_process}

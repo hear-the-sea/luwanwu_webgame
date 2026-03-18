@@ -21,7 +21,7 @@ from core.exceptions import (
     InsufficientStockError,
 )
 from core.utils import safe_int
-from gameplay.services.inventory.core import consume_inventory_item_locked
+from gameplay.services.inventory import core as inventory_core
 from gameplay.services.resources import spend_resources
 
 if TYPE_CHECKING:
@@ -207,7 +207,7 @@ def use_experience_item_for_guest(manor: Manor, guest: Guest, item_id: int, redu
         raise GuestNotIdleError(locked_guest)
 
     result = reduce_training_time_for_guest(locked_guest, reduce_seconds)
-    consume_inventory_item_locked(locked_item, 1)
+    inventory_core.consume_inventory_item_locked(locked_item, 1)
 
     remaining_quantity = 0
     if locked_item.pk:

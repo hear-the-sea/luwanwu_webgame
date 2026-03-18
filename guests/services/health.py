@@ -13,7 +13,7 @@ from django.utils import timezone
 from core.exceptions import GuestFullHpError, GuestNotIdleError, InsufficientStockError, InvalidHealAmountError
 from core.utils import safe_int
 from core.utils.time_scale import scale_value
-from gameplay.services.inventory.core import consume_inventory_item_locked
+from gameplay.services.inventory import core as inventory_core
 
 from .. import guest_health_rules as _guest_health_rules
 from ..constants import TimeConstants
@@ -175,7 +175,7 @@ def use_medicine_item_for_guest(manor: Manor, guest: Guest, item_id: int, heal_a
         raise ValueError("门客不存在或不属于您的庄园")
 
     result = heal_guest(locked_guest, heal_amount)
-    consume_inventory_item_locked(locked_item, 1)
+    inventory_core.consume_inventory_item_locked(locked_item, 1)
 
     remaining_quantity = 0
     if locked_item.pk:
