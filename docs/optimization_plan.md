@@ -71,7 +71,7 @@
 
 ### 2.4 当前未完成的高优先级问题
 
-- `mission / raid / guest recruitment` 的真实并发语义测试仍然不够；虽然 `mission` 发起/撤退、refresh dispatch / worker 消费，`scout` refresh dispatch / worker 消费，`raid` 发起、battle worker、撤退返程 worker 消费，`guest recruitment` 发起/完成/候选确认已覆盖首批关键竞争与派发语义，但更多 refresh 补偿链路和 battle/return 并发竞争仍是缺口。
+- `mission / raid / guest recruitment` 的真实并发语义测试仍然不够；虽然 `mission` 发起/撤退、refresh dispatch / worker 消费，`scout` refresh dispatch / worker 消费，`raid` 发起/撤退、battle worker、撤退返程 worker 消费，`guest recruitment` 发起/完成/候选确认已覆盖首批关键竞争与派发语义，但更多 refresh 补偿链路和 battle/return 并发竞争仍是缺口。
 - 项目内仍有不少入口继续把 `ValueError` 作为跨层业务语义，异常层次还没有整体收口。
 - 页面读路径虽然已经开始统一，但尚未完全消除显式补偿调用、局部降级分叉，以及 `refresh_manor_state(...)` 这一类总刷新入口的扩散风险。
 
