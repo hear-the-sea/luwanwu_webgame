@@ -32,7 +32,7 @@ from gameplay.services.utils.cache import CacheKeys
 from gameplay.services.utils.messages import claim_message_attachments
 from gameplay.tasks.pvp import complete_scout_task
 from guests.models import RecruitmentPool
-from guests.services.recruitment import recruit_guest
+from guests.services.recruitment import recruit_guest, refresh_guest_recruitments, start_guest_recruitment
 from guests.services.recruitment_guests import finalize_candidate
 from guilds.constants import CONTRIBUTION_RATES, GUILD_CREATION_COST
 from guilds.models import GuildAnnouncement, GuildDonationLog, GuildMember, GuildResourceLog
@@ -400,6 +400,40 @@ def test_integration_mission_launch_refresh_and_report_flow(
     assert run.completed_at is not None
     assert guest.status in [guest.Status.IDLE, guest.Status.INJURED]
     assert Message.objects.filter(manor=manor, title=f"{mission.name} 战报", battle_report=run.battle_report).exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_integration_guest_recruitment_refresh_and_finalize_candidate_flow(
+    require_env_services, game_data, django_user_model
+):
+    user = django_user_model.objects.create_user(
+        username=f"intg_guest_recruit_{uuid.uuid4().hex[:8]}",
+        password="pass123",
+    )
+    manor = ensure_manor(user)
+    manor.silver = 500000
+    manor.grain = 500000
+    manor.save(update_fields=["silver", "grain"])
+
+    pool = RecruitmentPool.objects.get(key="cunmu")
+    recruitment = start_guest_recruitment(manor, pool, seed=77)
+    recruitment.complete_at = timezone.now() - timedelta(seconds=1)
+    recruitment.save(update_fields=["complete_at"])
+
+    completed = refresh_guest_recruitments(manor)
+
+    recruitment.refresh_from_db()
+    assert completed == 1
+    assert recruitment.status == recruitment.Status.COMPLETED
+    assert recruitment.result_count == manor.candidates.count()
+    assert recruitment.result_count > 0
+
+    candidate = manor.candidates.order_by("id").first()
+    assert candidate is not None
+    guest = finalize_candidate(candidate)
+
+    assert guest.manor_id == manor.id
+    assert not manor.candidates.filter(pk=candidate.pk).exists()
 
 
 @pytest.mark.django_db(transaction=True)
