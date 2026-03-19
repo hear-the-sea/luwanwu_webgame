@@ -435,6 +435,52 @@ def test_integration_mission_launch_refresh_and_report_flow(
 
 
 @pytest.mark.django_db(transaction=True)
+def test_integration_complete_mission_task_finalizes_due_run(
+    require_env_services, game_data, mission_templates, django_user_model
+):
+    user = django_user_model.objects.create_user(
+        username=f"intg_mission_task_{uuid.uuid4().hex[:8]}",
+        password="pass123",
+    )
+    manor = ensure_manor(user)
+    manor.silver = max(int(manor.silver or 0), 50_000)
+    manor.grain = max(int(manor.grain or 0), 50_000)
+    manor.save(update_fields=["silver", "grain"])
+
+    mission = MissionTemplate.objects.filter(guest_only=False, is_defense=False).first()
+    if mission is None:
+        pytest.skip("No offense mission available for integration coverage")
+
+    pool = RecruitmentPool.objects.get(key="cunmu")
+    candidate = recruit_guest(manor, pool, seed=23)[0]
+    guest = finalize_candidate(candidate)
+
+    troop_template = TroopTemplate.objects.filter(key="archer").first() or TroopTemplate.objects.first()
+    assert troop_template is not None
+
+    PlayerTroop.objects.update_or_create(
+        manor=manor,
+        troop_template=troop_template,
+        defaults={"count": 200},
+    )
+
+    run = launch_mission(manor, mission, [guest.id], {troop_template.key: 20})
+    run.return_at = timezone.now() - timedelta(seconds=1)
+    run.save(update_fields=["return_at"])
+
+    result = complete_mission_task.run(run.id)
+
+    run.refresh_from_db()
+    guest.refresh_from_db()
+
+    assert result == "completed"
+    assert run.status == MissionRun.Status.COMPLETED
+    assert run.completed_at is not None
+    assert guest.status in [guest.Status.IDLE, guest.Status.INJURED]
+    assert Message.objects.filter(manor=manor, title=f"{mission.name} 战报", battle_report=run.battle_report).exists()
+
+
+@pytest.mark.django_db(transaction=True)
 def test_integration_guest_recruitment_refresh_and_finalize_candidate_flow(
     require_env_services, game_data, django_user_model
 ):
