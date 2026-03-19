@@ -9,6 +9,7 @@ import pytest
 from django.core.cache import cache
 from django.utils import timezone
 
+import gameplay.services.missions_impl.execution as mission_execution
 from battle.models import TroopTemplate
 from gameplay.models import (
     InventoryItem,
@@ -30,6 +31,7 @@ from gameplay.services.raid import scout_refresh as scout_refresh_command
 from gameplay.services.raid import start_raid, start_scout
 from gameplay.services.utils.cache import CacheKeys
 from gameplay.services.utils.messages import claim_message_attachments
+from gameplay.tasks import complete_mission_task
 from gameplay.tasks.pvp import complete_scout_task
 from guests.models import RecruitmentPool
 from guests.services.recruitment import recruit_guest, refresh_guest_recruitments, start_guest_recruitment
@@ -348,6 +350,36 @@ def test_integration_start_scout_creates_record_under_external_services(
     assert record.status == ScoutRecord.Status.SCOUTING
     assert record.complete_at > record.started_at
     assert troop.count == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_integration_mission_refresh_dispatch_sets_external_dedup_gate(require_env_services):
+    run_id = 30_000_000 + int(time.time())
+    dedup_key = f"mission:refresh_dispatch:{run_id}"
+    cache.delete(dedup_key)
+
+    ok = mission_execution._try_dispatch_mission_refresh_task(complete_mission_task, run_id)
+
+    assert ok is True
+    assert cache.get(dedup_key) == "1"
+
+    cache.delete(dedup_key)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_integration_mission_refresh_dispatch_failure_rolls_back_dedup_gate(require_env_services):
+    run_id = 40_000_000 + int(time.time())
+    dedup_key = f"mission:refresh_dispatch:{run_id}"
+    cache.delete(dedup_key)
+
+    class _FailingTask:
+        def apply_async(self, **_kwargs):
+            raise RuntimeError("dispatch failed")
+
+    ok = mission_execution._try_dispatch_mission_refresh_task(_FailingTask(), run_id)
+
+    assert ok is False
+    assert cache.get(dedup_key) is None
 
 
 @pytest.mark.django_db(transaction=True)

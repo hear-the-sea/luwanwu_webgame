@@ -54,7 +54,7 @@
 - `gameplay/services/raid/scout_refresh.py` 已开始承接侦察 refresh 补偿命令，但 `scout.py` 的其它动作边界和真实服务测试仍需继续收口。
 - `gameplay/services/raid/scout_return.py` 已开始承接撤退请求和返程完成写命令；`scout_start.py`、`scout_finalize.py` 现已承接侦察发起/结果写入主写命令，但真实服务测试仍未封板。
 - `raid/scout` 已补第一批真实外部服务测试，开始覆盖 refresh dispatch dedup gate、dispatch 失败回滚和同步补偿收口；但并发冲突与 worker 实际消费语义仍未封板。
-- `mission` 已补第一批真实并发语义测试，覆盖同门客并发发起只允许一个 `ACTIVE`、同一 `MissionRun` 并发撤退只允许一个状态迁移成功；但 refresh dispatch、worker 实际消费和更多补偿场景仍未封板。
+- `mission` 已补第一批真实并发与任务派发语义测试，覆盖同门客并发发起只允许一个 `ACTIVE`、同一 `MissionRun` 并发撤退只允许一个状态迁移成功，以及 refresh dispatch dedup gate / dispatch 失败回滚；但 worker 实际消费和更多补偿场景仍未封板。
 - `guest recruitment` 已开始补真实服务语义测试，覆盖并发发起只允许一个 `PENDING`、refresh 补偿完成与候选确认链路；但更多 `select_for_update` 竞争场景仍未封板。
 - `buildings` 升级入口已不再从 view 直接调用 `refresh_manor_state(...)`；陈旧升级状态改由 `start_upgrade()` 写命令自行收口。
 - `guests/roster`、`guests/detail` 的门客状态准备已收口到显式 read helper，不再在 `get_context_data()` 内联推进状态。
