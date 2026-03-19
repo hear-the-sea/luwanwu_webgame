@@ -385,6 +385,26 @@ def test_convert_candidate_to_retainer_rejects_missing_candidate(game_data, djan
 
 
 @pytest.mark.django_db
+def test_finalize_candidate_rejects_missing_candidate(game_data, django_user_model, load_guest_data):
+    user = django_user_model.objects.create_user(username="player_finalize_missing_candidate", password="pass123")
+    manor = ensure_manor(user)
+    manor.grain = manor.silver = 500000
+    manor.save(update_fields=["grain", "silver"])
+
+    pool = RecruitmentPool.objects.get(key="cunmu")
+    candidate = recruit_guest(manor, pool, seed=7)[0]
+    candidate_id = candidate.pk
+
+    candidate.delete()
+
+    with pytest.raises(RecruitmentCandidateStateError, match="候选门客不存在或已处理"):
+        finalize_candidate(candidate)
+
+    assert RecruitmentCandidate.objects.filter(pk=candidate_id).exists() is False
+    assert Guest.objects.filter(manor=manor).count() == 0
+
+
+@pytest.mark.django_db
 def test_convert_candidate_to_retainer_rejects_when_capacity_full(game_data, django_user_model, load_guest_data):
     user = django_user_model.objects.create_user(username="player_retainer_capacity_full", password="pass123")
     manor = ensure_manor(user)

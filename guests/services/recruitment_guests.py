@@ -146,10 +146,20 @@ def finalize_candidate(candidate: RecruitmentCandidate) -> Guest:
     """确认招募候选门客，将其转为正式门客。"""
     from gameplay.models import Manor
 
-    manor = Manor.objects.select_for_update().get(pk=candidate.manor_id)
+    candidate_id, manor_id = _validate_retainer_candidate_identity(candidate)
+    manor = Manor.objects.select_for_update().get(pk=manor_id)
+    locked_candidate = (
+        RecruitmentCandidate.objects.select_for_update()
+        .select_related("template", "pool")
+        .filter(pk=candidate_id, manor_id=manor_id)
+        .first()
+    )
+    if locked_candidate is None:
+        raise RecruitmentCandidateStateError()
+
     _ensure_guest_capacity_available(manor)
     guest = _build_guest_from_candidate(
-        candidate=candidate,
+        candidate=locked_candidate,
         manor=manor,
         rng=random.Random(),
         create_guest_func=create_guest_from_template,
@@ -158,10 +168,10 @@ def finalize_candidate(candidate: RecruitmentCandidate) -> Guest:
     _create_recruitment_record(
         recruitment_record_model=RecruitmentRecord,
         manor=manor,
-        candidate=candidate,
+        candidate=locked_candidate,
         guest=guest,
     )
-    candidate.delete()
+    locked_candidate.delete()
     invalidate_recruitment_hall_cache(getattr(manor, "id", None))
     return guest
 

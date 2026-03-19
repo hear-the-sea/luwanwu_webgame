@@ -55,7 +55,7 @@
 - `gameplay/services/raid/scout_return.py` 已开始承接撤退请求和返程完成写命令；`scout_start.py`、`scout_finalize.py` 现已承接侦察发起/结果写入主写命令，但真实服务测试仍未封板。
 - `raid/scout` 已补第一批真实外部服务测试，开始覆盖 refresh dispatch dedup gate、dispatch 失败回滚、同步补偿收口，以及 `complete_scout_task` / `complete_scout_return_task`、`complete_raid_task`（撤退返程）、`process_raid_battle_task` 的实际消费；但并发冲突和更多 battle/refresh 竞争语义仍未封板。
 - `mission` 已补第一批真实并发与任务派发语义测试，覆盖同门客并发发起只允许一个 `ACTIVE`、同一 `MissionRun` 并发撤退只允许一个状态迁移成功，以及 refresh dispatch dedup gate / dispatch 失败回滚、`complete_mission_task` 实际消费收口；但更多补偿场景仍未封板。
-- `guest recruitment` 已开始补真实服务语义测试，覆盖并发发起只允许一个 `PENDING`、refresh 补偿完成与候选确认链路；但更多 `select_for_update` 竞争场景仍未封板。
+- `guest recruitment` 已开始补真实服务语义测试，覆盖并发发起只允许一个 `PENDING`、并发完成只允许一次 `PENDING -> COMPLETED` 收口，以及候选确认只允许一次转正；但更多 `select_for_update` 竞争场景仍未封板。
 - `buildings` 升级入口已不再从 view 直接调用 `refresh_manor_state(...)`；陈旧升级状态改由 `start_upgrade()` 写命令自行收口。
 - `guests/roster`、`guests/detail` 的门客状态准备已收口到显式 read helper，不再在 `get_context_data()` 内联推进状态。
 - 单会话策略已改为默认 `fail-closed`，但平台级故障语义仍需继续用真实服务门禁验证。
@@ -71,7 +71,7 @@
 
 ### 2.4 当前未完成的高优先级问题
 
-- `mission / raid / guest recruitment` 的真实并发语义测试仍然不够；虽然 `mission` 发起/撤退、refresh dispatch / worker 消费，`scout` refresh dispatch / worker 消费，`raid` 发起、battle worker、撤退返程 worker 消费，`guest recruitment` 发起已覆盖首批关键竞争与派发语义，但更多 refresh 补偿链路和 battle/return 并发竞争仍是缺口。
+- `mission / raid / guest recruitment` 的真实并发语义测试仍然不够；虽然 `mission` 发起/撤退、refresh dispatch / worker 消费，`scout` refresh dispatch / worker 消费，`raid` 发起、battle worker、撤退返程 worker 消费，`guest recruitment` 发起/完成/候选确认已覆盖首批关键竞争与派发语义，但更多 refresh 补偿链路和 battle/return 并发竞争仍是缺口。
 - 项目内仍有不少入口继续把 `ValueError` 作为跨层业务语义，异常层次还没有整体收口。
 - 页面读路径虽然已经开始统一，但尚未完全消除显式补偿调用、局部降级分叉，以及 `refresh_manor_state(...)` 这一类总刷新入口的扩散风险。
 
