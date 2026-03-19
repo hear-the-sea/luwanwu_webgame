@@ -4,6 +4,7 @@ import logging
 import random
 from typing import Any, Dict, List, Literal, Tuple
 
+from core.exceptions import ItemNotFoundError
 from guests.models import Guest
 
 from ..constants import PVPConstants
@@ -161,5 +162,5 @@ def grant_battle_salvage(manor, exp_fruit_count: int, equipment_recovery: Dict[s
             continue
         try:
             add_item_to_inventory(manor, equip_key, count)
-        except ValueError:
+        except ItemNotFoundError:
             logger.warning("Unknown equipment template for recovery: %s", equip_key)

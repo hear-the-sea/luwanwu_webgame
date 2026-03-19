@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, List
 
 from django.db import transaction
 
-from core.exceptions import GuestCapacityFullError, ItemNotConfiguredError, ItemNotUsableError
+from core.exceptions import GuestCapacityFullError, ItemNotConfiguredError, ItemNotFoundError, ItemNotUsableError
 from gameplay.models import InventoryItem, ItemTemplate, Manor, ResourceEvent
 from gameplay.services.resources import grant_resources, grant_resources_locked
 
@@ -298,7 +298,7 @@ def _apply_loot_box(item: InventoryItem) -> Dict[str, Any]:
             book_template = ItemTemplate.objects.filter(key=book_key).first()
             book_name = book_template.name if book_template else book_key
             rewards.append(f"技能书【{book_name}】")
-        except ValueError as exc:
+        except ItemNotFoundError as exc:
             logger.warning(
                 "loot box bonus item grant skipped: manor_id=%s loot_box_item_id=%s bonus_item_key=%s error=%s",
                 manor.id,

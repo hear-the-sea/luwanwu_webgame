@@ -75,6 +75,7 @@
 1. `trade` 高频入口的业务错误、基础设施错误、程序错误边界比改动前更清晰，view 不再继续依赖 legacy `ValueError` 集合作为默认业务契约。
 2. 公开 service 入口与 view 映射已经补了边界契约测试，能明确断言哪些错误会被映射为用户提示，哪些错误必须继续上抛。
 3. `arena` 链路已完成一轮同类收口：报名、撤销、兑换、门客选择等 service/helper 不再默认抛裸 `ValueError`，而是改为显式 `Arena*Error` / 资源异常；`gameplay/views/arena.py` 已同步改成按领域异常映射。
+4. 针对异常迁移的残留兼容点已补尾：`ItemNotFoundError` 已补回 `loot box` 奖励和 `battle salvage` 装备回收的显式容错分支，`arena` 兑换数量归一化也已补上非法输入契约，避免新旧异常语义混用造成回归。
 
 本批仍未完成：
 

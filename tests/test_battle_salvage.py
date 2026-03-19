@@ -1,6 +1,12 @@
+import logging
 from types import SimpleNamespace
 
-from gameplay.services.battle_salvage import calculate_battle_salvage
+import pytest
+
+from core.exceptions import ItemNotFoundError
+from gameplay.models import InventoryItem, ItemTemplate
+from gameplay.services.battle_salvage import calculate_battle_salvage, grant_battle_salvage
+from gameplay.services.manor.core import ensure_manor
 
 
 def test_calculate_battle_salvage_deterministic_and_uses_guest_hp_ratio():
@@ -90,3 +96,30 @@ def test_calculate_battle_salvage_can_limit_equipment_recovery_to_player_side():
     assert set(equip_attacker_only.keys()).issubset(attacker_equipment_keys)
     assert defender_unique_key not in equip_attacker_only
     assert defender_unique_key in equip_all
+
+
+@pytest.mark.django_db
+def test_grant_battle_salvage_skips_missing_equipment_template(monkeypatch, caplog, django_user_model):
+    user = django_user_model.objects.create_user(username="battle_salvage_missing_item", password="pass12345")
+    manor = ensure_manor(user)
+    ItemTemplate.objects.create(key="experience_fruit", name="经验果")
+
+    from gameplay.services.inventory.core import add_item_to_inventory as original_add_item_to_inventory
+
+    def _grant_with_missing_equipment(target_manor, item_key, quantity=1, storage_location="warehouse"):
+        if item_key == "missing_equip":
+            raise ItemNotFoundError(f"物品模板不存在: {item_key}")
+        return original_add_item_to_inventory(target_manor, item_key, quantity, storage_location)
+
+    monkeypatch.setattr("gameplay.services.inventory.core.add_item_to_inventory", _grant_with_missing_equipment)
+
+    with caplog.at_level(logging.WARNING):
+        grant_battle_salvage(manor, exp_fruit_count=3, equipment_recovery={"missing_equip": 2})
+
+    exp_fruit = InventoryItem.objects.get(
+        manor=manor,
+        template__key="experience_fruit",
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+    assert exp_fruit.quantity == 3
+    assert any("Unknown equipment template for recovery" in rec.getMessage() for rec in caplog.records)

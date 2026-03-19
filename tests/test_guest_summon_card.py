@@ -2,7 +2,7 @@ import logging
 
 import pytest
 
-from core.exceptions import GuestCapacityFullError, InsufficientStockError
+from core.exceptions import GuestCapacityFullError, InsufficientStockError, ItemNotFoundError
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.inventory.use import use_inventory_item
 from gameplay.services.manor.core import ensure_manor
@@ -181,7 +181,7 @@ def test_loot_box_logs_and_tracks_skipped_bonus_items(monkeypatch, caplog, djang
     monkeypatch.setattr("gameplay.services.inventory.use.inventory_random.choice", lambda keys: keys[0])
 
     def _raise_bonus_item_error(*_args, **_kwargs):
-        raise ValueError("bonus item template missing")
+        raise ItemNotFoundError("bonus item template missing")
 
     monkeypatch.setattr(
         "gameplay.services.inventory.use.add_item_to_inventory",

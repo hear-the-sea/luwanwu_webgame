@@ -20,6 +20,9 @@ def test_normalize_exchange_quantity_validates_positive_values():
     with pytest.raises(ArenaExchangeError, match="兑换数量无效"):
         normalize_exchange_quantity(0)
 
+    with pytest.raises(ArenaExchangeError, match="兑换数量无效"):
+        normalize_exchange_quantity("bad")
+
 
 def test_scale_reward_resources_and_items():
     assert scale_reward_resources({"grain": 100, "silver": 50}, 2) == {"grain": 200, "silver": 100}

@@ -17,7 +17,10 @@ from .rewards import ArenaRewardDefinition, get_arena_reward_definition
 
 
 def normalize_exchange_quantity(quantity: int) -> int:
-    normalized_quantity = int(quantity or 0)
+    try:
+        normalized_quantity = int(quantity or 0)
+    except (TypeError, ValueError) as exc:
+        raise ArenaExchangeError("兑换数量无效") from exc
     if normalized_quantity <= 0:
         raise ArenaExchangeError("兑换数量无效")
     return normalized_quantity
