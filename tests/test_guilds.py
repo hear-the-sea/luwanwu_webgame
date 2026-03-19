@@ -5,6 +5,7 @@
 import logging
 
 import pytest
+from django.test import TestCase
 
 from gameplay.models import InventoryItem, ItemTemplate, Manor
 from guilds.models import GuildMember
@@ -155,6 +156,36 @@ class TestGuildMembership:
         assert application.status == "approved"
         membership = GuildMember.objects.get(user=second_user, guild=guild)
         assert membership.is_active is True
+
+    def test_approve_application_defers_followups_until_outer_commit(
+        self, user_with_gold_bars, second_user, monkeypatch
+    ):
+        guild = guild_service.create_guild(user=user_with_gold_bars, name="延迟通知帮会", description="")
+        application = member_service.apply_to_guild(second_user, guild, "请收留我")
+        followups: list[tuple[str, int]] = []
+
+        monkeypatch.setattr(
+            member_service,
+            "send_system_message_to_user",
+            lambda user_id, **_kwargs: followups.append(("message", user_id)),
+        )
+        monkeypatch.setattr(
+            member_service,
+            "create_announcement",
+            lambda guild_obj, _author, _content: followups.append(("announcement", guild_obj.pk)),
+        )
+
+        with TestCase.captureOnCommitCallbacks(execute=False) as callbacks:
+            member_service.approve_application(application, user_with_gold_bars)
+
+        application.refresh_from_db()
+        assert application.status == "approved"
+        assert followups == []
+        assert len(callbacks) == 1
+
+        callbacks[0]()
+        assert ("message", second_user.id) in followups
+        assert ("announcement", guild.id) in followups
 
     @pytest.mark.parametrize(
         ("operation", "guild_name"),

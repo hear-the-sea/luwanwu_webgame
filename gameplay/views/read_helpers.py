@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import Any
 
 from django.http import HttpRequest
 
@@ -11,6 +10,7 @@ from core.utils.infrastructure import (
     DATABASE_INFRASTRUCTURE_EXCEPTIONS,
     is_expected_infrastructure_error,
 )
+from gameplay.models import Manor
 from gameplay.services.manor.core import get_manor
 from gameplay.services.raid import refresh_raid_runs, refresh_scout_records
 
@@ -19,9 +19,9 @@ EXPECTED_READ_ACTIVITY_REFRESH_ERRORS = DATABASE_CACHE_INFRASTRUCTURE_EXCEPTIONS
 
 
 def prepare_manor_for_read(
-    manor: Any,
+    manor: Manor,
     *,
-    project_fn: Callable[[Any], None],
+    project_fn: Callable[[Manor], None],
     logger: logging.Logger,
     source: str,
     user_id: int | None = None,
@@ -53,11 +53,11 @@ def prepare_manor_for_read(
 def get_prepared_manor_for_read(
     request: HttpRequest,
     *,
-    project_fn: Callable[[Any], None],
+    project_fn: Callable[[Manor], None],
     logger: logging.Logger,
     source: str,
     on_expected_failure: Callable[[Exception], None] | None = None,
-) -> Any:
+) -> Manor:
     """Load the current manor and run the standard read projection flow."""
     manor = get_manor(request.user)
     prepare_manor_for_read(
@@ -76,11 +76,11 @@ def get_prepared_manor_with_raid_activity_for_read(
     *,
     logger: logging.Logger,
     source: str,
-    project_fn: Callable[[Any], None] | None = None,
+    project_fn: Callable[[Manor], None] | None = None,
     prefer_async: bool = True,
     on_projection_expected_failure: Callable[[Exception], None] | None = None,
     on_activity_expected_failure: Callable[[Exception], None] | None = None,
-) -> Any:
+) -> Manor:
     """Load the current manor through the unified raid/scout read entrypoint."""
     manor = get_manor(request.user)
     user_id = getattr(request.user, "id", None)
@@ -107,9 +107,9 @@ def get_prepared_manor_with_raid_activity_for_read(
 
 
 def prepare_manor_activity_for_read(
-    manor: Any,
+    manor: Manor,
     *,
-    refresh_fn: Callable[[Any], None],
+    refresh_fn: Callable[[Manor], None],
     logger: logging.Logger,
     source: str,
     user_id: int | None = None,
@@ -139,7 +139,7 @@ def prepare_manor_activity_for_read(
 
 
 def prepare_raid_activity_for_read(
-    manor: Any,
+    manor: Manor,
     *,
     logger: logging.Logger,
     source: str,
@@ -149,7 +149,7 @@ def prepare_raid_activity_for_read(
 ) -> bool:
     """Refresh raid/scout read models at explicit read entrypoints only."""
 
-    def _refresh_activity(target_manor: Any) -> None:
+    def _refresh_activity(target_manor: Manor) -> None:
         refresh_scout_records(target_manor, prefer_async=prefer_async)
         refresh_raid_runs(target_manor, prefer_async=prefer_async)
 

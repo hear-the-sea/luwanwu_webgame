@@ -102,6 +102,8 @@ module = [
     "gameplay.views.messages",
     "gameplay.views.missions",
     "gameplay.views.production",
+    "gameplay.views.production_helpers",
+    "gameplay.views.production_page_context",
     "gameplay.views.recruitment",
     "gameplay.views.technology",
     "gameplay.views.work",

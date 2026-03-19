@@ -1,6 +1,7 @@
 # guilds/services/member.py
 
 import logging
+from collections.abc import Callable
 
 from django.db import transaction
 from django.db.utils import IntegrityError
@@ -60,6 +61,10 @@ def _run_announcement_followup(action: str, *, guild, content: str, **context):
         lambda: create_announcement(guild, "system", content),
         **context,
     )
+
+
+def _schedule_followup_after_commit(callback: Callable[[], None]) -> None:
+    transaction.on_commit(callback)
 
 
 def _approve_application_state(application, reviewer, auto=False):
@@ -433,7 +438,7 @@ def approve_application(application, reviewer, auto=False):
         ValueError: 验证失败
     """
     guild, applicant_user_id, guild_name = _approve_application_state(application, reviewer, auto=auto)
-    _send_approve_application_followups(guild, applicant_user_id, guild_name)
+    _schedule_followup_after_commit(lambda: _send_approve_application_followups(guild, applicant_user_id, guild_name))
 
 
 def reject_application(application, reviewer, note=""):
@@ -449,7 +454,7 @@ def reject_application(application, reviewer, note=""):
         ValueError: 验证失败
     """
     applicant_user_id, guild_name = _reject_application_state(application, reviewer, note=note)
-    _send_reject_application_followups(applicant_user_id, guild_name, note)
+    _schedule_followup_after_commit(lambda: _send_reject_application_followups(applicant_user_id, guild_name, note))
 
 
 def leave_guild(member):
@@ -463,7 +468,7 @@ def leave_guild(member):
         ValueError: 验证失败
     """
     guild, member_user_id, guild_name = _leave_guild_state(member)
-    _send_leave_guild_followups(guild, member_user_id, guild_name)
+    _schedule_followup_after_commit(lambda: _send_leave_guild_followups(guild, member_user_id, guild_name))
 
 
 def kick_member(target_member, operator):
@@ -478,7 +483,7 @@ def kick_member(target_member, operator):
         ValueError: 验证失败
     """
     guild, target_user_id, guild_name = _kick_member_state(target_member, operator)
-    _send_kick_member_followups(guild, target_user_id, guild_name)
+    _schedule_followup_after_commit(lambda: _send_kick_member_followups(guild, target_user_id, guild_name))
 
 
 def appoint_admin(target_member, operator):
@@ -493,7 +498,9 @@ def appoint_admin(target_member, operator):
         ValueError: 验证失败
     """
     guild, guild_name, operator_user_id, target_user_id = _appoint_admin_state(target_member, operator)
-    _send_appoint_admin_followups(guild, guild_name, operator_user_id, target_user_id)
+    _schedule_followup_after_commit(
+        lambda: _send_appoint_admin_followups(guild, guild_name, operator_user_id, target_user_id)
+    )
 
 
 def demote_admin(target_member, operator):
@@ -508,7 +515,7 @@ def demote_admin(target_member, operator):
         ValueError: 验证失败
     """
     guild, guild_name, target_user_id = _demote_admin_state(target_member, operator)
-    _send_demote_admin_followups(guild, guild_name, target_user_id)
+    _schedule_followup_after_commit(lambda: _send_demote_admin_followups(guild, guild_name, target_user_id))
 
 
 def transfer_leadership(current_leader_member, new_leader_member):
@@ -526,7 +533,14 @@ def transfer_leadership(current_leader_member, new_leader_member):
         current_leader_member,
         new_leader_member,
     )
-    _send_transfer_leadership_followups(guild, guild_name, current_leader_user_id, new_leader_user_id)
+    _schedule_followup_after_commit(
+        lambda: _send_transfer_leadership_followups(
+            guild,
+            guild_name,
+            current_leader_user_id,
+            new_leader_user_id,
+        )
+    )
 
 
 def get_member_rankings(guild, ranking_type="total"):

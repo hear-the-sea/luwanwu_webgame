@@ -7,7 +7,9 @@ from django.core.paginator import Paginator
 from django.http import HttpRequest
 
 from gameplay.constants import UIConstants
+from gameplay.models import Manor
 from gameplay.services.buildings import forge as forge_service
+from gameplay.services.buildings.forge_helpers import DECOMPOSE_CATEGORIES, DECOMPOSE_WEAPON_CATEGORIES
 from gameplay.services.buildings.ranch import (
     get_active_livestock_productions,
     get_livestock_options,
@@ -43,7 +45,7 @@ from gameplay.views.read_helpers import get_prepared_manor_for_read
 logger = logging.getLogger(__name__)
 
 
-def _prepare_production_manor(request: HttpRequest, *, source: str):
+def _prepare_production_manor(request: HttpRequest, *, source: str) -> Manor:
     return get_prepared_manor_for_read(
         request,
         project_fn=project_resource_production_for_read,
@@ -116,16 +118,16 @@ def build_forge_page_context(
     is_forging = forge_service.has_active_forging(manor)
     current_mode = _normalize_forge_mode(request.GET.get("mode"), default="synthesize")
 
-    active_categories = forge_service.DECOMPOSE_CATEGORIES
+    active_categories = DECOMPOSE_CATEGORIES
     current_category = normalize_forge_category(
         request.GET.get("category", "all"),
         active_categories=active_categories,
-        weapon_categories=forge_service.DECOMPOSE_WEAPON_CATEGORIES,
+        weapon_categories=DECOMPOSE_WEAPON_CATEGORIES,
     )
     equipment_list = get_filtered_equipment_options(
         manor=manor,
         current_category=current_category,
-        weapon_categories=forge_service.DECOMPOSE_WEAPON_CATEGORIES,
+        weapon_categories=DECOMPOSE_WEAPON_CATEGORIES,
         get_equipment_options=forge_service.get_equipment_options,
     )
     paginator = Paginator(equipment_list, items_per_page)

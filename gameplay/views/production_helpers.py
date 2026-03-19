@@ -70,8 +70,10 @@ def annotate_blueprint_synthesis_options(
         )
         merged_result_category = to_decompose_category(result_category)
         normalized_recipe["result_category"] = merged_result_category
-        normalized_recipe["result_category_name"] = active_categories.get(
-            merged_result_category, merged_result_category
+        normalized_recipe["result_category_name"] = (
+            active_categories.get(merged_result_category, merged_result_category)
+            if merged_result_category is not None
+            else None
         )
         normalized_recipes.append(normalized_recipe)
 
