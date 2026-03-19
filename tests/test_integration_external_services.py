@@ -31,7 +31,7 @@ from gameplay.services.raid import scout_refresh as scout_refresh_command
 from gameplay.services.raid import start_raid, start_scout
 from gameplay.services.utils.cache import CacheKeys
 from gameplay.services.utils.messages import claim_message_attachments
-from gameplay.tasks import complete_mission_task
+from gameplay.tasks import complete_mission_task, complete_raid_task
 from gameplay.tasks.pvp import complete_scout_return_task, complete_scout_task
 from guests.models import RecruitmentPool
 from guests.services.recruitment import recruit_guest, refresh_guest_recruitments, start_guest_recruitment
@@ -221,6 +221,47 @@ def test_integration_raid_start_and_retreat_flow(require_env_services, game_data
 
     assert run.status == RaidRun.Status.RETREATED
     assert run.is_retreating is True
+
+
+@pytest.mark.django_db(transaction=True)
+def test_integration_complete_raid_task_finalizes_retreated_run(require_env_services, game_data, django_user_model):
+    attacker, defender = _prepare_attack_ready_manors(django_user_model, prefix="intg_raid_task")
+
+    pool = RecruitmentPool.objects.get(key="cunmu")
+    candidate = recruit_guest(attacker, pool, seed=31)[0]
+    guest = finalize_candidate(candidate)
+
+    troop_template = TroopTemplate.objects.filter(key="archer").first() or TroopTemplate.objects.first()
+    assert troop_template is not None
+
+    troop, _ = PlayerTroop.objects.update_or_create(
+        manor=attacker,
+        troop_template=troop_template,
+        defaults={"count": 200},
+    )
+
+    run = start_raid(attacker, defender, [guest.id], {troop_template.key: 10})
+    request_raid_retreat(run)
+
+    run.refresh_from_db()
+    troop.refresh_from_db()
+    assert run.status == RaidRun.Status.RETREATED
+    assert troop.count == 190
+
+    run.return_at = timezone.now() - timedelta(seconds=1)
+    run.save(update_fields=["return_at"])
+
+    result = complete_raid_task.run(run.id)
+
+    run.refresh_from_db()
+    troop.refresh_from_db()
+    guest.refresh_from_db()
+
+    assert result == "completed"
+    assert run.status == RaidRun.Status.COMPLETED
+    assert run.completed_at is not None
+    assert guest.status == guest.Status.IDLE
+    assert troop.count == 200
 
 
 @pytest.mark.django_db(transaction=True)
