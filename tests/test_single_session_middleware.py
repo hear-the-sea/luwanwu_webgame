@@ -101,6 +101,7 @@ def test_single_session_middleware_rechecks_db_when_verify_marker_cache_write_fa
 
 
 @pytest.mark.django_db
+@override_settings(SINGLE_SESSION_FAIL_OPEN=True)
 def test_single_session_middleware_keeps_session_when_authoritative_lookup_errors(
     client, django_user_model, monkeypatch
 ):

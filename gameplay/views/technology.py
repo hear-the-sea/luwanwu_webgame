@@ -28,7 +28,7 @@ from gameplay.services.technology import (
     get_technology_display_data,
     upgrade_technology,
 )
-from gameplay.views.read_helpers import prepare_manor_for_read
+from gameplay.views.read_helpers import get_prepared_manor_for_read
 
 logger = logging.getLogger(__name__)
 
@@ -93,13 +93,11 @@ class TechnologyView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        manor = get_manor(self.request.user)
-        prepare_manor_for_read(
-            manor,
+        manor = get_prepared_manor_for_read(
+            self.request,
             project_fn=project_resource_production_for_read,
             logger=logger,
             source="technology_view",
-            user_id=getattr(self.request.user, "id", None),
         )
 
         # 获取当前选中的分类，默认为 basic

@@ -40,7 +40,11 @@ from .capture import (  # noqa: F401
 from .config import PVPConstants
 from .loot import _apply_loot, _calculate_loot
 from .messaging import _send_raid_battle_messages  # noqa: F401
-from .travel import _dismiss_marching_raids_if_protected
+from .travel import (
+    _dismiss_marching_raids_if_protected,
+    _get_defender_battle_block_reason,
+    _retreat_raid_run_due_to_blocked_target,
+)
 from .troops import _coerce_positive_int, _normalize_mapping, _normalize_positive_int_mapping
 
 logger = logging.getLogger(__name__)
@@ -219,6 +223,7 @@ def process_raid_battle(run: RaidRun, now: Optional[datetime] = None) -> None:
         now: 当前时间（可选）
     """
     now = now or timezone.now()
+    blocked_reason: str | None = None
 
     with transaction.atomic():
         locked_run = _prepare_run_for_battle(run.pk, now)
@@ -238,22 +243,29 @@ def process_raid_battle(run: RaidRun, now: Optional[datetime] = None) -> None:
             return
         locked_run.attacker = attacker_locked
         locked_run.defender = defender_locked
+        blocked_reason = _get_defender_battle_block_reason(defender_locked, now=now)
+        if blocked_reason:
+            _retreat_raid_run_due_to_blocked_target(locked_run, now=now, reason=blocked_reason)
+        else:
+            report = _execute_raid_battle(locked_run)
+            apply_defender_troop_losses(locked_run.defender, report)
 
-        report = _execute_raid_battle(locked_run)
-        apply_defender_troop_losses(locked_run.defender, report)
+            is_attacker_victory = report.winner == "attacker"
+            locked_run.is_attacker_victory = is_attacker_victory
+            locked_run.battle_report = report
 
-        is_attacker_victory = report.winner == "attacker"
-        locked_run.is_attacker_victory = is_attacker_victory
-        locked_run.battle_report = report
+            _apply_raid_loot_if_needed(locked_run, is_attacker_victory)
+            _apply_prestige_changes(locked_run, is_attacker_victory)
+            _apply_defeat_protection(locked_run, is_attacker_victory, now=now)
+            _apply_capture_reward(locked_run, report, is_attacker_victory)
+            _apply_salvage_reward(locked_run, report, is_attacker_victory)
 
-        _apply_raid_loot_if_needed(locked_run, is_attacker_victory)
-        _apply_prestige_changes(locked_run, is_attacker_victory)
-        _apply_defeat_protection(locked_run, is_attacker_victory, now=now)
-        _apply_capture_reward(locked_run, report, is_attacker_victory)
-        _apply_salvage_reward(locked_run, report, is_attacker_victory)
+            locked_run.status = RaidRun.Status.RETURNING
+            locked_run.save()
 
-        locked_run.status = RaidRun.Status.RETURNING
-        locked_run.save()
+    if blocked_reason:
+        _dispatch_complete_raid_task(locked_run, now=now)
+        return
 
     try:
         _send_raid_battle_messages(locked_run)

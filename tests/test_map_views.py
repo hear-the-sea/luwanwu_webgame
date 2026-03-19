@@ -25,10 +25,13 @@ class TestMapViews:
 
     def test_map_page_syncs_resources_before_loading_context(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
-        calls = {"sync": 0, "context": 0}
+        calls = {"sync": 0, "activity": 0, "context": 0}
 
         def _fake_sync(*_args, **_kwargs):
             calls["sync"] += 1
+
+        def _fake_activity(*_args, **_kwargs):
+            calls["activity"] += 1
 
         def _fake_context(*_args, **_kwargs):
             calls["context"] += 1
@@ -45,11 +48,12 @@ class TestMapViews:
             }
 
         monkeypatch.setattr("gameplay.views.map.project_resource_production_for_read", _fake_sync)
+        monkeypatch.setattr("gameplay.views.map.prepare_raid_activity_for_read", _fake_activity)
         monkeypatch.setattr("gameplay.views.map.get_map_context", _fake_context)
 
         response = client.get(reverse("gameplay:map"))
         assert response.status_code == 200
-        assert calls == {"sync": 1, "context": 1}
+        assert calls == {"sync": 1, "activity": 1, "context": 1}
 
     def test_map_region_filter(self, manor_with_user):
         """地图地区过滤"""
@@ -119,6 +123,34 @@ class TestMapAPI:
         data = response.json()
         assert data["success"] is True
         assert "active_raids" in data
+
+    def test_raid_status_api_refreshes_activity_before_listing(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        calls = {"activity": 0, "raids": 0, "scouts": 0, "incoming": 0}
+
+        monkeypatch.setattr(
+            "gameplay.views.map.prepare_raid_activity_for_read",
+            lambda current_manor, **_kwargs: calls.__setitem__(
+                "activity", calls["activity"] + (1 if current_manor == manor else 0)
+            ),
+        )
+        monkeypatch.setattr(
+            "gameplay.views.map.get_active_raids",
+            lambda current_manor: calls.__setitem__("raids", calls["raids"] + 1) or [],
+        )
+        monkeypatch.setattr(
+            "gameplay.views.map.get_active_scouts",
+            lambda current_manor: calls.__setitem__("scouts", calls["scouts"] + 1) or [],
+        )
+        monkeypatch.setattr(
+            "gameplay.views.map.get_incoming_raids",
+            lambda current_manor: calls.__setitem__("incoming", calls["incoming"] + 1) or [],
+        )
+
+        response = client.get(reverse("gameplay:raid_status_api"))
+
+        assert response.status_code == 200
+        assert calls == {"activity": 1, "raids": 1, "scouts": 1, "incoming": 1}
 
     def test_manor_detail_api(self, manor_with_user):
         """庄园详情API"""

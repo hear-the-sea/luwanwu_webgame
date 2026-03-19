@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
+from typing import Any
 
 from django.contrib import messages
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect
 
 from core.utils import json_error, json_success
@@ -28,7 +31,17 @@ def format_duration(seconds: int) -> str:
     return "".join(parts)
 
 
-def format_bulk_recruit_success_message(succeeded_guests: list, *, preview_limit: int) -> str:
+def _project_recruitment_hall_read_model(request: HttpRequest, manor: Any) -> None:
+    prepare_manor_for_read(
+        manor,
+        project_fn=project_resource_production_for_read,
+        logger=logger,
+        source="recruitment_hall_ajax_payload",
+        user_id=getattr(request.user, "id", None),
+    )
+
+
+def format_bulk_recruit_success_message(succeeded_guests: list[Any], *, preview_limit: int) -> str:
     total = len(succeeded_guests)
     if total <= 0:
         return ""
@@ -41,19 +54,18 @@ def format_bulk_recruit_success_message(succeeded_guests: list, *, preview_limit
     return f"成功招募 {total} 名门客：{preview}"
 
 
-def build_recruitment_hall_ajax_payload(request, manor, *, use_cache: bool = True) -> dict:
+def build_recruitment_hall_ajax_payload(
+    request: HttpRequest,
+    manor: Any,
+    *,
+    use_cache: bool = True,
+) -> dict[str, Any]:
     from django.template.loader import render_to_string
 
     from gameplay.constants import UIConstants
     from gameplay.selectors.recruitment import get_recruitment_hall_context
 
-    prepare_manor_for_read(
-        manor,
-        project_fn=project_resource_production_for_read,
-        logger=logger,
-        source="recruitment_hall_ajax_payload",
-        user_id=getattr(getattr(request, "user", None), "id", None),
-    )
+    _project_recruitment_hall_read_model(request, manor)
     context = get_recruitment_hall_context(manor, UIConstants.RECRUIT_RECORDS_DISPLAY, use_cache=use_cache)
     return {
         "hall_pools_html": render_to_string(
@@ -70,8 +82,13 @@ def build_recruitment_hall_ajax_payload(request, manor, *, use_cache: bool = Tru
 
 
 def json_recruitment_hall_success(
-    request, manor, message: str, *, message_level: str = "success", use_cache: bool = True
-):
+    request: HttpRequest,
+    manor: Any,
+    message: str,
+    *,
+    message_level: str = "success",
+    use_cache: bool = True,
+) -> JsonResponse:
     return json_success(
         message=message,
         message_level=message_level,
@@ -80,15 +97,15 @@ def json_recruitment_hall_success(
 
 
 def recruitment_hall_response(
-    request,
-    manor,
+    request: HttpRequest,
+    manor: Any,
     message: str,
     *,
     is_ajax: bool,
     status: int = 200,
     message_level: str = "success",
     use_cache: bool = True,
-):
+) -> HttpResponse:
     if is_ajax:
         if status >= 400:
             return json_error(message, status=status)
@@ -105,8 +122,12 @@ def recruitment_hall_response(
 
 
 def recruitment_hall_resolution_error_response(
-    request, manor, resolution_error: RecruitViewResolutionError, *, is_ajax: bool
-):
+    request: HttpRequest,
+    manor: Any,
+    resolution_error: RecruitViewResolutionError,
+    *,
+    is_ajax: bool,
+) -> HttpResponse:
     return recruitment_hall_response(
         request,
         manor,
@@ -118,14 +139,14 @@ def recruitment_hall_resolution_error_response(
 
 
 def candidate_action_success_response(
-    request,
-    manor,
+    request: HttpRequest,
+    manor: Any,
     outcome: CandidateActionOutcome,
     *,
     is_ajax: bool,
-    invalidate_cache_fn,
+    invalidate_cache_fn: Callable[[Any], bool],
     preview_limit: int,
-):
+) -> HttpResponse:
     manor_id = getattr(manor, "id", None)
 
     if outcome.action == "discard":

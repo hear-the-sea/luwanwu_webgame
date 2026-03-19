@@ -184,6 +184,21 @@ def test_refresh_raid_runs_prefers_async_dispatch(monkeypatch):
     assert called == {"battle": 0, "finalize": 0}
 
 
+def test_get_active_raids_is_pure_listing_query(monkeypatch):
+    manor = SimpleNamespace(id=9)
+    persisted = [SimpleNamespace(id=1)]
+
+    monkeypatch.setattr(
+        combat_runs,
+        "persistence_get_active_raids",
+        lambda current_manor, *, raid_run_model: persisted if current_manor is manor else [],
+    )
+
+    result = combat_runs.get_active_raids(manor)
+
+    assert result == persisted
+
+
 def test_prepare_run_for_battle_uses_runs_retreat_wrapper(monkeypatch):
     class _Status:
         RETREATED = "retreated"

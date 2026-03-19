@@ -84,6 +84,35 @@ def test_arena_view_renders(arena_client):
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("view_name", "selector_attr"),
+    [
+        ("gameplay:arena", "get_arena_registration_context"),
+        ("gameplay:arena_events", "get_arena_events_context"),
+        ("gameplay:arena_exchange_page", "get_arena_exchange_context"),
+    ],
+)
+def test_arena_pages_sync_resources_before_loading_context(arena_client, monkeypatch, view_name, selector_attr):
+    client, manor = arena_client
+    calls: list[str] = []
+
+    monkeypatch.setattr(
+        "gameplay.views.arena.project_resource_production_for_read",
+        lambda *_args, **_kwargs: calls.append("sync"),
+    )
+    monkeypatch.setattr(
+        f"gameplay.views.arena.{selector_attr}",
+        lambda current_manor: calls.append("context") or {"manor": current_manor},
+    )
+
+    response = client.get(reverse(view_name))
+
+    assert response.status_code == 200
+    assert response.context["manor"] == manor
+    assert calls == ["sync", "context"]
+
+
+@pytest.mark.django_db
 def test_arena_events_view_renders(arena_client):
     client, _manor = arena_client
     response = client.get(reverse("gameplay:arena_events"))
@@ -231,6 +260,27 @@ def test_arena_event_detail_view_renders(arena_client, django_user_model):
     body = response.content.decode("utf-8")
     assert f"赛事 #{tournament.id} 对阵与战报" in body
     assert "对阵与战报" in body
+
+
+@pytest.mark.django_db
+def test_arena_event_detail_view_syncs_resources_before_loading_context(arena_client, monkeypatch):
+    client, manor = arena_client
+    calls: list[str] = []
+
+    monkeypatch.setattr(
+        "gameplay.views.arena.project_resource_production_for_read",
+        lambda *_args, **_kwargs: calls.append("sync"),
+    )
+    monkeypatch.setattr(
+        "gameplay.views.arena.get_arena_event_detail_context",
+        lambda current_manor, **_kwargs: calls.append("context") or {"manor": current_manor},
+    )
+
+    response = client.get(reverse("gameplay:arena_event_detail", args=[1]))
+
+    assert response.status_code == 200
+    assert response.context["manor"] == manor
+    assert calls == ["sync", "context"]
 
 
 @pytest.mark.django_db

@@ -111,7 +111,7 @@ make precommit
 本项目默认启用 CI 质量门禁（GitHub Actions）：
 
 - `flake8`：基础代码风格检查（仓库内固定 `jobs=1`，保证在受限环境也可运行）
-- `pytest + coverage`：默认单元测试道与覆盖率报告（不包含 `integration` marker）
+- `pytest + coverage`：默认单元测试道与覆盖率报告（不包含 `integration` marker，默认会收集 `tests/` 以及仓库内声明到 `pytest.ini` 的 app 内测试目录，例如 `guests/tests/`）
 - `python manage.py check --deploy`：部署安全检查
 
 本地建议按以下顺序执行：

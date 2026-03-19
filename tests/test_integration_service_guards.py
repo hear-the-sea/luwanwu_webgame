@@ -114,3 +114,29 @@ def test_should_fail_for_missing_env_services_when_markexpr_requests_integration
     items = [_Item(True), _Item(False)]
 
     assert conftest._should_fail_for_missing_env_services(config, items) is True
+
+
+@pytest.mark.parametrize(
+    "markexpr",
+    [
+        "not integration",
+        "smoke and not integration",
+        "not (integration or smoke)",
+    ],
+)
+def test_should_not_fail_for_missing_env_services_when_markexpr_excludes_integration(monkeypatch, markexpr: str):
+    monkeypatch.delenv("DJANGO_TEST_USE_ENV_SERVICES", raising=False)
+
+    class _Item:
+        def __init__(self, integration: bool):
+            self.integration = integration
+
+        def get_closest_marker(self, name: str):
+            if name == "integration" and self.integration:
+                return object()
+            return None
+
+    config = SimpleNamespace(option=SimpleNamespace(markexpr=markexpr))
+    items = [_Item(True), _Item(False)]
+
+    assert conftest._should_fail_for_missing_env_services(config, items) is False

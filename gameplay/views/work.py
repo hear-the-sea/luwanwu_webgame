@@ -25,7 +25,7 @@ from gameplay.models import WorkAssignment, WorkTemplate
 from gameplay.services.manor.core import get_manor
 from gameplay.services.resources import project_resource_production_for_read
 from gameplay.services.work import assign_guest_to_work, claim_work_reward, recall_guest_from_work
-from gameplay.views.read_helpers import prepare_manor_for_read
+from gameplay.views.read_helpers import get_prepared_manor_for_read
 from guests.models import Guest, GuestStatus
 
 logger = logging.getLogger(__name__)
@@ -67,13 +67,11 @@ class WorkView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        manor = get_manor(self.request.user)
-        prepare_manor_for_read(
-            manor,
+        manor = get_prepared_manor_for_read(
+            self.request,
             project_fn=project_resource_production_for_read,
             logger=logger,
             source="work_view",
-            user_id=getattr(self.request.user, "id", None),
         )
 
         # 获取当前标签页

@@ -25,7 +25,7 @@ from core.utils.rate_limit import rate_limit_redirect
 from gameplay.constants import BuildingKeys
 from gameplay.services.manor.core import get_manor
 from gameplay.services.resources import project_resource_production_for_read
-from gameplay.views.read_helpers import prepare_manor_for_read
+from gameplay.views.read_helpers import get_prepared_manor_for_read
 
 logger = logging.getLogger(__name__)
 
@@ -91,13 +91,11 @@ class TroopRecruitmentView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        manor = get_manor(self.request.user)
-        prepare_manor_for_read(
-            manor,
+        manor = get_prepared_manor_for_read(
+            self.request,
             project_fn=project_resource_production_for_read,
             logger=logger,
             source="troop_recruitment_view",
-            user_id=getattr(self.request.user, "id", None),
         )
 
         from gameplay.services.recruitment.recruitment import (

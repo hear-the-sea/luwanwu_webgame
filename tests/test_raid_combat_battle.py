@@ -12,6 +12,7 @@ from gameplay.models import PlayerTroop, RaidRun
 from gameplay.services.manor.core import ensure_manor
 from gameplay.services.raid.combat import battle as combat_battle
 from gameplay.services.raid.combat import runs as combat_runs
+from gameplay.services.raid.combat import travel as combat_travel
 from guests.models import Guest, GuestStatus, GuestTemplate
 
 
@@ -174,6 +175,7 @@ def test_process_raid_battle_ignores_post_commit_failures(monkeypatch):
     monkeypatch.setattr(combat_battle, "_apply_defeat_protection", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(combat_battle, "_apply_capture_reward", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(combat_battle, "_apply_salvage_reward", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_get_defender_battle_block_reason", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         combat_battle,
         "_send_raid_battle_messages",
@@ -194,6 +196,63 @@ def test_process_raid_battle_ignores_post_commit_failures(monkeypatch):
 
     assert run.status == RaidRun.Status.RETURNING
     assert saved["count"] == 1
+    assert dispatched["count"] == 1
+
+
+def test_process_raid_battle_rechecks_defender_protection_before_fight(monkeypatch):
+    now = timezone.now()
+    attacker = SimpleNamespace(id=1, location_display="江南", display_name="进攻方")
+    defender = SimpleNamespace(id=2, location_display="塞北", display_name="防守方")
+    run = SimpleNamespace(
+        pk=8,
+        id=8,
+        attacker_id=1,
+        defender_id=2,
+        attacker=attacker,
+        defender=defender,
+        status=RaidRun.Status.MARCHING,
+        save=lambda **_kwargs: None,
+    )
+    dispatched = {"count": 0}
+    retreated = {}
+
+    monkeypatch.setattr(combat_battle.transaction, "atomic", contextlib.nullcontext)
+    monkeypatch.setattr(combat_battle, "_prepare_run_for_battle", lambda *_args, **_kwargs: run)
+    monkeypatch.setattr(combat_battle, "_lock_battle_manors", lambda *_args, **_kwargs: (attacker, defender))
+    monkeypatch.setattr(
+        combat_battle, "_get_defender_battle_block_reason", lambda *_args, **_kwargs: "对方处于战败保护期"
+    )
+    monkeypatch.setattr(
+        combat_battle,
+        "_retreat_raid_run_due_to_blocked_target",
+        lambda current_run, *, now=None, reason: retreated.update(
+            {"run_id": current_run.id, "now": now, "reason": reason}
+        ),
+    )
+    monkeypatch.setattr(
+        combat_battle,
+        "_execute_raid_battle",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("battle should not execute")),
+    )
+    monkeypatch.setattr(
+        combat_battle,
+        "_send_raid_battle_messages",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("battle message should not send")),
+    )
+    monkeypatch.setattr(
+        combat_battle,
+        "_dismiss_marching_raids_if_protected",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("dismiss should not run")),
+    )
+    monkeypatch.setattr(
+        combat_battle,
+        "_dispatch_complete_raid_task",
+        lambda *_args, **_kwargs: dispatched.__setitem__("count", dispatched["count"] + 1),
+    )
+
+    combat_battle.process_raid_battle(run, now=now)
+
+    assert retreated == {"run_id": 8, "now": now, "reason": "对方处于战败保护期"}
     assert dispatched["count"] == 1
 
 
@@ -384,3 +443,50 @@ def test_process_raid_battle_cleans_up_run_when_manor_lock_fails(monkeypatch, dj
     assert run.is_attacker_victory is False
     assert guest.status == GuestStatus.IDLE
     assert troop.count == 5
+
+
+@pytest.mark.django_db
+def test_dismiss_marching_raids_if_protected_reacts_to_defeat_protection(django_user_model, monkeypatch):
+    attacker_user = django_user_model.objects.create_user(username="raid_dismiss_attacker", password="pass123")
+    defender_user = django_user_model.objects.create_user(username="raid_dismiss_defender", password="pass123")
+    attacker = ensure_manor(attacker_user)
+    defender = ensure_manor(defender_user)
+
+    now = timezone.now()
+    defender.defeat_protection_until = now + timedelta(minutes=30)
+    defender.save(update_fields=["defeat_protection_until"])
+
+    run = RaidRun.objects.create(
+        attacker=attacker,
+        defender=defender,
+        status=RaidRun.Status.MARCHING,
+        troop_loadout={},
+        travel_time=60,
+        battle_at=now + timedelta(seconds=30),
+        return_at=now + timedelta(seconds=60),
+    )
+
+    sent_messages = []
+    scheduled = []
+    monkeypatch.setattr(
+        combat_travel,
+        "create_message",
+        lambda **kwargs: sent_messages.append(kwargs),
+    )
+    monkeypatch.setattr(
+        combat_travel, "safe_apply_async", lambda task, **kwargs: scheduled.append((task, kwargs)) or True
+    )
+
+    import gameplay.tasks as gameplay_tasks
+
+    monkeypatch.setattr(gameplay_tasks, "complete_raid_task", object(), raising=False)
+
+    dismissed = combat_travel._dismiss_marching_raids_if_protected(defender)
+
+    run.refresh_from_db()
+    assert dismissed == 1
+    assert run.status == RaidRun.Status.RETREATED
+    assert run.return_at is not None and run.return_at > now
+    assert len(sent_messages) == 1
+    assert "战败保护期" in sent_messages[0]["body"]
+    assert len(scheduled) == 1

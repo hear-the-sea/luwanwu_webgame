@@ -237,4 +237,6 @@ HEALTH_CHECK_CELERY_BROKER = (
     )
     == "1"
 )
-SINGLE_SESSION_FAIL_OPEN = env("DJANGO_SINGLE_SESSION_FAIL_OPEN", "1") == "1"
+# Authentication enforcement should fail closed by default; environments that
+# need a softer posture must opt in explicitly.
+SINGLE_SESSION_FAIL_OPEN = env("DJANGO_SINGLE_SESSION_FAIL_OPEN", "0") == "1"

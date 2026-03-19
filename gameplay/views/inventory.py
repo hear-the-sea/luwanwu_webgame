@@ -36,7 +36,7 @@ from gameplay.services.inventory.use import use_inventory_item
 from gameplay.services.manor.core import get_manor
 from gameplay.services.manor.treasury import move_item_to_treasury, move_item_to_warehouse
 from gameplay.services.resources import project_resource_production_for_read
-from gameplay.views.read_helpers import prepare_manor_for_read
+from gameplay.views.read_helpers import get_prepared_manor_for_read
 
 logger = logging.getLogger(__name__)
 
@@ -194,13 +194,11 @@ class RecruitmentHallView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        manor = get_manor(self.request.user)
-        prepare_manor_for_read(
-            manor,
+        manor = get_prepared_manor_for_read(
+            self.request,
             project_fn=project_resource_production_for_read,
             logger=logger,
             source="recruitment_hall_view",
-            user_id=getattr(self.request.user, "id", None),
         )
         context.update(get_recruitment_hall_context(manor, UIConstants.RECRUIT_RECORDS_DISPLAY))
         return context
@@ -213,13 +211,11 @@ class WarehouseView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        manor = get_manor(self.request.user)
-        prepare_manor_for_read(
-            manor,
+        manor = get_prepared_manor_for_read(
+            self.request,
             project_fn=project_resource_production_for_read,
             logger=logger,
             source="warehouse_view",
-            user_id=getattr(self.request.user, "id", None),
         )
         context["manor"] = manor
 

@@ -28,21 +28,25 @@ class TestCoreViews:
 
     def test_home_page_syncs_resources_before_loading_context(self, authenticated_client, monkeypatch):
         ensure_manor(authenticated_client.user)
-        calls = {"sync": 0, "context": 0}
+        calls = {"sync": 0, "activity": 0, "context": 0}
 
         def _fake_sync(*_args, **_kwargs):
             calls["sync"] += 1
+
+        def _fake_activity(*_args, **_kwargs):
+            calls["activity"] += 1
 
         def _fake_context(manor):
             calls["context"] += 1
             return {"manor": manor}
 
         monkeypatch.setattr("gameplay.views.core.project_resource_production_for_read", _fake_sync)
+        monkeypatch.setattr("gameplay.views.core.prepare_raid_activity_for_read", _fake_activity)
         monkeypatch.setattr("gameplay.views.core.get_home_context", _fake_context)
 
         response = authenticated_client.get(reverse("home"))
         assert response.status_code == 200
-        assert calls == {"sync": 1, "context": 1}
+        assert calls == {"sync": 1, "activity": 1, "context": 1}
 
     def test_dashboard_requires_login(self, client):
         """仪表盘需要登录"""

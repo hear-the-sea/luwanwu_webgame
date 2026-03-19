@@ -35,7 +35,7 @@ from gameplay.services.utils.messages import (
     mark_messages_read,
     unread_message_count,
 )
-from gameplay.views.read_helpers import prepare_manor_for_read
+from gameplay.views.read_helpers import get_prepared_manor_for_read
 
 logger = logging.getLogger(__name__)
 
@@ -207,13 +207,11 @@ class MessageListView(LoginRequiredMixin, TemplateView):
         contextual hint ("当前有 X 条未读通知").
         """
         context = super().get_context_data(**kwargs)
-        manor = get_manor(self.request.user)
-        prepare_manor_for_read(
-            manor,
+        manor = get_prepared_manor_for_read(
+            self.request,
             project_fn=project_resource_production_for_read,
             logger=logger,
             source="messages_view",
-            user_id=getattr(self.request.user, "id", None),
         )
         context["manor"] = manor
 

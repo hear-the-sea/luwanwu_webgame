@@ -54,7 +54,7 @@ def test_testing_settings_force_in_memory_backends(monkeypatch: pytest.MonkeyPat
     assert module.HEALTH_CHECK_CELERY_WORKERS is False
     assert module.HEALTH_CHECK_CELERY_BEAT is False
     assert module.HEALTH_CHECK_CELERY_ROUNDTRIP is False
-    assert module.SINGLE_SESSION_FAIL_OPEN is True
+    assert module.SINGLE_SESSION_FAIL_OPEN is False
 
 
 def test_testing_settings_uses_xdist_worker_in_sqlite_name(monkeypatch: pytest.MonkeyPatch):

@@ -27,6 +27,7 @@ def test_testing_settings_default_celery_not_eager(monkeypatch: pytest.MonkeyPat
 
     assert module.CELERY_TASK_ALWAYS_EAGER is False
     assert module.CELERY_TASK_EAGER_PROPAGATES is False
+    assert module.SINGLE_SESSION_FAIL_OPEN is False
 
 
 @pytest.mark.parametrize("value", ["1", "true", "yes", "on"])

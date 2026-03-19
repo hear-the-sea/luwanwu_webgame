@@ -20,7 +20,7 @@ from core.config import GUEST
 from core.exceptions import GameError
 from core.utils import sanitize_error_message
 from gameplay.services.resources import project_resource_production_for_read
-from gameplay.views.read_helpers import prepare_manor_for_read
+from gameplay.views.read_helpers import get_prepared_manor_for_read
 
 from ..forms import AllocateSkillPointsForm
 from ..models import GearItem, GearSlot, GearTemplate, GuestSkill, Skill
@@ -172,17 +172,14 @@ class RosterView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         from gameplay.models import InventoryItem, ItemTemplate
-        from gameplay.services.manor.core import get_manor
         from guests.services.salary import bulk_check_salary_paid, get_guest_salary, get_unpaid_guests
 
         context = super().get_context_data(**kwargs)
-        manor = get_manor(self.request.user)
-        prepare_manor_for_read(
-            manor,
+        manor = get_prepared_manor_for_read(
+            self.request,
             project_fn=project_resource_production_for_read,
             logger=logger,
             source="guest_roster_view",
-            user_id=getattr(self.request.user, "id", None),
         )
         guests = list(available_guests(manor))
         refresh_guests_state(guests, now=timezone.now(), refresh=True)

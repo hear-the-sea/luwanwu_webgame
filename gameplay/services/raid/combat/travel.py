@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Dict, List
 
 from django.db import transaction
@@ -19,6 +19,66 @@ from ..utils import calculate_distance, is_same_region
 from .config import PVPConstants
 
 logger = logging.getLogger(__name__)
+
+
+def _get_defender_battle_block_reason(defender: Manor, *, now: datetime | None = None) -> str | None:
+    """Return the protection reason that should cancel an arriving raid, if any."""
+    if defender.is_under_newbie_protection:
+        return "对方处于新手保护期"
+    if defender.is_under_defeat_protection:
+        return "对方处于战败保护期"
+    if defender.is_under_peace_shield:
+        return "对方处于免战牌保护期"
+
+    now = now or timezone.now()
+    recent_attacks = (
+        RaidRun.objects.filter(defender=defender, started_at__gte=now - timedelta(hours=24))
+        .exclude(status=RaidRun.Status.MARCHING)
+        .count()
+    )
+    if recent_attacks >= PVPConstants.RAID_MAX_DAILY_ATTACKS_RECEIVED:
+        return "该目标今日已被多次攻击，暂时无法攻击"
+    return None
+
+
+def _retreat_raid_run_due_to_blocked_target(
+    locked_run: RaidRun,
+    *,
+    now: datetime | None = None,
+    reason: str,
+) -> int:
+    """
+    Mark a marching raid as retreated because the defender became ineligible before battle.
+
+    Returns:
+        Countdown seconds until the run finishes returning.
+    """
+    now = now or timezone.now()
+    elapsed = max(0, int((now - locked_run.started_at).total_seconds()))
+    return_time = max(1, elapsed)
+
+    locked_run.status = RaidRun.Status.RETREATED
+    locked_run.return_at = now + timedelta(seconds=return_time)
+    locked_run.save(update_fields=["status", "return_at"])
+
+    try:
+        create_message(
+            manor=locked_run.attacker,
+            kind="system",
+            title="部队已遣返",
+            body=f"目标 {locked_run.defender.display_name} 当前无法交战（{reason}），您的部队已自动遣返。",
+        )
+    except Exception as exc:
+        logger.warning(
+            "raid blocked-target message failed: run_id=%s attacker=%s defender=%s error=%s",
+            locked_run.id,
+            locked_run.attacker_id,
+            locked_run.defender_id,
+            exc,
+            exc_info=True,
+        )
+
+    return return_time
 
 
 def calculate_raid_travel_time(
@@ -87,7 +147,7 @@ def get_incoming_raids(manor: Manor) -> List[RaidRun]:
 
 def _dismiss_marching_raids_if_protected(defender: Manor) -> int:
     """
-    检查防守方是否触发保护（24小时被攻击达到上限），如果是则遣返所有正在行军的进攻队伍。
+    检查防守方是否进入保护态，如果是则遣返所有正在行军的进攻队伍。
 
     Args:
         defender: 防守方庄园
@@ -96,15 +156,8 @@ def _dismiss_marching_raids_if_protected(defender: Manor) -> int:
         遣返的队伍数量
     """
     now = timezone.now()
-
-    # 检查24小时内被攻击次数（不含正在行军的）
-    recent_attacks = (
-        RaidRun.objects.filter(defender=defender, started_at__gte=now - timedelta(hours=24))
-        .exclude(status=RaidRun.Status.MARCHING)
-        .count()
-    )
-
-    if recent_attacks < PVPConstants.RAID_MAX_DAILY_ATTACKS_RECEIVED:
+    reason = _get_defender_battle_block_reason(defender, now=now)
+    if reason is None:
         return 0
 
     # 查找所有正在行军中的、目标是该防守方的队伍
@@ -125,22 +178,7 @@ def _dismiss_marching_raids_if_protected(defender: Manor) -> int:
             if not locked_run:
                 continue
 
-            # 计算已行军时间，按原路返回
-            elapsed = max(0, int((now - locked_run.started_at).total_seconds()))
-            return_time = max(1, elapsed)
-
-            # 设为撤退状态
-            locked_run.status = RaidRun.Status.RETREATED
-            locked_run.return_at = now + timedelta(seconds=return_time)
-            locked_run.save(update_fields=["status", "return_at"])
-
-            # 发送消息通知进攻方
-            create_message(
-                manor=locked_run.attacker,
-                kind="system",
-                title="部队已遣返",
-                body=f"目标 {defender.display_name} 已触发攻击保护，您的部队已自动遣返。",
-            )
+            return_time = _retreat_raid_run_due_to_blocked_target(locked_run, now=now, reason=reason)
 
         # 调度返程完成任务（事务外）
         try:

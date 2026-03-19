@@ -25,7 +25,7 @@ from gameplay.models import BuildingCategory
 from gameplay.selectors.home import get_home_context
 from gameplay.services.manor.core import get_manor, get_rename_card_count, rename_manor
 from gameplay.services.resources import project_resource_production_for_read
-from gameplay.views.read_helpers import prepare_manor_for_read
+from gameplay.views.read_helpers import get_prepared_manor_for_read, prepare_raid_activity_for_read
 
 logger = logging.getLogger(__name__)
 
@@ -70,13 +70,11 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        manor = get_manor(self.request.user)
-        prepare_manor_for_read(
-            manor,
+        manor = get_prepared_manor_for_read(
+            self.request,
             project_fn=project_resource_production_for_read,
             logger=logger,
             source="dashboard_view",
-            user_id=getattr(self.request.user, "id", None),
         )
 
         # Get category from URL parameter, default to 'resource'
@@ -107,10 +105,14 @@ class HomeView(TemplateView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
         if user.is_authenticated:
-            manor = get_manor(user)
-            prepare_manor_for_read(
-                manor,
+            manor = get_prepared_manor_for_read(
+                self.request,
                 project_fn=project_resource_production_for_read,
+                logger=logger,
+                source="home_view",
+            )
+            prepare_raid_activity_for_read(
+                manor,
                 logger=logger,
                 source="home_view",
                 user_id=getattr(user, "id", None),

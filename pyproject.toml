@@ -107,6 +107,8 @@ module = [
     "gameplay.views.work",
     "trade.views",
     "guests.views.recruit",
+    "guests.views.recruit_responses",
+    "guests.views.recruit_runtime",
 ]
 ignore_errors = false
 disallow_untyped_defs = true

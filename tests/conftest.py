@@ -2,6 +2,7 @@
 Pytest 配置和共享 fixtures
 """
 
+import ast
 import os
 from pathlib import Path
 from uuid import uuid4
@@ -53,6 +54,42 @@ def _test_gate_description(mode: str) -> str:
     )
 
 
+def _markexpr_explicitly_selects_integration(markexpr: str) -> bool:
+    """Return True when the marker expression positively selects integration tests.
+
+    `pytest -m "not integration"` must stay on the hermetic gate and should not
+    be treated as an explicit request for real external services.
+    """
+    expression = (markexpr or "").strip()
+    if not expression:
+        return False
+
+    try:
+        parsed = ast.parse(expression, mode="eval")
+    except SyntaxError:
+        return False
+
+    def _has_positive_integration(node: ast.AST, *, positive: bool = True) -> bool:
+        if isinstance(node, ast.Name):
+            return positive and node.id == "integration"
+
+        if isinstance(node, ast.Call):
+            return _has_positive_integration(node.func, positive=positive)
+
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+            return _has_positive_integration(node.operand, positive=not positive)
+
+        if isinstance(node, ast.BoolOp):
+            return any(_has_positive_integration(value, positive=positive) for value in node.values)
+
+        if isinstance(node, ast.Expression):
+            return _has_positive_integration(node.body, positive=positive)
+
+        return False
+
+    return _has_positive_integration(parsed)
+
+
 def _should_fail_for_missing_env_services(config, items) -> bool:
     if _env_services_enabled():
         return False
@@ -62,7 +99,7 @@ def _should_fail_for_missing_env_services(config, items) -> bool:
         return False
 
     markexpr = str(getattr(getattr(config, "option", None), "markexpr", "") or "").strip()
-    if "integration" in markexpr:
+    if _markexpr_explicitly_selects_integration(markexpr):
         return True
 
     return len(integration_items) == len(items)

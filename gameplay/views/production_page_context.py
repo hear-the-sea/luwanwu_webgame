@@ -29,7 +29,6 @@ from gameplay.services.buildings.stable import (
     get_stable_speed_bonus,
     has_active_production,
 )
-from gameplay.services.manor.core import get_manor
 from gameplay.services.resources import project_resource_production_for_read
 from gameplay.services.technology import get_player_technology_level
 from gameplay.views.production_helpers import (
@@ -39,21 +38,18 @@ from gameplay.views.production_helpers import (
     normalize_forge_category,
     resolve_decompose_category,
 )
-from gameplay.views.read_helpers import prepare_manor_for_read
+from gameplay.views.read_helpers import get_prepared_manor_for_read
 
 logger = logging.getLogger(__name__)
 
 
 def _prepare_production_manor(request: HttpRequest, *, source: str):
-    manor = get_manor(request.user)
-    prepare_manor_for_read(
-        manor,
+    return get_prepared_manor_for_read(
+        request,
         project_fn=project_resource_production_for_read,
         logger=logger,
         source=source,
-        user_id=getattr(request.user, "id", None),
     )
-    return manor
 
 
 def build_stable_page_context(request: HttpRequest) -> dict[str, Any]:

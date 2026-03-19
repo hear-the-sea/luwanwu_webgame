@@ -14,7 +14,6 @@ source =
     websocket
 omit =
     */migrations/*
-    */templatetags/*
     */tests/*
     tests/*
     manage.py

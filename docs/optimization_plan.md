@@ -33,7 +33,7 @@
 ### 本批已完成
 
 - 页面资源读路径开始收敛到统一 helper，减少 view 层散落的 ad-hoc `try/except`。
-- 单会话校验 unavailable 时支持显式 fail-open / fail-closed；当前默认保持 fail-open，生产是否收紧仍需真实环境验证，不得仅凭局部实现直接定案。
+- 单会话校验 unavailable 时支持显式 fail-open / fail-closed；基础配置现已改为默认 fail-closed，需要更宽松策略时必须显式打开。
 - integration gate 的 skip / fail 消息补上了直接可执行的本地命令提示。
 - `gameplay/services/buildings/forge.py` 已继续下沉：蓝图合成、装备分解、运行期锻造流程拆入独立子模块，`forge.py` 保留缓存、配置与兼容出口。
 - `get_recruitment_equipment_keys()` 的导入异常已从广谱吞异常收窄为 `ImportError`。
@@ -102,6 +102,9 @@
 
 - 热点入口边界已完成一轮系统收口：`trade`、`production`、`missions` 已拆出只读 page context，`recruit`、`mission`、`forge` 的写动作入口已下沉为独立 handler/runtime。
 - `forge` 与 `raid/scout` 已从“callback/bundle 空转拆分”转向按业务动作组织模块，`run_wiring.py` 已删除，`forge_runtime.py`、`recruit_action_runtime.py` 等职责边界已固定。
+- 页面读路径已继续上收：`trade/page_context.py`、`gameplay/views/*` 主要页面入口、`guests/views/roster.py` 已统一改走 `get_prepared_manor_for_read(...)` 请求级 helper，页面层不再重复拼装“取 manor + 读侧投影 + 降级语义”样板。
+- 默认测试/覆盖率门禁已补齐一轮可信度缺口：`pytest.ini` 现已覆盖 `guests/tests/`，`.coveragerc` 不再长期排除 `templatetags`，相关契约测试已补齐。
+- 第一批 `guests` 侧稳定入口已退出 `*.views.*` 的 mypy 总豁免：`guests.views.recruit_runtime`、`guests.views.recruit_responses` 已进入真实类型门禁，当前门禁命令已可通过。
 - 第一阶段的目标已视为完成，后续不再继续在这一阶段追加大纵深重构；剩余统一写模型、异常层次、真实外部服务测试等工作，转入第二阶段及以后继续推进。
 
 ### 本轮已完成
@@ -114,6 +117,8 @@
 - `trade/page_context.py`、`gameplay/views/production_page_context.py`、`gameplay/views/mission_page_context.py`：热点页面读侧装配已统一下沉。
 - `guests/views/recruit_action_runtime.py`、`gameplay/views/mission_action_handlers.py`、`gameplay/views/production_forge_handlers.py`：热点写动作入口已从 view 主文件下沉。
 - `gameplay/services/buildings/forge_runtime.py`、`gameplay/services/raid/scout.py`、`gameplay/services/raid/combat/*`：第一阶段主链路中的 callback/importer/bundle 空转层已明显收缩。
+- `gameplay/services/raid/combat/travel.py`：补齐防守保护态 helper 的时间参数标注后，`guests.views.recruit_runtime` / `guests.views.recruit_responses` 的新增 mypy 门禁已解除阻塞。
+- `gameplay/views/read_helpers.py`、`gameplay/views/core.py`、`gameplay/views/map.py`、`gameplay/services/raid/combat/runs.py`：`raid/scout` 读前刷新已开始通过显式 helper 触发，`get_active_raids()` 不再偷偷承担补偿刷新职责。
 
 ### 本轮新增启动项
 
@@ -124,12 +129,19 @@
 - `gameplay/services/buildings/forge.py`：开始拆分配置归一化逻辑。
 - `gameplay/services/arena/core.py`：开始拆分纯 helper 与报名快照逻辑。
 
-## 阶段 2：热点模块重构
+## 阶段 2：并发与测试基线
 
-- 重做 `guests/services/recruitment.py`：优先按业务动作和写入边界收口，而不是继续增加薄包装层。
-- 重做 `gameplay/services/buildings/forge.py`：优先按图纸合成、装备分解、开始锻造、完成锻造等用例收口，避免主入口变成参数转发器。
-- 拆分 `gameplay/services/arena/core.py`：报名、快照、匹配、结算、奖励分层。
-- 收缩 `gameplay/services/__init__.py` 聚合出口，新增代码只允许从子模块导入。
+- 以 [第二阶段统一写模型基线](write_model_boundaries.md) 作为本阶段前置约束，先固化 `mission / raid / guest recruitment` 的主写入口、after-commit follow-up 和 refresh command 边界。
+- 为 `select_for_update`、请求级锁、任务派发与补偿刷新补真实外部服务测试，不再只依赖 hermetic 套件和局部 mock。
+- 继续把 `raid/scout`、`mission`、`guest recruitment` 的补偿职责从页面读路径外迁，禁止新增“读取前顺手修状态”的入口。
+- 第二阶段完成标准不再是“又拆出几个 helper”，而是写路径的正确性来源、补偿边界和真实门禁都变得可说明、可测试。
+
+### 第二阶段当前进展（`2026-03-19`）
+
+- `raid/scout` 读侧已经完成一轮显式化：`HomeView`、`MapView`、`raid_status_api` 会在列出活动状态前显式调用统一 helper；`get_active_raids()` 已退回纯读 accessor。
+- `arena` 报名/赛事/兑换/详情页已接入统一的 `get_prepared_manor_for_read(...)` 入口，页面 selector 不再各自决定资源读侧投影触发时机。
+- 这轮改动对应审计规则 `R3`、`R5` 的局部推进：副作用不再藏在 accessor 里，并已补入口契约测试。
+- 第二阶段仍未封板：页面读路径仍然存在显式补偿调用，真实 MySQL / Redis / Channels / Celery gate 也还没有补齐。
 
 ## 阶段 3：类型与边界治理
 
