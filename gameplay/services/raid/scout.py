@@ -9,26 +9,24 @@ from __future__ import annotations
 import logging
 import random
 from datetime import datetime, timedelta
-from importlib import import_module
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
 from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 
 from battle.models import TroopTemplate
-from common.utils.celery import safe_apply_async, safe_apply_async_with_dedup
+from common.utils.celery import safe_apply_async
 from core.utils.time_scale import scale_duration
 
 from ...constants import PVPConstants
 from ...models import Manor, PlayerTroop, ScoutCooldown, ScoutRecord
 from ..technology import get_player_technology_level
 from ..utils.messages import create_message
+from . import scout_refresh as scout_refresh_command
+from . import scout_return as scout_return_command
 from .utils import calculate_distance, can_attack_target, get_asset_level, get_troop_description
 
 logger = logging.getLogger(__name__)
-
-
-_REFRESH_DISPATCH_DEDUP_SECONDS = 5
 ScoutFollowupAction = Literal[
     "detected_message",
     "failure_result_message",
@@ -77,31 +75,6 @@ def _schedule_scout_followup(action: ScoutFollowupAction, record: ScoutRecord, *
     transaction.on_commit(lambda: _run_scout_followup(action, record, **context))
 
 
-def _try_dispatch_scout_refresh_task(task: Any, record_id: int, phase: str) -> bool:
-    return safe_apply_async_with_dedup(
-        task,
-        dedup_key=f"pvp:refresh_dispatch:scout:{phase}:{record_id}",
-        dedup_timeout=_REFRESH_DISPATCH_DEDUP_SECONDS,
-        args=[record_id],
-        countdown=0,
-        logger=logger,
-        log_message=f"scout refresh dispatch failed: phase={phase} record_id={record_id}",
-    )
-
-
-def _resolve_scout_task(task_name: str) -> Any:
-    tasks_module = import_module("gameplay.tasks.pvp")
-    return getattr(tasks_module, task_name)
-
-
-def _resolve_scout_refresh_tasks() -> tuple[Any, Any] | None:
-    try:
-        return _resolve_scout_task("complete_scout_task"), _resolve_scout_task("complete_scout_return_task")
-    except Exception:
-        logger.warning("Failed to import scout tasks, falling back to sync refresh", exc_info=True)
-        return None
-
-
 def _dispatch_scout_task(
     task_name: str,
     *,
@@ -111,7 +84,7 @@ def _dispatch_scout_task(
     false_log_message: str,
 ) -> None:
     try:
-        task = _resolve_scout_task(task_name)
+        task = scout_refresh_command.resolve_scout_task(task_name)
     except Exception as exc:
         logger.warning(
             "%s import failed: record_id=%s attacker=%s defender=%s error=%s",
@@ -155,24 +128,6 @@ def _lock_manor_pair(attacker_id: int, defender_id: int) -> tuple[Manor, Manor]:
     return attacker, defender
 
 
-def _collect_due_scout_record_ids(manor: Manor, now: datetime) -> tuple[list[int], list[int]]:
-    scouting_ids = list(
-        ScoutRecord.objects.filter(
-            attacker=manor,
-            status=ScoutRecord.Status.SCOUTING,
-            complete_at__lte=now,
-        ).values_list("id", flat=True)
-    )
-    returning_ids = list(
-        ScoutRecord.objects.filter(
-            attacker=manor,
-            status=ScoutRecord.Status.RETURNING,
-            return_at__lte=now,
-        ).values_list("id", flat=True)
-    )
-    return scouting_ids, returning_ids
-
-
 def _restore_scout_troops(attacker: Manor, quantity: int, *, now: datetime | None = None) -> None:
     """Return scout troops to the attacker, recreating the row when it was removed."""
     if quantity <= 0:
@@ -204,42 +159,6 @@ def _restore_scout_troops(attacker: Manor, quantity: int, *, now: datetime | Non
         if updated:
             return
         raise RuntimeError("探子返还失败，请稍后重试")
-
-
-def _dispatch_async_scout_refresh(
-    scouting_ids: list[int],
-    returning_ids: list[int],
-) -> tuple[list[int], list[int], bool]:
-    tasks = _resolve_scout_refresh_tasks()
-    if tasks is None:
-        return scouting_ids, returning_ids, False
-    complete_scout_task, complete_scout_return_task = tasks
-
-    sync_scouting_ids: list[int] = []
-    for record_id in scouting_ids:
-        if not _try_dispatch_scout_refresh_task(complete_scout_task, record_id, "outbound"):
-            sync_scouting_ids.append(record_id)
-
-    sync_returning_ids: list[int] = []
-    for record_id in returning_ids:
-        if not _try_dispatch_scout_refresh_task(complete_scout_return_task, record_id, "return"):
-            sync_returning_ids.append(record_id)
-
-    if not sync_scouting_ids and not sync_returning_ids:
-        return [], [], True
-    return sync_scouting_ids, sync_returning_ids, False
-
-
-def _finalize_due_scout_records(now: datetime, scouting_ids: list[int], returning_ids: list[int]) -> None:
-    if scouting_ids:
-        scouting_records = ScoutRecord.objects.select_related("attacker", "defender").filter(id__in=scouting_ids)
-        for record in scouting_records:
-            finalize_scout(record, now=now)
-
-    if returning_ids:
-        returning_records = ScoutRecord.objects.select_related("attacker", "defender").filter(id__in=returning_ids)
-        for record in returning_records:
-            finalize_scout_return(record, now=now)
 
 
 def get_scout_tech_level(manor: Manor) -> int:
@@ -481,42 +400,13 @@ def finalize_scout_return(record: ScoutRecord, now: Optional[datetime] = None) -
         record: 侦察记录
         now: 当前时间（可选）
     """
-    now = now or timezone.now()
-
-    with transaction.atomic():
-        locked_record = (
-            ScoutRecord.objects.select_for_update().select_related("attacker", "defender").filter(pk=record.pk).first()
-        )
-
-        if not locked_record or locked_record.status != ScoutRecord.Status.RETURNING:
-            return
-
-        followup_action: ScoutFollowupAction
-
-        # 根据返回语义设置最终状态并在事务提交后发送消息
-        if locked_record.was_retreated:
-            locked_record.status = ScoutRecord.Status.FAILED
-            followup_action = "retreat_result_message"
-
-        elif locked_record.is_success:
-            locked_record.status = ScoutRecord.Status.SUCCESS
-            # 归还探子（成功时探子安全返回）
-            _restore_scout_troops(locked_record.attacker, locked_record.scout_cost, now=now)
-            followup_action = "success_result_message"
-
-        else:
-            locked_record.status = ScoutRecord.Status.FAILED
-            followup_action = "failure_result_message"
-
-        locked_record.completed_at = now
-        locked_record.save(update_fields=["status", "completed_at"])
-        _schedule_scout_followup(
-            followup_action,
-            locked_record,
-            record_id=locked_record.id,
-            attacker_id=locked_record.attacker_id,
-            defender_id=locked_record.defender_id,
-        )
+    scout_return_command.finalize_scout_return_command(
+        record,
+        now=now,
+        scout_record_model=ScoutRecord,
+        restore_scout_troops_fn=_restore_scout_troops,
+        schedule_followup_fn=_schedule_scout_followup,
+    )
 
 
 def _gather_scout_intel(defender: Manor) -> Dict[str, Any]:
@@ -613,18 +503,45 @@ def _send_scout_detected_message(record: ScoutRecord) -> None:
 
 def refresh_scout_records(manor: Manor, *, prefer_async: bool = False) -> None:
     """刷新庄园的侦察记录状态（支持异步优先结算）。"""
-    now = timezone.now()
-    scouting_ids, returning_ids = _collect_due_scout_record_ids(manor, now)
 
-    if not scouting_ids and not returning_ids:
-        return
+    def _collect_due_ids(target_manor: Manor, current_time: datetime) -> tuple[list[int], list[int]]:
+        return scout_refresh_command.collect_due_scout_record_ids(
+            target_manor,
+            current_time,
+            scout_record_model=ScoutRecord,
+        )
 
-    if prefer_async:
-        scouting_ids, returning_ids, done_async = _dispatch_async_scout_refresh(scouting_ids, returning_ids)
-        if done_async:
-            return
+    def _dispatch_async(scouting_ids: list[int], returning_ids: list[int]) -> tuple[list[int], list[int], bool]:
+        return scout_refresh_command.dispatch_async_scout_refresh(
+            scouting_ids,
+            returning_ids,
+            resolve_tasks_fn=lambda: scout_refresh_command.resolve_scout_refresh_tasks(logger=logger),
+            try_dispatch_fn=lambda task, record_id, phase: scout_refresh_command.try_dispatch_scout_refresh_task(
+                task,
+                record_id,
+                phase,
+                logger=logger,
+            ),
+        )
 
-    _finalize_due_scout_records(now, scouting_ids, returning_ids)
+    def _finalize_due(current_time: datetime, scouting_ids: list[int], returning_ids: list[int]) -> None:
+        scout_refresh_command.finalize_due_scout_records(
+            current_time,
+            scouting_ids,
+            returning_ids,
+            scout_record_model=ScoutRecord,
+            finalize_scout_fn=finalize_scout,
+            finalize_scout_return_fn=finalize_scout_return,
+        )
+
+    scout_refresh_command.refresh_scout_records_command(
+        manor,
+        prefer_async=prefer_async,
+        now_fn=timezone.now,
+        collect_due_ids_fn=_collect_due_ids,
+        dispatch_async_fn=_dispatch_async,
+        finalize_due_fn=_finalize_due,
+    )
 
 
 def get_active_scouts(manor: Manor) -> List[ScoutRecord]:
@@ -660,31 +577,16 @@ def request_scout_retreat(record: ScoutRecord) -> None:
     Raises:
         ValueError: 无法撤退时
     """
-    if record.status != ScoutRecord.Status.SCOUTING:
-        raise ValueError("当前状态无法撤退")
-
-    now = timezone.now()
-    elapsed = max(0, int((now - record.started_at).total_seconds()))
-
-    with transaction.atomic():
-        locked_record = ScoutRecord.objects.select_for_update().select_related("attacker").filter(pk=record.pk).first()
-
-        if not locked_record or locked_record.status != ScoutRecord.Status.SCOUTING:
-            raise ValueError("当前状态无法撤退")
-
-        # 标记为主动撤退并进入返程；撤退不是侦察失败，不复用 is_success=False 语义。
-        locked_record.status = ScoutRecord.Status.RETURNING
-        locked_record.is_success = None
-        locked_record.was_retreated = True
-        locked_record.return_at = now + timedelta(seconds=max(1, elapsed))
-        locked_record.save(update_fields=["status", "is_success", "was_retreated", "return_at"])
-
-        # 归还探子（撤退不消耗探子）
-        _restore_scout_troops(locked_record.attacker, locked_record.scout_cost, now=now)
+    locked_record, countdown = scout_return_command.request_scout_retreat_command(
+        record,
+        now_fn=timezone.now,
+        scout_record_model=ScoutRecord,
+        restore_scout_troops_fn=_restore_scout_troops,
+    )
 
     _dispatch_scout_task(
         "complete_scout_return_task",
-        countdown=max(1, elapsed),
+        countdown=countdown,
         record=locked_record,
         log_message="complete_scout_return_task dispatch failed for retreat",
         false_log_message="complete_scout_return_task dispatch returned False after scout retreat; scout may remain returning",

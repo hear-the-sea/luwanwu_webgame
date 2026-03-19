@@ -4,7 +4,7 @@ import random
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from core.exceptions import GuestCapacityFullError, RetainerCapacityFullError
+from core.exceptions import GuestCapacityFullError, RecruitmentCandidateStateError, RetainerCapacityFullError
 
 if TYPE_CHECKING:
     from gameplay.models import Manor
@@ -92,7 +92,7 @@ def validate_retainer_candidate_identity(candidate: RecruitmentCandidate) -> tup
     candidate_id = getattr(candidate, "pk", None)
     manor_id = getattr(candidate, "manor_id", None)
     if not candidate_id or not manor_id:
-        raise ValueError("候选门客不存在或已处理")
+        raise RecruitmentCandidateStateError()
     return int(candidate_id), int(manor_id)
 
 

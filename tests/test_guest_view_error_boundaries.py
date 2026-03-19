@@ -412,6 +412,21 @@ def test_recruit_view_runtime_error_bubbles_up(django_user_model, monkeypatch):
 
 
 @pytest.mark.django_db
+def test_recruit_view_legacy_value_error_bubbles_up(django_user_model, monkeypatch):
+    client, _manor = _login_client(django_user_model, prefix="recruit_value_error")
+    pool = _create_pool("recruit_value_error")
+    _stub_recruit_lock(monkeypatch)
+
+    monkeypatch.setattr(
+        "guests.views.recruit.start_guest_recruitment",
+        lambda *_a, **_k: (_ for _ in ()).throw(ValueError("legacy business error")),
+    )
+
+    with pytest.raises(ValueError, match="legacy business error"):
+        client.post(reverse("guests:recruit"), {"pool": str(pool.pk)})
+
+
+@pytest.mark.django_db
 def test_accept_candidate_view_database_error_degrades_with_message(django_user_model, monkeypatch):
     client, manor = _login_client(django_user_model, prefix="accept_db")
     candidate = _create_candidate(manor, prefix="accept_db")

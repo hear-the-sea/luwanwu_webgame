@@ -71,6 +71,41 @@ def get_prepared_manor_for_read(
     return manor
 
 
+def get_prepared_manor_with_raid_activity_for_read(
+    request: HttpRequest,
+    *,
+    logger: logging.Logger,
+    source: str,
+    project_fn: Callable[[Any], None] | None = None,
+    prefer_async: bool = True,
+    on_projection_expected_failure: Callable[[Exception], None] | None = None,
+    on_activity_expected_failure: Callable[[Exception], None] | None = None,
+) -> Any:
+    """Load the current manor through the unified raid/scout read entrypoint."""
+    manor = get_manor(request.user)
+    user_id = getattr(request.user, "id", None)
+
+    if project_fn is not None:
+        prepare_manor_for_read(
+            manor,
+            project_fn=project_fn,
+            logger=logger,
+            source=source,
+            user_id=user_id,
+            on_expected_failure=on_projection_expected_failure,
+        )
+
+    prepare_raid_activity_for_read(
+        manor,
+        logger=logger,
+        source=source,
+        user_id=user_id,
+        prefer_async=prefer_async,
+        on_expected_failure=on_activity_expected_failure,
+    )
+    return manor
+
+
 def prepare_manor_activity_for_read(
     manor: Any,
     *,

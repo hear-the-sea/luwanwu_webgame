@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import guests.services.recruitment_candidates as recruitment_candidates
 import guests.services.recruitment_flow as recruitment_flow
+from core.exceptions import RecruitmentAlreadyInProgressError, RecruitmentDailyLimitExceededError
 from guests.models import GuestRarity
 
 
@@ -70,7 +71,7 @@ def test_validate_recruitment_start_allowed_rejects_active_recruitment():
     manor = SimpleNamespace(pk=1)
     pool = SimpleNamespace(pk=2, name="村募")
 
-    with __import__("pytest").raises(ValueError, match="已有招募正在进行中"):
+    with __import__("pytest").raises(RecruitmentAlreadyInProgressError, match="已有招募正在进行中"):
         recruitment_flow.validate_recruitment_start_allowed(
             locked_manor=manor,
             pool=pool,
@@ -85,7 +86,7 @@ def test_validate_recruitment_start_allowed_rejects_daily_limit():
     manor = SimpleNamespace(pk=1)
     pool = SimpleNamespace(pk=2, name="村募")
 
-    with __import__("pytest").raises(ValueError, match="今日招募次数已达上限"):
+    with __import__("pytest").raises(RecruitmentDailyLimitExceededError, match="今日招募次数已达上限"):
         recruitment_flow.validate_recruitment_start_allowed(
             locked_manor=manor,
             pool=pool,

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 import guests.services.recruitment_finalize_helpers as recruitment_finalize_helpers
-from core.exceptions import GuestCapacityFullError
+from core.exceptions import GuestCapacityFullError, RecruitmentCandidateStateError
 
 
 def test_split_candidates_by_capacity_splits_success_and_failed_lists():
@@ -47,5 +47,5 @@ def test_ensure_guest_capacity_available_raises_when_full():
 
 
 def test_validate_retainer_candidate_identity_rejects_missing_ids():
-    with pytest.raises(ValueError, match="候选门客不存在或已处理"):
+    with pytest.raises(RecruitmentCandidateStateError, match="候选门客不存在或已处理"):
         recruitment_finalize_helpers.validate_retainer_candidate_identity(SimpleNamespace(pk=None, manor_id=None))

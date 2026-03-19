@@ -69,7 +69,7 @@ def _retain_candidates(candidates: list[RecruitmentCandidate]) -> tuple[int, str
         try:
             convert_candidate_to_retainer(candidate)
             retained += 1
-        except (GameError, ValueError) as exc:
+        except GameError as exc:
             error_message = sanitize_error_message(exc)
             break
     return retained, error_message

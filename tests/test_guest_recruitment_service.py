@@ -12,7 +12,8 @@ import guests.services.recruitment_guests as recruitment_guest_service
 import guests.services.recruitment_queries as recruitment_query_service
 import guests.services.recruitment_shared as recruitment_shared
 import guests.services.recruitment_templates as recruitment_template_service
-from core.exceptions import GuestNotIdleError, InvalidAllocationError
+from core.exceptions import GuestNotIdleError, InvalidAllocationError, RecruitmentItemOwnershipError
+from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.manor.core import ensure_manor
 from guests.models import (
     Guest,
@@ -330,6 +331,32 @@ def test_reveal_candidate_rarity_updates_unrevealed():
 
     assert count == 3
     manor.candidates.filter.assert_called_once_with(rarity_revealed=False)
+
+
+@pytest.mark.django_db
+def test_use_magnifying_glass_for_candidates_rejects_item_not_owned(django_user_model):
+    user = django_user_model.objects.create_user(
+        username="recruitment_magnifier_missing_user",
+        password="pass123",
+        email="recruitment_magnifier_missing_user@test.local",
+    )
+    manor = ensure_manor(user)
+    template = ItemTemplate.objects.create(
+        key="recruitment_magnifier_missing",
+        name="放大镜",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=False,
+        tradeable=False,
+    )
+    InventoryItem.objects.create(
+        manor=manor,
+        template=template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    with pytest.raises(RecruitmentItemOwnershipError, match="道具不存在或不属于您的庄园"):
+        recruitment_command_service.use_magnifying_glass_for_candidates(manor, item_id=999999)
 
 
 @pytest.mark.django_db

@@ -12,6 +12,37 @@ from gameplay.constants import PVPConstants
 from gameplay.models import PlayerTroop, ScoutRecord
 from gameplay.services.manor.core import ensure_manor
 from gameplay.services.raid import scout as scout_service
+from gameplay.services.raid import scout_refresh as scout_refresh_command
+
+
+def test_refresh_scout_records_command_skips_finalize_when_nothing_due():
+    calls = {"dispatch": 0, "finalize": 0}
+
+    scout_refresh_command.refresh_scout_records_command(
+        SimpleNamespace(id=7),
+        prefer_async=True,
+        now_fn=lambda: timezone.now(),
+        collect_due_ids_fn=lambda _manor, _now: ([], []),
+        dispatch_async_fn=lambda *_args: calls.__setitem__("dispatch", calls["dispatch"] + 1) or ([], [], True),
+        finalize_due_fn=lambda *_args: calls.__setitem__("finalize", calls["finalize"] + 1),
+    )
+
+    assert calls == {"dispatch": 0, "finalize": 0}
+
+
+def test_refresh_scout_records_command_skips_sync_finalize_when_async_dispatch_finishes():
+    calls = {"dispatch": 0, "finalize": 0}
+
+    scout_refresh_command.refresh_scout_records_command(
+        SimpleNamespace(id=8),
+        prefer_async=True,
+        now_fn=lambda: timezone.now(),
+        collect_due_ids_fn=lambda _manor, _now: ([11], [12]),
+        dispatch_async_fn=lambda *_args: calls.__setitem__("dispatch", calls["dispatch"] + 1) or ([], [], True),
+        finalize_due_fn=lambda *_args: calls.__setitem__("finalize", calls["finalize"] + 1),
+    )
+
+    assert calls == {"dispatch": 1, "finalize": 0}
 
 
 def test_refresh_scout_records_prefers_async_dispatch(monkeypatch):
@@ -43,7 +74,11 @@ def test_refresh_scout_records_prefers_async_dispatch(monkeypatch):
         dispatched.append((record_id, phase))
         return True
 
-    monkeypatch.setattr(scout_service, "_try_dispatch_scout_refresh_task", _dispatch)
+    monkeypatch.setattr(
+        scout_refresh_command,
+        "try_dispatch_scout_refresh_task",
+        lambda task, record_id, phase, *, logger: _dispatch(task, record_id, phase),
+    )
 
     called = {"scout": 0, "return": 0}
     monkeypatch.setattr(
@@ -85,13 +120,13 @@ def test_refresh_scout_records_falls_back_to_sync_when_task_import_fails(monkeyp
 
     dummy_cls = type("_ScoutRecord", (), {"Status": _Status, "objects": _ScoutObjects()})
     monkeypatch.setattr(scout_service, "ScoutRecord", dummy_cls)
-    monkeypatch.setattr(scout_service, "_resolve_scout_refresh_tasks", lambda: None)
+    monkeypatch.setattr(scout_refresh_command, "resolve_scout_refresh_tasks", lambda **_kwargs: None)
 
     called = {"scout": 0, "return": 0}
     monkeypatch.setattr(
-        scout_service,
-        "_finalize_due_scout_records",
-        lambda _now, scouting_ids, returning_ids: called.update(
+        scout_refresh_command,
+        "finalize_due_scout_records",
+        lambda _now, scouting_ids, returning_ids, **_kwargs: called.update(
             {"scout": len(scouting_ids), "return": len(returning_ids)}
         ),
     )

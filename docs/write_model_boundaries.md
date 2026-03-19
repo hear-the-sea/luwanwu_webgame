@@ -9,6 +9,8 @@
 - `gameplay/views/mission_action_handlers.py`
 - `gameplay/services/missions_impl/*`
 - `gameplay/services/raid/scout.py`
+- `gameplay/services/raid/scout_refresh.py`
+- `gameplay/services/raid/scout_return.py`
 - `gameplay/services/raid/combat/*`
 - `guests/views/recruit_action_runtime.py`
 - `guests/views/recruit_responses.py`
@@ -105,7 +107,11 @@
 - `gameplay/services/raid/combat/finalize.py`
   - 负责返程完成后的门客与护院恢复、战利品发放、状态落终态
 - `gameplay/services/raid/scout.py`
-  - 当前同时覆盖侦察发起、撤退、结果写入、消息 follow-up、补偿刷新
+  - 负责侦察发起、结果写入、消息 follow-up
+- `gameplay/services/raid/scout_refresh.py`
+  - 负责到期记录扫描、refresh task 派发、同步 fallback 收口
+- `gameplay/services/raid/scout_return.py`
+  - 负责撤退请求、返程完成的事务与状态收口
 
 ### 3.3 第二阶段口径
 

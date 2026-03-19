@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 from django.db import transaction
 
 from core.config import GUEST
-from core.exceptions import GuestNotIdleError, InvalidAllocationError
+from core.exceptions import GuestNotIdleError, InvalidAllocationError, RecruitmentCandidateStateError
 
 from ..models import Guest, GuestSkill, GuestStatus, GuestTemplate, RecruitmentCandidate, RecruitmentRecord
 from ..utils.recruitment_variance import apply_recruitment_variance
@@ -249,7 +249,7 @@ def convert_candidate_to_retainer(candidate: RecruitmentCandidate) -> None:
         manor_id=manor_id,
     )
     if locked_candidate is None:
-        raise ValueError("候选门客不存在或已处理")
+        raise RecruitmentCandidateStateError()
 
     _ensure_retainer_capacity_available(manor)
     _increment_retainer_count_locked(manor)

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, List
 from django.db import transaction
 from django.utils import timezone
 
-from core.exceptions import InsufficientStockError
+from core.exceptions import InsufficientStockError, RecruitmentItemOwnershipError
 
 if TYPE_CHECKING:
     from gameplay.models import Manor
@@ -69,7 +69,7 @@ def use_magnifying_glass_for_candidates(manor: Manor, item_id: int) -> int:
         .first()
     )
     if not locked_item:
-        raise ValueError("道具不存在或不属于您的庄园")
+        raise RecruitmentItemOwnershipError()
     if locked_item.quantity <= 0:
         raise InsufficientStockError(locked_item.template.name, 1, locked_item.quantity)
 

@@ -5,7 +5,13 @@ from django.utils import timezone
 import guests.services.recruitment_queries as recruitment_query_service
 import guests.services.recruitment_templates as recruitment_template_service
 from core.config import GUEST
-from core.exceptions import GuestNotIdleError, RetainerCapacityFullError
+from core.exceptions import (
+    GuestNotIdleError,
+    RecruitmentAlreadyInProgressError,
+    RecruitmentCandidateStateError,
+    RecruitmentDailyLimitExceededError,
+    RetainerCapacityFullError,
+)
 from gameplay.services.manor.core import ensure_manor
 from guests.models import Guest, GuestRecruitment, GuestStatus, GuestTemplate, RecruitmentCandidate, RecruitmentPool
 from guests.services.recruitment import (
@@ -142,7 +148,7 @@ def test_start_guest_recruitment_rejects_when_active_exists(game_data, django_us
 
     start_guest_recruitment(manor, pool, seed=1)
 
-    with pytest.raises(ValueError, match="已有招募正在进行中"):
+    with pytest.raises(RecruitmentAlreadyInProgressError, match="已有招募正在进行中"):
         start_guest_recruitment(manor, pool, seed=2)
 
 
@@ -182,7 +188,7 @@ def test_start_guest_recruitment_rejects_when_pool_daily_limit_reached(
         finished_at=now,
     )
 
-    with pytest.raises(ValueError, match="今日招募次数已达上限"):
+    with pytest.raises(RecruitmentDailyLimitExceededError, match="今日招募次数已达上限"):
         start_guest_recruitment(manor, pool, seed=3)
 
 
@@ -370,7 +376,7 @@ def test_convert_candidate_to_retainer_rejects_missing_candidate(game_data, djan
 
     candidate.delete()
 
-    with pytest.raises(ValueError, match="候选门客不存在或已处理"):
+    with pytest.raises(RecruitmentCandidateStateError, match="候选门客不存在或已处理"):
         convert_candidate_to_retainer(candidate)
 
     manor.refresh_from_db()

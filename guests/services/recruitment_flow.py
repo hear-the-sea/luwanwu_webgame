@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from django.db import transaction
 
 from common.utils.celery import safe_apply_async
+from core.exceptions import RecruitmentAlreadyInProgressError, RecruitmentDailyLimitExceededError
 from gameplay.services.utils.messages import create_message
 from gameplay.services.utils.notifications import notify_user
 
@@ -165,11 +166,11 @@ def validate_recruitment_start_allowed(
     count_pool_draws_today: Callable[..., int],
 ) -> None:
     if has_active_guest_recruitment(locked_manor):
-        raise ValueError("已有招募正在进行中，请等待当前招募完成。")
+        raise RecruitmentAlreadyInProgressError()
 
     draws_today = count_pool_draws_today(locked_manor.pk, int(pool.pk), now=current_time)
     if draws_today >= daily_limit:
-        raise ValueError(f"{pool.name}今日招募次数已达上限（{daily_limit}次）")
+        raise RecruitmentDailyLimitExceededError(pool.name, daily_limit)
 
 
 def spend_recruitment_cost_if_needed(

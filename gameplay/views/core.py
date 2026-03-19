@@ -25,7 +25,7 @@ from gameplay.models import BuildingCategory
 from gameplay.selectors.home import get_home_context
 from gameplay.services.manor.core import get_manor, get_rename_card_count, rename_manor
 from gameplay.services.resources import project_resource_production_for_read
-from gameplay.views.read_helpers import get_prepared_manor_for_read, prepare_raid_activity_for_read
+from gameplay.views.read_helpers import get_prepared_manor_for_read, get_prepared_manor_with_raid_activity_for_read
 
 logger = logging.getLogger(__name__)
 
@@ -105,17 +105,11 @@ class HomeView(TemplateView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
         if user.is_authenticated:
-            manor = get_prepared_manor_for_read(
+            manor = get_prepared_manor_with_raid_activity_for_read(
                 self.request,
+                logger=logger,
+                source="home_view",
                 project_fn=project_resource_production_for_read,
-                logger=logger,
-                source="home_view",
-            )
-            prepare_raid_activity_for_read(
-                manor,
-                logger=logger,
-                source="home_view",
-                user_id=getattr(user, "id", None),
             )
             context.update(get_home_context(manor))
 

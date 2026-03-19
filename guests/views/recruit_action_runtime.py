@@ -16,7 +16,7 @@ from core.utils.locked_actions import (
 )
 from core.utils.view_error_mapping import (
     DEFAULT_VIEW_INFRASTRUCTURE_EXCEPTIONS,
-    LEGACY_VALUE_ERROR_VIEW_EXCEPTIONS,
+    KNOWN_VIEW_EXCEPTIONS,
     classify_view_error,
 )
 
@@ -65,7 +65,7 @@ def run_locked_recruit_action(
         )
 
     def _on_error(exc: Exception, *, log_message: str | None) -> HttpResponse:
-        category = classify_view_error(exc, known_exceptions=LEGACY_VALUE_ERROR_VIEW_EXCEPTIONS)
+        category = classify_view_error(exc, known_exceptions=KNOWN_VIEW_EXCEPTIONS)
         if category == "unexpected":
             raise exc
         if category != "known" and log_message is not None:
@@ -89,7 +89,7 @@ def run_locked_recruit_action(
         operation=operation,
         on_lock_conflict=_conflict_response,
         on_success=lambda response: response,
-        known_exceptions=(GameError, ValueError),
+        known_exceptions=(GameError,),
         on_known_error=lambda exc: _on_error(exc, log_message=None),
         on_database_error=lambda exc: _on_error(exc, log_message=database_log_message),
         on_unexpected_error=lambda exc: _on_error(exc, log_message=unexpected_log_message),

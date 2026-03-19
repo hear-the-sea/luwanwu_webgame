@@ -49,7 +49,7 @@ from gameplay.services.raid.map_search import get_manor_public_info
 from gameplay.services.raid.protection import get_protection_status
 from gameplay.services.raid.utils import can_attack_target
 from gameplay.services.resources import project_resource_production_for_read
-from gameplay.views.read_helpers import get_prepared_manor_for_read, prepare_raid_activity_for_read
+from gameplay.views.read_helpers import get_prepared_manor_for_read, get_prepared_manor_with_raid_activity_for_read
 
 MAP_ACTION_LOCK_SECONDS = 5
 MAP_ACTION_LOCK_NAMESPACE = "map:view_lock"
@@ -180,17 +180,11 @@ class MapView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        manor = get_prepared_manor_for_read(
+        manor = get_prepared_manor_with_raid_activity_for_read(
             self.request,
+            logger=logger,
+            source="map_view",
             project_fn=project_resource_production_for_read,
-            logger=logger,
-            source="map_view",
-        )
-        prepare_raid_activity_for_read(
-            manor,
-            logger=logger,
-            source="map_view",
-            user_id=getattr(self.request.user, "id", None),
         )
         # 获取当前选中的地区（默认显示玩家所在地区）
         selected_region = self.request.GET.get("region", manor.region)
@@ -378,12 +372,10 @@ def retreat_raid_api(request: HttpRequest, raid_id: int) -> JsonResponse:
 @login_required
 def raid_status_api(request: HttpRequest) -> JsonResponse:
     """获取当前出征和来袭状态API"""
-    manor = get_manor(request.user)
-    prepare_raid_activity_for_read(
-        manor,
+    manor = get_prepared_manor_with_raid_activity_for_read(
+        request,
         logger=logger,
         source="raid_status_api",
-        user_id=getattr(request.user, "id", None),
     )
 
     active_raids = get_active_raids(manor)

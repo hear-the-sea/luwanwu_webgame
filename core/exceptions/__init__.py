@@ -84,7 +84,11 @@ from .recruitment import (
     InvalidAllocationError,
     NoTemplateAvailableError,
     PoolNotConfiguredError,
+    RecruitmentAlreadyInProgressError,
+    RecruitmentCandidateStateError,
+    RecruitmentDailyLimitExceededError,
     RecruitmentError,
+    RecruitmentItemOwnershipError,
 )
 from .resource import (
     CapacityError,
@@ -181,6 +185,10 @@ __all__ = [
     "RecruitmentError",
     "PoolNotConfiguredError",
     "NoTemplateAvailableError",
+    "RecruitmentAlreadyInProgressError",
+    "RecruitmentDailyLimitExceededError",
+    "RecruitmentItemOwnershipError",
+    "RecruitmentCandidateStateError",
     "AttributePointError",
     "InvalidAllocationError",
 ]
