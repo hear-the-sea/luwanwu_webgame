@@ -32,7 +32,7 @@ from gameplay.services.raid import start_raid, start_scout
 from gameplay.services.utils.cache import CacheKeys
 from gameplay.services.utils.messages import claim_message_attachments
 from gameplay.tasks import complete_mission_task
-from gameplay.tasks.pvp import complete_scout_task
+from gameplay.tasks.pvp import complete_scout_return_task, complete_scout_task
 from guests.models import RecruitmentPool
 from guests.services.recruitment import recruit_guest, refresh_guest_recruitments, start_guest_recruitment
 from guests.services.recruitment_guests import finalize_candidate
@@ -350,6 +350,76 @@ def test_integration_start_scout_creates_record_under_external_services(
     assert record.status == ScoutRecord.Status.SCOUTING
     assert record.complete_at > record.started_at
     assert troop.count == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_integration_complete_scout_task_finalizes_outbound_record(require_env_services, game_data, django_user_model):
+    attacker, defender = _prepare_attack_ready_manors(django_user_model, prefix="intg_scout_task_outbound")
+    scout_template, _ = TroopTemplate.objects.get_or_create(key="scout", defaults={"name": "探子"})
+    PlayerTroop.objects.update_or_create(
+        manor=attacker,
+        troop_template=scout_template,
+        defaults={"count": 0},
+    )
+
+    record = ScoutRecord.objects.create(
+        attacker=attacker,
+        defender=defender,
+        status=ScoutRecord.Status.SCOUTING,
+        scout_cost=1,
+        success_rate=1.0,
+        travel_time=600,
+        complete_at=timezone.now() - timedelta(seconds=5),
+    )
+
+    result = complete_scout_task.run(record.id)
+
+    record.refresh_from_db()
+    cooldown = ScoutCooldown.objects.get(attacker=attacker, defender=defender)
+
+    assert result == "completed"
+    assert record.status == ScoutRecord.Status.RETURNING
+    assert record.is_success is True
+    assert record.return_at is not None
+    assert record.return_at > timezone.now()
+    assert cooldown.cooldown_until > timezone.now()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_integration_complete_scout_return_task_finalizes_returning_record(
+    require_env_services, game_data, django_user_model
+):
+    attacker, defender = _prepare_attack_ready_manors(django_user_model, prefix="intg_scout_task_return")
+    scout_template, _ = TroopTemplate.objects.get_or_create(key="scout", defaults={"name": "探子"})
+    troop, _ = PlayerTroop.objects.update_or_create(
+        manor=attacker,
+        troop_template=scout_template,
+        defaults={"count": 0},
+    )
+
+    record = ScoutRecord.objects.create(
+        attacker=attacker,
+        defender=defender,
+        status=ScoutRecord.Status.RETURNING,
+        scout_cost=1,
+        success_rate=1.0,
+        travel_time=60,
+        complete_at=timezone.now() - timedelta(seconds=120),
+        return_at=timezone.now() - timedelta(seconds=5),
+        is_success=True,
+        intel_data={"troop_description": "少量", "guest_count": 1, "avg_guest_level": 1, "asset_level": "一般"},
+    )
+
+    result = complete_scout_return_task.run(record.id)
+
+    record.refresh_from_db()
+    troop.refresh_from_db()
+
+    assert result == "completed"
+    assert record.status == ScoutRecord.Status.SUCCESS
+    assert record.completed_at is not None
+    assert troop.count == 1
+    assert Message.objects.filter(manor=attacker, title__startswith="侦察报告 - ").exists()
 
 
 @pytest.mark.django_db(transaction=True)
