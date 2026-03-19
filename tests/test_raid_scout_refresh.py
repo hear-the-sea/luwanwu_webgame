@@ -142,7 +142,7 @@ def test_send_scout_success_message_tolerates_invalid_intel_shape(monkeypatch):
     def _create_message(*, manor, kind, title, body):
         sent.update({"manor": manor, "kind": kind, "title": title, "body": body})
 
-    monkeypatch.setattr(scout_service, "create_message", _create_message)
+    monkeypatch.setattr(scout_service.scout_followups, "create_message", _create_message)
 
     record = SimpleNamespace(
         intel_data=["bad-shape"],
@@ -150,7 +150,7 @@ def test_send_scout_success_message_tolerates_invalid_intel_shape(monkeypatch):
         defender=SimpleNamespace(display_name="目标庄园"),
     )
 
-    scout_service._send_scout_success_message(record)
+    scout_service.scout_followups.send_scout_success_message(record)
 
     assert sent["manor"].id == 1
     assert sent["kind"] == "system"
@@ -169,7 +169,7 @@ def test_start_scout_rechecks_attack_constraints_inside_transaction(monkeypatch)
             return True, ""
         return False, "对方处于免战牌保护期"
 
-    monkeypatch.setattr(scout_service.transaction, "atomic", contextlib.nullcontext)
+    monkeypatch.setattr(scout_service.scout_start_command.transaction, "atomic", contextlib.nullcontext)
     monkeypatch.setattr(scout_service, "can_attack_target", _fake_can_attack)
     monkeypatch.setattr(scout_service, "check_scout_cooldown", lambda *_args, **_kwargs: (False, None))
     monkeypatch.setattr(scout_service, "get_scout_count", lambda *_args, **_kwargs: 1)
@@ -227,7 +227,7 @@ def test_finalize_scout_return_marks_retreated_records_without_failure_message(d
 
     request_time = timezone.now()
     monkeypatch.setattr(scout_service.timezone, "now", lambda: request_time)
-    monkeypatch.setattr(scout_service, "safe_apply_async", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(scout_service.scout_followups, "safe_apply_async", lambda *_args, **_kwargs: True)
 
     scout_service.request_scout_retreat(record)
 
@@ -240,17 +240,19 @@ def test_finalize_scout_return_marks_retreated_records_without_failure_message(d
 
     sent = {"retreat": 0, "fail": 0}
     monkeypatch.setattr(
-        scout_service,
-        "_send_scout_retreat_message",
+        scout_service.scout_followups,
+        "send_scout_retreat_message",
         lambda *_args, **_kwargs: sent.__setitem__("retreat", sent["retreat"] + 1),
     )
     monkeypatch.setattr(
-        scout_service,
-        "_send_scout_fail_message",
+        scout_service.scout_followups,
+        "send_scout_fail_message",
         lambda *_args, **_kwargs: sent.__setitem__("fail", sent["fail"] + 1),
     )
     callbacks = []
-    monkeypatch.setattr(scout_service.transaction, "on_commit", lambda callback: callbacks.append(callback))
+    monkeypatch.setattr(
+        scout_service.scout_followups.transaction, "on_commit", lambda callback: callbacks.append(callback)
+    )
 
     complete_time = request_time + timedelta(seconds=5)
     scout_service.finalize_scout_return(record, now=complete_time)
@@ -292,7 +294,7 @@ def test_request_scout_retreat_recreates_missing_scout_troop_row(django_user_mod
 
     request_time = timezone.now()
     monkeypatch.setattr(scout_service.timezone, "now", lambda: request_time)
-    monkeypatch.setattr(scout_service, "safe_apply_async", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(scout_service.scout_followups, "safe_apply_async", lambda *_args, **_kwargs: True)
 
     scout_service.request_scout_retreat(record)
 
@@ -328,8 +330,10 @@ def test_finalize_scout_return_recreates_missing_scout_troop_row_for_success(dja
     )
 
     callbacks = []
-    monkeypatch.setattr(scout_service.transaction, "on_commit", lambda callback: callbacks.append(callback))
-    monkeypatch.setattr(scout_service, "_send_scout_success_message", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        scout_service.scout_followups.transaction, "on_commit", lambda callback: callbacks.append(callback)
+    )
+    monkeypatch.setattr(scout_service.scout_followups, "send_scout_success_message", lambda *_args, **_kwargs: None)
 
     complete_time = timezone.now()
     scout_service.finalize_scout_return(record, now=complete_time)
@@ -361,12 +365,12 @@ def test_finalize_scout_detected_message_runs_after_commit_and_failure_does_not_
     monkeypatch.setattr(scout_service, "_roll_scout_success", lambda: 0.5)
     dispatched = []
     monkeypatch.setattr(
-        scout_service.scout_refresh_command,
+        scout_service.scout_followups.scout_refresh_command,
         "resolve_scout_task",
         lambda task_name: SimpleNamespace(name=task_name),
     )
     monkeypatch.setattr(
-        scout_service,
+        scout_service.scout_followups,
         "safe_apply_async",
         lambda task, *, args, countdown, **_kwargs: dispatched.append(
             {
@@ -384,9 +388,11 @@ def test_finalize_scout_detected_message_runs_after_commit_and_failure_does_not_
         sent["count"] += 1
         raise RuntimeError("notify failed")
 
-    monkeypatch.setattr(scout_service, "_send_scout_detected_message", _fail_detected)
+    monkeypatch.setattr(scout_service.scout_followups, "send_scout_detected_message", _fail_detected)
     callbacks = []
-    monkeypatch.setattr(scout_service.transaction, "on_commit", lambda callback: callbacks.append(callback))
+    monkeypatch.setattr(
+        scout_service.scout_followups.transaction, "on_commit", lambda callback: callbacks.append(callback)
+    )
 
     now = timezone.now()
     scout_service.finalize_scout(record, now=now)
@@ -427,19 +433,21 @@ def test_start_scout_dispatch_runs_after_commit(django_user_model, monkeypatch):
     )
 
     callbacks = []
-    monkeypatch.setattr(scout_service.transaction, "on_commit", lambda callback: callbacks.append(callback))
+    monkeypatch.setattr(
+        scout_service.scout_followups.transaction, "on_commit", lambda callback: callbacks.append(callback)
+    )
     monkeypatch.setattr(scout_service, "can_attack_target", lambda *_args, **_kwargs: (True, ""))
     monkeypatch.setattr(scout_service, "calculate_scout_success_rate", lambda *_args, **_kwargs: 0.5)
     monkeypatch.setattr(scout_service, "calculate_scout_travel_time", lambda *_args, **_kwargs: 45)
     monkeypatch.setattr(
-        scout_service.scout_refresh_command,
+        scout_service.scout_followups.scout_refresh_command,
         "resolve_scout_task",
         lambda task_name: SimpleNamespace(name=task_name),
     )
 
     dispatched = []
     monkeypatch.setattr(
-        scout_service,
+        scout_service.scout_followups,
         "safe_apply_async",
         lambda task, *, args, countdown, **_kwargs: dispatched.append(
             {

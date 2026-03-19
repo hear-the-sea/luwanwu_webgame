@@ -8,6 +8,7 @@
   let observerInitialized = false;
   let tickTimerId = null;
   let reloadTimerId = null;
+  let refreshRequestInFlight = false;
   const AUTO_REFRESH_GRACE_MS = 800;
   const SHORT_COUNTDOWN_WINDOW_MS = 5000;
   const SHORT_COUNTDOWN_GRACE_MS = 1200;
@@ -15,6 +16,35 @@
   function schedulePageReload() {
     if (reloadTimerId !== null) return;
     reloadTimerId = window.setTimeout(() => window.location.reload(), 500);
+  }
+
+  function requestRefreshThenReload(refreshUrl, refreshMethod) {
+    if (!refreshUrl) {
+      schedulePageReload();
+      return;
+    }
+    if (refreshRequestInFlight) return;
+    refreshRequestInFlight = true;
+
+    const method = (refreshMethod || "GET").toUpperCase();
+    const headers = { "X-Requested-With": "XMLHttpRequest" };
+    if (method !== "GET" && method !== "HEAD") {
+      const csrfToken = getCSRFToken();
+      if (csrfToken) {
+        headers["X-CSRFToken"] = csrfToken;
+      }
+    }
+
+    fetch(refreshUrl, {
+      method,
+      headers,
+    })
+      .catch((err) => {
+        console.error("状态刷新失败:", err);
+      })
+      .finally(() => {
+        schedulePageReload();
+      });
   }
 
   function initCache() {
@@ -35,6 +65,8 @@
       target,
       style: el.getAttribute("data-format") || "",
       shouldRefresh: el.getAttribute("data-refresh") === "1",
+      refreshUrl: el.getAttribute("data-refresh-url"),
+      refreshMethod: el.getAttribute("data-refresh-method"),
       checkUrl: el.getAttribute("data-check-url"),
       completeText: el.getAttribute("data-complete-text"),
       removeSelector: el.getAttribute("data-remove-selector"),
@@ -236,7 +268,17 @@
         continue;
       }
 
-      const { target, style, shouldRefresh, checkUrl, completeText, removeSelector, initialRemainingMs } = cached;
+      const {
+        target,
+        style,
+        shouldRefresh,
+        refreshUrl,
+        refreshMethod,
+        checkUrl,
+        completeText,
+        removeSelector,
+        initialRemainingMs,
+      } = cached;
       const diff = target - now;
       const completionGraceMs =
         shouldRefresh && initialRemainingMs <= SHORT_COUNTDOWN_WINDOW_MS
@@ -267,7 +309,7 @@
         if (checkUrl) {
           checkTrainingAndUpdate(el);
         } else if (shouldRefresh) {
-          schedulePageReload();
+          requestRefreshThenReload(refreshUrl, refreshMethod);
         }
       } else if (shouldRefresh && diff <= 0) {
         // 倒计时到点后留出短暂缓冲，减少短计时建筑因节流/时钟偏差导致的重复刷新。

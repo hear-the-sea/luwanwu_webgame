@@ -71,6 +71,7 @@ from .map import (
     map_search_api,
     protection_status_api,
     raid_status_api,
+    refresh_raid_activity_api,
     retreat_raid_api,
     start_raid_api,
     start_scout_api,
@@ -193,6 +194,7 @@ __all__ = [
     "start_raid_api",
     "retreat_raid_api",
     "raid_status_api",
+    "refresh_raid_activity_api",
     "protection_status_api",
     # Jail / Oath grove
     "jail_status_api",

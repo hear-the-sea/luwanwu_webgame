@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import timedelta
+from types import SimpleNamespace
+
 import pytest
 from django.contrib.messages import get_messages
 from django.db import DatabaseError
@@ -36,7 +39,7 @@ class TestCoreViews:
             return {"manor": manor}
 
         monkeypatch.setattr(
-            "gameplay.views.core.get_prepared_manor_with_raid_activity_for_read",
+            "gameplay.views.core.get_prepared_manor_for_read",
             lambda request, **_kwargs: calls.__setitem__("prepared", calls["prepared"] + 1) or manor,
         )
         monkeypatch.setattr("gameplay.views.core.get_home_context", _fake_context)
@@ -44,6 +47,68 @@ class TestCoreViews:
         response = authenticated_client.get(reverse("home"))
         assert response.status_code == 200
         assert calls == {"prepared": 1, "context": 1}
+
+    def test_home_page_raid_scout_countdowns_use_explicit_refresh_api(self, authenticated_client, monkeypatch):
+        manor = ensure_manor(authenticated_client.user)
+        now = timezone.now()
+
+        monkeypatch.setattr(
+            "gameplay.views.core.get_prepared_manor_for_read",
+            lambda request, **_kwargs: manor,
+        )
+        monkeypatch.setattr(
+            "gameplay.views.core.get_home_context",
+            lambda _manor: {
+                "manor": manor,
+                "resources": [],
+                "resource_labels": {},
+                "guests": [],
+                "guest_count": 0,
+                "active_runs": [],
+                "upgrading_buildings": [],
+                "upgrading_technologies": [],
+                "total_guest_salary": 0,
+                "building_income": [],
+                "grain_production": 0,
+                "personnel_grain_cost": 0,
+                "player_troops": [],
+                "active_scouts": [
+                    SimpleNamespace(
+                        id=11,
+                        defender=SimpleNamespace(display_name="目标庄园"),
+                        status="scouting",
+                        next_state_at=now + timedelta(minutes=3),
+                        get_status_display="侦察中",
+                    )
+                ],
+                "active_raids": [
+                    SimpleNamespace(
+                        id=12,
+                        defender=SimpleNamespace(display_name="目标庄园"),
+                        status="marching",
+                        next_state_at=now + timedelta(minutes=5),
+                        get_status_display="行军中",
+                        can_retreat=False,
+                        is_retreating=False,
+                    )
+                ],
+                "incoming_raids": [
+                    SimpleNamespace(
+                        id=13,
+                        attacker=SimpleNamespace(display_name="来袭者", location_display="齐国 临淄"),
+                        arrive_at=now + timedelta(minutes=7),
+                    )
+                ],
+            },
+        )
+
+        response = authenticated_client.get(reverse("home"))
+
+        assert response.status_code == 200
+        body = response.content.decode("utf-8")
+        refresh_url = reverse("gameplay:refresh_raid_activity_api")
+        assert body.count(f'data-refresh-url="{refresh_url}"') == 3
+        assert body.count('data-refresh-method="post"') == 3
 
     def test_dashboard_requires_login(self, client):
         """仪表盘需要登录"""

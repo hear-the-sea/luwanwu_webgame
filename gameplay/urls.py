@@ -46,6 +46,7 @@ from .views.map import (
     map_search_api,
     protection_status_api,
     raid_status_api,
+    refresh_raid_activity_api,
     retreat_raid_api,
     start_raid_api,
     start_scout_api,
@@ -161,6 +162,7 @@ urlpatterns = [
     path("api/map/raid/", start_raid_api, name="start_raid_api"),
     path("api/map/raid/<int:raid_id>/retreat/", retreat_raid_api, name="retreat_raid_api"),
     path("api/map/status/", raid_status_api, name="raid_status_api"),
+    path("api/map/status/refresh/", refresh_raid_activity_api, name="refresh_raid_activity_api"),
     path("api/map/protection/", protection_status_api, name="protection_status_api"),
     # 监牢 / 结义林
     path("api/jail/status/", jail_status_api, name="jail_status_api"),

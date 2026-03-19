@@ -365,6 +365,8 @@
                               data-countdown="{{ raid.arrive_at|date:'c' }}"
                               data-format="zh"
                               data-refresh="1"
+                              data-refresh-url="{% url 'gameplay:refresh_raid_activity_api' %}"
+                              data-refresh-method="post"
                               title="预计到达 {{ raid.arrive_at|date:'Y-m-d H:i:s' }}">计算中</span>
                     </td>
                     <td>
@@ -385,6 +387,8 @@
                               data-countdown="{{ raid.next_state_at|date:'c' }}"
                               data-format="zh"
                               data-refresh="1"
+                              data-refresh-url="{% url 'gameplay:refresh_raid_activity_api' %}"
+                              data-refresh-method="post"
                               title="预计 {{ raid.next_state_at|date:'Y-m-d H:i:s' }}">计算中</span>
                     </td>
                     <td>
@@ -419,6 +423,8 @@
                               data-countdown="{{ scout.next_state_at|date:'c' }}"
                               data-format="zh"
                               data-refresh="1"
+                              data-refresh-url="{% url 'gameplay:refresh_raid_activity_api' %}"
+                              data-refresh-method="post"
                               title="预计{% if scout.status == 'scouting' %}到达{% else %}返回{% endif %} {{ scout.next_state_at|date:'Y-m-d H:i:s' }}">计算中</span>
                     </td>
                     <td>

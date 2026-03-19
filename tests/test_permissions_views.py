@@ -36,3 +36,8 @@ class TestPermissions:
         for url in api_urls:
             response = client.get(url)
             assert response.status_code == 302, f"{url} should redirect"
+
+    def test_post_api_requires_login(self, client):
+        """受保护的 POST API 需要登录"""
+        response = client.post(reverse("gameplay:refresh_raid_activity_api"))
+        assert response.status_code == 302

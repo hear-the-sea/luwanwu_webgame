@@ -50,8 +50,8 @@
 
 当前已推进但尚未封板的事项：
 
-- `HomeView`、`MapView`、`raid_status_api` 已开始向统一请求级入口收口 `raid/scout` 读侧 refresh，但其它页面和真实服务门禁仍未让这条链路整体封板。
-- `gameplay/services/raid/scout_refresh.py` 已开始承接侦察 refresh 补偿命令，但 `scout.py` 的其它动作边界和真实服务测试仍需继续收口。
+- `HomeView`、`MapView`、`raid_status_api` 已退出 GET 读路径中的 `raid/scout` 补偿刷新；显式刷新改由 `POST /gameplay/api/map/status/refresh/` 触发，但其它页面和真实服务门禁仍未让这条链路整体封板。
+- `gameplay/services/raid/scout_refresh.py` 已承接侦察 refresh 补偿命令，`gameplay/services/raid/scout_followups.py` 也开始承接 after-commit 消息/任务派发；`scout.py` 已退回公共入口、状态查询和适配层，但真实服务测试仍需继续收口。
 - `gameplay/services/raid/scout_return.py` 已开始承接撤退请求和返程完成写命令；`scout_start.py`、`scout_finalize.py` 现已承接侦察发起/结果写入主写命令，但真实服务测试仍未封板。
 - `raid/scout` 已补第一批真实外部服务测试，开始覆盖 refresh dispatch dedup gate、dispatch 失败回滚、同步补偿收口，以及 `complete_scout_task` / `complete_scout_return_task`、`complete_raid_task`（撤退返程）、`process_raid_battle_task` 的实际消费；但并发冲突和更多 battle/refresh 竞争语义仍未封板。
 - `mission` 已补第一批真实并发与任务派发语义测试，覆盖同门客并发发起只允许一个 `ACTIVE`、同一 `MissionRun` 并发撤退只允许一个状态迁移成功，以及 refresh dispatch dedup gate / dispatch 失败回滚、`complete_mission_task` 实际消费收口；但更多补偿场景仍未封板。

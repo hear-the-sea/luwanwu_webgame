@@ -39,6 +39,8 @@ from gameplay.services.raid import (
     get_active_raids,
     get_active_scouts,
     get_incoming_raids,
+    refresh_raid_runs,
+    refresh_scout_records,
     request_raid_retreat,
     search_manors_by_name,
     search_manors_by_region,
@@ -49,7 +51,7 @@ from gameplay.services.raid.map_search import get_manor_public_info
 from gameplay.services.raid.protection import get_protection_status
 from gameplay.services.raid.utils import can_attack_target
 from gameplay.services.resources import project_resource_production_for_read
-from gameplay.views.read_helpers import get_prepared_manor_for_read, get_prepared_manor_with_raid_activity_for_read
+from gameplay.views.read_helpers import get_prepared_manor_for_read
 
 MAP_ACTION_LOCK_SECONDS = 5
 MAP_ACTION_LOCK_NAMESPACE = "map:view_lock"
@@ -173,6 +175,49 @@ def _release_map_action_lock(lock_key: str, lock_token: str | None) -> None:
     release_scoped_action_lock(MAP_ACTION_LOCK_SPEC, lock_key, lock_token)
 
 
+def _build_raid_status_response(manor: Any) -> JsonResponse:
+    active_raids = get_active_raids(manor)
+    active_scouts = get_active_scouts(manor)
+    incoming_raids = get_incoming_raids(manor)
+
+    return json_success(
+        active_raids=[
+            {
+                "id": r.id,
+                "target_name": r.defender.display_name,
+                "status": r.status,
+                "status_display": r.get_status_display(),
+                "time_remaining": r.time_remaining,
+                "can_retreat": r.can_retreat,
+            }
+            for r in active_raids
+        ],
+        active_scouts=[
+            {
+                "id": s.id,
+                "target_name": s.defender.display_name,
+                "time_remaining": s.time_remaining,
+                "success_rate": round(s.success_rate * 100),
+            }
+            for s in active_scouts
+        ],
+        incoming_raids=[
+            {
+                "id": r.id,
+                "attacker_name": r.attacker.display_name,
+                "attacker_location": r.attacker.location_display,
+                "time_remaining": r.time_remaining,
+            }
+            for r in incoming_raids
+        ],
+    )
+
+
+def _refresh_raid_activity(manor: Any) -> None:
+    refresh_scout_records(manor, prefer_async=True)
+    refresh_raid_runs(manor, prefer_async=True)
+
+
 class MapView(LoginRequiredMixin, TemplateView):
     """世界地图页面"""
 
@@ -180,7 +225,7 @@ class MapView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        manor = get_prepared_manor_with_raid_activity_for_read(
+        manor = get_prepared_manor_for_read(
             self.request,
             logger=logger,
             source="map_view",
@@ -370,49 +415,32 @@ def retreat_raid_api(request: HttpRequest, raid_id: int) -> JsonResponse:
 
 
 @login_required
+@require_POST
+@rate_limit_json("raid_activity_refresh", limit=30, window_seconds=60, error_message="状态刷新过于频繁，请稍后再试")
+def refresh_raid_activity_api(request: HttpRequest) -> JsonResponse:
+    """显式触发侦察/踢馆补偿刷新。"""
+    manor = get_manor(request.user)
+
+    return _run_locked_map_json_action(
+        request,
+        manor=manor,
+        action_name="refresh_raid_activity",
+        scope="self",
+        operation=lambda: _refresh_raid_activity(manor),
+        success_response=lambda _result: _build_raid_status_response(manor),
+        log_message="Unexpected raid activity refresh error: manor_id=%s user_id=%s",
+        log_args=(
+            getattr(manor, "id", None),
+            getattr(request.user, "id", None),
+        ),
+    )
+
+
+@login_required
 def raid_status_api(request: HttpRequest) -> JsonResponse:
     """获取当前出征和来袭状态API"""
-    manor = get_prepared_manor_with_raid_activity_for_read(
-        request,
-        logger=logger,
-        source="raid_status_api",
-    )
-
-    active_raids = get_active_raids(manor)
-    active_scouts = get_active_scouts(manor)
-    incoming_raids = get_incoming_raids(manor)
-
-    return json_success(
-        active_raids=[
-            {
-                "id": r.id,
-                "target_name": r.defender.display_name,
-                "status": r.status,
-                "status_display": r.get_status_display(),
-                "time_remaining": r.time_remaining,
-                "can_retreat": r.can_retreat,
-            }
-            for r in active_raids
-        ],
-        active_scouts=[
-            {
-                "id": s.id,
-                "target_name": s.defender.display_name,
-                "time_remaining": s.time_remaining,
-                "success_rate": round(s.success_rate * 100),
-            }
-            for s in active_scouts
-        ],
-        incoming_raids=[
-            {
-                "id": r.id,
-                "attacker_name": r.attacker.display_name,
-                "attacker_location": r.attacker.location_display,
-                "time_remaining": r.time_remaining,
-            }
-            for r in incoming_raids
-        ],
-    )
+    manor = get_manor(request.user)
+    return _build_raid_status_response(manor)
 
 
 @login_required

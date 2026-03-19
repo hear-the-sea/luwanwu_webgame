@@ -9,155 +9,30 @@ from __future__ import annotations
 import logging
 import random
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from django.db import IntegrityError, models, transaction
+from django.db import IntegrityError, models
 from django.utils import timezone
 
 from battle.models import TroopTemplate
-from common.utils.celery import safe_apply_async
 from core.utils.time_scale import scale_duration
 
 from ...constants import PVPConstants
 from ...models import Manor, PlayerTroop, ScoutCooldown, ScoutRecord
 from ..technology import get_player_technology_level
-from ..utils.messages import create_message
 from . import scout_finalize as scout_finalize_command
+from . import scout_followups
 from . import scout_refresh as scout_refresh_command
 from . import scout_return as scout_return_command
 from . import scout_start as scout_start_command
 from .utils import calculate_distance, can_attack_target, get_asset_level, get_troop_description
 
 logger = logging.getLogger(__name__)
-ScoutFollowupAction = Literal[
-    "detected_message",
-    "failure_result_message",
-    "retreat_result_message",
-    "success_result_message",
-]
 
 
 def _roll_scout_success() -> float:
     """Expose scout success sampling through a stable helper for orchestration/tests."""
     return random.random()
-
-
-def _normalize_mapping(raw: Any) -> Dict[str, Any]:
-    if isinstance(raw, dict):
-        return raw
-    return {}
-
-
-def _coerce_non_negative_int(raw: Any, default: int = 0) -> int:
-    try:
-        parsed = int(raw)
-    except (TypeError, ValueError):
-        parsed = default
-    return parsed if parsed >= 0 else 0
-
-
-def _log_scout_followup_failure(action: str, **context: Any) -> None:
-    context_str = " ".join(f"{key}={value}" for key, value in context.items())
-    if context_str:
-        logger.warning("Scout %s follow-up failed: %s", action, context_str, exc_info=True)
-    else:
-        logger.warning("Scout %s follow-up failed", action, exc_info=True)
-
-
-def _run_scout_followup(action: ScoutFollowupAction, record: ScoutRecord, **context: Any) -> None:
-    try:
-        if action == "detected_message":
-            _send_scout_detected_message(record)
-        elif action == "success_result_message":
-            _send_scout_success_message(record)
-        elif action == "retreat_result_message":
-            _send_scout_retreat_message(record)
-        else:
-            _send_scout_fail_message(record)
-    except Exception:
-        _log_scout_followup_failure(action, **context)
-
-
-def _schedule_scout_followup(action: ScoutFollowupAction, record: ScoutRecord, **context: Any) -> None:
-    transaction.on_commit(lambda: _run_scout_followup(action, record, **context))
-
-
-def _dispatch_scout_task(
-    task_name: str,
-    *,
-    countdown: int,
-    record: ScoutRecord,
-    log_message: str,
-    false_log_message: str,
-) -> None:
-    try:
-        task = scout_refresh_command.resolve_scout_task(task_name)
-    except Exception as exc:
-        logger.warning(
-            "%s import failed: record_id=%s attacker=%s defender=%s error=%s",
-            task_name,
-            record.id,
-            record.attacker_id,
-            record.defender_id,
-            exc,
-            exc_info=True,
-        )
-        return
-
-    dispatched = safe_apply_async(
-        task,
-        args=[record.id],
-        countdown=countdown,
-        logger=logger,
-        log_message=log_message,
-    )
-    if dispatched:
-        return
-    logger.error(
-        false_log_message,
-        extra={
-            "task_name": getattr(task, "name", str(task)),
-            "record_id": record.id,
-            "attacker_id": record.attacker_id,
-            "defender_id": record.defender_id,
-        },
-    )
-
-
-def _schedule_scout_completion(record: ScoutRecord, countdown: int) -> None:
-    transaction.on_commit(
-        lambda: _dispatch_scout_task(
-            "complete_scout_task",
-            countdown=countdown,
-            record=record,
-            log_message="complete_scout_task dispatch failed",
-            false_log_message="complete_scout_task dispatch returned False; scout may remain in outbound state",
-        )
-    )
-
-
-def _schedule_scout_return_completion(record: ScoutRecord, countdown: int) -> None:
-    transaction.on_commit(
-        lambda: _dispatch_scout_task(
-            "complete_scout_return_task",
-            countdown=countdown,
-            record=record,
-            log_message="complete_scout_return_task dispatch failed",
-            false_log_message="complete_scout_return_task dispatch returned False; scout may remain returning",
-        )
-    )
-
-
-def _schedule_scout_return_completion_after_retreat(record: ScoutRecord, countdown: int) -> None:
-    transaction.on_commit(
-        lambda: _dispatch_scout_task(
-            "complete_scout_return_task",
-            countdown=countdown,
-            record=record,
-            log_message="complete_scout_return_task dispatch failed for retreat",
-            false_log_message="complete_scout_return_task dispatch returned False after scout retreat; scout may remain returning",
-        )
-    )
 
 
 def _lock_manor_pair(attacker_id: int, defender_id: int) -> tuple[Manor, Manor]:
@@ -290,7 +165,7 @@ def start_scout(attacker: Manor, defender: Manor) -> ScoutRecord:
         lock_manor_pair_fn=_lock_manor_pair,
         calculate_success_rate_fn=calculate_scout_success_rate,
         calculate_travel_time_fn=calculate_scout_travel_time,
-        schedule_completion_fn=_schedule_scout_completion,
+        schedule_completion_fn=scout_followups.schedule_scout_completion,
         now_fn=timezone.now,
         scout_cooldown_model=ScoutCooldown,
         player_troop_model=PlayerTroop,
@@ -320,8 +195,8 @@ def finalize_scout(record: ScoutRecord, now: Optional[datetime] = None) -> None:
         scout_cooldown_model=ScoutCooldown,
         random_fn=_roll_scout_success,
         gather_intel_fn=_gather_scout_intel,
-        schedule_followup_fn=_schedule_scout_followup,
-        schedule_return_completion_fn=_schedule_scout_return_completion,
+        schedule_followup_fn=scout_followups.schedule_scout_followup,
+        schedule_return_completion_fn=scout_followups.schedule_scout_return_completion,
     )
 
 
@@ -338,7 +213,7 @@ def finalize_scout_return(record: ScoutRecord, now: Optional[datetime] = None) -
         now=now,
         scout_record_model=ScoutRecord,
         restore_scout_troops_fn=_restore_scout_troops,
-        schedule_followup_fn=_schedule_scout_followup,
+        schedule_followup_fn=scout_followups.schedule_scout_followup,
     )
 
 
@@ -365,73 +240,6 @@ def _gather_scout_intel(defender: Manor) -> Dict[str, Any]:
         "asset_level": asset_level,
         "scouted_at": timezone.now().isoformat(),
     }
-
-
-def _send_scout_success_message(record: ScoutRecord) -> None:
-    """发送侦察成功消息"""
-    intel = _normalize_mapping(record.intel_data)
-    troop_description = str(intel.get("troop_description") or "未知")
-    guest_count = _coerce_non_negative_int(intel.get("guest_count", 0), 0)
-    avg_guest_level = _coerce_non_negative_int(intel.get("avg_guest_level", 0), 0)
-    asset_level = str(intel.get("asset_level") or "未知")
-
-    body = f"""探子已成功潜入 {record.defender.display_name}，获取到以下情报：
-
-【护院情况】{troop_description}
-【门客数量】{guest_count} 人
-【门客等级】平均 {avg_guest_level} 级
-【资产状况】{asset_level}"""
-
-    create_message(
-        manor=record.attacker,
-        kind="system",
-        title=f"侦察报告 - {record.defender.display_name}",
-        body=body,
-    )
-
-
-def _send_scout_fail_message(record: ScoutRecord) -> None:
-    """发送侦察失败消息"""
-    body = f"""派往 {record.defender.display_name} 的探子被对方发现，侦察任务失败。
-探子已损失。"""
-
-    create_message(
-        manor=record.attacker,
-        kind="system",
-        title="侦察失败",
-        body=body,
-    )
-
-
-def _send_scout_retreat_message(record: ScoutRecord) -> None:
-    """发送侦察撤退消息"""
-    body = f"""派往 {record.defender.display_name} 的探子已按命令撤回。
-探子已安全返回，未获得情报。"""
-
-    create_message(
-        manor=record.attacker,
-        kind="system",
-        title="侦察已撤退",
-        body=body,
-    )
-
-
-def _send_scout_detected_message(record: ScoutRecord) -> None:
-    """发送被侦察警告消息给防守方"""
-    body = f"""我方巡逻队在庄园附近发现并抓获了一名探子！
-
-探子来源：{record.attacker.display_name}
-所在地区：{record.attacker.location_display}
-发现时间：{timezone.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-建议加强防备，敌人可能即将来袭！"""
-
-    create_message(
-        manor=record.defender,
-        kind="system",
-        title="发现敌方探子！",
-        body=body,
-    )
 
 
 def refresh_scout_records(manor: Manor, *, prefer_async: bool = False) -> None:
@@ -515,5 +323,5 @@ def request_scout_retreat(record: ScoutRecord) -> None:
         now_fn=timezone.now,
         scout_record_model=ScoutRecord,
         restore_scout_troops_fn=_restore_scout_troops,
-        schedule_return_completion_fn=_schedule_scout_return_completion_after_retreat,
+        schedule_return_completion_fn=scout_followups.schedule_scout_return_completion_after_retreat,
     )

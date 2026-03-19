@@ -42,7 +42,7 @@ class TestMapViews:
             }
 
         monkeypatch.setattr(
-            "gameplay.views.map.get_prepared_manor_with_raid_activity_for_read",
+            "gameplay.views.map.get_prepared_manor_for_read",
             lambda request, **_kwargs: calls.__setitem__("prepared", calls["prepared"] + 1) or manor,
         )
         monkeypatch.setattr("gameplay.views.map.get_map_context", _fake_context)
@@ -120,13 +120,21 @@ class TestMapAPI:
         assert data["success"] is True
         assert "active_raids" in data
 
-    def test_raid_status_api_refreshes_activity_before_listing(self, manor_with_user, monkeypatch):
+    def test_raid_status_api_reads_status_without_triggering_refresh(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
-        calls = {"prepared": 0, "raids": 0, "scouts": 0, "incoming": 0}
+        calls = {"manor": 0, "refresh_scout": 0, "refresh_raid": 0, "raids": 0, "scouts": 0, "incoming": 0}
 
         monkeypatch.setattr(
-            "gameplay.views.map.get_prepared_manor_with_raid_activity_for_read",
-            lambda request, **_kwargs: calls.__setitem__("prepared", calls["prepared"] + 1) or manor,
+            "gameplay.views.map.get_manor",
+            lambda user: calls.__setitem__("manor", calls["manor"] + 1) or manor,
+        )
+        monkeypatch.setattr(
+            "gameplay.views.map.refresh_scout_records",
+            lambda *_args, **_kwargs: calls.__setitem__("refresh_scout", calls["refresh_scout"] + 1),
+        )
+        monkeypatch.setattr(
+            "gameplay.views.map.refresh_raid_runs",
+            lambda *_args, **_kwargs: calls.__setitem__("refresh_raid", calls["refresh_raid"] + 1),
         )
         monkeypatch.setattr(
             "gameplay.views.map.get_active_raids",
@@ -144,7 +152,71 @@ class TestMapAPI:
         response = client.get(reverse("gameplay:raid_status_api"))
 
         assert response.status_code == 200
-        assert calls == {"prepared": 1, "raids": 1, "scouts": 1, "incoming": 1}
+        assert calls == {"manor": 1, "refresh_scout": 0, "refresh_raid": 0, "raids": 1, "scouts": 1, "incoming": 1}
+
+    def test_refresh_raid_activity_api_refreshes_before_listing(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        calls: list[tuple[object, ...]] = []
+
+        monkeypatch.setattr(
+            "gameplay.views.map.get_manor",
+            lambda user: calls.append(("manor", user)) or manor,
+        )
+        monkeypatch.setattr(
+            "gameplay.views.map.refresh_scout_records",
+            lambda current_manor, *, prefer_async=False: calls.append(("refresh_scout", current_manor, prefer_async)),
+        )
+        monkeypatch.setattr(
+            "gameplay.views.map.refresh_raid_runs",
+            lambda current_manor, *, prefer_async=False: calls.append(("refresh_raid", current_manor, prefer_async)),
+        )
+        monkeypatch.setattr(
+            "gameplay.views.map.get_active_raids",
+            lambda current_manor: calls.append(("raids", current_manor)) or [],
+        )
+        monkeypatch.setattr(
+            "gameplay.views.map.get_active_scouts",
+            lambda current_manor: calls.append(("scouts", current_manor)) or [],
+        )
+        monkeypatch.setattr(
+            "gameplay.views.map.get_incoming_raids",
+            lambda current_manor: calls.append(("incoming", current_manor)) or [],
+        )
+
+        response = client.post(reverse("gameplay:refresh_raid_activity_api"))
+
+        assert response.status_code == 200
+        assert calls[0][0] == "manor"
+        assert calls[1:] == [
+            ("refresh_scout", manor, True),
+            ("refresh_raid", manor, True),
+            ("raids", manor),
+            ("scouts", manor),
+            ("incoming", manor),
+        ]
+        data = response.json()
+        assert data["success"] is True
+        assert data["active_raids"] == []
+        assert data["active_scouts"] == []
+        assert data["incoming_raids"] == []
+
+    def test_refresh_raid_activity_api_rejects_when_action_lock_conflicts(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+        called = {"refresh": 0}
+
+        monkeypatch.setattr("gameplay.views.map._acquire_map_action_lock", lambda *_a, **_k: (False, "", None))
+        monkeypatch.setattr(
+            "gameplay.views.map.refresh_scout_records",
+            lambda *_args, **_kwargs: called.__setitem__("refresh", called["refresh"] + 1),
+        )
+
+        response = client.post(reverse("gameplay:refresh_raid_activity_api"))
+
+        assert response.status_code == 409
+        payload = response.json()
+        assert payload["success"] is False
+        assert "请求处理中，请稍候重试" in payload["error"]
+        assert called["refresh"] == 0
 
     def test_manor_detail_api(self, manor_with_user):
         """庄园详情API"""
