@@ -358,8 +358,25 @@ def test_finalize_scout_detected_message_runs_after_commit_and_failure_does_not_
         complete_at=timezone.now() + timedelta(seconds=45),
     )
 
-    monkeypatch.setattr(scout_service.random, "random", lambda: 0.5)
-    monkeypatch.setattr(scout_service, "safe_apply_async", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(scout_service, "_roll_scout_success", lambda: 0.5)
+    dispatched = []
+    monkeypatch.setattr(
+        scout_service.scout_refresh_command,
+        "resolve_scout_task",
+        lambda task_name: SimpleNamespace(name=task_name),
+    )
+    monkeypatch.setattr(
+        scout_service,
+        "safe_apply_async",
+        lambda task, *, args, countdown, **_kwargs: dispatched.append(
+            {
+                "task_name": getattr(task, "name", str(task)),
+                "args": args,
+                "countdown": countdown,
+            }
+        )
+        or True,
+    )
 
     sent = {"count": 0}
 
@@ -379,11 +396,76 @@ def test_finalize_scout_detected_message_runs_after_commit_and_failure_does_not_
     assert record.is_success is False
     assert record.return_at == now + timedelta(seconds=record.travel_time)
     assert sent["count"] == 0
-    assert len(callbacks) == 1
+    assert dispatched == []
+    assert len(callbacks) == 2
 
-    callbacks[0]()
+    for callback in callbacks:
+        callback()
 
     record.refresh_from_db()
     assert record.status == ScoutRecord.Status.RETURNING
     assert record.is_success is False
     assert sent["count"] == 1
+    assert dispatched == [
+        {
+            "task_name": "complete_scout_return_task",
+            "args": [record.id],
+            "countdown": record.travel_time,
+        }
+    ]
+
+
+@pytest.mark.django_db(transaction=True)
+def test_start_scout_dispatch_runs_after_commit(django_user_model, monkeypatch):
+    attacker = ensure_manor(django_user_model.objects.create_user(username="scout_start_attacker", password="pass123"))
+    defender = ensure_manor(django_user_model.objects.create_user(username="scout_start_defender", password="pass123"))
+    scout_template, _ = TroopTemplate.objects.get_or_create(key=PVPConstants.SCOUT_TROOP_KEY, defaults={"name": "探子"})
+    troop, _ = PlayerTroop.objects.update_or_create(
+        manor=attacker,
+        troop_template=scout_template,
+        defaults={"count": 2},
+    )
+
+    callbacks = []
+    monkeypatch.setattr(scout_service.transaction, "on_commit", lambda callback: callbacks.append(callback))
+    monkeypatch.setattr(scout_service, "can_attack_target", lambda *_args, **_kwargs: (True, ""))
+    monkeypatch.setattr(scout_service, "calculate_scout_success_rate", lambda *_args, **_kwargs: 0.5)
+    monkeypatch.setattr(scout_service, "calculate_scout_travel_time", lambda *_args, **_kwargs: 45)
+    monkeypatch.setattr(
+        scout_service.scout_refresh_command,
+        "resolve_scout_task",
+        lambda task_name: SimpleNamespace(name=task_name),
+    )
+
+    dispatched = []
+    monkeypatch.setattr(
+        scout_service,
+        "safe_apply_async",
+        lambda task, *, args, countdown, **_kwargs: dispatched.append(
+            {
+                "task_name": getattr(task, "name", str(task)),
+                "args": args,
+                "countdown": countdown,
+            }
+        )
+        or True,
+    )
+
+    record = scout_service.start_scout(attacker, defender)
+
+    troop.refresh_from_db()
+    record.refresh_from_db()
+    assert troop.count == 1
+    assert record.status == ScoutRecord.Status.SCOUTING
+    assert len(callbacks) == 1
+    assert dispatched == []
+
+    callbacks[0]()
+
+    assert dispatched == [
+        {
+            "task_name": "complete_scout_task",
+            "args": [record.id],
+            "countdown": 45,
+        }
+    ]

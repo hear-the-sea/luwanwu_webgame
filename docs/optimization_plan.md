@@ -52,7 +52,10 @@
 
 - `HomeView`、`MapView`、`raid_status_api` 已开始向统一请求级入口收口 `raid/scout` 读侧 refresh，但其它页面和真实服务门禁仍未让这条链路整体封板。
 - `gameplay/services/raid/scout_refresh.py` 已开始承接侦察 refresh 补偿命令，但 `scout.py` 的其它动作边界和真实服务测试仍需继续收口。
-- `gameplay/services/raid/scout_return.py` 已开始承接撤退请求和返程完成写命令，但侦察发起/结果写入仍未完全拆成更稳定的动作边界。
+- `gameplay/services/raid/scout_return.py` 已开始承接撤退请求和返程完成写命令；`scout_start.py`、`scout_finalize.py` 现已承接侦察发起/结果写入主写命令，但真实服务测试仍未封板。
+- `raid/scout` 已补第一批真实外部服务测试，开始覆盖 refresh dispatch dedup gate、dispatch 失败回滚和同步补偿收口；但并发冲突与 worker 实际消费语义仍未封板。
+- `buildings` 升级入口已不再从 view 直接调用 `refresh_manor_state(...)`；陈旧升级状态改由 `start_upgrade()` 写命令自行收口。
+- `guests/roster`、`guests/detail` 的门客状态准备已收口到显式 read helper，不再在 `get_context_data()` 内联推进状态。
 - 单会话策略已改为默认 `fail-closed`，但平台级故障语义仍需继续用真实服务门禁验证。
 - integration gate 的提示信息、`pytest` 路径和模板/过滤器相关测试已补齐，但真实 MySQL / Redis / Channels / Celery gate 仍不足。
 

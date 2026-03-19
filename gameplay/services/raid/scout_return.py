@@ -58,6 +58,7 @@ def request_scout_retreat_command(
     now_fn: Callable[[], datetime] = timezone.now,
     scout_record_model: Any = ScoutRecord,
     restore_scout_troops_fn: Callable[..., None],
+    schedule_return_completion_fn: Callable[[Any, int], None] | None = None,
 ) -> tuple[Any, int]:
     if record.status != scout_record_model.Status.SCOUTING:
         raise ValueError("当前状态无法撤退")
@@ -81,5 +82,7 @@ def request_scout_retreat_command(
         locked_record.save(update_fields=["status", "is_success", "was_retreated", "return_at"])
 
         restore_scout_troops_fn(locked_record.attacker, locked_record.scout_cost, now=current_time)
+        if schedule_return_completion_fn is not None:
+            schedule_return_completion_fn(locked_record, countdown)
 
     return locked_record, countdown

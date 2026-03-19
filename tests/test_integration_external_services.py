@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 import uuid
 from datetime import timedelta
@@ -19,12 +20,17 @@ from gameplay.models import (
     RaidRun,
     ResourceEvent,
     ResourceType,
+    ScoutCooldown,
+    ScoutRecord,
 )
 from gameplay.services.manor.core import ensure_manor
 from gameplay.services.missions import launch_mission, refresh_mission_runs
-from gameplay.services.raid import request_raid_retreat, start_raid
+from gameplay.services.raid import refresh_scout_records, request_raid_retreat
+from gameplay.services.raid import scout_refresh as scout_refresh_command
+from gameplay.services.raid import start_raid, start_scout
 from gameplay.services.utils.cache import CacheKeys
 from gameplay.services.utils.messages import claim_message_attachments
+from gameplay.tasks.pvp import complete_scout_task
 from guests.models import RecruitmentPool
 from guests.services.recruitment import recruit_guest
 from guests.services.recruitment_guests import finalize_candidate
@@ -38,6 +44,39 @@ from trade.services.auction_service import place_bid, settle_auction_round
 from trade.services.market_service import create_listing, purchase_listing
 
 pytestmark = [pytest.mark.integration]
+
+
+def _prepare_attack_ready_manors(django_user_model, *, prefix: str):
+    attacker_user = django_user_model.objects.create_user(
+        username=f"{prefix}_attacker_{uuid.uuid4().hex[:8]}",
+        password="pass123",
+    )
+    defender_user = django_user_model.objects.create_user(
+        username=f"{prefix}_defender_{uuid.uuid4().hex[:8]}",
+        password="pass123",
+    )
+    attacker = ensure_manor(attacker_user)
+    defender = ensure_manor(defender_user)
+
+    for manor in (attacker, defender):
+        manor.newbie_protection_until = timezone.now() - timedelta(days=1)
+        manor.peace_shield_until = None
+        manor.defeat_protection_until = None
+        manor.prestige = 100
+        manor.grain = 500000
+        manor.silver = 500000
+        manor.save(
+            update_fields=[
+                "newbie_protection_until",
+                "peace_shield_until",
+                "defeat_protection_until",
+                "prestige",
+                "grain",
+                "silver",
+            ]
+        )
+
+    return attacker, defender
 
 
 @pytest.mark.django_db(transaction=True)
@@ -156,34 +195,7 @@ def test_integration_auction_bid_and_settlement_flow(require_env_services, djang
 
 @pytest.mark.django_db(transaction=True)
 def test_integration_raid_start_and_retreat_flow(require_env_services, game_data, django_user_model):
-    attacker_user = django_user_model.objects.create_user(
-        username=f"intg_raider_{uuid.uuid4().hex[:8]}",
-        password="pass123",
-    )
-    defender_user = django_user_model.objects.create_user(
-        username=f"intg_defender_{uuid.uuid4().hex[:8]}",
-        password="pass123",
-    )
-    attacker = ensure_manor(attacker_user)
-    defender = ensure_manor(defender_user)
-
-    for manor in (attacker, defender):
-        manor.newbie_protection_until = timezone.now() - timedelta(days=1)
-        manor.peace_shield_until = None
-        manor.defeat_protection_until = None
-        manor.prestige = 100
-        manor.grain = 500000
-        manor.silver = 500000
-        manor.save(
-            update_fields=[
-                "newbie_protection_until",
-                "peace_shield_until",
-                "defeat_protection_until",
-                "prestige",
-                "grain",
-                "silver",
-            ]
-        )
+    attacker, defender = _prepare_attack_ready_manors(django_user_model, prefix="intg_raid")
 
     pool = RecruitmentPool.objects.get(key="cunmu")
     candidate = recruit_guest(attacker, pool, seed=3)[0]
@@ -207,6 +219,135 @@ def test_integration_raid_start_and_retreat_flow(require_env_services, game_data
 
     assert run.status == RaidRun.Status.RETREATED
     assert run.is_retreating is True
+
+
+@pytest.mark.django_db(transaction=True)
+def test_integration_scout_refresh_dispatch_sets_external_dedup_gate(require_env_services):
+    record_id = 10_000_000 + int(time.time())
+    dedup_key = f"pvp:refresh_dispatch:scout:outbound:{record_id}"
+    test_logger = logging.getLogger("tests.integration.scout_refresh_dispatch")
+    cache.delete(dedup_key)
+
+    ok = scout_refresh_command.try_dispatch_scout_refresh_task(
+        complete_scout_task,
+        record_id,
+        "outbound",
+        logger=test_logger,
+    )
+
+    assert ok is True
+    assert cache.get(dedup_key) == "1"
+
+    cache.delete(dedup_key)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_integration_scout_refresh_dispatch_failure_rolls_back_dedup_gate(require_env_services):
+    record_id = 20_000_000 + int(time.time())
+    dedup_key = f"pvp:refresh_dispatch:scout:outbound:{record_id}"
+    test_logger = logging.getLogger("tests.integration.scout_refresh_dispatch_failure")
+    cache.delete(dedup_key)
+
+    class _FailingTask:
+        def apply_async(self, **_kwargs):
+            raise RuntimeError("dispatch failed")
+
+    ok = scout_refresh_command.try_dispatch_scout_refresh_task(
+        _FailingTask(),
+        record_id,
+        "outbound",
+        logger=test_logger,
+    )
+
+    assert ok is False
+    assert cache.get(dedup_key) is None
+
+
+@pytest.mark.django_db(transaction=True)
+def test_integration_scout_refresh_sync_finalize_outbound_record(require_env_services, game_data, django_user_model):
+    attacker, defender = _prepare_attack_ready_manors(django_user_model, prefix="intg_scout_outbound")
+    scout_template, _ = TroopTemplate.objects.get_or_create(key="scout", defaults={"name": "探子"})
+    PlayerTroop.objects.update_or_create(
+        manor=attacker,
+        troop_template=scout_template,
+        defaults={"count": 0},
+    )
+
+    record = ScoutRecord.objects.create(
+        attacker=attacker,
+        defender=defender,
+        status=ScoutRecord.Status.SCOUTING,
+        scout_cost=1,
+        success_rate=1.0,
+        travel_time=600,
+        complete_at=timezone.now() - timedelta(seconds=5),
+    )
+
+    refresh_scout_records(attacker, prefer_async=False)
+
+    record.refresh_from_db()
+    cooldown = ScoutCooldown.objects.get(attacker=attacker, defender=defender)
+
+    assert record.status == ScoutRecord.Status.RETURNING
+    assert record.is_success is True
+    assert record.return_at is not None
+    assert record.return_at > timezone.now()
+    assert cooldown.cooldown_until > timezone.now()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_integration_scout_refresh_sync_finalize_returning_record(require_env_services, game_data, django_user_model):
+    attacker, defender = _prepare_attack_ready_manors(django_user_model, prefix="intg_scout_return")
+    scout_template, _ = TroopTemplate.objects.get_or_create(key="scout", defaults={"name": "探子"})
+    troop, _ = PlayerTroop.objects.update_or_create(
+        manor=attacker,
+        troop_template=scout_template,
+        defaults={"count": 0},
+    )
+
+    record = ScoutRecord.objects.create(
+        attacker=attacker,
+        defender=defender,
+        status=ScoutRecord.Status.RETURNING,
+        scout_cost=1,
+        success_rate=1.0,
+        travel_time=60,
+        complete_at=timezone.now() - timedelta(seconds=120),
+        return_at=timezone.now() - timedelta(seconds=5),
+        is_success=True,
+        intel_data={"troop_description": "少量", "guest_count": 1, "avg_guest_level": 1, "asset_level": "一般"},
+    )
+
+    refresh_scout_records(attacker, prefer_async=False)
+
+    record.refresh_from_db()
+    troop.refresh_from_db()
+
+    assert record.status == ScoutRecord.Status.SUCCESS
+    assert record.completed_at is not None
+    assert troop.count == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_integration_start_scout_creates_record_under_external_services(
+    require_env_services, game_data, django_user_model
+):
+    attacker, defender = _prepare_attack_ready_manors(django_user_model, prefix="intg_scout_start")
+    scout_template, _ = TroopTemplate.objects.get_or_create(key="scout", defaults={"name": "探子"})
+    troop, _ = PlayerTroop.objects.update_or_create(
+        manor=attacker,
+        troop_template=scout_template,
+        defaults={"count": 2},
+    )
+
+    record = start_scout(attacker, defender)
+
+    troop.refresh_from_db()
+    record.refresh_from_db()
+
+    assert record.status == ScoutRecord.Status.SCOUTING
+    assert record.complete_at > record.started_at
+    assert troop.count == 1
 
 
 @pytest.mark.django_db(transaction=True)

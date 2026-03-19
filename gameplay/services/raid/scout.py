@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import random
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
 from django.db import IntegrityError, models, transaction
@@ -22,8 +22,10 @@ from ...constants import PVPConstants
 from ...models import Manor, PlayerTroop, ScoutCooldown, ScoutRecord
 from ..technology import get_player_technology_level
 from ..utils.messages import create_message
+from . import scout_finalize as scout_finalize_command
 from . import scout_refresh as scout_refresh_command
 from . import scout_return as scout_return_command
+from . import scout_start as scout_start_command
 from .utils import calculate_distance, can_attack_target, get_asset_level, get_troop_description
 
 logger = logging.getLogger(__name__)
@@ -33,6 +35,11 @@ ScoutFollowupAction = Literal[
     "retreat_result_message",
     "success_result_message",
 ]
+
+
+def _roll_scout_success() -> float:
+    """Expose scout success sampling through a stable helper for orchestration/tests."""
+    return random.random()
 
 
 def _normalize_mapping(raw: Any) -> Dict[str, Any]:
@@ -114,6 +121,42 @@ def _dispatch_scout_task(
             "attacker_id": record.attacker_id,
             "defender_id": record.defender_id,
         },
+    )
+
+
+def _schedule_scout_completion(record: ScoutRecord, countdown: int) -> None:
+    transaction.on_commit(
+        lambda: _dispatch_scout_task(
+            "complete_scout_task",
+            countdown=countdown,
+            record=record,
+            log_message="complete_scout_task dispatch failed",
+            false_log_message="complete_scout_task dispatch returned False; scout may remain in outbound state",
+        )
+    )
+
+
+def _schedule_scout_return_completion(record: ScoutRecord, countdown: int) -> None:
+    transaction.on_commit(
+        lambda: _dispatch_scout_task(
+            "complete_scout_return_task",
+            countdown=countdown,
+            record=record,
+            log_message="complete_scout_return_task dispatch failed",
+            false_log_message="complete_scout_return_task dispatch returned False; scout may remain returning",
+        )
+    )
+
+
+def _schedule_scout_return_completion_after_retreat(record: ScoutRecord, countdown: int) -> None:
+    transaction.on_commit(
+        lambda: _dispatch_scout_task(
+            "complete_scout_return_task",
+            countdown=countdown,
+            record=record,
+            log_message="complete_scout_return_task dispatch failed for retreat",
+            false_log_message="complete_scout_return_task dispatch returned False after scout retreat; scout may remain returning",
+        )
     )
 
 
@@ -238,90 +281,22 @@ def start_scout(attacker: Manor, defender: Manor) -> ScoutRecord:
     Raises:
         ValueError: 无法发起侦察时
     """
-    # 检查是否可以攻击目标
-    can_attack, reason = can_attack_target(
+    return scout_start_command.start_scout_command(
         attacker,
         defender,
-        use_cached_recent_attacks=False,
-        check_defeat_protection=False,
+        can_attack_target_fn=can_attack_target,
+        check_scout_cooldown_fn=check_scout_cooldown,
+        get_scout_count_fn=get_scout_count,
+        lock_manor_pair_fn=_lock_manor_pair,
+        calculate_success_rate_fn=calculate_scout_success_rate,
+        calculate_travel_time_fn=calculate_scout_travel_time,
+        schedule_completion_fn=_schedule_scout_completion,
+        now_fn=timezone.now,
+        scout_cooldown_model=ScoutCooldown,
+        player_troop_model=PlayerTroop,
+        scout_record_model=ScoutRecord,
+        scout_troop_key=PVPConstants.SCOUT_TROOP_KEY,
     )
-    if not can_attack:
-        raise ValueError(reason)
-
-    # 检查冷却
-    in_cooldown, remaining = check_scout_cooldown(attacker, defender)
-    if in_cooldown:
-        remaining_secs = remaining or 0
-        minutes = remaining_secs // 60
-        seconds = remaining_secs % 60
-        raise ValueError(f"侦察冷却中，剩余 {minutes}分{seconds}秒")
-
-    # 检查探子数量
-    scout_count = get_scout_count(attacker)
-    if scout_count < 1:
-        raise ValueError("探子不足，无法发起侦察")
-
-    with transaction.atomic():
-        attacker_locked, defender_locked = _lock_manor_pair(attacker.pk, defender.pk)
-        now = timezone.now()
-
-        # Re-check target eligibility after row locks to close TOCTOU gaps.
-        can_attack_locked, reason_locked = can_attack_target(
-            attacker_locked,
-            defender_locked,
-            now=now,
-            use_cached_recent_attacks=False,
-            check_defeat_protection=False,
-        )
-        if not can_attack_locked:
-            raise ValueError(reason_locked)
-
-        cooldown_locked = (
-            ScoutCooldown.objects.select_for_update()
-            .filter(attacker=attacker_locked, defender=defender_locked, cooldown_until__gt=now)
-            .first()
-        )
-        if cooldown_locked:
-            remaining = int((cooldown_locked.cooldown_until - now).total_seconds())
-            minutes = max(0, remaining) // 60
-            seconds = max(0, remaining) % 60
-            raise ValueError(f"侦察冷却中，剩余 {minutes}分{seconds}秒")
-
-        # Recompute on locked state to keep timing and odds consistent with the accepted request.
-        success_rate = calculate_scout_success_rate(attacker_locked, defender_locked)
-        travel_time = calculate_scout_travel_time(attacker_locked, defender_locked)
-
-        # 扣除探子
-        troop = PlayerTroop.objects.select_for_update().get(
-            manor=attacker_locked, troop_template__key=PVPConstants.SCOUT_TROOP_KEY
-        )
-        if troop.count < 1:
-            raise ValueError("探子不足，无法发起侦察")
-        troop.count -= 1
-        troop.save(update_fields=["count"])
-
-        # 创建侦察记录
-        complete_at = now + timedelta(seconds=travel_time)
-
-        record = ScoutRecord.objects.create(
-            attacker=attacker_locked,
-            defender=defender_locked,
-            status=ScoutRecord.Status.SCOUTING,
-            scout_cost=1,
-            success_rate=success_rate,
-            travel_time=travel_time,
-            complete_at=complete_at,
-        )
-
-    _dispatch_scout_task(
-        "complete_scout_task",
-        countdown=travel_time,
-        record=record,
-        log_message="complete_scout_task dispatch failed",
-        false_log_message="complete_scout_task dispatch returned False; scout may remain in outbound state",
-    )
-
-    return record
 
 
 def finalize_scout(record: ScoutRecord, now: Optional[datetime] = None) -> None:
@@ -338,57 +313,15 @@ def finalize_scout(record: ScoutRecord, now: Optional[datetime] = None) -> None:
         record: 侦察记录
         now: 当前时间（可选）
     """
-    now = now or timezone.now()
-
-    with transaction.atomic():
-        locked_record = (
-            ScoutRecord.objects.select_for_update().select_related("attacker", "defender").filter(pk=record.pk).first()
-        )
-
-        if not locked_record or locked_record.status != ScoutRecord.Status.SCOUTING:
-            return
-
-        followup_action: ScoutFollowupAction | None = None
-
-        # 判定成功/失败
-        is_success = random.random() < locked_record.success_rate
-        locked_record.is_success = is_success
-
-        if is_success:
-            # 收集情报（成功时）
-            locked_record.intel_data = _gather_scout_intel(locked_record.defender)
-        else:
-            # 失败时：事务提交后给防守方发送警告消息（探子被发现）
-            followup_action = "detected_message"
-
-        # 进入返程阶段
-        locked_record.status = ScoutRecord.Status.RETURNING
-        locked_record.return_at = now + timedelta(seconds=locked_record.travel_time)
-        locked_record.save(update_fields=["status", "is_success", "intel_data", "return_at"])
-
-        # 设置冷却
-        cooldown_until = now + timedelta(minutes=PVPConstants.SCOUT_COOLDOWN_MINUTES)
-        ScoutCooldown.objects.update_or_create(
-            attacker=locked_record.attacker,
-            defender=locked_record.defender,
-            defaults={"cooldown_until": cooldown_until},
-        )
-
-        if followup_action is not None:
-            _schedule_scout_followup(
-                followup_action,
-                locked_record,
-                record_id=locked_record.id,
-                attacker_id=locked_record.attacker_id,
-                defender_id=locked_record.defender_id,
-            )
-
-    _dispatch_scout_task(
-        "complete_scout_return_task",
-        countdown=locked_record.travel_time,
-        record=locked_record,
-        log_message="complete_scout_return_task dispatch failed",
-        false_log_message="complete_scout_return_task dispatch returned False; scout may remain returning",
+    scout_finalize_command.finalize_scout_command(
+        record,
+        now=now,
+        scout_record_model=ScoutRecord,
+        scout_cooldown_model=ScoutCooldown,
+        random_fn=_roll_scout_success,
+        gather_intel_fn=_gather_scout_intel,
+        schedule_followup_fn=_schedule_scout_followup,
+        schedule_return_completion_fn=_schedule_scout_return_completion,
     )
 
 
@@ -577,17 +510,10 @@ def request_scout_retreat(record: ScoutRecord) -> None:
     Raises:
         ValueError: 无法撤退时
     """
-    locked_record, countdown = scout_return_command.request_scout_retreat_command(
+    scout_return_command.request_scout_retreat_command(
         record,
         now_fn=timezone.now,
         scout_record_model=ScoutRecord,
         restore_scout_troops_fn=_restore_scout_troops,
-    )
-
-    _dispatch_scout_task(
-        "complete_scout_return_task",
-        countdown=countdown,
-        record=locked_record,
-        log_message="complete_scout_return_task dispatch failed for retreat",
-        false_log_message="complete_scout_return_task dispatch returned False after scout retreat; scout may remain returning",
+        schedule_return_completion_fn=_schedule_scout_return_completion_after_retreat,
     )

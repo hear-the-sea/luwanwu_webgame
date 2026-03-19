@@ -67,3 +67,49 @@ def test_guest_detail_view_finalizes_overdue_training(game_data, django_user_mod
     assert guest.level == 2
     assert guest.training_target_level >= 2
     assert guest.training_complete_at is not None
+
+
+@pytest.mark.django_db
+def test_roster_view_uses_explicit_read_helper(game_data, django_user_model, monkeypatch):
+    user = django_user_model.objects.create_user(username="roster_read_helper", password="pass123")
+    manor = ensure_manor(user)
+    guest = _create_guest(manor, prefix="roster_read_helper")
+
+    calls = {"helper": 0}
+
+    def _fake_helper(request, *, logger, source, available_guests_fn):
+        calls["helper"] += 1
+        assert source == "guest_roster_view"
+        return manor, [guest]
+
+    monkeypatch.setattr("guests.views.roster.get_prepared_guest_roster_for_read", _fake_helper)
+
+    client = Client()
+    client.force_login(user)
+    response = client.get(reverse("guests:roster"))
+
+    assert response.status_code == 200
+    assert calls["helper"] == 1
+
+
+@pytest.mark.django_db
+def test_guest_detail_view_uses_explicit_read_helper(game_data, django_user_model, monkeypatch):
+    user = django_user_model.objects.create_user(username="detail_read_helper", password="pass123")
+    manor = ensure_manor(user)
+    guest = _create_guest(manor, prefix="detail_read_helper")
+
+    calls = {"helper": 0}
+
+    def _fake_helper(request, guest_pk, *, load_guest_detail_fn):
+        calls["helper"] += 1
+        assert guest_pk == guest.pk
+        return manor, guest
+
+    monkeypatch.setattr("guests.views.roster.get_prepared_guest_detail_for_read", _fake_helper)
+
+    client = Client()
+    client.force_login(user)
+    response = client.get(reverse("guests:detail", args=[guest.pk]))
+
+    assert response.status_code == 200
+    assert calls["helper"] == 1

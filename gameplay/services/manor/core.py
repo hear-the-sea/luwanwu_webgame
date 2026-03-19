@@ -326,6 +326,8 @@ def start_upgrade(building: Building) -> None:
     from ..technology import get_building_cost_reduction
 
     manor = building.manor
+    finalize_upgrades(manor)
+    building.refresh_from_db(fields=["level", "is_upgrading", "upgrade_complete_at"])
 
     if building.is_upgrading:
         raise ValueError("建筑正在升级中")

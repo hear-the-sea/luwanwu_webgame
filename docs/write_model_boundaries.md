@@ -9,6 +9,8 @@
 - `gameplay/views/mission_action_handlers.py`
 - `gameplay/services/missions_impl/*`
 - `gameplay/services/raid/scout.py`
+- `gameplay/services/raid/scout_start.py`
+- `gameplay/services/raid/scout_finalize.py`
 - `gameplay/services/raid/scout_refresh.py`
 - `gameplay/services/raid/scout_return.py`
 - `gameplay/services/raid/combat/*`
@@ -107,7 +109,11 @@
 - `gameplay/services/raid/combat/finalize.py`
   - 负责返程完成后的门客与护院恢复、战利品发放、状态落终态
 - `gameplay/services/raid/scout.py`
-  - 负责侦察发起、结果写入、消息 follow-up
+  - 负责侦察公开入口、消息 follow-up 与共享适配
+- `gameplay/services/raid/scout_start.py`
+  - 负责侦察发起写命令、双庄园加锁、探子扣减、after-commit completion dispatch 注册
+- `gameplay/services/raid/scout_finalize.py`
+  - 负责侦察到达判定、冷却落库、返程切换、after-commit detected / return dispatch 注册
 - `gameplay/services/raid/scout_refresh.py`
   - 负责到期记录扫描、refresh task 派发、同步 fallback 收口
 - `gameplay/services/raid/scout_return.py`
@@ -116,7 +122,7 @@
 ### 3.3 第二阶段口径
 
 - 双庄园锁顺序、门客锁、护院锁必须继续由 write command 统一持有。
-- 侦察链路要继续按“发起 / 结果写入 / 撤退 / 返程完成 / refresh 补偿”拆成稳定动作边界，避免 `scout.py` 继续兼任总调度器。
+- 侦察链路要继续按“发起 / 结果写入 / 撤退 / 返程完成 / refresh 补偿”拆成稳定动作边界；当前 `scout_start.py` / `scout_finalize.py` 已承接主写命令，`scout.py` 不再继续兼任总调度器。
 - `refresh_raid_runs()` 与侦察 refresh 只能补偿 durable state，不得继续追加新的业务判断分支。
 
 ---

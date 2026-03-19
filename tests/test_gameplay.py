@@ -5,6 +5,7 @@ from django.utils import timezone
 from django_redis.exceptions import ConnectionInterrupted
 
 import gameplay.services.manor.core as manor_service
+from gameplay.constants import MAX_CONCURRENT_BUILDING_UPGRADES
 from gameplay.models import MissionTemplate, RaidRun, ScoutRecord
 from gameplay.services.manor.core import ensure_manor, refresh_manor_state, start_upgrade
 from gameplay.services.missions import launch_mission, refresh_mission_runs
@@ -37,6 +38,36 @@ def test_upgrade_consumes_resources(django_user_model):
     building.refresh_from_db()
     assert building.is_upgrading is True
     assert manor.silver < 50000
+
+
+@pytest.mark.django_db
+def test_start_upgrade_finalizes_due_upgrades_before_slot_check(django_user_model):
+    user = django_user_model.objects.create_user(username="player_upgrade_due_finalize", password="pass12345")
+    manor = ensure_manor(user)
+    manor.grain = manor.silver = 500000
+    manor.save(update_fields=["grain", "silver"])
+
+    buildings = list(manor.buildings.order_by("id")[: MAX_CONCURRENT_BUILDING_UPGRADES + 1])
+    if len(buildings) < MAX_CONCURRENT_BUILDING_UPGRADES + 1:
+        pytest.skip("Not enough buildings to verify concurrent upgrade slot reuse")
+
+    now = timezone.now()
+    stale_buildings = buildings[:MAX_CONCURRENT_BUILDING_UPGRADES]
+    target_building = buildings[MAX_CONCURRENT_BUILDING_UPGRADES]
+    for stale in stale_buildings:
+        stale.is_upgrading = True
+        stale.upgrade_complete_at = now - timedelta(seconds=1)
+        stale.save(update_fields=["is_upgrading", "upgrade_complete_at"])
+
+    start_upgrade(target_building)
+
+    target_building.refresh_from_db()
+    assert target_building.is_upgrading is True
+    assert target_building.upgrade_complete_at is not None
+    for stale in stale_buildings:
+        stale.refresh_from_db()
+        assert stale.is_upgrading is False
+        assert stale.upgrade_complete_at is None
 
 
 @pytest.mark.django_db(transaction=True)

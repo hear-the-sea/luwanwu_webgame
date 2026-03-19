@@ -19,14 +19,12 @@ from django.views.generic import TemplateView
 from core.config import GUEST
 from core.exceptions import GameError
 from core.utils import sanitize_error_message
-from gameplay.services.resources import project_resource_production_for_read
-from gameplay.views.read_helpers import get_prepared_manor_for_read
 
 from ..forms import AllocateSkillPointsForm
 from ..models import GearItem, GearSlot, GearTemplate, GuestSkill, Skill
 from ..services.recruitment_queries import available_guests
 from ..services.roster import dismiss_guest
-from ..utils.guest_state import refresh_guest_state, refresh_guests_state
+from .read_helpers import get_prepared_guest_detail_for_read, get_prepared_guest_roster_for_read
 
 logger = logging.getLogger(__name__)
 MAX_GUEST_SKILL_SLOTS = int(GUEST.MAX_SKILL_SLOTS)
@@ -175,14 +173,12 @@ class RosterView(LoginRequiredMixin, TemplateView):
         from guests.services.salary import bulk_check_salary_paid, get_guest_salary, get_unpaid_guests
 
         context = super().get_context_data(**kwargs)
-        manor = get_prepared_manor_for_read(
+        manor, guests = get_prepared_guest_roster_for_read(
             self.request,
-            project_fn=project_resource_production_for_read,
             logger=logger,
             source="guest_roster_view",
+            available_guests_fn=available_guests,
         )
-        guests = list(available_guests(manor))
-        refresh_guests_state(guests, now=timezone.now(), refresh=True)
         exp_items = list(
             manor.inventory_items.select_related("template").filter(
                 template__effect_type=ItemTemplate.EffectType.EXPERIENCE_ITEM,
@@ -230,12 +226,12 @@ class GuestDetailView(LoginRequiredMixin, TemplateView):
     template_name = "guests/detail.html"
 
     def get_context_data(self, **kwargs):
-        from gameplay.services.manor.core import get_manor
-
         context = super().get_context_data(**kwargs)
-        manor = get_manor(self.request.user)
-        guest = _load_guest_detail(manor, self.kwargs["pk"])
-        refresh_guest_state(guest, now=timezone.now(), refresh=True)
+        manor, guest = get_prepared_guest_detail_for_read(
+            self.request,
+            self.kwargs["pk"],
+            load_guest_detail_fn=_load_guest_detail,
+        )
         slots = [(choice.value, choice.label) for choice in GearSlot]
         slot_capacity = {
             GearSlot.DEVICE.value: 3,
