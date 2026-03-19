@@ -9,22 +9,14 @@ from django.utils import timezone
 from common.constants.resources import ResourceType
 from core.utils.time_scale import scale_duration
 from gameplay.models import ArenaEntry, ArenaExchangeRecord, ArenaMatch, ArenaTournament, Manor
-from gameplay.services.arena.core import (
-    ARENA_COMPLETED_RETENTION_SECONDS,
-    ARENA_DAILY_PARTICIPATION_LIMIT,
-    ARENA_MAX_GUESTS_PER_ENTRY,
-    ARENA_REGISTRATION_SILVER_COST,
-    ARENA_ROUND_INTERVAL_SECONDS,
-    ARENA_TOURNAMENT_PLAYER_LIMIT,
-)
+from gameplay.services.arena import core as arena_core
 from gameplay.services.arena.rewards import load_arena_reward_catalog
 from gameplay.utils.template_loader import get_item_template_names_by_keys
 from guests.models import GuestStatus
 
-ARENA_PRIMARY_EVENT = {
+ARENA_PRIMARY_EVENT_BASE = {
     "key": "tianxia_buwu",
     "name": "天下布武",
-    "subtitle": f"{ARENA_TOURNAMENT_PLAYER_LIMIT} 人门客淘汰赛",
     "description": "报名满员后自动开赛，每 10 分钟推进一轮，直到决出最终胜者。",
 }
 
@@ -112,7 +104,7 @@ def _today_participation_stats(manor: Manor) -> tuple[int, int]:
             joined_at__gte=day_start,
             joined_at__lt=day_end,
         ).count()
-    remaining_daily = max(0, ARENA_DAILY_PARTICIPATION_LIMIT - today_participations)
+    remaining_daily = max(0, arena_core.ARENA_DAILY_PARTICIPATION_LIMIT - today_participations)
     return today_participations, remaining_daily
 
 
@@ -128,7 +120,7 @@ def _get_active_entry(manor: Manor) -> ArenaEntry | None:
 
 def _build_common_context(manor: Manor) -> dict:
     today_participations, remaining_daily = _today_participation_stats(manor)
-    round_interval_seconds = max(1, scale_duration(ARENA_ROUND_INTERVAL_SECONDS, minimum=1))
+    round_interval_seconds = max(1, scale_duration(arena_core.ARENA_ROUND_INTERVAL_SECONDS, minimum=1))
     if round_interval_seconds % 60 == 0:
         round_interval_label = f"{round_interval_seconds // 60} 分钟"
     else:
@@ -138,16 +130,17 @@ def _build_common_context(manor: Manor) -> dict:
         "manor": manor,
         "today_participations": today_participations,
         "remaining_daily": remaining_daily,
-        "daily_limit": ARENA_DAILY_PARTICIPATION_LIMIT,
-        "max_guests_per_entry": ARENA_MAX_GUESTS_PER_ENTRY,
+        "daily_limit": arena_core.ARENA_DAILY_PARTICIPATION_LIMIT,
+        "max_guests_per_entry": arena_core.ARENA_MAX_GUESTS_PER_ENTRY,
         "arena_event": {
-            **ARENA_PRIMARY_EVENT,
-            "player_limit": ARENA_TOURNAMENT_PLAYER_LIMIT,
+            **ARENA_PRIMARY_EVENT_BASE,
+            "subtitle": f"{arena_core.ARENA_TOURNAMENT_PLAYER_LIMIT} 人门客淘汰赛",
+            "player_limit": arena_core.ARENA_TOURNAMENT_PLAYER_LIMIT,
             "round_interval_seconds": round_interval_seconds,
             "round_interval_label": round_interval_label,
         },
-        "registration_silver_cost": ARENA_REGISTRATION_SILVER_COST,
-        "can_afford_registration": manor.silver >= ARENA_REGISTRATION_SILVER_COST,
+        "registration_silver_cost": arena_core.ARENA_REGISTRATION_SILVER_COST,
+        "can_afford_registration": manor.silver >= arena_core.ARENA_REGISTRATION_SILVER_COST,
     }
 
 
@@ -229,7 +222,7 @@ def get_arena_event_detail_context(manor: Manor, tournament_id: int, selected_ro
         return None
 
     if tournament.status != ArenaTournament.Status.RUNNING:
-        visible_cutoff = current_time - timedelta(seconds=ARENA_COMPLETED_RETENTION_SECONDS)
+        visible_cutoff = current_time - timedelta(seconds=arena_core.ARENA_COMPLETED_RETENTION_SECONDS)
         is_recently_ended = (
             tournament.status in [ArenaTournament.Status.COMPLETED, ArenaTournament.Status.CANCELLED]
             and tournament.ended_at is not None

@@ -8,6 +8,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async, safe_apply_async_with_dedup
+from core.utils.infrastructure import NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS
 from core.utils.time_scale import scale_duration
 from guests.query_utils import guest_template_rarity_rank_case
 
@@ -68,7 +69,7 @@ logger = logging.getLogger(__name__)
 
 
 _MISSION_REFRESH_DISPATCH_DEDUP_SECONDS = 5
-MISSION_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS = (ConnectionError, OSError, TimeoutError)
+MISSION_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS = NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS
 
 
 def _normalize_mapping(raw: Any) -> Dict[str, object]:

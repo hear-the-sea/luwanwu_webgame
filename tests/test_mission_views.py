@@ -23,6 +23,17 @@ class TestMissionViews:
         assert response.status_code == 200
         assert "missions" in response.context
 
+    def test_task_board_tolerates_resource_sync_error(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+        monkeypatch.setattr(
+            "gameplay.views.mission_page_context.project_resource_production_for_read",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("sync failed")),
+        )
+
+        response = client.get(reverse("gameplay:tasks"))
+        assert response.status_code == 200
+        assert "missions" in response.context
+
     def test_task_board_with_mission_selected(self, manor_with_user):
         """选择任务后的任务面板"""
         manor, client = manor_with_user

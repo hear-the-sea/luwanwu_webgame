@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
+from importlib import import_module
 from typing import Any, Dict, Optional
 
-from django.db import DatabaseError, transaction
+from django.db import transaction
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, INFRASTRUCTURE_EXCEPTIONS
 from gameplay.services.battle_snapshots import build_guest_battle_snapshots, build_guest_snapshot_proxies
 from guests.models import Guest, GuestStatus
 from guests.query_utils import guest_template_rarity_rank_case
@@ -44,8 +46,8 @@ from .troops import _coerce_positive_int, _normalize_mapping, _normalize_positiv
 logger = logging.getLogger(__name__)
 
 
-RAID_BATTLE_INFRASTRUCTURE_EXCEPTIONS = (DatabaseError, ConnectionError, OSError, TimeoutError)
-RAID_CAPTURE_DEGRADED_EXCEPTIONS = (ConnectionError, OSError, TimeoutError)
+RAID_BATTLE_INFRASTRUCTURE_EXCEPTIONS = DATABASE_INFRASTRUCTURE_EXCEPTIONS
+RAID_CAPTURE_DEGRADED_EXCEPTIONS = INFRASTRUCTURE_EXCEPTIONS
 
 
 def _load_locked_raid_run(run_pk: int) -> Optional[RaidRun]:
@@ -180,26 +182,30 @@ def _fail_raid_run_due_missing_manor(locked_run: RaidRun, *, now: Optional[datet
     _fail_raid_run_due_missing_manor_impl(
         locked_run,
         now=now,
-        guest_model=Guest,
-        guest_status=GuestStatus,
-        manor_model=Manor,
         normalize_positive_int_mapping=_normalize_positive_int_mapping,
         add_troops_batch=combat_runs._add_troops_batch,
     )
 
 
 def _dispatch_complete_raid_task(run: RaidRun, *, now: Optional[datetime] = None) -> None:
-    def _import_complete_raid_task() -> Any:
-        from gameplay.tasks import complete_raid_task
-
-        return complete_raid_task
+    try:
+        complete_raid_task = import_module("gameplay.tasks").complete_raid_task
+    except Exception as exc:
+        logger.warning(
+            "complete_raid_task import failed: run_id=%s error=%s",
+            run.id,
+            exc,
+            exc_info=True,
+            extra={"degraded": True, "component": "raid_task_import", "run_id": run.id},
+        )
+        complete_raid_task = None
 
     _dispatch_complete_raid_task_impl(
         run,
         now=now,
         logger=logger,
         safe_apply_async_fn=safe_apply_async,
-        complete_raid_task_importer=_import_complete_raid_task,
+        complete_raid_task=complete_raid_task,
         finalize_raid_fn=combat_runs.finalize_raid,
     )
 

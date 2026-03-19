@@ -48,38 +48,43 @@ def test_reload_runtime_configs_updates_arena_module_constants(monkeypatch):
     import gameplay.services.arena.rules as arena_rules_module
     from gameplay.services.arena.rules import clear_arena_rules_cache
 
-    clear_arena_rules_cache()
-    monkeypatch.setattr(
-        arena_rules_module,
-        "load_yaml_data",
-        lambda *args, **kwargs: {
-            "registration": {
-                "max_guests_per_entry": 7,
-                "registration_silver_cost": 1234,
-                "daily_participation_limit": 5,
-                "tournament_player_limit": 4,
-            },
-            "runtime": {
-                "round_interval_seconds": 300,
-                "completed_retention_seconds": 120,
-                "round_retry_seconds": 10,
-                "recruiting_lock_key": "arena:test:refresh",
-                "recruiting_lock_timeout": 3,
-            },
-            "rewards": {
-                "base_participation_coins": 99,
-                "rank_bonus_coins": {1: 500, 2: 250},
-            },
-        },
-    )
+    try:
+        clear_arena_rules_cache()
+        with monkeypatch.context() as patcher:
+            patcher.setattr(
+                arena_rules_module,
+                "load_yaml_data",
+                lambda *args, **kwargs: {
+                    "registration": {
+                        "max_guests_per_entry": 7,
+                        "registration_silver_cost": 1234,
+                        "daily_participation_limit": 5,
+                        "tournament_player_limit": 4,
+                    },
+                    "runtime": {
+                        "round_interval_seconds": 300,
+                        "completed_retention_seconds": 120,
+                        "round_retry_seconds": 10,
+                        "recruiting_lock_key": "arena:test:refresh",
+                        "recruiting_lock_timeout": 3,
+                    },
+                    "rewards": {
+                        "base_participation_coins": 99,
+                        "rank_bonus_coins": {1: 500, 2: 250},
+                    },
+                },
+            )
 
-    reload_runtime_configs()
+            reload_runtime_configs()
 
-    assert arena_core.ARENA_MAX_GUESTS_PER_ENTRY == 7
-    assert arena_core.ARENA_REGISTRATION_SILVER_COST == 1234
-    assert arena_core.ARENA_ROUND_INTERVAL_SECONDS == 300
-    assert arena_core.ARENA_BASE_PARTICIPATION_COINS == 99
-    assert arena_core.ARENA_RECRUITING_LOCK_KEY == "arena:test:refresh"
+            assert arena_core.ARENA_MAX_GUESTS_PER_ENTRY == 7
+            assert arena_core.ARENA_REGISTRATION_SILVER_COST == 1234
+            assert arena_core.ARENA_ROUND_INTERVAL_SECONDS == 300
+            assert arena_core.ARENA_BASE_PARTICIPATION_COINS == 99
+            assert arena_core.ARENA_RECRUITING_LOCK_KEY == "arena:test:refresh"
+    finally:
+        clear_arena_rules_cache()
+        reload_runtime_configs()
 
 
 def test_reload_runtime_configs_updates_guild_module_constants(monkeypatch):
@@ -87,36 +92,41 @@ def test_reload_runtime_configs_updates_guild_module_constants(monkeypatch):
     import guilds.constants as guild_constants
     from guilds.constants import clear_guild_rules_cache
 
-    clear_guild_rules_cache()
-    monkeypatch.setattr(
-        "guilds.constants.load_yaml_data",
-        lambda *args, **kwargs: {
-            "pagination": {"guild_list_page_size": 55, "guild_hall_display_limit": 33},
-            "creation": {"guild_creation_cost": {"gold_bar": 9}, "guild_upgrade_base_cost": 12},
-            "contribution": {
-                "rates": {"silver": 3, "grain": 4},
-                "daily_limits": {"silver": 200000, "grain": 80000},
-                "min_donation_amount": 500,
-            },
-            "technology": {
-                "upgrade_costs": {
-                    "equipment_forge": {"silver": 7000, "grain": 3000, "gold_bar": 2},
+    try:
+        clear_guild_rules_cache()
+        with monkeypatch.context() as patcher:
+            patcher.setattr(
+                "guilds.constants.load_yaml_data",
+                lambda *args, **kwargs: {
+                    "pagination": {"guild_list_page_size": 55, "guild_hall_display_limit": 33},
+                    "creation": {"guild_creation_cost": {"gold_bar": 9}, "guild_upgrade_base_cost": 12},
+                    "contribution": {
+                        "rates": {"silver": 3, "grain": 4},
+                        "daily_limits": {"silver": 200000, "grain": 80000},
+                        "min_donation_amount": 500,
+                    },
+                    "technology": {
+                        "upgrade_costs": {
+                            "equipment_forge": {"silver": 7000, "grain": 3000, "gold_bar": 2},
+                        },
+                        "names": {"equipment_forge": "刷新锻造"},
+                    },
+                    "warehouse": {"exchange_costs": {"gear_green": 77}, "daily_exchange_limit": 15},
+                    "hero_pool": {"slot_limit": 4, "battle_lineup_limit": 30, "replace_cooldown_seconds": 900},
                 },
-                "names": {"equipment_forge": "刷新锻造"},
-            },
-            "warehouse": {"exchange_costs": {"gear_green": 77}, "daily_exchange_limit": 15},
-            "hero_pool": {"slot_limit": 4, "battle_lineup_limit": 30, "replace_cooldown_seconds": 900},
-        },
-    )
+            )
 
-    reload_runtime_configs()
+            reload_runtime_configs()
 
-    assert guild_constants.GUILD_LIST_PAGE_SIZE == 55
-    assert guild_constants.GUILD_HALL_DISPLAY_LIMIT == 33
-    assert guild_constants.GUILD_CREATION_COST == {"gold_bar": 9}
-    assert guild_constants.GUILD_UPGRADE_BASE_COST == 12
-    assert guild_constants.MIN_DONATION_AMOUNT == 500
-    assert guild_constants.DAILY_EXCHANGE_LIMIT == 15
-    assert guild_constants.GUILD_HERO_POOL_SLOT_LIMIT == 4
-    assert guild_constants.GUILD_BATTLE_LINEUP_LIMIT == 30
-    assert guild_constants.GUILD_HERO_POOL_REPLACE_COOLDOWN_SECONDS == 900
+            assert guild_constants.GUILD_LIST_PAGE_SIZE == 55
+            assert guild_constants.GUILD_HALL_DISPLAY_LIMIT == 33
+            assert guild_constants.GUILD_CREATION_COST == {"gold_bar": 9}
+            assert guild_constants.GUILD_UPGRADE_BASE_COST == 12
+            assert guild_constants.MIN_DONATION_AMOUNT == 500
+            assert guild_constants.DAILY_EXCHANGE_LIMIT == 15
+            assert guild_constants.GUILD_HERO_POOL_SLOT_LIMIT == 4
+            assert guild_constants.GUILD_BATTLE_LINEUP_LIMIT == 30
+            assert guild_constants.GUILD_HERO_POOL_REPLACE_COOLDOWN_SECONDS == 900
+    finally:
+        clear_guild_rules_cache()
+        reload_runtime_configs()

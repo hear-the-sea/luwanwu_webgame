@@ -5,13 +5,14 @@ from django.contrib.messages import get_messages
 from django.db import DatabaseError
 from django.urls import reverse
 
+from core.exceptions import ShopValidationError
 from gameplay.models import Manor
 from gameplay.services.manor.core import ensure_manor
 
 
 @pytest.mark.django_db
 def test_trade_view_renders(monkeypatch, client, django_user_model):
-    monkeypatch.setattr("trade.views.get_trade_context", lambda *_args, **_kwargs: {"current_tab": "shop"})
+    monkeypatch.setattr("trade.views.build_trade_page_context", lambda *_args, **_kwargs: {"current_tab": "shop"})
 
     user = django_user_model.objects.create_user(username="trade_view", password="pass12345")
     _ = ensure_manor(user)
@@ -23,7 +24,7 @@ def test_trade_view_renders(monkeypatch, client, django_user_model):
 
 @pytest.mark.django_db
 def test_trade_view_creates_manor_when_missing(monkeypatch, client, django_user_model):
-    monkeypatch.setattr("trade.views.get_trade_context", lambda *_args, **_kwargs: {"current_tab": "shop"})
+    monkeypatch.setattr("trade.views.build_trade_page_context", lambda *_args, **_kwargs: {"current_tab": "shop"})
 
     user = django_user_model.objects.create_user(username="trade_view_create_manor", password="pass12345")
     client.force_login(user)
@@ -35,9 +36,9 @@ def test_trade_view_creates_manor_when_missing(monkeypatch, client, django_user_
 
 @pytest.mark.django_db
 def test_trade_view_tolerates_resource_sync_error(monkeypatch, client, django_user_model):
-    monkeypatch.setattr("trade.views.get_trade_context", lambda *_args, **_kwargs: {"current_tab": "shop"})
+    monkeypatch.setattr("trade.page_context.get_trade_context", lambda *_args, **_kwargs: {"current_tab": "shop"})
     monkeypatch.setattr(
-        "trade.views.project_resource_production_for_read",
+        "trade.page_context.project_resource_production_for_read",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("sync failed")),
     )
 
@@ -54,7 +55,7 @@ def test_trade_view_renders_bank_degraded_banner_and_disables_exchange(monkeypat
     user = django_user_model.objects.create_user(username="trade_view_bank_degraded", password="pass12345")
     manor = ensure_manor(user)
     monkeypatch.setattr(
-        "trade.views.get_trade_context",
+        "trade.views.build_trade_page_context",
         lambda *_args, **_kwargs: {
             "current_tab": "bank",
             "tabs": [{"key": "bank", "name": "钱庄"}],
@@ -111,7 +112,10 @@ def test_shop_buy_view_success(monkeypatch, client, django_user_model):
 
 @pytest.mark.django_db
 def test_shop_buy_view_error(monkeypatch, client, django_user_model):
-    monkeypatch.setattr("trade.views.buy_item", lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("bad")))
+    monkeypatch.setattr(
+        "trade.views.buy_item",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ShopValidationError(action="buy", message="bad")),
+    )
 
     user = django_user_model.objects.create_user(username="shop_buy_err", password="pass12345")
     _ = ensure_manor(user)
@@ -121,6 +125,23 @@ def test_shop_buy_view_error(monkeypatch, client, django_user_model):
     assert resp.status_code == 302
     msgs = [m.message for m in get_messages(resp.wsgi_request)]
     assert any("bad" in m for m in msgs)
+
+
+@pytest.mark.django_db
+def test_shop_sell_view_known_error(monkeypatch, client, django_user_model):
+    monkeypatch.setattr(
+        "trade.views.sell_item",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ShopValidationError(action="sell", message="sell blocked")),
+    )
+
+    user = django_user_model.objects.create_user(username="shop_sell_err", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    resp = client.post(reverse("trade:shop_sell"), {"item_key": "k", "quantity": "1"})
+    assert resp.status_code == 302
+    msgs = [m.message for m in get_messages(resp.wsgi_request)]
+    assert any("sell blocked" in m for m in msgs)
 
 
 @pytest.mark.django_db

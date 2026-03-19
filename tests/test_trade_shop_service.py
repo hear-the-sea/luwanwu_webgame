@@ -3,7 +3,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from django.utils import timezone
 
+from core.exceptions import InsufficientSilverError, ItemNotConfiguredError
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.manor.core import ensure_manor
 from trade.models import ShopPurchaseLog, ShopSellLog, ShopStock
@@ -16,6 +18,12 @@ from trade.services.shop_service import (
     get_shop_items_for_display,
     sell_item,
 )
+
+
+def _set_manor_silver(manor, amount: int) -> None:
+    manor.silver = amount
+    manor.resource_updated_at = timezone.now()
+    manor.save(update_fields=["silver", "resource_updated_at"])
 
 
 @pytest.mark.django_db
@@ -89,8 +97,7 @@ def test_get_shop_items_for_display_tolerates_invalid_price_and_stock(monkeypatc
 def test_buy_item_decrements_stock_and_increments_inventory(monkeypatch, django_user_model):
     user = django_user_model.objects.create_user(username="shop_buy", password="pass12345")
     manor = ensure_manor(user)
-    manor.silver = 1000
-    manor.save(update_fields=["silver"])
+    _set_manor_silver(manor, 1000)
 
     template = ItemTemplate.objects.create(
         key="shop_buy_item",
@@ -130,8 +137,7 @@ def test_buy_item_decrements_stock_and_increments_inventory(monkeypatch, django_
 def test_buy_item_rejects_negative_price_config(monkeypatch, django_user_model):
     user = django_user_model.objects.create_user(username="shop_buy_bad_price", password="pass12345")
     manor = ensure_manor(user)
-    manor.silver = 1000
-    manor.save(update_fields=["silver"])
+    _set_manor_silver(manor, 1000)
 
     template = ItemTemplate.objects.create(
         key="shop_buy_bad_price_item",
@@ -145,7 +151,7 @@ def test_buy_item_rejects_negative_price_config(monkeypatch, django_user_model):
     config = ShopItemConfig(item_key=template.key, price=-5, stock=4, daily_refresh=False)
     monkeypatch.setattr("trade.services.shop_service.get_shop_item_config", lambda *_args, **_kwargs: config)
 
-    with pytest.raises(ValueError, match="价格配置异常"):
+    with pytest.raises(ItemNotConfiguredError, match="价格配置异常"):
         buy_item(manor, template.key, 2)
 
     manor.refresh_from_db()
@@ -154,11 +160,32 @@ def test_buy_item_rejects_negative_price_config(monkeypatch, django_user_model):
 
 
 @pytest.mark.django_db
+def test_buy_item_translates_insufficient_silver_to_domain_error(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="shop_buy_no_silver", password="pass12345")
+    manor = ensure_manor(user)
+    _set_manor_silver(manor, 1)
+
+    template = ItemTemplate.objects.create(
+        key="shop_buy_no_silver_item",
+        name="买不起的物品",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=False,
+        tradeable=False,
+        price=10,
+    )
+
+    config = ShopItemConfig(item_key=template.key, price=5, stock=4, daily_refresh=False)
+    monkeypatch.setattr("trade.services.shop_service.get_shop_item_config", lambda *_args, **_kwargs: config)
+
+    with pytest.raises(InsufficientSilverError, match="银两不足"):
+        buy_item(manor, template.key, 1)
+
+
+@pytest.mark.django_db
 def test_sell_item_grants_silver_and_clears_zero_inventory(monkeypatch, django_user_model):
     user = django_user_model.objects.create_user(username="shop_sell", password="pass12345")
     manor = ensure_manor(user)
-    manor.silver = 0
-    manor.save(update_fields=["silver"])
+    _set_manor_silver(manor, 0)
 
     template = ItemTemplate.objects.create(
         key="shop_sell_item",

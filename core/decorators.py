@@ -22,6 +22,7 @@ from core.utils import json_error
 from core.utils.http import accepts_json as _accepts_json_header
 from core.utils.http import is_ajax_request as _is_ajax_header
 from core.utils.validation import safe_redirect_url, sanitize_error_message
+from core.utils.view_error_mapping import action_error_response, flash_view_error
 
 logger = logging.getLogger(__name__)
 
@@ -129,9 +130,13 @@ def flash_unexpected_view_error(
     log_args: tuple[object, ...] = (),
     logger_instance: logging.Logger | None = None,
 ) -> None:
-    active_logger = logger_instance or logger
-    active_logger.exception(log_message, *log_args)
-    messages.error(request, sanitize_error_message(exc))
+    flash_view_error(
+        request,
+        exc,
+        log_message=log_message,
+        log_args=log_args,
+        logger_instance=logger_instance or logger,
+    )
 
 
 def unexpected_error_response(
@@ -145,13 +150,16 @@ def unexpected_error_response(
     logger_instance: logging.Logger | None = None,
     status: int = 500,
 ) -> HttpResponse:
-    active_logger = logger_instance or logger
-    active_logger.exception(log_message, *log_args)
-    error_message = sanitize_error_message(exc)
-    if is_ajax:
-        return json_error(error_message, status=status)
-    messages.error(request, error_message)
-    return redirect(redirect_url)
+    return action_error_response(
+        request,
+        exc,
+        is_ajax=is_ajax,
+        redirect_to=redirect_url,
+        fallback_status=status,
+        log_message=log_message,
+        log_args=log_args,
+        logger_instance=logger_instance or logger,
+    )
 
 
 def get_next_url(request: HttpRequest, default: Optional[str] = None, result: Optional[str] = None) -> str:

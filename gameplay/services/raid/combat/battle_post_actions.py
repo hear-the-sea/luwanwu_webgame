@@ -7,14 +7,15 @@ from typing import Any, Callable
 
 from django.utils import timezone
 
+from guests.models import Guest, GuestStatus
+
+from ....models import Manor
+
 
 def fail_raid_run_due_missing_manor(
     locked_run: Any,
     *,
     now: datetime | None,
-    guest_model: Any,
-    guest_status: Any,
-    manor_model: Any,
     normalize_positive_int_mapping: Callable[[Any], dict[str, int]],
     add_troops_batch: Callable[..., Any],
 ) -> None:
@@ -23,13 +24,13 @@ def fail_raid_run_due_missing_manor(
     guests = list(locked_run.guests.select_for_update())
     guests_to_update = []
     for guest in guests:
-        if guest.status == guest_status.DEPLOYED:
-            guest.status = guest_status.IDLE
+        if guest.status == GuestStatus.DEPLOYED:
+            guest.status = GuestStatus.IDLE
             guests_to_update.append(guest)
     if guests_to_update:
-        guest_model.objects.bulk_update(guests_to_update, ["status"])
+        Guest.objects.bulk_update(guests_to_update, ["status"])
 
-    attacker_locked = manor_model.objects.select_for_update().filter(pk=locked_run.attacker_id).first()
+    attacker_locked = Manor.objects.select_for_update().filter(pk=locked_run.attacker_id).first()
     if attacker_locked is not None:
         loadout = normalize_positive_int_mapping(getattr(locked_run, "troop_loadout", {}))
         if loadout:
@@ -49,7 +50,7 @@ def dispatch_complete_raid_task(
     now: datetime | None,
     logger: logging.Logger,
     safe_apply_async_fn: Callable[..., bool],
-    complete_raid_task_importer: Callable[[], Any],
+    complete_raid_task: Any | None,
     finalize_raid_fn: Callable[..., Any],
 ) -> None:
     current_time = now or timezone.now()
@@ -60,27 +61,10 @@ def dispatch_complete_raid_task(
         logger.warning("complete_raid_task dispatch failed for due raid; finalizing synchronously: run_id=%s", run.id)
         finalize_raid_fn(run, now=current_time)
 
-    try:
-        complete_raid_task = complete_raid_task_importer()
-    except ImportError as exc:
-        logger.warning(
-            "complete_raid_task import failed: run_id=%s error=%s",
-            run.id,
-            exc,
-            exc_info=True,
-            extra={"degraded": True, "component": "raid_task_import", "run_id": run.id},
-        )
+    if complete_raid_task is None:
         remaining = 0 if not run.return_at else max(0, math.ceil((run.return_at - current_time).total_seconds()))
         _fallback_sync_when_due(remaining)
         return
-    except Exception:
-        logger.error(
-            "Unexpected complete_raid_task import failure: run_id=%s",
-            run.id,
-            exc_info=True,
-            extra={"degraded": True, "component": "raid_task_import", "run_id": run.id},
-        )
-        raise
 
     if run.return_at:
         remaining = max(0, math.ceil((run.return_at - current_time).total_seconds()))

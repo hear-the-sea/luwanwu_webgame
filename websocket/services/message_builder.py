@@ -6,7 +6,7 @@ import html
 import logging
 import re
 
-from redis.exceptions import RedisError
+from core.utils.infrastructure import INFRASTRUCTURE_EXCEPTIONS
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ def next_id_sync(redis, *, next_id_key: str) -> int:
 
     try:
         return int(redis.incr(next_id_key) or 0)
-    except RedisError as exc:
+    except INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning("World chat next_id Redis error; rejecting send: %s", exc)
         raise WorldChatInfrastructureError("world chat id backend unavailable") from exc
 

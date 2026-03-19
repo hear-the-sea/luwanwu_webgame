@@ -89,6 +89,7 @@ from .resource import (
     SkillSlotFullError,
     TreasuryCapacityFullError,
 )
+from .trade import ShopValidationError, TradeError
 
 __all__ = [
     # Base
@@ -104,6 +105,9 @@ __all__ = [
     "EquipmentSlotFullError",
     "TreasuryCapacityFullError",
     "InsufficientSpaceError",
+    # Trade
+    "TradeError",
+    "ShopValidationError",
     # Guest
     "GuestError",
     "GuestNotIdleError",

@@ -28,6 +28,14 @@ class CandidateActionOutcome:
     error_message: str | None = None
 
 
+@dataclass(frozen=True)
+class CandidateActionRequest:
+    action: str
+    selection: CandidateSelection
+    lock_scope: str
+    target_count: int
+
+
 def resolve_selected_candidate_selection(
     *,
     manor: Any,
@@ -79,6 +87,56 @@ def resolve_all_candidate_selection(
 
     return (
         CandidateSelection(queryset=queryset, candidates=candidates, candidate_ids=None, target_count=len(candidates)),
+        None,
+    )
+
+
+def resolve_candidate_action_request(
+    *,
+    manor: Any,
+    raw_scope: str | None,
+    raw_action: str | None,
+    raw_candidate_ids: list[str],
+    normalize_scope: Callable[[str | None], str | None],
+    normalize_action: Callable[[str | None], str | None],
+    parse_positive_candidate_ids: Callable[[list[str]], list[int] | None],
+    load_selected_candidates: Callable[[Any, list[int]], tuple[Any, list[Any]]],
+    candidate_model: Any,
+) -> tuple[CandidateActionRequest | None, RecruitViewResolutionError | None]:
+    scope = normalize_scope(raw_scope)
+    if scope is None:
+        return None, RecruitViewResolutionError("选择范围无效")
+
+    if scope == "selected":
+        selection, resolution_error = resolve_selected_candidate_selection(
+            manor=manor,
+            raw_candidate_ids=raw_candidate_ids,
+            parse_positive_candidate_ids=parse_positive_candidate_ids,
+            load_selected_candidates=load_selected_candidates,
+        )
+    else:
+        action = normalize_action(raw_action)
+        if action is None:
+            return None, RecruitViewResolutionError("操作类型无效")
+        selection, resolution_error = resolve_all_candidate_selection(
+            manor=manor,
+            action=action,
+            candidate_model=candidate_model,
+        )
+    if resolution_error is not None or selection is None:
+        return None, resolution_error
+
+    action = normalize_action(raw_action)
+    if action is None:
+        return None, RecruitViewResolutionError("操作类型无效")
+
+    return (
+        CandidateActionRequest(
+            action=action,
+            selection=selection,
+            lock_scope=f"candidate-actions:{int(manor.id)}",
+            target_count=selection.target_count,
+        ),
         None,
     )
 

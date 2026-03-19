@@ -2,13 +2,48 @@
 
 本文档给出 `web_game_v5` 的分阶段优化路线，并标记首批已落地项。
 
+## 2026-03-19 审计对齐说明
+
+自 2026-03-19 起，本计划必须服从 [技术审计](technical_audit_2026-03.md) 第 `2.1` 节“后续优化的强制规则”。
+
+执行约束：
+
+1. 不再以“抽 helper / 拆子模块数量”作为重构完成标准，必须证明职责边界更清晰。
+2. 所有统一异常处理、统一读路径、统一降级策略改动，必须先定义错误语义和 fail-open / fail-closed 口径。
+3. 页面读路径、副作用补偿、基础设施降级，不允许继续在 view 层横向复制。
+4. 工作区全量测试不绿时，优先恢复绿灯，不继续扩散重构范围。
+5. 若本计划与审计结论冲突，以审计为准，并同步修正文档。
+
 ## 2026-03-09 当前执行面
+
+## 2026-03-18 新增执行批次
+
+### 本批目标
+
+- 收口页面读路径中的资源投影入口，停止每个 view 自己定义一套降级语义。
+- 将单会话校验 unavailable 时的策略显式配置化，并与平台级故障策略统一评估。
+- 提高真实外部服务门禁的可发现性，让 skip/fail 消息直接给出执行命令。
+
+### 本批执行顺序
+
+1. 新增统一的页面读路径 helper，并替换核心页面调用点。
+2. 新增 `SINGLE_SESSION_FAIL_OPEN` 配置，HTTP / WebSocket 共用同一策略。
+3. 为单会话策略、测试门禁提示和平台级故障语义补回归测试。
+
+### 本批已完成
+
+- 页面资源读路径开始收敛到统一 helper，减少 view 层散落的 ad-hoc `try/except`。
+- 单会话校验 unavailable 时支持显式 fail-open / fail-closed；当前默认保持 fail-open，生产是否收紧仍需真实环境验证，不得仅凭局部实现直接定案。
+- integration gate 的 skip / fail 消息补上了直接可执行的本地命令提示。
+- `gameplay/services/buildings/forge.py` 已继续下沉：蓝图合成、装备分解、运行期锻造流程拆入独立子模块，`forge.py` 保留缓存、配置与兼容出口。
+- `get_recruitment_equipment_keys()` 的导入异常已从广谱吞异常收窄为 `ImportError`。
 
 ### 本轮目标
 
 - 先做低风险、可回归、能持续削减复杂度的收敛工作。
 - 每轮只推进一个可验证的小主题，避免“大爆炸式重构”。
 - 每完成一个主题，都要求补文档、补测试、补最小验证命令。
+- 所有后续重构都必须证明边界更清晰、错误语义更稳定，而不是仅仅把复杂度分散到更多文件。
 
 ### 执行顺序
 
@@ -43,6 +78,12 @@
 - 文档沉淀：把优化目标和顺序固化为可执行清单。
 - 工具收敛：减少同类 helper 的重复实现，优先统一模板加载、缓存 key、轻量通用查询工具。
 
+### 阶段 1 封板结果（`2026-03-19`）
+
+- 热点入口边界已完成一轮系统收口：`trade`、`production`、`missions` 已拆出只读 page context，`recruit`、`mission`、`forge` 的写动作入口已下沉为独立 handler/runtime。
+- `forge` 与 `raid/scout` 已从“callback/bundle 空转拆分”转向按业务动作组织模块，`run_wiring.py` 已删除，`forge_runtime.py`、`recruit_action_runtime.py` 等职责边界已固定。
+- 第一阶段的目标已视为完成，后续不再继续在这一阶段追加大纵深重构；剩余统一写模型、异常层次、真实外部服务测试等工作，转入第二阶段及以后继续推进。
+
 ### 本轮已完成
 
 - `config/settings/logging_conf.py`：接入 `RequestIDFilter`，并为 `access` logger 配置独立 handler。
@@ -50,6 +91,9 @@
 - `gameplay/views/missions.py`：改为消费 helper，降低文件复杂度。
 - `tests/test_logging_configuration.py`：新增日志配置回归测试。
 - `tests/test_mission_helper_functions.py`：新增任务辅助函数回归测试。
+- `trade/page_context.py`、`gameplay/views/production_page_context.py`、`gameplay/views/mission_page_context.py`：热点页面读侧装配已统一下沉。
+- `guests/views/recruit_action_runtime.py`、`gameplay/views/mission_action_handlers.py`、`gameplay/views/production_forge_handlers.py`：热点写动作入口已从 view 主文件下沉。
+- `gameplay/services/buildings/forge_runtime.py`、`gameplay/services/raid/scout.py`、`gameplay/services/raid/combat/*`：第一阶段主链路中的 callback/importer/bundle 空转层已明显收缩。
 
 ### 本轮新增启动项
 
@@ -62,8 +106,8 @@
 
 ## 阶段 2：热点模块重构
 
-- 拆分 `guests/services/recruitment.py`：缓存、抽卡、候选人构建、落库、通知分层。
-- 拆分 `gameplay/services/buildings/forge.py`：配方加载、分解、锻造、蓝图、排程分层。
+- 重做 `guests/services/recruitment.py`：优先按业务动作和写入边界收口，而不是继续增加薄包装层。
+- 重做 `gameplay/services/buildings/forge.py`：优先按图纸合成、装备分解、开始锻造、完成锻造等用例收口，避免主入口变成参数转发器。
 - 拆分 `gameplay/services/arena/core.py`：报名、快照、匹配、结算、奖励分层。
 - 收缩 `gameplay/services/__init__.py` 聚合出口，新增代码只允许从子模块导入。
 
@@ -72,18 +116,23 @@
 - 逐步缩小 `pyproject.toml` 中 mypy 的 `ignore_errors` 范围。
 - 优先覆盖 selector、service、utility 层，再逐步推进到 views。
 - 约束新模块必须带类型标注，避免继续产生新的类型盲区。
+- 建立显式异常分层，逐步减少跨层泛用 `ValueError` / `RuntimeError` / 裸 `Exception`。
+- 为 view / selector / service / infrastructure 建立可测试的职责边界。
 
 ## 阶段 4：性能与数据一致性
 
 - 为关键页面增加查询次数基线测试，重点覆盖任务、仓库、交易、竞技场。
 - 统一高频缓存 key、TTL 和失效策略，减少隐式缓存分叉。
 - 继续梳理 Celery 任务的“吞异常但兜底扫描”模式，补 metrics/告警。
+- 统一基础设施故障的 fail-open / fail-closed 口径，禁止各模块各自定义全局策略。
 
 ## 阶段 5：测试与发布质量
 
 - 将超大测试文件按业务域拆分，例如 `tests/test_views.py`。
 - 增加并发行为回归用例，覆盖锁、库存、撤退、报名等关键路径。
 - 为 YAML 配置加载继续补 schema 化校验与负例测试。
+- 为统一异常映射、统一读路径入口、基础设施降级策略补边界契约测试。
+- 保持全量 `pytest` 绿灯，红灯时先收口再继续结构改造。
 
 ## 阶段 6：迁移与运维治理
 

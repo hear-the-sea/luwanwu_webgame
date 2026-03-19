@@ -18,3 +18,7 @@ def test_env_float_parsing(monkeypatch: pytest.MonkeyPatch, raw_value: str, defa
     monkeypatch.setenv("TEST_FLOAT_ENV", raw_value)
 
     assert base_settings.env_float("TEST_FLOAT_ENV", default) == expected
+
+
+def test_single_session_fail_open_defaults_to_true():
+    assert base_settings.SINGLE_SESSION_FAIL_OPEN is True

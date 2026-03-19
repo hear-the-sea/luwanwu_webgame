@@ -74,6 +74,7 @@ HEALTH_CHECK_CELERY_BROKER = False
 HEALTH_CHECK_CELERY_WORKERS = False
 HEALTH_CHECK_CELERY_BEAT = False
 HEALTH_CHECK_CELERY_ROUNDTRIP = False
+SINGLE_SESSION_FAIL_OPEN = True
 
 try:
     from config.celery import app as celery_app

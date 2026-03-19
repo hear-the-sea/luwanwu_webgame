@@ -57,7 +57,7 @@ class TestCoreViews:
         assert "buildings" in response.context
 
     def test_dashboard_refresh_database_error_does_not_500(self, manor_with_user, monkeypatch):
-        """数据库故障时仪表盘应降级而不是返回500。"""
+        """数据库故障时仪表盘应静默降级而不是返回500。"""
         _manor, client = manor_with_user
         monkeypatch.setattr(
             "gameplay.views.core.project_resource_production_for_read",
@@ -66,7 +66,8 @@ class TestCoreViews:
 
         response = client.get(reverse("gameplay:dashboard"))
         assert response.status_code == 200
-        assert "操作失败，请稍后重试" in response.content.decode("utf-8")
+        messages = [str(message) for message in get_messages(response.wsgi_request)]
+        assert messages == []
 
     def test_dashboard_refresh_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
         """编程错误不应被页面层吞掉。"""

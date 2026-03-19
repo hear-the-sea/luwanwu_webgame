@@ -11,12 +11,7 @@ from django.db.models import Count, F
 from django.utils import timezone
 
 from gameplay.models import ArenaEntry, ArenaTournament
-from gameplay.services.arena.core import (
-    ARENA_REGISTRATION_SILVER_COST,
-    ARENA_TOURNAMENT_PLAYER_LIMIT,
-    register_arena_entry,
-    run_due_arena_rounds,
-)
+from gameplay.services.arena import core as arena_core
 from gameplay.services.manor.core import ensure_manor
 from guests.models import Guest, GuestTemplate
 
@@ -142,8 +137,10 @@ class Command(BaseCommand):
             raise CommandError("--players 必须为正整数")
         if not 1 <= guests_per_player <= 10:
             raise CommandError("--guests-per-player 必须在 1 到 10 之间")
-        if seed_silver < ARENA_REGISTRATION_SILVER_COST:
-            raise CommandError(f"--seed-silver 不能低于报名费 {ARENA_REGISTRATION_SILVER_COST}，否则无法报名")
+        if seed_silver < arena_core.ARENA_REGISTRATION_SILVER_COST:
+            raise CommandError(
+                f"--seed-silver 不能低于报名费 {arena_core.ARENA_REGISTRATION_SILVER_COST}，否则无法报名"
+            )
         if finish and max_steps <= 0:
             raise CommandError("--finish 模式下 --max-steps 必须为正整数")
         if step_seconds_option is not None and int(step_seconds_option) <= 0:
@@ -169,9 +166,9 @@ class Command(BaseCommand):
                 f"检测到报名中的赛事 #{recruiting.id}，当前 {recruiting.entry_count}/{recruiting.player_limit}，本次将补齐 {players_to_seed} 人。"
             )
         else:
-            players_to_seed = int(requested_players or ARENA_TOURNAMENT_PLAYER_LIMIT)
+            players_to_seed = int(requested_players or arena_core.ARENA_TOURNAMENT_PLAYER_LIMIT)
             self.stdout.write(
-                f"未检测到可用报名池，本次将新建并报名 {players_to_seed} 人（默认满员 {ARENA_TOURNAMENT_PLAYER_LIMIT}）。"
+                f"未检测到可用报名池，本次将新建并报名 {players_to_seed} 人（默认满员 {arena_core.ARENA_TOURNAMENT_PLAYER_LIMIT}）。"
             )
 
         if players_to_seed <= 0:
@@ -200,7 +197,7 @@ class Command(BaseCommand):
                 guest = _create_guest(manor, template, f"{idx + 1}-{guest_idx + 1}")
                 selected_guest_ids.append(guest.id)
 
-            result = register_arena_entry(manor, selected_guest_ids)
+            result = arena_core.register_arena_entry(manor, selected_guest_ids)
             created_users.append(username)
             seed_results.append(
                 _ParticipantSeedResult(
@@ -246,7 +243,7 @@ class Command(BaseCommand):
         processed_rounds = 0
 
         for _ in range(max_steps):
-            processed = run_due_arena_rounds(now=simulated_now, limit=50)
+            processed = arena_core.run_due_arena_rounds(now=simulated_now, limit=50)
             processed_rounds += processed
             tournament.refresh_from_db(fields=["status", "current_round", "next_round_at", "ended_at"])
             if tournament.status != ArenaTournament.Status.RUNNING:

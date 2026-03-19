@@ -1,32 +1,8 @@
 from __future__ import annotations
 
-from django.db import DatabaseError
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_infrastructure_runtime_error
 
-INFRASTRUCTURE_RUNTIME_ERROR_MARKERS = (
-    "backend",
-    "cache",
-    "channel",
-    "connection",
-    "down",
-    "redis",
-    "timeout",
-    "unavailable",
-    "ws",
-)
-
-MARKET_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS: tuple[type[BaseException], ...] = (
-    DatabaseError,
-    ConnectionError,
-    OSError,
-    TimeoutError,
-)
-
-
-def _is_infrastructure_runtime_error(exc: Exception) -> bool:
-    if not isinstance(exc, RuntimeError):
-        return False
-    message = str(exc).lower()
-    return any(marker in message for marker in INFRASTRUCTURE_RUNTIME_ERROR_MARKERS)
+MARKET_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS = DATABASE_INFRASTRUCTURE_EXCEPTIONS
 
 
 def safe_send_market_message(
@@ -34,7 +10,7 @@ def safe_send_market_message(
     create_message_func,
     logger,
     log_message: str,
-    infrastructure_exceptions: tuple[type[BaseException], ...] = MARKET_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
+    infrastructure_exceptions: tuple[type[Exception], ...] = MARKET_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
     **kwargs,
 ) -> bool:
     try:
@@ -44,7 +20,7 @@ def safe_send_market_message(
         logger.warning("%s: %s", log_message, exc, exc_info=True)
         return False
     except RuntimeError as exc:
-        if _is_infrastructure_runtime_error(exc):
+        if is_infrastructure_runtime_error(exc):
             logger.warning("%s: %s", log_message, exc, exc_info=True)
             return False
         logger.exception("%s: unexpected error", log_message)
@@ -62,7 +38,7 @@ def safe_send_market_notification(
     payload: dict,
     log_context: str,
     log_message: str,
-    infrastructure_exceptions: tuple[type[BaseException], ...] = MARKET_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
+    infrastructure_exceptions: tuple[type[Exception], ...] = MARKET_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
 ) -> None:
     try:
         notify_user_func(user_id, payload, log_context=log_context)
@@ -75,7 +51,7 @@ def safe_send_market_notification(
             exc_info=True,
         )
     except RuntimeError as exc:
-        if _is_infrastructure_runtime_error(exc):
+        if is_infrastructure_runtime_error(exc):
             logger.warning(
                 "%s: user_id=%s error=%s",
                 log_message,

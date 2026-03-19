@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from django_redis.exceptions import ConnectionInterrupted
 
 from trade.services import market_notification_helpers
 
@@ -91,6 +92,21 @@ def test_safe_send_market_message_treats_backend_runtime_error_as_infrastructure
     assert result is False
     logger.warning.assert_called_once()
     logger.exception.assert_not_called()
+
+
+def test_safe_send_market_notification_swallows_connection_interrupted():
+    logger = MagicMock()
+
+    market_notification_helpers.safe_send_market_notification(
+        notify_user_func=lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionInterrupted("redis down")),
+        logger=logger,
+        user_id=9,
+        payload={"kind": "market_sold"},
+        log_context="market sold notification",
+        log_message="market notify_user failed",
+    )
+
+    logger.warning.assert_called_once()
 
 
 def test_send_purchase_notifications_returns_mail_flags_and_notifies_seller():

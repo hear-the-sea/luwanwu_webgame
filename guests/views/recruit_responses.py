@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import logging
+
 from django.contrib import messages
 from django.shortcuts import redirect
 
 from core.utils import json_error, json_success
 from gameplay.services.resources import project_resource_production_for_read
+from gameplay.views.read_helpers import prepare_manor_for_read
 
 from .recruit_runtime import CandidateActionOutcome, RecruitViewResolutionError
+
+logger = logging.getLogger(__name__)
 
 
 def format_duration(seconds: int) -> str:
@@ -42,7 +47,13 @@ def build_recruitment_hall_ajax_payload(request, manor, *, use_cache: bool = Tru
     from gameplay.constants import UIConstants
     from gameplay.selectors.recruitment import get_recruitment_hall_context
 
-    project_resource_production_for_read(manor)
+    prepare_manor_for_read(
+        manor,
+        project_fn=project_resource_production_for_read,
+        logger=logger,
+        source="recruitment_hall_ajax_payload",
+        user_id=getattr(getattr(request, "user", None), "id", None),
+    )
     context = get_recruitment_hall_context(manor, UIConstants.RECRUIT_RECORDS_DISPLAY, use_cache=use_cache)
     return {
         "hall_pools_html": render_to_string(

@@ -133,6 +133,19 @@ def test_dispatch_complete_raid_task_finalizes_sync_when_due_dispatch_fails(monk
     assert finalized == [(77, now)]
 
 
+def test_dispatch_complete_raid_task_finalizes_sync_when_task_import_fails(monkeypatch):
+    now = timezone.now()
+    finalized: list[tuple[int, object]] = []
+
+    monkeypatch.setattr(combat_battle, "import_module", lambda _name: (_ for _ in ()).throw(ImportError("boom")))
+    monkeypatch.setattr(combat_runs, "finalize_raid", lambda run, now=None: finalized.append((run.id, now)))
+
+    run = SimpleNamespace(id=88, return_at=now, travel_time=600)
+    combat_battle._dispatch_complete_raid_task(run, now=now)
+
+    assert finalized == [(88, now)]
+
+
 def test_process_raid_battle_ignores_post_commit_failures(monkeypatch):
     now = timezone.now()
     attacker = SimpleNamespace(id=1, location_display="江南", display_name="进攻方")

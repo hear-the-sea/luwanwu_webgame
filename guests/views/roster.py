@@ -9,6 +9,7 @@ import logging
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import DatabaseError
 from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
@@ -18,6 +19,8 @@ from django.views.generic import TemplateView
 from core.config import GUEST
 from core.exceptions import GameError
 from core.utils import sanitize_error_message
+from gameplay.services.resources import project_resource_production_for_read
+from gameplay.views.read_helpers import prepare_manor_for_read
 
 from ..forms import AllocateSkillPointsForm
 from ..models import GearItem, GearSlot, GearTemplate, GuestSkill, Skill
@@ -170,12 +173,17 @@ class RosterView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         from gameplay.models import InventoryItem, ItemTemplate
         from gameplay.services.manor.core import get_manor
-        from gameplay.services.resources import project_resource_production_for_read
         from guests.services.salary import bulk_check_salary_paid, get_guest_salary, get_unpaid_guests
 
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
-        project_resource_production_for_read(manor)
+        prepare_manor_for_read(
+            manor,
+            project_fn=project_resource_production_for_read,
+            logger=logger,
+            source="guest_roster_view",
+            user_id=getattr(self.request.user, "id", None),
+        )
         guests = list(available_guests(manor))
         refresh_guests_state(guests, now=timezone.now(), refresh=True)
         exp_items = list(
@@ -289,9 +297,23 @@ def dismiss_guest_view(request, pk: int):
     except (GameError, ValueError) as exc:
         messages.error(request, f"辞退失败：{sanitize_error_message(exc)}")
         return redirect("guests:detail", pk=pk)
-    except Exception as exc:
+    except DatabaseError as exc:
+        logger.exception(
+            "Unexpected dismiss guest view database error: manor_id=%s user_id=%s guest_id=%s",
+            getattr(manor, "id", None),
+            getattr(request.user, "id", None),
+            pk,
+        )
         messages.error(request, f"辞退失败：{sanitize_error_message(exc)}")
         return redirect("guests:detail", pk=pk)
+    except Exception:
+        logger.exception(
+            "Unexpected dismiss guest view error: manor_id=%s user_id=%s guest_id=%s",
+            getattr(manor, "id", None),
+            getattr(request.user, "id", None),
+            pk,
+        )
+        raise
 
     if result.gear_summary:
         readable = "、".join(f"{name} x{count}" if count > 1 else name for name, count in result.gear_summary.items())

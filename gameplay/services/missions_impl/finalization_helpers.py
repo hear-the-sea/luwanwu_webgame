@@ -222,7 +222,7 @@ def send_mission_report_message(
     logger: Any,
     create_message: Callable[..., Any],
     notify_user: Callable[..., Any],
-    notification_infrastructure_exceptions: tuple[type[BaseException], ...],
+    notification_infrastructure_exceptions: tuple[type[Exception], ...],
 ) -> None:
     if not report or locked_run.is_retreating:
         return

@@ -70,7 +70,7 @@ class TrainView(LoginRequiredMixin, TemplateView):
                 levels,
             )
             messages.error(request, sanitize_error_message(exc))
-        except Exception as exc:
+        except Exception:
             logger.exception(
                 "Unexpected guest train error: manor_id=%s user_id=%s guest_id=%s levels=%s",
                 getattr(manor, "id", None),
@@ -78,7 +78,7 @@ class TrainView(LoginRequiredMixin, TemplateView):
                 getattr(guest, "id", None),
                 levels,
             )
-            messages.error(request, sanitize_error_message(exc))
+            raise
         return redirect(next_url)
 
 
@@ -271,7 +271,7 @@ def allocate_points_view(request, pk: int):
             return json_error(error_msg, status=500, include_message=True)
         messages.error(request, error_msg)
         return reverse("guests:detail", args=[guest.pk])
-    except Exception as exc:
+    except Exception:
         logger.exception(
             "Unexpected allocate-points error: manor_id=%s user_id=%s guest_id=%s attribute=%s points=%s",
             getattr(manor, "id", None),
@@ -280,10 +280,7 @@ def allocate_points_view(request, pk: int):
             attribute,
             points,
         )
-        if is_ajax:
-            return json_error(sanitize_error_message(exc), status=500, include_message=True)
-        messages.error(request, sanitize_error_message(exc))
-        return reverse("guests:detail", args=[guest.pk])
+        raise
 
     # 成功消息由装饰器的 success_message 参数处理
     messages.success(request, f"{guest.display_name} 属性加点成功")

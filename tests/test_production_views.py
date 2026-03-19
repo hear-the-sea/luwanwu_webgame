@@ -22,6 +22,17 @@ class TestProductionViews:
         assert response.status_code == 200
         assert "horse_options" in response.context
 
+    def test_stable_page_tolerates_resource_sync_error(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+        monkeypatch.setattr(
+            "gameplay.views.production_page_context.project_resource_production_for_read",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("sync failed")),
+        )
+
+        response = client.get(reverse("gameplay:stable"))
+        assert response.status_code == 200
+        assert "horse_options" in response.context
+
     def test_stable_page_active_production_has_refresh_countdown(self, manor_with_user):
         manor, client = manor_with_user
         HorseProduction.objects.create(

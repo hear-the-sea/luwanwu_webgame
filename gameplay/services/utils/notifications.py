@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING, Any, Dict
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
+from core.utils.infrastructure import NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS, is_infrastructure_runtime_error
+
 logger = logging.getLogger(__name__)
 
 
@@ -59,9 +61,18 @@ def notify_user(
             {"type": "notify.message", "payload": payload},
         )
         return True
-    except Exception as exc:
+    except NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning("Failed to send %s via channels: %s", log_context, exc, exc_info=True)
         return False
+    except RuntimeError as exc:
+        if is_infrastructure_runtime_error(exc):
+            logger.warning("Failed to send %s via channels: %s", log_context, exc, exc_info=True)
+            return False
+        logger.exception("Unexpected runtime error while sending %s via channels", log_context)
+        raise
+    except Exception as exc:
+        logger.exception("Unexpected error while sending %s via channels: %s", log_context, exc)
+        raise
 
 
 def notify_manor(

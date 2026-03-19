@@ -2,9 +2,10 @@ from datetime import timedelta
 
 import pytest
 from django.utils import timezone
+from django_redis.exceptions import ConnectionInterrupted
 
 import gameplay.services.manor.core as manor_service
-from gameplay.models import MissionTemplate
+from gameplay.models import MissionTemplate, RaidRun, ScoutRecord
 from gameplay.services.manor.core import ensure_manor, refresh_manor_state, start_upgrade
 from gameplay.services.missions import launch_mission, refresh_mission_runs
 from guests.models import GuestStatus
@@ -290,3 +291,162 @@ def test_refresh_manor_state_still_throttles_when_cache_hit_and_no_due_work(djan
 
     refresh_manor_state(manor)
     assert calls == {"finalize": 1, "resource": 0, "mission": 0}
+
+
+@pytest.mark.django_db
+def test_refresh_manor_state_falls_back_to_local_throttle_when_cache_backend_unavailable(
+    django_user_model, settings, monkeypatch
+):
+    user = django_user_model.objects.create_user(username="player_refresh_cache_unavailable", password="pass12345")
+    manor = ensure_manor(user)
+
+    settings.MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS = 5
+    monkeypatch.setattr(
+        manor_service.cache,
+        "add",
+        lambda *args, **kwargs: (_ for _ in ()).throw(ConnectionInterrupted("redis unavailable")),
+    )
+
+    calls = {"finalize": 0, "resource": 0, "mission": 0, "scout": 0, "raid": 0}
+    monkeypatch.setattr(
+        manor_service, "finalize_upgrades", lambda _manor: calls.__setitem__("finalize", calls["finalize"] + 1)
+    )
+    monkeypatch.setattr(
+        "gameplay.services.resources.sync_resource_production",
+        lambda _manor: calls.__setitem__("resource", calls["resource"] + 1),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.missions.refresh_mission_runs",
+        lambda _manor: calls.__setitem__("mission", calls["mission"] + 1),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.raid.refresh_scout_records",
+        lambda _manor: calls.__setitem__("scout", calls["scout"] + 1),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.raid.refresh_raid_runs",
+        lambda _manor: calls.__setitem__("raid", calls["raid"] + 1),
+    )
+
+    refresh_manor_state(manor)
+    refresh_manor_state(manor)
+
+    assert calls == {"finalize": 2, "resource": 1, "mission": 1, "scout": 1, "raid": 1}
+
+
+@pytest.mark.django_db
+def test_refresh_manor_state_bypasses_cache_throttle_when_scout_due(django_user_model, settings, monkeypatch):
+    attacker = django_user_model.objects.create_user(username="player_refresh_due_scout", password="pass12345")
+    defender = django_user_model.objects.create_user(username="player_refresh_due_scout_target", password="pass12345")
+    manor = ensure_manor(attacker)
+    target_manor = ensure_manor(defender)
+
+    ScoutRecord.objects.create(
+        attacker=manor,
+        defender=target_manor,
+        status=ScoutRecord.Status.SCOUTING,
+        scout_cost=1,
+        success_rate=0.5,
+        travel_time=60,
+        complete_at=timezone.now() - timedelta(seconds=1),
+    )
+
+    settings.MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS = 5
+    monkeypatch.setattr(manor_service.cache, "add", lambda *args, **kwargs: False)
+
+    calls = {"finalize": 0, "resource": 0, "mission": 0, "scout": 0, "raid": 0}
+    monkeypatch.setattr(
+        manor_service, "finalize_upgrades", lambda _manor: calls.__setitem__("finalize", calls["finalize"] + 1)
+    )
+    monkeypatch.setattr(
+        "gameplay.services.resources.sync_resource_production",
+        lambda _manor: calls.__setitem__("resource", calls["resource"] + 1),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.missions.refresh_mission_runs",
+        lambda _manor: calls.__setitem__("mission", calls["mission"] + 1),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.raid.refresh_scout_records",
+        lambda _manor: calls.__setitem__("scout", calls["scout"] + 1),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.raid.refresh_raid_runs",
+        lambda _manor: calls.__setitem__("raid", calls["raid"] + 1),
+    )
+
+    refresh_manor_state(manor)
+    assert calls == {"finalize": 1, "resource": 1, "mission": 1, "scout": 1, "raid": 1}
+
+
+@pytest.mark.django_db
+def test_refresh_manor_state_bypasses_cache_throttle_when_raid_due(django_user_model, settings, monkeypatch):
+    attacker = django_user_model.objects.create_user(username="player_refresh_due_raid", password="pass12345")
+    defender = django_user_model.objects.create_user(username="player_refresh_due_raid_target", password="pass12345")
+    manor = ensure_manor(attacker)
+    target_manor = ensure_manor(defender)
+
+    RaidRun.objects.create(
+        attacker=manor,
+        defender=target_manor,
+        status=RaidRun.Status.MARCHING,
+        travel_time=60,
+        battle_at=timezone.now() - timedelta(seconds=1),
+    )
+
+    settings.MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS = 5
+    monkeypatch.setattr(manor_service.cache, "add", lambda *args, **kwargs: False)
+
+    calls = {"finalize": 0, "resource": 0, "mission": 0, "scout": 0, "raid": 0}
+    monkeypatch.setattr(
+        manor_service, "finalize_upgrades", lambda _manor: calls.__setitem__("finalize", calls["finalize"] + 1)
+    )
+    monkeypatch.setattr(
+        "gameplay.services.resources.sync_resource_production",
+        lambda _manor: calls.__setitem__("resource", calls["resource"] + 1),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.missions.refresh_mission_runs",
+        lambda _manor: calls.__setitem__("mission", calls["mission"] + 1),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.raid.refresh_scout_records",
+        lambda _manor: calls.__setitem__("scout", calls["scout"] + 1),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.raid.refresh_raid_runs",
+        lambda _manor: calls.__setitem__("raid", calls["raid"] + 1),
+    )
+
+    refresh_manor_state(manor)
+    assert calls == {"finalize": 1, "resource": 1, "mission": 1, "scout": 1, "raid": 1}
+
+
+@pytest.mark.django_db
+def test_refresh_manor_state_propagates_prefer_async_to_all_refresh_hooks(django_user_model, settings, monkeypatch):
+    user = django_user_model.objects.create_user(username="player_refresh_async_hooks", password="pass12345")
+    manor = ensure_manor(user)
+
+    settings.MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS = 0
+
+    calls = {"resource": 0, "mission": [], "scout": [], "raid": []}
+    monkeypatch.setattr(manor_service, "finalize_upgrades", lambda _manor: None)
+    monkeypatch.setattr(
+        "gameplay.services.resources.sync_resource_production",
+        lambda _manor: calls.__setitem__("resource", calls["resource"] + 1),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.missions.refresh_mission_runs",
+        lambda _manor, prefer_async=False: calls["mission"].append(prefer_async),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.raid.refresh_scout_records",
+        lambda _manor, prefer_async=False: calls["scout"].append(prefer_async),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.raid.refresh_raid_runs",
+        lambda _manor, prefer_async=False: calls["raid"].append(prefer_async),
+    )
+
+    refresh_manor_state(manor, prefer_async=True)
+    assert calls == {"resource": 1, "mission": [True], "scout": [True], "raid": [True]}

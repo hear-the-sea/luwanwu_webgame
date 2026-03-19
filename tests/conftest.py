@@ -26,10 +26,15 @@ def _env_services_enabled() -> bool:
     return os.environ.get("DJANGO_TEST_USE_ENV_SERVICES", "0") == "1"
 
 
+def _real_service_gate_hint() -> str:
+    return "Run `DJANGO_TEST_USE_ENV_SERVICES=1 make test-integration` or `make test-real-services`."
+
+
 def _gate_outcome(message: str, *, strict: bool) -> None:
+    detailed_message = f"{message}. {_real_service_gate_hint()}"
     if strict:
-        pytest.fail(message, pytrace=False)
-    pytest.skip(message)
+        pytest.fail(detailed_message, pytrace=False)
+    pytest.skip(detailed_message)
 
 
 def _test_gate_mode() -> str:
@@ -46,6 +51,21 @@ def _test_gate_description(mode: str) -> str:
         "TEST_GATE_DESCRIPTION",
         "Hermetic rapid gate (SQLite, LocMem cache, InMemoryChannelLayer, memory Celery).",
     )
+
+
+def _should_fail_for_missing_env_services(config, items) -> bool:
+    if _env_services_enabled():
+        return False
+
+    integration_items = [item for item in items if item.get_closest_marker("integration") is not None]
+    if not integration_items:
+        return False
+
+    markexpr = str(getattr(getattr(config, "option", None), "markexpr", "") or "").strip()
+    if "integration" in markexpr:
+        return True
+
+    return len(integration_items) == len(items)
 
 
 def _require_non_sqlite_database(settings, *, strict: bool) -> None:
@@ -229,7 +249,7 @@ def manor_factory(user_factory):
 def require_env_services():
     """Validate integration external services; strict-fail when explicit real-service gate is enabled."""
     if not _env_services_enabled():
-        pytest.skip("integration tests require DJANGO_TEST_USE_ENV_SERVICES=1")
+        pytest.skip(f"integration tests require DJANGO_TEST_USE_ENV_SERVICES=1. {_real_service_gate_hint()}")
 
     from django.conf import settings
     from django.core.cache import cache
@@ -244,6 +264,11 @@ def require_env_services():
 
 def pytest_collection_modifyitems(config, items):
     """Ensure all integration tests run behind the same external-service gate."""
+    if _should_fail_for_missing_env_services(config, items):
+        raise pytest.UsageError(
+            f"integration tests require DJANGO_TEST_USE_ENV_SERVICES=1. {_real_service_gate_hint()}"
+        )
+
     for item in items:
         if item.get_closest_marker("integration") is not None:
             item.add_marker(pytest.mark.usefixtures("require_env_services"))

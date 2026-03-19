@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Callable
 
+from django.conf import settings
 from django.contrib.auth import logout
 from django.core.cache import cache
 from django.db import IntegrityError
@@ -108,6 +109,10 @@ def is_single_session_request_valid(user_id: int, current_session_key: str | Non
         raise SessionValidationUnavailable("single-session validation unavailable") from exc
 
 
+def should_fail_open_on_single_session_unavailable() -> bool:
+    return bool(getattr(settings, "SINGLE_SESSION_FAIL_OPEN", False))
+
+
 class SingleSessionMiddleware:
     def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
         self.get_response = get_response
@@ -121,17 +126,30 @@ class SingleSessionMiddleware:
                 try:
                     session_is_valid = is_single_session_request_valid(user.id, current_session_key)
                 except SessionValidationUnavailable:
+                    fail_open = should_fail_open_on_single_session_unavailable()
                     record_degradation(
                         SESSION_SYNC_FAILURE,
                         component="single_session_middleware",
-                        detail="session enforcement unavailable, allowing current request",
+                        detail=(
+                            "session enforcement unavailable, allowing current request"
+                            if fail_open
+                            else "session enforcement unavailable, logging out current request"
+                        ),
                         user_id=user.id,
                     )
-                    logger.warning(
-                        "Single-session validation unavailable; keeping authenticated request: user_id=%s",
-                        user.id,
-                        exc_info=True,
-                    )
+                    if fail_open:
+                        logger.warning(
+                            "Single-session validation unavailable; keeping authenticated request: user_id=%s",
+                            user.id,
+                            exc_info=True,
+                        )
+                    else:
+                        logger.error(
+                            "Single-session validation unavailable; logging out current request: user_id=%s",
+                            user.id,
+                            exc_info=True,
+                        )
+                        logout(request)
                 else:
                     if not session_is_valid:
                         logout(request)

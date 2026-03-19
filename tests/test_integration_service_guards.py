@@ -17,21 +17,21 @@ def test_require_external_cache_backend_skips_locmem():
     settings = SimpleNamespace(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
 
     with pytest.raises(pytest.skip.Exception, match="external cache backend"):
-        conftest._require_external_cache_backend(settings, cache=SimpleNamespace())
+        conftest._require_external_cache_backend(settings, cache=SimpleNamespace(), strict=False)
 
 
 def test_require_external_channel_layer_skips_inmemory_backend():
     settings = SimpleNamespace(CHANNEL_LAYERS={"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}})
 
     with pytest.raises(pytest.skip.Exception, match="external channel layer backend"):
-        conftest._require_external_channel_layer(settings, channel_layer=SimpleNamespace())
+        conftest._require_external_channel_layer(settings, channel_layer=SimpleNamespace(), strict=False)
 
 
 def test_require_external_celery_broker_skips_memory_broker():
     celery_app = SimpleNamespace(conf=SimpleNamespace(broker_url="memory://", result_backend="cache+memory://"))
 
     with pytest.raises(pytest.skip.Exception, match="external Celery broker"):
-        conftest._require_external_celery_broker(celery_app)
+        conftest._require_external_celery_broker(celery_app, strict=False)
 
 
 def test_require_external_celery_broker_accepts_reachable_connection():
@@ -57,6 +57,60 @@ def test_require_external_celery_broker_accepts_reachable_connection():
         def connection(self):
             return _Connection()
 
-    conftest._require_external_celery_broker(_CeleryApp())
+    conftest._require_external_celery_broker(_CeleryApp(), strict=False)
 
     assert ensured["count"] == 1
+
+
+def test_should_fail_for_missing_env_services_when_only_integration_items_selected(monkeypatch):
+    monkeypatch.delenv("DJANGO_TEST_USE_ENV_SERVICES", raising=False)
+
+    class _Item:
+        def __init__(self, integration: bool):
+            self.integration = integration
+
+        def get_closest_marker(self, name: str):
+            if name == "integration" and self.integration:
+                return object()
+            return None
+
+    config = SimpleNamespace(option=SimpleNamespace(markexpr=""))
+    items = [_Item(True), _Item(True)]
+
+    assert conftest._should_fail_for_missing_env_services(config, items) is True
+
+
+def test_should_not_fail_for_missing_env_services_when_selection_is_mixed(monkeypatch):
+    monkeypatch.delenv("DJANGO_TEST_USE_ENV_SERVICES", raising=False)
+
+    class _Item:
+        def __init__(self, integration: bool):
+            self.integration = integration
+
+        def get_closest_marker(self, name: str):
+            if name == "integration" and self.integration:
+                return object()
+            return None
+
+    config = SimpleNamespace(option=SimpleNamespace(markexpr=""))
+    items = [_Item(True), _Item(False)]
+
+    assert conftest._should_fail_for_missing_env_services(config, items) is False
+
+
+def test_should_fail_for_missing_env_services_when_markexpr_requests_integration(monkeypatch):
+    monkeypatch.delenv("DJANGO_TEST_USE_ENV_SERVICES", raising=False)
+
+    class _Item:
+        def __init__(self, integration: bool):
+            self.integration = integration
+
+        def get_closest_marker(self, name: str):
+            if name == "integration" and self.integration:
+                return object()
+            return None
+
+    config = SimpleNamespace(option=SimpleNamespace(markexpr="integration"))
+    items = [_Item(True), _Item(False)]
+
+    assert conftest._should_fail_for_missing_env_services(config, items) is True

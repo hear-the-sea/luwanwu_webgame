@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -24,6 +25,7 @@ from gameplay.models import BuildingCategory
 from gameplay.selectors.home import get_home_context
 from gameplay.services.manor.core import get_manor, get_rename_card_count, rename_manor
 from gameplay.services.resources import project_resource_production_for_read
+from gameplay.views.read_helpers import prepare_manor_for_read
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +56,8 @@ class DashboardView(LoginRequiredMixin, TemplateView):
     template_name = "gameplay/dashboard.html"
 
     @staticmethod
-    def _prepare_building_display(buildings):
-        prepared = []
+    def _prepare_building_display(buildings: Any) -> list[Any]:
+        prepared: list[Any] = []
         for building in buildings:
             max_level = BUILDING_MAX_LEVELS.get(building.building_type.key)
             is_max_level = max_level is not None and building.level >= max_level
@@ -66,21 +68,16 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             prepared.append(building)
         return prepared
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
-        try:
-            project_resource_production_for_read(manor)
-        except DatabaseError as exc:
-            _handle_unexpected_core_error(
-                self.request,
-                exc,
-                log_message="Unexpected dashboard refresh error: manor_id=%s user_id=%s",
-                log_args=(
-                    getattr(manor, "id", None),
-                    getattr(self.request.user, "id", None),
-                ),
-            )
+        prepare_manor_for_read(
+            manor,
+            project_fn=project_resource_production_for_read,
+            logger=logger,
+            source="dashboard_view",
+            user_id=getattr(self.request.user, "id", None),
+        )
 
         # Get category from URL parameter, default to 'resource'
         category = self.kwargs.get("category", "resource")
@@ -106,12 +103,18 @@ class HomeView(TemplateView):
 
     template_name = "landing.html"
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         user = self.request.user
         if user.is_authenticated:
             manor = get_manor(user)
-            project_resource_production_for_read(manor)
+            prepare_manor_for_read(
+                manor,
+                project_fn=project_resource_production_for_read,
+                logger=logger,
+                source="home_view",
+                user_id=getattr(user, "id", None),
+            )
             context.update(get_home_context(manor))
 
         return context
@@ -122,7 +125,7 @@ class SettingsView(LoginRequiredMixin, TemplateView):
 
     template_name = "gameplay/settings.html"
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
 
@@ -167,7 +170,7 @@ class RankingView(LoginRequiredMixin, TemplateView):
 
     template_name = "gameplay/ranking.html"
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
 

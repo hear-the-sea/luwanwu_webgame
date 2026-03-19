@@ -22,12 +22,7 @@ from gameplay.selectors import (
     get_arena_exchange_context,
     get_arena_registration_context,
 )
-from gameplay.services.arena.core import (
-    ARENA_REGISTRATION_SILVER_COST,
-    cancel_arena_entry,
-    exchange_arena_reward,
-    register_arena_entry,
-)
+from gameplay.services.arena import core as arena_core
 from gameplay.services.manor.core import get_manor
 from gameplay.utils.template_loader import get_item_template_names_by_keys
 
@@ -36,6 +31,22 @@ logger = logging.getLogger(__name__)
 ARENA_TAB_REGISTRATION = "registration"
 ARENA_TAB_EVENTS = "events"
 ARENA_TAB_EXCHANGE = "exchange"
+
+
+def register_arena_entry(*args, **kwargs):
+    return arena_core.register_arena_entry(*args, **kwargs)
+
+
+def cancel_arena_entry(*args, **kwargs):
+    return arena_core.cancel_arena_entry(*args, **kwargs)
+
+
+def exchange_arena_reward(*args, **kwargs):
+    return arena_core.exchange_arena_reward(*args, **kwargs)
+
+
+def _get_registration_silver_cost() -> int:
+    return arena_core.ARENA_REGISTRATION_SILVER_COST
 
 
 def _handle_known_arena_error(request: HttpRequest, exc: ValueError) -> None:
@@ -177,12 +188,12 @@ def arena_register_view(request: HttpRequest) -> HttpResponse:
         if result.auto_started:
             messages.success(
                 request,
-                f"报名成功！消耗银两 {ARENA_REGISTRATION_SILVER_COST}。本场已满 {result.entry_count} 人，竞技场已自动开赛。",
+                f"报名成功！消耗银两 {_get_registration_silver_cost()}。本场已满 {result.entry_count} 人，竞技场已自动开赛。",
             )
         else:
             messages.success(
                 request,
-                f"报名成功！消耗银两 {ARENA_REGISTRATION_SILVER_COST}。当前已报名 {result.entry_count}/{result.tournament.player_limit} 人。",
+                f"报名成功！消耗银两 {_get_registration_silver_cost()}。当前已报名 {result.entry_count}/{result.tournament.player_limit} 人。",
             )
     except ValueError as exc:
         _handle_known_arena_error(request, exc)
@@ -210,7 +221,7 @@ def arena_cancel_view(request: HttpRequest) -> HttpResponse:
         canceled_count = cancel_arena_entry(manor)
         messages.success(
             request,
-            f"已撤销报名（{canceled_count} 条），可重新报名（报名费 {ARENA_REGISTRATION_SILVER_COST} 银两不返还）。",
+            f"已撤销报名（{canceled_count} 条），可重新报名（报名费 {_get_registration_silver_cost()} 银两不返还）。",
         )
     except ValueError as exc:
         _handle_known_arena_error(request, exc)

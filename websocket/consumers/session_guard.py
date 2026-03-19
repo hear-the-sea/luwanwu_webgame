@@ -5,7 +5,11 @@ import time
 
 from channels.db import database_sync_to_async
 
-from core.middleware.single_session import SessionValidationUnavailable, is_single_session_request_valid
+from core.middleware.single_session import (
+    SessionValidationUnavailable,
+    is_single_session_request_valid,
+    should_fail_open_on_single_session_unavailable,
+)
 from core.utils.degradation import SESSION_SYNC_FAILURE, record_degradation
 
 logger = logging.getLogger(__name__)
@@ -103,21 +107,36 @@ class SingleSessionWebSocketMixin:
         try:
             is_valid = await database_sync_to_async(is_websocket_session_valid, thread_sensitive=True)(self.scope)  # type: ignore[attr-defined]
         except WebSocketSessionValidationUnavailable:
+            fail_open = should_fail_open_on_single_session_unavailable()
             record_degradation(
                 SESSION_SYNC_FAILURE,
                 component="single_session_websocket",
-                detail="websocket session validation unavailable, keeping connection",
+                detail=(
+                    "websocket session validation unavailable, keeping connection"
+                    if fail_open
+                    else "websocket session validation unavailable, closing connection"
+                ),
                 user_id=getattr(user, "id", None),
             )
-            logger.warning(
-                "WebSocket session validation unavailable; keeping connection: consumer=%s user_id=%s path=%s",
+            if fail_open:
+                logger.warning(
+                    "WebSocket session validation unavailable; keeping connection: consumer=%s user_id=%s path=%s",
+                    self.__class__.__name__,
+                    getattr(user, "id", None),
+                    self.scope.get("path"),  # type: ignore[attr-defined]
+                    exc_info=True,
+                )
+                self._remember_session_validation()
+                return True
+
+            logger.error(
+                "WebSocket session validation unavailable; closing connection: consumer=%s user_id=%s path=%s",
                 self.__class__.__name__,
                 getattr(user, "id", None),
                 self.scope.get("path"),  # type: ignore[attr-defined]
                 exc_info=True,
             )
-            self._remember_session_validation()
-            return True
+            return False
 
         if is_valid:
             self._remember_session_validation()

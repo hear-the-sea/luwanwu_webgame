@@ -189,7 +189,7 @@ def unequip_view(request):
             len(gear_ids),
         )
         messages.error(request, sanitize_error_message(exc))
-    except Exception as exc:
+    except Exception:
         logger.exception(
             "Unexpected unequip view error: manor_id=%s user_id=%s guest_id=%s gear_count=%s",
             getattr(manor, "id", None),
@@ -197,7 +197,7 @@ def unequip_view(request):
             guest_id,
             len(gear_ids),
         )
-        messages.error(request, sanitize_error_message(exc))
+        raise
     return redirect(next_url)
 
 

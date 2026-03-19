@@ -37,12 +37,13 @@ def test_start_equipment_forging_consumes_materials_and_creates_record(monkeypat
         },
     )
     monkeypatch.setattr("gameplay.services.technology.get_player_technology_level", lambda *_args, **_kwargs: 5)
-    monkeypatch.setattr(forge_service, "calculate_forging_duration", lambda _base, _manor: 90)
+    monkeypatch.setattr(
+        "gameplay.services.buildings.forge_runtime.calculate_forging_duration", lambda _base, _manor: 90
+    )
 
     scheduled = {}
     monkeypatch.setattr(
-        forge_service,
-        "_schedule_forging_completion",
+        "gameplay.services.buildings.forge_runtime.schedule_forging_completion",
         lambda production, duration: scheduled.update({"id": production.id, "duration": duration}),
     )
 

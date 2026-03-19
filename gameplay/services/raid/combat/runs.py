@@ -12,6 +12,8 @@ from django.utils import timezone
 
 from common.utils.celery import safe_apply_async, safe_apply_async_with_dedup
 from gameplay.services.battle_snapshots import build_guest_battle_snapshots
+from gameplay.services.raid import utils as raid_utils
+from gameplay.services.resources import grant_resources_locked
 from guests.models import Guest, GuestStatus
 
 from ....models import Manor, RaidRun, ResourceEvent
@@ -51,7 +53,6 @@ from .run_side_effects import (
     schedule_raid_retreat_completion_best_effort,
     send_raid_incoming_message,
 )
-from .run_wiring import build_finalize_raid_dependencies, build_refresh_raid_dependencies, build_start_raid_dependencies
 from .start import start_raid as _start_raid_command
 from .travel import calculate_raid_travel_time, get_active_raid_count
 
@@ -93,18 +94,16 @@ def _lock_manor_pair(attacker_id: int, defender_id: int) -> tuple[Manor, Manor]:
 
 
 def _recheck_can_attack_target(attacker: Manor, defender: Manor, now: datetime) -> tuple[bool, str]:
-    from ..utils import can_attack_target
-
-    return persistence_recheck_can_attack_target(attacker, defender, now, can_attack_target=can_attack_target)
+    return persistence_recheck_can_attack_target(
+        attacker, defender, now, can_attack_target=raid_utils.can_attack_target
+    )
 
 
 def _invalidate_recent_attacks_cache_on_commit(defender_id: int) -> None:
-    from ..utils import invalidate_recent_attacks_cache
-
     persistence_invalidate_recent_attacks_cache_on_commit(
         defender_id,
         on_commit=transaction.on_commit,
-        invalidate_recent_attacks_cache=invalidate_recent_attacks_cache,
+        invalidate_recent_attacks_cache=raid_utils.invalidate_recent_attacks_cache,
     )
 
 
@@ -180,24 +179,22 @@ def start_raid(
         defender,
         guest_ids,
         troop_loadout,
-        **build_start_raid_dependencies(
-            validate_and_normalize_inputs=_validate_and_normalize_raid_inputs,
-            transaction_atomic=transaction.atomic,
-            lock_manor_pair=_lock_manor_pair,
-            now_func=timezone.now,
-            recheck_can_attack_target=_recheck_can_attack_target,
-            get_active_raid_count=get_active_raid_count,
-            raid_max_concurrent=PVPConstants.RAID_MAX_CONCURRENT,
-            load_and_validate_attacker_guests=_load_and_validate_attacker_guests,
-            normalize_and_validate_raid_loadout=_normalize_and_validate_raid_loadout,
-            deduct_troops=_deduct_troops,
-            calculate_raid_travel_time=calculate_raid_travel_time,
-            create_raid_run_record=_create_raid_run_record,
-            invalidate_recent_attacks_cache_on_commit=_invalidate_recent_attacks_cache_on_commit,
-            send_raid_incoming_message=_send_raid_incoming_message,
-            dispatch_raid_battle_task=_dispatch_raid_battle_task,
-            logger=logger,
-        ),
+        validate_and_normalize_inputs=_validate_and_normalize_raid_inputs,
+        transaction_atomic=transaction.atomic,
+        lock_manor_pair=_lock_manor_pair,
+        now_func=timezone.now,
+        recheck_can_attack_target=_recheck_can_attack_target,
+        get_active_raid_count=get_active_raid_count,
+        raid_max_concurrent=PVPConstants.RAID_MAX_CONCURRENT,
+        load_and_validate_attacker_guests=_load_and_validate_attacker_guests,
+        normalize_and_validate_raid_loadout=_normalize_and_validate_raid_loadout,
+        deduct_troops=_deduct_troops,
+        calculate_raid_travel_time=calculate_raid_travel_time,
+        create_raid_run_record=_create_raid_run_record,
+        invalidate_recent_attacks_cache_on_commit=_invalidate_recent_attacks_cache_on_commit,
+        send_raid_incoming_message=_send_raid_incoming_message,
+        dispatch_raid_battle_task=_dispatch_raid_battle_task,
+        logger=logger,
     )
 
 
@@ -214,20 +211,16 @@ def finalize_raid(run: RaidRun, now: Optional[datetime] = None) -> None:
         run: 踢馆记录
         now: 当前时间（可选）
     """
-    from gameplay.services.resources import grant_resources_locked
-
     _finalize_raid_command(
         run,
         now=now,
-        **build_finalize_raid_dependencies(
-            load_locked_raid_run=_load_locked_raid_run,
-            normalize_positive_int_mapping=_normalize_positive_int_mapping,
-            return_surviving_troops=_return_surviving_troops,
-            load_locked_attacker=_load_locked_attacker,
-            grant_resources_locked=grant_resources_locked,
-            grant_loot_items=_grant_loot_items,
-            battle_reward_reason=ResourceEvent.Reason.BATTLE_REWARD,
-        ),
+        load_locked_raid_run=_load_locked_raid_run,
+        normalize_positive_int_mapping=_normalize_positive_int_mapping,
+        return_surviving_troops=_return_surviving_troops,
+        load_locked_attacker=_load_locked_attacker,
+        grant_resources_locked=grant_resources_locked,
+        grant_loot_items=_grant_loot_items,
+        battle_reward_reason=ResourceEvent.Reason.BATTLE_REWARD,
     )
 
 
@@ -293,18 +286,16 @@ def refresh_raid_runs(manor: Manor, *, prefer_async: bool = False) -> None:
     _refresh_raid_runs_command(
         manor,
         prefer_async=prefer_async,
-        **build_refresh_raid_dependencies(
-            now_func=timezone.now,
-            raid_run_model=RaidRun,
-            collect_due_raid_run_ids=collect_due_raid_run_ids,
-            dispatch_async_raid_refresh=dispatch_async_raid_refresh,
-            logger=logger,
-            import_raid_refresh_tasks=_import_raid_refresh_tasks,
-            try_dispatch_raid_refresh_task=_try_dispatch_raid_refresh_task,
-            process_due_raid_run_ids=process_due_raid_run_ids,
-            process_raid_battle=process_raid_battle,
-            finalize_raid=finalize_raid,
-        ),
+        now_func=timezone.now,
+        raid_run_model=RaidRun,
+        collect_due_raid_run_ids=collect_due_raid_run_ids,
+        dispatch_async_raid_refresh=dispatch_async_raid_refresh,
+        logger=logger,
+        import_raid_refresh_tasks=_import_raid_refresh_tasks,
+        try_dispatch_raid_refresh_task=_try_dispatch_raid_refresh_task,
+        process_due_raid_run_ids=process_due_raid_run_ids,
+        process_raid_battle=process_raid_battle,
+        finalize_raid=finalize_raid,
     )
 
 

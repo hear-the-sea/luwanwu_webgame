@@ -22,7 +22,17 @@ from core.exceptions import GameError
 from core.utils.time_scale import scale_duration
 
 from ...constants import BUILDING_MAX_LEVELS, MAX_CONCURRENT_BUILDING_UPGRADES, BuildingKeys, ManorNameConstants
-from ...models import Building, BuildingType, ItemTemplate, Manor, Message, MissionRun, ResourceEvent
+from ...models import (
+    Building,
+    BuildingType,
+    ItemTemplate,
+    Manor,
+    Message,
+    MissionRun,
+    RaidRun,
+    ResourceEvent,
+    ScoutRecord,
+)
 from ..utils.cache import invalidate_home_stats_cache
 from ..utils.notifications import notify_user
 from . import provisioning as _provisioning
@@ -181,6 +191,8 @@ def ensure_buildings_exist(manor: Manor) -> None:
 def _has_due_manor_refresh_work(manor_id: int, now: datetime | None = None) -> bool:
     return _refresh.has_due_manor_refresh_work(
         mission_run_model=MissionRun,
+        scout_record_model=ScoutRecord,
+        raid_run_model=RaidRun,
         manor_id=manor_id,
         now=now or timezone.now(),
         logger=logger,
@@ -189,6 +201,7 @@ def _has_due_manor_refresh_work(manor_id: int, now: datetime | None = None) -> b
 
 def refresh_manor_state(manor: Manor, *, prefer_async: bool = False) -> None:
     from ..missions import refresh_mission_runs
+    from ..raid import refresh_raid_runs, refresh_scout_records
     from ..resources import sync_resource_production
 
     _refresh.refresh_manor_state(
@@ -203,6 +216,8 @@ def refresh_manor_state(manor: Manor, *, prefer_async: bool = False) -> None:
         should_skip_refresh_by_local_fallback_func=_should_skip_refresh_by_local_fallback,
         sync_resource_production_func=sync_resource_production,
         refresh_mission_runs_func=refresh_mission_runs,
+        refresh_scout_records_func=refresh_scout_records,
+        refresh_raid_runs_func=refresh_raid_runs,
     )
 
 

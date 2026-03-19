@@ -19,10 +19,6 @@ from gameplay.models import (
 )
 from gameplay.services.arena import core as arena_core
 from gameplay.services.arena.core import (
-    ARENA_DAILY_PARTICIPATION_LIMIT,
-    ARENA_MAX_GUESTS_PER_ENTRY,
-    ARENA_REGISTRATION_SILVER_COST,
-    ARENA_TOURNAMENT_PLAYER_LIMIT,
     cancel_arena_entry,
     cleanup_expired_tournaments,
     exchange_arena_reward,
@@ -139,7 +135,7 @@ def test_register_arena_entry_respects_daily_limit():
     guest = _create_guest(manor, template, "A")
 
     now = timezone.now()
-    for idx in range(ARENA_DAILY_PARTICIPATION_LIMIT):
+    for idx in range(arena_core.ARENA_DAILY_PARTICIPATION_LIMIT):
         tournament = ArenaTournament.objects.create(
             status=ArenaTournament.Status.COMPLETED,
             player_limit=10,
@@ -167,9 +163,9 @@ def test_register_arena_entry_rejects_more_than_guest_limit():
     )
     manor = ensure_manor(user)
     template = _create_guest_template("arena_guest_limit_tpl")
-    guests = [_create_guest(manor, template, str(i)) for i in range(ARENA_MAX_GUESTS_PER_ENTRY + 1)]
+    guests = [_create_guest(manor, template, str(i)) for i in range(arena_core.ARENA_MAX_GUESTS_PER_ENTRY + 1)]
 
-    with pytest.raises(ValueError, match=f"最多选择 {ARENA_MAX_GUESTS_PER_ENTRY} 名门客"):
+    with pytest.raises(ValueError, match=f"最多选择 {arena_core.ARENA_MAX_GUESTS_PER_ENTRY} 名门客"):
         register_arena_entry(manor, [guest.id for guest in guests])
 
 
@@ -213,7 +209,7 @@ def test_register_arena_entry_auto_starts_when_reaching_player_limit():
     template = _create_guest_template("arena_auto_start_tpl")
 
     tournament_id = None
-    for idx in range(ARENA_TOURNAMENT_PLAYER_LIMIT):
+    for idx in range(arena_core.ARENA_TOURNAMENT_PLAYER_LIMIT):
         user = User.objects.create_user(
             username=f"arena_auto_{idx}",
             password="pass123",
@@ -230,7 +226,7 @@ def test_register_arena_entry_auto_starts_when_reaching_player_limit():
             tournament_id = result.tournament.id
         assert result.tournament.id == tournament_id
 
-        if idx < ARENA_TOURNAMENT_PLAYER_LIMIT - 1:
+        if idx < arena_core.ARENA_TOURNAMENT_PLAYER_LIMIT - 1:
             assert result.auto_started is False
         else:
             assert result.auto_started is True
@@ -238,14 +234,14 @@ def test_register_arena_entry_auto_starts_when_reaching_player_limit():
     tournament = ArenaTournament.objects.get(pk=tournament_id)
     assert tournament.status == ArenaTournament.Status.RUNNING
     assert tournament.current_round == 1
-    assert tournament.entries.count() == ARENA_TOURNAMENT_PLAYER_LIMIT
+    assert tournament.entries.count() == arena_core.ARENA_TOURNAMENT_PLAYER_LIMIT
     assert (
         ArenaMatch.objects.filter(
             tournament=tournament,
             round_number=1,
             status=ArenaMatch.Status.SCHEDULED,
         ).count()
-        == (ARENA_TOURNAMENT_PLAYER_LIMIT + 1) // 2
+        == (arena_core.ARENA_TOURNAMENT_PLAYER_LIMIT + 1) // 2
     )
 
 
@@ -273,14 +269,14 @@ def test_cancel_arena_entry_releases_guests_and_does_not_consume_daily_quota():
         assert guest.status == GuestStatus.IDLE
         assert not ArenaEntry.objects.filter(manor=manor, tournament__status=ArenaTournament.Status.RECRUITING).exists()
         manor.refresh_from_db(fields=["silver", "arena_participations_today", "arena_participation_date"])
-        assert manor.silver == initial_silver - ARENA_REGISTRATION_SILVER_COST * (idx + 1)
+        assert manor.silver == initial_silver - arena_core.ARENA_REGISTRATION_SILVER_COST * (idx + 1)
         assert manor.arena_participations_today == 0
         assert manor.arena_participation_date == timezone.localdate()
 
     result = register_arena_entry(manor, [guest.id])
     assert result.entry is not None
     manor.refresh_from_db(fields=["silver", "arena_participations_today", "arena_participation_date"])
-    assert manor.silver == initial_silver - ARENA_REGISTRATION_SILVER_COST * 6
+    assert manor.silver == initial_silver - arena_core.ARENA_REGISTRATION_SILVER_COST * 6
     assert manor.arena_participations_today == 1
     assert manor.arena_participation_date == timezone.localdate()
 
@@ -712,7 +708,7 @@ def test_daily_participation_counter_not_reset_by_tournament_cleanup():
 
     now = timezone.now()
     manor.arena_participation_date = timezone.localdate(now)
-    manor.arena_participations_today = ARENA_DAILY_PARTICIPATION_LIMIT
+    manor.arena_participations_today = arena_core.ARENA_DAILY_PARTICIPATION_LIMIT
     manor.save(update_fields=["arena_participation_date", "arena_participations_today"])
 
     stale_tournament = ArenaTournament.objects.create(

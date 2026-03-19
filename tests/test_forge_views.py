@@ -70,6 +70,19 @@ class TestForgeViews:
         assert any("请选择装备类型" in m for m in messages)
         assert called["count"] == 0
 
+    def test_start_equipment_forging_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+        monkeypatch.setattr(
+            "gameplay.services.buildings.forge.start_equipment_forging",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            client.post(
+                reverse("gameplay:start_equipment_forging"),
+                {"equipment_key": "equip_dummy", "quantity": "1", "category": "helmet", "mode": "synthesize"},
+            )
+
     def test_forge_page(self, manor_with_user):
         """铁匠铺页面"""
         _manor, client = manor_with_user
@@ -77,6 +90,17 @@ class TestForgeViews:
         assert response.status_code == 200
         assert "equipment_list" in response.context
         assert "device" in response.context["equipment_categories"]
+
+    def test_forge_page_tolerates_resource_sync_error(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+        monkeypatch.setattr(
+            "gameplay.views.production_page_context.project_resource_production_for_read",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("sync failed")),
+        )
+
+        response = client.get(reverse("gameplay:forge"))
+        assert response.status_code == 200
+        assert "equipment_list" in response.context
 
     def test_forge_page_active_production_has_refresh_countdown(self, manor_with_user):
         manor, client = manor_with_user
@@ -155,6 +179,19 @@ class TestForgeViews:
         assert any("无效的数量" in m for m in messages)
         assert called["count"] == 0
 
+    def test_decompose_equipment_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+        monkeypatch.setattr(
+            "gameplay.services.buildings.forge.decompose_equipment",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            client.post(
+                reverse("gameplay:decompose_equipment"),
+                data={"equipment_key": "equip_dummy", "quantity": "1", "category": "helmet", "mode": "decompose"},
+            )
+
     def test_synthesize_blueprint_equipment_view_redirects_with_category(self, manor_with_user, monkeypatch):
         """图纸合成后返回当前分类。"""
         _manor, client = manor_with_user
@@ -215,6 +252,19 @@ class TestForgeViews:
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("无效的数量" in m for m in messages)
         assert called["count"] == 0
+
+    def test_synthesize_blueprint_equipment_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+        monkeypatch.setattr(
+            "gameplay.services.buildings.forge.synthesize_equipment_with_blueprint",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            client.post(
+                reverse("gameplay:synthesize_blueprint_equipment"),
+                data={"blueprint_key": "bp_dummy", "quantity": "1", "category": "helmet", "mode": "synthesize"},
+            )
 
     def test_forge_decompose_mode_uses_shared_category_filter(self, manor_with_user, monkeypatch):
         """分解模式应复用装备分类筛选。"""

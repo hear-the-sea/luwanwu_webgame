@@ -8,13 +8,12 @@ from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
-from django.db import DatabaseError
 from django.http import HttpResponseRedirect
 from django.shortcuts import redirect
 from django.urls import reverse
 
-from core.exceptions import GameError
 from core.utils import safe_int, sanitize_error_message
+from core.utils.view_error_mapping import LEGACY_VALUE_ERROR_VIEW_EXCEPTIONS, classify_view_error, flash_view_error
 from gameplay.models import Manor
 from gameplay.services.manor.core import get_manor
 
@@ -228,13 +227,16 @@ def handle_trade_error(request, exc: Exception) -> None:
 
 
 def handle_unexpected_trade_error(request, exc: Exception, *, op: str) -> None:
-    logger.exception(
-        "trade view unexpected error: op=%s user_id=%s error=%s",
-        getattr(request, "op", op),
-        getattr(request.user, "id", None),
+    flash_view_error(
+        request,
         exc,
+        log_message="trade view action failed: op=%s user_id=%s",
+        log_args=(
+            getattr(request, "op", op),
+            getattr(request.user, "id", None),
+        ),
+        logger_instance=logger,
     )
-    handle_trade_error(request, exc)
 
 
 def execute_trade_action(
@@ -248,12 +250,15 @@ def execute_trade_action(
         result = action()
         messages.success(request, success_message(result))
         return TradeActionOutcome(succeeded=True, result=result)
-    except (GameError, ValueError) as exc:
-        handle_trade_error(request, exc)
-        return TradeActionOutcome(succeeded=False)
-    except DatabaseError as exc:
-        handle_unexpected_trade_error(request, exc, op=op)
-        return TradeActionOutcome(succeeded=False)
+    except Exception as exc:
+        category = classify_view_error(exc, known_exceptions=LEGACY_VALUE_ERROR_VIEW_EXCEPTIONS)
+        if category == "known":
+            handle_trade_error(request, exc)
+            return TradeActionOutcome(succeeded=False)
+        if category == "infrastructure":
+            handle_unexpected_trade_error(request, exc, op=op)
+            return TradeActionOutcome(succeeded=False)
+        raise
 
 
 def execute_trade_action_and_redirect(

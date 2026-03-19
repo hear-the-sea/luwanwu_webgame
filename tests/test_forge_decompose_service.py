@@ -182,3 +182,12 @@ def test_decompose_probabilities_increase_for_higher_rarity():
     ]:
         assert purple[reward_key] >= blue[reward_key]
         assert orange[reward_key] >= purple[reward_key]
+
+
+def test_get_recruitment_equipment_keys_does_not_fail_open(monkeypatch):
+    monkeypatch.setattr(
+        "gameplay.services.buildings.forge.load_troop_templates", lambda: (_ for _ in ()).throw(RuntimeError("boom"))
+    )
+
+    with pytest.raises(RuntimeError, match="boom"):
+        forge_service.get_recruitment_equipment_keys.__wrapped__()

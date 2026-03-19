@@ -1,5 +1,6 @@
 import pytest
 from django.core.cache import cache
+from django_redis.exceptions import ConnectionInterrupted
 
 from gameplay.selectors.recruitment import get_recruitment_hall_context
 from gameplay.services.manor.core import ensure_manor
@@ -60,10 +61,12 @@ def test_get_recruitment_hall_context_tolerates_cache_backend_failure(game_data,
     manor.save(update_fields=["silver", "grain"])
 
     monkeypatch.setattr(
-        "gameplay.selectors.recruitment.cache.get", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down"))
+        "gameplay.selectors.recruitment.cache.get",
+        lambda *_a, **_k: (_ for _ in ()).throw(ConnectionInterrupted("cache down")),
     )
     monkeypatch.setattr(
-        "gameplay.selectors.recruitment.cache.set", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down"))
+        "gameplay.selectors.recruitment.cache.set",
+        lambda *_a, **_k: (_ for _ in ()).throw(ConnectionInterrupted("cache down")),
     )
 
     context = get_recruitment_hall_context(manor, records_limit=5)

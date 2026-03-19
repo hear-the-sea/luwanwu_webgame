@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from django_redis.exceptions import ConnectionInterrupted
+
 import gameplay.services.raid as raid_service
 from gameplay.selectors.home import _normalize_hourly_rates, get_home_context
 
@@ -54,10 +56,12 @@ def test_get_home_context_tolerates_cache_backend_failure(monkeypatch):
     monkeypatch.setattr("gameplay.selectors.home.get_technology_template", lambda *_a, **_k: {})
     monkeypatch.setattr("gameplay.selectors.home.can_retreat", lambda *_a, **_k: False)
     monkeypatch.setattr(
-        "gameplay.selectors.home.cache.get", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down"))
+        "gameplay.selectors.home.cache.get",
+        lambda *_a, **_k: (_ for _ in ()).throw(ConnectionInterrupted("cache down")),
     )
     monkeypatch.setattr(
-        "gameplay.selectors.home.cache.set", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down"))
+        "gameplay.selectors.home.cache.set",
+        lambda *_a, **_k: (_ for _ in ()).throw(ConnectionInterrupted("cache down")),
     )
     monkeypatch.setattr(
         "gameplay.utils.resource_calculator.get_hourly_rates", lambda *_a, **_k: {"grain": "12", "silver": 8}

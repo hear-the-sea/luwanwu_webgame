@@ -1,5 +1,19 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from threading import Lock
+from typing import Any
+
+from django.db import DatabaseError
+from django.db.models import Q
+
+from gameplay.services.utils.cache_exceptions import (
+    CACHE_INFRASTRUCTURE_EXCEPTIONS,
+    is_expected_cache_infrastructure_error,
+)
+
+CACHE_THROTTLE_ERRORS = CACHE_INFRASTRUCTURE_EXCEPTIONS
+
 
 def cleanup_local_fallback_cache(
     local_refresh_fallback: dict[int, float],
@@ -25,13 +39,13 @@ def cleanup_local_fallback_cache(
 def should_skip_refresh_by_local_fallback(
     local_refresh_fallback: dict[int, float],
     *,
-    state_lock,
+    state_lock: Lock,
     max_size: int,
     cleanup_batch: int,
     evict_count: int,
     manor_id: int,
     min_interval: int,
-    monotonic_func,
+    monotonic_func: Callable[[], float],
 ) -> bool:
     if manor_id <= 0 or min_interval <= 0:
         return False
@@ -58,34 +72,60 @@ def should_skip_refresh_by_local_fallback(
     return False
 
 
-def has_due_manor_refresh_work(*, mission_run_model, manor_id: int, now, logger) -> bool:
+def has_due_manor_refresh_work(
+    *,
+    mission_run_model: Any,
+    scout_record_model: Any,
+    raid_run_model: Any,
+    manor_id: int,
+    now: Any,
+    logger: Any,
+) -> bool:
     if manor_id <= 0:
         return False
-    try:
-        return mission_run_model.objects.filter(
+
+    checks = (
+        mission_run_model.objects.filter(
             manor_id=manor_id,
             status=mission_run_model.Status.ACTIVE,
             return_at__isnull=False,
             return_at__lte=now,
-        ).exists()
-    except Exception:
-        logger.warning("due manor refresh work check failed: manor_id=%s", manor_id, exc_info=True)
-        return False
+        ),
+        scout_record_model.objects.filter(attacker_id=manor_id).filter(
+            Q(status=scout_record_model.Status.SCOUTING, complete_at__lte=now)
+            | Q(status=scout_record_model.Status.RETURNING, return_at__lte=now)
+        ),
+        raid_run_model.objects.filter(attacker_id=manor_id).filter(
+            Q(status=raid_run_model.Status.MARCHING, battle_at__lte=now)
+            | Q(status=raid_run_model.Status.RETURNING, return_at__lte=now)
+            | Q(status=raid_run_model.Status.RETREATED, return_at__lte=now)
+        ),
+    )
+
+    for queryset in checks:
+        try:
+            if queryset.exists():
+                return True
+        except DatabaseError:
+            logger.warning("due manor refresh work check failed: manor_id=%s", manor_id, exc_info=True)
+    return False
 
 
 def refresh_manor_state(
-    manor,
+    manor: Any,
     *,
     prefer_async: bool,
-    settings_obj,
-    cache_backend,
-    logger,
-    timezone_module,
-    finalize_upgrades_func,
-    has_due_manor_refresh_work_func,
-    should_skip_refresh_by_local_fallback_func,
-    sync_resource_production_func,
-    refresh_mission_runs_func,
+    settings_obj: Any,
+    cache_backend: Any,
+    logger: Any,
+    timezone_module: Any,
+    finalize_upgrades_func: Callable[[Any], None],
+    has_due_manor_refresh_work_func: Callable[..., bool],
+    should_skip_refresh_by_local_fallback_func: Callable[[int, int], bool],
+    sync_resource_production_func: Callable[[Any], None],
+    refresh_mission_runs_func: Callable[..., None],
+    refresh_scout_records_func: Callable[..., None],
+    refresh_raid_runs_func: Callable[..., None],
 ) -> None:
     finalize_upgrades_func(manor)
 
@@ -98,6 +138,8 @@ def refresh_manor_state(
                 if not has_due_manor_refresh_work_func(manor.pk, now=now):
                     return
         except Exception as exc:
+            if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_THROTTLE_ERRORS):
+                raise
             logger.warning("缓存操作失败，降级为本地节流: %s", exc, exc_info=True)
             if should_skip_refresh_by_local_fallback_func(manor.pk, min_interval):
                 if not has_due_manor_refresh_work_func(manor.pk, now=now):
@@ -106,8 +148,12 @@ def refresh_manor_state(
     sync_resource_production_func(manor)
     if prefer_async:
         refresh_mission_runs_func(manor, prefer_async=True)
+        refresh_scout_records_func(manor, prefer_async=True)
+        refresh_raid_runs_func(manor, prefer_async=True)
     else:
         refresh_mission_runs_func(manor)
+        refresh_scout_records_func(manor)
+        refresh_raid_runs_func(manor)
 
 
 __all__ = [

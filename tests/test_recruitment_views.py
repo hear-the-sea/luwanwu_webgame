@@ -6,6 +6,10 @@ import pytest
 from django.contrib.messages import get_messages
 from django.db import DatabaseError
 from django.urls import reverse
+from django_redis.exceptions import ConnectionInterrupted
+
+from gameplay.services.utils import cache as cache_utils
+from guests.views.recruit import _invalidate_recruitment_hall_cache_for_manor
 
 
 @pytest.mark.django_db
@@ -46,7 +50,7 @@ class TestRecruitmentViews:
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("操作失败，请稍后重试" in m for m in messages)
 
-    def test_start_troop_recruitment_unexpected_error_does_not_500(self, manor_with_user, monkeypatch):
+    def test_start_troop_recruitment_unexpected_error_bubbles_up(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
 
         monkeypatch.setattr(
@@ -54,14 +58,11 @@ class TestRecruitmentViews:
             lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
         )
 
-        response = client.post(
-            reverse("gameplay:start_troop_recruitment"),
-            {"troop_key": "any", "quantity": "1"},
-        )
-        assert response.status_code == 302
-        assert response.url == reverse("gameplay:troop_recruitment")
-        messages = [str(m) for m in get_messages(response.wsgi_request)]
-        assert any("操作失败，请稍后重试" in m for m in messages)
+        with pytest.raises(RuntimeError, match="boom"):
+            client.post(
+                reverse("gameplay:start_troop_recruitment"),
+                {"troop_key": "any", "quantity": "1"},
+            )
 
     def test_start_troop_recruitment_rejects_invalid_quantity(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
@@ -98,3 +99,13 @@ class TestRecruitmentViews:
         assert response.url == reverse("gameplay:troop_recruitment")
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("recruit blocked" in m for m in messages)
+
+
+def test_invalidate_recruitment_hall_cache_for_manor_tolerates_connection_interrupted(monkeypatch):
+    monkeypatch.setattr(
+        cache_utils,
+        "invalidate_recruitment_hall_cache",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache down")),
+    )
+
+    assert _invalidate_recruitment_hall_cache_for_manor(1) is False

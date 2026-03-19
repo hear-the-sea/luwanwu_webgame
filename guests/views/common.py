@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-from django.contrib import messages
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import redirect
 
-from core.utils import json_error
-from core.utils.validation import sanitize_error_message
+from core.utils.view_error_mapping import action_error_response
 
 
 def unexpected_action_error_response(
@@ -15,8 +12,10 @@ def unexpected_action_error_response(
     is_ajax: bool,
     redirect_to: str,
 ) -> HttpResponse:
-    error_message = sanitize_error_message(exc)
-    if is_ajax:
-        return json_error(error_message, status=500, include_message=True)
-    messages.error(request, error_message)
-    return redirect(redirect_to)
+    return action_error_response(
+        request,
+        exc,
+        is_ajax=is_ajax,
+        redirect_to=redirect_to,
+        include_message=True,
+    )

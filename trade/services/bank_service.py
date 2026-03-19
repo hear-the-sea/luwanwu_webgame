@@ -12,11 +12,12 @@ import logging
 from typing import Any, Callable
 
 from django.core.cache import cache
-from django.db import DatabaseError, transaction
+from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
 from core.utils.cache_lock import release_cache_key_if_owner
+from core.utils.infrastructure import CACHE_INFRASTRUCTURE_EXCEPTIONS
 from gameplay.models import Manor, ResourceEvent
 from gameplay.services.inventory.core import add_item_to_inventory_locked
 from gameplay.services.resources import spend_resources_locked
@@ -65,7 +66,7 @@ from .bank_runtime import strict_cache_add_entry, strict_cache_get_entry
 logger = logging.getLogger(__name__)
 
 
-BANK_INFRASTRUCTURE_EXCEPTIONS = (DatabaseError, ConnectionError, OSError, TimeoutError)
+BANK_INFRASTRUCTURE_EXCEPTIONS = CACHE_INFRASTRUCTURE_EXCEPTIONS
 BANK_CACHE_COMPONENT = "bank_cache"
 
 

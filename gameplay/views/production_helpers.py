@@ -58,8 +58,8 @@ def annotate_blueprint_synthesis_options(
     *,
     active_categories: Mapping[str, str],
     current_category: str,
-    infer_equipment_category: Callable[[str, str], str],
-    to_decompose_category: Callable[[str], str],
+    infer_equipment_category: Callable[[str, str | None], str | None],
+    to_decompose_category: Callable[[str | None], str | None],
 ) -> list[dict[str, Any]]:
     normalized_recipes: list[dict[str, Any]] = []
     for recipe in recipes:

@@ -5,6 +5,8 @@ from typing import Any, Callable
 from django.db import transaction
 from django.utils import timezone
 
+from guests.models import Guest, GuestStatus
+
 
 def finalize_raid(
     run: Any,
@@ -18,8 +20,6 @@ def finalize_raid(
     grant_loot_items: Callable[[Any, dict[str, int]], None],
     battle_reward_reason: Any,
 ) -> None:
-    from guests.models import Guest, GuestStatus
-
     now = now or timezone.now()
 
     with transaction.atomic():

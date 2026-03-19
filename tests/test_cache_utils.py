@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import importlib
 
+from django_redis.exceptions import ConnectionInterrupted
+
 from gameplay.services.utils.cache import cached, get_or_set
 
 cache_utils = importlib.import_module("gameplay.services.utils.cache")
@@ -53,3 +55,13 @@ def test_cached_decorator_tolerates_cache_backend_failure(monkeypatch):
     assert _compute(3) == 4
     assert _compute(3) == 4
     assert calls["compute"] == 2
+
+
+def test_invalidate_recruitment_hall_cache_tolerates_delete_many_failure(monkeypatch):
+    monkeypatch.setattr(
+        cache_utils.cache,
+        "delete_many",
+        lambda *_a, **_k: (_ for _ in ()).throw(ConnectionInterrupted("cache down")),
+    )
+
+    cache_utils.invalidate_recruitment_hall_cache(1)

@@ -23,7 +23,7 @@ def build_finalize_mission_dependencies(
     send_mission_report_message: Callable[..., Any],
     create_message: Callable[..., Any],
     notify_user: Callable[..., Any],
-    notification_infrastructure_exceptions: tuple[type[BaseException], ...],
+    notification_infrastructure_exceptions: tuple[type[Exception], ...],
 ) -> dict[str, Any]:
     return {
         "load_locked_mission_run": load_locked_mission_run,

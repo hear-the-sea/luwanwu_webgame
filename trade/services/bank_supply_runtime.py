@@ -7,11 +7,11 @@ from datetime import timedelta
 from typing import Any, Callable
 
 from django.core.cache import cache
-from django.db import DatabaseError
 from django.db.models import Sum
 from django.utils import timezone
 
 from core.utils.cache_lock import release_cache_key_if_owner
+from core.utils.infrastructure import CACHE_INFRASTRUCTURE_EXCEPTIONS, DATABASE_INFRASTRUCTURE_EXCEPTIONS
 from gameplay.models import InventoryItem, Manor
 from trade.models import GoldBarExchangeLog
 
@@ -38,7 +38,8 @@ from .cache_resilience import (
 logger = logging.getLogger(__name__)
 
 
-BANK_INFRASTRUCTURE_EXCEPTIONS = (DatabaseError, ConnectionError, OSError, TimeoutError)
+BANK_CACHE_INFRASTRUCTURE_EXCEPTIONS = CACHE_INFRASTRUCTURE_EXCEPTIONS
+BANK_QUERY_INFRASTRUCTURE_EXCEPTIONS = DATABASE_INFRASTRUCTURE_EXCEPTIONS
 BANK_CACHE_COMPONENT = "bank_cache"
 
 
@@ -88,7 +89,7 @@ def _default_safe_cache_get(key: str, default: Any = None) -> Any:
         default,
         logger=logger,
         component=BANK_CACHE_COMPONENT,
-        infrastructure_exceptions=BANK_INFRASTRUCTURE_EXCEPTIONS,
+        infrastructure_exceptions=BANK_CACHE_INFRASTRUCTURE_EXCEPTIONS,
     )
 
 
@@ -100,7 +101,7 @@ def _default_safe_cache_set(key: str, value: Any, timeout: int) -> None:
         timeout,
         logger=logger,
         component=BANK_CACHE_COMPONENT,
-        infrastructure_exceptions=BANK_INFRASTRUCTURE_EXCEPTIONS,
+        infrastructure_exceptions=BANK_CACHE_INFRASTRUCTURE_EXCEPTIONS,
     )
 
 
@@ -112,7 +113,7 @@ def _default_safe_cache_add(key: str, value: Any, timeout: int) -> bool:
         timeout,
         logger=logger,
         component=BANK_CACHE_COMPONENT,
-        infrastructure_exceptions=BANK_INFRASTRUCTURE_EXCEPTIONS,
+        infrastructure_exceptions=BANK_CACHE_INFRASTRUCTURE_EXCEPTIONS,
     )
 
 
@@ -122,7 +123,7 @@ def _default_safe_cache_delete(key: str) -> None:
         key,
         logger=logger,
         component=BANK_CACHE_COMPONENT,
-        infrastructure_exceptions=BANK_INFRASTRUCTURE_EXCEPTIONS,
+        infrastructure_exceptions=BANK_CACHE_INFRASTRUCTURE_EXCEPTIONS,
     )
 
 
@@ -133,7 +134,7 @@ def strict_cache_get_value(key: str, default: Any = None) -> Any:
         default,
         logger=logger,
         component=BANK_CACHE_COMPONENT,
-        infrastructure_exceptions=BANK_INFRASTRUCTURE_EXCEPTIONS,
+        infrastructure_exceptions=BANK_CACHE_INFRASTRUCTURE_EXCEPTIONS,
         unavailable_error_factory=GoldBarPricingUnavailableError,
     )
 
@@ -146,7 +147,7 @@ def strict_cache_add_value(key: str, value: Any, timeout: int) -> bool:
         timeout,
         logger=logger,
         component=BANK_CACHE_COMPONENT,
-        infrastructure_exceptions=BANK_INFRASTRUCTURE_EXCEPTIONS,
+        infrastructure_exceptions=BANK_CACHE_INFRASTRUCTURE_EXCEPTIONS,
         unavailable_error_factory=GoldBarPricingUnavailableError,
     )
 
@@ -272,7 +273,7 @@ def get_effective_gold_supply_data(*, fail_closed: bool = False) -> tuple[int, s
         safe_cache_set_value(SUPPLY_CACHE_KEY, total, SUPPLY_CACHE_TTL)
         safe_cache_set_value(SUPPLY_STALE_CACHE_KEY, total, SUPPLY_STALE_CACHE_TTL)
         return total, "db"
-    except BANK_INFRASTRUCTURE_EXCEPTIONS as exc:
+    except BANK_QUERY_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning(
             "Failed to query gold supply: %s",
             exc,

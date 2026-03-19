@@ -5,6 +5,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.core.cache import cache
 from django.db import DatabaseError
 from django.test import RequestFactory
+from django_redis.exceptions import ConnectionInterrupted
 
 from core.middleware.online_presence import OnlinePresenceMiddleware
 from gameplay.context_processors import notifications
@@ -103,6 +104,26 @@ def test_notifications_authenticated_http_touch_refreshes_online_count(monkeypat
     context = notifications(request)
 
     assert context["online_user_count"] == 1
+
+
+def test_online_presence_middleware_tolerates_connection_interrupted(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="ctx_touch_fail_user", password="pass")
+    request = RequestFactory().get("/")
+    request.user = user
+
+    monkeypatch.setattr("gameplay.services.online_presence.cache.add", lambda *_args, **_kwargs: True)
+    deleted_keys: list[str] = []
+    monkeypatch.setattr("gameplay.services.online_presence.cache.delete", lambda key: deleted_keys.append(key))
+
+    class _BrokenRedis:
+        def zadd(self, *_args, **_kwargs):
+            raise ConnectionInterrupted("redis down")
+
+    monkeypatch.setattr("gameplay.services.online_presence.get_redis_connection_if_supported", lambda: _BrokenRedis())
+
+    OnlinePresenceMiddleware(lambda _request: None)(request)
+
+    assert any(key.startswith("stats:online_users:touch:") for key in deleted_keys)
 
 
 def test_notifications_authenticated_falls_back_when_sidebar_cache_payload_invalid(monkeypatch, django_user_model):

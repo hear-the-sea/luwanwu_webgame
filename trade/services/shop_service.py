@@ -10,6 +10,14 @@ from typing import Any, Dict, Iterable, List
 from django.db import transaction
 from django.db.models import F
 
+from core.exceptions import (
+    InsufficientSilverError,
+    InsufficientStockError,
+    ItemInsufficientError,
+    ItemNotConfiguredError,
+    ItemNotFoundError,
+    ShopValidationError,
+)
 from gameplay.models import InventoryItem, ItemTemplate, Manor, ResourceEvent
 from gameplay.models.items import (
     ITEM_EFFECT_TYPE_LABELS,
@@ -226,28 +234,28 @@ def buy_item(manor: Manor, item_key: str, quantity: int) -> Dict:
         购买结果字典
 
     Raises:
-        ValueError: 购买失败时抛出
+        GameError: 购买失败时抛出显式领域异常
     """
     quantity = _coerce_int(quantity, 0)
     if quantity <= 0:
-        raise ValueError("购买数量必须大于 0")
+        raise ShopValidationError(action="buy")
 
     # 检查商品配置
     config = get_shop_item_config(item_key)
     if config is None:
-        raise ValueError("商品不存在")
+        raise ItemNotFoundError("商品不存在")
 
     # 获取物品模板
     try:
         template = ItemTemplate.objects.get(key=item_key)
     except ItemTemplate.DoesNotExist:
-        raise ValueError("商品不存在")
+        raise ItemNotFoundError("商品不存在")
 
     # 确定价格
     raw_unit_price = config.price if config.price is not None else template.price
     unit_price = _coerce_int(raw_unit_price, -1)
     if unit_price < 0:
-        raise ValueError("商品价格配置异常")
+        raise ItemNotConfiguredError("商品价格配置异常")
     total_cost = unit_price * quantity
 
     # 检查库存（使用行级锁防止超卖）
@@ -257,16 +265,21 @@ def buy_item(manor: Manor, item_key: str, quantity: int) -> Dict:
             defaults={"current_stock": _coerce_non_negative_int(config.stock, 0)},
         )
         if stock.current_stock < quantity:
-            raise ValueError("库存不足")
+            raise InsufficientStockError(template.name, quantity, int(stock.current_stock), message="库存不足")
 
     # 锁定庄园并检查扣除银两（并发安全）
     locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
-    spend_resources_locked(
-        locked_manor,
-        {"silver": total_cost},
-        f"购买 {template.name} x{quantity}",
-        ResourceEvent.Reason.SHOP_PURCHASE,
-    )
+    try:
+        spend_resources_locked(
+            locked_manor,
+            {"silver": total_cost},
+            f"购买 {template.name} x{quantity}",
+            ResourceEvent.Reason.SHOP_PURCHASE,
+        )
+    except ValueError as exc:
+        if str(exc) != "资源不足":
+            raise
+        raise InsufficientSilverError(total_cost, int(locked_manor.silver), message="银两不足") from exc
 
     # 扣除库存（原子操作，防止并发超卖）
     if not config.is_unlimited:
@@ -275,7 +288,8 @@ def buy_item(manor: Manor, item_key: str, quantity: int) -> Dict:
             current_stock=F("current_stock") - quantity
         )
         if not updated:
-            raise ValueError("库存不足")
+            refreshed_stock = ShopStock.objects.filter(pk=stock.pk).values_list("current_stock", flat=True).first() or 0
+            raise InsufficientStockError(template.name, quantity, int(refreshed_stock), message="库存不足")
 
     # 添加物品到背包（原子操作，防止并发丢失更新）
     # IMPORTANT: Must specify storage_location to avoid MultipleObjectsReturned
@@ -322,22 +336,22 @@ def sell_item(manor: Manor, item_key: str, quantity: int) -> Dict:
         出售结果字典
 
     Raises:
-        ValueError: 出售失败时抛出
+        GameError: 出售失败时抛出显式领域异常
     """
     quantity = _coerce_int(quantity, 0)
     if quantity <= 0:
-        raise ValueError("出售数量必须大于 0")
+        raise ShopValidationError(action="sell")
 
     # 获取物品模板
     try:
         template = ItemTemplate.objects.only("id", "key", "name", "price").get(key=item_key)
     except ItemTemplate.DoesNotExist:
-        raise ValueError("物品不存在")
+        raise ItemNotFoundError("物品不存在")
 
     # 计算回收价
     unit_price = get_sell_price_by_template(template)
     if unit_price <= 0:
-        raise ValueError("该物品无法出售")
+        raise ItemNotConfiguredError("该物品无法出售")
 
     total_income = unit_price * quantity
 
@@ -358,8 +372,18 @@ def sell_item(manor: Manor, item_key: str, quantity: int) -> Dict:
             storage_location=InventoryItem.StorageLocation.WAREHOUSE,
         ).exists()
         if not has_item:
-            raise ValueError("您没有该物品")
-        raise ValueError("物品数量不足")
+            raise ItemInsufficientError(template.name, quantity, 0, message="您没有该物品")
+        available_quantity = (
+            InventoryItem.objects.filter(
+                manor=locked_manor,
+                template=template,
+                storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+            )
+            .values_list("quantity", flat=True)
+            .first()
+            or 0
+        )
+        raise ItemInsufficientError(template.name, quantity, int(available_quantity), message="物品数量不足")
 
     grant_resources_locked(
         locked_manor,

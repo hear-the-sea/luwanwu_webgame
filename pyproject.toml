@@ -95,10 +95,18 @@ ignore_errors = true
 [[tool.mypy.overrides]]
 module = [
     "core.views.health",
+    "gameplay.views.core",
+    "gameplay.views.inventory",
+    "gameplay.views.jail",
+    "gameplay.views.map",
+    "gameplay.views.messages",
+    "gameplay.views.missions",
+    "gameplay.views.production",
     "gameplay.views.recruitment",
     "gameplay.views.technology",
     "gameplay.views.work",
     "trade.views",
+    "guests.views.recruit",
 ]
 ignore_errors = false
 disallow_untyped_defs = true

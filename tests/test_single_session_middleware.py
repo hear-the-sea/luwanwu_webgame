@@ -1,6 +1,7 @@
 import pytest
 from django.core.cache import cache
 from django.db import DatabaseError
+from django.test import override_settings
 
 from accounts.models import UserActiveSession
 from accounts.utils import USER_SESSION_CACHE_PREFIX, USER_SESSION_CACHE_TTL
@@ -117,3 +118,22 @@ def test_single_session_middleware_keeps_session_when_authoritative_lookup_error
     assert response.status_code == 200
     assert client.session.get("_auth_user_id") == str(user.id)
     assert client.session.session_key == current_session_key
+
+
+@pytest.mark.django_db
+@override_settings(SINGLE_SESSION_FAIL_OPEN=False)
+def test_single_session_middleware_logs_out_when_authoritative_lookup_errors_in_fail_closed_mode(
+    client, django_user_model, monkeypatch
+):
+    user = django_user_model.objects.create_user(username="single_session_fail_closed", password="pass123")
+    client.force_login(user)
+
+    def fake_load_active_session_key(_user_id):
+        raise DatabaseError("db unavailable")
+
+    monkeypatch.setattr("core.middleware.single_session._load_active_session_key", fake_load_active_session_key)
+
+    response = client.get("/health/live")
+
+    assert response.status_code == 200
+    assert "_auth_user_id" not in client.session

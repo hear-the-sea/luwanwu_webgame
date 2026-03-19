@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from django.contrib.messages import get_messages
+from django.db import DatabaseError
 from django.test import Client
 from django.urls import reverse
 
@@ -57,14 +58,14 @@ def test_deposit_troop_to_bank_view_success(troop_bank_client):
 
 
 @pytest.mark.django_db
-def test_withdraw_troop_from_bank_view_unexpected_error_does_not_500(troop_bank_client, monkeypatch):
+def test_withdraw_troop_from_bank_view_database_error_does_not_500(troop_bank_client, monkeypatch):
     manor, client = troop_bank_client
-    template = _create_troop_template("view_bank_blade", "视图刀手")
+    template = _create_troop_template("view_bank_blade_db", "视图刀手数据库异常")
     TroopBankStorage.objects.create(manor=manor, troop_template=template, count=30)
 
     monkeypatch.setattr(
         "gameplay.services.manor.troop_bank.withdraw_troops_from_bank",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
     )
 
     response = client.post(
@@ -78,14 +79,32 @@ def test_withdraw_troop_from_bank_view_unexpected_error_does_not_500(troop_bank_
 
 
 @pytest.mark.django_db
-def test_deposit_troop_to_bank_view_unexpected_error_does_not_500(troop_bank_client, monkeypatch):
+def test_withdraw_troop_from_bank_view_programming_error_bubbles_up(troop_bank_client, monkeypatch):
     manor, client = troop_bank_client
-    template = _create_troop_template("view_bank_archer", "视图弓手")
+    template = _create_troop_template("view_bank_blade", "视图刀手")
+    TroopBankStorage.objects.create(manor=manor, troop_template=template, count=30)
+
+    monkeypatch.setattr(
+        "gameplay.services.manor.troop_bank.withdraw_troops_from_bank",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+
+    with pytest.raises(RuntimeError, match="boom"):
+        client.post(
+            reverse("gameplay:withdraw_troop_from_bank"),
+            {"troop_key": template.key, "quantity": "10"},
+        )
+
+
+@pytest.mark.django_db
+def test_deposit_troop_to_bank_view_database_error_does_not_500(troop_bank_client, monkeypatch):
+    manor, client = troop_bank_client
+    template = _create_troop_template("view_bank_archer_db", "视图弓手数据库异常")
     PlayerTroop.objects.create(manor=manor, troop_template=template, count=30)
 
     monkeypatch.setattr(
         "gameplay.services.manor.troop_bank.deposit_troops_to_bank",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
     )
 
     response = client.post(
@@ -96,3 +115,21 @@ def test_deposit_troop_to_bank_view_unexpected_error_does_not_500(troop_bank_cli
     assert response.url == reverse("gameplay:troop_recruitment")
     messages = [str(m) for m in get_messages(response.wsgi_request)]
     assert any("操作失败，请稍后重试" in m for m in messages)
+
+
+@pytest.mark.django_db
+def test_deposit_troop_to_bank_view_programming_error_bubbles_up(troop_bank_client, monkeypatch):
+    manor, client = troop_bank_client
+    template = _create_troop_template("view_bank_archer", "视图弓手")
+    PlayerTroop.objects.create(manor=manor, troop_template=template, count=30)
+
+    monkeypatch.setattr(
+        "gameplay.services.manor.troop_bank.deposit_troops_to_bank",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+
+    with pytest.raises(RuntimeError, match="boom"):
+        client.post(
+            reverse("gameplay:deposit_troop_to_bank"),
+            {"troop_key": template.key, "quantity": "10"},
+        )

@@ -10,9 +10,13 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import DatabaseError
 from django_redis import get_redis_connection
-from redis.exceptions import RedisError
 
 from core.utils.degradation import WORLD_CHAT_REFUND, record_degradation
+from core.utils.infrastructure import INFRASTRUCTURE_EXCEPTIONS
+from gameplay.services.utils.cache_exceptions import (
+    CACHE_INFRASTRUCTURE_EXCEPTIONS,
+    is_expected_cache_infrastructure_error,
+)
 from websocket.backends.chat_history import (
     TRIM_HISTORY_SCRIPT,
     append_history_sync,
@@ -36,12 +40,9 @@ class WorldChatInfrastructureError(RuntimeError):
     """Expected infrastructure/runtime dependency failure for world chat operations."""
 
 
-WORLD_CHAT_EXPECTED_INFRASTRUCTURE_ERRORS = (
+WORLD_CHAT_EXPECTED_INFRASTRUCTURE_ERRORS: tuple[type[Exception], ...] = (
     WorldChatInfrastructureError,
-    RedisError,
-    ConnectionError,
-    OSError,
-    TimeoutError,
+    *INFRASTRUCTURE_EXCEPTIONS,
 )
 
 
@@ -286,6 +287,8 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
         try:
             return cache.get(key)
         except Exception as exc:
+            if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+                raise
             logger.warning(
                 "World chat cache.get failed: key=%s error=%s",
                 key,
@@ -299,6 +302,8 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
         try:
             cache.set(key, value, timeout=timeout)
         except Exception as exc:
+            if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+                raise
             logger.warning(
                 "World chat cache.set failed: key=%s error=%s",
                 key,

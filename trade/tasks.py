@@ -7,9 +7,9 @@ from __future__ import annotations
 import logging
 
 from celery import shared_task
-from django.db import DatabaseError
 from django.utils import timezone
 
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_expected_infrastructure_error
 from core.utils.task_monitoring import increment_degraded_counter
 from trade.models import ShopStock
 from trade.services.shop_config import get_shop_config, reload_shop_config
@@ -31,7 +31,11 @@ def _coerce_non_negative_int(value, default: int = 0) -> int:
 
 def _is_expected_task_error(exc: Exception) -> bool:
     """Infrastructure errors that warrant a Celery retry rather than immediate propagation."""
-    return isinstance(exc, (DatabaseError, ConnectionError, OSError, TimeoutError))
+    return is_expected_infrastructure_error(
+        exc,
+        exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+        allow_runtime_markers=True,
+    )
 
 
 def _normalize_settlement_stats(stats) -> tuple[int, int, int, int]:

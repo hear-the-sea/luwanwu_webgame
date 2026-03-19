@@ -8,9 +8,10 @@ from datetime import timedelta
 from typing import Any, Callable, Dict, List, Optional
 
 from django.core.cache import cache
-from django.db import DatabaseError, IntegrityError, transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
+from core.utils.infrastructure import CACHE_INFRASTRUCTURE_EXCEPTIONS
 from gameplay.models import ItemTemplate, Manor
 from gameplay.services.inventory.core import add_item_to_inventory_locked, consume_inventory_item_for_manor_locked
 from gameplay.services.utils.messages import create_message
@@ -36,7 +37,7 @@ from trade.services.cache_resilience import best_effort_cache_add, best_effort_c
 logger = logging.getLogger(__name__)
 
 
-AUCTION_INFRASTRUCTURE_EXCEPTIONS = (DatabaseError, ConnectionError, OSError, TimeoutError)
+AUCTION_INFRASTRUCTURE_EXCEPTIONS = CACHE_INFRASTRUCTURE_EXCEPTIONS
 AUCTION_CACHE_COMPONENT = "auction_cache"
 
 

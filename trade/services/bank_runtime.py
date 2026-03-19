@@ -55,7 +55,7 @@ def safe_cache_get(
     cache_backend: Any,
     logger: Any,
     component: str,
-    infrastructure_exceptions: tuple[type[BaseException], ...],
+    infrastructure_exceptions: tuple[type[Exception], ...],
 ) -> Any:
     return best_effort_cache_get(
         cache_backend,
@@ -75,7 +75,7 @@ def safe_cache_set(
     cache_backend: Any,
     logger: Any,
     component: str,
-    infrastructure_exceptions: tuple[type[BaseException], ...],
+    infrastructure_exceptions: tuple[type[Exception], ...],
 ) -> None:
     best_effort_cache_set(
         cache_backend,
@@ -96,7 +96,7 @@ def safe_cache_add(
     cache_backend: Any,
     logger: Any,
     component: str,
-    infrastructure_exceptions: tuple[type[BaseException], ...],
+    infrastructure_exceptions: tuple[type[Exception], ...],
 ) -> bool:
     return best_effort_cache_add(
         cache_backend,
@@ -115,7 +115,7 @@ def safe_cache_delete(
     cache_backend: Any,
     logger: Any,
     component: str,
-    infrastructure_exceptions: tuple[type[BaseException], ...],
+    infrastructure_exceptions: tuple[type[Exception], ...],
 ) -> None:
     best_effort_cache_delete(
         cache_backend,
@@ -133,7 +133,7 @@ def strict_cache_get_entry(
     cache_backend: Any,
     logger: Any,
     component: str,
-    infrastructure_exceptions: tuple[type[BaseException], ...],
+    infrastructure_exceptions: tuple[type[Exception], ...],
     unavailable_error_factory: Callable[[], Exception],
 ) -> Any:
     return strict_cache_get(
@@ -155,7 +155,7 @@ def strict_cache_add_entry(
     cache_backend: Any,
     logger: Any,
     component: str,
-    infrastructure_exceptions: tuple[type[BaseException], ...],
+    infrastructure_exceptions: tuple[type[Exception], ...],
     unavailable_error_factory: Callable[[], Exception],
 ) -> bool:
     return strict_cache_add(

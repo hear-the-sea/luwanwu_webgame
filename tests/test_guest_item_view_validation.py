@@ -275,11 +275,11 @@ def test_recruit_view_ajax_success_bypasses_cache_when_invalidation_fails(game_d
 
     monkeypatch.setattr("guests.views.recruit._invalidate_recruitment_hall_cache_for_manor", lambda *_a, **_k: False)
     monkeypatch.setattr(
-        "gameplay.selectors.recruitment.cache.get",
+        "gameplay.selectors.recruitment._safe_cache_get",
         lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("cache.get should be bypassed")),
     )
     monkeypatch.setattr(
-        "gameplay.selectors.recruitment.cache.set",
+        "gameplay.selectors.recruitment._safe_cache_set",
         lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("cache.set should be bypassed")),
     )
 
@@ -586,7 +586,7 @@ def test_use_magnifying_glass_view_ajax_success_returns_recruitment_hall_partial
 
 
 @pytest.mark.django_db
-def test_use_experience_item_view_unexpected_error_returns_500(game_data, django_user_model, monkeypatch):
+def test_use_experience_item_view_unexpected_error_bubbles_up(game_data, django_user_model, monkeypatch):
     manor, guest, client = _bootstrap_guest_client(game_data, django_user_model, username="view_exp_item_unexpected")
     template = ItemTemplate.objects.create(
         key=f"view_exp_item_unexpected_{manor.id}",
@@ -601,20 +601,16 @@ def test_use_experience_item_view_unexpected_error_returns_500(game_data, django
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
-    response = client.post(
-        reverse("guests:use_exp_item", args=[guest.pk]),
-        {"item_id": str(item.pk)},
-        HTTP_X_REQUESTED_WITH="XMLHttpRequest",
-    )
-
-    assert response.status_code == 500
-    payload = response.json()
-    assert payload["success"] is False
-    assert "操作失败，请稍后重试" in payload["error"]
+    with pytest.raises(RuntimeError, match="boom"):
+        client.post(
+            reverse("guests:use_exp_item", args=[guest.pk]),
+            {"item_id": str(item.pk)},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
 
 
 @pytest.mark.django_db
-def test_use_medicine_item_view_unexpected_error_returns_500(game_data, django_user_model, monkeypatch):
+def test_use_medicine_item_view_unexpected_error_bubbles_up(game_data, django_user_model, monkeypatch):
     manor, guest, client = _bootstrap_guest_client(
         game_data, django_user_model, username="view_medicine_item_unexpected"
     )
@@ -631,20 +627,16 @@ def test_use_medicine_item_view_unexpected_error_returns_500(game_data, django_u
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
-    response = client.post(
-        reverse("guests:use_medicine_item", args=[guest.pk]),
-        {"item_id": str(item.pk)},
-        HTTP_X_REQUESTED_WITH="XMLHttpRequest",
-    )
-
-    assert response.status_code == 500
-    payload = response.json()
-    assert payload["success"] is False
-    assert "操作失败，请稍后重试" in payload["error"]
+    with pytest.raises(RuntimeError, match="boom"):
+        client.post(
+            reverse("guests:use_medicine_item", args=[guest.pk]),
+            {"item_id": str(item.pk)},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
 
 
 @pytest.mark.django_db
-def test_use_magnifying_glass_view_unexpected_error_returns_500(game_data, django_user_model, monkeypatch):
+def test_use_magnifying_glass_view_unexpected_error_bubbles_up(game_data, django_user_model, monkeypatch):
     user = django_user_model.objects.create_user(username="view_magnify_item_unexpected", password="pass123")
     ensure_manor(user)
     client = Client()
@@ -655,16 +647,12 @@ def test_use_magnifying_glass_view_unexpected_error_returns_500(game_data, djang
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
-    response = client.post(
-        reverse("guests:use_magnifying_glass"),
-        {"item_id": "1"},
-        HTTP_X_REQUESTED_WITH="XMLHttpRequest",
-    )
-
-    assert response.status_code == 500
-    payload = response.json()
-    assert payload["success"] is False
-    assert "操作失败，请稍后重试" in payload["error"]
+    with pytest.raises(RuntimeError, match="boom"):
+        client.post(
+            reverse("guests:use_magnifying_glass"),
+            {"item_id": "1"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
 
 
 @pytest.mark.django_db

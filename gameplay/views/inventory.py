@@ -36,6 +36,7 @@ from gameplay.services.inventory.use import use_inventory_item
 from gameplay.services.manor.core import get_manor
 from gameplay.services.manor.treasury import move_item_to_treasury, move_item_to_warehouse
 from gameplay.services.resources import project_resource_production_for_read
+from gameplay.views.read_helpers import prepare_manor_for_read
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,7 @@ def _parse_positive_quantity(raw_quantity: str | None, default: int = 1) -> int 
     return safe_positive_int(raw_quantity, default=None)
 
 
-def _warehouse_item(manor, pk: int) -> InventoryItem:
+def _warehouse_item(manor: Any, pk: int) -> InventoryItem:
     return get_object_or_404(
         manor.inventory_items.select_related("template"),
         pk=pk,
@@ -191,10 +192,16 @@ class RecruitmentHallView(LoginRequiredMixin, TemplateView):
 
     template_name = "gameplay/recruitment_hall.html"
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
-        project_resource_production_for_read(manor)
+        prepare_manor_for_read(
+            manor,
+            project_fn=project_resource_production_for_read,
+            logger=logger,
+            source="recruitment_hall_view",
+            user_id=getattr(self.request.user, "id", None),
+        )
         context.update(get_recruitment_hall_context(manor, UIConstants.RECRUIT_RECORDS_DISPLAY))
         return context
 
@@ -204,15 +211,21 @@ class WarehouseView(LoginRequiredMixin, TemplateView):
 
     template_name = "gameplay/warehouse.html"
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
-        project_resource_production_for_read(manor)
+        prepare_manor_for_read(
+            manor,
+            project_fn=project_resource_production_for_read,
+            logger=logger,
+            source="warehouse_view",
+            user_id=getattr(self.request.user, "id", None),
+        )
         context["manor"] = manor
 
         current_tab = self.request.GET.get("tab", "warehouse")
         selected_category = self.request.GET.get("category", "all")
-        page = safe_int(self.request.GET.get("page", 1), default=1, min_val=1)
+        page = safe_int(self.request.GET.get("page", 1), default=1, min_val=1) or 1
         context.update(get_warehouse_context(manor, current_tab, selected_category, page))
         return context
 

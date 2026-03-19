@@ -84,8 +84,9 @@ web_game_v5/
 │   └── wsgi.py         # WSGI 配置
 │
 ├── accounts/           # 账户模块
-│   ├── models.py       # User 模型（继承 AbstractUser）
-│   └── views.py        # 登录/注册/资料
+│   ├── models/         # User 模型（继承 AbstractUser）
+│   ├── views/          # 登录/注册/资料
+│   └── services/       # 登录运行时、单点登录
 │
 ├── gameplay/           # 核心玩法模块
 │   ├── models/         # Manor, Building, Item, Mission...
@@ -95,35 +96,35 @@ web_game_v5/
 │   └── tasks/          # Celery 任务
 │
 ├── guests/             # 门客模块
-│   ├── models.py       # Guest, Skill, Gear...
+│   ├── models/         # Guest, Skill, Gear...
 │   ├── views/          # 门客列表、详情、装备
 │   ├── services/       # 招募、培养、装备、工资
 │   └── tasks.py        # 培养完成任务
 │
 ├── battle/             # 战斗模块
-│   ├── models.py       # BattleReport, TroopTemplate
-│   ├── services.py     # 战斗模拟入口
-│   ├── simulation_core.py  # 战斗引擎核心
-│   └── tasks.py        # 战报生成任务
+│   ├── models/         # BattleReport、TroopTemplate 等基础模型
+│   ├── services/       # 战斗模拟入口
+│   ├── simulation_core/  # 战斗引擎核心
+│   └── tasks/          # 战报生成任务
 │
 ├── trade/              # 交易模块
-│   ├── models.py       # MarketListing, ShopStock
-│   ├── views.py        # 商店/银庄/交易行
+│   ├── models/         # MarketListing、ShopStock
+│   ├── views/          # 商店/银庄/交易行
 │   └── services/       # 商店、银庄、交易行服务
 │
 ├── guilds/             # 帮会模块
-│   ├── models.py       # Guild, GuildMember, Technology...
-│   ├── views.py        # 帮会管理全流程
+│   ├── models/         # Guild、GuildMember、Technology...
+│   ├── views/          # 帮会管理全流程
 │   └── services/       # 帮会、成员、贡献、科技、仓库
 │
 ├── websocket/          # WebSocket 模块
-│   ├── consumers.py    # NotificationConsumer, OnlineStatsConsumer
+│   ├── consumers/      # NotificationConsumer、OnlineStatsConsumer 等
 │   └── routing.py      # WebSocket 路由
 │
 ├── battle_debugger/    # 战斗调试工具（开发用）
 │
 ├── core/               # 共享工具
-│   ├── utils.py        # 通用工具函数
+│   ├── utils/          # 通用工具函数
 │   └── exceptions.py   # 自定义异常
 │
 ├── data/               # YAML 数据配置
@@ -180,7 +181,7 @@ web_game_v5/
 ### View Layer（视图层）
 
 - **职责**：处理 HTTP 请求，进行基础验证，调用 Service 层
-- **位置**：`{app}/views.py` 或 `{app}/views/`
+- **位置**：`{app}/views/`（可包含多个子模块或 `__init__.py` 聚合）
 - **原则**：
   - 不包含业务逻辑
   - 负责权限检查（`@login_required`）
@@ -193,14 +194,14 @@ web_game_v5/
 - **位置**：`{app}/services/` 或 `{app}/services.py`
 - **原则**：
   - 所有业务逻辑必须在此层实现
-  - 通过 `ValueError` 或自定义异常返回错误
+  - 优先抛出显式领域异常；`ValueError` 仅保留给历史兼容入口，不再作为默认跨层契约
   - 使用 `@transaction.atomic` 管理事务
   - 避免直接操作 HTTP 请求/响应
 
 ### Model Layer（模型层）
 
 - **职责**：定义数据结构，提供 ORM 查询接口
-- **位置**：`{app}/models.py` 或 `{app}/models/`
+- **位置**：`{app}/models/`（每个模型模块可按领域拆分）
 - **原则**：
   - 包含字段定义和约束
   - 提供 `property` 计算属性
@@ -279,7 +280,7 @@ CELERY_BEAT_SCHEDULE = {
 ### 连接处理
 
 ```python
-# websocket/consumers.py
+# websocket/consumers/notification.py 等
 
 class NotificationConsumer(AsyncJsonWebsocketConsumer):
     """用户通知推送"""
@@ -331,11 +332,11 @@ class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
 
 ```
 battle/
-├── models.py           # BattleReport, TroopTemplate
-├── services.py         # simulate_report() - 对外接口
-├── simulation_core.py  # BattleSimulator 类 - 核心引擎
-├── troops.py           # 兵种数据加载
-└── tasks.py            # generate_report_task
+├── models/             # BattleReport、TroopTemplate 等基础模型
+├── services/           # simulate_report() 等外部接口
+├── simulation_core/    # BattleSimulator 类 - 核心引擎
+├── troops/             # 兵种数据加载相关
+└── tasks/              # generate_report_task
 ```
 
 ### 战斗模拟流程
@@ -626,7 +627,7 @@ def my_task(self, arg1, arg2):
 ### 添加新的 WebSocket Consumer
 
 ```python
-# websocket/consumers.py
+# websocket/consumers/<feature>.py
 class MyConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
         # 认证检查

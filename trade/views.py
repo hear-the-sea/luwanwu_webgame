@@ -6,7 +6,6 @@ from typing import Any
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db import DatabaseError
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
@@ -14,9 +13,8 @@ from django.views.generic import TemplateView
 from core.utils import safe_int
 from core.utils.rate_limit import rate_limit_redirect
 from gameplay.models import Manor
-from gameplay.services.manor.core import get_manor
-from gameplay.services.resources import project_resource_production_for_read
-from trade.selectors import get_trade_context
+from gameplay.services.manor import troop_bank as troop_bank_service
+from trade.page_context import build_trade_page_context
 from trade.services.auction_service import place_bid
 from trade.services.bank_service import exchange_gold_bar
 from trade.services.market_service import LISTING_FEES, cancel_listing, create_listing, purchase_listing
@@ -52,18 +50,6 @@ def _warn_if_threshold_exceeded(
         logger.warning(log_message, *log_args)
 
 
-def _sync_trade_view_resources(manor: Manor) -> None:
-    try:
-        project_resource_production_for_read(manor)
-    except (DatabaseError, ConnectionError, OSError, TimeoutError) as exc:
-        logger.warning(
-            "sync resource production for trade view failed: manor_id=%s error=%s",
-            getattr(manor, "id", None),
-            exc,
-            exc_info=True,
-        )
-
-
 class TradeView(LoginRequiredMixin, TemplateView):
     """交易主页面"""
 
@@ -71,10 +57,7 @@ class TradeView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        manor = get_manor(self.request.user)
-        _sync_trade_view_resources(manor)
-        context.update(get_trade_context(self.request, manor))
-
+        context.update(build_trade_page_context(self.request))
         return context
 
 
@@ -151,15 +134,10 @@ def exchange_gold_bar_view(request: HttpRequest) -> HttpResponse:
 def deposit_troop_to_bank_view(request: HttpRequest) -> HttpResponse:
     """钱庄存入护院"""
 
-    def _deposit(manor: Manor, troop_key: str, quantity: int) -> Any:
-        from gameplay.services.manor.troop_bank import deposit_troops_to_bank
-
-        return deposit_troops_to_bank(manor, troop_key, quantity)
-
     return _handle_troop_bank_transfer(
         request,
         op="bank_troop_deposit",
-        transfer_action=_deposit,
+        transfer_action=troop_bank_service.deposit_troops_to_bank,
         success_message=lambda result: f"已存入 {result['quantity']} 名{result['troop_name']}到钱庄",
     )
 
@@ -170,15 +148,10 @@ def deposit_troop_to_bank_view(request: HttpRequest) -> HttpResponse:
 def withdraw_troop_from_bank_view(request: HttpRequest) -> HttpResponse:
     """钱庄取出护院"""
 
-    def _withdraw(manor: Manor, troop_key: str, quantity: int) -> Any:
-        from gameplay.services.manor.troop_bank import withdraw_troops_from_bank
-
-        return withdraw_troops_from_bank(manor, troop_key, quantity)
-
     return _handle_troop_bank_transfer(
         request,
         op="bank_troop_withdraw",
-        transfer_action=_withdraw,
+        transfer_action=troop_bank_service.withdraw_troops_from_bank,
         success_message=lambda result: f"已从钱庄取出 {result['quantity']} 名{result['troop_name']}",
     )
 

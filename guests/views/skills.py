@@ -17,7 +17,6 @@ from django.views.decorators.http import require_POST
 from core.config import GUEST
 from core.decorators import handle_game_errors
 from core.exceptions import GameError
-from core.utils import is_ajax_request, json_error
 from core.utils.validation import safe_positive_int, safe_redirect_url, sanitize_error_message
 
 from ..models import Guest, GuestStatus, Skill
@@ -154,7 +153,7 @@ def learn_skill_view(request, pk: int):
             getattr(skill, "key", None),
         )
         messages.error(request, sanitize_error_message(exc))
-    except Exception as exc:
+    except Exception:
         logger.exception(
             "Unexpected skill learn error: manor_id=%s user_id=%s guest_id=%s item_id=%s skill_key=%s",
             getattr(manor, "id", None),
@@ -163,7 +162,7 @@ def learn_skill_view(request, pk: int):
             item_id_int,
             getattr(skill, "key", None),
         )
-        messages.error(request, sanitize_error_message(exc))
+        raise
     return redirect(next_url)
 
 
@@ -199,7 +198,7 @@ def forget_skill_view(request, pk: int):
         )
         messages.error(request, sanitize_error_message(exc))
         return reverse("guests:detail", args=[pk])
-    except Exception as exc:
+    except Exception:
         logger.exception(
             "Unexpected skill forget error: manor_id=%s user_id=%s guest_id=%s guest_skill_id=%s",
             getattr(manor, "id", None),
@@ -207,10 +206,7 @@ def forget_skill_view(request, pk: int):
             pk,
             request.POST.get("guest_skill_id"),
         )
-        if is_ajax_request(request):
-            return json_error(sanitize_error_message(exc), status=500, include_message=True)
-        messages.error(request, sanitize_error_message(exc))
-        return reverse("guests:detail", args=[pk])
+        raise
 
     messages.info(request, f"{guest.display_name} 已遗忘 {skill_name}")
     return reverse("guests:detail", args=[guest.pk])

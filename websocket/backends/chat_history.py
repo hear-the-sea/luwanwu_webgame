@@ -5,11 +5,15 @@ from __future__ import annotations
 import json
 import logging
 
-from redis.exceptions import RedisError
-
 from core.utils.degradation import CHAT_HISTORY_DEGRADED, record_degradation
+from core.utils.infrastructure import INFRASTRUCTURE_EXCEPTIONS
+from gameplay.services.utils.cache_exceptions import (
+    CACHE_INFRASTRUCTURE_EXCEPTIONS,
+    is_expected_cache_infrastructure_error,
+)
 
 logger = logging.getLogger(__name__)
+LUA_FALLBACK_EXCEPTIONS: tuple[type[Exception], ...] = INFRASTRUCTURE_EXCEPTIONS + (AttributeError,)
 
 # Lua script for batch history trimming (O(1) per removed message vs O(n) round trips)
 TRIM_HISTORY_SCRIPT = """
@@ -78,7 +82,7 @@ def trim_history_by_time_sync(
     """Trim expired messages from history using Lua script for O(1) performance."""
     try:
         redis.eval(TRIM_HISTORY_SCRIPT, 1, history_key, cutoff_ms, history_limit)
-    except (RedisError, AttributeError) as exc:
+    except LUA_FALLBACK_EXCEPTIONS as exc:
         # Fallback to Python-based trimming when Lua is unavailable (e.g., in tests)
         logger.debug("Lua script unavailable, using Python fallback: %s", exc)
         trim_history_by_time_fallback(cutoff_ms, redis, history_key=history_key, history_limit=history_limit)
@@ -102,7 +106,7 @@ def get_history_sync(
     cutoff_ms = int((_now_ts() - float(history_message_ttl_seconds)) * 1000)
     try:
         raw_items = redis.lrange(history_key, 0, max(0, history_on_connect - 1))
-    except RedisError:
+    except INFRASTRUCTURE_EXCEPTIONS:
         record_degradation(
             CHAT_HISTORY_DEGRADED,
             component="world_chat",
@@ -132,7 +136,7 @@ def get_history_sync(
 
     try:
         trim_history_by_time_sync(cutoff_ms, redis, history_key=history_key, history_limit=history_limit)
-    except RedisError as exc:
+    except INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.debug("World chat history trim skipped due to Redis error: %s", exc)
     except Exception:
         logger.exception("Unexpected error while trimming world chat history")
@@ -157,7 +161,9 @@ def append_history_sync(
         pipe.ltrim(history_key, 0, max(0, history_limit - 1))
         pipe.expire(history_key, int(history_message_ttl_seconds) + 60)
         pipe.execute()
-    except (RedisError, ConnectionError, OSError, TimeoutError) as exc:
+    except Exception as exc:
+        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+            raise
         logger.warning("World chat history append failed; rejecting send: %s", exc)
         raise WorldChatInfrastructureError("world chat history backend unavailable") from exc
 
@@ -172,6 +178,8 @@ def remove_history_sync(message: dict, redis, *, history_key: str) -> None:
     payload = json.dumps(message, ensure_ascii=False, separators=(",", ":"))
     try:
         redis.lrem(history_key, 1, payload)
-    except (RedisError, ConnectionError, OSError, TimeoutError) as exc:
+    except Exception as exc:
+        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+            raise
         logger.warning("World chat history compensation delete failed: %s", exc)
         raise WorldChatInfrastructureError("world chat history compensation unavailable") from exc

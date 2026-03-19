@@ -6,19 +6,17 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import TypeVar
+from typing import Any, TypeVar, cast
 
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db import DatabaseError
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.http import HttpRequest, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
-from core.decorators import unexpected_error_response
 from core.exceptions import GameError
-from core.utils import json_error, json_success, parse_json_object, safe_int, safe_positive_int, sanitize_error_message
+from core.utils import json_error, json_success, parse_json_object, safe_int, safe_positive_int
 from core.utils.locked_actions import (
     ActionLockSpec,
     acquire_scoped_action_lock,
@@ -27,6 +25,11 @@ from core.utils.locked_actions import (
     release_scoped_action_lock,
 )
 from core.utils.rate_limit import rate_limit_json
+from core.utils.view_error_mapping import (
+    DEFAULT_VIEW_INFRASTRUCTURE_EXCEPTIONS,
+    LEGACY_VALUE_ERROR_VIEW_EXCEPTIONS,
+    json_error_response_for_exception,
+)
 from gameplay.constants import REGION_CHOICES, UIConstants
 from gameplay.models import Manor as ManorModel
 from gameplay.models import RaidRun
@@ -46,6 +49,7 @@ from gameplay.services.raid.map_search import get_manor_public_info
 from gameplay.services.raid.protection import get_protection_status
 from gameplay.services.raid.utils import can_attack_target
 from gameplay.services.resources import project_resource_production_for_read
+from gameplay.views.read_helpers import prepare_manor_for_read
 
 MAP_ACTION_LOCK_SECONDS = 5
 MAP_ACTION_LOCK_NAMESPACE = "map:view_lock"
@@ -65,39 +69,40 @@ def _map_action_conflict_response() -> JsonResponse:
     return json_error("请求处理中，请稍候重试", status=409)
 
 
-def _map_known_error_response(exc: GameError | ValueError) -> JsonResponse:
-    return json_error(sanitize_error_message(exc))
+def _raise_or_handle_known_map_exception(exc: Exception) -> JsonResponse:
+    return cast(
+        JsonResponse,
+        json_error_response_for_exception(
+            exc,
+            logger_instance=logger,
+            known_exceptions=LEGACY_VALUE_ERROR_VIEW_EXCEPTIONS,
+        ),
+    )
 
 
-def _map_unexpected_error_response(
-    request: HttpRequest,
-    exc: DatabaseError,
-    *,
-    log_message: str,
-    log_args: tuple[object, ...],
-) -> HttpResponse:
-    return unexpected_error_response(
-        request,
-        exc,
-        is_ajax=True,
-        redirect_url="gameplay:map",
-        log_message=log_message,
-        log_args=log_args,
-        logger_instance=logger,
+def _map_action_error_response(exc: Exception, *, log_message: str, log_args: tuple[object, ...]) -> JsonResponse:
+    return cast(
+        JsonResponse,
+        json_error_response_for_exception(
+            exc,
+            log_message=log_message,
+            log_args=log_args,
+            logger_instance=logger,
+        ),
     )
 
 
 def _run_locked_map_json_action(
     request: HttpRequest,
     *,
-    manor,
+    manor: Any,
     action_name: str,
     scope: str,
     operation: Callable[[], MapActionResult],
     success_response: Callable[[MapActionResult], JsonResponse],
     log_message: str,
     log_args: tuple[object, ...],
-) -> HttpResponse:
+) -> JsonResponse:
     return execute_locked_action(
         action_name=action_name,
         owner_id=int(manor.id),
@@ -108,17 +113,14 @@ def _run_locked_map_json_action(
         on_lock_conflict=_map_action_conflict_response,
         on_success=success_response,
         known_exceptions=(GameError, ValueError),
-        on_known_error=_map_known_error_response,
-        on_database_error=lambda exc: _map_unexpected_error_response(
-            request,
-            exc,
-            log_message=log_message,
-            log_args=log_args,
-        ),
+        on_known_error=_raise_or_handle_known_map_exception,
+        on_database_error=lambda exc: _map_action_error_response(exc, log_message=log_message, log_args=log_args),
+        on_unexpected_error=lambda exc: _map_action_error_response(exc, log_message=log_message, log_args=log_args),
+        unexpected_exceptions=DEFAULT_VIEW_INFRASTRUCTURE_EXCEPTIONS,
     )
 
 
-def _resolve_attack_fields_from_info(info: dict, viewer_manor, target_manor) -> tuple[bool, str]:
+def _resolve_attack_fields_from_info(info: dict[str, Any], viewer_manor: Any, target_manor: Any) -> tuple[bool, str]:
     can_attack_value = info.get("can_attack")
     attack_reason_value = info.get("attack_reason")
     if isinstance(can_attack_value, bool) and isinstance(attack_reason_value, str):
@@ -126,14 +128,14 @@ def _resolve_attack_fields_from_info(info: dict, viewer_manor, target_manor) -> 
     return can_attack_target(viewer_manor, target_manor)
 
 
-def _request_json_object_or_error(request: HttpRequest) -> tuple[dict | None, JsonResponse | None]:
+def _request_json_object_or_error(request: HttpRequest) -> tuple[dict[str, Any] | None, JsonResponse | None]:
     data = parse_json_object(request.body)
     if data is None:
         return None, json_error("无效的请求数据")
     return data, None
 
 
-def _target_manor_or_error(data: dict) -> tuple[ManorModel | None, JsonResponse | None]:
+def _target_manor_or_error(data: dict[str, Any]) -> tuple[ManorModel | None, JsonResponse | None]:
     target_id = safe_positive_int(data.get("target_id"), default=None)
     if target_id is None:
         return None, json_error("目标庄园参数无效")
@@ -145,7 +147,7 @@ def _target_manor_or_error(data: dict) -> tuple[ManorModel | None, JsonResponse 
 
 def _request_target_manor_or_error(
     request: HttpRequest,
-) -> tuple[dict | None, ManorModel | None, JsonResponse | None]:
+) -> tuple[dict[str, Any] | None, ManorModel | None, JsonResponse | None]:
     data, error = _request_json_object_or_error(request)
     if error is not None:
         return None, None, error
@@ -176,10 +178,16 @@ class MapView(LoginRequiredMixin, TemplateView):
 
     template_name = "gameplay/map.html"
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
-        project_resource_production_for_read(manor)
+        prepare_manor_for_read(
+            manor,
+            project_fn=project_resource_production_for_read,
+            logger=logger,
+            source="map_view",
+            user_id=getattr(self.request.user, "id", None),
+        )
         # 获取当前选中的地区（默认显示玩家所在地区）
         selected_region = self.request.GET.get("region", manor.region)
 
@@ -197,10 +205,16 @@ class RaidConfigView(LoginRequiredMixin, TemplateView):
 
     template_name = "gameplay/raid_config.html"
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
-        project_resource_production_for_read(manor)
+        prepare_manor_for_read(
+            manor,
+            project_fn=project_resource_production_for_read,
+            logger=logger,
+            source="raid_config_view",
+            user_id=getattr(self.request.user, "id", None),
+        )
 
         target_id = self.kwargs.get("target_id")
 
@@ -220,7 +234,7 @@ def map_search_api(request: HttpRequest) -> JsonResponse:
     search_type = request.GET.get("type", "region")
     query = request.GET.get("q", "").strip()
     region = request.GET.get("region", manor.region)
-    page = safe_int(request.GET.get("page", "1"), 1, min_val=1)
+    page = safe_int(request.GET.get("page", "1"), 1, min_val=1) or 1
     page_size = UIConstants.MAP_SEARCH_PAGE_SIZE
 
     if search_type == "name" and query:

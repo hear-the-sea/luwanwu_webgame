@@ -4,11 +4,11 @@ import logging
 from typing import Any, Callable
 
 from django.core.paginator import Paginator
-from django.db import DatabaseError
 from django.db.models import QuerySet
 from django.http import HttpRequest
 
 from core.utils import safe_int, safe_ordering
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_expected_infrastructure_error
 from gameplay.models.items import LEGACY_TOOL_EFFECT_TYPES, normalize_item_effect_type
 from gameplay.services.technology import get_troop_class_for_key
 from trade.services.shop_service import EFFECT_TYPE_CATEGORY
@@ -29,7 +29,11 @@ _TROOP_CATEGORY_LABELS: dict[str, str] = {
 
 
 def _is_expected_trade_context_error(exc: Exception) -> bool:
-    return isinstance(exc, (DatabaseError, ConnectionError, OSError, TimeoutError))
+    return is_expected_infrastructure_error(
+        exc,
+        exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+        allow_runtime_markers=True,
+    )
 
 
 def _safe_call(func: Callable[..., Any], *args: Any, default: Any, log_message: str, **kwargs: Any) -> Any:

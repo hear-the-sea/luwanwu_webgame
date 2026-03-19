@@ -63,6 +63,44 @@ def test_refresh_scout_records_prefers_async_dispatch(monkeypatch):
     assert called == {"scout": 0, "return": 0}
 
 
+def test_refresh_scout_records_falls_back_to_sync_when_task_import_fails(monkeypatch):
+    class _Status:
+        SCOUTING = "scouting"
+        RETURNING = "returning"
+
+    class _ScoutObjects:
+        def __init__(self):
+            self._status = None
+
+        def filter(self, **kwargs):
+            self._status = kwargs.get("status")
+            return self
+
+        def values_list(self, *_args, **_kwargs):
+            mapping = {
+                _Status.SCOUTING: [21],
+                _Status.RETURNING: [22],
+            }
+            return list(mapping.get(self._status, []))
+
+    dummy_cls = type("_ScoutRecord", (), {"Status": _Status, "objects": _ScoutObjects()})
+    monkeypatch.setattr(scout_service, "ScoutRecord", dummy_cls)
+    monkeypatch.setattr(scout_service, "_resolve_scout_refresh_tasks", lambda: None)
+
+    called = {"scout": 0, "return": 0}
+    monkeypatch.setattr(
+        scout_service,
+        "_finalize_due_scout_records",
+        lambda _now, scouting_ids, returning_ids: called.update(
+            {"scout": len(scouting_ids), "return": len(returning_ids)}
+        ),
+    )
+
+    scout_service.refresh_scout_records(SimpleNamespace(id=7), prefer_async=True)
+
+    assert called == {"scout": 1, "return": 1}
+
+
 def test_send_scout_success_message_tolerates_invalid_intel_shape(monkeypatch):
     sent = {}
 
@@ -194,6 +232,79 @@ def test_finalize_scout_return_marks_retreated_records_without_failure_message(d
     callbacks[0]()
 
     assert sent == {"retreat": 1, "fail": 0}
+
+
+@pytest.mark.django_db(transaction=True)
+def test_request_scout_retreat_recreates_missing_scout_troop_row(django_user_model, monkeypatch):
+    attacker = ensure_manor(
+        django_user_model.objects.create_user(username="scout_retreat_restore_attacker", password="pass123")
+    )
+    defender = ensure_manor(
+        django_user_model.objects.create_user(username="scout_retreat_restore_defender", password="pass123")
+    )
+    scout_template, _ = TroopTemplate.objects.get_or_create(key=PVPConstants.SCOUT_TROOP_KEY, defaults={"name": "探子"})
+    PlayerTroop.objects.filter(manor=attacker, troop_template=scout_template).delete()
+
+    record = ScoutRecord.objects.create(
+        attacker=attacker,
+        defender=defender,
+        status=ScoutRecord.Status.SCOUTING,
+        scout_cost=2,
+        success_rate=0.5,
+        travel_time=60,
+        complete_at=timezone.now() + timedelta(seconds=60),
+    )
+
+    request_time = timezone.now()
+    monkeypatch.setattr(scout_service.timezone, "now", lambda: request_time)
+    monkeypatch.setattr(scout_service, "safe_apply_async", lambda *_args, **_kwargs: True)
+
+    scout_service.request_scout_retreat(record)
+
+    record.refresh_from_db()
+    troop = PlayerTroop.objects.get(manor=attacker, troop_template=scout_template)
+    assert record.status == ScoutRecord.Status.RETURNING
+    assert record.was_retreated is True
+    assert troop.count == 2
+
+
+@pytest.mark.django_db(transaction=True)
+def test_finalize_scout_return_recreates_missing_scout_troop_row_for_success(django_user_model, monkeypatch):
+    attacker = ensure_manor(
+        django_user_model.objects.create_user(username="scout_success_restore_attacker", password="pass123")
+    )
+    defender = ensure_manor(
+        django_user_model.objects.create_user(username="scout_success_restore_defender", password="pass123")
+    )
+    scout_template, _ = TroopTemplate.objects.get_or_create(key=PVPConstants.SCOUT_TROOP_KEY, defaults={"name": "探子"})
+    PlayerTroop.objects.filter(manor=attacker, troop_template=scout_template).delete()
+
+    record = ScoutRecord.objects.create(
+        attacker=attacker,
+        defender=defender,
+        status=ScoutRecord.Status.RETURNING,
+        scout_cost=3,
+        success_rate=1.0,
+        return_at=timezone.now() + timedelta(seconds=30),
+        complete_at=timezone.now() - timedelta(seconds=30),
+        travel_time=30,
+        is_success=True,
+        intel_data={"troop_description": "少量", "guest_count": 1, "avg_guest_level": 1, "asset_level": "普通"},
+    )
+
+    callbacks = []
+    monkeypatch.setattr(scout_service.transaction, "on_commit", lambda callback: callbacks.append(callback))
+    monkeypatch.setattr(scout_service, "_send_scout_success_message", lambda *_args, **_kwargs: None)
+
+    complete_time = timezone.now()
+    scout_service.finalize_scout_return(record, now=complete_time)
+
+    record.refresh_from_db()
+    troop = PlayerTroop.objects.get(manor=attacker, troop_template=scout_template)
+    assert record.status == ScoutRecord.Status.SUCCESS
+    assert record.completed_at == complete_time
+    assert troop.count == 3
+    assert len(callbacks) == 1
 
 
 @pytest.mark.django_db(transaction=True)

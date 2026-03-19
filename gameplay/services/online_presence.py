@@ -5,6 +5,12 @@ import time
 
 from django.core.cache import cache
 
+from core.utils.infrastructure import INFRASTRUCTURE_EXCEPTIONS
+from gameplay.services.utils.cache_exceptions import (
+    CACHE_INFRASTRUCTURE_EXCEPTIONS,
+    is_expected_cache_infrastructure_error,
+)
+
 from .online_presence_backend import (
     ONLINE_USER_TOUCH_CACHE_KEY_PREFIX,
     ONLINE_USER_TOUCH_CACHE_TIMEOUT,
@@ -20,7 +26,9 @@ logger = logging.getLogger(__name__)
 def _safe_cache_add(key: str, value, timeout: int):
     try:
         return cache.add(key, value, timeout=timeout)
-    except Exception:
+    except Exception as exc:
+        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+            raise
         logger.warning("Failed to add cache key: %s", key, exc_info=True)
         return None
 
@@ -28,7 +36,9 @@ def _safe_cache_add(key: str, value, timeout: int):
 def _safe_cache_delete(key: str) -> None:
     try:
         cache.delete(key)
-    except Exception:
+    except Exception as exc:
+        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+            raise
         logger.warning("Failed to delete cache key: %s", key, exc_info=True)
 
 
@@ -57,7 +67,11 @@ def refresh_online_presence_from_request(user) -> None:
         _safe_cache_delete(ONLINE_USERS_CACHE_KEY)
     except NotImplementedError:
         return
-    except Exception:
+    except INFRASTRUCTURE_EXCEPTIONS:
         if should_refresh:
             _safe_cache_delete(touch_cache_key)
         logger.warning("Failed to refresh online user presence from HTTP request", exc_info=True)
+    except Exception:
+        if should_refresh:
+            _safe_cache_delete(touch_cache_key)
+        logger.exception("Unexpected error while refreshing online user presence from HTTP request")

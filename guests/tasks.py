@@ -6,13 +6,14 @@ from datetime import timedelta
 from typing import Callable
 
 from celery import shared_task
-from django.db import DatabaseError, transaction
+from django.db import transaction
 from django.db.models import F, IntegerField, Q, Value
 from django.db.models.functions import Greatest
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async_with_dedup
 from core.config import GUEST, GUEST_LOYALTY
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_expected_infrastructure_error
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,11 @@ def _dedup_timeout_for_remaining(remaining: int) -> int:
 
 def _is_expected_task_error(exc: Exception) -> bool:
     """Infrastructure errors that warrant a Celery retry rather than immediate propagation."""
-    return isinstance(exc, (DatabaseError, ConnectionError, OSError, TimeoutError))
+    return is_expected_infrastructure_error(
+        exc,
+        exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+        allow_runtime_markers=True,
+    )
 
 
 @shared_task(name="guests.complete_training", bind=True, max_retries=2, default_retry_delay=30)

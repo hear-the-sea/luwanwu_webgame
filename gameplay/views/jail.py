@@ -29,6 +29,7 @@ from core.utils.locked_actions import (
 from core.utils.rate_limit import rate_limit_json
 from core.utils.validation import sanitize_error_message
 from gameplay.constants import PVPConstants, get_raid_capture_guest_rate
+from gameplay.models import Manor
 from gameplay.services.jail import (
     add_oath_bond,
     draw_pie,
@@ -51,6 +52,7 @@ JAIL_ACTION_LOCK_SPEC = ActionLockSpec(
     log_context="jail action lock",
 )
 JailActionResult = TypeVar("JailActionResult")
+JailResponseT = TypeVar("JailResponseT", bound=HttpResponse)
 
 
 def _jail_action_lock_key(action: str, manor_id: int, scope: str) -> str:
@@ -103,20 +105,34 @@ def _json_exception_response(exc: GameError | ValueError | DatabaseError, *, sta
     return json_error(sanitize_error_message(exc), status=status)
 
 
+def _raise_or_handle_known_jail_exception(
+    exc: Exception,
+    *,
+    handler: Callable[[GameError | ValueError], JailResponseT],
+) -> JailResponseT:
+    if not isinstance(exc, (GameError, ValueError)):
+        raise exc
+    return handler(exc)
+
+
 def _execute_locked_jail_action(
     *,
     request: HttpRequest,
-    manor,
+    manor: Manor,
     action_name: str,
     scope: str,
     operation: Callable[[], JailActionResult],
-    on_lock_conflict: Callable[[], HttpResponse],
-    on_success: Callable[[JailActionResult], HttpResponse],
-    on_known_error: Callable[[GameError | ValueError], HttpResponse],
-    on_database_error: Callable[[DatabaseError], HttpResponse],
+    on_lock_conflict: Callable[[], JailResponseT],
+    on_success: Callable[[JailActionResult], JailResponseT],
+    on_known_error: Callable[[Exception], JailResponseT],
+    on_database_error: Callable[[DatabaseError], JailResponseT],
     log_message: str,
     log_args: tuple[object, ...],
-) -> HttpResponse:
+) -> JailResponseT:
+    def _handle_database_error(exc: DatabaseError) -> JailResponseT:
+        logger.exception(log_message, *log_args)
+        return on_database_error(exc)
+
     return execute_locked_action(
         action_name=action_name,
         owner_id=int(manor.id),
@@ -128,17 +144,14 @@ def _execute_locked_jail_action(
         on_success=on_success,
         known_exceptions=(GameError, ValueError),
         on_known_error=on_known_error,
-        on_database_error=lambda exc: (
-            logger.exception(log_message, *log_args),
-            on_database_error(exc),
-        )[1],
+        on_database_error=_handle_database_error,
     )
 
 
 def _run_locked_redirect_action(
     *,
     request: HttpRequest,
-    manor,
+    manor: Manor,
     action_name: str,
     scope: str,
     operation: Callable[[], JailActionResult],
@@ -160,7 +173,10 @@ def _run_locked_redirect_action(
             message="请求处理中，请稍候重试",
         ),
         on_success=success_response,
-        on_known_error=lambda exc: _redirect_exception_response(request, redirect_name, exc),
+        on_known_error=lambda exc: _raise_or_handle_known_jail_exception(
+            exc,
+            handler=lambda known_exc: _redirect_exception_response(request, redirect_name, known_exc),
+        ),
         on_database_error=lambda exc: _redirect_exception_response(request, redirect_name, exc),
         log_message=log_message,
         log_args=log_args,
@@ -170,14 +186,14 @@ def _run_locked_redirect_action(
 def _run_locked_json_action(
     *,
     request: HttpRequest,
-    manor,
+    manor: Manor,
     action_name: str,
     scope: str,
     operation: Callable[[], JailActionResult],
     success_response: Callable[[JailActionResult], JsonResponse],
     log_message: str,
     log_args: tuple[object, ...],
-) -> HttpResponse:
+) -> JsonResponse:
     return _execute_locked_jail_action(
         request=request,
         manor=manor,
@@ -186,7 +202,10 @@ def _run_locked_json_action(
         operation=operation,
         on_lock_conflict=lambda: json_error("请求处理中，请稍候重试", status=409),
         on_success=success_response,
-        on_known_error=lambda exc: _json_exception_response(exc),
+        on_known_error=lambda exc: _raise_or_handle_known_jail_exception(
+            exc,
+            handler=lambda known_exc: _json_exception_response(known_exc),
+        ),
         on_database_error=lambda exc: _json_exception_response(exc, status=500),
         log_message=log_message,
         log_args=log_args,
@@ -196,7 +215,7 @@ def _run_locked_json_action(
 class JailView(LoginRequiredMixin, TemplateView):
     template_name = "gameplay/jail.html"
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: object) -> dict[str, object]:
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
         prisoners = list_held_prisoners(manor)
@@ -216,7 +235,7 @@ class JailView(LoginRequiredMixin, TemplateView):
 class OathGroveView(LoginRequiredMixin, TemplateView):
     template_name = "gameplay/oath_grove.html"
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: object) -> dict[str, object]:
         context = super().get_context_data(**kwargs)
         manor = get_manor(self.request.user)
         bonds = list_oath_bonds(manor)
@@ -286,7 +305,7 @@ def oath_status_api(request: HttpRequest) -> JsonResponse:
 
 @login_required
 @require_POST
-def recruit_prisoner_view(request: HttpRequest, prisoner_id: int):
+def recruit_prisoner_view(request: HttpRequest, prisoner_id: int) -> HttpResponse:
     manor = get_manor(request.user)
     return _run_locked_redirect_action(
         request=request,
@@ -308,7 +327,7 @@ def recruit_prisoner_view(request: HttpRequest, prisoner_id: int):
 
 @login_required
 @require_POST
-def draw_pie_view(request: HttpRequest, prisoner_id: int):
+def draw_pie_view(request: HttpRequest, prisoner_id: int) -> HttpResponse:
     manor = get_manor(request.user)
     return _run_locked_redirect_action(
         request=request,
@@ -330,7 +349,7 @@ def draw_pie_view(request: HttpRequest, prisoner_id: int):
 
 @login_required
 @require_POST
-def release_prisoner_view(request: HttpRequest, prisoner_id: int):
+def release_prisoner_view(request: HttpRequest, prisoner_id: int) -> HttpResponse:
     manor = get_manor(request.user)
     return _run_locked_redirect_action(
         request=request,
@@ -352,7 +371,7 @@ def release_prisoner_view(request: HttpRequest, prisoner_id: int):
 
 @login_required
 @require_POST
-def add_oath_bond_view(request: HttpRequest):
+def add_oath_bond_view(request: HttpRequest) -> HttpResponse:
     manor = get_manor(request.user)
     guest_id = safe_positive_int(request.POST.get("guest_id"), default=None)
     if guest_id is None:
@@ -378,7 +397,7 @@ def add_oath_bond_view(request: HttpRequest):
 
 @login_required
 @require_POST
-def remove_oath_bond_view(request: HttpRequest, guest_id: int):
+def remove_oath_bond_view(request: HttpRequest, guest_id: int) -> HttpResponse:
     manor = get_manor(request.user)
     return _run_locked_redirect_action(
         request=request,
