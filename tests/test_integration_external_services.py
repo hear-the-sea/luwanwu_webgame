@@ -32,7 +32,7 @@ from gameplay.services.raid import start_raid, start_scout
 from gameplay.services.utils.cache import CacheKeys
 from gameplay.services.utils.messages import claim_message_attachments
 from gameplay.tasks import complete_mission_task, complete_raid_task
-from gameplay.tasks.pvp import complete_scout_return_task, complete_scout_task
+from gameplay.tasks.pvp import complete_scout_return_task, complete_scout_task, process_raid_battle_task
 from guests.models import RecruitmentPool
 from guests.services.recruitment import recruit_guest, refresh_guest_recruitments, start_guest_recruitment
 from guests.services.recruitment_guests import finalize_candidate
@@ -262,6 +262,42 @@ def test_integration_complete_raid_task_finalizes_retreated_run(require_env_serv
     assert run.completed_at is not None
     assert guest.status == guest.Status.IDLE
     assert troop.count == 200
+
+
+@pytest.mark.django_db(transaction=True)
+def test_integration_process_raid_battle_task_advances_due_marching_run(
+    require_env_services, game_data, django_user_model
+):
+    attacker, defender = _prepare_attack_ready_manors(django_user_model, prefix="intg_raid_battle_task")
+
+    pool = RecruitmentPool.objects.get(key="cunmu")
+    candidate = recruit_guest(attacker, pool, seed=41)[0]
+    guest = finalize_candidate(candidate)
+
+    troop_template = TroopTemplate.objects.filter(key="archer").first() or TroopTemplate.objects.first()
+    assert troop_template is not None
+
+    PlayerTroop.objects.update_or_create(
+        manor=attacker,
+        troop_template=troop_template,
+        defaults={"count": 200},
+    )
+
+    run = start_raid(attacker, defender, [guest.id], {troop_template.key: 10})
+    run.battle_at = timezone.now() - timedelta(seconds=1)
+    run.save(update_fields=["battle_at"])
+
+    result = process_raid_battle_task.run(run.id)
+
+    run.refresh_from_db()
+
+    assert result == "completed"
+    assert run.status == RaidRun.Status.RETURNING
+    assert run.battle_report is not None
+    assert run.is_attacker_victory is not None
+    assert run.return_at is not None
+    assert run.return_at > timezone.now()
+    assert run.completed_at is None
 
 
 @pytest.mark.django_db(transaction=True)
