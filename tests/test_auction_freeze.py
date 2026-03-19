@@ -1,6 +1,7 @@
 import pytest
 from django.db import transaction
 
+from core.exceptions import TradeValidationError
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.manor.core import ensure_manor
 from trade.models import AuctionBid, AuctionRound, AuctionSlot
@@ -60,5 +61,5 @@ def test_freeze_gold_bars_respects_available_inventory(django_user_model):
 
     with transaction.atomic():
         freeze_gold_bars(manor, 3, bid1)
-        with pytest.raises(ValueError):
+        with pytest.raises(TradeValidationError):
             freeze_gold_bars(manor, 3, bid2)

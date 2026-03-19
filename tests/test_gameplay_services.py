@@ -11,6 +11,7 @@ from django.db.utils import ProgrammingError
 from django.utils import timezone
 
 from battle.models import TroopTemplate
+from core.exceptions import InsufficientResourceError
 from gameplay.models import (
     InventoryItem,
     ItemTemplate,
@@ -345,7 +346,7 @@ def test_spend_resources_insufficient():
     manor.silver = 50
     manor.save()
 
-    with pytest.raises(ValueError, match="资源不足"):
+    with pytest.raises(InsufficientResourceError, match="银两不足"):
         spend_resources(manor, {"silver": 100}, "测试消耗")
 
 

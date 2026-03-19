@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from battle.models import TroopTemplate
+from core.exceptions import TradeValidationError
 from gameplay.models import PlayerTroop, TroopBankStorage
 from gameplay.services.manor.core import ensure_manor
 from gameplay.services.manor.troop_bank import (
@@ -67,7 +68,7 @@ def test_deposit_troops_to_bank_rejects_capacity_overflow(django_user_model):
     PlayerTroop.objects.create(manor=manor, troop_template=template, count=100)
     TroopBankStorage.objects.create(manor=manor, troop_template=other_template, count=TROOP_BANK_CAPACITY - 10)
 
-    with pytest.raises(ValueError, match="容量不足"):
+    with pytest.raises(TradeValidationError, match="容量不足"):
         deposit_troops_to_bank(manor, template.key, 11)
 
     # 上限边界可存入
@@ -102,7 +103,7 @@ def test_withdraw_troops_from_bank_rejects_insufficient_count(django_user_model)
     template = _create_troop_template("bank_fist", "钱庄拳师")
     TroopBankStorage.objects.create(manor=manor, troop_template=template, count=8)
 
-    with pytest.raises(ValueError, match="数量不足"):
+    with pytest.raises(TradeValidationError, match="数量不足"):
         withdraw_troops_from_bank(manor, template.key, 9)
 
 
@@ -113,5 +114,5 @@ def test_deposit_troops_to_bank_rejects_invalid_quantity(django_user_model):
     template = _create_troop_template("bank_invalid_qty", "钱庄异常数量")
     PlayerTroop.objects.create(manor=manor, troop_template=template, count=10)
 
-    with pytest.raises(ValueError, match="正整数"):
+    with pytest.raises(TradeValidationError, match="正整数"):
         deposit_troops_to_bank(manor, template.key, "bad")

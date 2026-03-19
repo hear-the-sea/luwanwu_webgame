@@ -62,6 +62,25 @@
 - `gameplay/services/buildings/forge_config_helpers.py` 已抽离铁匠铺配置归一化逻辑。
 - `gameplay/services/arena/helpers.py` 已抽离竞技场纯计算与轮次辅助逻辑。
 - `gameplay/services/arena/snapshots.py` 已抽离竞技场报名快照构建与快照代理逻辑。
+- `trade` 高频写链路已开始退出 legacy `ValueError` 兼容：`TradeValidationError` 已接入交易行/钱庄/拍卖/钱庄护院主链路，`trade/view_helpers.py` 已停止把裸 `ValueError` 视为已知业务错误。
+- `gameplay/services/resources.py` 已把 `spend_resources_locked()` 的“资源不足”从字符串契约升级为显式资源异常，`trade/shop/technology/arena/buildings` 等直接调用点已同步改为按异常类型收口，而不是继续猜 `"资源不足"` 文本。
+- 本轮额外补了错误语义契约测试：覆盖 `trade` 视图对业务异常 / 基础设施异常 / 裸 `ValueError` 的区分，以及资源服务显式异常的回归。
+
+### 2026-03-19 异常语义收口说明
+
+本批改动对应审计规则 `R2`、`R5` 的局部推进，不代表 `P1-6` 已整体封板。
+
+本批已满足：
+
+1. `trade` 高频入口的业务错误、基础设施错误、程序错误边界比改动前更清晰，view 不再继续依赖 legacy `ValueError` 集合作为默认业务契约。
+2. 公开 service 入口与 view 映射已经补了边界契约测试，能明确断言哪些错误会被映射为用户提示，哪些错误必须继续上抛。
+3. `arena` 链路已完成一轮同类收口：报名、撤销、兑换、门客选择等 service/helper 不再默认抛裸 `ValueError`，而是改为显式 `Arena*Error` / 资源异常；`gameplay/views/arena.py` 已同步改成按领域异常映射。
+
+本批仍未完成：
+
+1. 项目范围内仍有大量老链路继续使用 `ValueError` 作为跨层业务语义，不能把这轮结果表述成“审计要求已全部满足”。
+2. `core/utils/view_error_mapping.py` 的 legacy 兼容集合仍在其它入口存活，后续要继续按高频链路逐步退役。
+3. `production`、`mission`、`recruit`、`jail` 等入口仍有 `GameError + ValueError` 混用，下一轮应继续优先处理高频 view/service 主链路。
 
 ## 目标
 

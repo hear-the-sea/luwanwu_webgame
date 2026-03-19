@@ -1,5 +1,6 @@
 import pytest
 
+from core.exceptions import ArenaExchangeError
 from gameplay.services.arena.exchange_helpers import (
     build_exchange_payload,
     build_exchange_summary,
@@ -16,7 +17,7 @@ def test_normalize_exchange_quantity_validates_positive_values():
     assert normalize_exchange_quantity(3) == 3
     assert normalize_exchange_quantity("2") == 2
 
-    with pytest.raises(ValueError, match="兑换数量无效"):
+    with pytest.raises(ArenaExchangeError, match="兑换数量无效"):
         normalize_exchange_quantity(0)
 
 

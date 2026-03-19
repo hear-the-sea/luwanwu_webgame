@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from battle.models import BattleReport
+from core.exceptions import ArenaError
 from gameplay.models import ArenaEntry, ArenaEntryGuest, ArenaMatch, ArenaTournament, ItemTemplate
 from gameplay.services.manor.core import ensure_manor
 from guests.models import Guest, GuestStatus, GuestTemplate
@@ -336,7 +337,7 @@ def test_arena_register_view_known_error_shows_message(arena_client, monkeypatch
 
     monkeypatch.setattr(
         "gameplay.views.arena.register_arena_entry",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("arena blocked")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ArenaError("arena blocked")),
     )
 
     response = client.post(
@@ -348,6 +349,24 @@ def test_arena_register_view_known_error_shows_message(arena_client, monkeypatch
     assert response.url == reverse("gameplay:arena")
     messages = [str(m) for m in get_messages(response.wsgi_request)]
     assert any("arena blocked" in m for m in messages)
+
+
+@pytest.mark.django_db
+def test_arena_register_view_raw_value_error_bubbles_up(arena_client, monkeypatch):
+    client, manor = arena_client
+    template = _build_guest_template("arena_view_register_value_error_tpl")
+    guest = _build_guest(manor, template, "V")
+
+    monkeypatch.setattr(
+        "gameplay.views.arena.register_arena_entry",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("arena legacy")),
+    )
+
+    with pytest.raises(ValueError, match="arena legacy"):
+        client.post(
+            reverse("gameplay:arena_register"),
+            {"guest_ids": [str(guest.id)]},
+        )
 
 
 @pytest.mark.django_db

@@ -40,6 +40,79 @@ class MissionCannotRetreatError(MissionError):
         super().__init__(message, reason=reason)
 
 
+# ============ 竞技场相关异常 ============
+
+
+class ArenaError(GameError):
+    """竞技场相关错误基类"""
+
+    error_code = "ARENA_ERROR"
+
+
+class ArenaGuestSelectionError(ArenaError):
+    """竞技场门客选择错误"""
+
+    error_code = "ARENA_GUEST_SELECTION_ERROR"
+
+
+class ArenaParticipationLimitError(ArenaError):
+    """竞技场每日参与次数超限"""
+
+    error_code = "ARENA_PARTICIPATION_LIMIT"
+
+    def __init__(self, limit: int, message: str | None = None):
+        if message is None:
+            message = f"每日最多参加 {limit} 次竞技场"
+        super().__init__(message, limit=limit)
+
+
+class ArenaEntryStateError(ArenaError):
+    """竞技场报名或撤销状态错误"""
+
+    error_code = "ARENA_ENTRY_STATE_ERROR"
+
+
+class ArenaCancellationError(ArenaEntryStateError):
+    """竞技场撤销报名错误"""
+
+    error_code = "ARENA_CANCELLATION_ERROR"
+
+
+class ArenaBusyError(ArenaError):
+    """竞技场系统忙碌"""
+
+    error_code = "ARENA_BUSY"
+    default_message = "竞技场报名繁忙，请稍后重试"
+
+
+class ArenaExchangeError(ArenaError):
+    """竞技场兑换错误"""
+
+    error_code = "ARENA_EXCHANGE_ERROR"
+
+
+class ArenaInsufficientCoinsError(ArenaExchangeError):
+    """角斗币不足"""
+
+    error_code = "ARENA_INSUFFICIENT_COINS"
+
+    def __init__(self, required: int, available: int, message: str | None = None):
+        if message is None:
+            message = "角斗币不足"
+        super().__init__(message, required=required, available=available)
+
+
+class ArenaRewardLimitError(ArenaExchangeError):
+    """竞技场奖励兑换次数超限"""
+
+    error_code = "ARENA_REWARD_LIMIT"
+
+    def __init__(self, reward_name: str, daily_limit: int, message: str | None = None):
+        if message is None:
+            message = f"{reward_name} 今日最多可兑换 {daily_limit} 次"
+        super().__init__(message, reward_name=reward_name, daily_limit=daily_limit)
+
+
 # ============ 打工相关异常 ============
 
 

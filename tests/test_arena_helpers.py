@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 from django.utils import timezone
 
+from core.exceptions import ArenaGuestSelectionError
 from gameplay.services.arena.helpers import (
     build_round_pairings,
     calculate_ranked_entries,
@@ -24,10 +25,10 @@ from gameplay.services.arena.rewards import ArenaRandomItemOption
 def test_normalize_guest_ids_deduplicates_and_validates_limit():
     assert normalize_guest_ids([3, "1", 3, 2], max_guests_per_entry=4) == [3, 1, 2]
 
-    with pytest.raises(ValueError, match="请至少选择 1 名门客"):
+    with pytest.raises(ArenaGuestSelectionError, match="请至少选择 1 名门客"):
         normalize_guest_ids([], max_guests_per_entry=4)
 
-    with pytest.raises(ValueError, match="每次最多选择 2 名门客"):
+    with pytest.raises(ArenaGuestSelectionError, match="每次最多选择 2 名门客"):
         normalize_guest_ids([1, 2, 3], max_guests_per_entry=2)
 
 

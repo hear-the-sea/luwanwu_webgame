@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from django.core.cache import cache
 
+from core.exceptions import ItemNotFoundError, TradeValidationError
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.manor.core import ensure_manor
 from trade.models import GoldBarExchangeLog
@@ -86,7 +87,7 @@ def test_calculate_gold_bar_cost_rejects_invalid_quantity(monkeypatch, django_us
     monkeypatch.setattr(bank_service, "calculate_supply_factor", lambda: 1.0)
     monkeypatch.setattr(bank_service, "get_today_exchange_count", lambda *_args, **_kwargs: 0)
 
-    with pytest.raises(ValueError, match="兑换数量必须大于0"):
+    with pytest.raises(TradeValidationError, match="兑换数量必须大于0"):
         bank_service.calculate_gold_bar_cost(manor, "invalid")
 
 
@@ -216,8 +217,36 @@ def test_exchange_gold_bar_rejects_invalid_quantity(django_user_model):
     user = django_user_model.objects.create_user(username="bank_exchange_invalid_qty", password="pass12345")
     manor = ensure_manor(user)
 
-    with pytest.raises(ValueError, match="兑换数量必须大于0"):
+    with pytest.raises(TradeValidationError, match="兑换数量必须大于0"):
         bank_service.exchange_gold_bar(manor, "invalid")
+
+
+@pytest.mark.django_db
+def test_exchange_gold_bar_translates_missing_gold_bar_template(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="bank_exchange_missing_gold_tpl", password="pass12345")
+    manor = ensure_manor(user)
+    manor.silver = 1_000_000_000
+    manor.save(update_fields=["silver"])
+
+    monkeypatch.setattr(
+        bank_service,
+        "calculate_gold_bar_cost",
+        lambda *_args, **_kwargs: {
+            "base_cost": 100,
+            "fee": 10,
+            "total_cost": 110,
+            "rate_details": [50],
+            "avg_rate": 50,
+        },
+    )
+    monkeypatch.setattr(bank_service, "calculate_next_rate", lambda *_args, **_kwargs: 123)
+    monkeypatch.setattr(
+        "trade.services.bank_service.add_item_to_inventory_locked",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ItemNotFoundError("物品模板不存在: gold_bar")),
+    )
+
+    with pytest.raises(TradeValidationError, match="金条物品不存在，请联系管理员"):
+        bank_service.exchange_gold_bar(manor, 1)
 
 
 @pytest.mark.django_db

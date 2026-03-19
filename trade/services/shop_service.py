@@ -11,6 +11,7 @@ from django.db import transaction
 from django.db.models import F
 
 from core.exceptions import (
+    InsufficientResourceError,
     InsufficientSilverError,
     InsufficientStockError,
     ItemInsufficientError,
@@ -276,9 +277,7 @@ def buy_item(manor: Manor, item_key: str, quantity: int) -> Dict:
             f"购买 {template.name} x{quantity}",
             ResourceEvent.Reason.SHOP_PURCHASE,
         )
-    except ValueError as exc:
-        if str(exc) != "资源不足":
-            raise
+    except InsufficientResourceError as exc:
         raise InsufficientSilverError(total_cost, int(locked_manor.silver), message="银两不足") from exc
 
     # 扣除库存（原子操作，防止并发超卖）

@@ -8,6 +8,7 @@ from typing import List, Optional, Tuple
 from django.db import transaction
 from django.utils import timezone
 
+from core.exceptions import TradeValidationError
 from gameplay.models import Manor
 from gameplay.services.utils.messages import create_message
 from gameplay.services.utils.notifications import notify_user
@@ -27,7 +28,7 @@ def _safe_int(value, default: int) -> int:
 def _normalize_bid_amount(amount: int) -> int:
     normalized = _safe_int(amount, 0)
     if normalized <= 0:
-        raise ValueError("出价金额必须大于0")
+        raise TradeValidationError("出价金额必须大于0")
     return normalized
 
 
@@ -38,7 +39,7 @@ def _safe_winner_count(slot: AuctionSlot) -> int:
 def _require_valid_winner_count(slot: AuctionSlot) -> int:
     winner_count = _safe_int(getattr(slot, "quantity", 0), 0)
     if winner_count <= 0:
-        raise ValueError("拍卖位配置异常，请联系管理员")
+        raise TradeValidationError("拍卖位配置异常，请联系管理员")
     return winner_count
 
 
@@ -63,9 +64,9 @@ def _safe_notify_user(user_id: int, payload: dict, *, log_context: str) -> None:
 
 def _validate_bid_raise_or_increment(slot: AuctionSlot, amount: int, current_amount: int) -> None:
     if amount <= current_amount:
-        raise ValueError(f"加价金额必须高于您之前的出价 {current_amount} 金条")
+        raise TradeValidationError(f"加价金额必须高于您之前的出价 {current_amount} 金条")
     if amount < current_amount + slot.min_increment:
-        raise ValueError(f"加价幅度至少为 {slot.min_increment} 金条")
+        raise TradeValidationError(f"加价幅度至少为 {slot.min_increment} 金条")
 
 
 def _get_player_active_bid(ranking: list[AuctionBid], manor: Manor) -> AuctionBid | None:
@@ -75,17 +76,17 @@ def _get_player_active_bid(ranking: list[AuctionBid], manor: Manor) -> AuctionBi
 def _load_locked_slot(slot_id: int) -> AuctionSlot:
     slot = AuctionSlot.objects.select_for_update().select_related("round", "item_template").filter(id=slot_id).first()
     if not slot:
-        raise ValueError("拍卖位不存在")
+        raise TradeValidationError("拍卖位不存在")
     return slot
 
 
 def _validate_slot_active(slot: AuctionSlot) -> None:
     if slot.status != AuctionSlot.Status.ACTIVE:
-        raise ValueError("该拍卖位已结束")
+        raise TradeValidationError("该拍卖位已结束")
     if slot.round.status != AuctionRound.Status.ACTIVE:
-        raise ValueError("该拍卖轮次已结束")
+        raise TradeValidationError("该拍卖轮次已结束")
     if slot.round.end_at <= timezone.now():
-        raise ValueError("拍卖时间已结束")
+        raise TradeValidationError("拍卖时间已结束")
 
 
 def _load_previous_active_bid(slot: AuctionSlot, manor: Manor) -> AuctionBid | None:
@@ -226,7 +227,7 @@ def validate_bid_amount(
     if not ranking and not current_bid:
         min_bid = slot.starting_price
         if amount < min_bid:
-            raise ValueError(f"出价金额不得低于起拍价 {min_bid} 金条")
+            raise TradeValidationError(f"出价金额不得低于起拍价 {min_bid} 金条")
         return
 
     # 如果已有出价，检查是否为加价
@@ -245,7 +246,7 @@ def validate_bid_amount(
     winner_count = _safe_winner_count(slot)
 
     if len(ranking) >= winner_count and amount <= cutoff:
-        raise ValueError(f"出价金额需要高于当前最低中标价 {cutoff} 金条才能进入前 {winner_count} 名")
+        raise TradeValidationError(f"出价金额需要高于当前最低中标价 {cutoff} 金条才能进入前 {winner_count} 名")
 
 
 def place_bid(

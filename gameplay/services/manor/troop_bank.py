@@ -9,6 +9,8 @@ from typing import Any
 from django.db import DatabaseError, transaction
 from django.db.models import Sum
 
+from core.exceptions import TradeValidationError
+
 from ...models import Manor, PlayerTroop, TroopBankStorage
 
 TROOP_BANK_CAPACITY = 5000
@@ -18,9 +20,9 @@ def _normalize_positive_quantity(quantity: int, *, action: str) -> int:
     try:
         normalized = int(quantity)
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"{action}数量必须是正整数") from exc
+        raise TradeValidationError(f"{action}数量必须是正整数") from exc
     if normalized <= 0:
-        raise ValueError(f"{action}数量必须大于0")
+        raise TradeValidationError(f"{action}数量必须大于0")
     return normalized
 
 
@@ -111,13 +113,13 @@ def deposit_troops_to_bank(manor: Manor, troop_key: str, quantity: int) -> dict[
         .first()
     )
     if not player_troop:
-        raise ValueError("没有该类型的护院")
+        raise TradeValidationError("没有该类型的护院")
     if player_troop.count < quantity:
-        raise ValueError(f"{player_troop.troop_template.name}数量不足，当前可用{player_troop.count}")
+        raise TradeValidationError(f"{player_troop.troop_template.name}数量不足，当前可用{player_troop.count}")
 
     used = get_troop_bank_used_space(locked_manor)
     if used + quantity > TROOP_BANK_CAPACITY:
-        raise ValueError(f"钱庄护院容量不足，最多可存放{TROOP_BANK_CAPACITY}名")
+        raise TradeValidationError(f"钱庄护院容量不足，最多可存放{TROOP_BANK_CAPACITY}名")
 
     bank_troop, _created = TroopBankStorage.objects.get_or_create(
         manor=locked_manor,
@@ -151,9 +153,9 @@ def withdraw_troops_from_bank(manor: Manor, troop_key: str, quantity: int) -> di
         .first()
     )
     if not bank_troop:
-        raise ValueError("钱庄中没有该类型护院")
+        raise TradeValidationError("钱庄中没有该类型护院")
     if bank_troop.count < quantity:
-        raise ValueError(f"钱庄中{bank_troop.troop_template.name}数量不足，当前仅有{bank_troop.count}")
+        raise TradeValidationError(f"钱庄中{bank_troop.troop_template.name}数量不足，当前仅有{bank_troop.count}")
 
     player_troop, _created = PlayerTroop.objects.get_or_create(
         manor=locked_manor,

@@ -27,6 +27,15 @@ from .building import (
     TechnologyUpgradeInProgressError,
 )
 from .gameplay import (
+    ArenaBusyError,
+    ArenaCancellationError,
+    ArenaEntryStateError,
+    ArenaError,
+    ArenaExchangeError,
+    ArenaGuestSelectionError,
+    ArenaInsufficientCoinsError,
+    ArenaParticipationLimitError,
+    ArenaRewardLimitError,
     MissionCannotRetreatError,
     MissionDailyLimitError,
     MissionError,
@@ -89,7 +98,7 @@ from .resource import (
     SkillSlotFullError,
     TreasuryCapacityFullError,
 )
-from .trade import ShopValidationError, TradeError
+from .trade import ShopValidationError, TradeError, TradeValidationError
 
 __all__ = [
     # Base
@@ -107,6 +116,7 @@ __all__ = [
     "InsufficientSpaceError",
     # Trade
     "TradeError",
+    "TradeValidationError",
     "ShopValidationError",
     # Guest
     "GuestError",
@@ -131,6 +141,15 @@ __all__ = [
     "EquipmentNotEquippedError",
     "DuplicateEquipmentError",
     # Gameplay (Mission, Work, Salary)
+    "ArenaError",
+    "ArenaGuestSelectionError",
+    "ArenaParticipationLimitError",
+    "ArenaEntryStateError",
+    "ArenaCancellationError",
+    "ArenaBusyError",
+    "ArenaExchangeError",
+    "ArenaInsufficientCoinsError",
+    "ArenaRewardLimitError",
     "MissionError",
     "MissionDailyLimitError",
     "MissionCannotRetreatError",

@@ -5,6 +5,8 @@ from datetime import timedelta
 from django.db.models import F
 from django.utils import timezone
 
+from core.exceptions import TradeValidationError
+
 
 def normalize_listing_inputs(quantity: int, unit_price: int, duration: int, *, safe_int) -> tuple[int, int, int]:
     return safe_int(quantity, 0), safe_int(unit_price, -1), safe_int(duration, -1)
@@ -13,9 +15,9 @@ def normalize_listing_inputs(quantity: int, unit_price: int, duration: int, *, s
 def load_tradeable_item_template(*, item_template_model, item_key: str):
     item_template = item_template_model.objects.filter(key=item_key).first()
     if not item_template:
-        raise ValueError("物品不存在")
+        raise TradeValidationError("物品不存在")
     if not item_template.tradeable:
-        raise ValueError("该物品不可交易")
+        raise TradeValidationError("该物品不可交易")
     return item_template
 
 
@@ -33,13 +35,13 @@ def lock_listing_inventory_item(*, inventory_item_model, locked_manor, item_temp
 
 def validate_listing_inventory(*, inventory_item, quantity: int) -> None:
     if not inventory_item or inventory_item.quantity < quantity:
-        raise ValueError("物品数量不足")
+        raise TradeValidationError("物品数量不足")
 
 
 def validate_gold_bar_availability(*, inventory_item, quantity: int, frozen: int) -> None:
     available = inventory_item.quantity - frozen
     if available < quantity:
-        raise ValueError(f"可用金条不足（当前可用 {available} 个，{frozen} 个被拍卖冻结）")
+        raise TradeValidationError(f"可用金条不足（当前可用 {available} 个，{frozen} 个被拍卖冻结）")
 
 
 def decrement_listing_inventory(*, inventory_item_model, inventory_item, quantity: int) -> None:
@@ -48,7 +50,7 @@ def decrement_listing_inventory(*, inventory_item_model, inventory_item, quantit
         updated_at=timezone.now(),
     )
     if not updated_rows:
-        raise ValueError("物品数量不足或已被其他操作占用")
+        raise TradeValidationError("物品数量不足或已被其他操作占用")
 
     inventory_item_model.objects.filter(pk=inventory_item.pk, quantity=0).delete()
 
@@ -56,7 +58,7 @@ def decrement_listing_inventory(*, inventory_item_model, inventory_item, quantit
 def validate_listing_total_price(*, unit_price: int, quantity: int, max_total_price: int) -> int:
     total_price = unit_price * quantity
     if total_price > max_total_price:
-        raise ValueError(f"总价不能超过 {max_total_price:,} 银两")
+        raise TradeValidationError(f"总价不能超过 {max_total_price:,} 银两")
     return total_price
 
 

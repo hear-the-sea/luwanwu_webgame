@@ -13,6 +13,13 @@ class TradeError(GameError):
     error_code = "TRADE_ERROR"
 
 
+class TradeValidationError(TradeError):
+    """交易业务规则或输入校验错误"""
+
+    error_code = "TRADE_VALIDATION_ERROR"
+    default_message = "交易请求无效"
+
+
 class ShopValidationError(TradeError):
     """商店买卖请求参数校验错误"""
 

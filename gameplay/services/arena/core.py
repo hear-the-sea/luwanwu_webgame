@@ -10,6 +10,7 @@ from django.db import transaction
 from django.db.models import Count, F
 from django.utils import timezone
 
+from core.exceptions import ArenaBusyError, ArenaEntryStateError, ArenaParticipationLimitError
 from core.utils.cache_lock import acquire_best_effort_lock, release_best_effort_lock
 from gameplay.models import ArenaEntry, ArenaEntryGuest, ArenaMatch, ArenaTournament, Manor
 from guests.models import Guest, GuestStatus
@@ -131,7 +132,7 @@ def _get_or_create_recruiting_tournament_locked() -> ArenaTournament:
         )
         if existing:
             return existing
-        raise ValueError("竞技场报名繁忙，请稍后重试")
+        raise ArenaBusyError()
 
     try:
         existing = (
@@ -205,13 +206,13 @@ def register_arena_entry(manor: Manor, guest_ids: Iterable[int]) -> ArenaRegistr
     locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
 
     if _sync_daily_participation_counter_locked(locked_manor) >= ARENA_DAILY_PARTICIPATION_LIMIT:
-        raise ValueError(f"每日最多参加 {ARENA_DAILY_PARTICIPATION_LIMIT} 次竞技场")
+        raise ArenaParticipationLimitError(ARENA_DAILY_PARTICIPATION_LIMIT)
 
     if ArenaEntry.objects.filter(
         manor=locked_manor,
         tournament__status__in=[ArenaTournament.Status.RECRUITING, ArenaTournament.Status.RUNNING],
     ).exists():
-        raise ValueError("您已有进行中的竞技场报名，请等待本场结束")
+        raise ArenaEntryStateError("您已有进行中的竞技场报名，请等待本场结束")
 
     selected_guests = load_selected_registration_guests_locked(locked_manor, selected_guest_ids)
     deduct_registration_silver_locked(locked_manor, silver_cost=ARENA_REGISTRATION_SILVER_COST)

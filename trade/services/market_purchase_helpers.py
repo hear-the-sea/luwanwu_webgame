@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from core.exceptions import TradeValidationError
 from gameplay.models import Manor
 
 
@@ -11,17 +12,17 @@ def get_locked_listing_for_purchase(*, market_listing_model, listing_id: int):
         .first()
     )
     if not listing:
-        raise ValueError("挂单不存在")
+        raise TradeValidationError("挂单不存在")
     return listing
 
 
 def validate_listing_for_purchase(listing, buyer: Manor, *, active_status: str) -> None:
     if listing.status != active_status:
-        raise ValueError("该挂单已下架")
+        raise TradeValidationError("该挂单已下架")
     if listing.is_expired:
-        raise ValueError("该挂单已过期")
+        raise TradeValidationError("该挂单已过期")
     if listing.seller_id == buyer.pk:
-        raise ValueError("不能购买自己的物品")
+        raise TradeValidationError("不能购买自己的物品")
 
 
 def lock_purchase_parties(*, manor_model, buyer_pk: int, seller_pk: int | None):

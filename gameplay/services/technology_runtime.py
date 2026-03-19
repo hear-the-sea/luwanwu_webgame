@@ -56,6 +56,8 @@ def upgrade_technology(
 
     from django.utils import timezone
 
+    from core.exceptions import InsufficientResourceError
+
     from ..models import Manor, PlayerTechnology
     from .manor.prestige import add_prestige_silver_locked
     from .resources import spend_resources_locked
@@ -89,7 +91,7 @@ def upgrade_technology(
                 reason="tech_upgrade",
                 note=f"升级{template['name']}",
             )
-        except ValueError as exc:
+        except InsufficientResourceError as exc:
             raise insufficient_resource_error_cls("silver", cost, locked_manor.silver) from exc
 
         add_prestige_silver_locked(locked_manor, cost)

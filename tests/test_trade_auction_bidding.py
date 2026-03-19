@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from core.exceptions import TradeValidationError
 from gameplay.models import InventoryItem
 from gameplay.services.manor.core import ensure_manor
 from tests.helpers.auction import create_active_round_slot, ensure_gold_bar_template
@@ -27,7 +28,7 @@ def test_validate_bid_amount_rejects_below_starting_price(django_user_model):
     slot = create_active_round_slot(item_key="auction_validate_item")
     slot.bid_count = 0
 
-    with pytest.raises(ValueError, match="起拍价"):
+    with pytest.raises(TradeValidationError, match="起拍价"):
         auction_service.validate_bid_amount(slot, 1)
 
 
@@ -211,7 +212,7 @@ def test_validate_bid_amount_rejects_non_positive_amount(django_user_model):
     slot = create_active_round_slot(item_key="auction_validate_non_positive_item")
     slot.bid_count = 0
 
-    with pytest.raises(ValueError, match="出价金额必须大于0"):
+    with pytest.raises(TradeValidationError, match="出价金额必须大于0"):
         auction_service.validate_bid_amount(slot, 0)
 
 
@@ -222,7 +223,7 @@ def test_place_bid_rejects_invalid_amount_type(django_user_model):
     _set_gold_bars(manor, 10)
     slot = create_active_round_slot(item_key="auction_invalid_amount_type_item")
 
-    with pytest.raises(ValueError, match="出价金额必须大于0"):
+    with pytest.raises(TradeValidationError, match="出价金额必须大于0"):
         auction_service.place_bid(manor, slot.id, "invalid")
 
 
@@ -235,5 +236,5 @@ def test_place_bid_rejects_invalid_winner_count_configuration(django_user_model)
     slot.quantity = 0
     slot.save(update_fields=["quantity"])
 
-    with pytest.raises(ValueError, match="拍卖位配置异常"):
+    with pytest.raises(TradeValidationError, match="拍卖位配置异常"):
         auction_service.place_bid(manor, slot.id, 5)

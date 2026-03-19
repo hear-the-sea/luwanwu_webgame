@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from django.db import transaction
 from django.db.models import F, Sum
 
+from core.exceptions import ArenaExchangeError, ArenaInsufficientCoinsError, ArenaRewardLimitError
 from gameplay.models import ArenaExchangeRecord, Manor, Message
 from gameplay.services.inventory.core import add_item_to_inventory_locked
 from gameplay.services.resources import grant_resources_locked
@@ -18,7 +19,7 @@ from .rewards import ArenaRewardDefinition, get_arena_reward_definition
 def normalize_exchange_quantity(quantity: int) -> int:
     normalized_quantity = int(quantity or 0)
     if normalized_quantity <= 0:
-        raise ValueError("兑换数量无效")
+        raise ArenaExchangeError("兑换数量无效")
     return normalized_quantity
 
 
@@ -89,7 +90,7 @@ def ensure_exchange_daily_limit(
         or 0
     )
     if today_exchanged + normalized_quantity > reward.daily_limit:
-        raise ValueError(f"{reward.name} 今日最多可兑换 {reward.daily_limit} 次")
+        raise ArenaRewardLimitError(reward.name, reward.daily_limit)
 
 
 def grant_exchange_items_locked(
@@ -172,14 +173,14 @@ class ArenaExchangeResult:
 def exchange_arena_reward(manor: Manor, reward_key: str, quantity: int = 1) -> ArenaExchangeResult:
     reward = get_arena_reward_definition(reward_key)
     if not reward:
-        raise ValueError("兑换项不存在")
+        raise ArenaExchangeError("兑换项不存在")
 
     normalized_quantity = normalize_exchange_quantity(quantity)
 
     locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
     total_cost = reward.cost_coins * normalized_quantity
     if locked_manor.arena_coins < total_cost:
-        raise ValueError("角斗币不足")
+        raise ArenaInsufficientCoinsError(total_cost, int(locked_manor.arena_coins))
 
     day_start, day_end = _arena_helpers.today_bounds()
     ensure_exchange_daily_limit(

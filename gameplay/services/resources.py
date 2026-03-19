@@ -13,6 +13,7 @@ from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
+from core.exceptions import InsufficientResourceError, InsufficientSilverError
 from core.utils.time_scale import scale_value
 
 from ..models import Manor, ResourceEvent, ResourceType
@@ -82,6 +83,20 @@ def _credit_resource(manor: Manor, resource: str, amount: int) -> Tuple[int, int
 def _require_atomic_block(name: str) -> None:
     if not transaction.get_connection().in_atomic_block:
         raise RuntimeError(f"{name} must be called inside transaction.atomic()")
+
+
+def _raise_insufficient_resource_error(manor: Manor, cost: Dict[str, int]) -> None:
+    for resource, amount in cost.items():
+        required = int(amount or 0)
+        if required <= 0:
+            continue
+        available = int(getattr(manor, resource, 0) or 0)
+        if available >= required:
+            continue
+        if resource == ResourceType.SILVER:
+            raise InsufficientSilverError(required, available)
+        raise InsufficientResourceError(resource, required, available)
+    raise InsufficientResourceError("unknown", 0, 0, message="资源不足")
 
 
 def _build_production_snapshot(manor: Manor, *, now: datetime) -> tuple[Dict[str, int], Dict[str, int], bool]:
@@ -171,7 +186,7 @@ def spend_resources_locked(
     updates = {key: F(key) - value for key, value in cost.items()}
     updated = Manor.objects.filter(pk=manor.pk, **filters).update(**updates)
     if not updated:
-        raise ValueError("资源不足")
+        _raise_insufficient_resource_error(manor, cost)
 
     manor.refresh_from_db(fields=RESOURCE_FIELDS + ["resource_updated_at"])
     if int(cost.get(ResourceType.GRAIN, 0) or 0) > 0:
@@ -313,7 +328,7 @@ def spend_resources(
         reason: 消耗原因
 
     Raises:
-        ValueError: 资源不足时抛出
+        InsufficientResourceError: 资源不足时抛出
     """
     if not cost:
         return

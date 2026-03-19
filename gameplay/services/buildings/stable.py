@@ -16,6 +16,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
+from core.exceptions import InsufficientResourceError
 from core.utils.time_scale import scale_duration
 from core.utils.yaml_loader import load_yaml_data
 
@@ -247,8 +248,13 @@ def start_horse_production(manor: Manor, horse_key: str, quantity: int = 1) -> H
                 note=f"生产{horse_name}x{quantity}",
                 reason=ResourceEvent.Reason.UPGRADE_COST,
             )
-        except ValueError as exc:
-            raise ValueError(f"粮食不足，需要{total_grain_cost}点粮食") from exc
+        except InsufficientResourceError as exc:
+            raise InsufficientResourceError(
+                "grain",
+                total_grain_cost,
+                int(locked_manor.grain),
+                message=f"粮食不足，需要{total_grain_cost}点粮食",
+            ) from exc
 
         # 计算实际生产时间（时间不随数量增加）
         actual_duration = calculate_production_duration(config["base_duration"], manor)

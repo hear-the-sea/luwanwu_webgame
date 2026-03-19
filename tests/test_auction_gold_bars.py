@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from core.exceptions import TradeValidationError
 from trade.services.auction import gold_bars
 
 pytestmark = pytest.mark.django_db
@@ -117,7 +118,7 @@ def test_freeze_gold_bars_rejects_zero_amount():
     manor = MagicMock()
     bid = MagicMock()
 
-    with pytest.raises(ValueError, match="冻结数量必须大于0"):
+    with pytest.raises(TradeValidationError, match="冻结数量必须大于0"):
         gold_bars.freeze_gold_bars(manor, 0, bid)
 
 
@@ -126,7 +127,7 @@ def test_freeze_gold_bars_rejects_negative_amount():
     manor = MagicMock()
     bid = MagicMock()
 
-    with pytest.raises(ValueError, match="冻结数量必须大于0"):
+    with pytest.raises(TradeValidationError, match="冻结数量必须大于0"):
         gold_bars.freeze_gold_bars(manor, -5, bid)
 
 
@@ -146,7 +147,7 @@ def test_freeze_gold_bars_rejects_insufficient():
             mock_frozen_qs.filter.return_value.aggregate.return_value = {"total": 30}
 
             # Available = 50 - 30 = 20, trying to freeze 25
-            with pytest.raises(ValueError, match="可用金条不足"):
+            with pytest.raises(TradeValidationError, match="可用金条不足"):
                 gold_bars.freeze_gold_bars(manor, 25, bid)
 
 

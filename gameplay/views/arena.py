@@ -14,6 +14,7 @@ from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
 from core.decorators import flash_unexpected_view_error
+from core.exceptions import ArenaGuestSelectionError, GameError
 from core.utils import safe_positive_int, sanitize_error_message
 from core.utils.rate_limit import rate_limit_redirect
 from gameplay.selectors import (
@@ -49,7 +50,7 @@ def _get_registration_silver_cost() -> int:
     return arena_core.ARENA_REGISTRATION_SILVER_COST
 
 
-def _handle_known_arena_error(request: HttpRequest, exc: ValueError) -> None:
+def _handle_known_arena_error(request: HttpRequest, exc: GameError | ValueError) -> None:
     messages.error(request, sanitize_error_message(exc))
 
 
@@ -75,7 +76,7 @@ def _parse_guest_ids(raw_values: list[str]) -> list[int]:
     for raw in raw_values:
         guest_id = safe_positive_int(raw, default=None)
         if guest_id is None:
-            raise ValueError("门客选择有误")
+            raise ArenaGuestSelectionError("门客选择有误")
         if guest_id in seen:
             continue
         seen.add(guest_id)
@@ -195,7 +196,7 @@ def arena_register_view(request: HttpRequest) -> HttpResponse:
                 request,
                 f"报名成功！消耗银两 {_get_registration_silver_cost()}。当前已报名 {result.entry_count}/{result.tournament.player_limit} 人。",
             )
-    except ValueError as exc:
+    except GameError as exc:
         _handle_known_arena_error(request, exc)
     except DatabaseError as exc:
         _handle_unexpected_arena_error(
@@ -223,7 +224,7 @@ def arena_cancel_view(request: HttpRequest) -> HttpResponse:
             request,
             f"已撤销报名（{canceled_count} 条），可重新报名（报名费 {_get_registration_silver_cost()} 银两不返还）。",
         )
-    except ValueError as exc:
+    except GameError as exc:
         _handle_known_arena_error(request, exc)
     except DatabaseError as exc:
         _handle_unexpected_arena_error(
@@ -267,7 +268,7 @@ def arena_exchange_view(request: HttpRequest) -> HttpResponse:
             request,
             f"兑换成功：{result.reward.name} x{result.quantity}，消耗角斗币 {result.total_cost}。{random_draw_summary}",
         )
-    except ValueError as exc:
+    except GameError as exc:
         _handle_known_arena_error(request, exc)
     except DatabaseError as exc:
         _handle_unexpected_arena_error(

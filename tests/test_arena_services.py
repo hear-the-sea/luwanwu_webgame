@@ -6,6 +6,14 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
+from core.exceptions import (
+    ArenaBusyError,
+    ArenaCancellationError,
+    ArenaGuestSelectionError,
+    ArenaParticipationLimitError,
+    ArenaRewardLimitError,
+    InsufficientSilverError,
+)
 from gameplay.models import (
     ArenaEntry,
     ArenaEntryGuest,
@@ -150,7 +158,7 @@ def test_register_arena_entry_respects_daily_limit():
             coin_reward=10,
         )
 
-    with pytest.raises(ValueError, match="每日最多参加"):
+    with pytest.raises(ArenaParticipationLimitError, match="每日最多参加"):
         register_arena_entry(manor, [guest.id])
 
 
@@ -165,7 +173,7 @@ def test_register_arena_entry_rejects_more_than_guest_limit():
     template = _create_guest_template("arena_guest_limit_tpl")
     guests = [_create_guest(manor, template, str(i)) for i in range(arena_core.ARENA_MAX_GUESTS_PER_ENTRY + 1)]
 
-    with pytest.raises(ValueError, match=f"最多选择 {arena_core.ARENA_MAX_GUESTS_PER_ENTRY} 名门客"):
+    with pytest.raises(ArenaGuestSelectionError, match=f"最多选择 {arena_core.ARENA_MAX_GUESTS_PER_ENTRY} 名门客"):
         register_arena_entry(manor, [guest.id for guest in guests])
 
 
@@ -182,7 +190,7 @@ def test_register_arena_entry_requires_idle_guests():
     guest.status = GuestStatus.WORKING
     guest.save(update_fields=["status"])
 
-    with pytest.raises(ValueError, match="仅空闲门客可报名竞技场"):
+    with pytest.raises(ArenaGuestSelectionError, match="仅空闲门客可报名竞技场"):
         register_arena_entry(manor, [guest.id])
 
 
@@ -200,7 +208,7 @@ def test_register_arena_entry_returns_busy_error_when_recruiting_lock_not_acquir
 
     monkeypatch.setattr(arena_core, "acquire_best_effort_lock", lambda *args, **kwargs: (False, False, None))
 
-    with pytest.raises(ValueError, match="竞技场报名繁忙，请稍后重试"):
+    with pytest.raises(ArenaBusyError, match="竞技场报名繁忙，请稍后重试"):
         register_arena_entry(manor, [guest.id])
 
 
@@ -290,7 +298,7 @@ def test_cancel_arena_entry_requires_recruiting_entry():
     )
     manor = ensure_manor(user)
 
-    with pytest.raises(ValueError, match="当前没有可撤销的报名"):
+    with pytest.raises(ArenaCancellationError, match="当前没有可撤销的报名"):
         cancel_arena_entry(manor)
 
 
@@ -519,7 +527,7 @@ def test_exchange_arena_reward_gladiator_chest_respects_daily_limit():
 
     exchange_arena_reward(manor, "gladiator_chest", quantity=2)
 
-    with pytest.raises(ValueError, match="角斗士宝箱 今日最多可兑换 2 次"):
+    with pytest.raises(ArenaRewardLimitError, match="角斗士宝箱 今日最多可兑换 2 次"):
         exchange_arena_reward(manor, "gladiator_chest", quantity=1)
 
 
@@ -647,7 +655,7 @@ def test_register_arena_entry_requires_registration_silver_cost():
     template = _create_guest_template("arena_need_silver_tpl")
     guest = _create_guest(manor, template, "A")
 
-    with pytest.raises(ValueError, match="银两不足"):
+    with pytest.raises(InsufficientSilverError, match="银两不足"):
         register_arena_entry(manor, [guest.id])
 
 
@@ -728,5 +736,5 @@ def test_daily_participation_counter_not_reset_by_tournament_cleanup():
     assert cleaned == 1
     assert not ArenaEntry.objects.filter(id=stale_entry.id).exists()
 
-    with pytest.raises(ValueError, match="每日最多参加"):
+    with pytest.raises(ArenaParticipationLimitError, match="每日最多参加"):
         register_arena_entry(manor, [guest.id])

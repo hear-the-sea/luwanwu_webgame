@@ -8,6 +8,7 @@ import pytest
 from django.db import IntegrityError
 from django.utils import timezone
 
+from core.exceptions import TradeValidationError
 from gameplay.models import InventoryItem, ItemTemplate, Manor
 from trade.models import MarketListing, MarketTransaction
 from trade.services import market_service
@@ -116,7 +117,7 @@ class TestMarketListing:
             manor=seller_manor, template=untradeable_item_template, quantity=10, storage_location="warehouse"
         )
 
-        with pytest.raises(ValueError, match="不可交易"):
+        with pytest.raises(TradeValidationError, match="不可交易"):
             market_service.create_listing(
                 manor=seller_manor,
                 item_key="test_untradeable_item",
@@ -127,7 +128,7 @@ class TestMarketListing:
 
     def test_create_listing_insufficient_quantity(self, seller_manor):
         """测试物品数量不足"""
-        with pytest.raises(ValueError, match="数量不足"):
+        with pytest.raises(TradeValidationError, match="数量不足"):
             market_service.create_listing(
                 manor=seller_manor,
                 item_key="test_tradeable_item",
@@ -141,7 +142,7 @@ class TestMarketListing:
         seller_manor.silver = 100  # 不够手续费
         seller_manor.save()
 
-        with pytest.raises(ValueError, match="资源不足"):
+        with pytest.raises(TradeValidationError, match="银两不足"):
             market_service.create_listing(
                 manor=seller_manor,
                 item_key="test_tradeable_item",
@@ -153,7 +154,7 @@ class TestMarketListing:
     def test_create_listing_price_too_low(self, seller_manor, tradeable_item_template):
         """测试定价过低"""
         # 物品基础价格1000，最低定价不能低于1000
-        with pytest.raises(ValueError, match="不能低于"):
+        with pytest.raises(TradeValidationError, match="不能低于"):
             market_service.create_listing(
                 manor=seller_manor,
                 item_key="test_tradeable_item",
@@ -259,7 +260,7 @@ class TestMarketPurchase:
             duration=7200,
         )
 
-        with pytest.raises(ValueError, match="不能购买自己"):
+        with pytest.raises(TradeValidationError, match="不能购买自己"):
             market_service.purchase_listing(seller_manor, listing.id)
 
     def test_purchase_insufficient_silver(self, seller_manor, buyer_manor):
@@ -275,7 +276,7 @@ class TestMarketPurchase:
         buyer_manor.silver = 1000  # 不够
         buyer_manor.save()
 
-        with pytest.raises(ValueError, match="资源不足"):
+        with pytest.raises(TradeValidationError, match="银两不足"):
             market_service.purchase_listing(buyer_manor, listing.id)
 
     def test_purchase_expired_listing(self, seller_manor, buyer_manor):
@@ -292,7 +293,7 @@ class TestMarketPurchase:
         listing.expires_at = timezone.now() - timedelta(hours=1)
         listing.save()
 
-        with pytest.raises(ValueError, match="已过期"):
+        with pytest.raises(TradeValidationError, match="已过期"):
             market_service.purchase_listing(buyer_manor, listing.id)
 
     def test_purchase_listing_succeeds_when_message_send_fails(
@@ -371,7 +372,7 @@ class TestMarketCancel:
             duration=7200,
         )
 
-        with pytest.raises(ValueError, match="无权取消"):
+        with pytest.raises(TradeValidationError, match="无权取消"):
             market_service.cancel_listing(buyer_manor, listing.id)
 
     def test_cancel_listing_restores_inventory_when_create_races(

@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from core.exceptions import TradeValidationError
 from trade.services import market_service
 
 pytestmark = pytest.mark.django_db
@@ -83,7 +84,7 @@ def test_validate_listing_price_rejects_below_minimum():
     """Test that price below minimum is rejected."""
     item_template = SimpleNamespace(price=1000)
 
-    with pytest.raises(ValueError, match="单价不能低于"):
+    with pytest.raises(TradeValidationError, match="单价不能低于"):
         market_service.validate_listing_price(item_template, 500)
 
 
@@ -91,7 +92,7 @@ def test_validate_listing_price_rejects_above_maximum():
     """Test that price above maximum is rejected."""
     item_template = SimpleNamespace(price=100)
 
-    with pytest.raises(ValueError, match="单价不能超过"):
+    with pytest.raises(TradeValidationError, match="单价不能超过"):
         market_service.validate_listing_price(item_template, 20000000)
 
 
@@ -134,7 +135,7 @@ def test_create_listing_rejects_invalid_duration():
     """Test that invalid duration is rejected."""
     manor = MagicMock()
 
-    with pytest.raises(ValueError, match="无效的上架时长"):
+    with pytest.raises(TradeValidationError, match="无效的上架时长"):
         market_service.create_listing(manor, "item_key", 1, 1000, 9999)
 
 
@@ -142,8 +143,8 @@ def test_create_listing_rejects_nonexistent_item():
     """Test that nonexistent item is rejected."""
     manor = MagicMock()
 
-    with patch.object(market_service, "load_market_item_template", side_effect=ValueError("物品不存在")):
-        with pytest.raises(ValueError, match="物品不存在"):
+    with patch.object(market_service, "load_market_item_template", side_effect=TradeValidationError("物品不存在")):
+        with pytest.raises(TradeValidationError, match="物品不存在"):
             market_service.create_listing(manor, "fake_item", 1, 1000, 7200)
 
 
@@ -151,8 +152,8 @@ def test_create_listing_rejects_non_tradeable_item():
     """Test that non-tradeable item is rejected."""
     manor = MagicMock()
 
-    with patch.object(market_service, "load_market_item_template", side_effect=ValueError("该物品不可交易")):
-        with pytest.raises(ValueError, match="该物品不可交易"):
+    with patch.object(market_service, "load_market_item_template", side_effect=TradeValidationError("该物品不可交易")):
+        with pytest.raises(TradeValidationError, match="该物品不可交易"):
             market_service.create_listing(manor, "item", 1, 1000, 7200)
 
 
@@ -162,7 +163,7 @@ def test_create_listing_rejects_zero_quantity():
     item_template = SimpleNamespace(key="item", tradeable=True, price=100)
 
     with patch.object(market_service, "load_market_item_template", return_value=item_template):
-        with pytest.raises(ValueError, match="数量必须大于0"):
+        with pytest.raises(TradeValidationError, match="数量必须大于0"):
             market_service.create_listing(manor, "item", 0, 1000, 7200)
 
 
@@ -172,7 +173,7 @@ def test_create_listing_rejects_negative_quantity():
     item_template = SimpleNamespace(key="item", tradeable=True, price=100)
 
     with patch.object(market_service, "load_market_item_template", return_value=item_template):
-        with pytest.raises(ValueError, match="数量必须大于0"):
+        with pytest.raises(TradeValidationError, match="数量必须大于0"):
             market_service.create_listing(manor, "item", -1, 1000, 7200)
 
 
@@ -182,7 +183,7 @@ def test_create_listing_rejects_non_integer_quantity():
     item_template = SimpleNamespace(key="item", tradeable=True, price=100)
 
     with patch.object(market_service, "load_market_item_template", return_value=item_template):
-        with pytest.raises(ValueError, match="数量必须大于0"):
+        with pytest.raises(TradeValidationError, match="数量必须大于0"):
             market_service.create_listing(manor, "item", cast(int, "abc"), 1000, 7200)
 
 
@@ -192,7 +193,7 @@ def test_create_listing_rejects_non_integer_unit_price():
     item_template = SimpleNamespace(key="item", tradeable=True, price=100)
 
     with patch.object(market_service, "load_market_item_template", return_value=item_template):
-        with pytest.raises(ValueError, match="单价不能低于"):
+        with pytest.raises(TradeValidationError, match="单价不能低于"):
             market_service.create_listing(manor, "item", 1, cast(int, "abc"), 7200)
 
 
@@ -200,7 +201,7 @@ def test_create_listing_rejects_non_integer_duration():
     """Test that non-integer duration is rejected safely."""
     manor = MagicMock()
 
-    with pytest.raises(ValueError, match="无效的上架时长"):
+    with pytest.raises(TradeValidationError, match="无效的上架时长"):
         market_service.create_listing(manor, "item_key", 1, 1000, cast(int, "abc"))
 
 
@@ -259,7 +260,7 @@ def test_purchase_listing_rejects_nonexistent():
     with patch.object(market_service.MarketListing, "objects") as mock_qs:
         mock_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = None
 
-        with pytest.raises(ValueError, match="挂单不存在"):
+        with pytest.raises(TradeValidationError, match="挂单不存在"):
             market_service.purchase_listing(buyer, 999)
 
 
@@ -273,7 +274,7 @@ def test_cancel_listing_rejects_nonexistent():
     with patch.object(market_service.MarketListing, "objects") as mock_qs:
         mock_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = None
 
-        with pytest.raises(ValueError, match="挂单不存在或无权取消"):
+        with pytest.raises(TradeValidationError, match="挂单不存在或无权取消"):
             market_service.cancel_listing(manor, 999)
 
 

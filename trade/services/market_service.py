@@ -14,6 +14,7 @@ from django.db.models import QuerySet
 from django.utils import timezone
 
 from core.config import TRADE
+from core.exceptions import InsufficientResourceError, TradeValidationError
 from core.utils.yaml_loader import load_yaml_data
 from gameplay.models import InventoryItem, ItemTemplate, Manor, ResourceEvent
 from gameplay.models.items import LEGACY_TOOL_EFFECT_TYPES
@@ -98,21 +99,27 @@ def _safe_int(value, default: int) -> int:
 
 
 def charge_listing_fee(locked_manor: Manor, silver_amount: int) -> None:
-    spend_resources_locked(
-        locked_manor,
-        {"silver": silver_amount},
-        note="交易行挂单手续费",
-        reason=ResourceEvent.Reason.MARKET_LISTING_FEE,
-    )
+    try:
+        spend_resources_locked(
+            locked_manor,
+            {"silver": silver_amount},
+            note="交易行挂单手续费",
+            reason=ResourceEvent.Reason.MARKET_LISTING_FEE,
+        )
+    except InsufficientResourceError as exc:
+        raise TradeValidationError(str(exc)) from exc
 
 
 def pay_market_purchase(locked_manor: Manor, *, item_name: str, total_price: int) -> None:
-    spend_resources_locked(
-        locked_manor,
-        {"silver": total_price},
-        note=f"购买{item_name}",
-        reason=ResourceEvent.Reason.MARKET_PURCHASE,
-    )
+    try:
+        spend_resources_locked(
+            locked_manor,
+            {"silver": total_price},
+            note=f"购买{item_name}",
+            reason=ResourceEvent.Reason.MARKET_PURCHASE,
+        )
+    except InsufficientResourceError as exc:
+        raise TradeValidationError(str(exc)) from exc
 
 
 def settle_market_sale_proceeds(locked_manor: Manor, *, item_name: str, silver_amount: int) -> None:
@@ -188,16 +195,16 @@ def validate_listing_price(item_template: ItemTemplate, unit_price: int) -> None
         unit_price: 单价
 
     Raises:
-        ValueError: 如果价格不合法
+        TradeValidationError: 如果价格不合法
     """
     template_price = max(0, _safe_int(getattr(item_template, "price", 0), 0))
     normalized_unit_price = _safe_int(unit_price, -1)
     min_price = int(template_price * MIN_PRICE_MULTIPLIER)
     if normalized_unit_price < min_price:
-        raise ValueError(f"单价不能低于 {min_price} 银两")
+        raise TradeValidationError(f"单价不能低于 {min_price} 银两")
 
     if normalized_unit_price > MAX_PRICE:
-        raise ValueError(f"单价不能超过 {MAX_PRICE:,} 银两")
+        raise TradeValidationError(f"单价不能超过 {MAX_PRICE:,} 银两")
 
 
 def create_listing(
@@ -226,7 +233,7 @@ def create_listing(
         创建的挂单对象
 
     Raises:
-        ValueError: 验证失败时抛出异常
+        TradeValidationError: 验证失败时抛出异常
     """
     return _market_commands.create_market_listing(
         manor,

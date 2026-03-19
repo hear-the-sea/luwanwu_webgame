@@ -7,6 +7,7 @@ from typing import Iterable
 from django.conf import settings
 from django.utils import timezone
 
+from core.exceptions import ArenaGuestSelectionError
 from core.utils.time_scale import scale_duration
 
 from .rewards import ArenaRandomItemOption
@@ -28,18 +29,18 @@ def normalize_guest_ids(guest_ids: Iterable[int], *, max_guests_per_entry: int) 
         try:
             guest_id = int(raw)
         except (TypeError, ValueError):
-            raise ValueError("门客选择有误")
+            raise ArenaGuestSelectionError("门客选择有误")
         if guest_id <= 0:
-            raise ValueError("门客选择有误")
+            raise ArenaGuestSelectionError("门客选择有误")
         if guest_id in seen:
             continue
         seen.add(guest_id)
         normalized.append(guest_id)
 
     if not normalized:
-        raise ValueError("请至少选择 1 名门客")
+        raise ArenaGuestSelectionError("请至少选择 1 名门客")
     if len(normalized) > max_guests_per_entry:
-        raise ValueError(f"每次最多选择 {max_guests_per_entry} 名门客")
+        raise ArenaGuestSelectionError(f"每次最多选择 {max_guests_per_entry} 名门客")
     return normalized
 
 

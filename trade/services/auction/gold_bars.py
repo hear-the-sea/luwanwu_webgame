@@ -8,6 +8,7 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
+from core.exceptions import TradeValidationError
 from gameplay.models import InventoryItem, Manor
 from gameplay.services.inventory.core import consume_inventory_item_for_manor_locked, get_item_quantity
 from trade.models import AuctionBid, FrozenGoldBar
@@ -35,7 +36,7 @@ def get_available_gold_bars(manor: Manor) -> int:
 def freeze_gold_bars(manor: Manor, amount: int, bid: AuctionBid) -> FrozenGoldBar:
     """冻结金条用于拍卖出价。"""
     if amount <= 0:
-        raise ValueError("冻结数量必须大于0")
+        raise TradeValidationError("冻结数量必须大于0")
 
     inventory_item = (
         InventoryItem.objects.select_for_update()
@@ -53,7 +54,7 @@ def freeze_gold_bars(manor: Manor, amount: int, bid: AuctionBid) -> FrozenGoldBa
     )
     available = max(0, total - frozen)
     if available < amount:
-        raise ValueError(f"可用金条不足，当前可用 {available} 根，需要 {amount} 根")
+        raise TradeValidationError(f"可用金条不足，当前可用 {available} 根，需要 {amount} 根")
 
     frozen_record = FrozenGoldBar.objects.create(
         manor=manor,

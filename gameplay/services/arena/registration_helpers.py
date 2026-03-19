@@ -2,6 +2,12 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 
+from core.exceptions import (
+    ArenaCancellationError,
+    ArenaGuestSelectionError,
+    InsufficientResourceError,
+    InsufficientSilverError,
+)
 from gameplay.models import ArenaEntry, ArenaEntryGuest, ArenaTournament, Manor, ResourceEvent
 from guests.models import Guest, GuestStatus
 
@@ -16,11 +22,11 @@ def load_selected_registration_guests_locked(locked_manor: Manor, selected_guest
         .order_by("id")
     )
     if len(all_selected_guests) != len(requested_guest_ids):
-        raise ValueError("所选门客不存在或不属于当前庄园")
+        raise ArenaGuestSelectionError("所选门客不存在或不属于当前庄园")
 
     non_idle_guests = [guest for guest in all_selected_guests if guest.status != GuestStatus.IDLE]
     if non_idle_guests:
-        raise ValueError("仅空闲门客可报名竞技场")
+        raise ArenaGuestSelectionError("仅空闲门客可报名竞技场")
 
     selected_guest_order = {guest_id: index for index, guest_id in enumerate(requested_guest_ids)}
     return sorted(all_selected_guests, key=lambda guest: selected_guest_order[guest.id])
@@ -36,8 +42,10 @@ def deduct_registration_silver_locked(locked_manor: Manor, *, silver_cost: int) 
             note="竞技场报名",
             reason=ResourceEvent.Reason.UPGRADE_COST,
         )
-    except ValueError as exc:
-        raise ValueError(f"银两不足，报名需要 {silver_cost} 银两") from exc
+    except InsufficientResourceError as exc:
+        raise InsufficientSilverError(
+            silver_cost, int(locked_manor.silver), message=f"银两不足，报名需要 {silver_cost} 银两"
+        ) from exc
 
 
 def create_arena_entry_with_guests_locked(
@@ -72,12 +80,12 @@ def collect_cancelable_recruiting_entries_locked(locked_manor: Manor) -> tuple[l
         .order_by("-joined_at", "-id")
     )
     if not recruiting_entries:
-        raise ValueError("当前没有可撤销的报名")
+        raise ArenaCancellationError("当前没有可撤销的报名")
 
     tournament_ids = {entry.tournament_id for entry in recruiting_entries}
     locked_tournaments = list(ArenaTournament.objects.select_for_update().filter(id__in=tournament_ids))
     if any(tournament.status != ArenaTournament.Status.RECRUITING for tournament in locked_tournaments):
-        raise ValueError("赛事已开赛，当前不可撤销报名")
+        raise ArenaCancellationError("赛事已开赛，当前不可撤销报名")
 
     entry_ids = [entry.id for entry in recruiting_entries]
     participant_guest_ids = list(

@@ -5,7 +5,7 @@ from django.contrib.messages import get_messages
 from django.db import DatabaseError
 from django.urls import reverse
 
-from core.exceptions import ShopValidationError
+from core.exceptions import ShopValidationError, TradeValidationError
 from gameplay.models import Manor
 from gameplay.services.manor.core import ensure_manor
 
@@ -128,6 +128,18 @@ def test_shop_buy_view_error(monkeypatch, client, django_user_model):
 
 
 @pytest.mark.django_db
+def test_shop_buy_view_raw_value_error_bubbles_up(monkeypatch, client, django_user_model):
+    monkeypatch.setattr("trade.views.buy_item", lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("legacy")))
+
+    user = django_user_model.objects.create_user(username="shop_buy_legacy_value_error", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    with pytest.raises(ValueError, match="legacy"):
+        client.post(reverse("trade:shop_buy"), {"item_key": "k", "quantity": "1"})
+
+
+@pytest.mark.django_db
 def test_shop_sell_view_known_error(monkeypatch, client, django_user_model):
     monkeypatch.setattr(
         "trade.views.sell_item",
@@ -142,6 +154,23 @@ def test_shop_sell_view_known_error(monkeypatch, client, django_user_model):
     assert resp.status_code == 302
     msgs = [m.message for m in get_messages(resp.wsgi_request)]
     assert any("sell blocked" in m for m in msgs)
+
+
+@pytest.mark.django_db
+def test_exchange_gold_bar_view_handles_trade_validation_error(monkeypatch, client, django_user_model):
+    monkeypatch.setattr(
+        "trade.views.exchange_gold_bar",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(TradeValidationError("兑换失败")),
+    )
+
+    user = django_user_model.objects.create_user(username="bank_trade_validation_error", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    resp = client.post(reverse("trade:exchange_gold_bar"), {"quantity": "1"})
+    assert resp.status_code == 302
+    msgs = [m.message for m in get_messages(resp.wsgi_request)]
+    assert any("兑换失败" in m for m in msgs)
 
 
 @pytest.mark.django_db

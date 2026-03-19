@@ -11,7 +11,7 @@
 import math
 from decimal import Decimal
 
-from core.exceptions import GameError
+from core.exceptions import GameError, TradeValidationError
 
 # ============ 金条基础配置 ============
 
@@ -58,7 +58,7 @@ def _safe_int(value, default: int) -> int:
 def _normalize_positive_quantity(quantity) -> int:
     normalized = _safe_int(quantity, 0)
     if normalized <= 0:
-        raise ValueError("兑换数量必须大于0")
+        raise TradeValidationError("兑换数量必须大于0")
     return normalized
 
 

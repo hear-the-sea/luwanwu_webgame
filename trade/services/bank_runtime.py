@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from core.exceptions import InsufficientResourceError, ItemNotFoundError, TradeValidationError
+
 from .cache_resilience import (
     best_effort_cache_add,
     best_effort_cache_delete,
@@ -203,10 +205,8 @@ def grant_gold_bars_locked(
 ) -> None:
     try:
         add_item_to_inventory_locked(manor, gold_bar_item_key, quantity)
-    except ValueError as exc:
-        if str(exc) == f"物品模板不存在: {gold_bar_item_key}":
-            raise ValueError("金条物品不存在，请联系管理员") from exc
-        raise
+    except ItemNotFoundError as exc:
+        raise TradeValidationError("金条物品不存在，请联系管理员") from exc
 
 
 def spend_exchange_cost_locked(
@@ -225,8 +225,8 @@ def spend_exchange_cost_locked(
             note=f"兑换金条 x{quantity}",
             reason=bank_exchange_reason,
         )
-    except ValueError as exc:
-        raise ValueError(
+    except InsufficientResourceError as exc:
+        raise TradeValidationError(
             f"银两不足，需要 {total_cost:,} 银两" f"（基础 {cost_info['base_cost']:,} + 手续费 {cost_info['fee']:,}）"
         ) from exc
     return total_cost

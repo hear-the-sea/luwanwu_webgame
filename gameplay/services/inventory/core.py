@@ -13,7 +13,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.db.models.functions import Now
 
-from core.exceptions import InsufficientStockError
+from core.exceptions import InsufficientStockError, ItemNotFoundError
 from gameplay.models import InventoryItem, ItemTemplate, Manor
 
 # 粮食物品模板 key
@@ -39,7 +39,7 @@ def add_item_to_inventory_locked(
     _require_atomic_block("add_item_to_inventory_locked")
     template = ItemTemplate.objects.filter(key=item_key).first()
     if not template:
-        raise ValueError(f"物品模板不存在: {item_key}")
+        raise ItemNotFoundError(f"物品模板不存在: {item_key}")
 
     if quantity <= 0:
         raise ValueError("quantity must be positive")

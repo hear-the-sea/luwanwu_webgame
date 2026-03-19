@@ -16,6 +16,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
+from core.exceptions import InsufficientResourceError
 from core.utils.time_scale import scale_duration
 from core.utils.yaml_loader import load_yaml_data
 
@@ -310,8 +311,13 @@ def start_smelting_production(manor: Manor, metal_key: str, quantity: int = 1) -
                     note=f"制作{metal_name}x{quantity}",
                     reason=ResourceEvent.Reason.UPGRADE_COST,
                 )
-            except ValueError as exc:
-                raise ValueError(f"{cost_name}不足，需要{total_cost}{cost_name}") from exc
+            except InsufficientResourceError as exc:
+                raise InsufficientResourceError(
+                    "silver",
+                    total_cost,
+                    int(locked_manor.silver),
+                    message=f"{cost_name}不足，需要{total_cost}{cost_name}",
+                ) from exc
         else:
             # 扣除物品（铜、锡等）
             item = (

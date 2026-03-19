@@ -13,7 +13,7 @@ from django.shortcuts import redirect
 from django.urls import reverse
 
 from core.utils import safe_int, sanitize_error_message
-from core.utils.view_error_mapping import LEGACY_VALUE_ERROR_VIEW_EXCEPTIONS, classify_view_error, flash_view_error
+from core.utils.view_error_mapping import classify_view_error, flash_view_error
 from gameplay.models import Manor
 from gameplay.services.manor.core import get_manor
 
@@ -251,7 +251,7 @@ def execute_trade_action(
         messages.success(request, success_message(result))
         return TradeActionOutcome(succeeded=True, result=result)
     except Exception as exc:
-        category = classify_view_error(exc, known_exceptions=LEGACY_VALUE_ERROR_VIEW_EXCEPTIONS)
+        category = classify_view_error(exc)
         if category == "known":
             handle_trade_error(request, exc)
             return TradeActionOutcome(succeeded=False)

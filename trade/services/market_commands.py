@@ -3,6 +3,8 @@ from __future__ import annotations
 from django.db import transaction
 from django.utils import timezone
 
+from core.exceptions import TradeValidationError
+
 
 def create_market_listing(
     manor,
@@ -32,13 +34,13 @@ def create_market_listing(
     quantity, unit_price, duration = normalize_listing_inputs(quantity, unit_price, duration, safe_int=safe_int)
 
     if duration not in listing_fees:
-        raise ValueError(f"无效的上架时长，请选择 {list(listing_fees.keys())}")
+        raise TradeValidationError(f"无效的上架时长，请选择 {list(listing_fees.keys())}")
 
     item_template = load_market_item_template(item_key)
     validate_listing_price(item_template, unit_price)
 
     if quantity <= 0:
-        raise ValueError("数量必须大于0")
+        raise TradeValidationError("数量必须大于0")
 
     with transaction.atomic():
         locked_manor = manor_model.objects.select_for_update().get(pk=manor.pk)
@@ -174,10 +176,10 @@ def cancel_market_listing(
         )
 
         if not listing:
-            raise ValueError("挂单不存在或无权取消")
+            raise TradeValidationError("挂单不存在或无权取消")
 
         if listing.status != market_listing_model.Status.ACTIVE:
-            raise ValueError("该挂单已经不在售状态，无法取消")
+            raise TradeValidationError("该挂单已经不在售状态，无法取消")
 
         listing.status = market_listing_model.Status.CANCELLED
         listing.save(update_fields=["status"])
