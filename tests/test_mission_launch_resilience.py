@@ -35,11 +35,19 @@ def test_launch_mission_survives_dispatch_failure(game_data, mission_templates, 
     guest = _create_launch_guest(manor)
 
     monkeypatch.setattr(mission_execution, "refresh_mission_runs", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(mission_execution, "_import_launch_post_action_tasks", lambda: (object(), object()))
-    monkeypatch.setattr(mission_execution, "dispatch_or_sync_launch_report", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
-        mission_execution,
-        "_schedule_mission_completion_task",
+        mission_execution.mission_followups,
+        "import_launch_post_action_tasks",
+        lambda **_kwargs: (object(), object()),
+    )
+    monkeypatch.setattr(
+        mission_execution.mission_followups,
+        "dispatch_or_sync_launch_report",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        mission_execution.mission_followups,
+        "schedule_mission_completion_task",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("dispatch backend unavailable")),
     )
 
@@ -66,13 +74,21 @@ def test_launch_mission_survives_report_failure(game_data, mission_templates, ma
     guest = _create_launch_guest(manor)
 
     monkeypatch.setattr(mission_execution, "refresh_mission_runs", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(mission_execution, "_import_launch_post_action_tasks", lambda: (object(), object()))
     monkeypatch.setattr(
-        mission_execution,
+        mission_execution.mission_followups,
+        "import_launch_post_action_tasks",
+        lambda **_kwargs: (object(), object()),
+    )
+    monkeypatch.setattr(
+        mission_execution.mission_followups,
         "dispatch_or_sync_launch_report",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("report generation exploded")),
     )
-    monkeypatch.setattr(mission_execution, "_schedule_mission_completion_task", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        mission_execution.mission_followups,
+        "schedule_mission_completion_task",
+        lambda *_args, **_kwargs: None,
+    )
 
     caplog.set_level(logging.ERROR, logger=mission_execution.__name__)
 

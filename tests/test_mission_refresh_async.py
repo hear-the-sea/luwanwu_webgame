@@ -59,8 +59,8 @@ def test_refresh_mission_runs_uses_sync_for_small_backlog(monkeypatch):
     finalized = []
     monkeypatch.setattr(mission_execution, "finalize_mission_run", lambda run, **_kwargs: finalized.append(run.id))
     monkeypatch.setattr(
-        mission_execution,
-        "_try_dispatch_mission_refresh_task",
+        mission_execution.mission_followups,
+        "try_dispatch_mission_refresh_task",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("should not dispatch async")),
     )
 
@@ -82,9 +82,9 @@ def test_refresh_mission_runs_dispatches_async_for_large_backlog(monkeypatch):
 
     dispatched = []
     monkeypatch.setattr(
-        mission_execution,
-        "_try_dispatch_mission_refresh_task",
-        lambda _task, run_id: dispatched.append(run_id) or True,
+        mission_execution.mission_followups,
+        "try_dispatch_mission_refresh_task",
+        lambda _task, run_id, **_kwargs: dispatched.append(run_id) or True,
     )
 
     finalized = []
@@ -109,9 +109,9 @@ def test_refresh_mission_runs_falls_back_to_sync_for_failed_dispatch(monkeypatch
 
     dispatch_ok = {21: True, 22: False, 23: True}
     monkeypatch.setattr(
-        mission_execution,
-        "_try_dispatch_mission_refresh_task",
-        lambda _task, run_id: dispatch_ok[run_id],
+        mission_execution.mission_followups,
+        "try_dispatch_mission_refresh_task",
+        lambda _task, run_id, **_kwargs: dispatch_ok[run_id],
     )
 
     finalized = []
@@ -192,14 +192,20 @@ def test_schedule_mission_completion_task_finalizes_sync_when_due_dispatch_fails
     run = SimpleNamespace(id=51, return_at=now)
     finalized: list[int] = []
 
-    monkeypatch.setattr(mission_execution, "safe_apply_async", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(mission_execution.mission_followups, "safe_apply_async", lambda *_args, **_kwargs: False)
     monkeypatch.setattr(
         mission_execution,
         "finalize_mission_run",
         lambda scheduled_run, **_kwargs: finalized.append(scheduled_run.id),
     )
 
-    mission_execution._schedule_mission_completion_task(run, object())
+    mission_execution.mission_followups.schedule_mission_completion_task(
+        run,
+        object(),
+        logger=mission_execution.logger,
+        finalize_mission_run=mission_execution.finalize_mission_run,
+        now_func=timezone.now,
+    )
 
     assert finalized == [51]
 

@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import logging
 import os
+from functools import partial
 from typing import Any, Dict, List
 
 from django.conf import settings
 from django.utils import timezone
 
-from common.utils.celery import safe_apply_async, safe_apply_async_with_dedup
+from common.utils.celery import safe_apply_async
 from core.utils.infrastructure import NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS
 from core.utils.time_scale import scale_duration
 from guests.query_utils import guest_template_rarity_rank_case
@@ -17,6 +18,7 @@ from ..battle_snapshots import build_guest_battle_snapshots, build_guest_snapsho
 from ..recruitment.troops import apply_defender_troop_losses
 from ..utils.messages import create_message
 from ..utils.notifications import notify_user
+from . import mission_followups
 from .drops import award_mission_drops_locked, resolve_defense_drops_if_missing
 from .execution_adapters import (
     build_mission_drops_with_salvage_adapter,
@@ -25,19 +27,12 @@ from .execution_adapters import (
     normalize_guest_configs,
     normalize_mapping,
 )
-from .execution_launch_runtime import (
-    dispatch_complete_mission_task_entry,
-    import_launch_post_action_tasks_entry,
-    schedule_mission_completion_task_entry,
-    try_prepare_launch_report_entry,
-)
 from .execution_runtime import (
     can_retreat_entry,
     refresh_mission_runs_entry,
     request_retreat_entry,
     schedule_mission_completion_entry,
 )
-from .execution_runtime import try_dispatch_mission_refresh_task as runtime_try_dispatch_mission_refresh_task
 from .execution_wiring import build_finalize_mission_dependencies, build_launch_mission_dependencies
 from .finalization_helpers import (
     apply_mission_rewards_if_won,
@@ -51,14 +46,6 @@ from .finalization_helpers import (
 )
 from .finalize_command import finalize_mission_run as _finalize_mission_run_command
 from .launch_command import launch_mission as _launch_mission_command
-from .launch_post_actions import (
-    attach_run_report_if_empty,
-    build_defender_setup_and_drop_table,
-    dispatch_or_sync_launch_report,
-    import_launch_post_action_tasks,
-    schedule_mission_completion_task,
-)
-from .launch_resilience import dispatch_completion_task_best_effort, prepare_launch_report_best_effort
 from .refresh_command import refresh_mission_runs as _refresh_mission_runs_command
 from .refresh_command import schedule_mission_completion as _schedule_mission_completion_command
 from .retreat_command import can_retreat as _can_retreat_command
@@ -80,16 +67,6 @@ def _normalize_guest_configs(raw: Any) -> List[Any]:
     return normalize_guest_configs(raw)
 
 
-def _try_dispatch_mission_refresh_task(task, run_id: int) -> bool:
-    return runtime_try_dispatch_mission_refresh_task(
-        task,
-        run_id,
-        safe_apply_async_with_dedup=safe_apply_async_with_dedup,
-        logger=logger,
-        dedup_seconds=_MISSION_REFRESH_DISPATCH_DEDUP_SECONDS,
-    )
-
-
 def refresh_mission_runs(manor: Manor, *, prefer_async: bool = False) -> None:
     refresh_mission_runs_entry(
         manor,
@@ -99,7 +76,11 @@ def refresh_mission_runs(manor: Manor, *, prefer_async: bool = False) -> None:
         settings_obj=settings,
         logger=logger,
         now_func=timezone.now,
-        try_dispatch_mission_refresh_task=_try_dispatch_mission_refresh_task,
+        try_dispatch_mission_refresh_task=partial(
+            mission_followups.try_dispatch_mission_refresh_task,
+            logger=logger,
+            dedup_seconds=_MISSION_REFRESH_DISPATCH_DEDUP_SECONDS,
+        ),
         finalize_mission_run=finalize_mission_run,
     )
 
@@ -150,70 +131,6 @@ def finalize_mission_run(run: MissionRun, now=None) -> None:
     )
 
 
-def _schedule_mission_completion_task(run: MissionRun, complete_mission_task) -> None:
-    schedule_mission_completion_task_entry(
-        run,
-        complete_mission_task,
-        schedule_mission_completion_task=schedule_mission_completion_task,
-        safe_apply_async=safe_apply_async,
-        logger=logger,
-        finalize_mission_run=finalize_mission_run,
-        now_func=timezone.now,
-    )
-
-
-def _import_launch_post_action_tasks() -> tuple[Any | None, Any | None]:
-    return import_launch_post_action_tasks_entry(
-        import_launch_post_action_tasks=import_launch_post_action_tasks, logger=logger
-    )
-
-
-def _try_prepare_launch_report(
-    manor: Manor,
-    mission: MissionTemplate,
-    run: MissionRun,
-    guests: List[Any],
-    loadout: Dict[str, int],
-    travel_seconds: int,
-    seed,
-    generate_report_task,
-) -> None:
-    try_prepare_launch_report_entry(
-        manor,
-        mission,
-        run,
-        guests,
-        loadout,
-        travel_seconds,
-        seed,
-        generate_report_task,
-        logger=logger,
-        prepare_launch_report_best_effort=prepare_launch_report_best_effort,
-        build_defender_setup_and_drop_table=build_defender_setup_and_drop_table,
-        normalize_guest_configs=_normalize_guest_configs,
-        normalize_mapping=_normalize_mapping,
-        dispatch_or_sync_launch_report=dispatch_or_sync_launch_report,
-        attach_run_report_if_empty=attach_run_report_if_empty,
-        build_guest_snapshot_proxies=build_guest_snapshot_proxies,
-        build_guest_battle_snapshots=build_guest_battle_snapshots,
-        generate_sync_battle_report=generate_sync_battle_report,
-        safe_apply_async=safe_apply_async,
-        settings_obj=settings,
-        environ=os.environ,
-        mission_run_model=MissionRun,
-    )
-
-
-def _dispatch_complete_mission_task(run: MissionRun, complete_mission_task) -> None:
-    dispatch_complete_mission_task_entry(
-        run,
-        complete_mission_task,
-        dispatch_completion_task_best_effort=dispatch_completion_task_best_effort,
-        logger=logger,
-        schedule_mission_completion_task=_schedule_mission_completion_task,
-    )
-
-
 def launch_mission(
     manor: Manor,
     mission: MissionTemplate,
@@ -221,6 +138,12 @@ def launch_mission(
     troop_loadout: Dict[str, int],
     seed=None,
 ):
+    schedule_completion_followup = partial(
+        mission_followups.schedule_mission_completion_task,
+        logger=logger,
+        finalize_mission_run=finalize_mission_run,
+        now_func=timezone.now,
+    )
     return _launch_mission_command(
         manor,
         mission,
@@ -230,9 +153,27 @@ def launch_mission(
         **build_launch_mission_dependencies(
             scale_duration=scale_duration,
             refresh_mission_runs=refresh_mission_runs,
-            import_launch_post_action_tasks=_import_launch_post_action_tasks,
-            try_prepare_launch_report=_try_prepare_launch_report,
-            dispatch_complete_mission_task=_dispatch_complete_mission_task,
+            import_launch_post_action_tasks=partial(
+                mission_followups.import_launch_post_action_tasks,
+                logger=logger,
+            ),
+            try_prepare_launch_report=partial(
+                mission_followups.try_prepare_launch_report,
+                logger=logger,
+                normalize_guest_configs=_normalize_guest_configs,
+                normalize_mapping=_normalize_mapping,
+                build_guest_snapshot_proxies=build_guest_snapshot_proxies,
+                build_guest_battle_snapshots=build_guest_battle_snapshots,
+                generate_sync_battle_report=generate_sync_battle_report,
+                settings_obj=settings,
+                environ=os.environ,
+                mission_run_model=MissionRun,
+            ),
+            dispatch_complete_mission_task=partial(
+                mission_followups.dispatch_complete_mission_task,
+                logger=logger,
+                schedule_mission_completion_task=schedule_completion_followup,
+            ),
         ),
     )
 

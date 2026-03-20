@@ -505,7 +505,12 @@ def test_integration_mission_refresh_dispatch_sets_external_dedup_gate(require_e
     dedup_key = f"mission:refresh_dispatch:{run_id}"
     cache.delete(dedup_key)
 
-    ok = mission_execution._try_dispatch_mission_refresh_task(complete_mission_task, run_id)
+    ok = mission_execution.mission_followups.try_dispatch_mission_refresh_task(
+        complete_mission_task,
+        run_id,
+        logger=mission_execution.logger,
+        dedup_seconds=5,
+    )
 
     assert ok is True
     assert cache.get(dedup_key) == "1"
@@ -523,7 +528,12 @@ def test_integration_mission_refresh_dispatch_failure_rolls_back_dedup_gate(requ
         def apply_async(self, **_kwargs):
             raise RuntimeError("dispatch failed")
 
-    ok = mission_execution._try_dispatch_mission_refresh_task(_FailingTask(), run_id)
+    ok = mission_execution.mission_followups.try_dispatch_mission_refresh_task(
+        _FailingTask(),
+        run_id,
+        logger=mission_execution.logger,
+        dedup_seconds=5,
+    )
 
     assert ok is False
     assert cache.get(dedup_key) is None

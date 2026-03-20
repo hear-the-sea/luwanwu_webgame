@@ -51,9 +51,21 @@ def test_launch_mission_concurrent_requests_allow_only_one_active_run_for_same_g
         custom_name="mission_concurrency_guest",
     )
 
-    monkeypatch.setattr(mission_execution, "_import_launch_post_action_tasks", lambda: (None, None))
-    monkeypatch.setattr(mission_execution, "_try_prepare_launch_report", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(mission_execution, "_dispatch_complete_mission_task", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        mission_execution.mission_followups,
+        "import_launch_post_action_tasks",
+        lambda **_kwargs: (None, None),
+    )
+    monkeypatch.setattr(
+        mission_execution.mission_followups,
+        "try_prepare_launch_report",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        mission_execution.mission_followups,
+        "dispatch_complete_mission_task",
+        lambda *_args, **_kwargs: None,
+    )
 
     barrier = threading.Barrier(2)
     results: list[int] = []

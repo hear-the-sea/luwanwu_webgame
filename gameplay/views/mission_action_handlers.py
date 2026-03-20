@@ -23,8 +23,10 @@ def handle_known_mission_exception(
     exc: Exception,
     *,
     redirect_func: Callable[[], HttpResponse],
+    allow_legacy_value_error: bool = True,
 ) -> HttpResponse:
-    if not isinstance(exc, (GameError, ValueError)):
+    known_types = (GameError, ValueError) if allow_legacy_value_error else (GameError,)
+    if not isinstance(exc, known_types):
         raise exc
     mission_helpers.handle_known_mission_error(request, exc)
     return redirect_func()
@@ -80,7 +82,12 @@ def handle_accept_mission(
         return _mission_redirect()
 
     def _on_known_error(exc: Exception) -> HttpResponse:
-        return handle_known_mission_exception(request, exc, redirect_func=_mission_redirect)
+        return handle_known_mission_exception(
+            request,
+            exc,
+            redirect_func=_mission_redirect,
+            allow_legacy_value_error=False,
+        )
 
     def _on_database_error(exc: DatabaseError) -> HttpResponse:
         mission_helpers.handle_unexpected_mission_error(
@@ -105,7 +112,7 @@ def handle_accept_mission(
         on_lock_conflict=_on_lock_conflict,
         operation=_perform_accept,
         on_success=lambda _result: _mission_redirect(),
-        known_exceptions=(GameError, ValueError),
+        known_exceptions=(GameError,),
         on_known_error=_on_known_error,
         on_database_error=_on_database_error,
     )
@@ -137,7 +144,12 @@ def handle_retreat_mission(
         return _dashboard_redirect()
 
     def _on_known_error(exc: Exception) -> HttpResponse:
-        return handle_known_mission_exception(request, exc, redirect_func=_dashboard_redirect)
+        return handle_known_mission_exception(
+            request,
+            exc,
+            redirect_func=_dashboard_redirect,
+            allow_legacy_value_error=False,
+        )
 
     def _on_database_error(exc: DatabaseError) -> HttpResponse:
         mission_helpers.handle_unexpected_mission_error(
@@ -162,7 +174,7 @@ def handle_retreat_mission(
         on_lock_conflict=_on_lock_conflict,
         operation=_perform_retreat,
         on_success=lambda _result: _dashboard_redirect(),
-        known_exceptions=(GameError, ValueError),
+        known_exceptions=(GameError,),
         on_known_error=_on_known_error,
         on_database_error=_on_database_error,
     )
@@ -247,7 +259,12 @@ def handle_use_mission_card(
         return _mission_redirect()
 
     def _on_known_error(exc: Exception) -> HttpResponse:
-        return handle_known_mission_exception(request, exc, redirect_func=_mission_redirect)
+        return handle_known_mission_exception(
+            request,
+            exc,
+            redirect_func=_mission_redirect,
+            allow_legacy_value_error=False,
+        )
 
     def _on_database_error(exc: DatabaseError) -> HttpResponse:
         mission_helpers.handle_unexpected_mission_error(
@@ -272,7 +289,7 @@ def handle_use_mission_card(
         on_lock_conflict=_on_lock_conflict,
         operation=_perform_use_card,
         on_success=lambda _result: _mission_redirect(),
-        known_exceptions=(GameError, ValueError),
+        known_exceptions=(GameError,),
         on_known_error=_on_known_error,
         on_database_error=_on_database_error,
     )

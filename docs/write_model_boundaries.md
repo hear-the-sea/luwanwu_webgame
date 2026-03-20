@@ -76,8 +76,10 @@
   - 负责事务内二次校验、门客/护院锁定、`MissionRun` 创建、门客状态推进
 - `gameplay/services/missions_impl/finalize_command.py`
   - 负责事务内结算、门客 HP / 状态恢复、护院返还、奖励发放、消息落地
+- `gameplay/services/missions_impl/mission_followups.py`
+  - 负责 launch 后报告准备、完成任务导入与 completion dispatch、refresh dispatch gate
 - `gameplay/services/missions_impl/execution.py`
-  - 负责派发完成任务、触发 refresh command
+  - 负责公共入口接线与 finalize / refresh command 适配
 
 ### 2.3 第二阶段口径
 

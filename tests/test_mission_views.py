@@ -273,6 +273,22 @@ class TestMissionViews:
         with pytest.raises(RuntimeError, match="boom"):
             client.post(reverse("gameplay:accept_mission"), {"mission_key": mission.key})
 
+    def test_accept_mission_legacy_value_error_bubbles_up(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        mission = MissionTemplate.objects.create(
+            key=f"view_accept_legacy_value_{manor.id}",
+            name="旧异常任务",
+            is_defense=True,
+        )
+
+        monkeypatch.setattr(
+            "gameplay.views.missions.launch_mission",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("legacy mission error")),
+        )
+
+        with pytest.raises(ValueError, match="legacy mission error"):
+            client.post(reverse("gameplay:accept_mission"), {"mission_key": mission.key})
+
     def test_accept_mission_known_error_shows_message(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
         mission = MissionTemplate.objects.create(
@@ -327,6 +343,23 @@ class TestMissionViews:
         )
 
         with pytest.raises(RuntimeError, match="boom"):
+            client.post(reverse("gameplay:mission_retreat", kwargs={"pk": run.pk}))
+
+    def test_retreat_mission_legacy_value_error_bubbles_up(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        mission = MissionTemplate.objects.create(
+            key=f"view_retreat_legacy_value_{manor.id}",
+            name="撤退旧异常任务",
+            is_defense=False,
+        )
+        run = MissionRun.objects.create(manor=manor, mission=mission, status=MissionRun.Status.ACTIVE)
+
+        monkeypatch.setattr(
+            "gameplay.views.missions.request_retreat",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("legacy retreat error")),
+        )
+
+        with pytest.raises(ValueError, match="legacy retreat error"):
             client.post(reverse("gameplay:mission_retreat", kwargs={"pk": run.pk}))
 
     def test_retreat_scout_database_error_does_not_500(self, manor_with_user, monkeypatch, django_user_model):
@@ -404,4 +437,23 @@ class TestMissionViews:
         )
 
         with pytest.raises(RuntimeError, match="boom"):
+            client.post(reverse("gameplay:use_mission_card"), {"mission_key": mission.key})
+
+    def test_use_mission_card_legacy_value_error_bubbles_up(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        mission = MissionTemplate.objects.create(
+            key=f"view_use_card_legacy_value_{manor.id}",
+            name="任务卡旧异常任务",
+        )
+
+        monkeypatch.setattr(
+            "gameplay.services.inventory.core.consume_inventory_item_for_manor_locked",
+            lambda *_args, **_kwargs: None,
+        )
+        monkeypatch.setattr(
+            "gameplay.views.missions.add_mission_extra_attempt",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("legacy mission card error")),
+        )
+
+        with pytest.raises(ValueError, match="legacy mission card error"):
             client.post(reverse("gameplay:use_mission_card"), {"mission_key": mission.key})
