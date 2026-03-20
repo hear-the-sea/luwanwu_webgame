@@ -26,6 +26,7 @@ from ..models import GuestRecruitment, RecruitmentCandidate, RecruitmentPool
 from ..utils.name_generator import generate_random_name
 from . import recruitment_candidates as _recruitment_candidates
 from . import recruitment_flow as _recruitment_flow
+from . import recruitment_followups as _recruitment_followups
 from . import recruitment_queries as _recruitment_queries
 from . import recruitment_shared as _recruitment_shared
 from . import recruitment_templates as _recruitment_templates
@@ -156,7 +157,7 @@ def _build_recruitment_candidates(
 
 def _schedule_guest_recruitment_completion(recruitment: GuestRecruitment, eta_seconds: int) -> None:
     """调度门客招募完成任务。"""
-    _recruitment_flow.schedule_guest_recruitment_completion(recruitment, eta_seconds, logger=logger)
+    _recruitment_followups.schedule_guest_recruitment_completion(recruitment, eta_seconds, logger=logger)
 
 
 def _mark_recruitment_failed_locked(recruitment: GuestRecruitment, *, current_time: datetime, reason: str) -> None:
@@ -189,7 +190,7 @@ def _send_recruitment_completion_notification(
     candidate_count: int,
     recruitment_id: int | None = None,
 ) -> None:
-    _recruitment_flow.send_recruitment_completion_notification(
+    _recruitment_followups.send_recruitment_completion_notification(
         manor=manor,
         pool=pool,
         candidate_count=candidate_count,

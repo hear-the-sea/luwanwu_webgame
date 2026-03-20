@@ -5,10 +5,11 @@ from django.utils import timezone
 from django_redis.exceptions import ConnectionInterrupted
 
 import gameplay.services.manor.core as manor_service
+from core.exceptions import MissionCannotRetreatError, MissionSquadSizeExceededError, MissionTroopLoadoutError
 from gameplay.constants import MAX_CONCURRENT_BUILDING_UPGRADES
-from gameplay.models import MissionTemplate, RaidRun, ScoutRecord
+from gameplay.models import MissionRun, MissionTemplate, RaidRun, ScoutRecord
 from gameplay.services.manor.core import ensure_manor, refresh_manor_state, start_upgrade
-from gameplay.services.missions import launch_mission, refresh_mission_runs
+from gameplay.services.missions import launch_mission, refresh_mission_runs, request_retreat
 from guests.models import GuestStatus
 from guests.services.recruitment import recruit_guest
 from guests.services.recruitment_guests import finalize_candidate
@@ -153,7 +154,7 @@ def test_mission_launch_with_invalid_troop_type(game_data, mission_templates, ma
     assert not PlayerTroop.objects.filter(manor=manor, troop_template__key=fake_troop_key).exists()
 
     # 尝试出征包含不存在的护院类型
-    with pytest.raises(ValueError) as exc:
+    with pytest.raises(MissionTroopLoadoutError) as exc:
         launch_mission(manor, mission, [guest.id], {fake_troop_key: 100})
 
     assert "不存在的类型" in str(exc.value)
@@ -190,13 +191,29 @@ def test_mission_launch_rejects_when_guest_count_exceeds_max_squad(game_data, mi
         for idx in range(max_squad_size + 1)
     ]
 
-    with pytest.raises(ValueError) as exc:
+    with pytest.raises(MissionSquadSizeExceededError) as exc:
         launch_mission(manor, mission, [guest.id for guest in guests], {})
     assert f"最多只能派出 {max_squad_size} 名门客出征" in str(exc.value)
 
     for guest in guests:
         guest.refresh_from_db()
         assert guest.status == GuestStatus.IDLE
+
+
+@pytest.mark.django_db(transaction=True)
+def test_request_retreat_raises_mission_cannot_retreat_when_already_retreating(django_user_model, monkeypatch):
+    import gameplay.services.missions_impl.execution as mission_execution
+
+    user = django_user_model.objects.create_user(username="player_mission_retreating", password="pass12345")
+    manor = ensure_manor(user)
+    mission = MissionTemplate.objects.create(key="mission_retreating_case", name="撤退测试任务", is_defense=False)
+    run = MissionRun.objects.create(manor=manor, mission=mission, status=MissionRun.Status.ACTIVE, travel_time=300)
+
+    monkeypatch.setattr(mission_execution, "schedule_mission_completion", lambda *_args, **_kwargs: None)
+    request_retreat(run)
+
+    with pytest.raises(MissionCannotRetreatError, match="任务已在撤退中"):
+        request_retreat(run)
 
 
 @pytest.mark.django_db

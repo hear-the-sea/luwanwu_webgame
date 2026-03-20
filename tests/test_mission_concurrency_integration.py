@@ -7,6 +7,7 @@ import pytest
 from django.db import connection
 
 import gameplay.services.missions_impl.execution as mission_execution
+from core.exceptions import MissionCannotRetreatError, MissionGuestSelectionError
 from gameplay.models import MissionRun, MissionTemplate
 from gameplay.services.manor.core import ensure_manor
 from gameplay.services.missions import launch_mission, request_retreat
@@ -81,7 +82,7 @@ def test_launch_mission_concurrent_requests_allow_only_one_active_run_for_same_g
 
     assert len(results) == 1
     assert len(errors) == 1
-    assert isinstance(errors[0], ValueError)
+    assert isinstance(errors[0], MissionGuestSelectionError)
     assert "部分门客不可用或已离开庄园" in str(errors[0])
     assert MissionRun.objects.filter(manor=manor, mission=mission, status=MissionRun.Status.ACTIVE).count() == 1
     assert guest.status == GuestStatus.DEPLOYED
@@ -138,7 +139,7 @@ def test_request_retreat_concurrent_requests_allow_only_one_transition(
 
     assert len(successes) == 1
     assert len(errors) == 1
-    assert isinstance(errors[0], ValueError)
+    assert isinstance(errors[0], MissionCannotRetreatError)
     assert "任务已在撤退中" in str(errors[0])
     assert run.status == MissionRun.Status.ACTIVE
     assert run.is_retreating is True

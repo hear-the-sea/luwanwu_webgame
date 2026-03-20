@@ -6,6 +6,13 @@ from typing import Any
 from django.db import transaction
 from django.utils import timezone
 
+from core.exceptions import (
+    MissionDailyLimitError,
+    MissionGuestSelectionError,
+    MissionSquadSizeExceededError,
+    MissionTroopLoadoutError,
+)
+
 from ...models import Manor, MissionRun, MissionTemplate
 from ..battle_snapshots import build_guest_battle_snapshots
 from .attempts import get_mission_daily_limit, mission_attempts_today
@@ -16,7 +23,7 @@ def validate_mission_attempts(manor: Manor, mission: MissionTemplate) -> None:
     attempts = mission_attempts_today(manor, mission)
     daily_limit = get_mission_daily_limit(manor, mission)
     if attempts >= daily_limit:
-        raise ValueError("今日该任务次数已耗尽")
+        raise MissionDailyLimitError()
 
 
 def prepare_offense_launch_inputs(
@@ -34,24 +41,30 @@ def prepare_offense_launch_inputs(
         manor.guests.select_for_update().filter(id__in=guest_ids).select_related("template").prefetch_related("skills")
     )
     if len(guests) != len(set(guest_ids)):
-        raise ValueError("部分门客不可用或已离开庄园")
+        raise MissionGuestSelectionError("部分门客不可用或已离开庄园")
     if any(guest.status != GuestStatus.IDLE for guest in guests):
-        raise ValueError("部分门客不可用或已离开庄园")
+        raise MissionGuestSelectionError("部分门客不可用或已离开庄园")
     if not guests:
-        raise ValueError("请选择至少一名门客")
+        raise MissionGuestSelectionError("请选择至少一名门客")
 
     max_squad_size = getattr(manor, "max_squad_size", None) or 0
     if max_squad_size and len(guests) > max_squad_size:
-        raise ValueError(f"最多只能派出 {max_squad_size} 名门客出征")
+        raise MissionSquadSizeExceededError(max_squad_size)
 
     if mission.guest_only:
         loadout: dict[str, int] = {}
     else:
-        loadout = normalize_mission_loadout(troop_loadout)
-        validate_troop_capacity(guests, loadout)
+        try:
+            loadout = normalize_mission_loadout(troop_loadout)
+            validate_troop_capacity(guests, loadout)
+        except ValueError as exc:
+            raise MissionTroopLoadoutError(str(exc)) from exc
 
     if loadout:
-        _deduct_troops_batch(manor, loadout)
+        try:
+            _deduct_troops_batch(manor, loadout)
+        except ValueError as exc:
+            raise MissionTroopLoadoutError(str(exc)) from exc
 
     travel_seconds = travel_time_seconds(mission.base_travel_time, guests, loadout)
     return guests, loadout, travel_seconds

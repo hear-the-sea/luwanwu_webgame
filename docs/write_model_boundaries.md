@@ -145,7 +145,9 @@
 - `guests/services/recruitment.py`
   - 负责事务内发起招募、创建 `GuestRecruitment(PENDING)`、显现候选稀有度、完成招募
 - `guests/services/recruitment_flow.py`
-  - 负责 after-commit completion dispatch、完成/失败状态落库、通知发送
+  - 负责主写链路共享校验、成本扣减、`PENDING/COMPLETED/FAILED` 状态落库
+- `guests/services/recruitment_followups.py`
+  - 负责 after-commit completion dispatch、完成通知发送
 - `guests/services/recruitment_guests.py`
   - 负责候选转正式门客时的事务与行锁
 

@@ -24,6 +24,29 @@ class MissionDailyLimitError(MissionError):
     default_message = "今日该任务次数已耗尽"
 
 
+class MissionGuestSelectionError(MissionError):
+    """任务门客选择错误"""
+
+    error_code = "MISSION_GUEST_SELECTION_ERROR"
+
+
+class MissionSquadSizeExceededError(MissionError):
+    """任务出征人数超限"""
+
+    error_code = "MISSION_SQUAD_SIZE_EXCEEDED"
+
+    def __init__(self, limit: int, message: str | None = None):
+        if message is None:
+            message = f"最多只能派出 {limit} 名门客出征"
+        super().__init__(message, limit=limit)
+
+
+class MissionTroopLoadoutError(MissionError):
+    """任务护院配置错误"""
+
+    error_code = "MISSION_TROOP_LOADOUT_ERROR"
+
+
 class MissionCannotRetreatError(MissionError):
     """无法撤退"""
 
@@ -33,6 +56,8 @@ class MissionCannotRetreatError(MissionError):
         if message is None:
             if reason == "ended":
                 message = "任务已结束，无法撤退"
+            elif reason == "retreating":
+                message = "任务已在撤退中"
             elif reason == "returning":
                 message = "已进入返程，无法撤退"
             else:

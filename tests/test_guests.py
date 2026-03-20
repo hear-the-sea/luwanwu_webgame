@@ -14,6 +14,7 @@ from core.exceptions import (
 )
 from gameplay.services.manor.core import ensure_manor
 from guests.models import Guest, GuestRecruitment, GuestStatus, GuestTemplate, RecruitmentCandidate, RecruitmentPool
+from guests.services import recruitment_followups as recruitment_followups_service
 from guests.services.recruitment import (
     finalize_guest_recruitment,
     recruit_guest,
@@ -271,6 +272,54 @@ def test_finalize_guest_recruitment_keeps_success_when_notification_fails(
     recruitment.refresh_from_db()
     assert recruitment.status == GuestRecruitment.Status.COMPLETED
     assert manor.candidates.count() == recruitment.draw_count
+
+
+def test_schedule_guest_recruitment_completion_runs_after_commit(monkeypatch):
+    callbacks = []
+    dispatched = []
+
+    monkeypatch.setattr(
+        recruitment_followups_service.transaction,
+        "on_commit",
+        lambda callback: callbacks.append(callback),
+    )
+    monkeypatch.setattr(
+        "guests.tasks.complete_guest_recruitment",
+        type("_Task", (), {"name": "guests.complete_recruitment"})(),
+    )
+    monkeypatch.setattr(
+        recruitment_followups_service,
+        "safe_apply_async",
+        lambda task, *, args, countdown, **_kwargs: dispatched.append(
+            {
+                "task_name": getattr(task, "name", str(task)),
+                "args": args,
+                "countdown": countdown,
+            }
+        )
+        or True,
+    )
+
+    recruitment = type("_Recruitment", (), {"id": 17, "manor_id": 3, "pool_id": 5})()
+
+    recruitment_followups_service.schedule_guest_recruitment_completion(
+        recruitment,
+        45,
+        logger=recruitment_followups_service.logging.getLogger(__name__),
+    )
+
+    assert len(callbacks) == 1
+    assert dispatched == []
+
+    callbacks[0]()
+
+    assert dispatched == [
+        {
+            "task_name": "guests.complete_recruitment",
+            "args": [17],
+            "countdown": 45,
+        }
+    ]
 
 
 @pytest.mark.django_db(transaction=True)

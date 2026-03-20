@@ -5,19 +5,21 @@ from datetime import timedelta
 from django.db import transaction
 from django.utils import timezone
 
+from core.exceptions import MissionCannotRetreatError
+
 
 def request_retreat(run, *, mission_run_model, schedule_mission_completion) -> None:
     now = timezone.now()
     with transaction.atomic():
         locked_run = mission_run_model.objects.select_for_update().filter(pk=run.pk).first()
         if not locked_run or locked_run.status != mission_run_model.Status.ACTIVE:
-            raise ValueError("任务已结束，无法撤退")
+            raise MissionCannotRetreatError(reason="ended")
         if locked_run.is_retreating:
-            raise ValueError("任务已在撤退中")
+            raise MissionCannotRetreatError(reason="retreating")
 
         outbound_finish = locked_run.started_at + timedelta(seconds=locked_run.travel_time)
         if now >= outbound_finish:
-            raise ValueError("已进入返程，无法撤退")
+            raise MissionCannotRetreatError(reason="returning")
 
         elapsed = max(0, int((now - locked_run.started_at).total_seconds()))
         return_time = max(1, elapsed)

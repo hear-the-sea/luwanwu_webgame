@@ -8,6 +8,7 @@ from django.db import DatabaseError
 from django.urls import reverse
 from django.utils import timezone
 
+from core.exceptions import MissionDailyLimitError
 from gameplay.models import MissionRun, MissionTemplate, ScoutRecord
 from gameplay.services.manor.core import ensure_manor
 
@@ -282,14 +283,14 @@ class TestMissionViews:
 
         monkeypatch.setattr(
             "gameplay.views.missions.launch_mission",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("mission blocked")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(MissionDailyLimitError()),
         )
 
         response = client.post(reverse("gameplay:accept_mission"), {"mission_key": mission.key})
         assert response.status_code == 302
         assert response.url == f"{reverse('gameplay:tasks')}?mission={mission.key}"
         messages = [str(m) for m in get_messages(response.wsgi_request)]
-        assert any("mission blocked" in m for m in messages)
+        assert any("今日该任务次数已耗尽" in m for m in messages)
 
     def test_retreat_mission_database_error_does_not_500(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
