@@ -80,6 +80,64 @@ class TestWorkViews:
         assert response.status_code == 200
         assert response.context["current_tier"] == "senior"
 
+    def test_work_page_uses_explicit_read_helper(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        calls = {"prepared": 0}
+
+        monkeypatch.setattr(
+            "gameplay.views.work.get_prepared_manor_for_read",
+            lambda request, **kwargs: calls.__setitem__("prepared", calls["prepared"] + 1) or manor,
+        )
+        monkeypatch.setattr(
+            "gameplay.views.work.get_work_page_context",
+            lambda current_manor, *, current_tier, page: (
+                {
+                    "work_tiers": [],
+                    "current_tier": current_tier,
+                    "current_tier_config": {"key": current_tier, "name": "测试"},
+                    "works": [],
+                    "page_obj": [],
+                    "is_paginated": False,
+                }
+                if current_manor is manor and page == 1
+                else {}
+            ),
+        )
+
+        response = client.get(reverse("gameplay:work"))
+
+        assert response.status_code == 200
+        assert calls["prepared"] == 1
+
+    def test_work_page_uses_selector_context(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        calls = {"selector": 0}
+
+        monkeypatch.setattr("gameplay.views.work.get_prepared_manor_for_read", lambda request, **kwargs: manor)
+
+        def _fake_selector(current_manor, *, current_tier, page):
+            calls["selector"] += 1
+            assert current_manor is manor
+            assert current_tier == "senior"
+            assert page == 2
+            return {
+                "work_tiers": [{"key": "senior", "name": "高级工作区"}],
+                "current_tier": "senior",
+                "current_tier_config": {"key": "senior", "name": "高级工作区"},
+                "works": ["work-a"],
+                "page_obj": [],
+                "is_paginated": True,
+            }
+
+        monkeypatch.setattr("gameplay.views.work.get_work_page_context", _fake_selector)
+
+        response = client.get(reverse("gameplay:work") + "?tier=senior&page=2")
+
+        assert response.status_code == 200
+        assert calls["selector"] == 1
+        assert response.context["current_tier"] == "senior"
+        assert response.context["works"] == ["work-a"]
+
     def test_work_page_paginates_four_works_per_tier(self, manor_with_user):
         manor, client = manor_with_user
         for index in range(5):

@@ -440,3 +440,54 @@ transaction.atomic():        — 第二阶段：汇总轮次结果
 
 - 装备选项缓存失败时允许降级为直接查库，但仍保持纯读语义。
 - 真正的库存扣减、装备占用和属性变更仍由写路径事务负责，GET 不承担补偿或预同步职责。
+
+---
+
+## 9. 护院募兵页面读路径（gameplay/views/recruitment.py）
+
+**代码**：`gameplay/views/recruitment.py`、`gameplay/selectors/troop_recruitment.py`
+
+### 数据来源与边界
+
+- `TroopRecruitmentView` 只负责加载当前庄园并调用显式读 selector，不再在 view 内部混排分类计算、速度展示和募兵上下文装配。
+- 护院募兵页面的读模型由 `get_troop_recruitment_context()` 统一返回，包含募兵选项、分类、当前募兵队列与护院库存等展示数据。
+- 发起募兵、钱庄存取护院仍保持在 POST 写入口中，页面 GET 不承担任何募兵状态推进或补偿刷新职责。
+
+### 失败/补偿行为
+
+- 页面读取继续沿用庄园资源投影的只读降级语义，不新增写路径补偿。
+- 募兵完成、队列收口和库存变化仍由显式 service / task 入口负责，GET 页面不回挂 finalize / refresh。
+
+---
+
+## 10. 科技页面读路径（gameplay/views/technology.py）
+
+**代码**：`gameplay/views/technology.py`、`gameplay/selectors/technology.py`
+
+### 数据来源与边界
+
+- `TechnologyView` 只负责加载当前庄园并调用显式读 selector，不再在 view 内部混排 tab 归一化、武艺兵种筛选和页面上下文装配。
+- 科技页面的读模型由 `get_technology_page_context()` 统一返回，负责基础 / 武艺 / 生产三个标签页的展示数据组织。
+- 科技升级仍保持在 POST 写入口 `upgrade_technology_view` 中，GET 页面不承担科技状态推进或补偿刷新职责。
+
+### 失败/补偿行为
+
+- 页面读取继续沿用庄园资源投影的只读降级语义，不新增写路径补偿。
+- 科技升级完成、收口与通知仍由显式 service / task 入口负责，GET 页面不回挂 finalize / refresh。
+
+---
+
+## 11. 打工页面读路径（gameplay/views/work.py）
+
+**代码**：`gameplay/views/work.py`、`gameplay/selectors/work.py`
+
+### 数据来源与边界
+
+- `WorkView` 只负责加载当前庄园并调用显式读 selector，不再在 view 内部混排工作区分页、候选门客筛选和进行中任务映射。
+- 打工页面的读模型由 `get_work_page_context()` 统一返回，负责工作区标签、分页结果、卡片绑定的活动任务和可派遣门客列表。
+- 派遣、召回、领取报酬仍保持在 POST 写入口中，GET 页面不承担打工状态推进或补偿刷新职责。
+
+### 失败/补偿行为
+
+- 页面读取继续沿用庄园资源投影的只读降级语义，不新增写路径补偿。
+- 打工完成、报酬领取和召回仍由显式 service / task 入口负责，GET 页面不回挂 finalize / refresh。

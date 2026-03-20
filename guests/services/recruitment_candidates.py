@@ -3,6 +3,8 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING, Callable, TypedDict
 
+from django.db import connections, transaction
+
 from ..models import GuestRarity, GuestTemplate, RecruitmentCandidate
 
 if TYPE_CHECKING:
@@ -112,6 +114,7 @@ def load_candidate_generation_context(
     }
 
 
+@transaction.atomic
 def persist_candidate_batch(
     *,
     recruitment_candidate_model: type[RecruitmentCandidate],
@@ -119,14 +122,19 @@ def persist_candidate_batch(
     candidates_to_create: list[RecruitmentCandidate],
     invalidate_cache: Callable[[int | None], None],
 ) -> list[RecruitmentCandidate]:
-    candidates = recruitment_candidate_model.objects.bulk_create(candidates_to_create)
-    if candidates and any(getattr(candidate, "pk", None) is None for candidate in candidates):
-        created_ids = list(
-            recruitment_candidate_model.objects.filter(manor=manor)
-            .order_by("-id")
-            .values_list("id", flat=True)[: len(candidates_to_create)]
-        )
-        created_ids.reverse()
-        candidates = list(recruitment_candidate_model.objects.filter(id__in=created_ids).order_by("id"))
+    if not candidates_to_create:
+        invalidate_cache(getattr(manor, "id", None))
+        return []
+
+    connection = connections[recruitment_candidate_model.objects.db]
+    can_return_bulk_rows = bool(getattr(connection.features, "can_return_rows_from_bulk_insert", False))
+
+    if can_return_bulk_rows:
+        candidates = recruitment_candidate_model.objects.bulk_create(candidates_to_create)
+    else:
+        candidates = []
+        for candidate in candidates_to_create:
+            candidate.save(force_insert=True)
+            candidates.append(candidate)
     invalidate_cache(getattr(manor, "id", None))
     return candidates

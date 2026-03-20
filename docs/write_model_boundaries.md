@@ -148,6 +148,8 @@
   - 负责事务内发起招募、创建 `GuestRecruitment(PENDING)`、显现候选稀有度、完成招募
 - `guests/services/recruitment_flow.py`
   - 负责主写链路共享校验、成本扣减、`PENDING/COMPLETED/FAILED` 状态落库
+- `guests/services/recruitment_candidates.py`
+  - 负责候选批量构造与落库；候选持久化必须直接返回本次 durable rows，不得再用“按庄园最近 N 条回查”这类启发式补丁回填主键
 - `guests/services/recruitment_followups.py`
   - 负责 after-commit completion dispatch、完成通知发送
 - `guests/services/recruitment_guests.py`
@@ -157,6 +159,7 @@
 
 - `start_guest_recruitment()` 是唯一允许创建 `PENDING` 招募的入口。
 - `finalize_guest_recruitment()` 是唯一允许把 `PENDING -> COMPLETED / FAILED` 的入口。
+- 候选批量生成的返回值必须与本次写入结果一一对应；如果数据库后端不支持 `bulk_create` 回填主键，应退回稳定的逐条插入语义，而不是依赖“最近写入记录”猜测。
 - 候选确认、保留、放弃必须与 `GuestRecruitment` 状态机分离，作为独立写命令看待。
 - `refresh_guest_recruitments()` 只补偿已到期仍为 `PENDING` 的招募，不再承担页面读路径修复职责。
 

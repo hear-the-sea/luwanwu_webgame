@@ -20,43 +20,17 @@ from django.views.generic import TemplateView
 from core.decorators import flash_unexpected_view_error
 from core.exceptions import GameError
 from core.utils import safe_redirect_url, sanitize_error_message
+from gameplay.selectors.technology import (
+    get_technology_page_context,
+    normalize_martial_troop_class,
+    normalize_technology_tab,
+)
 from gameplay.services.manor.core import get_manor
 from gameplay.services.resources import project_resource_production_for_read
-from gameplay.services.technology import (
-    get_categories,
-    get_martial_technologies_grouped,
-    get_technology_display_data,
-    upgrade_technology,
-)
+from gameplay.services.technology import upgrade_technology
 from gameplay.views.read_helpers import get_prepared_manor_for_read
 
 logger = logging.getLogger(__name__)
-
-TECHNOLOGY_TABS = frozenset({"basic", "martial", "production"})
-MARTIAL_TROOP_CLASSES = (
-    {"key": "dao", "name": "刀类"},
-    {"key": "qiang", "name": "枪类"},
-    {"key": "jian", "name": "剑类"},
-    {"key": "quan", "name": "拳类"},
-    {"key": "gong", "name": "弓箭类"},
-)
-DEFAULT_TECHNOLOGY_TAB = "basic"
-DEFAULT_MARTIAL_TROOP_CLASS = "dao"
-
-
-def _normalize_technology_tab(raw_tab: str | None) -> str:
-    tab = (raw_tab or DEFAULT_TECHNOLOGY_TAB).strip()
-    if tab not in TECHNOLOGY_TABS:
-        return DEFAULT_TECHNOLOGY_TAB
-    return tab
-
-
-def _normalize_martial_troop_class(raw_troop_class: str | None) -> str:
-    troop_class = (raw_troop_class or DEFAULT_MARTIAL_TROOP_CLASS).strip()
-    valid_troop_classes = {item["key"] for item in MARTIAL_TROOP_CLASSES}
-    if troop_class not in valid_troop_classes:
-        return DEFAULT_MARTIAL_TROOP_CLASS
-    return troop_class
 
 
 def _build_technology_redirect_url(tab: str, troop: str = "") -> str:
@@ -99,33 +73,14 @@ class TechnologyView(LoginRequiredMixin, TemplateView):
             logger=logger,
             source="technology_view",
         )
-
-        # 获取当前选中的分类，默认为 basic
-        current_tab = _normalize_technology_tab(self.request.GET.get("tab"))
-
         context["manor"] = manor
-        context["categories"] = get_categories()
-        context["current_tab"] = current_tab
-
-        # 武艺技术按兵种分组，支持子分类筛选
-        if current_tab == "martial":
-            all_groups = get_martial_technologies_grouped(manor)
-            # 兵种子分类
-            context["troop_classes"] = list(MARTIAL_TROOP_CLASSES)
-
-            # 获取当前选中的兵种子分类
-            current_troop_class = _normalize_martial_troop_class(self.request.GET.get("troop"))
-            context["current_troop_class"] = current_troop_class
-
-            # 只显示当前选中兵种的技术
-            context["martial_groups"] = [g for g in all_groups if g["class_key"] == current_troop_class]
-            context["technologies"] = []
-        else:
-            context["martial_groups"] = []
-            context["troop_classes"] = []
-            context["current_troop_class"] = ""
-            context["technologies"] = get_technology_display_data(manor, current_tab)
-
+        context.update(
+            get_technology_page_context(
+                manor,
+                current_tab=self.request.GET.get("tab") or "",
+                current_troop_class=self.request.GET.get("troop") or "",
+            )
+        )
         return context
 
 
@@ -134,8 +89,8 @@ class TechnologyView(LoginRequiredMixin, TemplateView):
 def upgrade_technology_view(request: HttpRequest, tech_key: str) -> HttpResponse:
     """升级技术"""
     manor = get_manor(request.user)
-    tab = _normalize_technology_tab(request.POST.get("tab"))
-    troop = _normalize_martial_troop_class(request.POST.get("troop")) if tab == "martial" else ""
+    tab = normalize_technology_tab(request.POST.get("tab"))
+    troop = normalize_martial_troop_class(request.POST.get("troop")) if tab == "martial" else ""
     next_url = (request.POST.get("next") or "").strip()
 
     try:

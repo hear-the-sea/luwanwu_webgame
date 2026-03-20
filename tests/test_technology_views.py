@@ -34,6 +34,65 @@ class TestTechnologyViews:
         assert response.status_code == 200
         assert response.context["current_tab"] == "basic"
 
+    def test_technology_page_uses_explicit_read_helper(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        calls = {"prepared": 0}
+
+        monkeypatch.setattr(
+            "gameplay.views.technology.get_prepared_manor_for_read",
+            lambda request, **kwargs: calls.__setitem__("prepared", calls["prepared"] + 1) or manor,
+        )
+        monkeypatch.setattr(
+            "gameplay.views.technology.get_technology_page_context",
+            lambda current_manor, *, current_tab, current_troop_class: (
+                {
+                    "categories": [],
+                    "current_tab": current_tab or "basic",
+                    "martial_groups": [],
+                    "troop_classes": [],
+                    "current_troop_class": current_troop_class,
+                    "technologies": [],
+                }
+                if current_manor is manor
+                else {}
+            ),
+        )
+
+        response = client.get(reverse("gameplay:technology"))
+
+        assert response.status_code == 200
+        assert calls["prepared"] == 1
+
+    def test_technology_page_uses_selector_context(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        calls = {"selector": 0}
+
+        monkeypatch.setattr("gameplay.views.technology.get_prepared_manor_for_read", lambda request, **kwargs: manor)
+
+        def _fake_selector(current_manor, *, current_tab, current_troop_class):
+            calls["selector"] += 1
+            assert current_manor is manor
+            assert current_tab == "martial"
+            assert current_troop_class == "qiang"
+            return {
+                "categories": [{"key": "martial", "name": "武艺"}],
+                "current_tab": "martial",
+                "martial_groups": [{"class_key": "qiang", "techs": []}],
+                "troop_classes": [{"key": "qiang", "name": "枪类"}],
+                "current_troop_class": "qiang",
+                "technologies": [],
+            }
+
+        monkeypatch.setattr("gameplay.views.technology.get_technology_page_context", _fake_selector)
+
+        response = client.get(reverse("gameplay:technology") + "?tab=martial&troop=qiang")
+
+        assert response.status_code == 200
+        assert calls["selector"] == 1
+        assert response.context["current_tab"] == "martial"
+        assert response.context["current_troop_class"] == "qiang"
+        assert response.context["martial_groups"] == [{"class_key": "qiang", "techs": []}]
+
     def test_upgrade_technology_known_error_shows_message(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
 

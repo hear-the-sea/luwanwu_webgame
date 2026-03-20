@@ -33,6 +33,75 @@ class TestRecruitmentViews:
         assert options
         assert all(option.get("troop_class") == "jian" for option in options)
 
+    def test_troop_recruitment_page_uses_explicit_read_helper(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        calls = {"prepared": 0}
+
+        monkeypatch.setattr(
+            "gameplay.views.recruitment.get_prepared_manor_for_read",
+            lambda request, **kwargs: calls.__setitem__("prepared", calls["prepared"] + 1) or manor,
+        )
+        monkeypatch.setattr(
+            "gameplay.views.recruitment.get_troop_recruitment_context",
+            lambda current_manor, *, selected_category: (
+                {
+                    "current_category": selected_category,
+                    "recruitment_options": [],
+                    "recruitment_categories": [{"key": "all", "name": "全部"}],
+                    "active_recruitments": [],
+                    "player_troops": [],
+                    "training_level": 0,
+                    "citang_level": 0,
+                    "can_recruit": False,
+                    "speed_bonus_percent": 0,
+                    "training_multiplier": 1,
+                    "citang_multiplier": 1,
+                    "is_recruiting": False,
+                }
+                if current_manor is manor
+                else {}
+            ),
+        )
+
+        response = client.get(reverse("gameplay:troop_recruitment"))
+
+        assert response.status_code == 200
+        assert calls["prepared"] == 1
+
+    def test_troop_recruitment_page_uses_selector_context(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        calls = {"selector": 0}
+
+        monkeypatch.setattr("gameplay.views.recruitment.get_prepared_manor_for_read", lambda request, **kwargs: manor)
+
+        def _fake_selector(current_manor, *, selected_category):
+            calls["selector"] += 1
+            assert current_manor is manor
+            assert selected_category == "dao"
+            return {
+                "current_category": selected_category,
+                "recruitment_options": [{"key": "dao_guard", "troop_class": "dao"}],
+                "recruitment_categories": [{"key": "all", "name": "全部"}, {"key": "dao", "name": "刀系"}],
+                "active_recruitments": [],
+                "player_troops": [],
+                "training_level": 1,
+                "citang_level": 1,
+                "can_recruit": True,
+                "speed_bonus_percent": 100,
+                "training_multiplier": 1.5,
+                "citang_multiplier": 2.0,
+                "is_recruiting": False,
+            }
+
+        monkeypatch.setattr("gameplay.views.recruitment.get_troop_recruitment_context", _fake_selector)
+
+        response = client.get(reverse("gameplay:troop_recruitment") + "?category=dao")
+
+        assert response.status_code == 200
+        assert calls["selector"] == 1
+        assert response.context["current_category"] == "dao"
+        assert response.context["recruitment_options"] == [{"key": "dao_guard", "troop_class": "dao"}]
+
     def test_start_troop_recruitment_database_error_does_not_500(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
 

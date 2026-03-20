@@ -33,7 +33,7 @@ from gameplay.services.utils.cache import CacheKeys
 from gameplay.services.utils.messages import claim_message_attachments
 from gameplay.tasks import complete_mission_task, complete_raid_task
 from gameplay.tasks.pvp import complete_scout_return_task, complete_scout_task, process_raid_battle_task
-from guests.models import RecruitmentPool
+from guests.models import GuestStatus, RecruitmentPool
 from guests.services.recruitment import recruit_guest, refresh_guest_recruitments, start_guest_recruitment
 from guests.services.recruitment_guests import finalize_candidate
 from guilds.constants import CONTRIBUTION_RATES, GUILD_CREATION_COST
@@ -45,7 +45,7 @@ from trade.models import AuctionBid, AuctionRound, AuctionSlot, MarketListing
 from trade.services.auction_service import place_bid, settle_auction_round
 from trade.services.market_service import create_listing, purchase_listing
 
-pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("load_guest_data")]
+pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("load_guest_data", "load_troop_data")]
 
 
 def _prepare_attack_ready_manors(django_user_model, *, prefix: str):
@@ -260,7 +260,7 @@ def test_integration_complete_raid_task_finalizes_retreated_run(require_env_serv
     assert result == "completed"
     assert run.status == RaidRun.Status.COMPLETED
     assert run.completed_at is not None
-    assert guest.status == guest.Status.IDLE
+    assert guest.status == GuestStatus.IDLE
     assert troop.count == 200
 
 
@@ -575,7 +575,7 @@ def test_integration_mission_launch_refresh_and_report_flow(
 
     assert run.status == MissionRun.Status.ACTIVE
     assert run.battle_report is not None
-    assert guest.status == guest.Status.DEPLOYED
+    assert guest.status == GuestStatus.DEPLOYED
 
     run.return_at = timezone.now() - timedelta(seconds=1)
     run.save(update_fields=["return_at"])
@@ -587,7 +587,7 @@ def test_integration_mission_launch_refresh_and_report_flow(
 
     assert run.status == MissionRun.Status.COMPLETED
     assert run.completed_at is not None
-    assert guest.status in [guest.Status.IDLE, guest.Status.INJURED]
+    assert guest.status in [GuestStatus.IDLE, GuestStatus.INJURED]
     assert Message.objects.filter(manor=manor, title=f"{mission.name} 战报", battle_report=run.battle_report).exists()
 
 
@@ -633,7 +633,7 @@ def test_integration_complete_mission_task_finalizes_due_run(
     assert result == "completed"
     assert run.status == MissionRun.Status.COMPLETED
     assert run.completed_at is not None
-    assert guest.status in [guest.Status.IDLE, guest.Status.INJURED]
+    assert guest.status in [GuestStatus.IDLE, GuestStatus.INJURED]
     assert Message.objects.filter(manor=manor, title=f"{mission.name} 战报", battle_report=run.battle_report).exists()
 
 
