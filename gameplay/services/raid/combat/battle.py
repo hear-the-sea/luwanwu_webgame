@@ -11,6 +11,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
+from core.exceptions import BattlePreparationError
 from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, INFRASTRUCTURE_EXCEPTIONS
 from gameplay.services.battle_snapshots import build_guest_battle_snapshots, build_guest_snapshot_proxies
 from guests.models import Guest, GuestStatus
@@ -89,7 +90,7 @@ def _lock_battle_manors(attacker_id: int, defender_id: int) -> tuple[Manor, Mano
     attacker = locked.get(attacker_id)
     defender = locked.get(defender_id)
     if attacker is None or defender is None:
-        raise ValueError("目标庄园不存在")
+        raise BattlePreparationError("目标庄园不存在")
     return attacker, defender
 
 
@@ -232,7 +233,7 @@ def process_raid_battle(run: RaidRun, now: Optional[datetime] = None) -> None:
 
         try:
             attacker_locked, defender_locked = _lock_battle_manors(locked_run.attacker_id, locked_run.defender_id)
-        except ValueError:
+        except BattlePreparationError:
             logger.warning(
                 "raid battle aborted due to missing manor: run_id=%s attacker=%s defender=%s",
                 locked_run.id,

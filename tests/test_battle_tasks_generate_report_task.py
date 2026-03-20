@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from core.exceptions import BattlePreparationError
 from gameplay.services.manor.core import ensure_manor
 
 
@@ -68,7 +69,7 @@ def test_generate_report_task_skips_when_run_already_has_report(monkeypatch, dja
 
 
 @pytest.mark.django_db
-def test_generate_report_task_does_not_retry_on_value_error(monkeypatch, django_user_model):
+def test_generate_report_task_does_not_retry_on_game_error(monkeypatch, django_user_model):
     """Business errors should be swallowed and not retried."""
     from battle.tasks import generate_report_task
 
@@ -76,7 +77,7 @@ def test_generate_report_task_does_not_retry_on_value_error(monkeypatch, django_
     manor = ensure_manor(user)
 
     def _boom(**_kwargs):
-        raise ValueError("bad input")
+        raise BattlePreparationError("bad input")
 
     monkeypatch.setattr("battle.tasks.simulate_report", _boom)
 
@@ -98,6 +99,40 @@ def test_generate_report_task_does_not_retry_on_value_error(monkeypatch, django_
     )
     assert got is None
     assert called["retry"] == 0
+
+
+@pytest.mark.django_db
+def test_generate_report_task_retries_on_legacy_value_error(monkeypatch, django_user_model):
+    """Legacy ValueError should now be treated as unexpected and retried."""
+    from battle.tasks import generate_report_task
+
+    user = django_user_model.objects.create_user(username="task_legacy_value_error", password="pass")
+    manor = ensure_manor(user)
+
+    def _boom(**_kwargs):
+        raise ValueError("bad input")
+
+    monkeypatch.setattr("battle.tasks.simulate_report", _boom)
+
+    state = {"exc": None}
+
+    def _retry(exc):
+        state["exc"] = exc
+        raise RuntimeError("retried")
+
+    monkeypatch.setattr(generate_report_task, "retry", _retry)
+
+    with pytest.raises(RuntimeError, match="retried"):
+        generate_report_task.run(
+            manor_id=manor.id,
+            mission_id=None,
+            run_id=None,
+            guest_ids=[],
+            troop_loadout={},
+            battle_type="skirmish",
+        )
+
+    assert isinstance(state["exc"], ValueError)
 
 
 @pytest.mark.django_db

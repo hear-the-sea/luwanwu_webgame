@@ -10,6 +10,8 @@ from django.db import IntegrityError
 from django.db.models import F
 from django.utils import timezone
 
+from core.exceptions import RaidStartError
+
 from ....models import Manor, PlayerTroop, RaidRun
 
 # Normalization / calculation helpers from the troops sub-module.
@@ -41,9 +43,9 @@ def _deduct_troops(manor: Manor, loadout: Dict[str, int]) -> None:
     for troop_key, count in loadout.items():
         troop = troops.get(troop_key)
         if not troop:
-            raise ValueError("没有该类型的护院")
+            raise RaidStartError("没有该类型的护院")
         if troop.count < count:
-            raise ValueError(f"护院 {troop.troop_template.name} 数量不足")
+            raise RaidStartError(f"护院 {troop.troop_template.name} 数量不足")
         troop.count -= count
         to_update.append(troop)
 

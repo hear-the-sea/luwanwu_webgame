@@ -7,6 +7,7 @@ from celery import shared_task
 from django.apps import apps
 from django.db import transaction
 
+from core.exceptions import GameError
 from guests.models import Guest
 
 from .services import simulate_report
@@ -249,7 +250,7 @@ def generate_report_task(
         logger.info("Battle report %d generated successfully for manor %d", report.pk, manor_id)
         return report.pk
 
-    except ValueError as exc:
+    except GameError as exc:
         # Business/validation errors should not be retried.
         logger.warning(
             "Battle report generation aborted (non-retriable) for manor %s: %s",

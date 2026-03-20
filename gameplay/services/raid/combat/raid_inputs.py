@@ -78,5 +78,8 @@ def _normalize_and_validate_raid_loadout(guests: list[Guest], troop_loadout: Dic
 
     loadout = normalize_troop_loadout(troop_loadout, default_if_empty=False)
     loadout = {key: count for key, count in loadout.items() if count > 0}
-    validate_troop_capacity(guests, loadout)
+    try:
+        validate_troop_capacity(guests, loadout)
+    except ValueError as exc:
+        raise RaidStartError(str(exc)) from exc
     return loadout

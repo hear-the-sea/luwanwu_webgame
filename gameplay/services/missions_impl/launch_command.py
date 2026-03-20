@@ -7,10 +7,12 @@ from django.db import transaction
 from django.utils import timezone
 
 from core.exceptions import (
+    BattlePreparationError,
     MissionDailyLimitError,
     MissionGuestSelectionError,
     MissionSquadSizeExceededError,
     MissionTroopLoadoutError,
+    TroopLoadoutError,
 )
 
 from ...models import Manor, MissionRun, MissionTemplate
@@ -57,13 +59,13 @@ def prepare_offense_launch_inputs(
         try:
             loadout = normalize_mission_loadout(troop_loadout)
             validate_troop_capacity(guests, loadout)
-        except ValueError as exc:
+        except (BattlePreparationError, TroopLoadoutError) as exc:
             raise MissionTroopLoadoutError(str(exc)) from exc
 
     if loadout:
         try:
             _deduct_troops_batch(manor, loadout)
-        except ValueError as exc:
+        except TroopLoadoutError as exc:
             raise MissionTroopLoadoutError(str(exc)) from exc
 
     travel_seconds = travel_time_seconds(mission.base_travel_time, guests, loadout)

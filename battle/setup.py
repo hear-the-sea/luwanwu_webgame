@@ -4,6 +4,7 @@ import random
 from collections.abc import Callable
 from typing import Any
 
+from core.exceptions import BattlePreparationError
 from guests.models import Guest, GuestStatus
 
 from .constants import MAX_SQUAD
@@ -42,14 +43,14 @@ def validate_attacker_guest_ownership(manor, guests: list[Guest]) -> None:
             continue
 
         if parsed_manor_id != int(manor_pk):
-            raise ValueError("攻击方门客必须属于当前庄园")
+            raise BattlePreparationError("攻击方门客必须属于当前庄园")
 
     if not unresolved_ids:
         return
 
     owned_ids = set(Guest.objects.filter(id__in=unresolved_ids, manor_id=manor_pk).values_list("id", flat=True))
     if len(owned_ids) != len(set(unresolved_ids)):
-        raise ValueError("攻击方门客必须属于当前庄园")
+        raise BattlePreparationError("攻击方门客必须属于当前庄园")
 
 
 def select_default_attacker_guests(manor, limit: int) -> list[Guest]:
@@ -62,9 +63,9 @@ def select_default_attacker_guests(manor, limit: int) -> list[Guest]:
     if total_guests > 0:
         injured_count = guest_qs.filter(status=GuestStatus.INJURED).count()
         if injured_count > 0:
-            raise ValueError(f"有{injured_count}名门客处于重伤状态，请使用药品治疗后再出征")
-        raise ValueError("仅空闲门客可出征，请先让门客空闲后再尝试战斗")
-    raise ValueError("请先招募门客后再尝试战斗")
+            raise BattlePreparationError(f"有{injured_count}名门客处于重伤状态，请使用药品治疗后再出征")
+        raise BattlePreparationError("仅空闲门客可出征，请先让门客空闲后再尝试战斗")
+    raise BattlePreparationError("请先招募门客后再尝试战斗")
 
 
 def resolve_attacker_guests_for_battle(
@@ -80,7 +81,7 @@ def resolve_attacker_guests_for_battle(
     else:
         guests = attacker_guests
         if not guests:
-            raise ValueError("请选择可出征的门客")
+            raise BattlePreparationError("请选择可出征的门客")
         validate_attacker_guest_ownership_fn(manor, guests)
     return guests, guests[:limit]
 

@@ -11,7 +11,7 @@ from battle.services import (
     recover_orphaned_deployed_guests,
     simulate_report,
 )
-from core.exceptions import GuestNotIdleError
+from core.exceptions import BattlePreparationError, GuestNotIdleError
 from gameplay.models import ArenaEntry, ArenaEntryGuest, ArenaTournament, MissionRun, MissionTemplate, RaidRun
 from gameplay.services.battle_snapshots import build_guest_battle_snapshots, build_guest_snapshot_proxies
 from gameplay.services.manor.core import ensure_manor
@@ -96,7 +96,7 @@ def test_simulate_report_rejects_foreign_attacker_guests(game_data, django_user_
     _recruit_frontline(foreign_manor, draws=1)
     foreign_guest = foreign_manor.guests.first()
 
-    with pytest.raises(ValueError, match="攻击方门客必须属于当前庄园"):
+    with pytest.raises(BattlePreparationError, match="攻击方门客必须属于当前庄园"):
         simulate_report(attacker_manor, attacker_guests=[foreign_guest], troop_loadout={})
 
 
@@ -172,7 +172,7 @@ def test_simulate_report_requires_idle_guests(game_data, django_user_model):
     _recruit_frontline(manor, draws=2)
     manor.guests.update(status=GuestStatus.WORKING)
 
-    with pytest.raises(ValueError) as exc:
+    with pytest.raises(BattlePreparationError) as exc:
         simulate_report(manor, seed=5)
 
     assert "空闲" in str(exc.value) or "重伤" in str(exc.value)
@@ -222,7 +222,7 @@ def test_injured_guest_cannot_deploy(django_user_model):
         guest.save()
     troop_loadout = {"dao_jie": 100, "qiang_ling": 100, "archer": 100, "fist_master": 100, "jian_shi": 100}
     # 重伤门客无法出征，应抛出异常
-    with pytest.raises(ValueError) as exc:
+    with pytest.raises(BattlePreparationError) as exc:
         simulate_report(manor, seed=1, troop_loadout=troop_loadout)
     assert "重伤" in str(exc.value)
 

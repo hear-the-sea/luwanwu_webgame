@@ -4,7 +4,9 @@ from types import SimpleNamespace
 
 import pytest
 
+import battle.locking as battle_locking
 import battle.services as battle_services
+from core.exceptions import BattlePreparationError
 
 
 @pytest.mark.django_db
@@ -48,3 +50,18 @@ def test_lock_guests_for_battle_locks_manor_before_guests(monkeypatch):
     guest_lock_idx = next(i for i, item in enumerate(events) if item.startswith("guest_lock:"))
     assert manor_lock_idx < guest_lock_idx
     assert "inside" in events
+
+
+def test_validate_locked_guest_statuses_raises_battle_preparation_error():
+    with pytest.raises(BattlePreparationError, match="正在战斗中"):
+        battle_services._validate_locked_guest_statuses([SimpleNamespace(display_name="甲", status="deployed")])
+
+
+def test_load_locked_battle_participants_raises_battle_preparation_error_when_missing():
+    with pytest.raises(BattlePreparationError, match="部分门客不存在，无法执行战斗"):
+        battle_locking.load_locked_battle_participants(
+            [1, 2],
+            primary_guest_ids=[1, 2],
+            secondary_guest_ids=[],
+            lock_guest_rows_fn=lambda _guest_ids: [SimpleNamespace(id=1, status="idle")],
+        )

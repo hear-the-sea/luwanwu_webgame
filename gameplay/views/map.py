@@ -410,6 +410,7 @@ def retreat_raid_api(request: HttpRequest, raid_id: int) -> JsonResponse:
             getattr(request.user, "id", None),
             raid_id,
         ),
+        known_exceptions=(GameError,),
     )
 
 

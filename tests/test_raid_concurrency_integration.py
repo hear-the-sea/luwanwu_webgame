@@ -7,7 +7,7 @@ import pytest
 from django.db import connection
 from django.utils import timezone
 
-from core.exceptions import RaidStartError, ScoutRetreatStateError
+from core.exceptions import RaidRetreatStateError, RaidStartError
 from gameplay.models import RaidRun
 from gameplay.services.manor.core import ensure_manor
 from gameplay.services.raid.combat import runs as combat_runs
@@ -130,7 +130,7 @@ def test_request_raid_retreat_concurrent_requests_allow_only_one_transition(monk
 
     assert len(results) == 1
     assert len(errors) == 1
-    assert isinstance(errors[0], ScoutRetreatStateError)
+    assert isinstance(errors[0], RaidRetreatStateError)
     assert "当前状态无法撤退" in str(errors[0])
     assert run.status == RaidRun.Status.RETREATED
     assert run.is_retreating is True

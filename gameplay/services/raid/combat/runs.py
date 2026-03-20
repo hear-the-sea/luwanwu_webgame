@@ -248,7 +248,7 @@ def request_raid_retreat(run: RaidRun) -> None:
         run: 踢馆记录
 
     Raises:
-        ValueError: 无法撤退时
+        RaidRetreatStateError: 无法撤退时
     """
     request_raid_retreat_entry(
         run,

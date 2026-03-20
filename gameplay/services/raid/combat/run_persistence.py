@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
+from core.exceptions import RaidStartError
+
 
 def lock_manor_pair(attacker_id: int, defender_id: int, *, manor_model: Any) -> tuple[Any, Any]:
     """Lock attacker/defender rows in a stable order to avoid deadlocks."""
@@ -11,7 +13,7 @@ def lock_manor_pair(attacker_id: int, defender_id: int, *, manor_model: Any) -> 
     attacker = locked.get(attacker_id)
     defender = locked.get(defender_id)
     if attacker is None or defender is None:
-        raise ValueError("目标庄园不存在")
+        raise RaidStartError("目标庄园不存在")
     return attacker, defender
 
 

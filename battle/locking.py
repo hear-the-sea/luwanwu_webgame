@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from core.exceptions import BattlePreparationError
 from guests.models import Guest, GuestStatus
 
 
@@ -40,7 +41,7 @@ def lock_manor_rows(manor_ids: list[int]) -> None:
     )
     missing_ids = [manor_id for manor_id in manor_ids if manor_id not in locked_ids]
     if missing_ids:
-        raise ValueError("部分庄园不存在，无法执行战斗")
+        raise BattlePreparationError("部分庄园不存在，无法执行战斗")
 
 
 def lock_guest_rows(guest_ids: list[int]) -> list[Guest]:
@@ -50,11 +51,11 @@ def lock_guest_rows(guest_ids: list[int]) -> list[Guest]:
 def validate_locked_guest_statuses(locked_guests: list[Guest]) -> None:
     for guest in locked_guests:
         if guest.status == GuestStatus.DEPLOYED:
-            raise ValueError(f"门客 {guest.display_name} 正在战斗中，请稍后再试")
+            raise BattlePreparationError(f"门客 {guest.display_name} 正在战斗中，请稍后再试")
         if guest.status == GuestStatus.WORKING:
-            raise ValueError(f"门客 {guest.display_name} 正在打工中，无法出征")
+            raise BattlePreparationError(f"门客 {guest.display_name} 正在打工中，无法出征")
         if guest.status == GuestStatus.INJURED:
-            raise ValueError(f"门客 {guest.display_name} 处于重伤状态，请先治疗")
+            raise BattlePreparationError(f"门客 {guest.display_name} 处于重伤状态，请先治疗")
 
 
 def load_locked_battle_participants(
@@ -68,7 +69,7 @@ def load_locked_battle_participants(
     locked_guest_map = {guest.id: guest for guest in locked_guests}
     missing_guest_ids = [guest_id for guest_id in guest_ids if guest_id not in locked_guest_map]
     if missing_guest_ids:
-        raise ValueError("部分门客不存在，无法执行战斗")
+        raise BattlePreparationError("部分门客不存在，无法执行战斗")
 
     locked_primary = [locked_guest_map[guest_id] for guest_id in primary_guest_ids]
     locked_secondary = [locked_guest_map[guest_id] for guest_id in secondary_guest_ids]

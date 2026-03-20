@@ -8,6 +8,7 @@ import pytest
 from django.utils import timezone
 
 from battle.models import TroopTemplate
+from core.exceptions import BattlePreparationError
 from gameplay.models import PlayerTroop, RaidRun
 from gameplay.services.manor.core import ensure_manor
 from gameplay.services.raid.combat import battle as combat_battle
@@ -428,7 +429,7 @@ def test_process_raid_battle_cleans_up_run_when_manor_lock_fails(monkeypatch, dj
     monkeypatch.setattr(
         combat_battle,
         "_lock_battle_manors",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("目标庄园不存在")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(BattlePreparationError("目标庄园不存在")),
     )
 
     combat_battle.process_raid_battle(run, now=now)

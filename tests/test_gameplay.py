@@ -164,6 +164,43 @@ def test_mission_launch_with_invalid_troop_type(game_data, mission_templates, ma
 
 
 @pytest.mark.django_db(transaction=True)
+def test_mission_launch_with_insufficient_troops_wraps_shared_loadout_error(
+    game_data, mission_templates, manor_with_troops
+):
+    """共享护院扣减错误应被包装成 MissionTroopLoadoutError。"""
+    from battle.models import TroopTemplate
+    from gameplay.models import PlayerTroop
+    from guests.models import Guest, GuestTemplate
+
+    mission = MissionTemplate.objects.filter(guest_only=False, is_defense=False).first()
+    if not mission:
+        pytest.skip("No mission available that allows troops")
+    manor = manor_with_troops
+    template = GuestTemplate.objects.first()
+    if template is None:
+        pytest.skip("No guest template available")
+
+    guest = Guest.objects.create(manor=manor, template=template, level=50, status=GuestStatus.IDLE)
+    troop_template = TroopTemplate.objects.create(
+        key="mission_insufficient_guard",
+        name="任务测试护院",
+        description="",
+        base_attack=1,
+        base_defense=1,
+        base_hp=1,
+        speed_bonus=0,
+        priority=9999,
+        default_count=0,
+    )
+    PlayerTroop.objects.create(manor=manor, troop_template=troop_template, count=1)
+
+    with pytest.raises(MissionTroopLoadoutError) as exc:
+        launch_mission(manor, mission, [guest.id], {troop_template.key: 2})
+
+    assert "数量不足" in str(exc.value)
+
+
+@pytest.mark.django_db(transaction=True)
 def test_mission_launch_rejects_when_guest_count_exceeds_max_squad(game_data, mission_templates, manor_with_troops):
     """服务层应拒绝超出上阵人数上限的任务出征请求。"""
     from guests.models import Guest, GuestTemplate

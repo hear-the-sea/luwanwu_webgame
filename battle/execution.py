@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict, List
 
 from django.utils import timezone
 
+from core.exceptions import BattlePreparationError
 from guests.guest_combat_stats import is_live_guest_model
 from guests.guest_rules import compute_guest_troop_capacity
 from guests.models import Guest, GuestStatus
@@ -150,7 +151,7 @@ def validate_troop_capacity(guests: List[Guest], troop_loadout: Dict[str, int]) 
     total_troops = sum(troop_loadout.values())
     if total_troops > total_capacity:
         guest_count = len(guests)
-        raise ValueError(
+        raise BattlePreparationError(
             f"兵力超过带兵上限！当前出征{guest_count}名门客，"
             f"总带兵上限为{total_capacity}，实际兵力为{total_troops}。"
             f"请减少兵力或增派更多门客。"

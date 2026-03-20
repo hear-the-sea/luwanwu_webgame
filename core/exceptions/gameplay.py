@@ -87,6 +87,32 @@ class RaidStartError(GameError):
     error_code = "RAID_START_ERROR"
 
 
+class RaidRetreatStateError(GameError):
+    """踢馆撤退状态错误"""
+
+    error_code = "RAID_RETREAT_STATE_ERROR"
+
+    def __init__(self, reason: str = "ended", message: str | None = None):
+        if message is None:
+            if reason == "retreating":
+                message = "已在撤退中"
+            else:
+                message = "当前状态无法撤退"
+        super().__init__(message, reason=reason)
+
+
+class BattlePreparationError(GameError):
+    """战斗准备阶段输入或状态错误"""
+
+    error_code = "BATTLE_PREPARATION_ERROR"
+
+
+class TroopLoadoutError(GameError):
+    """护院配置或库存错误"""
+
+    error_code = "TROOP_LOADOUT_ERROR"
+
+
 # ============ 竞技场相关异常 ============
 
 

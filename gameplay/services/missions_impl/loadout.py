@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Dict
 
+from core.exceptions import TroopLoadoutError
 from core.utils.time_scale import scale_duration
 
 
@@ -14,7 +15,10 @@ def normalize_mission_loadout(raw: Dict[str, int] | None) -> Dict[str, int]:
     if not templates:
         return {}
 
-    loadout = normalize_loadout_util(raw, templates)
+    try:
+        loadout = normalize_loadout_util(raw, templates)
+    except ValueError as exc:
+        raise TroopLoadoutError(str(exc)) from exc
     return loadout
 
 

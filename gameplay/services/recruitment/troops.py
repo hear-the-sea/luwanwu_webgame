@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING, Dict, Optional
 from django.db.models import F
 from django.utils import timezone
 
+from core.exceptions import TroopLoadoutError
+
 if TYPE_CHECKING:
     from ...models import Manor
 
@@ -132,7 +134,7 @@ def _deduct_troops_batch(manor: "Manor", loadout: Dict[str, int]) -> None:
         loadout: 要扣除的护院配置 {troop_key: count}
 
     Raises:
-        ValueError: 护院数量不足时抛出异常
+        TroopLoadoutError: 护院数量不足时抛出异常
     """
     if not loadout:
         return
@@ -158,9 +160,9 @@ def _deduct_troops_batch(manor: "Manor", loadout: Dict[str, int]) -> None:
         if not troop:
             # 护院类型不存在 - 必须抛出异常，否则会造成护院复制漏洞
             # 场景：出征时扣除A但跳过B → 战斗结束归还会创建B → 凭空生成护院
-            raise ValueError(f"护院配置包含不存在的类型: {troop_key}")
+            raise TroopLoadoutError(f"护院配置包含不存在的类型: {troop_key}")
         if troop.count < count:
-            raise ValueError(f"护院 {troop.troop_template.name} 数量不足")
+            raise TroopLoadoutError(f"护院 {troop.troop_template.name} 数量不足")
         troop.count -= count
         to_update.append(troop)
 

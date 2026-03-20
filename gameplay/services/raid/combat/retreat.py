@@ -6,6 +6,8 @@ from typing import Any, Callable
 from django.db import transaction
 from django.utils import timezone
 
+from core.exceptions import RaidRetreatStateError
+
 
 def request_raid_retreat(
     run: Any,
@@ -14,10 +16,10 @@ def request_raid_retreat(
     schedule_retreat_completion: Callable[[int, int], None],
 ) -> None:
     if run.status != raid_run_model.Status.MARCHING:
-        raise ValueError("当前状态无法撤退")
+        raise RaidRetreatStateError("ended")
 
     if run.is_retreating:
-        raise ValueError("已在撤退中")
+        raise RaidRetreatStateError("retreating")
 
     now = timezone.now()
     elapsed = max(0, int((now - run.started_at).total_seconds()))
@@ -25,9 +27,9 @@ def request_raid_retreat(
     with transaction.atomic():
         locked_run = raid_run_model.objects.select_for_update().filter(pk=run.pk).first()
         if not locked_run or locked_run.status != raid_run_model.Status.MARCHING:
-            raise ValueError("当前状态无法撤退")
+            raise RaidRetreatStateError("ended")
         if locked_run.is_retreating:
-            raise ValueError("已在撤退中")
+            raise RaidRetreatStateError("retreating")
 
         locked_run.is_retreating = True
         locked_run.status = raid_run_model.Status.RETREATED

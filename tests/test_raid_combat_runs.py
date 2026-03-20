@@ -130,8 +130,42 @@ def test_deduct_troops_raises_when_missing(monkeypatch):
 
     monkeypatch.setattr(troop_ops, "PlayerTroop", _PlayerTroop)
 
-    with pytest.raises(ValueError, match="没有该类型的护院"):
+    with pytest.raises(RaidStartError, match="没有该类型的护院"):
         combat_runs._deduct_troops(SimpleNamespace(), {"inf": 1})
+
+
+def test_normalize_and_validate_raid_loadout_translates_battle_value_error(monkeypatch):
+    monkeypatch.setattr(
+        "battle.combatants_pkg.normalize_troop_loadout",
+        lambda troop_loadout, default_if_empty=False: troop_loadout,
+    )
+    monkeypatch.setattr(
+        "battle.services.validate_troop_capacity",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("门客容量不足")),
+    )
+
+    with pytest.raises(RaidStartError, match="门客容量不足"):
+        combat_runs._normalize_and_validate_raid_loadout([], {"inf": 1})
+
+
+def test_lock_manor_pair_raises_raid_start_error_when_target_missing():
+    class _Objects:
+        @staticmethod
+        def select_for_update():
+            return _Objects()
+
+        @staticmethod
+        def filter(**_kwargs):
+            return _Objects()
+
+        @staticmethod
+        def order_by(*_args, **_kwargs):
+            return []
+
+    dummy_manor_model = type("_Manor", (), {"objects": _Objects()})
+
+    with pytest.raises(RaidStartError, match="目标庄园不存在"):
+        combat_runs.persistence_lock_manor_pair(1, 2, manor_model=dummy_manor_model)
 
 
 def test_refresh_raid_runs_prefers_async_dispatch(monkeypatch):
