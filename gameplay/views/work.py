@@ -47,7 +47,7 @@ def _handle_unexpected_work_error(
     )
 
 
-def _handle_known_work_error(request: HttpRequest, exc: GameError | ValueError) -> None:
+def _handle_known_work_error(request: HttpRequest, exc: GameError) -> None:
     messages.error(request, sanitize_error_message(exc))
 
 
@@ -106,7 +106,7 @@ def assign_work_view(request: HttpRequest) -> HttpResponse:
         # 计算完成时间（小时）
         hours = work_template.work_duration / 3600
         messages.success(request, f"{guest.display_name} 已前往 {work_template.name} 打工，预计 {hours:.1f} 小时后完成")
-    except (GameError, ValueError) as exc:
+    except GameError as exc:
         _handle_known_work_error(request, exc)
     except DatabaseError as exc:
         _handle_unexpected_work_error(
@@ -137,7 +137,7 @@ def recall_work_view(request: HttpRequest, pk: int) -> HttpResponse:
         messages.success(
             request, f"{assignment.guest.display_name} 已从 {assignment.work_template.name} 召回（无报酬）"
         )
-    except (GameError, ValueError) as exc:
+    except GameError as exc:
         _handle_known_work_error(request, exc)
     except DatabaseError as exc:
         _handle_unexpected_work_error(
@@ -165,7 +165,7 @@ def claim_work_reward_view(request: HttpRequest, pk: int) -> HttpResponse:
     try:
         reward = claim_work_reward(assignment)
         messages.success(request, f"{assignment.guest.display_name} 完成打工，获得银两 {reward['silver']}")
-    except (GameError, ValueError) as exc:
+    except GameError as exc:
         _handle_known_work_error(request, exc)
     except DatabaseError as exc:
         _handle_unexpected_work_error(

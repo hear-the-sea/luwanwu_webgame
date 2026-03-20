@@ -15,7 +15,17 @@ from typing import List
 from django.db import transaction
 
 from core.config import GUEST
-from core.exceptions import GuestCapacityFullError, GuestNotIdleError
+from core.exceptions import (
+    GuestCapacityFullError,
+    GuestNotIdleError,
+    JailError,
+    OathBondAlreadyExistsError,
+    OathCapacityFullError,
+    OathGuestNotFoundError,
+    PrisonerAlreadyHandledError,
+    PrisonerNotFoundError,
+    PrisonerUnavailableError,
+)
 from guests.models import Guest, GuestStatus, GuestTemplate
 from guests.services.recruitment_guests import grant_template_skills
 from guests.utils.recruitment_variance import apply_recruitment_variance
@@ -67,7 +77,7 @@ def add_oath_bond(manor: Manor, guest_id: int) -> OathBond:
         .first()
     )
     if not guest:
-        raise ValueError("门客不存在")
+        raise OathGuestNotFoundError()
     if guest.status != GuestStatus.IDLE:
         raise GuestNotIdleError(guest)
 
@@ -75,11 +85,11 @@ def add_oath_bond(manor: Manor, guest_id: int) -> OathBond:
     capacity = int(getattr(locked_manor, "oath_capacity", 0) or 0)
     current = OathBond.objects.filter(manor=manor).count()
     if current >= capacity:
-        raise ValueError("结义人数已满")
+        raise OathCapacityFullError()
 
     bond, created = OathBond.objects.get_or_create(manor=manor, guest=guest)
     if not created:
-        raise ValueError("该门客已结义")
+        raise OathBondAlreadyExistsError()
     return bond
 
 
@@ -103,7 +113,7 @@ def release_prisoner(manor: Manor, prisoner_id: int) -> JailPrisoner:
         .first()
     )
     if not prisoner:
-        raise ValueError("囚徒不存在或已处理")
+        raise PrisonerUnavailableError()
 
     prisoner.status = JailPrisoner.Status.RELEASED
     prisoner.save(update_fields=["status"])
@@ -126,7 +136,7 @@ def draw_pie(manor: Manor, prisoner_id: int) -> JailPrisoner:
         .first()
     )
     if not prisoner:
-        raise ValueError("囚徒不存在或已处理")
+        raise PrisonerUnavailableError()
 
     # 检查金条
     cost = int(getattr(PVPConstants, "JAIL_PERSUADE_GOLD_BAR_COST", 1) or 1)
@@ -144,7 +154,7 @@ def draw_pie(manor: Manor, prisoner_id: int) -> JailPrisoner:
 
     if not gold_bar_item:
         have = get_item_quantity(manor, GOLD_BAR_ITEM_KEY)
-        raise ValueError(f"金条不足，需要 {cost} 个（当前 {have} 个）")
+        raise JailError(f"金条不足，需要 {cost} 个（当前 {have} 个）")
 
     # 原子消耗金条
     InventoryItem.objects.filter(pk=gold_bar_item.pk).update(quantity=F("quantity") - cost)
@@ -176,13 +186,13 @@ def recruit_prisoner(manor: Manor, prisoner_id: int) -> Guest:
         .first()
     )
     if not prisoner:
-        raise ValueError("囚徒不存在")
+        raise PrisonerNotFoundError()
     if prisoner.status != JailPrisoner.Status.HELD:
-        raise ValueError("囚徒已处理")
+        raise PrisonerAlreadyHandledError()
 
     threshold = int(getattr(PVPConstants, "JAIL_RECRUIT_LOYALTY_THRESHOLD", 30) or 30)
     if int(prisoner.loyalty) > threshold:
-        raise ValueError("忠诚度过高，无法招募")
+        raise JailError("忠诚度过高，无法招募")
 
     # 使用锁定后的 manor 对象检查容量
     capacity = locked_manor.guest_capacity
@@ -193,13 +203,13 @@ def recruit_prisoner(manor: Manor, prisoner_id: int) -> Guest:
     template: GuestTemplate = prisoner.guest_template
     exclusive_template_keys = _get_prisoner_recruit_exclusive_keys(template.key)
     if exclusive_template_keys and locked_manor.guests.filter(template__key__in=exclusive_template_keys).exists():
-        raise ValueError(f"庄园已拥有门客「{template.name}」，不可重复招募")
+        raise JailError(f"庄园已拥有门客「{template.name}」，不可重复招募")
 
     cost = int(getattr(PVPConstants, "JAIL_RECRUIT_GOLD_BAR_COST", 1) or 1)
     if cost > 0:
         have = get_item_quantity(manor, GOLD_BAR_ITEM_KEY)
         if have < cost:
-            raise ValueError(f"金条不足，需要 {cost} 个（当前 {have} 个）")
+            raise JailError(f"金条不足，需要 {cost} 个（当前 {have} 个）")
         consume_inventory_item(manor, GOLD_BAR_ITEM_KEY, cost)
 
     rng = random.Random()

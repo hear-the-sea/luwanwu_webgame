@@ -49,20 +49,20 @@ def test_list_oath_bonds_returns_empty_list_when_no_bonds():
 
 @patch("gameplay.services.jail.Manor")
 def test_add_oath_bond_raises_when_guest_not_found(mock_manor_model):
-    """Test that ValueError is raised when guest doesn't exist."""
+    """Test that OathGuestNotFoundError is raised when guest doesn't exist."""
     manor = SimpleNamespace(pk=1, oath_capacity=5)
     mock_manor_model.objects.select_for_update.return_value.get.return_value = manor
 
     with patch.object(jail_service.Guest, "objects") as mock_qs:
         mock_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = None
 
-        with pytest.raises(ValueError, match="门客不存在"):
+        with pytest.raises(jail_service.OathGuestNotFoundError, match="门客不存在"):
             jail_service.add_oath_bond(manor, guest_id=999)
 
 
 @patch("gameplay.services.jail.Manor")
 def test_add_oath_bond_raises_when_capacity_full(mock_manor_model):
-    """Test that ValueError is raised when oath capacity is full."""
+    """Test that OathCapacityFullError is raised when oath capacity is full."""
     manor = SimpleNamespace(pk=1, oath_capacity=2)
     mock_manor_model.objects.select_for_update.return_value.get.return_value = manor
 
@@ -76,13 +76,13 @@ def test_add_oath_bond_raises_when_capacity_full(mock_manor_model):
         with patch.object(jail_service.OathBond, "objects") as mock_bond_qs:
             mock_bond_qs.filter.return_value.count.return_value = 2  # At capacity
 
-            with pytest.raises(ValueError, match="结义人数已满"):
+            with pytest.raises(jail_service.OathCapacityFullError, match="结义人数已满"):
                 jail_service.add_oath_bond(manor, guest_id=10)
 
 
 @patch("gameplay.services.jail.Manor")
 def test_add_oath_bond_raises_when_already_bonded(mock_manor_model):
-    """Test that ValueError is raised when guest is already bonded."""
+    """Test that OathBondAlreadyExistsError is raised when guest is already bonded."""
     manor = SimpleNamespace(pk=1, oath_capacity=5)
     mock_manor_model.objects.select_for_update.return_value.get.return_value = manor
 
@@ -98,7 +98,7 @@ def test_add_oath_bond_raises_when_already_bonded(mock_manor_model):
             mock_bond_qs.filter.return_value.count.return_value = 1
             mock_bond_qs.get_or_create.return_value = (existing_bond, False)  # Not created
 
-            with pytest.raises(ValueError, match="该门客已结义"):
+            with pytest.raises(jail_service.OathBondAlreadyExistsError, match="该门客已结义"):
                 jail_service.add_oath_bond(manor, guest_id=10)
 
 
@@ -159,13 +159,13 @@ def test_remove_oath_bond_rejects_non_idle_guest(mock_guest_model):
 
 
 def test_release_prisoner_raises_when_not_found():
-    """Test that ValueError is raised when prisoner doesn't exist."""
+    """Test that PrisonerUnavailableError is raised when prisoner doesn't exist."""
     manor = SimpleNamespace(pk=1)
 
     with patch.object(jail_service.JailPrisoner, "objects") as mock_qs:
         mock_qs.select_for_update.return_value.filter.return_value.first.return_value = None
 
-        with pytest.raises(ValueError, match="囚徒不存在或已处理"):
+        with pytest.raises(jail_service.PrisonerUnavailableError, match="囚徒不存在或已处理"):
             jail_service.release_prisoner(manor, prisoner_id=999)
 
 
@@ -188,18 +188,18 @@ def test_release_prisoner_sets_status_to_released():
 
 
 def test_draw_pie_raises_when_prisoner_not_found():
-    """Test that ValueError is raised when prisoner doesn't exist."""
+    """Test that PrisonerUnavailableError is raised when prisoner doesn't exist."""
     manor = SimpleNamespace(pk=1)
 
     with patch.object(jail_service.JailPrisoner, "objects") as mock_qs:
         mock_qs.select_for_update.return_value.filter.return_value.first.return_value = None
 
-        with pytest.raises(ValueError, match="囚徒不存在或已处理"):
+        with pytest.raises(jail_service.PrisonerUnavailableError, match="囚徒不存在或已处理"):
             jail_service.draw_pie(manor, prisoner_id=999)
 
 
 def test_draw_pie_raises_when_gold_insufficient():
-    """Test that ValueError is raised when gold bars are insufficient."""
+    """Test that JailError is raised when gold bars are insufficient."""
     manor = SimpleNamespace(pk=1)
     prisoner = MagicMock()
     prisoner.loyalty = 80
@@ -211,7 +211,7 @@ def test_draw_pie_raises_when_gold_insufficient():
         with patch("gameplay.models.InventoryItem") as mock_inventory_item:
             mock_inventory_item.objects.select_for_update.return_value.filter.return_value.first.return_value = None
             with patch.object(jail_service, "get_item_quantity", return_value=0):
-                with pytest.raises(ValueError, match="金条不足"):
+                with pytest.raises(jail_service.JailError, match="金条不足"):
                     jail_service.draw_pie(manor, prisoner_id=1)
 
 
@@ -304,7 +304,7 @@ def test_draw_pie_uses_configured_gold_cost(mock_manor_model, monkeypatch):
 
 @patch("gameplay.services.jail.Manor")
 def test_draw_pie_raises_when_gold_insufficient_with_manor_lock(mock_manor_model):
-    """Test that ValueError is raised when gold bars are insufficient."""
+    """Test that JailError is raised when gold bars are insufficient."""
     manor = SimpleNamespace(pk=1)
     mock_manor_model.objects.select_for_update.return_value.get.return_value = manor
 
@@ -319,7 +319,7 @@ def test_draw_pie_raises_when_gold_insufficient_with_manor_lock(mock_manor_model
             mock_inventory_item.objects.select_for_update.return_value.filter.return_value.first.return_value = None
 
             with patch.object(jail_service, "get_item_quantity", return_value=0):
-                with pytest.raises(ValueError, match="金条不足"):
+                with pytest.raises(jail_service.JailError, match="金条不足"):
                     jail_service.draw_pie(manor, prisoner_id=1)
 
 
@@ -328,20 +328,20 @@ def test_draw_pie_raises_when_gold_insufficient_with_manor_lock(mock_manor_model
 
 @patch("gameplay.services.jail.Manor")
 def test_recruit_prisoner_raises_when_not_found(mock_manor_model):
-    """Test that ValueError is raised when prisoner doesn't exist."""
+    """Test that PrisonerNotFoundError is raised when prisoner doesn't exist."""
     manor = SimpleNamespace(pk=1)
     mock_manor_model.objects.select_for_update.return_value.get.return_value = manor
 
     with patch.object(jail_service.JailPrisoner, "objects") as mock_qs:
         mock_qs.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = None
 
-        with pytest.raises(ValueError, match="囚徒不存在"):
+        with pytest.raises(jail_service.PrisonerNotFoundError, match="囚徒不存在"):
             jail_service.recruit_prisoner(manor, prisoner_id=999)
 
 
 @patch("gameplay.services.jail.Manor")
 def test_recruit_prisoner_raises_when_already_processed(mock_manor_model):
-    """Test that ValueError is raised when prisoner is already processed."""
+    """Test that PrisonerAlreadyHandledError is raised when prisoner is already processed."""
     manor = SimpleNamespace(pk=1)
     mock_manor_model.objects.select_for_update.return_value.get.return_value = manor
 
@@ -353,13 +353,13 @@ def test_recruit_prisoner_raises_when_already_processed(mock_manor_model):
             prisoner
         )
 
-        with pytest.raises(ValueError, match="囚徒已处理"):
+        with pytest.raises(jail_service.PrisonerAlreadyHandledError, match="囚徒已处理"):
             jail_service.recruit_prisoner(manor, prisoner_id=1)
 
 
 @patch("gameplay.services.jail.Manor")
 def test_recruit_prisoner_raises_when_loyalty_too_high(mock_manor_model):
-    """Test that ValueError is raised when prisoner loyalty is too high."""
+    """Test that JailError is raised when prisoner loyalty is too high."""
     manor = SimpleNamespace(pk=1)
     mock_manor_model.objects.select_for_update.return_value.get.return_value = manor
 
@@ -372,7 +372,7 @@ def test_recruit_prisoner_raises_when_loyalty_too_high(mock_manor_model):
             prisoner
         )
 
-        with pytest.raises(ValueError, match="忠诚度过高"):
+        with pytest.raises(jail_service.JailError, match="忠诚度过高"):
             jail_service.recruit_prisoner(manor, prisoner_id=1)
 
 
@@ -400,7 +400,7 @@ def test_recruit_prisoner_raises_when_guest_capacity_full(mock_manor_model):
 
 @patch("gameplay.services.jail.Manor")
 def test_recruit_prisoner_raises_when_gold_insufficient(mock_manor_model):
-    """Test that ValueError is raised when gold bars are insufficient."""
+    """Test that JailError is raised when gold bars are insufficient."""
     manor = MagicMock()
     manor.guest_capacity = 10
     manor.guests.count.return_value = 5
@@ -420,7 +420,7 @@ def test_recruit_prisoner_raises_when_gold_insufficient(mock_manor_model):
             mock_inventory_item.objects.select_for_update.return_value.filter.return_value.first.return_value = None
 
             with patch.object(jail_service, "get_item_quantity", return_value=0):
-                with pytest.raises(ValueError, match="金条不足"):
+                with pytest.raises(jail_service.JailError, match="金条不足"):
                     jail_service.recruit_prisoner(manor, prisoner_id=1)
 
 
@@ -443,7 +443,7 @@ def test_recruit_prisoner_rejects_duplicate_unique_original_guest(mock_manor_mod
         )
 
         with patch.object(jail_service, "consume_inventory_item") as mock_consume:
-            with pytest.raises(ValueError, match="不可重复招募"):
+            with pytest.raises(jail_service.JailError, match="不可重复招募"):
                 jail_service.recruit_prisoner(manor, prisoner_id=1)
 
     mock_consume.assert_not_called()
@@ -467,7 +467,7 @@ def test_recruit_prisoner_rejects_duplicate_panfeng_variant(mock_manor_model):
             prisoner
         )
 
-        with pytest.raises(ValueError, match="不可重复招募"):
+        with pytest.raises(jail_service.JailError, match="不可重复招募"):
             jail_service.recruit_prisoner(manor, prisoner_id=1)
 
 

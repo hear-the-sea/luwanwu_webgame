@@ -8,7 +8,7 @@ from django.db import DatabaseError
 from django.test import Client
 from django.urls import reverse
 
-from core.exceptions import GameError
+from core.exceptions import GameError, GuestItemOwnershipError, InvalidAllocationError
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.manor.core import ensure_manor
 from guests.models import (
@@ -621,6 +621,19 @@ def test_train_view_runtime_error_bubbles_up(django_user_model, monkeypatch):
 
 
 @pytest.mark.django_db
+def test_train_view_value_error_bubbles_up(django_user_model, monkeypatch):
+    client, manor = _login_client(django_user_model, prefix="train_value_error")
+    guest = _create_guest(manor, prefix="train_value_error")
+
+    monkeypatch.setattr(
+        "guests.views.training.train_guest", lambda *_a, **_k: (_ for _ in ()).throw(ValueError("legacy train"))
+    )
+
+    with pytest.raises(ValueError, match="legacy train"):
+        client.post(reverse("guests:train"), {"guest": str(guest.pk), "levels": "1"})
+
+
+@pytest.mark.django_db
 def test_use_experience_item_view_database_error_returns_generic_json(django_user_model, monkeypatch):
     client, manor = _login_client(django_user_model, prefix="exp_db")
     guest = _create_guest(manor, prefix="exp_db")
@@ -644,6 +657,56 @@ def test_use_experience_item_view_database_error_returns_generic_json(django_use
 
     assert response.status_code == 500
     assert response.json()["error"] == "操作失败，请稍后重试"
+
+
+@pytest.mark.django_db
+def test_use_experience_item_view_known_game_error_returns_business_json(django_user_model, monkeypatch):
+    client, manor = _login_client(django_user_model, prefix="exp_known")
+    guest = _create_guest(manor, prefix="exp_known")
+    item = _create_item(
+        manor,
+        effect_type=ItemTemplate.EffectType.EXPERIENCE_ITEM,
+        effect_payload={"time": 3600},
+        prefix="exp_known",
+    )
+
+    monkeypatch.setattr(
+        "guests.views.training.use_experience_item_for_guest",
+        lambda *_a, **_k: (_ for _ in ()).throw(GuestItemOwnershipError()),
+    )
+
+    response = client.post(
+        reverse("guests:use_exp_item", args=[guest.pk]),
+        {"item_id": str(item.pk)},
+        **_ajax_headers(),
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"] == "道具不存在或不属于您的庄园"
+
+
+@pytest.mark.django_db
+def test_use_experience_item_view_value_error_bubbles_up(django_user_model, monkeypatch):
+    client, manor = _login_client(django_user_model, prefix="exp_value_error")
+    guest = _create_guest(manor, prefix="exp_value_error")
+    item = _create_item(
+        manor,
+        effect_type=ItemTemplate.EffectType.EXPERIENCE_ITEM,
+        effect_payload={"time": 3600},
+        prefix="exp_value_error",
+    )
+
+    monkeypatch.setattr(
+        "guests.views.training.use_experience_item_for_guest",
+        lambda *_a, **_k: (_ for _ in ()).throw(ValueError("legacy exp")),
+    )
+
+    with pytest.raises(ValueError, match="legacy exp"):
+        client.post(
+            reverse("guests:use_exp_item", args=[guest.pk]),
+            {"item_id": str(item.pk)},
+            **_ajax_headers(),
+        )
 
 
 @pytest.mark.django_db
@@ -671,13 +734,13 @@ def test_use_experience_item_view_runtime_error_bubbles_up(django_user_model, mo
 
 
 @pytest.mark.django_db
-def test_allocate_points_view_value_error_returns_business_json(django_user_model, monkeypatch):
+def test_allocate_points_view_known_game_error_returns_business_json(django_user_model, monkeypatch):
     client, manor = _login_client(django_user_model, prefix="allocate_value")
     guest = _create_guest(manor, prefix="allocate_value")
 
     monkeypatch.setattr(
         "guests.views.training.allocate_attribute_points",
-        lambda *_a, **_k: (_ for _ in ()).throw(ValueError("加点失败")),
+        lambda *_a, **_k: (_ for _ in ()).throw(InvalidAllocationError("invalid_request", "加点失败")),
     )
 
     response = client.post(
@@ -688,6 +751,24 @@ def test_allocate_points_view_value_error_returns_business_json(django_user_mode
 
     assert response.status_code == 400
     assert response.json()["error"] == "加点失败"
+
+
+@pytest.mark.django_db
+def test_allocate_points_view_value_error_bubbles_up(django_user_model, monkeypatch):
+    client, manor = _login_client(django_user_model, prefix="allocate_value_error")
+    guest = _create_guest(manor, prefix="allocate_value_error")
+
+    monkeypatch.setattr(
+        "guests.views.training.allocate_attribute_points",
+        lambda *_a, **_k: (_ for _ in ()).throw(ValueError("加点失败")),
+    )
+
+    with pytest.raises(ValueError, match="加点失败"):
+        client.post(
+            reverse("guests:allocate_points", args=[guest.pk]),
+            {"guest": str(guest.pk), "attribute": "force", "points": "1"},
+            **_ajax_headers(),
+        )
 
 
 @pytest.mark.django_db

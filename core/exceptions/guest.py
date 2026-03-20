@@ -115,6 +115,26 @@ class GuestOwnershipError(GuestError):
         super().__init__(message)
 
 
+class GuestNotFoundError(GuestError):
+    """门客不存在"""
+
+    error_code = "GUEST_NOT_FOUND"
+    default_message = "门客不存在"
+
+
+class GuestItemOwnershipError(GuestError):
+    """道具不存在或不属于当前庄园"""
+
+    error_code = "GUEST_ITEM_OWNERSHIP_ERROR"
+    default_message = "道具不存在或不属于您的庄园"
+
+
+class GuestItemConfigurationError(GuestError):
+    """门客培养道具配置无效"""
+
+    error_code = "GUEST_ITEM_CONFIGURATION_ERROR"
+
+
 class GuestFullHpError(GuestError):
     """门客已满血"""
 

@@ -17,7 +17,6 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
-from core.decorators import handle_game_errors
 from core.exceptions import GameError
 from core.utils import is_ajax_request, is_json_request, json_error, json_success, safe_int, safe_positive_int
 from core.utils.rate_limit import rate_limit_json
@@ -59,7 +58,7 @@ class TrainView(LoginRequiredMixin, TemplateView):
             eta = guest.training_complete_at
             eta_str = eta.strftime("%H:%M:%S") if eta else ""
             messages.success(request, f"{guest.display_name} 正在升级，预计 {eta_str} 完成")
-        except (GameError, ValueError) as exc:
+        except GameError as exc:
             messages.error(request, sanitize_error_message(exc))
         except DatabaseError as exc:
             logger.exception(
@@ -119,7 +118,11 @@ def use_experience_item_view(request, pk: int):
         payload = item.template.effect_payload or {}
         reduce_seconds = safe_int(payload.get("time"), default=None)
         if reduce_seconds is None or reduce_seconds <= 0:
-            raise ValueError("道具未配置有效时间")
+            error_msg = "道具未配置有效时间"
+            if is_ajax:
+                return json_error(error_msg, status=400, include_message=True)
+            messages.error(request, error_msg)
+            return redirect(next_url)
         result = use_experience_item_for_guest(manor, guest, item.pk, reduce_seconds)
         new_quantity = safe_int(result.get("remaining_item_quantity"), default=0, min_val=0)
         reduced_seconds = safe_int(result.get("time_reduced"), default=0, min_val=0)
@@ -139,7 +142,7 @@ def use_experience_item_view(request, pk: int):
                 training_eta=eta.isoformat() if eta else None,
             )
         messages.success(request, msg)
-    except (GameError, ValueError) as exc:
+    except GameError as exc:
         error_msg = sanitize_error_message(exc)
         if is_ajax:
             return json_error(error_msg, status=400, include_message=True)
@@ -202,12 +205,9 @@ def check_training_view(request, pk: int):
 
 @login_required
 @require_POST
-@handle_game_errors(redirect_url="guests:detail")
 def allocate_points_view(request, pk: int):
     """
     门客属性加点视图
-
-    使用统一的错误处理装饰器，减少样板代码
     """
     from gameplay.services.manor.core import get_manor
 
@@ -216,19 +216,27 @@ def allocate_points_view(request, pk: int):
     guest = get_object_or_404(Guest.objects.for_manor(manor).with_template(), pk=pk)
     form = AllocateSkillPointsForm(request.POST, manor=manor)
     is_ajax = is_json_request(request)
+    default_url = reverse("guests:detail", args=[guest.pk])
+    next_url = safe_redirect_url(request, request.POST.get("next"), default_url)
 
     if not form.is_valid():
-        # 表单验证失败，抛出 ValueError 让装饰器处理
         errors = []
         for field_errors in form.errors.values():
             errors.extend(field_errors)
         error_msg = "; ".join(errors) or "加点参数有误"
-        raise ValueError(error_msg)
+        if is_ajax:
+            return json_error(error_msg, status=400, include_message=True)
+        messages.error(request, error_msg)
+        return redirect(next_url)
 
     # 验证门客 ID 一致性
     form_guest = form.cleaned_data["guest"]
     if form_guest.pk != guest.pk:
-        raise ValueError("非法的加点请求")
+        error_msg = "非法的加点请求"
+        if is_ajax:
+            return json_error(error_msg, status=400, include_message=True)
+        messages.error(request, error_msg)
+        return redirect(next_url)
 
     attribute = form.cleaned_data["attribute"]
     points = form.cleaned_data["points"]
@@ -255,8 +263,12 @@ def allocate_points_view(request, pk: int):
                 luck=guest.luck,
                 attribute_panel_html=attribute_panel_html,
             )
-    except (GameError, ValueError):
-        raise
+    except GameError as exc:
+        error_msg = sanitize_error_message(exc)
+        if is_ajax:
+            return json_error(error_msg, status=400, include_message=True)
+        messages.error(request, error_msg)
+        return redirect(next_url)
     except DatabaseError as exc:
         logger.exception(
             "Unexpected allocate-points database error: manor_id=%s user_id=%s guest_id=%s attribute=%s points=%s",
@@ -270,7 +282,7 @@ def allocate_points_view(request, pk: int):
         if is_ajax:
             return json_error(error_msg, status=500, include_message=True)
         messages.error(request, error_msg)
-        return reverse("guests:detail", args=[guest.pk])
+        return redirect(next_url)
     except Exception:
         logger.exception(
             "Unexpected allocate-points error: manor_id=%s user_id=%s guest_id=%s attribute=%s points=%s",
@@ -285,5 +297,4 @@ def allocate_points_view(request, pk: int):
     # 成功消息由装饰器的 success_message 参数处理
     messages.success(request, f"{guest.display_name} 属性加点成功")
 
-    # 返回重定向 URL（装饰器会处理）
-    return reverse("guests:detail", args=[guest.pk])
+    return redirect(next_url)

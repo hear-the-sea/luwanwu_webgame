@@ -6,7 +6,12 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 from django.db import transaction
 
 from core.config import GUEST
-from core.exceptions import GuestNotIdleError, InvalidAllocationError, RecruitmentCandidateStateError
+from core.exceptions import (
+    GuestNotFoundError,
+    GuestNotIdleError,
+    InvalidAllocationError,
+    RecruitmentCandidateStateError,
+)
 
 from ..models import Guest, GuestSkill, GuestStatus, GuestTemplate, RecruitmentCandidate, RecruitmentRecord
 from ..utils.recruitment_variance import apply_recruitment_variance
@@ -278,12 +283,12 @@ def convert_candidate_to_retainer(candidate: RecruitmentCandidate) -> None:
 def allocate_attribute_points(guest: Guest, attribute: str, points: int) -> Guest:
     """为门客分配属性点到指定属性。"""
     if not getattr(guest, "pk", None):
-        raise ValueError("门客不存在")
+        raise GuestNotFoundError()
 
     with transaction.atomic():
         locked_guest = Guest.objects.select_for_update().filter(pk=guest.pk).first()
         if not locked_guest:
-            raise ValueError("门客不存在")
+            raise GuestNotFoundError()
         if locked_guest.status != GuestStatus.IDLE:
             raise GuestNotIdleError(locked_guest)
         if points <= 0:

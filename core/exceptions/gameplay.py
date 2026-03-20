@@ -138,6 +138,79 @@ class ArenaRewardLimitError(ArenaExchangeError):
         super().__init__(message, reward_name=reward_name, daily_limit=daily_limit)
 
 
+# ============ 监牢 / 结义相关异常 ============
+
+
+class JailError(GameError):
+    """监牢相关错误基类"""
+
+    error_code = "JAIL_ERROR"
+
+
+class OathBondError(JailError):
+    """结义关系相关错误基类"""
+
+    error_code = "OATH_BOND_ERROR"
+
+
+class OathGuestNotFoundError(OathBondError):
+    """结义目标门客不存在"""
+
+    error_code = "OATH_GUEST_NOT_FOUND"
+    default_message = "门客不存在"
+
+
+class OathCapacityFullError(OathBondError):
+    """结义人数已达上限"""
+
+    error_code = "OATH_CAPACITY_FULL"
+    default_message = "结义人数已满"
+
+
+class OathBondAlreadyExistsError(OathBondError):
+    """门客已经结义"""
+
+    error_code = "OATH_BOND_ALREADY_EXISTS"
+    default_message = "该门客已结义"
+
+
+class PrisonerUnavailableError(JailError):
+    """囚徒不存在或已处理"""
+
+    error_code = "PRISONER_UNAVAILABLE"
+    default_message = "囚徒不存在或已处理"
+
+
+class PrisonerNotFoundError(JailError):
+    """囚徒不存在"""
+
+    error_code = "PRISONER_NOT_FOUND"
+    default_message = "囚徒不存在"
+
+
+class PrisonerAlreadyHandledError(JailError):
+    """囚徒已处理"""
+
+    error_code = "PRISONER_ALREADY_HANDLED"
+    default_message = "囚徒已处理"
+
+
+# ============ 护院募兵相关异常 ============
+
+
+class TroopRecruitmentError(GameError):
+    """护院募兵相关错误基类"""
+
+    error_code = "TROOP_RECRUITMENT_ERROR"
+
+
+class TroopRecruitmentAlreadyInProgressError(TroopRecruitmentError):
+    """已有募兵正在进行中"""
+
+    error_code = "TROOP_RECRUITMENT_ALREADY_IN_PROGRESS"
+    default_message = "已有募兵正在进行中，同时只能进行一种募兵"
+
+
 # ============ 打工相关异常 ============
 
 

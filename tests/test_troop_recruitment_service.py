@@ -6,6 +6,7 @@ import pytest
 from django.utils import timezone
 
 from battle.models import TroopTemplate
+from core.exceptions import TroopRecruitmentAlreadyInProgressError, TroopRecruitmentError
 from gameplay.models import InventoryItem, ItemTemplate, PlayerTroop, TroopRecruitment
 from gameplay.services.manor.core import ensure_manor
 from gameplay.services.recruitment.recruitment import (
@@ -78,7 +79,7 @@ def test_consume_equipment_insufficient_keeps_inventory_unchanged(recruit_manor)
     _set_inventory(manor, spear, 5)
     _set_inventory(manor, shield, 1)
 
-    with pytest.raises(ValueError, match="装备不足: equip_shield_short"):
+    with pytest.raises(TroopRecruitmentError, match="装备不足: equip_shield_short"):
         _consume_equipment_for_recruitment(manor, ["equip_spear_short", "equip_shield_short"], quantity=2)
 
     spear_item = InventoryItem.objects.get(
@@ -167,7 +168,7 @@ def test_start_troop_recruitment_rollback_on_insufficient_equipment(monkeypatch,
         lambda current_manor, troop_key, quantity: troop_data,
     )
 
-    with pytest.raises(ValueError, match="装备不足: equip_shield_rollback"):
+    with pytest.raises(TroopRecruitmentError, match="装备不足: equip_shield_rollback"):
         start_troop_recruitment(manor, "rollback_unit", quantity=2)
 
     manor.refresh_from_db()
@@ -223,7 +224,7 @@ def test_start_troop_recruitment_rechecks_active_queue_after_lock(monkeypatch, r
         complete_at=timezone.now() + timedelta(minutes=1),
     )
 
-    with pytest.raises(ValueError, match="已有募兵正在进行中"):
+    with pytest.raises(TroopRecruitmentAlreadyInProgressError, match="已有募兵正在进行中"):
         start_troop_recruitment(stale_manor, "spearman", quantity=1)
 
     manor.refresh_from_db()
@@ -255,7 +256,7 @@ def test_start_troop_recruitment_uses_locked_retainer_count_instead_of_stale_obj
         lambda recruitment, eta_seconds: None,
     )
 
-    with pytest.raises(ValueError, match="家丁不足，需要2"):
+    with pytest.raises(TroopRecruitmentError, match="家丁不足，需要2"):
         start_troop_recruitment(stale_manor, "shield_bearer", quantity=1)
 
     manor.refresh_from_db()

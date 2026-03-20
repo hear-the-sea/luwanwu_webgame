@@ -92,7 +92,7 @@ def _message_redirect(
 def _redirect_exception_response(
     request: HttpRequest,
     redirect_name: str,
-    exc: GameError | ValueError | DatabaseError,
+    exc: GameError | DatabaseError,
 ) -> HttpResponse:
     return _message_redirect(
         request,
@@ -102,16 +102,16 @@ def _redirect_exception_response(
     )
 
 
-def _json_exception_response(exc: GameError | ValueError | DatabaseError, *, status: int = 400) -> JsonResponse:
+def _json_exception_response(exc: GameError | DatabaseError, *, status: int = 400) -> JsonResponse:
     return json_error(sanitize_error_message(exc), status=status)
 
 
 def _raise_or_handle_known_jail_exception(
     exc: Exception,
     *,
-    handler: Callable[[GameError | ValueError], JailResponseT],
+    handler: Callable[[GameError], JailResponseT],
 ) -> JailResponseT:
-    if not isinstance(exc, (GameError, ValueError)):
+    if not isinstance(exc, GameError):
         raise exc
     return handler(exc)
 
@@ -143,7 +143,7 @@ def _execute_locked_jail_action(
         operation=operation,
         on_lock_conflict=on_lock_conflict,
         on_success=on_success,
-        known_exceptions=(GameError, ValueError),
+        known_exceptions=(GameError,),
         on_known_error=on_known_error,
         on_database_error=_handle_database_error,
     )

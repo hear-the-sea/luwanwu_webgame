@@ -5,6 +5,7 @@ import uuid
 import pytest
 from django.utils import timezone
 
+from core.exceptions import GuestItemConfigurationError, GuestItemOwnershipError, GuestOwnershipError
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.manor.core import ensure_manor
 from guests.models import RecruitmentPool
@@ -105,3 +106,30 @@ def test_use_experience_item_for_guest_sanitizes_malformed_reduce_result(monkeyp
     assert result["applied_levels"] == 0
     assert result["remaining_item_quantity"] == 0
     assert InventoryItem.objects.filter(pk=item.pk).exists() is False
+
+
+@pytest.mark.django_db
+def test_use_experience_item_for_guest_rejects_missing_item(game_data, django_user_model):
+    manor, guest = _bootstrap_training_guest(game_data, django_user_model, username="exp_item_missing_item")
+
+    with pytest.raises(GuestItemOwnershipError, match="道具不存在或不属于您的庄园"):
+        use_experience_item_for_guest(manor, guest, 999999, 120)
+
+
+@pytest.mark.django_db
+def test_use_experience_item_for_guest_rejects_invalid_reduce_seconds(game_data, django_user_model):
+    manor, guest = _bootstrap_training_guest(game_data, django_user_model, username="exp_item_invalid_seconds")
+    item = _create_experience_item(manor, seconds=120)
+
+    with pytest.raises(GuestItemConfigurationError, match="道具未配置有效时间"):
+        use_experience_item_for_guest(manor, guest, item.pk, 0)
+
+
+@pytest.mark.django_db
+def test_use_experience_item_for_guest_rejects_missing_guest_after_lock(game_data, django_user_model):
+    manor, guest = _bootstrap_training_guest(game_data, django_user_model, username="exp_item_missing_guest")
+    item = _create_experience_item(manor, seconds=120)
+    guest.delete()
+
+    with pytest.raises(GuestOwnershipError, match="门客不存在或不属于您的庄园"):
+        use_experience_item_for_guest(manor, guest, item.pk, 120)

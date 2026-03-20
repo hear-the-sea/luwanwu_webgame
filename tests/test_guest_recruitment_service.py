@@ -13,7 +13,7 @@ import guests.services.recruitment_guests as recruitment_guest_service
 import guests.services.recruitment_queries as recruitment_query_service
 import guests.services.recruitment_shared as recruitment_shared
 import guests.services.recruitment_templates as recruitment_template_service
-from core.exceptions import GuestNotIdleError, InvalidAllocationError, RecruitmentItemOwnershipError
+from core.exceptions import GuestNotFoundError, GuestNotIdleError, InvalidAllocationError, RecruitmentItemOwnershipError
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.manor.core import ensure_manor
 from guests.models import (
@@ -346,6 +346,31 @@ def test_allocate_attribute_points_rejects_zero_points(django_user_model):
 
     with pytest.raises(InvalidAllocationError):
         recruitment_guest_service.allocate_attribute_points(guest, "force", 0)
+
+
+@pytest.mark.django_db
+def test_allocate_attribute_points_rejects_missing_unsaved_guest(django_user_model):
+    user = django_user_model.objects.create_user(username="alloc_guest_unsaved", password="pass123")
+    manor = ensure_manor(user)
+    template = GuestTemplate.objects.create(
+        key="alloc_guest_unsaved_tpl",
+        name="未保存门客模板",
+        archetype="civil",
+        rarity="gray",
+    )
+    guest = Guest(manor=manor, template=template, attribute_points=1, force=1, intellect=1, defense_stat=1, agility=1)
+
+    with pytest.raises(GuestNotFoundError, match="门客不存在"):
+        recruitment_guest_service.allocate_attribute_points(guest, "force", 1)
+
+
+@pytest.mark.django_db
+def test_allocate_attribute_points_rejects_deleted_guest(django_user_model):
+    guest = _create_guest_for_allocation_tests(django_user_model, "deleted")
+    guest.delete()
+
+    with pytest.raises(GuestNotFoundError, match="门客不存在"):
+        recruitment_guest_service.allocate_attribute_points(guest, "force", 1)
 
 
 @pytest.mark.django_db

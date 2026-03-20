@@ -8,6 +8,7 @@ from django.db import DatabaseError
 from django.urls import reverse
 from django.utils import timezone
 
+from core.exceptions import WorkError
 from gameplay.models import WorkAssignment, WorkTemplate
 from guests.models import Guest, GuestArchetype, GuestRarity, GuestStatus, GuestTemplate
 
@@ -226,7 +227,7 @@ class TestWorkViews:
 
         monkeypatch.setattr(
             "gameplay.views.work.assign_guest_to_work",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("work blocked")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(WorkError("work blocked")),
         )
 
         response = client.post(
@@ -237,6 +238,21 @@ class TestWorkViews:
         assert response.url == reverse("gameplay:work")
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("work blocked" in m for m in messages)
+
+    def test_assign_work_value_error_bubbles_up(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        guest, work_template = self._create_work_data(manor, "assign_value_error")
+
+        monkeypatch.setattr(
+            "gameplay.views.work.assign_guest_to_work",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("bad payload")),
+        )
+
+        with pytest.raises(ValueError, match="bad payload"):
+            client.post(
+                reverse("gameplay:assign_work"),
+                {"guest_id": guest.id, "work_key": work_template.key},
+            )
 
     def test_assign_work_database_error_does_not_500(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user

@@ -18,6 +18,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.utils import timezone
 
+from core.exceptions import TroopRecruitmentAlreadyInProgressError, TroopRecruitmentError
 from core.utils import safe_int
 from core.utils.time_scale import scale_duration
 
@@ -431,26 +432,26 @@ def _batch_get_tech_levels(manor: Manor, tech_keys: set[str]) -> Dict[str, int]:
 
 def _validate_start_recruitment_inputs(manor: Manor, troop_key: str, quantity: int) -> dict:
     if quantity < 1:
-        raise ValueError("募兵数量至少为1")
+        raise TroopRecruitmentError("募兵数量至少为1")
     if has_active_recruitment(manor):
-        raise ValueError("已有募兵正在进行中，同时只能进行一种募兵")
+        raise TroopRecruitmentAlreadyInProgressError()
     if manor.get_building_level(BuildingKeys.LIANGGONG_CHANG) < 1:
-        raise ValueError("练功场等级不足，需要1级以上")
+        raise TroopRecruitmentError("练功场等级不足，需要1级以上")
 
     troop = get_troop_template(troop_key)
     if not troop:
-        raise ValueError("无效的兵种类型")
+        raise TroopRecruitmentError("无效的兵种类型")
     recruit_config = troop.get("recruit")
     if not recruit_config:
-        raise ValueError("该兵种不可募兵")
+        raise TroopRecruitmentError("该兵种不可募兵")
 
     max_quantity = get_max_recruit_quantity(manor, troop_key, recruit_config)
     if quantity > max_quantity:
-        raise ValueError(f"造兵术等级限制，单次最多招募{max_quantity}人")
+        raise TroopRecruitmentError(f"造兵术等级限制，单次最多招募{max_quantity}人")
 
     check_result = check_recruitment_requirements(manor, troop_key, quantity)
     if not check_result["can_recruit"]:
-        raise ValueError("、".join(check_result["errors"]))
+        raise TroopRecruitmentError("、".join(check_result["errors"]))
     return troop
 
 
@@ -478,7 +479,7 @@ def _consume_equipment_for_recruitment(manor: Manor, equipment_list: list[str], 
     for item_key in equipment_list:
         item = locked_items.get(item_key)
         if not item or item.quantity < quantity:
-            raise ValueError(f"装备不足: {item_key}")
+            raise TroopRecruitmentError(f"装备不足: {item_key}")
 
         item.quantity -= quantity
         if item.quantity <= 0:
@@ -498,13 +499,13 @@ def _consume_equipment_for_recruitment(manor: Manor, equipment_list: list[str], 
 def _consume_retainers_for_recruitment(manor: Manor, retainer_cost: int) -> None:
     available_retainers = _coerce_non_negative_int(getattr(manor, "retainer_count", 0), 0)
     if available_retainers < retainer_cost:
-        raise ValueError(f"家丁不足，需要{retainer_cost}")
+        raise TroopRecruitmentError(f"家丁不足，需要{retainer_cost}")
 
     updated = Manor.objects.filter(pk=manor.pk, retainer_count__gte=retainer_cost).update(
         retainer_count=F("retainer_count") - retainer_cost
     )
     if updated != 1:
-        raise ValueError(f"家丁不足，需要{retainer_cost}")
+        raise TroopRecruitmentError(f"家丁不足，需要{retainer_cost}")
 
     manor.refresh_from_db(fields=["retainer_count"])
 
@@ -515,7 +516,7 @@ def _lock_manor_for_recruitment(manor: Manor) -> Manor:
 
 def _ensure_no_active_recruitment_locked(manor: Manor) -> None:
     if TroopRecruitment.objects.filter(manor=manor, status=TroopRecruitment.Status.RECRUITING).exists():
-        raise ValueError("已有募兵正在进行中，同时只能进行一种募兵")
+        raise TroopRecruitmentAlreadyInProgressError()
 
 
 def _create_troop_recruitment_record(
@@ -559,7 +560,7 @@ def start_troop_recruitment(
         TroopRecruitment 实例
 
     Raises:
-        ValueError: 参数错误、条件不满足或已有募兵进行中
+        TroopRecruitmentError: 参数错误、条件不满足或已有募兵进行中
     """
     troop = _validate_start_recruitment_inputs(manor, troop_key, quantity)
     recruit_config = troop.get("recruit") or {}
@@ -585,7 +586,7 @@ def start_troop_recruitment(
                 base_duration,
             )
         except IntegrityError:
-            raise ValueError("已有募兵正在进行中，同时只能进行一种募兵")
+            raise TroopRecruitmentAlreadyInProgressError()
         _schedule_recruitment_completion(recruitment, actual_duration)
 
     return recruitment

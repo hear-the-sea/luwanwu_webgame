@@ -8,6 +8,7 @@ from django.db import DatabaseError
 from django.urls import reverse
 from django_redis.exceptions import ConnectionInterrupted
 
+from core.exceptions import TroopRecruitmentError
 from gameplay.services.utils import cache as cache_utils
 from guests.views.recruit import _invalidate_recruitment_hall_cache_for_manor
 
@@ -157,7 +158,7 @@ class TestRecruitmentViews:
 
         monkeypatch.setattr(
             "gameplay.services.recruitment.recruitment.start_troop_recruitment",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("recruit blocked")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(TroopRecruitmentError("recruit blocked")),
         )
 
         response = client.post(
@@ -168,6 +169,20 @@ class TestRecruitmentViews:
         assert response.url == reverse("gameplay:troop_recruitment")
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("recruit blocked" in m for m in messages)
+
+    def test_start_troop_recruitment_value_error_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.services.recruitment.recruitment.start_troop_recruitment",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("bad payload")),
+        )
+
+        with pytest.raises(ValueError, match="bad payload"):
+            client.post(
+                reverse("gameplay:start_troop_recruitment"),
+                {"troop_key": "any", "quantity": "1"},
+            )
 
 
 def test_invalidate_recruitment_hall_cache_for_manor_tolerates_connection_interrupted(monkeypatch):

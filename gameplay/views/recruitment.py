@@ -54,7 +54,7 @@ def _handle_unexpected_recruitment_error(
     )
 
 
-def _handle_known_recruitment_error(request: HttpRequest, exc: GameError | ValueError) -> None:
+def _handle_known_recruitment_error(request: HttpRequest, exc: GameError) -> None:
     messages.error(request, sanitize_error_message(exc))
 
 
@@ -106,7 +106,7 @@ def _execute_troop_bank_transfer(
     try:
         result = transfer_action(manor, troop_key, quantity)
         messages.success(request, success_message_template.format(**result))
-    except (GameError, ValueError) as exc:
+    except GameError as exc:
         _handle_known_recruitment_error(request, exc)
     except DatabaseError as exc:
         _handle_unexpected_recruitment_error(
@@ -147,7 +147,7 @@ def start_troop_recruitment_view(request: HttpRequest) -> HttpResponse:
         messages.success(
             request, f"{recruitment.troop_name}{quantity_text} 开始募兵，预计 {recruitment.actual_duration} 秒后完成"
         )
-    except (GameError, ValueError) as exc:
+    except GameError as exc:
         _handle_known_recruitment_error(request, exc)
     except DatabaseError as exc:
         _handle_unexpected_recruitment_error(

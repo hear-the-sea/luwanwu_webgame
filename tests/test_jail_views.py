@@ -12,6 +12,7 @@ from django.contrib.messages import get_messages
 from django.db import DatabaseError
 from django.urls import reverse
 
+from core.exceptions import JailError, OathBondError
 from gameplay.services.manor.core import ensure_manor
 
 
@@ -376,6 +377,31 @@ class TestJailAndOathAPI:
         assert payload["success"] is False
         assert "操作失败，请稍后重试" in payload["error"]
 
+    def test_recruit_prisoner_api_known_game_error_returns_400(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.views.jail.recruit_prisoner",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(JailError("prisoner blocked")),
+        )
+
+        response = client.post(reverse("gameplay:recruit_prisoner_api", kwargs={"prisoner_id": 1}))
+        assert response.status_code == 400
+        payload = response.json()
+        assert payload["success"] is False
+        assert "prisoner blocked" in payload["error"]
+
+    def test_recruit_prisoner_api_value_error_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.views.jail.recruit_prisoner",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("bad payload")),
+        )
+
+        with pytest.raises(ValueError, match="bad payload"):
+            client.post(reverse("gameplay:recruit_prisoner_api", kwargs={"prisoner_id": 1}))
+
     def test_recruit_prisoner_api_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
 
@@ -425,6 +451,31 @@ class TestJailAndOathViews:
         assert response.url == reverse("gameplay:oath_grove")
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("操作失败，请稍后重试" in m for m in messages)
+
+    def test_add_oath_bond_view_known_game_error_shows_message(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.views.jail.add_oath_bond",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(OathBondError("bond blocked")),
+        )
+
+        response = client.post(reverse("gameplay:add_oath_bond_view"), {"guest_id": 1})
+        assert response.status_code == 302
+        assert response.url == reverse("gameplay:oath_grove")
+        messages = [str(m) for m in get_messages(response.wsgi_request)]
+        assert any("bond blocked" in m for m in messages)
+
+    def test_add_oath_bond_view_value_error_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.views.jail.add_oath_bond",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("bad payload")),
+        )
+
+        with pytest.raises(ValueError, match="bad payload"):
+            client.post(reverse("gameplay:add_oath_bond_view"), {"guest_id": 1})
 
     def test_add_oath_bond_view_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user

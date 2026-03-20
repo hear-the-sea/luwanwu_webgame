@@ -15,8 +15,11 @@ from common.utils.celery import safe_apply_async
 from core.config import GUEST
 from core.exceptions import (
     GuestError,
+    GuestItemConfigurationError,
+    GuestItemOwnershipError,
     GuestMaxLevelError,
     GuestNotIdleError,
+    GuestOwnershipError,
     GuestTrainingInProgressError,
     InsufficientStockError,
 )
@@ -176,7 +179,7 @@ def _load_locked_experience_item(manor: Manor, item_id: int) -> InventoryItem:
         .first()
     )
     if not locked_item:
-        raise ValueError("道具不存在或不属于您的庄园")
+        raise GuestItemOwnershipError()
     if locked_item.quantity <= 0:
         raise InsufficientStockError(locked_item.template.name, 1, locked_item.quantity)
     return locked_item
@@ -193,7 +196,7 @@ def use_experience_item_for_guest(manor: Manor, guest: Guest, item_id: int, redu
     - 锁顺序统一为 Manor -> InventoryItem -> Guest
     """
     if reduce_seconds <= 0:
-        raise ValueError("道具未配置有效时间")
+        raise GuestItemConfigurationError("道具未配置有效时间")
 
     from gameplay.models import Manor as ManorModel
 
@@ -202,7 +205,7 @@ def use_experience_item_for_guest(manor: Manor, guest: Guest, item_id: int, redu
 
     locked_guest = Guest.objects.select_for_update().select_related("template").filter(pk=guest.pk, manor=manor).first()
     if not locked_guest:
-        raise ValueError("门客不存在或不属于您的庄园")
+        raise GuestOwnershipError(message="门客不存在或不属于您的庄园")
     if locked_guest.status != GuestStatus.IDLE:
         raise GuestNotIdleError(locked_guest)
 

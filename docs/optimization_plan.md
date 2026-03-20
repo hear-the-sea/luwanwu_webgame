@@ -31,7 +31,7 @@
 
 - 热点页面入口已完成一轮边界收口，读侧 page context 与写动作入口已开始分离。
 - `mission`、`production`、`trade`、`recruit`、`forge` 等热点链路已从 view 主文件中下沉出 page context 或 action handler。
-- 页面读路径已开始统一到请求级 helper：`trade/page_context.py`、`gameplay/views/core.py`、`gameplay/views/map.py`、`gameplay/views/inventory.py`、`gameplay/views/messages.py`、`gameplay/views/work.py`、`gameplay/views/technology.py`、`gameplay/views/recruitment.py`、`gameplay/views/arena.py`、`gameplay/views/mission_page_context.py`、`gameplay/views/production_page_context.py`、`guests/views/roster.py` 已接入 `get_prepared_manor_for_read(...)`。
+- 页面读路径已开始统一到请求级 helper：`trade/page_context.py`、`gameplay/views/core.py`、`gameplay/views/map.py`、`gameplay/views/inventory.py`、`gameplay/views/messages.py`、`gameplay/views/work.py`、`gameplay/views/technology.py`、`gameplay/views/recruitment.py`、`gameplay/views/arena.py`、`gameplay/views/mission_page_context.py`、`gameplay/selectors/production.py`、`guests/views/roster.py` 已接入 `get_prepared_manor_for_read(...)`。
 - `raid/scout` 读侧刷新已从 accessor 中显式化；`get_active_raids()` 已退回纯读查询。
 - 默认测试、覆盖率与部分 mypy 门禁已补齐第一轮可信度缺口。
 
@@ -65,10 +65,12 @@
 
 虽然当前主线仍是阶段 2，但以下主题已经启动，后续可以按“小主题一轮一收口”的方式继续推进：
 
-- `阶段 3` 的异常语义收口已经开始：`trade`、`arena` 和部分资源链路已经退出一部分 legacy `ValueError` 兼容，但 `mission`、`recruitment`、`jail`、`work` 等入口仍大量混用 `GameError + ValueError`。
+- `阶段 3` 的异常语义收口已经开始：`trade`、`arena`、`work`、`jail`、`troop recruitment` 和部分资源链路已经退出一部分 legacy `ValueError` 兼容，但 `mission`、`guest recruitment` 等入口仍明显混用 `GameError + ValueError`。
 - `mission` 已开始收口主链路异常语义：发起任务与撤退请求开始改走 `MissionError` 子类，但 view 层和部分兼容测试仍保留 `ValueError` 兜底。
 - `mission` 的 `accept/retreat/use_card` 视图入口已不再把裸 `ValueError` 当作已知业务错误吞掉；剩余 legacy `ValueError` 兼容主要还在 scout 等共享入口。
 - `guest recruitment` 已开始收口主链路异常语义：招募发起、放大镜使用、候选保留已改走显式 `RecruitmentError` 子类，`guests/views/recruit_action_runtime.py` 不再把裸 `ValueError` 当作已知业务错误。
+- `guest recruitment` 的属性点分配路径也已开始退出 legacy `ValueError`：`guests/services/recruitment_guests.allocate_attribute_points()` 与 `guests/views/training.allocate_points_view()` 已改走显式门客 / 加点异常，但训练、经验道具等其它培养入口仍未整体封板。
+- `guest training` / `experience item` 的一部分异常语义也已开始收口：`guests/services/training.use_experience_item_for_guest()` 与 `guests/views/training.use_experience_item_view()` 已改走显式门客 / 道具异常，`TrainView` 也不再把裸 `ValueError` 当作已知业务错误；但训练、药品等培养入口仍未整体封板。
 - `阶段 5` 的测试门禁治理已经开始：hermetic / integration gate 提示、`pytest` 路径和部分边界契约测试已经补齐，但真实外部服务覆盖面仍不足。
 
 ### 2.4 当前未完成的高优先级问题
@@ -83,7 +85,7 @@
 
 1. 继续收口 `mission / raid / guest recruitment` 的主写入口、after-commit follow-up 和 refresh command 边界。
 2. 为高风险写链路补真实外部服务测试，优先覆盖数据库锁、缓存/通道、任务派发与补偿刷新语义。
-3. 沿高频主链路逐步退出 legacy `ValueError` 兼容，优先处理 `mission / recruitment / jail / work` 等仍明显混用的 view/service 入口。
+3. 沿高频主链路逐步退出 legacy `ValueError` 兼容，优先处理 `mission / guest recruitment` 等仍明显混用的 view/service 入口。
 4. 在阶段 2 关键链路具备真实测试约束后，再推进模板、页面脚本和前端交互边界治理。
 
 ## 4. 分阶段路线
