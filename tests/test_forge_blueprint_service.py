@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from core.exceptions import ForgeOperationError
 from gameplay.models import InventoryItem, ItemTemplate, PlayerTechnology
 from gameplay.services.buildings import forge as forge_service
 from gameplay.services.inventory.core import get_item_quantity
@@ -135,5 +136,5 @@ def test_synthesize_equipment_with_blueprint_requires_forging_level(django_user_
         },
     )
 
-    with pytest.raises(ValueError, match="锻造技5级"):
+    with pytest.raises(ForgeOperationError, match="锻造技5级"):
         forge_service.synthesize_equipment_with_blueprint(manor, "bp_need_lvl", quantity=1)

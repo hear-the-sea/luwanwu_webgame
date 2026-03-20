@@ -49,7 +49,7 @@ def handle_unexpected_mission_error(
     )
 
 
-def handle_known_mission_error(request: HttpRequest, exc: GameError | ValueError) -> None:
+def handle_known_mission_error(request: HttpRequest, exc: GameError) -> None:
     messages.error(request, sanitize_error_message(exc))
 
 

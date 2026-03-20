@@ -40,7 +40,7 @@ def _build_technology_redirect_url(tab: str, troop: str = "") -> str:
     return redirect_url
 
 
-def _handle_known_technology_error(request: HttpRequest, exc: GameError | ValueError) -> None:
+def _handle_known_technology_error(request: HttpRequest, exc: GameError) -> None:
     messages.error(request, sanitize_error_message(exc))
 
 
@@ -96,7 +96,7 @@ def upgrade_technology_view(request: HttpRequest, tech_key: str) -> HttpResponse
     try:
         result = upgrade_technology(manor, tech_key)
         messages.success(request, result["message"])
-    except (GameError, ValueError) as exc:
+    except GameError as exc:
         _handle_known_technology_error(request, exc)
     except DatabaseError as exc:
         _handle_unexpected_technology_error(

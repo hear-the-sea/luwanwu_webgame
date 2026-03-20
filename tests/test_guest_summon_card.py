@@ -2,7 +2,7 @@ import logging
 
 import pytest
 
-from core.exceptions import GuestCapacityFullError, InsufficientStockError, ItemNotFoundError
+from core.exceptions import GuestAlreadyOwnedError, GuestCapacityFullError, InsufficientStockError, ItemNotFoundError
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.inventory.use import use_inventory_item
 from gameplay.services.manor.core import ensure_manor
@@ -335,7 +335,7 @@ def test_summon_card_rejects_duplicate_unique_guest(django_user_model):
         storage_location=InventoryItem.StorageLocation.WAREHOUSE,
     )
 
-    with pytest.raises(ValueError, match="不可重复获得"):
+    with pytest.raises(GuestAlreadyOwnedError, match="不可重复获得"):
         use_inventory_item(item)
 
     item.refresh_from_db()

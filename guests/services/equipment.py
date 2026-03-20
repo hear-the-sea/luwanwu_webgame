@@ -328,7 +328,7 @@ def resolve_equippable_gear(manor: Manor, choice: str | GearItem, *, slot: str |
 
     raw_choice = str(choice or "").strip()
     if not raw_choice:
-        raise ValueError("请选择可用装备")
+        raise EquipmentError("请选择可用装备")
 
     if raw_choice.isdigit():
         gear = manor.gears.select_related("template").filter(pk=int(raw_choice), guest__isnull=True).first()

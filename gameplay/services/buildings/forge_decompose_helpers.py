@@ -4,6 +4,8 @@ import random
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from core.exceptions import ForgeOperationError
+
 if TYPE_CHECKING:
     from ...models import InventoryItem
 
@@ -45,14 +47,14 @@ def roll_decompose_rewards(
 ) -> dict[str, int]:
     supported_rarities = set(config["supported_rarities"])
     if rarity not in supported_rarities:
-        raise ValueError("仅绿色及以上装备可分解")
+        raise ForgeOperationError("仅绿色及以上装备可分解")
 
     base_materials_map: dict[str, dict[str, list[int]]] = config["base_materials"]
     chance_rewards_map: dict[str, dict[str, float]] = config["chance_rewards"]
     base_materials = base_materials_map.get(rarity)
     chance_rewards = chance_rewards_map.get(rarity)
     if not base_materials or chance_rewards is None:
-        raise ValueError(f"分解配置缺失：{rarity}")
+        raise ForgeOperationError(f"分解配置缺失：{rarity}")
 
     roll_int = randint_func or random.randint
     roll_float = random_func or random.random

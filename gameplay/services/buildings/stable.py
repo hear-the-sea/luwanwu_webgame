@@ -16,7 +16,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
-from core.exceptions import InsufficientResourceError
+from core.exceptions import InsufficientResourceError, ProductionStartError
 from core.utils.time_scale import scale_duration
 from core.utils.yaml_loader import load_yaml_data
 
@@ -203,10 +203,10 @@ def start_horse_production(manor: Manor, horse_key: str, quantity: int = 1) -> H
         HorseProduction实例
 
     Raises:
-        ValueError: 参数错误、资源不足、科技等级不足或已有生产进行中
+        ProductionStartError: 参数错误、科技等级不足或已有生产进行中
     """
     if horse_key not in HORSE_CONFIG:
-        raise ValueError("无效的马匹类型")
+        raise ProductionStartError("无效的马匹类型")
 
     config = HORSE_CONFIG[horse_key]
     required_level = config.get("required_horsemanship", 1)
@@ -218,14 +218,14 @@ def start_horse_production(manor: Manor, horse_key: str, quantity: int = 1) -> H
 
     horsemanship_level = get_player_technology_level(manor, "horsemanship")
     if horsemanship_level < required_level:
-        raise ValueError(f"需要驯马术{required_level}级才能生产{horse_name}")
+        raise ProductionStartError(f"需要驯马术{required_level}级才能生产{horse_name}")
 
     # 验证生产数量
     max_quantity = get_max_production_quantity(manor)
     if quantity < 1:
-        raise ValueError("生产数量至少为1")
+        raise ProductionStartError("生产数量至少为1")
     if quantity > max_quantity:
-        raise ValueError(f"驯马术等级限制，单次最多生产{max_quantity}匹")
+        raise ProductionStartError(f"驯马术等级限制，单次最多生产{max_quantity}匹")
 
     # 计算总消耗
     total_grain_cost = config["grain_cost"] * quantity
@@ -240,7 +240,7 @@ def start_horse_production(manor: Manor, horse_key: str, quantity: int = 1) -> H
 
         # 锁内再次检查，避免并发下绕过限制
         if has_active_production(locked_manor):
-            raise ValueError("已有马匹正在生产中，同时只能生产一种马匹")
+            raise ProductionStartError("已有马匹正在生产中，同时只能生产一种马匹")
         try:
             spend_resources_locked(
                 locked_manor,

@@ -67,7 +67,7 @@ def run_forge_post_action(
     try:
         result = operation(manor, item_key, quantity)
         messages.success(request, success_message(result))
-    except (GameError, ValueError) as exc:
+    except GameError as exc:
         messages.error(request, sanitize_error_message(exc))
     except DatabaseError as exc:
         on_database_error(exc)

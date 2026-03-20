@@ -8,6 +8,7 @@ from typing import Any, Dict
 
 from django.db import transaction
 
+from core.exceptions import GuestItemConfigurationError, GuestNotRequirementError
 from gameplay.models import InventoryItem, Manor
 from guests.growth_engine import (
     XISUIDAN_MAX_REROLL_ATTEMPTS,
@@ -211,15 +212,21 @@ def use_soul_container(manor: Manor, item: InventoryItem, guest_id: int) -> Dict
     min_level, allowed_rarities = get_soul_fusion_requirements(payload)
 
     if guest.level < min_level:
-        raise ValueError(f"仅可融合{min_level}级及以上门客")
+        raise GuestNotRequirementError(
+            guest,
+            "level",
+            min_level,
+            guest.level,
+            message=f"仅可融合{min_level}级及以上门客",
+        )
 
     guest_rarity = str(getattr(getattr(guest, "template", None), "rarity", "") or "").strip()
     if guest_rarity not in allowed_rarities:
-        raise ValueError("仅可融合绿色、蓝色或紫色门客")
+        raise GuestItemConfigurationError("仅可融合绿色、蓝色或紫色门客")
 
     config = SOUL_FUSION_RESULT_CONFIG.get(guest_rarity)
     if not config:
-        raise ValueError("该门客的灵魂尚不足以稳定成器")
+        raise GuestItemConfigurationError("该门客的灵魂尚不足以稳定成器")
 
     guest_name = guest.display_name
     source_stats = _extract_soul_fusion_source_stats(guest)

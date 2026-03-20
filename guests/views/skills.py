@@ -15,8 +15,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from core.config import GUEST
-from core.decorators import handle_game_errors
-from core.exceptions import GameError
+from core.exceptions import GameError, GuestSkillNotFoundError
 from core.utils.validation import safe_positive_int, safe_redirect_url, sanitize_error_message
 
 from ..models import Guest, GuestStatus, Skill
@@ -104,8 +103,6 @@ def learn_skill_view(request, pk: int):
     由于有大量验证逻辑，保持手动错误处理以保持代码清晰
     但使用 manager 方法简化查询
     """
-    from django.core.exceptions import ObjectDoesNotExist
-
     manor, guest, next_url = _get_guest_and_next_url(request, pk)
 
     item_id = request.POST.get("item_id")
@@ -132,7 +129,7 @@ def learn_skill_view(request, pk: int):
     try:
         _persist_skill_learning(guest, skill, inventory_item)
         messages.success(request, f"{guest.display_name} 习得 {skill.name}")
-    except (GameError, ValueError, ObjectDoesNotExist) as exc:
+    except GameError as exc:
         logger.warning(
             "Skill learn rejected: manor_id=%s user_id=%s guest_id=%s item_id=%s skill_key=%s error=%s",
             getattr(manor, "id", None),
@@ -168,7 +165,6 @@ def learn_skill_view(request, pk: int):
 
 @login_required
 @require_POST
-@handle_game_errors(redirect_url="guests:detail")
 def forget_skill_view(request, pk: int):
     """
     遗忘技能视图
@@ -185,9 +181,12 @@ def forget_skill_view(request, pk: int):
 
         guest_skill_id = safe_positive_int(request.POST.get("guest_skill_id"), default=None)
         if guest_skill_id is None:
-            raise ValueError("未指定技能")
+            raise GuestSkillNotFoundError("未指定技能")
 
         skill_name = _persist_skill_forget(guest, guest_skill_id)
+    except GameError as exc:
+        messages.error(request, sanitize_error_message(exc))
+        return redirect("guests:detail", pk=pk)
     except DatabaseError as exc:
         logger.exception(
             "Unexpected skill forget database error: manor_id=%s user_id=%s guest_id=%s guest_skill_id=%s",
@@ -197,7 +196,7 @@ def forget_skill_view(request, pk: int):
             request.POST.get("guest_skill_id"),
         )
         messages.error(request, sanitize_error_message(exc))
-        return reverse("guests:detail", args=[pk])
+        return redirect("guests:detail", pk=pk)
     except Exception:
         logger.exception(
             "Unexpected skill forget error: manor_id=%s user_id=%s guest_id=%s guest_skill_id=%s",
@@ -209,4 +208,4 @@ def forget_skill_view(request, pk: int):
         raise
 
     messages.info(request, f"{guest.display_name} 已遗忘 {skill_name}")
-    return reverse("guests:detail", args=[guest.pk])
+    return redirect("guests:detail", pk=guest.pk)

@@ -14,8 +14,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.views.decorators.http import require_GET, require_POST
 
-from core.decorators import handle_game_errors
-from core.exceptions import GameError
+from core.exceptions import EquipmentError, GameError
 from core.utils import is_ajax_request, json_error, json_success
 from core.utils.rate_limit import rate_limit_redirect
 from core.utils.validation import safe_positive_int, safe_redirect_url, sanitize_error_message
@@ -67,12 +66,11 @@ def _best_effort_clear_gear_options_cache(manor_id: int, *, slots: set[str] | No
 @login_required
 @require_POST
 @rate_limit_redirect("equip", limit=15, window_seconds=60)
-@handle_game_errors(redirect_url="gameplay:recruitment_hall")
 def equip_view(request):
     """
     装备视图
 
-    使用统一装饰器处理错误，表单验证失败时抛出 ValueError
+    手动收口业务 / 基础设施异常，避免继续吞裸 ValueError
     """
     from gameplay.services.manor.core import get_manor
 
@@ -83,7 +81,7 @@ def equip_view(request):
         form = EquipForm(request.POST, manor=manor)
 
         if not form.is_valid():
-            raise ValueError("请选择门客与可用装备")
+            raise EquipmentError("请选择门客与可用装备")
 
         guest = form.cleaned_data["guest"]
         gear = equipment_service.resolve_equippable_gear(
@@ -94,6 +92,12 @@ def equip_view(request):
 
         equipment_service.equip_guest(gear, guest)
         _best_effort_clear_gear_options_cache(manor.id, slots={gear.template.slot})
+    except GameError as exc:
+        error_msg = sanitize_error_message(exc)
+        if is_ajax_request(request):
+            return json_error(error_msg, status=400, include_message=True)
+        messages.error(request, error_msg)
+        return redirect("gameplay:recruitment_hall")
     except DatabaseError as exc:
         logger.exception(
             "Unexpected equip view database error: manor_id=%s user_id=%s slot=%s",
@@ -193,7 +197,7 @@ def unequip_view(request):
             _best_effort_clear_gear_options_cache(manor.id, slots=changed_slots)
         else:
             messages.info(request, "没有可卸下的装备")
-    except (GameError, ValueError) as exc:
+    except GameError as exc:
         messages.error(request, sanitize_error_message(exc))
     except DatabaseError as exc:
         logger.exception(

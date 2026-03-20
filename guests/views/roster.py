@@ -289,7 +289,7 @@ def dismiss_guest_view(request, pk: int):
 
     try:
         result = dismiss_guest(guest)
-    except (GameError, ValueError) as exc:
+    except GameError as exc:
         messages.error(request, f"辞退失败：{sanitize_error_message(exc)}")
         return redirect("guests:detail", pk=pk)
     except DatabaseError as exc:

@@ -5,6 +5,15 @@ from typing import TYPE_CHECKING
 from django.db import transaction
 
 from core.config import GUEST
+from core.exceptions import (
+    GuestItemOwnershipError,
+    GuestNotFoundError,
+    GuestNotIdleError,
+    GuestSkillAlreadyLearnedError,
+    GuestSkillNotFoundError,
+    InsufficientStockError,
+    SkillSlotFullError,
+)
 
 from ..models import Guest, GuestSkill, GuestStatus, Skill
 
@@ -19,19 +28,23 @@ def learn_guest_skill(guest: Guest, skill: Skill, inventory_item: "InventoryItem
     from gameplay.services.inventory.core import consume_inventory_item_locked
 
     with transaction.atomic():
-        locked_guest = Guest.objects.select_for_update().get(pk=guest.pk)
+        locked_guest = Guest.objects.select_for_update().filter(pk=guest.pk).first()
+        if locked_guest is None:
+            raise GuestNotFoundError()
         if locked_guest.status != GuestStatus.IDLE:
-            raise ValueError(f"{locked_guest.display_name} 当前非空闲状态，无法学习技能")
+            raise GuestNotIdleError(locked_guest, message=f"{locked_guest.display_name} 当前非空闲状态，无法学习技能")
 
         if locked_guest.guest_skills.count() >= MAX_GUEST_SKILL_SLOTS:
-            raise ValueError("技能位已满")
+            raise SkillSlotFullError("技能位已满")
 
         if locked_guest.guest_skills.filter(skill=skill).exists():
-            raise ValueError(f"{locked_guest.display_name} 已掌握 {skill.name}")
+            raise GuestSkillAlreadyLearnedError(locked_guest, skill)
 
         locked_item = InventoryItem.objects.select_for_update().filter(pk=inventory_item.pk).first()
-        if not locked_item or locked_item.quantity < 1:
-            raise ValueError("技能书数量不足")
+        if locked_item is None:
+            raise GuestItemOwnershipError(message="技能书不存在或不属于您的庄园")
+        if locked_item.quantity < 1:
+            raise InsufficientStockError(locked_item.template.name, 1, locked_item.quantity)
 
         GuestSkill.objects.create(
             guest=locked_guest,
@@ -45,13 +58,13 @@ def forget_guest_skill(guest: Guest, guest_skill_id: int) -> str:
     with transaction.atomic():
         locked_guest = Guest.objects.select_for_update().select_related("template").filter(pk=guest.pk).first()
         if locked_guest is None:
-            raise ValueError("门客不存在")
+            raise GuestNotFoundError()
         if locked_guest.status != GuestStatus.IDLE:
-            raise ValueError(f"{locked_guest.display_name} 当前非空闲状态，无法遗忘技能")
+            raise GuestNotIdleError(locked_guest, message=f"{locked_guest.display_name} 当前非空闲状态，无法遗忘技能")
 
         locked_guest_skill = locked_guest.guest_skills.select_related("skill").filter(pk=guest_skill_id).first()
         if locked_guest_skill is None:
-            raise ValueError("未找到要遗忘的技能")
+            raise GuestSkillNotFoundError("未找到要遗忘的技能")
 
         skill_name = locked_guest_skill.skill.name
         locked_guest_skill.delete()

@@ -22,6 +22,40 @@ class BuildingUpgradingError(BuildingError):
     default_message = "建筑正在升级中"
 
 
+class BuildingMaxLevelError(BuildingError):
+    """建筑已达最高等级"""
+
+    error_code = "BUILDING_MAX_LEVEL"
+
+    def __init__(self, building_name: str, max_level: int, message: str | None = None):
+        if message is None:
+            message = f"{building_name}已达到最大等级（Lv{max_level}）"
+        super().__init__(message, building_name=building_name, max_level=max_level)
+
+
+class BuildingConcurrentUpgradeLimitError(BuildingError):
+    """同时升级的建筑数量超限"""
+
+    error_code = "BUILDING_CONCURRENT_UPGRADE_LIMIT"
+
+    def __init__(self, limit: int, message: str | None = None):
+        if message is None:
+            message = f"同时最多只能升级 {limit} 个建筑"
+        super().__init__(message, limit=limit)
+
+
+class ProductionStartError(BuildingError):
+    """生产/制作发起错误"""
+
+    error_code = "PRODUCTION_START_ERROR"
+
+
+class ForgeOperationError(BuildingError):
+    """铁匠铺锻造 / 合成 / 分解错误"""
+
+    error_code = "FORGE_OPERATION_ERROR"
+
+
 class BuildingNotBuiltError(BuildingError):
     """建筑尚未建造"""
 

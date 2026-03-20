@@ -16,7 +16,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
-from core.exceptions import InsufficientResourceError
+from core.exceptions import InsufficientResourceError, ProductionStartError
 from core.utils.time_scale import scale_duration
 from core.utils.yaml_loader import load_yaml_data
 
@@ -255,10 +255,10 @@ def start_smelting_production(manor: Manor, metal_key: str, quantity: int = 1) -
         SmeltingProduction实例
 
     Raises:
-        ValueError: 参数错误、资源不足、等级不足或已有制作进行中
+        ProductionStartError: 参数错误、等级不足或已有制作进行中
     """
     if metal_key not in METAL_CONFIG:
-        raise ValueError("无效的制作类型")
+        raise ProductionStartError("无效的制作类型")
 
     config = METAL_CONFIG[metal_key]
 
@@ -271,14 +271,14 @@ def start_smelting_production(manor: Manor, metal_key: str, quantity: int = 1) -
     if not is_unlocked:
         item_name_map_for_level = _get_item_name_map({metal_key})
         metal_name_for_level = item_name_map_for_level.get(metal_key, metal_key)
-        raise ValueError(f"需要{required_type_label}{required_level}级才能制作{metal_name_for_level}")
+        raise ProductionStartError(f"需要{required_type_label}{required_level}级才能制作{metal_name_for_level}")
 
     # 验证制作数量
     max_quantity = get_max_smelting_quantity(manor)
     if quantity < 1:
-        raise ValueError("制作数量至少为1")
+        raise ProductionStartError("制作数量至少为1")
     if quantity > max_quantity:
-        raise ValueError(f"冶炼技等级限制，单次最多制作{max_quantity}个")
+        raise ProductionStartError(f"冶炼技等级限制，单次最多制作{max_quantity}个")
 
     # 获取消耗配置
     cost_type = config["cost_type"]
@@ -300,7 +300,7 @@ def start_smelting_production(manor: Manor, metal_key: str, quantity: int = 1) -
 
         # 锁内再次检查，避免并发下绕过限制
         if has_active_smelting_production(locked_manor):
-            raise ValueError("已有物品正在制作中，同时只能制作一种物品")
+            raise ProductionStartError("已有物品正在制作中，同时只能制作一种物品")
 
         # 扣除材料
         if cost_type == "silver":
@@ -331,7 +331,7 @@ def start_smelting_production(manor: Manor, metal_key: str, quantity: int = 1) -
                 .first()
             )
             if not item or item.quantity < total_cost:
-                raise ValueError(f"{cost_name}不足")
+                raise ProductionStartError(f"{cost_name}不足")
             consume_inventory_item_locked(item, total_cost)
 
         # 计算实际制作时间（时间不随数量增加）

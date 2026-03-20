@@ -4,6 +4,7 @@ from typing import Any
 
 from django.db import transaction
 
+from core.exceptions import ForgeOperationError
 from gameplay.models import InventoryItem
 from gameplay.models import Manor as ManorModel
 
@@ -102,10 +103,10 @@ def decompose_equipment(
     roll_decompose_rewards: Any,
 ) -> dict[str, Any]:
     if quantity < 1:
-        raise ValueError("分解数量至少为1")
+        raise ForgeOperationError("分解数量至少为1")
 
     if equipment_key in recruit_equipment_keys:
-        raise ValueError("用于募兵（招募护院）的装备不可分解")
+        raise ForgeOperationError("用于募兵（招募护院）的装备不可分解")
 
     supported_rarities = set(config["supported_rarities"])
 
@@ -123,15 +124,15 @@ def decompose_equipment(
         )
 
         if not locked_item:
-            raise ValueError("仓库中没有该装备")
+            raise ForgeOperationError("仓库中没有该装备")
         if locked_item.quantity < quantity:
-            raise ValueError("装备数量不足")
+            raise ForgeOperationError("装备数量不足")
 
         template = locked_item.template
         if not template.effect_type.startswith("equip_"):
-            raise ValueError("该物品不是可分解装备")
+            raise ForgeOperationError("该物品不是可分解装备")
         if template.rarity not in supported_rarities:
-            raise ValueError("仅绿色及以上装备可分解")
+            raise ForgeOperationError("仅绿色及以上装备可分解")
 
         rewards = roll_decompose_rewards(template.rarity, quantity, config)
         consume_inventory_item_locked(locked_item, quantity)

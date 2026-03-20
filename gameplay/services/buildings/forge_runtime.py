@@ -7,6 +7,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
+from core.exceptions import ForgeOperationError
 from core.utils.time_scale import scale_duration
 from gameplay.constants import BuildingKeys
 from gameplay.models import EquipmentProduction, InventoryItem, ItemTemplate
@@ -73,7 +74,7 @@ def start_equipment_forging(
     material_name_fallback_map: dict[str, str],
 ) -> Any:
     if equipment_key not in equipment_config:
-        raise ValueError("无效的装备类型")
+        raise ForgeOperationError("无效的装备类型")
 
     config = equipment_config[equipment_key]
     required_level = config.get("required_forging", 1)
@@ -82,7 +83,7 @@ def start_equipment_forging(
 
     forging_level = technology_service.get_player_technology_level(manor, "forging")
     if forging_level < required_level:
-        raise ValueError(f"需要锻造技{required_level}级才能锻造{equipment_name}")
+        raise ForgeOperationError(f"需要锻造技{required_level}级才能锻造{equipment_name}")
 
     max_quantity = get_max_forging_quantity(manor)
     validate_forging_quantity(quantity=quantity, max_quantity=max_quantity)
@@ -95,7 +96,7 @@ def start_equipment_forging(
         locked_manor = ManorModel.objects.select_for_update().get(pk=manor.pk)
 
         if has_active_forging(locked_manor):
-            raise ValueError("已有装备正在锻造中，同时只能锻造一种装备")
+            raise ForgeOperationError("已有装备正在锻造中，同时只能锻造一种装备")
 
         consume_forging_materials_locked(
             inventory_item_model=InventoryItem,

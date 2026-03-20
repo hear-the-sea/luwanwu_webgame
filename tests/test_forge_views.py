@@ -8,6 +8,7 @@ from django.db import DatabaseError
 from django.urls import reverse
 from django.utils import timezone
 
+from core.exceptions import ForgeOperationError
 from gameplay.models import EquipmentProduction
 
 
@@ -78,6 +79,35 @@ class TestForgeViews:
         )
 
         with pytest.raises(RuntimeError, match="boom"):
+            client.post(
+                reverse("gameplay:start_equipment_forging"),
+                {"equipment_key": "equip_dummy", "quantity": "1", "category": "helmet", "mode": "synthesize"},
+            )
+
+    def test_start_equipment_forging_known_error_shows_message(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+        monkeypatch.setattr(
+            "gameplay.services.buildings.forge.start_equipment_forging",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ForgeOperationError("forge blocked")),
+        )
+
+        response = client.post(
+            reverse("gameplay:start_equipment_forging"),
+            {"equipment_key": "equip_dummy", "quantity": "1", "category": "helmet", "mode": "synthesize"},
+        )
+        assert response.status_code == 302
+        assert response.url == f"{reverse('gameplay:forge')}?mode=synthesize&category=helmet"
+        messages = [str(m) for m in get_messages(response.wsgi_request)]
+        assert any("forge blocked" in m for m in messages)
+
+    def test_start_equipment_forging_legacy_value_error_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+        monkeypatch.setattr(
+            "gameplay.services.buildings.forge.start_equipment_forging",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("legacy forge blocked")),
+        )
+
+        with pytest.raises(ValueError, match="legacy forge blocked"):
             client.post(
                 reverse("gameplay:start_equipment_forging"),
                 {"equipment_key": "equip_dummy", "quantity": "1", "category": "helmet", "mode": "synthesize"},
@@ -270,6 +300,35 @@ class TestForgeViews:
                 data={"equipment_key": "equip_dummy", "quantity": "1", "category": "helmet", "mode": "decompose"},
             )
 
+    def test_decompose_equipment_known_error_shows_message(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+        monkeypatch.setattr(
+            "gameplay.services.buildings.forge.decompose_equipment",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ForgeOperationError("decompose blocked")),
+        )
+
+        response = client.post(
+            reverse("gameplay:decompose_equipment"),
+            data={"equipment_key": "equip_dummy", "quantity": "1", "category": "helmet", "mode": "decompose"},
+        )
+        assert response.status_code == 302
+        assert response.url == f"{reverse('gameplay:forge')}?mode=decompose&category=helmet"
+        messages = [str(m) for m in get_messages(response.wsgi_request)]
+        assert any("decompose blocked" in m for m in messages)
+
+    def test_decompose_equipment_legacy_value_error_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+        monkeypatch.setattr(
+            "gameplay.services.buildings.forge.decompose_equipment",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("legacy decompose blocked")),
+        )
+
+        with pytest.raises(ValueError, match="legacy decompose blocked"):
+            client.post(
+                reverse("gameplay:decompose_equipment"),
+                data={"equipment_key": "equip_dummy", "quantity": "1", "category": "helmet", "mode": "decompose"},
+            )
+
     def test_synthesize_blueprint_equipment_view_redirects_with_category(self, manor_with_user, monkeypatch):
         """图纸合成后返回当前分类。"""
         _manor, client = manor_with_user
@@ -339,6 +398,35 @@ class TestForgeViews:
         )
 
         with pytest.raises(RuntimeError, match="boom"):
+            client.post(
+                reverse("gameplay:synthesize_blueprint_equipment"),
+                data={"blueprint_key": "bp_dummy", "quantity": "1", "category": "helmet", "mode": "synthesize"},
+            )
+
+    def test_synthesize_blueprint_equipment_known_error_shows_message(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+        monkeypatch.setattr(
+            "gameplay.services.buildings.forge.synthesize_equipment_with_blueprint",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ForgeOperationError("blueprint blocked")),
+        )
+
+        response = client.post(
+            reverse("gameplay:synthesize_blueprint_equipment"),
+            data={"blueprint_key": "bp_dummy", "quantity": "1", "category": "helmet", "mode": "synthesize"},
+        )
+        assert response.status_code == 302
+        assert response.url == f"{reverse('gameplay:forge')}?mode=synthesize&category=helmet"
+        messages = [str(m) for m in get_messages(response.wsgi_request)]
+        assert any("blueprint blocked" in m for m in messages)
+
+    def test_synthesize_blueprint_equipment_legacy_value_error_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+        monkeypatch.setattr(
+            "gameplay.services.buildings.forge.synthesize_equipment_with_blueprint",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("legacy blueprint blocked")),
+        )
+
+        with pytest.raises(ValueError, match="legacy blueprint blocked"):
             client.post(
                 reverse("gameplay:synthesize_blueprint_equipment"),
                 data={"blueprint_key": "bp_dummy", "quantity": "1", "category": "helmet", "mode": "synthesize"},

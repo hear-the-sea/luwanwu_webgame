@@ -8,6 +8,7 @@ from django.db import DatabaseError
 from django.urls import reverse
 from django.utils import timezone
 
+from core.exceptions import ProductionStartError
 from gameplay.models import HorseProduction, LivestockProduction, SmeltingProduction
 
 
@@ -182,6 +183,20 @@ class TestProductionViews:
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("操作失败，请稍后重试" in m for m in messages)
 
+    def test_start_horse_production_known_error_shows_message(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.views.production.start_horse_production",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ProductionStartError("horse blocked")),
+        )
+
+        response = client.post(reverse("gameplay:start_horse_production"), {"horse_key": "any", "quantity": "1"})
+        assert response.status_code == 302
+        assert response.url == reverse("gameplay:stable")
+        messages = [str(m) for m in get_messages(response.wsgi_request)]
+        assert any("horse blocked" in m for m in messages)
+
     def test_start_horse_production_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
 
@@ -191,6 +206,17 @@ class TestProductionViews:
         )
 
         with pytest.raises(RuntimeError, match="boom"):
+            client.post(reverse("gameplay:start_horse_production"), {"horse_key": "any", "quantity": "1"})
+
+    def test_start_horse_production_legacy_value_error_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.views.production.start_horse_production",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("legacy horse blocked")),
+        )
+
+        with pytest.raises(ValueError, match="legacy horse blocked"):
             client.post(reverse("gameplay:start_horse_production"), {"horse_key": "any", "quantity": "1"})
 
     def test_start_horse_production_rejects_invalid_quantity(self, manor_with_user, monkeypatch):
@@ -241,6 +267,33 @@ class TestProductionViews:
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("操作失败，请稍后重试" in m for m in messages)
 
+    def test_start_livestock_production_known_error_shows_message(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.services.buildings.ranch.start_livestock_production",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ProductionStartError("livestock blocked")),
+        )
+
+        response = client.post(
+            reverse("gameplay:start_livestock_production"), {"livestock_key": "any", "quantity": "1"}
+        )
+        assert response.status_code == 302
+        assert response.url == reverse("gameplay:ranch")
+        messages = [str(m) for m in get_messages(response.wsgi_request)]
+        assert any("livestock blocked" in m for m in messages)
+
+    def test_start_livestock_production_legacy_value_error_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.services.buildings.ranch.start_livestock_production",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("legacy livestock blocked")),
+        )
+
+        with pytest.raises(ValueError, match="legacy livestock blocked"):
+            client.post(reverse("gameplay:start_livestock_production"), {"livestock_key": "any", "quantity": "1"})
+
     def test_start_livestock_production_rejects_invalid_quantity(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
         called = {"count": 0}
@@ -273,6 +326,31 @@ class TestProductionViews:
         assert response.url == reverse("gameplay:smithy")
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("操作失败，请稍后重试" in m for m in messages)
+
+    def test_start_smelting_production_known_error_shows_message(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.services.buildings.smithy.start_smelting_production",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ProductionStartError("smelting blocked")),
+        )
+
+        response = client.post(reverse("gameplay:start_smelting_production"), {"metal_key": "any", "quantity": "1"})
+        assert response.status_code == 302
+        assert response.url == reverse("gameplay:smithy")
+        messages = [str(m) for m in get_messages(response.wsgi_request)]
+        assert any("smelting blocked" in m for m in messages)
+
+    def test_start_smelting_production_legacy_value_error_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.services.buildings.smithy.start_smelting_production",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("legacy smelting blocked")),
+        )
+
+        with pytest.raises(ValueError, match="legacy smelting blocked"):
+            client.post(reverse("gameplay:start_smelting_production"), {"metal_key": "any", "quantity": "1"})
 
     def test_start_smelting_production_rejects_invalid_quantity(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user

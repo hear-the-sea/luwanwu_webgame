@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from core.exceptions import ForgeOperationError
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.buildings import forge as forge_service
 from gameplay.services.inventory.core import get_item_quantity
@@ -158,7 +159,7 @@ def test_decompose_equipment_rejects_recruitment_gear(django_user_model, monkeyp
 
     monkeypatch.setattr(forge_service, "get_recruitment_equipment_keys", lambda: {"equip_recruit_blocked"})
 
-    with pytest.raises(ValueError, match="招募护院"):
+    with pytest.raises(ForgeOperationError, match="招募护院"):
         forge_service.decompose_equipment(manor, "equip_recruit_blocked", quantity=1)
 
     assert get_item_quantity(manor, "equip_recruit_blocked") == 1

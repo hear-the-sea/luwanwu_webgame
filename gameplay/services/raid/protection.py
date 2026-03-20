@@ -12,6 +12,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from django.db import transaction
 from django.utils import timezone
 
+from core.exceptions import PeaceShieldUnavailableError
+
 from ...models import Manor
 from .combat import get_active_raid_count, get_incoming_raids
 
@@ -25,7 +27,7 @@ def activate_peace_shield(manor: Manor, duration_seconds: int) -> None:
         duration_seconds: 保护时长（秒）
 
     Raises:
-        ValueError: 无法使用免战牌时
+        PeaceShieldUnavailableError: 当前无法使用免战牌时
     """
     with transaction.atomic():
         manor = Manor.objects.select_for_update().get(pk=manor.pk)
@@ -33,12 +35,12 @@ def activate_peace_shield(manor: Manor, duration_seconds: int) -> None:
         # 检查是否有出征中的队伍
         active_raids = get_active_raid_count(manor)
         if active_raids > 0:
-            raise ValueError("有出征中的队伍，无法使用免战牌")
+            raise PeaceShieldUnavailableError("active_raids")
 
         # 检查是否有敌军来袭
         incoming = get_incoming_raids(manor)
         if incoming:
-            raise ValueError("有敌军来袭，无法使用免战牌")
+            raise PeaceShieldUnavailableError("incoming_raids")
 
         now = timezone.now()
         current_until = manor.peace_shield_until or now

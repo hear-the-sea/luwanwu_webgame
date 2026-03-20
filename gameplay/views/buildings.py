@@ -41,7 +41,7 @@ def _handle_unexpected_building_error(
     )
 
 
-def _handle_known_building_error(request: HttpRequest, exc: GameError | ValueError) -> None:
+def _handle_known_building_error(request: HttpRequest, exc: GameError) -> None:
     messages.error(request, sanitize_error_message(exc))
 
 
@@ -67,7 +67,7 @@ class UpgradeBuildingView(LoginRequiredMixin, TemplateView):
             start_upgrade(building)
             eta = building.upgrade_complete_at.strftime("%H:%M:%S") if building.upgrade_complete_at else ""
             messages.success(request, f"{building.building_type.name} 开始升级，完成时间 {eta}")
-        except (GameError, ValueError) as exc:
+        except GameError as exc:
             _handle_known_building_error(request, exc)
         except DatabaseError as exc:
             _handle_unexpected_building_error(

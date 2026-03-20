@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from core.exceptions import ForgeOperationError
 from gameplay.services.buildings.forge_decompose_helpers import (
     build_decomposable_equipment_option,
     roll_decompose_rewards,
@@ -75,7 +76,7 @@ def test_roll_decompose_rewards_uses_ranges_and_probability_hooks():
 
 
 def test_roll_decompose_rewards_rejects_unsupported_rarity():
-    with pytest.raises(ValueError, match="仅绿色及以上装备可分解"):
+    with pytest.raises(ForgeOperationError, match="仅绿色及以上装备可分解"):
         roll_decompose_rewards(
             "black",
             1,

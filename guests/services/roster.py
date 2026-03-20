@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from django.db import transaction
 
-from core.exceptions import GuestNotIdleError
+from core.exceptions import GuestNotFoundError, GuestNotIdleError
 
 from ..models import Guest, GuestStatus
 from . import equipment as equipment_service
@@ -21,7 +21,7 @@ def dismiss_guest(guest: Guest) -> DismissGuestResult:
     with transaction.atomic():
         locked_guest = Guest.objects.select_for_update().filter(pk=guest.pk).first()
         if not locked_guest:
-            raise ValueError("门客不存在")
+            raise GuestNotFoundError()
         if locked_guest.status not in {GuestStatus.IDLE, GuestStatus.INJURED}:
             raise GuestNotIdleError(locked_guest)
 

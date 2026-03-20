@@ -113,6 +113,26 @@ class TroopLoadoutError(GameError):
     error_code = "TROOP_LOADOUT_ERROR"
 
 
+class PeaceShieldUnavailableError(GameError):
+    """免战牌当前不可使用"""
+
+    error_code = "PEACE_SHIELD_UNAVAILABLE"
+
+    def __init__(self, reason: str = "busy", message: str | None = None):
+        if message is None:
+            if reason == "incoming_raids":
+                message = "有敌军来袭，无法使用免战牌"
+            else:
+                message = "有出征中的队伍，无法使用免战牌"
+        super().__init__(message, reason=reason)
+
+
+class RelocationError(GameError):
+    """庄园迁移相关错误"""
+
+    error_code = "RELOCATION_ERROR"
+
+
 # ============ 竞技场相关异常 ============
 
 

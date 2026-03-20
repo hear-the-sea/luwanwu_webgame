@@ -13,7 +13,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from core.exceptions import GameError
+from core.exceptions import GameError, GuestItemConfigurationError
 from core.utils import is_ajax_request, json_error, json_success, safe_int, safe_positive_int
 from core.utils.validation import safe_redirect_url, sanitize_error_message
 
@@ -61,7 +61,7 @@ def use_medicine_item_view(request, pk: int):
         payload = item.template.effect_payload or {}
         heal_amount = safe_int(payload.get("hp"), default=None)
         if heal_amount is None or heal_amount <= 0:
-            raise ValueError("道具未配置有效恢复值")
+            raise GuestItemConfigurationError("道具未配置有效恢复值")
         result = use_medicine_item_for_guest(manor, guest, item.pk, heal_amount)
         new_quantity = safe_int(result.get("remaining_item_quantity"), default=0, min_val=0)
         healed = safe_int(result.get("healed"), default=0, min_val=0)
@@ -80,7 +80,7 @@ def use_medicine_item_view(request, pk: int):
                 status_display=result.get("status_display", guest.get_status_display()),
             )
         messages.success(request, msg)
-    except (GameError, ValueError) as exc:
+    except GameError as exc:
         error_msg = sanitize_error_message(exc)
         if is_ajax:
             return json_error(error_msg, status=400, include_message=True)

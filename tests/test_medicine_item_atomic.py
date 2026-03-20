@@ -4,7 +4,7 @@ import uuid
 
 import pytest
 
-from core.exceptions import GuestNotIdleError
+from core.exceptions import GuestItemOwnershipError, GuestNotIdleError, GuestOwnershipError
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.manor.core import ensure_manor
 from guests.models import GuestStatus, RecruitmentPool
@@ -123,3 +123,29 @@ def test_use_medicine_item_for_guest_rejects_non_idle_busy_status(game_data, dja
     item.refresh_from_db()
     assert guest.status == GuestStatus.WORKING
     assert item.quantity == 1
+
+
+@pytest.mark.django_db
+def test_use_medicine_item_for_guest_rejects_missing_item(game_data, django_user_model):
+    manor, guest = _bootstrap_injured_guest(game_data, django_user_model, username="medicine_item_missing_item")
+    heal_amount = max(1, int(guest.max_hp * 0.2))
+
+    with pytest.raises(GuestItemOwnershipError, match="道具不存在或不属于您的庄园"):
+        use_medicine_item_for_guest(manor, guest, 999999, heal_amount)
+
+
+@pytest.mark.django_db
+def test_use_medicine_item_for_guest_rejects_guest_outside_manor(game_data, django_user_model):
+    manor, _guest = _bootstrap_injured_guest(game_data, django_user_model, username="medicine_item_foreign_manor")
+    other_manor, other_guest = _bootstrap_injured_guest(
+        game_data, django_user_model, username="medicine_item_foreign_guest"
+    )
+    heal_amount = max(1, int(other_guest.max_hp * 0.2))
+    item = _create_medicine_item(manor, heal_amount=heal_amount)
+
+    with pytest.raises(GuestOwnershipError, match="门客不存在或不属于您的庄园"):
+        use_medicine_item_for_guest(manor, other_guest, item.pk, heal_amount)
+
+    item.refresh_from_db()
+    assert item.quantity == 1
+    assert other_guest.manor_id == other_manor.id

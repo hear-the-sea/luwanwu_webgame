@@ -6,6 +6,15 @@ from random import Random
 
 from django.db.models import F
 
+from core.exceptions import (
+    GameError,
+    GuestItemConfigurationError,
+    GuestItemOwnershipError,
+    GuestNotIdleError,
+    GuestOwnershipError,
+    InsufficientStockError,
+    ItemNotFoundError,
+)
 from gameplay.models import InventoryItem, ItemTemplate, Manor
 from guests.models import Guest, GuestStatus, GuestTemplate
 
@@ -54,10 +63,8 @@ def validate_guest_item_use(
     action: str,
 ) -> tuple[InventoryItem, Guest]:
     """Validate guest-target item usage prerequisites and lock related rows."""
-    from core.exceptions import InsufficientStockError
-
     if not item.pk:
-        raise ValueError("物品不存在")
+        raise ItemNotFoundError()
 
     locked_item = (
         InventoryItem.objects.select_for_update()
@@ -66,20 +73,20 @@ def validate_guest_item_use(
         .first()
     )
     if not locked_item:
-        raise ValueError("物品不存在或不属于您的庄园")
+        raise GuestItemOwnershipError()
 
     payload = locked_item.template.effect_payload or {}
     if payload.get("action") != action:
-        raise ValueError("物品类型错误")
+        raise GuestItemConfigurationError("物品类型错误")
 
     if locked_item.quantity <= 0:
         raise InsufficientStockError(locked_item.template.name, 1, locked_item.quantity)
 
     guest = Guest.objects.select_for_update().select_related("template").filter(id=guest_id, manor=manor).first()
     if not guest:
-        raise ValueError("门客不存在或不属于您的庄园")
+        raise GuestOwnershipError(message="门客不存在或不属于您的庄园")
     if guest.status != GuestStatus.IDLE:
-        raise ValueError(f"{guest.display_name} 当前非空闲状态，无法执行该操作")
+        raise GuestNotIdleError(guest, message=f"{guest.display_name} 当前非空闲状态，无法执行该操作")
 
     return locked_item, guest
 
@@ -96,7 +103,7 @@ def detach_guest_gears_for_reset(guest: Guest, *, action_label: str) -> int:
             unequip_guest_item(gear, guest)
             unequipped_count += 1
             continue
-        except (ValueError, TypeError) as exc:
+        except (GameError, TypeError) as exc:
             logger.warning(
                 "门客%s时常规卸装失败，改为强制卸下: guest_id=%s, gear_id=%s, error=%s",
                 action_label,
@@ -172,23 +179,23 @@ def prepare_guest_for_reset(guest: Guest, *, action_label: str) -> GuestResetPre
 
 def resolve_rarity_upgrade_target(guest: Guest, *, payload: object) -> GuestTemplate:
     if not isinstance(payload, dict):
-        raise ValueError("升阶道具配置错误")
+        raise GuestItemConfigurationError("升阶道具配置错误")
 
     target_template_map = payload.get("target_template_map") or {}
     if not isinstance(target_template_map, dict):
-        raise ValueError("升阶道具配置错误")
+        raise GuestItemConfigurationError("升阶道具配置错误")
 
     source_template_key = str(getattr(getattr(guest, "template", None), "key", "") or "").strip()
     if not source_template_key:
-        raise ValueError("门客模板异常")
+        raise GuestItemConfigurationError("门客模板异常")
 
     target_template_key = str(target_template_map.get(source_template_key) or "").strip()
     if not target_template_key:
-        raise ValueError("该门客无法使用此升阶道具")
+        raise GuestItemConfigurationError("该门客无法使用此升阶道具")
 
     target_template = GuestTemplate.objects.select_for_update().filter(key=target_template_key).first()
     if not target_template:
-        raise ValueError("目标稀有度模板不存在")
+        raise GuestItemConfigurationError("目标稀有度模板不存在")
 
     return target_template
 

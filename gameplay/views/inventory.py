@@ -73,7 +73,7 @@ def _error_response(
 def _known_inventory_error_response(
     request: HttpRequest,
     is_ajax: bool,
-    exc: GameError | ValueError,
+    exc: GameError,
     *,
     redirect_url: str = "gameplay:warehouse",
 ) -> HttpResponse:
@@ -120,7 +120,7 @@ def _move_item_between_storage(
         if is_ajax:
             return json_success(message=message)
         messages.success(request, message)
-    except (GameError, ValueError) as exc:
+    except GameError as exc:
         return _known_inventory_error_response(request, is_ajax, exc, redirect_url=redirect_url)
     except DatabaseError as exc:
         return _unexpected_inventory_error_response(
@@ -167,7 +167,7 @@ def _use_target_guest_item(
         if is_ajax:
             return json_success(message=message)
         messages.success(request, message)
-    except (GameError, ValueError) as exc:
+    except GameError as exc:
         return _known_inventory_error_response(request, is_ajax, exc)
     except DatabaseError as exc:
         return _unexpected_inventory_error_response(
@@ -247,7 +247,7 @@ def use_item_view(request: HttpRequest, pk: int) -> HttpResponse:
         if is_ajax:
             return json_success(message=f"{item.template.name} 使用成功：{summary}")
         messages.success(request, f"{item.template.name} 使用成功：{summary}")
-    except (GameError, ValueError) as exc:
+    except GameError as exc:
         return _known_inventory_error_response(request, is_ajax, exc)
     except DatabaseError as exc:
         return _unexpected_inventory_error_response(

@@ -8,7 +8,7 @@ from django.db import DatabaseError
 from django.urls import reverse
 from django.utils import timezone
 
-from core.exceptions import GameError
+from core.exceptions import GameError, ItemNotUsableError
 from gameplay.models import InventoryItem, ItemTemplate
 from guests.models import (
     GearItem,
@@ -302,7 +302,7 @@ class TestInventoryViews:
 
         monkeypatch.setattr(
             "gameplay.views.inventory.use_inventory_item",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("use blocked")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ItemNotUsableError("普通道具", message="use blocked")),
         )
 
         response = client.post(
@@ -313,6 +313,22 @@ class TestInventoryViews:
         payload = response.json()
         assert payload["success"] is False
         assert "use blocked" in payload["error"]
+
+    def test_use_item_ajax_legacy_value_error_bubbles_up(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        template = ItemTemplate.objects.create(key="view_use_item_legacy_error", name="旧式异常道具")
+        item = InventoryItem.objects.create(manor=manor, template=template, quantity=1)
+
+        monkeypatch.setattr(
+            "gameplay.views.inventory.use_inventory_item",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("legacy use blocked")),
+        )
+
+        with pytest.raises(ValueError, match="legacy use blocked"):
+            client.post(
+                reverse("gameplay:use_item", kwargs={"pk": item.pk}),
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
 
     def test_use_item_ajax_database_error_returns_500(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
@@ -388,6 +404,27 @@ class TestInventoryViews:
         )
 
         with pytest.raises(RuntimeError, match="boom"):
+            client.post(
+                reverse("gameplay:use_rebirth_card", kwargs={"pk": item.pk}),
+                {"guest_id": 1},
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+
+    def test_use_rebirth_card_legacy_value_error_bubbles_up(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        template = ItemTemplate.objects.create(
+            key="view_rebirth_card_item_value_error",
+            name="门客重生卡旧式异常",
+            effect_payload={"action": "rebirth_guest"},
+        )
+        item = InventoryItem.objects.create(manor=manor, template=template, quantity=1)
+
+        monkeypatch.setattr(
+            "gameplay.views.inventory.use_guest_rebirth_card",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("legacy rebirth")),
+        )
+
+        with pytest.raises(ValueError, match="legacy rebirth"):
             client.post(
                 reverse("gameplay:use_rebirth_card", kwargs={"pk": item.pk}),
                 {"guest_id": 1},

@@ -8,6 +8,8 @@ from gameplay.services.manor.core import (
     BANNED_WORDS,
     MANOR_NAME_MAX_LENGTH,
     MANOR_NAME_MIN_LENGTH,
+    ManorRenameItemError,
+    ManorRenameValidationError,
     ensure_manor,
     rename_manor,
     validate_manor_name,
@@ -142,3 +144,21 @@ def test_rename_manor_succeeds_when_message_fails(monkeypatch, django_user_model
 
     manor.refresh_from_db()
     assert manor.name == "Harbor01"
+
+
+@pytest.mark.django_db
+def test_rename_manor_rejects_invalid_name_with_explicit_error(django_user_model):
+    user = django_user_model.objects.create_user(username="manor_rename_invalid", password="pass12345")
+    manor = ensure_manor(user)
+
+    with pytest.raises(ManorRenameValidationError, match="名称不能为空"):
+        rename_manor(manor, "   ", consume_item=False)
+
+
+@pytest.mark.django_db
+def test_rename_manor_rejects_missing_rename_card_with_explicit_error(django_user_model):
+    user = django_user_model.objects.create_user(username="manor_rename_missing_card", password="pass12345")
+    manor = ensure_manor(user)
+
+    with pytest.raises(ManorRenameItemError, match="庄园命名卡道具未配置"):
+        rename_manor(manor, "Harbor02", consume_item=True)

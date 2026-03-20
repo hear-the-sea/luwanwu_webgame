@@ -23,10 +23,8 @@ def handle_known_mission_exception(
     exc: Exception,
     *,
     redirect_func: Callable[[], HttpResponse],
-    allow_legacy_value_error: bool = True,
 ) -> HttpResponse:
-    known_types = (GameError, ValueError) if allow_legacy_value_error else (GameError,)
-    if not isinstance(exc, known_types):
+    if not isinstance(exc, GameError):
         raise exc
     mission_helpers.handle_known_mission_error(request, exc)
     return redirect_func()
@@ -86,7 +84,6 @@ def handle_accept_mission(
             request,
             exc,
             redirect_func=_mission_redirect,
-            allow_legacy_value_error=False,
         )
 
     def _on_database_error(exc: DatabaseError) -> HttpResponse:
@@ -148,7 +145,6 @@ def handle_retreat_mission(
             request,
             exc,
             redirect_func=_dashboard_redirect,
-            allow_legacy_value_error=False,
         )
 
     def _on_database_error(exc: DatabaseError) -> HttpResponse:
@@ -211,7 +207,6 @@ def handle_retreat_scout(
             request,
             exc,
             redirect_func=_home_redirect,
-            allow_legacy_value_error=False,
         )
 
     def _on_database_error(exc: DatabaseError) -> HttpResponse:
@@ -268,7 +263,6 @@ def handle_use_mission_card(
             request,
             exc,
             redirect_func=_mission_redirect,
-            allow_legacy_value_error=False,
         )
 
     def _on_database_error(exc: DatabaseError) -> HttpResponse:

@@ -12,6 +12,8 @@ from typing import Optional, Tuple
 from django.db import transaction
 from django.utils import timezone
 
+from core.exceptions import RelocationError
+
 from ...constants import REGION_DICT, PVPConstants
 from ...models import Manor
 from .combat import get_active_raid_count, get_incoming_raids
@@ -49,27 +51,27 @@ def relocate_manor(manor: Manor, new_region: str) -> Tuple[int, int]:
         (新X坐标, 新Y坐标)
 
     Raises:
-        ValueError: 无法迁移时
+        RelocationError: 无法迁移时
     """
     # 验证地区
     if new_region not in REGION_DICT:
-        raise ValueError("无效的地区")
+        raise RelocationError("无效的地区")
 
     # 检查迁移条件
     if not manor.can_relocate:
         if manor.is_under_newbie_protection:
-            raise ValueError("新手保护期内无法迁移")
-        raise ValueError("迁移冷却中，请稍后再试")
+            raise RelocationError("新手保护期内无法迁移")
+        raise RelocationError("迁移冷却中，请稍后再试")
 
     # 检查是否有出征中的队伍
     active_raids = get_active_raid_count(manor)
     if active_raids > 0:
-        raise ValueError("有出征中的队伍，无法迁移")
+        raise RelocationError("有出征中的队伍，无法迁移")
 
     # 检查是否有敌军来袭
     incoming = get_incoming_raids(manor)
     if incoming:
-        raise ValueError("有敌军来袭，无法迁移")
+        raise RelocationError("有敌军来袭，无法迁移")
 
     # 检查金条（需要考虑拍卖冻结的金条）
     cost = get_relocation_cost(manor)
@@ -79,7 +81,7 @@ def relocate_manor(manor: Manor, new_region: str) -> Tuple[int, int]:
 
     available_gold = get_available_gold_bars(manor)
     if available_gold < cost:
-        raise ValueError(f"可用金条不足，需要 {cost} 个（当前可用 {available_gold} 个）")
+        raise RelocationError(f"可用金条不足，需要 {cost} 个（当前可用 {available_gold} 个）")
 
     with transaction.atomic():
         # 扣除金条
@@ -114,4 +116,4 @@ def _generate_unique_coordinate(region: str, exclude_manor_id: Optional[int] = N
         if not query.exists():
             return x, y
 
-    raise ValueError("无法生成唯一坐标，请稍后重试")
+    raise RelocationError("无法生成唯一坐标，请稍后重试")

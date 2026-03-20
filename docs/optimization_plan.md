@@ -67,11 +67,22 @@
 
 - `阶段 3` 的异常语义收口已经开始：`trade`、`arena`、`work`、`jail`、`troop recruitment` 和部分资源链路已经退出一部分 legacy `ValueError` 兼容，但 `mission`、`guest recruitment` 等入口仍明显混用 `GameError + ValueError`。
 - `mission` 已开始收口主链路异常语义：发起任务与撤退请求开始改走 `MissionError` 子类，但 view 层和部分兼容测试仍保留 `ValueError` 兜底。
-- `mission` 的 `accept/retreat/use_card` 视图入口以及 `scout start / retreat`、`raid start / retreat` 共享入口已不再把裸 `ValueError` 当作已知业务错误吞掉；剩余 legacy `ValueError` 兼容主要还在更底层 battle/locking 输入校验等共享入口。
+- `mission` 的 `accept/retreat/use_card` 视图入口以及 `scout start / retreat`、`raid start / retreat` 共享入口已不再把裸 `ValueError` 当作已知业务错误吞掉；`gameplay/views/mission_action_handlers.py` 里的 legacy `ValueError` 兼容开关也已移除，剩余 legacy `ValueError` 兼容主要还在更底层 battle/locking 输入校验等共享入口。
 - `raid` 依赖的 battle 预备层异常语义也已开始收口：`battle/setup.py`、`battle/locking.py`、`battle/execution.validate_troop_capacity()` 已开始改走显式 `BattlePreparationError`，但更底层 battle 组件和其它复用路径仍未整体封板。
 - `guest recruitment` 已开始收口主链路异常语义：招募发起、放大镜使用、候选保留已改走显式 `RecruitmentError` 子类，`guests/views/recruit_action_runtime.py` 不再把裸 `ValueError` 当作已知业务错误。
 - `guest recruitment` 的属性点分配路径也已开始退出 legacy `ValueError`：`guests/services/recruitment_guests.allocate_attribute_points()` 与 `guests/views/training.allocate_points_view()` 已改走显式门客 / 加点异常，但训练、经验道具等其它培养入口仍未整体封板。
-- `guest training` / `experience item` 的一部分异常语义也已开始收口：`guests/services/training.use_experience_item_for_guest()` 与 `guests/views/training.use_experience_item_view()` 已改走显式门客 / 道具异常，`TrainView` 也不再把裸 `ValueError` 当作已知业务错误；但训练、药品等培养入口仍未整体封板。
+- `guest training` / `experience item` 的一部分异常语义也已开始收口：`guests/services/training.use_experience_item_for_guest()` 与 `guests/views/training.use_experience_item_view()` 已改走显式门客 / 道具异常，`TrainView` 也不再把裸 `ValueError` 当作已知业务错误。
+- `guest` 的装备 / 药品 / 技能 / 辞退入口也开始退出 legacy `ValueError`：`guests/services/health.py`、`guests/services/skills.py`、`guests/services/roster.py`、`guests/services/equipment.py` 已补显式门客 / 道具 / 技能异常，`guests/views/items.py`、`guests/views/skills.py`、`guests/views/equipment.py`、`guests/views/roster.py` 不再把裸 `ValueError` 当作已知业务错误；但 `roster`、`items`、`equipment` 之外的其它门客入口仍未整体封板。
+- `guest salary` 入口也开始退出 legacy `ValueError`：`guests/views/salary.py` 已停止依赖会吞裸 `ValueError` 的通用装饰器，改单独收口 `GameError` / `DatabaseError`，工资支付链路开始具备与 `guest recruitment`、`training` 一致的异常边界。
+- `inventory` 的门客定向道具链路也已开始收口：`gameplay/services/inventory/guest_reset_helpers.py`、`gameplay/services/inventory/guest_items.py` 已把重生卡 / 升阶道具 / 灵魂容器的核心校验改走显式门客 / 道具异常，`gameplay/views/inventory.py` 的目标门客物品入口不再把裸 `ValueError` 当作已知业务错误；但仓库通用 `use_item` 与其它非定向道具链路仍未整体封板。
+- `inventory` 的仓库通用 `use_item` 链路也已开始退出一批 legacy `ValueError`：`gameplay/services/inventory/use.py` 中免战牌、召唤卡、工具类分发、物品归属校验已改走显式 `ItemError / GuestError`，`gameplay/views/inventory.py` 的通用使用入口不再把裸 `ValueError` 当作已知业务错误；但仓库迁移和其它建筑 / 道具副作用链路仍未整体封板。
+- `raid/protection` 的免战牌服务边界也已开始收口：`gameplay/services/raid/protection.py` 已退出 legacy `ValueError`，改走显式 `PeaceShieldUnavailableError`，并成为仓库免战牌使用链路的单一校验来源。
+- `raid/relocation` 的庄园迁移服务边界也已开始收口：`gameplay/services/raid/relocation.py` 已退出 legacy `ValueError`，改走显式 `RelocationError`，并补上迁移条件、金条不足、坐标耗尽等服务契约测试。
+- `technology` 视图入口也已退出 legacy `ValueError`：`gameplay/views/technology.py` 现在只把显式 `TechnologyError / GameError` 当已知业务错误处理，裸 `ValueError` 改为继续冒泡。
+- `building` 升级主入口也已开始收口异常语义：`gameplay/services/manor/core.start_upgrade()` 已把“正在升级 / 达到满级 / 并发上限”改走显式 `BuildingError` 子类，`gameplay/views/buildings.py` 不再把裸 `ValueError` 当已知业务错误处理。
+- `production` 的马房 / 畜牧 / 冶炼主入口也已开始收口异常语义：`gameplay/services/buildings/stable.py`、`gameplay/services/buildings/ranch.py`、`gameplay/services/buildings/smithy.py` 已把参数/门槛/并发中的业务 `ValueError` 改走显式 `ProductionStartError`，`gameplay/views/production.py` 不再把裸 `ValueError` 当已知业务错误处理。
+- `core` 的庄园改名入口也已开始退出 legacy `ValueError`：`gameplay/services/manor/core.rename_manor()` 已把名称校验、重名冲突、命名卡配置/扣减失败改走显式 `GameError`，`gameplay/views/core.py` 不再把裸 `ValueError` 当已知业务错误处理。
+- `forge` 的锻造 / 图纸 / 分解主入口也已开始收口异常语义：`gameplay/services/buildings/forge_runtime.py`、`gameplay/services/buildings/forge_blueprints.py`、`gameplay/services/buildings/forge_decompose.py` 及相关 helper 已把业务 `ValueError` 改走显式 `ForgeOperationError`，`gameplay/views/production_forge_handlers.py` 不再把裸 `ValueError` 当已知业务错误处理。
 - `阶段 5` 的测试门禁治理已经开始：hermetic / integration gate 提示、`pytest` 路径和部分边界契约测试已经补齐，但真实外部服务覆盖面仍不足。
 
 ### 2.4 当前未完成的高优先级问题

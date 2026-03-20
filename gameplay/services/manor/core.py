@@ -18,7 +18,12 @@ from django.db.models import F
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
-from core.exceptions import GameError
+from core.exceptions import (
+    BuildingConcurrentUpgradeLimitError,
+    BuildingMaxLevelError,
+    BuildingUpgradingError,
+    GameError,
+)
 from core.utils.time_scale import scale_duration
 
 from ...constants import BUILDING_MAX_LEVELS, MAX_CONCURRENT_BUILDING_UPGRADES, BuildingKeys, ManorNameConstants
@@ -51,8 +56,22 @@ def calculate_building_capacity(level: int, is_silver_vault: bool = False) -> in
 logger = logging.getLogger(__name__)
 
 
-class ManorNameConflictError(ValueError):
+class ManorNameConflictError(GameError):
     """Raised when the requested manor name is already occupied."""
+
+    error_code = "MANOR_NAME_CONFLICT"
+
+
+class ManorRenameValidationError(GameError):
+    """Raised when the requested manor name is invalid."""
+
+    error_code = "MANOR_RENAME_VALIDATION_ERROR"
+
+
+class ManorRenameItemError(GameError):
+    """Raised when rename-card lookup or consumption fails."""
+
+    error_code = "MANOR_RENAME_ITEM_ERROR"
 
 
 class ManorNotFoundError(GameError):
@@ -330,16 +349,16 @@ def start_upgrade(building: Building) -> None:
     building.refresh_from_db(fields=["level", "is_upgrading", "upgrade_complete_at"])
 
     if building.is_upgrading:
-        raise ValueError("建筑正在升级中")
+        raise BuildingUpgradingError()
 
     building_key = building.building_type.key
     max_level = BUILDING_MAX_LEVELS.get(building_key)
     if max_level is not None and building.level >= max_level:
-        raise ValueError(f"{building.building_type.name}已达到最大等级（Lv{max_level}）")
+        raise BuildingMaxLevelError(building.building_type.name, max_level)
 
     upgrading_count = Building.objects.filter(manor=manor, is_upgrading=True).count()
     if upgrading_count >= MAX_CONCURRENT_BUILDING_UPGRADES:
-        raise ValueError(f"同时最多只能升级 {MAX_CONCURRENT_BUILDING_UPGRADES} 个建筑")
+        raise BuildingConcurrentUpgradeLimitError(MAX_CONCURRENT_BUILDING_UPGRADES)
 
     base_cost = building.next_level_cost()
     cost_reduction = get_building_cost_reduction(manor)
@@ -355,11 +374,11 @@ def start_upgrade(building: Building) -> None:
         manor = Manor.objects.select_for_update().get(pk=manor.pk)
         building = Building.objects.select_for_update().get(pk=building.pk)
         if building.is_upgrading:
-            raise ValueError("建筑正在升级中")
+            raise BuildingUpgradingError()
 
         upgrading_count = Building.objects.filter(manor=manor, is_upgrading=True).count()
         if upgrading_count >= MAX_CONCURRENT_BUILDING_UPGRADES:
-            raise ValueError(f"同时最多只能升级 {MAX_CONCURRENT_BUILDING_UPGRADES} 个建筑")
+            raise BuildingConcurrentUpgradeLimitError(MAX_CONCURRENT_BUILDING_UPGRADES)
 
         from ..resources import spend_resources_locked
 
@@ -417,15 +436,15 @@ def rename_manor(manor: Manor, new_name: str, consume_item: bool = True) -> None
     new_name = new_name.strip()
     valid, error_msg = validate_manor_name(new_name)
     if not valid:
-        raise ValueError(error_msg)
+        raise ManorRenameValidationError(error_msg)
     if not is_manor_name_available(new_name, exclude_manor_id=manor.id):
-        raise ValueError("该名称已被使用")
+        raise ManorNameConflictError("该名称已被使用")
 
     if consume_item:
         try:
             rename_card = ItemTemplate.objects.get(key="manor_rename_card")
         except ItemTemplate.DoesNotExist:
-            raise ValueError("庄园命名卡道具未配置")
+            raise ManorRenameItemError("庄园命名卡道具未配置")
 
         inventory_item = (
             InventoryItem.objects.select_for_update()
@@ -439,11 +458,11 @@ def rename_manor(manor: Manor, new_name: str, consume_item: bool = True) -> None
         )
 
         if not inventory_item:
-            raise ValueError("您没有庄园命名卡")
+            raise ManorRenameItemError("您没有庄园命名卡")
 
         updated = InventoryItem.objects.filter(pk=inventory_item.pk, quantity__gte=1).update(quantity=F("quantity") - 1)
         if not updated:
-            raise ValueError("道具消耗失败，请重试")
+            raise ManorRenameItemError("道具消耗失败，请重试")
 
         InventoryItem.objects.filter(pk=inventory_item.pk, quantity__lte=0).delete()
 
@@ -453,7 +472,7 @@ def rename_manor(manor: Manor, new_name: str, consume_item: bool = True) -> None
         manor.save(update_fields=["name"])
     except IntegrityError:
         logger.warning("Manor rename race condition detected for %s by user %s", new_name, manor.user_id)
-        raise ValueError("该名称已被使用")
+        raise ManorNameConflictError("该名称已被使用")
 
     from ..utils.messages import create_message
 

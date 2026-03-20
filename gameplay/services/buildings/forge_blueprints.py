@@ -4,6 +4,7 @@ from typing import Any
 
 from django.db import transaction
 
+from core.exceptions import ForgeOperationError
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.models import Manor as ManorModel
 
@@ -67,23 +68,23 @@ def synthesize_equipment_with_blueprint(
     recipe_index: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     if quantity < 1:
-        raise ValueError("合成数量至少为1")
+        raise ForgeOperationError("合成数量至少为1")
 
     recipe = recipe_index.get(blueprint_key)
     if not recipe:
-        raise ValueError("无效的图纸")
+        raise ForgeOperationError("无效的图纸")
 
     required_forging = int(recipe.get("required_forging", 1))
     forging_level = technology_service.get_player_technology_level(manor, "forging")
     if forging_level < required_forging:
-        raise ValueError(f"需要锻造技{required_forging}级才能合成")
+        raise ForgeOperationError(f"需要锻造技{required_forging}级才能合成")
 
     result_item_key = recipe["result_item_key"]
     result_template = ItemTemplate.objects.filter(key=result_item_key).only("key", "name", "effect_type").first()
     if not result_template:
-        raise ValueError("图纸配置错误：产物不存在")
+        raise ForgeOperationError("图纸配置错误：产物不存在")
     if not str(result_template.effect_type or "").startswith("equip_"):
-        raise ValueError("图纸配置错误：产物必须是装备")
+        raise ForgeOperationError("图纸配置错误：产物必须是装备")
 
     consume_requirements: dict[str, int] = {blueprint_key: quantity}
     for cost_key, cost_amount in recipe.get("costs", {}).items():
@@ -112,7 +113,7 @@ def synthesize_equipment_with_blueprint(
             item = locked_items.get(need_key)
             if not item or item.quantity < need_amount:
                 need_name = template_names.get(need_key, need_key)
-                raise ValueError(f"{need_name}不足")
+                raise ForgeOperationError(f"{need_name}不足")
 
         for need_key, need_amount in consume_requirements.items():
             consume_inventory_item_locked(locked_items[need_key], need_amount)

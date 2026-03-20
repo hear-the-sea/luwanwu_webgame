@@ -4,6 +4,7 @@ from itertools import count
 
 import pytest
 
+from core.exceptions import GuestNotFoundError, GuestNotIdleError, GuestSkillNotFoundError
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.manor.core import ensure_manor
 from guests.models import Guest, GuestSkill, GuestStatus, GuestTemplate, Skill
@@ -66,7 +67,7 @@ def test_learn_guest_skill_rejects_busy_guest_without_consuming_book(django_user
     guest.save(update_fields=["status"])
     skill, item = _create_skill_book_item(manor)
 
-    with pytest.raises(ValueError, match="非空闲状态"):
+    with pytest.raises(GuestNotIdleError, match="非空闲状态"):
         learn_guest_skill(guest, skill, item)
 
     item.refresh_from_db(fields=["quantity"])
@@ -86,3 +87,31 @@ def test_forget_guest_skill_deletes_skill_record(django_user_model):
 
     assert skill_name == skill.name
     assert not GuestSkill.objects.filter(pk=guest_skill.pk).exists()
+
+
+@pytest.mark.django_db
+def test_forget_guest_skill_rejects_missing_guest(django_user_model):
+    user = django_user_model.objects.create_user(
+        username=_unique("skill_service_missing_guest_user"), password="pass123"
+    )
+    manor = ensure_manor(user)
+    guest = _create_guest(manor)
+    guest_id = guest.pk
+    guest.delete()
+
+    with pytest.raises(GuestNotFoundError, match="门客不存在"):
+        forget_guest_skill(guest, 999999)
+
+    assert not Guest.objects.filter(pk=guest_id).exists()
+
+
+@pytest.mark.django_db
+def test_forget_guest_skill_rejects_missing_skill_record(django_user_model):
+    user = django_user_model.objects.create_user(
+        username=_unique("skill_service_missing_skill_user"), password="pass123"
+    )
+    manor = ensure_manor(user)
+    guest = _create_guest(manor)
+
+    with pytest.raises(GuestSkillNotFoundError, match="未找到要遗忘的技能"):
+        forget_guest_skill(guest, 999999)

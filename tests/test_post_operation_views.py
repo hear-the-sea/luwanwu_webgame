@@ -7,6 +7,8 @@ from django.contrib.messages import get_messages
 from django.db import DatabaseError
 from django.urls import reverse
 
+from core.exceptions import BuildingUpgradingError
+
 
 @pytest.mark.django_db
 class TestPostOperations:
@@ -27,7 +29,7 @@ class TestPostOperations:
 
         monkeypatch.setattr(
             "gameplay.views.buildings.start_upgrade",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("upgrade blocked")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(BuildingUpgradingError("upgrade blocked")),
         )
 
         response = client.post(reverse("gameplay:upgrade_building", kwargs={"pk": building.pk}))
@@ -35,6 +37,18 @@ class TestPostOperations:
         assert response.url == reverse("gameplay:dashboard")
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("upgrade blocked" in m for m in messages)
+
+    def test_upgrade_building_legacy_value_error_bubbles_up(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        building = manor.buildings.first()
+
+        monkeypatch.setattr(
+            "gameplay.views.buildings.start_upgrade",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("legacy upgrade blocked")),
+        )
+
+        with pytest.raises(ValueError, match="legacy upgrade blocked"):
+            client.post(reverse("gameplay:upgrade_building", kwargs={"pk": building.pk}))
 
     def test_upgrade_building_database_error_does_not_500(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user

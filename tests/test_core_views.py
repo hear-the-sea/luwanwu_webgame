@@ -9,6 +9,7 @@ from django.db import DatabaseError
 from django.urls import reverse
 from django.utils import timezone
 
+from core.exceptions import GameError
 from gameplay.constants import BUILDING_MAX_LEVELS
 from gameplay.services.manor.core import ensure_manor
 
@@ -248,7 +249,7 @@ class TestCoreViews:
         _manor, client = manor_with_user
         monkeypatch.setattr(
             "gameplay.views.core.rename_manor",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("rename blocked")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(GameError("rename blocked")),
         )
 
         response = client.post(reverse("gameplay:rename_manor"), {"new_name": "新庄园名"})
@@ -256,6 +257,16 @@ class TestCoreViews:
         assert response.url == reverse("gameplay:settings")
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("rename blocked" in m for m in messages)
+
+    def test_rename_manor_legacy_value_error_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+        monkeypatch.setattr(
+            "gameplay.views.core.rename_manor",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("legacy rename blocked")),
+        )
+
+        with pytest.raises(ValueError, match="legacy rename blocked"):
+            client.post(reverse("gameplay:rename_manor"), {"new_name": "新庄园名"})
 
     def test_rename_manor_database_error_does_not_500(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user

@@ -224,6 +224,25 @@ def test_equip_view_runtime_error_bubbles_up(django_user_model, monkeypatch):
 
 
 @pytest.mark.django_db
+def test_equip_view_legacy_value_error_bubbles_up(django_user_model, monkeypatch):
+    client, manor = _login_client(django_user_model, prefix="equip_value_error")
+    guest = _create_guest(manor, prefix="equip_value_error")
+    gear = _create_gear(manor)
+    _stub_equip_form(monkeypatch, guest, gear)
+
+    monkeypatch.setattr(
+        "guests.services.equipment.equip_guest",
+        lambda *_a, **_k: (_ for _ in ()).throw(ValueError("legacy equip")),
+    )
+
+    with pytest.raises(ValueError, match="legacy equip"):
+        client.post(
+            reverse("guests:equip"),
+            {"guest": str(guest.pk), "gear": str(gear.pk), "slot": gear.template.slot},
+        )
+
+
+@pytest.mark.django_db
 def test_equip_view_cache_invalidation_failure_does_not_hide_success(django_user_model, monkeypatch):
     client, manor = _login_client(django_user_model, prefix="equip_cache")
     guest = _create_guest(manor, prefix="equip_cache")
@@ -371,6 +390,30 @@ def test_use_medicine_item_view_runtime_error_bubbles_up(django_user_model, monk
     )
 
     with pytest.raises(RuntimeError, match="boom"):
+        client.post(
+            reverse("guests:use_medicine_item", args=[guest.pk]),
+            {"item_id": str(item.pk)},
+            **_ajax_headers(),
+        )
+
+
+@pytest.mark.django_db
+def test_use_medicine_item_view_legacy_value_error_bubbles_up(django_user_model, monkeypatch):
+    client, manor = _login_client(django_user_model, prefix="medicine_value_error")
+    guest = _create_guest(manor, prefix="medicine_value_error")
+    item = _create_item(
+        manor,
+        effect_type=ItemTemplate.EffectType.MEDICINE,
+        effect_payload={"hp": 100},
+        prefix="medicine_value_error",
+    )
+
+    monkeypatch.setattr(
+        "guests.views.items.use_medicine_item_for_guest",
+        lambda *_a, **_k: (_ for _ in ()).throw(ValueError("legacy medicine")),
+    )
+
+    with pytest.raises(ValueError, match="legacy medicine"):
         client.post(
             reverse("guests:use_medicine_item", args=[guest.pk]),
             {"item_id": str(item.pk)},
@@ -557,6 +600,21 @@ def test_learn_skill_view_runtime_error_bubbles_up(django_user_model, monkeypatc
 
 
 @pytest.mark.django_db
+def test_learn_skill_view_legacy_value_error_bubbles_up(django_user_model, monkeypatch):
+    client, manor = _login_client(django_user_model, prefix="learn_value_error")
+    guest = _create_guest(manor, prefix="learn_value_error")
+    _skill, item = _create_skill_book(manor, prefix="learn_value_error")
+
+    monkeypatch.setattr(
+        "guests.views.skills._persist_skill_learning",
+        lambda *_a, **_k: (_ for _ in ()).throw(ValueError("legacy learn")),
+    )
+
+    with pytest.raises(ValueError, match="legacy learn"):
+        client.post(reverse("guests:learn_skill", args=[guest.pk]), {"item_id": str(item.pk)})
+
+
+@pytest.mark.django_db
 def test_forget_skill_view_database_error_degrades_with_message(django_user_model, monkeypatch):
     client, manor = _login_client(django_user_model, prefix="forget_db")
     guest = _create_guest(manor, prefix="forget_db")
@@ -588,6 +646,22 @@ def test_forget_skill_view_runtime_error_bubbles_up(django_user_model, monkeypat
     )
 
     with pytest.raises(RuntimeError, match="boom"):
+        client.post(reverse("guests:forget_skill", args=[guest.pk]), {"guest_skill_id": str(guest_skill.pk)})
+
+
+@pytest.mark.django_db
+def test_forget_skill_view_legacy_value_error_bubbles_up(django_user_model, monkeypatch):
+    client, manor = _login_client(django_user_model, prefix="forget_value_error")
+    guest = _create_guest(manor, prefix="forget_value_error")
+    skill = Skill.objects.create(key=_unique("forget_value_error_skill"), name="遗忘技能", rarity="green")
+    guest_skill = GuestSkill.objects.create(guest=guest, skill=skill)
+
+    monkeypatch.setattr(
+        "guests.views.skills._persist_skill_forget",
+        lambda *_a, **_k: (_ for _ in ()).throw(ValueError("legacy forget")),
+    )
+
+    with pytest.raises(ValueError, match="legacy forget"):
         client.post(reverse("guests:forget_skill", args=[guest.pk]), {"guest_skill_id": str(guest_skill.pk)})
 
 
@@ -835,4 +909,17 @@ def test_dismiss_guest_view_runtime_error_bubbles_up(django_user_model, monkeypa
     )
 
     with pytest.raises(RuntimeError, match="boom"):
+        client.post(reverse("guests:dismiss", args=[guest.pk]))
+
+
+@pytest.mark.django_db
+def test_dismiss_guest_view_legacy_value_error_bubbles_up(django_user_model, monkeypatch):
+    client, manor = _login_client(django_user_model, prefix="dismiss_value_error")
+    guest = _create_guest(manor, prefix="dismiss_value_error")
+
+    monkeypatch.setattr(
+        "guests.views.roster.dismiss_guest", lambda *_a, **_k: (_ for _ in ()).throw(ValueError("legacy dismiss"))
+    )
+
+    with pytest.raises(ValueError, match="legacy dismiss"):
         client.post(reverse("guests:dismiss", args=[guest.pk]))

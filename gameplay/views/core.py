@@ -44,7 +44,7 @@ def _handle_unexpected_core_error(
     )
 
 
-def _handle_known_core_error(request: HttpRequest, exc: GameError | ValueError) -> None:
+def _handle_known_core_error(request: HttpRequest, exc: GameError) -> None:
     messages.error(request, sanitize_error_message(exc))
 
 
@@ -115,7 +115,7 @@ def rename_manor_view(request: HttpRequest) -> HttpResponse:
     try:
         rename_manor(manor, new_name)
         messages.success(request, f"庄园已成功更名为「{new_name}」")
-    except (GameError, ValueError) as exc:
+    except GameError as exc:
         _handle_known_core_error(request, exc)
     except DatabaseError as exc:
         _handle_unexpected_core_error(

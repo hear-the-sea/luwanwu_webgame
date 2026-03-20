@@ -5,6 +5,8 @@ from django.contrib.messages import get_messages
 from django.db import DatabaseError
 from django.urls import reverse
 
+from core.exceptions import TechnologyError
+
 
 @pytest.mark.django_db
 class TestTechnologyViews:
@@ -98,7 +100,7 @@ class TestTechnologyViews:
 
         monkeypatch.setattr(
             "gameplay.views.technology.upgrade_technology",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("tech blocked")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(TechnologyError("tech blocked")),
         )
 
         response = client.post(
@@ -109,6 +111,20 @@ class TestTechnologyViews:
         assert response.url == f"{reverse('gameplay:technology')}?tab=basic"
         messages = [str(m) for m in get_messages(response.wsgi_request)]
         assert any("tech blocked" in m for m in messages)
+
+    def test_upgrade_technology_legacy_value_error_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.views.technology.upgrade_technology",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("legacy tech blocked")),
+        )
+
+        with pytest.raises(ValueError, match="legacy tech blocked"):
+            client.post(
+                reverse("gameplay:upgrade_technology", kwargs={"tech_key": "dao_attack"}),
+                {"tab": "basic"},
+            )
 
     def test_upgrade_technology_database_error_does_not_500(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user

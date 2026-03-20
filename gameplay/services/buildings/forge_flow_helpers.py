@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 from logging import Logger
 from typing import TYPE_CHECKING, Any, Callable, Iterable
 
+from core.exceptions import ForgeOperationError
+
 if TYPE_CHECKING:
     from ...models import EquipmentProduction, InventoryItem, Manor
 
@@ -78,9 +80,9 @@ def build_equipment_options(
 
 def validate_forging_quantity(*, quantity: int, max_quantity: int) -> None:
     if quantity < 1:
-        raise ValueError("锻造数量至少为1")
+        raise ForgeOperationError("锻造数量至少为1")
     if quantity > max_quantity:
-        raise ValueError(f"锻造技等级限制，单次最多锻造{max_quantity}件")
+        raise ForgeOperationError(f"锻造技等级限制，单次最多锻造{max_quantity}件")
 
 
 def build_total_material_costs(*, materials: dict[str, int], quantity: int) -> dict[str, int]:
@@ -109,7 +111,7 @@ def consume_forging_materials_locked(
         )
         mat_name = material_name_map.get(mat_key, material_name_fallback_map.get(mat_key, mat_key))
         if not item or item.quantity < total_amount:
-            raise ValueError(f"{mat_name}不足")
+            raise ForgeOperationError(f"{mat_name}不足")
         consume_inventory_item_locked(item, total_amount)
 
 

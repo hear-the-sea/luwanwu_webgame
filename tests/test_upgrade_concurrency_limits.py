@@ -1,6 +1,6 @@
 import pytest
 
-from core.exceptions import TechnologyConcurrentUpgradeLimitError
+from core.exceptions import BuildingConcurrentUpgradeLimitError, TechnologyConcurrentUpgradeLimitError
 from gameplay.services.manor.core import ensure_manor, start_upgrade
 from gameplay.services.technology import upgrade_technology
 
@@ -24,7 +24,7 @@ def test_building_upgrade_concurrency_limit(django_user_model, monkeypatch):
     start_upgrade(buildings[0])
     start_upgrade(buildings[1])
 
-    with pytest.raises(ValueError, match=r"同时最多只能升级 2 个建筑"):
+    with pytest.raises(BuildingConcurrentUpgradeLimitError, match=r"同时最多只能升级 2 个建筑"):
         start_upgrade(buildings[2])
 
 

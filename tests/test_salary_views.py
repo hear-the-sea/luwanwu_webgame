@@ -5,6 +5,7 @@ from django.contrib.messages import get_messages
 from django.db import DatabaseError
 from django.urls import reverse
 
+from core.exceptions import NoGuestsError
 from guests.models import Guest, GuestArchetype, GuestRarity, GuestStatus, GuestTemplate
 
 
@@ -90,6 +91,38 @@ def test_pay_salary_view_programming_error_bubbles_up(manor_with_user, monkeypat
 
 
 @pytest.mark.django_db
+def test_pay_salary_view_known_game_error_degrades_with_message(manor_with_user, monkeypatch):
+    manor, client = manor_with_user
+    guest = _create_guest(manor, key_suffix="game")
+
+    monkeypatch.setattr(
+        "guests.services.salary.pay_guest_salary",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(NoGuestsError("没有可支付工资的门客")),
+    )
+
+    response = client.post(reverse("guests:pay_salary", kwargs={"pk": guest.pk}))
+
+    assert response.status_code == 302
+    assert response.url == reverse("guests:roster")
+    messages = [str(m) for m in get_messages(response.wsgi_request)]
+    assert any("没有可支付工资的门客" in m for m in messages)
+
+
+@pytest.mark.django_db
+def test_pay_salary_view_legacy_value_error_bubbles_up(manor_with_user, monkeypatch):
+    manor, client = manor_with_user
+    guest = _create_guest(manor, key_suffix="value-error")
+
+    monkeypatch.setattr(
+        "guests.services.salary.pay_guest_salary",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("legacy salary")),
+    )
+
+    with pytest.raises(ValueError, match="legacy salary"):
+        client.post(reverse("guests:pay_salary", kwargs={"pk": guest.pk}))
+
+
+@pytest.mark.django_db
 def test_pay_all_salaries_view_database_error_degrades_with_message(manor_with_user, monkeypatch):
     _manor, client = manor_with_user
 
@@ -133,4 +166,34 @@ def test_pay_all_salaries_view_programming_error_bubbles_up(manor_with_user, mon
     )
 
     with pytest.raises(RuntimeError, match="boom"):
+        client.post(reverse("guests:pay_all_salaries"))
+
+
+@pytest.mark.django_db
+def test_pay_all_salaries_view_known_game_error_degrades_with_message(manor_with_user, monkeypatch):
+    _manor, client = manor_with_user
+
+    monkeypatch.setattr(
+        "guests.services.salary.pay_all_salaries",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(NoGuestsError("没有可支付工资的门客")),
+    )
+
+    response = client.post(reverse("guests:pay_all_salaries"))
+
+    assert response.status_code == 302
+    assert response.url == reverse("guests:roster")
+    messages = [str(m) for m in get_messages(response.wsgi_request)]
+    assert any("没有可支付工资的门客" in m for m in messages)
+
+
+@pytest.mark.django_db
+def test_pay_all_salaries_view_legacy_value_error_bubbles_up(manor_with_user, monkeypatch):
+    _manor, client = manor_with_user
+
+    monkeypatch.setattr(
+        "guests.services.salary.pay_all_salaries",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("legacy bulk salary")),
+    )
+
+    with pytest.raises(ValueError, match="legacy bulk salary"):
         client.post(reverse("guests:pay_all_salaries"))

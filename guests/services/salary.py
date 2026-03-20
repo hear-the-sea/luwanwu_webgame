@@ -93,7 +93,7 @@ def pay_guest_salary(manor: Manor, guest: Guest, for_date: date = None) -> Salar
         工资支付记录
 
     Raises:
-        ValueError: 验证失败时抛出异常
+        GameError: 业务验证失败时抛出显式异常
     """
     from gameplay.models import Manor
 
@@ -147,7 +147,7 @@ def pay_all_salaries(manor: Manor, for_date: date = None) -> Dict:
         支付结果字典
 
     Raises:
-        ValueError: 验证失败时抛出异常
+        GameError: 业务验证失败时抛出显式异常
     """
     if for_date is None:
         for_date = timezone.now().date()

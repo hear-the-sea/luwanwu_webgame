@@ -98,7 +98,7 @@ def _run_basic_production_start(
         production = start_operation(manor, item_key, quantity)
         quantity_text = f"x{production.quantity}" if production.quantity > 1 else ""
         messages.success(request, success_message(production, quantity_text))
-    except (GameError, ValueError) as exc:
+    except GameError as exc:
         messages.error(request, sanitize_error_message(exc))
     except DatabaseError as exc:
         _handle_unexpected_production_error(

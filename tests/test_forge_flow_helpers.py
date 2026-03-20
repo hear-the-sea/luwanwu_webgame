@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from core.exceptions import ForgeOperationError
 from gameplay.services.buildings import forge_flow_helpers
 
 
@@ -18,10 +19,10 @@ def test_build_filtered_equipment_configs_respects_category():
 
 
 def test_validate_forging_quantity_rejects_out_of_range_values():
-    with pytest.raises(ValueError, match="至少为1"):
+    with pytest.raises(ForgeOperationError, match="至少为1"):
         forge_flow_helpers.validate_forging_quantity(quantity=0, max_quantity=10)
 
-    with pytest.raises(ValueError, match="单次最多锻造10件"):
+    with pytest.raises(ForgeOperationError, match="单次最多锻造10件"):
         forge_flow_helpers.validate_forging_quantity(quantity=11, max_quantity=10)
 
 

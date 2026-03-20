@@ -16,7 +16,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
-from core.exceptions import InsufficientResourceError
+from core.exceptions import InsufficientResourceError, ProductionStartError
 from core.utils.time_scale import scale_duration
 from core.utils.yaml_loader import load_yaml_data
 
@@ -204,10 +204,10 @@ def start_livestock_production(manor: Manor, livestock_key: str, quantity: int =
         LivestockProduction实例
 
     Raises:
-        ValueError: 参数错误、资源不足、科技等级不足或已有养殖进行中
+        ProductionStartError: 参数错误、科技等级不足或已有养殖进行中
     """
     if livestock_key not in LIVESTOCK_CONFIG:
-        raise ValueError("无效的家畜类型")
+        raise ProductionStartError("无效的家畜类型")
 
     config = LIVESTOCK_CONFIG[livestock_key]
     required_level = config.get("required_animal_husbandry", 1)
@@ -219,14 +219,14 @@ def start_livestock_production(manor: Manor, livestock_key: str, quantity: int =
 
     animal_husbandry_level = get_player_technology_level(manor, "animal_husbandry")
     if animal_husbandry_level < required_level:
-        raise ValueError(f"需要养殖术{required_level}级才能养殖{livestock_name}")
+        raise ProductionStartError(f"需要养殖术{required_level}级才能养殖{livestock_name}")
 
     # 验证养殖数量
     max_quantity = get_max_livestock_quantity(manor)
     if quantity < 1:
-        raise ValueError("养殖数量至少为1")
+        raise ProductionStartError("养殖数量至少为1")
     if quantity > max_quantity:
-        raise ValueError(f"养殖术等级限制，单次最多养殖{max_quantity}只")
+        raise ProductionStartError(f"养殖术等级限制，单次最多养殖{max_quantity}只")
 
     # 计算总消耗
     total_grain_cost = config["grain_cost"] * quantity
@@ -240,7 +240,7 @@ def start_livestock_production(manor: Manor, livestock_key: str, quantity: int =
         locked_manor = ManorModel.objects.select_for_update().get(pk=manor.pk)
 
         if has_active_livestock_production(locked_manor):
-            raise ValueError("已有家畜正在养殖中，同时只能养殖一种家畜")
+            raise ProductionStartError("已有家畜正在养殖中，同时只能养殖一种家畜")
         try:
             spend_resources_locked(
                 locked_manor,

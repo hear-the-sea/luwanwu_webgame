@@ -10,7 +10,14 @@ from typing import TYPE_CHECKING, Any, Dict
 from django.db import transaction
 from django.utils import timezone
 
-from core.exceptions import GuestFullHpError, GuestNotIdleError, InsufficientStockError, InvalidHealAmountError
+from core.exceptions import (
+    GuestFullHpError,
+    GuestItemOwnershipError,
+    GuestNotIdleError,
+    GuestOwnershipError,
+    InsufficientStockError,
+    InvalidHealAmountError,
+)
 from core.utils import safe_int
 from core.utils.time_scale import scale_value
 from gameplay.services.inventory import core as inventory_core
@@ -149,7 +156,7 @@ def _load_locked_medicine_item(manor: Manor, item_id: int) -> InventoryItem:
         .first()
     )
     if not locked_item:
-        raise ValueError("道具不存在或不属于您的庄园")
+        raise GuestItemOwnershipError()
     if locked_item.quantity <= 0:
         raise InsufficientStockError(locked_item.template.name, 1, locked_item.quantity)
     return locked_item
@@ -172,7 +179,7 @@ def use_medicine_item_for_guest(manor: Manor, guest: Guest, item_id: int, heal_a
 
     locked_guest = Guest.objects.select_for_update().select_related("template").filter(pk=guest.pk, manor=manor).first()
     if not locked_guest:
-        raise ValueError("门客不存在或不属于您的庄园")
+        raise GuestOwnershipError(message="门客不存在或不属于您的庄园")
 
     result = heal_guest(locked_guest, heal_amount)
     inventory_core.consume_inventory_item_locked(locked_item, 1)

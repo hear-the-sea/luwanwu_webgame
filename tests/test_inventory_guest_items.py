@@ -1,5 +1,6 @@
 import pytest
 
+from core.exceptions import GuestItemConfigurationError, GuestNotIdleError, GuestNotRequirementError
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.inventory.guest_items import (
     use_guest_rarity_upgrade_item,
@@ -462,7 +463,7 @@ def test_use_xisuidan_rejects_non_idle_guest(django_user_model):
     guest.status = GuestStatus.WORKING
     guest.save(update_fields=["status"])
 
-    with pytest.raises(ValueError, match="非空闲状态"):
+    with pytest.raises(GuestNotIdleError, match="非空闲状态"):
         use_xisuidan(manor, item, guest.id)
 
     item.refresh_from_db()
@@ -680,7 +681,7 @@ def test_use_guest_rarity_upgrade_item_rejects_unsupported_guest(django_user_mod
         status=GuestStatus.IDLE,
     )
 
-    with pytest.raises(ValueError, match="无法使用此升阶道具"):
+    with pytest.raises(GuestItemConfigurationError, match="无法使用此升阶道具"):
         use_guest_rarity_upgrade_item(manor, item, other_guest.id)
 
     item.refresh_from_db()
@@ -948,7 +949,7 @@ def test_use_soul_container_rejects_low_level_or_unsupported_rarity(django_user_
         luck=70,
     )
 
-    with pytest.raises(ValueError, match="30级及以上"):
+    with pytest.raises(GuestNotRequirementError, match="30级及以上"):
         use_soul_container(manor, item, guest.id)
 
     item.refresh_from_db()
@@ -967,7 +968,7 @@ def test_use_soul_container_rejects_low_level_or_unsupported_rarity(django_user_
         status=GuestStatus.IDLE,
     )
 
-    with pytest.raises(ValueError, match="绿色、蓝色或紫色门客"):
+    with pytest.raises(GuestItemConfigurationError, match="绿色、蓝色或紫色门客"):
         use_soul_container(manor, item, gray_guest.id)
 
     item.refresh_from_db()

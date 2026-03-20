@@ -4,7 +4,7 @@ from itertools import count
 
 import pytest
 
-from core.exceptions import GuestNotIdleError
+from core.exceptions import GuestNotFoundError, GuestNotIdleError
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.manor.core import ensure_manor
 from guests.models import (
@@ -80,3 +80,14 @@ def test_dismiss_guest_rejects_busy_guest(django_user_model):
         dismiss_guest(guest)
 
     assert Guest.objects.filter(pk=guest.pk).exists()
+
+
+@pytest.mark.django_db
+def test_dismiss_guest_rejects_missing_guest(django_user_model):
+    user = django_user_model.objects.create_user(username=_unique("roster_service_missing_user"), password="pass123")
+    manor = ensure_manor(user)
+    guest = _create_guest(manor)
+    guest.delete()
+
+    with pytest.raises(GuestNotFoundError, match="门客不存在"):
+        dismiss_guest(guest)

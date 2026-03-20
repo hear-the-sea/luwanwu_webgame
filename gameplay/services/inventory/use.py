@@ -11,7 +11,13 @@ from typing import Any, Callable, Dict, List
 
 from django.db import transaction
 
-from core.exceptions import GuestCapacityFullError, ItemNotConfiguredError, ItemNotFoundError, ItemNotUsableError
+from core.exceptions import (
+    GuestAlreadyOwnedError,
+    GuestCapacityFullError,
+    ItemNotConfiguredError,
+    ItemNotFoundError,
+    ItemNotUsableError,
+)
 from gameplay.models import InventoryItem, ItemTemplate, Manor, ResourceEvent
 from gameplay.services.resources import grant_resources, grant_resources_locked
 
@@ -139,7 +145,7 @@ def _apply_resource_pack(item: InventoryItem) -> Dict[str, Any]:
 
 def _apply_peace_shield(item: InventoryItem) -> Dict[str, Any]:
     """使用免战牌，激活保护状态。"""
-    from gameplay.services.raid import activate_peace_shield, get_active_raid_count, get_incoming_raids
+    from gameplay.services.raid import activate_peace_shield
 
     payload = item.template.effect_payload or {}
     duration = payload.get("duration")
@@ -147,17 +153,6 @@ def _apply_peace_shield(item: InventoryItem) -> Dict[str, Any]:
         raise ItemNotConfiguredError()
 
     manor = item.manor
-
-    # 检查是否有出征中的队伍
-    active_raids = get_active_raid_count(manor)
-    if active_raids > 0:
-        raise ValueError("有出征中的队伍，无法使用免战牌")
-
-    # 检查是否有敌军来袭
-    incoming = get_incoming_raids(manor)
-    if incoming:
-        raise ValueError("有敌军来袭，无法使用免战牌")
-
     activate_peace_shield(manor, duration)
     hours = duration // 3600
     return {
@@ -190,13 +185,13 @@ def _apply_guest_summon(item: InventoryItem) -> Dict[str, Any]:
 
     template = GuestTemplate.objects.filter(key=chosen_key).first()
     if not template:
-        raise ValueError(f"门客模板不存在: {chosen_key}")
+        raise ItemNotConfiguredError(f"门客模板不存在: {chosen_key}")
 
     exclusive_template_keys = payload.get("exclusive_template_keys") or []
     if isinstance(exclusive_template_keys, list):
         normalized_exclusive_keys = [str(key).strip() for key in exclusive_template_keys if str(key).strip()]
         if normalized_exclusive_keys and manor.guests.filter(template__key__in=normalized_exclusive_keys).exists():
-            raise ValueError(f"庄园已拥有门客「{template.name}」，不可重复获得")
+            raise GuestAlreadyOwnedError(template)
 
     _consume_required_items_locked(manor, payload)
 
@@ -223,15 +218,15 @@ def _apply_tool(item: InventoryItem) -> Dict[str, Any]:
         return _apply_guest_summon(item)
     if payload.get("action") == "rebirth_guest":
         # 门客重生卡需要选择目标门客，抛出提示让前端引导选择
-        raise ValueError("请选择要重生的门客")
+        raise ItemNotUsableError(item.template.name, message="请选择要重生的门客")
     if payload.get("action") == "upgrade_guest_rarity":
-        raise ValueError("请选择要升阶的门客")
+        raise ItemNotUsableError(item.template.name, message="请选择要升阶的门客")
     if payload.get("action") == "soul_fusion":
-        raise ValueError("请选择要融合的门客")
+        raise ItemNotUsableError(item.template.name, message="请选择要融合的门客")
     key = item.template.key or ""
     if key.startswith("peace_shield_"):
         return _apply_peace_shield(item)
-    raise ValueError("未知的道具效果")
+    raise ItemNotUsableError(item.template.name, message="未知的道具效果")
 
 
 def _apply_loot_box(item: InventoryItem) -> Dict[str, Any]:
@@ -336,14 +331,14 @@ def use_inventory_item(item: InventoryItem, manor: Manor | None = None) -> Dict[
         使用效果摘要字典
 
     Raises:
-        ValueError: 物品不存在或不属于指定庄园
+        ItemNotFoundError: 物品不存在或不属于指定庄园
         InsufficientStockError: 物品数量不足
         ItemNotUsableError: 物品不可用
     """
     from core.exceptions import InsufficientStockError
 
     if not item.pk:
-        raise ValueError("物品不存在")
+        raise ItemNotFoundError()
 
     # 死锁预防：统一锁顺序 Manor -> InventoryItem
     # 商店服务是先锁 Manor 后锁 Item，此处必须保持一致
@@ -362,7 +357,7 @@ def use_inventory_item(item: InventoryItem, manor: Manor | None = None) -> Dict[
     )
     if not locked_item:
         if manor is not None:
-            raise ValueError("物品不存在或不属于您的庄园")
+            raise ItemNotFoundError("物品不存在或不属于您的庄园")
         raise InsufficientStockError(item.template.name, 1, 0)
     if locked_item.quantity <= 0:
         raise InsufficientStockError(locked_item.template.name, 1, locked_item.quantity)

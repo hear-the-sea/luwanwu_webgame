@@ -115,6 +115,18 @@ class GuestOwnershipError(GuestError):
         super().__init__(message)
 
 
+class GuestAlreadyOwnedError(GuestError):
+    """庄园已拥有该门客"""
+
+    error_code = "GUEST_ALREADY_OWNED"
+
+    def __init__(self, guest: Any = None, message: str | None = None):
+        guest_name = getattr(guest, "display_name", getattr(guest, "name", "该门客")) if guest is not None else "该门客"
+        if message is None:
+            message = f"庄园已拥有门客「{guest_name}」，不可重复获得"
+        super().__init__(message, guest_name=guest_name)
+
+
 class GuestNotFoundError(GuestError):
     """门客不存在"""
 
@@ -133,6 +145,26 @@ class GuestItemConfigurationError(GuestError):
     """门客培养道具配置无效"""
 
     error_code = "GUEST_ITEM_CONFIGURATION_ERROR"
+
+
+class GuestSkillAlreadyLearnedError(GuestError):
+    """门客已掌握该技能"""
+
+    error_code = "GUEST_SKILL_ALREADY_LEARNED"
+
+    def __init__(self, guest: Any = None, skill: Any = None, message: str | None = None):
+        guest_name = getattr(guest, "display_name", "门客") if guest is not None else "门客"
+        skill_name = getattr(skill, "name", "该技能") if skill is not None else "该技能"
+        if message is None:
+            message = f"{guest_name} 已掌握 {skill_name}"
+        super().__init__(message, guest_name=guest_name, skill_name=skill_name)
+
+
+class GuestSkillNotFoundError(GuestError):
+    """门客技能不存在"""
+
+    error_code = "GUEST_SKILL_NOT_FOUND"
+    default_message = "未找到要操作的技能"
 
 
 class GuestFullHpError(GuestError):
