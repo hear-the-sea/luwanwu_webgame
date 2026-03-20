@@ -230,6 +230,8 @@ class GuestDetailView(LoginRequiredMixin, TemplateView):
         manor, guest = get_prepared_guest_detail_for_read(
             self.request,
             self.kwargs["pk"],
+            logger=logger,
+            source="guest_detail_view",
             load_guest_detail_fn=_load_guest_detail,
         )
         slots = [(choice.value, choice.label) for choice in GearSlot]

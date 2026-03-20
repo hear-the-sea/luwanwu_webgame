@@ -4,7 +4,7 @@ from django import forms
 
 from core.config import GUEST
 
-from .models import GearItem, Guest, RecruitmentPool
+from .models import Guest, RecruitmentPool
 
 
 class RecruitForm(forms.Form):
@@ -40,14 +40,13 @@ class TrainGuestForm(forms.Form):
 
 class EquipForm(forms.Form):
     guest = forms.ModelChoiceField(queryset=Guest.objects.all(), label="门客")
-    gear = forms.ModelChoiceField(queryset=GearItem.objects.none(), label="装备")
+    gear = forms.CharField(label="装备")
 
     def __init__(self, *args, **kwargs):
         manor = kwargs.pop("manor", None)
         super().__init__(*args, **kwargs)
         if manor:
             self.fields["guest"].queryset = manor.guests.select_related("template")
-            self.fields["gear"].queryset = manor.gears.filter(guest__isnull=True).select_related("template")
 
 
 class AllocateSkillPointsForm(forms.Form):

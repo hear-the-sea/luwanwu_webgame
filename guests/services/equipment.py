@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict
+from typing import TYPE_CHECKING, Any, Dict
 
 from core.exceptions import (
     DuplicateEquipmentError,
@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from gameplay.models import Manor
 
 from django.db import transaction
+from django.db.models import Count, Min
 
 from ..models import GearItem, GearSlot, GearTemplate, Guest, GuestRarity, GuestStatus
 from ..utils.equipment_utils import EQUIP_SLOT_MAP, SET_STAT_FIELD_MAP, compute_set_bonus
@@ -97,7 +98,7 @@ def _clear_replaced_items(guest: Guest, existing_items: list[GearItem], updates:
             )
 
 
-def _consume_warehouse_item_for_gear(guest: Guest, gear: GearItem) -> None:
+def _consume_warehouse_item_for_gear(guest: Guest, gear: GearItem) -> bool:
     from django.db.models import F
 
     from gameplay.models import InventoryItem
@@ -116,14 +117,14 @@ def _consume_warehouse_item_for_gear(guest: Guest, gear: GearItem) -> None:
     )
 
     if not inv_item:
-        # 理论上 equip_guest 之前应该校验过，但并发下可能被抢占
-        raise EquipmentError("装备库存不足")
+        return False
 
     # 使用原子更新扣减库存
     InventoryItem.objects.filter(pk=inv_item.pk).update(quantity=F("quantity") - 1)
 
     # 清理零库存记录（再次检查以确保安全）
     InventoryItem.objects.filter(pk=inv_item.pk, quantity__lte=0).delete()
+    return True
 
 
 def apply_set_bonuses(guest: Guest) -> Dict[str, int]:
@@ -165,6 +166,180 @@ def give_gear(manor: Manor, template: GearTemplate) -> GearItem:
     return GearItem.objects.create(manor=manor, template=template)
 
 
+def _build_gear_template_defaults(item_template: Any, *, slot: str) -> dict[str, Any]:
+    payload = getattr(item_template, "effect_payload", {}) or {}
+    extra_stats = {key: int(value) for key, value in payload.items() if isinstance(value, (int, float))}
+    return {
+        "name": getattr(item_template, "name", ""),
+        "slot": slot,
+        "rarity": getattr(item_template, "rarity", GuestRarity.GRAY),
+        "set_key": payload.get("set_key", ""),
+        "set_description": payload.get("set_description", ""),
+        "set_bonus": payload.get("set_bonus", {}),
+        "attack_bonus": 0,
+        "defense_bonus": 0,
+        "extra_stats": extra_stats,
+    }
+
+
+def build_gear_template_preview(item_template: Any) -> GearTemplate | None:
+    effect_type = str(getattr(item_template, "effect_type", "") or "")
+    slot = EQUIP_SLOT_MAP.get(effect_type)
+    if not slot:
+        return None
+    return GearTemplate(
+        key=getattr(item_template, "key", ""),
+        **_build_gear_template_defaults(item_template, slot=slot),
+    )
+
+
+def _list_free_gear_options(manor: Manor, *, slot: str) -> list[dict[str, Any]]:
+    rows = (
+        manor.gears.filter(guest__isnull=True, template__slot=slot)
+        .values("template_id", "template__key")
+        .annotate(count=Count("id"), gear_id=Min("id"))
+        .order_by("template__name", "template_id")
+    )
+    template_ids = [row["template_id"] for row in rows]
+    templates = {
+        template.id: template
+        for template in GearTemplate.objects.filter(id__in=template_ids).only(
+            "id",
+            "key",
+            "name",
+            "rarity",
+            "set_key",
+            "set_description",
+            "set_bonus",
+            "attack_bonus",
+            "defense_bonus",
+            "extra_stats",
+        )
+    }
+
+    options: list[dict[str, Any]] = []
+    for row in rows:
+        template = templates.get(row["template_id"])
+        if template is None:
+            continue
+        options.append(
+            {
+                "id": row["gear_id"],
+                "template_key": row["template__key"],
+                "count": row["count"],
+                "template": template,
+            }
+        )
+    return options
+
+
+def list_available_inventory_gear_options(manor: Manor, *, slot: str) -> list[dict[str, Any]]:
+    from gameplay.models import InventoryItem
+
+    effect_types = [key for key, mapped_slot in EQUIP_SLOT_MAP.items() if mapped_slot == slot]
+    if not effect_types:
+        return []
+
+    items = (
+        InventoryItem.objects.filter(
+            manor=manor,
+            template__effect_type__in=effect_types,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+            quantity__gt=0,
+        )
+        .select_related("template")
+        .order_by("template__name", "id")
+    )
+
+    options: list[dict[str, Any]] = []
+    for item in items:
+        preview = build_gear_template_preview(item.template)
+        if preview is None:
+            continue
+        options.append(
+            {
+                "template_key": item.template.key,
+                "count": item.quantity,
+                "template": preview,
+            }
+        )
+    return options
+
+
+def list_available_equippable_gear_options(manor: Manor, *, slot: str) -> list[dict[str, Any]]:
+    merged: dict[str, dict[str, Any]] = {}
+
+    for entry in _list_free_gear_options(manor, slot=slot):
+        merged[entry["template_key"]] = entry
+
+    for entry in list_available_inventory_gear_options(manor, slot=slot):
+        template_key = entry["template_key"]
+        existing = merged.get(template_key)
+        if existing is None:
+            merged[template_key] = {
+                "id": entry["template_key"],
+                **entry,
+            }
+            continue
+        existing["count"] = max(int(existing.get("count", 0) or 0), int(entry.get("count", 0) or 0))
+
+    return sorted(merged.values(), key=lambda entry: (getattr(entry["template"], "name", ""), str(entry["id"])))
+
+
+def _get_or_create_free_gear_for_template_key(manor: Manor, *, template_key: str, slot: str | None = None) -> GearItem:
+    from gameplay.models import InventoryItem
+
+    inventory_item = (
+        InventoryItem.objects.select_related("template")
+        .filter(
+            manor=manor,
+            template__key=template_key,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+            quantity__gt=0,
+        )
+        .first()
+    )
+    if inventory_item is None:
+        raise ItemNotFoundError("未找到可用装备")
+
+    resolved_slot = EQUIP_SLOT_MAP.get(inventory_item.template.effect_type)
+    if not resolved_slot:
+        raise ItemNotFoundError("未找到可用装备")
+    if slot and resolved_slot != slot:
+        raise EquipmentError("装备槽位不匹配")
+
+    gear_template, _ = GearTemplate.objects.update_or_create(
+        key=inventory_item.template.key,
+        defaults=_build_gear_template_defaults(inventory_item.template, slot=resolved_slot),
+    )
+    free_gear = (
+        manor.gears.select_related("template").filter(template=gear_template, guest__isnull=True).order_by("id").first()
+    )
+    if free_gear is not None:
+        return free_gear
+    return GearItem.objects.create(manor=manor, template=gear_template)
+
+
+def resolve_equippable_gear(manor: Manor, choice: str | GearItem, *, slot: str | None = None) -> GearItem:
+    if isinstance(choice, GearItem):
+        if slot and choice.template.slot != slot:
+            raise EquipmentError("装备槽位不匹配")
+        return choice
+
+    raw_choice = str(choice or "").strip()
+    if not raw_choice:
+        raise ValueError("请选择可用装备")
+
+    if raw_choice.isdigit():
+        gear = manor.gears.select_related("template").filter(pk=int(raw_choice), guest__isnull=True).first()
+        if gear is not None:
+            if slot and gear.template.slot != slot:
+                raise EquipmentError("装备槽位不匹配")
+            return gear
+
+    return _get_or_create_free_gear_for_template_key(manor, template_key=raw_choice, slot=slot)
+
+
 def ensure_inventory_gears(manor: Manor, *, slot: str | None = None) -> None:
     """
     同步庄园背包中的装备道具到门客装备系统。
@@ -195,20 +370,10 @@ def ensure_inventory_gears(manor: Manor, *, slot: str | None = None) -> None:
         if not slot:
             continue
         synced_slots.add(slot)
-        payload = inv.template.effect_payload or {}
-        extra_stats = {k: int(v) for k, v in payload.items() if isinstance(v, (int, float))}
-        defaults = {
-            "name": inv.template.name,
-            "slot": slot,
-            "rarity": getattr(inv.template, "rarity", GuestRarity.GRAY),
-            "set_key": payload.get("set_key", ""),
-            "set_description": payload.get("set_description", ""),
-            "set_bonus": payload.get("set_bonus", {}),
-            "attack_bonus": 0,
-            "defense_bonus": 0,
-            "extra_stats": extra_stats,
-        }
-        gear_template, _ = GearTemplate.objects.update_or_create(key=inv.template.key, defaults=defaults)
+        gear_template, _ = GearTemplate.objects.update_or_create(
+            key=inv.template.key,
+            defaults=_build_gear_template_defaults(inv.template, slot=slot),
+        )
         free_qs = manor.gears.filter(template=gear_template, guest__isnull=True)
         free_count = free_qs.count()
         target_free = max(0, inv.quantity)

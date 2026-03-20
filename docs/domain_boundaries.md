@@ -406,3 +406,37 @@ transaction.atomic():        — 第二阶段：汇总轮次结果
 - 在线用户数查询降级路径：Redis ZSET → 本地缓存 → DB 近 30 分钟登录用户 COUNT
 - 任何单项查询失败都不会影响其他上下文数据的加载（各项独立 try/except）
 - AJAX 请求和非 HTML 请求跳过全局统计数据加载（节省开销）
+
+---
+
+## 7. 门客名册 / 详情读路径（guests/views/roster.py）
+
+**代码**：`guests/views/read_helpers.py`、`guests/views/roster.py`
+
+### 数据来源与边界
+
+- 页面 GET 只允许读取 `Manor`、`Guest`、装备与技能等读模型，不再在读路径里调用训练结算、自动续训、回血或套装重算。
+- 庄园级资源投影仍通过 `get_prepared_manor_for_read()` 执行，保持与其他页面一致的只读投影语义。
+- 新门客的自动训练计时器必须在候选确认写链路里创建，不得依赖名册页或详情页首次访问触发。
+
+### 失败/补偿行为
+
+- 页面读取失败时只沿用既有读侧降级，不承担门客状态补偿职责。
+- 训练完成后的显式收口仍由 `guests:check_training`、异步任务和训练服务负责，不回挂到页面 GET。
+
+---
+
+## 8. 装备弹窗读路径（guests/views/equipment.py）
+
+**代码**：`guests/views/equipment.py`、`guests/services/equipment.py`
+
+### 数据来源与边界
+
+- `guests:gear_options` 只允许读取已存在的 durable state：仓库 `InventoryItem` 与已落库的空闲 `GearItem`；不得在 GET 中调用库存同步来创建/删除 `GearItem`。
+- 缺少 `GearItem` 实体时，只能在 `guests:equip` 这类显式写入口里按模板键物化，用于承接后续加锁、穿戴和库存扣减。
+- 读侧缓存只缓存装备选项投影，不缓存通过 GET 触发的任何状态修正结果。
+
+### 失败/补偿行为
+
+- 装备选项缓存失败时允许降级为直接查库，但仍保持纯读语义。
+- 真正的库存扣减、装备占用和属性变更仍由写路径事务负责，GET 不承担补偿或预同步职责。

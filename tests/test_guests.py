@@ -48,6 +48,8 @@ def test_recruit_guest_creates_record(game_data, django_user_model, load_guest_d
     assert len(candidates) == expected_count
     guest = finalize_candidate(candidates[0])
     assert Guest.objects.filter(pk=guest.pk).exists()
+    assert guest.training_complete_at is not None
+    assert guest.training_target_level == 2
 
 
 @pytest.mark.django_db
@@ -331,6 +333,9 @@ def test_train_guest_increases_level(game_data, django_user_model, load_guest_da
     pool = RecruitmentPool.objects.get(key="cunmu")
     candidates = recruit_guest(manor, pool, seed=1)
     guest = finalize_candidate(candidates[0])
+    guest.training_complete_at = None
+    guest.training_target_level = 0
+    guest.save(update_fields=["training_complete_at", "training_target_level"])
     guest.manor.grain = guest.manor.silver = 5000
     guest.manor.save()
     train_guest(guest, levels=2)

@@ -10,7 +10,6 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.db import DatabaseError
-from django.db.models import Count, Min
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.views.decorators.http import require_GET, require_POST
@@ -22,7 +21,7 @@ from core.utils.rate_limit import rate_limit_redirect
 from core.utils.validation import safe_positive_int, safe_redirect_url, sanitize_error_message
 
 from ..forms import EquipForm
-from ..models import GearSlot, GearTemplate, Guest
+from ..models import GearSlot, Guest
 from ..services import equipment as equipment_service
 from ..templatetags.guest_extras import gear_summary, rarity_class, rarity_label
 from .common import unexpected_action_error_response
@@ -52,6 +51,19 @@ def _safe_cache_delete_many(keys: list[str]) -> None:
         logger.warning("Gear options cache.delete_many failed: keys_count=%s error=%s", len(keys), exc, exc_info=True)
 
 
+def _best_effort_clear_gear_options_cache(manor_id: int, *, slots: set[str] | None = None) -> None:
+    try:
+        _clear_gear_options_cache(manor_id, slots=slots)
+    except Exception as exc:
+        logger.warning(
+            "Gear options cache invalidation skipped: manor_id=%s slots=%s error=%s",
+            manor_id,
+            sorted(slots) if slots else None,
+            exc,
+            exc_info=True,
+        )
+
+
 @login_required
 @require_POST
 @rate_limit_redirect("equip", limit=15, window_seconds=60)
@@ -68,17 +80,20 @@ def equip_view(request):
 
     try:
         slot = request.POST.get("slot") or ""
-        equipment_service.ensure_inventory_gears(manor, slot=slot or None)
         form = EquipForm(request.POST, manor=manor)
 
         if not form.is_valid():
             raise ValueError("请选择门客与可用装备")
 
-        gear = form.cleaned_data["gear"]
         guest = form.cleaned_data["guest"]
+        gear = equipment_service.resolve_equippable_gear(
+            manor,
+            form.cleaned_data["gear"],
+            slot=slot or None,
+        )
 
         equipment_service.equip_guest(gear, guest)
-        _clear_gear_options_cache(manor.id, slots={gear.template.slot})
+        _best_effort_clear_gear_options_cache(manor.id, slots={gear.template.slot})
     except DatabaseError as exc:
         logger.exception(
             "Unexpected equip view database error: manor_id=%s user_id=%s slot=%s",
@@ -175,7 +190,7 @@ def unequip_view(request):
             removed += 1
         if removed:
             messages.success(request, f"{guest.display_name} 卸下 {removed} 件装备")
-            _clear_gear_options_cache(manor.id, slots=changed_slots)
+            _best_effort_clear_gear_options_cache(manor.id, slots=changed_slots)
         else:
             messages.info(request, "没有可卸下的装备")
     except (GameError, ValueError) as exc:
@@ -218,42 +233,19 @@ def gear_options_view(request):
     if cached is not None:
         return JsonResponse(cached)
 
-    equipment_service.ensure_inventory_gears(manor, slot=slot)
-    rows = (
-        manor.gears.filter(guest__isnull=True, template__slot=slot)
-        .values("template_id", "template__name", "template__rarity")
-        .annotate(count=Count("id"), gear_id=Min("id"))
-        .order_by("template__name")
-    )
-    template_ids = [row["template_id"] for row in rows]
-    templates = {
-        tpl.id: tpl
-        for tpl in GearTemplate.objects.filter(id__in=template_ids).only(
-            "id",
-            "name",
-            "rarity",
-            "set_key",
-            "set_description",
-            "set_bonus",
-            "attack_bonus",
-            "defense_bonus",
-            "extra_stats",
-        )
-    }
     options = []
-    for row in rows:
-        template = templates.get(row["template_id"])
-        if not template:
-            continue
-        rarity = row["template__rarity"]
+    for entry in equipment_service.list_available_equippable_gear_options(manor, slot=slot):
+        template = entry["template"]
+        rarity = template.rarity
         options.append(
             {
-                "id": row["gear_id"],
-                "name": row["template__name"],
+                "id": entry["id"],
+                "template_key": entry["template_key"],
+                "name": template.name,
                 "rarity": rarity,
                 "rarity_label": rarity_label(rarity),
                 "rarity_class": rarity_class(rarity),
-                "count": row["count"],
+                "count": entry["count"],
                 "title": gear_summary(template),
             }
         )
@@ -266,11 +258,11 @@ def gear_options_view(request):
     return JsonResponse(payload)
 
 
-def _gear_options_cache_key(manor_id: int, slot: str) -> str:
-    return f"gear_options:{manor_id}:{slot}"
-
-
 def _clear_gear_options_cache(manor_id: int, slots: set[str] | None = None) -> None:
     slot_values = slots or {choice.value for choice in GearSlot}
     keys = [_gear_options_cache_key(manor_id, value) for value in slot_values]
     _safe_cache_delete_many(keys)
+
+
+def _gear_options_cache_key(manor_id: int, slot: str) -> str:
+    return f"gear_options:{manor_id}:{slot}"

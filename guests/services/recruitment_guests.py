@@ -13,6 +13,7 @@ from ..utils.recruitment_variance import apply_recruitment_variance
 from . import recruitment_batch as _recruitment_batch
 from . import recruitment_finalize_helpers as _recruitment_finalize_helpers
 from .recruitment_shared import invalidate_recruitment_hall_cache
+from .training import ensure_auto_training
 
 if TYPE_CHECKING:
     from gameplay.models import Manor
@@ -29,6 +30,11 @@ _save_guest_objects = _recruitment_finalize_helpers.save_guest_objects
 _split_candidates_by_capacity = _recruitment_finalize_helpers.split_candidates_by_capacity
 _validate_retainer_candidate_identity = _recruitment_finalize_helpers.validate_retainer_candidate_identity
 _preload_templates = _recruitment_batch.preload_templates
+
+
+def _ensure_training_started_for_guests(guests: list[Guest]) -> None:
+    for guest in guests:
+        ensure_auto_training(guest)
 
 
 def grant_template_skills(guest: Guest) -> None:
@@ -171,6 +177,7 @@ def finalize_candidate(candidate: RecruitmentCandidate) -> Guest:
         candidate=locked_candidate,
         guest=guest,
     )
+    _ensure_training_started_for_guests([guest])
     locked_candidate.delete()
     invalidate_recruitment_hall_cache(getattr(manor, "id", None))
     return guest
@@ -237,6 +244,7 @@ def bulk_finalize_candidates(
     if all_skills_to_create:
         GuestSkill.objects.bulk_create(all_skills_to_create)
 
+    _ensure_training_started_for_guests(created_guests)
     _delete_processed_candidates(
         recruitment_candidate_model=RecruitmentCandidate,
         candidate_ids_to_delete=candidate_ids_to_delete,

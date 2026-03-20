@@ -425,6 +425,8 @@ def test_bulk_finalize_candidates_respects_capacity_and_grants_template_skills(d
         "bulk_finalize_skill_a",
         "bulk_finalize_skill_b",
     }
+    assert created_guest.training_complete_at is not None
+    assert created_guest.training_target_level == 2
     assert RecruitmentCandidate.objects.filter(id=candidate_1.id).exists() is False
     assert RecruitmentCandidate.objects.filter(id=candidate_2.id).exists() is True
 

@@ -32,10 +32,11 @@ def _create_guest(manor, *, prefix: str) -> Guest:
 
 
 @pytest.mark.django_db
-def test_roster_view_refreshes_guest_training_state(game_data, django_user_model):
+def test_roster_view_does_not_start_training_from_get(game_data, django_user_model):
     user = django_user_model.objects.create_user(username="roster_auto_train", password="pass123")
     manor = ensure_manor(user)
     guest = _create_guest(manor, prefix="roster_auto_train")
+    assert guest.training_complete_at is None
 
     client = Client()
     client.force_login(user)
@@ -44,17 +45,18 @@ def test_roster_view_refreshes_guest_training_state(game_data, django_user_model
 
     assert response.status_code == 200
     guest.refresh_from_db()
-    assert guest.training_complete_at is not None
-    assert guest.training_target_level == 2
+    assert guest.training_complete_at is None
+    assert guest.training_target_level == 0
 
 
 @pytest.mark.django_db
-def test_guest_detail_view_finalizes_overdue_training(game_data, django_user_model):
+def test_guest_detail_view_does_not_finalize_overdue_training_on_get(game_data, django_user_model):
     user = django_user_model.objects.create_user(username="detail_auto_train", password="pass123")
     manor = ensure_manor(user)
     guest = _create_guest(manor, prefix="detail_auto_train")
     guest.training_target_level = 2
-    guest.training_complete_at = timezone.now() - timedelta(seconds=1)
+    overdue_at = timezone.now() - timedelta(seconds=1)
+    guest.training_complete_at = overdue_at
     guest.save(update_fields=["training_target_level", "training_complete_at"])
 
     client = Client()
@@ -64,9 +66,9 @@ def test_guest_detail_view_finalizes_overdue_training(game_data, django_user_mod
 
     assert response.status_code == 200
     guest.refresh_from_db()
-    assert guest.level == 2
-    assert guest.training_target_level >= 2
-    assert guest.training_complete_at is not None
+    assert guest.level == 1
+    assert guest.training_target_level == 2
+    assert guest.training_complete_at == overdue_at
 
 
 @pytest.mark.django_db
@@ -100,9 +102,10 @@ def test_guest_detail_view_uses_explicit_read_helper(game_data, django_user_mode
 
     calls = {"helper": 0}
 
-    def _fake_helper(request, guest_pk, *, load_guest_detail_fn):
+    def _fake_helper(request, guest_pk, *, logger, source, load_guest_detail_fn):
         calls["helper"] += 1
         assert guest_pk == guest.pk
+        assert source == "guest_detail_view"
         return manor, guest
 
     monkeypatch.setattr("guests.views.roster.get_prepared_guest_detail_for_read", _fake_helper)

@@ -232,7 +232,7 @@ def test_equip_view_cache_invalidation_failure_does_not_hide_success(django_user
 
     monkeypatch.setattr("guests.services.equipment.equip_guest", lambda *_a, **_k: None)
     monkeypatch.setattr(
-        "guests.views.equipment.cache.delete_many",
+        "guests.views.equipment._clear_gear_options_cache",
         lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down")),
     )
 
@@ -287,7 +287,7 @@ def test_unequip_view_cache_invalidation_failure_does_not_hide_success(django_us
 
     monkeypatch.setattr("guests.services.equipment.unequip_guest_item", lambda *_a, **_k: None)
     monkeypatch.setattr(
-        "guests.views.equipment.cache.delete_many",
+        "guests.views.equipment._clear_gear_options_cache",
         lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down")),
     )
 
