@@ -6,6 +6,8 @@ from typing import Any, Callable
 from django.db import transaction
 from django.utils import timezone
 
+from core.exceptions import ScoutStartError
+
 from ...models import PlayerTroop, ScoutCooldown, ScoutRecord
 
 
@@ -40,14 +42,14 @@ def start_scout_command(
         check_defeat_protection=False,
     )
     if not can_attack:
-        raise ValueError(reason)
+        raise ScoutStartError(reason)
 
     in_cooldown, remaining = check_scout_cooldown_fn(attacker, defender)
     if in_cooldown:
-        raise ValueError(format_scout_cooldown_message(remaining))
+        raise ScoutStartError(format_scout_cooldown_message(remaining))
 
     if get_scout_count_fn(attacker) < 1:
-        raise ValueError("探子不足，无法发起侦察")
+        raise ScoutStartError("探子不足，无法发起侦察")
 
     with transaction.atomic():
         attacker_locked, defender_locked = lock_manor_pair_fn(attacker.pk, defender.pk)
@@ -61,7 +63,7 @@ def start_scout_command(
             check_defeat_protection=False,
         )
         if not can_attack_locked:
-            raise ValueError(reason_locked)
+            raise ScoutStartError(reason_locked)
 
         cooldown_locked = (
             scout_cooldown_model.objects.select_for_update()
@@ -70,7 +72,7 @@ def start_scout_command(
         )
         if cooldown_locked:
             remaining_locked = int((cooldown_locked.cooldown_until - current_time).total_seconds())
-            raise ValueError(format_scout_cooldown_message(remaining_locked))
+            raise ScoutStartError(format_scout_cooldown_message(remaining_locked))
 
         success_rate = calculate_success_rate_fn(attacker_locked, defender_locked)
         travel_time = calculate_travel_time_fn(attacker_locked, defender_locked)
@@ -80,7 +82,7 @@ def start_scout_command(
             troop_template__key=scout_troop_key,
         )
         if troop.count < 1:
-            raise ValueError("探子不足，无法发起侦察")
+            raise ScoutStartError("探子不足，无法发起侦察")
 
         troop.count -= 1
         troop.save(update_fields=["count"])

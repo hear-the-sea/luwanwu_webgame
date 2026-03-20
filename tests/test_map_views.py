@@ -8,6 +8,7 @@ import pytest
 from django.db import DatabaseError
 from django.urls import reverse
 
+from core.exceptions import RaidStartError, ScoutStartError
 from gameplay.models import RaidRun
 from gameplay.services.manor.core import ensure_manor
 
@@ -403,7 +404,7 @@ class TestMapAPI:
 
         monkeypatch.setattr(
             "gameplay.views.map.start_raid",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("raid blocked")),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RaidStartError("raid blocked")),
         )
 
         response = client.post(
@@ -415,6 +416,26 @@ class TestMapAPI:
         payload = response.json()
         assert payload["success"] is False
         assert "raid blocked" in payload["error"]
+
+    def test_start_raid_api_legacy_value_error_bubbles_up(self, manor_with_user, monkeypatch, django_user_model):
+        attacker, client = manor_with_user
+        defender_user = django_user_model.objects.create_user(
+            username=f"map_legacy_raid_def_{attacker.id}",
+            password="pass123",
+        )
+        defender = ensure_manor(defender_user)
+
+        monkeypatch.setattr(
+            "gameplay.views.map.start_raid",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("legacy raid start")),
+        )
+
+        with pytest.raises(ValueError, match="legacy raid start"):
+            client.post(
+                reverse("gameplay:start_raid_api"),
+                data=json.dumps({"target_id": defender.id, "guest_ids": [1], "troop_loadout": {}}),
+                content_type="application/json",
+            )
 
     def test_retreat_raid_api_rejects_when_action_lock_conflicts(self, manor_with_user, monkeypatch, django_user_model):
         attacker, client = manor_with_user
@@ -462,6 +483,49 @@ class TestMapAPI:
         payload = response.json()
         assert payload["success"] is False
         assert "操作失败，请稍后重试" in payload["error"]
+
+    def test_start_scout_api_known_error_returns_400(self, manor_with_user, monkeypatch, django_user_model):
+        attacker, client = manor_with_user
+        defender_user = django_user_model.objects.create_user(
+            username=f"map_known_scout_def_{attacker.id}",
+            password="pass123",
+        )
+        defender = ensure_manor(defender_user)
+
+        monkeypatch.setattr(
+            "gameplay.views.map.start_scout",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ScoutStartError("scout blocked")),
+        )
+
+        response = client.post(
+            reverse("gameplay:start_scout_api"),
+            data=json.dumps({"target_id": defender.id}),
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        payload = response.json()
+        assert payload["success"] is False
+        assert "scout blocked" in payload["error"]
+
+    def test_start_scout_api_legacy_value_error_bubbles_up(self, manor_with_user, monkeypatch, django_user_model):
+        attacker, client = manor_with_user
+        defender_user = django_user_model.objects.create_user(
+            username=f"map_legacy_scout_def_{attacker.id}",
+            password="pass123",
+        )
+        defender = ensure_manor(defender_user)
+
+        monkeypatch.setattr(
+            "gameplay.views.map.start_scout",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("legacy scout start")),
+        )
+
+        with pytest.raises(ValueError, match="legacy scout start"):
+            client.post(
+                reverse("gameplay:start_scout_api"),
+                data=json.dumps({"target_id": defender.id}),
+                content_type="application/json",
+            )
 
     def test_start_scout_api_programming_error_bubbles_up(self, manor_with_user, monkeypatch, django_user_model):
         attacker, client = manor_with_user

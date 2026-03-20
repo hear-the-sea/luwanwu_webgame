@@ -65,6 +65,28 @@ class MissionCannotRetreatError(MissionError):
         super().__init__(message, reason=reason)
 
 
+# ============ 侦察相关异常 ============
+
+
+class ScoutRetreatStateError(GameError):
+    """侦察撤退状态错误"""
+
+    error_code = "SCOUT_RETREAT_STATE_ERROR"
+    default_message = "当前状态无法撤退"
+
+
+class ScoutStartError(GameError):
+    """侦察发起错误"""
+
+    error_code = "SCOUT_START_ERROR"
+
+
+class RaidStartError(GameError):
+    """踢馆发起错误"""
+
+    error_code = "RAID_START_ERROR"
+
+
 # ============ 竞技场相关异常 ============
 
 

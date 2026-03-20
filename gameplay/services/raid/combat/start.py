@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from core.exceptions import RaidStartError
+
 
 def start_raid(
     attacker: Any,
@@ -34,11 +36,11 @@ def start_raid(
 
         can_attack, reason = recheck_can_attack_target(attacker_locked, defender_locked, now=now)
         if not can_attack:
-            raise ValueError(reason)
+            raise RaidStartError(reason)
 
         active_count = get_active_raid_count(attacker_locked)
         if active_count >= raid_max_concurrent:
-            raise ValueError(f"同时最多进行 {raid_max_concurrent} 次出征")
+            raise RaidStartError(f"同时最多进行 {raid_max_concurrent} 次出征")
 
         guests = load_and_validate_attacker_guests(attacker_locked, guest_ids)
         loadout = normalize_and_validate_raid_loadout(guests, troop_loadout)

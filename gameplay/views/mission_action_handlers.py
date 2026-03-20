@@ -207,7 +207,12 @@ def handle_retreat_scout(
         return _home_redirect()
 
     def _on_known_error(exc: Exception) -> HttpResponse:
-        return handle_known_mission_exception(request, exc, redirect_func=_home_redirect)
+        return handle_known_mission_exception(
+            request,
+            exc,
+            redirect_func=_home_redirect,
+            allow_legacy_value_error=False,
+        )
 
     def _on_database_error(exc: DatabaseError) -> HttpResponse:
         mission_helpers.handle_unexpected_mission_error(
@@ -232,7 +237,7 @@ def handle_retreat_scout(
         on_lock_conflict=_on_lock_conflict,
         operation=_perform_retreat,
         on_success=lambda _result: _home_redirect(),
-        known_exceptions=(GameError, ValueError),
+        known_exceptions=(GameError,),
         on_known_error=_on_known_error,
         on_database_error=_on_database_error,
     )

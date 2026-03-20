@@ -154,7 +154,7 @@ def start_scout(attacker: Manor, defender: Manor) -> ScoutRecord:
         侦察记录
 
     Raises:
-        ValueError: 无法发起侦察时
+        ScoutStartError: 无法发起侦察时
     """
     return scout_start_command.start_scout_command(
         attacker,
@@ -316,7 +316,7 @@ def request_scout_retreat(record: ScoutRecord) -> None:
         record: 侦察记录
 
     Raises:
-        ValueError: 无法撤退时
+        ScoutRetreatStateError: 无法撤退时
     """
     scout_return_command.request_scout_retreat_command(
         record,

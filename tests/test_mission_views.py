@@ -8,7 +8,7 @@ from django.db import DatabaseError
 from django.urls import reverse
 from django.utils import timezone
 
-from core.exceptions import MissionDailyLimitError
+from core.exceptions import MissionDailyLimitError, ScoutRetreatStateError
 from gameplay.models import MissionRun, MissionTemplate, ScoutRecord
 from gameplay.services.manor.core import ensure_manor
 
@@ -404,6 +404,53 @@ class TestMissionViews:
         )
 
         with pytest.raises(RuntimeError, match="boom"):
+            client.post(reverse("gameplay:scout_retreat", kwargs={"pk": record.pk}))
+
+    def test_retreat_scout_known_error_shows_message(self, manor_with_user, monkeypatch, django_user_model):
+        attacker, client = manor_with_user
+        defender_user = django_user_model.objects.create_user(
+            username=f"scout_def_known_{attacker.id}",
+            password="pass123",
+        )
+        defender = ensure_manor(defender_user)
+        record = ScoutRecord.objects.create(
+            attacker=attacker,
+            defender=defender,
+            status=ScoutRecord.Status.SCOUTING,
+            complete_at=timezone.now(),
+        )
+
+        monkeypatch.setattr(
+            "gameplay.services.raid.request_scout_retreat",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ScoutRetreatStateError()),
+        )
+
+        response = client.post(reverse("gameplay:scout_retreat", kwargs={"pk": record.pk}))
+        assert response.status_code == 302
+        assert response.url == reverse("home")
+        messages = [str(m) for m in get_messages(response.wsgi_request)]
+        assert any("当前状态无法撤退" in m for m in messages)
+
+    def test_retreat_scout_legacy_value_error_bubbles_up(self, manor_with_user, monkeypatch, django_user_model):
+        attacker, client = manor_with_user
+        defender_user = django_user_model.objects.create_user(
+            username=f"scout_def_legacy_{attacker.id}",
+            password="pass123",
+        )
+        defender = ensure_manor(defender_user)
+        record = ScoutRecord.objects.create(
+            attacker=attacker,
+            defender=defender,
+            status=ScoutRecord.Status.SCOUTING,
+            complete_at=timezone.now(),
+        )
+
+        monkeypatch.setattr(
+            "gameplay.services.raid.request_scout_retreat",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("legacy scout retreat")),
+        )
+
+        with pytest.raises(ValueError, match="legacy scout retreat"):
             client.post(reverse("gameplay:scout_retreat", kwargs={"pk": record.pk}))
 
     def test_use_mission_card_database_error_does_not_500(self, manor_with_user, monkeypatch):

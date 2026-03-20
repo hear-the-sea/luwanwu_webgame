@@ -71,17 +71,6 @@ def _map_action_conflict_response() -> JsonResponse:
     return json_error("请求处理中，请稍候重试", status=409)
 
 
-def _raise_or_handle_known_map_exception(exc: Exception) -> JsonResponse:
-    return cast(
-        JsonResponse,
-        json_error_response_for_exception(
-            exc,
-            logger_instance=logger,
-            known_exceptions=LEGACY_VALUE_ERROR_VIEW_EXCEPTIONS,
-        ),
-    )
-
-
 def _map_action_error_response(exc: Exception, *, log_message: str, log_args: tuple[object, ...]) -> JsonResponse:
     return cast(
         JsonResponse,
@@ -104,6 +93,7 @@ def _run_locked_map_json_action(
     success_response: Callable[[MapActionResult], JsonResponse],
     log_message: str,
     log_args: tuple[object, ...],
+    known_exceptions: tuple[type[Exception], ...] = LEGACY_VALUE_ERROR_VIEW_EXCEPTIONS,
 ) -> JsonResponse:
     return execute_locked_action(
         action_name=action_name,
@@ -114,8 +104,15 @@ def _run_locked_map_json_action(
         operation=operation,
         on_lock_conflict=_map_action_conflict_response,
         on_success=success_response,
-        known_exceptions=(GameError, ValueError),
-        on_known_error=_raise_or_handle_known_map_exception,
+        known_exceptions=known_exceptions,
+        on_known_error=lambda exc: cast(
+            JsonResponse,
+            json_error_response_for_exception(
+                exc,
+                logger_instance=logger,
+                known_exceptions=known_exceptions,
+            ),
+        ),
         on_database_error=lambda exc: _map_action_error_response(exc, log_message=log_message, log_args=log_args),
         on_unexpected_error=lambda exc: _map_action_error_response(exc, log_message=log_message, log_args=log_args),
         unexpected_exceptions=DEFAULT_VIEW_INFRASTRUCTURE_EXCEPTIONS,
@@ -342,6 +339,7 @@ def start_scout_api(request: HttpRequest) -> JsonResponse:
             getattr(request.user, "id", None),
             getattr(target_manor, "id", None),
         ),
+        known_exceptions=(GameError,),
     )
 
 
@@ -383,6 +381,7 @@ def start_raid_api(request: HttpRequest) -> JsonResponse:
             getattr(request.user, "id", None),
             getattr(target_manor, "id", None),
         ),
+        known_exceptions=(GameError,),
     )
 
 

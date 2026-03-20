@@ -6,6 +6,8 @@ from typing import Any, Callable
 from django.db import transaction
 from django.utils import timezone
 
+from core.exceptions import ScoutRetreatStateError
+
 from ...models import ScoutRecord
 
 
@@ -61,7 +63,7 @@ def request_scout_retreat_command(
     schedule_return_completion_fn: Callable[[Any, int], None] | None = None,
 ) -> tuple[Any, int]:
     if record.status != scout_record_model.Status.SCOUTING:
-        raise ValueError("当前状态无法撤退")
+        raise ScoutRetreatStateError()
 
     current_time = now_fn()
     elapsed = max(0, int((current_time - record.started_at).total_seconds()))
@@ -73,7 +75,7 @@ def request_scout_retreat_command(
         )
 
         if not locked_record or locked_record.status != scout_record_model.Status.SCOUTING:
-            raise ValueError("当前状态无法撤退")
+            raise ScoutRetreatStateError()
 
         locked_record.status = scout_record_model.Status.RETURNING
         locked_record.is_success = None

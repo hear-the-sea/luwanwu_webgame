@@ -8,6 +8,7 @@ import pytest
 from django.utils import timezone
 
 from battle.models import TroopTemplate
+from core.exceptions import ScoutStartError
 from gameplay.constants import PVPConstants
 from gameplay.models import PlayerTroop, ScoutRecord
 from gameplay.services.manor.core import ensure_manor
@@ -175,7 +176,7 @@ def test_start_scout_rechecks_attack_constraints_inside_transaction(monkeypatch)
     monkeypatch.setattr(scout_service, "get_scout_count", lambda *_args, **_kwargs: 1)
     monkeypatch.setattr(scout_service, "_lock_manor_pair", lambda *_args, **_kwargs: (attacker, defender))
 
-    with pytest.raises(ValueError, match="免战牌保护期"):
+    with pytest.raises(ScoutStartError, match="免战牌保护期"):
         scout_service.start_scout(attacker, defender)
 
     assert calls["can_attack"] == 2
@@ -193,7 +194,7 @@ def test_start_scout_precheck_uses_uncached_attack_check(monkeypatch):
 
     monkeypatch.setattr(scout_service, "can_attack_target", _fake_can_attack)
 
-    with pytest.raises(ValueError, match="blocked"):
+    with pytest.raises(ScoutStartError, match="blocked"):
         scout_service.start_scout(attacker, defender)
 
     assert seen["use_cached_recent_attacks"] is False

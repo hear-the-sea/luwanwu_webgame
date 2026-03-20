@@ -10,6 +10,7 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
 
+from core.exceptions import RaidStartError
 from gameplay.services.raid import utils as raid_utils
 from gameplay.services.raid.combat import battle as combat_battle
 from gameplay.services.raid.combat import runs as combat_runs
@@ -302,7 +303,7 @@ def test_start_raid_rechecks_attack_constraints_inside_transaction(monkeypatch):
     monkeypatch.setattr(combat_runs, "get_active_raid_count", _unexpected_active_count)
     monkeypatch.setattr(combat_runs, "_load_and_validate_attacker_guests", _unexpected_load_guests)
 
-    with pytest.raises(ValueError, match="免战牌保护期"):
+    with pytest.raises(RaidStartError, match="免战牌保护期"):
         combat_runs.start_raid(attacker, defender, [101], {"inf": 1})
 
     assert called["load_guests"] == 0

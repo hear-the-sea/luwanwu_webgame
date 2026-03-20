@@ -67,7 +67,7 @@
 
 - `阶段 3` 的异常语义收口已经开始：`trade`、`arena`、`work`、`jail`、`troop recruitment` 和部分资源链路已经退出一部分 legacy `ValueError` 兼容，但 `mission`、`guest recruitment` 等入口仍明显混用 `GameError + ValueError`。
 - `mission` 已开始收口主链路异常语义：发起任务与撤退请求开始改走 `MissionError` 子类，但 view 层和部分兼容测试仍保留 `ValueError` 兜底。
-- `mission` 的 `accept/retreat/use_card` 视图入口已不再把裸 `ValueError` 当作已知业务错误吞掉；剩余 legacy `ValueError` 兼容主要还在 scout 等共享入口。
+- `mission` 的 `accept/retreat/use_card` 视图入口以及 `scout start / retreat`、`raid start` 共享入口已不再把裸 `ValueError` 当作已知业务错误吞掉；剩余 legacy `ValueError` 兼容主要还在 `raid retreat`、更底层 battle/locking 输入校验等共享入口。
 - `guest recruitment` 已开始收口主链路异常语义：招募发起、放大镜使用、候选保留已改走显式 `RecruitmentError` 子类，`guests/views/recruit_action_runtime.py` 不再把裸 `ValueError` 当作已知业务错误。
 - `guest recruitment` 的属性点分配路径也已开始退出 legacy `ValueError`：`guests/services/recruitment_guests.allocate_attribute_points()` 与 `guests/views/training.allocate_points_view()` 已改走显式门客 / 加点异常，但训练、经验道具等其它培养入口仍未整体封板。
 - `guest training` / `experience item` 的一部分异常语义也已开始收口：`guests/services/training.use_experience_item_for_guest()` 与 `guests/views/training.use_experience_item_view()` 已改走显式门客 / 道具异常，`TrainView` 也不再把裸 `ValueError` 当作已知业务错误；但训练、药品等培养入口仍未整体封板。
