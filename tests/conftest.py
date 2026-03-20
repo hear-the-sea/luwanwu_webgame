@@ -199,6 +199,23 @@ def mission_templates(django_db_setup, django_db_blocker):
 
 
 @pytest.fixture(scope="function")
+def load_guest_data(django_db_setup, django_db_blocker):
+    """Ensure guest templates and recruitment pools exist for transactional tests."""
+    with django_db_blocker.unblock():
+        from guests.models import RecruitmentPool
+
+        if RecruitmentPool.objects.exists():
+            return
+
+        original_cwd = os.getcwd()
+        os.chdir(PROJECT_ROOT)
+        try:
+            call_command("load_guest_templates", verbosity=0, skip_images=True)
+        finally:
+            os.chdir(original_cwd)
+
+
+@pytest.fixture(scope="function")
 def manor_with_troops(django_user_model, django_db_blocker):
     """
     创建拥有基础护院的庄园和用户

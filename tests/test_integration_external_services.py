@@ -45,7 +45,7 @@ from trade.models import AuctionBid, AuctionRound, AuctionSlot, MarketListing
 from trade.services.auction_service import place_bid, settle_auction_round
 from trade.services.market_service import create_listing, purchase_listing
 
-pytestmark = [pytest.mark.integration]
+pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("load_guest_data")]
 
 
 def _prepare_attack_ready_manors(django_user_model, *, prefix: str):
@@ -160,7 +160,7 @@ def test_integration_auction_bid_and_settlement_flow(require_env_services, djang
         tradeable=False,
         price=5000,
     )
-    round_number = int(time.time() * 1000)
+    round_number = int(time.time())
     auction_round = AuctionRound.objects.create(
         round_number=round_number,
         status=AuctionRound.Status.ACTIVE,

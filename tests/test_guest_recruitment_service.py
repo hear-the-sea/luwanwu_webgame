@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 
 import guests.services.recruitment as recruitment_command_service
+import guests.services.recruitment_candidates as recruitment_candidate_service
 import guests.services.recruitment_guests as recruitment_guest_service
 import guests.services.recruitment_queries as recruitment_query_service
 import guests.services.recruitment_shared as recruitment_shared
@@ -145,6 +146,66 @@ def test_build_rarity_search_order_starts_with_target_and_covers_all_rarities():
         GuestRarity.PURPLE,
         GuestRarity.ORANGE,
     }
+
+
+@pytest.mark.django_db
+def test_persist_candidate_batch_reloads_created_rows_when_bulk_create_does_not_fill_pks(
+    django_user_model, monkeypatch
+):
+    user = django_user_model.objects.create_user(username="candidate_persist_reload", password="pass123")
+    manor = ensure_manor(user)
+    pool = RecruitmentPool.objects.create(
+        key="candidate_persist_reload_pool",
+        name="候选回填卡池",
+        cost={},
+        tier=RecruitmentPool.Tier.CUNMU,
+        draw_count=1,
+    )
+    template = GuestTemplate.objects.create(
+        key="candidate_persist_reload_tpl",
+        name="候选回填模板",
+        archetype="civil",
+        rarity=GuestRarity.GRAY,
+    )
+    original_bulk_create = RecruitmentCandidate.objects.bulk_create
+
+    def _bulk_create_without_pks(objs, **kwargs):
+        created = original_bulk_create(objs, **kwargs)
+        for obj in created:
+            obj.pk = None
+        return created
+
+    monkeypatch.setattr(RecruitmentCandidate.objects, "bulk_create", _bulk_create_without_pks)
+
+    created = recruitment_candidate_service.persist_candidate_batch(
+        recruitment_candidate_model=RecruitmentCandidate,
+        manor=manor,
+        candidates_to_create=[
+            RecruitmentCandidate(
+                manor=manor,
+                pool=pool,
+                template=template,
+                display_name="候选甲",
+                rarity=template.rarity,
+                archetype=template.archetype,
+                rarity_revealed=False,
+            ),
+            RecruitmentCandidate(
+                manor=manor,
+                pool=pool,
+                template=template,
+                display_name="候选乙",
+                rarity=template.rarity,
+                archetype=template.archetype,
+                rarity_revealed=False,
+            ),
+        ],
+        invalidate_cache=lambda *_args, **_kwargs: None,
+    )
+
+    assert len(created) == 2
+    assert all(candidate.pk for candidate in created)
+    assert [candidate.display_name for candidate in created] == ["候选甲", "候选乙"]
 
 
 def test_choose_template_by_rarity_cached_falls_back_to_next_available_rarity():

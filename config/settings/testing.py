@@ -28,6 +28,10 @@ def _env_flag(name: str, default: bool = False) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _using_env_services() -> bool:
+    return _env_flag("DJANGO_TEST_USE_ENV_SERVICES", default=False)
+
+
 def _clear_celery_env_vars() -> None:
     for key in CELERY_ENV_VARS_TO_CLEAR:
         os.environ.pop(key, None)
@@ -76,18 +80,19 @@ HEALTH_CHECK_CELERY_BEAT = False
 HEALTH_CHECK_CELERY_ROUNDTRIP = False
 SINGLE_SESSION_FAIL_OPEN = False
 
-try:
-    from config.celery import app as celery_app
+if not _using_env_services():
+    try:
+        from config.celery import app as celery_app
 
-    celery_app.conf.update(
-        CELERY_BROKER_URL=CELERY_BROKER_URL,
-        CELERY_RESULT_BACKEND=CELERY_RESULT_BACKEND,
-        CELERY_TASK_ALWAYS_EAGER=CELERY_TASK_ALWAYS_EAGER,
-        CELERY_TASK_EAGER_PROPAGATES=CELERY_TASK_EAGER_PROPAGATES,
-        broker_url=CELERY_BROKER_URL,
-        result_backend=CELERY_RESULT_BACKEND,
-        task_always_eager=CELERY_TASK_ALWAYS_EAGER,
-        task_eager_propagates=CELERY_TASK_EAGER_PROPAGATES,
-    )
-except Exception:
-    logger.warning("Failed to update Celery app for tests", exc_info=True)
+        celery_app.conf.update(
+            CELERY_BROKER_URL=CELERY_BROKER_URL,
+            CELERY_RESULT_BACKEND=CELERY_RESULT_BACKEND,
+            CELERY_TASK_ALWAYS_EAGER=CELERY_TASK_ALWAYS_EAGER,
+            CELERY_TASK_EAGER_PROPAGATES=CELERY_TASK_EAGER_PROPAGATES,
+            broker_url=CELERY_BROKER_URL,
+            result_backend=CELERY_RESULT_BACKEND,
+            task_always_eager=CELERY_TASK_ALWAYS_EAGER,
+            task_eager_propagates=CELERY_TASK_EAGER_PROPAGATES,
+        )
+    except Exception:
+        logger.warning("Failed to update Celery app for tests", exc_info=True)

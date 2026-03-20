@@ -13,8 +13,9 @@ from guests.models import Guest, GuestRecruitment, RecruitmentCandidate, Recruit
 from guests.services.recruitment import finalize_guest_recruitment, recruit_guest, start_guest_recruitment
 from guests.services.recruitment_guests import finalize_candidate
 
+pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("load_guest_data")]
 
-@pytest.mark.integration
+
 @pytest.mark.django_db(transaction=True)
 def test_start_guest_recruitment_concurrent_requests_allow_only_one_pending(game_data, django_user_model):
     if connection.vendor == "sqlite":
@@ -56,7 +57,6 @@ def test_start_guest_recruitment_concurrent_requests_allow_only_one_pending(game
     assert GuestRecruitment.objects.filter(manor=manor, status=GuestRecruitment.Status.PENDING).count() == 1
 
 
-@pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
 def test_finalize_guest_recruitment_concurrent_requests_only_one_completes(game_data, django_user_model):
     if connection.vendor == "sqlite":
@@ -100,7 +100,6 @@ def test_finalize_guest_recruitment_concurrent_requests_only_one_completes(game_
     assert recruitment.result_count > 0
 
 
-@pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
 def test_finalize_candidate_concurrent_requests_create_only_one_guest(game_data, django_user_model):
     if connection.vendor == "sqlite":

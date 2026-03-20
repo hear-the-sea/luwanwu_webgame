@@ -120,5 +120,13 @@ def persist_candidate_batch(
     invalidate_cache: Callable[[int | None], None],
 ) -> list[RecruitmentCandidate]:
     candidates = recruitment_candidate_model.objects.bulk_create(candidates_to_create)
+    if candidates and any(getattr(candidate, "pk", None) is None for candidate in candidates):
+        created_ids = list(
+            recruitment_candidate_model.objects.filter(manor=manor)
+            .order_by("-id")
+            .values_list("id", flat=True)[: len(candidates_to_create)]
+        )
+        created_ids.reverse()
+        candidates = list(recruitment_candidate_model.objects.filter(id__in=created_ids).order_by("id"))
     invalidate_cache(getattr(manor, "id", None))
     return candidates
