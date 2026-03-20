@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import pytest
 from django.contrib.messages import get_messages
@@ -40,6 +41,137 @@ def test_recruit_prisoner_view_rejects_when_action_lock_conflicts(monkeypatch, a
     messages = list(get_messages(response.wsgi_request))
     assert any(message.level_tag == "warning" and "请求处理中，请稍候重试" in message.message for message in messages)
     assert called["count"] == 0
+
+
+@pytest.mark.django_db
+def test_jail_page_uses_explicit_read_helper(monkeypatch, authenticated_client_with_manor, django_user_model):
+    client = authenticated_client_with_manor
+    manor = ensure_manor(django_user_model.objects.get(username="jail_view_user"))
+    calls = {"prepared": 0}
+
+    monkeypatch.setattr(
+        "gameplay.views.jail.get_prepared_manor_for_read",
+        lambda request, **kwargs: calls.__setitem__("prepared", calls["prepared"] + 1) or manor,
+    )
+    monkeypatch.setattr(
+        "gameplay.views.jail.get_jail_page_context",
+        lambda current_manor: (
+            {
+                "jail_capacity": 0,
+                "prisoners": [],
+                "capture_rate_percent": 0,
+                "recruit_loyalty_threshold": 0,
+                "recruit_cost_gold_bar": 0,
+            }
+            if current_manor is manor
+            else {}
+        ),
+    )
+
+    response = client.get(reverse("gameplay:jail"))
+
+    assert response.status_code == 200
+    assert calls["prepared"] == 1
+
+
+@pytest.mark.django_db
+def test_jail_page_uses_selector_context(monkeypatch, authenticated_client_with_manor, django_user_model):
+    client = authenticated_client_with_manor
+    manor = ensure_manor(django_user_model.objects.get(username="jail_view_user"))
+    calls = {"selector": 0}
+
+    monkeypatch.setattr("gameplay.views.jail.get_prepared_manor_for_read", lambda request, **kwargs: manor)
+
+    def _fake_selector(current_manor):
+        calls["selector"] += 1
+        assert current_manor is manor
+        return {
+            "jail_capacity": 3,
+            "prisoners": [
+                SimpleNamespace(
+                    id=1,
+                    display_name="prisoner-a",
+                    guest_template=SimpleNamespace(rarity="green"),
+                    loyalty=20,
+                    original_manor=SimpleNamespace(display_name="旧主"),
+                    captured_at=None,
+                )
+            ],
+            "capture_rate_percent": 25,
+            "recruit_loyalty_threshold": 30,
+            "recruit_cost_gold_bar": 2,
+        }
+
+    monkeypatch.setattr("gameplay.views.jail.get_jail_page_context", _fake_selector)
+
+    response = client.get(reverse("gameplay:jail"))
+
+    assert response.status_code == 200
+    assert calls["selector"] == 1
+    assert response.context["prisoners"][0].display_name == "prisoner-a"
+
+
+@pytest.mark.django_db
+def test_oath_grove_page_uses_explicit_read_helper(monkeypatch, authenticated_client_with_manor, django_user_model):
+    client = authenticated_client_with_manor
+    manor = ensure_manor(django_user_model.objects.get(username="jail_view_user"))
+    calls = {"prepared": 0}
+
+    monkeypatch.setattr(
+        "gameplay.views.jail.get_prepared_manor_for_read",
+        lambda request, **kwargs: calls.__setitem__("prepared", calls["prepared"] + 1) or manor,
+    )
+    monkeypatch.setattr(
+        "gameplay.views.jail.get_oath_grove_page_context",
+        lambda current_manor: (
+            {
+                "oath_capacity": 0,
+                "bonds": [],
+                "available_guests": [],
+            }
+            if current_manor is manor
+            else {}
+        ),
+    )
+
+    response = client.get(reverse("gameplay:oath_grove"))
+
+    assert response.status_code == 200
+    assert calls["prepared"] == 1
+
+
+@pytest.mark.django_db
+def test_oath_grove_page_uses_selector_context(monkeypatch, authenticated_client_with_manor, django_user_model):
+    client = authenticated_client_with_manor
+    manor = ensure_manor(django_user_model.objects.get(username="jail_view_user"))
+    calls = {"selector": 0}
+
+    monkeypatch.setattr("gameplay.views.jail.get_prepared_manor_for_read", lambda request, **kwargs: manor)
+
+    def _fake_selector(current_manor):
+        calls["selector"] += 1
+        assert current_manor is manor
+        return {
+            "oath_capacity": 5,
+            "bonds": [
+                SimpleNamespace(
+                    guest_id=2,
+                    guest=SimpleNamespace(display_name="bond-a", template=SimpleNamespace(rarity="blue"), level=9),
+                    created_at=None,
+                )
+            ],
+            "available_guests": [
+                SimpleNamespace(id=3, display_name="guest-a", template=SimpleNamespace(rarity="green"), level=5)
+            ],
+        }
+
+    monkeypatch.setattr("gameplay.views.jail.get_oath_grove_page_context", _fake_selector)
+
+    response = client.get(reverse("gameplay:oath_grove"))
+
+    assert response.status_code == 200
+    assert calls["selector"] == 1
+    assert response.context["bonds"][0].guest.display_name == "bond-a"
 
 
 @pytest.mark.django_db

@@ -491,3 +491,54 @@ transaction.atomic():        — 第二阶段：汇总轮次结果
 
 - 页面读取继续沿用庄园资源投影的只读降级语义，不新增写路径补偿。
 - 打工完成、报酬领取和召回仍由显式 service / task 入口负责，GET 页面不回挂 finalize / refresh。
+
+---
+
+## 12. 生产页面读路径（gameplay/views/production.py）
+
+**代码**：`gameplay/views/production.py`、`gameplay/selectors/production.py`
+
+### 数据来源与边界
+
+- `StableView / RanchView / SmithyView / ForgeView` 只负责加载当前庄园并调用显式读 selector，不再继续依赖 `production_page_context` 在 view helper 中混排页面装配。
+- 生产页面的读模型由 `get_stable_page_context()`、`get_ranch_page_context()`、`get_smithy_page_context()`、`get_forge_page_context()` 统一返回，负责各自页面的展示数据组织。
+- 生产、分解、图纸合成等动作仍保持在 POST 写入口中，GET 页面不承担生产状态推进或补偿刷新职责。
+
+### 失败/补偿行为
+
+- 页面读取继续沿用庄园资源投影的只读降级语义，不新增写路径补偿。
+- 生产完成、分解收口和合成结果落库仍由显式 service / task 入口负责，GET 页面不回挂 finalize / refresh。
+
+---
+
+## 13. 监牢 / 结义林页面读路径（gameplay/views/jail.py）
+
+**代码**：`gameplay/views/jail.py`、`gameplay/selectors/jail.py`
+
+### 数据来源与边界
+
+- `JailView` 与 `OathGroveView` 只负责加载当前庄园并调用显式读 selector，不再在 view 内部拼装囚徒列表、结义容量和候选门客列表。
+- 页面读模型由 `get_jail_page_context()` 与 `get_oath_grove_page_context()` 统一返回，负责监牢和结义林展示数据组织。
+- 招募囚徒、画饼、释放、结义添加/移除仍保持在 POST / API 写入口中，GET 页面不承担状态推进或补偿刷新职责。
+
+### 失败/补偿行为
+
+- 页面读取继续沿用庄园资源投影的只读降级语义，不新增写路径补偿。
+- 囚徒状态变化、结义关系变更和相关资源扣减仍由显式 service / locked action 入口负责，GET 页面不回挂 finalize / refresh。
+
+---
+
+## 14. 核心页面读路径（gameplay/views/core.py）
+
+**代码**：`gameplay/views/core.py`、`gameplay/selectors/core.py`
+
+### 数据来源与边界
+
+- `DashboardView / SettingsView / RankingView` 只负责加载当前庄园并调用显式读 selector，不再在 view 内部拼装建筑展示、改名卡统计和排行榜上下文。
+- 核心页面的读模型由 `get_dashboard_context()`、`get_settings_page_context()`、`get_ranking_page_context()` 统一返回，负责各自页面的展示数据组织。
+- 庄园更名等状态变更仍保持在 POST 写入口中，GET 页面不承担状态推进或补偿刷新职责。
+
+### 失败/补偿行为
+
+- 页面读取继续沿用现有只读降级语义，不新增写路径补偿。
+- 更名、声望变化和首页活动状态仍由显式 service / selector 入口负责，GET 页面不回挂 finalize / refresh。

@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from django.core.paginator import Paginator
-from django.http import HttpRequest
 
 from gameplay.constants import UIConstants
-from gameplay.models import Manor
 from gameplay.services.buildings import forge as forge_service
 from gameplay.services.buildings.forge_helpers import DECOMPOSE_CATEGORIES, DECOMPOSE_WEAPON_CATEGORIES
 from gameplay.services.buildings.ranch import (
@@ -31,7 +28,6 @@ from gameplay.services.buildings.stable import (
     get_stable_speed_bonus,
     has_active_production,
 )
-from gameplay.services.resources import project_resource_production_for_read
 from gameplay.services.technology import get_player_technology_level
 from gameplay.views.production_helpers import (
     annotate_blueprint_synthesis_options,
@@ -40,25 +36,11 @@ from gameplay.views.production_helpers import (
     normalize_forge_category,
     resolve_decompose_category,
 )
-from gameplay.views.read_helpers import get_prepared_manor_for_read
-
-logger = logging.getLogger(__name__)
 
 
-def _prepare_production_manor(request: HttpRequest, *, source: str) -> Manor:
-    return get_prepared_manor_for_read(
-        request,
-        project_fn=project_resource_production_for_read,
-        logger=logger,
-        source=source,
-    )
-
-
-def build_stable_page_context(request: HttpRequest) -> dict[str, Any]:
-    manor = _prepare_production_manor(request, source="stable_view")
+def get_stable_page_context(manor: Any) -> dict[str, Any]:
     speed_bonus = get_stable_speed_bonus(manor)
     return {
-        "manor": manor,
         "horse_options": get_horse_options(manor),
         "active_productions": get_active_productions(manor),
         "speed_bonus": speed_bonus,
@@ -69,11 +51,9 @@ def build_stable_page_context(request: HttpRequest) -> dict[str, Any]:
     }
 
 
-def build_ranch_page_context(request: HttpRequest) -> dict[str, Any]:
-    manor = _prepare_production_manor(request, source="ranch_view")
+def get_ranch_page_context(manor: Any) -> dict[str, Any]:
     speed_bonus = get_ranch_speed_bonus(manor)
     return {
-        "manor": manor,
         "livestock_options": get_livestock_options(manor),
         "active_productions": get_active_livestock_productions(manor),
         "speed_bonus": speed_bonus,
@@ -84,11 +64,9 @@ def build_ranch_page_context(request: HttpRequest) -> dict[str, Any]:
     }
 
 
-def build_smithy_page_context(request: HttpRequest) -> dict[str, Any]:
-    manor = _prepare_production_manor(request, source="smithy_view")
+def get_smithy_page_context(manor: Any) -> dict[str, Any]:
     speed_bonus = get_smithy_speed_bonus(manor)
     return {
-        "manor": manor,
         "metal_options": get_metal_options(manor),
         "active_productions": get_active_smelting_productions(manor),
         "speed_bonus": speed_bonus,
@@ -106,53 +84,53 @@ def _normalize_forge_mode(raw_mode: str | None, *, default: str = "synthesize") 
     return mode
 
 
-def build_forge_page_context(
-    request: HttpRequest,
+def get_forge_page_context(
+    manor: Any,
     *,
+    current_mode: str,
+    current_category: str,
+    page: str | int,
     items_per_page: int = UIConstants.FORGE_ITEMS_PER_PAGE,
     decompose_items_per_page: int = 9,
 ) -> dict[str, Any]:
-    manor = _prepare_production_manor(request, source="forge_view")
     forging_level = get_player_technology_level(manor, "forging")
     max_quantity = forge_service.get_max_forging_quantity(manor)
     is_forging = forge_service.has_active_forging(manor)
-    current_mode = _normalize_forge_mode(request.GET.get("mode"), default="synthesize")
+    normalized_mode = _normalize_forge_mode(current_mode, default="synthesize")
 
     active_categories = DECOMPOSE_CATEGORIES
-    current_category = normalize_forge_category(
-        request.GET.get("category", "all"),
+    normalized_category = normalize_forge_category(
+        current_category or "all",
         active_categories=active_categories,
         weapon_categories=DECOMPOSE_WEAPON_CATEGORIES,
     )
     equipment_list = get_filtered_equipment_options(
         manor=manor,
-        current_category=current_category,
+        current_category=normalized_category,
         weapon_categories=DECOMPOSE_WEAPON_CATEGORIES,
         get_equipment_options=forge_service.get_equipment_options,
     )
     paginator = Paginator(equipment_list, items_per_page)
-    page_number = request.GET.get("page", 1)
-    page_obj = paginator.get_page(page_number)
+    page_obj = paginator.get_page(page)
 
     blueprint_synthesis_options = annotate_blueprint_synthesis_options(
         forge_service.get_blueprint_synthesis_options(manor),
         active_categories=active_categories,
-        current_category=current_category,
+        current_category=normalized_category,
         infer_equipment_category=forge_service.infer_equipment_category,
         to_decompose_category=forge_service.to_decompose_category,
     )
 
-    decompose_category = resolve_decompose_category(current_category)
+    decompose_category = resolve_decompose_category(normalized_category)
     decomposable_equipment = forge_service.get_decomposable_equipment_options(manor, category=decompose_category)
     decompose_paginator = Paginator(decomposable_equipment, decompose_items_per_page)
-    decompose_page_obj = decompose_paginator.get_page(page_number)
+    decompose_page_obj = decompose_paginator.get_page(page)
     speed_bonus = forge_service.get_forge_speed_bonus(manor)
 
     return {
-        "manor": manor,
-        "current_mode": current_mode,
+        "current_mode": normalized_mode,
         "equipment_categories": build_categories_with_all(active_categories),
-        "current_category": current_category,
+        "current_category": normalized_category,
         "equipment_list": page_obj,
         "page_obj": page_obj,
         "decompose_page_obj": decompose_page_obj,

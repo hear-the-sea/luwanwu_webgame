@@ -122,6 +122,26 @@ class TestCoreViews:
         assert response.status_code == 200
         assert "buildings" in response.context
 
+    def test_dashboard_uses_selector_context(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        calls = {"selector": 0}
+
+        monkeypatch.setattr("gameplay.views.core.get_prepared_manor_for_read", lambda request, **kwargs: manor)
+        from gameplay.selectors.core import get_dashboard_context as real_get_dashboard_context
+
+        def _fake_selector(current_manor, *, category):
+            calls["selector"] += 1
+            assert current_manor is manor
+            return real_get_dashboard_context(current_manor, category=category)
+
+        monkeypatch.setattr("gameplay.views.core.get_dashboard_context", _fake_selector)
+
+        response = client.get(reverse("gameplay:dashboard"))
+
+        assert response.status_code == 200
+        assert calls["selector"] == 1
+        assert "buildings" in response.context
+
     def test_dashboard_refresh_database_error_does_not_500(self, manor_with_user, monkeypatch):
         """数据库故障时仪表盘应静默降级而不是返回500。"""
         _manor, client = manor_with_user
@@ -209,6 +229,21 @@ class TestCoreViews:
         response = client.get(reverse("gameplay:settings"))
         assert response.status_code == 200
 
+    def test_settings_page_uses_selector_context(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        calls = {"selector": 0}
+
+        monkeypatch.setattr(
+            "gameplay.views.core.get_settings_page_context",
+            lambda current_manor: calls.__setitem__("selector", calls["selector"] + 1) or {"rename_card_count": 9},
+        )
+
+        response = client.get(reverse("gameplay:settings"))
+
+        assert response.status_code == 200
+        assert calls["selector"] == 1
+        assert response.context["rename_card_count"] == 9
+
     def test_rename_manor_known_error_shows_message(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
         monkeypatch.setattr(
@@ -250,4 +285,22 @@ class TestCoreViews:
         _manor, client = manor_with_user
         response = client.get(reverse("gameplay:ranking"))
         assert response.status_code == 200
+        assert "ranking" in response.context
+
+    def test_ranking_page_uses_selector_context(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        calls = {"selector": 0}
+        from gameplay.selectors.core import get_ranking_page_context as real_get_ranking_page_context
+
+        def _fake_selector(current_manor):
+            calls["selector"] += 1
+            assert current_manor.pk == manor.pk
+            return real_get_ranking_page_context(current_manor)
+
+        monkeypatch.setattr("gameplay.views.core.get_ranking_page_context", _fake_selector)
+
+        response = client.get(reverse("gameplay:ranking"))
+
+        assert response.status_code == 200
+        assert calls["selector"] == 1
         assert "ranking" in response.context

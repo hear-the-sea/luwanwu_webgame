@@ -94,7 +94,7 @@ class TestForgeViews:
     def test_forge_page_tolerates_resource_sync_error(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
         monkeypatch.setattr(
-            "gameplay.views.production_page_context.project_resource_production_for_read",
+            "gameplay.views.production.project_resource_production_for_read",
             lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("sync failed")),
         )
 
@@ -121,6 +121,84 @@ class TestForgeViews:
         body = response.content.decode("utf-8")
         assert "js/dashboard.js" in body
         assert 'data-refresh="1"' in body
+
+    def test_forge_page_uses_explicit_read_helper(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        calls = {"prepared": 0}
+
+        monkeypatch.setattr(
+            "gameplay.views.production._get_prepared_production_manor",
+            lambda request, *, source: calls.__setitem__("prepared", calls["prepared"] + 1) or manor,
+        )
+        monkeypatch.setattr(
+            "gameplay.views.production.get_forge_page_context",
+            lambda current_manor, **kwargs: (
+                {
+                    "current_mode": kwargs["current_mode"],
+                    "equipment_categories": [],
+                    "current_category": kwargs["current_category"],
+                    "equipment_list": [],
+                    "page_obj": [],
+                    "decompose_page_obj": [],
+                    "active_forgings": [],
+                    "blueprint_synthesis_options": [],
+                    "decomposable_equipment": [],
+                    "speed_bonus": 0,
+                    "speed_bonus_percent": 0,
+                    "forging_level": 0,
+                    "max_forging_quantity": 1,
+                    "is_forging": False,
+                }
+                if current_manor is manor
+                else {}
+            ),
+        )
+
+        response = client.get(reverse("gameplay:forge"))
+
+        assert response.status_code == 200
+        assert calls["prepared"] == 1
+
+    def test_forge_page_uses_selector_context(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        calls = {"selector": 0}
+
+        monkeypatch.setattr(
+            "gameplay.views.production._get_prepared_production_manor",
+            lambda request, *, source: manor,
+        )
+
+        def _fake_selector(current_manor, **kwargs):
+            calls["selector"] += 1
+            assert current_manor is manor
+            assert kwargs["current_mode"] == "decompose"
+            assert kwargs["current_category"] == "weapon"
+            assert kwargs["page"] == "2"
+            return {
+                "current_mode": "decompose",
+                "equipment_categories": ["weapon"],
+                "current_category": "weapon",
+                "equipment_list": ["equip-a"],
+                "page_obj": [],
+                "decompose_page_obj": [],
+                "active_forgings": [],
+                "blueprint_synthesis_options": [],
+                "decomposable_equipment": [],
+                "speed_bonus": 0.1,
+                "speed_bonus_percent": 10,
+                "forging_level": 4,
+                "max_forging_quantity": 3,
+                "is_forging": False,
+            }
+
+        monkeypatch.setattr("gameplay.views.production.get_forge_page_context", _fake_selector)
+
+        response = client.get(reverse("gameplay:forge") + "?mode=decompose&category=weapon&page=2")
+
+        assert response.status_code == 200
+        assert calls["selector"] == 1
+        assert response.context["current_mode"] == "decompose"
+        assert response.context["current_category"] == "weapon"
 
     def test_decompose_equipment_view_redirects_with_category(self, manor_with_user, monkeypatch):
         """分解装备后返回当前分类。"""

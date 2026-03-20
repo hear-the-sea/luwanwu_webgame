@@ -23,21 +23,23 @@ from core.utils import safe_positive_int, sanitize_error_message
 from core.utils.rate_limit import rate_limit_redirect
 from gameplay.constants import UIConstants
 from gameplay.models import Manor
+from gameplay.selectors.production import (
+    get_forge_page_context,
+    get_ranch_page_context,
+    get_smithy_page_context,
+    get_stable_page_context,
+)
 from gameplay.services.buildings import ranch as ranch_service
 from gameplay.services.buildings import smithy as smithy_service
 from gameplay.services.buildings.stable import start_horse_production
 from gameplay.services.manor.core import get_manor
+from gameplay.services.resources import project_resource_production_for_read
 from gameplay.views.production_forge_handlers import (
     handle_decompose_equipment,
     handle_start_equipment_forging,
     handle_synthesize_blueprint_equipment,
 )
-from gameplay.views.production_page_context import (
-    build_forge_page_context,
-    build_ranch_page_context,
-    build_smithy_page_context,
-    build_stable_page_context,
-)
+from gameplay.views.read_helpers import get_prepared_manor_for_read
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +61,15 @@ def _handle_unexpected_production_error(
         log_message=log_message,
         log_args=log_args,
         logger_instance=logger,
+    )
+
+
+def _get_prepared_production_manor(request: HttpRequest, *, source: str) -> Manor:
+    return get_prepared_manor_for_read(
+        request,
+        project_fn=project_resource_production_for_read,
+        logger=logger,
+        source=source,
     )
 
 
@@ -112,7 +123,9 @@ class StableView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        context.update(build_stable_page_context(self.request))
+        manor = _get_prepared_production_manor(self.request, source="stable_view")
+        context["manor"] = manor
+        context.update(get_stable_page_context(manor))
         return context
 
 
@@ -143,7 +156,9 @@ class RanchView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        context.update(build_ranch_page_context(self.request))
+        manor = _get_prepared_production_manor(self.request, source="ranch_view")
+        context["manor"] = manor
+        context.update(get_ranch_page_context(manor))
         return context
 
 
@@ -174,7 +189,9 @@ class SmithyView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        context.update(build_smithy_page_context(self.request))
+        manor = _get_prepared_production_manor(self.request, source="smithy_view")
+        context["manor"] = manor
+        context.update(get_smithy_page_context(manor))
         return context
 
 
@@ -207,9 +224,14 @@ class ForgeView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
+        manor = _get_prepared_production_manor(self.request, source="forge_view")
+        context["manor"] = manor
         context.update(
-            build_forge_page_context(
-                self.request,
+            get_forge_page_context(
+                manor,
+                current_mode=self.request.GET.get("mode") or "synthesize",
+                current_category=self.request.GET.get("category") or "all",
+                page=self.request.GET.get("page", 1),
                 items_per_page=self.ITEMS_PER_PAGE,
                 decompose_items_per_page=self.DECOMPOSE_ITEMS_PER_PAGE,
             )

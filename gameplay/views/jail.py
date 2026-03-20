@@ -28,8 +28,8 @@ from core.utils.locked_actions import (
 )
 from core.utils.rate_limit import rate_limit_json
 from core.utils.validation import sanitize_error_message
-from gameplay.constants import PVPConstants, get_raid_capture_guest_rate
 from gameplay.models import Manor
+from gameplay.selectors.jail import get_jail_page_context, get_oath_grove_page_context
 from gameplay.services.jail import (
     add_oath_bond,
     draw_pie,
@@ -40,7 +40,8 @@ from gameplay.services.jail import (
     remove_oath_bond,
 )
 from gameplay.services.manor.core import get_manor
-from guests.query_utils import guest_template_rarity_rank_case
+from gameplay.services.resources import project_resource_production_for_read
+from gameplay.views.read_helpers import get_prepared_manor_for_read
 
 logger = logging.getLogger(__name__)
 JAIL_ACTION_LOCK_SECONDS = 5
@@ -217,18 +218,14 @@ class JailView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs: object) -> dict[str, object]:
         context = super().get_context_data(**kwargs)
-        manor = get_manor(self.request.user)
-        prisoners = list_held_prisoners(manor)
-        context.update(
-            {
-                "manor": manor,
-                "jail_capacity": int(getattr(manor, "jail_capacity", 0) or 0),
-                "prisoners": prisoners,
-                "capture_rate_percent": int(round(get_raid_capture_guest_rate() * 100)),
-                "recruit_loyalty_threshold": int(PVPConstants.JAIL_RECRUIT_LOYALTY_THRESHOLD),
-                "recruit_cost_gold_bar": int(PVPConstants.JAIL_RECRUIT_GOLD_BAR_COST),
-            }
+        manor = get_prepared_manor_for_read(
+            self.request,
+            project_fn=project_resource_production_for_read,
+            logger=logger,
+            source="jail_view",
         )
+        context["manor"] = manor
+        context.update(get_jail_page_context(manor))
         return context
 
 
@@ -237,23 +234,14 @@ class OathGroveView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs: object) -> dict[str, object]:
         context = super().get_context_data(**kwargs)
-        manor = get_manor(self.request.user)
-        bonds = list_oath_bonds(manor)
-        oathed_ids = {b.guest_id for b in bonds}
-        available_guests = (
-            manor.guests.select_related("template")
-            .exclude(id__in=oathed_ids)
-            .annotate(_template_rarity_rank=guest_template_rarity_rank_case("template__rarity"))
-            .order_by("-_template_rarity_rank", "-level", "id")
+        manor = get_prepared_manor_for_read(
+            self.request,
+            project_fn=project_resource_production_for_read,
+            logger=logger,
+            source="oath_grove_view",
         )
-        context.update(
-            {
-                "manor": manor,
-                "oath_capacity": int(getattr(manor, "oath_capacity", 0) or 0),
-                "bonds": bonds,
-                "available_guests": list(available_guests)[:50],
-            }
-        )
+        context["manor"] = manor
+        context.update(get_oath_grove_page_context(manor))
         return context
 
 

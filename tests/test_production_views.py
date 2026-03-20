@@ -25,7 +25,7 @@ class TestProductionViews:
     def test_stable_page_tolerates_resource_sync_error(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
         monkeypatch.setattr(
-            "gameplay.views.production_page_context.project_resource_production_for_read",
+            "gameplay.views.production.project_resource_production_for_read",
             lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("sync failed")),
         )
 
@@ -59,6 +59,66 @@ class TestProductionViews:
         response = client.get(reverse("gameplay:ranch"))
         assert response.status_code == 200
         assert "livestock_options" in response.context
+
+    def test_stable_page_uses_explicit_read_helper(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        calls = {"prepared": 0}
+
+        monkeypatch.setattr(
+            "gameplay.views.production._get_prepared_production_manor",
+            lambda request, *, source: calls.__setitem__("prepared", calls["prepared"] + 1) or manor,
+        )
+        monkeypatch.setattr(
+            "gameplay.views.production.get_stable_page_context",
+            lambda current_manor: (
+                {
+                    "horse_options": [],
+                    "active_productions": [],
+                    "speed_bonus": 0,
+                    "speed_bonus_percent": 0,
+                    "horsemanship_level": 0,
+                    "max_production_quantity": 1,
+                    "is_producing": False,
+                }
+                if current_manor is manor
+                else {}
+            ),
+        )
+
+        response = client.get(reverse("gameplay:stable"))
+
+        assert response.status_code == 200
+        assert calls["prepared"] == 1
+
+    def test_stable_page_uses_selector_context(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        calls = {"selector": 0}
+
+        monkeypatch.setattr(
+            "gameplay.views.production._get_prepared_production_manor",
+            lambda request, *, source: manor,
+        )
+
+        def _fake_selector(current_manor):
+            calls["selector"] += 1
+            assert current_manor is manor
+            return {
+                "horse_options": ["horse-a"],
+                "active_productions": [],
+                "speed_bonus": 0.2,
+                "speed_bonus_percent": 20,
+                "horsemanship_level": 3,
+                "max_production_quantity": 8,
+                "is_producing": False,
+            }
+
+        monkeypatch.setattr("gameplay.views.production.get_stable_page_context", _fake_selector)
+
+        response = client.get(reverse("gameplay:stable"))
+
+        assert response.status_code == 200
+        assert calls["selector"] == 1
+        assert response.context["horse_options"] == ["horse-a"]
 
     def test_ranch_page_active_production_has_refresh_countdown(self, manor_with_user):
         manor, client = manor_with_user
