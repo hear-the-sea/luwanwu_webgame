@@ -28,7 +28,7 @@ def test_resource_production_increase(django_user_model):
     before_silver = manor.silver
     manor.resource_updated_at = timezone.now() - timedelta(hours=2)
     manor.save()
-    refresh_manor_state(manor)
+    refresh_manor_state(manor, include_activity_refresh=True)
     manor.refresh_from_db()
     assert manor.silver >= before_silver
 
@@ -277,6 +277,39 @@ def test_request_retreat_raises_mission_cannot_retreat_when_already_retreating(d
 
 
 @pytest.mark.django_db
+def test_refresh_manor_state_defaults_to_read_projection_only(django_user_model, settings, monkeypatch):
+    user = django_user_model.objects.create_user(username="player_refresh_projection_only", password="pass12345")
+    manor = ensure_manor(user)
+
+    settings.MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS = 0
+
+    calls = {"finalize": 0, "resource": 0, "mission": 0, "scout": 0, "raid": 0}
+    monkeypatch.setattr(
+        manor_service, "finalize_upgrades", lambda _manor: calls.__setitem__("finalize", calls["finalize"] + 1)
+    )
+    monkeypatch.setattr(
+        "gameplay.services.resources.sync_resource_production",
+        lambda _manor: calls.__setitem__("resource", calls["resource"] + 1),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.missions.refresh_mission_runs",
+        lambda _manor, prefer_async=False: calls.__setitem__("mission", calls["mission"] + 1),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.raid.refresh_scout_records",
+        lambda _manor, prefer_async=False: calls.__setitem__("scout", calls["scout"] + 1),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.raid.refresh_raid_runs",
+        lambda _manor, prefer_async=False: calls.__setitem__("raid", calls["raid"] + 1),
+    )
+
+    refresh_manor_state(manor)
+
+    assert calls == {"finalize": 1, "resource": 1, "mission": 0, "scout": 0, "raid": 0}
+
+
+@pytest.mark.django_db
 def test_refresh_manor_state_local_fallback_throttles_when_cache_unavailable(django_user_model, settings, monkeypatch):
     user = django_user_model.objects.create_user(username="player_refresh_fallback", password="pass12345")
     manor = ensure_manor(user)
@@ -303,8 +336,8 @@ def test_refresh_manor_state_local_fallback_throttles_when_cache_unavailable(dja
         lambda _manor: calls.__setitem__("mission", calls["mission"] + 1),
     )
 
-    refresh_manor_state(manor)
-    refresh_manor_state(manor)
+    refresh_manor_state(manor, include_activity_refresh=True)
+    refresh_manor_state(manor, include_activity_refresh=True)
 
     assert calls == {"finalize": 2, "resource": 1, "mission": 1}
 
@@ -339,9 +372,9 @@ def test_refresh_manor_state_local_fallback_allows_after_interval(django_user_mo
         lambda _manor: calls.__setitem__("mission", calls["mission"] + 1),
     )
 
-    refresh_manor_state(manor)
-    refresh_manor_state(manor)
-    refresh_manor_state(manor)
+    refresh_manor_state(manor, include_activity_refresh=True)
+    refresh_manor_state(manor, include_activity_refresh=True)
+    refresh_manor_state(manor, include_activity_refresh=True)
 
     assert calls == {"finalize": 3, "resource": 2, "mission": 2}
 
@@ -372,7 +405,7 @@ def test_refresh_manor_state_bypasses_cache_throttle_when_upgrade_due(django_use
         lambda _manor: calls.__setitem__("mission", calls["mission"] + 1),
     )
 
-    refresh_manor_state(manor)
+    refresh_manor_state(manor, include_activity_refresh=True)
     assert calls == {"finalize": 1, "resource": 0, "mission": 0}
 
 
@@ -397,7 +430,7 @@ def test_refresh_manor_state_still_throttles_when_cache_hit_and_no_due_work(djan
         lambda _manor: calls.__setitem__("mission", calls["mission"] + 1),
     )
 
-    refresh_manor_state(manor)
+    refresh_manor_state(manor, include_activity_refresh=True)
     assert calls == {"finalize": 1, "resource": 0, "mission": 0}
 
 
@@ -436,8 +469,8 @@ def test_refresh_manor_state_falls_back_to_local_throttle_when_cache_backend_una
         lambda _manor: calls.__setitem__("raid", calls["raid"] + 1),
     )
 
-    refresh_manor_state(manor)
-    refresh_manor_state(manor)
+    refresh_manor_state(manor, include_activity_refresh=True)
+    refresh_manor_state(manor, include_activity_refresh=True)
 
     assert calls == {"finalize": 2, "resource": 1, "mission": 1, "scout": 1, "raid": 1}
 
@@ -483,7 +516,7 @@ def test_refresh_manor_state_bypasses_cache_throttle_when_scout_due(django_user_
         lambda _manor: calls.__setitem__("raid", calls["raid"] + 1),
     )
 
-    refresh_manor_state(manor)
+    refresh_manor_state(manor, include_activity_refresh=True)
     assert calls == {"finalize": 1, "resource": 1, "mission": 1, "scout": 1, "raid": 1}
 
 
@@ -526,7 +559,7 @@ def test_refresh_manor_state_bypasses_cache_throttle_when_raid_due(django_user_m
         lambda _manor: calls.__setitem__("raid", calls["raid"] + 1),
     )
 
-    refresh_manor_state(manor)
+    refresh_manor_state(manor, include_activity_refresh=True)
     assert calls == {"finalize": 1, "resource": 1, "mission": 1, "scout": 1, "raid": 1}
 
 
@@ -556,5 +589,5 @@ def test_refresh_manor_state_propagates_prefer_async_to_all_refresh_hooks(django
         lambda _manor, prefer_async=False: calls["raid"].append(prefer_async),
     )
 
-    refresh_manor_state(manor, prefer_async=True)
+    refresh_manor_state(manor, prefer_async=True, include_activity_refresh=True)
     assert calls == {"resource": 1, "mission": [True], "scout": [True], "raid": [True]}

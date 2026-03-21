@@ -34,7 +34,6 @@ def test_launch_mission_survives_dispatch_failure(game_data, mission_templates, 
     mission = _select_offense_mission()
     guest = _create_launch_guest(manor)
 
-    monkeypatch.setattr(mission_execution, "refresh_mission_runs", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         mission_execution.mission_followups,
         "import_launch_post_action_tasks",
@@ -73,7 +72,6 @@ def test_launch_mission_survives_report_failure(game_data, mission_templates, ma
     mission = _select_offense_mission()
     guest = _create_launch_guest(manor)
 
-    monkeypatch.setattr(mission_execution, "refresh_mission_runs", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         mission_execution.mission_followups,
         "import_launch_post_action_tasks",
@@ -105,3 +103,35 @@ def test_launch_mission_survives_report_failure(game_data, mission_templates, ma
         getattr(record, "degraded", False) and getattr(record, "component", "") == "mission_launch_report"
         for record in caplog.records
     )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_launch_mission_does_not_trigger_refresh_command(game_data, mission_templates, manor_with_troops, monkeypatch):
+    manor = manor_with_troops
+    mission = _select_offense_mission()
+    guest = _create_launch_guest(manor)
+
+    monkeypatch.setattr(
+        mission_execution.mission_followups,
+        "import_launch_post_action_tasks",
+        lambda **_kwargs: (object(), object()),
+    )
+    monkeypatch.setattr(
+        mission_execution.mission_followups,
+        "dispatch_or_sync_launch_report",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        mission_execution.mission_followups,
+        "schedule_mission_completion_task",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        mission_execution,
+        "refresh_mission_runs",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("launch should not refresh due runs")),
+    )
+
+    run = mission_execution.launch_mission(manor, mission, [guest.id], {})
+
+    assert MissionRun.objects.filter(pk=run.pk, status=MissionRun.Status.ACTIVE).exists()

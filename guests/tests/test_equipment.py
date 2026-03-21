@@ -5,6 +5,7 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from core.exceptions import BattlePreparationError
 from guests.models import GearItem, GearSlot, GearTemplate, Guest, GuestArchetype, GuestRarity, GuestTemplate
 from guests.services.equipment import equip_guest, unequip_guest_item
 
@@ -221,7 +222,7 @@ class TestEquipmentTroopCapacity(TestCase):
         )
 
         self.assertEqual(self.guest.troop_capacity, 200)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(BattlePreparationError):
             validate_troop_capacity([self.guest], {"test_troop": 230})
 
         equip_guest(gear, self.guest)

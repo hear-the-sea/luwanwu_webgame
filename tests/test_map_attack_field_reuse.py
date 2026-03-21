@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 from django.urls import reverse
 
-from gameplay.selectors import map as map_selector
+import gameplay.selectors.map as map_selector
 from gameplay.services.manor.core import ensure_manor
 
 

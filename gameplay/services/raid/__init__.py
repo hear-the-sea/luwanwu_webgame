@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 # 踢馆战斗
+from .activity_refresh import refresh_raid_activity
 from .combat import (
     calculate_raid_travel_time,
     can_raid_retreat,
@@ -106,6 +107,7 @@ __all__ = [
     "start_raid",
     "process_raid_battle",
     "finalize_raid",
+    "refresh_raid_activity",
     "request_raid_retreat",
     "can_raid_retreat",
     "refresh_raid_runs",

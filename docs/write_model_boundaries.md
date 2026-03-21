@@ -86,6 +86,8 @@
 - `launch_mission()` 视为唯一发起写入口。
 - `request_retreat()` 视为唯一撤退写入口。
 - `finalize_mission_run()` 视为唯一终态收口入口。
+- `launch_mission()` 不得在主写命令前后隐式触发 `refresh_mission_runs()`；到期 run 的补偿只能留在显式 refresh / finalize 链路。
+- `refresh_mission_runs()` 不得再通过 `refresh_manor_state(...)` 这一类总刷新入口默认扇出；如需兼容旧调用，必须显式声明活动刷新意图。
 - `refresh_mission_runs()` 只能做“到期 run 的补偿触发”，不能继续扩散到页面读路径。
 
 ---
@@ -106,6 +108,8 @@
 
 - `gameplay/views/map.py`、`gameplay/views/mission_action_handlers.py`
   - 负责请求级锁、输入解析、异常映射
+- `gameplay/services/raid/activity_refresh.py`
+  - 负责地图显式活动刷新入口的服务编排；只允许串联显式 `refresh_scout_records()` / `refresh_raid_runs()`，不再把补偿逻辑留在 view 内联实现
 - `gameplay/services/raid/combat/start.py`
   - 负责踢馆事务内的双庄园加锁、门客/护院扣减、`RaidRun` 创建
 - `gameplay/services/raid/combat/finalize.py`

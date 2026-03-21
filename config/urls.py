@@ -11,7 +11,7 @@ from config.api_docs import (
     SettingsAwareSpectacularSwaggerView,
 )
 from core.views.health import health_live, health_ready
-from gameplay.views import HomeView
+from gameplay.views.core import HomeView
 
 urlpatterns = [
     path("health/live", health_live, name="health_live"),

@@ -218,7 +218,12 @@ def _has_due_manor_refresh_work(manor_id: int, now: datetime | None = None) -> b
     )
 
 
-def refresh_manor_state(manor: Manor, *, prefer_async: bool = False) -> None:
+def refresh_manor_state(
+    manor: Manor,
+    *,
+    prefer_async: bool = False,
+    include_activity_refresh: bool = False,
+) -> None:
     from ..missions import refresh_mission_runs
     from ..raid import refresh_raid_runs, refresh_scout_records
     from ..resources import sync_resource_production
@@ -226,6 +231,7 @@ def refresh_manor_state(manor: Manor, *, prefer_async: bool = False) -> None:
     _refresh.refresh_manor_state(
         manor,
         prefer_async=prefer_async,
+        include_activity_refresh=include_activity_refresh,
         settings_obj=settings,
         cache_backend=cache,
         logger=logger,

@@ -11,6 +11,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from core.exceptions import BattlePreparationError, RaidStartError
+from gameplay.services.manor.core import ensure_manor
 from gameplay.services.raid import utils as raid_utils
 from gameplay.services.raid.combat import battle as combat_battle
 from gameplay.services.raid.combat import runs as combat_runs
@@ -217,6 +218,74 @@ def test_refresh_raid_runs_prefers_async_dispatch(monkeypatch):
 
     assert set(dispatched) == {(1, "battle"), (2, "battle"), (3, "return"), (4, "return")}
     assert called == {"battle": 0, "finalize": 0}
+
+
+@pytest.mark.django_db
+def test_collect_due_raid_run_ids_only_returns_due_durable_states(django_user_model):
+    attacker = ensure_manor(django_user_model.objects.create_user(username="raid_due_attacker", password="pass123"))
+    defender = ensure_manor(django_user_model.objects.create_user(username="raid_due_defender", password="pass123"))
+
+    now = timezone.now()
+    due_marching = combat_runs.RaidRun.objects.create(
+        attacker=attacker,
+        defender=defender,
+        troop_loadout={},
+        status=combat_runs.RaidRun.Status.MARCHING,
+        travel_time=60,
+        battle_at=now - timedelta(seconds=1),
+    )
+    combat_runs.RaidRun.objects.create(
+        attacker=attacker,
+        defender=defender,
+        troop_loadout={},
+        status=combat_runs.RaidRun.Status.MARCHING,
+        travel_time=60,
+        battle_at=now + timedelta(seconds=60),
+    )
+    due_returning = combat_runs.RaidRun.objects.create(
+        attacker=attacker,
+        defender=defender,
+        troop_loadout={},
+        status=combat_runs.RaidRun.Status.RETURNING,
+        travel_time=60,
+        return_at=now - timedelta(seconds=1),
+    )
+    combat_runs.RaidRun.objects.create(
+        attacker=attacker,
+        defender=defender,
+        troop_loadout={},
+        status=combat_runs.RaidRun.Status.RETURNING,
+        travel_time=60,
+        return_at=now + timedelta(seconds=60),
+    )
+    due_retreated = combat_runs.RaidRun.objects.create(
+        attacker=attacker,
+        defender=defender,
+        troop_loadout={},
+        status=combat_runs.RaidRun.Status.RETREATED,
+        travel_time=60,
+        return_at=now - timedelta(seconds=1),
+    )
+    combat_runs.RaidRun.objects.create(
+        attacker=attacker,
+        defender=defender,
+        troop_loadout={},
+        status=combat_runs.RaidRun.Status.COMPLETED,
+        travel_time=60,
+        battle_at=now - timedelta(seconds=120),
+        return_at=now - timedelta(seconds=60),
+        completed_at=now - timedelta(seconds=30),
+    )
+
+    marching_ids, returning_ids, retreated_ids = combat_runs.collect_due_raid_run_ids(
+        attacker,
+        now,
+        combat_runs.RaidRun,
+    )
+
+    assert marching_ids == [due_marching.id]
+    assert returning_ids == [due_returning.id]
+    assert retreated_ids == [due_retreated.id]
 
 
 def test_get_active_raids_is_pure_listing_query(monkeypatch):

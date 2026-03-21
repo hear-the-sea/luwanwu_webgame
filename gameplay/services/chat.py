@@ -51,9 +51,6 @@ def consume_trumpet(user_id: int) -> Tuple[bool, str]:
         return True, ""
     except InsufficientStockError:
         return False, "小喇叭不足，无法在世界频道发言"
-    except ValueError as exc:
-        logger.warning("Failed to consume trumpet due to invalid input: %s", exc)
-        return False, "扣除小喇叭失败，请稍后重试"
     except Exception:
         logger.exception("Unexpected error when consuming trumpet for user_id=%s", user_id)
         return False, "扣除小喇叭失败，请稍后重试"

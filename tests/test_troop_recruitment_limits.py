@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from core.exceptions import TroopRecruitmentError
 from gameplay.models import PlayerTechnology
 from gameplay.services.manor.core import ensure_manor
 from gameplay.services.recruitment import recruitment as recruitment_service
@@ -53,5 +54,5 @@ def test_validate_start_recruitment_inputs_rejects_over_max_quantity(django_user
         lambda *_args, **_kwargs: {"can_recruit": True, "errors": []},
     )
 
-    with pytest.raises(ValueError, match="单次最多招募50人"):
+    with pytest.raises(TroopRecruitmentError, match="单次最多招募50人"):
         recruitment_service._validate_start_recruitment_inputs(manor, "dao_ke", quantity=51)

@@ -35,8 +35,7 @@ from gameplay.services.raid import (
     get_active_raids,
     get_active_scouts,
     get_incoming_raids,
-    refresh_raid_runs,
-    refresh_scout_records,
+    refresh_raid_activity,
     request_raid_retreat,
     search_manors_by_name,
     search_manors_by_region,
@@ -136,7 +135,7 @@ def _target_manor_or_error(data: dict[str, Any]) -> tuple[ManorModel | None, Jso
         return None, json_error("目标庄园参数无效")
     try:
         return ManorModel.objects.get(pk=target_id), None
-    except (ManorModel.DoesNotExist, ValueError, TypeError):
+    except ManorModel.DoesNotExist:
         return None, json_error("目标庄园不存在", status=404)
 
 
@@ -204,11 +203,6 @@ def _build_raid_status_response(manor: Any) -> JsonResponse:
             for r in incoming_raids
         ],
     )
-
-
-def _refresh_raid_activity(manor: Any) -> None:
-    refresh_scout_records(manor, prefer_async=True)
-    refresh_raid_runs(manor, prefer_async=True)
 
 
 class MapView(LoginRequiredMixin, TemplateView):
@@ -422,7 +416,7 @@ def refresh_raid_activity_api(request: HttpRequest) -> JsonResponse:
         manor=manor,
         action_name="refresh_raid_activity",
         scope="self",
-        operation=lambda: _refresh_raid_activity(manor),
+        operation=lambda: refresh_raid_activity(manor, prefer_async=True),
         success_response=lambda _result: _build_raid_status_response(manor),
         log_message="Unexpected raid activity refresh error: manor_id=%s user_id=%s",
         log_args=(

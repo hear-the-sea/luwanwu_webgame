@@ -115,6 +115,7 @@ def refresh_manor_state(
     manor: Any,
     *,
     prefer_async: bool,
+    include_activity_refresh: bool,
     settings_obj: Any,
     cache_backend: Any,
     logger: Any,
@@ -135,17 +136,19 @@ def refresh_manor_state(
         cache_key = f"manor:refresh:{manor.pk}"
         try:
             if not cache_backend.add(cache_key, "1", timeout=min_interval):
-                if not has_due_manor_refresh_work_func(manor.pk, now=now):
+                if not include_activity_refresh or not has_due_manor_refresh_work_func(manor.pk, now=now):
                     return
         except Exception as exc:
             if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_THROTTLE_ERRORS):
                 raise
             logger.warning("缓存操作失败，降级为本地节流: %s", exc, exc_info=True)
             if should_skip_refresh_by_local_fallback_func(manor.pk, min_interval):
-                if not has_due_manor_refresh_work_func(manor.pk, now=now):
+                if not include_activity_refresh or not has_due_manor_refresh_work_func(manor.pk, now=now):
                     return
 
     sync_resource_production_func(manor)
+    if not include_activity_refresh:
+        return
     if prefer_async:
         refresh_mission_runs_func(manor, prefer_async=True)
         refresh_scout_records_func(manor, prefer_async=True)

@@ -123,19 +123,15 @@ class TestMapAPI:
 
     def test_raid_status_api_reads_status_without_triggering_refresh(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
-        calls = {"manor": 0, "refresh_scout": 0, "refresh_raid": 0, "raids": 0, "scouts": 0, "incoming": 0}
+        calls = {"manor": 0, "refresh_activity": 0, "raids": 0, "scouts": 0, "incoming": 0}
 
         monkeypatch.setattr(
             "gameplay.views.map.get_manor",
             lambda user: calls.__setitem__("manor", calls["manor"] + 1) or manor,
         )
         monkeypatch.setattr(
-            "gameplay.views.map.refresh_scout_records",
-            lambda *_args, **_kwargs: calls.__setitem__("refresh_scout", calls["refresh_scout"] + 1),
-        )
-        monkeypatch.setattr(
-            "gameplay.views.map.refresh_raid_runs",
-            lambda *_args, **_kwargs: calls.__setitem__("refresh_raid", calls["refresh_raid"] + 1),
+            "gameplay.views.map.refresh_raid_activity",
+            lambda *_args, **_kwargs: calls.__setitem__("refresh_activity", calls["refresh_activity"] + 1),
         )
         monkeypatch.setattr(
             "gameplay.views.map.get_active_raids",
@@ -153,7 +149,7 @@ class TestMapAPI:
         response = client.get(reverse("gameplay:raid_status_api"))
 
         assert response.status_code == 200
-        assert calls == {"manor": 1, "refresh_scout": 0, "refresh_raid": 0, "raids": 1, "scouts": 1, "incoming": 1}
+        assert calls == {"manor": 1, "refresh_activity": 0, "raids": 1, "scouts": 1, "incoming": 1}
 
     def test_refresh_raid_activity_api_refreshes_before_listing(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
@@ -164,12 +160,10 @@ class TestMapAPI:
             lambda user: calls.append(("manor", user)) or manor,
         )
         monkeypatch.setattr(
-            "gameplay.views.map.refresh_scout_records",
-            lambda current_manor, *, prefer_async=False: calls.append(("refresh_scout", current_manor, prefer_async)),
-        )
-        monkeypatch.setattr(
-            "gameplay.views.map.refresh_raid_runs",
-            lambda current_manor, *, prefer_async=False: calls.append(("refresh_raid", current_manor, prefer_async)),
+            "gameplay.views.map.refresh_raid_activity",
+            lambda current_manor, *, prefer_async=False: calls.append(
+                ("refresh_activity", current_manor, prefer_async)
+            ),
         )
         monkeypatch.setattr(
             "gameplay.views.map.get_active_raids",
@@ -189,8 +183,7 @@ class TestMapAPI:
         assert response.status_code == 200
         assert calls[0][0] == "manor"
         assert calls[1:] == [
-            ("refresh_scout", manor, True),
-            ("refresh_raid", manor, True),
+            ("refresh_activity", manor, True),
             ("raids", manor),
             ("scouts", manor),
             ("incoming", manor),
@@ -207,7 +200,7 @@ class TestMapAPI:
 
         monkeypatch.setattr("gameplay.views.map._acquire_map_action_lock", lambda *_a, **_k: (False, "", None))
         monkeypatch.setattr(
-            "gameplay.views.map.refresh_scout_records",
+            "gameplay.views.map.refresh_raid_activity",
             lambda *_args, **_kwargs: called.__setitem__("refresh", called["refresh"] + 1),
         )
 
@@ -223,7 +216,7 @@ class TestMapAPI:
         manor, client = manor_with_user
 
         monkeypatch.setattr(
-            "gameplay.views.map.refresh_scout_records",
+            "gameplay.views.map.refresh_raid_activity",
             lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("legacy refresh")),
         )
 
@@ -257,6 +250,21 @@ class TestMapAPI:
         payload = response.json()
         assert payload["success"] is False
         assert "参数无效" in payload["error"]
+
+    def test_start_scout_api_target_lookup_value_error_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.views.map.ManorModel.objects.get",
+            lambda **_kwargs: (_ for _ in ()).throw(ValueError("bad manor lookup")),
+        )
+
+        with pytest.raises(ValueError, match="bad manor lookup"):
+            client.post(
+                reverse("gameplay:start_scout_api"),
+                data=json.dumps({"target_id": 1}),
+                content_type="application/json",
+            )
 
     @pytest.mark.parametrize("target_id", [0, -1])
     def test_start_scout_api_rejects_non_positive_target_id(self, manor_with_user, target_id):

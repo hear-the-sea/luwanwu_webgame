@@ -6,8 +6,8 @@ from typing import Any
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import DatabaseError
 
-from gameplay.selectors import sidebar as sidebar_selector
-from gameplay.selectors import stats as stats_selector
+import gameplay.selectors.sidebar as sidebar_selector
+import gameplay.selectors.stats as stats_selector
 from gameplay.services.utils.messages import unread_message_count
 
 logger = logging.getLogger(__name__)

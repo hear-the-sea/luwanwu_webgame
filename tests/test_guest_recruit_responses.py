@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 from django.test import RequestFactory
 
-from guests.views import recruit_responses
+import guests.views.recruit_responses as recruit_responses
 
 
 def test_format_duration_breaks_down_hours_minutes_and_seconds():

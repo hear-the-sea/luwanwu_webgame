@@ -34,6 +34,7 @@
 - 页面读路径已开始统一到请求级 helper：`trade/page_context.py`、`gameplay/views/core.py`、`gameplay/views/map.py`、`gameplay/views/inventory.py`、`gameplay/views/messages.py`、`gameplay/views/work.py`、`gameplay/views/technology.py`、`gameplay/views/recruitment.py`、`gameplay/views/arena.py`、`gameplay/views/mission_page_context.py`、`gameplay/selectors/production.py`、`guests/views/roster.py` 已接入 `get_prepared_manor_for_read(...)`。
 - `raid/scout` 读侧刷新已从 accessor 中显式化；`get_active_raids()` 已退回纯读查询。
 - 默认测试、覆盖率与部分 mypy 门禁已补齐第一轮可信度缺口。
+- 2026-03-21 已补齐阶段 1 封板验证：`make test` 全量通过（`1852 passed, 28 deselected`），并完成热点包导入链复核；`gameplay.views`、`gameplay.selectors`、`guests.views`、`guilds.views` 已退出包根聚合导入用法，相关 `__init__.py` 已收口为无副作用最小包标记。
 
 阶段 1 已封板，后续不再继续把“拆 view / 抽 helper”本身作为主要目标。
 
@@ -51,17 +52,28 @@
 当前已推进但尚未封板的事项：
 
 - `HomeView`、`MapView`、`raid_status_api` 已退出 GET 读路径中的 `raid/scout` 补偿刷新；显式刷新改由 `POST /gameplay/api/map/status/refresh/` 触发，但其它页面和真实服务门禁仍未让这条链路整体封板。
+- `map` 的显式活动刷新也已退出 view 内联编排：`refresh_raid_activity_api` 现在只调用 `gameplay.services.raid.refresh_raid_activity()` 这一显式服务入口，不再在 view 层直接拼接 `refresh_scout_records()` / `refresh_raid_runs()`。
 - `gameplay/services/raid/scout_refresh.py` 已承接侦察 refresh 补偿命令，`gameplay/services/raid/scout_followups.py` 也开始承接 after-commit 消息/任务派发；`scout.py` 已退回公共入口、状态查询和适配层，但真实服务测试仍需继续收口。
 - `gameplay/services/raid/scout_return.py` 已开始承接撤退请求和返程完成写命令；`scout_start.py`、`scout_finalize.py` 现已承接侦察发起/结果写入主写命令，但真实服务测试仍未封板。
 - `raid/scout` 已补第一批真实外部服务测试，开始覆盖 refresh dispatch dedup gate、dispatch 失败回滚、同步补偿收口，以及 `complete_scout_task` / `complete_scout_return_task`、`complete_raid_task`（撤退返程）、`process_raid_battle_task` 的实际消费；但并发冲突和更多 battle/refresh 竞争语义仍未封板。
-- `mission` 已补第一批真实并发与任务派发语义测试，覆盖同门客并发发起只允许一个 `ACTIVE`、同一 `MissionRun` 并发撤退只允许一个状态迁移成功，以及 refresh dispatch dedup gate / dispatch 失败回滚、`complete_mission_task` 实际消费收口；`gameplay/services/missions_impl/mission_followups.py` 也开始承接 launch 后报告准备、任务导入与 completion dispatch，但更多补偿场景仍未封板。
-- `guest recruitment` 已开始补真实服务语义测试，覆盖并发发起只允许一个 `PENDING`、并发完成只允许一次 `PENDING -> COMPLETED` 收口，以及候选确认只允许一次转正；`guests/services/recruitment_followups.py` 也开始承接完成任务派发与通知发送，但更多 `select_for_update` 竞争场景仍未封板。
+- `raid/scout` 的 refresh 契约测试已继续补强：due-id 收集现在有测试约束其只扫描“到期且仍处于 durable 进行中状态”的记录，不再把未来记录或终态记录混入补偿路径。
+- `scout` 的真实并发测试也已补到仓库：并发发起只允许一次派出、并发撤退只允许一次状态迁移，以及 refresh 与 `finalize_scout()` / `finalize_scout_return()` 并发时只允许一次 durable 收口的 integration 用例，已在本机外部 MySQL gate 下完成实跑验收。
+- `raid` 的真实并发测试也已继续补到仓库：并发 battle 只允许一次从 `MARCHING` 进入主流程、并发 finalize 只允许一次落成 `COMPLETED`，以及 refresh 与 `process_raid_battle()` / `finalize_raid()` 并发时只允许一次 durable 收口的 integration 用例，已在本机外部 MySQL gate 下完成实跑验收。
+- `raid/scout` 的第二批真实并发测试已继续补上 refresh 竞争语义：`refresh_raid_runs()` 与显式 `process_raid_battle()` / `finalize_raid()` 并发时仍只允许一次 durable 收口，`refresh_scout_records()` 与显式 `finalize_scout()` / `finalize_scout_return()` 并发时也只允许一次状态推进或返还探子。
+- `mission` 已补真实并发与任务派发语义测试，覆盖同门客并发发起只允许一个 `ACTIVE`、同一 `MissionRun` 并发撤退只允许一个状态迁移成功，以及 refresh dispatch dedup gate / dispatch 失败回滚、`complete_mission_task` 实际消费收口；`refresh_mission_runs()` 与显式 `finalize_mission_run()` 的真实并发竞争用例也已补齐，并在 real-services gate 下完成验收。
+- `mission` 发起写入口已退出预刷新耦合：`launch_mission()` 不再在主写命令前隐式调用 `refresh_mission_runs()`；到期 run 的补偿继续留在显式 refresh / worker 链路，并已补回归测试约束该边界。
+- `guest recruitment` 已补真实服务语义测试，覆盖并发发起只允许一个 `PENDING`、并发完成只允许一次 `PENDING -> COMPLETED` 收口，以及候选确认只允许一次转正；`refresh_guest_recruitments()` 与显式 `finalize_guest_recruitment()` 的真实并发竞争用例也已补齐，并在 real-services gate 下完成验收。
+- `guest recruitment` 的 refresh 契约测试也已补到 service 层：`refresh_guest_recruitments()` 现在有测试约束其只扫描“到期且仍为 PENDING”的 durable rows，不再把未来记录或已结束记录混入补偿路径。
+- `2026-03-22` 已完成一轮阶段 2 real-services 验收：`tests/test_raid_concurrency_integration.py`、`tests/test_raid_scout_concurrency_integration.py` 共 `8 passed, 2 skipped`，`tests/test_mission_concurrency_integration.py`、`tests/test_guest_recruitment_concurrency_integration.py` 共 `6 passed, 1 skipped`。
 - `map` 的 `refresh_raid_activity_api` 已退出 legacy `ValueError` 兼容：写入口默认只把显式 `GameError` 当已知业务错误，裸 `ValueError` 继续冒泡，避免 view 层把程序/契约错误伪装成 400。
+- `map` 的目标庄园解析 helper 也已继续收紧：`gameplay/views/map._target_manor_or_error()` 在参数已通过 `safe_positive_int()` 归一化后，不再额外吞掉 `ValueError/TypeError`，查库阶段的异常改为继续冒泡。
 - `core` 的 legacy view 装饰器也已退出 `ValueError` 业务语义：`core/decorators.handle_game_errors` 不再捕获裸 `ValueError`，避免新代码继续把 `ValueError` 当跨层业务错误。
 - `core` 的错误消息清洗入口也已退出 `ValueError` 业务语义：`core/utils/validation.sanitize_error_message()` 不再直接回显裸 `ValueError` 文案，未显式归类的异常统一退回通用失败消息，避免程序错误泄漏到页面层。
 - `core` 的 rate limit 工具也已开始退出裸 `ValueError`：`core/utils/rate_limit._validate_rate_limit_options()` 对非法 `limit/window_seconds` 配置不再抛 `ValueError`，改走显式内部调用契约错误 `AssertionError`。
 - `resources` 服务也已开始退出裸 `ValueError`：`gameplay/services/resources._handle_unknown_resource()` 在 debug 下对未知资源类型改走显式内部调用契约错误 `AssertionError`，非 debug 环境继续记录错误并跳过非法资源，不再把该问题伪装成业务异常。
+- `chat` 服务入口也已退出 legacy `ValueError` 兼容：`gameplay/services/chat.consume_trumpet()` 不再把裸 `ValueError` 当作特殊输入错误分支处理，库存不足继续走显式 `InsufficientStockError`，其余异常统一按未知失败降级。
 - `buildings` 升级入口已不再从 view 直接调用 `refresh_manor_state(...)`；陈旧升级状态改由 `start_upgrade()` 写命令自行收口。
+- `refresh_manor_state(...)` 已收紧为默认只处理建筑/资源读侧投影；`mission / scout / raid` 补偿刷新改为显式 `include_activity_refresh=True` 才会触发，避免总刷新入口继续默认扇出到阶段二写链路。
 - `guests/roster`、`guests/detail` 的门客状态准备已收口到显式 read helper，不再在 `get_context_data()` 内联推进状态。
 - 单会话策略已改为默认 `fail-closed`，但平台级故障语义仍需继续用真实服务门禁验证。
 - integration gate 的提示信息、`pytest` 路径和模板/过滤器相关测试已补齐，但真实 MySQL / Redis / Channels / Celery gate 仍不足。
@@ -107,18 +119,18 @@
 
 ### 2.4 当前未完成的高优先级问题
 
-- `mission / raid / guest recruitment` 的真实并发语义测试仍然不够；虽然 `mission` 发起/撤退、refresh dispatch / worker 消费，`scout` refresh dispatch / worker 消费，`raid` 发起/撤退、battle worker、撤退返程 worker 消费，`guest recruitment` 发起/完成/候选确认已覆盖首批关键竞争与派发语义，但更多 refresh 补偿链路和 battle/return 并发竞争仍是缺口。
+- 阶段 2 的核心验收项已基本具备：`mission / raid / guest recruitment` 的主写入口、refresh 补偿边界、真实并发与 refresh/finalize 竞争语义都已有 real-services 约束；后续剩余工作以封板整理和回归维护为主。
 - 项目内仍有不少入口继续把 `ValueError` 作为跨层业务语义，异常层次还没有整体收口。
-- 页面读路径虽然已经开始统一，但尚未完全消除显式补偿调用、局部降级分叉，以及 `refresh_manor_state(...)` 这一类总刷新入口的扩散风险。
+- 页面读路径虽然已经开始统一，但尚未完全消除局部降级分叉；活动补偿已退出页面隐式读路径，但仍需在阶段 3 持续审视显式刷新入口与错误语义的一致性。
 
 ## 3. 后续执行顺序
 
 下一轮优化按以下顺序推进：
 
-1. 继续收口 `mission / raid / guest recruitment` 的主写入口、after-commit follow-up 和 refresh command 边界。
-2. 为高风险写链路补真实外部服务测试，优先覆盖数据库锁、缓存/通道、任务派发与补偿刷新语义。
-3. 沿高频主链路逐步退出 legacy `ValueError` 兼容，优先处理 `mission / guest recruitment` 等仍明显混用的 view/service 入口。
-4. 在阶段 2 关键链路具备真实测试约束后，再推进模板、页面脚本和前端交互边界治理。
+1. 完成阶段 2 封板整理，保持 `mission / raid / guest recruitment` 的主写入口、after-commit follow-up 和 refresh command 边界不回退。
+2. 沿高频主链路逐步退出 legacy `ValueError` 兼容，优先处理 `mission / guest recruitment` 等仍明显混用的 view/service 入口。
+3. 在阶段 2 关键链路已有真实测试约束的前提下，继续推进模板、页面脚本和前端交互边界治理。
+4. 把阶段 2 的 real-services 套件纳入后续回归节奏，避免补偿边界与并发语义回退。
 
 ## 4. 分阶段路线
 

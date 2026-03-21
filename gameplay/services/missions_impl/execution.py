@@ -152,7 +152,6 @@ def launch_mission(
         seed=seed,
         **build_launch_mission_dependencies(
             scale_duration=scale_duration,
-            refresh_mission_runs=refresh_mission_runs,
             import_launch_post_action_tasks=partial(
                 mission_followups.import_launch_post_action_tasks,
                 logger=logger,

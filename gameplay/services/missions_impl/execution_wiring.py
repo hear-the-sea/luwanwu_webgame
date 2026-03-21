@@ -57,14 +57,12 @@ def build_finalize_mission_dependencies(
 def build_launch_mission_dependencies(
     *,
     scale_duration: Callable[..., Any],
-    refresh_mission_runs: Callable[..., Any],
     import_launch_post_action_tasks: Callable[..., Any],
     try_prepare_launch_report: Callable[..., Any],
     dispatch_complete_mission_task: Callable[..., Any],
 ) -> dict[str, Any]:
     return {
         "scale_duration": scale_duration,
-        "refresh_mission_runs": refresh_mission_runs,
         "import_launch_post_action_tasks": import_launch_post_action_tasks,
         "try_prepare_launch_report": try_prepare_launch_report,
         "dispatch_complete_mission_task": dispatch_complete_mission_task,

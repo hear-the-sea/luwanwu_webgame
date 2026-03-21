@@ -12,6 +12,7 @@ from core.exceptions import ScoutStartError
 from gameplay.constants import PVPConstants
 from gameplay.models import PlayerTroop, ScoutRecord
 from gameplay.services.manor.core import ensure_manor
+from gameplay.services.raid import activity_refresh as raid_activity_refresh
 from gameplay.services.raid import scout as scout_service
 from gameplay.services.raid import scout_refresh as scout_refresh_command
 
@@ -31,6 +32,27 @@ def test_refresh_scout_records_command_skips_finalize_when_nothing_due():
     assert calls == {"dispatch": 0, "finalize": 0}
 
 
+def test_refresh_raid_activity_delegates_explicit_refresh_commands():
+    calls: list[tuple[object, ...]] = []
+    manor = SimpleNamespace(id=7)
+
+    raid_activity_refresh.refresh_raid_activity(
+        manor,
+        prefer_async=True,
+        refresh_scout_records_func=lambda current_manor, *, prefer_async=False: calls.append(
+            ("scout", current_manor, prefer_async)
+        ),
+        refresh_raid_runs_func=lambda current_manor, *, prefer_async=False: calls.append(
+            ("raid", current_manor, prefer_async)
+        ),
+    )
+
+    assert calls == [
+        ("scout", manor, True),
+        ("raid", manor, True),
+    ]
+
+
 def test_refresh_scout_records_command_skips_sync_finalize_when_async_dispatch_finishes():
     calls = {"dispatch": 0, "finalize": 0}
 
@@ -44,6 +66,70 @@ def test_refresh_scout_records_command_skips_sync_finalize_when_async_dispatch_f
     )
 
     assert calls == {"dispatch": 1, "finalize": 0}
+
+
+@pytest.mark.django_db
+def test_collect_due_scout_record_ids_only_returns_due_durable_states(django_user_model):
+    attacker = ensure_manor(django_user_model.objects.create_user(username="scout_due_attacker", password="pass123"))
+    defender = ensure_manor(django_user_model.objects.create_user(username="scout_due_defender", password="pass123"))
+
+    now = timezone.now()
+    due_outbound = ScoutRecord.objects.create(
+        attacker=attacker,
+        defender=defender,
+        status=ScoutRecord.Status.SCOUTING,
+        scout_cost=1,
+        success_rate=0.5,
+        travel_time=60,
+        complete_at=now - timedelta(seconds=1),
+    )
+    ScoutRecord.objects.create(
+        attacker=attacker,
+        defender=defender,
+        status=ScoutRecord.Status.SCOUTING,
+        scout_cost=1,
+        success_rate=0.5,
+        travel_time=60,
+        complete_at=now + timedelta(seconds=60),
+    )
+    due_return = ScoutRecord.objects.create(
+        attacker=attacker,
+        defender=defender,
+        status=ScoutRecord.Status.RETURNING,
+        scout_cost=1,
+        success_rate=0.5,
+        travel_time=60,
+        return_at=now - timedelta(seconds=1),
+        complete_at=now - timedelta(seconds=120),
+    )
+    ScoutRecord.objects.create(
+        attacker=attacker,
+        defender=defender,
+        status=ScoutRecord.Status.RETURNING,
+        scout_cost=1,
+        success_rate=0.5,
+        travel_time=60,
+        return_at=now + timedelta(seconds=60),
+        complete_at=now - timedelta(seconds=120),
+    )
+    ScoutRecord.objects.create(
+        attacker=attacker,
+        defender=defender,
+        status=ScoutRecord.Status.SUCCESS,
+        scout_cost=1,
+        success_rate=1.0,
+        travel_time=60,
+        complete_at=now - timedelta(seconds=120),
+        return_at=now - timedelta(seconds=60),
+        completed_at=now - timedelta(seconds=30),
+        is_success=True,
+        intel_data={},
+    )
+
+    scouting_ids, returning_ids = scout_refresh_command.collect_due_scout_record_ids(attacker, now)
+
+    assert scouting_ids == [due_outbound.id]
+    assert returning_ids == [due_return.id]
 
 
 def test_refresh_scout_records_prefers_async_dispatch(monkeypatch):

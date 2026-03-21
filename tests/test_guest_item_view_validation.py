@@ -6,12 +6,12 @@ from django.core.cache import cache
 from django.test import Client
 from django.urls import reverse
 
+import guests.views.recruit as recruit_views
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.manor.core import ensure_manor
 from guests.models import GearItem, GearSlot, RecruitmentCandidate, RecruitmentPool
 from guests.services.recruitment import recruit_guest
 from guests.services.recruitment_guests import finalize_candidate
-from guests.views import recruit as recruit_views
 
 
 def _bootstrap_guest_client(game_data, django_user_model, *, username: str):

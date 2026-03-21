@@ -1,25 +1,12 @@
 from django.urls import path
 
-from .views import (
-    GuestDetailView,
-    RecruitView,
-    RosterView,
-    TrainView,
-    accept_candidate_view,
-    allocate_points_view,
-    check_training_view,
-    dismiss_guest_view,
-    equip_view,
-    forget_skill_view,
-    gear_options_view,
-    learn_skill_view,
-    pay_all_salaries_view,
-    pay_salary_view,
-    unequip_view,
-    use_experience_item_view,
-    use_magnifying_glass_view,
-    use_medicine_item_view,
-)
+from .views.equipment import equip_view, gear_options_view, unequip_view
+from .views.items import use_medicine_item_view
+from .views.recruit import RecruitView, accept_candidate_view, use_magnifying_glass_view
+from .views.roster import GuestDetailView, RosterView, dismiss_guest_view
+from .views.salary import pay_all_salaries_view, pay_salary_view
+from .views.skills import forget_skill_view, learn_skill_view
+from .views.training import TrainView, allocate_points_view, check_training_view, use_experience_item_view
 
 app_name = "guests"
 

@@ -127,12 +127,10 @@ def launch_mission(
     *,
     seed: Any = None,
     scale_duration,
-    refresh_mission_runs,
     import_launch_post_action_tasks,
     try_prepare_launch_report,
     dispatch_complete_mission_task,
 ) -> MissionRun:
-    refresh_mission_runs(manor)
     validate_mission_attempts(manor, mission)
 
     with transaction.atomic():

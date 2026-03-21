@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from django.utils import timezone
 
 import gameplay.services.missions_impl.execution as mission_execution
+import gameplay.services.missions_impl.launch_post_actions as mission_launch_post_actions
 
 
 class _DueRunsManager:
@@ -133,7 +134,7 @@ def test_build_defender_setup_and_drop_table_sanitizes_invalid_mission_json():
         drop_table="bad-drops",
     )
 
-    defender_setup, drop_table = mission_execution.build_defender_setup_and_drop_table(
+    defender_setup, drop_table = mission_launch_post_actions.build_defender_setup_and_drop_table(
         mission,
         loadout={},
         normalize_guest_configs=mission_execution._normalize_guest_configs,
@@ -150,7 +151,7 @@ def test_build_defender_setup_and_drop_table_for_defense_keeps_runtime_loadout()
     mission = SimpleNamespace(is_defense=True)
     loadout = {"archer": 10}
 
-    defender_setup, drop_table = mission_execution.build_defender_setup_and_drop_table(
+    defender_setup, drop_table = mission_launch_post_actions.build_defender_setup_and_drop_table(
         mission,
         loadout=loadout,
         normalize_guest_configs=mission_execution._normalize_guest_configs,

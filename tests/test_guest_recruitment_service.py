@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -19,6 +20,7 @@ from gameplay.services.manor.core import ensure_manor
 from guests.models import (
     Guest,
     GuestRarity,
+    GuestRecruitment,
     GuestStatus,
     GuestTemplate,
     RecruitmentCandidate,
@@ -646,3 +648,70 @@ def test_bulk_finalize_candidates_marks_missing_candidates_as_failed(django_user
     assert len(created) == 1
     assert created[0].custom_name == "缺失候选二"
     assert [candidate.id for candidate in failed] == [candidate_1.id]
+
+
+@pytest.mark.django_db
+def test_refresh_guest_recruitments_only_processes_due_pending_records(django_user_model, monkeypatch):
+    user = django_user_model.objects.create_user(
+        username="refresh_guest_recruitments_due_pending",
+        password="pass123",
+        email="refresh_guest_recruitments_due_pending@test.local",
+    )
+    manor = ensure_manor(user)
+    pool = RecruitmentPool.objects.create(
+        key="refresh_guest_recruitments_pool",
+        name="刷新招募测试卡池",
+        cost={},
+        tier=RecruitmentPool.Tier.CUNMU,
+        draw_count=1,
+    )
+
+    now = recruitment_command_service.timezone.now()
+    due_pending = GuestRecruitment.objects.create(
+        manor=manor,
+        pool=pool,
+        cost={},
+        draw_count=1,
+        duration_seconds=30,
+        seed=11,
+        status=GuestRecruitment.Status.PENDING,
+        complete_at=now,
+    )
+    future_pending = GuestRecruitment.objects.create(
+        manor=manor,
+        pool=pool,
+        cost={},
+        draw_count=1,
+        duration_seconds=30,
+        seed=22,
+        status=GuestRecruitment.Status.PENDING,
+        complete_at=now + timedelta(minutes=5),
+    )
+    completed = GuestRecruitment.objects.create(
+        manor=manor,
+        pool=pool,
+        cost={},
+        draw_count=1,
+        duration_seconds=30,
+        seed=33,
+        status=GuestRecruitment.Status.COMPLETED,
+        complete_at=now - timedelta(minutes=5),
+        finished_at=now - timedelta(minutes=4),
+        result_count=1,
+    )
+
+    finalized_ids: list[int] = []
+
+    def _fake_finalize(recruitment, *, now=None, send_notification=False):
+        assert now is not None
+        assert send_notification is True
+        finalized_ids.append(recruitment.pk)
+        return recruitment.pk == due_pending.pk
+
+    monkeypatch.setattr(recruitment_command_service, "finalize_guest_recruitment", _fake_finalize)
+    completed_count = recruitment_command_service.refresh_guest_recruitments(manor)
+
+    assert completed_count == 1
+    assert finalized_ids == [due_pending.pk]
+    assert future_pending.pk not in finalized_ids
+    assert completed.pk not in finalized_ids

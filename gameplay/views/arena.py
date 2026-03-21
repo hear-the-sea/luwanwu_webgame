@@ -17,7 +17,7 @@ from core.decorators import flash_unexpected_view_error
 from core.exceptions import ArenaGuestSelectionError, GameError
 from core.utils import safe_positive_int, sanitize_error_message
 from core.utils.rate_limit import rate_limit_redirect
-from gameplay.selectors import (
+from gameplay.selectors.arena import (
     get_arena_event_detail_context,
     get_arena_events_context,
     get_arena_exchange_context,
