@@ -31,11 +31,7 @@ def _coerce_non_negative_int(value, default: int = 0) -> int:
 
 def _is_expected_task_error(exc: Exception) -> bool:
     """Infrastructure errors that warrant a Celery retry rather than immediate propagation."""
-    return is_expected_infrastructure_error(
-        exc,
-        exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
-        allow_runtime_markers=True,
-    )
+    return is_expected_infrastructure_error(exc, exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS)
 
 
 def _normalize_settlement_stats(stats) -> tuple[int, int, int, int]:

@@ -8,7 +8,7 @@ import pytest
 from django.db import IntegrityError
 from django.utils import timezone
 
-from core.exceptions import TradeValidationError
+from core.exceptions import MessageError, TradeValidationError
 from gameplay.models import InventoryItem, ItemTemplate, Manor
 from trade.models import MarketListing, MarketTransaction
 from trade.services import market_service
@@ -309,7 +309,7 @@ class TestMarketPurchase:
         )
 
         def _raise_message_error(**_kwargs):
-            raise RuntimeError("message backend unavailable")
+            raise MessageError("message backend unavailable")
 
         monkeypatch.setattr(market_service, "send_market_message", _raise_message_error)
 

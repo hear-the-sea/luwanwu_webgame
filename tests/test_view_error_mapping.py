@@ -57,6 +57,10 @@ def test_classify_view_error_treats_value_error_as_unexpected_by_default():
     assert classify_view_error(ValueError("boom")) == "unexpected"
 
 
+def test_classify_view_error_treats_runtime_marker_as_unexpected():
+    assert classify_view_error(RuntimeError("database backend unavailable")) == "unexpected"
+
+
 def test_classify_view_error_can_explicitly_allow_legacy_value_errors():
     assert classify_view_error(ValueError("boom"), known_exceptions=(GameError, ValueError)) == "known"
 

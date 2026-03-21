@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from core.exceptions import TradeValidationError
+from core.exceptions import MessageError, TradeValidationError
 from gameplay.models import InventoryItem
 from gameplay.services.manor.core import ensure_manor
 from tests.helpers.auction import create_active_round_slot, ensure_gold_bar_template
@@ -146,11 +146,11 @@ def test_place_bid_succeeds_when_outbid_notification_fails(monkeypatch, django_u
     auction_service.place_bid(manor1, slot.id, 5)
     monkeypatch.setattr(
         "trade.services.auction.bidding.create_message",
-        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("msg down")),
+        lambda *args, **kwargs: (_ for _ in ()).throw(MessageError("msg down")),
     )
     monkeypatch.setattr(
         "trade.services.auction.bidding.notify_user",
-        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("ws down")),
+        lambda *args, **kwargs: (_ for _ in ()).throw(ConnectionError("ws down")),
     )
 
     bid2, _ = auction_service.place_bid(manor2, slot.id, 6)
@@ -158,6 +158,27 @@ def test_place_bid_succeeds_when_outbid_notification_fails(monkeypatch, django_u
 
     assert bid2.status == AuctionBid.Status.ACTIVE
     assert bid2.frozen_record.is_frozen is True
+
+
+@pytest.mark.django_db
+def test_place_bid_runtime_marker_notification_error_bubbles_up(monkeypatch, django_user_model):
+    user1 = django_user_model.objects.create_user(username="auction_notify_runtime_1", password="pass12345")
+    user2 = django_user_model.objects.create_user(username="auction_notify_runtime_2", password="pass12345")
+    manor1 = ensure_manor(user1)
+    manor2 = ensure_manor(user2)
+    _set_gold_bars(manor1, 10)
+    _set_gold_bars(manor2, 10)
+
+    slot = create_active_round_slot(item_key="auction_notify_runtime_item", quantity=1)
+
+    auction_service.place_bid(manor1, slot.id, 5)
+    monkeypatch.setattr(
+        "trade.services.auction.bidding.create_message",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+    )
+
+    with pytest.raises(RuntimeError, match="message backend down"):
+        auction_service.place_bid(manor2, slot.id, 6)
 
 
 @pytest.mark.django_db

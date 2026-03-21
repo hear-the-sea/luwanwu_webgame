@@ -29,7 +29,9 @@ def _select_offense_mission():
 
 
 @pytest.mark.django_db(transaction=True)
-def test_launch_mission_survives_dispatch_failure(game_data, mission_templates, manor_with_troops, monkeypatch, caplog):
+def test_launch_mission_survives_explicit_dispatch_failure(
+    game_data, mission_templates, manor_with_troops, monkeypatch, caplog
+):
     manor = manor_with_troops
     mission = _select_offense_mission()
     guest = _create_launch_guest(manor)
@@ -47,7 +49,7 @@ def test_launch_mission_survives_dispatch_failure(game_data, mission_templates, 
     monkeypatch.setattr(
         mission_execution.mission_followups,
         "schedule_mission_completion_task",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("dispatch backend unavailable")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionError("dispatch backend unavailable")),
     )
 
     caplog.set_level(logging.ERROR, logger=mission_execution.__name__)
@@ -67,7 +69,9 @@ def test_launch_mission_survives_dispatch_failure(game_data, mission_templates, 
 
 
 @pytest.mark.django_db(transaction=True)
-def test_launch_mission_survives_report_failure(game_data, mission_templates, manor_with_troops, monkeypatch, caplog):
+def test_launch_mission_survives_explicit_report_failure(
+    game_data, mission_templates, manor_with_troops, monkeypatch, caplog
+):
     manor = manor_with_troops
     mission = _select_offense_mission()
     guest = _create_launch_guest(manor)
@@ -80,7 +84,7 @@ def test_launch_mission_survives_report_failure(game_data, mission_templates, ma
     monkeypatch.setattr(
         mission_execution.mission_followups,
         "dispatch_or_sync_launch_report",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("report backend unavailable")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionError("report backend unavailable")),
     )
     monkeypatch.setattr(
         mission_execution.mission_followups,
@@ -103,6 +107,34 @@ def test_launch_mission_survives_report_failure(game_data, mission_templates, ma
         getattr(record, "degraded", False) and getattr(record, "component", "") == "mission_launch_report"
         for record in caplog.records
     )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_launch_mission_report_runtime_marker_error_bubbles_up(
+    game_data, mission_templates, manor_with_troops, monkeypatch
+):
+    manor = manor_with_troops
+    mission = _select_offense_mission()
+    guest = _create_launch_guest(manor)
+
+    monkeypatch.setattr(
+        mission_execution.mission_followups,
+        "import_launch_post_action_tasks",
+        lambda **_kwargs: (object(), object()),
+    )
+    monkeypatch.setattr(
+        mission_execution.mission_followups,
+        "dispatch_or_sync_launch_report",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("report backend unavailable")),
+    )
+    monkeypatch.setattr(
+        mission_execution.mission_followups,
+        "schedule_mission_completion_task",
+        lambda *_args, **_kwargs: None,
+    )
+
+    with pytest.raises(RuntimeError, match="report backend unavailable"):
+        mission_execution.launch_mission(manor, mission, [guest.id], {})
 
 
 @pytest.mark.django_db(transaction=True)
@@ -158,6 +190,34 @@ def test_launch_mission_completion_dispatch_programming_error_bubbles_up(
     )
 
     with pytest.raises(AssertionError, match="broken completion dispatch contract"):
+        mission_execution.launch_mission(manor, mission, [guest.id], {})
+
+
+@pytest.mark.django_db(transaction=True)
+def test_launch_mission_completion_dispatch_runtime_marker_error_bubbles_up(
+    game_data, mission_templates, manor_with_troops, monkeypatch
+):
+    manor = manor_with_troops
+    mission = _select_offense_mission()
+    guest = _create_launch_guest(manor)
+
+    monkeypatch.setattr(
+        mission_execution.mission_followups,
+        "import_launch_post_action_tasks",
+        lambda **_kwargs: (object(), object()),
+    )
+    monkeypatch.setattr(
+        mission_execution.mission_followups,
+        "dispatch_or_sync_launch_report",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        mission_execution.mission_followups,
+        "schedule_mission_completion_task",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("dispatch backend unavailable")),
+    )
+
+    with pytest.raises(RuntimeError, match="dispatch backend unavailable"):
         mission_execution.launch_mission(manor, mission, [guest.id], {})
 
 

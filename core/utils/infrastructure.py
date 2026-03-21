@@ -6,7 +6,7 @@ from django.db import DatabaseError
 
 InfrastructureExceptions: TypeAlias = tuple[type[Exception], ...]
 
-INFRASTRUCTURE_RUNTIME_ERROR_MARKERS = (
+CACHE_RUNTIME_ERROR_MARKERS = (
     "cache backend",
     "cache down",
     "cache get failed",
@@ -17,11 +17,6 @@ INFRASTRUCTURE_RUNTIME_ERROR_MARKERS = (
     "cache delete failed",
     "cache delete_many failed",
     "cache write failed",
-    "backend down",
-    "backend unavailable",
-    "broker",
-    "celery",
-    "channel layer",
     "connection aborted",
     "connection refused",
     "connection reset",
@@ -95,11 +90,16 @@ DATABASE_CACHE_INFRASTRUCTURE_EXCEPTIONS = build_infrastructure_exceptions(
 NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS = INFRASTRUCTURE_EXCEPTIONS
 
 
-def is_infrastructure_runtime_error(exc: Exception) -> bool:
+def is_cache_runtime_error(exc: Exception) -> bool:
     if not isinstance(exc, RuntimeError):
         return False
     message = str(exc).lower()
-    return any(marker in message for marker in INFRASTRUCTURE_RUNTIME_ERROR_MARKERS)
+    return any(marker in message for marker in CACHE_RUNTIME_ERROR_MARKERS)
+
+
+def is_infrastructure_runtime_error(exc: Exception) -> bool:
+    """Legacy alias kept for cache-only runtime compatibility checks."""
+    return is_cache_runtime_error(exc)
 
 
 def is_expected_infrastructure_error(
@@ -108,11 +108,10 @@ def is_expected_infrastructure_error(
     exceptions: InfrastructureExceptions = INFRASTRUCTURE_EXCEPTIONS,
     allow_runtime_markers: bool = False,
 ) -> bool:
-    if isinstance(exc, exceptions):
-        return True
-    if allow_runtime_markers and is_infrastructure_runtime_error(exc):
-        return True
-    return False
+    # Runtime marker inference is intentionally limited to direct cache helpers.
+    # Keep the flag as a no-op for compatibility with older callers.
+    _ = allow_runtime_markers
+    return isinstance(exc, exceptions)
 
 
 def is_expected_cache_infrastructure_error(
@@ -120,15 +119,15 @@ def is_expected_cache_infrastructure_error(
     *,
     exceptions: InfrastructureExceptions = CACHE_INFRASTRUCTURE_EXCEPTIONS,
 ) -> bool:
-    return is_expected_infrastructure_error(
-        exc,
-        exceptions=exceptions,
-        allow_runtime_markers=True,
-    )
+    return isinstance(exc, exceptions) or is_cache_runtime_error(exc)
+
+
+INFRASTRUCTURE_RUNTIME_ERROR_MARKERS = CACHE_RUNTIME_ERROR_MARKERS
 
 
 __all__ = [
     "CACHE_INFRASTRUCTURE_EXCEPTIONS",
+    "CACHE_RUNTIME_ERROR_MARKERS",
     "DATABASE_CACHE_INFRASTRUCTURE_EXCEPTIONS",
     "DATABASE_INFRASTRUCTURE_EXCEPTIONS",
     "INFRASTRUCTURE_EXCEPTIONS",
@@ -136,6 +135,7 @@ __all__ = [
     "InfrastructureExceptions",
     "NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS",
     "build_infrastructure_exceptions",
+    "is_cache_runtime_error",
     "is_expected_cache_infrastructure_error",
     "is_expected_infrastructure_error",
     "is_infrastructure_runtime_error",

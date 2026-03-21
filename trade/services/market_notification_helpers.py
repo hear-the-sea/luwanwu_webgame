@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_infrastructure_runtime_error
+from core.exceptions import MessageError
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_expected_infrastructure_error
 
 MARKET_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS = DATABASE_INFRASTRUCTURE_EXCEPTIONS
 
@@ -16,16 +17,10 @@ def safe_send_market_message(
     try:
         create_message_func(**kwargs)
         return True
-    except infrastructure_exceptions as exc:
-        logger.warning("%s: %s", log_message, exc, exc_info=True)
-        return False
-    except RuntimeError as exc:
-        if is_infrastructure_runtime_error(exc):
+    except Exception as exc:
+        if isinstance(exc, MessageError) or is_expected_infrastructure_error(exc, exceptions=infrastructure_exceptions):
             logger.warning("%s: %s", log_message, exc, exc_info=True)
             return False
-        logger.exception("%s: unexpected error", log_message)
-        raise
-    except Exception:
         logger.exception("%s: unexpected error", log_message)
         raise
 
@@ -42,16 +37,8 @@ def safe_send_market_notification(
 ) -> None:
     try:
         notify_user_func(user_id, payload, log_context=log_context)
-    except infrastructure_exceptions as exc:
-        logger.warning(
-            "%s: user_id=%s error=%s",
-            log_message,
-            user_id,
-            exc,
-            exc_info=True,
-        )
-    except RuntimeError as exc:
-        if is_infrastructure_runtime_error(exc):
+    except Exception as exc:
+        if is_expected_infrastructure_error(exc, exceptions=infrastructure_exceptions):
             logger.warning(
                 "%s: user_id=%s error=%s",
                 log_message,
@@ -60,9 +47,6 @@ def safe_send_market_notification(
                 exc_info=True,
             )
             return
-        logger.exception("%s unexpected notification error: user_id=%s", log_message, user_id)
-        raise
-    except Exception:
         logger.exception("%s unexpected notification error: user_id=%s", log_message, user_id)
         raise
 

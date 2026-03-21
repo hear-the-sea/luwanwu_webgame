@@ -11,7 +11,13 @@ from django.core.cache import cache
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from core.utils.infrastructure import CACHE_INFRASTRUCTURE_EXCEPTIONS
+from core.exceptions import MessageError
+from core.utils.infrastructure import (
+    CACHE_INFRASTRUCTURE_EXCEPTIONS,
+    DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+    NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
+    is_expected_infrastructure_error,
+)
 from gameplay.models import ItemTemplate, Manor
 from gameplay.services.inventory.core import add_item_to_inventory_locked, consume_inventory_item_for_manor_locked
 from gameplay.services.utils.messages import create_message
@@ -85,6 +91,8 @@ def _safe_notify_user(user_id: int, payload: dict, *, log_context: str) -> None:
     try:
         notify_user(user_id, payload, log_context=log_context)
     except Exception as exc:
+        if not is_expected_infrastructure_error(exc, exceptions=NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS):
+            raise
         logger.warning(
             "auction winning notify_user failed: user_id=%s error=%s",
             user_id,
@@ -492,6 +500,11 @@ def _send_winning_notification_vickrey(
             },
         )
     except Exception as exc:
+        if not (
+            isinstance(exc, MessageError)
+            or is_expected_infrastructure_error(exc, exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS)
+        ):
+            raise
         delivery_via_message = False
         logger.exception(
             "auction winning message create failed, fallback to direct inventory grant: slot_id=%s manor_id=%s error=%s",

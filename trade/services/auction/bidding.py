@@ -8,7 +8,12 @@ from typing import List, Optional, Tuple
 from django.db import transaction
 from django.utils import timezone
 
-from core.exceptions import TradeValidationError
+from core.exceptions import MessageError, TradeValidationError
+from core.utils.infrastructure import (
+    DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+    NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
+    is_expected_infrastructure_error,
+)
 from gameplay.models import Manor
 from gameplay.services.utils.messages import create_message
 from gameplay.services.utils.notifications import notify_user
@@ -47,6 +52,11 @@ def _safe_create_message(**kwargs) -> None:
     try:
         create_message(**kwargs)
     except Exception as exc:
+        if not (
+            isinstance(exc, MessageError)
+            or is_expected_infrastructure_error(exc, exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS)
+        ):
+            raise
         logger.warning("auction outbid create_message failed: %s", exc, exc_info=True)
 
 
@@ -54,6 +64,8 @@ def _safe_notify_user(user_id: int, payload: dict, *, log_context: str) -> None:
     try:
         notify_user(user_id, payload, log_context=log_context)
     except Exception as exc:
+        if not is_expected_infrastructure_error(exc, exceptions=NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS):
+            raise
         logger.warning(
             "auction outbid notify_user failed: user_id=%s error=%s",
             user_id,

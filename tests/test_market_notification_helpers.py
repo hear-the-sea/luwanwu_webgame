@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 from django_redis.exceptions import ConnectionInterrupted
 
+from core.exceptions import MessageError
 from trade.services import market_notification_helpers
 
 
@@ -76,11 +77,11 @@ def test_safe_send_market_notification_re_raises_non_infrastructure_errors():
     logger.warning.assert_not_called()
 
 
-def test_safe_send_market_message_treats_backend_runtime_error_as_infrastructure():
+def test_safe_send_market_message_swallows_message_error():
     logger = MagicMock()
 
     result = market_notification_helpers.safe_send_market_message(
-        create_message_func=lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+        create_message_func=lambda **_kwargs: (_ for _ in ()).throw(MessageError("message backend down")),
         logger=logger,
         log_message="market create_message failed",
         manor=SimpleNamespace(id=1),
@@ -92,6 +93,24 @@ def test_safe_send_market_message_treats_backend_runtime_error_as_infrastructure
     assert result is False
     logger.warning.assert_called_once()
     logger.exception.assert_not_called()
+
+
+def test_safe_send_market_message_runtime_marker_bubbles_up():
+    logger = MagicMock()
+
+    with pytest.raises(RuntimeError, match="message backend down"):
+        market_notification_helpers.safe_send_market_message(
+            create_message_func=lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+            logger=logger,
+            log_message="market create_message failed",
+            manor=SimpleNamespace(id=1),
+            kind="system",
+            title="t",
+            body="b",
+        )
+
+    logger.warning.assert_not_called()
+    logger.exception.assert_called_once()
 
 
 def test_safe_send_market_notification_swallows_connection_interrupted():

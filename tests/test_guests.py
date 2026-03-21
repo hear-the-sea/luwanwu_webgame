@@ -9,6 +9,7 @@ import guests.services.recruitment_templates as recruitment_template_service
 from core.config import GUEST
 from core.exceptions import (
     GuestNotIdleError,
+    MessageError,
     NoTemplateAvailableError,
     RecruitmentAlreadyInProgressError,
     RecruitmentCandidateStateError,
@@ -264,15 +265,44 @@ def test_finalize_guest_recruitment_keeps_success_when_notification_fails(
     recruitment.save(update_fields=["complete_at"])
 
     monkeypatch.setattr(
-        "gameplay.services.utils.messages.create_message",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+        "guests.services.recruitment_followups.create_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(MessageError("message backend down")),
     )
     monkeypatch.setattr(
-        "gameplay.services.utils.notifications.notify_user",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("ws backend down")),
+        "guests.services.recruitment_followups.notify_user",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionError("ws backend down")),
     )
 
     assert finalize_guest_recruitment(recruitment, now=timezone.now(), send_notification=True) is True
+
+    recruitment.refresh_from_db()
+    assert recruitment.status == GuestRecruitment.Status.COMPLETED
+    assert manor.candidates.count() == recruitment.draw_count
+
+
+@pytest.mark.django_db
+def test_finalize_guest_recruitment_runtime_marker_notification_error_bubbles_up(
+    game_data, django_user_model, load_guest_data, monkeypatch
+):
+    user = django_user_model.objects.create_user(
+        username="player_recruit_async_notify_runtime_backend", password="pass123"
+    )
+    manor = ensure_manor(user)
+    manor.silver = 50000
+    manor.save(update_fields=["silver"])
+    pool = RecruitmentPool.objects.get(key="cunmu")
+
+    recruitment = start_guest_recruitment(manor, pool, seed=109)
+    recruitment.complete_at = timezone.now() - timezone.timedelta(seconds=1)
+    recruitment.save(update_fields=["complete_at"])
+
+    monkeypatch.setattr(
+        "guests.services.recruitment_followups.create_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+    )
+
+    with pytest.raises(RuntimeError, match="message backend down"):
+        finalize_guest_recruitment(recruitment, now=timezone.now(), send_notification=True)
 
     recruitment.refresh_from_db()
     assert recruitment.status == GuestRecruitment.Status.COMPLETED

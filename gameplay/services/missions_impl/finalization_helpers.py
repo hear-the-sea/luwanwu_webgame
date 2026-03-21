@@ -234,7 +234,6 @@ def send_mission_report_message(
             or is_expected_infrastructure_error(
                 exc,
                 exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
-                allow_runtime_markers=True,
             )
         ):
             raise
@@ -264,7 +263,6 @@ def send_mission_report_message(
         if not is_expected_infrastructure_error(
             exc,
             exceptions=notification_infrastructure_exceptions,
-            allow_runtime_markers=True,
         ):
             raise
         logger.warning(

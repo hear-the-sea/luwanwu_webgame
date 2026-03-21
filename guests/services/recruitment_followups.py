@@ -80,11 +80,7 @@ def send_recruitment_completion_notification(
     except Exception as exc:
         if not (
             isinstance(exc, MessageError)
-            or is_expected_infrastructure_error(
-                exc,
-                exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
-                allow_runtime_markers=True,
-            )
+            or is_expected_infrastructure_error(exc, exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS)
         ):
             raise
         logger.warning(

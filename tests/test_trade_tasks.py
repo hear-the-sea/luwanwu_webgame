@@ -125,6 +125,23 @@ def test_refresh_shop_stock_retries_when_loading_config_fails(monkeypatch):
 
 
 @pytest.mark.django_db
+def test_refresh_shop_stock_runtime_marker_bubbles_up_without_retry(monkeypatch):
+    monkeypatch.setattr("trade.tasks.reload_shop_config", lambda: None)
+    monkeypatch.setattr(
+        "trade.tasks.get_shop_config",
+        lambda: (_ for _ in ()).throw(RuntimeError("config backend unavailable")),
+    )
+    monkeypatch.setattr(
+        refresh_shop_stock,
+        "retry",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("retry should not be called")),
+    )
+
+    with pytest.raises(RuntimeError, match="config backend unavailable"):
+        refresh_shop_stock.run()
+
+
+@pytest.mark.django_db
 def test_process_expired_listings_coerces_invalid_count(monkeypatch):
     monkeypatch.setattr("trade.services.market_service.expire_listings", lambda: "invalid")
     result = process_expired_listings.run()

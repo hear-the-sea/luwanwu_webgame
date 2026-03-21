@@ -86,7 +86,6 @@ def _delete_captured_guest_gear(run: RaidRun, target: Guest) -> None:
         if not is_expected_infrastructure_error(
             exc,
             exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
-            allow_runtime_markers=True,
         ):
             raise
         logger.warning(

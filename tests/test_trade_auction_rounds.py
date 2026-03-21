@@ -7,6 +7,7 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
 
+from core.exceptions import MessageError
 from gameplay.models import InventoryItem, Message
 from gameplay.services.manor.core import ensure_manor
 from gameplay.services.utils.messages import claim_message_attachments
@@ -739,7 +740,7 @@ def test_rounds_module_settle_slot_falls_back_to_direct_grant_when_message_creat
 
     monkeypatch.setattr(
         "trade.services.auction.rounds.create_message",
-        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("message unavailable")),
+        lambda *a, **k: (_ for _ in ()).throw(MessageError("message unavailable")),
     )
     monkeypatch.setattr("trade.services.auction.rounds.notify_user", lambda *a, **k: True)
 
@@ -760,6 +761,71 @@ def test_rounds_module_settle_slot_falls_back_to_direct_grant_when_message_creat
         storage_location=InventoryItem.StorageLocation.WAREHOUSE,
     )
     assert granted_item.quantity == 1
+
+
+@pytest.mark.django_db
+def test_rounds_module_settle_slot_runtime_marker_message_error_bubbles_up(monkeypatch, django_user_model):
+    from trade.services.auction.rounds import _settle_slot
+
+    user = django_user_model.objects.create_user(username="auction_rounds_message_runtime", password="pass123")
+    manor = ensure_manor(user)
+
+    item_tpl = _create_auction_item_template("auction_settle_direct_runtime_item")
+    gold_tpl = _ensure_gold_bar_template()
+    InventoryItem.objects.create(
+        manor=manor,
+        template=gold_tpl,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        quantity=30,
+    )
+    auction_round = AuctionRound.objects.create(
+        round_number=10016,
+        status=AuctionRound.Status.ACTIVE,
+        start_at=timezone.now() - timedelta(days=2),
+        end_at=timezone.now() - timedelta(minutes=1),
+    )
+    slot = AuctionSlot.objects.create(
+        round=auction_round,
+        item_template=item_tpl,
+        quantity=1,
+        starting_price=10,
+        current_price=10,
+        min_increment=1,
+        status=AuctionSlot.Status.ACTIVE,
+        config_key=item_tpl.key,
+        slot_index=0,
+    )
+    bid = AuctionBid.objects.create(
+        slot=slot,
+        manor=manor,
+        amount=20,
+        status=AuctionBid.Status.ACTIVE,
+        frozen_gold_bars=20,
+    )
+    FrozenGoldBar.objects.create(
+        manor=manor,
+        amount=20,
+        reason=FrozenGoldBar.Reason.AUCTION_BID,
+        auction_bid=bid,
+        is_frozen=True,
+    )
+
+    monkeypatch.setattr(
+        "trade.services.auction.rounds.create_message",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("message backend down")),
+    )
+    monkeypatch.setattr("trade.services.auction.rounds.notify_user", lambda *a, **k: True)
+
+    with pytest.raises(RuntimeError, match="message backend down"):
+        with TestCase.captureOnCommitCallbacks(execute=True):
+            _settle_slot(slot)
+
+    assert not Message.objects.filter(manor=manor, title__contains="拍卖行").exists()
+    assert not InventoryItem.objects.filter(
+        manor=manor,
+        template=item_tpl,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    ).exists()
 
 
 @pytest.mark.django_db
@@ -805,7 +871,7 @@ def test_rounds_module_settle_slot_ignores_notify_failure(monkeypatch, django_us
     monkeypatch.setattr("trade.services.auction.rounds.create_message", lambda *a, **k: None)
     monkeypatch.setattr(
         "trade.services.auction.rounds.notify_user",
-        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("ws unavailable")),
+        lambda *a, **k: (_ for _ in ()).throw(ConnectionError("ws unavailable")),
     )
 
     result = _settle_slot(slot)
@@ -815,6 +881,56 @@ def test_rounds_module_settle_slot_ignores_notify_failure(monkeypatch, django_us
     assert result["sold"] is True
     assert slot.status == AuctionSlot.Status.SOLD
     assert bid.status == AuctionBid.Status.WON
+
+
+@pytest.mark.django_db
+def test_rounds_module_settle_slot_runtime_marker_notify_error_bubbles_up(monkeypatch, django_user_model):
+    from trade.services.auction.rounds import _settle_slot
+
+    user = django_user_model.objects.create_user(username="auction_rounds_notify_runtime", password="pass123")
+    manor = ensure_manor(user)
+
+    item_tpl = _create_auction_item_template("auction_settle_notify_runtime_item")
+    auction_round = AuctionRound.objects.create(
+        round_number=10017,
+        status=AuctionRound.Status.ACTIVE,
+        start_at=timezone.now() - timedelta(days=2),
+        end_at=timezone.now() - timedelta(minutes=1),
+    )
+    slot = AuctionSlot.objects.create(
+        round=auction_round,
+        item_template=item_tpl,
+        quantity=1,
+        starting_price=10,
+        current_price=10,
+        min_increment=1,
+        status=AuctionSlot.Status.ACTIVE,
+        config_key=item_tpl.key,
+        slot_index=0,
+    )
+    bid = AuctionBid.objects.create(
+        slot=slot, manor=manor, amount=20, status=AuctionBid.Status.ACTIVE, frozen_gold_bars=20
+    )
+    FrozenGoldBar.objects.create(
+        manor=manor,
+        amount=20,
+        reason=FrozenGoldBar.Reason.AUCTION_BID,
+        auction_bid=bid,
+        is_frozen=True,
+    )
+
+    monkeypatch.setattr(
+        "trade.services.auction.gold_bars.consume_inventory_item_for_manor_locked", lambda *a, **k: None
+    )
+    monkeypatch.setattr("trade.services.auction.rounds.create_message", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "trade.services.auction.rounds.notify_user",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("ws backend down")),
+    )
+
+    with pytest.raises(RuntimeError, match="ws backend down"):
+        with TestCase.captureOnCommitCallbacks(execute=True):
+            _settle_slot(slot)
 
 
 @pytest.mark.django_db

@@ -52,6 +52,7 @@ def schedule_recruitment_completion(recruitment: TroopRecruitment, eta_seconds: 
 
     countdown = max(0, int(eta_seconds))
 
+    complete_troop_recruitment: object
     try:
         from gameplay.tasks import complete_troop_recruitment
     except ImportError as exc:
@@ -59,9 +60,6 @@ def schedule_recruitment_completion(recruitment: TroopRecruitment, eta_seconds: 
             raise
         logger.warning("Unable to import complete_troop_recruitment task; skip scheduling", exc_info=True)
         return
-    except Exception:
-        logger.error("Unexpected complete_troop_recruitment import failure", exc_info=True)
-        raise
 
     def _dispatch_completion() -> None:
         dispatched = safe_apply_async(
@@ -177,7 +175,6 @@ def finalize_troop_recruitment(recruitment: TroopRecruitment, send_notification:
                 or is_expected_infrastructure_error(
                     exc,
                     exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
-                    allow_runtime_markers=True,
                 )
             ):
                 raise
@@ -205,7 +202,6 @@ def finalize_troop_recruitment(recruitment: TroopRecruitment, send_notification:
             if not is_expected_infrastructure_error(
                 exc,
                 exceptions=NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
-                allow_runtime_markers=True,
             ):
                 raise
             logger.warning(

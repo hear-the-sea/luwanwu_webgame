@@ -143,7 +143,6 @@ def _apply_capture_reward(locked_run: RaidRun, report: Any, is_attacker_victory:
         if is_expected_infrastructure_error(
             exc,
             exceptions=RAID_CAPTURE_DEGRADED_EXCEPTIONS,
-            allow_runtime_markers=True,
         ):
             logger.warning(
                 "raid capture failed: run_id=%s attacker=%s defender=%s error=%s",
@@ -295,7 +294,6 @@ def process_raid_battle(run: RaidRun, now: Optional[datetime] = None) -> None:
         if isinstance(exc, MessageError) or is_expected_infrastructure_error(
             exc,
             exceptions=RAID_BATTLE_INFRASTRUCTURE_EXCEPTIONS,
-            allow_runtime_markers=True,
         ):
             logger.warning(
                 "raid battle messages failed: run_id=%s attacker=%s defender=%s error=%s",
@@ -331,7 +329,6 @@ def process_raid_battle(run: RaidRun, now: Optional[datetime] = None) -> None:
         if is_expected_infrastructure_error(
             exc,
             exceptions=RAID_BATTLE_INFRASTRUCTURE_EXCEPTIONS,
-            allow_runtime_markers=True,
         ):
             logger.warning(
                 "dismiss marching raids failed: run_id=%s defender=%s error=%s",

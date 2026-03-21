@@ -100,7 +100,7 @@ def test_delete_captured_guest_gear_infrastructure_error_degrades(monkeypatch):
     class _GearQuerySet:
         @staticmethod
         def delete():
-            raise RuntimeError("redis backend down")
+            raise ConnectionError("redis backend down")
 
     class _GearObjects:
         @staticmethod
@@ -147,12 +147,29 @@ def test_apply_capture_reward_runtime_marker_infrastructure_error_degrades(monke
     monkeypatch.setattr(
         combat_battle,
         "_try_capture_guest",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("redis timed out")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionError("redis timed out")),
     )
 
     combat_battle._apply_capture_reward(run, SimpleNamespace(), True)
 
     assert run.battle_rewards == {"existing": True}
+
+
+def test_apply_capture_reward_runtime_marker_error_bubbles_up(monkeypatch):
+    run = SimpleNamespace(
+        id=53,
+        attacker_id=1,
+        defender_id=2,
+        battle_rewards={"existing": True},
+    )
+    monkeypatch.setattr(
+        combat_battle,
+        "_try_capture_guest",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("redis timed out")),
+    )
+
+    with pytest.raises(RuntimeError, match="redis timed out"):
+        combat_battle._apply_capture_reward(run, SimpleNamespace(), True)
 
 
 def test_apply_capture_reward_programming_error_bubbles_up(monkeypatch):
@@ -282,7 +299,7 @@ def test_process_raid_battle_known_post_commit_failures_degrade_and_continue(mon
     monkeypatch.setattr(
         combat_battle,
         "_dismiss_marching_raids_if_protected",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("redis down")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionError("redis down")),
     )
     monkeypatch.setattr(
         combat_battle,
@@ -291,6 +308,55 @@ def test_process_raid_battle_known_post_commit_failures_degrade_and_continue(mon
     )
 
     combat_battle.process_raid_battle(run, now=now)
+
+    assert run.status == RaidRun.Status.RETURNING
+    assert saved["count"] == 1
+    assert dispatched["count"] == 1
+
+
+def test_process_raid_battle_cleanup_runtime_marker_error_bubbles_after_dispatch(monkeypatch):
+    now = timezone.now()
+    attacker = SimpleNamespace(id=1, location_display="江南", display_name="进攻方")
+    defender = SimpleNamespace(id=2, location_display="塞北", display_name="防守方")
+    saved = {"count": 0}
+    dispatched = {"count": 0}
+    run = SimpleNamespace(
+        pk=19,
+        id=19,
+        attacker_id=1,
+        defender_id=2,
+        attacker=attacker,
+        defender=defender,
+        status=RaidRun.Status.MARCHING,
+        save=lambda **_kwargs: saved.__setitem__("count", saved["count"] + 1),
+    )
+    report = SimpleNamespace(winner="attacker")
+
+    monkeypatch.setattr(combat_battle.transaction, "atomic", contextlib.nullcontext)
+    monkeypatch.setattr(combat_battle, "_prepare_run_for_battle", lambda *_args, **_kwargs: run)
+    monkeypatch.setattr(combat_battle, "_lock_battle_manors", lambda *_args, **_kwargs: (attacker, defender))
+    monkeypatch.setattr(combat_battle, "_execute_raid_battle", lambda *_args, **_kwargs: report)
+    monkeypatch.setattr(combat_battle, "apply_defender_troop_losses", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_apply_raid_loot_if_needed", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_apply_prestige_changes", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_apply_defeat_protection", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_apply_capture_reward", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_apply_salvage_reward", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_get_defender_battle_block_reason", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_send_raid_battle_messages", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        combat_battle,
+        "_dismiss_marching_raids_if_protected",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("redis down")),
+    )
+    monkeypatch.setattr(
+        combat_battle,
+        "_dispatch_complete_raid_task",
+        lambda *_args, **_kwargs: dispatched.__setitem__("count", dispatched["count"] + 1),
+    )
+
+    with pytest.raises(RuntimeError, match="redis down"):
+        combat_battle.process_raid_battle(run, now=now)
 
     assert run.status == RaidRun.Status.RETURNING
     assert saved["count"] == 1
@@ -742,3 +808,53 @@ def test_retreat_raid_run_due_to_blocked_target_programming_error_bubbles_up(mon
     assert locked_run.status == RaidRun.Status.RETREATED
     assert locked_run.return_at == now + timedelta(seconds=15)
     assert saved["fields"] == ["status", "return_at"]
+
+
+def test_retreat_raid_run_due_to_blocked_target_explicit_message_error_degrades(monkeypatch):
+    now = timezone.now()
+    saved = {"fields": None}
+    locked_run = SimpleNamespace(
+        id=22,
+        attacker_id=1,
+        defender_id=2,
+        attacker=SimpleNamespace(id=1),
+        defender=SimpleNamespace(display_name="守方"),
+        started_at=now - timedelta(seconds=15),
+        save=lambda *, update_fields: saved.__setitem__("fields", update_fields),
+    )
+
+    monkeypatch.setattr(
+        combat_travel,
+        "create_message",
+        lambda **_kwargs: (_ for _ in ()).throw(MessageError("message backend down")),
+    )
+
+    return_time = combat_travel._retreat_raid_run_due_to_blocked_target(locked_run, now=now, reason="战败保护")
+
+    assert return_time == 15
+    assert locked_run.status == RaidRun.Status.RETREATED
+    assert locked_run.return_at == now + timedelta(seconds=15)
+    assert saved["fields"] == ["status", "return_at"]
+
+
+def test_retreat_raid_run_due_to_blocked_target_runtime_marker_error_bubbles_up(monkeypatch):
+    now = timezone.now()
+    saved = {"fields": None}
+    locked_run = SimpleNamespace(
+        id=23,
+        attacker_id=1,
+        defender_id=2,
+        attacker=SimpleNamespace(id=1),
+        defender=SimpleNamespace(display_name="守方"),
+        started_at=now - timedelta(seconds=15),
+        save=lambda *, update_fields: saved.__setitem__("fields", update_fields),
+    )
+
+    monkeypatch.setattr(
+        combat_travel,
+        "create_message",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+    )
+
+    with pytest.raises(RuntimeError, match="message backend down"):
+        combat_travel._retreat_raid_run_due_to_blocked_target(locked_run, now=now, reason="战败保护")

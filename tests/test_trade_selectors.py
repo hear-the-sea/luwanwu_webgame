@@ -531,6 +531,22 @@ def test_get_trade_context_shop_programming_error_bubbles_up(monkeypatch, django
 
 
 @pytest.mark.django_db
+def test_get_trade_context_shop_runtime_marker_bubbles_up(monkeypatch, django_user_model):
+    monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "trade.selectors.get_shop_items_for_display",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("database backend unavailable")),
+    )
+
+    user = django_user_model.objects.create_user(username="trade_ctx_shop_runtime_backend", password="pass12345")
+    manor = ensure_manor(user)
+    request = RequestFactory().get("/trade", {"tab": "shop"})
+
+    with pytest.raises(RuntimeError, match="database backend unavailable"):
+        get_trade_context(request, manor)
+
+
+@pytest.mark.django_db
 def test_get_trade_context_market_programming_error_bubbles_up(monkeypatch, django_user_model):
     monkeypatch.setattr("trade.selectors.sync_resource_production", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(

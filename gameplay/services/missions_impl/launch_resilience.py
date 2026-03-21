@@ -67,7 +67,6 @@ def prepare_launch_report_best_effort(
         if not is_expected_infrastructure_error(
             exc,
             exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
-            allow_runtime_markers=True,
         ):
             raise
         logger.error(
@@ -114,7 +113,6 @@ def dispatch_completion_task_best_effort(
         if not is_expected_infrastructure_error(
             exc,
             exceptions=INFRASTRUCTURE_EXCEPTIONS,
-            allow_runtime_markers=True,
         ):
             raise
         logger.error(

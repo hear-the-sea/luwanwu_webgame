@@ -29,11 +29,7 @@ def _dedup_timeout_for_remaining(remaining: int) -> int:
 
 def _is_expected_task_error(exc: Exception) -> bool:
     """Infrastructure errors that warrant a Celery retry rather than immediate propagation."""
-    return is_expected_infrastructure_error(
-        exc,
-        exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
-        allow_runtime_markers=True,
-    )
+    return is_expected_infrastructure_error(exc, exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS)
 
 
 @shared_task(name="guests.complete_training", bind=True, max_retries=2, default_retry_delay=30)

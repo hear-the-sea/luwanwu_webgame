@@ -23,7 +23,25 @@ def test_notify_user_returns_false_on_connection_interrupted(monkeypatch):
     logger.warning.assert_called_once()
 
 
-def test_notify_user_returns_false_on_unexpected_runtime_error(monkeypatch):
+def test_notify_user_runtime_marker_error_bubbles_up(monkeypatch):
+    logger = MagicMock()
+    monkeypatch.setattr(notification_utils, "logger", logger)
+    monkeypatch.setattr(notification_utils, "async_to_sync", lambda fn: fn)
+    monkeypatch.setattr(
+        notification_utils,
+        "get_channel_layer",
+        lambda: MagicMock(
+            group_send=lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("notification backend down"))
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="notification backend down"):
+        notify_user(1, {"kind": "system", "title": "t"})
+
+    logger.exception.assert_called_once()
+
+
+def test_notify_user_unexpected_runtime_error_bubbles_up(monkeypatch):
     logger = MagicMock()
     monkeypatch.setattr(notification_utils, "logger", logger)
     monkeypatch.setattr(notification_utils, "async_to_sync", lambda fn: fn)

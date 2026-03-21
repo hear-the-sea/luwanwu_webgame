@@ -429,6 +429,27 @@ def test_guest_training_dispatch_false(monkeypatch, caplog):
 
 
 @pytest.mark.django_db
+def test_guest_training_runtime_marker_bubbles_up_without_retry(monkeypatch):
+    import guests.tasks as guest_tasks
+
+    guest = SimpleNamespace(training_complete_at=None)
+
+    monkeypatch.setattr("guests.models.Guest", SimpleNamespace(objects=_Chain(first_result=guest)))
+    monkeypatch.setattr(
+        "guests.services.training.finalize_guest_training",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("training backend unavailable")),
+    )
+    monkeypatch.setattr(
+        guest_tasks.complete_guest_training,
+        "retry",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("retry should not be called")),
+    )
+
+    with pytest.raises(RuntimeError, match="training backend unavailable"):
+        guest_tasks.complete_guest_training.run(103)
+
+
+@pytest.mark.django_db
 def test_guest_training_via_safe_apply_async(monkeypatch):
     import guests.services.training as guest_training_service
     import guests.tasks as guest_tasks

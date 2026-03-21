@@ -91,7 +91,6 @@ def _retreat_raid_run_due_to_blocked_target(
             or is_expected_infrastructure_error(
                 exc,
                 exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
-                allow_runtime_markers=True,
             )
         ):
             raise

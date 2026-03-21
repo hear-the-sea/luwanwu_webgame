@@ -8,6 +8,7 @@ from django.utils import timezone
 
 import gameplay.services.missions_impl.execution as mission_execution
 import gameplay.services.missions_impl.launch_post_actions as mission_launch_post_actions
+from core.exceptions import MessageError
 
 
 class _DueRunsManager:
@@ -187,7 +188,7 @@ def test_build_defender_setup_and_drop_table_for_defense_keeps_runtime_loadout()
     assert drop_table == {}
 
 
-def test_send_mission_report_message_ignores_message_failure(monkeypatch):
+def test_send_mission_report_message_ignores_explicit_message_failure(monkeypatch):
     run = SimpleNamespace(
         id=88,
         manor_id=9,
@@ -200,7 +201,7 @@ def test_send_mission_report_message_ignores_message_failure(monkeypatch):
     monkeypatch.setattr(
         mission_execution,
         "create_message",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(MessageError("message backend down")),
     )
 
     mission_execution.send_mission_report_message(
@@ -211,6 +212,33 @@ def test_send_mission_report_message_ignores_message_failure(monkeypatch):
         notify_user=mission_execution.notify_user,
         notification_infrastructure_exceptions=mission_execution.MISSION_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
     )
+
+
+def test_send_mission_report_message_runtime_marker_error_bubbles_up(monkeypatch):
+    run = SimpleNamespace(
+        id=188,
+        manor_id=109,
+        is_retreating=False,
+        manor=SimpleNamespace(user_id=110),
+        mission=SimpleNamespace(key="mission_key", name="任务名"),
+    )
+    report = SimpleNamespace(id=166)
+
+    monkeypatch.setattr(
+        mission_execution,
+        "create_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+    )
+
+    with pytest.raises(RuntimeError, match="message backend down"):
+        mission_execution.send_mission_report_message(
+            run,
+            report,
+            logger=mission_execution.logger,
+            create_message=mission_execution.create_message,
+            notify_user=mission_execution.notify_user,
+            notification_infrastructure_exceptions=mission_execution.MISSION_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
+        )
 
 
 def test_send_mission_report_message_programming_error_bubbles_up(monkeypatch):
@@ -258,6 +286,34 @@ def test_send_mission_report_notification_programming_error_bubbles_up(monkeypat
     )
 
     with pytest.raises(AssertionError, match="broken mission notify contract"):
+        mission_execution.send_mission_report_message(
+            run,
+            report,
+            logger=mission_execution.logger,
+            create_message=mission_execution.create_message,
+            notify_user=mission_execution.notify_user,
+            notification_infrastructure_exceptions=mission_execution.MISSION_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
+        )
+
+
+def test_send_mission_report_notification_runtime_marker_error_bubbles_up(monkeypatch):
+    run = SimpleNamespace(
+        id=190,
+        manor_id=111,
+        is_retreating=False,
+        manor=SimpleNamespace(user_id=112),
+        mission=SimpleNamespace(key="mission_key", name="任务名"),
+    )
+    report = SimpleNamespace(id=168)
+
+    monkeypatch.setattr(mission_execution, "create_message", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(
+        mission_execution,
+        "notify_user",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("ws backend down")),
+    )
+
+    with pytest.raises(RuntimeError, match="ws backend down"):
         mission_execution.send_mission_report_message(
             run,
             report,

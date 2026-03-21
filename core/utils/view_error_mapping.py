@@ -23,15 +23,10 @@ def classify_view_error(
     *,
     known_exceptions: tuple[type[Exception], ...] = KNOWN_VIEW_EXCEPTIONS,
     infrastructure_exceptions: tuple[type[Exception], ...] = DEFAULT_VIEW_INFRASTRUCTURE_EXCEPTIONS,
-    allow_runtime_markers: bool = False,
 ) -> ViewErrorCategory:
     if isinstance(exc, known_exceptions):
         return "known"
-    if is_expected_infrastructure_error(
-        exc,
-        exceptions=infrastructure_exceptions,
-        allow_runtime_markers=allow_runtime_markers,
-    ):
+    if is_expected_infrastructure_error(exc, exceptions=infrastructure_exceptions):
         return "infrastructure"
     return "unexpected"
 
@@ -67,13 +62,11 @@ def flash_view_error(
     logger_instance: logging.Logger | None = None,
     known_exceptions: tuple[type[Exception], ...] = KNOWN_VIEW_EXCEPTIONS,
     infrastructure_exceptions: tuple[type[Exception], ...] = DEFAULT_VIEW_INFRASTRUCTURE_EXCEPTIONS,
-    allow_runtime_markers: bool = False,
 ) -> ViewErrorCategory:
     category = classify_view_error(
         exc,
         known_exceptions=known_exceptions,
         infrastructure_exceptions=infrastructure_exceptions,
-        allow_runtime_markers=allow_runtime_markers,
     )
     _log_non_business_error(
         category,
@@ -97,7 +90,6 @@ def json_error_response_for_exception(
     logger_instance: logging.Logger | None = None,
     known_exceptions: tuple[type[Exception], ...] = KNOWN_VIEW_EXCEPTIONS,
     infrastructure_exceptions: tuple[type[Exception], ...] = DEFAULT_VIEW_INFRASTRUCTURE_EXCEPTIONS,
-    allow_runtime_markers: bool = False,
     include_message: bool = False,
     **payload: Any,
 ) -> HttpResponse:
@@ -105,7 +97,6 @@ def json_error_response_for_exception(
         exc,
         known_exceptions=known_exceptions,
         infrastructure_exceptions=infrastructure_exceptions,
-        allow_runtime_markers=allow_runtime_markers,
     )
     _log_non_business_error(
         category,
@@ -137,7 +128,6 @@ def action_error_response(
     logger_instance: logging.Logger | None = None,
     known_exceptions: tuple[type[Exception], ...] = KNOWN_VIEW_EXCEPTIONS,
     infrastructure_exceptions: tuple[type[Exception], ...] = DEFAULT_VIEW_INFRASTRUCTURE_EXCEPTIONS,
-    allow_runtime_markers: bool = False,
     include_message: bool = False,
     **payload: Any,
 ) -> HttpResponse:
@@ -151,7 +141,6 @@ def action_error_response(
             logger_instance=logger_instance,
             known_exceptions=known_exceptions,
             infrastructure_exceptions=infrastructure_exceptions,
-            allow_runtime_markers=allow_runtime_markers,
             include_message=include_message,
             **payload,
         )
@@ -164,7 +153,6 @@ def action_error_response(
         logger_instance=logger_instance,
         known_exceptions=known_exceptions,
         infrastructure_exceptions=infrastructure_exceptions,
-        allow_runtime_markers=allow_runtime_markers,
     )
     if callable(redirect_to):
         return redirect_to()

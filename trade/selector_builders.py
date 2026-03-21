@@ -29,11 +29,7 @@ _TROOP_CATEGORY_LABELS: dict[str, str] = {
 
 
 def _is_expected_trade_context_error(exc: Exception) -> bool:
-    return is_expected_infrastructure_error(
-        exc,
-        exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
-        allow_runtime_markers=True,
-    )
+    return is_expected_infrastructure_error(exc, exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS)
 
 
 def _safe_call(func: Callable[..., Any], *args: Any, default: Any, log_message: str, **kwargs: Any) -> Any:
