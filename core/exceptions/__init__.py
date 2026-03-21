@@ -74,6 +74,7 @@ from .gameplay import (
     WorkRewardClaimedError,
 )
 from .guest import (
+    GuestAllocationResetError,
     GuestAlreadyOwnedError,
     GuestError,
     GuestFullHpError,
@@ -155,6 +156,7 @@ __all__ = [
     "ShopValidationError",
     # Guest
     "GuestAlreadyOwnedError",
+    "GuestAllocationResetError",
     "GuestError",
     "GuestNotIdleError",
     "GuestItemOwnershipError",

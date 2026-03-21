@@ -1,6 +1,11 @@
 import pytest
 
-from core.exceptions import GuestItemConfigurationError, GuestNotIdleError, GuestNotRequirementError
+from core.exceptions import (
+    GuestAllocationResetError,
+    GuestItemConfigurationError,
+    GuestNotIdleError,
+    GuestNotRequirementError,
+)
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.inventory.guest_items import (
     use_guest_rarity_upgrade_item,
@@ -546,6 +551,28 @@ def test_use_xidianka_resets_allocated_points_and_refunds_attribute_points(djang
     assert "武力-12" in result["_message"]
     assert "智力-9" in result["_message"]
     assert not InventoryItem.objects.filter(pk=item.pk).exists()
+
+
+@pytest.mark.django_db
+def test_use_xidianka_rejects_guest_without_allocated_points(django_user_model):
+    manor, guest, item = _prepare_xidianka_case(django_user_model, "no_alloc")
+    guest.attribute_points = 7
+    guest.allocated_force = 0
+    guest.allocated_intellect = 0
+    guest.allocated_defense = 0
+    guest.allocated_agility = 0
+    guest.save(
+        update_fields=[
+            "attribute_points",
+            "allocated_force",
+            "allocated_intellect",
+            "allocated_defense",
+            "allocated_agility",
+        ]
+    )
+
+    with pytest.raises(GuestAllocationResetError, match="无需使用洗点卡"):
+        use_xidianka(manor, item, guest.id)
 
 
 class _RangeSpyRng:

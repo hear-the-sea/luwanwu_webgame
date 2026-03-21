@@ -71,14 +71,19 @@
 - `mission` 的 `accept/retreat/use_card` 视图入口以及 `scout start / retreat`、`raid start / retreat` 共享入口已不再把裸 `ValueError` 当作已知业务错误吞掉；`gameplay/views/mission_action_handlers.py` 里的 legacy `ValueError` 兼容开关也已移除，剩余 legacy `ValueError` 兼容主要还在更底层 battle/locking 输入校验等共享入口。
 - `raid/scout` 的双庄园加锁也已开始退出裸 `ValueError`：`gameplay/services/raid/scout.py` 的 `_lock_manor_pair()` 现在直接抛显式 `ScoutStartError`，把“目标庄园不存在”的业务语义留在侦察发起链路内收口。
 - `raid` 的 loadout 预备层也已删掉过期兼容壳：`gameplay/services/raid/combat/raid_inputs.py` 不再把 battle 层的显式 `BattlePreparationError` 重新包成 `RaidStartError`，`start_raid_api` 继续通过统一 `GameError` 映射返回业务错误。
+- `battle` 的门客技能序列化也已开始退出误吞异常：`battle/combatants_pkg/guest_builder.py` 不再把已保存门客 `skills.all()` 上的裸 `ValueError` 静默吞掉，未保存门客仍走显式空回退，程序错误改为继续冒泡。
+- `battle` 的状态伤害惩罚入口也已退出裸 `ValueError`：`battle/simulation/damage_calculation.py` 的 `process_status_effects(..., phase=\"damage_penalty\")` 现在把缺少 `damage` 视为内部调用契约错误，改走显式 `AssertionError`，不再伪装成业务参数异常。
 - `raid` 依赖的 battle 预备层异常语义也已开始收口：`battle/setup.py`、`battle/locking.py`、`battle/execution.validate_troop_capacity()` 已开始改走显式 `BattlePreparationError`，但更底层 battle 组件和其它复用路径仍未整体封板。
 - `guest recruitment` 已开始收口主链路异常语义：招募发起、放大镜使用、候选保留已改走显式 `RecruitmentError` 子类，`guests/views/recruit_action_runtime.py` 不再把裸 `ValueError` 当作已知业务错误。
 - `guest recruitment` 的属性点分配路径也已开始退出 legacy `ValueError`：`guests/services/recruitment_guests.allocate_attribute_points()` 与 `guests/views/training.allocate_points_view()` 已改走显式门客 / 加点异常，但训练、经验道具等其它培养入口仍未整体封板。
 - `guest training` / `experience item` 的一部分异常语义也已开始收口：`guests/services/training.use_experience_item_for_guest()` 与 `guests/views/training.use_experience_item_view()` 已改走显式门客 / 道具异常，`TrainView` 也不再把裸 `ValueError` 当作已知业务错误。
+- `guest` 的洗点卡链路也已开始退出裸 `ValueError`：`guests/growth_engine.reset_guest_allocation()` 对“没有已分配属性点”不再抛裸 `ValueError`，改走显式 `GuestAllocationResetError`，`gameplay/views/inventory.py` 能稳定按已知业务错误返回。
 - `guest` 的装备 / 药品 / 技能 / 辞退入口也开始退出 legacy `ValueError`：`guests/services/health.py`、`guests/services/skills.py`、`guests/services/roster.py`、`guests/services/equipment.py` 已补显式门客 / 道具 / 技能异常，`guests/views/items.py`、`guests/views/skills.py`、`guests/views/equipment.py`、`guests/views/roster.py` 不再把裸 `ValueError` 当作已知业务错误；但 `roster`、`items`、`equipment` 之外的其它门客入口仍未整体封板。
 - `guest salary` 入口也开始退出 legacy `ValueError`：`guests/views/salary.py` 已停止依赖会吞裸 `ValueError` 的通用装饰器，改单独收口 `GameError` / `DatabaseError`，工资支付链路开始具备与 `guest recruitment`、`training` 一致的异常边界。
 - `inventory` 的门客定向道具链路也已开始收口：`gameplay/services/inventory/guest_reset_helpers.py`、`gameplay/services/inventory/guest_items.py` 已把重生卡 / 升阶道具 / 灵魂容器的核心校验改走显式门客 / 道具异常，`gameplay/views/inventory.py` 的目标门客物品入口不再把裸 `ValueError` 当作已知业务错误；但仓库通用 `use_item` 与其它非定向道具链路仍未整体封板。
 - `inventory` 的仓库通用 `use_item` 链路也已开始退出一批 legacy `ValueError`：`gameplay/services/inventory/use.py` 中免战牌、召唤卡、工具类分发、物品归属校验已改走显式 `ItemError / GuestError`，`gameplay/views/inventory.py` 的通用使用入口不再把裸 `ValueError` 当作已知业务错误；但仓库迁移和其它建筑 / 道具副作用链路仍未整体封板。
+- `inventory/core` 的基础库存行操作也已开始退出裸 `ValueError`：`consume_inventory_item_locked()` 与 `consume_inventory_item()` 对未持久化库存行不再抛 `ValueError("物品不存在")`，统一改走显式 `ItemNotFoundError`。
+- `inventory/core` 的加库存入口也已开始退出裸 `ValueError`：`add_item_to_inventory_locked()` 对非正数量不再抛 `ValueError("quantity must be positive")`，改为显式内部调用契约错误 `AssertionError`。
 - `raid/protection` 的免战牌服务边界也已开始收口：`gameplay/services/raid/protection.py` 已退出 legacy `ValueError`，改走显式 `PeaceShieldUnavailableError`，并成为仓库免战牌使用链路的单一校验来源。
 - `raid/relocation` 的庄园迁移服务边界也已开始收口：`gameplay/services/raid/relocation.py` 已退出 legacy `ValueError`，改走显式 `RelocationError`，并补上迁移条件、金条不足、坐标耗尽等服务契约测试。
 - `technology` 视图入口也已退出 legacy `ValueError`：`gameplay/views/technology.py` 现在只把显式 `TechnologyError / GameError` 当已知业务错误处理，裸 `ValueError` 改为继续冒泡。

@@ -42,7 +42,7 @@ def add_item_to_inventory_locked(
         raise ItemNotFoundError(f"物品模板不存在: {item_key}")
 
     if quantity <= 0:
-        raise ValueError("quantity must be positive")
+        raise AssertionError("add_item_to_inventory_locked requires positive quantity")
 
     # Atomic increment to avoid lost updates under concurrent requests.
     updated = InventoryItem.objects.filter(
@@ -91,7 +91,7 @@ def consume_inventory_item_locked(locked_item: InventoryItem, amount: int = 1) -
     if consume_amount <= 0:
         return
     if not locked_item.pk:
-        raise ValueError("物品不存在")
+        raise ItemNotFoundError()
 
     item_name = getattr(getattr(locked_item, "template", None), "name", "物品")
     if locked_item.quantity < consume_amount:
@@ -274,7 +274,7 @@ def consume_inventory_item(item_or_manor, item_key_or_amount=1, amount: int = 1)
         item_id = item_or_manor.pk
         item_name = getattr(getattr(item_or_manor, "template", None), "name", "物品")
         if not item_id:
-            raise ValueError("物品不存在")
+            raise ItemNotFoundError()
         with transaction.atomic():
             try:
                 locked = InventoryItem.objects.select_for_update().select_related("template", "manor").get(pk=item_id)

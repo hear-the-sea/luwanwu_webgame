@@ -71,6 +71,18 @@ class GuestTrainingInProgressError(GuestError):
         super().__init__(message, guest_name=guest_name)
 
 
+class GuestAllocationResetError(GuestError):
+    """门客当前没有可重置的已分配属性点"""
+
+    error_code = "GUEST_ALLOCATION_RESET_ERROR"
+
+    def __init__(self, guest: Any = None, message: str | None = None):
+        guest_name = getattr(guest, "display_name", "该门客") if guest is not None else "该门客"
+        if message is None:
+            message = f"{guest_name} 没有分配过属性点，无需使用洗点卡"
+        super().__init__(message, guest_name=guest_name)
+
+
 class GuestNotRequirementError(GuestError):
     """门客属性不满足要求"""
 

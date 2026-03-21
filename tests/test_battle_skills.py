@@ -1,9 +1,11 @@
 import random
 from types import SimpleNamespace
 
+import pytest
+
 from battle.combat_math import SLAUGHTER_MULTIPLIER, effective_attack_value, effective_defense_value, troop_unit_hp
 from battle.simulation.constants import GUEST_SKILL_VS_TROOP_MULTIPLIER
-from battle.simulation.damage_calculation import calculate_attack_damage
+from battle.simulation.damage_calculation import calculate_attack_damage, process_status_effects
 from battle.skills import apply_skill_statuses, skill_damage_bonus, trigger_skills
 from battle.status_manager import prepare_combatants_for_round
 
@@ -199,3 +201,30 @@ def test_guest_vs_troop_skill_damage_uses_reduced_skill_multiplier():
     base_damage = max(1, int(actor.attack * (1 - reduction)))
     expected = int(base_damage * SLAUGHTER_MULTIPLIER + 2000 * GUEST_SKILL_VS_TROOP_MULTIPLIER)
     assert result.damage == expected
+
+
+def test_process_status_effects_damage_penalty_requires_damage_argument():
+    actor = make_unit()
+    target = make_unit(side="defender")
+    rng = FixedRng()
+
+    with pytest.raises(AssertionError, match="damage_penalty phase requires 'damage'"):
+        process_status_effects(actor, target, [], rng, phase="damage_penalty")
+
+
+def test_process_status_effects_damage_penalty_applies_penalty_without_rng(monkeypatch):
+    actor = make_unit(status_effects={"morale_down": {"active": 2, "pending": 0}})
+    target = make_unit(side="defender")
+    calls = {"random": 0}
+
+    class _CountingRng(FixedRng):
+        def random(self):
+            calls["random"] += 1
+            return super().random()
+
+    monkeypatch.setattr("battle.utils.status_effects.get_damage_penalty", lambda _actor: 0.25)
+
+    damage = process_status_effects(actor, target, [], _CountingRng(), phase="damage_penalty", damage=100)
+
+    assert damage == 75
+    assert calls["random"] == 0

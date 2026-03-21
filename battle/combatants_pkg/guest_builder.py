@@ -93,10 +93,7 @@ def _serialize_guest_model_skills(guest: Guest) -> list[dict]:
     if getattr(guest, "pk", None) is None or not hasattr(guest, "skills"):
         return []
 
-    try:
-        return [_serialize_skill(skill) for skill in guest.skills.all()]
-    except ValueError:
-        return []
+    return [_serialize_skill(skill) for skill in guest.skills.all()]
 
 
 def _serialize_guest_template_skills(guest: Guest) -> list[dict]:

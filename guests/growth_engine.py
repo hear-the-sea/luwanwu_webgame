@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
 from core.config import GUEST
+from core.exceptions import GuestAllocationResetError
 
 from .growth_rules import (
     CIVIL_ATTRIBUTE_WEIGHTS,
@@ -239,7 +240,7 @@ def reset_guest_allocation(guest: "Guest") -> AllocationResetResult:
     }
     total_allocated = sum(allocation_details.values())
     if total_allocated == 0:
-        raise ValueError("该门客没有分配过属性点，无需使用洗点卡")
+        raise GuestAllocationResetError(guest)
 
     guest.force -= guest.allocated_force
     guest.intellect -= guest.allocated_intellect

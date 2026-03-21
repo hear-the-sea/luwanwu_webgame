@@ -8,7 +8,7 @@ from django.db import DatabaseError
 from django.urls import reverse
 from django.utils import timezone
 
-from core.exceptions import GameError, ItemNotUsableError
+from core.exceptions import GameError, GuestAllocationResetError, ItemNotUsableError
 from gameplay.models import InventoryItem, ItemTemplate
 from guests.models import (
     GearItem,
@@ -240,6 +240,30 @@ class TestInventoryViews:
         assert payload["success"] is False
         assert "请选择要洗点的门客" in payload["error"]
         assert called["count"] == 0
+
+    def test_use_xidianka_known_error_returns_400(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        template = ItemTemplate.objects.create(
+            key="view_xidianka_item_known_error",
+            name="洗点卡已知错误",
+            effect_payload={"action": "reset_allocation"},
+        )
+        item = InventoryItem.objects.create(manor=manor, template=template, quantity=1)
+
+        monkeypatch.setattr(
+            "gameplay.views.inventory.use_xidianka",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(GuestAllocationResetError(message="无需使用洗点卡")),
+        )
+
+        response = client.post(
+            reverse("gameplay:use_xidianka", kwargs={"pk": item.pk}),
+            {"guest_id": 1},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        assert response.status_code == 400
+        payload = response.json()
+        assert payload["success"] is False
+        assert "无需使用洗点卡" in payload["error"]
 
     def test_use_guest_rarity_upgrade_rejects_non_positive_guest_id(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user

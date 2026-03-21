@@ -230,7 +230,7 @@ def process_status_effects(
 
     if phase == "damage_penalty":
         if damage is None:
-            raise ValueError("damage_penalty phase requires 'damage'")
+            raise AssertionError("damage_penalty phase requires 'damage'")
         damage_penalty = get_damage_penalty(actor)
         if damage_penalty > 0:
             damage = int(damage * (1 - damage_penalty))

@@ -3,6 +3,7 @@ import random
 import pytest
 from django.utils import timezone
 
+from battle.combatants_pkg import serialize_skills
 from battle.models import BattleReport
 from battle.services import (
     BATTLE_ORPHANED_DEPLOYED_RECOVERY_COUNTER,
@@ -456,6 +457,24 @@ def test_extract_defender_tech_profile_tolerates_invalid_technology_config():
     assert levels == {}
     assert guest_level == 50
     assert skills is None
+
+
+def test_serialize_skills_returns_empty_for_unsaved_guest():
+    guest = type("_UnsavedGuest", (), {"pk": None})()
+
+    assert serialize_skills(guest) == []
+
+
+def test_serialize_skills_bubbles_up_programming_value_error():
+    class _BrokenSkills:
+        @staticmethod
+        def all():
+            raise ValueError("broken skills manager")
+
+    guest = type("_BrokenGuest", (), {"pk": 1, "skills": _BrokenSkills()})()
+
+    with pytest.raises(ValueError, match="broken skills manager"):
+        serialize_skills(guest)
 
 
 def test_build_defender_guest_and_loadout_tolerates_invalid_defender_setup(monkeypatch):
