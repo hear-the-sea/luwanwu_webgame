@@ -1,11 +1,12 @@
 import pytest
 from django.utils import timezone
 
+from core.exceptions import GuestTrainingUnavailableError
 from gameplay.services.manor.core import ensure_manor
 from guests.models import RecruitmentPool
 from guests.services.recruitment import recruit_guest
 from guests.services.recruitment_guests import finalize_candidate
-from guests.services.training import ensure_auto_training, reduce_training_time_for_guest
+from guests.services.training import ensure_auto_training, reduce_training_time, reduce_training_time_for_guest
 from guests.utils.training_timer import ensure_training_timer, remaining_training_seconds
 
 
@@ -48,3 +49,16 @@ def test_reduce_training_time_for_guest_levels_up(game_data, django_user_model):
     assert guest.level >= 2
     assert result["applied_levels"] >= 1
     assert result["time_reduced"] > 0
+
+
+@pytest.mark.django_db
+def test_reduce_training_time_rejects_when_no_eligible_guests(game_data, django_user_model):
+    guest = _bootstrap_guest(django_user_model)
+    guest.level = 100
+    guest.status = "idle"
+    guest.training_complete_at = None
+    guest.training_target_level = 0
+    guest.save(update_fields=["level", "status", "training_complete_at", "training_target_level"])
+
+    with pytest.raises(GuestTrainingUnavailableError, match="所有门客已达等级上限"):
+        reduce_training_time(guest.manor, seconds=10)

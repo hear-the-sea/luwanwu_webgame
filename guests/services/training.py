@@ -14,13 +14,13 @@ from django.utils import timezone
 from common.utils.celery import safe_apply_async
 from core.config import GUEST
 from core.exceptions import (
-    GuestError,
     GuestItemConfigurationError,
     GuestItemOwnershipError,
     GuestMaxLevelError,
     GuestNotIdleError,
     GuestOwnershipError,
     GuestTrainingInProgressError,
+    GuestTrainingUnavailableError,
     InsufficientStockError,
 )
 from core.utils import safe_int
@@ -239,7 +239,7 @@ def reduce_training_time(manor: Manor, seconds: int) -> Dict[str, int]:
         包含缩短的总时间和影响的门客数量的字典
 
     Raises:
-        GuestError: 所有门客已达等级上限时抛出
+        GuestTrainingUnavailableError: 所有门客已达等级上限时抛出
     """
     if seconds <= 0:
         return {"time_reduced": 0, "applied_guests": 0}
@@ -255,7 +255,7 @@ def reduce_training_time(manor: Manor, seconds: int) -> Dict[str, int]:
             .values_list("id", flat=True)
         )
         if not candidate_ids:
-            raise GuestError("所有门客已达等级上限，无法使用该道具。")
+            raise GuestTrainingUnavailableError()
 
         locked_guests_qs = (
             Guest.objects.select_related("template")
@@ -336,44 +336,44 @@ def reduce_training_time_for_guest(guest: Guest, seconds: int) -> GuestTrainingR
     }
 
 
-@transaction.atomic
 def train_guest(guest: Guest, levels: int = 1) -> Guest:
     """
     开始培养门客，消耗资源并设置训练计时器。
     """
     if not getattr(guest, "pk", None):
-        raise GuestError("门客未保存，无法训练")
+        raise AssertionError("train_guest requires a persisted guest")
 
-    # 死锁预防：统一锁顺序 Manor -> Guest
-    # 全局规则是先锁 Manor (资源扣除) 再锁 Guest (状态变更)
-    from gameplay.models import Manor
+    with transaction.atomic():
+        # 死锁预防：统一锁顺序 Manor -> Guest
+        # 全局规则是先锁 Manor (资源扣除) 再锁 Guest (状态变更)
+        from gameplay.models import Manor
 
-    Manor.objects.select_for_update().get(pk=guest.manor_id)
+        Manor.objects.select_for_update().get(pk=guest.manor_id)
 
-    locked_guest = Guest.objects.select_for_update().select_related("manor", "template").get(pk=guest.pk)
-    if locked_guest.status != GuestStatus.IDLE:
-        raise GuestNotIdleError(locked_guest)
-    if locked_guest.level >= MAX_GUEST_LEVEL:
-        raise GuestMaxLevelError(locked_guest, max_level=MAX_GUEST_LEVEL)
-    if locked_guest.training_complete_at:
-        raise GuestTrainingInProgressError(locked_guest)
-    if locked_guest.level + levels > MAX_GUEST_LEVEL:
-        levels = MAX_GUEST_LEVEL - locked_guest.level
-    manor = locked_guest.manor
-    cost = get_level_up_cost(locked_guest, levels)
-    from gameplay.models import ResourceEvent
+        locked_guest = Guest.objects.select_for_update().select_related("manor", "template").get(pk=guest.pk)
+        if locked_guest.status != GuestStatus.IDLE:
+            raise GuestNotIdleError(locked_guest)
+        if locked_guest.level >= MAX_GUEST_LEVEL:
+            raise GuestMaxLevelError(locked_guest, max_level=MAX_GUEST_LEVEL)
+        if locked_guest.training_complete_at:
+            raise GuestTrainingInProgressError(locked_guest)
+        if locked_guest.level + levels > MAX_GUEST_LEVEL:
+            levels = MAX_GUEST_LEVEL - locked_guest.level
+        manor = locked_guest.manor
+        cost = get_level_up_cost(locked_guest, levels)
+        from gameplay.models import ResourceEvent
 
-    spend_resources(
-        manor,
-        cost,
-        note=f"培养 {guest.template.name}",
-        reason=ResourceEvent.Reason.TRAINING_COST,
-    )
-    duration = get_training_duration(locked_guest, levels)
-    locked_guest.training_target_level = locked_guest.level + levels
-    locked_guest.training_complete_at = timezone.now() + timedelta(seconds=duration)
-    locked_guest.save(update_fields=["training_target_level", "training_complete_at"])
-    TrainingLog.objects.create(manor=manor, guest=locked_guest, delta_level=levels, resource_cost=cost)
+        spend_resources(
+            manor,
+            cost,
+            note=f"培养 {guest.template.name}",
+            reason=ResourceEvent.Reason.TRAINING_COST,
+        )
+        duration = get_training_duration(locked_guest, levels)
+        locked_guest.training_target_level = locked_guest.level + levels
+        locked_guest.training_complete_at = timezone.now() + timedelta(seconds=duration)
+        locked_guest.save(update_fields=["training_target_level", "training_complete_at"])
+        TrainingLog.objects.create(manor=manor, guest=locked_guest, delta_level=levels, resource_cost=cost)
 
     # Celery 不可用时直接完成训练，确保调用方立即看到等级变更（测试/开发环境友好）。
     def enqueue_training() -> None:

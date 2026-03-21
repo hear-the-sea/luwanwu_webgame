@@ -71,6 +71,13 @@ class GuestTrainingInProgressError(GuestError):
         super().__init__(message, guest_name=guest_name)
 
 
+class GuestTrainingUnavailableError(GuestError):
+    """当前没有可进行训练时间缩减的门客"""
+
+    error_code = "GUEST_TRAINING_UNAVAILABLE"
+    default_message = "所有门客已达等级上限，无法使用该道具。"
+
+
 class GuestAllocationResetError(GuestError):
     """门客当前没有可重置的已分配属性点"""
 

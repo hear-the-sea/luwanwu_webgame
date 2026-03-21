@@ -111,3 +111,24 @@ def test_finalize_guest_training_is_idempotent():
     guest.refresh_from_db()
     assert guest.level == level_after
     assert guest.attribute_points == points_after
+
+
+def test_train_guest_rejects_unsaved_guest():
+    template = GuestTemplate(
+        key="train_unsaved_tpl",
+        name="未保存训练门客",
+        archetype=GuestArchetype.MILITARY,
+        rarity=GuestRarity.GRAY,
+    )
+    guest = Guest(
+        template=template,
+        level=1,
+        force=80,
+        intellect=80,
+        defense_stat=80,
+        agility=80,
+        current_hp=500,
+    )
+
+    with pytest.raises(AssertionError, match="requires a persisted guest"):
+        train_guest(guest, levels=1)

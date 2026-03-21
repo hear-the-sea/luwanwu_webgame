@@ -89,6 +89,7 @@ from .guest import (
     GuestSkillAlreadyLearnedError,
     GuestSkillNotFoundError,
     GuestTrainingInProgressError,
+    GuestTrainingUnavailableError,
     InvalidHealAmountError,
     NoGuestsError,
 )
@@ -164,6 +165,7 @@ __all__ = [
     "GuestInjuredError",
     "GuestMaxLevelError",
     "GuestTrainingInProgressError",
+    "GuestTrainingUnavailableError",
     "GuestNotFoundError",
     "GuestNotRequirementError",
     "GuestOwnershipError",
