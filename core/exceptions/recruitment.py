@@ -82,6 +82,8 @@ class InvalidAllocationError(AttributePointError):
                 message = "属性点不足"
             elif reason == "unknown_attribute":
                 message = "未知的加点属性"
+            elif reason == "attribute_overflow":
+                message = "属性值已达上限，无法继续加点"
             else:
                 message = "无效的加点请求"
         super().__init__(message, reason=reason)

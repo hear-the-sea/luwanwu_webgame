@@ -109,3 +109,32 @@ def test_allocate_points_non_ajax_keeps_redirect_behavior(client, django_user_mo
     guest.refresh_from_db()
     assert guest.intellect == 71
     assert guest.attribute_points == 1
+
+
+@pytest.mark.django_db
+def test_allocate_points_ajax_returns_overflow_error_message(client, django_user_model):
+    user = django_user_model.objects.create_user(username="alloc_points_overflow", password="pass123")
+    manor = ensure_manor(user)
+    guest = _create_guest_with_points(manor, "overflow")
+    guest.force = 9999
+    guest.attribute_points = 2
+    guest.save(update_fields=["force", "attribute_points"])
+
+    client.login(username="alloc_points_overflow", password="pass123")
+    detail_url = reverse("guests:detail", args=[guest.id])
+    response = client.post(
+        reverse("guests:allocate_points", args=[guest.id]),
+        {
+            "guest": guest.id,
+            "attribute": "force",
+            "points": 1,
+            "next": detail_url,
+        },
+        HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        HTTP_ACCEPT="application/json",
+    )
+
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["success"] is False
+    assert payload["error"] == "属性值已达上限，无法继续加点"

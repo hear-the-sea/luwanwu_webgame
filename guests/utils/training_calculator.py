@@ -51,7 +51,7 @@ def calculate_level_up_cost(current_level: int, target_levels: int = 1) -> Dict[
         资源成本字典 {"grain": 粮食数量, "silver": 银两数量}
 
     Raises:
-        ValueError: 如果参数不合法或升级后超过最大等级
+        AssertionError: 如果参数不合法或升级后超过最大等级
 
     Examples:
         >>> calculate_level_up_cost(1, 1)
@@ -61,14 +61,14 @@ def calculate_level_up_cost(current_level: int, target_levels: int = 1) -> Dict[
     """
     # 安全修复：验证参数范围，防止负数导致异常行为
     if current_level < 1:
-        raise ValueError(f"当前等级必须>=1，收到: {current_level}")
+        raise AssertionError(f"当前等级必须>=1，收到: {current_level}")
     if target_levels < 1:
-        raise ValueError(f"升级等级数必须>=1，收到: {target_levels}")
+        raise AssertionError(f"升级等级数必须>=1，收到: {target_levels}")
 
     target_level = current_level + target_levels
     max_guest_level = int(GUEST.MAX_LEVEL)
     if target_level > max_guest_level:
-        raise ValueError(f"已达等级上限 {max_guest_level}")
+        raise AssertionError(f"已达等级上限 {max_guest_level}")
 
     # 粮食成本随等级递增
     grain_cost = sum((current_level + i) * GRAIN_COST_PER_LEVEL for i in range(1, target_levels + 1))
@@ -96,6 +96,9 @@ def calculate_training_duration(current_level: int, rarity: str, levels: int = 1
     Returns:
         训练所需总秒数
 
+    Raises:
+        AssertionError: 如果参数不合法
+
     Examples:
         >>> calculate_training_duration(1, 'black', 1)
         120
@@ -104,6 +107,11 @@ def calculate_training_duration(current_level: int, rarity: str, levels: int = 1
         >>> calculate_training_duration(10, 'black', 1)
         174
     """
+    if current_level < 1:
+        raise AssertionError(f"当前等级必须>=1，收到: {current_level}")
+    if levels < 1:
+        raise AssertionError(f"训练等级数必须>=1，收到: {levels}")
+
     # `rarity` is usually a string (GuestRarity values), while the coefficient
     # map is keyed by those enum values.
     rarity_coeff = RARITY_TIME_COEFFICIENT.get(cast(GuestRarity, rarity), 1.0)

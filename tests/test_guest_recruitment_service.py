@@ -410,7 +410,7 @@ def test_allocate_attribute_points_rejects_overflow(django_user_model):
     guest.force = 9950  # Near max
     guest.save(update_fields=["attribute_points", "force"])
 
-    with pytest.raises(InvalidAllocationError):
+    with pytest.raises(InvalidAllocationError, match="属性值已达上限"):
         recruitment_guest_service.allocate_attribute_points(guest, "force", 100)
 
 
