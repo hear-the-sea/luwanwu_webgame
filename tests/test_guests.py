@@ -1,3 +1,5 @@
+import builtins
+
 import pytest
 from django.core.management import call_command
 from django.utils import timezone
@@ -7,6 +9,7 @@ import guests.services.recruitment_templates as recruitment_template_service
 from core.config import GUEST
 from core.exceptions import (
     GuestNotIdleError,
+    NoTemplateAvailableError,
     RecruitmentAlreadyInProgressError,
     RecruitmentCandidateStateError,
     RecruitmentDailyLimitExceededError,
@@ -276,6 +279,88 @@ def test_finalize_guest_recruitment_keeps_success_when_notification_fails(
     assert manor.candidates.count() == recruitment.draw_count
 
 
+@pytest.mark.django_db
+def test_finalize_guest_recruitment_notification_programming_error_bubbles_up(
+    game_data, django_user_model, load_guest_data, monkeypatch
+):
+    user = django_user_model.objects.create_user(
+        username="player_recruit_async_notify_program_error", password="pass123"
+    )
+    manor = ensure_manor(user)
+    manor.silver = 50000
+    manor.save(update_fields=["silver"])
+    pool = RecruitmentPool.objects.get(key="cunmu")
+
+    recruitment = start_guest_recruitment(manor, pool, seed=199)
+    recruitment.complete_at = timezone.now() - timezone.timedelta(seconds=1)
+    recruitment.save(update_fields=["complete_at"])
+
+    monkeypatch.setattr(
+        "guests.services.recruitment_followups.create_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken message contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken message contract"):
+        finalize_guest_recruitment(recruitment, now=timezone.now(), send_notification=True)
+
+    recruitment.refresh_from_db()
+    assert recruitment.status == GuestRecruitment.Status.COMPLETED
+    assert manor.candidates.count() == recruitment.draw_count
+
+
+@pytest.mark.django_db
+def test_finalize_guest_recruitment_marks_failed_for_known_recruitment_error(
+    game_data, django_user_model, load_guest_data, monkeypatch
+):
+    user = django_user_model.objects.create_user(username="player_recruit_async_known_error", password="pass123")
+    manor = ensure_manor(user)
+    manor.silver = 50000
+    manor.save(update_fields=["silver"])
+    pool = RecruitmentPool.objects.get(key="cunmu")
+
+    recruitment = start_guest_recruitment(manor, pool, seed=808)
+    recruitment.complete_at = timezone.now() - timezone.timedelta(seconds=1)
+    recruitment.save(update_fields=["complete_at"])
+
+    monkeypatch.setattr(
+        "guests.services.recruitment._build_recruitment_candidates",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(NoTemplateAvailableError()),
+    )
+
+    assert finalize_guest_recruitment(recruitment, now=timezone.now(), send_notification=False) is False
+
+    recruitment.refresh_from_db()
+    assert recruitment.status == GuestRecruitment.Status.FAILED
+    assert "缺少可用的门客模板" in recruitment.error_message
+
+
+@pytest.mark.django_db
+def test_finalize_guest_recruitment_does_not_mask_contract_error(
+    game_data, django_user_model, load_guest_data, monkeypatch
+):
+    user = django_user_model.objects.create_user(username="player_recruit_async_contract_error", password="pass123")
+    manor = ensure_manor(user)
+    manor.silver = 50000
+    manor.save(update_fields=["silver"])
+    pool = RecruitmentPool.objects.get(key="cunmu")
+
+    recruitment = start_guest_recruitment(manor, pool, seed=909)
+    recruitment.complete_at = timezone.now() - timezone.timedelta(seconds=1)
+    recruitment.save(update_fields=["complete_at"])
+
+    monkeypatch.setattr(
+        "guests.services.recruitment._build_recruitment_candidates",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("invalid recruitment contract")),
+    )
+
+    with pytest.raises(AssertionError, match="invalid recruitment contract"):
+        finalize_guest_recruitment(recruitment, now=timezone.now(), send_notification=False)
+
+    recruitment.refresh_from_db()
+    assert recruitment.status == GuestRecruitment.Status.PENDING
+    assert recruitment.error_message == ""
+
+
 def test_schedule_guest_recruitment_completion_runs_after_commit(monkeypatch):
     callbacks = []
     dispatched = []
@@ -322,6 +407,48 @@ def test_schedule_guest_recruitment_completion_runs_after_commit(monkeypatch):
             "countdown": 45,
         }
     ]
+
+
+def test_schedule_guest_recruitment_completion_unexpected_import_error_bubbles_up(monkeypatch):
+    original_import = builtins.__import__
+
+    def _raising_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "guests.tasks":
+            raise RuntimeError("broken task module")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _raising_import)
+
+    recruitment = type("_Recruitment", (), {"id": 17, "manor_id": 3, "pool_id": 5})()
+
+    with pytest.raises(RuntimeError, match="broken task module"):
+        recruitment_followups_service.schedule_guest_recruitment_completion(
+            recruitment,
+            45,
+            logger=recruitment_followups_service.logging.getLogger(__name__),
+        )
+
+
+def test_schedule_guest_recruitment_completion_nested_import_error_bubbles_up(monkeypatch):
+    original_import = builtins.__import__
+
+    def _raising_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "guests.tasks":
+            exc = ModuleNotFoundError("No module named 'redis'")
+            exc.name = "redis"
+            raise exc
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _raising_import)
+
+    recruitment = type("_Recruitment", (), {"id": 18, "manor_id": 4, "pool_id": 6})()
+
+    with pytest.raises(ModuleNotFoundError, match="redis"):
+        recruitment_followups_service.schedule_guest_recruitment_completion(
+            recruitment,
+            30,
+            logger=recruitment_followups_service.logging.getLogger(__name__),
+        )
 
 
 @pytest.mark.django_db(transaction=True)

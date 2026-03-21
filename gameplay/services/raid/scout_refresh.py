@@ -7,6 +7,7 @@ from typing import Any, Callable
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async_with_dedup
+from core.utils.imports import is_missing_target_import
 
 from ...models import ScoutRecord
 
@@ -39,9 +40,14 @@ def resolve_scout_task(task_name: str) -> Any:
 def resolve_scout_refresh_tasks(*, logger: Any) -> tuple[Any, Any] | None:
     try:
         return resolve_scout_task("complete_scout_task"), resolve_scout_task("complete_scout_return_task")
-    except Exception:
+    except ImportError as exc:
+        if not is_missing_target_import(exc, "gameplay.tasks.pvp"):
+            raise
         logger.warning("Failed to import scout tasks, falling back to sync refresh", exc_info=True)
         return None
+    except Exception:
+        logger.error("Unexpected scout task import failure during refresh", exc_info=True)
+        raise
 
 
 def collect_due_scout_record_ids(

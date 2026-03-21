@@ -2,6 +2,12 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Mapping
 
+from core.utils.infrastructure import (
+    DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+    INFRASTRUCTURE_EXCEPTIONS,
+    is_expected_infrastructure_error,
+)
+
 
 def should_force_sync_launch_report(*, settings_obj: Any, environ: Mapping[str, str]) -> bool:
     return bool(getattr(settings_obj, "DEBUG", False) or environ.get("PYTEST_CURRENT_TEST"))
@@ -57,12 +63,19 @@ def prepare_launch_report_best_effort(
             force_sync=should_force_sync_launch_report(settings_obj=settings_obj, environ=environ),
         )
         attach_run_report_if_empty(run, report, mission_run_model=mission_run_model)
-    except Exception:
+    except Exception as exc:
+        if not is_expected_infrastructure_error(
+            exc,
+            exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+            allow_runtime_markers=True,
+        ):
+            raise
         logger.error(
-            "Mission launch report preparation failed: run_id=%s manor_id=%s mission_id=%s",
+            "Mission launch report preparation failed: run_id=%s manor_id=%s mission_id=%s error=%s",
             run.id,
             manor.id,
             mission.id,
+            exc,
             exc_info=True,
             extra={
                 "degraded": True,
@@ -97,11 +110,18 @@ def dispatch_completion_task_best_effort(
 
     try:
         schedule_mission_completion_task(run, complete_mission_task)
-    except Exception:
+    except Exception as exc:
+        if not is_expected_infrastructure_error(
+            exc,
+            exceptions=INFRASTRUCTURE_EXCEPTIONS,
+            allow_runtime_markers=True,
+        ):
+            raise
         logger.error(
-            "Mission completion dispatch failed after launch: run_id=%s manor_id=%s",
+            "Mission completion dispatch failed after launch: run_id=%s manor_id=%s error=%s",
             run.id,
             run.manor_id,
+            exc,
             exc_info=True,
             extra={
                 "degraded": True,

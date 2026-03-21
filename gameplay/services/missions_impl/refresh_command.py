@@ -3,6 +3,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from core.utils.imports import is_missing_target_import
+
 
 def refresh_mission_runs(
     manor,
@@ -33,9 +35,12 @@ def refresh_mission_runs(
     if should_try_async:
         try:
             from gameplay.tasks import complete_mission_task
-        except ImportError:
+        except ImportError as exc:
+            if not is_missing_target_import(exc, "gameplay.tasks"):
+                raise
             logger.warning(
-                "Failed to import mission task, falling back to sync refresh",
+                "Failed to import mission task, falling back to sync refresh: %s",
+                exc,
                 exc_info=True,
                 extra={"degraded": True, "component": "mission_task_import"},
             )
@@ -79,9 +84,12 @@ def schedule_mission_completion(
     countdown = max(0, math.ceil((run.return_at - now_func()).total_seconds()))
     try:
         from gameplay.tasks import complete_mission_task
-    except ImportError:
+    except ImportError as exc:
+        if not is_missing_target_import(exc, "gameplay.tasks"):
+            raise
         logger.warning(
-            "Unable to import complete_mission_task; relying on sync fallback when due",
+            "Unable to import complete_mission_task; relying on sync fallback when due: %s",
+            exc,
             exc_info=True,
             extra={"degraded": True, "component": "mission_task_import"},
         )

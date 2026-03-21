@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, Callable
 
+from core.utils.imports import is_missing_target_import
+
 if TYPE_CHECKING:
     from ....models import Manor, RaidRun
 
@@ -39,9 +41,14 @@ def dispatch_async_raid_refresh(
 ) -> tuple[list[int], list[int], list[int], bool]:
     try:
         complete_raid_task, process_raid_battle_task = import_tasks()
-    except Exception:
+    except ImportError as exc:
+        if not is_missing_target_import(exc, "gameplay.tasks"):
+            raise
         logger.warning("Failed to import raid tasks, falling back to sync refresh", exc_info=True)
         return marching_ids, returning_ids, retreated_ids, False
+    except Exception:
+        logger.error("Unexpected raid task import failure during refresh", exc_info=True)
+        raise
 
     sync_marching_ids: list[int] = []
     for run_id in marching_ids:

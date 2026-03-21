@@ -99,3 +99,26 @@ def test_send_exchange_success_message_swallows_message_errors(caplog):
         )
 
     assert "arena exchange message failed" in caplog.text
+
+
+def test_send_exchange_success_message_programming_error_bubbles_up():
+    class _Reward:
+        key = "grain_pack_small"
+        name = "小粮包"
+
+    class _Manor:
+        id = 1
+
+    with pytest.raises(AssertionError, match="broken arena exchange message contract"):
+        send_exchange_success_message(
+            create_message_func=lambda **_kwargs: (_ for _ in ()).throw(
+                AssertionError("broken arena exchange message contract")
+            ),
+            message_kind="reward",
+            locked_manor=_Manor(),
+            reward=_Reward(),
+            total_cost=80,
+            normalized_quantity=1,
+            summary="资源已发放",
+            logger=__import__("logging").getLogger("tests.arena.exchange"),
+        )

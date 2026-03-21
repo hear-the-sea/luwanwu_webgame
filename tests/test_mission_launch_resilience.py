@@ -80,7 +80,7 @@ def test_launch_mission_survives_report_failure(game_data, mission_templates, ma
     monkeypatch.setattr(
         mission_execution.mission_followups,
         "dispatch_or_sync_launch_report",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("report generation exploded")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("report backend unavailable")),
     )
     monkeypatch.setattr(
         mission_execution.mission_followups,
@@ -103,6 +103,62 @@ def test_launch_mission_survives_report_failure(game_data, mission_templates, ma
         getattr(record, "degraded", False) and getattr(record, "component", "") == "mission_launch_report"
         for record in caplog.records
     )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_launch_mission_report_programming_error_bubbles_up(
+    game_data, mission_templates, manor_with_troops, monkeypatch
+):
+    manor = manor_with_troops
+    mission = _select_offense_mission()
+    guest = _create_launch_guest(manor)
+
+    monkeypatch.setattr(
+        mission_execution.mission_followups,
+        "import_launch_post_action_tasks",
+        lambda **_kwargs: (object(), object()),
+    )
+    monkeypatch.setattr(
+        mission_execution.mission_followups,
+        "dispatch_or_sync_launch_report",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken report contract")),
+    )
+    monkeypatch.setattr(
+        mission_execution.mission_followups,
+        "schedule_mission_completion_task",
+        lambda *_args, **_kwargs: None,
+    )
+
+    with pytest.raises(AssertionError, match="broken report contract"):
+        mission_execution.launch_mission(manor, mission, [guest.id], {})
+
+
+@pytest.mark.django_db(transaction=True)
+def test_launch_mission_completion_dispatch_programming_error_bubbles_up(
+    game_data, mission_templates, manor_with_troops, monkeypatch
+):
+    manor = manor_with_troops
+    mission = _select_offense_mission()
+    guest = _create_launch_guest(manor)
+
+    monkeypatch.setattr(
+        mission_execution.mission_followups,
+        "import_launch_post_action_tasks",
+        lambda **_kwargs: (object(), object()),
+    )
+    monkeypatch.setattr(
+        mission_execution.mission_followups,
+        "dispatch_or_sync_launch_report",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        mission_execution.mission_followups,
+        "schedule_mission_completion_task",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken completion dispatch contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken completion dispatch contract"):
+        mission_execution.launch_mission(manor, mission, [guest.id], {})
 
 
 @pytest.mark.django_db(transaction=True)

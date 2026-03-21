@@ -6,6 +6,9 @@ from typing import TYPE_CHECKING
 from django.db import transaction
 
 from common.utils.celery import safe_apply_async
+from core.exceptions import MessageError
+from core.utils.imports import is_missing_target_import
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_expected_infrastructure_error
 from gameplay.services.utils.messages import create_message
 from gameplay.services.utils.notifications import notify_user
 
@@ -24,9 +27,14 @@ def schedule_guest_recruitment_completion(
     countdown = max(0, int(eta_seconds))
     try:
         from guests.tasks import complete_guest_recruitment
-    except Exception:
+    except ImportError as exc:
+        if not is_missing_target_import(exc, "guests.tasks"):
+            raise
         logger.warning("Unable to import complete_guest_recruitment task; skip scheduling", exc_info=True)
         return
+    except Exception:
+        logger.error("Unexpected complete_guest_recruitment import failure", exc_info=True)
+        raise
 
     def _dispatch_completion() -> None:
         dispatched = safe_apply_async(
@@ -69,21 +77,32 @@ def send_recruitment_completion_notification(
             title=title,
             body=body,
         )
-        notify_user(
-            manor.user_id,
-            {
-                "kind": "system",
-                "title": title,
-                "pool_key": pool.key,
-                "candidate_count": candidate_count,
-            },
-            log_context="guest recruitment notification",
-        )
     except Exception as exc:
+        if not (
+            isinstance(exc, MessageError)
+            or is_expected_infrastructure_error(
+                exc,
+                exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+                allow_runtime_markers=True,
+            )
+        ):
+            raise
         logger.warning(
-            "guest recruitment notification failed: recruitment_id=%s manor_id=%s error=%s",
+            "guest recruitment message creation failed: recruitment_id=%s manor_id=%s error=%s",
             recruitment_id,
             getattr(manor, "id", None),
             exc,
             exc_info=True,
         )
+        return
+
+    notify_user(
+        manor.user_id,
+        {
+            "kind": "system",
+            "title": title,
+            "pool_key": pool.key,
+            "candidate_count": candidate_count,
+        },
+        log_context="guest recruitment notification",
+    )

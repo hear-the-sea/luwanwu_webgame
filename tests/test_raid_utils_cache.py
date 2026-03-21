@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
 from django.utils import timezone
+from django_redis.exceptions import ConnectionInterrupted
 
 from gameplay.services.raid import utils as raid_utils
 
@@ -73,6 +75,49 @@ def test_invalidate_recent_attacks_cache_deletes_expected_key(monkeypatch):
     raid_utils.invalidate_recent_attacks_cache(15)
 
     assert deleted["key"] == "raid:recent_attacks_24h:15"
+
+
+def test_safe_cache_get_tolerates_cache_infrastructure_failure(monkeypatch):
+    monkeypatch.setattr(
+        raid_utils.cache,
+        "get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache down")),
+    )
+
+    assert raid_utils._safe_cache_get("raid:test:get") is None
+
+
+def test_safe_cache_get_programming_error_bubbles_up(monkeypatch):
+    monkeypatch.setattr(
+        raid_utils.cache,
+        "get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken cache contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken cache contract"):
+        raid_utils._safe_cache_get("raid:test:get")
+
+
+def test_safe_cache_set_programming_error_bubbles_up(monkeypatch):
+    monkeypatch.setattr(
+        raid_utils.cache,
+        "set",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken cache contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken cache contract"):
+        raid_utils._safe_cache_set("raid:test:set", 3, 30)
+
+
+def test_safe_cache_delete_programming_error_bubbles_up(monkeypatch):
+    monkeypatch.setattr(
+        raid_utils.cache,
+        "delete",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken cache contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken cache contract"):
+        raid_utils._safe_cache_delete("raid:test:delete")
 
 
 def test_can_attack_target_can_bypass_cached_recent_attacks(monkeypatch):

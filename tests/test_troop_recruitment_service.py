@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 from datetime import timedelta
 
 import pytest
@@ -9,6 +10,7 @@ from battle.models import TroopTemplate
 from core.exceptions import TroopRecruitmentAlreadyInProgressError, TroopRecruitmentError
 from gameplay.models import InventoryItem, ItemTemplate, PlayerTroop, TroopRecruitment
 from gameplay.services.manor.core import ensure_manor
+from gameplay.services.recruitment import lifecycle as troop_recruitment_lifecycle_service
 from gameplay.services.recruitment.recruitment import (
     _consume_equipment_for_recruitment,
     finalize_troop_recruitment,
@@ -320,3 +322,111 @@ def test_finalize_troop_recruitment_keeps_success_when_notification_fails(monkey
     assert finalize_troop_recruitment(recruitment, send_notification=True) is True
     recruitment.refresh_from_db()
     assert recruitment.status == TroopRecruitment.Status.COMPLETED
+
+
+@pytest.mark.django_db
+def test_finalize_troop_recruitment_notification_programming_error_bubbles_up(monkeypatch, recruit_manor):
+    manor = recruit_manor
+    TroopTemplate.objects.filter(key="scout").delete()
+
+    recruitment = TroopRecruitment.objects.create(
+        manor=manor,
+        troop_key="scout",
+        troop_name="探子",
+        quantity=2,
+        equipment_costs={},
+        retainer_cost=2,
+        base_duration=60,
+        actual_duration=60,
+        complete_at=timezone.now() - timedelta(seconds=1),
+    )
+
+    monkeypatch.setattr("gameplay.services.utils.messages.create_message", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(
+        "gameplay.services.utils.notifications.notify_user",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken troop notify contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken troop notify contract"):
+        finalize_troop_recruitment(recruitment, send_notification=True)
+
+    recruitment.refresh_from_db()
+    assert recruitment.status == TroopRecruitment.Status.COMPLETED
+
+
+def test_schedule_recruitment_completion_runs_after_commit(monkeypatch):
+    callbacks = []
+    dispatched = []
+
+    monkeypatch.setattr(
+        troop_recruitment_lifecycle_service.transaction,
+        "on_commit",
+        lambda callback: callbacks.append(callback),
+    )
+    monkeypatch.setattr(
+        "gameplay.tasks.complete_troop_recruitment",
+        type("_Task", (), {"name": "gameplay.complete_troop_recruitment"})(),
+    )
+    monkeypatch.setattr(
+        troop_recruitment_lifecycle_service,
+        "safe_apply_async",
+        lambda task, *, args, countdown, **_kwargs: dispatched.append(
+            {
+                "task_name": getattr(task, "name", str(task)),
+                "args": args,
+                "countdown": countdown,
+            }
+        )
+        or True,
+    )
+
+    recruitment = type("_Recruitment", (), {"id": 17, "manor_id": 3, "troop_key": "scout"})()
+
+    troop_recruitment_lifecycle_service.schedule_recruitment_completion(recruitment, 45)
+
+    assert len(callbacks) == 1
+    assert dispatched == []
+
+    callbacks[0]()
+
+    assert dispatched == [
+        {
+            "task_name": "gameplay.complete_troop_recruitment",
+            "args": [17],
+            "countdown": 45,
+        }
+    ]
+
+
+def test_schedule_recruitment_completion_unexpected_import_error_bubbles_up(monkeypatch):
+    original_import = builtins.__import__
+
+    def _raising_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "gameplay.tasks":
+            raise RuntimeError("broken task module")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _raising_import)
+
+    recruitment = type("_Recruitment", (), {"id": 17, "manor_id": 3, "troop_key": "scout"})()
+
+    with pytest.raises(RuntimeError, match="broken task module"):
+        troop_recruitment_lifecycle_service.schedule_recruitment_completion(recruitment, 45)
+
+
+def test_schedule_recruitment_completion_nested_import_error_bubbles_up(monkeypatch):
+    original_import = builtins.__import__
+
+    def _raising_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "gameplay.tasks":
+            exc = ModuleNotFoundError("No module named 'redis'")
+            exc.name = "redis"
+            raise exc
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _raising_import)
+
+    recruitment = type("_Recruitment", (), {"id": 18, "manor_id": 4, "troop_key": "archer"})()
+
+    with pytest.raises(ModuleNotFoundError, match="redis"):
+        troop_recruitment_lifecycle_service.schedule_recruitment_completion(recruitment, 30)

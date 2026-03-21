@@ -14,6 +14,7 @@ from core.exceptions import BattlePreparationError, RaidStartError
 from gameplay.services.manor.core import ensure_manor
 from gameplay.services.raid import utils as raid_utils
 from gameplay.services.raid.combat import battle as combat_battle
+from gameplay.services.raid.combat import run_side_effects as combat_run_side_effects
 from gameplay.services.raid.combat import runs as combat_runs
 from gameplay.services.raid.combat import troop_ops
 
@@ -218,6 +219,42 @@ def test_refresh_raid_runs_prefers_async_dispatch(monkeypatch):
 
     assert set(dispatched) == {(1, "battle"), (2, "battle"), (3, "return"), (4, "return")}
     assert called == {"battle": 0, "finalize": 0}
+
+
+def test_refresh_raid_runs_nested_import_error_bubbles_up(monkeypatch):
+    class _Status:
+        MARCHING = "marching"
+        RETURNING = "returning"
+        RETREATED = "retreated"
+
+    class _RaidObjects:
+        def __init__(self):
+            self._status = None
+
+        def filter(self, **kwargs):
+            self._status = kwargs.get("status")
+            return self
+
+        def values_list(self, *_args, **_kwargs):
+            mapping = {
+                _Status.MARCHING: [1],
+                _Status.RETURNING: [],
+                _Status.RETREATED: [],
+            }
+            return list(mapping.get(self._status, []))
+
+    dummy_cls = type("_RaidRun", (), {"Status": _Status, "objects": _RaidObjects()})
+    monkeypatch.setattr(combat_runs, "RaidRun", dummy_cls)
+
+    def _raise_import():
+        exc = ModuleNotFoundError("No module named 'redis'")
+        exc.name = "redis"
+        raise exc
+
+    monkeypatch.setattr(combat_runs, "_import_raid_refresh_tasks", _raise_import)
+
+    with pytest.raises(ModuleNotFoundError, match="redis"):
+        combat_runs.refresh_raid_runs(SimpleNamespace(id=9), prefer_async=True)
 
 
 @pytest.mark.django_db
@@ -520,7 +557,7 @@ def test_start_raid_succeeds_when_incoming_message_fails(monkeypatch):
     monkeypatch.setattr(
         combat_runs,
         "_send_raid_incoming_message",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("message down")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
     )
     monkeypatch.setattr(
         combat_runs,
@@ -532,6 +569,41 @@ def test_start_raid_succeeds_when_incoming_message_fails(monkeypatch):
 
     assert result is created_run
     assert dispatched == {"run_id": 99, "travel_time": 45}
+
+
+def test_start_raid_incoming_message_programming_error_bubbles_up(monkeypatch):
+    attacker = SimpleNamespace(pk=1, id=1, defeat_protection_until=None)
+    defender = SimpleNamespace(pk=2, id=2)
+    created_run = SimpleNamespace(id=99, attacker=attacker, defender=defender)
+
+    monkeypatch.setattr(combat_runs.transaction, "atomic", contextlib.nullcontext)
+    monkeypatch.setattr(
+        combat_runs,
+        "_validate_and_normalize_raid_inputs",
+        lambda *_args, **_kwargs: ([101], {"inf": 1}),
+    )
+    monkeypatch.setattr(combat_runs, "_lock_manor_pair", lambda *_args, **_kwargs: (attacker, defender))
+    monkeypatch.setattr(combat_runs, "_recheck_can_attack_target", lambda *_args, **_kwargs: (True, ""))
+    monkeypatch.setattr(combat_runs, "get_active_raid_count", lambda *_args, **_kwargs: 0)
+    monkeypatch.setattr(combat_runs, "_load_and_validate_attacker_guests", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(combat_runs, "_normalize_and_validate_raid_loadout", lambda *_args, **_kwargs: {"inf": 1})
+    monkeypatch.setattr(combat_runs, "_deduct_troops", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_runs, "calculate_raid_travel_time", lambda *_args, **_kwargs: 45)
+    monkeypatch.setattr(combat_runs, "_create_raid_run_record", lambda *_args, **_kwargs: created_run)
+    monkeypatch.setattr(combat_runs, "_invalidate_recent_attacks_cache_on_commit", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        combat_runs,
+        "_send_raid_incoming_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken incoming message contract")),
+    )
+    monkeypatch.setattr(
+        combat_runs,
+        "_dispatch_raid_battle_task",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("should not dispatch after programming error")),
+    )
+
+    with pytest.raises(AssertionError, match="broken incoming message contract"):
+        combat_runs.start_raid(attacker, defender, [101], {"inf": 1})
 
 
 def test_dispatch_raid_battle_task_processes_sync_when_due_dispatch_fails(monkeypatch):
@@ -546,6 +618,41 @@ def test_dispatch_raid_battle_task_processes_sync_when_due_dispatch_fails(monkey
     combat_runs._dispatch_raid_battle_task(SimpleNamespace(id=123), travel_time=0)
 
     assert processed == [123]
+
+
+def test_dispatch_raid_battle_task_nested_import_error_bubbles_up(monkeypatch):
+    run = SimpleNamespace(id=123)
+
+    def _raise_import():
+        exc = ModuleNotFoundError("No module named 'redis'")
+        exc.name = "redis"
+        raise exc
+
+    with pytest.raises(ModuleNotFoundError, match="redis"):
+        combat_run_side_effects.dispatch_raid_battle_task_best_effort(
+            run,
+            0,
+            logger=combat_runs.logger,
+            import_process_raid_battle_task=_raise_import,
+            safe_apply_async=lambda *_args, **_kwargs: True,
+            process_raid_battle=lambda *_args, **_kwargs: None,
+        )
+
+
+def test_schedule_raid_retreat_completion_nested_import_error_bubbles_up():
+    def _raise_import():
+        exc = ModuleNotFoundError("No module named 'redis'")
+        exc.name = "redis"
+        raise exc
+
+    with pytest.raises(ModuleNotFoundError, match="redis"):
+        combat_run_side_effects.schedule_raid_retreat_completion_best_effort(
+            55,
+            30,
+            logger=combat_runs.logger,
+            import_complete_raid_task=_raise_import,
+            safe_apply_async=lambda *_args, **_kwargs: True,
+        )
 
 
 def test_validate_and_normalize_raid_inputs_uses_uncached_attack_check(monkeypatch):

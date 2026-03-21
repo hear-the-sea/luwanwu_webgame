@@ -6,6 +6,8 @@ from datetime import timedelta
 
 from django.db.models import F
 
+from core.exceptions import MessageError
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_expected_infrastructure_error
 from gameplay.models import ArenaEntry, ArenaEntryGuest, ArenaMatch, ArenaTournament, Manor, Message
 from gameplay.services.utils.messages import create_message
 from guests.models import Guest, GuestStatus
@@ -98,6 +100,15 @@ def finalize_tournament_locked(
         try:
             create_message(manor=entry.manor, kind=Message.Kind.REWARD, title=title, body=body)
         except Exception as exc:
+            if not (
+                isinstance(exc, MessageError)
+                or is_expected_infrastructure_error(
+                    exc,
+                    exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+                    allow_runtime_markers=True,
+                )
+            ):
+                raise
             logger.warning(
                 "arena settlement message failed: tournament_id=%s entry_id=%s manor_id=%s error=%s",
                 tournament.id,

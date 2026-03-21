@@ -3,6 +3,8 @@ from __future__ import annotations
 import math
 from typing import Any, Callable, Dict, List
 
+from core.utils.imports import is_missing_target_import
+
 
 def build_defender_setup_and_drop_table(
     mission: Any,
@@ -163,22 +165,42 @@ def import_launch_post_action_tasks(*, logger: Any) -> tuple[Any | None, Any | N
         from battle.tasks import generate_report_task as imported_generate_report_task
 
         generate_report_task = imported_generate_report_task
-    except Exception:
+    except ImportError as exc:
+        if not is_missing_target_import(exc, "battle.tasks"):
+            raise
         logger.error(
-            "Failed to import generate_report_task during mission launch",
+            "Failed to import generate_report_task during mission launch: %s",
+            exc,
             exc_info=True,
             extra={"degraded": True, "component": "mission_launch_report_import"},
         )
+    except Exception:
+        logger.error(
+            "Unexpected generate_report_task import failure during mission launch",
+            exc_info=True,
+            extra={"degraded": True, "component": "mission_launch_report_import"},
+        )
+        raise
 
     try:
         from gameplay.tasks import complete_mission_task as imported_complete_mission_task
 
         complete_mission_task = imported_complete_mission_task
-    except Exception:
+    except ImportError as exc:
+        if not is_missing_target_import(exc, "gameplay.tasks"):
+            raise
         logger.error(
-            "Failed to import complete_mission_task during mission launch",
+            "Failed to import complete_mission_task during mission launch: %s",
+            exc,
             exc_info=True,
             extra={"degraded": True, "component": "mission_launch_completion_import"},
         )
+    except Exception:
+        logger.error(
+            "Unexpected complete_mission_task import failure during mission launch",
+            exc_info=True,
+            extra={"degraded": True, "component": "mission_launch_completion_import"},
+        )
+        raise
 
     return generate_report_task, complete_mission_task

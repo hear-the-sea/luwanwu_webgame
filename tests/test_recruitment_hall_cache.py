@@ -10,6 +10,7 @@ from gameplay.services.utils.cache import (
     recruitment_hall_context_cache_key,
 )
 from guests.models import RecruitmentPool
+from guests.services import recruitment_shared as recruitment_shared_service
 from guests.services.recruitment import recruit_guest
 
 
@@ -73,3 +74,14 @@ def test_get_recruitment_hall_context_tolerates_cache_backend_failure(game_data,
 
     assert context["candidate_count"] == 0
     assert "pools" in context
+
+
+def test_recruitment_shared_invalidate_cache_bubbles_programming_error(monkeypatch):
+    monkeypatch.setattr(
+        recruitment_shared_service,
+        "_invalidate_recruitment_hall_cache",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken cache contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken cache contract"):
+        recruitment_shared_service.invalidate_recruitment_hall_cache(1)

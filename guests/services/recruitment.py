@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, List
 from django.db import transaction
 from django.utils import timezone
 
-from core.exceptions import InsufficientStockError, RecruitmentItemOwnershipError
+from core.exceptions import InsufficientStockError, RecruitmentError, RecruitmentItemOwnershipError
 
 if TYPE_CHECKING:
     from gameplay.models import Manor
@@ -32,6 +32,11 @@ from . import recruitment_shared as _recruitment_shared
 from . import recruitment_templates as _recruitment_templates
 
 logger = logging.getLogger(__name__)
+
+
+def _should_mark_recruitment_failed(exc: Exception) -> bool:
+    """Only explicit recruitment business/config errors should transition durable state to FAILED."""
+    return isinstance(exc, RecruitmentError)
 
 
 def reveal_candidate_rarity(manor: Manor) -> int:
@@ -296,7 +301,13 @@ def finalize_guest_recruitment(
                 clear_existing=True,
             )
         except Exception as exc:
-            logger.exception("Failed to finalize guest recruitment %s: %s", locked.id, exc)
+            if not _should_mark_recruitment_failed(exc):
+                raise
+            logger.warning(
+                "Guest recruitment finalized as FAILED due to known recruitment error: recruitment_id=%s error=%s",
+                locked.id,
+                exc,
+            )
             _mark_recruitment_failed_locked(locked, current_time=current_time, reason=str(exc))
             return False
 

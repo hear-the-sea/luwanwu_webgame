@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
 from core.exceptions import BattlePreparationError
+from core.utils.imports import is_missing_target_import
 from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, INFRASTRUCTURE_EXCEPTIONS
 from gameplay.services.battle_snapshots import build_guest_battle_snapshots, build_guest_snapshot_proxies
 from guests.models import Guest, GuestStatus
@@ -195,7 +196,9 @@ def _fail_raid_run_due_missing_manor(locked_run: RaidRun, *, now: Optional[datet
 def _dispatch_complete_raid_task(run: RaidRun, *, now: Optional[datetime] = None) -> None:
     try:
         complete_raid_task = import_module("gameplay.tasks").complete_raid_task
-    except Exception as exc:
+    except ImportError as exc:
+        if not is_missing_target_import(exc, "gameplay.tasks"):
+            raise
         logger.warning(
             "complete_raid_task import failed: run_id=%s error=%s",
             run.id,
@@ -204,6 +207,14 @@ def _dispatch_complete_raid_task(run: RaidRun, *, now: Optional[datetime] = None
             extra={"degraded": True, "component": "raid_task_import", "run_id": run.id},
         )
         complete_raid_task = None
+    except Exception:
+        logger.error(
+            "Unexpected complete_raid_task import failure: run_id=%s",
+            run.id,
+            exc_info=True,
+            extra={"degraded": True, "component": "raid_task_import", "run_id": run.id},
+        )
+        raise
 
     _dispatch_complete_raid_task_impl(
         run,

@@ -6,6 +6,8 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, cast
 
 from battle.services import simulate_report
+from core.exceptions import MessageError
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_expected_infrastructure_error
 from gameplay.models import ArenaEntry, ArenaMatch, ArenaTournament, Message
 from gameplay.services.utils.messages import create_message
 from guests.models import Guest
@@ -44,7 +46,16 @@ def send_arena_battle_messages(
             body=body,
             battle_report=report,
         )
-    except Exception:
+    except Exception as exc:
+        if not (
+            isinstance(exc, MessageError)
+            or is_expected_infrastructure_error(
+                exc,
+                exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+                allow_runtime_markers=True,
+            )
+        ):
+            raise
         logger.exception(
             "failed to send arena battle messages: report_id=%s attacker_entry=%s defender_entry=%s",
             getattr(report, "id", None),

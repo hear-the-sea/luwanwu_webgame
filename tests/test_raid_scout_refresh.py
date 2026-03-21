@@ -223,6 +223,18 @@ def test_refresh_scout_records_falls_back_to_sync_when_task_import_fails(monkeyp
     assert called == {"scout": 1, "return": 1}
 
 
+def test_resolve_scout_refresh_tasks_nested_import_error_bubbles_up(monkeypatch):
+    def _raise_import(_task_name):
+        exc = ModuleNotFoundError("No module named 'redis'")
+        exc.name = "redis"
+        raise exc
+
+    monkeypatch.setattr(scout_refresh_command, "resolve_scout_task", _raise_import)
+
+    with pytest.raises(ModuleNotFoundError, match="redis"):
+        scout_refresh_command.resolve_scout_refresh_tasks(logger=scout_service.logger)
+
+
 def test_send_scout_success_message_tolerates_invalid_intel_shape(monkeypatch):
     sent = {}
 
@@ -494,7 +506,7 @@ def test_finalize_scout_detected_message_runs_after_commit_and_failure_does_not_
 
     def _fail_detected(*_args, **_kwargs):
         sent["count"] += 1
-        raise RuntimeError("notify failed")
+        raise RuntimeError("message backend down")
 
     monkeypatch.setattr(scout_service.scout_followups, "send_scout_detected_message", _fail_detected)
     callbacks = []
@@ -527,6 +539,22 @@ def test_finalize_scout_detected_message_runs_after_commit_and_failure_does_not_
             "countdown": record.travel_time,
         }
     ]
+
+
+def test_run_scout_followup_programming_error_bubbles_up(monkeypatch):
+    record = SimpleNamespace(
+        attacker=SimpleNamespace(display_name="进攻方", location_display="A-1"),
+        defender=SimpleNamespace(display_name="防守方"),
+    )
+
+    monkeypatch.setattr(
+        scout_service.scout_followups,
+        "send_scout_detected_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken scout message contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken scout message contract"):
+        scout_service.scout_followups.run_scout_followup("detected_message", record)
 
 
 @pytest.mark.django_db(transaction=True)
@@ -585,3 +613,23 @@ def test_start_scout_dispatch_runs_after_commit(django_user_model, monkeypatch):
             "countdown": 45,
         }
     ]
+
+
+def test_dispatch_scout_task_nested_import_error_bubbles_up(monkeypatch):
+    record = SimpleNamespace(id=17, attacker_id=3, defender_id=5)
+
+    def _raise_import(_task_name):
+        exc = ModuleNotFoundError("No module named 'redis'")
+        exc.name = "redis"
+        raise exc
+
+    monkeypatch.setattr(scout_service.scout_followups.scout_refresh_command, "resolve_scout_task", _raise_import)
+
+    with pytest.raises(ModuleNotFoundError, match="redis"):
+        scout_service.scout_followups.dispatch_scout_task(
+            "complete_scout_task",
+            countdown=30,
+            record=record,
+            log_message="complete_scout_task dispatch failed",
+            false_log_message="complete_scout_task dispatch returned False; scout may remain in outbound state",
+        )

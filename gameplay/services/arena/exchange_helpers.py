@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from django.db import transaction
 from django.db.models import F, Sum
 
-from core.exceptions import ArenaExchangeError, ArenaInsufficientCoinsError, ArenaRewardLimitError
+from core.exceptions import ArenaExchangeError, ArenaInsufficientCoinsError, ArenaRewardLimitError, MessageError
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_expected_infrastructure_error
 from gameplay.models import ArenaExchangeRecord, Manor, Message
 from gameplay.services.inventory.core import add_item_to_inventory_locked
 from gameplay.services.resources import grant_resources_locked
@@ -148,6 +149,15 @@ def send_exchange_success_message(
             body=f"消耗角斗币 {total_cost}，兑换数量 {normalized_quantity}。{summary}。",
         )
     except Exception as exc:
+        if not (
+            isinstance(exc, MessageError)
+            or is_expected_infrastructure_error(
+                exc,
+                exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+                allow_runtime_markers=True,
+            )
+        ):
+            raise
         logger.warning(
             "arena exchange message failed: manor_id=%s reward_key=%s quantity=%s error=%s",
             locked_manor.id,

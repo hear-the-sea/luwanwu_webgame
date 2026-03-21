@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from core.utils.imports import is_missing_target_import
+
 
 def send_raid_incoming_message(run: Any, *, create_message: Callable[..., Any]) -> None:
     battle_at = run.battle_at
@@ -40,7 +42,9 @@ def dispatch_raid_battle_task_best_effort(
 
     try:
         process_raid_battle_task = import_process_raid_battle_task()
-    except Exception as exc:
+    except ImportError as exc:
+        if not is_missing_target_import(exc, "gameplay.tasks"):
+            raise
         logger.warning(
             "process_raid_battle_task dispatch failed: run_id=%s error=%s",
             run.id,
@@ -49,6 +53,13 @@ def dispatch_raid_battle_task_best_effort(
         )
         _fallback_sync_when_due()
         return
+    except Exception:
+        logger.error(
+            "Unexpected process_raid_battle_task import failure: run_id=%s",
+            run.id,
+            exc_info=True,
+        )
+        raise
 
     dispatched = safe_apply_async(
         process_raid_battle_task,
@@ -80,7 +91,9 @@ def schedule_raid_retreat_completion_best_effort(
 ) -> None:
     try:
         complete_raid_task = import_complete_raid_task()
-    except Exception as exc:
+    except ImportError as exc:
+        if not is_missing_target_import(exc, "gameplay.tasks"):
+            raise
         logger.warning(
             "complete_raid_task dispatch failed for retreat: run_id=%s error=%s",
             run_id,
@@ -88,6 +101,13 @@ def schedule_raid_retreat_completion_best_effort(
             exc_info=True,
         )
         return
+    except Exception:
+        logger.error(
+            "Unexpected complete_raid_task import failure for retreat: run_id=%s",
+            run_id,
+            exc_info=True,
+        )
+        raise
 
     dispatched = safe_apply_async(
         complete_raid_task,

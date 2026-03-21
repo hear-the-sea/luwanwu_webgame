@@ -139,13 +139,34 @@ def test_dispatch_complete_raid_task_finalizes_sync_when_task_import_fails(monke
     now = timezone.now()
     finalized: list[tuple[int, object]] = []
 
-    monkeypatch.setattr(combat_battle, "import_module", lambda _name: (_ for _ in ()).throw(ImportError("boom")))
+    def _missing_module(_name):
+        exc = ModuleNotFoundError("No module named 'gameplay.tasks'")
+        exc.name = "gameplay.tasks"
+        raise exc
+
+    monkeypatch.setattr(combat_battle, "import_module", _missing_module)
     monkeypatch.setattr(combat_runs, "finalize_raid", lambda run, now=None: finalized.append((run.id, now)))
 
     run = SimpleNamespace(id=88, return_at=now, travel_time=600)
     combat_battle._dispatch_complete_raid_task(run, now=now)
 
     assert finalized == [(88, now)]
+
+
+def test_dispatch_complete_raid_task_nested_import_error_bubbles_up(monkeypatch):
+    now = timezone.now()
+
+    def _nested_import_failure(_name):
+        exc = ModuleNotFoundError("No module named 'redis'")
+        exc.name = "redis"
+        raise exc
+
+    monkeypatch.setattr(combat_battle, "import_module", _nested_import_failure)
+
+    run = SimpleNamespace(id=89, return_at=now, travel_time=600)
+
+    with pytest.raises(ModuleNotFoundError, match="redis"):
+        combat_battle._dispatch_complete_raid_task(run, now=now)
 
 
 def test_process_raid_battle_ignores_post_commit_failures(monkeypatch):

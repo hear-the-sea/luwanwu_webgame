@@ -1,12 +1,8 @@
 from __future__ import annotations
 
-import logging
-
 from gameplay.services.utils.cache import invalidate_recruitment_hall_cache as _invalidate_recruitment_hall_cache
 
 from ..models import GuestRarity, RecruitmentPool
-
-logger = logging.getLogger(__name__)
 
 NON_REPEATABLE_RARITIES = frozenset(
     {
@@ -29,10 +25,7 @@ CORE_POOL_TIERS = (
 def invalidate_recruitment_hall_cache(manor_id: int | None) -> None:
     if not manor_id:
         return
-    try:
-        _invalidate_recruitment_hall_cache(int(manor_id))
-    except Exception:
-        logger.debug("Failed to invalidate recruitment hall cache for manor_id=%s", manor_id, exc_info=True)
+    _invalidate_recruitment_hall_cache(int(manor_id))
 
 
 __all__ = [

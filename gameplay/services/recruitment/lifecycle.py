@@ -13,7 +13,14 @@ from django.db import transaction
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
+from core.exceptions import MessageError
 from core.utils import safe_int
+from core.utils.imports import is_missing_target_import
+from core.utils.infrastructure import (
+    DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+    NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
+    is_expected_infrastructure_error,
+)
 
 from ...models import PlayerTroop, TroopRecruitment
 
@@ -47,9 +54,14 @@ def schedule_recruitment_completion(recruitment: TroopRecruitment, eta_seconds: 
 
     try:
         from gameplay.tasks import complete_troop_recruitment
-    except Exception:
+    except ImportError as exc:
+        if not is_missing_target_import(exc, "gameplay.tasks"):
+            raise
         logger.warning("Unable to import complete_troop_recruitment task; skip scheduling", exc_info=True)
         return
+    except Exception:
+        logger.error("Unexpected complete_troop_recruitment import failure", exc_info=True)
+        raise
 
     def _dispatch_completion() -> None:
         dispatched = safe_apply_async(
@@ -113,9 +125,6 @@ def finalize_troop_recruitment(recruitment: TroopRecruitment, send_notification:
     """
     完成募兵，将护院添加到玩家存储。
     """
-    from ...models import Message
-    from ..utils.notifications import notify_user
-
     with transaction.atomic():
         locked_recruitment = (
             TroopRecruitment.objects.select_for_update()
@@ -150,17 +159,38 @@ def finalize_troop_recruitment(recruitment: TroopRecruitment, send_notification:
         recruitment = locked_recruitment
 
     if send_notification:
+        from ...models import Message
+        from ..utils.messages import create_message
+        from ..utils.notifications import notify_user
+
         quantity_text = f"x{recruitment.quantity}" if recruitment.quantity > 1 else ""
         try:
-            from ..utils.messages import create_message
-
             create_message(
                 manor=recruitment.manor,
                 kind=Message.Kind.SYSTEM,
                 title=f"{recruitment.troop_name}{quantity_text}募兵完成",
                 body=f"您的{recruitment.troop_name}{quantity_text}已募兵完成。",
             )
+        except Exception as exc:
+            if not (
+                isinstance(exc, MessageError)
+                or is_expected_infrastructure_error(
+                    exc,
+                    exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+                    allow_runtime_markers=True,
+                )
+            ):
+                raise
+            logger.warning(
+                "troop recruitment message creation failed: recruitment_id=%s manor_id=%s error=%s",
+                recruitment.id,
+                recruitment.manor_id,
+                exc,
+                exc_info=True,
+            )
+            return True
 
+        try:
             notify_user(
                 recruitment.manor.user_id,
                 {
@@ -172,6 +202,12 @@ def finalize_troop_recruitment(recruitment: TroopRecruitment, send_notification:
                 log_context="troop recruitment notification",
             )
         except Exception as exc:
+            if not is_expected_infrastructure_error(
+                exc,
+                exceptions=NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
+                allow_runtime_markers=True,
+            ):
+                raise
             logger.warning(
                 "troop recruitment notification failed: recruitment_id=%s manor_id=%s error=%s",
                 recruitment.id,

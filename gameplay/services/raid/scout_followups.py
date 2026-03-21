@@ -7,6 +7,9 @@ from django.db import transaction
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
+from core.exceptions import MessageError
+from core.utils.imports import is_missing_target_import
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_expected_infrastructure_error
 
 from ..utils.messages import create_message
 from . import scout_refresh as scout_refresh_command
@@ -119,7 +122,16 @@ def run_scout_followup(action: ScoutFollowupAction, record: Any, **context: Any)
             send_scout_retreat_message(record)
         else:
             send_scout_fail_message(record)
-    except Exception:
+    except Exception as exc:
+        if not (
+            isinstance(exc, MessageError)
+            or is_expected_infrastructure_error(
+                exc,
+                exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+                allow_runtime_markers=True,
+            )
+        ):
+            raise
         log_scout_followup_failure(action, **context)
 
 
@@ -137,7 +149,9 @@ def dispatch_scout_task(
 ) -> None:
     try:
         task = scout_refresh_command.resolve_scout_task(task_name)
-    except Exception as exc:
+    except ImportError as exc:
+        if not is_missing_target_import(exc, "gameplay.tasks.pvp"):
+            raise
         logger.warning(
             "%s import failed: record_id=%s attacker=%s defender=%s error=%s",
             task_name,
@@ -148,6 +162,16 @@ def dispatch_scout_task(
             exc_info=True,
         )
         return
+    except Exception:
+        logger.error(
+            "Unexpected %s import failure: record_id=%s attacker=%s defender=%s",
+            task_name,
+            record.id,
+            record.attacker_id,
+            record.defender_id,
+            exc_info=True,
+        )
+        raise
 
     dispatched = safe_apply_async(
         task,

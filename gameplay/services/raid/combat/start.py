@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from core.exceptions import RaidStartError
+from core.exceptions import MessageError, RaidStartError
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_expected_infrastructure_error
 
 
 def start_raid(
@@ -55,6 +56,15 @@ def start_raid(
     try:
         send_raid_incoming_message(run)
     except Exception as exc:
+        if not (
+            isinstance(exc, MessageError)
+            or is_expected_infrastructure_error(
+                exc,
+                exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+                allow_runtime_markers=True,
+            )
+        ):
+            raise
         logger.warning(
             "raid incoming message failed: run_id=%s attacker=%s defender=%s error=%s",
             getattr(run, "id", None),

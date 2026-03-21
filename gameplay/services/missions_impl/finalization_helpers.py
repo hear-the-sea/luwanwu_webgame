@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Set, Tuple
 
+from core.exceptions import MessageError
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_expected_infrastructure_error
+
 
 def build_defense_report_if_needed(
     locked_run: Any,
@@ -162,26 +165,16 @@ def build_mission_drops_with_salvage(
     if locked_run.mission.is_defense and not drops:
         drops = resolve_defense_drops_if_missing(report, locked_run.mission.drop_table or {})
 
-    try:
-        from ..battle_salvage import calculate_battle_salvage
+    from ..battle_salvage import calculate_battle_salvage
 
-        exp_fruit_count, equipment_recovery = calculate_battle_salvage(
-            report,
-            equipment_casualty_side=player_side,
-        )
-        if exp_fruit_count > 0:
-            drops["experience_fruit"] = drops.get("experience_fruit", 0) + exp_fruit_count
-        for equip_key, count in equipment_recovery.items():
-            drops[equip_key] = drops.get(equip_key, 0) + count
-    except Exception as exc:
-        logger.warning(
-            "Failed to calculate mission battle salvage rewards: run_id=%s report_id=%s error=%s",
-            locked_run.id,
-            getattr(report, "id", None),
-            exc,
-            exc_info=True,
-            extra={"degraded": True, "component": "mission_battle_salvage", "run_id": locked_run.id},
-        )
+    exp_fruit_count, equipment_recovery = calculate_battle_salvage(
+        report,
+        equipment_casualty_side=player_side,
+    )
+    if exp_fruit_count > 0:
+        drops["experience_fruit"] = drops.get("experience_fruit", 0) + exp_fruit_count
+    for equip_key, count in equipment_recovery.items():
+        drops[equip_key] = drops.get(equip_key, 0) + count
 
     return drops
 
@@ -235,11 +228,21 @@ def send_mission_report_message(
             body="",
             battle_report=report,
         )
-    except Exception:
+    except Exception as exc:
+        if not (
+            isinstance(exc, MessageError)
+            or is_expected_infrastructure_error(
+                exc,
+                exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+                allow_runtime_markers=True,
+            )
+        ):
+            raise
         logger.error(
-            "Mission report message creation failed: run_id=%s manor_id=%s",
+            "Mission report message creation failed: run_id=%s manor_id=%s error=%s",
             locked_run.id,
             locked_run.manor_id,
+            exc,
             exc_info=True,
             extra={"degraded": True, "component": "mission_report_message", "run_id": locked_run.id},
         )
@@ -257,22 +260,19 @@ def send_mission_report_message(
             },
             log_context="mission battle notification",
         )
-    except notification_infrastructure_exceptions as exc:
+    except Exception as exc:
+        if not is_expected_infrastructure_error(
+            exc,
+            exceptions=notification_infrastructure_exceptions,
+            allow_runtime_markers=True,
+        ):
+            raise
         logger.warning(
             "mission report notification failed: run_id=%s manor_id=%s report_id=%s error=%s",
             locked_run.id,
             locked_run.manor_id,
             getattr(report, "id", None),
             exc,
-            exc_info=True,
-            extra={"degraded": True, "component": "mission_notification", "run_id": locked_run.id},
-        )
-    except Exception:
-        logger.error(
-            "Unexpected mission report notification failure: run_id=%s manor_id=%s report_id=%s",
-            locked_run.id,
-            locked_run.manor_id,
-            getattr(report, "id", None),
             exc_info=True,
             extra={"degraded": True, "component": "mission_notification", "run_id": locked_run.id},
         )

@@ -3,6 +3,7 @@ from __future__ import annotations
 import builtins
 from types import SimpleNamespace
 
+import pytest
 from django.utils import timezone
 
 import gameplay.services.missions_impl.execution as mission_execution
@@ -125,6 +126,30 @@ def test_refresh_mission_runs_falls_back_to_sync_for_failed_dispatch(monkeypatch
     assert finalized == [22]
 
 
+def test_refresh_mission_runs_nested_import_error_bubbles_up(monkeypatch):
+    class _Status:
+        ACTIVE = "active"
+
+    mission_run_cls = type("_MissionRun", (), {"Status": _Status, "objects": _RunObjects([])})
+    monkeypatch.setattr(mission_execution, "MissionRun", mission_run_cls)
+    monkeypatch.setattr(mission_execution.settings, "MISSION_REFRESH_SYNC_MAX_RUNS", 0, raising=False)
+
+    original_import = builtins.__import__
+
+    def _raising_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "gameplay.tasks":
+            exc = ModuleNotFoundError("No module named 'redis'")
+            exc.name = "redis"
+            raise exc
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _raising_import)
+    manor = SimpleNamespace(mission_runs=_DueRunsManager(ids=[31]))
+
+    with pytest.raises(ModuleNotFoundError, match="redis"):
+        mission_execution.refresh_mission_runs(manor, prefer_async=True)
+
+
 def test_build_defender_setup_and_drop_table_sanitizes_invalid_mission_json():
     mission = SimpleNamespace(
         is_defense=False,
@@ -188,6 +213,113 @@ def test_send_mission_report_message_ignores_message_failure(monkeypatch):
     )
 
 
+def test_send_mission_report_message_programming_error_bubbles_up(monkeypatch):
+    run = SimpleNamespace(
+        id=89,
+        manor_id=10,
+        is_retreating=False,
+        manor=SimpleNamespace(user_id=101),
+        mission=SimpleNamespace(key="mission_key", name="任务名"),
+    )
+    report = SimpleNamespace(id=67)
+
+    monkeypatch.setattr(
+        mission_execution,
+        "create_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken mission message contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken mission message contract"):
+        mission_execution.send_mission_report_message(
+            run,
+            report,
+            logger=mission_execution.logger,
+            create_message=mission_execution.create_message,
+            notify_user=mission_execution.notify_user,
+            notification_infrastructure_exceptions=mission_execution.MISSION_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
+        )
+
+
+def test_send_mission_report_notification_programming_error_bubbles_up(monkeypatch):
+    run = SimpleNamespace(
+        id=90,
+        manor_id=11,
+        is_retreating=False,
+        manor=SimpleNamespace(user_id=102),
+        mission=SimpleNamespace(key="mission_key", name="任务名"),
+    )
+    report = SimpleNamespace(id=68)
+
+    monkeypatch.setattr(mission_execution, "create_message", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(
+        mission_execution,
+        "notify_user",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken mission notify contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken mission notify contract"):
+        mission_execution.send_mission_report_message(
+            run,
+            report,
+            logger=mission_execution.logger,
+            create_message=mission_execution.create_message,
+            notify_user=mission_execution.notify_user,
+            notification_infrastructure_exceptions=mission_execution.MISSION_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
+        )
+
+
+def test_import_launch_post_action_tasks_falls_back_on_import_error(monkeypatch):
+    original_import = builtins.__import__
+
+    def _raising_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name in {"battle.tasks", "gameplay.tasks"}:
+            exc = ModuleNotFoundError(f"No module named '{name}'")
+            exc.name = name
+            raise exc
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _raising_import)
+
+    generate_report_task, complete_mission_task = mission_launch_post_actions.import_launch_post_action_tasks(
+        logger=mission_execution.logger
+    )
+
+    assert generate_report_task is None
+    assert complete_mission_task is None
+
+
+def test_import_launch_post_action_tasks_nested_import_error_bubbles_up(monkeypatch):
+    original_import = builtins.__import__
+
+    def _raising_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "battle.tasks":
+            exc = ModuleNotFoundError("No module named 'celery'")
+            exc.name = "celery"
+            raise exc
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _raising_import)
+
+    with pytest.raises(ModuleNotFoundError, match="celery"):
+        mission_launch_post_actions.import_launch_post_action_tasks(logger=mission_execution.logger)
+
+
+def test_import_launch_post_action_tasks_unexpected_import_error_bubbles_up(monkeypatch):
+    original_import = builtins.__import__
+
+    def _raising_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "battle.tasks":
+            return SimpleNamespace(generate_report_task=object())
+        if name == "gameplay.tasks":
+            raise RuntimeError("broken gameplay task import")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _raising_import)
+
+    with pytest.raises(RuntimeError, match="broken gameplay task import"):
+        mission_launch_post_actions.import_launch_post_action_tasks(logger=mission_execution.logger)
+
+
 def test_schedule_mission_completion_task_finalizes_sync_when_due_dispatch_fails(monkeypatch):
     now = timezone.now()
     run = SimpleNamespace(id=51, return_at=now)
@@ -219,7 +351,9 @@ def test_schedule_mission_completion_finalizes_sync_when_due_task_import_fails(m
 
     def _raising_import(name, globals=None, locals=None, fromlist=(), level=0):
         if name == "gameplay.tasks":
-            raise ImportError("tasks unavailable")
+            exc = ModuleNotFoundError("No module named 'gameplay.tasks'")
+            exc.name = "gameplay.tasks"
+            raise exc
         return original_import(name, globals, locals, fromlist, level)
 
     monkeypatch.setattr(builtins, "__import__", _raising_import)
@@ -232,3 +366,21 @@ def test_schedule_mission_completion_finalizes_sync_when_due_task_import_fails(m
     mission_execution.schedule_mission_completion(run)
 
     assert finalized == [52]
+
+
+def test_schedule_mission_completion_nested_import_error_bubbles_up(monkeypatch):
+    now = timezone.now()
+    run = SimpleNamespace(id=53, return_at=now)
+    original_import = builtins.__import__
+
+    def _raising_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "gameplay.tasks":
+            exc = ModuleNotFoundError("No module named 'redis'")
+            exc.name = "redis"
+            raise exc
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _raising_import)
+
+    with pytest.raises(ModuleNotFoundError, match="redis"):
+        mission_execution.schedule_mission_completion(run)
