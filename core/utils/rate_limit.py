@@ -49,9 +49,9 @@ def _default_identifier(request: HttpRequest) -> str:
 
 def _validate_rate_limit_options(limit: int, window_seconds: int) -> None:
     if limit <= 0:
-        raise ValueError("limit must be > 0")
+        raise AssertionError("rate limit requires positive limit")
     if window_seconds <= 0:
-        raise ValueError("window_seconds must be > 0")
+        raise AssertionError("rate limit requires positive window_seconds")
 
 
 def _should_bypass_rate_limit(request: HttpRequest, include_safe_methods: bool) -> bool:

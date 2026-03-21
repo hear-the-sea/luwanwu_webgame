@@ -1,6 +1,7 @@
 from django.test import RequestFactory
 
-from core.utils.validation import parse_json_object, safe_positive_int, safe_redirect_url
+from core.exceptions import GameError
+from core.utils.validation import parse_json_object, safe_positive_int, safe_redirect_url, sanitize_error_message
 
 
 def test_safe_positive_int_accepts_positive_values():
@@ -48,3 +49,11 @@ def test_safe_redirect_url_rejects_external_url_after_double_decode():
     request = RequestFactory().get("/manor/")
     unsafe = "%252F%252Fevil.example%252F%2523building-77"
     assert safe_redirect_url(request, unsafe, "/manor/") == "/manor/"
+
+
+def test_sanitize_error_message_returns_business_message_for_game_error():
+    assert sanitize_error_message(GameError("blocked")) == "blocked"
+
+
+def test_sanitize_error_message_hides_value_error_message():
+    assert sanitize_error_message(ValueError("leak")) == "操作失败，请稍后重试"

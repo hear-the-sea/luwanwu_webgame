@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.sessions.middleware import SessionMiddleware
@@ -150,3 +151,13 @@ class RateLimitRedirectTests(TestCase):
         payload = json.loads(response.content.decode("utf-8"))
         self.assertEqual(payload["success"], False)
         self.assertIn("繁忙", payload["error"])
+
+
+def test_rate_limit_redirect_rejects_non_positive_limit():
+    with pytest.raises(AssertionError, match="positive limit"):
+        rate_limit_redirect("bad", limit=0, window_seconds=60)
+
+
+def test_rate_limit_redirect_rejects_non_positive_window():
+    with pytest.raises(AssertionError, match="positive window_seconds"):
+        rate_limit_redirect("bad", limit=1, window_seconds=0)

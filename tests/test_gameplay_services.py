@@ -8,6 +8,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError
 from django.db.utils import ProgrammingError
+from django.test import override_settings
 from django.utils import timezone
 
 from battle.models import TroopTemplate
@@ -322,6 +323,32 @@ def test_grant_resources_caps_and_logs_actual():
     ).first()
     assert event is not None
     assert event.delta == 5
+
+
+@pytest.mark.django_db
+@override_settings(DEBUG=True)
+def test_grant_resources_rejects_unknown_resource_in_debug():
+    user = User.objects.create_user(username="resource_unknown_debug", password="test123")
+    manor = ensure_manor(user)
+
+    with pytest.raises(AssertionError, match="unknown resource type: mystery"):
+        grant_resources(manor, {"mystery": 10}, "未知资源测试")
+
+
+@pytest.mark.django_db
+@override_settings(DEBUG=False)
+def test_grant_resources_skips_unknown_resource_and_logs_error(caplog):
+    user = User.objects.create_user(username="resource_unknown_prod", password="test123")
+    manor = ensure_manor(user)
+    initial_silver = manor.silver
+
+    with caplog.at_level(logging.ERROR):
+        credited = grant_resources(manor, {"mystery": 10}, "未知资源测试")
+
+    manor.refresh_from_db(fields=["silver"])
+    assert credited == {}
+    assert manor.silver == initial_silver
+    assert "未知资源类型被跳过" in caplog.text
 
 
 @pytest.mark.django_db

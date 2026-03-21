@@ -196,7 +196,7 @@ def sanitize_error_message(error: Exception) -> str:
     """
     清理错误消息，避免泄露敏感信息。
 
-    对于 GameError 或 ValueError，返回其消息（通常是业务逻辑错误）。
+    对于 GameError，返回其业务消息。
     对于其他异常，返回通用消息。
 
     Args:
@@ -207,8 +207,6 @@ def sanitize_error_message(error: Exception) -> str:
     """
     if isinstance(error, GameError):
         return error.message
-    if isinstance(error, ValueError):
-        return str(error)
     return "操作失败，请稍后重试"
 
 

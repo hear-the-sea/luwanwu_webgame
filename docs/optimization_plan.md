@@ -58,6 +58,9 @@
 - `guest recruitment` 已开始补真实服务语义测试，覆盖并发发起只允许一个 `PENDING`、并发完成只允许一次 `PENDING -> COMPLETED` 收口，以及候选确认只允许一次转正；`guests/services/recruitment_followups.py` 也开始承接完成任务派发与通知发送，但更多 `select_for_update` 竞争场景仍未封板。
 - `map` 的 `refresh_raid_activity_api` 已退出 legacy `ValueError` 兼容：写入口默认只把显式 `GameError` 当已知业务错误，裸 `ValueError` 继续冒泡，避免 view 层把程序/契约错误伪装成 400。
 - `core` 的 legacy view 装饰器也已退出 `ValueError` 业务语义：`core/decorators.handle_game_errors` 不再捕获裸 `ValueError`，避免新代码继续把 `ValueError` 当跨层业务错误。
+- `core` 的错误消息清洗入口也已退出 `ValueError` 业务语义：`core/utils/validation.sanitize_error_message()` 不再直接回显裸 `ValueError` 文案，未显式归类的异常统一退回通用失败消息，避免程序错误泄漏到页面层。
+- `core` 的 rate limit 工具也已开始退出裸 `ValueError`：`core/utils/rate_limit._validate_rate_limit_options()` 对非法 `limit/window_seconds` 配置不再抛 `ValueError`，改走显式内部调用契约错误 `AssertionError`。
+- `resources` 服务也已开始退出裸 `ValueError`：`gameplay/services/resources._handle_unknown_resource()` 在 debug 下对未知资源类型改走显式内部调用契约错误 `AssertionError`，非 debug 环境继续记录错误并跳过非法资源，不再把该问题伪装成业务异常。
 - `buildings` 升级入口已不再从 view 直接调用 `refresh_manor_state(...)`；陈旧升级状态改由 `start_upgrade()` 写命令自行收口。
 - `guests/roster`、`guests/detail` 的门客状态准备已收口到显式 read helper，不再在 `get_context_data()` 内联推进状态。
 - 单会话策略已改为默认 `fail-closed`，但平台级故障语义仍需继续用真实服务门禁验证。

@@ -53,7 +53,7 @@ def _get_resource_capacity(manor: Manor, resource: str) -> Tuple[int, bool]:
 
 def _handle_unknown_resource(manor: Manor, resource: str, amount: int) -> None:
     if settings.DEBUG:
-        raise ValueError(f"未知资源类型: {resource}")
+        raise AssertionError(f"unknown resource type: {resource}")
     logger.error(
         "未知资源类型被跳过: %s=%s",
         resource,
