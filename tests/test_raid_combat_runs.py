@@ -10,7 +10,7 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
 
-from core.exceptions import RaidStartError
+from core.exceptions import BattlePreparationError, RaidStartError
 from gameplay.services.raid import utils as raid_utils
 from gameplay.services.raid.combat import battle as combat_battle
 from gameplay.services.raid.combat import runs as combat_runs
@@ -134,17 +134,17 @@ def test_deduct_troops_raises_when_missing(monkeypatch):
         combat_runs._deduct_troops(SimpleNamespace(), {"inf": 1})
 
 
-def test_normalize_and_validate_raid_loadout_translates_battle_value_error(monkeypatch):
+def test_normalize_and_validate_raid_loadout_bubbles_up_battle_preparation_error(monkeypatch):
     monkeypatch.setattr(
         "battle.combatants_pkg.normalize_troop_loadout",
         lambda troop_loadout, default_if_empty=False: troop_loadout,
     )
     monkeypatch.setattr(
         "battle.services.validate_troop_capacity",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("门客容量不足")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(BattlePreparationError("门客容量不足")),
     )
 
-    with pytest.raises(RaidStartError, match="门客容量不足"):
+    with pytest.raises(BattlePreparationError, match="门客容量不足"):
         combat_runs._normalize_and_validate_raid_loadout([], {"inf": 1})
 
 

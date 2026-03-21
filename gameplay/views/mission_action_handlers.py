@@ -36,7 +36,6 @@ def handle_accept_mission(
     manor: Any,
     mission: Any,
     launch_mission_fn: Callable[[Any, Any, list[int], dict[str, int]], Any],
-    normalize_mission_loadout: Callable[[dict[str, int]], dict[str, int]],
 ) -> HttpResponse:
     if mission.is_defense:
         guest_ids: list[int] = []
@@ -68,8 +67,7 @@ def handle_accept_mission(
         return mission_helpers.mission_tasks_redirect(mission.key)
 
     def _perform_accept() -> None:
-        loadout = normalize_mission_loadout(raw_loadout) if raw_loadout else {}
-        launch_mission_fn(manor, mission, guest_ids, loadout)
+        launch_mission_fn(manor, mission, guest_ids, raw_loadout)
         if mission.is_defense:
             messages.success(request, f"{mission.name} 已进入防守，战报稍后送达。")
         else:

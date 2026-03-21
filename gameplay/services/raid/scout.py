@@ -15,6 +15,7 @@ from django.db import IntegrityError, models
 from django.utils import timezone
 
 from battle.models import TroopTemplate
+from core.exceptions import ScoutStartError
 from core.utils.time_scale import scale_duration
 
 from ...constants import PVPConstants
@@ -42,7 +43,7 @@ def _lock_manor_pair(attacker_id: int, defender_id: int) -> tuple[Manor, Manor]:
     attacker = locked.get(attacker_id)
     defender = locked.get(defender_id)
     if attacker is None or defender is None:
-        raise ValueError("目标庄园不存在")
+        raise ScoutStartError("目标庄园不存在")
     return attacker, defender
 
 

@@ -19,7 +19,6 @@ from gameplay.services import raid as raid_service
 from gameplay.services.manor.core import get_manor
 from gameplay.services.missions_impl.attempts import add_mission_extra_attempt
 from gameplay.services.missions_impl.execution import launch_mission, request_retreat
-from gameplay.services.missions_impl.loadout import normalize_mission_loadout
 
 from . import mission_helpers
 from .mission_action_handlers import (
@@ -67,7 +66,6 @@ class AcceptMissionView(LoginRequiredMixin, TemplateView):
             manor=manor,
             mission=mission,
             launch_mission_fn=launch_mission,
-            normalize_mission_loadout=normalize_mission_loadout,
         )
 
 

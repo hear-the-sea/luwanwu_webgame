@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import TYPE_CHECKING, DefaultDict, Dict
 
+from core.exceptions import TroopLoadoutError
 from core.utils import safe_int
 from core.utils.time_scale import scale_duration
 
@@ -137,7 +138,7 @@ def normalize_mission_loadout(raw: Dict[str, int] | None, troop_templates: Dict[
         标准化后的兵力配置
 
     Raises:
-        ValueError: 如果 raw 包含不存在的护院类型（安全检查）
+        TroopLoadoutError: 如果 raw 包含不存在的护院类型（安全检查）
 
     Examples:
         >>> normalize_mission_loadout({"infantry": "100", "invalid": -5}, templates)
@@ -153,9 +154,11 @@ def normalize_mission_loadout(raw: Dict[str, int] | None, troop_templates: Dict[
     invalid_keys = set(raw.keys()) - set(troop_templates.keys())
     if invalid_keys:
         # 过滤掉数量为0的key（可能是前端传递的空值）
-        invalid_nonzero = {k: v for k, v in raw.items() if k in invalid_keys and int(v or 0) > 0}
+        invalid_nonzero = {
+            k: v for k, v in raw.items() if k in invalid_keys and (safe_int(v, default=0, min_val=0) or 0) > 0
+        }
         if invalid_nonzero:
-            raise ValueError(f"护院配置包含不存在的类型: {', '.join(invalid_nonzero.keys())}")
+            raise TroopLoadoutError(f"护院配置包含不存在的类型: {', '.join(invalid_nonzero.keys())}")
 
     loadout: Dict[str, int] = {}
     for key in troop_templates.keys():

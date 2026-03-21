@@ -201,6 +201,27 @@ def test_start_scout_precheck_uses_uncached_attack_check(monkeypatch):
     assert seen["check_defeat_protection"] is False
 
 
+def test_lock_manor_pair_raises_scout_start_error_when_target_missing(monkeypatch):
+    class _Objects:
+        @staticmethod
+        def select_for_update():
+            return _Objects()
+
+        @staticmethod
+        def filter(**_kwargs):
+            return _Objects()
+
+        @staticmethod
+        def order_by(*_args, **_kwargs):
+            return []
+
+    dummy_manor_model = type("_Manor", (), {"objects": _Objects()})
+    monkeypatch.setattr(scout_service, "Manor", dummy_manor_model)
+
+    with pytest.raises(ScoutStartError, match="目标庄园不存在"):
+        scout_service._lock_manor_pair(1, 2)
+
+
 @pytest.mark.django_db(transaction=True)
 def test_finalize_scout_return_marks_retreated_records_without_failure_message(django_user_model, monkeypatch):
     attacker = ensure_manor(

@@ -171,7 +171,7 @@ def start_raid(
         踢馆记录
 
     Raises:
-        RaidStartError: 无法发起踢馆时
+        GameError: 无法发起踢馆时
     """
     del seed
     return _start_raid_command(

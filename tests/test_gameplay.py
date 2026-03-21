@@ -5,11 +5,17 @@ from django.utils import timezone
 from django_redis.exceptions import ConnectionInterrupted
 
 import gameplay.services.manor.core as manor_service
-from core.exceptions import MissionCannotRetreatError, MissionSquadSizeExceededError, MissionTroopLoadoutError
+from core.exceptions import (
+    MissionCannotRetreatError,
+    MissionSquadSizeExceededError,
+    MissionTroopLoadoutError,
+    TroopLoadoutError,
+)
 from gameplay.constants import MAX_CONCURRENT_BUILDING_UPGRADES
 from gameplay.models import MissionRun, MissionTemplate, RaidRun, ScoutRecord
 from gameplay.services.manor.core import ensure_manor, refresh_manor_state, start_upgrade
 from gameplay.services.missions import launch_mission, refresh_mission_runs, request_retreat
+from gameplay.utils.resource_calculator import normalize_mission_loadout
 from guests.models import GuestStatus
 from guests.services.recruitment import recruit_guest
 from guests.services.recruitment_guests import finalize_candidate
@@ -161,6 +167,23 @@ def test_mission_launch_with_invalid_troop_type(game_data, mission_templates, ma
 
     # 确保没有创建该护院记录
     assert not PlayerTroop.objects.filter(manor=manor, troop_template__key=fake_troop_key).exists()
+
+
+def test_normalize_mission_loadout_rejects_unknown_troop_keys():
+    with pytest.raises(TroopLoadoutError, match="不存在的类型"):
+        normalize_mission_loadout(
+            {"nonexistent_troop_xxx": 1},
+            troop_templates={"archer": {"label": "弓手"}},
+        )
+
+
+def test_normalize_mission_loadout_ignores_unknown_troop_keys_with_invalid_quantity_shape():
+    loadout = normalize_mission_loadout(
+        {"nonexistent_troop_xxx": "not-a-number"},
+        troop_templates={"archer": {"label": "弓手"}},
+    )
+
+    assert loadout == {"archer": 0}
 
 
 @pytest.mark.django_db(transaction=True)
