@@ -65,6 +65,7 @@
 - `guest recruitment` 已补真实服务语义测试，覆盖并发发起只允许一个 `PENDING`、并发完成只允许一次 `PENDING -> COMPLETED` 收口，以及候选确认只允许一次转正；`refresh_guest_recruitments()` 与显式 `finalize_guest_recruitment()` 的真实并发竞争用例也已补齐，并在 real-services gate 下完成验收。
 - `guest recruitment` 的 refresh 契约测试也已补到 service 层：`refresh_guest_recruitments()` 现在有测试约束其只扫描“到期且仍为 PENDING”的 durable rows，不再把未来记录或已结束记录混入补偿路径。
 - `2026-03-22` 已完成一轮阶段 2 real-services 验收：`tests/test_raid_concurrency_integration.py`、`tests/test_raid_scout_concurrency_integration.py` 共 `8 passed, 2 skipped`，`tests/test_mission_concurrency_integration.py`、`tests/test_guest_recruitment_concurrency_integration.py` 共 `6 passed, 1 skipped`。
+- 阶段 2 的关键 real-services 套件现已纳入 `make test-critical` 固定回归：`raid / scout / mission / guest recruitment` 会与既有 `work service` 并发用例一起在 `DJANGO_TEST_USE_ENV_SERVICES=1 make test-real-services` / `make test-gates` 中执行，避免封板后只停留在一次性人工验收。
 - `map` 的 `refresh_raid_activity_api` 已退出 legacy `ValueError` 兼容：写入口默认只把显式 `GameError` 当已知业务错误，裸 `ValueError` 继续冒泡，避免 view 层把程序/契约错误伪装成 400。
 - `map` 的目标庄园解析 helper 也已继续收紧：`gameplay/views/map._target_manor_or_error()` 在参数已通过 `safe_positive_int()` 归一化后，不再额外吞掉 `ValueError/TypeError`，查库阶段的异常改为继续冒泡。
 - `core` 的 legacy view 装饰器也已退出 `ValueError` 业务语义：`core/decorators.handle_game_errors` 不再捕获裸 `ValueError`，避免新代码继续把 `ValueError` 当跨层业务错误。
@@ -130,7 +131,7 @@
 1. 完成阶段 2 封板整理，保持 `mission / raid / guest recruitment` 的主写入口、after-commit follow-up 和 refresh command 边界不回退。
 2. 沿高频主链路逐步退出 legacy `ValueError` 兼容，优先处理 `mission / guest recruitment` 等仍明显混用的 view/service 入口。
 3. 在阶段 2 关键链路已有真实测试约束的前提下，继续推进模板、页面脚本和前端交互边界治理。
-4. 把阶段 2 的 real-services 套件纳入后续回归节奏，避免补偿边界与并发语义回退。
+4. 把阶段 2 的 real-services 套件持续保留在回归节奏里，避免补偿边界与并发语义回退。
 
 ## 4. 分阶段路线
 

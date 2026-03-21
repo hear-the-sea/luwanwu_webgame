@@ -460,6 +460,7 @@ python manage.py load_guest_templates
 
 - 默认测试道使用 SQLite、LocMem cache、InMemory channel layer、memory Celery，不覆盖真实外部服务语义。
 - `integration` 用例通过 `pytest.mark.integration` 区分，且依赖 `DJANGO_TEST_USE_ENV_SERVICES=1` 与可达的外部 DB/Redis/Channels/Celery。
+- `make test-critical` 作为高风险快速回归，固定补跑 `raid / scout / mission / guest recruitment / work service` 的真实并发敏感套件。
 - 固定串行验收可使用 `DJANGO_TEST_USE_ENV_SERVICES=1 make test-gates`（先 hermetic，再 real external services）。
 
 ---

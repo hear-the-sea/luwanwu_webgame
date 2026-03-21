@@ -405,7 +405,7 @@ tests/
 | Hermetic 套件 | `make test` / `make test-unit` | SQLite + `LocMem` cache + in-memory broker/channel layer | 业务逻辑、状态机、计算规则、同步降级分支在本地替身环境下基本正确 | 真实数据库锁与事务语义、Redis 共享锁/去重语义、真实 Celery broker dispatch/retry/fallback、Channels 经 Redis 的跨进程广播/聊天链路 |
 | Infra-backed 集成测试 | `DJANGO_TEST_USE_ENV_SERVICES=1 make test-integration` | MySQL + Redis + 真实 Celery broker / Channels transport | 真实依赖交互、一致性边界、跨进程并发、外部基础设施降级与恢复路径 | 性能/容量上限仍需额外压测或 profile 测试 |
 
-`make test-critical` 是一个便捷目标，不是单独的验收层级；它只是在启用外部服务时补跑若干并发敏感用例，不能替代完整的 `make test-integration` 门禁。
+`make test-critical` 是一个便捷目标，不是单独的验收层级；它只是在启用外部服务时补跑若干并发敏感用例，不能替代完整的 `make test-integration` 门禁。当前该目标固定覆盖 `raid`、`scout`、`mission`、`guest recruitment` 与 `work service` 的真实并发回归套件，用于快速拦截阶段 2 的高风险回退。
 
 建议把 `DJANGO_TEST_USE_ENV_SERVICES=1 make test-gates` 作为提交高风险改动前的固定流程。该命令会先跑 hermetic rapid gate，再强制执行真实外部服务 gate；如果没有启用 `DJANGO_TEST_USE_ENV_SERVICES=1`，命令会直接失败，而不是静默跳过第二层验证。
 

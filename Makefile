@@ -3,6 +3,12 @@ MANAGE ?= $(PYTHON) manage.py
 LOCAL_STATE_DIR ?= .local
 FLAKE8_TARGETS ?= accounts battle gameplay guests guilds trade core websocket config tests
 MYPY_TARGETS ?= accounts battle common config core gameplay guests guilds tasks trade websocket
+CRITICAL_INTEGRATION_TESTS ?= \
+	tests/test_raid_concurrency_integration.py \
+	tests/test_raid_scout_concurrency_integration.py \
+	tests/test_mission_concurrency_integration.py \
+	tests/test_guest_recruitment_concurrency_integration.py \
+	tests/test_work_service_concurrency.py
 
 .PHONY: install install-unpinned install-lock install-dev-lock migrate bootstrap-data dev dev-ws worker beat test test-unit test-unit-cov test-critical test-integration test-all format lint lint-strict check clean lock lock-dev test-real-services test-gates cov cov-html
 
@@ -73,7 +79,7 @@ test-unit-cov:
 
 test-critical:
 	@if [ "$$DJANGO_TEST_USE_ENV_SERVICES" = "1" ]; then \
-		$(PYTHON) -m pytest tests/test_raid_concurrency_integration.py tests/test_work_service_concurrency.py -q; \
+		$(PYTHON) -m pytest $(CRITICAL_INTEGRATION_TESTS) -q; \
 	else \
 		echo "Skipping critical concurrency integration tests; set DJANGO_TEST_USE_ENV_SERVICES=1 (or run 'make test-real-services') to enable non-SQLite verification."; \
 	fi
