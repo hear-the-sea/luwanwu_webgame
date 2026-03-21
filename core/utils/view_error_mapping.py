@@ -15,7 +15,6 @@ from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_exp
 
 ViewErrorCategory = Literal["known", "infrastructure", "unexpected"]
 KNOWN_VIEW_EXCEPTIONS = (GameError,)
-LEGACY_VALUE_ERROR_VIEW_EXCEPTIONS = (GameError, ValueError)
 DEFAULT_VIEW_INFRASTRUCTURE_EXCEPTIONS = DATABASE_INFRASTRUCTURE_EXCEPTIONS
 
 
@@ -175,7 +174,6 @@ def action_error_response(
 __all__ = [
     "DEFAULT_VIEW_INFRASTRUCTURE_EXCEPTIONS",
     "KNOWN_VIEW_EXCEPTIONS",
-    "LEGACY_VALUE_ERROR_VIEW_EXCEPTIONS",
     "ViewErrorCategory",
     "action_error_response",
     "classify_view_error",

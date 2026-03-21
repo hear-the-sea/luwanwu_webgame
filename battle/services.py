@@ -172,7 +172,7 @@ def lock_guests_for_battle(
         锁定后的门客列表
 
     Raises:
-        ValueError: 如果门客已在战斗中或状态不是空闲
+        BattlePreparationError: 门客处于不可出征状态（战斗中/打工/重伤等）或锁定数据缺失
     """
     other_guests = other_guests or []
     if not guests and not other_guests:

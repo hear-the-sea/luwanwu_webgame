@@ -7,12 +7,7 @@ from django.contrib.messages.storage.fallback import FallbackStorage
 from django.test import RequestFactory
 
 from core.exceptions import GameError
-from core.utils.view_error_mapping import (
-    LEGACY_VALUE_ERROR_VIEW_EXCEPTIONS,
-    classify_view_error,
-    flash_view_error,
-    json_error_response_for_exception,
-)
+from core.utils.view_error_mapping import classify_view_error, flash_view_error, json_error_response_for_exception
 
 
 def _build_request():
@@ -63,7 +58,7 @@ def test_classify_view_error_treats_value_error_as_unexpected_by_default():
 
 
 def test_classify_view_error_can_explicitly_allow_legacy_value_errors():
-    assert classify_view_error(ValueError("boom"), known_exceptions=LEGACY_VALUE_ERROR_VIEW_EXCEPTIONS) == "known"
+    assert classify_view_error(ValueError("boom"), known_exceptions=(GameError, ValueError)) == "known"
 
 
 def test_classify_view_error_treats_game_error_as_known_by_default():

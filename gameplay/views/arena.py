@@ -52,7 +52,7 @@ def _get_registration_silver_cost() -> int:
     return arena_core.ARENA_REGISTRATION_SILVER_COST
 
 
-def _handle_known_arena_error(request: HttpRequest, exc: GameError | ValueError) -> None:
+def _handle_known_arena_error(request: HttpRequest, exc: GameError) -> None:
     messages.error(request, sanitize_error_message(exc))
 
 

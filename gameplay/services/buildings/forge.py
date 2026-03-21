@@ -352,7 +352,7 @@ def start_equipment_forging(manor: Manor, equipment_key: str, quantity: int = 1)
         EquipmentProduction实例
 
     Raises:
-        ValueError: 参数错误、材料不足、科技等级不足或已有锻造进行中
+        ForgeOperationError: 参数错误、材料不足、科技等级不足或已有锻造进行中
     """
     return _forge_runtime.start_equipment_forging(
         manor,
