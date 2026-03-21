@@ -56,6 +56,8 @@
 - `raid/scout` 已补第一批真实外部服务测试，开始覆盖 refresh dispatch dedup gate、dispatch 失败回滚、同步补偿收口，以及 `complete_scout_task` / `complete_scout_return_task`、`complete_raid_task`（撤退返程）、`process_raid_battle_task` 的实际消费；但并发冲突和更多 battle/refresh 竞争语义仍未封板。
 - `mission` 已补第一批真实并发与任务派发语义测试，覆盖同门客并发发起只允许一个 `ACTIVE`、同一 `MissionRun` 并发撤退只允许一个状态迁移成功，以及 refresh dispatch dedup gate / dispatch 失败回滚、`complete_mission_task` 实际消费收口；`gameplay/services/missions_impl/mission_followups.py` 也开始承接 launch 后报告准备、任务导入与 completion dispatch，但更多补偿场景仍未封板。
 - `guest recruitment` 已开始补真实服务语义测试，覆盖并发发起只允许一个 `PENDING`、并发完成只允许一次 `PENDING -> COMPLETED` 收口，以及候选确认只允许一次转正；`guests/services/recruitment_followups.py` 也开始承接完成任务派发与通知发送，但更多 `select_for_update` 竞争场景仍未封板。
+- `map` 的 `refresh_raid_activity_api` 已退出 legacy `ValueError` 兼容：写入口默认只把显式 `GameError` 当已知业务错误，裸 `ValueError` 继续冒泡，避免 view 层把程序/契约错误伪装成 400。
+- `core` 的 legacy view 装饰器也已退出 `ValueError` 业务语义：`core/decorators.handle_game_errors` 不再捕获裸 `ValueError`，避免新代码继续把 `ValueError` 当跨层业务错误。
 - `buildings` 升级入口已不再从 view 直接调用 `refresh_manor_state(...)`；陈旧升级状态改由 `start_upgrade()` 写命令自行收口。
 - `guests/roster`、`guests/detail` 的门客状态准备已收口到显式 read helper，不再在 `get_context_data()` 内联推进状态。
 - 单会话策略已改为默认 `fail-closed`，但平台级故障语义仍需继续用真实服务门禁验证。

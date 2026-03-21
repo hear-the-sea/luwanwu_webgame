@@ -219,6 +219,17 @@ class TestMapAPI:
         assert "请求处理中，请稍候重试" in payload["error"]
         assert called["refresh"] == 0
 
+    def test_refresh_raid_activity_api_legacy_value_error_bubbles_up(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.views.map.refresh_scout_records",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("legacy refresh")),
+        )
+
+        with pytest.raises(ValueError, match="legacy refresh"):
+            client.post(reverse("gameplay:refresh_raid_activity_api"))
+
     def test_manor_detail_api(self, manor_with_user):
         """庄园详情API"""
         manor, client = manor_with_user

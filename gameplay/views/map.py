@@ -25,11 +25,7 @@ from core.utils.locked_actions import (
     release_scoped_action_lock,
 )
 from core.utils.rate_limit import rate_limit_json
-from core.utils.view_error_mapping import (
-    DEFAULT_VIEW_INFRASTRUCTURE_EXCEPTIONS,
-    LEGACY_VALUE_ERROR_VIEW_EXCEPTIONS,
-    json_error_response_for_exception,
-)
+from core.utils.view_error_mapping import DEFAULT_VIEW_INFRASTRUCTURE_EXCEPTIONS, json_error_response_for_exception
 from gameplay.constants import REGION_CHOICES, UIConstants
 from gameplay.models import Manor as ManorModel
 from gameplay.models import RaidRun
@@ -93,7 +89,7 @@ def _run_locked_map_json_action(
     success_response: Callable[[MapActionResult], JsonResponse],
     log_message: str,
     log_args: tuple[object, ...],
-    known_exceptions: tuple[type[Exception], ...] = LEGACY_VALUE_ERROR_VIEW_EXCEPTIONS,
+    known_exceptions: tuple[type[Exception], ...] = (GameError,),
 ) -> JsonResponse:
     return execute_locked_action(
         action_name=action_name,

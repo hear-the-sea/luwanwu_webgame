@@ -100,17 +100,10 @@ def _handle_success_response(
 def _handle_game_exception(
     request: HttpRequest,
     view_func: Callable,
-    exc: GameError | ValueError,
+    exc: GameError,
     redirect_url: str | None,
 ) -> HttpResponse:
     error_msg = sanitize_error_message(exc)
-
-    if isinstance(exc, ValueError):
-        logger.debug(
-            f"ValueError in {view_func.__name__}: {exc}",
-            exc_info=False,
-            extra={"request": request},
-        )
 
     if is_htmx_request(request):
         return redirect(get_next_url(request, redirect_url))
@@ -227,7 +220,7 @@ def handle_game_errors(
     """
     统一处理游戏错误的装饰器。
 
-    自动捕获 GameError 和 ValueError，并添加错误消息。
+    自动捕获 GameError，并添加错误消息。
     支持 AJAX/HTMX 请求，自动返回 JSON 响应。
 
     Args:
@@ -272,7 +265,7 @@ def handle_game_errors(
                     return response
                 return result
 
-            except (GameError, ValueError) as exc:
+            except GameError as exc:
                 return _handle_game_exception(request, view_func, exc, redirect_url)
 
         return wrapper

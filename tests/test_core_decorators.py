@@ -8,7 +8,14 @@ from django.db import DatabaseError
 from django.http import HttpResponse
 from django.test import RequestFactory
 
-from core.decorators import _add_success_message, flash_unexpected_view_error, get_next_url, unexpected_error_response
+from core.decorators import (
+    _add_success_message,
+    flash_unexpected_view_error,
+    get_next_url,
+    handle_game_errors,
+    unexpected_error_response,
+)
+from core.exceptions import GameError
 
 
 def test_get_next_url_rejects_unsafe_default_external_url():
@@ -106,3 +113,25 @@ def test_unexpected_error_response_programming_error_bubbles_up():
             redirect_url="/fallback",
             log_message="runtime failed",
         )
+
+
+def test_handle_game_errors_does_not_swallow_raw_value_error():
+    @handle_game_errors(redirect_url="/fallback")
+    def _view(_request):
+        raise ValueError("legacy")
+
+    request = RequestFactory().post("/some-page", HTTP_ACCEPT="application/json")
+    with pytest.raises(ValueError, match="legacy"):
+        _view(request)
+
+
+def test_handle_game_errors_still_maps_game_error_to_400_json():
+    @handle_game_errors(redirect_url="/fallback")
+    def _view(_request):
+        raise GameError("blocked")
+
+    request = RequestFactory().post("/some-page", HTTP_ACCEPT="application/json")
+    response = _view(request)
+
+    assert response.status_code == 400
+    assert json.loads(response.content)["error"] == "blocked"
