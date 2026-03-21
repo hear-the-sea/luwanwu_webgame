@@ -105,7 +105,6 @@ def finalize_tournament_locked(
                 or is_expected_infrastructure_error(
                     exc,
                     exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
-                    allow_runtime_markers=True,
                 )
             ):
                 raise

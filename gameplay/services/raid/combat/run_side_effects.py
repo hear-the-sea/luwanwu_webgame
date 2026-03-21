@@ -40,6 +40,7 @@ def dispatch_raid_battle_task_best_effort(
         )
         process_raid_battle(run)
 
+    process_raid_battle_task: Any
     try:
         process_raid_battle_task = import_process_raid_battle_task()
     except ImportError as exc:
@@ -53,13 +54,6 @@ def dispatch_raid_battle_task_best_effort(
         )
         _fallback_sync_when_due()
         return
-    except Exception:
-        logger.error(
-            "Unexpected process_raid_battle_task import failure: run_id=%s",
-            run.id,
-            exc_info=True,
-        )
-        raise
 
     dispatched = safe_apply_async(
         process_raid_battle_task,
@@ -89,6 +83,7 @@ def schedule_raid_retreat_completion_best_effort(
     import_complete_raid_task: Callable[[], Any],
     safe_apply_async: Callable[..., bool],
 ) -> None:
+    complete_raid_task: Any
     try:
         complete_raid_task = import_complete_raid_task()
     except ImportError as exc:
@@ -101,13 +96,6 @@ def schedule_raid_retreat_completion_best_effort(
             exc_info=True,
         )
         return
-    except Exception:
-        logger.error(
-            "Unexpected complete_raid_task import failure for retreat: run_id=%s",
-            run_id,
-            exc_info=True,
-        )
-        raise
 
     dispatched = safe_apply_async(
         complete_raid_task,

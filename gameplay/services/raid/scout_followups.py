@@ -128,7 +128,6 @@ def run_scout_followup(action: ScoutFollowupAction, record: Any, **context: Any)
             or is_expected_infrastructure_error(
                 exc,
                 exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
-                allow_runtime_markers=True,
             )
         ):
             raise
@@ -147,6 +146,7 @@ def dispatch_scout_task(
     log_message: str,
     false_log_message: str,
 ) -> None:
+    task: Any
     try:
         task = scout_refresh_command.resolve_scout_task(task_name)
     except ImportError as exc:
@@ -162,16 +162,6 @@ def dispatch_scout_task(
             exc_info=True,
         )
         return
-    except Exception:
-        logger.error(
-            "Unexpected %s import failure: record_id=%s attacker=%s defender=%s",
-            task_name,
-            record.id,
-            record.attacker_id,
-            record.defender_id,
-            exc_info=True,
-        )
-        raise
 
     dispatched = safe_apply_async(
         task,

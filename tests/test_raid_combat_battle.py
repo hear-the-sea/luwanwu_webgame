@@ -8,7 +8,7 @@ import pytest
 from django.utils import timezone
 
 from battle.models import TroopTemplate
-from core.exceptions import BattlePreparationError
+from core.exceptions import BattlePreparationError, MessageError
 from gameplay.models import PlayerTroop, RaidRun
 from gameplay.services.manor.core import ensure_manor
 from gameplay.services.raid.combat import battle as combat_battle
@@ -96,6 +96,82 @@ def test_collect_losing_guest_ids_handles_invalid_data():
     assert result == [999]
 
 
+def test_delete_captured_guest_gear_infrastructure_error_degrades(monkeypatch):
+    class _GearQuerySet:
+        @staticmethod
+        def delete():
+            raise RuntimeError("redis backend down")
+
+    class _GearObjects:
+        @staticmethod
+        def filter(**_kwargs):
+            return _GearQuerySet()
+
+    fake_gear_item = type("_GearItem", (), {"objects": _GearObjects()})
+    monkeypatch.setattr("guests.models.GearItem", fake_gear_item)
+
+    combat_battle._delete_captured_guest_gear(
+        SimpleNamespace(id=41),
+        SimpleNamespace(pk=9),
+    )
+
+
+def test_delete_captured_guest_gear_programming_error_bubbles_up(monkeypatch):
+    class _GearQuerySet:
+        @staticmethod
+        def delete():
+            raise AssertionError("broken gear delete contract")
+
+    class _GearObjects:
+        @staticmethod
+        def filter(**_kwargs):
+            return _GearQuerySet()
+
+    fake_gear_item = type("_GearItem", (), {"objects": _GearObjects()})
+    monkeypatch.setattr("guests.models.GearItem", fake_gear_item)
+
+    with pytest.raises(AssertionError, match="broken gear delete contract"):
+        combat_battle._delete_captured_guest_gear(
+            SimpleNamespace(id=42),
+            SimpleNamespace(pk=10),
+        )
+
+
+def test_apply_capture_reward_runtime_marker_infrastructure_error_degrades(monkeypatch):
+    run = SimpleNamespace(
+        id=51,
+        attacker_id=1,
+        defender_id=2,
+        battle_rewards={"existing": True},
+    )
+    monkeypatch.setattr(
+        combat_battle,
+        "_try_capture_guest",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("redis timed out")),
+    )
+
+    combat_battle._apply_capture_reward(run, SimpleNamespace(), True)
+
+    assert run.battle_rewards == {"existing": True}
+
+
+def test_apply_capture_reward_programming_error_bubbles_up(monkeypatch):
+    run = SimpleNamespace(
+        id=52,
+        attacker_id=1,
+        defender_id=2,
+        battle_rewards={"existing": True},
+    )
+    monkeypatch.setattr(
+        combat_battle,
+        "_try_capture_guest",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken capture contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken capture contract"):
+        combat_battle._apply_capture_reward(run, SimpleNamespace(), True)
+
+
 def test_dispatch_complete_raid_task_uses_remaining_return_time(monkeypatch):
     now = timezone.now()
     captured: dict[str, object] = {}
@@ -169,7 +245,7 @@ def test_dispatch_complete_raid_task_nested_import_error_bubbles_up(monkeypatch)
         combat_battle._dispatch_complete_raid_task(run, now=now)
 
 
-def test_process_raid_battle_ignores_post_commit_failures(monkeypatch):
+def test_process_raid_battle_known_post_commit_failures_degrade_and_continue(monkeypatch):
     now = timezone.now()
     attacker = SimpleNamespace(id=1, location_display="江南", display_name="进攻方")
     defender = SimpleNamespace(id=2, location_display="塞北", display_name="防守方")
@@ -201,12 +277,12 @@ def test_process_raid_battle_ignores_post_commit_failures(monkeypatch):
     monkeypatch.setattr(
         combat_battle,
         "_send_raid_battle_messages",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("messages down")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(MessageError("messages down")),
     )
     monkeypatch.setattr(
         combat_battle,
         "_dismiss_marching_raids_if_protected",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("dismiss down")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("redis down")),
     )
     monkeypatch.setattr(
         combat_battle,
@@ -215,6 +291,110 @@ def test_process_raid_battle_ignores_post_commit_failures(monkeypatch):
     )
 
     combat_battle.process_raid_battle(run, now=now)
+
+    assert run.status == RaidRun.Status.RETURNING
+    assert saved["count"] == 1
+    assert dispatched["count"] == 1
+
+
+def test_process_raid_battle_message_programming_error_bubbles_after_dispatch(monkeypatch):
+    now = timezone.now()
+    attacker = SimpleNamespace(id=1, location_display="江南", display_name="进攻方")
+    defender = SimpleNamespace(id=2, location_display="塞北", display_name="防守方")
+    saved = {"count": 0}
+    dismissed = {"count": 0}
+    dispatched = {"count": 0}
+    run = SimpleNamespace(
+        pk=17,
+        id=17,
+        attacker_id=1,
+        defender_id=2,
+        attacker=attacker,
+        defender=defender,
+        status=RaidRun.Status.MARCHING,
+        save=lambda **_kwargs: saved.__setitem__("count", saved["count"] + 1),
+    )
+    report = SimpleNamespace(winner="attacker")
+
+    monkeypatch.setattr(combat_battle.transaction, "atomic", contextlib.nullcontext)
+    monkeypatch.setattr(combat_battle, "_prepare_run_for_battle", lambda *_args, **_kwargs: run)
+    monkeypatch.setattr(combat_battle, "_lock_battle_manors", lambda *_args, **_kwargs: (attacker, defender))
+    monkeypatch.setattr(combat_battle, "_execute_raid_battle", lambda *_args, **_kwargs: report)
+    monkeypatch.setattr(combat_battle, "apply_defender_troop_losses", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_apply_raid_loot_if_needed", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_apply_prestige_changes", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_apply_defeat_protection", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_apply_capture_reward", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_apply_salvage_reward", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_get_defender_battle_block_reason", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        combat_battle,
+        "_send_raid_battle_messages",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken raid message contract")),
+    )
+    monkeypatch.setattr(
+        combat_battle,
+        "_dismiss_marching_raids_if_protected",
+        lambda *_args, **_kwargs: dismissed.__setitem__("count", dismissed["count"] + 1),
+    )
+    monkeypatch.setattr(
+        combat_battle,
+        "_dispatch_complete_raid_task",
+        lambda *_args, **_kwargs: dispatched.__setitem__("count", dispatched["count"] + 1),
+    )
+
+    with pytest.raises(AssertionError, match="broken raid message contract"):
+        combat_battle.process_raid_battle(run, now=now)
+
+    assert run.status == RaidRun.Status.RETURNING
+    assert saved["count"] == 1
+    assert dismissed["count"] == 1
+    assert dispatched["count"] == 1
+
+
+def test_process_raid_battle_cleanup_programming_error_bubbles_after_dispatch(monkeypatch):
+    now = timezone.now()
+    attacker = SimpleNamespace(id=1, location_display="江南", display_name="进攻方")
+    defender = SimpleNamespace(id=2, location_display="塞北", display_name="防守方")
+    saved = {"count": 0}
+    dispatched = {"count": 0}
+    run = SimpleNamespace(
+        pk=18,
+        id=18,
+        attacker_id=1,
+        defender_id=2,
+        attacker=attacker,
+        defender=defender,
+        status=RaidRun.Status.MARCHING,
+        save=lambda **_kwargs: saved.__setitem__("count", saved["count"] + 1),
+    )
+    report = SimpleNamespace(winner="attacker")
+
+    monkeypatch.setattr(combat_battle.transaction, "atomic", contextlib.nullcontext)
+    monkeypatch.setattr(combat_battle, "_prepare_run_for_battle", lambda *_args, **_kwargs: run)
+    monkeypatch.setattr(combat_battle, "_lock_battle_manors", lambda *_args, **_kwargs: (attacker, defender))
+    monkeypatch.setattr(combat_battle, "_execute_raid_battle", lambda *_args, **_kwargs: report)
+    monkeypatch.setattr(combat_battle, "apply_defender_troop_losses", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_apply_raid_loot_if_needed", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_apply_prestige_changes", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_apply_defeat_protection", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_apply_capture_reward", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_apply_salvage_reward", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_get_defender_battle_block_reason", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_battle, "_send_raid_battle_messages", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        combat_battle,
+        "_dismiss_marching_raids_if_protected",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken raid cleanup contract")),
+    )
+    monkeypatch.setattr(
+        combat_battle,
+        "_dispatch_complete_raid_task",
+        lambda *_args, **_kwargs: dispatched.__setitem__("count", dispatched["count"] + 1),
+    )
+
+    with pytest.raises(AssertionError, match="broken raid cleanup contract"):
+        combat_battle.process_raid_battle(run, now=now)
 
     assert run.status == RaidRun.Status.RETURNING
     assert saved["count"] == 1
@@ -512,3 +692,53 @@ def test_dismiss_marching_raids_if_protected_reacts_to_defeat_protection(django_
     assert len(sent_messages) == 1
     assert "战败保护期" in sent_messages[0]["body"]
     assert len(scheduled) == 1
+
+
+def test_resolve_complete_raid_task_missing_target_module_degrades(monkeypatch):
+    def _missing_module(_name):
+        exc = ModuleNotFoundError("No module named 'gameplay.tasks'")
+        exc.name = "gameplay.tasks"
+        raise exc
+
+    monkeypatch.setattr(combat_travel, "import_module", _missing_module)
+
+    assert combat_travel.resolve_complete_raid_task(logger=combat_travel.logger) is None
+
+
+def test_resolve_complete_raid_task_nested_import_error_bubbles_up(monkeypatch):
+    def _nested_import_failure(_name):
+        exc = ModuleNotFoundError("No module named 'redis'")
+        exc.name = "redis"
+        raise exc
+
+    monkeypatch.setattr(combat_travel, "import_module", _nested_import_failure)
+
+    with pytest.raises(ModuleNotFoundError, match="redis"):
+        combat_travel.resolve_complete_raid_task(logger=combat_travel.logger)
+
+
+def test_retreat_raid_run_due_to_blocked_target_programming_error_bubbles_up(monkeypatch):
+    now = timezone.now()
+    saved = {"fields": None}
+    locked_run = SimpleNamespace(
+        id=21,
+        attacker_id=1,
+        defender_id=2,
+        attacker=SimpleNamespace(id=1),
+        defender=SimpleNamespace(display_name="守方"),
+        started_at=now - timedelta(seconds=15),
+        save=lambda *, update_fields: saved.__setitem__("fields", update_fields),
+    )
+
+    monkeypatch.setattr(
+        combat_travel,
+        "create_message",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("broken blocked-target message contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken blocked-target message contract"):
+        combat_travel._retreat_raid_run_due_to_blocked_target(locked_run, now=now, reason="战败保护")
+
+    assert locked_run.status == RaidRun.Status.RETREATED
+    assert locked_run.return_at == now + timedelta(seconds=15)
+    assert saved["fields"] == ["status", "return_at"]

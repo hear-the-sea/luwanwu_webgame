@@ -10,7 +10,7 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
 
-from core.exceptions import BattlePreparationError, RaidStartError
+from core.exceptions import BattlePreparationError, MessageError, RaidStartError
 from gameplay.services.manor.core import ensure_manor
 from gameplay.services.raid import utils as raid_utils
 from gameplay.services.raid.combat import battle as combat_battle
@@ -557,7 +557,7 @@ def test_start_raid_succeeds_when_incoming_message_fails(monkeypatch):
     monkeypatch.setattr(
         combat_runs,
         "_send_raid_incoming_message",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(MessageError("message backend down")),
     )
     monkeypatch.setattr(
         combat_runs,
@@ -569,6 +569,43 @@ def test_start_raid_succeeds_when_incoming_message_fails(monkeypatch):
 
     assert result is created_run
     assert dispatched == {"run_id": 99, "travel_time": 45}
+
+
+def test_start_raid_incoming_message_runtime_marker_error_bubbles_up(monkeypatch):
+    attacker = SimpleNamespace(pk=1, id=1, defeat_protection_until=None)
+    defender = SimpleNamespace(pk=2, id=2)
+    created_run = SimpleNamespace(id=100, attacker=attacker, defender=defender)
+
+    monkeypatch.setattr(combat_runs.transaction, "atomic", contextlib.nullcontext)
+    monkeypatch.setattr(
+        combat_runs,
+        "_validate_and_normalize_raid_inputs",
+        lambda *_args, **_kwargs: ([101], {"inf": 1}),
+    )
+    monkeypatch.setattr(combat_runs, "_lock_manor_pair", lambda *_args, **_kwargs: (attacker, defender))
+    monkeypatch.setattr(combat_runs, "_recheck_can_attack_target", lambda *_args, **_kwargs: (True, ""))
+    monkeypatch.setattr(combat_runs, "get_active_raid_count", lambda *_args, **_kwargs: 0)
+    monkeypatch.setattr(combat_runs, "_load_and_validate_attacker_guests", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(combat_runs, "_normalize_and_validate_raid_loadout", lambda *_args, **_kwargs: {"inf": 1})
+    monkeypatch.setattr(combat_runs, "_deduct_troops", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_runs, "calculate_raid_travel_time", lambda *_args, **_kwargs: 45)
+    monkeypatch.setattr(combat_runs, "_create_raid_run_record", lambda *_args, **_kwargs: created_run)
+    monkeypatch.setattr(combat_runs, "_invalidate_recent_attacks_cache_on_commit", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        combat_runs,
+        "_send_raid_incoming_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+    )
+    monkeypatch.setattr(
+        combat_runs,
+        "_dispatch_raid_battle_task",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("should not dispatch after runtime marker error")
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="message backend down"):
+        combat_runs.start_raid(attacker, defender, [101], {"inf": 1})
 
 
 def test_start_raid_incoming_message_programming_error_bubbles_up(monkeypatch):
@@ -639,6 +676,45 @@ def test_dispatch_raid_battle_task_nested_import_error_bubbles_up(monkeypatch):
         )
 
 
+def test_dispatch_raid_battle_task_missing_target_module_degrades_and_processes_sync_when_due():
+    processed: list[int] = []
+    run = SimpleNamespace(id=124)
+
+    def _raise_import():
+        exc = ModuleNotFoundError("No module named 'gameplay.tasks'")
+        exc.name = "gameplay.tasks"
+        raise exc
+
+    combat_run_side_effects.dispatch_raid_battle_task_best_effort(
+        run,
+        0,
+        logger=combat_runs.logger,
+        import_process_raid_battle_task=_raise_import,
+        safe_apply_async=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("should not dispatch when target task module is missing")
+        ),
+        process_raid_battle=lambda current_run, **_kwargs: processed.append(current_run.id),
+    )
+
+    assert processed == [124]
+
+
+def test_dispatch_raid_battle_task_programming_error_bubbles_up():
+    run = SimpleNamespace(id=125)
+
+    with pytest.raises(AssertionError, match="broken task import contract"):
+        combat_run_side_effects.dispatch_raid_battle_task_best_effort(
+            run,
+            0,
+            logger=combat_runs.logger,
+            import_process_raid_battle_task=lambda: (_ for _ in ()).throw(
+                AssertionError("broken task import contract")
+            ),
+            safe_apply_async=lambda *_args, **_kwargs: True,
+            process_raid_battle=lambda *_args, **_kwargs: None,
+        )
+
+
 def test_schedule_raid_retreat_completion_nested_import_error_bubbles_up():
     def _raise_import():
         exc = ModuleNotFoundError("No module named 'redis'")
@@ -652,6 +728,68 @@ def test_schedule_raid_retreat_completion_nested_import_error_bubbles_up():
             logger=combat_runs.logger,
             import_complete_raid_task=_raise_import,
             safe_apply_async=lambda *_args, **_kwargs: True,
+        )
+
+
+def test_schedule_raid_retreat_completion_missing_target_module_degrades():
+    def _raise_import():
+        exc = ModuleNotFoundError("No module named 'gameplay.tasks'")
+        exc.name = "gameplay.tasks"
+        raise exc
+
+    combat_run_side_effects.schedule_raid_retreat_completion_best_effort(
+        56,
+        30,
+        logger=combat_runs.logger,
+        import_complete_raid_task=_raise_import,
+        safe_apply_async=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("should not dispatch when target task module is missing")
+        ),
+    )
+
+
+def test_schedule_raid_retreat_completion_programming_error_bubbles_up():
+    with pytest.raises(AssertionError, match="broken retreat task import contract"):
+        combat_run_side_effects.schedule_raid_retreat_completion_best_effort(
+            57,
+            30,
+            logger=combat_runs.logger,
+            import_complete_raid_task=lambda: (_ for _ in ()).throw(
+                AssertionError("broken retreat task import contract")
+            ),
+            safe_apply_async=lambda *_args, **_kwargs: True,
+        )
+
+
+def test_dispatch_async_raid_refresh_missing_target_module_falls_back_to_sync():
+    def _raise_import():
+        exc = ModuleNotFoundError("No module named 'gameplay.tasks'")
+        exc.name = "gameplay.tasks"
+        raise exc
+
+    marching_ids, returning_ids, retreated_ids, done_async = combat_runs.dispatch_async_raid_refresh(
+        [1, 2],
+        [3],
+        [4],
+        logger=combat_runs.logger,
+        import_tasks=_raise_import,
+        dispatch_refresh_task=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("should not dispatch when target task module is missing")
+        ),
+    )
+
+    assert (marching_ids, returning_ids, retreated_ids, done_async) == ([1, 2], [3], [4], False)
+
+
+def test_dispatch_async_raid_refresh_programming_error_bubbles_up():
+    with pytest.raises(AssertionError, match="broken refresh import contract"):
+        combat_runs.dispatch_async_raid_refresh(
+            [1],
+            [],
+            [],
+            logger=combat_runs.logger,
+            import_tasks=lambda: (_ for _ in ()).throw(AssertionError("broken refresh import contract")),
+            dispatch_refresh_task=lambda *_args, **_kwargs: True,
         )
 
 

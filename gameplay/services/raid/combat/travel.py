@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
+from importlib import import_module
 from typing import Dict, List
 
 from django.db import transaction
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
+from core.exceptions import MessageError
+from core.utils.imports import is_missing_target_import
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_expected_infrastructure_error
 from core.utils.time_scale import scale_duration
 from guests.models import Guest
 
@@ -19,6 +23,19 @@ from ..utils import calculate_distance, is_same_region
 from .config import PVPConstants
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_complete_raid_task(*, logger: logging.Logger) -> object | None:
+    try:
+        return import_module("gameplay.tasks").complete_raid_task
+    except ImportError as exc:
+        if not is_missing_target_import(exc, "gameplay.tasks"):
+            raise
+        logger.warning("complete_raid_task import failed for dismissed raids; skip async completion", exc_info=True)
+        return None
+    except Exception:
+        logger.error("Unexpected complete_raid_task import failure for dismissed raids", exc_info=True)
+        raise
 
 
 def _get_defender_battle_block_reason(defender: Manor, *, now: datetime | None = None) -> str | None:
@@ -69,6 +86,15 @@ def _retreat_raid_run_due_to_blocked_target(
             body=f"目标 {locked_run.defender.display_name} 当前无法交战（{reason}），您的部队已自动遣返。",
         )
     except Exception as exc:
+        if not (
+            isinstance(exc, MessageError)
+            or is_expected_infrastructure_error(
+                exc,
+                exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+                allow_runtime_markers=True,
+            )
+        ):
+            raise
         logger.warning(
             "raid blocked-target message failed: run_id=%s attacker=%s defender=%s error=%s",
             locked_run.id,
@@ -170,6 +196,7 @@ def _dismiss_marching_raids_if_protected(defender: Manor) -> int:
     if not marching_runs:
         return 0
 
+    complete_raid_task = resolve_complete_raid_task(logger=logger)
     dismissed_count = 0
     for run in marching_runs:
         with transaction.atomic():
@@ -181,16 +208,7 @@ def _dismiss_marching_raids_if_protected(defender: Manor) -> int:
             return_time = _retreat_raid_run_due_to_blocked_target(locked_run, now=now, reason=reason)
 
         # 调度返程完成任务（事务外）
-        try:
-            from gameplay.tasks import complete_raid_task
-        except Exception as exc:
-            logger.warning(
-                "complete_raid_task dispatch failed for dismissed raid: run_id=%s error=%s",
-                run.id,
-                exc,
-                exc_info=True,
-            )
-        else:
+        if complete_raid_task is not None:
             safe_apply_async(
                 complete_raid_task,
                 args=[run.id],

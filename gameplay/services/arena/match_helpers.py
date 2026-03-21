@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, cast
 
 from battle.services import simulate_report
-from core.exceptions import MessageError
+from core.exceptions import BattlePreparationError, MessageError
 from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_expected_infrastructure_error
 from gameplay.models import ArenaEntry, ArenaMatch, ArenaTournament, Message
 from gameplay.services.utils.messages import create_message
@@ -52,7 +52,6 @@ def send_arena_battle_messages(
             or is_expected_infrastructure_error(
                 exc,
                 exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
-                allow_runtime_markers=True,
             )
         ):
             raise
@@ -230,7 +229,7 @@ def resolve_match_locked(
             use_lock=False,
             opponent_name=defender_entry.manor.display_name,
         )
-    except Exception:
+    except BattlePreparationError:
         logger.exception(
             "arena simulate_report failed; defer match for retry: tournament_id=%s round=%s attacker=%s defender=%s",
             tournament.id,

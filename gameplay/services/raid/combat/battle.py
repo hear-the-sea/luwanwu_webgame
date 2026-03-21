@@ -11,9 +11,13 @@ from django.db import transaction
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
-from core.exceptions import BattlePreparationError
+from core.exceptions import BattlePreparationError, MessageError
 from core.utils.imports import is_missing_target_import
-from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, INFRASTRUCTURE_EXCEPTIONS
+from core.utils.infrastructure import (
+    DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+    INFRASTRUCTURE_EXCEPTIONS,
+    is_expected_infrastructure_error,
+)
 from gameplay.services.battle_snapshots import build_guest_battle_snapshots, build_guest_snapshot_proxies
 from guests.models import Guest, GuestStatus
 from guests.query_utils import guest_template_rarity_rank_case
@@ -135,34 +139,39 @@ def _apply_capture_reward(locked_run: RaidRun, report: Any, is_attacker_victory:
         if capture_info:
             battle_rewards = _normalize_mapping(locked_run.battle_rewards)
             locked_run.battle_rewards = {**battle_rewards, "capture": capture_info}
-    except RAID_CAPTURE_DEGRADED_EXCEPTIONS as exc:
-        logger.warning(
-            "raid capture failed: run_id=%s attacker=%s defender=%s error=%s",
-            locked_run.id,
-            locked_run.attacker_id,
-            locked_run.defender_id,
+    except Exception as exc:
+        if is_expected_infrastructure_error(
             exc,
-            exc_info=True,
-            extra={
-                "degraded": True,
-                "component": "raid_capture_reward",
-                "run_id": locked_run.id,
-            },
-        )
-    except Exception:
-        logger.error(
-            "Unexpected raid capture failure: run_id=%s attacker=%s defender=%s",
-            locked_run.id,
-            locked_run.attacker_id,
-            locked_run.defender_id,
-            exc_info=True,
-            extra={
-                "degraded": True,
-                "component": "raid_capture_reward",
-                "run_id": locked_run.id,
-            },
-        )
-        raise
+            exceptions=RAID_CAPTURE_DEGRADED_EXCEPTIONS,
+            allow_runtime_markers=True,
+        ):
+            logger.warning(
+                "raid capture failed: run_id=%s attacker=%s defender=%s error=%s",
+                locked_run.id,
+                locked_run.attacker_id,
+                locked_run.defender_id,
+                exc,
+                exc_info=True,
+                extra={
+                    "degraded": True,
+                    "component": "raid_capture_reward",
+                    "run_id": locked_run.id,
+                },
+            )
+        else:
+            logger.error(
+                "Unexpected raid capture failure: run_id=%s attacker=%s defender=%s",
+                locked_run.id,
+                locked_run.attacker_id,
+                locked_run.defender_id,
+                exc_info=True,
+                extra={
+                    "degraded": True,
+                    "component": "raid_capture_reward",
+                    "run_id": locked_run.id,
+                },
+            )
+            raise
 
 
 def _apply_salvage_reward(locked_run: RaidRun, report: Any, is_attacker_victory: bool) -> None:
@@ -236,6 +245,7 @@ def process_raid_battle(run: RaidRun, now: Optional[datetime] = None) -> None:
     """
     now = now or timezone.now()
     blocked_reason: str | None = None
+    post_commit_error: Exception | None = None
 
     with transaction.atomic():
         locked_run = _prepare_run_for_battle(run.pk, now)
@@ -281,64 +291,77 @@ def process_raid_battle(run: RaidRun, now: Optional[datetime] = None) -> None:
 
     try:
         _send_raid_battle_messages(locked_run)
-    except RAID_BATTLE_INFRASTRUCTURE_EXCEPTIONS as exc:
-        logger.warning(
-            "raid battle messages failed: run_id=%s attacker=%s defender=%s error=%s",
-            locked_run.id,
-            locked_run.attacker_id,
-            locked_run.defender_id,
+    except Exception as exc:
+        if isinstance(exc, MessageError) or is_expected_infrastructure_error(
             exc,
-            exc_info=True,
-            extra={
-                "degraded": True,
-                "component": "raid_battle_message",
-                "run_id": locked_run.id,
-            },
-        )
-    except Exception:
-        # 消息通知属于边缘副作用，任何异常都不应回滚已提交的战斗结果
-        logger.error(
-            "Unexpected raid battle message failure: run_id=%s attacker=%s defender=%s",
-            locked_run.id,
-            locked_run.attacker_id,
-            locked_run.defender_id,
-            exc_info=True,
-            extra={
-                "degraded": True,
-                "component": "raid_battle_message",
-                "run_id": locked_run.id,
-            },
-        )
+            exceptions=RAID_BATTLE_INFRASTRUCTURE_EXCEPTIONS,
+            allow_runtime_markers=True,
+        ):
+            logger.warning(
+                "raid battle messages failed: run_id=%s attacker=%s defender=%s error=%s",
+                locked_run.id,
+                locked_run.attacker_id,
+                locked_run.defender_id,
+                exc,
+                exc_info=True,
+                extra={
+                    "degraded": True,
+                    "component": "raid_battle_message",
+                    "run_id": locked_run.id,
+                },
+            )
+        else:
+            logger.error(
+                "Unexpected raid battle message failure: run_id=%s attacker=%s defender=%s",
+                locked_run.id,
+                locked_run.attacker_id,
+                locked_run.defender_id,
+                exc_info=True,
+                extra={
+                    "degraded": True,
+                    "component": "raid_battle_message",
+                    "run_id": locked_run.id,
+                },
+            )
+            post_commit_error = exc
 
     try:
         _dismiss_marching_raids_if_protected(locked_run.defender)
-    except RAID_BATTLE_INFRASTRUCTURE_EXCEPTIONS as exc:
-        logger.warning(
-            "dismiss marching raids failed: run_id=%s defender=%s error=%s",
-            locked_run.id,
-            locked_run.defender_id,
+    except Exception as exc:
+        if is_expected_infrastructure_error(
             exc,
-            exc_info=True,
-            extra={
-                "degraded": True,
-                "component": "raid_protection_cleanup",
-                "run_id": locked_run.id,
-            },
-        )
-    except Exception:
-        # 战斗保护清理是边缘副作用，失败不回滚已提交的战斗结果
-        logger.error(
-            "Unexpected dismiss marching raids failure: run_id=%s defender=%s",
-            locked_run.id,
-            locked_run.defender_id,
-            exc_info=True,
-            extra={
-                "degraded": True,
-                "component": "raid_protection_cleanup",
-                "run_id": locked_run.id,
-            },
-        )
+            exceptions=RAID_BATTLE_INFRASTRUCTURE_EXCEPTIONS,
+            allow_runtime_markers=True,
+        ):
+            logger.warning(
+                "dismiss marching raids failed: run_id=%s defender=%s error=%s",
+                locked_run.id,
+                locked_run.defender_id,
+                exc,
+                exc_info=True,
+                extra={
+                    "degraded": True,
+                    "component": "raid_protection_cleanup",
+                    "run_id": locked_run.id,
+                },
+            )
+        else:
+            logger.error(
+                "Unexpected dismiss marching raids failure: run_id=%s defender=%s",
+                locked_run.id,
+                locked_run.defender_id,
+                exc_info=True,
+                extra={
+                    "degraded": True,
+                    "component": "raid_protection_cleanup",
+                    "run_id": locked_run.id,
+                },
+            )
+            if post_commit_error is None:
+                post_commit_error = exc
     _dispatch_complete_raid_task(locked_run, now=now)
+    if post_commit_error is not None:
+        raise post_commit_error.with_traceback(post_commit_error.__traceback__)
 
 
 # ============ Battle execution and guest damage ============

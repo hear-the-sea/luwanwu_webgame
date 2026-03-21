@@ -11,6 +11,7 @@ import math
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
 
+from django.conf import settings
 from django.core.cache import cache
 from django.db.models import F, Sum
 from django.utils import timezone
@@ -31,12 +32,7 @@ def _recent_attacks_cache_key(defender_id: int) -> str:
 
 
 def _recent_attacks_cache_ttl_seconds() -> int:
-    try:
-        from django.conf import settings
-
-        raw = getattr(settings, "RAID_RECENT_ATTACKS_CACHE_TTL_SECONDS", 5)
-    except Exception:
-        raw = 5
+    raw = getattr(settings, "RAID_RECENT_ATTACKS_CACHE_TTL_SECONDS", 5)
     try:
         ttl = int(raw)
     except (TypeError, ValueError):

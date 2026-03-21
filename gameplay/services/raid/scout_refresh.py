@@ -45,9 +45,6 @@ def resolve_scout_refresh_tasks(*, logger: Any) -> tuple[Any, Any] | None:
             raise
         logger.warning("Failed to import scout tasks, falling back to sync refresh", exc_info=True)
         return None
-    except Exception:
-        logger.error("Unexpected scout task import failure during refresh", exc_info=True)
-        raise
 
 
 def collect_due_scout_record_ids(

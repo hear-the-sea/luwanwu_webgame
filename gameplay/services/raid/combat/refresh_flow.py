@@ -39,6 +39,8 @@ def dispatch_async_raid_refresh(
     import_tasks: Callable[[], tuple[Any, Any]],
     dispatch_refresh_task: Callable[[Any, int, str], bool],
 ) -> tuple[list[int], list[int], list[int], bool]:
+    complete_raid_task: Any
+    process_raid_battle_task: Any
     try:
         complete_raid_task, process_raid_battle_task = import_tasks()
     except ImportError as exc:
@@ -46,9 +48,6 @@ def dispatch_async_raid_refresh(
             raise
         logger.warning("Failed to import raid tasks, falling back to sync refresh", exc_info=True)
         return marching_ids, returning_ids, retreated_ids, False
-    except Exception:
-        logger.error("Unexpected raid task import failure during refresh", exc_info=True)
-        raise
 
     sync_marching_ids: list[int] = []
     for run_id in marching_ids:

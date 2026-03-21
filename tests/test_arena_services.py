@@ -13,6 +13,7 @@ from core.exceptions import (
     ArenaParticipationLimitError,
     ArenaRewardLimitError,
     InsufficientSilverError,
+    MessageError,
 )
 from gameplay.models import (
     ArenaEntry,
@@ -366,6 +367,53 @@ def test_run_due_arena_rounds_completes_tournament_and_grants_coins():
 
 
 @pytest.mark.django_db
+def test_start_ready_tournaments_programming_error_bubbles_up(monkeypatch):
+    tournament = ArenaTournament.objects.create(
+        status=ArenaTournament.Status.RECRUITING,
+        player_limit=2,
+        round_interval_seconds=600,
+    )
+    ArenaEntry.objects.create(
+        tournament=tournament,
+        manor=ensure_manor(User.objects.create_user("arena_start_err", "arena_start_err@test.local", "pass123")),
+    )
+    ArenaEntry.objects.create(
+        tournament=tournament,
+        manor=ensure_manor(User.objects.create_user("arena_start_err2", "arena_start_err2@test.local", "pass123")),
+    )
+
+    monkeypatch.setattr(
+        arena_core,
+        "start_tournament_if_ready",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken arena start contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken arena start contract"):
+        arena_core.start_ready_tournaments(limit=10)
+
+
+@pytest.mark.django_db
+def test_run_due_arena_rounds_programming_error_bubbles_up(monkeypatch):
+    now = timezone.now()
+    ArenaTournament.objects.create(
+        status=ArenaTournament.Status.RUNNING,
+        player_limit=2,
+        round_interval_seconds=600,
+        current_round=1,
+        next_round_at=now - timedelta(seconds=1),
+    )
+
+    monkeypatch.setattr(
+        arena_core,
+        "_run_tournament_round",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken arena round contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken arena round contract"):
+        arena_core.run_due_arena_rounds(now=now, limit=10)
+
+
+@pytest.mark.django_db
 def test_arena_uses_guest_snapshot_not_live_guest_state():
     template = _create_guest_template("arena_snapshot_tpl")
     user_a = User.objects.create_user(
@@ -620,7 +668,7 @@ def test_exchange_arena_reward_peerless_general_upgrade_2_grants_item():
 
 
 @pytest.mark.django_db
-def test_exchange_arena_reward_keeps_success_when_message_fails(monkeypatch):
+def test_exchange_arena_reward_keeps_success_when_explicit_message_error(monkeypatch):
     user = User.objects.create_user(
         username="arena_exchange_message_fail",
         password="pass123",
@@ -632,7 +680,7 @@ def test_exchange_arena_reward_keeps_success_when_message_fails(monkeypatch):
 
     monkeypatch.setattr(
         "gameplay.services.arena.exchange_helpers.create_message",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(MessageError("message backend down")),
     )
 
     result = exchange_arena_reward(manor, "grain_pack_small", quantity=1)
@@ -641,6 +689,26 @@ def test_exchange_arena_reward_keeps_success_when_message_fails(monkeypatch):
     assert result.total_cost == 80
     assert manor.arena_coins == 920
     assert ArenaExchangeRecord.objects.filter(manor=manor, reward_key="grain_pack_small").count() == 1
+
+
+@pytest.mark.django_db
+def test_exchange_arena_reward_runtime_marker_error_bubbles_up(monkeypatch):
+    user = User.objects.create_user(
+        username="arena_exchange_runtime_fail",
+        password="pass123",
+        email="arena_exchange_runtime_fail@test.local",
+    )
+    manor = ensure_manor(user)
+    manor.arena_coins = 1000
+    manor.save(update_fields=["arena_coins"])
+
+    monkeypatch.setattr(
+        "gameplay.services.arena.exchange_helpers.create_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+    )
+
+    with pytest.raises(RuntimeError, match="message backend down"):
+        exchange_arena_reward(manor, "grain_pack_small", quantity=1)
 
 
 @pytest.mark.django_db

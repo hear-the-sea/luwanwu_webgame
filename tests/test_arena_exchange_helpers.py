@@ -1,6 +1,6 @@
 import pytest
 
-from core.exceptions import ArenaExchangeError
+from core.exceptions import ArenaExchangeError, MessageError
 from gameplay.services.arena.exchange_helpers import (
     build_exchange_payload,
     build_exchange_summary,
@@ -78,7 +78,7 @@ def test_grant_exchange_items_locked_merges_grants_and_calls_inventory_writer():
     assert granted == {"item_a": 3, "item_b": 3}
 
 
-def test_send_exchange_success_message_swallows_message_errors(caplog):
+def test_send_exchange_success_message_swallows_explicit_message_errors(caplog):
     class _Reward:
         key = "grain_pack_small"
         name = "小粮包"
@@ -88,7 +88,7 @@ def test_send_exchange_success_message_swallows_message_errors(caplog):
 
     with caplog.at_level("WARNING"):
         send_exchange_success_message(
-            create_message_func=lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+            create_message_func=lambda **_kwargs: (_ for _ in ()).throw(MessageError("message backend down")),
             message_kind="reward",
             locked_manor=_Manor(),
             reward=_Reward(),
@@ -99,6 +99,27 @@ def test_send_exchange_success_message_swallows_message_errors(caplog):
         )
 
     assert "arena exchange message failed" in caplog.text
+
+
+def test_send_exchange_success_message_runtime_marker_error_bubbles_up():
+    class _Reward:
+        key = "grain_pack_small"
+        name = "小粮包"
+
+    class _Manor:
+        id = 1
+
+    with pytest.raises(RuntimeError, match="message backend down"):
+        send_exchange_success_message(
+            create_message_func=lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+            message_kind="reward",
+            locked_manor=_Manor(),
+            reward=_Reward(),
+            total_cost=80,
+            normalized_quantity=1,
+            summary="资源已发放",
+            logger=__import__("logging").getLogger("tests.arena.exchange"),
+        )
 
 
 def test_send_exchange_success_message_programming_error_bubbles_up():

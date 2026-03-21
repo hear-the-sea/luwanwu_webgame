@@ -77,6 +77,23 @@ def test_invalidate_recent_attacks_cache_deletes_expected_key(monkeypatch):
     assert deleted["key"] == "raid:recent_attacks_24h:15"
 
 
+def test_recent_attacks_cache_ttl_seconds_falls_back_for_invalid_value(monkeypatch):
+    monkeypatch.setattr(raid_utils.settings, "RAID_RECENT_ATTACKS_CACHE_TTL_SECONDS", "bad", raising=False)
+
+    assert raid_utils._recent_attacks_cache_ttl_seconds() == 5
+
+
+def test_recent_attacks_cache_ttl_seconds_programming_error_bubbles_up(monkeypatch):
+    class _BrokenSettings:
+        def __getattr__(self, _name):
+            raise AssertionError("broken settings contract")
+
+    monkeypatch.setattr(raid_utils, "settings", _BrokenSettings())
+
+    with pytest.raises(AssertionError, match="broken settings contract"):
+        raid_utils._recent_attacks_cache_ttl_seconds()
+
+
 def test_safe_cache_get_tolerates_cache_infrastructure_failure(monkeypatch):
     monkeypatch.setattr(
         raid_utils.cache,

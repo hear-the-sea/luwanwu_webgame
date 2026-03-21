@@ -270,11 +270,8 @@ def start_ready_tournaments(limit: int = 20) -> int:
     )
     started_count = 0
     for tournament_id in candidate_ids:
-        try:
-            if start_tournament_if_ready(ArenaTournament(id=tournament_id)):
-                started_count += 1
-        except Exception:
-            logger.exception("failed to start ready tournament: tournament_id=%s", tournament_id)
+        if start_tournament_if_ready(ArenaTournament(id=tournament_id)):
+            started_count += 1
     return started_count
 
 
@@ -387,11 +384,8 @@ def run_due_arena_rounds(*, now: datetime | None = None, limit: int = 20) -> int
 
     processed = 0
     for tournament_id in due_ids:
-        try:
-            if _run_tournament_round(tournament_id, now=current_time):
-                processed += 1
-        except Exception:
-            logger.exception("failed to process arena round: tournament_id=%s", tournament_id)
+        if _run_tournament_round(tournament_id, now=current_time):
+            processed += 1
     return processed
 
 
