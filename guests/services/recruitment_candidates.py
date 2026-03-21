@@ -29,7 +29,10 @@ def resolve_candidate_draw_count(*, pool: RecruitmentPool, manor: Manor, total_d
     resolved_draw_count = total_draw_count
     if resolved_draw_count is None:
         resolved_draw_count = pool.draw_count + manor.tavern_recruitment_bonus
-    return max(1, int(resolved_draw_count))
+    try:
+        return max(1, int(resolved_draw_count))
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid recruitment draw count: {resolved_draw_count!r}") from exc
 
 
 def build_candidate_display_name(

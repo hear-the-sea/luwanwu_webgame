@@ -75,6 +75,9 @@
 - `battle` 的状态伤害惩罚入口也已退出裸 `ValueError`：`battle/simulation/damage_calculation.py` 的 `process_status_effects(..., phase=\"damage_penalty\")` 现在把缺少 `damage` 视为内部调用契约错误，改走显式 `AssertionError`，不再伪装成业务参数异常。
 - `raid` 依赖的 battle 预备层异常语义也已开始收口：`battle/setup.py`、`battle/locking.py`、`battle/execution.validate_troop_capacity()` 已开始改走显式 `BattlePreparationError`，但更底层 battle 组件和其它复用路径仍未整体封板。
 - `guest recruitment` 已开始收口主链路异常语义：招募发起、放大镜使用、候选保留已改走显式 `RecruitmentError` 子类，`guests/views/recruit_action_runtime.py` 不再把裸 `ValueError` 当作已知业务错误。
+- `guest recruitment` 的 flow helper 也已开始退出裸 `ValueError`：`guests/services/recruitment_flow.resolve_recruitment_seed()` 对非法 seed 不再直接泄漏 `int(...)` 的裸异常，统一改走显式内部调用契约错误 `AssertionError`。
+- `guest recruitment` 的 flow helper 契约也已继续收紧：`resolve_recruitment_cost()`、`create_pending_recruitment()` 对非法 cost / draw_count / duration 输入不再直接泄漏底层 `dict(...)` / `int(...)` 裸异常，统一改走显式 `AssertionError`。
+- `guest recruitment` 的 candidate helper 也已开始退出裸异常：`resolve_candidate_draw_count()` 对非法抽取数量不再直接泄漏 `int(...)` 的裸异常，统一改走显式内部调用契约错误 `AssertionError`。
 - `guest recruitment` 的属性点分配路径也已开始退出 legacy `ValueError`：`guests/services/recruitment_guests.allocate_attribute_points()` 与 `guests/views/training.allocate_points_view()` 已改走显式门客 / 加点异常，但训练、经验道具等其它培养入口仍未整体封板。
 - `guest recruitment` 的属性点分配错误语义也已继续细化：`InvalidAllocationError("attribute_overflow")` 不再落回通用“无效的加点请求”，现在会返回明确的“属性值已达上限，无法继续加点”业务文案。
 - `guest training` / `experience item` 的一部分异常语义也已开始收口：`guests/services/training.use_experience_item_for_guest()` 与 `guests/views/training.use_experience_item_view()` 已改走显式门客 / 道具异常，`TrainView` 也不再把裸 `ValueError` 当作已知业务错误。

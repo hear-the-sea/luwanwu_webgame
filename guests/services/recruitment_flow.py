@@ -17,11 +17,19 @@ InvalidateCacheFunc = Callable[[int | None], None]
 
 
 def resolve_recruitment_seed(seed: int | None) -> int:
-    return int(seed if seed is not None else random.SystemRandom().randint(1, 2**31 - 1))
+    try:
+        return int(seed if seed is not None else random.SystemRandom().randint(1, 2**31 - 1))
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid recruitment seed: {seed!r}") from exc
 
 
 def resolve_recruitment_cost(pool: RecruitmentPool) -> dict:
-    return dict(pool.cost or {})
+    raw_cost = pool.cost or {}
+    # Accept mappings and iterable-of-pairs, but normalize contract errors into an explicit AssertionError.
+    try:
+        return dict(raw_cost)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid recruitment cost payload: {raw_cost!r}") from exc
 
 
 def create_pending_recruitment(
@@ -35,14 +43,28 @@ def create_pending_recruitment(
     duration_seconds: int,
     seed: int,
 ) -> GuestRecruitment:
-    resolved_duration_seconds = max(0, int(duration_seconds))
+    try:
+        resolved_duration_seconds = max(0, int(duration_seconds))
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid recruitment duration: {duration_seconds!r}") from exc
+
+    try:
+        resolved_draw_count = max(1, int(draw_count))
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid recruitment draw count: {draw_count!r}") from exc
+
+    try:
+        resolved_seed = int(seed)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid recruitment seed: {seed!r}") from exc
+
     return recruitment_model.objects.create(
         manor=manor,
         pool=pool,
         cost=cost,
-        draw_count=max(1, int(draw_count)),
+        draw_count=resolved_draw_count,
         duration_seconds=resolved_duration_seconds,
-        seed=int(seed),
+        seed=resolved_seed,
         complete_at=current_time + timedelta(seconds=resolved_duration_seconds),
     )
 
