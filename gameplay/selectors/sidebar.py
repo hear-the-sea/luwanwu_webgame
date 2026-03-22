@@ -4,21 +4,22 @@ import logging
 
 from django.core.cache import cache
 
-from gameplay.services.utils.cache_exceptions import (
-    CACHE_INFRASTRUCTURE_EXCEPTIONS,
-    is_expected_cache_infrastructure_error,
-)
+from gameplay.services.utils.cache_exceptions import CACHE_INFRASTRUCTURE_EXCEPTIONS
 
 logger = logging.getLogger(__name__)
 
 SIDEBAR_RANK_CACHE_TIMEOUT = 30
 
 
+def _is_expected_cache_error(exc: Exception) -> bool:
+    return isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS)
+
+
 def _safe_cache_get(key: str, default=None):
     try:
         return cache.get(key, default)
     except Exception as exc:
-        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+        if not _is_expected_cache_error(exc):
             raise
         logger.warning("Failed to read cache key: %s", key, exc_info=True)
         return default
@@ -28,7 +29,7 @@ def _safe_cache_set(key: str, value, timeout: int) -> None:
     try:
         cache.set(key, value, timeout=timeout)
     except Exception as exc:
-        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+        if not _is_expected_cache_error(exc):
             raise
         logger.warning("Failed to write cache key: %s", key, exc_info=True)
 

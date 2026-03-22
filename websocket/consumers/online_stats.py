@@ -22,16 +22,17 @@ from gameplay.services.online_presence_backend import (
     count_online_users,
     touch_ws_presence,
 )
-from gameplay.services.utils.cache_exceptions import (
-    CACHE_INFRASTRUCTURE_EXCEPTIONS,
-    is_expected_cache_infrastructure_error,
-)
+from gameplay.services.utils.cache_exceptions import CACHE_INFRASTRUCTURE_EXCEPTIONS
 
 from .session_guard import SingleSessionWebSocketMixin
 
 User = get_user_model()
 
 logger = logging.getLogger(__name__)
+
+
+def _is_expected_cache_error(exc: Exception) -> bool:
+    return isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS)
 
 
 class OnlineStatsConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer):
@@ -134,7 +135,7 @@ class OnlineStatsConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsume
         try:
             return cache.get(key)
         except Exception as exc:
-            if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+            if not _is_expected_cache_error(exc):
                 raise
             logger.warning("Online stats cache.get failed: key=%s error=%s", key, exc, exc_info=True)
             return None
@@ -143,7 +144,7 @@ class OnlineStatsConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsume
         try:
             cache.set(key, value, timeout=timeout)
         except Exception as exc:
-            if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+            if not _is_expected_cache_error(exc):
                 raise
             logger.warning("Online stats cache.set failed: key=%s error=%s", key, exc, exc_info=True)
 
@@ -151,7 +152,7 @@ class OnlineStatsConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsume
         try:
             cache.delete(key)
         except Exception as exc:
-            if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+            if not _is_expected_cache_error(exc):
                 raise
             logger.warning("Online stats cache.delete failed: key=%s error=%s", key, exc, exc_info=True)
 
@@ -213,7 +214,7 @@ class OnlineStatsConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsume
                 str(int(self.ONLINE_USERS_TTL * 2)),
             )
         except Exception as exc:
-            if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+            if not _is_expected_cache_error(exc):
                 raise
             remaining_raw = redis.eval(
                 script,
@@ -233,9 +234,7 @@ class OnlineStatsConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsume
         try:
             count_online_users(redis, now_ts=float(now_ts), ttl_seconds=self.ONLINE_USERS_TTL)
             return 0
-        except Exception as exc:
-            if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
-                raise
+        except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
             logger.warning("Online stats Redis cleanup failed; skipping: %s", exc)
             return 0
 
@@ -269,34 +268,21 @@ class OnlineStatsConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsume
                 await self.touch_online_user(self.user_id)
             except asyncio.CancelledError:
                 return
-            except Exception as exc:
-                if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
-                    raise
+            except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
                 logger.debug("Online stats heartbeat Redis error; will retry: %s", exc)
-                continue
-            except Exception as exc:
-                logger.exception("Unexpected error in online stats heartbeat loop: %s", exc)
                 continue
 
     async def get_stats(self):
         try:
             online_count = await sync_to_async(self._get_online_count_sync, thread_sensitive=True)()
-        except Exception as exc:
-            if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
-                raise
+        except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
             logger.warning("Online stats Redis read failed; reporting 0 online users: %s", exc)
-            online_count = 0
-        except Exception as exc:
-            logger.exception("Unexpected error while getting online count; reporting 0 online users: %s", exc)
             online_count = 0
 
         try:
             total_count = await self.get_total_users()
         except DatabaseError as exc:
             logger.warning("Online stats DB read failed; reporting 0 total users: %s", exc)
-            total_count = 0
-        except Exception as exc:
-            logger.exception("Unexpected error while getting total users; reporting 0 total users: %s", exc)
             total_count = 0
 
         return {

@@ -3,21 +3,23 @@ from __future__ import annotations
 import logging
 
 import pytest
+from django_redis.exceptions import ConnectionInterrupted
+from kombu.exceptions import OperationalError
 
 from common.utils import celery as celery_utils
 
 
 class _Task:
-    def __init__(self, *, should_fail: bool = False):
-        self.should_fail = should_fail
+    def __init__(self, *, failure: Exception | None = None):
+        self.failure = failure
         self.called = 0
         self.last_kwargs = None
 
     def apply_async(self, **kwargs):
         self.called += 1
         self.last_kwargs = kwargs
-        if self.should_fail:
-            raise RuntimeError("dispatch failed")
+        if self.failure is not None:
+            raise self.failure
 
 
 # ============ safe_apply_async tests ============
@@ -36,7 +38,7 @@ def test_safe_apply_async_returns_true_on_success():
 
 def test_safe_apply_async_returns_false_on_failure():
     """Test that safe_apply_async returns False when dispatch fails."""
-    task = _Task(should_fail=True)
+    task = _Task(failure=OperationalError("dispatch failed"))
 
     ok = celery_utils.safe_apply_async(task, args=[1])
 
@@ -46,7 +48,7 @@ def test_safe_apply_async_returns_false_on_failure():
 
 def test_safe_apply_async_logs_on_failure_when_logger_provided(caplog):
     """Test that safe_apply_async logs warning when dispatch fails and logger is provided."""
-    task = _Task(should_fail=True)
+    task = _Task(failure=OperationalError("dispatch failed"))
     test_logger = logging.getLogger("test_celery")
 
     with caplog.at_level(logging.WARNING):
@@ -62,10 +64,17 @@ def test_safe_apply_async_logs_on_failure_when_logger_provided(caplog):
 
 
 def test_safe_apply_async_can_raise_on_failure():
-    task = _Task(should_fail=True)
+    task = _Task(failure=OperationalError("dispatch failed"))
 
-    with pytest.raises(RuntimeError, match="dispatch failed"):
+    with pytest.raises(OperationalError, match="dispatch failed"):
         celery_utils.safe_apply_async(task, args=[1], raise_on_failure=True)
+
+
+def test_safe_apply_async_programming_error_bubbles_up():
+    task = _Task(failure=AssertionError("broken task contract"))
+
+    with pytest.raises(AssertionError, match="broken task contract"):
+        celery_utils.safe_apply_async(task, args=[1])
 
 
 def test_safe_apply_async_handles_none_args_and_kwargs():
@@ -124,7 +133,7 @@ def test_safe_apply_async_with_dedup_dispatches_when_gate_open(monkeypatch):
 
 
 def test_safe_apply_async_with_dedup_returns_false_on_dispatch_error(monkeypatch):
-    task = _Task(should_fail=True)
+    task = _Task(failure=OperationalError("dispatch failed"))
     deleted = {"keys": []}
     monkeypatch.setattr(celery_utils.cache, "add", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(celery_utils.cache, "delete", lambda key: deleted["keys"].append(key))
@@ -142,12 +151,12 @@ def test_safe_apply_async_with_dedup_returns_false_on_dispatch_error(monkeypatch
 
 
 def test_safe_apply_async_with_dedup_rolls_back_and_raises_on_dispatch_error(monkeypatch):
-    task = _Task(should_fail=True)
+    task = _Task(failure=OperationalError("dispatch failed"))
     deleted = {"keys": []}
     monkeypatch.setattr(celery_utils.cache, "add", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(celery_utils.cache, "delete", lambda key: deleted["keys"].append(key))
 
-    with pytest.raises(RuntimeError, match="dispatch failed"):
+    with pytest.raises(OperationalError, match="dispatch failed"):
         celery_utils.safe_apply_async_with_dedup(
             task,
             dedup_key="test:key3:raise",
@@ -164,7 +173,7 @@ def test_safe_apply_async_with_dedup_falls_back_when_cache_unavailable(monkeypat
     task = _Task()
 
     def _raise(*_args, **_kwargs):
-        raise RuntimeError("cache down")
+        raise ConnectionInterrupted("cache down")
 
     monkeypatch.setattr(celery_utils.cache, "add", _raise)
 
@@ -177,6 +186,58 @@ def test_safe_apply_async_with_dedup_falls_back_when_cache_unavailable(monkeypat
 
     assert ok is True
     assert task.called == 1
+
+
+def test_safe_apply_async_with_dedup_runtime_marker_cache_error_bubbles_up(monkeypatch):
+    task = _Task()
+
+    def _raise(*_args, **_kwargs):
+        raise RuntimeError("cache down")
+
+    monkeypatch.setattr(celery_utils.cache, "add", _raise)
+
+    with pytest.raises(RuntimeError, match="cache down"):
+        celery_utils.safe_apply_async_with_dedup(
+            task,
+            dedup_key="test:key4:runtime-marker",
+            dedup_timeout=5,
+            args=[4],
+        )
+
+
+def test_safe_apply_async_with_dedup_cache_programming_error_bubbles_up(monkeypatch):
+    task = _Task()
+
+    def _raise(*_args, **_kwargs):
+        raise AssertionError("broken cache contract")
+
+    monkeypatch.setattr(celery_utils.cache, "add", _raise)
+
+    with pytest.raises(AssertionError, match="broken cache contract"):
+        celery_utils.safe_apply_async_with_dedup(
+            task,
+            dedup_key="test:key4:programming",
+            dedup_timeout=5,
+            args=[4],
+        )
+
+
+def test_safe_apply_async_with_dedup_rollback_programming_error_bubbles_up(monkeypatch):
+    task = _Task(failure=OperationalError("dispatch failed"))
+    monkeypatch.setattr(celery_utils.cache, "add", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        celery_utils.cache,
+        "delete",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken cache delete contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken cache delete contract"):
+        celery_utils.safe_apply_async_with_dedup(
+            task,
+            dedup_key="test:key4:rollback-programming",
+            dedup_timeout=5,
+            args=[4],
+        )
 
 
 def test_safe_apply_async_with_dedup_skips_dedup_when_key_empty(monkeypatch):

@@ -291,7 +291,7 @@ def test_increment_attempt_counter_fail_closed_on_incr_error_in_production(monke
 
     monkeypatch.setattr(account_views.cache, "add", lambda *args, **kwargs: False)
     monkeypatch.setattr(
-        account_views.cache, "incr", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("no incr"))
+        account_views.cache, "incr", lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionError("no incr"))
     )
 
     attempts = account_views._increment_attempt_counter(key)
@@ -307,7 +307,7 @@ def test_increment_attempt_counter_debug_fallback_resets_on_non_numeric_cache_va
 
     monkeypatch.setattr(account_views.cache, "add", lambda *args, **kwargs: False)
     monkeypatch.setattr(
-        account_views.cache, "incr", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("no incr"))
+        account_views.cache, "incr", lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionError("no incr"))
     )
     monkeypatch.setattr(account_views.cache, "get", lambda *_args, **_kwargs: "not-a-number")
     monkeypatch.setattr(account_views.cache, "set", set_mock)
@@ -325,7 +325,7 @@ def test_increment_attempt_counter_fail_closed_when_cache_add_raises_in_producti
     key = "login_attempts:test-cache-error"
 
     monkeypatch.setattr(
-        account_views.cache, "add", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("add fail"))
+        account_views.cache, "add", lambda *args, **kwargs: (_ for _ in ()).throw(ConnectionError("add fail"))
     )
 
     attempts = account_views._increment_attempt_counter(key)
@@ -342,7 +342,7 @@ def test_check_login_attempts_uses_local_lock_when_cache_get_errors(monkeypatch)
     monkeypatch.setattr(
         account_views.cache,
         "get",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionError("cache down")),
     )
 
     is_locked, ttl = account_views._check_login_attempts(request, "tester")
@@ -362,7 +362,7 @@ def test_record_failed_attempt_fail_closed_when_cache_ops_fail_in_production(mon
     monkeypatch.setattr(
         account_views.cache,
         "add",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache add down")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionError("cache add down")),
     )
 
     # 首次 cache.add 失败 → fail-closed → 返回 LOGIN_ATTEMPT_LIMIT(2) → 触发锁定
@@ -385,7 +385,7 @@ def test_check_login_attempts_fallback_ttl_when_cache_ttl_errors(monkeypatch):
     monkeypatch.setattr(
         account_views.cache,
         "ttl",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("ttl fail")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionError("ttl fail")),
         raising=False,
     )
     monkeypatch.setattr(account_views, "LOGIN_LOCKOUT_DURATION", 321)
@@ -398,7 +398,7 @@ def test_check_login_attempts_fallback_ttl_when_cache_ttl_errors(monkeypatch):
 @pytest.mark.django_db
 def test_clear_login_attempts_tolerates_cache_delete_errors(monkeypatch):
     request = _build_login_request(remote_addr="10.0.0.12")
-    delete_mock = Mock(side_effect=RuntimeError("delete fail"))
+    delete_mock = Mock(side_effect=ConnectionError("delete fail"))
     monkeypatch.setattr(account_views.cache, "delete", delete_mock)
     account_views._LOCAL_LOGIN_CACHE.clear()
     account_views._local_login_cache_set("login_attempts:ip:10.0.0.12", 2, timeout=60)
@@ -406,3 +406,29 @@ def test_clear_login_attempts_tolerates_cache_delete_errors(monkeypatch):
     account_views._clear_login_attempts(request, "tester")
     assert delete_mock.call_count >= 2
     assert not account_views._LOCAL_LOGIN_CACHE
+
+
+@pytest.mark.django_db
+def test_check_login_attempts_runtime_marker_cache_get_bubbles_up(monkeypatch):
+    request = _build_login_request(remote_addr="10.0.0.14")
+
+    monkeypatch.setattr(
+        account_views.cache,
+        "get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+    )
+
+    with pytest.raises(RuntimeError, match="cache down"):
+        account_views._check_login_attempts(request, "tester_runtime_marker")
+
+
+@pytest.mark.django_db
+def test_increment_attempt_counter_runtime_marker_cache_add_bubbles_up(monkeypatch):
+    key = "login_attempts:test-runtime-marker"
+
+    monkeypatch.setattr(
+        account_views.cache, "add", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("cache add down"))
+    )
+
+    with pytest.raises(RuntimeError, match="cache add down"):
+        account_views._increment_attempt_counter(key)

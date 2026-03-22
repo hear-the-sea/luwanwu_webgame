@@ -14,15 +14,16 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from core.utils.http import is_json_request
 from core.utils.network import get_client_ip
 from core.utils.responses import json_error
-from gameplay.services.utils.cache_exceptions import (
-    CACHE_INFRASTRUCTURE_EXCEPTIONS,
-    is_expected_cache_infrastructure_error,
-)
+from gameplay.services.utils.cache_exceptions import CACHE_INFRASTRUCTURE_EXCEPTIONS
 
 logger = logging.getLogger(__name__)
 
 _SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 _MEMCACHE_KEY_LIMIT = 250
+
+
+def _is_expected_cache_error(exc: Exception) -> bool:
+    return isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS)
 
 
 def _cache_error_response(is_json: bool, error_message: str, request: HttpRequest, redirect_url: str | None = None):
@@ -115,9 +116,9 @@ def _get_rate_limit_count(cache_key: str, window_seconds: int, log_prefix: str) 
     try:
         return _increment_cache_counter(cache_key, window_seconds)
     except Exception as exc:
-        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+        if not _is_expected_cache_error(exc):
             logger.error("%s cache unexpected error", log_prefix, exc_info=True)
-            return None
+            raise
         logger.error("%s cache backend unavailable", log_prefix, exc_info=True)
         return None
 

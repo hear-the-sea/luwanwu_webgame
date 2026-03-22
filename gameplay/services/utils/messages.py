@@ -18,10 +18,7 @@ from django.utils import timezone
 
 from core.config import MESSAGE
 from core.exceptions import AttachmentAlreadyClaimedError, MessageNotFoundError, NoAttachmentError
-from gameplay.services.utils.cache_exceptions import (
-    CACHE_INFRASTRUCTURE_EXCEPTIONS,
-    is_expected_cache_infrastructure_error,
-)
+from gameplay.services.utils.cache_exceptions import CACHE_INFRASTRUCTURE_EXCEPTIONS
 
 from ...models import InventoryItem, ItemTemplate, Manor, Message, ResourceEvent
 from ..resources import grant_resources_locked
@@ -38,11 +35,15 @@ _LOCAL_CLEANUP_FALLBACK_CLEANUP_BATCH = 2000
 _LOCAL_CLEANUP_FALLBACK_EVICT_COUNT = 1000
 
 
+def _is_expected_cache_error(exc: Exception) -> bool:
+    return isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS)
+
+
 def _safe_cache_get(key: str, default=None):
     try:
         return cache.get(key, default)
     except Exception as exc:
-        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+        if not _is_expected_cache_error(exc):
             raise
         logger.warning("messages cache.get failed: key=%s", key, exc_info=True)
         return default
@@ -52,7 +53,7 @@ def _safe_cache_set(key: str, value, timeout: int) -> None:
     try:
         cache.set(key, value, timeout=timeout)
     except Exception as exc:
-        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+        if not _is_expected_cache_error(exc):
             raise
         logger.warning("messages cache.set failed: key=%s", key, exc_info=True)
 
@@ -61,7 +62,7 @@ def _safe_cache_add(key: str, value, timeout: int) -> bool:
     try:
         return bool(cache.add(key, value, timeout=timeout))
     except Exception as exc:
-        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+        if not _is_expected_cache_error(exc):
             raise
         logger.warning("messages cache.add failed: key=%s", key, exc_info=True)
         return False
@@ -97,7 +98,7 @@ def _safe_cache_delete(key: str) -> None:
     try:
         cache.delete(key)
     except Exception as exc:
-        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+        if not _is_expected_cache_error(exc):
             raise
         logger.warning("messages cache.delete failed: key=%s", key, exc_info=True)
 
@@ -106,7 +107,7 @@ def _safe_cache_delete_many(keys: list[str]) -> None:
     try:
         cache.delete_many(keys)
     except Exception as exc:
-        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+        if not _is_expected_cache_error(exc):
             raise
         logger.warning("messages cache.delete_many failed: keys_count=%s", len(keys), exc_info=True)
 

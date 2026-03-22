@@ -145,3 +145,41 @@ def test_rate_limit_json_hashes_when_scope_too_long(monkeypatch):
     assert response.status_code == 200
     assert ":h:" in captured["key"]
     assert len(captured["key"]) <= rate_limit_module._MEMCACHE_KEY_LIMIT
+
+
+@pytest.mark.django_db
+def test_rate_limit_json_programming_error_bubbles_up(monkeypatch):
+    rf = RequestFactory()
+    request = rf.post("/fake")
+
+    monkeypatch.setattr(
+        rate_limit_module.cache,
+        "add",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken cache contract")),
+    )
+
+    @rate_limit_json("t6", limit=1, window_seconds=60)
+    def view(req):
+        return JsonResponse({"ok": True})
+
+    with pytest.raises(AssertionError, match="broken cache contract"):
+        view(request)
+
+
+@pytest.mark.django_db
+def test_rate_limit_json_runtime_marker_error_bubbles_up(monkeypatch):
+    rf = RequestFactory()
+    request = rf.post("/fake")
+
+    monkeypatch.setattr(
+        rate_limit_module.cache,
+        "add",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+    )
+
+    @rate_limit_json("t7", limit=1, window_seconds=60)
+    def view(req):
+        return JsonResponse({"ok": True})
+
+    with pytest.raises(RuntimeError, match="cache down"):
+        view(request)

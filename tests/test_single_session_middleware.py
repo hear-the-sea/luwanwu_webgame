@@ -2,6 +2,7 @@ import pytest
 from django.core.cache import cache
 from django.db import DatabaseError
 from django.test import override_settings
+from django_redis.exceptions import ConnectionInterrupted
 
 from accounts.models import UserActiveSession
 from accounts.utils import USER_SESSION_CACHE_PREFIX, USER_SESSION_CACHE_TTL
@@ -89,7 +90,7 @@ def test_single_session_middleware_rechecks_db_when_verify_marker_cache_write_fa
 
     def fake_add(key, value, timeout=None):
         if key.endswith(":verified"):
-            raise RuntimeError("cache add down")
+            raise ConnectionInterrupted("cache add down")
         return original_add(key, value, timeout=timeout)
 
     monkeypatch.setattr("core.middleware.single_session.cache.add", fake_add)
@@ -98,6 +99,24 @@ def test_single_session_middleware_rechecks_db_when_verify_marker_cache_write_fa
 
     assert response.status_code == 200
     assert "_auth_user_id" not in client.session
+
+
+@pytest.mark.django_db
+def test_single_session_middleware_runtime_marker_verify_cache_error_bubbles_up(client, django_user_model, monkeypatch):
+    user = django_user_model.objects.create_user(username="single_session_runtime_marker", password="pass123")
+    client.force_login(user)
+
+    original_add = cache.add
+
+    def fake_add(key, value, timeout=None):
+        if key.endswith(":verified"):
+            raise RuntimeError("cache add down")
+        return original_add(key, value, timeout=timeout)
+
+    monkeypatch.setattr("core.middleware.single_session.cache.add", fake_add)
+
+    with pytest.raises(RuntimeError, match="cache add down"):
+        client.get("/health/live")
 
 
 @pytest.mark.django_db

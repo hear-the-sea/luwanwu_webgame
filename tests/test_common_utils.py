@@ -76,11 +76,13 @@ def test_resolve_drop_rewards_rules_are_stable():
 
 
 def test_safe_apply_async_swallows_dispatch_errors():
+    from kombu.exceptions import OperationalError
+
     from common.utils.celery import safe_apply_async
 
     class DummyTask:
         def apply_async(self, *args, **kwargs):
-            raise RuntimeError("boom")
+            raise OperationalError("boom")
 
     logger = logging.getLogger("tests.safe_apply_async")
     assert safe_apply_async(DummyTask(), logger=logger) is False

@@ -24,14 +24,6 @@ def best_effort_cache_get(
             extra={"degraded": True, "component": component},
         )
         return default
-    except Exception:
-        logger.error(
-            "Unexpected cache.get failure: key=%s",
-            key,
-            exc_info=True,
-            extra={"degraded": True, "component": component},
-        )
-        return default
 
 
 def best_effort_cache_set(
@@ -49,13 +41,6 @@ def best_effort_cache_set(
     except infrastructure_exceptions:
         logger.warning(
             "Failed to write cache key: %s",
-            key,
-            exc_info=True,
-            extra={"degraded": True, "component": component},
-        )
-    except Exception:
-        logger.error(
-            "Unexpected cache.set failure: key=%s",
             key,
             exc_info=True,
             extra={"degraded": True, "component": component},
@@ -82,14 +67,6 @@ def best_effort_cache_add(
             extra={"degraded": True, "component": component},
         )
         return False
-    except Exception:
-        logger.error(
-            "Unexpected cache.add failure: key=%s",
-            key,
-            exc_info=True,
-            extra={"degraded": True, "component": component},
-        )
-        return False
 
 
 def best_effort_cache_delete(
@@ -105,13 +82,6 @@ def best_effort_cache_delete(
     except infrastructure_exceptions:
         logger.warning(
             "Failed to delete cache key: %s",
-            key,
-            exc_info=True,
-            extra={"degraded": True, "component": component},
-        )
-    except Exception:
-        logger.error(
-            "Unexpected cache.delete failure: key=%s",
             key,
             exc_info=True,
             extra={"degraded": True, "component": component},

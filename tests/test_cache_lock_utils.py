@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 
+from django_redis.exceptions import ConnectionInterrupted
+
 import core.utils.cache_lock as cache_lock
 
 
@@ -12,10 +14,10 @@ def test_build_action_lock_key_uses_namespace_action_owner_and_scope():
 def test_cache_lock_falls_back_to_local_lock_when_cache_unavailable(monkeypatch):
     class _BrokenCache:
         def add(self, *_args, **_kwargs):
-            raise RuntimeError("cache down")
+            raise ConnectionInterrupted("cache down")
 
         def delete(self, *_args, **_kwargs):
-            raise RuntimeError("cache down")
+            raise ConnectionInterrupted("cache down")
 
     cache_lock._LOCAL_LOCKS.clear()
     monkeypatch.setattr(cache_lock, "cache", _BrokenCache())
@@ -63,10 +65,10 @@ def test_cache_lock_falls_back_to_local_lock_when_cache_unavailable(monkeypatch)
 def test_action_lock_wraps_local_fallback_key_and_releases_it(monkeypatch):
     class _BrokenCache:
         def add(self, *_args, **_kwargs):
-            raise RuntimeError("cache down")
+            raise ConnectionInterrupted("cache down")
 
         def delete(self, *_args, **_kwargs):
-            raise RuntimeError("cache down")
+            raise ConnectionInterrupted("cache down")
 
     logger = logging.getLogger(__name__)
     cache_lock._LOCAL_LOCKS.clear()
@@ -152,7 +154,7 @@ def test_action_lock_uses_cache_key_when_cache_is_available(monkeypatch):
 def test_cache_lock_can_fail_closed_when_local_fallback_disabled(monkeypatch):
     class _BrokenCache:
         def add(self, *_args, **_kwargs):
-            raise RuntimeError("cache down")
+            raise ConnectionInterrupted("cache down")
 
     cache_lock._LOCAL_LOCKS.clear()
     monkeypatch.setattr(cache_lock, "cache", _BrokenCache())
@@ -169,6 +171,54 @@ def test_cache_lock_can_fail_closed_when_local_fallback_disabled(monkeypatch):
     assert from_cache is False
     assert token is None
     assert cache_lock._LOCAL_LOCKS == {}
+
+
+def test_cache_lock_programming_error_bubbles_up(monkeypatch):
+    class _BrokenCache:
+        def add(self, *_args, **_kwargs):
+            raise AssertionError("broken cache contract")
+
+    cache_lock._LOCAL_LOCKS.clear()
+    monkeypatch.setattr(cache_lock, "cache", _BrokenCache())
+
+    try:
+        try:
+            cache_lock.acquire_best_effort_lock(
+                "lock:test:programming",
+                timeout_seconds=5,
+                logger=logging.getLogger(__name__),
+                log_context="test lock",
+            )
+        except AssertionError as exc:
+            assert "broken cache contract" in str(exc)
+        else:
+            raise AssertionError("expected acquire_best_effort_lock to bubble programming error")
+    finally:
+        cache_lock._LOCAL_LOCKS.clear()
+
+
+def test_cache_lock_runtime_marker_error_bubbles_up(monkeypatch):
+    class _BrokenCache:
+        def add(self, *_args, **_kwargs):
+            raise RuntimeError("cache down")
+
+    cache_lock._LOCAL_LOCKS.clear()
+    monkeypatch.setattr(cache_lock, "cache", _BrokenCache())
+
+    try:
+        try:
+            cache_lock.acquire_best_effort_lock(
+                "lock:test:runtime-marker",
+                timeout_seconds=5,
+                logger=logging.getLogger(__name__),
+                log_context="test lock",
+            )
+        except RuntimeError as exc:
+            assert "cache down" in str(exc)
+        else:
+            raise AssertionError("expected acquire_best_effort_lock to bubble runtime marker error")
+    finally:
+        cache_lock._LOCAL_LOCKS.clear()
 
 
 def test_cache_lock_uses_cache_when_available(monkeypatch):
@@ -344,3 +394,52 @@ def test_release_cache_key_if_owner_falls_back_when_atomic_unavailable(monkeypat
     assert released is True
     assert called["atomic"] == 1
     assert called["fallback"] == 1
+
+
+def test_release_cache_key_if_owner_bubbles_up_programming_error_on_get(monkeypatch):
+    logger = logging.getLogger(__name__)
+
+    class _BrokenCache:
+        def get(self, *_args, **_kwargs):
+            raise AssertionError("broken cache get contract")
+
+    monkeypatch.setattr(cache_lock, "cache", _BrokenCache())
+    monkeypatch.setattr(cache_lock, "_release_cache_lock_atomic_if_owner", lambda *_args, **_kwargs: None)
+
+    try:
+        cache_lock.release_cache_key_if_owner(
+            "lock:test:get-programming",
+            lock_token="token",
+            logger=logger,
+            log_context="test release",
+        )
+    except AssertionError as exc:
+        assert "broken cache get contract" in str(exc)
+    else:
+        raise AssertionError("expected release_cache_key_if_owner to bubble cache.get programming error")
+
+
+def test_release_cache_key_if_owner_bubbles_up_programming_error_on_delete(monkeypatch):
+    logger = logging.getLogger(__name__)
+
+    class _BrokenCache:
+        def get(self, *_args, **_kwargs):
+            return "token"
+
+        def delete(self, *_args, **_kwargs):
+            raise AssertionError("broken cache delete contract")
+
+    monkeypatch.setattr(cache_lock, "cache", _BrokenCache())
+    monkeypatch.setattr(cache_lock, "_release_cache_lock_atomic_if_owner", lambda *_args, **_kwargs: None)
+
+    try:
+        cache_lock.release_cache_key_if_owner(
+            "lock:test:delete-programming",
+            lock_token="token",
+            logger=logger,
+            log_context="test release",
+        )
+    except AssertionError as exc:
+        assert "broken cache delete contract" in str(exc)
+    else:
+        raise AssertionError("expected release_cache_key_if_owner to bubble cache.delete programming error")

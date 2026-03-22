@@ -115,6 +115,17 @@ def test_safe_cache_get_programming_error_bubbles_up(monkeypatch):
         raid_utils._safe_cache_get("raid:test:get")
 
 
+def test_safe_cache_get_runtime_marker_error_bubbles_up(monkeypatch):
+    monkeypatch.setattr(
+        raid_utils.cache,
+        "get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+    )
+
+    with pytest.raises(RuntimeError, match="cache down"):
+        raid_utils._safe_cache_get("raid:test:get")
+
+
 def test_safe_cache_set_programming_error_bubbles_up(monkeypatch):
     monkeypatch.setattr(
         raid_utils.cache,

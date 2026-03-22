@@ -7,6 +7,7 @@ from django.contrib.messages import get_messages
 from django.db import DatabaseError
 from django.test import Client
 from django.urls import reverse
+from django_redis.exceptions import ConnectionInterrupted
 
 from core.exceptions import GameError, GuestItemOwnershipError, InvalidAllocationError
 from gameplay.models import InventoryItem, ItemTemplate
@@ -252,7 +253,7 @@ def test_equip_view_cache_invalidation_failure_does_not_hide_success(django_user
     monkeypatch.setattr("guests.services.equipment.equip_guest", lambda *_a, **_k: None)
     monkeypatch.setattr(
         "guests.views.equipment._clear_gear_options_cache",
-        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down")),
+        lambda *_a, **_k: (_ for _ in ()).throw(ConnectionInterrupted("cache down")),
     )
 
     response = client.post(
@@ -307,7 +308,7 @@ def test_unequip_view_cache_invalidation_failure_does_not_hide_success(django_us
     monkeypatch.setattr("guests.services.equipment.unequip_guest_item", lambda *_a, **_k: None)
     monkeypatch.setattr(
         "guests.views.equipment._clear_gear_options_cache",
-        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down")),
+        lambda *_a, **_k: (_ for _ in ()).throw(ConnectionInterrupted("cache down")),
     )
 
     response = client.post(reverse("guests:unequip"), {"guest": str(guest.pk), "gear": [str(gear.pk)]})
@@ -315,6 +316,26 @@ def test_unequip_view_cache_invalidation_failure_does_not_hide_success(django_us
     assert response.status_code == 302
     assert response.url == reverse("guests:roster")
     assert any("卸下 1 件装备" in m for m in _messages(response))
+
+
+@pytest.mark.django_db
+def test_equip_view_runtime_marker_cache_invalidation_error_bubbles_up(django_user_model, monkeypatch):
+    client, manor = _login_client(django_user_model, prefix="equip_cache_runtime")
+    guest = _create_guest(manor, prefix="equip_cache_runtime")
+    gear = _create_gear(manor)
+    _stub_equip_form(monkeypatch, guest, gear)
+
+    monkeypatch.setattr("guests.services.equipment.equip_guest", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "guests.views.equipment._clear_gear_options_cache",
+        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down")),
+    )
+
+    with pytest.raises(RuntimeError, match="cache down"):
+        client.post(
+            reverse("guests:equip"),
+            {"guest": str(guest.pk), "gear": str(gear.pk), "slot": gear.template.slot},
+        )
 
 
 @pytest.mark.django_db

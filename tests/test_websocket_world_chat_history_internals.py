@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+from django_redis.exceptions import ConnectionInterrupted
 from redis.exceptions import RedisError
 
 from websocket.consumers import WorldChatConsumer
@@ -276,7 +278,7 @@ def test_world_chat_get_display_name_tolerates_cache_errors(monkeypatch):
     consumer = _build_consumer(_FakeRedis())
 
     def _raise_cache_error(*_args, **_kwargs):
-        raise RuntimeError("cache down")
+        raise ConnectionInterrupted("cache down")
 
     monkeypatch.setattr("websocket.consumers.world_chat.cache.get", _raise_cache_error)
     monkeypatch.setattr("websocket.consumers.world_chat.cache.set", _raise_cache_error)
@@ -304,3 +306,15 @@ def test_world_chat_get_display_name_tolerates_cache_errors(monkeypatch):
 
     resolved = consumer._get_display_name.__wrapped__(consumer, 1)
     assert resolved == "测试庄园"
+
+
+def test_world_chat_get_display_name_runtime_marker_cache_error_bubbles_up(monkeypatch):
+    consumer = _build_consumer(_FakeRedis())
+
+    monkeypatch.setattr(
+        "websocket.consumers.world_chat.cache.get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+    )
+
+    with pytest.raises(RuntimeError, match="cache down"):
+        consumer._get_display_name.__wrapped__(consumer, 1)

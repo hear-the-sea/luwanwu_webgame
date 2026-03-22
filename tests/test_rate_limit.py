@@ -152,6 +152,23 @@ class RateLimitRedirectTests(TestCase):
         self.assertEqual(payload["success"], False)
         self.assertIn("繁忙", payload["error"])
 
+    def test_rate_limit_redirect_programming_error_bubbles_up(self):
+        request = self.factory.post("/test")
+        request.user = self.user
+        _attach_session_and_messages(request)
+
+        original_add = cache.add
+
+        def raise_programming_error(*args, **kwargs):
+            raise AssertionError("broken cache contract")
+
+        try:
+            cache.add = raise_programming_error
+            with self.assertRaisesRegex(AssertionError, "broken cache contract"):
+                _limited_view(request)
+        finally:
+            cache.add = original_add
+
 
 def test_rate_limit_redirect_rejects_non_positive_limit():
     with pytest.raises(AssertionError, match="positive limit"):

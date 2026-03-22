@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from django.core.cache import cache
+from django_redis.exceptions import ConnectionInterrupted
 
 from core.exceptions import ItemNotFoundError, TradeValidationError
 from gameplay.models import InventoryItem, ItemTemplate
@@ -152,12 +153,12 @@ def test_get_effective_gold_supply_falls_back_when_cache_errors(monkeypatch):
     monkeypatch.setattr(
         bank_service.cache,
         "get",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache read failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache read failed")),
     )
     monkeypatch.setattr(
         bank_service.cache,
         "add",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache add failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache add failed")),
     )
 
     value = bank_service.get_effective_gold_supply()
@@ -204,12 +205,24 @@ def test_exchange_gold_bar_tolerates_cache_delete_failure(monkeypatch, django_us
     monkeypatch.setattr(
         bank_service.cache,
         "delete",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache delete failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache delete failed")),
     )
 
     result = bank_service.exchange_gold_bar(manor, 1)
     assert result["quantity"] == 1
     assert result["total_cost"] == 110
+
+
+@pytest.mark.django_db
+def test_get_effective_gold_supply_runtime_marker_cache_error_bubbles_up(monkeypatch):
+    monkeypatch.setattr(
+        bank_service.cache,
+        "get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache read failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="cache read failed"):
+        bank_service.get_effective_gold_supply()
 
 
 @pytest.mark.django_db

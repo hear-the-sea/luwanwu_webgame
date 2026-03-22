@@ -44,7 +44,30 @@ class _FakeRedis:
         return len(union)
 
 
-def test_notifications_anonymous_tolerates_cache_and_redis_failures(monkeypatch):
+def test_notifications_anonymous_tolerates_explicit_cache_and_redis_infrastructure_failures(monkeypatch):
+    request = RequestFactory().get("/")
+    request.user = AnonymousUser()
+
+    monkeypatch.setattr(
+        "gameplay.selectors.stats.cache.get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache read failed")),
+    )
+    monkeypatch.setattr(
+        "gameplay.selectors.stats.cache.set",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache write failed")),
+    )
+    monkeypatch.setattr(
+        "gameplay.selectors.stats.get_redis_connection",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionError("redis down")),
+    )
+
+    context = notifications(request)
+    assert context["message_unread_count"] == 0
+    assert context["online_user_count"] >= 0
+    assert context["total_user_count"] >= 0
+
+
+def test_notifications_anonymous_runtime_marker_cache_error_bubbles_up(monkeypatch):
     request = RequestFactory().get("/")
     request.user = AnonymousUser()
 
@@ -52,19 +75,9 @@ def test_notifications_anonymous_tolerates_cache_and_redis_failures(monkeypatch)
         "gameplay.selectors.stats.cache.get",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache read failed")),
     )
-    monkeypatch.setattr(
-        "gameplay.selectors.stats.cache.set",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache write failed")),
-    )
-    monkeypatch.setattr(
-        "gameplay.selectors.stats.get_redis_connection",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("redis down")),
-    )
 
-    context = notifications(request)
-    assert context["message_unread_count"] == 0
-    assert context["online_user_count"] >= 0
-    assert context["total_user_count"] >= 0
+    with pytest.raises(RuntimeError, match="cache read failed"):
+        notifications(request)
 
 
 def test_notifications_anonymous_handles_corrupted_cached_online_value(monkeypatch):
@@ -122,6 +135,27 @@ def test_online_presence_middleware_tolerates_connection_interrupted(monkeypatch
     monkeypatch.setattr("gameplay.services.online_presence.get_redis_connection_if_supported", lambda: _BrokenRedis())
 
     OnlinePresenceMiddleware(lambda _request: None)(request)
+
+    assert any(key.startswith("stats:online_users:touch:") for key in deleted_keys)
+
+
+def test_online_presence_middleware_runtime_marker_redis_error_bubbles_up(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="ctx_touch_runtime_user", password="pass")
+    request = RequestFactory().get("/")
+    request.user = user
+
+    monkeypatch.setattr("gameplay.services.online_presence.cache.add", lambda *_args, **_kwargs: True)
+    deleted_keys: list[str] = []
+    monkeypatch.setattr("gameplay.services.online_presence.cache.delete", lambda key: deleted_keys.append(key))
+
+    class _BrokenRedis:
+        def zadd(self, *_args, **_kwargs):
+            raise RuntimeError("redis down")
+
+    monkeypatch.setattr("gameplay.services.online_presence.get_redis_connection_if_supported", lambda: _BrokenRedis())
+
+    with pytest.raises(RuntimeError, match="redis down"):
+        OnlinePresenceMiddleware(lambda _request: None)(request)
 
     assert any(key.startswith("stats:online_users:touch:") for key in deleted_keys)
 
@@ -237,6 +271,34 @@ def test_notifications_authenticated_programming_error_in_rank_bubbles_up(monkey
         notifications(request)
 
 
+def test_notifications_authenticated_runtime_marker_sidebar_cache_error_bubbles_up(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="ctx_rank_cache_runtime_user", password="pass")
+    manor = ensure_manor(user)
+    request = RequestFactory().get("/")
+    request.user = user
+
+    def fake_stats_cache_get(key, default=None):
+        if key in {"stats:total_users_count", "stats:online_users_count"}:
+            return 0
+        return default
+
+    monkeypatch.setattr("gameplay.selectors.stats.cache.get", fake_stats_cache_get)
+    monkeypatch.setattr("gameplay.context_processors.unread_message_count", lambda _manor: 1)
+    monkeypatch.setattr(
+        "gameplay.services.raid.get_protection_status",
+        lambda _manor: {"is_protected": False, "type_display": "", "remaining_display": ""},
+    )
+    monkeypatch.setattr(
+        "gameplay.selectors.sidebar.cache.get",
+        lambda key, default=None: (
+            (_ for _ in ()).throw(RuntimeError("cache read failed")) if key == f"sidebar:rank:{manor.id}" else default
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="cache read failed"):
+        notifications(request)
+
+
 def test_notifications_non_home_pages_skip_home_sidebar_queries(monkeypatch, django_user_model):
     user = django_user_model.objects.create_user(username="ctx_non_home_user", password="pass")
     request = RequestFactory().get("/manor/warehouse/")
@@ -287,11 +349,11 @@ def test_notifications_total_user_count_uses_local_fallback_when_cache_reads_fai
 
     monkeypatch.setattr(
         "gameplay.selectors.stats.cache.get",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache read failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache read failed")),
     )
     monkeypatch.setattr(
         "gameplay.selectors.stats.cache.set",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache write failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache write failed")),
     )
     monkeypatch.setattr(
         "gameplay.selectors.stats.User.objects.filter",
@@ -324,15 +386,15 @@ def test_notifications_online_user_count_uses_local_fallback_when_cache_and_redi
 
     monkeypatch.setattr(
         "gameplay.selectors.stats.cache.get",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache read failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache read failed")),
     )
     monkeypatch.setattr(
         "gameplay.selectors.stats.cache.set",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache write failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache write failed")),
     )
     monkeypatch.setattr(
         "gameplay.selectors.stats.get_redis_connection",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("redis down")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionError("redis down")),
     )
     monkeypatch.setattr(
         "gameplay.selectors.stats.load_total_user_count",
@@ -349,3 +411,18 @@ def test_notifications_online_user_count_uses_local_fallback_when_cache_and_redi
     assert first["online_user_count"] == 3
     assert second["online_user_count"] == 3
     assert count_calls["count"] == 1
+
+
+def test_notifications_online_user_count_runtime_marker_redis_error_bubbles_up(monkeypatch):
+    request = RequestFactory().get("/")
+    request.user = AnonymousUser()
+
+    monkeypatch.setattr("gameplay.selectors.stats.load_total_user_count", lambda: 0)
+    monkeypatch.setattr("gameplay.selectors.stats.cache.get", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "gameplay.selectors.stats.get_redis_connection",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("redis down")),
+    )
+
+    with pytest.raises(RuntimeError, match="redis down"):
+        notifications(request)

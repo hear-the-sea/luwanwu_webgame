@@ -12,10 +12,7 @@ from typing import Callable, TypeVar, cast
 
 from django.core.cache import cache
 
-from gameplay.services.utils.cache_exceptions import (
-    CACHE_INFRASTRUCTURE_EXCEPTIONS,
-    is_expected_cache_infrastructure_error,
-)
+from gameplay.services.utils.cache_exceptions import CACHE_INFRASTRUCTURE_EXCEPTIONS
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +23,10 @@ CACHE_TIMEOUT_LONG = 60  # 60秒 - 低实时性要求
 CACHE_TIMEOUT_RANKING = 60  # 排行榜缓存
 CACHE_TIMEOUT_CONFIG = 300  # 5分钟 - 配置类数据
 RECRUITMENT_HALL_CACHE_VERSION = 1  # 聚贤庄上下文缓存版本
+
+
+def _is_expected_cache_error(exc: Exception) -> bool:
+    return isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS)
 
 
 class CacheKeys:
@@ -95,7 +96,7 @@ def invalidate_home_stats_cache(manor_id: int) -> None:
     try:
         cache.delete(CacheKeys.home_hourly_rates(manor_id))
     except Exception as exc:
-        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+        if not _is_expected_cache_error(exc):
             raise
         logger.warning("cache.delete failed in invalidate_home_stats_cache(): manor_id=%s error=%s", manor_id, exc)
 
@@ -111,7 +112,7 @@ def invalidate_recruitment_hall_cache(manor_id: int) -> None:
             ]
         )
     except Exception as exc:
-        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+        if not _is_expected_cache_error(exc):
             raise
         logger.warning(
             "cache.delete_many failed in invalidate_recruitment_hall_cache(): manor_id=%s error=%s",
@@ -136,7 +137,7 @@ def invalidate_manor_cache(manor_id: int) -> None:
     try:
         cache.delete_many(keys_to_delete)
     except Exception as exc:
-        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+        if not _is_expected_cache_error(exc):
             raise
         logger.warning("cache.delete_many failed in invalidate_manor_cache(): manor_id=%s error=%s", manor_id, exc)
 
@@ -151,7 +152,7 @@ def invalidate_ranking_cache() -> None:
         cache.delete(CacheKeys.RANKING_PRESTIGE)
         cache.delete(CacheKeys.RANKING_TOTAL_PLAYERS)
     except Exception as exc:
-        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+        if not _is_expected_cache_error(exc):
             raise
         logger.warning("cache.delete failed in invalidate_ranking_cache(): error=%s", exc)
 
@@ -189,7 +190,7 @@ def cached(
             try:
                 result = cache.get(cache_key, sentinel)
             except Exception as exc:
-                if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+                if not _is_expected_cache_error(exc):
                     raise
                 logger.warning("cache.get failed in cached(): key=%s error=%s", cache_key, exc, exc_info=True)
                 result = sentinel
@@ -206,7 +207,7 @@ def cached(
                 try:
                     cache.set(cache_key, computed, timeout=timeout)
                 except Exception as exc:
-                    if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+                    if not _is_expected_cache_error(exc):
                         raise
                     logger.warning("cache.set failed in cached(): key=%s error=%s", cache_key, exc, exc_info=True)
             return cast(T, computed)
@@ -231,7 +232,7 @@ def get_or_set(key: str, default_func: Callable[[], T], timeout: int = CACHE_TIM
     try:
         result = cache.get(key)
     except Exception as exc:
-        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+        if not _is_expected_cache_error(exc):
             raise
         logger.warning("cache.get failed in get_or_set(): key=%s error=%s", key, exc, exc_info=True)
         result = None
@@ -240,7 +241,7 @@ def get_or_set(key: str, default_func: Callable[[], T], timeout: int = CACHE_TIM
         try:
             cache.set(key, result, timeout=timeout)
         except Exception as exc:
-            if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+            if not _is_expected_cache_error(exc):
                 raise
             logger.warning("cache.set failed in get_or_set(): key=%s error=%s", key, exc, exc_info=True)
     return cast(T, result)

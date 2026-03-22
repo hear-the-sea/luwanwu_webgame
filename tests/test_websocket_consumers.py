@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 
 from django.core.cache import cache
 from django.test import SimpleTestCase
+from django_redis.exceptions import ConnectionInterrupted
 from redis.exceptions import RedisError
 
 from websocket.consumers import NotificationConsumer, OnlineStatsConsumer
@@ -291,7 +292,7 @@ class OnlineStatsConsumerTests(SimpleTestCase):
 
         consumer._get_redis = lambda: _Redis()  # type: ignore[method-assign]
         original_delete = cache.delete
-        cache.delete = lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down"))
+        cache.delete = lambda *_a, **_k: (_ for _ in ()).throw(ConnectionInterrupted("cache down"))
         try:
             consumer._add_online_connection_sync(7, 1000.0)
         finally:
@@ -309,7 +310,7 @@ class OnlineStatsConsumerTests(SimpleTestCase):
 
         consumer._get_redis = lambda: _Redis()  # type: ignore[method-assign]
         original_delete = cache.delete
-        cache.delete = lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down"))
+        cache.delete = lambda *_a, **_k: (_ for _ in ()).throw(ConnectionInterrupted("cache down"))
         try:
             assert consumer._remove_online_connection_sync(7) == 0
         finally:

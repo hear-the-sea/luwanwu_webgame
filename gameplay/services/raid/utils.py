@@ -16,15 +16,16 @@ from django.core.cache import cache
 from django.db.models import F, Sum
 from django.utils import timezone
 
-from gameplay.services.utils.cache_exceptions import (
-    CACHE_INFRASTRUCTURE_EXCEPTIONS,
-    is_expected_cache_infrastructure_error,
-)
+from gameplay.services.utils.cache_exceptions import CACHE_INFRASTRUCTURE_EXCEPTIONS
 
 from ...constants import PVPConstants
 from ...models import InventoryItem, Manor, RaidRun
 
 logger = logging.getLogger(__name__)
+
+
+def _is_expected_cache_error(exc: Exception) -> bool:
+    return isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS)
 
 
 def _recent_attacks_cache_key(defender_id: int) -> str:
@@ -44,7 +45,7 @@ def _safe_cache_get(key: str) -> int | None:
     try:
         return cache.get(key)
     except Exception as exc:
-        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+        if not _is_expected_cache_error(exc):
             raise
         logger.warning("raid utils cache.get failed: key=%s", key, exc_info=True)
         return None
@@ -54,7 +55,7 @@ def _safe_cache_set(key: str, value: int, timeout: int) -> None:
     try:
         cache.set(key, int(value), timeout=timeout)
     except Exception as exc:
-        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+        if not _is_expected_cache_error(exc):
             raise
         logger.warning("raid utils cache.set failed: key=%s", key, exc_info=True)
 
@@ -63,7 +64,7 @@ def _safe_cache_delete(key: str) -> None:
     try:
         cache.delete(key)
     except Exception as exc:
-        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+        if not _is_expected_cache_error(exc):
             raise
         logger.warning("raid utils cache.delete failed: key=%s", key, exc_info=True)
 

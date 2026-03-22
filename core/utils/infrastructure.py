@@ -119,7 +119,7 @@ def is_expected_cache_infrastructure_error(
     *,
     exceptions: InfrastructureExceptions = CACHE_INFRASTRUCTURE_EXCEPTIONS,
 ) -> bool:
-    return isinstance(exc, exceptions) or is_cache_runtime_error(exc)
+    return isinstance(exc, exceptions)
 
 
 INFRASTRUCTURE_RUNTIME_ERROR_MARKERS = CACHE_RUNTIME_ERROR_MARKERS

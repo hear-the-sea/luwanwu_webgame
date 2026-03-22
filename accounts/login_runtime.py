@@ -23,14 +23,6 @@ def normalize_lock_ttl(
             extra={"degraded": True, "component": "login_cache"},
         )
         return lockout_duration
-    except Exception:
-        logger.error(
-            "Unexpected lock TTL cache failure: key=%s",
-            lock_key,
-            exc_info=True,
-            extra={"degraded": True, "component": "login_cache"},
-        )
-        return lockout_duration
     if ttl is None:
         return lockout_duration
     try:
@@ -84,14 +76,6 @@ def safe_cache_get(
             extra={"degraded": True, "component": "login_cache"},
         )
         return local_value
-    except Exception:
-        logger.error(
-            "Unexpected login cache.get failure: key=%s",
-            key,
-            exc_info=True,
-            extra={"degraded": True, "component": "login_cache"},
-        )
-        return local_value
     if cached is cache_miss_sentinel:
         return local_value
     if cached is not None:
@@ -119,13 +103,6 @@ def safe_cache_set(
             exc_info=True,
             extra={"degraded": True, "component": "login_cache"},
         )
-    except Exception:
-        logger.error(
-            "Unexpected login cache.set failure: key=%s",
-            key,
-            exc_info=True,
-            extra={"degraded": True, "component": "login_cache"},
-        )
 
 
 def safe_cache_delete(
@@ -142,13 +119,6 @@ def safe_cache_delete(
     except infrastructure_exceptions:
         logger.warning(
             "Failed to delete cache key: %s",
-            key,
-            exc_info=True,
-            extra={"degraded": True, "component": "login_cache"},
-        )
-    except Exception:
-        logger.error(
-            "Unexpected login cache.delete failure: key=%s",
             key,
             exc_info=True,
             extra={"degraded": True, "component": "login_cache"},
@@ -196,14 +166,6 @@ def increment_attempt_counter(
             extra={"degraded": True, "component": "login_cache"},
         )
         added = None
-    except Exception:
-        logger.error(
-            "Unexpected login attempts cache.add failure: key=%s",
-            key,
-            exc_info=True,
-            extra={"degraded": True, "component": "login_cache"},
-        )
-        added = None
 
     if added is True:
         safe_cache_set(key, 1, timeout=login_attempt_window)
@@ -230,22 +192,6 @@ def increment_attempt_counter(
                 increment_degraded_counter("login_security_degraded")
                 return login_attempt_limit
             logger.warning("Fallback to local login attempt counter path: key=%s", key)
-            return _fallback_debug_attempt_counter(
-                key,
-                login_attempt_window=login_attempt_window,
-                safe_cache_get=safe_cache_get,
-                safe_cache_set=safe_cache_set,
-            )
-        except Exception:
-            logger.error(
-                "Unexpected login attempts cache.incr failure: key=%s",
-                key,
-                exc_info=True,
-                extra={"degraded": True, "component": "login_cache"},
-            )
-            if not settings_obj.DEBUG:
-                increment_degraded_counter("login_security_degraded")
-                return login_attempt_limit
             return _fallback_debug_attempt_counter(
                 key,
                 login_attempt_window=login_attempt_window,

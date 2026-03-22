@@ -6,6 +6,7 @@ import pytest
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
+from django_redis.exceptions import ConnectionInterrupted
 
 from core.exceptions import MessageError
 from gameplay.models import InventoryItem, Message
@@ -104,7 +105,7 @@ def test_rounds_module_create_auction_round_skips_when_cache_add_fails(monkeypat
 
     monkeypatch.setattr(
         "trade.services.auction.rounds.cache.add",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache down")),
     )
     monkeypatch.setattr(
         "trade.services.auction.rounds.get_auction_settings",
@@ -963,13 +964,26 @@ def test_rounds_module_settle_auction_round_skips_when_cache_add_fails(monkeypat
 
     monkeypatch.setattr(
         "trade.services.auction.rounds.cache.add",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache down")),
     )
     stats = settle_round_impl(round_id=auction_round.id)
 
     auction_round.refresh_from_db()
     assert stats["settled"] == 0
     assert auction_round.status == AuctionRound.Status.ACTIVE
+
+
+@pytest.mark.django_db
+def test_rounds_module_create_auction_round_runtime_marker_cache_add_bubbles_up(monkeypatch):
+    from trade.services.auction.rounds import create_auction_round as create_round_impl
+
+    monkeypatch.setattr(
+        "trade.services.auction.rounds.cache.add",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+    )
+
+    with pytest.raises(RuntimeError, match="cache down"):
+        create_round_impl()
 
 
 @pytest.mark.django_db

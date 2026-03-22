@@ -5,6 +5,7 @@ import pytest
 from django.contrib.sessions.models import Session
 from django.test import RequestFactory
 from django.utils import timezone
+from django_redis.exceptions import ConnectionInterrupted
 
 from accounts import signals as account_signals
 from accounts import utils as account_utils
@@ -107,7 +108,7 @@ def test_acquire_login_lock_falls_back_to_local_when_cache_add_errors(monkeypatc
     monkeypatch.setattr(
         account_utils.cache,
         "add",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache down")),
     )
     monkeypatch.setattr(account_utils, "LOGIN_LOCK_MAX_WAIT_SECONDS", 0.0)
 
@@ -117,6 +118,20 @@ def test_acquire_login_lock_falls_back_to_local_when_cache_add_errors(monkeypatc
     account_utils._release_login_lock(lock_key, token)
     assert account_utils._acquire_login_lock(lock_key, "token-b") is True
     account_utils._release_login_lock(lock_key, "token-b")
+
+
+def test_acquire_login_lock_runtime_marker_cache_error_bubbles_up(monkeypatch):
+    lock_key = "login_lock:runtime_marker"
+
+    account_utils._LOCAL_LOGIN_LOCKS.clear()
+    monkeypatch.setattr(
+        account_utils.cache,
+        "add",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+    )
+
+    with pytest.raises(RuntimeError, match="cache down"):
+        account_utils._acquire_login_lock(lock_key, "token-a")
 
 
 def test_session_key_prefix_handles_none():

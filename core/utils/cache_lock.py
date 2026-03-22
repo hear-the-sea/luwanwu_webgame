@@ -8,6 +8,8 @@ from threading import Lock
 from django.conf import settings
 from django.core.cache import cache
 
+from core.utils.infrastructure import CACHE_INFRASTRUCTURE_EXCEPTIONS
+
 _LOCAL_LOCKS: dict[str, tuple[str, float]] = {}
 _LOCAL_LOCKS_GUARD = Lock()
 _LOCAL_LOCKS_MAX_SIZE = 20000
@@ -24,6 +26,10 @@ if current_token == expected_token then
 end
 return 0
 """
+
+
+def _is_expected_cache_error(exc: Exception) -> bool:
+    return isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS)
 
 
 def _cleanup_expired_local_locks(now: float) -> None:
@@ -53,7 +59,7 @@ def _release_cache_lock_atomic_if_owner(
     """
     try:
         from django_redis import get_redis_connection
-    except Exception:
+    except ImportError:
         return None
 
     try:
@@ -61,6 +67,8 @@ def _release_cache_lock_atomic_if_owner(
     except NotImplementedError:
         return None
     except Exception as exc:
+        if not _is_expected_cache_error(exc):
+            raise
         logger.warning(
             "%s atomic cache lock release unavailable, fallback to compare-delete: key=%s error=%s",
             log_context,
@@ -75,6 +83,8 @@ def _release_cache_lock_atomic_if_owner(
         deleted = redis.eval(_CACHE_RELEASE_IF_OWNER_SCRIPT, 1, redis_key, lock_token)
         return bool(int(deleted or 0))
     except Exception as exc:
+        if not _is_expected_cache_error(exc):
+            raise
         logger.warning(
             "%s atomic cache lock release unavailable, fallback to compare-delete: key=%s error=%s",
             log_context,
@@ -96,6 +106,8 @@ def _release_cache_lock_non_atomic_if_owner(
     try:
         current_token = cache.get(key)
     except Exception as exc:
+        if not _is_expected_cache_error(exc):
+            raise
         logger.warning(
             "%s cache lock ownership check failed: key=%s error=%s",
             log_context,
@@ -112,6 +124,8 @@ def _release_cache_lock_non_atomic_if_owner(
         cache.delete(key)
         return True
     except Exception as exc:
+        if not _is_expected_cache_error(exc):
+            raise
         logger.warning(
             "%s cache lock delete failed: key=%s error=%s",
             log_context,
@@ -145,6 +159,8 @@ def acquire_best_effort_lock(
             return True, True, lock_token
         return False, True, None
     except Exception as exc:
+        if not _is_expected_cache_error(exc):
+            raise
         if not allow_local_fallback:
             logger.warning(
                 "%s cache lock unavailable (fail-closed): key=%s degraded=True error=%s",

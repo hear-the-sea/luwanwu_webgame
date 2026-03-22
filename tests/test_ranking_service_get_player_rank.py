@@ -1,4 +1,5 @@
 import pytest
+from django_redis.exceptions import ConnectionInterrupted
 
 
 @pytest.mark.django_db
@@ -51,11 +52,30 @@ def test_get_player_rank_tolerates_cache_backend_failure(django_user_model, monk
 
     monkeypatch.setattr(
         "gameplay.services.ranking.cache.get",
-        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down")),
+        lambda *_a, **_k: (_ for _ in ()).throw(ConnectionInterrupted("cache down")),
     )
     monkeypatch.setattr(
         "gameplay.services.ranking.cache.set",
-        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down")),
+        lambda *_a, **_k: (_ for _ in ()).throw(ConnectionInterrupted("cache down")),
     )
 
     assert get_player_rank(manor) == 2
+
+
+@pytest.mark.django_db
+def test_get_player_rank_runtime_marker_cache_error_bubbles_up(django_user_model, monkeypatch):
+    from gameplay.services.manor.core import ensure_manor
+    from gameplay.services.ranking import get_player_rank
+
+    user = django_user_model.objects.create_user(username="rank_runtime_marker", password="pass")
+    manor = ensure_manor(user)
+    manor.prestige = 100
+    manor.save(update_fields=["prestige"])
+
+    monkeypatch.setattr(
+        "gameplay.services.ranking.cache.get",
+        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down")),
+    )
+
+    with pytest.raises(RuntimeError, match="cache down"):
+        get_player_rank(manor)

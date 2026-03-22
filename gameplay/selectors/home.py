@@ -14,10 +14,14 @@ from ..models import MissionRun, ResourceType
 from ..services.missions import can_retreat
 from ..services.technology import get_technology_template
 from ..services.utils.cache import CacheKeys
-from ..services.utils.cache_exceptions import CACHE_INFRASTRUCTURE_EXCEPTIONS, is_expected_cache_infrastructure_error
+from ..services.utils.cache_exceptions import CACHE_INFRASTRUCTURE_EXCEPTIONS
 from ..services.utils.query_optimization import optimize_guest_queryset
 
 logger = logging.getLogger(__name__)
+
+
+def _is_expected_cache_error(exc: Exception) -> bool:
+    return isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS)
 
 
 def _normalize_hourly_rates(hourly_rates) -> dict[str, int]:
@@ -36,7 +40,7 @@ def _safe_cache_get(key: str):
     try:
         return cache.get(key)
     except Exception as exc:
-        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+        if not _is_expected_cache_error(exc):
             raise
         logger.warning("Home selector cache.get failed: key=%s error=%s", key, exc, exc_info=True)
         return None
@@ -46,7 +50,7 @@ def _safe_cache_set(key: str, value, timeout: int) -> None:
     try:
         cache.set(key, value, timeout=timeout)
     except Exception as exc:
-        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+        if not _is_expected_cache_error(exc):
             raise
         logger.warning("Home selector cache.set failed: key=%s error=%s", key, exc, exc_info=True)
 

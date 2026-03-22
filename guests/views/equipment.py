@@ -18,6 +18,7 @@ from core.exceptions import EquipmentError, GameError
 from core.utils import is_ajax_request, json_error, json_success
 from core.utils.rate_limit import rate_limit_redirect
 from core.utils.validation import safe_positive_int, safe_redirect_url, sanitize_error_message
+from gameplay.services.utils.cache_exceptions import CACHE_INFRASTRUCTURE_EXCEPTIONS
 
 from ..forms import EquipForm
 from ..models import GearSlot, Guest
@@ -28,10 +29,16 @@ from .common import unexpected_action_error_response
 logger = logging.getLogger(__name__)
 
 
+def _is_expected_cache_error(exc: Exception) -> bool:
+    return isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS)
+
+
 def _safe_cache_get(key: str):
     try:
         return cache.get(key)
     except Exception as exc:
+        if not _is_expected_cache_error(exc):
+            raise
         logger.warning("Gear options cache.get failed: key=%s error=%s", key, exc, exc_info=True)
         return None
 
@@ -40,6 +47,8 @@ def _safe_cache_set(key: str, value, timeout: int) -> None:
     try:
         cache.set(key, value, timeout=timeout)
     except Exception as exc:
+        if not _is_expected_cache_error(exc):
+            raise
         logger.warning("Gear options cache.set failed: key=%s error=%s", key, exc, exc_info=True)
 
 
@@ -47,6 +56,8 @@ def _safe_cache_delete_many(keys: list[str]) -> None:
     try:
         cache.delete_many(keys)
     except Exception as exc:
+        if not _is_expected_cache_error(exc):
+            raise
         logger.warning("Gear options cache.delete_many failed: keys_count=%s error=%s", len(keys), exc, exc_info=True)
 
 
@@ -54,6 +65,8 @@ def _best_effort_clear_gear_options_cache(manor_id: int, *, slots: set[str] | No
     try:
         _clear_gear_options_cache(manor_id, slots=slots)
     except Exception as exc:
+        if not _is_expected_cache_error(exc):
+            raise
         logger.warning(
             "Gear options cache invalidation skipped: manor_id=%s slots=%s error=%s",
             manor_id,

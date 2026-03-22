@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from accounts.models import UserActiveSession
 from core.utils.cache_lock import release_cache_key_if_owner
+from gameplay.services.utils.cache_exceptions import CACHE_INFRASTRUCTURE_EXCEPTIONS
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,10 @@ LOGIN_LOCK_MAX_WAIT_SECONDS = 0.30
 _LOCAL_LOGIN_LOCKS: dict[str, tuple[str, float]] = {}
 _LOCAL_LOGIN_LOCKS_GUARD = Lock()
 _LOCAL_LOGIN_LOCKS_MAX_SIZE = 5000
+
+
+def _is_expected_cache_error(exc: Exception) -> bool:
+    return isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS)
 
 
 def _session_key_prefix(session_key: str | None) -> str:
@@ -78,7 +83,9 @@ def purge_other_sessions(user_id: int, current_session_key: str | None) -> bool:
 def _safe_get_cached_session_key(cache_key: str) -> str | None:
     try:
         cached = cache.get(cache_key)
-    except Exception:
+    except Exception as exc:
+        if not _is_expected_cache_error(exc):
+            raise
         logger.debug("Failed to read active session cache for key=%s", cache_key, exc_info=True)
         return None
     return str(cached) if cached else None
@@ -87,7 +94,9 @@ def _safe_get_cached_session_key(cache_key: str) -> str | None:
 def _safe_set_cached_session_key(cache_key: str, session_key: str) -> None:
     try:
         cache.set(cache_key, session_key, timeout=USER_SESSION_CACHE_TTL)
-    except Exception:
+    except Exception as exc:
+        if not _is_expected_cache_error(exc):
+            raise
         logger.debug("Failed to write active session cache for key=%s", cache_key, exc_info=True)
 
 
@@ -215,7 +224,9 @@ def _acquire_login_lock(lock_key: str, lock_token: str) -> bool:
         try:
             if cache.add(lock_key, lock_token, timeout=LOGIN_LOCK_TIMEOUT):
                 return True
-        except Exception:
+        except Exception as exc:
+            if not _is_expected_cache_error(exc):
+                raise
             logger.warning("Login lock cache unavailable, fallback to local lock: key=%s", lock_key, exc_info=True)
             return _acquire_local_login_lock(lock_key, lock_token, deadline)
 

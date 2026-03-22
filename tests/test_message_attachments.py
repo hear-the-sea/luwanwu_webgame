@@ -4,6 +4,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.utils import timezone
+from django_redis.exceptions import ConnectionInterrupted
 
 from gameplay.models import ItemTemplate, Message, ResourceEvent, ResourceType
 from gameplay.services.manor.core import ensure_manor
@@ -142,11 +143,11 @@ def test_unread_message_count_tolerates_cache_errors(monkeypatch):
 
     monkeypatch.setattr(
         "gameplay.services.utils.messages.cache.get",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache get failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache get failed")),
     )
     monkeypatch.setattr(
         "gameplay.services.utils.messages.cache.set",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache set failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache set failed")),
     )
 
     assert unread_message_count(manor) == 1
@@ -161,7 +162,7 @@ def test_cleanup_old_messages_tolerates_cache_add_error(monkeypatch):
 
     monkeypatch.setattr(
         "gameplay.services.utils.messages.cache.add",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache add failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache add failed")),
     )
     message_service._LOCAL_CLEANUP_FALLBACK.clear()
 
@@ -179,7 +180,7 @@ def test_cleanup_old_messages_cache_add_error_uses_local_fallback_gate(monkeypat
 
     monkeypatch.setattr(
         "gameplay.services.utils.messages.cache.add",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache add failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache add failed")),
     )
     message_service._LOCAL_CLEANUP_FALLBACK.clear()
 
@@ -192,6 +193,21 @@ def test_cleanup_old_messages_cache_add_error_uses_local_fallback_gate(monkeypat
     # 第二次应被本地节流门禁拦截，避免缓存故障时每次请求都触发清理扫描
     cleanup_old_messages(manor)
     assert Message.objects.filter(pk=second_message.pk).exists() is True
+
+
+@pytest.mark.django_db
+def test_unread_message_count_runtime_marker_bubbles_up(monkeypatch):
+    user = User.objects.create_user(username="mail_user_cache_runtime", password="pass123")
+    manor = ensure_manor(user)
+    Message.objects.create(manor=manor, kind=Message.Kind.SYSTEM, title="cache runtime msg")
+
+    monkeypatch.setattr(
+        "gameplay.services.utils.messages.cache.get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache get failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="cache get failed"):
+        unread_message_count(manor)
 
 
 def test_local_cleanup_fallback_evicts_oldest_when_oversized(monkeypatch):

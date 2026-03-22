@@ -3,7 +3,23 @@ from __future__ import annotations
 import logging
 from typing import Any, Iterable, Mapping, Optional
 
+from celery.exceptions import TimeoutError as CeleryTimeoutError
 from django.core.cache import cache
+from kombu.exceptions import OperationalError
+
+from core.utils.infrastructure import CACHE_INFRASTRUCTURE_EXCEPTIONS
+
+CELERY_DISPATCH_INFRA_EXCEPTIONS = (
+    OperationalError,
+    ConnectionError,
+    OSError,
+    TimeoutError,
+    CeleryTimeoutError,
+)
+
+
+def _is_expected_cache_error(exc: Exception) -> bool:
+    return isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS)
 
 
 def safe_apply_async(
@@ -42,7 +58,9 @@ def safe_apply_async(
     try:
         task.apply_async(args=list(args or []), kwargs=dict(kwargs or {}), countdown=countdown)
         return True
-    except Exception:
+    except Exception as exc:
+        if not isinstance(exc, CELERY_DISPATCH_INFRA_EXCEPTIONS):
+            raise
         if logger:
             logger.warning(log_message, exc_info=True, extra={"degraded": True, "component": "celery_dispatch"})
         from core.utils.task_monitoring import increment_degraded_counter
@@ -95,7 +113,9 @@ def safe_apply_async_with_dedup(
             dedup_gate_acquired = bool(cache.add(dedup_key, "1", timeout=dedup_timeout))
             if not dedup_gate_acquired:
                 return True
-        except Exception:
+        except Exception as exc:
+            if not _is_expected_cache_error(exc):
+                raise
             if logger:
                 logger.warning(
                     "celery dispatch dedup cache unavailable: %s",
@@ -118,7 +138,9 @@ def safe_apply_async_with_dedup(
         if dedup_gate_acquired:
             try:
                 cache.delete(dedup_key)
-            except Exception:
+            except Exception as exc:
+                if not _is_expected_cache_error(exc):
+                    raise
                 if logger:
                     logger.debug("celery dispatch dedup rollback failed: %s", dedup_key, exc_info=True)
         raise
@@ -129,7 +151,9 @@ def safe_apply_async_with_dedup(
     if dedup_gate_acquired:
         try:
             cache.delete(dedup_key)
-        except Exception:
+        except Exception as exc:
+            if not _is_expected_cache_error(exc):
+                raise
             if logger:
                 logger.debug("celery dispatch dedup rollback failed: %s", dedup_key, exc_info=True)
     return False

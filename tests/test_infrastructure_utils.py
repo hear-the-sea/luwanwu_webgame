@@ -43,10 +43,10 @@ def test_expected_infrastructure_error_still_accepts_database_error_without_runt
     assert is_expected_infrastructure_error(exc, exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS)
 
 
-def test_expected_cache_infrastructure_error_accepts_cache_runtime_marker():
+def test_expected_cache_infrastructure_error_rejects_cache_runtime_marker():
     exc = RuntimeError("cache backend unavailable")
 
-    assert is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS)
+    assert not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS)
 
 
 def test_cache_runtime_error_rejects_non_cache_backend_phrase():

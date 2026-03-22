@@ -14,9 +14,13 @@ from guests.services.recruitment_queries import (
 
 from ..models import InventoryItem
 from ..services.utils.cache import CACHE_TIMEOUT_SHORT, recruitment_hall_context_cache_key
-from ..services.utils.cache_exceptions import CACHE_INFRASTRUCTURE_EXCEPTIONS, is_expected_cache_infrastructure_error
+from ..services.utils.cache_exceptions import CACHE_INFRASTRUCTURE_EXCEPTIONS
 
 logger = logging.getLogger(__name__)
+
+
+def _is_expected_cache_error(exc: Exception) -> bool:
+    return isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS)
 
 
 def _recruitment_hall_cache_key(manor_id: int) -> str:
@@ -93,7 +97,7 @@ def _safe_cache_get(key: str):
     try:
         return cache.get(key)
     except Exception as exc:
-        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+        if not _is_expected_cache_error(exc):
             raise
         logger.warning("Recruitment hall cache.get failed: key=%s error=%s", key, exc, exc_info=True)
         return None
@@ -103,7 +107,7 @@ def _safe_cache_set(key: str, value: dict, timeout: int) -> None:
     try:
         cache.set(key, value, timeout=timeout)
     except Exception as exc:
-        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+        if not _is_expected_cache_error(exc):
             raise
         logger.warning("Recruitment hall cache.set failed: key=%s error=%s", key, exc, exc_info=True)
 

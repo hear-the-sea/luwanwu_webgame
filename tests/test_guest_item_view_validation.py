@@ -5,6 +5,7 @@ from django.contrib.messages import get_messages
 from django.core.cache import cache
 from django.test import Client
 from django.urls import reverse
+from django_redis.exceptions import ConnectionInterrupted
 
 import guests.views.recruit as recruit_views
 from gameplay.models import InventoryItem, ItemTemplate
@@ -188,11 +189,11 @@ def test_gear_options_view_tolerates_cache_backend_failure(game_data, django_use
 
     monkeypatch.setattr(
         "guests.views.equipment.cache.get",
-        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down")),
+        lambda *_a, **_k: (_ for _ in ()).throw(ConnectionInterrupted("cache down")),
     )
     monkeypatch.setattr(
         "guests.views.equipment.cache.set",
-        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down")),
+        lambda *_a, **_k: (_ for _ in ()).throw(ConnectionInterrupted("cache down")),
     )
 
     template = ItemTemplate.objects.create(
@@ -220,6 +221,23 @@ def test_gear_options_view_tolerates_cache_backend_failure(game_data, django_use
     assert payload["options"][0]["count"] == 2
     assert GearItem.objects.filter(manor=manor).count() == before_count
     assert not GearItem.objects.filter(manor=manor, template__key=template.key).exists()
+
+
+@pytest.mark.django_db
+def test_gear_options_view_runtime_marker_cache_error_bubbles_up(game_data, django_user_model, monkeypatch):
+    cache.clear()
+    user = django_user_model.objects.create_user(username="view_gear_options_runtime_marker", password="pass123")
+    ensure_manor(user)
+    client = Client()
+    assert client.login(username="view_gear_options_runtime_marker", password="pass123")
+
+    monkeypatch.setattr(
+        "guests.views.equipment.cache.get",
+        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down")),
+    )
+
+    with pytest.raises(RuntimeError, match="cache down"):
+        client.get(reverse("guests:gear_options"), {"slot": GearSlot.WEAPON})
 
 
 @pytest.mark.django_db

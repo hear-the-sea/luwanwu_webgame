@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 
+import pytest
 from django_redis.exceptions import ConnectionInterrupted
 
 from gameplay.services.utils.cache import cached, get_or_set
@@ -12,7 +13,11 @@ cache_utils = importlib.import_module("gameplay.services.utils.cache")
 def test_get_or_set_tolerates_cache_get_failure(monkeypatch):
     calls = {"compute": 0}
 
-    monkeypatch.setattr(cache_utils.cache, "get", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down")))
+    monkeypatch.setattr(
+        cache_utils.cache,
+        "get",
+        lambda *_a, **_k: (_ for _ in ()).throw(ConnectionInterrupted("cache down")),
+    )
     monkeypatch.setattr(cache_utils.cache, "set", lambda *_a, **_k: None)
 
     def _compute():
@@ -29,7 +34,11 @@ def test_get_or_set_tolerates_cache_set_failure(monkeypatch):
     calls = {"compute": 0}
 
     monkeypatch.setattr(cache_utils.cache, "get", lambda *_a, **_k: None)
-    monkeypatch.setattr(cache_utils.cache, "set", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down")))
+    monkeypatch.setattr(
+        cache_utils.cache,
+        "set",
+        lambda *_a, **_k: (_ for _ in ()).throw(ConnectionInterrupted("cache down")),
+    )
 
     def _compute():
         calls["compute"] += 1
@@ -44,8 +53,16 @@ def test_get_or_set_tolerates_cache_set_failure(monkeypatch):
 def test_cached_decorator_tolerates_cache_backend_failure(monkeypatch):
     calls = {"compute": 0}
 
-    monkeypatch.setattr(cache_utils.cache, "get", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down")))
-    monkeypatch.setattr(cache_utils.cache, "set", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down")))
+    monkeypatch.setattr(
+        cache_utils.cache,
+        "get",
+        lambda *_a, **_k: (_ for _ in ()).throw(ConnectionInterrupted("cache down")),
+    )
+    monkeypatch.setattr(
+        cache_utils.cache,
+        "set",
+        lambda *_a, **_k: (_ for _ in ()).throw(ConnectionInterrupted("cache down")),
+    )
 
     @cached(lambda value: f"cache:test:{value}")
     def _compute(value: int) -> int:
@@ -65,3 +82,14 @@ def test_invalidate_recruitment_hall_cache_tolerates_delete_many_failure(monkeyp
     )
 
     cache_utils.invalidate_recruitment_hall_cache(1)
+
+
+def test_get_or_set_runtime_marker_bubbles_up(monkeypatch):
+    monkeypatch.setattr(
+        cache_utils.cache,
+        "get",
+        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down")),
+    )
+
+    with pytest.raises(RuntimeError, match="cache down"):
+        get_or_set("cache:test:get_runtime_marker", lambda: {"ok": True})

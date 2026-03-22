@@ -8,6 +8,7 @@ from datetime import timedelta
 import pytest
 from django.core.cache import cache
 from django.utils import timezone
+from kombu.exceptions import OperationalError
 
 import gameplay.services.missions_impl.execution as mission_execution
 from battle.models import TroopTemplate
@@ -329,7 +330,7 @@ def test_integration_scout_refresh_dispatch_failure_rolls_back_dedup_gate(requir
 
     class _FailingTask:
         def apply_async(self, **_kwargs):
-            raise RuntimeError("dispatch failed")
+            raise OperationalError("dispatch failed")
 
     ok = scout_refresh_command.try_dispatch_scout_refresh_task(
         _FailingTask(),
@@ -526,7 +527,7 @@ def test_integration_mission_refresh_dispatch_failure_rolls_back_dedup_gate(requ
 
     class _FailingTask:
         def apply_async(self, **_kwargs):
-            raise RuntimeError("dispatch failed")
+            raise OperationalError("dispatch failed")
 
     ok = mission_execution.mission_followups.try_dispatch_mission_refresh_task(
         _FailingTask(),

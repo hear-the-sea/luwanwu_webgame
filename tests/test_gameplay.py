@@ -319,7 +319,7 @@ def test_refresh_manor_state_local_fallback_throttles_when_cache_unavailable(dja
     manor_service._LOCAL_REFRESH_FALLBACK.clear()
 
     monkeypatch.setattr(
-        manor_service.cache, "add", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("cache down"))
+        manor_service.cache, "add", lambda *args, **kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache down"))
     )
 
     calls = {"finalize": 0, "resource": 0, "mission": 0}
@@ -352,7 +352,7 @@ def test_refresh_manor_state_local_fallback_allows_after_interval(django_user_mo
     manor_service._LOCAL_REFRESH_FALLBACK.clear()
 
     monkeypatch.setattr(
-        manor_service.cache, "add", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("cache down"))
+        manor_service.cache, "add", lambda *args, **kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache down"))
     )
 
     monotonic_values = iter([100.0, 102.0, 106.1])
@@ -377,6 +377,22 @@ def test_refresh_manor_state_local_fallback_allows_after_interval(django_user_mo
     refresh_manor_state(manor, include_activity_refresh=True)
 
     assert calls == {"finalize": 3, "resource": 2, "mission": 2}
+
+
+@pytest.mark.django_db
+def test_refresh_manor_state_runtime_marker_cache_error_bubbles_up(django_user_model, settings, monkeypatch):
+    user = django_user_model.objects.create_user(username="player_refresh_runtime_marker", password="pass12345")
+    manor = ensure_manor(user)
+
+    settings.MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS = 5
+    manor_service._LOCAL_REFRESH_FALLBACK.clear()
+
+    monkeypatch.setattr(
+        manor_service.cache, "add", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("cache down"))
+    )
+
+    with pytest.raises(RuntimeError, match="cache down"):
+        refresh_manor_state(manor, include_activity_refresh=True)
 
 
 @pytest.mark.django_db

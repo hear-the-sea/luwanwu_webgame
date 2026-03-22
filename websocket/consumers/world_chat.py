@@ -13,10 +13,7 @@ from django_redis import get_redis_connection
 
 from core.utils.degradation import WORLD_CHAT_REFUND, record_degradation
 from core.utils.infrastructure import INFRASTRUCTURE_EXCEPTIONS
-from gameplay.services.utils.cache_exceptions import (
-    CACHE_INFRASTRUCTURE_EXCEPTIONS,
-    is_expected_cache_infrastructure_error,
-)
+from gameplay.services.utils.cache_exceptions import CACHE_INFRASTRUCTURE_EXCEPTIONS
 from websocket.backends.chat_history import (
     TRIM_HISTORY_SCRIPT,
     append_history_sync,
@@ -34,6 +31,10 @@ from .session_guard import SingleSessionWebSocketMixin
 User = get_user_model()
 
 logger = logging.getLogger(__name__)
+
+
+def _is_expected_cache_error(exc: Exception) -> bool:
+    return isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS)
 
 
 class WorldChatInfrastructureError(RuntimeError):
@@ -287,7 +288,7 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
         try:
             return cache.get(key)
         except Exception as exc:
-            if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+            if not _is_expected_cache_error(exc):
                 raise
             logger.warning(
                 "World chat cache.get failed: key=%s error=%s",
@@ -302,7 +303,7 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
         try:
             cache.set(key, value, timeout=timeout)
         except Exception as exc:
-            if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
+            if not _is_expected_cache_error(exc):
                 raise
             logger.warning(
                 "World chat cache.set failed: key=%s error=%s",

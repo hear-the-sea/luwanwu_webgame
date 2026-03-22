@@ -8,6 +8,7 @@ import pytest
 from django.core.cache import cache
 from django.db import DatabaseError
 from django.test import SimpleTestCase
+from django_redis.exceptions import ConnectionInterrupted
 from redis.exceptions import RedisError
 
 from core.utils import cache_lock as cache_lock_module
@@ -129,13 +130,28 @@ class OnlineStatsConsumerInternalTests(SimpleTestCase):
         consumer.channel_layer.group_send = AsyncMock()
 
         original_add = cache.add
-        cache.add = lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down"))
+        cache.add = lambda *_a, **_k: (_ for _ in ()).throw(ConnectionInterrupted("cache down"))
         try:
             asyncio.run(consumer._broadcast_stats_best_effort({"online_count": 1}))
         finally:
             cache.add = original_add
 
         consumer.channel_layer.group_send.assert_awaited_once()
+
+    def test_broadcast_debounce_runtime_marker_cache_error_bubbles_up(self):
+        consumer = self._build_consumer()
+        consumer.BROADCAST_DEBOUNCE_SECONDS = 1
+        consumer.channel_layer.group_send = AsyncMock()
+
+        original_add = cache.add
+        cache.add = lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down"))
+        try:
+            with pytest.raises(RuntimeError, match="cache down"):
+                asyncio.run(consumer._broadcast_stats_best_effort({"online_count": 1}))
+        finally:
+            cache.add = original_add
+
+        consumer.channel_layer.group_send.assert_not_awaited()
 
     def test_broadcast_debounce_local_fallback_gates_when_cache_errors(self):
         consumer = self._build_consumer()
@@ -144,7 +160,7 @@ class OnlineStatsConsumerInternalTests(SimpleTestCase):
 
         cache_lock_module._LOCAL_LOCKS.clear()
         original_add = cache.add
-        cache.add = lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down"))
+        cache.add = lambda *_a, **_k: (_ for _ in ()).throw(ConnectionInterrupted("cache down"))
         try:
             asyncio.run(consumer._broadcast_stats_best_effort({"online_count": 1}))
             asyncio.run(consumer._broadcast_stats_best_effort({"online_count": 2}))
@@ -180,8 +196,8 @@ class OnlineStatsConsumerInternalTests(SimpleTestCase):
 
         original_get = cache.get
         original_set = cache.set
-        cache.get = lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down"))
-        cache.set = lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down"))
+        cache.get = lambda *_a, **_k: (_ for _ in ()).throw(ConnectionInterrupted("cache down"))
+        cache.set = lambda *_a, **_k: (_ for _ in ()).throw(ConnectionInterrupted("cache down"))
         try:
             assert consumer._get_online_count_sync() == 1
         finally:
@@ -234,8 +250,8 @@ def test_get_total_users_tolerates_cache_backend_failure(django_user_model):
 
     original_get = cache.get
     original_set = cache.set
-    cache.get = lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down"))
-    cache.set = lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down"))
+    cache.get = lambda *_a, **_k: (_ for _ in ()).throw(ConnectionInterrupted("cache down"))
+    cache.set = lambda *_a, **_k: (_ for _ in ()).throw(ConnectionInterrupted("cache down"))
     try:
         total = consumer.get_total_users.__wrapped__(consumer)
     finally:
@@ -243,3 +259,18 @@ def test_get_total_users_tolerates_cache_backend_failure(django_user_model):
         cache.set = original_set
 
     assert total == 1
+
+
+@pytest.mark.django_db
+def test_get_total_users_runtime_marker_cache_error_bubbles_up(django_user_model):
+    consumer = OnlineStatsConsumer()
+
+    django_user_model.objects.create_user(username="total_users_runtime_marker", password="pass")
+
+    original_get = cache.get
+    cache.get = lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache down"))
+    try:
+        with pytest.raises(RuntimeError, match="cache down"):
+            consumer.get_total_users.__wrapped__(consumer)
+    finally:
+        cache.get = original_get
