@@ -8,6 +8,13 @@ from django.core.cache import cache
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
+from core.exceptions import MessageError
+from core.utils.infrastructure import (
+    CACHE_INFRASTRUCTURE_EXCEPTIONS,
+    DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+    InfrastructureExceptions,
+    combine_infrastructure_exceptions,
+)
 from core.utils.task_monitoring import increment_degraded_counter
 from gameplay.models import GlobalMailCampaign, Manor
 from gameplay.services.global_mail import deliver_campaign_to_manor
@@ -19,6 +26,10 @@ GLOBAL_MAIL_BACKFILL_MIN_BATCH_SIZE = 50
 GLOBAL_MAIL_BACKFILL_ERROR_LOG_LIMIT = 5
 FAILED_GLOBAL_MAIL_MANOR_IDS_CACHE_KEY = "gameplay:global_mail:failed_manor_ids:{campaign_id}"
 FAILED_GLOBAL_MAIL_MANOR_IDS_TTL = 86400 * 7  # 7 days
+GLOBAL_MAIL_DELIVERY_EXCEPTIONS: InfrastructureExceptions = combine_infrastructure_exceptions(
+    MessageError,
+    infrastructure_exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+)
 
 
 def _get_failed_manor_ids_cache_key(campaign_id: int) -> str:
@@ -37,7 +48,7 @@ def persist_failed_manor_ids(campaign_id: int, failed_ids: list[int]) -> None:
         else:
             merged = [int(x) for x in failed_ids]
         cache.set(key, merged, timeout=FAILED_GLOBAL_MAIL_MANOR_IDS_TTL)
-    except Exception:
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
         logger.warning(
             "Failed to persist global mail failed manor IDs: campaign_id=%s",
             campaign_id,
@@ -53,7 +64,7 @@ def get_failed_manor_ids(campaign_id: int) -> list[int]:
         if isinstance(value, list):
             return [int(x) for x in value]
         return []
-    except Exception:
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
         logger.warning(
             "Failed to read global mail failed manor IDs: campaign_id=%s",
             campaign_id,
@@ -67,7 +78,7 @@ def clear_failed_manor_ids(campaign_id: int) -> None:
     key = _get_failed_manor_ids_cache_key(campaign_id)
     try:
         cache.delete(key)
-    except Exception:
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
         logger.warning(
             "Failed to clear global mail failed manor IDs: campaign_id=%s",
             campaign_id,
@@ -130,7 +141,7 @@ def backfill_global_mail_campaign_task(
         try:
             if deliver_campaign_to_manor(campaign, manor, now=current_time):
                 delivered_count += 1
-        except Exception as exc:
+        except GLOBAL_MAIL_DELIVERY_EXCEPTIONS as exc:
             failed_count += 1
             failed_manor_ids.append(int(manor.id))
             if failed_count <= GLOBAL_MAIL_BACKFILL_ERROR_LOG_LIMIT:

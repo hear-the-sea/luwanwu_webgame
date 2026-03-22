@@ -3,6 +3,7 @@ import asyncio
 import pytest
 from django.core.cache import cache
 from django.test import override_settings
+from django_redis.exceptions import ConnectionInterrupted
 
 from core.views import health as health_views
 
@@ -48,6 +49,34 @@ def test_health_ready_returns_503_when_cache_check_fails(monkeypatch, client):
 
 
 @pytest.mark.django_db
+def test_health_ready_cache_runtime_error_bubbles_up(monkeypatch, client):
+    monkeypatch.setattr("core.views.health._check_database_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health.cache.set", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "core.views.health.cache.get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken cache contract")),
+    )
+    monkeypatch.setattr("core.views.health.cache.delete", lambda *_args, **_kwargs: None)
+
+    with pytest.raises(AssertionError, match="broken cache contract"):
+        client.get("/health/ready")
+
+
+@pytest.mark.django_db
+def test_health_ready_cache_delete_programming_error_bubbles_up(monkeypatch, client):
+    monkeypatch.setattr("core.views.health._check_database_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health.cache.set", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("core.views.health.cache.get", lambda *_args, **_kwargs: "1")
+    monkeypatch.setattr(
+        "core.views.health.cache.delete",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken cache delete contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken cache delete contract"):
+        client.get("/health/ready")
+
+
+@pytest.mark.django_db
 @override_settings(HEALTH_CHECK_CACHE_TTL_SECONDS=30)
 def test_health_ready_uses_cached_payload(monkeypatch, client):
     cache.delete("health:ready:payload:v1")
@@ -70,6 +99,69 @@ def test_health_ready_uses_cached_payload(monkeypatch, client):
     assert first.status_code == 200
     assert second.status_code == 200
     assert calls == {"db": 1, "cache": 1}
+
+
+@pytest.mark.django_db
+@override_settings(HEALTH_CHECK_CACHE_TTL_SECONDS=30)
+def test_health_ready_tolerates_cached_payload_load_infrastructure_failure(monkeypatch, client):
+    monkeypatch.setattr("core.views.health._check_database_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health._check_cache_ready", lambda: (True, None))
+    monkeypatch.setattr(
+        "core.views.health.cache.get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache down")),
+    )
+    monkeypatch.setattr("core.views.health.cache.set", lambda *_args, **_kwargs: None)
+
+    resp = client.get("/health/ready")
+
+    assert resp.status_code == 200
+    assert resp.json()["checks"] == {"db": True, "cache": True}
+
+
+@pytest.mark.django_db
+@override_settings(HEALTH_CHECK_CACHE_TTL_SECONDS=30)
+def test_health_ready_cached_payload_load_runtime_error_bubbles_up(monkeypatch, client):
+    monkeypatch.setattr("core.views.health._check_database_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health._check_cache_ready", lambda: (True, None))
+    monkeypatch.setattr(
+        "core.views.health.cache.get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+    )
+
+    with pytest.raises(RuntimeError, match="cache down"):
+        client.get("/health/ready")
+
+
+@pytest.mark.django_db
+@override_settings(HEALTH_CHECK_CACHE_TTL_SECONDS=30)
+def test_health_ready_tolerates_cached_payload_store_infrastructure_failure(monkeypatch, client):
+    monkeypatch.setattr("core.views.health._check_database_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health._check_cache_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health.cache.get", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "core.views.health.cache.set",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache down")),
+    )
+
+    resp = client.get("/health/ready")
+
+    assert resp.status_code == 200
+    assert resp.json()["checks"] == {"db": True, "cache": True}
+
+
+@pytest.mark.django_db
+@override_settings(HEALTH_CHECK_CACHE_TTL_SECONDS=30)
+def test_health_ready_cached_payload_store_runtime_error_bubbles_up(monkeypatch, client):
+    monkeypatch.setattr("core.views.health._check_database_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health._check_cache_ready", lambda: (True, None))
+    monkeypatch.setattr("core.views.health.cache.get", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "core.views.health.cache.set",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+    )
+
+    with pytest.raises(RuntimeError, match="cache down"):
+        client.get("/health/ready")
 
 
 @pytest.mark.django_db
@@ -279,6 +371,35 @@ def test_health_channel_layer_check_times_out(monkeypatch):
     assert ok is False
     assert error is not None
     assert "timed out" in error
+
+
+@pytest.mark.django_db
+@override_settings(DEBUG=True)
+def test_health_channel_layer_programming_error_bubbles_up(monkeypatch):
+    class BrokenChannelLayer:
+        async def new_channel(self, prefix):
+            raise AssertionError("broken channel layer contract")
+
+    monkeypatch.setattr("core.views.health.get_channel_layer", lambda: BrokenChannelLayer())
+
+    with pytest.raises(AssertionError, match="broken channel layer contract"):
+        health_views._check_channel_layer_ready()
+
+
+@pytest.mark.django_db
+@override_settings(DEBUG=True)
+def test_health_celery_roundtrip_forget_programming_error_bubbles_up(monkeypatch):
+    class FakeAsyncResult:
+        def get(self, timeout, disable_sync_subtasks=False):
+            return "pong"
+
+        def forget(self):
+            raise AssertionError("broken roundtrip forget contract")
+
+    monkeypatch.setattr("core.views.health.celery_health_ping.apply_async", lambda: FakeAsyncResult())
+
+    with pytest.raises(AssertionError, match="broken roundtrip forget contract"):
+        health_views._check_celery_roundtrip_ready()
 
 
 @pytest.mark.django_db

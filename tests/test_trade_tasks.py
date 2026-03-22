@@ -215,6 +215,23 @@ def test_create_auction_round_task_tolerates_slots_count_error(monkeypatch):
 
 
 @pytest.mark.django_db
+def test_create_auction_round_task_slot_count_programming_error_bubbles_up(monkeypatch):
+    class _Slots:
+        def count(self):
+            raise AssertionError("broken slot count contract")
+
+    class _Round:
+        round_number = 3
+        slots = _Slots()
+
+    monkeypatch.setattr("trade.services.auction_config.reload_auction_config", lambda: None)
+    monkeypatch.setattr("trade.services.auction_service.create_auction_round", lambda: _Round())
+
+    with pytest.raises(AssertionError, match="broken slot count contract"):
+        create_auction_round_task.run()
+
+
+@pytest.mark.django_db
 def test_create_auction_round_task_retries_when_reload_fails(monkeypatch):
     monkeypatch.setattr(
         "trade.services.auction_config.reload_auction_config",
@@ -233,3 +250,23 @@ def test_create_auction_round_task_retries_when_reload_fails(monkeypatch):
         create_auction_round_task.run()
 
     assert called["retry"] == 1
+
+
+@pytest.mark.django_db
+def test_settle_auction_round_task_sync_fallback_programming_error_bubbles_up(monkeypatch):
+    monkeypatch.setattr(
+        "trade.services.auction_service.settle_auction_round",
+        lambda: {"settled": 1, "sold": 2, "unsold": 0, "total_gold_bars": 20},
+    )
+
+    monkeypatch.setattr(
+        "trade.tasks.create_auction_round_task.delay",
+        lambda: (_ for _ in ()).throw(ConnectionError("dispatch failed")),
+    )
+    monkeypatch.setattr(
+        "trade.services.auction_service.create_auction_round",
+        lambda: (_ for _ in ()).throw(AssertionError("broken create round contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken create round contract"):
+        settle_auction_round_task.run()

@@ -174,13 +174,6 @@ def import_launch_post_action_tasks(*, logger: Any) -> tuple[Any | None, Any | N
             exc_info=True,
             extra={"degraded": True, "component": "mission_launch_report_import"},
         )
-    except Exception:
-        logger.error(
-            "Unexpected generate_report_task import failure during mission launch",
-            exc_info=True,
-            extra={"degraded": True, "component": "mission_launch_report_import"},
-        )
-        raise
 
     try:
         from gameplay.tasks import complete_mission_task as imported_complete_mission_task
@@ -195,12 +188,5 @@ def import_launch_post_action_tasks(*, logger: Any) -> tuple[Any | None, Any | N
             exc_info=True,
             extra={"degraded": True, "component": "mission_launch_completion_import"},
         )
-    except Exception:
-        logger.error(
-            "Unexpected complete_mission_task import failure during mission launch",
-            exc_info=True,
-            extra={"degraded": True, "component": "mission_launch_completion_import"},
-        )
-        raise
 
     return generate_report_task, complete_mission_task

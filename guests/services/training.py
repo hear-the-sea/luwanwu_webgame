@@ -24,6 +24,7 @@ from core.exceptions import (
     InsufficientStockError,
 )
 from core.utils import safe_int
+from core.utils.imports import is_missing_target_import
 from gameplay.services.inventory import core as inventory_core
 from gameplay.services.resources import spend_resources
 
@@ -49,7 +50,9 @@ class GuestTrainingReductionResult(TypedDict):
 def _try_enqueue_complete_guest_training(guest: Guest, *, countdown: int, source: str) -> None:
     try:
         from guests.tasks import complete_guest_training
-    except ImportError:
+    except ImportError as exc:
+        if not is_missing_target_import(exc, "guests.tasks"):
+            raise
         logger.warning(
             "Failed to import celery task; finalize guest training immediately",
             extra={"guest_id": guest.id, "source": source},

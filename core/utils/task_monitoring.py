@@ -38,6 +38,7 @@ from django.core.cache import cache
 
 from core.utils import task_monitoring_registry
 from core.utils.degradation import CELERY_TASK_RETRY, record_degradation
+from core.utils.infrastructure import CACHE_INFRASTRUCTURE_EXCEPTIONS
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +117,7 @@ def _register_task_name(task_name: str) -> None:
     marker_key = _registry_member_key(task_name)
     try:
         cache.add(marker_key, 1, timeout=None)
-    except Exception:
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
         logger.warning("Failed to write task metrics registry marker for %s", task_name, exc_info=True)
 
     redis_client = _get_redis_registry_client()
@@ -124,7 +125,7 @@ def _register_task_name(task_name: str) -> None:
         try:
             redis_client.sadd(_get_redis_registry_key(), task_name)
             return
-        except Exception:
+        except CACHE_INFRASTRUCTURE_EXCEPTIONS:
             logger.warning("Failed to update Redis task metrics registry index", exc_info=True)
             return
 
@@ -135,7 +136,7 @@ def _register_task_name(task_name: str) -> None:
                 return
             registry.add(task_name)
             cache.set(TASK_METRICS_CACHE_KEY, registry, timeout=None)
-    except Exception:
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
         logger.warning("Failed to update task metrics registry", exc_info=True)
 
 
@@ -147,7 +148,7 @@ def _get_registry() -> set[str] | None:
 
     try:
         return _coerce_registry(cache.get(TASK_METRICS_CACHE_KEY))
-    except Exception:
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
         logger.warning("Failed to read task metrics registry", exc_info=True)
         return None
 
@@ -171,12 +172,12 @@ def _increment_metric_atomic(task_name: str, field: str) -> None:
                     cache.incr(key, delta=1)
                 except ValueError:
                     cache.set(key, 1, timeout=None)
-        except Exception:
+        except CACHE_INFRASTRUCTURE_EXCEPTIONS:
             logger.warning("Failed to initialise task metric %s.%s", task_name, field, exc_info=True)
             with _metrics_lock:
                 _ensure_task_entry(task_name)[field] += 1
             return
-    except Exception:
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
         logger.warning("Failed to increment task metric %s.%s", task_name, field, exc_info=True)
         with _metrics_lock:
             _ensure_task_entry(task_name)[field] += 1
@@ -230,7 +231,7 @@ def get_task_metrics() -> dict[str, dict[str, int]]:
         keys = [_metric_key(task_name, f) for f in _FIELDS]
         try:
             values = cache.get_many(keys)
-        except Exception:
+        except CACHE_INFRASTRUCTURE_EXCEPTIONS:
             logger.warning("Failed to read metric keys for task %s", task_name, exc_info=True)
             with _metrics_lock:
                 result[task_name] = dict(_ensure_task_entry(task_name))
@@ -255,13 +256,13 @@ def reset_task_metrics() -> None:
 
     try:
         cache.delete_many(keys_to_delete)
-    except Exception:
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
         logger.warning("Failed to clear task metrics cache", exc_info=True)
         # Best-effort fallback: delete keys one by one.
         for key in keys_to_delete:
             try:
                 cache.delete(key)
-            except Exception:
+            except CACHE_INFRASTRUCTURE_EXCEPTIONS:
                 pass
 
 
@@ -286,10 +287,10 @@ def increment_degraded_counter(component: str) -> None:
             cache.incr(key)
         except ValueError:
             cache.set(key, 1, timeout=_DEGRADED_COUNTER_TTL)
-        except Exception:
+        except CACHE_INFRASTRUCTURE_EXCEPTIONS:
             cache.set(key, 1, timeout=_DEGRADED_COUNTER_TTL)
-    except Exception:
-        pass  # Never let metrics fail the caller
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
+        return
 
 
 def get_degraded_counter(component: str, *, date_str: str | None = None) -> int:
@@ -305,5 +306,5 @@ def get_degraded_counter(component: str, *, date_str: str | None = None) -> int:
     try:
         value = cache.get(key)
         return int(value or 0)
-    except Exception:
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
         return 0

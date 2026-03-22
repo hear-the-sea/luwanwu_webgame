@@ -6,7 +6,7 @@ from datetime import timezone as dt_timezone
 from types import SimpleNamespace
 
 import pytest
-from django.db import IntegrityError, transaction
+from django.db import DatabaseError, IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
 
@@ -569,6 +569,44 @@ def test_start_raid_succeeds_when_incoming_message_fails(monkeypatch):
 
     assert result is created_run
     assert dispatched == {"run_id": 99, "travel_time": 45}
+
+
+def test_start_raid_succeeds_when_incoming_message_database_failure(monkeypatch):
+    attacker = SimpleNamespace(pk=1, id=1, defeat_protection_until=None)
+    defender = SimpleNamespace(pk=2, id=2)
+    created_run = SimpleNamespace(id=101, attacker=attacker, defender=defender)
+    dispatched = {"run_id": None, "travel_time": None}
+
+    monkeypatch.setattr(combat_runs.transaction, "atomic", contextlib.nullcontext)
+    monkeypatch.setattr(
+        combat_runs,
+        "_validate_and_normalize_raid_inputs",
+        lambda *_args, **_kwargs: ([101], {"inf": 1}),
+    )
+    monkeypatch.setattr(combat_runs, "_lock_manor_pair", lambda *_args, **_kwargs: (attacker, defender))
+    monkeypatch.setattr(combat_runs, "_recheck_can_attack_target", lambda *_args, **_kwargs: (True, ""))
+    monkeypatch.setattr(combat_runs, "get_active_raid_count", lambda *_args, **_kwargs: 0)
+    monkeypatch.setattr(combat_runs, "_load_and_validate_attacker_guests", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(combat_runs, "_normalize_and_validate_raid_loadout", lambda *_args, **_kwargs: {"inf": 1})
+    monkeypatch.setattr(combat_runs, "_deduct_troops", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(combat_runs, "calculate_raid_travel_time", lambda *_args, **_kwargs: 45)
+    monkeypatch.setattr(combat_runs, "_create_raid_run_record", lambda *_args, **_kwargs: created_run)
+    monkeypatch.setattr(combat_runs, "_invalidate_recent_attacks_cache_on_commit", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        combat_runs,
+        "_send_raid_incoming_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("message table unavailable")),
+    )
+    monkeypatch.setattr(
+        combat_runs,
+        "_dispatch_raid_battle_task",
+        lambda run, travel_time: dispatched.update({"run_id": run.id, "travel_time": travel_time}),
+    )
+
+    result = combat_runs.start_raid(attacker, defender, [101], {"inf": 1})
+
+    assert result is created_run
+    assert dispatched == {"run_id": 101, "travel_time": 45}
 
 
 def test_start_raid_incoming_message_runtime_marker_error_bubbles_up(monkeypatch):

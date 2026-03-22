@@ -9,12 +9,21 @@ from django.utils import timezone
 from common.utils.celery import safe_apply_async
 from core.exceptions import MessageError
 from core.utils.imports import is_missing_target_import
-from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_expected_infrastructure_error
+from core.utils.infrastructure import (
+    DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+    InfrastructureExceptions,
+    combine_infrastructure_exceptions,
+)
 
 from ..utils.messages import create_message
 from . import scout_refresh as scout_refresh_command
 
 logger = logging.getLogger(__name__)
+SCOUT_MESSAGE_DELIVERY_EXCEPTIONS: InfrastructureExceptions = combine_infrastructure_exceptions(
+    MessageError,
+    infrastructure_exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+)
+
 ScoutFollowupAction = Literal[
     "detected_message",
     "failure_result_message",
@@ -122,15 +131,7 @@ def run_scout_followup(action: ScoutFollowupAction, record: Any, **context: Any)
             send_scout_retreat_message(record)
         else:
             send_scout_fail_message(record)
-    except Exception as exc:
-        if not (
-            isinstance(exc, MessageError)
-            or is_expected_infrastructure_error(
-                exc,
-                exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
-            )
-        ):
-            raise
+    except SCOUT_MESSAGE_DELIVERY_EXCEPTIONS:
         log_scout_followup_failure(action, **context)
 
 

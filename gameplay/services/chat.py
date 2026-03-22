@@ -5,9 +5,9 @@
 from __future__ import annotations
 
 import logging
-from typing import Tuple
 
 from core.exceptions import InsufficientStockError
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS
 from gameplay.models import Manor
 from gameplay.services.inventory.core import add_item_to_inventory, consume_inventory_item
 
@@ -28,7 +28,7 @@ def _get_manor_for_user(user_id: int) -> Manor | None:
         return None
 
 
-def consume_trumpet(user_id: int) -> Tuple[bool, str]:
+def consume_trumpet(user_id: int) -> tuple[bool, str]:
     """
     消耗小喇叭道具（世界频道发言）
 
@@ -51,8 +51,8 @@ def consume_trumpet(user_id: int) -> Tuple[bool, str]:
         return True, ""
     except InsufficientStockError:
         return False, "小喇叭不足，无法在世界频道发言"
-    except Exception:
-        logger.exception("Unexpected error when consuming trumpet for user_id=%s", user_id)
+    except DATABASE_INFRASTRUCTURE_EXCEPTIONS:
+        logger.exception("Infrastructure error when consuming trumpet for user_id=%s", user_id)
         return False, "扣除小喇叭失败，请稍后重试"
 
 
@@ -68,6 +68,6 @@ def refund_trumpet(user_id: int) -> bool:
     try:
         add_item_to_inventory(manor, TRUMPET_ITEM_KEY, 1)
         return True
-    except Exception:
-        logger.exception("Unexpected error when refunding trumpet for user_id=%s", user_id)
+    except DATABASE_INFRASTRUCTURE_EXCEPTIONS:
+        logger.exception("Infrastructure error when refunding trumpet for user_id=%s", user_id)
         return False

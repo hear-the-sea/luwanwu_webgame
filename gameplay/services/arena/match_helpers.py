@@ -7,7 +7,11 @@ from typing import TYPE_CHECKING, cast
 
 from battle.services import simulate_report
 from core.exceptions import BattlePreparationError, MessageError
-from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_expected_infrastructure_error
+from core.utils.infrastructure import (
+    DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+    InfrastructureExceptions,
+    combine_infrastructure_exceptions,
+)
 from gameplay.models import ArenaEntry, ArenaMatch, ArenaTournament, Message
 from gameplay.services.utils.messages import create_message
 from guests.models import Guest
@@ -16,6 +20,12 @@ from .snapshots import ArenaGuestSnapshotProxy, load_entry_guests
 
 if TYPE_CHECKING:
     from datetime import datetime
+
+
+ARENA_BATTLE_MESSAGE_EXCEPTIONS: InfrastructureExceptions = combine_infrastructure_exceptions(
+    MessageError,
+    infrastructure_exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+)
 
 
 def send_arena_battle_messages(
@@ -46,15 +56,7 @@ def send_arena_battle_messages(
             body=body,
             battle_report=report,
         )
-    except Exception as exc:
-        if not (
-            isinstance(exc, MessageError)
-            or is_expected_infrastructure_error(
-                exc,
-                exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
-            )
-        ):
-            raise
+    except ARENA_BATTLE_MESSAGE_EXCEPTIONS:
         logger.exception(
             "failed to send arena battle messages: report_id=%s attacker_entry=%s defender_entry=%s",
             getattr(report, "id", None),

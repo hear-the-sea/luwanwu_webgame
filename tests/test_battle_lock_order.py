@@ -65,3 +65,16 @@ def test_load_locked_battle_participants_raises_battle_preparation_error_when_mi
             secondary_guest_ids=[],
             lock_guest_rows_fn=lambda _guest_ids: [SimpleNamespace(id=1, status="idle")],
         )
+
+
+def test_collect_guest_ids_programming_error_bubbles_up_for_invalid_guest_id():
+    with pytest.raises(AssertionError, match="broken battle guest id contract"):
+        battle_locking.collect_guest_ids([SimpleNamespace(pk=1, id="bad-id")])
+
+
+def test_collect_manor_ids_programming_error_bubbles_up_for_invalid_guest_manor_id():
+    manor = SimpleNamespace(pk=99)
+    guest = SimpleNamespace(pk=1, id=1, manor_id="bad-manor-id")
+
+    with pytest.raises(AssertionError, match="broken battle guest manor id contract"):
+        battle_locking.collect_manor_ids(manor, [guest])

@@ -7,13 +7,16 @@ import logging
 
 from core.utils.degradation import CHAT_HISTORY_DEGRADED, record_degradation
 from core.utils.infrastructure import INFRASTRUCTURE_EXCEPTIONS
-from gameplay.services.utils.cache_exceptions import (
-    CACHE_INFRASTRUCTURE_EXCEPTIONS,
-    is_expected_cache_infrastructure_error,
-)
+from gameplay.services.utils.cache_exceptions import CACHE_INFRASTRUCTURE_EXCEPTIONS
 
 logger = logging.getLogger(__name__)
 LUA_FALLBACK_EXCEPTIONS: tuple[type[Exception], ...] = INFRASTRUCTURE_EXCEPTIONS + (AttributeError,)
+MALFORMED_HISTORY_ENTRY_EXCEPTIONS: tuple[type[Exception], ...] = (
+    UnicodeDecodeError,
+    json.JSONDecodeError,
+    TypeError,
+    ValueError,
+)
 
 # Lua script for batch history trimming (O(1) per removed message vs O(n) round trips)
 TRIM_HISTORY_SCRIPT = """
@@ -65,10 +68,8 @@ def trim_history_by_time_fallback(
             ts = msg.get("ts") if isinstance(msg, dict) else None
             if isinstance(ts, (int, float)) and int(ts) >= int(cutoff_ms):
                 return
-        except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        except MALFORMED_HISTORY_ENTRY_EXCEPTIONS as exc:
             logger.debug("Dropping corrupted world chat history tail entry: %s", exc)
-        except Exception:
-            logger.exception("Unexpected error while trimming world chat history tail entry")
         redis.rpop(history_key)
 
 
@@ -86,8 +87,6 @@ def trim_history_by_time_sync(
         # Fallback to Python-based trimming when Lua is unavailable (e.g., in tests)
         logger.debug("Lua script unavailable, using Python fallback: %s", exc)
         trim_history_by_time_fallback(cutoff_ms, redis, history_key=history_key, history_limit=history_limit)
-    except Exception:
-        logger.exception("Unexpected error while trimming world chat history")
 
 
 def get_history_sync(
@@ -127,19 +126,14 @@ def get_history_sync(
             if isinstance(ts, (int, float)) and int(ts) < cutoff_ms:
                 continue
             messages.append(msg)
-        except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        except MALFORMED_HISTORY_ENTRY_EXCEPTIONS as exc:
             logger.debug("Skipping malformed world chat history entry: %s", exc)
-            continue
-        except Exception:
-            logger.exception("Unexpected error while parsing world chat history entry")
             continue
 
     try:
         trim_history_by_time_sync(cutoff_ms, redis, history_key=history_key, history_limit=history_limit)
     except INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.debug("World chat history trim skipped due to Redis error: %s", exc)
-    except Exception:
-        logger.exception("Unexpected error while trimming world chat history")
     return messages, False
 
 
@@ -161,9 +155,7 @@ def append_history_sync(
         pipe.ltrim(history_key, 0, max(0, history_limit - 1))
         pipe.expire(history_key, int(history_message_ttl_seconds) + 60)
         pipe.execute()
-    except Exception as exc:
-        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning("World chat history append failed; rejecting send: %s", exc)
         raise WorldChatInfrastructureError("world chat history backend unavailable") from exc
 
@@ -178,8 +170,6 @@ def remove_history_sync(message: dict, redis, *, history_key: str) -> None:
     payload = json.dumps(message, ensure_ascii=False, separators=(",", ":"))
     try:
         redis.lrem(history_key, 1, payload)
-    except Exception as exc:
-        if not is_expected_cache_infrastructure_error(exc, exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning("World chat history compensation delete failed: %s", exc)
         raise WorldChatInfrastructureError("world chat history compensation unavailable") from exc

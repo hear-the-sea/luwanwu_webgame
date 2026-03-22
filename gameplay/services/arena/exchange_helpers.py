@@ -7,7 +7,11 @@ from django.db import transaction
 from django.db.models import F, Sum
 
 from core.exceptions import ArenaExchangeError, ArenaInsufficientCoinsError, ArenaRewardLimitError, MessageError
-from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_expected_infrastructure_error
+from core.utils.infrastructure import (
+    DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+    InfrastructureExceptions,
+    combine_infrastructure_exceptions,
+)
 from gameplay.models import ArenaExchangeRecord, Manor, Message
 from gameplay.services.inventory.core import add_item_to_inventory_locked
 from gameplay.services.resources import grant_resources_locked
@@ -15,6 +19,11 @@ from gameplay.services.utils.messages import create_message
 
 from . import helpers as _arena_helpers
 from .rewards import ArenaRewardDefinition, get_arena_reward_definition
+
+ARENA_MESSAGE_DELIVERY_EXCEPTIONS: InfrastructureExceptions = combine_infrastructure_exceptions(
+    MessageError,
+    infrastructure_exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+)
 
 
 def normalize_exchange_quantity(quantity: int) -> int:
@@ -148,15 +157,7 @@ def send_exchange_success_message(
             title=f"竞技场兑换成功：{reward.name}",
             body=f"消耗角斗币 {total_cost}，兑换数量 {normalized_quantity}。{summary}。",
         )
-    except Exception as exc:
-        if not (
-            isinstance(exc, MessageError)
-            or is_expected_infrastructure_error(
-                exc,
-                exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
-            )
-        ):
-            raise
+    except ARENA_MESSAGE_DELIVERY_EXCEPTIONS as exc:
         logger.warning(
             "arena exchange message failed: manor_id=%s reward_key=%s quantity=%s error=%s",
             locked_manor.id,

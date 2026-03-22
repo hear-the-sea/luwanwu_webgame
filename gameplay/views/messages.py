@@ -19,6 +19,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
+from core.exceptions import GameError
 from core.utils import is_json_request, json_success
 from core.utils.validation import safe_redirect_url
 from core.utils.view_error_mapping import flash_view_error, json_error_response_for_exception
@@ -351,7 +352,17 @@ def claim_attachment_view(request: HttpRequest, pk: int) -> HttpResponse:
             )
 
         messages.success(request, f"附件领取成功：{summary_text}")
-    except Exception as exc:
+    except GameError as exc:
+        error_response = _claim_attachment_exception_response(
+            request,
+            manor=manor,
+            message_id=pk,
+            is_json=is_json,
+            exc=exc,
+        )
+        if error_response is not None:
+            return error_response
+    except DatabaseError as exc:
         error_response = _claim_attachment_exception_response(
             request,
             manor=manor,

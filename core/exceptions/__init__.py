@@ -93,6 +93,7 @@ from .guest import (
     InvalidHealAmountError,
     NoGuestsError,
 )
+from .guild import GuildContributionError, GuildError, GuildTechnologyError, GuildWarehouseError
 from .item import (
     DuplicateEquipmentError,
     EquipmentAlreadyEquippedError,
@@ -140,6 +141,11 @@ from .trade import ShopValidationError, TradeError, TradeValidationError
 __all__ = [
     # Base
     "GameError",
+    # Guilds
+    "GuildError",
+    "GuildContributionError",
+    "GuildTechnologyError",
+    "GuildWarehouseError",
     # Resource & Capacity
     "ResourceError",
     "InsufficientResourceError",

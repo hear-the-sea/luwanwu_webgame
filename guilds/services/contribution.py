@@ -4,6 +4,7 @@ from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
+from core.exceptions import GuildContributionError
 from gameplay.models import Manor, ResourceEvent
 from gameplay.services.resources import spend_resources_locked
 
@@ -31,20 +32,20 @@ def donate_resource(member, resource_type, amount):
         amount: 捐赠数量
 
     Raises:
-        ValueError: 验证失败
+        GuildContributionError: 验证失败
     """
     # 验证资源类型
     if resource_type not in CONTRIBUTION_RATES:
-        raise ValueError(f"不支持捐赠{resource_type}")
+        raise GuildContributionError(f"不支持捐赠{resource_type}")
 
     # 验证捐赠数量
     if amount < MIN_DONATION_AMOUNT:
-        raise ValueError(f"单次捐赠最少{MIN_DONATION_AMOUNT}单位")
+        raise GuildContributionError(f"单次捐赠最少{MIN_DONATION_AMOUNT}单位")
 
     # 安全修复：添加单次捐赠上限，防止整数溢出和异常数据
     MAX_DONATION_AMOUNT = 100_000_000  # 1亿上限
     if amount > MAX_DONATION_AMOUNT:
-        raise ValueError(f"单次捐赠最多{MAX_DONATION_AMOUNT:,}单位")
+        raise GuildContributionError(f"单次捐赠最多{MAX_DONATION_AMOUNT:,}单位")
 
     # 获取今日日期，用于重置每日统计
     today = timezone.now().date()
@@ -72,12 +73,12 @@ def donate_resource(member, resource_type, amount):
         # 验证每日捐赠上限
         if resource_type == "silver":
             if current_daily_silver + amount > DAILY_DONATION_LIMITS["silver"]:
-                raise ValueError(f"今日银两捐赠已达上限（{DAILY_DONATION_LIMITS['silver']}）")
+                raise GuildContributionError(f"今日银两捐赠已达上限（{DAILY_DONATION_LIMITS['silver']}）")
             new_daily_silver = current_daily_silver + amount
             new_daily_grain = current_daily_grain
         else:  # grain
             if current_daily_grain + amount > DAILY_DONATION_LIMITS["grain"]:
-                raise ValueError(f"今日粮食捐赠已达上限（{DAILY_DONATION_LIMITS['grain']}）")
+                raise GuildContributionError(f"今日粮食捐赠已达上限（{DAILY_DONATION_LIMITS['grain']}）")
             new_daily_silver = current_daily_silver
             new_daily_grain = current_daily_grain + amount
 
@@ -86,7 +87,7 @@ def donate_resource(member, resource_type, amount):
 
         # 安全修复：检查贡献度累积上限，防止整数溢出
         if member_locked.total_contribution + contribution > MAX_CONTRIBUTION:
-            raise ValueError(f"贡献度已达上限（{MAX_CONTRIBUTION:,}）")
+            raise GuildContributionError(f"贡献度已达上限（{MAX_CONTRIBUTION:,}）")
 
         # 步骤3：使用统一的资源消费函数扣除玩家资源（已包含并发安全检查）
         spend_resources_locked(

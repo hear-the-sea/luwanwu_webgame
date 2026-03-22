@@ -16,7 +16,14 @@ from django.db import transaction
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
-from core.exceptions import InsufficientResourceError, ProductionStartError
+from core.exceptions import InsufficientResourceError, MessageError, ProductionStartError
+from core.utils.imports import is_missing_target_import
+from core.utils.infrastructure import (
+    DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+    NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
+    InfrastructureExceptions,
+    combine_infrastructure_exceptions,
+)
 from core.utils.time_scale import scale_duration
 from core.utils.yaml_loader import load_yaml_data
 
@@ -24,6 +31,10 @@ from ...constants import BuildingKeys
 from ...models import HorseProduction, Manor
 
 logger = logging.getLogger(__name__)
+STABLE_MESSAGE_BEST_EFFORT_EXCEPTIONS: InfrastructureExceptions = combine_infrastructure_exceptions(
+    MessageError,
+    infrastructure_exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+)
 
 # 马匹配置
 DEFAULT_HORSE_CONFIG: Dict[str, Dict[str, Any]] = {}
@@ -291,7 +302,9 @@ def _schedule_production_completion(production: HorseProduction, eta_seconds: in
 
     try:
         from gameplay.tasks import complete_horse_production
-    except Exception:
+    except ImportError as exc:
+        if not is_missing_target_import(exc, "gameplay.tasks"):
+            raise
         logger.warning("Unable to import complete_horse_production task; skip scheduling", exc_info=True)
         return
 
@@ -370,7 +383,17 @@ def finalize_horse_production(production: HorseProduction, send_notification: bo
                 title=f"{completed_production.horse_name}{quantity_text}生产完成",
                 body=f"您的{completed_production.horse_name}{quantity_text}已生产完成，请到仓库查收。",
             )
+        except STABLE_MESSAGE_BEST_EFFORT_EXCEPTIONS as exc:
+            logger.warning(
+                "horse production message creation failed: production_id=%s manor_id=%s error=%s",
+                completed_production.id,
+                completed_production.manor_id,
+                exc,
+                exc_info=True,
+            )
+            return True
 
+        try:
             notify_user(
                 completed_production.manor.user_id,
                 {
@@ -381,7 +404,7 @@ def finalize_horse_production(production: HorseProduction, send_notification: bo
                 },
                 log_context="horse production notification",
             )
-        except Exception as exc:
+        except NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS as exc:
             logger.warning(
                 "horse production notification failed: production_id=%s manor_id=%s error=%s",
                 completed_production.id,

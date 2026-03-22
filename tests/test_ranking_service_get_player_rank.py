@@ -79,3 +79,28 @@ def test_get_player_rank_runtime_marker_cache_error_bubbles_up(django_user_model
 
     with pytest.raises(RuntimeError, match="cache down"):
         get_player_rank(manor)
+
+
+@pytest.mark.django_db
+def test_get_player_rank_cache_set_programming_error_bubbles_up(django_user_model, monkeypatch):
+    from gameplay.services.manor.core import ensure_manor
+    from gameplay.services.ranking import get_player_rank
+
+    user = django_user_model.objects.create_user(username="rank_set_programming", password="pass")
+    other = django_user_model.objects.create_user(username="rank_set_programming_other", password="pass")
+
+    manor = ensure_manor(user)
+    ahead = ensure_manor(other)
+    manor.prestige = 100
+    manor.save(update_fields=["prestige"])
+    ahead.prestige = 200
+    ahead.save(update_fields=["prestige"])
+
+    monkeypatch.setattr("gameplay.services.ranking.cache.get", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "gameplay.services.ranking.cache.set",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("broken ranking cache contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken ranking cache contract"):
+        get_player_rank(manor)

@@ -22,10 +22,6 @@ _SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 _MEMCACHE_KEY_LIMIT = 250
 
 
-def _is_expected_cache_error(exc: Exception) -> bool:
-    return isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS)
-
-
 def _cache_error_response(is_json: bool, error_message: str, request: HttpRequest, redirect_url: str | None = None):
     if is_json:
         return json_error("系统繁忙，请稍后再试", status=503)
@@ -64,12 +60,7 @@ def _should_bypass_rate_limit(request: HttpRequest, include_safe_methods: bool) 
 
 
 def _safe_identifier(request: HttpRequest, key_func: Callable[[HttpRequest], str] | None = None) -> str:
-    try:
-        raw_identifier = key_func(request) if key_func else _default_identifier(request)
-    except Exception:
-        logger.warning("Rate limit key_func failed, fallback to default identifier", exc_info=True)
-        raw_identifier = None
-
+    raw_identifier = key_func(request) if key_func else _default_identifier(request)
     identifier = str(raw_identifier).strip() if raw_identifier is not None else ""
     if identifier:
         return identifier
@@ -115,10 +106,7 @@ def _increment_cache_counter(cache_key: str, window_seconds: int) -> int:
 def _get_rate_limit_count(cache_key: str, window_seconds: int, log_prefix: str) -> int | None:
     try:
         return _increment_cache_counter(cache_key, window_seconds)
-    except Exception as exc:
-        if not _is_expected_cache_error(exc):
-            logger.error("%s cache unexpected error", log_prefix, exc_info=True)
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
         logger.error("%s cache backend unavailable", log_prefix, exc_info=True)
         return None
 

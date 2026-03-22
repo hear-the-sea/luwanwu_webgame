@@ -12,10 +12,6 @@ from gameplay.services.utils.cache_exceptions import CACHE_INFRASTRUCTURE_EXCEPT
 CACHE_THROTTLE_ERRORS = CACHE_INFRASTRUCTURE_EXCEPTIONS
 
 
-def _is_expected_cache_error(exc: Exception) -> bool:
-    return isinstance(exc, CACHE_THROTTLE_ERRORS)
-
-
 def cleanup_local_fallback_cache(
     local_refresh_fallback: dict[int, float],
     *,
@@ -139,9 +135,7 @@ def refresh_manor_state(
             if not cache_backend.add(cache_key, "1", timeout=min_interval):
                 if not include_activity_refresh or not has_due_manor_refresh_work_func(manor.pk, now=now):
                     return
-        except Exception as exc:
-            if not _is_expected_cache_error(exc):
-                raise
+        except CACHE_THROTTLE_ERRORS as exc:
             logger.warning("缓存操作失败，降级为本地节流: %s", exc, exc_info=True)
             if should_skip_refresh_by_local_fallback_func(manor.pk, min_interval):
                 if not include_activity_refresh or not has_due_manor_refresh_work_func(manor.pk, now=now):

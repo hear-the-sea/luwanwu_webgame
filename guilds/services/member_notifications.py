@@ -2,8 +2,19 @@ from __future__ import annotations
 
 import logging
 
+from core.exceptions import MessageError
+from core.utils.infrastructure import (
+    DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+    InfrastructureExceptions,
+    combine_infrastructure_exceptions,
+)
 from gameplay.models import Manor
 from gameplay.services.utils.messages import create_message
+
+GUILD_MESSAGE_DELIVERY_EXCEPTIONS: InfrastructureExceptions = combine_infrastructure_exceptions(
+    MessageError,
+    infrastructure_exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+)
 
 
 def resolve_display_name(user_id: int) -> str:
@@ -39,7 +50,7 @@ def send_system_message_to_user(
             title=title,
             body=body,
         )
-    except Exception as exc:
+    except GUILD_MESSAGE_DELIVERY_EXCEPTIONS as exc:
         logger.warning(
             "Guild %s follow-up message failed: target_user_id=%s guild=%s error=%s",
             action,

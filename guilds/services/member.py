@@ -7,6 +7,8 @@ from django.db import transaction
 from django.db.utils import IntegrityError
 from django.utils import timezone
 
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS
+
 from ..models import Guild, GuildApplication, GuildMember
 from .guild import create_announcement
 from .hero_pool import invalidate_member_hero_pool
@@ -27,7 +29,7 @@ def _log_followup_failure(action, **context):
 def _run_followup(action, callback, **context):
     try:
         callback()
-    except Exception:
+    except DATABASE_INFRASTRUCTURE_EXCEPTIONS:
         _log_followup_failure(action, **context)
 
 

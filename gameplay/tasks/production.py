@@ -6,10 +6,25 @@ from celery import shared_task
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async_with_dedup
+from core.utils.infrastructure import (
+    DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+    InfrastructureExceptions,
+    combine_infrastructure_exceptions,
+)
 
 from ._scheduled import DEFAULT_TASK_DEDUP_TIMEOUT, count_finalized_records, maybe_reschedule_for_future
 
 logger = logging.getLogger(__name__)
+
+
+class ProductionTaskRetryRequested(RuntimeError):
+    """Explicit retry marker for infrastructure-driven production task failures."""
+
+
+PRODUCTION_TASK_RETRY_EXCEPTIONS: InfrastructureExceptions = combine_infrastructure_exceptions(
+    ProductionTaskRetryRequested,
+    infrastructure_exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+)
 
 
 # ============ Horse Production ============
@@ -29,24 +44,29 @@ def complete_horse_production(self, production_id: int):
             logger.warning("HorseProduction %d not found", production_id)
             return "not_found"
 
-        rescheduled, _now = maybe_reschedule_for_future(
-            task_func=complete_horse_production,
-            record_id=production_id,
-            eta_value=production.complete_at,
-            dedup_key=f"production:horse:{production_id}",
-            schedule_func=safe_apply_async_with_dedup,
-            logger=logger,
-            now_func=timezone.now,
-            log_message=f"horse production reschedule failed: id={production_id}",
-            failure_message=f"horse production reschedule dispatch failed: id={production_id}",
-            dedup_timeout=DEFAULT_TASK_DEDUP_TIMEOUT,
-        )
+        try:
+            rescheduled, _now = maybe_reschedule_for_future(
+                task_func=complete_horse_production,
+                record_id=production_id,
+                eta_value=production.complete_at,
+                dedup_key=f"production:horse:{production_id}",
+                schedule_func=safe_apply_async_with_dedup,
+                logger=logger,
+                now_func=timezone.now,
+                log_message=f"horse production reschedule failed: id={production_id}",
+                failure_message=f"horse production reschedule dispatch failed: id={production_id}",
+                dedup_timeout=DEFAULT_TASK_DEDUP_TIMEOUT,
+            )
+        except RuntimeError as exc:
+            if str(exc) != f"horse production reschedule dispatch failed: id={production_id}":
+                raise
+            raise ProductionTaskRetryRequested(str(exc)) from exc
         if rescheduled is not None:
             return rescheduled
 
         finalized = finalize_horse_production(production, send_notification=True)
         return "completed" if finalized else "skipped"
-    except Exception as exc:
+    except PRODUCTION_TASK_RETRY_EXCEPTIONS as exc:
         logger.exception("Failed to complete horse production %d: %s", production_id, exc)
         raise self.retry(exc=exc)
 
@@ -70,6 +90,7 @@ def scan_horse_productions(limit: int = 200):
         finalize=lambda production: finalize_horse_production(production, send_notification=True),
         logger=logger,
         error_message="Failed to finalize horse production %s: %s",
+        expected_exceptions=PRODUCTION_TASK_RETRY_EXCEPTIONS,
     )
 
 
@@ -90,24 +111,29 @@ def complete_livestock_production(self, production_id: int):
             logger.warning("LivestockProduction %d not found", production_id)
             return "not_found"
 
-        rescheduled, _now = maybe_reschedule_for_future(
-            task_func=complete_livestock_production,
-            record_id=production_id,
-            eta_value=production.complete_at,
-            dedup_key=f"production:livestock:{production_id}",
-            schedule_func=safe_apply_async_with_dedup,
-            logger=logger,
-            now_func=timezone.now,
-            log_message=f"livestock production reschedule failed: id={production_id}",
-            failure_message=f"livestock production reschedule dispatch failed: id={production_id}",
-            dedup_timeout=DEFAULT_TASK_DEDUP_TIMEOUT,
-        )
+        try:
+            rescheduled, _now = maybe_reschedule_for_future(
+                task_func=complete_livestock_production,
+                record_id=production_id,
+                eta_value=production.complete_at,
+                dedup_key=f"production:livestock:{production_id}",
+                schedule_func=safe_apply_async_with_dedup,
+                logger=logger,
+                now_func=timezone.now,
+                log_message=f"livestock production reschedule failed: id={production_id}",
+                failure_message=f"livestock production reschedule dispatch failed: id={production_id}",
+                dedup_timeout=DEFAULT_TASK_DEDUP_TIMEOUT,
+            )
+        except RuntimeError as exc:
+            if str(exc) != f"livestock production reschedule dispatch failed: id={production_id}":
+                raise
+            raise ProductionTaskRetryRequested(str(exc)) from exc
         if rescheduled is not None:
             return rescheduled
 
         finalized = finalize_livestock_production(production, send_notification=True)
         return "completed" if finalized else "skipped"
-    except Exception as exc:
+    except PRODUCTION_TASK_RETRY_EXCEPTIONS as exc:
         logger.exception("Failed to complete livestock production %d: %s", production_id, exc)
         raise self.retry(exc=exc)
 
@@ -131,6 +157,7 @@ def scan_livestock_productions(limit: int = 200):
         finalize=lambda production: finalize_livestock_production(production, send_notification=True),
         logger=logger,
         error_message="Failed to finalize livestock production %s: %s",
+        expected_exceptions=PRODUCTION_TASK_RETRY_EXCEPTIONS,
     )
 
 
@@ -151,24 +178,29 @@ def complete_smelting_production(self, production_id: int):
             logger.warning("SmeltingProduction %d not found", production_id)
             return "not_found"
 
-        rescheduled, _now = maybe_reschedule_for_future(
-            task_func=complete_smelting_production,
-            record_id=production_id,
-            eta_value=production.complete_at,
-            dedup_key=f"production:smelting:{production_id}",
-            schedule_func=safe_apply_async_with_dedup,
-            logger=logger,
-            now_func=timezone.now,
-            log_message=f"smelting production reschedule failed: id={production_id}",
-            failure_message=f"smelting production reschedule dispatch failed: id={production_id}",
-            dedup_timeout=DEFAULT_TASK_DEDUP_TIMEOUT,
-        )
+        try:
+            rescheduled, _now = maybe_reschedule_for_future(
+                task_func=complete_smelting_production,
+                record_id=production_id,
+                eta_value=production.complete_at,
+                dedup_key=f"production:smelting:{production_id}",
+                schedule_func=safe_apply_async_with_dedup,
+                logger=logger,
+                now_func=timezone.now,
+                log_message=f"smelting production reschedule failed: id={production_id}",
+                failure_message=f"smelting production reschedule dispatch failed: id={production_id}",
+                dedup_timeout=DEFAULT_TASK_DEDUP_TIMEOUT,
+            )
+        except RuntimeError as exc:
+            if str(exc) != f"smelting production reschedule dispatch failed: id={production_id}":
+                raise
+            raise ProductionTaskRetryRequested(str(exc)) from exc
         if rescheduled is not None:
             return rescheduled
 
         finalized = finalize_smelting_production(production, send_notification=True)
         return "completed" if finalized else "skipped"
-    except Exception as exc:
+    except PRODUCTION_TASK_RETRY_EXCEPTIONS as exc:
         logger.exception("Failed to complete smelting production %d: %s", production_id, exc)
         raise self.retry(exc=exc)
 
@@ -192,6 +224,7 @@ def scan_smelting_productions(limit: int = 200):
         finalize=lambda production: finalize_smelting_production(production, send_notification=True),
         logger=logger,
         error_message="Failed to finalize smelting production %s: %s",
+        expected_exceptions=PRODUCTION_TASK_RETRY_EXCEPTIONS,
     )
 
 
@@ -212,24 +245,29 @@ def complete_equipment_forging(self, production_id: int):
             logger.warning("EquipmentProduction %d not found", production_id)
             return "not_found"
 
-        rescheduled, _now = maybe_reschedule_for_future(
-            task_func=complete_equipment_forging,
-            record_id=production_id,
-            eta_value=production.complete_at,
-            dedup_key=f"production:equipment:{production_id}",
-            schedule_func=safe_apply_async_with_dedup,
-            logger=logger,
-            now_func=timezone.now,
-            log_message=f"equipment forging reschedule failed: id={production_id}",
-            failure_message=f"equipment forging reschedule dispatch failed: id={production_id}",
-            dedup_timeout=DEFAULT_TASK_DEDUP_TIMEOUT,
-        )
+        try:
+            rescheduled, _now = maybe_reschedule_for_future(
+                task_func=complete_equipment_forging,
+                record_id=production_id,
+                eta_value=production.complete_at,
+                dedup_key=f"production:equipment:{production_id}",
+                schedule_func=safe_apply_async_with_dedup,
+                logger=logger,
+                now_func=timezone.now,
+                log_message=f"equipment forging reschedule failed: id={production_id}",
+                failure_message=f"equipment forging reschedule dispatch failed: id={production_id}",
+                dedup_timeout=DEFAULT_TASK_DEDUP_TIMEOUT,
+            )
+        except RuntimeError as exc:
+            if str(exc) != f"equipment forging reschedule dispatch failed: id={production_id}":
+                raise
+            raise ProductionTaskRetryRequested(str(exc)) from exc
         if rescheduled is not None:
             return rescheduled
 
         finalized = finalize_equipment_forging(production, send_notification=True)
         return "completed" if finalized else "skipped"
-    except Exception as exc:
+    except PRODUCTION_TASK_RETRY_EXCEPTIONS as exc:
         logger.exception("Failed to complete equipment forging %d: %s", production_id, exc)
         raise self.retry(exc=exc)
 
@@ -253,6 +291,7 @@ def scan_equipment_forgings(limit: int = 200):
         finalize=lambda production: finalize_equipment_forging(production, send_notification=True),
         logger=logger,
         error_message="Failed to finalize equipment forging %s: %s",
+        expected_exceptions=PRODUCTION_TASK_RETRY_EXCEPTIONS,
     )
 
 
@@ -267,9 +306,5 @@ def complete_work_assignments_task():
     """
     from gameplay.services.work import complete_work_assignments
 
-    try:
-        count = complete_work_assignments()
-        return f"完成 {count} 个打工任务"
-    except Exception:
-        logger.exception("Failed to complete work assignments")
-        raise
+    count = complete_work_assignments()
+    return f"完成 {count} 个打工任务"

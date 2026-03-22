@@ -10,6 +10,12 @@ from django.db import transaction
 from django.utils import timezone
 
 from common.utils import celery as celery_utils
+from core.utils.infrastructure import (
+    CACHE_INFRASTRUCTURE_EXCEPTIONS,
+    DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+    InfrastructureExceptions,
+    combine_infrastructure_exceptions,
+)
 from core.utils.task_monitoring import increment_degraded_counter
 
 from .models import Guild, GuildDonationLog, GuildExchangeLog, GuildResourceLog, GuildTechnology
@@ -20,6 +26,10 @@ from .services.warehouse import produce_equipment, produce_experience_items, pro
 logger = logging.getLogger(__name__)
 GUILD_PRODUCTION_PARTIAL_RETRY_LIMIT = 1
 FAILED_GUILD_PRODUCTION_IDS_CACHE_KEY = "guilds:daily_production:failed_guild_ids"
+GUILD_TASK_RETRY_EXCEPTIONS: InfrastructureExceptions = combine_infrastructure_exceptions(
+    *celery_utils.CELERY_DISPATCH_INFRA_EXCEPTIONS,
+    infrastructure_exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+)
 
 
 def _process_daily_technology_production(
@@ -64,23 +74,47 @@ def _persist_failed_guild_ids(failed_guild_ids: list[int]) -> None:
         existing_ids = _normalize_failed_guild_ids(cache.get(FAILED_GUILD_PRODUCTION_IDS_CACHE_KEY))
         merged_ids = existing_ids + [guild_id for guild_id in normalized_ids if guild_id not in existing_ids]
         cache.set(FAILED_GUILD_PRODUCTION_IDS_CACHE_KEY, merged_ids, timeout=None)
-    except Exception:
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
         logger.warning("Failed to persist failed guild production IDs", exc_info=True)
 
 
 def _clear_failed_guild_ids() -> None:
     try:
         cache.delete(FAILED_GUILD_PRODUCTION_IDS_CACHE_KEY)
-    except Exception:
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
         logger.warning("Failed to clear failed guild production IDs", exc_info=True)
 
 
 def get_failed_guild_ids() -> list[int]:
     try:
         return _normalize_failed_guild_ids(cache.get(FAILED_GUILD_PRODUCTION_IDS_CACHE_KEY))
-    except Exception:
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
         logger.warning("Failed to read failed guild production IDs", exc_info=True)
         return []
+
+
+def _run_guild_production_step(
+    guild: Guild,
+    *,
+    tech_key: str,
+    producer,
+    produced_items: list[str],
+    item_label: str,
+    now,
+) -> bool:
+    try:
+        if _process_daily_technology_production(
+            guild,
+            tech_key=tech_key,
+            producer=producer,
+            now=now,
+        ):
+            produced_items.append(item_label)
+            return False
+    except DATABASE_INFRASTRUCTURE_EXCEPTIONS as exc:
+        logger.error("Failed to produce %s for guild %s: %s", item_label, guild.id, exc)
+        return True
+    return False
 
 
 def _process_guild_production_once(guild_id: int) -> tuple[str, bool]:
@@ -88,48 +122,48 @@ def _process_guild_production_once(guild_id: int) -> tuple[str, bool]:
     if not guild.is_active:
         return f"guild {guild_id} is inactive", False
 
-    produced_items = []
+    produced_items: list[str] = []
     now = timezone.now()
     partial_failure = False
 
     # 装备锻造
-    try:
-        if _process_daily_technology_production(
+    partial_failure = (
+        _run_guild_production_step(
             guild,
             tech_key="equipment_forge",
             producer=produce_equipment,
+            produced_items=produced_items,
+            item_label="equipment",
             now=now,
-        ):
-            produced_items.append("equipment")
-    except Exception as exc:
-        partial_failure = True
-        logger.error("Failed to produce equipment for guild %s: %s", guild.id, exc)
+        )
+        or partial_failure
+    )
 
     # 经验炼制
-    try:
-        if _process_daily_technology_production(
+    partial_failure = (
+        _run_guild_production_step(
             guild,
             tech_key="experience_refine",
             producer=produce_experience_items,
+            produced_items=produced_items,
+            item_label="experience",
             now=now,
-        ):
-            produced_items.append("experience")
-    except Exception as exc:
-        partial_failure = True
-        logger.error("Failed to produce experience items for guild %s: %s", guild.id, exc)
+        )
+        or partial_failure
+    )
 
     # 资源补给
-    try:
-        if _process_daily_technology_production(
+    partial_failure = (
+        _run_guild_production_step(
             guild,
             tech_key="resource_supply",
             producer=produce_resource_packs,
+            produced_items=produced_items,
+            item_label="resource",
             now=now,
-        ):
-            produced_items.append("resource")
-    except Exception as exc:
-        partial_failure = True
-        logger.error("Failed to produce resource packs for guild %s: %s", guild.id, exc)
+        )
+        or partial_failure
+    )
 
     summary = f"processed guild {guild_id}: {', '.join(produced_items)}"
     if partial_failure:
@@ -185,7 +219,7 @@ def process_single_guild_production(self, guild_id: int | None = None, failed_id
                     failed_guild_ids.append(failed_guild_id)
             except Guild.DoesNotExist:
                 logger.warning("Guild %s not found during daily production", failed_guild_id)
-            except Exception as exc:
+            except GUILD_TASK_RETRY_EXCEPTIONS as exc:
                 logger.exception("Failed to process guild %s production: %s", failed_guild_id, exc)
                 raise self.retry(exc=exc)
 
@@ -208,7 +242,7 @@ def process_single_guild_production(self, guild_id: int | None = None, failed_id
     except Guild.DoesNotExist:
         logger.warning("Guild %s not found during daily production", guild_id)
         return "guild not found"
-    except Exception as exc:
+    except GUILD_TASK_RETRY_EXCEPTIONS as exc:
         logger.exception("Failed to process guild %s production: %s", guild_id, exc)
         raise self.retry(exc=exc)
 
@@ -237,7 +271,7 @@ def guild_tech_daily_production(self):
                 dispatched_count += 1
 
         return f"dispatched {dispatched_count} guild tasks"
-    except Exception as exc:
+    except GUILD_TASK_RETRY_EXCEPTIONS as exc:
         logger.exception("Failed to run guild tech daily production master task: %s", exc)
         raise self.retry(exc=exc)
 
@@ -251,7 +285,7 @@ def reset_guild_weekly_stats(self):
     try:
         reset_weekly_contributions()
         return "reset completed"
-    except Exception as exc:
+    except DATABASE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.exception("Failed to reset guild weekly stats: %s", exc)
         raise self.retry(exc=exc)
 
@@ -279,7 +313,7 @@ def cleanup_old_guild_logs(self):
             resource_deleted,
         )
         return f"cleaned up {total} logs"
-    except Exception as exc:
+    except DATABASE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.exception("Failed to cleanup old guild logs: %s", exc)
         raise self.retry(exc=exc)
 
@@ -295,6 +329,6 @@ def cleanup_invalid_guild_hero_pool(self):
         if cleaned:
             logger.info("Cleaned %d invalid guild hero pool entries", cleaned)
         return f"cleaned {cleaned} invalid hero pool entries"
-    except Exception as exc:
+    except DATABASE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.exception("Failed to cleanup invalid guild hero pool entries: %s", exc)
         raise self.retry(exc=exc)

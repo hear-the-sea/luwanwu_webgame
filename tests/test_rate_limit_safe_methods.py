@@ -76,7 +76,7 @@ def test_rate_limit_json_blank_key_func_falls_back(settings):
 
 
 @pytest.mark.django_db
-def test_rate_limit_json_key_func_error_falls_back(settings):
+def test_rate_limit_json_key_func_error_bubbles_up(settings):
     settings.CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
@@ -94,10 +94,8 @@ def test_rate_limit_json_key_func_error_falls_back(settings):
     def view(req):
         return JsonResponse({"ok": True})
 
-    resp1 = view(request)
-    resp2 = view(request)
-    assert resp1.status_code == 200
-    assert resp2.status_code == 429
+    with pytest.raises(RuntimeError, match="boom"):
+        view(request)
 
 
 @pytest.mark.django_db

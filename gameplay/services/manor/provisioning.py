@@ -88,7 +88,7 @@ def grant_initial_peace_shield(
             locked_manor.initial_peace_shield_granted_at = granted_at
             locked_manor.save(update_fields=["initial_peace_shield_granted_at"])
         manor.initial_peace_shield_granted_at = granted_at
-    except Exception:
+    except DatabaseError:
         logger.exception("Failed to grant initial peace shield: manor_id=%s item_key=%s", manor.pk, shield_key)
 
 
@@ -110,8 +110,6 @@ def deliver_active_global_mail_campaigns(
                 exc,
             )
             return
-        logger.exception("Failed to deliver active global mail campaigns: manor_id=%s", manor.pk)
-    except Exception:
         logger.exception("Failed to deliver active global mail campaigns: manor_id=%s", manor.pk)
 
 

@@ -1,4 +1,5 @@
 import pytest
+from django.db import DatabaseError
 
 from core.exceptions import ArenaExchangeError, MessageError
 from gameplay.services.arena.exchange_helpers import (
@@ -89,6 +90,29 @@ def test_send_exchange_success_message_swallows_explicit_message_errors(caplog):
     with caplog.at_level("WARNING"):
         send_exchange_success_message(
             create_message_func=lambda **_kwargs: (_ for _ in ()).throw(MessageError("message backend down")),
+            message_kind="reward",
+            locked_manor=_Manor(),
+            reward=_Reward(),
+            total_cost=80,
+            normalized_quantity=1,
+            summary="资源已发放",
+            logger=__import__("logging").getLogger("tests.arena.exchange"),
+        )
+
+    assert "arena exchange message failed" in caplog.text
+
+
+def test_send_exchange_success_message_swallows_database_infrastructure_errors(caplog):
+    class _Reward:
+        key = "grain_pack_small"
+        name = "小粮包"
+
+    class _Manor:
+        id = 1
+
+    with caplog.at_level("WARNING"):
+        send_exchange_success_message(
+            create_message_func=lambda **_kwargs: (_ for _ in ()).throw(DatabaseError("message table unavailable")),
             message_kind="reward",
             locked_manor=_Manor(),
             reward=_Reward(),

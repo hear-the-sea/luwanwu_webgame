@@ -36,7 +36,7 @@ def _append_optional_exception(
     try:
         module = __import__(module_name, fromlist=[attribute_name])
         exception_type = getattr(module, attribute_name)
-    except Exception:
+    except (ImportError, AttributeError):
         return
 
     if isinstance(exception_type, type) and issubclass(exception_type, Exception):
@@ -49,6 +49,14 @@ def _dedupe_exception_types(exception_types: list[type[Exception]]) -> Infrastru
         if exc_type not in unique_types:
             unique_types.append(exc_type)
     return tuple(unique_types)
+
+
+def combine_infrastructure_exceptions(
+    *extra_exceptions: type[Exception],
+    infrastructure_exceptions: InfrastructureExceptions | None = None,
+) -> InfrastructureExceptions:
+    base_exceptions = infrastructure_exceptions or INFRASTRUCTURE_EXCEPTIONS
+    return _dedupe_exception_types([*extra_exceptions, *base_exceptions])
 
 
 def build_infrastructure_exceptions(
@@ -128,6 +136,7 @@ INFRASTRUCTURE_RUNTIME_ERROR_MARKERS = CACHE_RUNTIME_ERROR_MARKERS
 __all__ = [
     "CACHE_INFRASTRUCTURE_EXCEPTIONS",
     "CACHE_RUNTIME_ERROR_MARKERS",
+    "combine_infrastructure_exceptions",
     "DATABASE_CACHE_INFRASTRUCTURE_EXCEPTIONS",
     "DATABASE_INFRASTRUCTURE_EXCEPTIONS",
     "INFRASTRUCTURE_EXCEPTIONS",

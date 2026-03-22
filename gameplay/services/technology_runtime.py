@@ -4,6 +4,8 @@ from typing import Any, Callable
 
 from django.db.models import F
 
+from gameplay.services.utils.cache_exceptions import CACHE_INFRASTRUCTURE_EXCEPTIONS
+
 
 def should_skip_tech_refresh_by_local_fallback(
     local_refresh_state: dict[int, float],
@@ -169,7 +171,7 @@ def refresh_technology_upgrades(
         try:
             if not cache_backend.add(cache_key, "1", timeout=min_interval):
                 return 0
-        except Exception as exc:
+        except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
             logger.warning("Technology refresh cache unavailable, fallback to local throttle: %s", exc, exc_info=True)
             if should_skip_tech_refresh_by_local_fallback_func(int(manor.pk), min_interval):
                 return 0

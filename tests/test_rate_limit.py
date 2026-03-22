@@ -85,7 +85,7 @@ class RateLimitRedirectTests(TestCase):
         self.assertEqual(second.status_code, 302)
         self.assertEqual(second["Location"], "/rate-limit")
 
-    def test_rate_limit_redirect_key_func_error_falls_back(self):
+    def test_rate_limit_redirect_key_func_error_bubbles_up(self):
         def bad_key_func(_request):
             raise RuntimeError("boom")
 
@@ -103,11 +103,8 @@ class RateLimitRedirectTests(TestCase):
         request.user = self.user
         _attach_session_and_messages(request)
 
-        first = limited_view(request)
-        second = limited_view(request)
-        self.assertEqual(first.status_code, 200)
-        self.assertEqual(second.status_code, 302)
-        self.assertEqual(second["Location"], "/rate-limit")
+        with self.assertRaisesRegex(RuntimeError, "boom"):
+            limited_view(request)
 
     def test_rate_limit_redirect_ajax_returns_json_when_limited(self):
         request = self.factory.post(

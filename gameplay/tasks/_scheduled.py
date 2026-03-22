@@ -5,6 +5,8 @@ from collections.abc import Callable, Iterable
 from logging import Logger
 from typing import Any, TypeVar
 
+from core.utils.infrastructure import InfrastructureExceptions
+
 RecordT = TypeVar("RecordT")
 
 DEFAULT_TASK_DEDUP_TIMEOUT = 5
@@ -49,12 +51,13 @@ def count_finalized_records(
     finalize: Callable[[RecordT], bool],
     logger: Logger,
     error_message: str,
+    expected_exceptions: InfrastructureExceptions,
 ) -> int:
     count = 0
     for record in records:
         try:
             if finalize(record):
                 count += 1
-        except Exception as exc:
+        except expected_exceptions as exc:
             logger.exception(error_message, getattr(record, "id", None), exc)
     return count

@@ -8,7 +8,7 @@ from django.db.models import QuerySet
 from django.http import HttpRequest
 
 from core.utils import safe_int, safe_ordering
-from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_expected_infrastructure_error
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS
 from gameplay.models.items import LEGACY_TOOL_EFFECT_TYPES, normalize_item_effect_type
 from gameplay.services.technology import get_troop_class_for_key
 from trade.services.shop_service import EFFECT_TYPE_CATEGORY
@@ -28,16 +28,10 @@ _TROOP_CATEGORY_LABELS: dict[str, str] = {
 }
 
 
-def _is_expected_trade_context_error(exc: Exception) -> bool:
-    return is_expected_infrastructure_error(exc, exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS)
-
-
 def _safe_call(func: Callable[..., Any], *args: Any, default: Any, log_message: str, **kwargs: Any) -> Any:
     try:
         return func(*args, **kwargs)
-    except Exception as exc:
-        if not _is_expected_trade_context_error(exc):
-            raise
+    except DATABASE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning("%s: %s", log_message, exc, exc_info=True)
         return default
 

@@ -19,10 +19,6 @@ from ..services.utils.cache_exceptions import CACHE_INFRASTRUCTURE_EXCEPTIONS
 logger = logging.getLogger(__name__)
 
 
-def _is_expected_cache_error(exc: Exception) -> bool:
-    return isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS)
-
-
 def _recruitment_hall_cache_key(manor_id: int) -> str:
     return recruitment_hall_context_cache_key(manor_id)
 
@@ -96,9 +92,7 @@ def _build_cached_payload(manor, records_limit: int) -> dict:
 def _safe_cache_get(key: str):
     try:
         return cache.get(key)
-    except Exception as exc:
-        if not _is_expected_cache_error(exc):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning("Recruitment hall cache.get failed: key=%s error=%s", key, exc, exc_info=True)
         return None
 
@@ -106,9 +100,7 @@ def _safe_cache_get(key: str):
 def _safe_cache_set(key: str, value: dict, timeout: int) -> None:
     try:
         cache.set(key, value, timeout=timeout)
-    except Exception as exc:
-        if not _is_expected_cache_error(exc):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning("Recruitment hall cache.set failed: key=%s error=%s", key, exc, exc_info=True)
 
 

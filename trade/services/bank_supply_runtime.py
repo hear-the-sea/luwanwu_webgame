@@ -286,12 +286,5 @@ def get_effective_gold_supply_data(*, fail_closed: bool = False) -> tuple[int, s
         if stale is not None:
             return normalize_supply_value(stale, source="stale_cache", fail_closed=False), "stale_cache"
         return GOLD_BAR_TARGET_SUPPLY, "default"
-    except Exception:
-        logger.error(
-            "Unexpected gold supply query failure",
-            exc_info=True,
-            extra={"degraded": True, "component": "bank_gold_supply"},
-        )
-        raise
     finally:
         release_cache_lock_if_owner_value(lock_key, lock_token)

@@ -6,6 +6,7 @@ from typing import Callable, Generic, TypeVar
 from django.contrib import messages
 from django.shortcuts import get_object_or_404
 
+from core.exceptions import GameError
 from guilds.models import Guild, GuildAnnouncement, GuildApplication, GuildMember
 
 ActionResultT = TypeVar("ActionResultT")
@@ -30,10 +31,13 @@ def execute_guild_action(
     *,
     action: Callable[[], ActionResultT],
     success_message: str | Callable[[ActionResultT], str],
-    error_message_formatter: Callable[[ValueError], str] = str,
+    error_message_formatter: Callable[[Exception], str] = str,
 ) -> GuildActionOutcome[ActionResultT]:
     try:
         result = action()
+    except GameError as exc:
+        messages.error(request, error_message_formatter(exc))
+        return GuildActionOutcome(succeeded=False)
     except ValueError as exc:
         messages.error(request, error_message_formatter(exc))
         return GuildActionOutcome(succeeded=False)

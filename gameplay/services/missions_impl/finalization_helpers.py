@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, List, Set, Tuple
 
 from core.exceptions import MessageError
-from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_expected_infrastructure_error
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS
 
 
 def build_defense_report_if_needed(
@@ -228,15 +228,17 @@ def send_mission_report_message(
             body="",
             battle_report=report,
         )
-    except Exception as exc:
-        if not (
-            isinstance(exc, MessageError)
-            or is_expected_infrastructure_error(
-                exc,
-                exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
-            )
-        ):
-            raise
+    except MessageError as exc:
+        logger.error(
+            "Mission report message creation failed: run_id=%s manor_id=%s error=%s",
+            locked_run.id,
+            locked_run.manor_id,
+            exc,
+            exc_info=True,
+            extra={"degraded": True, "component": "mission_report_message", "run_id": locked_run.id},
+        )
+        return
+    except DATABASE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.error(
             "Mission report message creation failed: run_id=%s manor_id=%s error=%s",
             locked_run.id,
@@ -259,12 +261,7 @@ def send_mission_report_message(
             },
             log_context="mission battle notification",
         )
-    except Exception as exc:
-        if not is_expected_infrastructure_error(
-            exc,
-            exceptions=notification_infrastructure_exceptions,
-        ):
-            raise
+    except notification_infrastructure_exceptions as exc:
         logger.warning(
             "mission report notification failed: run_id=%s manor_id=%s report_id=%s error=%s",
             locked_run.id,

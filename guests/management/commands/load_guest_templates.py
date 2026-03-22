@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import logging
 import random
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
@@ -15,6 +17,8 @@ from guests.models import GuestRarity, GuestTemplate, RecruitmentPool, Recruitme
 from guests.services.recruitment_templates import clear_template_cache
 
 logger = logging.getLogger(__name__)
+AVATAR_LOAD_RECOVERABLE_EXCEPTIONS = (OSError,)
+HERO_ROSTER_LOAD_RECOVERABLE_EXCEPTIONS = (CommandError, OSError, UnicodeDecodeError, json.JSONDecodeError)
 
 
 class Command(BaseCommand):
@@ -247,9 +251,9 @@ class Command(BaseCommand):
                 "description": data.get("description", ""),
                 "skill": skill_obj,
             }
-            obj, created = SkillBook.objects.update_or_create(key=data["key"], defaults=defaults)
+            book_obj, created = SkillBook.objects.update_or_create(key=data["key"], defaults=defaults)
             if verbosity >= 1:
-                self.stdout.write(f"{'Created' if created else 'Updated'} book {obj.key}")
+                self.stdout.write(f"{'Created' if created else 'Updated'} book {book_obj.key}")
 
         return skill_map
 
@@ -364,7 +368,7 @@ class Command(BaseCommand):
                     obj.avatar.name = stored_name
                     obj.save(update_fields=["avatar"])
                     self._safe_delete_old_avatar(obj, old_name, stored_name)
-        except Exception as exc:
+        except AVATAR_LOAD_RECOVERABLE_EXCEPTIONS as exc:
             if verbosity >= 1:
                 self.stdout.write(self.style.WARNING(f"  [FAIL] Failed to load avatar {avatar_filename}: {exc}"))
 
@@ -559,7 +563,11 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS(f"Assigned {fallback_avatar_count} fallback avatars."))
             self.stdout.write(self.style.SUCCESS("Guest templates and pools synced."))
 
-    def _load_heroes_from_dir(self, dir_path: Path, load_payload) -> dict[str, list]:
+    def _load_heroes_from_dir(
+        self,
+        dir_path: Path,
+        load_payload: Callable[[Path], dict[str, Any]],
+    ) -> dict[str, list]:
         """Load and merge hero roster from all YAML/JSON files in a directory.
 
         Each file should contain a 'heroes' key with rarity-based hero lists.
@@ -571,14 +579,19 @@ class Command(BaseCommand):
             try:
                 payload = load_payload(file_path)
                 heroes = payload.get("heroes") or payload.get("hero_roster") or {}
+                if not isinstance(heroes, dict):
+                    self.stdout.write(
+                        self.style.WARNING(f"Failed to load {file_path.name}: heroes payload root must be a mapping")
+                    )
+                    continue
                 for rarity, hero_list in heroes.items():
                     if rarity in merged:
                         merged[rarity].extend(hero_list)
                     else:
                         merged[rarity] = list(hero_list)
                 self.stdout.write(f"Loaded heroes from {file_path.name}")
-            except Exception as e:
-                self.stdout.write(self.style.WARNING(f"Failed to load {file_path.name}: {e}"))
+            except HERO_ROSTER_LOAD_RECOVERABLE_EXCEPTIONS as exc:
+                self.stdout.write(self.style.WARNING(f"Failed to load {file_path.name}: {exc}"))
         return merged
 
     def _safe_delete_old_avatar(self, template: GuestTemplate, old_name: str, new_name: str) -> None:
@@ -589,7 +602,7 @@ class Command(BaseCommand):
         template.avatar.storage.delete(old_name)
 
     def _build_avatar_catalog(self, image_source_dir: Path) -> dict[tuple[str, str], list[str]]:
-        catalog = {
+        catalog: dict[tuple[str, str], list[str]] = {
             ("civil", "male"): [],
             ("civil", "female"): [],
             ("military", "male"): [],

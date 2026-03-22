@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import logging
 from collections.abc import Callable, Iterator
 from typing import Any
 
 from asgiref.sync import async_to_sync
+from celery.exceptions import OperationalError as CeleryOperationalError
+from celery.exceptions import TimeoutError as CeleryTimeoutError
 from channels.layers import get_channel_layer
 from django.conf import settings
 from django.core.cache import cache
@@ -14,13 +17,17 @@ from django.db.utils import DatabaseError
 from django.http import Http404, HttpRequest, JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_GET
+from kombu.exceptions import OperationalError as KombuOperationalError
 
 from core.tasks import CELERY_BEAT_HEARTBEAT_CACHE_KEY, celery_health_ping
 from core.utils.degradation import get_degradation_counts
+from core.utils.infrastructure import CACHE_INFRASTRUCTURE_EXCEPTIONS, combine_infrastructure_exceptions
 from core.utils.network import get_client_ip, is_trusted_proxy_ip
 from core.utils.task_monitoring import get_degraded_counter, get_task_metrics
 from core.views import health_support
 from websocket.routing_status import get_websocket_routing_status
+
+logger = logging.getLogger(__name__)
 
 _DEGRADED_COMPONENTS = [
     "cache_lock_fail_closed",
@@ -29,6 +36,23 @@ _DEGRADED_COMPONENTS = [
     "celery_dispatch_failed",
 ]
 _READY_CACHE_KEY = "health:ready:payload:v1"
+
+
+class HealthCheckFailure(RuntimeError):
+    """Expected health check failure that should degrade readiness instead of bubbling."""
+
+
+CHANNEL_LAYER_READY_EXCEPTIONS = combine_infrastructure_exceptions(HealthCheckFailure)
+CELERY_BEAT_READY_EXCEPTIONS = combine_infrastructure_exceptions(
+    HealthCheckFailure,
+    infrastructure_exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS,
+)
+CELERY_READY_EXCEPTIONS = combine_infrastructure_exceptions(
+    HealthCheckFailure,
+    CeleryOperationalError,
+    CeleryTimeoutError,
+    KombuOperationalError,
+)
 
 
 def _maybe_debug_error(exc: Exception) -> str | None:
@@ -64,21 +88,28 @@ def _should_include_health_details() -> bool:
 
 
 def _load_cached_ready_payload() -> tuple[dict[str, object], int] | None:
-    return health_support.load_cached_ready_payload(
-        cache_backend=cache,
-        cache_key=_READY_CACHE_KEY,
-        ttl_seconds=health_support.get_ready_cache_ttl(settings),
-    )
+    try:
+        return health_support.load_cached_ready_payload(
+            cache_backend=cache,
+            cache_key=_READY_CACHE_KEY,
+            ttl_seconds=health_support.get_ready_cache_ttl(settings),
+        )
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
+        logger.warning("Health ready cached payload load failed: %s", exc, exc_info=True)
+        return None
 
 
 def _store_cached_ready_payload(payload: dict[str, object], status_code: int) -> None:
-    health_support.store_cached_ready_payload(
-        cache_backend=cache,
-        cache_key=_READY_CACHE_KEY,
-        payload=payload,
-        status_code=status_code,
-        ttl_seconds=health_support.get_ready_cache_ttl(settings),
-    )
+    try:
+        health_support.store_cached_ready_payload(
+            cache_backend=cache,
+            cache_key=_READY_CACHE_KEY,
+            payload=payload,
+            status_code=status_code,
+            ttl_seconds=health_support.get_ready_cache_ttl(settings),
+        )
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
+        logger.warning("Health ready cached payload store failed: %s", exc, exc_info=True)
 
 
 def _iter_ready_checks() -> Iterator[tuple[str, bool, Callable[[], tuple[bool, str | None]]]]:
@@ -119,17 +150,17 @@ def _check_cache_ready() -> tuple[bool, str | None]:
     marker = "1"
     try:
         cache.set(key, marker, timeout=5)
-        if cache.get(key) != marker:
-            raise RuntimeError("cache roundtrip failed")
-        return True, None
-    except Exception as exc:
+        cached_value = cache.get(key)
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
         return False, _maybe_debug_error(exc)
     finally:
         try:
             cache.delete(key)
-        except Exception:
-            # health check should stay non-fatal even if cache delete fails
+        except CACHE_INFRASTRUCTURE_EXCEPTIONS:
             pass
+    if cached_value != marker:
+        return False, _maybe_debug_error(RuntimeError("cache roundtrip failed"))
+    return True, None
 
 
 async def _channel_layer_roundtrip(channel_layer: Any, timeout_seconds: float) -> dict[str, str]:
@@ -139,9 +170,9 @@ async def _channel_layer_roundtrip(channel_layer: Any, timeout_seconds: float) -
     try:
         received = await asyncio.wait_for(channel_layer.receive(channel_name), timeout=timeout_seconds)
     except asyncio.TimeoutError as exc:
-        raise RuntimeError(f"channel layer receive timed out after {timeout_seconds:.2f}s") from exc
+        raise HealthCheckFailure(f"channel layer receive timed out after {timeout_seconds:.2f}s") from exc
     if not isinstance(received, dict) or received.get("marker") != payload["marker"]:
-        raise RuntimeError("channel layer roundtrip failed")
+        raise HealthCheckFailure("channel layer roundtrip failed")
     return received
 
 
@@ -149,11 +180,11 @@ def _check_channel_layer_ready() -> tuple[bool, str | None]:
     try:
         channel_layer = get_channel_layer()
         if channel_layer is None:
-            raise RuntimeError("channel layer is unavailable")
+            raise HealthCheckFailure("channel layer is unavailable")
         timeout_seconds = max(0.01, float(getattr(settings, "HEALTH_CHECK_CHANNEL_LAYER_TIMEOUT_SECONDS", 1.0)))
         async_to_sync(_channel_layer_roundtrip)(channel_layer, timeout_seconds)
         return True, None
-    except Exception as exc:
+    except CHANNEL_LAYER_READY_EXCEPTIONS as exc:
         return False, _maybe_debug_error(exc)
 
 
@@ -164,7 +195,7 @@ def _check_celery_broker_ready() -> tuple[bool, str | None]:
         with celery_app.connection_for_read() as connection:
             connection.connect()
         return True, None
-    except Exception as exc:
+    except CELERY_READY_EXCEPTIONS as exc:
         return False, _maybe_debug_error(exc)
 
 
@@ -174,9 +205,9 @@ def _check_celery_workers_ready() -> tuple[bool, str | None]:
 
         responses = celery_app.control.inspect(timeout=1.0).ping() or {}
         if not responses:
-            raise RuntimeError("no Celery workers responded to ping")
+            raise HealthCheckFailure("no Celery workers responded to ping")
         return True, None
-    except Exception as exc:
+    except CELERY_READY_EXCEPTIONS as exc:
         return False, _maybe_debug_error(exc)
 
 
@@ -185,14 +216,14 @@ def _check_celery_beat_ready() -> tuple[bool, str | None]:
     try:
         last_seen_raw = cache.get(CELERY_BEAT_HEARTBEAT_CACHE_KEY)
         if last_seen_raw is None:
-            raise RuntimeError("Celery beat heartbeat missing")
+            raise HealthCheckFailure("Celery beat heartbeat missing")
 
         last_seen = float(last_seen_raw)
         age_seconds = timezone.now().timestamp() - last_seen
         if age_seconds > max_age_seconds:
-            raise RuntimeError(f"Celery beat heartbeat stale: {int(age_seconds)}s old")
+            raise HealthCheckFailure(f"Celery beat heartbeat stale: {int(age_seconds)}s old")
         return True, None
-    except Exception as exc:
+    except CELERY_BEAT_READY_EXCEPTIONS as exc:
         return False, _maybe_debug_error(exc)
 
 
@@ -203,15 +234,15 @@ def _check_celery_roundtrip_ready() -> tuple[bool, str | None]:
         async_result = celery_health_ping.apply_async()
         response = async_result.get(timeout=timeout_seconds, disable_sync_subtasks=False)
         if response != "pong":
-            raise RuntimeError(f"unexpected Celery roundtrip payload: {response!r}")
+            raise HealthCheckFailure(f"unexpected Celery roundtrip payload: {response!r}")
         return True, None
-    except Exception as exc:
+    except CELERY_READY_EXCEPTIONS as exc:
         return False, _maybe_debug_error(exc)
     finally:
         if async_result is not None:
             try:
                 async_result.forget()
-            except Exception:
+            except CELERY_READY_EXCEPTIONS:
                 pass
 
 

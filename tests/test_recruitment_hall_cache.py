@@ -93,6 +93,26 @@ def test_get_recruitment_hall_context_runtime_marker_cache_error_bubbles_up(game
         get_recruitment_hall_context(manor, records_limit=5)
 
 
+@pytest.mark.django_db
+def test_get_recruitment_hall_context_runtime_marker_cache_set_error_bubbles_up(
+    game_data, django_user_model, monkeypatch
+):
+    user = django_user_model.objects.create_user(username="recruit_cache_set_runtime_failure", password="pass123")
+    manor = ensure_manor(user)
+    manor.silver = 500000
+    manor.grain = 500000
+    manor.save(update_fields=["silver", "grain"])
+
+    monkeypatch.setattr("gameplay.selectors.recruitment.cache.get", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "gameplay.selectors.recruitment.cache.set",
+        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache set failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="cache set failed"):
+        get_recruitment_hall_context(manor, records_limit=5)
+
+
 def test_recruitment_shared_invalidate_cache_bubbles_programming_error(monkeypatch):
     monkeypatch.setattr(
         recruitment_shared_service,

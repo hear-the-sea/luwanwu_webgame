@@ -34,11 +34,6 @@ from . import recruitment_templates as _recruitment_templates
 logger = logging.getLogger(__name__)
 
 
-def _should_mark_recruitment_failed(exc: Exception) -> bool:
-    """Only explicit recruitment business/config errors should transition durable state to FAILED."""
-    return isinstance(exc, RecruitmentError)
-
-
 def reveal_candidate_rarity(manor: Manor) -> int:
     """使用放大镜显示所有候选门客的稀有度。"""
     candidates = manor.candidates.filter(rarity_revealed=False)
@@ -300,9 +295,7 @@ def finalize_guest_recruitment(
                 total_draw_count=locked.draw_count,
                 clear_existing=True,
             )
-        except Exception as exc:
-            if not _should_mark_recruitment_failed(exc):
-                raise
+        except RecruitmentError as exc:
             logger.warning(
                 "Guest recruitment finalized as FAILED due to known recruitment error: recruitment_id=%s error=%s",
                 locked.id,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 from django.test import SimpleTestCase
 
@@ -22,7 +22,7 @@ class WorldChatConsumerTests(SimpleTestCase):
         consumer.channel_layer = AsyncMock()
         consumer.send_json = AsyncMock()
         consumer.close = AsyncMock()
-        consumer._ensure_valid_session = AsyncMock(return_value=True)
+        object.__setattr__(consumer, "_ensure_valid_session", AsyncMock(return_value=True))
         return consumer
 
     def test_chat_message_forwards_expected_fields(self):
@@ -201,10 +201,12 @@ class WorldChatConsumerTests(SimpleTestCase):
         }
         consumer._build_message = AsyncMock(return_value=message)
 
-        asyncio.run(consumer.receive_json({"type": "send", "text": "hello"}))
+        with patch("websocket.consumers.world_chat.record_degradation") as record_degradation_mock:
+            asyncio.run(consumer.receive_json({"type": "send", "text": "hello"}))
 
         consumer._refund_trumpet.assert_awaited_once_with()
         consumer.channel_layer.group_send.assert_not_awaited()
+        record_degradation_mock.assert_called_once()
         self.assertEqual(
             consumer.send_json.await_args.args[0],
             {
@@ -286,7 +288,31 @@ class WorldChatConsumerTests(SimpleTestCase):
         consumer._refund_trumpet = AsyncMock(return_value=True)
         consumer._build_message = AsyncMock(side_effect=RuntimeError("bug"))
 
-        with self.assertRaisesRegex(RuntimeError, "bug"):
+        with patch("websocket.consumers.world_chat.record_degradation") as record_degradation_mock:
+            with self.assertRaisesRegex(RuntimeError, "bug"):
+                asyncio.run(consumer.receive_json({"type": "send", "text": "hello"}))
+
+        consumer._refund_trumpet.assert_awaited_once_with()
+        record_degradation_mock.assert_not_called()
+
+    def test_receive_json_refund_programming_error_bubbles_up(self):
+        consumer = self._build_consumer()
+        consumer._rate_limit = AsyncMock(return_value=(True, None))
+        consumer._consume_trumpet = AsyncMock(return_value=(True, ""))
+        consumer._refund_trumpet = AsyncMock(side_effect=RuntimeError("refund bug"))
+        consumer._append_history = AsyncMock(side_effect=WorldChatInfrastructureError("redis down"))
+        consumer._build_message = AsyncMock(
+            return_value={
+                "type": "message",
+                "channel": "world",
+                "id": 1,
+                "ts": 1700000000000,
+                "sender": {"id": 1, "name": "玩家A"},
+                "text": "hello",
+            }
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "refund bug"):
             asyncio.run(consumer.receive_json({"type": "send", "text": "hello"}))
 
         consumer._refund_trumpet.assert_awaited_once_with()

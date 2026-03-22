@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import builtins
 import threading
+from types import SimpleNamespace
 
+import pytest
 from django.core.cache import cache
+from django_redis.exceptions import ConnectionInterrupted
 
 import core.utils.task_monitoring as task_monitoring
+import core.utils.task_monitoring_registry as task_monitoring_registry
 from core.utils.task_monitoring import (
     TASK_METRICS_CACHE_KEY,
     _metric_key,
@@ -168,6 +172,21 @@ class TestTaskMonitoringCounters:
                     store[key] = value
                 return True
 
+            def get(self, key, default=None):
+                del default
+                with store_lock:
+                    return store.get(key)
+
+            def delete_many(self, keys):
+                with store_lock:
+                    for key in keys:
+                        store.pop(key, None)
+
+            def delete(self, key):
+                with store_lock:
+                    store.pop(key, None)
+                return True
+
         monkeypatch.setattr(task_monitoring, "cache", FakeCache())
         monkeypatch.setattr(task_monitoring, "_register_task_name", lambda *_args, **_kwargs: None)
 
@@ -209,3 +228,137 @@ class TestTaskMonitoringCounters:
                 assert str(exc) == "broken import hook"
             else:
                 raise AssertionError("expected RuntimeError to bubble up")
+
+    def test_registry_helper_client_expected_cache_error_returns_none(self, monkeypatch):
+        logger = SimpleNamespace(warning=lambda *args, **kwargs: None)
+        original_import = builtins.__import__
+
+        def _fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "django_redis":
+                return SimpleNamespace(
+                    get_redis_connection=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                        ConnectionInterrupted("cache down")
+                    )
+                )
+            return original_import(name, globals, locals, fromlist, level)
+
+        with monkeypatch.context() as context:
+            context.setattr(builtins, "__import__", _fake_import)
+            assert task_monitoring_registry.get_redis_registry_client(logger) is None
+
+    def test_registry_helper_client_runtime_error_bubbles_up(self, monkeypatch):
+        logger = SimpleNamespace(warning=lambda *args, **kwargs: None)
+        original_import = builtins.__import__
+
+        def _fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "django_redis":
+                return SimpleNamespace(
+                    get_redis_connection=lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache down"))
+                )
+            return original_import(name, globals, locals, fromlist, level)
+
+        with monkeypatch.context() as context:
+            context.setattr(builtins, "__import__", _fake_import)
+            with pytest.raises(RuntimeError, match="cache down"):
+                task_monitoring_registry.get_redis_registry_client(logger)
+
+    def test_registry_helper_expected_cache_error_returns_none(self):
+        logger = SimpleNamespace(warning=lambda *args, **kwargs: None)
+        redis_client = SimpleNamespace(
+            smembers=lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache down")),
+            scan_iter=lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache down")),
+        )
+
+        registry = task_monitoring_registry.get_registry_from_redis(
+            cache_backend=cache,
+            logger=logger,
+            registry_key="metrics:registry",
+            marker_prefix="marker:",
+            get_client=lambda: redis_client,
+            decode_value=lambda value: str(value),
+        )
+
+        assert registry is None
+
+    def test_registry_helper_runtime_error_from_smembers_bubbles_up(self):
+        logger = SimpleNamespace(warning=lambda *args, **kwargs: None)
+        redis_client = SimpleNamespace(
+            smembers=lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+            scan_iter=lambda *_args, **_kwargs: iter(()),
+        )
+
+        with pytest.raises(RuntimeError, match="cache down"):
+            task_monitoring_registry.get_registry_from_redis(
+                cache_backend=cache,
+                logger=logger,
+                registry_key="metrics:registry",
+                marker_prefix="marker:",
+                get_client=lambda: redis_client,
+                decode_value=lambda value: str(value),
+            )
+
+    def test_registry_helper_runtime_error_from_scan_iter_bubbles_up(self):
+        logger = SimpleNamespace(warning=lambda *args, **kwargs: None)
+        redis_client = SimpleNamespace(
+            smembers=lambda *_args, **_kwargs: set(),
+            scan_iter=lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+        )
+
+        with pytest.raises(RuntimeError, match="cache down"):
+            task_monitoring_registry.get_registry_from_redis(
+                cache_backend=cache,
+                logger=logger,
+                registry_key="metrics:registry",
+                marker_prefix="marker:",
+                get_client=lambda: redis_client,
+                decode_value=lambda value: str(value),
+            )
+
+    def test_record_task_success_runtime_cache_error_bubbles_up(self, monkeypatch):
+        with monkeypatch.context() as context:
+            context.setattr(
+                task_monitoring.cache,
+                "incr",
+                lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+            )
+
+            with pytest.raises(RuntimeError, match="cache down"):
+                record_task_success("runtime_cache_error_task")
+
+    def test_get_task_metrics_expected_cache_error_uses_local_fallback(self, monkeypatch):
+        task_monitoring._metrics["fallback_task"]["success"] = 3
+        with monkeypatch.context() as context:
+            context.setattr(task_monitoring, "_get_registry", lambda: {"fallback_task"})
+            context.setattr(
+                task_monitoring.cache,
+                "get_many",
+                lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache down")),
+            )
+
+            metrics = get_task_metrics()
+
+        assert metrics["fallback_task"]["success"] == 3
+
+    def test_get_task_metrics_runtime_cache_error_bubbles_up(self, monkeypatch):
+        with monkeypatch.context() as context:
+            context.setattr(task_monitoring, "_get_registry", lambda: {"runtime_metrics_task"})
+            context.setattr(
+                task_monitoring.cache,
+                "get_many",
+                lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+            )
+
+            with pytest.raises(RuntimeError, match="cache down"):
+                get_task_metrics()
+
+    def test_reset_task_metrics_runtime_cache_delete_many_bubbles_up(self, monkeypatch):
+        with monkeypatch.context() as context:
+            context.setattr(task_monitoring, "_get_registry", lambda: {"runtime_reset_task"})
+            context.setattr(
+                task_monitoring.cache,
+                "delete_many",
+                lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+            )
+
+            with pytest.raises(RuntimeError, match="cache down"):
+                reset_task_metrics()

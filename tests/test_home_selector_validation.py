@@ -126,3 +126,37 @@ def test_get_home_context_runtime_marker_cache_error_bubbles_up(monkeypatch):
 
     with pytest.raises(RuntimeError, match="cache down"):
         get_home_context(manor)
+
+
+def test_get_home_context_runtime_marker_cache_set_error_bubbles_up(monkeypatch):
+    monkeypatch.setattr("gameplay.selectors.home.optimize_guest_queryset", lambda qs: qs)
+    monkeypatch.setattr("gameplay.selectors.home.get_technology_template", lambda *_a, **_k: {})
+    monkeypatch.setattr("gameplay.selectors.home.can_retreat", lambda *_a, **_k: False)
+    monkeypatch.setattr("gameplay.selectors.home.cache.get", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "gameplay.selectors.home.cache.set",
+        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache set failed")),
+    )
+    monkeypatch.setattr(
+        "gameplay.utils.resource_calculator.get_hourly_rates", lambda *_a, **_k: {"grain": "12", "silver": 8}
+    )
+    monkeypatch.setattr("gameplay.utils.resource_calculator.get_personnel_grain_cost_per_hour", lambda *_a, **_k: 3)
+    monkeypatch.setattr(raid_service, "get_active_scouts", lambda *_a, **_k: [])
+    monkeypatch.setattr(raid_service, "get_active_raids", lambda *_a, **_k: [])
+    monkeypatch.setattr(raid_service, "get_incoming_raids", lambda *_a, **_k: [])
+
+    manor = SimpleNamespace(
+        pk=1,
+        grain=100,
+        silver=200,
+        retainer_count=3,
+        retainer_capacity=10,
+        guests=_FakeQuerySet(),
+        mission_runs=_FakeQuerySet(),
+        buildings=_FakeQuerySet(),
+        technologies=_FakeQuerySet(),
+        troops=_FakeQuerySet(),
+    )
+
+    with pytest.raises(RuntimeError, match="cache set failed"):
+        get_home_context(manor)

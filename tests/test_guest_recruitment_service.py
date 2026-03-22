@@ -467,6 +467,39 @@ def test_guest_template_signal_clears_recruitment_template_cache(monkeypatch):
     assert calls == ["cleared"]
 
 
+@pytest.mark.django_db
+def test_guest_template_signal_cache_infrastructure_error_degrades(monkeypatch):
+    monkeypatch.setattr(
+        recruitment_template_service,
+        "clear_template_cache",
+        lambda: (_ for _ in ()).throw(ConnectionError("cache down")),
+    )
+
+    GuestTemplate.objects.create(
+        key="signal_cache_down_tpl",
+        name="信号缓存降级模板",
+        archetype="civil",
+        rarity="gray",
+    )
+
+
+@pytest.mark.django_db
+def test_guest_template_signal_programming_error_bubbles_up(monkeypatch):
+    monkeypatch.setattr(
+        recruitment_template_service,
+        "clear_template_cache",
+        lambda: (_ for _ in ()).throw(AssertionError("broken guest template cache contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken guest template cache contract"):
+        GuestTemplate.objects.create(
+            key="signal_cache_bug_tpl",
+            name="信号缓存契约错误模板",
+            archetype="civil",
+            rarity="gray",
+        )
+
+
 # ============ CORE_POOL_TIERS tests ============
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 import time
 from typing import Any, Callable
 
@@ -36,14 +37,11 @@ class AccessLogMiddleware:
 
         start = time.monotonic()
         response = None
-        exc = None
         try:
             response = self.get_response(request)
             return response
-        except Exception as e:  # pragma: no cover
-            exc = e
-            raise
         finally:
+            exc = sys.exc_info()[1]
             duration_ms = int((time.monotonic() - start) * 1000)
             status_code = getattr(response, "status_code", 500)
             user = getattr(request, "user", None)

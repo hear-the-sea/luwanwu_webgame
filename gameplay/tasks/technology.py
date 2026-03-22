@@ -6,11 +6,26 @@ from celery import shared_task
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async_with_dedup
+from core.utils.infrastructure import (
+    DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+    InfrastructureExceptions,
+    combine_infrastructure_exceptions,
+)
 from gameplay.services.technology import finalize_technology_upgrade
 
 from ._scheduled import DEFAULT_TASK_DEDUP_TIMEOUT, count_finalized_records, maybe_reschedule_for_future
 
 logger = logging.getLogger(__name__)
+
+
+class TechnologyTaskRetryRequested(RuntimeError):
+    """Explicit retry marker for infrastructure-driven technology task failures."""
+
+
+TECHNOLOGY_TASK_RETRY_EXCEPTIONS: InfrastructureExceptions = combine_infrastructure_exceptions(
+    TechnologyTaskRetryRequested,
+    infrastructure_exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+)
 
 
 @shared_task(name="gameplay.complete_technology_upgrade", bind=True, max_retries=2, default_retry_delay=30)
@@ -25,23 +40,28 @@ def complete_technology_upgrade(self, tech_id: int):
         if not tech:
             logger.warning("PlayerTechnology %d not found", tech_id)
             return "not_found"
-        rescheduled, now = maybe_reschedule_for_future(
-            task_func=complete_technology_upgrade,
-            record_id=tech_id,
-            eta_value=tech.upgrade_complete_at,
-            dedup_key=f"technology:upgrade:{tech_id}",
-            schedule_func=safe_apply_async_with_dedup,
-            logger=logger,
-            now_func=timezone.now,
-            log_message=f"technology upgrade reschedule failed: tech_id={tech_id}",
-            failure_message=f"technology reschedule dispatch failed: tech_id={tech_id}",
-            dedup_timeout=DEFAULT_TASK_DEDUP_TIMEOUT,
-        )
+        try:
+            rescheduled, now = maybe_reschedule_for_future(
+                task_func=complete_technology_upgrade,
+                record_id=tech_id,
+                eta_value=tech.upgrade_complete_at,
+                dedup_key=f"technology:upgrade:{tech_id}",
+                schedule_func=safe_apply_async_with_dedup,
+                logger=logger,
+                now_func=timezone.now,
+                log_message=f"technology upgrade reschedule failed: tech_id={tech_id}",
+                failure_message=f"technology reschedule dispatch failed: tech_id={tech_id}",
+                dedup_timeout=DEFAULT_TASK_DEDUP_TIMEOUT,
+            )
+        except RuntimeError as exc:
+            if str(exc) != f"technology reschedule dispatch failed: tech_id={tech_id}":
+                raise
+            raise TechnologyTaskRetryRequested(str(exc)) from exc
         if rescheduled is not None:
             return rescheduled
         finalized = finalize_technology_upgrade(tech, send_notification=True)
         return "completed" if finalized else "skipped"
-    except Exception as exc:
+    except TECHNOLOGY_TASK_RETRY_EXCEPTIONS as exc:
         logger.exception("Failed to complete technology upgrade %d: %s", tech_id, exc)
         raise self.retry(exc=exc)
 
@@ -64,4 +84,5 @@ def scan_technology_upgrades(limit: int = 200):
         finalize=lambda tech: finalize_technology_upgrade(tech, send_notification=True),
         logger=logger,
         error_message="Failed to finalize technology %s: %s",
+        expected_exceptions=TECHNOLOGY_TASK_RETRY_EXCEPTIONS,
     )

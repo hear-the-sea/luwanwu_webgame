@@ -6,7 +6,7 @@ import logging
 
 import pytest
 from django.contrib.auth import get_user_model
-from django.db import IntegrityError
+from django.db import DatabaseError, IntegrityError
 from django.db.utils import ProgrammingError
 from django.test import override_settings
 from django.utils import timezone
@@ -104,7 +104,7 @@ def test_ensure_manor_does_not_duplicate_initial_peace_shield_on_repeat_call():
 
 
 @pytest.mark.django_db
-def test_ensure_manor_retries_initial_peace_shield_after_transient_failure(monkeypatch):
+def test_ensure_manor_initial_peace_shield_runtime_marker_error_bubbles_up(monkeypatch):
     ItemTemplate.objects.create(
         key="peace_shield_small",
         name="免战牌·小",
@@ -132,7 +132,10 @@ def test_ensure_manor_retries_initial_peace_shield_after_transient_failure(monke
     User.objects.bulk_create([user])
     user = User.objects.get(username="testuser_init_shield_retry")
 
-    first = ensure_manor(user)
+    with pytest.raises(RuntimeError, match="temporary inventory failure"):
+        ensure_manor(user)
+
+    first = Manor.objects.get(user=user)
     first.refresh_from_db(fields=["initial_peace_shield_granted_at"])
     assert first.initial_peace_shield_granted_at is None
     assert not InventoryItem.objects.filter(manor=first, template__key="peace_shield_small").exists()
@@ -193,6 +196,46 @@ def test_deliver_active_global_mail_campaigns_skips_missing_schema(monkeypatch, 
         manor_service._deliver_active_global_mail_campaigns(manor)
 
     assert "schema is unavailable" in caplog.text
+
+
+@pytest.mark.django_db
+def test_deliver_active_global_mail_campaigns_runtime_marker_error_bubbles_up(monkeypatch):
+    user = User(username="global_mail_runtime_user")
+    user.set_password("test123")
+    User.objects.bulk_create([user])
+    user = User.objects.get(username="global_mail_runtime_user")
+    manor = Manor.objects.create(user=user)
+
+    monkeypatch.setattr(
+        "gameplay.services.global_mail.deliver_active_global_mail_campaigns",
+        lambda _manor: (_ for _ in ()).throw(RuntimeError("global mail bug")),
+    )
+
+    with pytest.raises(RuntimeError, match="global mail bug"):
+        manor_service._deliver_active_global_mail_campaigns(manor)
+
+
+@pytest.mark.django_db
+def test_ensure_manor_shield_database_error_is_best_effort(monkeypatch):
+    ItemTemplate.objects.create(
+        key="peace_shield_small",
+        name="免战牌·小",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=True,
+        effect_payload={"duration": 28800},
+    )
+
+    monkeypatch.setattr(
+        "gameplay.services.inventory.core.add_item_to_inventory_locked",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
+    )
+
+    user = User.objects.create_user(username="testuser_init_shield_db_fail", password="test123")
+    manor = ensure_manor(user)
+    manor.refresh_from_db(fields=["initial_peace_shield_granted_at"])
+
+    assert manor.initial_peace_shield_granted_at is None
+    assert not InventoryItem.objects.filter(manor=manor, template__key="peace_shield_small").exists()
 
 
 @pytest.mark.django_db

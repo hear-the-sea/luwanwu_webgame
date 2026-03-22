@@ -28,10 +28,6 @@ return 0
 """
 
 
-def _is_expected_cache_error(exc: Exception) -> bool:
-    return isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS)
-
-
 def _cleanup_expired_local_locks(now: float) -> None:
     expired_keys = [key for key, (_token, expires_at) in _LOCAL_LOCKS.items() if expires_at <= now]
     for key in expired_keys:
@@ -66,9 +62,7 @@ def _release_cache_lock_atomic_if_owner(
         redis = get_redis_connection("default")
     except NotImplementedError:
         return None
-    except Exception as exc:
-        if not _is_expected_cache_error(exc):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning(
             "%s atomic cache lock release unavailable, fallback to compare-delete: key=%s error=%s",
             log_context,
@@ -82,9 +76,7 @@ def _release_cache_lock_atomic_if_owner(
         redis_key = cache.make_key(key) if hasattr(cache, "make_key") else key  # type: ignore[attr-defined]
         deleted = redis.eval(_CACHE_RELEASE_IF_OWNER_SCRIPT, 1, redis_key, lock_token)
         return bool(int(deleted or 0))
-    except Exception as exc:
-        if not _is_expected_cache_error(exc):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning(
             "%s atomic cache lock release unavailable, fallback to compare-delete: key=%s error=%s",
             log_context,
@@ -105,9 +97,7 @@ def _release_cache_lock_non_atomic_if_owner(
     """Best-effort compare-delete fallback for non-Redis caches."""
     try:
         current_token = cache.get(key)
-    except Exception as exc:
-        if not _is_expected_cache_error(exc):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning(
             "%s cache lock ownership check failed: key=%s error=%s",
             log_context,
@@ -123,9 +113,7 @@ def _release_cache_lock_non_atomic_if_owner(
     try:
         cache.delete(key)
         return True
-    except Exception as exc:
-        if not _is_expected_cache_error(exc):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning(
             "%s cache lock delete failed: key=%s error=%s",
             log_context,
@@ -158,9 +146,7 @@ def acquire_best_effort_lock(
         if cache.add(key, lock_token, timeout=timeout):
             return True, True, lock_token
         return False, True, None
-    except Exception as exc:
-        if not _is_expected_cache_error(exc):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
         if not allow_local_fallback:
             logger.warning(
                 "%s cache lock unavailable (fail-closed): key=%s degraded=True error=%s",

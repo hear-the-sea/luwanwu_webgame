@@ -11,6 +11,7 @@ from gameplay.services.manor.core import ensure_manor
 from gameplay.services.utils import messages as message_service
 from gameplay.services.utils.cache import CacheKeys
 from gameplay.services.utils.messages import (
+    bulk_create_messages,
     claim_message_attachments,
     cleanup_old_messages,
     delete_all_messages,
@@ -208,6 +209,60 @@ def test_unread_message_count_runtime_marker_bubbles_up(monkeypatch):
 
     with pytest.raises(RuntimeError, match="cache get failed"):
         unread_message_count(manor)
+
+
+@pytest.mark.django_db
+def test_unread_message_count_cache_set_runtime_marker_bubbles_up(monkeypatch):
+    user = User.objects.create_user(username="mail_user_cache_set_runtime", password="pass123")
+    manor = ensure_manor(user)
+    Message.objects.create(manor=manor, kind=Message.Kind.SYSTEM, title="cache set runtime msg")
+
+    monkeypatch.setattr("gameplay.services.utils.messages.cache.get", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "gameplay.services.utils.messages.cache.set",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache set failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="cache set failed"):
+        unread_message_count(manor)
+
+
+@pytest.mark.django_db
+def test_delete_messages_cache_delete_runtime_marker_bubbles_up(monkeypatch):
+    user = User.objects.create_user(username="mail_user_delete_runtime", password="pass123")
+    manor = ensure_manor(user)
+    message = Message.objects.create(manor=manor, kind=Message.Kind.SYSTEM, title="delete runtime msg")
+
+    monkeypatch.setattr(
+        "gameplay.services.utils.messages.cache.delete",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache delete failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="cache delete failed"):
+        delete_messages(manor, [message.id])
+
+    assert Message.objects.filter(pk=message.pk).exists() is False
+
+
+@pytest.mark.django_db
+def test_bulk_create_messages_cache_delete_many_runtime_marker_bubbles_up(monkeypatch):
+    user = User.objects.create_user(username="mail_user_bulk_runtime", password="pass123")
+    manor = ensure_manor(user)
+
+    monkeypatch.setattr(
+        "gameplay.services.utils.messages.cache.delete_many",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache delete_many failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="cache delete_many failed"):
+        bulk_create_messages(
+            [
+                {"manor": manor, "kind": Message.Kind.SYSTEM, "title": "bulk runtime msg 1"},
+                {"manor": manor, "kind": Message.Kind.SYSTEM, "title": "bulk runtime msg 2"},
+            ]
+        )
+
+    assert Message.objects.filter(manor=manor, title__startswith="bulk runtime msg").count() == 2
 
 
 def test_local_cleanup_fallback_evicts_oldest_when_oversized(monkeypatch):

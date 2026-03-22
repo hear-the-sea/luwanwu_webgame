@@ -1,9 +1,19 @@
 from __future__ import annotations
 
 from core.exceptions import MessageError
-from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_expected_infrastructure_error
+from core.utils.infrastructure import (
+    DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+    NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
+    InfrastructureExceptions,
+    combine_infrastructure_exceptions,
+)
 
-MARKET_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS = DATABASE_INFRASTRUCTURE_EXCEPTIONS
+MARKET_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS: InfrastructureExceptions = DATABASE_INFRASTRUCTURE_EXCEPTIONS
+MARKET_MESSAGE_DELIVERY_EXCEPTIONS: InfrastructureExceptions = combine_infrastructure_exceptions(
+    MessageError,
+    infrastructure_exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+)
+MARKET_NOTIFY_EXCEPTIONS: InfrastructureExceptions = NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS
 
 
 def safe_send_market_message(
@@ -11,18 +21,15 @@ def safe_send_market_message(
     create_message_func,
     logger,
     log_message: str,
-    infrastructure_exceptions: tuple[type[Exception], ...] = MARKET_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
+    infrastructure_exceptions: InfrastructureExceptions = MARKET_MESSAGE_DELIVERY_EXCEPTIONS,
     **kwargs,
 ) -> bool:
     try:
         create_message_func(**kwargs)
         return True
-    except Exception as exc:
-        if isinstance(exc, MessageError) or is_expected_infrastructure_error(exc, exceptions=infrastructure_exceptions):
-            logger.warning("%s: %s", log_message, exc, exc_info=True)
-            return False
-        logger.exception("%s: unexpected error", log_message)
-        raise
+    except infrastructure_exceptions as exc:
+        logger.warning("%s: %s", log_message, exc, exc_info=True)
+        return False
 
 
 def safe_send_market_notification(
@@ -33,22 +40,19 @@ def safe_send_market_notification(
     payload: dict,
     log_context: str,
     log_message: str,
-    infrastructure_exceptions: tuple[type[Exception], ...] = MARKET_NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
+    infrastructure_exceptions: InfrastructureExceptions = MARKET_NOTIFY_EXCEPTIONS,
 ) -> None:
     try:
         notify_user_func(user_id, payload, log_context=log_context)
-    except Exception as exc:
-        if is_expected_infrastructure_error(exc, exceptions=infrastructure_exceptions):
-            logger.warning(
-                "%s: user_id=%s error=%s",
-                log_message,
-                user_id,
-                exc,
-                exc_info=True,
-            )
-            return
-        logger.exception("%s unexpected notification error: user_id=%s", log_message, user_id)
-        raise
+    except infrastructure_exceptions as exc:
+        logger.warning(
+            "%s: user_id=%s error=%s",
+            log_message,
+            user_id,
+            exc,
+            exc_info=True,
+        )
+        return
 
 
 def send_purchase_notifications(

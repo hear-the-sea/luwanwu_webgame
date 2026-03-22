@@ -25,10 +25,6 @@ CACHE_TIMEOUT_CONFIG = 300  # 5分钟 - 配置类数据
 RECRUITMENT_HALL_CACHE_VERSION = 1  # 聚贤庄上下文缓存版本
 
 
-def _is_expected_cache_error(exc: Exception) -> bool:
-    return isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS)
-
-
 class CacheKeys:
     """缓存键前缀和生成器"""
 
@@ -95,9 +91,7 @@ def invalidate_home_stats_cache(manor_id: int) -> None:
     """清除首页统计类缓存。"""
     try:
         cache.delete(CacheKeys.home_hourly_rates(manor_id))
-    except Exception as exc:
-        if not _is_expected_cache_error(exc):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning("cache.delete failed in invalidate_home_stats_cache(): manor_id=%s error=%s", manor_id, exc)
 
 
@@ -111,9 +105,7 @@ def invalidate_recruitment_hall_cache(manor_id: int) -> None:
                 recruitment_hall_context_cache_key(manor_id),
             ]
         )
-    except Exception as exc:
-        if not _is_expected_cache_error(exc):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning(
             "cache.delete_many failed in invalidate_recruitment_hall_cache(): manor_id=%s error=%s",
             manor_id,
@@ -136,9 +128,7 @@ def invalidate_manor_cache(manor_id: int) -> None:
     ]
     try:
         cache.delete_many(keys_to_delete)
-    except Exception as exc:
-        if not _is_expected_cache_error(exc):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning("cache.delete_many failed in invalidate_manor_cache(): manor_id=%s error=%s", manor_id, exc)
 
 
@@ -151,9 +141,7 @@ def invalidate_ranking_cache() -> None:
     try:
         cache.delete(CacheKeys.RANKING_PRESTIGE)
         cache.delete(CacheKeys.RANKING_TOTAL_PLAYERS)
-    except Exception as exc:
-        if not _is_expected_cache_error(exc):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning("cache.delete failed in invalidate_ranking_cache(): error=%s", exc)
 
 
@@ -189,9 +177,7 @@ def cached(
             sentinel = object()
             try:
                 result = cache.get(cache_key, sentinel)
-            except Exception as exc:
-                if not _is_expected_cache_error(exc):
-                    raise
+            except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
                 logger.warning("cache.get failed in cached(): key=%s error=%s", cache_key, exc, exc_info=True)
                 result = sentinel
 
@@ -206,9 +192,7 @@ def cached(
             if computed is not None or cache_none:
                 try:
                     cache.set(cache_key, computed, timeout=timeout)
-                except Exception as exc:
-                    if not _is_expected_cache_error(exc):
-                        raise
+                except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
                     logger.warning("cache.set failed in cached(): key=%s error=%s", cache_key, exc, exc_info=True)
             return cast(T, computed)
 
@@ -231,17 +215,13 @@ def get_or_set(key: str, default_func: Callable[[], T], timeout: int = CACHE_TIM
     """
     try:
         result = cache.get(key)
-    except Exception as exc:
-        if not _is_expected_cache_error(exc):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning("cache.get failed in get_or_set(): key=%s error=%s", key, exc, exc_info=True)
         result = None
     if result is None:
         result = default_func()
         try:
             cache.set(key, result, timeout=timeout)
-        except Exception as exc:
-            if not _is_expected_cache_error(exc):
-                raise
+        except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
             logger.warning("cache.set failed in get_or_set(): key=%s error=%s", key, exc, exc_info=True)
     return cast(T, result)

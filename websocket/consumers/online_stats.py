@@ -31,10 +31,6 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
-def _is_expected_cache_error(exc: Exception) -> bool:
-    return isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS)
-
-
 class OnlineStatsConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer):
     """WebSocket consumer for real-time online user statistics."""
 
@@ -134,26 +130,20 @@ class OnlineStatsConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsume
     def _safe_cache_get(self, key: str):
         try:
             return cache.get(key)
-        except Exception as exc:
-            if not _is_expected_cache_error(exc):
-                raise
+        except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
             logger.warning("Online stats cache.get failed: key=%s error=%s", key, exc, exc_info=True)
             return None
 
     def _safe_cache_set(self, key: str, value: int, timeout: int) -> None:
         try:
             cache.set(key, value, timeout=timeout)
-        except Exception as exc:
-            if not _is_expected_cache_error(exc):
-                raise
+        except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
             logger.warning("Online stats cache.set failed: key=%s error=%s", key, exc, exc_info=True)
 
     def _safe_cache_delete(self, key: str) -> None:
         try:
             cache.delete(key)
-        except Exception as exc:
-            if not _is_expected_cache_error(exc):
-                raise
+        except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
             logger.warning("Online stats cache.delete failed: key=%s error=%s", key, exc, exc_info=True)
 
     def _touch_online_user_sync(self, user_id: int, now_ts: float) -> None:
@@ -213,9 +203,7 @@ class OnlineStatsConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsume
                 str(int(user_id)),
                 str(int(self.ONLINE_USERS_TTL * 2)),
             )
-        except Exception as exc:
-            if not _is_expected_cache_error(exc):
-                raise
+        except CACHE_INFRASTRUCTURE_EXCEPTIONS:
             remaining_raw = redis.eval(
                 script,
                 2,

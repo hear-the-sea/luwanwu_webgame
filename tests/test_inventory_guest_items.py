@@ -1,6 +1,7 @@
 import pytest
 
 from core.exceptions import (
+    GameError,
     GuestAllocationResetError,
     GuestItemConfigurationError,
     GuestNotIdleError,
@@ -527,6 +528,67 @@ def test_use_guest_rebirth_card_resets_guest_progression_and_clears_gear(django_
     assert not InventoryItem.objects.filter(pk=item.pk).exists()
     returned_weapon = InventoryItem.objects.get(manor=manor, template=returned_item_template)
     assert returned_weapon.quantity == 1
+
+
+@pytest.mark.django_db
+def test_use_guest_rebirth_card_force_detach_fallback_keeps_success_on_known_unequip_error(
+    monkeypatch, django_user_model
+):
+    manor, guest, item = _prepare_rebirth_case(django_user_model, "fallback_ok")
+
+    gear_template = GearTemplate.objects.create(
+        key="rebirth_fallback_blade",
+        name="重生兜底佩刀",
+        slot=GearSlot.WEAPON,
+        rarity="green",
+    )
+    returned_item_template = ItemTemplate.objects.create(
+        key="rebirth_fallback_blade",
+        name="重生兜底佩刀",
+        effect_type="equip_weapon",
+        rarity="green",
+    )
+    GearItem.objects.create(manor=manor, template=gear_template, guest=guest)
+
+    monkeypatch.setattr(
+        "guests.services.equipment.unequip_guest_item",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(GameError(message="unequip blocked")),
+    )
+
+    result = use_guest_rebirth_card(manor, item, guest.id)
+
+    guest.refresh_from_db()
+    assert guest.gear_items.count() == 0
+    assert result["unequipped_count"] == 1
+    returned_weapon = InventoryItem.objects.get(manor=manor, template=returned_item_template)
+    assert returned_weapon.quantity == 1
+    assert not InventoryItem.objects.filter(pk=item.pk).exists()
+
+
+@pytest.mark.django_db
+def test_use_guest_rebirth_card_programming_error_during_unequip_bubbles_up(monkeypatch, django_user_model):
+    manor, guest, item = _prepare_rebirth_case(django_user_model, "fallback_bug")
+
+    gear_template = GearTemplate.objects.create(
+        key="rebirth_bug_blade",
+        name="重生异常佩刀",
+        slot=GearSlot.WEAPON,
+        rarity="green",
+    )
+    GearItem.objects.create(manor=manor, template=gear_template, guest=guest)
+
+    monkeypatch.setattr(
+        "guests.services.equipment.unequip_guest_item",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken unequip contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken unequip contract"):
+        use_guest_rebirth_card(manor, item, guest.id)
+
+    guest.refresh_from_db()
+    item.refresh_from_db()
+    assert guest.gear_items.count() == 1
+    assert item.quantity == 1
 
 
 @pytest.mark.django_db

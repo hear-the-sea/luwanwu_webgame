@@ -41,7 +41,7 @@ def test_safe_send_market_message_re_raises_non_infrastructure_errors():
             body="b",
         )
 
-    logger.exception.assert_called_once()
+    logger.exception.assert_not_called()
     logger.warning.assert_not_called()
 
 
@@ -73,7 +73,24 @@ def test_safe_send_market_notification_re_raises_non_infrastructure_errors():
             log_message="market notify_user failed",
         )
 
-    logger.exception.assert_called_once()
+    logger.exception.assert_not_called()
+    logger.warning.assert_not_called()
+
+
+def test_safe_send_market_notification_runtime_marker_bubbles_up():
+    logger = MagicMock()
+
+    with pytest.raises(RuntimeError, match="notify backend down"):
+        market_notification_helpers.safe_send_market_notification(
+            notify_user_func=lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("notify backend down")),
+            logger=logger,
+            user_id=9,
+            payload={"kind": "market_sold"},
+            log_context="market sold notification",
+            log_message="market notify_user failed",
+        )
+
+    logger.exception.assert_not_called()
     logger.warning.assert_not_called()
 
 
@@ -110,7 +127,7 @@ def test_safe_send_market_message_runtime_marker_bubbles_up():
         )
 
     logger.warning.assert_not_called()
-    logger.exception.assert_called_once()
+    logger.exception.assert_not_called()
 
 
 def test_safe_send_market_notification_swallows_connection_interrupted():

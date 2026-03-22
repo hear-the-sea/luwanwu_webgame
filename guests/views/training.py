@@ -5,7 +5,9 @@
 from __future__ import annotations
 
 import logging
+from typing import cast
 
+from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -26,7 +28,6 @@ from ..forms import AllocateSkillPointsForm, TrainGuestForm
 from ..models import Guest
 from ..services.recruitment_guests import allocate_attribute_points
 from ..services.training import finalize_guest_training, train_guest, use_experience_item_for_guest
-from .common import unexpected_action_error_response
 
 logger = logging.getLogger(__name__)
 
@@ -69,15 +70,6 @@ class TrainView(LoginRequiredMixin, TemplateView):
                 levels,
             )
             messages.error(request, sanitize_error_message(exc))
-        except Exception:
-            logger.exception(
-                "Unexpected guest train error: manor_id=%s user_id=%s guest_id=%s levels=%s",
-                getattr(manor, "id", None),
-                getattr(request.user, "id", None),
-                getattr(guest, "id", None),
-                levels,
-            )
-            raise
         return redirect(next_url)
 
 
@@ -125,7 +117,7 @@ def use_experience_item_view(request, pk: int):
             return redirect(next_url)
         result = use_experience_item_for_guest(manor, guest, item.pk, reduce_seconds)
         new_quantity = safe_int(result.get("remaining_item_quantity"), default=0, min_val=0)
-        reduced_seconds = safe_int(result.get("time_reduced"), default=0, min_val=0)
+        reduced_seconds = safe_int(result.get("time_reduced"), default=0, min_val=0) or 0
         reduced_hours = round(reduced_seconds / 3600, 2)
         eta = result.get("next_eta")
         eta_str = eta.strftime("%H:%M:%S") if eta else "已完成升级"
@@ -159,15 +151,6 @@ def use_experience_item_view(request, pk: int):
         if is_ajax:
             return json_error(error_msg, status=500, include_message=True)
         messages.error(request, error_msg)
-    except Exception as exc:
-        logger.exception(
-            "Unexpected experience-item use error: manor_id=%s user_id=%s guest_id=%s item_id=%s",
-            getattr(manor, "id", None),
-            getattr(request.user, "id", None),
-            pk,
-            item_id_int,
-        )
-        return unexpected_action_error_response(request, exc, is_ajax=is_ajax, redirect_to=next_url)
     return redirect(next_url)
 
 
@@ -220,9 +203,9 @@ def allocate_points_view(request, pk: int):
     next_url = safe_redirect_url(request, request.POST.get("next"), default_url)
 
     if not form.is_valid():
-        errors = []
+        errors: list[str] = []
         for field_errors in form.errors.values():
-            errors.extend(field_errors)
+            errors.extend(str(error) for error in field_errors)
         error_msg = "; ".join(errors) or "加点参数有误"
         if is_ajax:
             return json_error(error_msg, status=400, include_message=True)
@@ -247,7 +230,8 @@ def allocate_points_view(request, pk: int):
 
         if is_ajax:
             refreshed_form = AllocateSkillPointsForm(manor=manor, initial={"guest": guest})
-            refreshed_form.fields["guest"].queryset = manor.guests.filter(pk=guest.pk)
+            guest_field = cast(forms.ModelChoiceField, refreshed_form.fields["guest"])
+            guest_field.queryset = manor.guests.filter(pk=guest.pk)
             attribute_panel_html = render_to_string(
                 "guests/partials/attribute_panel.html",
                 {"guest": guest, "skill_point_form": refreshed_form},
@@ -283,16 +267,6 @@ def allocate_points_view(request, pk: int):
             return json_error(error_msg, status=500, include_message=True)
         messages.error(request, error_msg)
         return redirect(next_url)
-    except Exception:
-        logger.exception(
-            "Unexpected allocate-points error: manor_id=%s user_id=%s guest_id=%s attribute=%s points=%s",
-            getattr(manor, "id", None),
-            getattr(request.user, "id", None),
-            getattr(guest, "id", None),
-            attribute,
-            points,
-        )
-        raise
 
     # 成功消息由装饰器的 success_message 参数处理
     messages.success(request, f"{guest.display_name} 属性加点成功")

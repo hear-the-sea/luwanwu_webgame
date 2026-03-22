@@ -3,11 +3,19 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
+from django.db import DatabaseError
 from django.utils import timezone
 
+from core.exceptions import MessageError
 from gameplay.models import GlobalMailCampaign, GlobalMailDelivery, Message
 from gameplay.services.manor.core import ensure_manor
-from gameplay.tasks.global_mail import backfill_global_mail_campaign_task, enqueue_global_mail_backfill
+from gameplay.tasks.global_mail import (
+    backfill_global_mail_campaign_task,
+    clear_failed_manor_ids,
+    enqueue_global_mail_backfill,
+    get_failed_manor_ids,
+    persist_failed_manor_ids,
+)
 
 
 @pytest.mark.django_db
@@ -103,7 +111,7 @@ def test_backfill_global_mail_campaign_task_records_failed_manor_ids(monkeypatch
 
     def _deliver_with_failure(current_campaign, manor, now):
         if manor.id == manor_b.id:
-            raise RuntimeError("boom")
+            raise MessageError("message backend down")
         return original_deliver(current_campaign, manor, now=now)
 
     monkeypatch.setattr("gameplay.tasks.global_mail.deliver_campaign_to_manor", _deliver_with_failure)
@@ -117,6 +125,84 @@ def test_backfill_global_mail_campaign_task_records_failed_manor_ids(monkeypatch
     assert str(manor_b.id) in result["summary"]
     assert GlobalMailDelivery.objects.filter(campaign=campaign, manor=manor_a).exists()
     assert not GlobalMailDelivery.objects.filter(campaign=campaign, manor=manor_b).exists()
+
+
+@pytest.mark.django_db
+def test_backfill_global_mail_campaign_task_database_error_is_partial_failure(monkeypatch, django_user_model):
+    user_a = django_user_model.objects.create_user(username="global_mail_task_db_user_a", password="pass123")
+    user_b = django_user_model.objects.create_user(username="global_mail_task_db_user_b", password="pass123")
+    ensure_manor(user_a)
+    manor_b = ensure_manor(user_b)
+
+    campaign = GlobalMailCampaign.objects.create(
+        key="global_mail_task_db_failure",
+        kind=Message.Kind.REWARD,
+        title="任务补发数据库失败记录",
+        body="数据库失败列表测试",
+        attachments={"resources": {"wood": 10}},
+        is_active=True,
+    )
+
+    original_deliver = backfill_global_mail_campaign_task.run.__globals__["deliver_campaign_to_manor"]
+
+    def _deliver_with_failure(current_campaign, manor, now):
+        if manor.id == manor_b.id:
+            raise DatabaseError("delivery table unavailable")
+        return original_deliver(current_campaign, manor, now=now)
+
+    monkeypatch.setattr("gameplay.tasks.global_mail.deliver_campaign_to_manor", _deliver_with_failure)
+
+    result = backfill_global_mail_campaign_task.run(campaign.id, batch_size=1)
+
+    assert result["status"] == "partial_failure"
+    assert result["failed"] == 1
+    assert result["failed_manor_ids"] == [manor_b.id]
+
+
+@pytest.mark.django_db
+def test_backfill_global_mail_campaign_task_programming_error_bubbles_up(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="global_mail_task_programming_user", password="pass123")
+    ensure_manor(user)
+
+    campaign = GlobalMailCampaign.objects.create(
+        key="global_mail_task_programming_failure",
+        kind=Message.Kind.REWARD,
+        title="任务补发编程错误",
+        body="编程错误测试",
+        attachments={"resources": {"wood": 10}},
+        is_active=True,
+    )
+
+    monkeypatch.setattr(
+        "gameplay.tasks.global_mail.deliver_campaign_to_manor",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken global mail delivery contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken global mail delivery contract"):
+        backfill_global_mail_campaign_task.run(campaign.id, batch_size=1)
+
+
+def test_global_mail_failed_manor_ids_cache_programming_errors_bubble_up(monkeypatch):
+    monkeypatch.setattr(
+        "gameplay.tasks.global_mail.cache.get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken global mail failed-id cache get")),
+    )
+
+    with pytest.raises(AssertionError, match="broken global mail failed-id cache get"):
+        persist_failed_manor_ids(7, [1, 2])
+
+    with pytest.raises(AssertionError, match="broken global mail failed-id cache get"):
+        get_failed_manor_ids(7)
+
+
+def test_global_mail_failed_manor_ids_cache_delete_programming_error_bubbles_up(monkeypatch):
+    monkeypatch.setattr(
+        "gameplay.tasks.global_mail.cache.delete",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken global mail failed-id cache delete")),
+    )
+
+    with pytest.raises(AssertionError, match="broken global mail failed-id cache delete"):
+        clear_failed_manor_ids(7)
 
 
 def test_enqueue_global_mail_backfill_submits_expected_args(monkeypatch):

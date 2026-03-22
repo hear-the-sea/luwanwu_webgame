@@ -9,7 +9,7 @@ import logging
 from celery import shared_task
 from django.utils import timezone
 
-from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_expected_infrastructure_error
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS
 from core.utils.task_monitoring import increment_degraded_counter
 from trade.models import ShopStock
 from trade.services.shop_config import get_shop_config, reload_shop_config
@@ -27,11 +27,6 @@ def _safe_int(value, default: int = 0) -> int:
 def _coerce_non_negative_int(value, default: int = 0) -> int:
     parsed = _safe_int(value, default)
     return parsed if parsed >= 0 else default
-
-
-def _is_expected_task_error(exc: Exception) -> bool:
-    """Infrastructure errors that warrant a Celery retry rather than immediate propagation."""
-    return is_expected_infrastructure_error(exc, exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS)
 
 
 def _normalize_settlement_stats(stats) -> tuple[int, int, int, int]:
@@ -79,13 +74,11 @@ def refresh_shop_stock(self):
                         defaults={"current_stock": stock, "last_refresh": today},
                     )
                     refreshed_count += 1
-                except Exception as e:
-                    if not _is_expected_task_error(e):
-                        raise
+                except DATABASE_INFRASTRUCTURE_EXCEPTIONS as exc:
                     # DB/connection errors on a single item should not abort the
                     # entire refresh; log and continue with the remaining items.
-                    logger.exception("Failed to refresh stock for item %s: %s", item_key, e)
-                    failed_items.append({"item_key": item_key, "error": str(e)})
+                    logger.exception("Failed to refresh stock for item %s: %s", item_key, exc)
+                    failed_items.append({"item_key": item_key, "error": str(exc)})
 
         # 记录失败统计，便于监控告警
         if failed_items:
@@ -110,9 +103,7 @@ def refresh_shop_stock(self):
             )
 
         return f"refreshed {refreshed_count} items"
-    except Exception as exc:
-        if not _is_expected_task_error(exc):
-            raise
+    except DATABASE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.exception("Failed to refresh shop stock: %s", exc)
         raise self.retry(exc=exc)
 
@@ -136,9 +127,7 @@ def process_expired_listings(self):
 
         count = _coerce_non_negative_int(expire_listings(), 0)
         return f"处理了 {count} 个过期挂单"
-    except Exception as exc:
-        if not _is_expected_task_error(exc):
-            raise
+    except DATABASE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.exception("Failed to process expired listings: %s", exc)
         raise self.retry(exc=exc)
 
@@ -167,21 +156,17 @@ def settle_auction_round_task(self):
             # 结算完成后触发创建新轮次
             try:
                 create_auction_round_task.delay()
-            except Exception as exc:
-                if not _is_expected_task_error(exc):
-                    raise
+            except DATABASE_INFRASTRUCTURE_EXCEPTIONS as exc:
                 logger.warning("拍卖结算后触发新轮次任务失败，立即切换为同步创建: %s", exc, exc_info=True)
                 try:
                     create_auction_round()
-                except Exception as fallback_exc:
+                except DATABASE_INFRASTRUCTURE_EXCEPTIONS as fallback_exc:
                     logger.warning("拍卖结算后同步创建新轮次失败: %s", fallback_exc, exc_info=True)
             logger.info(f"拍卖轮次结算完成：售出 {sold} 件，" f"流拍 {unsold} 件，" f"共收取 {total_gold_bars} 金条")
             return f"结算完成：售出 {sold} 件，流拍 {unsold} 件，" f"共 {total_gold_bars} 金条"
         else:
             return "没有需要结算的拍卖轮次"
-    except Exception as exc:
-        if not _is_expected_task_error(exc):
-            raise
+    except DATABASE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.exception("结算拍卖轮次失败: %s", exc)
         raise self.retry(exc=exc)
 
@@ -210,9 +195,7 @@ def create_auction_round_task(self):
             round_number = _safe_int(getattr(auction_round, "round_number", 0), 0)
             try:
                 slot_count = _coerce_non_negative_int(auction_round.slots.count(), 0)
-            except Exception as exc:
-                if not _is_expected_task_error(exc):
-                    raise
+            except DATABASE_INFRASTRUCTURE_EXCEPTIONS as exc:
                 # Slot count is informational; degrade to 0 on infra errors.
                 logger.warning(
                     "读取拍卖轮次槽位数失败: round=%s error=%s",
@@ -225,8 +208,6 @@ def create_auction_round_task(self):
             return f"创建拍卖轮次 #{round_number}，" f"拍卖位数量: {slot_count}"
         else:
             return "已有进行中的拍卖轮次或无可用商品，跳过创建"
-    except Exception as exc:
-        if not _is_expected_task_error(exc):
-            raise
+    except DATABASE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.exception("创建拍卖轮次失败: %s", exc)
         raise self.retry(exc=exc)

@@ -204,6 +204,38 @@ class OnlineStatsConsumerInternalTests(SimpleTestCase):
             cache.get = original_get
             cache.set = original_set
 
+    def test_get_online_count_sync_cache_set_runtime_marker_bubbles_up(self):
+        consumer = self._build_consumer()
+        fake = _FakeRedis()
+        consumer._get_redis = lambda: fake
+
+        now_ts = time.time()
+        fake.zadd(consumer.ONLINE_WS_USERS_KEY, {1: now_ts})
+
+        original_get = cache.get
+        original_set = cache.set
+        cache.get = lambda *_a, **_k: None
+        cache.set = lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache set failed"))
+        try:
+            with pytest.raises(RuntimeError, match="cache set failed"):
+                consumer._get_online_count_sync()
+        finally:
+            cache.get = original_get
+            cache.set = original_set
+
+    def test_touch_online_user_sync_cache_delete_runtime_marker_bubbles_up(self):
+        consumer = self._build_consumer()
+        fake = _FakeRedis()
+        consumer._get_redis = lambda: fake
+
+        original_delete = cache.delete
+        cache.delete = lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache delete failed"))
+        try:
+            with pytest.raises(RuntimeError, match="cache delete failed"):
+                consumer._touch_online_user_sync(user_id=1, now_ts=time.time())
+        finally:
+            cache.delete = original_delete
+
     def test_cleanup_expired_users_sync_handles_redis_error(self):
         consumer = self._build_consumer()
 

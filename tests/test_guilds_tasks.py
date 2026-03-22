@@ -3,7 +3,9 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
+from django.db.utils import DatabaseError
 from django.utils import timezone
+from kombu.exceptions import OperationalError
 
 
 def _dispatch_immediately(task, *, args=None, kwargs=None, countdown=None, logger=None, log_message="", **_kwargs):
@@ -60,7 +62,7 @@ def test_guild_tech_daily_production_handles_inner_errors(monkeypatch, django_us
     calls: list[str] = []
 
     def _boom(_guild, _level):
-        raise RuntimeError("boom")
+        raise DatabaseError("boom")
 
     monkeypatch.setattr("guilds.tasks.produce_equipment", _boom)
     monkeypatch.setattr(
@@ -121,7 +123,7 @@ def test_process_single_guild_production_does_not_mark_timestamp_on_failure(monk
 
     monkeypatch.setattr(
         "guilds.tasks.produce_equipment",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("boom")),
     )
     monkeypatch.setattr(
         "common.utils.celery.safe_apply_async",
@@ -155,7 +157,7 @@ def test_process_single_guild_production_persists_failed_ids_when_retry_dispatch
 
     monkeypatch.setattr(
         "guilds.tasks.produce_equipment",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("boom")),
     )
     monkeypatch.setattr("common.utils.celery.safe_apply_async", lambda *_args, **_kwargs: False)
 
@@ -173,6 +175,85 @@ def test_process_single_guild_production_persists_failed_ids_when_retry_dispatch
 
 
 @pytest.mark.django_db
+def test_process_single_guild_production_programming_error_bubbles_up(monkeypatch, django_user_model):
+    from guilds.models import Guild, GuildTechnology
+    from guilds.tasks import process_single_guild_production
+
+    founder = django_user_model.objects.create_user(username="g_founder_programming_error", password="pass")
+    guild = Guild.objects.create(name="G-programming-error", founder=founder, is_active=True)
+    tech = GuildTechnology.objects.create(guild=guild, tech_key="equipment_forge", level=2)
+
+    monkeypatch.setattr(
+        "guilds.tasks.produce_equipment",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken guild production contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken guild production contract"):
+        process_single_guild_production.run(guild.id)
+
+    tech.refresh_from_db()
+    assert tech.last_production_at is None
+
+
+def test_persist_failed_guild_ids_cache_infrastructure_error_is_best_effort(monkeypatch):
+    from guilds.tasks import _persist_failed_guild_ids
+
+    monkeypatch.setattr(
+        "guilds.tasks.cache.get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionError("cache unavailable")),
+    )
+
+    _persist_failed_guild_ids([1, 2])
+
+
+def test_persist_failed_guild_ids_cache_programming_error_bubbles_up(monkeypatch):
+    from guilds.tasks import _persist_failed_guild_ids
+
+    monkeypatch.setattr(
+        "guilds.tasks.cache.get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken failed-id cache contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken failed-id cache contract"):
+        _persist_failed_guild_ids([1, 2])
+
+
+def test_get_failed_guild_ids_cache_infrastructure_error_returns_empty(monkeypatch):
+    from guilds.tasks import get_failed_guild_ids
+
+    monkeypatch.setattr(
+        "guilds.tasks.cache.get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionError("cache unavailable")),
+    )
+
+    assert get_failed_guild_ids() == []
+
+
+def test_get_failed_guild_ids_cache_programming_error_bubbles_up(monkeypatch):
+    from guilds.tasks import get_failed_guild_ids
+
+    monkeypatch.setattr(
+        "guilds.tasks.cache.get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken failed-id cache read contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken failed-id cache read contract"):
+        get_failed_guild_ids()
+
+
+def test_clear_failed_guild_ids_cache_programming_error_bubbles_up(monkeypatch):
+    from guilds.tasks import _clear_failed_guild_ids
+
+    monkeypatch.setattr(
+        "guilds.tasks.cache.delete",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken failed-id cache delete contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken failed-id cache delete contract"):
+        _clear_failed_guild_ids()
+
+
+@pytest.mark.django_db
 def test_guild_tech_daily_production_retries_when_dispatch_fails(monkeypatch, django_user_model):
     from guilds.models import Guild
     from guilds.tasks import guild_tech_daily_production
@@ -182,7 +263,7 @@ def test_guild_tech_daily_production_retries_when_dispatch_fails(monkeypatch, dj
 
     monkeypatch.setattr(
         "common.utils.celery.safe_apply_async",
-        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("dispatch failed")),
+        lambda *_a, **_k: (_ for _ in ()).throw(OperationalError("dispatch failed")),
     )
 
     called = {"retry": 0}
@@ -200,10 +281,32 @@ def test_guild_tech_daily_production_retries_when_dispatch_fails(monkeypatch, dj
 
 
 @pytest.mark.django_db
+def test_guild_tech_daily_production_programming_error_bubbles_up(monkeypatch, django_user_model):
+    from guilds.models import Guild
+    from guilds.tasks import guild_tech_daily_production
+
+    founder = django_user_model.objects.create_user(username="g_founder_dispatch_programming", password="pass")
+    Guild.objects.create(name="G-dispatch-programming", founder=founder, is_active=True)
+
+    monkeypatch.setattr(
+        "common.utils.celery.safe_apply_async",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("broken guild dispatch contract")),
+    )
+    monkeypatch.setattr(
+        guild_tech_daily_production,
+        "retry",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("retry should not be called")),
+    )
+
+    with pytest.raises(AssertionError, match="broken guild dispatch contract"):
+        guild_tech_daily_production.run()
+
+
+@pytest.mark.django_db
 def test_reset_guild_weekly_stats_retries_on_error(monkeypatch):
     from guilds.tasks import reset_guild_weekly_stats
 
-    monkeypatch.setattr("guilds.tasks.reset_weekly_contributions", lambda: (_ for _ in ()).throw(RuntimeError("x")))
+    monkeypatch.setattr("guilds.tasks.reset_weekly_contributions", lambda: (_ for _ in ()).throw(DatabaseError("x")))
 
     called = {"retry": 0}
 
@@ -217,6 +320,42 @@ def test_reset_guild_weekly_stats_retries_on_error(monkeypatch):
         reset_guild_weekly_stats.run()
 
     assert called["retry"] == 1
+
+
+@pytest.mark.django_db
+def test_reset_guild_weekly_stats_programming_error_bubbles_up(monkeypatch):
+    from guilds.tasks import reset_guild_weekly_stats
+
+    monkeypatch.setattr(
+        "guilds.tasks.reset_weekly_contributions",
+        lambda: (_ for _ in ()).throw(AssertionError("broken weekly reset contract")),
+    )
+    monkeypatch.setattr(
+        reset_guild_weekly_stats,
+        "retry",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("retry should not be called")),
+    )
+
+    with pytest.raises(AssertionError, match="broken weekly reset contract"):
+        reset_guild_weekly_stats.run()
+
+
+@pytest.mark.django_db
+def test_cleanup_invalid_guild_hero_pool_programming_error_bubbles_up(monkeypatch):
+    from guilds.tasks import cleanup_invalid_guild_hero_pool
+
+    monkeypatch.setattr(
+        "guilds.tasks.cleanup_invalid_hero_pool_entries",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken hero pool cleanup contract")),
+    )
+    monkeypatch.setattr(
+        cleanup_invalid_guild_hero_pool,
+        "retry",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("retry should not be called")),
+    )
+
+    with pytest.raises(AssertionError, match="broken hero pool cleanup contract"):
+        cleanup_invalid_guild_hero_pool.run()
 
 
 @pytest.mark.django_db

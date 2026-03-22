@@ -481,6 +481,33 @@ def test_schedule_guest_recruitment_completion_nested_import_error_bubbles_up(mo
         )
 
 
+def test_schedule_guest_recruitment_completion_missing_target_module_degrades(monkeypatch):
+    original_import = builtins.__import__
+    callbacks = []
+
+    def _raising_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "guests.tasks":
+            exc = ModuleNotFoundError("No module named 'guests.tasks'")
+            exc.name = "guests.tasks"
+            raise exc
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _raising_import)
+    monkeypatch.setattr(
+        recruitment_followups_service.transaction, "on_commit", lambda callback: callbacks.append(callback)
+    )
+
+    recruitment = type("_Recruitment", (), {"id": 19, "manor_id": 5, "pool_id": 7})()
+
+    recruitment_followups_service.schedule_guest_recruitment_completion(
+        recruitment,
+        20,
+        logger=recruitment_followups_service.logging.getLogger(__name__),
+    )
+
+    assert callbacks == []
+
+
 @pytest.mark.django_db(transaction=True)
 def test_train_guest_increases_level(game_data, django_user_model, load_guest_data):
     user = django_user_model.objects.create_user(username="player_train", password="pass123")

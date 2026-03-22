@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 from django.db import transaction
 from django.utils import timezone
@@ -12,7 +12,8 @@ from core.exceptions import MessageError, TradeValidationError
 from core.utils.infrastructure import (
     DATABASE_INFRASTRUCTURE_EXCEPTIONS,
     NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
-    is_expected_infrastructure_error,
+    InfrastructureExceptions,
+    combine_infrastructure_exceptions,
 )
 from gameplay.models import Manor
 from gameplay.services.utils.messages import create_message
@@ -21,6 +22,10 @@ from trade.models import AuctionBid, AuctionRound, AuctionSlot, FrozenGoldBar
 from trade.services.auction.gold_bars import freeze_gold_bars, unfreeze_gold_bars
 
 logger = logging.getLogger(__name__)
+AUCTION_OUTBID_MESSAGE_EXCEPTIONS: InfrastructureExceptions = combine_infrastructure_exceptions(
+    MessageError,
+    infrastructure_exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+)
 
 
 def _safe_int(value, default: int) -> int:
@@ -51,21 +56,14 @@ def _require_valid_winner_count(slot: AuctionSlot) -> int:
 def _safe_create_message(**kwargs) -> None:
     try:
         create_message(**kwargs)
-    except Exception as exc:
-        if not (
-            isinstance(exc, MessageError)
-            or is_expected_infrastructure_error(exc, exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS)
-        ):
-            raise
+    except AUCTION_OUTBID_MESSAGE_EXCEPTIONS as exc:
         logger.warning("auction outbid create_message failed: %s", exc, exc_info=True)
 
 
 def _safe_notify_user(user_id: int, payload: dict, *, log_context: str) -> None:
     try:
         notify_user(user_id, payload, log_context=log_context)
-    except Exception as exc:
-        if not is_expected_infrastructure_error(exc, exceptions=NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS):
-            raise
+    except NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning(
             "auction outbid notify_user failed: user_id=%s error=%s",
             user_id,
@@ -267,7 +265,7 @@ def place_bid(
     amount: int,
     *,
     notify_outbid_func=None,
-) -> Tuple[AuctionBid, bool]:
+) -> tuple[AuctionBid, bool]:
     """玩家出价（维克里拍卖）。
 
     Args:

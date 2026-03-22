@@ -1,9 +1,15 @@
+import logging
+
 from django.conf import settings
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
+from core.utils.infrastructure import CACHE_INFRASTRUCTURE_EXCEPTIONS
+
 from .models import GearTemplate, GuestTemplate
 from .services.equipment import give_gear
+
+logger = logging.getLogger(__name__)
 
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
@@ -30,9 +36,6 @@ def clear_guest_template_cache(sender, **kwargs):
         from .services.recruitment_templates import clear_template_cache
 
         clear_template_cache()
-    except Exception as e:
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
         # Best-effort: cache clear should never break writes.
-        import logging
-
-        logger = logging.getLogger(__name__)
-        logger.warning("Failed to clear guest template cache: %s", e, exc_info=True)
+        logger.warning("Failed to clear guest template cache: %s", exc, exc_info=True)

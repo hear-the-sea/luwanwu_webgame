@@ -4,14 +4,26 @@ from core.exceptions import BattlePreparationError
 from guests.models import Guest, GuestStatus
 
 
+def _coerce_positive_id(raw_id, *, contract_name: str) -> int:
+    try:
+        parsed_id = int(raw_id)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"broken {contract_name} contract") from exc
+    if parsed_id <= 0:
+        raise AssertionError(f"broken {contract_name} contract")
+    return parsed_id
+
+
 def collect_guest_ids(guests: list[Guest]) -> list[int]:
-    return [int(guest.id) for guest in guests if guest.pk]
+    return [
+        _coerce_positive_id(getattr(guest, "id", None), contract_name="battle guest id") for guest in guests if guest.pk
+    ]
 
 
 def collect_manor_ids(manor, *guest_groups: list[Guest] | None) -> list[int]:
     manor_ids: set[int] = set()
     if getattr(manor, "pk", None):
-        manor_ids.add(int(manor.pk))
+        manor_ids.add(_coerce_positive_id(getattr(manor, "pk", None), contract_name="battle manor id"))
 
     for guests in guest_groups:
         for guest in guests or []:
@@ -21,12 +33,7 @@ def collect_manor_ids(manor, *guest_groups: list[Guest] | None) -> list[int]:
                 guest_manor_id = getattr(guest_manor, "pk", None)
             if guest_manor_id is None:
                 continue
-            try:
-                parsed_id = int(guest_manor_id)
-            except (TypeError, ValueError):
-                continue
-            if parsed_id > 0:
-                manor_ids.add(parsed_id)
+            manor_ids.add(_coerce_positive_id(guest_manor_id, contract_name="battle guest manor id"))
     return sorted(manor_ids)
 
 

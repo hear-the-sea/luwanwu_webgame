@@ -64,10 +64,7 @@ def _grant_resources_locked(manor, drops: Dict[str, int], opponent_label: str) -
 
 
 def _in_atomic_block() -> bool:
-    try:
-        return bool(transaction.get_connection().in_atomic_block)
-    except Exception:
-        return False
+    return bool(transaction.get_connection().in_atomic_block)
 
 
 def _create_message(manor, opponent_label: str, report) -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 import time
 
 from django.core.cache import cache
@@ -20,16 +21,10 @@ from .online_presence_backend import (
 logger = logging.getLogger(__name__)
 
 
-def _is_expected_cache_error(exc: Exception) -> bool:
-    return isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS)
-
-
 def _safe_cache_add(key: str, value, timeout: int):
     try:
         return cache.add(key, value, timeout=timeout)
-    except Exception as exc:
-        if not _is_expected_cache_error(exc):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
         logger.warning("Failed to add cache key: %s", key, exc_info=True)
         return None
 
@@ -37,9 +32,7 @@ def _safe_cache_add(key: str, value, timeout: int):
 def _safe_cache_delete(key: str) -> None:
     try:
         cache.delete(key)
-    except Exception as exc:
-        if not _is_expected_cache_error(exc):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
         logger.warning("Failed to delete cache key: %s", key, exc_info=True)
 
 
@@ -59,6 +52,7 @@ def refresh_online_presence_from_request(user) -> None:
     if should_refresh is False:
         return
 
+    cleanup_touch_cache = False
     try:
         redis = get_redis_connection_if_supported()
         if redis is None:
@@ -69,10 +63,8 @@ def refresh_online_presence_from_request(user) -> None:
     except NotImplementedError:
         return
     except INFRASTRUCTURE_EXCEPTIONS:
-        if should_refresh:
-            _safe_cache_delete(touch_cache_key)
+        cleanup_touch_cache = bool(should_refresh)
         logger.warning("Failed to refresh online user presence from HTTP request", exc_info=True)
-    except Exception:
-        if should_refresh:
+    finally:
+        if cleanup_touch_cache or (should_refresh and sys.exc_info()[0] is not None):
             _safe_cache_delete(touch_cache_key)
-        raise

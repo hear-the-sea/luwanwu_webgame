@@ -18,8 +18,12 @@ CELERY_DISPATCH_INFRA_EXCEPTIONS = (
 )
 
 
-def _is_expected_cache_error(exc: Exception) -> bool:
-    return isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS)
+def _rollback_dedup_gate(dedup_key: str, *, logger: Optional[logging.Logger]) -> None:
+    try:
+        cache.delete(dedup_key)
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
+        if logger:
+            logger.debug("celery dispatch dedup rollback failed: %s", dedup_key, exc_info=True)
 
 
 def safe_apply_async(
@@ -58,9 +62,7 @@ def safe_apply_async(
     try:
         task.apply_async(args=list(args or []), kwargs=dict(kwargs or {}), countdown=countdown)
         return True
-    except Exception as exc:
-        if not isinstance(exc, CELERY_DISPATCH_INFRA_EXCEPTIONS):
-            raise
+    except CELERY_DISPATCH_INFRA_EXCEPTIONS:
         if logger:
             logger.warning(log_message, exc_info=True, extra={"degraded": True, "component": "celery_dispatch"})
         from core.utils.task_monitoring import increment_degraded_counter
@@ -113,9 +115,7 @@ def safe_apply_async_with_dedup(
             dedup_gate_acquired = bool(cache.add(dedup_key, "1", timeout=dedup_timeout))
             if not dedup_gate_acquired:
                 return True
-        except Exception as exc:
-            if not _is_expected_cache_error(exc):
-                raise
+        except CACHE_INFRASTRUCTURE_EXCEPTIONS:
             if logger:
                 logger.warning(
                     "celery dispatch dedup cache unavailable: %s",
@@ -124,6 +124,7 @@ def safe_apply_async_with_dedup(
                     extra={"degraded": True, "component": "celery_dedup_cache"},
                 )
 
+    ok: bool | None = None
     try:
         ok = safe_apply_async(
             task,
@@ -134,26 +135,8 @@ def safe_apply_async_with_dedup(
             log_message=log_message,
             raise_on_failure=raise_on_failure,
         )
-    except Exception:
-        if dedup_gate_acquired:
-            try:
-                cache.delete(dedup_key)
-            except Exception as exc:
-                if not _is_expected_cache_error(exc):
-                    raise
-                if logger:
-                    logger.debug("celery dispatch dedup rollback failed: %s", dedup_key, exc_info=True)
-        raise
-    if ok:
-        return True
-
-    # Roll back dedup gate on dispatch failure to avoid dropping retries in the dedup window.
-    if dedup_gate_acquired:
-        try:
-            cache.delete(dedup_key)
-        except Exception as exc:
-            if not _is_expected_cache_error(exc):
-                raise
-            if logger:
-                logger.debug("celery dispatch dedup rollback failed: %s", dedup_key, exc_info=True)
-    return False
+        return ok
+    finally:
+        # Dispatch failures and unexpected errors should both release the dedup gate so retries are not suppressed.
+        if dedup_gate_acquired and ok is not True:
+            _rollback_dedup_gate(dedup_key, logger=logger)

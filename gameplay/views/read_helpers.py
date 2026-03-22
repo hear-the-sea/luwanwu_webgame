@@ -5,7 +5,7 @@ from collections.abc import Callable
 
 from django.http import HttpRequest
 
-from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_expected_infrastructure_error
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS
 from gameplay.models import Manor
 from gameplay.services.manor.core import get_manor
 
@@ -25,12 +25,7 @@ def prepare_manor_for_read(
     try:
         project_fn(manor)
         return True
-    except Exception as exc:
-        if not is_expected_infrastructure_error(
-            exc,
-            exceptions=EXPECTED_READ_PROJECTION_ERRORS,
-        ):
-            raise
+    except EXPECTED_READ_PROJECTION_ERRORS as exc:
         logger.warning(
             "Manor read projection failed: source=%s manor_id=%s user_id=%s error=%s",
             source,

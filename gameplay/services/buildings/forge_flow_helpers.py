@@ -4,12 +4,23 @@ from datetime import datetime, timedelta
 from logging import Logger
 from typing import TYPE_CHECKING, Any, Callable, Iterable
 
-from core.exceptions import ForgeOperationError
+from core.exceptions import ForgeOperationError, MessageError
+from core.utils.imports import is_missing_target_import
+from core.utils.infrastructure import (
+    DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+    NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
+    InfrastructureExceptions,
+    combine_infrastructure_exceptions,
+)
 
 if TYPE_CHECKING:
     from ...models import EquipmentProduction, InventoryItem, Manor
 
 FilteredConfigs = list[tuple[str, dict[str, Any]]]
+FORGE_MESSAGE_BEST_EFFORT_EXCEPTIONS: InfrastructureExceptions = combine_infrastructure_exceptions(
+    MessageError,
+    infrastructure_exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+)
 
 
 def build_filtered_equipment_configs(
@@ -150,7 +161,9 @@ def schedule_forging_completion_task(
     countdown = max(0, int(eta_seconds))
     try:
         from gameplay.tasks import complete_equipment_forging
-    except Exception:
+    except ImportError as exc:
+        if not is_missing_target_import(exc, "gameplay.tasks"):
+            raise
         logger.warning("Unable to import complete_equipment_forging task; skip scheduling", exc_info=True)
         return
 
@@ -217,6 +230,17 @@ def send_equipment_forging_completion_notification(
             title=f"{production.equipment_name}{quantity_text}锻造完成",
             body=f"您的{production.equipment_name}{quantity_text}已锻造完成，请到仓库查收。",
         )
+    except FORGE_MESSAGE_BEST_EFFORT_EXCEPTIONS as exc:
+        logger.warning(
+            "equipment forging message creation failed: production_id=%s manor_id=%s error=%s",
+            getattr(production, "id", None),
+            getattr(production, "manor_id", None),
+            exc,
+            exc_info=True,
+        )
+        return
+
+    try:
         notify_user_func(
             production.manor.user_id,
             {
@@ -227,7 +251,7 @@ def send_equipment_forging_completion_notification(
             },
             log_context="equipment forging notification",
         )
-    except Exception as exc:
+    except NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning(
             "equipment forging notification failed: production_id=%s manor_id=%s error=%s",
             getattr(production, "id", None),

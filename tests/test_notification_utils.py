@@ -38,7 +38,7 @@ def test_notify_user_runtime_marker_error_bubbles_up(monkeypatch):
     with pytest.raises(RuntimeError, match="notification backend down"):
         notify_user(1, {"kind": "system", "title": "t"})
 
-    logger.exception.assert_called_once()
+    logger.exception.assert_not_called()
 
 
 def test_notify_user_unexpected_runtime_error_bubbles_up(monkeypatch):
@@ -54,4 +54,4 @@ def test_notify_user_unexpected_runtime_error_bubbles_up(monkeypatch):
     with pytest.raises(RuntimeError, match="bad payload"):
         notify_user(1, {"kind": "system", "title": "t"})
 
-    logger.exception.assert_called_once()
+    logger.exception.assert_not_called()

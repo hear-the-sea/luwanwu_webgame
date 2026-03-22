@@ -136,7 +136,7 @@ class _FakeRedis:
 
 def _build_consumer(fake_redis: _FakeRedis) -> WorldChatConsumer:
     consumer = WorldChatConsumer()
-    consumer._get_redis = lambda: fake_redis
+    object.__setattr__(consumer, "_get_redis", lambda: fake_redis)
     consumer.user_id = 1
     consumer.display_name = "u"
     return consumer
@@ -181,6 +181,20 @@ def test_world_chat_get_history_sync_skips_old_and_malformed_entries(monkeypatch
     assert len(fake._lists[consumer.HISTORY_KEY]) == 1
 
 
+def test_world_chat_get_history_sync_programming_error_bubbles_up(monkeypatch):
+    fake = _FakeRedis()
+    consumer = _build_consumer(fake)
+    fake._lists[consumer.HISTORY_KEY] = [json.dumps({"type": "message", "ts": 1, "text": "ok"})]
+
+    monkeypatch.setattr(
+        "websocket.backends.chat_history.json.loads",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("history parse bug")),
+    )
+
+    with pytest.raises(RuntimeError, match="history parse bug"):
+        consumer._get_history_sync()
+
+
 def test_world_chat_append_history_sync_pushes_and_trims(monkeypatch):
     fake = _FakeRedis()
     consumer = _build_consumer(fake)
@@ -200,6 +214,52 @@ def test_world_chat_append_history_sync_pushes_and_trims(monkeypatch):
     assert len(fake._lists[consumer.HISTORY_KEY]) == 2
     # Newest first (LPUSH)
     assert json.loads(fake._lists[consumer.HISTORY_KEY][0])["text"] == "c"
+
+
+def test_world_chat_append_history_sync_raises_infrastructure_error_on_cache_failure(monkeypatch):
+    class _BrokenRedis(_FakeRedis):
+        def pipeline(self):
+            raise ConnectionInterrupted("cache down")
+
+    consumer = _build_consumer(_BrokenRedis())
+
+    with pytest.raises(WorldChatInfrastructureError, match="history backend unavailable"):
+        consumer._append_history_sync({"type": "message", "ts": 1, "text": "hello"})
+
+
+def test_world_chat_append_history_sync_runtime_marker_bubbles_up(monkeypatch):
+    class _BrokenRedis(_FakeRedis):
+        def pipeline(self):
+            raise RuntimeError("cache down")
+
+    consumer = _build_consumer(_BrokenRedis())
+
+    with pytest.raises(RuntimeError, match="cache down"):
+        consumer._append_history_sync({"type": "message", "ts": 1, "text": "hello"})
+
+
+def test_world_chat_append_history_sync_trim_programming_error_bubbles_up(monkeypatch):
+    fake = _FakeRedis()
+    consumer = _build_consumer(fake)
+
+    monkeypatch.setattr(
+        "websocket.backends.chat_history.trim_history_by_time_sync",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("trim bug")),
+    )
+
+    with pytest.raises(RuntimeError, match="trim bug"):
+        consumer._append_history_sync({"type": "message", "ts": 1, "text": "hello"})
+
+
+def test_world_chat_remove_history_sync_runtime_marker_bubbles_up():
+    class _BrokenRedis(_FakeRedis):
+        def lrem(self, key: str, count: int, payload: str):
+            raise RuntimeError("cache delete failed")
+
+    consumer = _build_consumer(_BrokenRedis())
+
+    with pytest.raises(RuntimeError, match="cache delete failed"):
+        consumer._remove_history_sync({"type": "message", "ts": 1, "text": "hello"})
 
 
 def test_world_chat_rate_limit_sync_handles_no_user_id():

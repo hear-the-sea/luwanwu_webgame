@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
-from django.db import IntegrityError, transaction
+from django.db import DatabaseError, IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
 from django_redis.exceptions import ConnectionInterrupted
@@ -203,7 +203,7 @@ def test_settle_auction_round_marks_failed_slot_unsold_and_completes_round(monke
         end_at=timezone.now() - timedelta(minutes=1),
     )
 
-    monkeypatch.setattr(auction_service, "_settle_slot", lambda slot: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr(auction_service, "_settle_slot", lambda slot: (_ for _ in ()).throw(DatabaseError("boom")))
 
     stats = auction_service.settle_auction_round(round_id=auction_round.id)
 
@@ -367,7 +367,7 @@ def test_rounds_module_settle_auction_round_marks_failed_slot_unsold(monkeypatch
     )
 
     stats = settle_round_impl(
-        round_id=auction_round.id, settle_slot_func=lambda _slot: (_ for _ in ()).throw(RuntimeError("boom"))
+        round_id=auction_round.id, settle_slot_func=lambda _slot: (_ for _ in ()).throw(DatabaseError("boom"))
     )
 
     auction_round.refresh_from_db()
@@ -378,6 +378,106 @@ def test_rounds_module_settle_auction_round_marks_failed_slot_unsold(monkeypatch
     assert auction_round.status == AuctionRound.Status.COMPLETED
     assert auction_round.settled_at is not None
     assert slot.status == AuctionSlot.Status.UNSOLD
+
+
+@pytest.mark.django_db
+def test_rounds_module_settle_auction_round_runtime_error_bubbles_up():
+    from trade.services.auction.rounds import settle_auction_round as settle_round_impl
+
+    item_template = _create_auction_item_template("auction_rounds_runtime_error")
+    auction_round = AuctionRound.objects.create(
+        round_number=10013,
+        status=AuctionRound.Status.ACTIVE,
+        start_at=timezone.now() - timedelta(days=2),
+        end_at=timezone.now() - timedelta(minutes=1),
+    )
+    slot = AuctionSlot.objects.create(
+        round=auction_round,
+        item_template=item_template,
+        quantity=1,
+        starting_price=10,
+        current_price=10,
+        min_increment=1,
+        status=AuctionSlot.Status.ACTIVE,
+        config_key=item_template.key,
+        slot_index=0,
+    )
+
+    with pytest.raises(RuntimeError, match="boom"):
+        settle_round_impl(
+            round_id=auction_round.id, settle_slot_func=lambda _slot: (_ for _ in ()).throw(RuntimeError("boom"))
+        )
+
+    auction_round.refresh_from_db()
+    slot.refresh_from_db()
+    assert auction_round.status == AuctionRound.Status.SETTLING
+    assert auction_round.settled_at is None
+    assert slot.status == AuctionSlot.Status.ACTIVE
+
+
+@pytest.mark.django_db
+def test_rounds_module_settle_auction_round_invalid_settle_result_bubbles_contract_error():
+    from trade.services.auction.rounds import settle_auction_round as settle_round_impl
+
+    item_template = _create_auction_item_template("auction_rounds_invalid_settle_result")
+    auction_round = AuctionRound.objects.create(
+        round_number=10014,
+        status=AuctionRound.Status.ACTIVE,
+        start_at=timezone.now() - timedelta(days=2),
+        end_at=timezone.now() - timedelta(minutes=1),
+    )
+    slot = AuctionSlot.objects.create(
+        round=auction_round,
+        item_template=item_template,
+        quantity=1,
+        starting_price=10,
+        current_price=10,
+        min_increment=1,
+        status=AuctionSlot.Status.ACTIVE,
+        config_key=item_template.key,
+        slot_index=0,
+    )
+
+    with pytest.raises(AssertionError, match="invalid settle slot result"):
+        settle_round_impl(round_id=auction_round.id, settle_slot_func=lambda _slot: None)
+
+    auction_round.refresh_from_db()
+    slot.refresh_from_db()
+    assert auction_round.status == AuctionRound.Status.SETTLING
+    assert auction_round.settled_at is None
+    assert slot.status == AuctionSlot.Status.ACTIVE
+
+
+@pytest.mark.django_db
+def test_rounds_module_recovery_programming_error_bubbles_up(monkeypatch, django_user_model):
+    from trade.services.auction import rounds as auction_rounds
+
+    setup = create_slot_with_bids(
+        django_user_model=django_user_model,
+        bid_specs=[AuctionSlotBidSpec(username="auction_recovery_bug", amount=10)],
+        item_key="auction_rounds_recovery_programming_error",
+        round_number=10015,
+        start_at=timezone.now() - timedelta(days=2),
+        end_at=timezone.now() - timedelta(minutes=1),
+    )
+
+    monkeypatch.setattr(
+        auction_rounds,
+        "_refund_losing_bids",
+        lambda _bids: (_ for _ in ()).throw(AssertionError("refund contract bug")),
+    )
+
+    with pytest.raises(AssertionError, match="refund contract bug"):
+        auction_rounds.settle_auction_round(
+            round_id=setup.auction_round.id,
+            settle_slot_func=lambda _slot: (_ for _ in ()).throw(DatabaseError("boom")),
+        )
+
+    setup.auction_round.refresh_from_db()
+    setup.slot.refresh_from_db()
+    assert setup.auction_round.status == AuctionRound.Status.SETTLING
+    assert setup.auction_round.settled_at is None
+    assert setup.slot.status == AuctionSlot.Status.ACTIVE
 
 
 @pytest.mark.django_db

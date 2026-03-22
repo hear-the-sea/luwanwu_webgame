@@ -44,13 +44,6 @@ def refresh_mission_runs(
                 exc_info=True,
                 extra={"degraded": True, "component": "mission_task_import"},
             )
-        except Exception:
-            logger.error(
-                "Unexpected mission task import failure during refresh",
-                exc_info=True,
-                extra={"degraded": True, "component": "mission_task_import"},
-            )
-            raise
         else:
             sync_run_ids = []
             for run_id in due_run_ids:
@@ -96,13 +89,6 @@ def schedule_mission_completion(
         if countdown <= 0:
             finalize_mission_run(run)
         return
-    except Exception:
-        logger.error(
-            "Unexpected complete_mission_task import failure",
-            exc_info=True,
-            extra={"degraded": True, "component": "mission_task_import"},
-        )
-        raise
 
     dispatched = safe_apply_async(
         complete_mission_task,

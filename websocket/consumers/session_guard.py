@@ -6,6 +6,7 @@ import time
 from channels.db import database_sync_to_async
 
 from core.middleware.single_session import (
+    EXPECTED_SESSION_VALIDATION_ERRORS,
     SessionValidationUnavailable,
     is_single_session_request_valid,
     should_fail_open_on_single_session_unavailable,
@@ -17,6 +18,9 @@ logger = logging.getLogger(__name__)
 
 class WebSocketSessionValidationUnavailable(RuntimeError):
     """Raised when websocket session validation cannot reach authoritative state."""
+
+
+WEBSOCKET_SESSION_VALIDATION_EXCEPTIONS: tuple[type[Exception], ...] = EXPECTED_SESSION_VALIDATION_ERRORS
 
 
 def is_websocket_session_valid(scope: dict) -> bool:
@@ -38,12 +42,12 @@ def is_websocket_session_valid(scope: dict) -> bool:
         try:
             if not exists(current_session_key):
                 return False
-        except Exception as exc:
+        except WEBSOCKET_SESSION_VALIDATION_EXCEPTIONS as exc:
             raise WebSocketSessionValidationUnavailable("session existence check unavailable") from exc
 
     try:
         session_user_id = session.get("_auth_user_id")
-    except Exception as exc:
+    except WEBSOCKET_SESSION_VALIDATION_EXCEPTIONS as exc:
         raise WebSocketSessionValidationUnavailable("session payload check unavailable") from exc
 
     if str(session_user_id) != str(user.id):

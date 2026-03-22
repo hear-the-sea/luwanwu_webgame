@@ -2,8 +2,18 @@ import pytest
 from django.db import transaction
 from django.utils import timezone
 
-from core.exceptions import InsufficientStockError, ItemNotFoundError
-from gameplay.models import InventoryItem, ItemTemplate, PlayerTechnology
+from core.exceptions import InsufficientStockError, ItemNotFoundError, MessageError
+from gameplay.models import (
+    HorseProduction,
+    InventoryItem,
+    ItemTemplate,
+    LivestockProduction,
+    PlayerTechnology,
+    SmeltingProduction,
+)
+from gameplay.services.buildings.ranch import finalize_livestock_production
+from gameplay.services.buildings.smithy import finalize_smelting_production
+from gameplay.services.buildings.stable import finalize_horse_production
 from gameplay.services.inventory.core import (
     add_item_to_inventory,
     add_item_to_inventory_locked,
@@ -206,16 +216,114 @@ def test_finalize_building_upgrade_keeps_success_when_notification_fails(monkeyp
 
     monkeypatch.setattr(
         "gameplay.services.utils.messages.create_message",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(MessageError("message backend down")),
     )
     monkeypatch.setattr(
         "gameplay.services.manor.core.notify_user",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("ws backend down")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionError("ws backend down")),
     )
 
     assert finalize_building_upgrade(building, now=now, send_notification=True) is True
     building.refresh_from_db()
     assert building.level == before_level + 1
+    assert building.is_upgrading is False
+
+
+@pytest.mark.django_db
+def test_finalize_building_upgrade_message_runtime_marker_error_bubbles_up(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="building_finalize_msg_runtime", password="pass12345")
+    manor = ensure_manor(user)
+    building = manor.buildings.select_related("building_type").first()
+    assert building is not None
+
+    now = timezone.now()
+    building.is_upgrading = True
+    building.upgrade_complete_at = now - timezone.timedelta(seconds=1)
+    building.save(update_fields=["is_upgrading", "upgrade_complete_at"])
+
+    monkeypatch.setattr(
+        "gameplay.services.utils.messages.create_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+    )
+
+    with pytest.raises(RuntimeError, match="message backend down"):
+        finalize_building_upgrade(building, now=now, send_notification=True)
+
+    building.refresh_from_db()
+    assert building.is_upgrading is False
+
+
+@pytest.mark.django_db
+def test_finalize_building_upgrade_message_programming_error_bubbles_up(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="building_finalize_msg_programming", password="pass12345")
+    manor = ensure_manor(user)
+    building = manor.buildings.select_related("building_type").first()
+    assert building is not None
+
+    now = timezone.now()
+    building.is_upgrading = True
+    building.upgrade_complete_at = now - timezone.timedelta(seconds=1)
+    building.save(update_fields=["is_upgrading", "upgrade_complete_at"])
+
+    monkeypatch.setattr(
+        "gameplay.services.utils.messages.create_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken building message contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken building message contract"):
+        finalize_building_upgrade(building, now=now, send_notification=True)
+
+    building.refresh_from_db()
+    assert building.is_upgrading is False
+
+
+@pytest.mark.django_db
+def test_finalize_building_upgrade_notification_runtime_marker_error_bubbles_up(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="building_finalize_ws_runtime", password="pass12345")
+    manor = ensure_manor(user)
+    building = manor.buildings.select_related("building_type").first()
+    assert building is not None
+
+    now = timezone.now()
+    building.is_upgrading = True
+    building.upgrade_complete_at = now - timezone.timedelta(seconds=1)
+    building.save(update_fields=["is_upgrading", "upgrade_complete_at"])
+
+    monkeypatch.setattr("gameplay.services.utils.messages.create_message", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(
+        "gameplay.services.manor.core.notify_user",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("ws backend down")),
+    )
+
+    with pytest.raises(RuntimeError, match="ws backend down"):
+        finalize_building_upgrade(building, now=now, send_notification=True)
+
+    building.refresh_from_db()
+    assert building.is_upgrading is False
+
+
+@pytest.mark.django_db
+def test_finalize_building_upgrade_notification_programming_error_bubbles_up(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="building_finalize_ws_programming", password="pass12345")
+    manor = ensure_manor(user)
+    building = manor.buildings.select_related("building_type").first()
+    assert building is not None
+
+    now = timezone.now()
+    building.is_upgrading = True
+    building.upgrade_complete_at = now - timezone.timedelta(seconds=1)
+    building.save(update_fields=["is_upgrading", "upgrade_complete_at"])
+
+    monkeypatch.setattr("gameplay.services.utils.messages.create_message", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(
+        "gameplay.services.manor.core.notify_user",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken building notify contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken building notify contract"):
+        finalize_building_upgrade(building, now=now, send_notification=True)
+
+    building.refresh_from_db()
     assert building.is_upgrading is False
 
 
@@ -234,11 +342,65 @@ def test_finalize_technology_upgrade_keeps_success_when_notification_message_fai
     )
 
     def _raise_create_message(*_args, **_kwargs):
-        raise RuntimeError("message backend down")
+        raise MessageError("message backend down")
 
     monkeypatch.setattr("gameplay.services.utils.messages.create_message", _raise_create_message)
 
     assert finalize_technology_upgrade(tech, send_notification=True) is True
+    tech.refresh_from_db()
+    assert tech.level == 1
+    assert tech.is_upgrading is False
+
+
+@pytest.mark.django_db
+def test_finalize_technology_upgrade_message_runtime_marker_error_bubbles_up(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="tech_finalize_msg_runtime", password="pass12345")
+    manor = ensure_manor(user)
+
+    now = timezone.now()
+    tech = PlayerTechnology.objects.create(
+        manor=manor,
+        tech_key="march_art",
+        level=0,
+        is_upgrading=True,
+        upgrade_complete_at=now - timezone.timedelta(seconds=1),
+    )
+
+    monkeypatch.setattr(
+        "gameplay.services.utils.messages.create_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+    )
+
+    with pytest.raises(RuntimeError, match="message backend down"):
+        finalize_technology_upgrade(tech, send_notification=True)
+
+    tech.refresh_from_db()
+    assert tech.level == 1
+    assert tech.is_upgrading is False
+
+
+@pytest.mark.django_db
+def test_finalize_technology_upgrade_message_programming_error_bubbles_up(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="tech_finalize_msg_programming", password="pass12345")
+    manor = ensure_manor(user)
+
+    now = timezone.now()
+    tech = PlayerTechnology.objects.create(
+        manor=manor,
+        tech_key="march_art",
+        level=0,
+        is_upgrading=True,
+        upgrade_complete_at=now - timezone.timedelta(seconds=1),
+    )
+
+    monkeypatch.setattr(
+        "gameplay.services.utils.messages.create_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken technology message contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken technology message contract"):
+        finalize_technology_upgrade(tech, send_notification=True)
+
     tech.refresh_from_db()
     assert tech.level == 1
     assert tech.is_upgrading is False
@@ -260,10 +422,311 @@ def test_finalize_technology_upgrade_keeps_success_when_notification_ws_fails(mo
 
     monkeypatch.setattr(
         "gameplay.services.utils.notifications.notify_user",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("ws backend down")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionError("ws backend down")),
     )
 
     assert finalize_technology_upgrade(tech, send_notification=True) is True
     tech.refresh_from_db()
     assert tech.level == 1
     assert tech.is_upgrading is False
+
+
+@pytest.mark.django_db
+def test_finalize_technology_upgrade_notification_runtime_marker_error_bubbles_up(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="tech_finalize_ws_runtime", password="pass12345")
+    manor = ensure_manor(user)
+
+    now = timezone.now()
+    tech = PlayerTechnology.objects.create(
+        manor=manor,
+        tech_key="march_art",
+        level=0,
+        is_upgrading=True,
+        upgrade_complete_at=now - timezone.timedelta(seconds=1),
+    )
+
+    monkeypatch.setattr("gameplay.services.utils.messages.create_message", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(
+        "gameplay.services.utils.notifications.notify_user",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("ws backend down")),
+    )
+
+    with pytest.raises(RuntimeError, match="ws backend down"):
+        finalize_technology_upgrade(tech, send_notification=True)
+
+    tech.refresh_from_db()
+    assert tech.level == 1
+    assert tech.is_upgrading is False
+
+
+@pytest.mark.django_db
+def test_finalize_technology_upgrade_notification_programming_error_bubbles_up(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="tech_finalize_ws_programming", password="pass12345")
+    manor = ensure_manor(user)
+
+    now = timezone.now()
+    tech = PlayerTechnology.objects.create(
+        manor=manor,
+        tech_key="march_art",
+        level=0,
+        is_upgrading=True,
+        upgrade_complete_at=now - timezone.timedelta(seconds=1),
+    )
+
+    monkeypatch.setattr("gameplay.services.utils.messages.create_message", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(
+        "gameplay.services.utils.notifications.notify_user",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken technology notify contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken technology notify contract"):
+        finalize_technology_upgrade(tech, send_notification=True)
+
+    tech.refresh_from_db()
+    assert tech.level == 1
+    assert tech.is_upgrading is False
+
+
+_PRODUCTION_NOTIFICATION_CASES = [
+    (
+        "horse",
+        HorseProduction,
+        finalize_horse_production,
+        "gameplay.services.utils.notifications.notify_user",
+        {
+            "key_field": "horse_key",
+            "name_field": "horse_name",
+            "key": "horse_notify_item",
+            "name": "测试马匹",
+            "extra": {"grain_cost": 10},
+        },
+    ),
+    (
+        "livestock",
+        LivestockProduction,
+        finalize_livestock_production,
+        "gameplay.services.buildings.ranch.notify_user",
+        {
+            "key_field": "livestock_key",
+            "name_field": "livestock_name",
+            "key": "livestock_notify_item",
+            "name": "测试家畜",
+            "extra": {"grain_cost": 12},
+        },
+    ),
+    (
+        "smelting",
+        SmeltingProduction,
+        finalize_smelting_production,
+        "gameplay.services.buildings.smithy.notify_user",
+        {
+            "key_field": "metal_key",
+            "name_field": "metal_name",
+            "key": "smelting_notify_item",
+            "name": "测试金属",
+            "extra": {"cost_type": "silver", "cost_amount": 15},
+        },
+    ),
+]
+
+
+def _create_completed_notification_production(*, manor, model_cls, fields: dict):
+    item_key = fields["key"]
+    item_name = fields["name"]
+    ItemTemplate.objects.create(
+        key=item_key,
+        name=item_name,
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=False,
+    )
+    kwargs = {
+        "manor": manor,
+        fields["key_field"]: item_key,
+        fields["name_field"]: item_name,
+        "quantity": 2,
+        "base_duration": 60,
+        "actual_duration": 60,
+        "complete_at": timezone.now() - timezone.timedelta(seconds=1),
+        "status": model_cls.Status.PRODUCING,
+        **fields["extra"],
+    }
+    return model_cls.objects.create(**kwargs)
+
+
+@pytest.mark.parametrize(
+    ("_label", "model_cls", "finalize_func", "notify_user_path", "fields"),
+    _PRODUCTION_NOTIFICATION_CASES,
+)
+@pytest.mark.django_db
+def test_production_finalize_message_programming_error_bubbles_up(
+    _label,
+    model_cls,
+    finalize_func,
+    notify_user_path,
+    fields,
+    monkeypatch,
+    django_user_model,
+):
+    user = django_user_model.objects.create_user(username=f"{_label}_msg_programming", password="pass12345")
+    manor = ensure_manor(user)
+    production = _create_completed_notification_production(manor=manor, model_cls=model_cls, fields=fields)
+
+    monkeypatch.setattr(
+        "gameplay.services.utils.messages.create_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken production message contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken production message contract"):
+        finalize_func(production, send_notification=True)
+
+    production.refresh_from_db()
+    assert production.status == model_cls.Status.COMPLETED
+
+
+@pytest.mark.parametrize(
+    ("_label", "model_cls", "finalize_func", "notify_user_path", "fields"),
+    _PRODUCTION_NOTIFICATION_CASES,
+)
+@pytest.mark.django_db
+def test_production_finalize_keeps_success_when_message_infra_fails(
+    _label,
+    model_cls,
+    finalize_func,
+    notify_user_path,
+    fields,
+    monkeypatch,
+    django_user_model,
+):
+    user = django_user_model.objects.create_user(username=f"{_label}_msg_fail", password="pass12345")
+    manor = ensure_manor(user)
+    production = _create_completed_notification_production(manor=manor, model_cls=model_cls, fields=fields)
+
+    monkeypatch.setattr(
+        "gameplay.services.utils.messages.create_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(MessageError("message backend down")),
+    )
+
+    assert finalize_func(production, send_notification=True) is True
+    production.refresh_from_db()
+    assert production.status == model_cls.Status.COMPLETED
+
+
+@pytest.mark.parametrize(
+    ("_label", "model_cls", "finalize_func", "notify_user_path", "fields"),
+    _PRODUCTION_NOTIFICATION_CASES,
+)
+@pytest.mark.django_db
+def test_production_finalize_message_runtime_marker_error_bubbles_up(
+    _label,
+    model_cls,
+    finalize_func,
+    notify_user_path,
+    fields,
+    monkeypatch,
+    django_user_model,
+):
+    user = django_user_model.objects.create_user(username=f"{_label}_msg_runtime", password="pass12345")
+    manor = ensure_manor(user)
+    production = _create_completed_notification_production(manor=manor, model_cls=model_cls, fields=fields)
+
+    monkeypatch.setattr(
+        "gameplay.services.utils.messages.create_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+    )
+
+    with pytest.raises(RuntimeError, match="message backend down"):
+        finalize_func(production, send_notification=True)
+
+    production.refresh_from_db()
+    assert production.status == model_cls.Status.COMPLETED
+
+
+@pytest.mark.parametrize(
+    ("_label", "model_cls", "finalize_func", "notify_user_path", "fields"),
+    _PRODUCTION_NOTIFICATION_CASES,
+)
+@pytest.mark.django_db
+def test_production_finalize_notification_programming_error_bubbles_up(
+    _label,
+    model_cls,
+    finalize_func,
+    notify_user_path,
+    fields,
+    monkeypatch,
+    django_user_model,
+):
+    user = django_user_model.objects.create_user(username=f"{_label}_ws_programming", password="pass12345")
+    manor = ensure_manor(user)
+    production = _create_completed_notification_production(manor=manor, model_cls=model_cls, fields=fields)
+
+    monkeypatch.setattr("gameplay.services.utils.messages.create_message", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(
+        notify_user_path,
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken production notify contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken production notify contract"):
+        finalize_func(production, send_notification=True)
+
+    production.refresh_from_db()
+    assert production.status == model_cls.Status.COMPLETED
+
+
+@pytest.mark.parametrize(
+    ("_label", "model_cls", "finalize_func", "notify_user_path", "fields"),
+    _PRODUCTION_NOTIFICATION_CASES,
+)
+@pytest.mark.django_db
+def test_production_finalize_keeps_success_when_notification_infra_fails(
+    _label,
+    model_cls,
+    finalize_func,
+    notify_user_path,
+    fields,
+    monkeypatch,
+    django_user_model,
+):
+    user = django_user_model.objects.create_user(username=f"{_label}_ws_fail", password="pass12345")
+    manor = ensure_manor(user)
+    production = _create_completed_notification_production(manor=manor, model_cls=model_cls, fields=fields)
+
+    monkeypatch.setattr("gameplay.services.utils.messages.create_message", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(
+        notify_user_path,
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionError("ws backend down")),
+    )
+
+    assert finalize_func(production, send_notification=True) is True
+    production.refresh_from_db()
+    assert production.status == model_cls.Status.COMPLETED
+
+
+@pytest.mark.parametrize(
+    ("_label", "model_cls", "finalize_func", "notify_user_path", "fields"),
+    _PRODUCTION_NOTIFICATION_CASES,
+)
+@pytest.mark.django_db
+def test_production_finalize_notification_runtime_marker_error_bubbles_up(
+    _label,
+    model_cls,
+    finalize_func,
+    notify_user_path,
+    fields,
+    monkeypatch,
+    django_user_model,
+):
+    user = django_user_model.objects.create_user(username=f"{_label}_ws_runtime", password="pass12345")
+    manor = ensure_manor(user)
+    production = _create_completed_notification_production(manor=manor, model_cls=model_cls, fields=fields)
+
+    monkeypatch.setattr("gameplay.services.utils.messages.create_message", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(
+        notify_user_path,
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("ws backend down")),
+    )
+
+    with pytest.raises(RuntimeError, match="ws backend down"):
+        finalize_func(production, send_notification=True)
+
+    production.refresh_from_db()
+    assert production.status == model_cls.Status.COMPLETED

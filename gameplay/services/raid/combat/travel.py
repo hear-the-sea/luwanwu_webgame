@@ -13,7 +13,11 @@ from django.utils import timezone
 from common.utils.celery import safe_apply_async
 from core.exceptions import MessageError
 from core.utils.imports import is_missing_target_import
-from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_expected_infrastructure_error
+from core.utils.infrastructure import (
+    DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+    InfrastructureExceptions,
+    combine_infrastructure_exceptions,
+)
 from core.utils.time_scale import scale_duration
 from guests.models import Guest
 
@@ -23,6 +27,10 @@ from ..utils import calculate_distance, is_same_region
 from .config import PVPConstants
 
 logger = logging.getLogger(__name__)
+RAID_BLOCKED_TARGET_MESSAGE_EXCEPTIONS: InfrastructureExceptions = combine_infrastructure_exceptions(
+    MessageError,
+    infrastructure_exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+)
 
 
 def resolve_complete_raid_task(*, logger: logging.Logger) -> object | None:
@@ -33,9 +41,6 @@ def resolve_complete_raid_task(*, logger: logging.Logger) -> object | None:
             raise
         logger.warning("complete_raid_task import failed for dismissed raids; skip async completion", exc_info=True)
         return None
-    except Exception:
-        logger.error("Unexpected complete_raid_task import failure for dismissed raids", exc_info=True)
-        raise
 
 
 def _get_defender_battle_block_reason(defender: Manor, *, now: datetime | None = None) -> str | None:
@@ -85,15 +90,7 @@ def _retreat_raid_run_due_to_blocked_target(
             title="部队已遣返",
             body=f"目标 {locked_run.defender.display_name} 当前无法交战（{reason}），您的部队已自动遣返。",
         )
-    except Exception as exc:
-        if not (
-            isinstance(exc, MessageError)
-            or is_expected_infrastructure_error(
-                exc,
-                exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
-            )
-        ):
-            raise
+    except RAID_BLOCKED_TARGET_MESSAGE_EXCEPTIONS as exc:
         logger.warning(
             "raid blocked-target message failed: run_id=%s attacker=%s defender=%s error=%s",
             locked_run.id,

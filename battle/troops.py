@@ -91,11 +91,7 @@ def invalidate_troop_templates_cache() -> None:
     清除兵种模板缓存（在 TroopTemplate 变更或 YAML 更新时调用）
     """
     cache.delete(TROOP_TEMPLATES_CACHE_KEY)
-    try:
-        load_troop_templates_from_yaml.cache_clear()
-    except Exception:
-        # Best-effort: cache_clear may fail in edge cases (e.g. during reload)
-        pass
+    load_troop_templates_from_yaml.cache_clear()
 
 
 @lru_cache()

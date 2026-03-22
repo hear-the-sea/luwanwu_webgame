@@ -1,5 +1,6 @@
 import pytest
 
+from core.exceptions import GuildWarehouseError
 from gameplay.models import ItemTemplate
 from gameplay.services.manor.core import ensure_manor
 from guilds.models import Guild, GuildMember, GuildWarehouse
@@ -26,10 +27,10 @@ def guild_member_with_warehouse_item(django_user_model):
 def test_add_item_to_warehouse_rejects_non_positive_quantity(guild_member_with_warehouse_item):
     guild, _member = guild_member_with_warehouse_item
 
-    with pytest.raises(ValueError, match="产出数量必须为正整数"):
+    with pytest.raises(GuildWarehouseError, match="产出数量必须为正整数"):
         add_item_to_warehouse(guild, "guild_wh_item", 0, 5)
 
-    with pytest.raises(ValueError, match="产出数量必须为正整数"):
+    with pytest.raises(GuildWarehouseError, match="产出数量必须为正整数"):
         add_item_to_warehouse(guild, "guild_wh_item", -1, 5)
 
 
@@ -37,7 +38,7 @@ def test_add_item_to_warehouse_rejects_non_positive_quantity(guild_member_with_w
 def test_add_item_to_warehouse_rejects_negative_cost(guild_member_with_warehouse_item):
     guild, _member = guild_member_with_warehouse_item
 
-    with pytest.raises(ValueError, match="兑换成本不能为负数"):
+    with pytest.raises(GuildWarehouseError, match="兑换成本不能为负数"):
         add_item_to_warehouse(guild, "guild_wh_item", 1, -1)
 
 
@@ -45,8 +46,8 @@ def test_add_item_to_warehouse_rejects_negative_cost(guild_member_with_warehouse
 def test_exchange_item_rejects_non_positive_quantity(guild_member_with_warehouse_item):
     _guild, member = guild_member_with_warehouse_item
 
-    with pytest.raises(ValueError, match="兑换数量必须为正整数"):
+    with pytest.raises(GuildWarehouseError, match="兑换数量必须为正整数"):
         exchange_item(member, "guild_wh_item", 0)
 
-    with pytest.raises(ValueError, match="兑换数量必须为正整数"):
+    with pytest.raises(GuildWarehouseError, match="兑换数量必须为正整数"):
         exchange_item(member, "guild_wh_item", -3)

@@ -16,11 +16,7 @@ from common.utils.celery import safe_apply_async
 from core.exceptions import MessageError
 from core.utils import safe_int
 from core.utils.imports import is_missing_target_import
-from core.utils.infrastructure import (
-    DATABASE_INFRASTRUCTURE_EXCEPTIONS,
-    NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
-    is_expected_infrastructure_error,
-)
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS
 
 from ...models import PlayerTroop, TroopRecruitment
 
@@ -169,15 +165,16 @@ def finalize_troop_recruitment(recruitment: TroopRecruitment, send_notification:
                 title=f"{recruitment.troop_name}{quantity_text}募兵完成",
                 body=f"您的{recruitment.troop_name}{quantity_text}已募兵完成。",
             )
-        except Exception as exc:
-            if not (
-                isinstance(exc, MessageError)
-                or is_expected_infrastructure_error(
-                    exc,
-                    exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
-                )
-            ):
-                raise
+        except MessageError as exc:
+            logger.warning(
+                "troop recruitment message creation failed: recruitment_id=%s manor_id=%s error=%s",
+                recruitment.id,
+                recruitment.manor_id,
+                exc,
+                exc_info=True,
+            )
+            return True
+        except DATABASE_INFRASTRUCTURE_EXCEPTIONS as exc:
             logger.warning(
                 "troop recruitment message creation failed: recruitment_id=%s manor_id=%s error=%s",
                 recruitment.id,
@@ -198,12 +195,7 @@ def finalize_troop_recruitment(recruitment: TroopRecruitment, send_notification:
                 },
                 log_context="troop recruitment notification",
             )
-        except Exception as exc:
-            if not is_expected_infrastructure_error(
-                exc,
-                exceptions=NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
-            ):
-                raise
+        except NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS as exc:
             logger.warning(
                 "troop recruitment notification failed: recruitment_id=%s manor_id=%s error=%s",
                 recruitment.id,

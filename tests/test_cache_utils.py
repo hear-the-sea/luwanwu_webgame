@@ -84,6 +84,17 @@ def test_invalidate_recruitment_hall_cache_tolerates_delete_many_failure(monkeyp
     cache_utils.invalidate_recruitment_hall_cache(1)
 
 
+def test_invalidate_recruitment_hall_cache_runtime_marker_bubbles_up(monkeypatch):
+    monkeypatch.setattr(
+        cache_utils.cache,
+        "delete_many",
+        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache delete failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="cache delete failed"):
+        cache_utils.invalidate_recruitment_hall_cache(1)
+
+
 def test_get_or_set_runtime_marker_bubbles_up(monkeypatch):
     monkeypatch.setattr(
         cache_utils.cache,
@@ -93,3 +104,19 @@ def test_get_or_set_runtime_marker_bubbles_up(monkeypatch):
 
     with pytest.raises(RuntimeError, match="cache down"):
         get_or_set("cache:test:get_runtime_marker", lambda: {"ok": True})
+
+
+def test_cached_decorator_cache_set_runtime_marker_bubbles_up(monkeypatch):
+    monkeypatch.setattr(cache_utils.cache, "get", lambda _key, default=None: default)
+    monkeypatch.setattr(
+        cache_utils.cache,
+        "set",
+        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cache set failed")),
+    )
+
+    @cached(lambda value: f"cache:test:runtime:{value}")
+    def _compute(value: int) -> int:
+        return value + 1
+
+    with pytest.raises(RuntimeError, match="cache set failed"):
+        _compute(3)

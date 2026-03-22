@@ -301,14 +301,6 @@ def dismiss_guest_view(request, pk: int):
         )
         messages.error(request, f"辞退失败：{sanitize_error_message(exc)}")
         return redirect("guests:detail", pk=pk)
-    except Exception:
-        logger.exception(
-            "Unexpected dismiss guest view error: manor_id=%s user_id=%s guest_id=%s",
-            getattr(manor, "id", None),
-            getattr(request.user, "id", None),
-            pk,
-        )
-        raise
 
     if result.gear_summary:
         readable = "、".join(f"{name} x{count}" if count > 1 else name for name, count in result.gear_summary.items())

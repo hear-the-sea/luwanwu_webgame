@@ -5,8 +5,10 @@
 import logging
 
 import pytest
+from django.db.utils import DatabaseError
 from django.test import TestCase
 
+from core.exceptions import GuildContributionError, MessageError
 from gameplay.models import InventoryItem, ItemTemplate, Manor
 from guilds.models import GuildMember
 from guilds.services import contribution as contribution_service
@@ -142,10 +144,10 @@ class TestGuildMembership:
         application = member_service.apply_to_guild(second_user, guild, "请收留我")
 
         def _raise_message(*_args, **_kwargs):
-            raise RuntimeError("message backend down")
+            raise MessageError("message backend down")
 
         def _raise_announcement(*_args, **_kwargs):
-            raise RuntimeError("announcement backend down")
+            raise DatabaseError("announcement backend down")
 
         monkeypatch.setattr(member_service, "send_system_message_to_user", _raise_message)
         monkeypatch.setattr(member_service, "create_announcement", _raise_announcement)
@@ -202,7 +204,7 @@ class TestGuildMembership:
         guild = guild_service.create_guild(user=user_with_gold_bars, name=guild_name, description="")
 
         def _raise_followup(*_args, **_kwargs):
-            raise RuntimeError("notification backend down")
+            raise DatabaseError("notification backend down")
 
         monkeypatch.setattr(member_service, "send_system_message_to_user", _raise_followup)
         monkeypatch.setattr(member_service, "create_announcement", _raise_followup)
@@ -286,7 +288,7 @@ def test_send_system_message_to_user_returns_false_when_manor_missing(monkeypatc
 @pytest.mark.django_db
 def test_send_system_message_to_user_returns_false_when_create_message_fails(second_user, monkeypatch, caplog):
     def _boom(**_kwargs):
-        raise RuntimeError("message backend down")
+        raise MessageError("message backend down")
 
     monkeypatch.setattr(member_notifications, "create_message", _boom)
 
@@ -302,6 +304,50 @@ def test_send_system_message_to_user_returns_false_when_create_message_fails(sec
 
     assert result is False
     assert any("follow-up message failed" in record.getMessage() for record in caplog.records)
+
+
+@pytest.mark.django_db
+def test_send_system_message_to_user_runtime_marker_error_bubbles_up(second_user, monkeypatch):
+    monkeypatch.setattr(
+        member_notifications,
+        "create_message",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+    )
+
+    with pytest.raises(RuntimeError, match="message backend down"):
+        member_notifications.send_system_message_to_user(
+            second_user.id,
+            title="系统消息",
+            body="正文",
+            action="approve_application",
+            guild_name="测试帮会",
+            logger=logging.getLogger("tests.guilds.member_notifications"),
+        )
+
+
+@pytest.mark.django_db
+def test_approve_application_followup_programming_error_bubbles_up(user_with_gold_bars, second_user, monkeypatch):
+    guild = guild_service.create_guild(user=user_with_gold_bars, name="公会消息契约帮会", description="")
+    application = member_service.apply_to_guild(second_user, guild, "请收留我")
+
+    monkeypatch.setattr(member_service, "send_system_message_to_user", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        member_service,
+        "create_announcement",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken guild announcement contract")),
+    )
+
+    with TestCase.captureOnCommitCallbacks(execute=False) as callbacks:
+        member_service.approve_application(application, user_with_gold_bars)
+
+    assert len(callbacks) == 1
+    with pytest.raises(AssertionError, match="broken guild announcement contract"):
+        callbacks[0]()
+
+    application.refresh_from_db()
+    assert application.status == "approved"
+    membership = GuildMember.objects.get(user=second_user, guild=guild)
+    assert membership.is_active is True
 
     def test_leave_guild(self, user_with_gold_bars, second_user):
         """测试主动退出帮会"""
@@ -371,7 +417,7 @@ class TestGuildContribution:
         # 尝试捐赠超过每日限制
         daily_limit = contribution_service.DAILY_DONATION_LIMITS.get("silver", 100000)
 
-        with pytest.raises(ValueError, match="已达上限"):
+        with pytest.raises(GuildContributionError, match="已达上限"):
             contribution_service.donate_resource(member, "silver", daily_limit + 1)
 
 
@@ -468,11 +514,26 @@ class TestGuildDisband:
         GuildMember.objects.create(guild=guild, user=second_user, position="member")
 
         def _raise_bulk(*_args, **_kwargs):
-            raise RuntimeError("message backend down")
+            raise DatabaseError("message backend down")
 
-        monkeypatch.setattr("gameplay.services.utils.messages.bulk_create_messages", _raise_bulk)
+        monkeypatch.setattr("guilds.services.guild.bulk_create_messages", _raise_bulk)
 
         guild_service.disband_guild(guild, user_with_gold_bars)
+        guild.refresh_from_db()
+        assert guild.is_active is False
+
+    def test_disband_guild_followup_programming_error_bubbles_up(self, user_with_gold_bars, second_user, monkeypatch):
+        guild = guild_service.create_guild(user=user_with_gold_bars, name="解散契约帮会", description="")
+        GuildMember.objects.create(guild=guild, user=second_user, position="member")
+
+        monkeypatch.setattr(
+            "guilds.services.guild.bulk_create_messages",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken guild disband message contract")),
+        )
+
+        with pytest.raises(AssertionError, match="broken guild disband message contract"):
+            guild_service.disband_guild(guild, user_with_gold_bars)
+
         guild.refresh_from_db()
         assert guild.is_active is False
 

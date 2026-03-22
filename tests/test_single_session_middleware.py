@@ -120,6 +120,20 @@ def test_single_session_middleware_runtime_marker_verify_cache_error_bubbles_up(
 
 
 @pytest.mark.django_db
+def test_single_session_middleware_cache_get_programming_error_bubbles_up(client, django_user_model, monkeypatch):
+    user = django_user_model.objects.create_user(username="single_session_cache_get_bug", password="pass123")
+    client.force_login(user)
+
+    monkeypatch.setattr(
+        "core.middleware.single_session.cache.get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken single-session cache read contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken single-session cache read contract"):
+        client.get("/health/live")
+
+
+@pytest.mark.django_db
 @override_settings(SINGLE_SESSION_FAIL_OPEN=True)
 def test_single_session_middleware_keeps_session_when_authoritative_lookup_errors(
     client, django_user_model, monkeypatch

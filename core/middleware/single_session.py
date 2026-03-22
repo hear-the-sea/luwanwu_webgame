@@ -27,17 +27,11 @@ class SessionValidationUnavailable(RuntimeError):
     """Raised when authoritative single-session validation cannot complete."""
 
 
-def _is_expected_cache_error(exc: Exception) -> bool:
-    return isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS)
-
-
 def _load_active_session_key(user_id: int) -> str | None:
     cache_key = f"{USER_SESSION_CACHE_PREFIX}{user_id}"
     try:
         cached = cache.get(cache_key)
-    except Exception as exc:
-        if not _is_expected_cache_error(exc):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
         cached = None
 
     if cached:
@@ -47,9 +41,7 @@ def _load_active_session_key(user_id: int) -> str | None:
     if session_key:
         try:
             cache.set(cache_key, session_key, timeout=USER_SESSION_CACHE_TTL)
-        except Exception as exc:
-            if not _is_expected_cache_error(exc):
-                raise
+        except CACHE_INFRASTRUCTURE_EXCEPTIONS:
             logger.debug("Failed to cache active session key for user %s", user_id, exc_info=True)
     return session_key
 
@@ -60,9 +52,7 @@ def _load_active_session_key_from_db(user_id: int) -> str | None:
         cache_key = f"{USER_SESSION_CACHE_PREFIX}{user_id}"
         try:
             cache.set(cache_key, session_key, timeout=USER_SESSION_CACHE_TTL)
-        except Exception as exc:
-            if not _is_expected_cache_error(exc):
-                raise
+        except CACHE_INFRASTRUCTURE_EXCEPTIONS:
             logger.debug("Failed to refresh active session cache for user %s", user_id, exc_info=True)
     return session_key
 
@@ -81,9 +71,7 @@ def _ensure_active_session_key(user_id: int, current_session_key: str) -> str:
 
     try:
         cache.set(cache_key, session_key, timeout=USER_SESSION_CACHE_TTL)
-    except Exception as exc:
-        if not _is_expected_cache_error(exc):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
         logger.debug("Failed to write active session cache for user %s", user_id, exc_info=True)
     return session_key
 
@@ -92,9 +80,7 @@ def _should_verify_matching_session(user_id: int) -> bool:
     verify_key = f"{USER_SESSION_CACHE_PREFIX}{user_id}{_SESSION_VERIFY_CACHE_SUFFIX}"
     try:
         return bool(cache.add(verify_key, "1", timeout=_SESSION_VERIFY_CACHE_TTL_SECONDS))
-    except Exception as exc:
-        if not _is_expected_cache_error(exc):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
         logger.debug("Failed to write single-session verification marker for user %s", user_id, exc_info=True)
         # When cache markers are unavailable, fall back to DB verification instead of
         # trusting a potentially stale cache entry for the full session lifetime.
@@ -124,9 +110,7 @@ def is_single_session_request_valid(user_id: int, current_session_key: str | Non
         return False
     try:
         return _validate_active_session_key(int(user_id), str(current_session_key))
-    except Exception as exc:
-        if not isinstance(exc, EXPECTED_SESSION_VALIDATION_ERRORS):
-            raise
+    except EXPECTED_SESSION_VALIDATION_ERRORS as exc:
         raise SessionValidationUnavailable("single-session validation unavailable") from exc
 
 

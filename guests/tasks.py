@@ -13,7 +13,12 @@ from django.utils import timezone
 
 from common.utils.celery import safe_apply_async_with_dedup
 from core.config import GUEST, GUEST_LOYALTY
-from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_expected_infrastructure_error
+from core.exceptions import MessageError
+from core.utils.infrastructure import (
+    DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+    InfrastructureExceptions,
+    combine_infrastructure_exceptions,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -21,15 +26,15 @@ logger = logging.getLogger(__name__)
 DEFECTION_PROBABILITY = GUEST_LOYALTY.DEFECTION_PROBABILITY
 DEFECTION_BATCH_SIZE = GUEST_LOYALTY.DEFECTION_BATCH_SIZE
 DEFECTION_QUERY_CHUNK_SIZE = GUEST_LOYALTY.DEFECTION_QUERY_CHUNK_SIZE
+GUEST_TASK_RETRY_EXCEPTIONS: InfrastructureExceptions = DATABASE_INFRASTRUCTURE_EXCEPTIONS
+GUEST_DEFECTION_MESSAGE_EXCEPTIONS: InfrastructureExceptions = combine_infrastructure_exceptions(
+    MessageError,
+    infrastructure_exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+)
 
 
 def _dedup_timeout_for_remaining(remaining: int) -> int:
     return max(int(remaining) + 60, 60)
-
-
-def _is_expected_task_error(exc: Exception) -> bool:
-    """Infrastructure errors that warrant a Celery retry rather than immediate propagation."""
-    return is_expected_infrastructure_error(exc, exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS)
 
 
 @shared_task(name="guests.complete_training", bind=True, max_retries=2, default_retry_delay=30)
@@ -65,9 +70,7 @@ def complete_guest_training(self, guest_id: int) -> str:
                 return "rescheduled"
         finalized = finalize_guest_training(guest, now=now)
         return "completed" if finalized else "skipped"
-    except Exception as exc:
-        if not _is_expected_task_error(exc):
-            raise
+    except GUEST_TASK_RETRY_EXCEPTIONS as exc:
         logger.exception("Failed to complete guest training %d: %s", guest_id, exc)
         raise self.retry(exc=exc)
 
@@ -100,9 +103,7 @@ def scan_guest_training(limit: int = 200) -> int:
         try:
             if finalize_guest_training(guest, now=now):
                 count += 1
-        except Exception as exc:
-            if not _is_expected_task_error(exc):
-                raise
+        except GUEST_TASK_RETRY_EXCEPTIONS:
             # Per-guest failure should not abort the scan; the next scan cycle
             # will retry any guests that were skipped.
             logger.exception("Failed to finalize guest training %d", guest.id)
@@ -146,9 +147,7 @@ def complete_guest_recruitment(self, recruitment_id: int) -> str:
 
         finalized = finalize_guest_recruitment(recruitment, now=now, send_notification=True)
         return "completed" if finalized else "skipped"
-    except Exception as exc:
-        if not _is_expected_task_error(exc):
-            raise
+    except GUEST_TASK_RETRY_EXCEPTIONS as exc:
         logger.exception("Failed to complete guest recruitment %d: %s", recruitment_id, exc)
         raise self.retry(exc=exc)
 
@@ -180,9 +179,7 @@ def scan_guest_recruitments(limit: int = 200) -> int:
         try:
             if finalize_guest_recruitment(recruitment, now=now, send_notification=True):
                 count += 1
-        except Exception as exc:
-            if not _is_expected_task_error(exc):
-                raise
+        except GUEST_TASK_RETRY_EXCEPTIONS:
             # Per-recruitment failure should not abort the scan; the next cycle
             # will retry any recruitments that were skipped.
             logger.exception("Failed to finalize guest recruitment %d", recruitment.id)
@@ -229,9 +226,7 @@ def scan_passive_hp_recovery(limit: int = 200) -> int:
             after_state = (guest.current_hp, guest.last_hp_recovery_at, guest.status)
             if after_state != before_state:
                 count += 1
-        except Exception as exc:
-            if not _is_expected_task_error(exc):
-                raise
+        except GUEST_TASK_RETRY_EXCEPTIONS:
             # Per-guest HP recovery failure should not abort the scan.
             logger.exception("Failed to recover passive HP for guest %d", guest.id)
     return count
@@ -301,9 +296,7 @@ def process_daily_loyalty(self) -> str:
 
         updated_count = increased_count + decreased_count
         return f"处理了 {updated_count} 个门客的忠诚度，{defection_count} 个门客叛逃"
-    except Exception as exc:
-        if not _is_expected_task_error(exc):
-            raise
+    except GUEST_TASK_RETRY_EXCEPTIONS as exc:
         logger.exception("Failed to process daily loyalty: %s", exc)
         raise self.retry(exc=exc)
 
@@ -379,14 +372,12 @@ def _process_defection_batch(guest_ids: list[int], *, create_message: Callable) 
             if message_payload is not None:
                 try:
                     create_message(**message_payload)
-                except Exception:
+                except GUEST_DEFECTION_MESSAGE_EXCEPTIONS:
                     logger.exception("Failed to send defection message for guest %d", guest_id)
 
             if processed:
                 defection_count += 1
-        except Exception as exc:
-            if not _is_expected_task_error(exc):
-                raise
+        except GUEST_TASK_RETRY_EXCEPTIONS:
             # Per-guest defection failure should not abort the batch; the guest
             # will remain with low loyalty and be retried on the next daily run.
             logger.exception("Failed to process defection for guest %d", guest_id)

@@ -103,7 +103,7 @@ def detach_guest_gears_for_reset(guest: Guest, *, action_label: str) -> int:
             unequip_guest_item(gear, guest)
             unequipped_count += 1
             continue
-        except (GameError, TypeError) as exc:
+        except GameError as exc:
             logger.warning(
                 "门客%s时常规卸装失败，改为强制卸下: guest_id=%s, gear_id=%s, error=%s",
                 action_label,
@@ -111,34 +111,16 @@ def detach_guest_gears_for_reset(guest: Guest, *, action_label: str) -> int:
                 gear.pk,
                 exc,
             )
-        except Exception as exc:
-            logger.exception(
-                "门客%s时常规卸装异常，改为强制卸下: guest_id=%s gear_id=%s error=%s",
+        updated = guest.gear_items.filter(pk=gear.pk, guest_id=guest.pk).update(guest=None)
+        if updated:
+            restore_gear_to_warehouse(guest.manor, gear.template.key)
+            unequipped_count += 1
+        else:
+            logger.warning(
+                "门客%s时强制卸装未命中: guest_id=%s, gear_id=%s",
                 action_label,
                 guest.pk,
                 gear.pk,
-                exc,
-            )
-
-        try:
-            updated = guest.gear_items.filter(pk=gear.pk, guest_id=guest.pk).update(guest=None)
-            if updated:
-                restore_gear_to_warehouse(guest.manor, gear.template.key)
-                unequipped_count += 1
-            else:
-                logger.warning(
-                    "门客%s时强制卸装未命中: guest_id=%s, gear_id=%s",
-                    action_label,
-                    guest.pk,
-                    gear.pk,
-                )
-        except Exception as exc:
-            logger.exception(
-                "门客%s时强制卸装异常: guest_id=%s gear_id=%s error=%s",
-                action_label,
-                guest.pk,
-                gear.pk,
-                exc,
             )
 
     return unequipped_count

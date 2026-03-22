@@ -11,16 +11,28 @@ from .constants import MAX_SQUAD
 from .execution import BattleOptions
 
 
+def _coerce_positive_id(raw_id, *, contract_name: str) -> int:
+    try:
+        parsed_id = int(raw_id)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"broken {contract_name} contract") from exc
+    if parsed_id <= 0:
+        raise AssertionError(f"broken {contract_name} contract")
+    return parsed_id
+
+
 def validate_attacker_guest_ownership(manor, guests: list[Guest]) -> None:
     manor_pk = getattr(manor, "pk", None)
     if not manor_pk:
         return
+    parsed_manor_pk = _coerce_positive_id(manor_pk, contract_name="battle attacker manor id")
 
     unresolved_ids: list[int] = []
     for guest in guests:
         guest_pk = getattr(guest, "pk", None)
         if not guest_pk:
             continue
+        parsed_guest_pk = _coerce_positive_id(guest_pk, contract_name="battle attacker guest id")
         is_snapshot_proxy = bool(getattr(guest, "is_battle_snapshot_proxy", False))
 
         guest_manor_id = getattr(guest, "manor_id", None)
@@ -31,24 +43,17 @@ def validate_attacker_guest_ownership(manor, guests: list[Guest]) -> None:
         if guest_manor_id is None:
             if is_snapshot_proxy:
                 continue
-            unresolved_ids.append(int(guest_pk))
+            unresolved_ids.append(parsed_guest_pk)
             continue
 
-        try:
-            parsed_manor_id = int(guest_manor_id)
-        except (TypeError, ValueError):
-            if is_snapshot_proxy:
-                continue
-            unresolved_ids.append(int(guest_pk))
-            continue
-
-        if parsed_manor_id != int(manor_pk):
+        parsed_guest_manor_id = _coerce_positive_id(guest_manor_id, contract_name="battle attacker guest manor id")
+        if parsed_guest_manor_id != parsed_manor_pk:
             raise BattlePreparationError("攻击方门客必须属于当前庄园")
 
     if not unresolved_ids:
         return
 
-    owned_ids = set(Guest.objects.filter(id__in=unresolved_ids, manor_id=manor_pk).values_list("id", flat=True))
+    owned_ids = set(Guest.objects.filter(id__in=unresolved_ids, manor_id=parsed_manor_pk).values_list("id", flat=True))
     if len(owned_ids) != len(set(unresolved_ids)):
         raise BattlePreparationError("攻击方门客必须属于当前庄园")
 

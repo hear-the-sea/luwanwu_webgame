@@ -5,6 +5,7 @@ from importlib import import_module
 import pytest
 from django.conf import settings
 from django.contrib.sessions.models import Session
+from django.db import DatabaseError
 
 from accounts.models import UserActiveSession
 from websocket.consumers.session_guard import WebSocketSessionValidationUnavailable, is_websocket_session_valid
@@ -55,9 +56,41 @@ def test_is_websocket_session_valid_raises_when_session_store_unavailable(django
     UserActiveSession.objects.create(user=user, session_key=session.session_key)
 
     def _boom(_session_key):
-        raise RuntimeError("session backend down")
+        raise DatabaseError("session backend down")
 
     monkeypatch.setattr(session, "exists", _boom)
 
     with pytest.raises(WebSocketSessionValidationUnavailable, match="unavailable"):
+        is_websocket_session_valid({"user": user, "session": session})
+
+
+@pytest.mark.django_db
+def test_is_websocket_session_valid_programming_error_from_exists_bubbles_up(django_user_model, monkeypatch):
+    user = django_user_model.objects.create_user(username="ws_guard_exists_bug", password="pass123")
+    session = _build_session_for_user(user)
+    UserActiveSession.objects.create(user=user, session_key=session.session_key)
+
+    monkeypatch.setattr(
+        session,
+        "exists",
+        lambda _session_key: (_ for _ in ()).throw(AssertionError("broken session exists contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken session exists contract"):
+        is_websocket_session_valid({"user": user, "session": session})
+
+
+@pytest.mark.django_db
+def test_is_websocket_session_valid_programming_error_from_payload_bubbles_up(django_user_model, monkeypatch):
+    user = django_user_model.objects.create_user(username="ws_guard_payload_bug", password="pass123")
+    session = _build_session_for_user(user)
+    UserActiveSession.objects.create(user=user, session_key=session.session_key)
+
+    monkeypatch.setattr(
+        session,
+        "get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken session payload contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken session payload contract"):
         is_websocket_session_valid({"user": user, "session": session})

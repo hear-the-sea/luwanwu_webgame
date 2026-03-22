@@ -93,3 +93,20 @@ def test_dispatch_battle_message_calls_service(monkeypatch):
     dispatch_battle_message(manor, "Border Clash", report)
 
     assert captured["values"] == (manor, "Border Clash", report)
+
+
+def test_grant_battle_rewards_does_not_swallow_atomic_probe_errors(monkeypatch):
+    manor = DummyManor()
+    drops = {"grain": 10}
+
+    monkeypatch.setattr(
+        "battle.rewards.transaction.get_connection",
+        lambda: (_ for _ in ()).throw(RuntimeError("connection probe failed")),
+    )
+
+    try:
+        grant_battle_rewards(manor, drops, "atomic probe")
+    except RuntimeError as exc:
+        assert str(exc) == "connection probe failed"
+    else:
+        raise AssertionError("expected RuntimeError to bubble out of _in_atomic_block()")

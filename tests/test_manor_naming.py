@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import pytest
+from django.test import TestCase
 
+from core.exceptions import MessageError
 from gameplay.services.manor.core import (
     BANNED_WORDS,
     MANOR_NAME_MAX_LENGTH,
@@ -137,10 +139,47 @@ def test_rename_manor_succeeds_when_message_fails(monkeypatch, django_user_model
 
     monkeypatch.setattr(
         "gameplay.services.utils.messages.create_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(MessageError("message backend down")),
+    )
+
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        rename_manor(manor, "Harbor01", consume_item=False)
+
+    manor.refresh_from_db()
+    assert manor.name == "Harbor01"
+
+
+@pytest.mark.django_db
+def test_rename_manor_runtime_marker_message_error_bubbles_up(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="manor_rename_msg_runtime", password="pass12345")
+    manor = ensure_manor(user)
+
+    monkeypatch.setattr(
+        "gameplay.services.utils.messages.create_message",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
     )
 
-    rename_manor(manor, "Harbor01", consume_item=False)
+    with pytest.raises(RuntimeError, match="message backend down"):
+        with TestCase.captureOnCommitCallbacks(execute=True):
+            rename_manor(manor, "Harbor01", consume_item=False)
+
+    manor.refresh_from_db()
+    assert manor.name == "Harbor01"
+
+
+@pytest.mark.django_db
+def test_rename_manor_programming_error_message_bubbles_up(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="manor_rename_msg_programming", password="pass12345")
+    manor = ensure_manor(user)
+
+    monkeypatch.setattr(
+        "gameplay.services.utils.messages.create_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken manor rename message contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken manor rename message contract"):
+        with TestCase.captureOnCommitCallbacks(execute=True):
+            rename_manor(manor, "Harbor01", consume_item=False)
 
     manor.refresh_from_db()
     assert manor.name == "Harbor01"

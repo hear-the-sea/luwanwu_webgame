@@ -240,6 +240,42 @@ def test_safe_apply_async_with_dedup_rollback_programming_error_bubbles_up(monke
         )
 
 
+def test_safe_apply_async_with_dedup_dispatch_programming_error_rolls_back_and_bubbles_up(monkeypatch):
+    task = _Task(failure=AssertionError("broken dispatch contract"))
+    deleted = {"keys": []}
+    monkeypatch.setattr(celery_utils.cache, "add", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(celery_utils.cache, "delete", lambda key: deleted["keys"].append(key))
+
+    with pytest.raises(AssertionError, match="broken dispatch contract"):
+        celery_utils.safe_apply_async_with_dedup(
+            task,
+            dedup_key="test:key4:dispatch-programming",
+            dedup_timeout=5,
+            args=[4],
+        )
+
+    assert deleted["keys"] == ["test:key4:dispatch-programming"]
+
+
+def test_safe_apply_async_with_dedup_rollback_cache_infrastructure_error_is_ignored(monkeypatch):
+    task = _Task(failure=OperationalError("dispatch failed"))
+    monkeypatch.setattr(celery_utils.cache, "add", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        celery_utils.cache,
+        "delete",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionInterrupted("cache delete unavailable")),
+    )
+
+    ok = celery_utils.safe_apply_async_with_dedup(
+        task,
+        dedup_key="test:key4:rollback-cache-infra",
+        dedup_timeout=5,
+        args=[4],
+    )
+
+    assert ok is False
+
+
 def test_safe_apply_async_with_dedup_skips_dedup_when_key_empty(monkeypatch):
     """Test that dedup is skipped when dedup_key is empty."""
     task = _Task()

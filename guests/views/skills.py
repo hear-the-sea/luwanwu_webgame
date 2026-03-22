@@ -150,16 +150,6 @@ def learn_skill_view(request, pk: int):
             getattr(skill, "key", None),
         )
         messages.error(request, sanitize_error_message(exc))
-    except Exception:
-        logger.exception(
-            "Unexpected skill learn error: manor_id=%s user_id=%s guest_id=%s item_id=%s skill_key=%s",
-            getattr(manor, "id", None),
-            getattr(request.user, "id", None),
-            getattr(guest, "id", None),
-            item_id_int,
-            getattr(skill, "key", None),
-        )
-        raise
     return redirect(next_url)
 
 
@@ -197,15 +187,6 @@ def forget_skill_view(request, pk: int):
         )
         messages.error(request, sanitize_error_message(exc))
         return redirect("guests:detail", pk=pk)
-    except Exception:
-        logger.exception(
-            "Unexpected skill forget error: manor_id=%s user_id=%s guest_id=%s guest_skill_id=%s",
-            getattr(manor, "id", None),
-            getattr(request.user, "id", None),
-            pk,
-            request.POST.get("guest_skill_id"),
-        )
-        raise
 
     messages.info(request, f"{guest.display_name} 已遗忘 {skill_name}")
     return redirect("guests:detail", pk=guest.pk)

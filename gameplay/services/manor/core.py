@@ -23,6 +23,14 @@ from core.exceptions import (
     BuildingMaxLevelError,
     BuildingUpgradingError,
     GameError,
+    MessageError,
+)
+from core.utils.imports import is_missing_target_import
+from core.utils.infrastructure import (
+    DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+    NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
+    InfrastructureExceptions,
+    combine_infrastructure_exceptions,
 )
 from core.utils.time_scale import scale_duration
 
@@ -46,6 +54,10 @@ from . import refresh as _refresh
 CAPACITY_BASE = 20000
 CAPACITY_GROWTH_SILVER = 1.299657
 CAPACITY_GROWTH_GRAIN = 1.3905
+MANOR_MESSAGE_BEST_EFFORT_EXCEPTIONS: InfrastructureExceptions = combine_infrastructure_exceptions(
+    MessageError,
+    infrastructure_exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+)
 
 
 def calculate_building_capacity(level: int, is_silver_vault: bool = False) -> int:
@@ -286,6 +298,17 @@ def finalize_building_upgrade(building: Building, now: datetime | None = None, s
                 title=f"{building.building_type.name} 升级完成",
                 body=f"等级 Lv{building.level - 1} → Lv{building.level}",
             )
+        except MANOR_MESSAGE_BEST_EFFORT_EXCEPTIONS as exc:
+            logger.warning(
+                "building upgrade message creation failed: building_id=%s manor_id=%s error=%s",
+                building.id,
+                building.manor_id,
+                exc,
+                exc_info=True,
+            )
+            return True
+
+        try:
             notify_user(
                 building.manor.user_id,
                 {
@@ -296,7 +319,7 @@ def finalize_building_upgrade(building: Building, now: datetime | None = None, s
                 },
                 log_context="building upgrade notification",
             )
-        except Exception as exc:
+        except NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS as exc:
             logger.warning(
                 "building upgrade notification failed: building_id=%s manor_id=%s error=%s",
                 building.id,
@@ -322,7 +345,9 @@ def schedule_building_completion(building: Building, eta_seconds: int) -> None:
     countdown = max(0, int(eta_seconds))
     try:
         from gameplay.tasks import complete_building_upgrade
-    except Exception:
+    except ImportError as exc:
+        if not is_missing_target_import(exc, "gameplay.tasks"):
+            raise
         logger.warning("Unable to import complete_building_upgrade task; skip scheduling", exc_info=True)
         return
 
@@ -482,22 +507,25 @@ def rename_manor(manor: Manor, new_name: str, consume_item: bool = True) -> None
 
     from ..utils.messages import create_message
 
-    try:
-        create_message(
-            manor=manor,
-            kind=Message.Kind.SYSTEM,
-            title="庄园更名成功",
-            body=f"您的庄园已从「{old_name}」更名为「{new_name}」",
-        )
-    except Exception as exc:
-        logger.warning(
-            "manor rename message failed: manor_id=%s old_name=%s new_name=%s error=%s",
-            manor.id,
-            old_name,
-            new_name,
-            exc,
-            exc_info=True,
-        )
+    def _send_rename_message() -> None:
+        try:
+            create_message(
+                manor=manor,
+                kind=Message.Kind.SYSTEM,
+                title="庄园更名成功",
+                body=f"您的庄园已从「{old_name}」更名为「{new_name}」",
+            )
+        except MANOR_MESSAGE_BEST_EFFORT_EXCEPTIONS as exc:
+            logger.warning(
+                "manor rename message failed: manor_id=%s old_name=%s new_name=%s error=%s",
+                manor.id,
+                old_name,
+                new_name,
+                exc,
+                exc_info=True,
+            )
+
+    transaction.on_commit(_send_rename_message)
 
 
 def get_rename_card_count(manor: Manor) -> int:

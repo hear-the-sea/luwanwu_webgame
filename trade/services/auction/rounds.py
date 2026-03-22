@@ -16,7 +16,8 @@ from core.utils.infrastructure import (
     CACHE_INFRASTRUCTURE_EXCEPTIONS,
     DATABASE_INFRASTRUCTURE_EXCEPTIONS,
     NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
-    is_expected_infrastructure_error,
+    InfrastructureExceptions,
+    combine_infrastructure_exceptions,
 )
 from gameplay.models import ItemTemplate, Manor
 from gameplay.services.inventory.core import add_item_to_inventory_locked, consume_inventory_item_for_manor_locked
@@ -43,8 +44,12 @@ from trade.services.cache_resilience import best_effort_cache_add, best_effort_c
 logger = logging.getLogger(__name__)
 
 
-AUCTION_INFRASTRUCTURE_EXCEPTIONS = CACHE_INFRASTRUCTURE_EXCEPTIONS
+AUCTION_INFRASTRUCTURE_EXCEPTIONS: InfrastructureExceptions = CACHE_INFRASTRUCTURE_EXCEPTIONS
 AUCTION_CACHE_COMPONENT = "auction_cache"
+AUCTION_MESSAGE_DELIVERY_EXCEPTIONS: InfrastructureExceptions = combine_infrastructure_exceptions(
+    MessageError,
+    infrastructure_exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+)
 
 
 def _safe_int(value, default: int) -> int:
@@ -90,9 +95,7 @@ def _safe_cache_delete(key: str) -> None:
 def _safe_notify_user(user_id: int, payload: dict, *, log_context: str) -> None:
     try:
         notify_user(user_id, payload, log_context=log_context)
-    except Exception as exc:
-        if not is_expected_infrastructure_error(exc, exceptions=NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS):
-            raise
+    except NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning(
             "auction winning notify_user failed: user_id=%s error=%s",
             user_id,
@@ -262,7 +265,7 @@ def settle_auction_round(
             try:
                 result = settle_one(slot)
                 if not isinstance(result, dict):
-                    raise ValueError(f"invalid settle slot result for slot={slot.id}: {result!r}")
+                    raise AssertionError(f"invalid settle slot result for slot={slot.id}: {result!r}")
 
                 if result.get("skipped"):
                     continue
@@ -272,7 +275,9 @@ def settle_auction_round(
                     stats["total_gold_bars"] += max(0, _safe_int(result.get("price", 0), 0))
                 else:
                     stats["unsold"] += 1
-            except Exception as exc:
+            except AssertionError:
+                raise
+            except DATABASE_INFRASTRUCTURE_EXCEPTIONS as exc:
                 logger.exception("结算拍卖位 %s 时出错: %s", slot.id, exc)
                 if _mark_slot_unsold_after_failure(slot):
                     stats["unsold"] += 1
@@ -355,7 +360,7 @@ def _mark_slot_unsold_after_failure(slot: AuctionSlot) -> bool:
             locked_slot.status = AuctionSlot.Status.UNSOLD
             locked_slot.save(update_fields=["status"])
             return True
-    except Exception as exc:
+    except DATABASE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.exception("failed to force slot %s unsold after settlement error: %s", slot.id, exc)
         return False
 
@@ -499,12 +504,7 @@ def _send_winning_notification_vickrey(
                 "items": {slot.item_template.key: 1},
             },
         )
-    except Exception as exc:
-        if not (
-            isinstance(exc, MessageError)
-            or is_expected_infrastructure_error(exc, exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS)
-        ):
-            raise
+    except AUCTION_MESSAGE_DELIVERY_EXCEPTIONS as exc:
         delivery_via_message = False
         logger.exception(
             "auction winning message create failed, fallback to direct inventory grant: slot_id=%s manor_id=%s error=%s",

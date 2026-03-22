@@ -4,6 +4,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.utils import timezone
 
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS
 from gameplay.models import Manor
 from gameplay.services.utils.messages import bulk_create_messages
 
@@ -323,7 +324,7 @@ def disband_guild(guild, operator):
     if messages_data:
         try:
             bulk_create_messages(messages_data)
-        except Exception:
+        except DATABASE_INFRASTRUCTURE_EXCEPTIONS:
             logger.exception(
                 "Guild disband follow-up message send failed: guild_id=%s member_count=%s",
                 guild.id,

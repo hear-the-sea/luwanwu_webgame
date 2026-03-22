@@ -12,7 +12,11 @@ from django.db import DatabaseError
 from django_redis import get_redis_connection
 
 from core.utils.degradation import WORLD_CHAT_REFUND, record_degradation
-from core.utils.infrastructure import INFRASTRUCTURE_EXCEPTIONS
+from core.utils.infrastructure import (
+    INFRASTRUCTURE_EXCEPTIONS,
+    InfrastructureExceptions,
+    combine_infrastructure_exceptions,
+)
 from gameplay.services.utils.cache_exceptions import CACHE_INFRASTRUCTURE_EXCEPTIONS
 from websocket.backends.chat_history import (
     TRIM_HISTORY_SCRIPT,
@@ -33,17 +37,13 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
-def _is_expected_cache_error(exc: Exception) -> bool:
-    return isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS)
-
-
 class WorldChatInfrastructureError(RuntimeError):
     """Expected infrastructure/runtime dependency failure for world chat operations."""
 
 
-WORLD_CHAT_EXPECTED_INFRASTRUCTURE_ERRORS: tuple[type[Exception], ...] = (
+WORLD_CHAT_EXPECTED_INFRASTRUCTURE_ERRORS: InfrastructureExceptions = combine_infrastructure_exceptions(
     WorldChatInfrastructureError,
-    *INFRASTRUCTURE_EXCEPTIONS,
+    infrastructure_exceptions=INFRASTRUCTURE_EXCEPTIONS,
 )
 
 
@@ -88,9 +88,6 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
     HISTORY_UNAVAILABLE_MESSAGE = "历史消息暂时不可用，已跳过历史记录加载"
 
     _history_degraded: bool = False
-
-    def _is_expected_infrastructure_error(self, exc: Exception) -> bool:
-        return isinstance(exc, WORLD_CHAT_EXPECTED_INFRASTRUCTURE_ERRORS)
 
     async def connect(self):
         user = self.scope.get("user")
@@ -220,12 +217,6 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
                 message=message,
                 history_written=history_written,
             )
-            record_degradation(
-                WORLD_CHAT_REFUND,
-                component="world_chat",
-                detail=f"unexpected publish failed, refunded={refunded}, history_removed={history_removed}",
-                user_id=self.user_id,
-            )
             logger.error(
                 "Unexpected world chat publish failure: user_id=%s refunded=%s history_removed=%s",
                 self.user_id,
@@ -233,7 +224,6 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
                 history_removed,
                 exc_info=True,
                 extra={
-                    "degraded": True,
                     "component": "world_chat_publish",
                     "user_id": self.user_id,
                     "refunded": refunded,
@@ -287,9 +277,7 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
     def _safe_cache_get(self, key: str):
         try:
             return cache.get(key)
-        except Exception as exc:
-            if not _is_expected_cache_error(exc):
-                raise
+        except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
             logger.warning(
                 "World chat cache.get failed: key=%s error=%s",
                 key,
@@ -302,9 +290,7 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
     def _safe_cache_set(self, key: str, value: str, timeout: int) -> None:
         try:
             cache.set(key, value, timeout=timeout)
-        except Exception as exc:
-            if not _is_expected_cache_error(exc):
-                raise
+        except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
             logger.warning(
                 "World chat cache.set failed: key=%s error=%s",
                 key,

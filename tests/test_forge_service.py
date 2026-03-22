@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from django.utils import timezone
 
+from core.exceptions import MessageError
 from gameplay.models import EquipmentProduction, InventoryItem, ItemTemplate
 from gameplay.services.buildings import forge as forge_service
 from gameplay.services.manor.core import ensure_manor
@@ -83,7 +84,7 @@ def test_finalize_equipment_forging_keeps_success_when_notification_ws_fails(mon
 
     monkeypatch.setattr(
         "gameplay.services.utils.notifications.notify_user",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("ws backend down")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionError("ws backend down")),
     )
 
     assert forge_service.finalize_equipment_forging(production, send_notification=True) is True
@@ -91,3 +92,109 @@ def test_finalize_equipment_forging_keeps_success_when_notification_ws_fails(mon
     production.refresh_from_db()
     assert production.status == EquipmentProduction.Status.COMPLETED
     assert InventoryItem.objects.get(manor=manor, template=equipment_tpl).quantity == 2
+
+
+@pytest.mark.django_db
+def test_finalize_equipment_forging_keeps_success_when_message_fails(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="forge_service_msg_fail", password="pass12345")
+    manor = ensure_manor(user)
+
+    equipment_tpl = ItemTemplate.objects.create(
+        key="equip_service_sword",
+        name="服务测试剑",
+        effect_type="equip_weapon",
+        rarity="blue",
+    )
+    production = EquipmentProduction.objects.create(
+        manor=manor,
+        equipment_key=equipment_tpl.key,
+        equipment_name=equipment_tpl.name,
+        quantity=2,
+        material_costs={"tong": 4},
+        base_duration=60,
+        actual_duration=60,
+        complete_at=timezone.now() - timezone.timedelta(seconds=1),
+        status=EquipmentProduction.Status.FORGING,
+    )
+
+    monkeypatch.setattr(
+        "gameplay.services.utils.messages.create_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(MessageError("message backend down")),
+    )
+
+    assert forge_service.finalize_equipment_forging(production, send_notification=True) is True
+
+    production.refresh_from_db()
+    assert production.status == EquipmentProduction.Status.COMPLETED
+    assert InventoryItem.objects.get(manor=manor, template=equipment_tpl).quantity == 2
+
+
+@pytest.mark.django_db
+def test_finalize_equipment_forging_message_runtime_marker_error_bubbles_up(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="forge_service_msg_runtime", password="pass12345")
+    manor = ensure_manor(user)
+
+    equipment_tpl = ItemTemplate.objects.create(
+        key="equip_service_axe",
+        name="服务测试斧",
+        effect_type="equip_weapon",
+        rarity="blue",
+    )
+    production = EquipmentProduction.objects.create(
+        manor=manor,
+        equipment_key=equipment_tpl.key,
+        equipment_name=equipment_tpl.name,
+        quantity=2,
+        material_costs={"tong": 4},
+        base_duration=60,
+        actual_duration=60,
+        complete_at=timezone.now() - timezone.timedelta(seconds=1),
+        status=EquipmentProduction.Status.FORGING,
+    )
+
+    monkeypatch.setattr(
+        "gameplay.services.utils.messages.create_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+    )
+
+    with pytest.raises(RuntimeError, match="message backend down"):
+        forge_service.finalize_equipment_forging(production, send_notification=True)
+
+    production.refresh_from_db()
+    assert production.status == EquipmentProduction.Status.COMPLETED
+
+
+@pytest.mark.django_db
+def test_finalize_equipment_forging_notification_runtime_marker_error_bubbles_up(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="forge_service_ws_runtime", password="pass12345")
+    manor = ensure_manor(user)
+
+    equipment_tpl = ItemTemplate.objects.create(
+        key="equip_service_spear",
+        name="服务测试枪",
+        effect_type="equip_weapon",
+        rarity="blue",
+    )
+    production = EquipmentProduction.objects.create(
+        manor=manor,
+        equipment_key=equipment_tpl.key,
+        equipment_name=equipment_tpl.name,
+        quantity=2,
+        material_costs={"tong": 4},
+        base_duration=60,
+        actual_duration=60,
+        complete_at=timezone.now() - timezone.timedelta(seconds=1),
+        status=EquipmentProduction.Status.FORGING,
+    )
+
+    monkeypatch.setattr("gameplay.services.utils.messages.create_message", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(
+        "gameplay.services.buildings.forge_runtime.notify_user",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("ws backend down")),
+    )
+
+    with pytest.raises(RuntimeError, match="ws backend down"):
+        forge_service.finalize_equipment_forging(production, send_notification=True)
+
+    production.refresh_from_db()
+    assert production.status == EquipmentProduction.Status.COMPLETED

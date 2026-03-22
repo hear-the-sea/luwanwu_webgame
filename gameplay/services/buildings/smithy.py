@@ -16,7 +16,14 @@ from django.db import transaction
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
-from core.exceptions import InsufficientResourceError, ProductionStartError
+from core.exceptions import InsufficientResourceError, MessageError, ProductionStartError
+from core.utils.imports import is_missing_target_import
+from core.utils.infrastructure import (
+    DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+    NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
+    InfrastructureExceptions,
+    combine_infrastructure_exceptions,
+)
 from core.utils.time_scale import scale_duration
 from core.utils.yaml_loader import load_yaml_data
 
@@ -25,6 +32,10 @@ from ...models import Manor, SmeltingProduction
 from ..utils.notifications import notify_user
 
 logger = logging.getLogger(__name__)
+SMITHY_MESSAGE_BEST_EFFORT_EXCEPTIONS: InfrastructureExceptions = combine_infrastructure_exceptions(
+    MessageError,
+    infrastructure_exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+)
 
 # 制作配置（向后兼容沿用 METAL_CONFIG 名称）
 # 金属：
@@ -370,7 +381,9 @@ def _schedule_smelting_completion(production: SmeltingProduction, eta_seconds: i
 
     try:
         from gameplay.tasks import complete_smelting_production
-    except Exception:
+    except ImportError as exc:
+        if not is_missing_target_import(exc, "gameplay.tasks"):
+            raise
         logger.warning("Unable to import complete_smelting_production task; skip scheduling", exc_info=True)
         return
 
@@ -448,7 +461,17 @@ def finalize_smelting_production(production: SmeltingProduction, send_notificati
                 title=f"{completed_production.metal_name}{quantity_text}制作完成",
                 body=f"您的{completed_production.metal_name}{quantity_text}已制作完成，请到仓库查收。",
             )
+        except SMITHY_MESSAGE_BEST_EFFORT_EXCEPTIONS as exc:
+            logger.warning(
+                "smelting production message creation failed: production_id=%s manor_id=%s error=%s",
+                completed_production.id,
+                completed_production.manor_id,
+                exc,
+                exc_info=True,
+            )
+            return True
 
+        try:
             notify_user(
                 completed_production.manor.user_id,
                 {
@@ -459,7 +482,7 @@ def finalize_smelting_production(production: SmeltingProduction, send_notificati
                 },
                 log_context="smelting production notification",
             )
-        except Exception as exc:
+        except NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS as exc:
             logger.warning(
                 "smelting production notification failed: production_id=%s manor_id=%s error=%s",
                 completed_production.id,

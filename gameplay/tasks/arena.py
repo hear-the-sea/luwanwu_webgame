@@ -4,6 +4,7 @@ import logging
 
 from celery import shared_task
 
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS
 from gameplay.services.arena.core import cleanup_expired_tournaments, run_due_arena_rounds, start_ready_tournaments
 
 logger = logging.getLogger(__name__)
@@ -18,19 +19,19 @@ def scan_arena_tournaments(limit: int = 20) -> dict[str, int]:
 
     try:
         started = start_ready_tournaments(limit=limit)
-    except Exception:
+    except DATABASE_INFRASTRUCTURE_EXCEPTIONS:
         logger.exception("arena tournament start scan failed")
         failed_stages.append("start_ready_tournaments")
 
     try:
         processed = run_due_arena_rounds(limit=limit)
-    except Exception:
+    except DATABASE_INFRASTRUCTURE_EXCEPTIONS:
         logger.exception("arena tournament round scan failed")
         failed_stages.append("run_due_arena_rounds")
 
     try:
         cleaned = cleanup_expired_tournaments(limit=max(20, int(limit)))
-    except Exception:
+    except DATABASE_INFRASTRUCTURE_EXCEPTIONS:
         logger.exception("arena tournament cleanup failed")
         failed_stages.append("cleanup_expired_tournaments")
 

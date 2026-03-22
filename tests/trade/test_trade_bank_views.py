@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from django.contrib.messages import get_messages
+from django.db import DatabaseError
 from django.urls import reverse
 
 from core.exceptions import TradeValidationError
@@ -61,6 +62,38 @@ def test_exchange_gold_bar_view_rejects_invalid_quantity_without_service_call(mo
     msgs = [m.message for m in get_messages(resp.wsgi_request)]
     assert any("数量参数无效" in m for m in msgs)
     assert called["count"] == 0
+
+
+@pytest.mark.django_db
+def test_exchange_gold_bar_view_handles_database_error(monkeypatch, client, django_user_model):
+    monkeypatch.setattr(
+        "trade.views.exchange_gold_bar",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db unavailable")),
+    )
+
+    user = django_user_model.objects.create_user(username="bank_exchange_db_error", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    resp = client.post(reverse("trade:exchange_gold_bar"), {"quantity": "1"})
+    assert resp.status_code == 302
+    msgs = [m.message for m in get_messages(resp.wsgi_request)]
+    assert any("操作失败，请稍后重试" in m for m in msgs)
+
+
+@pytest.mark.django_db
+def test_exchange_gold_bar_view_programming_error_bubbles_up(monkeypatch, client, django_user_model):
+    monkeypatch.setattr(
+        "trade.views.exchange_gold_bar",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("broken exchange contract")),
+    )
+
+    user = django_user_model.objects.create_user(username="bank_exchange_runtime_error", password="pass12345")
+    _ = ensure_manor(user)
+    client.force_login(user)
+
+    with pytest.raises(RuntimeError, match="broken exchange contract"):
+        client.post(reverse("trade:exchange_gold_bar"), {"quantity": "1"})
 
 
 @pytest.mark.django_db

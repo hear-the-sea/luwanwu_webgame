@@ -3,6 +3,7 @@
 from django.db import transaction
 from django.db.models import F
 
+from core.exceptions import GuildWarehouseError
 from gameplay.models import InventoryItem, Manor
 
 from ..constants import DAILY_EXCHANGE_LIMIT
@@ -21,9 +22,9 @@ def add_item_to_warehouse(guild, item_key, quantity, contribution_cost):
         contribution_cost: 兑换成本（贡献度）
     """
     if quantity <= 0:
-        raise ValueError("产出数量必须为正整数")
+        raise GuildWarehouseError("产出数量必须为正整数")
     if contribution_cost < 0:
-        raise ValueError("兑换成本不能为负数")
+        raise GuildWarehouseError("兑换成本不能为负数")
 
     warehouse_item, created = GuildWarehouse.objects.get_or_create(
         guild=guild, item_key=item_key, defaults={"contribution_cost": contribution_cost}
@@ -53,10 +54,10 @@ def exchange_item(member, item_key, quantity=1):
         quantity: 兑换数量
 
     Raises:
-        ValueError: 验证失败
+        GuildWarehouseError: 验证失败
     """
     if quantity <= 0:
-        raise ValueError("兑换数量必须为正整数")
+        raise GuildWarehouseError("兑换数量必须为正整数")
 
     from gameplay.models import ItemTemplate
 
@@ -64,9 +65,9 @@ def exchange_item(member, item_key, quantity=1):
     try:
         template = ItemTemplate.objects.get(key=item_key)
         if not template.is_usable:
-            raise ValueError("此物品不可在仓库使用")
+            raise GuildWarehouseError("此物品不可在仓库使用")
     except ItemTemplate.DoesNotExist:
-        raise ValueError("物品不存在")
+        raise GuildWarehouseError("物品不存在")
 
     # 并发安全的事务处理
     # 锁定顺序：GuildMember -> GuildWarehouse -> InventoryItem
@@ -78,7 +79,7 @@ def exchange_item(member, item_key, quantity=1):
         member_locked.reset_daily_limits()
 
         if member_locked.daily_exchange_count >= DAILY_EXCHANGE_LIMIT:
-            raise ValueError(f"今日兑换次数已达上限（{DAILY_EXCHANGE_LIMIT}次）")
+            raise GuildWarehouseError(f"今日兑换次数已达上限（{DAILY_EXCHANGE_LIMIT}次）")
 
         # 步骤2：锁定仓库物品并验证库存
         warehouse_item = (
@@ -86,15 +87,15 @@ def exchange_item(member, item_key, quantity=1):
         )
 
         if not warehouse_item:
-            raise ValueError("物品不存在")
+            raise GuildWarehouseError("物品不存在")
 
         if warehouse_item.quantity < quantity:
-            raise ValueError(f"库存不足，剩余{warehouse_item.quantity}件")
+            raise GuildWarehouseError(f"库存不足，剩余{warehouse_item.quantity}件")
 
         # 计算总成本并验证贡献度
         total_cost = warehouse_item.contribution_cost * quantity
         if member_locked.current_contribution < total_cost:
-            raise ValueError(f"贡献度不足，需要{total_cost}贡献")
+            raise GuildWarehouseError(f"贡献度不足，需要{total_cost}贡献")
 
         # 步骤3：使用F()表达式扣除贡献度和增加兑换次数
         updated_member = GuildMember.objects.filter(pk=member_locked.pk).update(
@@ -103,7 +104,7 @@ def exchange_item(member, item_key, quantity=1):
         )
 
         if not updated_member:
-            raise ValueError("贡献度扣除失败，请重试")
+            raise GuildWarehouseError("贡献度扣除失败，请重试")
 
         # 步骤4：使用F()表达式扣除仓库库存并记录兑换量
         # quantity__gte条件确保不会扣成负数
@@ -113,7 +114,7 @@ def exchange_item(member, item_key, quantity=1):
         )
 
         if not updated_wh:
-            raise ValueError("库存不足，兑换失败")
+            raise GuildWarehouseError("库存不足，兑换失败")
 
         # 清理零库存记录（使用条件删除避免竞态条件）
         # 避免：refresh_from_db() 后另一个事务增加了库存，此时删除会丢失数据

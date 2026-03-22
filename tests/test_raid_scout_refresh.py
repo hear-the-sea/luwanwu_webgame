@@ -5,6 +5,7 @@ from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
+from django.db import DatabaseError
 from django.utils import timezone
 
 from battle.models import TroopTemplate
@@ -577,6 +578,21 @@ def test_run_scout_followup_programming_error_bubbles_up(monkeypatch):
 
     with pytest.raises(AssertionError, match="broken scout message contract"):
         scout_service.scout_followups.run_scout_followup("detected_message", record)
+
+
+def test_run_scout_followup_database_error_is_best_effort(monkeypatch):
+    record = SimpleNamespace(
+        attacker=SimpleNamespace(display_name="进攻方", location_display="A-1"),
+        defender=SimpleNamespace(display_name="防守方"),
+    )
+
+    monkeypatch.setattr(
+        scout_service.scout_followups,
+        "send_scout_detected_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("message table unavailable")),
+    )
+
+    scout_service.scout_followups.run_scout_followup("detected_message", record)
 
 
 def test_run_scout_followup_runtime_marker_error_bubbles_up(monkeypatch):

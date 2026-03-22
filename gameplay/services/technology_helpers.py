@@ -2,7 +2,20 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, Iterable, Sequence
 
+from core.exceptions import MessageError
+from core.utils.imports import is_missing_target_import
+from core.utils.infrastructure import (
+    DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+    NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
+    InfrastructureExceptions,
+    combine_infrastructure_exceptions,
+)
+
 MARTIAL_TECH_GROUP_ORDER = ("dao", "qiang", "jian", "quan", "gong")
+TECHNOLOGY_MESSAGE_BEST_EFFORT_EXCEPTIONS: InfrastructureExceptions = combine_infrastructure_exceptions(
+    MessageError,
+    infrastructure_exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+)
 
 
 def build_technology_display_entry(
@@ -84,7 +97,9 @@ def schedule_technology_completion_task(
     countdown = max(0, int(eta_seconds))
     try:
         from gameplay.tasks import complete_technology_upgrade
-    except Exception:
+    except ImportError as exc:
+        if not is_missing_target_import(exc, "gameplay.tasks"):
+            raise
         logger.warning("Unable to import complete_technology_upgrade task; skip scheduling", exc_info=True)
         return
 
@@ -128,6 +143,18 @@ def send_technology_completion_notification(
             title=f"{tech_name} 研究完成",
             body=f"当前等级 Lv{tech.level}",
         )
+    except TECHNOLOGY_MESSAGE_BEST_EFFORT_EXCEPTIONS as exc:
+        logger.warning(
+            "technology upgrade message creation failed: tech_id=%s manor_id=%s tech_key=%s error=%s",
+            getattr(tech, "id", None),
+            getattr(tech, "manor_id", None),
+            getattr(tech, "tech_key", None),
+            exc,
+            exc_info=True,
+        )
+        return
+
+    try:
         notify_user_func(
             tech.manor.user_id,
             {
@@ -138,7 +165,7 @@ def send_technology_completion_notification(
             },
             log_context="technology upgrade notification",
         )
-    except Exception as exc:
+    except NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning(
             "technology upgrade notification failed: tech_id=%s manor_id=%s tech_key=%s error=%s",
             getattr(tech, "id", None),

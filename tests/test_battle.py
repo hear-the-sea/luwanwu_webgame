@@ -1,8 +1,10 @@
 import random
+from types import SimpleNamespace
 
 import pytest
 from django.utils import timezone
 
+import battle.setup as battle_setup
 from battle.combatants_pkg import serialize_skills
 from battle.models import BattleReport
 from battle.services import (
@@ -99,6 +101,22 @@ def test_simulate_report_rejects_foreign_attacker_guests(game_data, django_user_
 
     with pytest.raises(BattlePreparationError, match="攻击方门客必须属于当前庄园"):
         simulate_report(attacker_manor, attacker_guests=[foreign_guest], troop_loadout={})
+
+
+def test_validate_attacker_guest_ownership_programming_error_bubbles_up_for_invalid_guest_id():
+    manor = SimpleNamespace(pk=1)
+    guest = SimpleNamespace(pk="bad-pk", id="bad-pk", manor_id=1)
+
+    with pytest.raises(AssertionError, match="broken battle attacker guest id contract"):
+        battle_setup.validate_attacker_guest_ownership(manor, [guest])
+
+
+def test_validate_attacker_guest_ownership_programming_error_bubbles_up_for_invalid_guest_manor_id():
+    manor = SimpleNamespace(pk=1)
+    guest = SimpleNamespace(pk=1, id=1, manor_id="bad-manor-id")
+
+    with pytest.raises(AssertionError, match="broken battle attacker guest manor id contract"):
+        battle_setup.validate_attacker_guest_ownership(manor, [guest])
 
 
 @pytest.mark.django_db

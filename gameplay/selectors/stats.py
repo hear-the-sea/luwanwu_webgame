@@ -43,9 +43,7 @@ def get_redis_connection(*_args: Any, **_kwargs: Any):
 def _safe_cache_get(key: str, default=None):
     try:
         return cache.get(key, default)
-    except Exception as exc:
-        if not isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
         logger.warning("Failed to read cache key: %s", key, exc_info=True)
         return default
 
@@ -53,18 +51,14 @@ def _safe_cache_get(key: str, default=None):
 def _safe_cache_set(key: str, value, timeout: int) -> None:
     try:
         cache.set(key, value, timeout=timeout)
-    except Exception as exc:
-        if not isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
         logger.warning("Failed to write cache key: %s", key, exc_info=True)
 
 
 def _safe_cache_delete(key: str) -> None:
     try:
         cache.delete(key)
-    except Exception as exc:
-        if not isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
         logger.warning("Failed to delete cache key: %s", key, exc_info=True)
 
 
@@ -104,9 +98,7 @@ def _set_local_stats_cache(key: str, value: int, timeout: int) -> None:
 def _load_cached_stat_or_none(key: str) -> tuple[int | None, bool]:
     try:
         cached = cache.get(key)
-    except Exception as exc:
-        if not isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
         record_degradation(CACHE_FALLBACK, component="stats_selector", detail=f"stat cache read failed: {key}")
         return _get_local_stats_cache(key), False
 
@@ -173,9 +165,7 @@ def load_online_user_count() -> int:
         online_count = _load_online_user_count_from_db()
         _persist_stat_cache(ONLINE_USERS_CACHE_KEY, online_count, timeout=ONLINE_USERS_FALLBACK_CACHE_TIMEOUT)
         return online_count
-    except Exception as exc:
-        if not isinstance(exc, INFRASTRUCTURE_EXCEPTIONS):
-            raise
+    except INFRASTRUCTURE_EXCEPTIONS:
         record_degradation(REDIS_FAILURE, component="stats_selector", detail="online user count Redis read failed")
         fallback_cached = _get_local_stats_cache(ONLINE_USERS_CACHE_KEY)
         if fallback_cached is not None:

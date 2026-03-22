@@ -7,8 +7,23 @@ from celery import shared_task
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async_with_dedup
+from core.utils.infrastructure import (
+    DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+    InfrastructureExceptions,
+    combine_infrastructure_exceptions,
+)
 
 logger = logging.getLogger(__name__)
+
+
+class PvpTaskRetryRequested(RuntimeError):
+    """Explicit retry marker for infrastructure-driven reschedule failures."""
+
+
+PVP_TASK_RETRY_EXCEPTIONS: InfrastructureExceptions = combine_infrastructure_exceptions(
+    PvpTaskRetryRequested,
+    infrastructure_exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+)
 
 
 def _dedup_timeout_for_countdown(countdown: int) -> int:
@@ -50,12 +65,12 @@ def complete_scout_task(self, record_id: int):
                     log_message=f"scout task reschedule failed: record_id={record_id}",
                 )
                 if not dispatched:
-                    raise RuntimeError(f"scout reschedule dispatch failed: record_id={record_id}")
+                    raise PvpTaskRetryRequested(f"scout reschedule dispatch failed: record_id={record_id}")
                 return "rescheduled"
 
         finalize_scout(record, now=now)
         return "completed"
-    except Exception as exc:
+    except PVP_TASK_RETRY_EXCEPTIONS as exc:
         logger.exception("Failed to complete scout %d: %s", record_id, exc)
         raise self.retry(exc=exc)
 
@@ -94,12 +109,12 @@ def complete_scout_return_task(self, record_id: int):
                     log_message=f"scout return task reschedule failed: record_id={record_id}",
                 )
                 if not dispatched:
-                    raise RuntimeError(f"scout return reschedule dispatch failed: record_id={record_id}")
+                    raise PvpTaskRetryRequested(f"scout return reschedule dispatch failed: record_id={record_id}")
                 return "rescheduled"
 
         finalize_scout_return(record, now=now)
         return "completed"
-    except Exception as exc:
+    except PVP_TASK_RETRY_EXCEPTIONS as exc:
         logger.exception("Failed to complete scout return %d: %s", record_id, exc)
         raise self.retry(exc=exc)
 
@@ -129,7 +144,7 @@ def scan_scout_records(limit: int = 200):
         try:
             finalize_scout(record, now=now)
             count += 1
-        except Exception:
+        except PVP_TASK_RETRY_EXCEPTIONS:
             logger.exception("Failed to finalize scout record %d", record.id)
 
     # Handle return complete (RETURNING -> SUCCESS/FAILED)
@@ -142,7 +157,7 @@ def scan_scout_records(limit: int = 200):
         try:
             finalize_scout_return(record, now=now)
             count += 1
-        except Exception:
+        except PVP_TASK_RETRY_EXCEPTIONS:
             logger.exception("Failed to finalize scout return %d", record.id)
 
     return count
@@ -186,7 +201,7 @@ def process_raid_battle_task(self, run_id: int):
                         log_message=f"raid complete task reschedule failed: run_id={run_id}",
                     )
                     if not dispatched:
-                        raise RuntimeError(f"raid complete reschedule dispatch failed: run_id={run_id}")
+                        raise PvpTaskRetryRequested(f"raid complete reschedule dispatch failed: run_id={run_id}")
                     return "retreated_rescheduled"
             dispatched = safe_apply_async_with_dedup(
                 complete_raid_task,
@@ -198,7 +213,7 @@ def process_raid_battle_task(self, run_id: int):
                 log_message=f"raid complete task forward failed: run_id={run_id}",
             )
             if not dispatched:
-                raise RuntimeError(f"raid complete forward dispatch failed: run_id={run_id}")
+                raise PvpTaskRetryRequested(f"raid complete forward dispatch failed: run_id={run_id}")
             return "retreated_forwarded"
 
         if run.status == RaidRun.Status.MARCHING and run.battle_at and run.battle_at > now:
@@ -214,12 +229,12 @@ def process_raid_battle_task(self, run_id: int):
                     log_message=f"raid battle task reschedule failed: run_id={run_id}",
                 )
                 if not dispatched:
-                    raise RuntimeError(f"raid battle reschedule dispatch failed: run_id={run_id}")
+                    raise PvpTaskRetryRequested(f"raid battle reschedule dispatch failed: run_id={run_id}")
                 return "rescheduled"
 
         process_raid_battle(run, now=now)
         return "completed"
-    except Exception as exc:
+    except PVP_TASK_RETRY_EXCEPTIONS as exc:
         logger.exception("Failed to process raid battle %d: %s", run_id, exc)
         raise self.retry(exc=exc)
 
@@ -262,7 +277,7 @@ def complete_raid_task(self, run_id: int):
                         log_message=f"raid complete task reschedule failed: run_id={run_id}",
                     )
                     if not dispatched:
-                        raise RuntimeError(f"raid complete reschedule dispatch failed: run_id={run_id}")
+                        raise PvpTaskRetryRequested(f"raid complete reschedule dispatch failed: run_id={run_id}")
                     return "rescheduled"
             finalize_raid(run, now=now)
             return "completed"
@@ -282,13 +297,13 @@ def complete_raid_task(self, run_id: int):
                         log_message=f"raid complete task reschedule failed: run_id={run_id}",
                     )
                     if not dispatched:
-                        raise RuntimeError(f"raid complete reschedule dispatch failed: run_id={run_id}")
+                        raise PvpTaskRetryRequested(f"raid complete reschedule dispatch failed: run_id={run_id}")
                     return "rescheduled"
             finalize_raid(run, now=now)
             return "completed"
 
         return "invalid_status"
-    except Exception as exc:
+    except PVP_TASK_RETRY_EXCEPTIONS as exc:
         logger.exception("Failed to complete raid %d: %s", run_id, exc)
         raise self.retry(exc=exc)
 
@@ -315,7 +330,7 @@ def scan_raid_runs(limit: int = 200):
         try:
             process_raid_battle(run, now=now)
             count += 1
-        except Exception:
+        except PVP_TASK_RETRY_EXCEPTIONS:
             logger.exception("Failed to process raid battle %d", run.id)
 
     # Handle returning but completed
@@ -329,7 +344,7 @@ def scan_raid_runs(limit: int = 200):
         try:
             finalize_raid(run, now=now)
             count += 1
-        except Exception:
+        except PVP_TASK_RETRY_EXCEPTIONS:
             logger.exception("Failed to finalize raid %d", run.id)
 
     # Handle retreated but completed
@@ -343,7 +358,7 @@ def scan_raid_runs(limit: int = 200):
         try:
             finalize_raid(run, now=now)
             count += 1
-        except Exception:
+        except PVP_TASK_RETRY_EXCEPTIONS:
             logger.exception("Failed to finalize retreated raid %d", run.id)
 
     return count

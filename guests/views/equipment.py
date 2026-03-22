@@ -24,21 +24,14 @@ from ..forms import EquipForm
 from ..models import GearSlot, Guest
 from ..services import equipment as equipment_service
 from ..templatetags.guest_extras import gear_summary, rarity_class, rarity_label
-from .common import unexpected_action_error_response
 
 logger = logging.getLogger(__name__)
-
-
-def _is_expected_cache_error(exc: Exception) -> bool:
-    return isinstance(exc, CACHE_INFRASTRUCTURE_EXCEPTIONS)
 
 
 def _safe_cache_get(key: str):
     try:
         return cache.get(key)
-    except Exception as exc:
-        if not _is_expected_cache_error(exc):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning("Gear options cache.get failed: key=%s error=%s", key, exc, exc_info=True)
         return None
 
@@ -46,27 +39,21 @@ def _safe_cache_get(key: str):
 def _safe_cache_set(key: str, value, timeout: int) -> None:
     try:
         cache.set(key, value, timeout=timeout)
-    except Exception as exc:
-        if not _is_expected_cache_error(exc):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning("Gear options cache.set failed: key=%s error=%s", key, exc, exc_info=True)
 
 
 def _safe_cache_delete_many(keys: list[str]) -> None:
     try:
         cache.delete_many(keys)
-    except Exception as exc:
-        if not _is_expected_cache_error(exc):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning("Gear options cache.delete_many failed: keys_count=%s error=%s", len(keys), exc, exc_info=True)
 
 
 def _best_effort_clear_gear_options_cache(manor_id: int, *, slots: set[str] | None = None) -> None:
     try:
         _clear_gear_options_cache(manor_id, slots=slots)
-    except Exception as exc:
-        if not _is_expected_cache_error(exc):
-            raise
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning(
             "Gear options cache invalidation skipped: manor_id=%s slots=%s error=%s",
             manor_id,
@@ -123,19 +110,6 @@ def equip_view(request):
             return json_error(error_msg, status=500, include_message=True)
         messages.error(request, error_msg)
         return redirect("gameplay:recruitment_hall")
-    except Exception as exc:
-        logger.exception(
-            "Unexpected equip view error: manor_id=%s user_id=%s slot=%s",
-            getattr(manor, "id", None),
-            getattr(request.user, "id", None),
-            request.POST.get("slot"),
-        )
-        return unexpected_action_error_response(
-            request,
-            exc,
-            is_ajax=is_ajax_request(request),
-            redirect_to="gameplay:recruitment_hall",
-        )
 
     # AJAX 请求返回 JSON 响应
     if is_ajax_request(request):
@@ -221,15 +195,6 @@ def unequip_view(request):
             len(gear_ids),
         )
         messages.error(request, sanitize_error_message(exc))
-    except Exception:
-        logger.exception(
-            "Unexpected unequip view error: manor_id=%s user_id=%s guest_id=%s gear_count=%s",
-            getattr(manor, "id", None),
-            getattr(request.user, "id", None),
-            guest_id,
-            len(gear_ids),
-        )
-        raise
     return redirect(next_url)
 
 

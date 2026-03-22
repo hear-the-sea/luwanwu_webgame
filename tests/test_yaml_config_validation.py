@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 import battle.troops as troop_loader
 import gameplay.services.buildings.base as building_base
 import gameplay.services.buildings.forge as forge_service
@@ -77,6 +79,18 @@ troops:
     assert loaded["archer"]["default_count"] == 120
     assert loaded["swordsman"]["priority"] == 2
     assert loaded["swordsman"]["default_count"] == 150
+
+
+def test_invalidate_troop_templates_cache_bubbles_cache_clear_errors(monkeypatch):
+    monkeypatch.setattr(troop_loader.cache, "delete", lambda _key: None)
+    monkeypatch.setattr(
+        troop_loader.load_troop_templates_from_yaml,
+        "cache_clear",
+        lambda: (_ for _ in ()).throw(RuntimeError("cache clear bug")),
+    )
+
+    with pytest.raises(RuntimeError, match="cache clear bug"):
+        troop_loader.invalidate_troop_templates_cache()
 
 
 def test_auction_config_loader_coerces_invalid_types(tmp_path, monkeypatch):

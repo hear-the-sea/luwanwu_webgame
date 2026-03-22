@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
-from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS, is_expected_infrastructure_error
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS
 from gameplay.constants import get_raid_capture_guest_rate
 from guests.models import Guest
 
@@ -82,12 +82,7 @@ def _delete_captured_guest_gear(run: RaidRun, target: Guest) -> None:
 
     try:
         GearItem.objects.filter(guest=target).delete()
-    except Exception as exc:
-        if not is_expected_infrastructure_error(
-            exc,
-            exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
-        ):
-            raise
+    except DATABASE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning(
             "failed to delete captured guest gear: run_id=%s guest_id=%s error=%s",
             run.id,

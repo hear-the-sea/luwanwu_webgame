@@ -7,6 +7,7 @@ from django.db import connection
 from django.test import RequestFactory
 from django.test.utils import CaptureQueriesContext
 
+from core.exceptions import GuildContributionError
 from gameplay.services.manor.core import ensure_manor
 from guilds.models import (
     Guild,
@@ -90,6 +91,23 @@ def test_execute_guild_action_formats_value_error_message():
     assert outcome.succeeded is False
     assert outcome.result is None
     assert [str(message) for message in get_messages(request)] == ["格式化：原始错误"]
+
+
+@pytest.mark.django_db
+def test_execute_guild_action_formats_game_error_message():
+    request = RequestFactory().post("/guilds/test/")
+    _attach_session_and_messages(request)
+
+    outcome = execute_guild_action(
+        request,
+        action=lambda: (_ for _ in ()).throw(GuildContributionError("贡献不足")),
+        success_message="不会出现",
+        error_message_formatter=lambda exc: f"格式化：{exc}",
+    )
+
+    assert outcome.succeeded is False
+    assert outcome.result is None
+    assert [str(message) for message in get_messages(request)] == ["格式化：贡献不足"]
 
 
 @pytest.mark.django_db

@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from django.db.utils import DatabaseError
 
 
 @pytest.mark.django_db
@@ -170,7 +171,7 @@ def test_upgrade_technology_keeps_success_when_announcement_fails(monkeypatch, d
 
     monkeypatch.setattr(
         "guilds.services.technology.create_announcement",
-        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("announcement down")),
+        lambda *_a, **_k: (_ for _ in ()).throw(DatabaseError("announcement down")),
     )
     monkeypatch.setattr(
         "guilds.services.technology.Manor.objects.filter", lambda *_a, **_k: SimpleNamespace(first=lambda: None)
@@ -183,7 +184,47 @@ def test_upgrade_technology_keeps_success_when_announcement_fails(monkeypatch, d
 
 
 @pytest.mark.django_db
+def test_upgrade_technology_programming_error_in_announcement_bubbles_up(monkeypatch, django_user_model):
+    from gameplay.services.manor.core import ensure_manor
+    from guilds.models import Guild, GuildTechnology
+    from guilds.services.technology import upgrade_technology
+
+    monkeypatch.setattr(
+        "guilds.services.technology.get_active_membership",
+        lambda *_a, **_k: SimpleNamespace(can_manage=True),
+    )
+
+    operator = django_user_model.objects.create_user(username="tech_operator_announce_bug", password="pass")
+    ensure_manor(operator)
+
+    founder = django_user_model.objects.create_user(username="tech_founder_announce_bug", password="pass")
+    guild = Guild.objects.create(
+        name="TechGuildAnnounceBug",
+        founder=founder,
+        silver=999999,
+        grain=999999,
+        gold_bar=999999,
+    )
+    tech = GuildTechnology.objects.create(guild=guild, tech_key="equipment_forge", level=0, max_level=5)
+
+    monkeypatch.setattr(
+        "guilds.services.technology.create_announcement",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("broken guild tech announcement contract")),
+    )
+    monkeypatch.setattr(
+        "guilds.services.technology.Manor.objects.filter", lambda *_a, **_k: SimpleNamespace(first=lambda: None)
+    )
+
+    with pytest.raises(AssertionError, match="broken guild tech announcement contract"):
+        upgrade_technology(guild, "equipment_forge", operator)
+
+    tech.refresh_from_db()
+    assert tech.level == 1
+
+
+@pytest.mark.django_db
 def test_upgrade_technology_permission_denied(monkeypatch, django_user_model):
+    from core.exceptions import GuildTechnologyError
     from guilds.models import Guild, GuildTechnology
     from guilds.services.technology import upgrade_technology
 
@@ -197,12 +238,13 @@ def test_upgrade_technology_permission_denied(monkeypatch, django_user_model):
     guild = Guild.objects.create(name="TechGuild5", founder=founder)
     GuildTechnology.objects.create(guild=guild, tech_key="equipment_forge", level=0, max_level=5)
 
-    with pytest.raises(ValueError, match="只有帮主和管理员"):
+    with pytest.raises(GuildTechnologyError, match="只有帮主和管理员"):
         upgrade_technology(guild, "equipment_forge", operator)
 
 
 @pytest.mark.django_db
 def test_upgrade_technology_insufficient_resources(monkeypatch, django_user_model):
+    from core.exceptions import GuildTechnologyError
     from guilds.models import Guild, GuildTechnology
     from guilds.services.technology import upgrade_technology
 
@@ -220,7 +262,7 @@ def test_upgrade_technology_insufficient_resources(monkeypatch, django_user_mode
     guild = Guild.objects.create(name="TechGuild6", founder=founder, silver=0, grain=999999, gold_bar=999999)
     tech = GuildTechnology.objects.create(guild=guild, tech_key="equipment_forge", level=0, max_level=5)
 
-    with pytest.raises(ValueError, match="银两不足"):
+    with pytest.raises(GuildTechnologyError, match="银两不足"):
         upgrade_technology(guild, "equipment_forge", operator)
 
     tech.refresh_from_db()

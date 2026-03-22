@@ -8,6 +8,7 @@ from django.apps import apps
 from django.db import transaction
 
 from core.exceptions import GameError
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS
 from guests.models import Guest
 
 from .services import simulate_report
@@ -259,10 +260,10 @@ def generate_report_task(
             extra={"manor_id": manor_id, "run_id": run_id, "mission_id": mission_id},
         )
         return None
-    except Exception as exc:
+    except DATABASE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.exception(
-            f"Battle report generation failed for manor {manor_id}: {exc}",
+            f"Battle report generation failed due to infrastructure error for manor {manor_id}: {exc}",
             extra={"manor_id": manor_id, "run_id": run_id, "mission_id": mission_id},
         )
-        # Retry on unexpected errors
+        # Retry on infrastructure errors.
         raise self.retry(exc=exc)

@@ -80,6 +80,30 @@ def test_notifications_anonymous_runtime_marker_cache_error_bubbles_up(monkeypat
         notifications(request)
 
 
+def test_notifications_anonymous_runtime_marker_cache_set_error_bubbles_up(monkeypatch):
+    request = RequestFactory().get("/")
+    request.user = AnonymousUser()
+
+    def fake_cache_get(key, default=None):
+        if key in {"stats:total_users_count", "stats:online_users_count"}:
+            return None
+        return default
+
+    monkeypatch.setattr("gameplay.selectors.stats.cache.get", fake_cache_get)
+    monkeypatch.setattr(
+        "gameplay.selectors.stats.cache.set",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache write failed")),
+    )
+    monkeypatch.setattr(
+        "gameplay.selectors.stats.User.objects.filter",
+        lambda **_kwargs: type("FakeQuerySet", (), {"count": lambda self: 7})(),
+    )
+    monkeypatch.setattr("gameplay.selectors.stats._load_online_user_count_from_redis", lambda: 3)
+
+    with pytest.raises(RuntimeError, match="cache write failed"):
+        notifications(request)
+
+
 def test_notifications_anonymous_handles_corrupted_cached_online_value(monkeypatch):
     request = RequestFactory().get("/")
     request.user = AnonymousUser()
@@ -158,6 +182,27 @@ def test_online_presence_middleware_runtime_marker_redis_error_bubbles_up(monkey
         OnlinePresenceMiddleware(lambda _request: None)(request)
 
     assert any(key.startswith("stats:online_users:touch:") for key in deleted_keys)
+
+
+def test_online_presence_middleware_cache_delete_programming_error_bubbles_up(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="ctx_touch_delete_programming_user", password="pass")
+    request = RequestFactory().get("/")
+    request.user = user
+
+    monkeypatch.setattr("gameplay.services.online_presence.cache.add", lambda *_args, **_kwargs: True)
+
+    class _BrokenRedis:
+        def zadd(self, *_args, **_kwargs):
+            raise ConnectionInterrupted("redis down")
+
+    monkeypatch.setattr("gameplay.services.online_presence.get_redis_connection_if_supported", lambda: _BrokenRedis())
+    monkeypatch.setattr(
+        "gameplay.services.online_presence.cache.delete",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken presence cache delete contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken presence cache delete contract"):
+        OnlinePresenceMiddleware(lambda _request: None)(request)
 
 
 def test_notifications_authenticated_falls_back_when_sidebar_cache_payload_invalid(monkeypatch, django_user_model):
@@ -296,6 +341,39 @@ def test_notifications_authenticated_runtime_marker_sidebar_cache_error_bubbles_
     )
 
     with pytest.raises(RuntimeError, match="cache read failed"):
+        notifications(request)
+
+
+def test_notifications_authenticated_runtime_marker_sidebar_cache_set_error_bubbles_up(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="ctx_rank_cache_set_runtime_user", password="pass")
+    manor = ensure_manor(user)
+    request = RequestFactory().get("/")
+    request.user = user
+
+    def fake_stats_cache_get(key, default=None):
+        if key in {"stats:total_users_count", "stats:online_users_count"}:
+            return 0
+        return default
+
+    def fake_sidebar_cache_get(key, default=None):
+        if key == f"sidebar:rank:{manor.id}":
+            return None
+        return default
+
+    monkeypatch.setattr("gameplay.selectors.stats.cache.get", fake_stats_cache_get)
+    monkeypatch.setattr("gameplay.context_processors.unread_message_count", lambda _manor: 1)
+    monkeypatch.setattr(
+        "gameplay.services.raid.get_protection_status",
+        lambda _manor: {"is_protected": False, "type_display": "", "remaining_display": ""},
+    )
+    monkeypatch.setattr("gameplay.selectors.sidebar.cache.get", fake_sidebar_cache_get)
+    monkeypatch.setattr(
+        "gameplay.selectors.sidebar.cache.set",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache write failed")),
+    )
+    monkeypatch.setattr("gameplay.services.ranking.get_player_rank", lambda _manor: 9)
+
+    with pytest.raises(RuntimeError, match="cache write failed"):
         notifications(request)
 
 

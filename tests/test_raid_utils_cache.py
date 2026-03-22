@@ -137,6 +137,17 @@ def test_safe_cache_set_programming_error_bubbles_up(monkeypatch):
         raid_utils._safe_cache_set("raid:test:set", 3, 30)
 
 
+def test_safe_cache_set_runtime_marker_error_bubbles_up(monkeypatch):
+    monkeypatch.setattr(
+        raid_utils.cache,
+        "set",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache set failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="cache set failed"):
+        raid_utils._safe_cache_set("raid:test:set", 3, 30)
+
+
 def test_safe_cache_delete_programming_error_bubbles_up(monkeypatch):
     monkeypatch.setattr(
         raid_utils.cache,
@@ -145,6 +156,17 @@ def test_safe_cache_delete_programming_error_bubbles_up(monkeypatch):
     )
 
     with pytest.raises(AssertionError, match="broken cache contract"):
+        raid_utils._safe_cache_delete("raid:test:delete")
+
+
+def test_safe_cache_delete_runtime_marker_error_bubbles_up(monkeypatch):
+    monkeypatch.setattr(
+        raid_utils.cache,
+        "delete",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("cache delete failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="cache delete failed"):
         raid_utils._safe_cache_delete("raid:test:delete")
 
 

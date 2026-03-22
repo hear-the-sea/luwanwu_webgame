@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from core.utils.infrastructure import CACHE_INFRASTRUCTURE_EXCEPTIONS
+
 
 def build_metric_key(prefix: str, task_name: str, field: str) -> str:
     """Return the cache key for a single metric counter."""
@@ -37,7 +39,7 @@ def get_redis_registry_client(logger: Any) -> Any | None:
         return get_redis_connection("default")
     except NotImplementedError:
         return None
-    except Exception:
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
         logger.warning("Failed to acquire Redis client for task metrics registry", exc_info=True)
         return None
 
@@ -84,7 +86,7 @@ def get_registry_from_redis(
         concrete_registry_key = get_redis_registry_key(cache_backend, registry_key)
         registry.update(decode_value(value) for value in redis_client.smembers(concrete_registry_key))
         read_succeeded = True
-    except Exception:
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
         logger.warning("Failed to read Redis task metrics registry index", exc_info=True)
 
     try:
@@ -94,7 +96,7 @@ def get_registry_from_redis(
             if member_key.startswith(member_prefix):
                 registry.add(member_key[len(member_prefix) :])
         read_succeeded = True
-    except Exception:
+    except CACHE_INFRASTRUCTURE_EXCEPTIONS:
         logger.warning("Failed to scan Redis task metrics registry markers", exc_info=True)
 
     if read_succeeded:

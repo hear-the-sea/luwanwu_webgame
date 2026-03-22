@@ -16,7 +16,8 @@ from core.utils.imports import is_missing_target_import
 from core.utils.infrastructure import (
     DATABASE_INFRASTRUCTURE_EXCEPTIONS,
     INFRASTRUCTURE_EXCEPTIONS,
-    is_expected_infrastructure_error,
+    InfrastructureExceptions,
+    combine_infrastructure_exceptions,
 )
 from gameplay.services.battle_snapshots import build_guest_battle_snapshots, build_guest_snapshot_proxies
 from guests.models import Guest, GuestStatus
@@ -56,8 +57,12 @@ from .troops import _coerce_positive_int, _normalize_mapping, _normalize_positiv
 logger = logging.getLogger(__name__)
 
 
-RAID_BATTLE_INFRASTRUCTURE_EXCEPTIONS = DATABASE_INFRASTRUCTURE_EXCEPTIONS
-RAID_CAPTURE_DEGRADED_EXCEPTIONS = INFRASTRUCTURE_EXCEPTIONS
+RAID_BATTLE_INFRASTRUCTURE_EXCEPTIONS: InfrastructureExceptions = DATABASE_INFRASTRUCTURE_EXCEPTIONS
+RAID_BATTLE_MESSAGE_EXCEPTIONS: InfrastructureExceptions = combine_infrastructure_exceptions(
+    MessageError,
+    infrastructure_exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
+)
+RAID_CAPTURE_DEGRADED_EXCEPTIONS: InfrastructureExceptions = INFRASTRUCTURE_EXCEPTIONS
 
 
 def _load_locked_raid_run(run_pk: int) -> Optional[RaidRun]:
@@ -139,38 +144,20 @@ def _apply_capture_reward(locked_run: RaidRun, report: Any, is_attacker_victory:
         if capture_info:
             battle_rewards = _normalize_mapping(locked_run.battle_rewards)
             locked_run.battle_rewards = {**battle_rewards, "capture": capture_info}
-    except Exception as exc:
-        if is_expected_infrastructure_error(
+    except RAID_CAPTURE_DEGRADED_EXCEPTIONS as exc:
+        logger.warning(
+            "raid capture failed: run_id=%s attacker=%s defender=%s error=%s",
+            locked_run.id,
+            locked_run.attacker_id,
+            locked_run.defender_id,
             exc,
-            exceptions=RAID_CAPTURE_DEGRADED_EXCEPTIONS,
-        ):
-            logger.warning(
-                "raid capture failed: run_id=%s attacker=%s defender=%s error=%s",
-                locked_run.id,
-                locked_run.attacker_id,
-                locked_run.defender_id,
-                exc,
-                exc_info=True,
-                extra={
-                    "degraded": True,
-                    "component": "raid_capture_reward",
-                    "run_id": locked_run.id,
-                },
-            )
-        else:
-            logger.error(
-                "Unexpected raid capture failure: run_id=%s attacker=%s defender=%s",
-                locked_run.id,
-                locked_run.attacker_id,
-                locked_run.defender_id,
-                exc_info=True,
-                extra={
-                    "degraded": True,
-                    "component": "raid_capture_reward",
-                    "run_id": locked_run.id,
-                },
-            )
-            raise
+            exc_info=True,
+            extra={
+                "degraded": True,
+                "component": "raid_capture_reward",
+                "run_id": locked_run.id,
+            },
+        )
 
 
 def _apply_salvage_reward(locked_run: RaidRun, report: Any, is_attacker_victory: bool) -> None:
@@ -215,14 +202,6 @@ def _dispatch_complete_raid_task(run: RaidRun, *, now: Optional[datetime] = None
             extra={"degraded": True, "component": "raid_task_import", "run_id": run.id},
         )
         complete_raid_task = None
-    except Exception:
-        logger.error(
-            "Unexpected complete_raid_task import failure: run_id=%s",
-            run.id,
-            exc_info=True,
-            extra={"degraded": True, "component": "raid_task_import", "run_id": run.id},
-        )
-        raise
 
     _dispatch_complete_raid_task_impl(
         run,
@@ -290,72 +269,56 @@ def process_raid_battle(run: RaidRun, now: Optional[datetime] = None) -> None:
 
     try:
         _send_raid_battle_messages(locked_run)
-    except Exception as exc:
-        if isinstance(exc, MessageError) or is_expected_infrastructure_error(
+    except RAID_BATTLE_MESSAGE_EXCEPTIONS as exc:
+        logger.warning(
+            "raid battle messages failed: run_id=%s attacker=%s defender=%s error=%s",
+            locked_run.id,
+            locked_run.attacker_id,
+            locked_run.defender_id,
             exc,
-            exceptions=RAID_BATTLE_INFRASTRUCTURE_EXCEPTIONS,
-        ):
-            logger.warning(
-                "raid battle messages failed: run_id=%s attacker=%s defender=%s error=%s",
-                locked_run.id,
-                locked_run.attacker_id,
-                locked_run.defender_id,
-                exc,
-                exc_info=True,
-                extra={
-                    "degraded": True,
-                    "component": "raid_battle_message",
-                    "run_id": locked_run.id,
-                },
-            )
-        else:
-            logger.error(
-                "Unexpected raid battle message failure: run_id=%s attacker=%s defender=%s",
-                locked_run.id,
-                locked_run.attacker_id,
-                locked_run.defender_id,
-                exc_info=True,
-                extra={
-                    "degraded": True,
-                    "component": "raid_battle_message",
-                    "run_id": locked_run.id,
-                },
-            )
-            post_commit_error = exc
+            exc_info=True,
+            extra={
+                "degraded": True,
+                "component": "raid_battle_message",
+                "run_id": locked_run.id,
+            },
+        )
+    except Exception as exc:
+        logger.error(
+            "Unexpected raid battle message failure: run_id=%s attacker=%s defender=%s",
+            locked_run.id,
+            locked_run.attacker_id,
+            locked_run.defender_id,
+            exc_info=True,
+            extra={"run_id": locked_run.id},
+        )
+        post_commit_error = exc
 
     try:
         _dismiss_marching_raids_if_protected(locked_run.defender)
-    except Exception as exc:
-        if is_expected_infrastructure_error(
+    except RAID_BATTLE_INFRASTRUCTURE_EXCEPTIONS as exc:
+        logger.warning(
+            "dismiss marching raids failed: run_id=%s defender=%s error=%s",
+            locked_run.id,
+            locked_run.defender_id,
             exc,
-            exceptions=RAID_BATTLE_INFRASTRUCTURE_EXCEPTIONS,
-        ):
-            logger.warning(
-                "dismiss marching raids failed: run_id=%s defender=%s error=%s",
-                locked_run.id,
-                locked_run.defender_id,
-                exc,
-                exc_info=True,
-                extra={
-                    "degraded": True,
-                    "component": "raid_protection_cleanup",
-                    "run_id": locked_run.id,
-                },
-            )
-        else:
-            logger.error(
-                "Unexpected dismiss marching raids failure: run_id=%s defender=%s",
-                locked_run.id,
-                locked_run.defender_id,
-                exc_info=True,
-                extra={
-                    "degraded": True,
-                    "component": "raid_protection_cleanup",
-                    "run_id": locked_run.id,
-                },
-            )
-            if post_commit_error is None:
-                post_commit_error = exc
+            exc_info=True,
+            extra={
+                "degraded": True,
+                "component": "raid_protection_cleanup",
+                "run_id": locked_run.id,
+            },
+        )
+    except Exception as exc:
+        logger.error(
+            "Unexpected dismiss marching raids failure: run_id=%s defender=%s",
+            locked_run.id,
+            locked_run.defender_id,
+            exc_info=True,
+            extra={"run_id": locked_run.id},
+        )
+        if post_commit_error is None:
+            post_commit_error = exc
     _dispatch_complete_raid_task(locked_run, now=now)
     if post_commit_error is not None:
         raise post_commit_error.with_traceback(post_commit_error.__traceback__)

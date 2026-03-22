@@ -1,10 +1,13 @@
 # guilds/services/technology.py
 
 import logging
+from typing import SupportsInt, cast
 
 from django.db import transaction
 from django.db.models import F
 
+from core.exceptions import GuildTechnologyError
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS
 from gameplay.models import Manor
 
 from ..constants import TECH_NAMES, TECH_UPGRADE_COSTS
@@ -46,22 +49,25 @@ def upgrade_technology(guild, tech_key, operator):
         operator: 操作者User对象
 
     Raises:
-        ValueError: 验证失败
+        GuildTechnologyError: 验证失败
     """
     # 验证权限
-    membership = get_active_membership(guild, operator, "只有帮主和管理员可以升级科技")
+    try:
+        membership = get_active_membership(guild, operator, "只有帮主和管理员可以升级科技")
+    except ValueError as exc:
+        raise GuildTechnologyError(str(exc)) from exc
     if not membership.can_manage:
-        raise ValueError("只有帮主和管理员可以升级科技")
+        raise GuildTechnologyError("只有帮主和管理员可以升级科技")
 
     # 获取科技
     try:
         tech = GuildTechnology.objects.get(guild=guild, tech_key=tech_key)
     except GuildTechnology.DoesNotExist:
-        raise ValueError("科技不存在")
+        raise GuildTechnologyError("科技不存在")
 
     # 验证是否可升级
     if not tech.can_upgrade:
-        raise ValueError("科技已达最高等级")
+        raise GuildTechnologyError("科技已达最高等级")
 
     # 并发安全的事务处理
     with transaction.atomic():
@@ -74,14 +80,14 @@ def upgrade_technology(guild, tech_key, operator):
 
         # 步骤2：在锁内重新验证条件，防止并发穿透
         if not tech_locked.can_upgrade:
-            raise ValueError("科技已达最高等级")
+            raise GuildTechnologyError("科技已达最高等级")
 
         if guild_locked.silver < cost["silver"]:
-            raise ValueError(f"帮会银两不足，需要{cost['silver']}")
+            raise GuildTechnologyError(f"帮会银两不足，需要{cost['silver']}")
         if guild_locked.grain < cost["grain"]:
-            raise ValueError(f"帮会粮食不足，需要{cost['grain']}")
+            raise GuildTechnologyError(f"帮会粮食不足，需要{cost['grain']}")
         if guild_locked.gold_bar < cost["gold_bar"]:
-            raise ValueError(f"帮会金条不足，需要{cost['gold_bar']}")
+            raise GuildTechnologyError(f"帮会金条不足，需要{cost['gold_bar']}")
 
         # 步骤3：使用F()表达式原子性地扣除帮会资源
         Guild.objects.filter(pk=guild_locked.pk).update(
@@ -127,7 +133,7 @@ def upgrade_technology(guild, tech_key, operator):
             "system",
             f"{operator_name}将{tech_name}升至{tech_level}级！",
         )
-    except Exception:
+    except DATABASE_INFRASTRUCTURE_EXCEPTIONS:
         logger.exception(
             "Guild tech upgrade announcement failed: user_id=%s guild_id=%s tech_key=%s level=%s",
             operator_user_id,
@@ -226,10 +232,14 @@ def apply_guild_bonus_to_guest(guest):
     Returns:
         dict: 加成后的属性
     """
-    base_defense = getattr(guest, "defense_stat", None)
-    if base_defense is None:
+    base_defense_raw = getattr(guest, "defense_stat", None)
+    if base_defense_raw is None:
         # 兼容旧调用方（例如历史测试桩）使用 defense 字段
-        base_defense = getattr(guest, "defense", 0)
+        base_defense_raw = getattr(guest, "defense", 0)
+    try:
+        base_defense = int(cast(SupportsInt | str | bytes | bytearray, base_defense_raw))
+    except (TypeError, ValueError):
+        base_defense = 0
 
     # 检查玩家是否在帮会中
     user = guest.manor.user
@@ -237,7 +247,7 @@ def apply_guild_bonus_to_guest(guest):
         return {
             "force": guest.force,
             "intellect": guest.intellect,
-            "defense": int(base_defense),
+            "defense": base_defense,
         }
 
     guild = user.guild_membership.guild

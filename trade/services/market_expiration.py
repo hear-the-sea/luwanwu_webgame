@@ -6,6 +6,8 @@ from django.db import DatabaseError, transaction
 from django.db.models import QuerySet
 from django.utils import timezone
 
+from core.exceptions import TradeValidationError
+
 from . import market_notification_helpers as _market_notification_helpers
 
 
@@ -15,7 +17,7 @@ def normalize_expire_limit(limit: int | None) -> int | None:
     try:
         parsed = int(limit)
     except (TypeError, ValueError):
-        raise ValueError("limit 必须是整数")
+        raise TradeValidationError("limit 必须是整数")
     if parsed <= 0:
         return 0
     return parsed

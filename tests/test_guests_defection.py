@@ -7,6 +7,7 @@ from datetime import date
 
 import pytest
 
+from core.exceptions import MessageError
 from gameplay.services.manor.core import ensure_manor
 from guests import tasks as guest_tasks
 from guests.models import Guest, GuestDefection, GuestTemplate
@@ -117,7 +118,7 @@ def test_process_defection_batch_keeps_deletion_when_message_fails(django_user_m
 
     count = guest_tasks._process_defection_batch(
         [guest.id],
-        create_message=lambda **kwargs: (_ for _ in ()).throw(RuntimeError("message down")),
+        create_message=lambda **kwargs: (_ for _ in ()).throw(MessageError("message down")),
     )
 
     assert count == 1
@@ -125,3 +126,17 @@ def test_process_defection_batch_keeps_deletion_when_message_fails(django_user_m
 
     defection = GuestDefection.objects.get(guest_id=guest.id)
     assert defection.guest_name == "韩信"
+
+
+@pytest.mark.django_db
+def test_process_defection_batch_programming_error_bubbles_after_delete(django_user_model):
+    guest = _create_guest_for_defection(django_user_model, username="defection_message_bug")
+
+    with pytest.raises(RuntimeError, match="message bug"):
+        guest_tasks._process_defection_batch(
+            [guest.id],
+            create_message=lambda **kwargs: (_ for _ in ()).throw(RuntimeError("message bug")),
+        )
+
+    assert Guest.objects.filter(id=guest.id).exists() is False
+    assert GuestDefection.objects.filter(guest_id=guest.id).count() == 1

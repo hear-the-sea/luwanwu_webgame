@@ -64,9 +64,6 @@ def notify_user(
     except NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning("Failed to send %s via channels: %s", log_context, exc, exc_info=True)
         return False
-    except Exception as exc:
-        logger.exception("Unexpected error while sending %s via channels: %s", log_context, exc)
-        raise
 
 
 def notify_manor(

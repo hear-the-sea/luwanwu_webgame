@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 import gameplay.services.technology as tech_service
 import gameplay.services.technology_refresh_state as tech_refresh_state
 
@@ -119,7 +121,7 @@ def test_refresh_technology_upgrades_local_fallback_throttles_when_cache_unavail
     monkeypatch.setattr(
         tech_service.cache,
         "add",
-        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+        lambda *args, **kwargs: (_ for _ in ()).throw(ConnectionError("cache down")),
     )
 
     calls = {"finalize": 0}
@@ -159,7 +161,7 @@ def test_refresh_technology_upgrades_local_fallback_allows_after_interval(monkey
     monkeypatch.setattr(
         tech_service.cache,
         "add",
-        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+        lambda *args, **kwargs: (_ for _ in ()).throw(ConnectionError("cache down")),
     )
     monotonic_values = iter([100.0, 102.0, 106.1])
     monkeypatch.setattr(tech_service.time, "monotonic", lambda: next(monotonic_values))
@@ -193,4 +195,28 @@ def test_refresh_technology_upgrades_local_fallback_allows_after_interval(monkey
     assert second == 0
     assert third == 1
     assert calls["finalize"] == 2
+    tech_refresh_state.clear_local_tech_refresh_fallback()
+
+
+def test_refresh_technology_upgrades_runtime_cache_error_bubbles_up(monkeypatch, settings):
+    settings.MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS = 5
+    tech_refresh_state.clear_local_tech_refresh_fallback()
+
+    monkeypatch.setattr(
+        tech_service.cache,
+        "add",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("cache down")),
+    )
+
+    class _TechManager:
+        def filter(self, **kwargs):
+            raise AssertionError("should not query technologies when cache contract is broken")
+
+    class _Manor:
+        pk = 3
+        technologies = _TechManager()
+
+    with pytest.raises(RuntimeError, match="cache down"):
+        tech_service.refresh_technology_upgrades(_Manor())
+
     tech_refresh_state.clear_local_tech_refresh_fallback()

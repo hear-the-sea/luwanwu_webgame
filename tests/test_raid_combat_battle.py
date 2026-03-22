@@ -5,6 +5,7 @@ from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
+from django.db import DatabaseError
 from django.utils import timezone
 
 from battle.models import TroopTemplate
@@ -113,6 +114,26 @@ def test_delete_captured_guest_gear_infrastructure_error_degrades(monkeypatch):
     combat_battle._delete_captured_guest_gear(
         SimpleNamespace(id=41),
         SimpleNamespace(pk=9),
+    )
+
+
+def test_delete_captured_guest_gear_database_error_degrades(monkeypatch):
+    class _GearQuerySet:
+        @staticmethod
+        def delete():
+            raise DatabaseError("gear table unavailable")
+
+    class _GearObjects:
+        @staticmethod
+        def filter(**_kwargs):
+            return _GearQuerySet()
+
+    fake_gear_item = type("_GearItem", (), {"objects": _GearObjects()})
+    monkeypatch.setattr("guests.models.GearItem", fake_gear_item)
+
+    combat_battle._delete_captured_guest_gear(
+        SimpleNamespace(id=43),
+        SimpleNamespace(pk=11),
     )
 
 
@@ -262,7 +283,7 @@ def test_dispatch_complete_raid_task_nested_import_error_bubbles_up(monkeypatch)
         combat_battle._dispatch_complete_raid_task(run, now=now)
 
 
-def test_process_raid_battle_known_post_commit_failures_degrade_and_continue(monkeypatch):
+def test_process_raid_battle_known_post_commit_failures_degrade_and_continue(monkeypatch, caplog):
     now = timezone.now()
     attacker = SimpleNamespace(id=1, location_display="江南", display_name="进攻方")
     defender = SimpleNamespace(id=2, location_display="塞北", display_name="防守方")
@@ -307,11 +328,16 @@ def test_process_raid_battle_known_post_commit_failures_degrade_and_continue(mon
         lambda *_args, **_kwargs: dispatched.__setitem__("count", dispatched["count"] + 1),
     )
 
-    combat_battle.process_raid_battle(run, now=now)
+    with caplog.at_level("WARNING", logger=combat_battle.logger.name):
+        combat_battle.process_raid_battle(run, now=now)
 
     assert run.status == RaidRun.Status.RETURNING
     assert saved["count"] == 1
     assert dispatched["count"] == 1
+    degraded_components = {
+        getattr(record, "component", None) for record in caplog.records if getattr(record, "degraded", False)
+    }
+    assert degraded_components == {"raid_battle_message", "raid_protection_cleanup"}
 
 
 def test_process_raid_battle_cleanup_runtime_marker_error_bubbles_after_dispatch(monkeypatch):
@@ -363,7 +389,7 @@ def test_process_raid_battle_cleanup_runtime_marker_error_bubbles_after_dispatch
     assert dispatched["count"] == 1
 
 
-def test_process_raid_battle_message_programming_error_bubbles_after_dispatch(monkeypatch):
+def test_process_raid_battle_message_programming_error_bubbles_after_dispatch(monkeypatch, caplog):
     now = timezone.now()
     attacker = SimpleNamespace(id=1, location_display="江南", display_name="进攻方")
     defender = SimpleNamespace(id=2, location_display="塞北", display_name="防守方")
@@ -409,16 +435,20 @@ def test_process_raid_battle_message_programming_error_bubbles_after_dispatch(mo
         lambda *_args, **_kwargs: dispatched.__setitem__("count", dispatched["count"] + 1),
     )
 
-    with pytest.raises(AssertionError, match="broken raid message contract"):
-        combat_battle.process_raid_battle(run, now=now)
+    with caplog.at_level("ERROR", logger=combat_battle.logger.name):
+        with pytest.raises(AssertionError, match="broken raid message contract"):
+            combat_battle.process_raid_battle(run, now=now)
 
     assert run.status == RaidRun.Status.RETURNING
     assert saved["count"] == 1
     assert dismissed["count"] == 1
     assert dispatched["count"] == 1
+    error_records = [record for record in caplog.records if record.levelname == "ERROR"]
+    assert error_records
+    assert all(not getattr(record, "degraded", False) for record in error_records)
 
 
-def test_process_raid_battle_cleanup_programming_error_bubbles_after_dispatch(monkeypatch):
+def test_process_raid_battle_cleanup_programming_error_bubbles_after_dispatch(monkeypatch, caplog):
     now = timezone.now()
     attacker = SimpleNamespace(id=1, location_display="江南", display_name="进攻方")
     defender = SimpleNamespace(id=2, location_display="塞北", display_name="防守方")
@@ -459,12 +489,16 @@ def test_process_raid_battle_cleanup_programming_error_bubbles_after_dispatch(mo
         lambda *_args, **_kwargs: dispatched.__setitem__("count", dispatched["count"] + 1),
     )
 
-    with pytest.raises(AssertionError, match="broken raid cleanup contract"):
-        combat_battle.process_raid_battle(run, now=now)
+    with caplog.at_level("ERROR", logger=combat_battle.logger.name):
+        with pytest.raises(AssertionError, match="broken raid cleanup contract"):
+            combat_battle.process_raid_battle(run, now=now)
 
     assert run.status == RaidRun.Status.RETURNING
     assert saved["count"] == 1
     assert dispatched["count"] == 1
+    error_records = [record for record in caplog.records if record.levelname == "ERROR"]
+    assert error_records
+    assert all(not getattr(record, "degraded", False) for record in error_records)
 
 
 def test_process_raid_battle_rechecks_defender_protection_before_fight(monkeypatch):
