@@ -31,6 +31,7 @@
 - 2026-03-23 本轮验证：`pytest tests/test_guest_item_view_validation.py tests/test_guest_view_error_boundaries.py -k "use_medicine_item_view or learn_skill_view or forget_skill_view" -q` 通过，结果为 `19 passed, 55 deselected`。
 - 2026-03-23 本轮验证：`pytest tests/test_guest_runtime_refresh_views.py -q` 通过，结果为 `5 passed`。
 - 2026-03-23 本轮验证：`pytest tests/test_guest_item_view_validation.py tests/test_guest_view_error_boundaries.py -k "use_experience_item_view or allocate_points_view or train" -q` 通过，结果为 `15 passed, 60 deselected`。
+- 2026-03-23 本轮验证：`pytest tests/test_inventory_views.py -k "use_rebirth_card or use_xisuidan or use_xidianka or use_guest_rarity_upgrade or use_soul_container" -q` 通过，结果为 `10 passed, 20 deselected`。
 - 2026-03-23 本轮验证：`pytest tests/test_treasury_move_service_contracts.py -q` 通过，结果为 `2 passed`。
 - 2026-03-23 本轮验证：`pytest tests/test_guest_recruitment_flow_helpers.py -q` 通过，结果为 `25 passed`。
 - 2026-03-23 本轮验证：`pytest tests/test_guest_recruitment_service.py -k "bulk_finalize_candidates" -q` 通过，结果为 `4 passed, 30 deselected`。

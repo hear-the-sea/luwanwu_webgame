@@ -56,6 +56,20 @@ def _warehouse_item(manor: Any, pk: int) -> InventoryItem:
     )
 
 
+def _resolve_target_guest_item_action(item: InventoryItem) -> str | None:
+    payload = item.template.effect_payload
+    if payload is None:
+        return None
+    if not isinstance(payload, dict):
+        raise AssertionError(f"invalid inventory target-guest item effect_payload: {payload!r}")
+    action = payload.get("action")
+    if action is None:
+        return None
+    if not isinstance(action, str):
+        raise AssertionError(f"invalid inventory target-guest item action: {action!r}")
+    return action.strip() or None
+
+
 def _error_response(
     request: HttpRequest,
     is_ajax: bool,
@@ -153,8 +167,8 @@ def _use_target_guest_item(
     item = _warehouse_item(manor, pk)
     is_ajax = is_ajax_request(request)
 
-    payload = item.template.effect_payload or {}
-    if payload.get("action") != expected_action:
+    action = _resolve_target_guest_item_action(item)
+    if action != expected_action:
         return _error_response(request, is_ajax, "物品类型错误")
 
     guest_id = safe_positive_int(request.POST.get("guest_id"), default=None)

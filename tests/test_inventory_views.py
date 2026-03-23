@@ -187,6 +187,31 @@ class TestInventoryViews:
         assert "请选择要重生的门客" in payload["error"]
         assert called["count"] == 0
 
+    def test_use_rebirth_card_rejects_non_mapping_effect_payload(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        template = ItemTemplate.objects.create(
+            key="view_rebirth_card_bad_payload",
+            name="门客重生卡坏结构",
+            effect_payload=False,
+        )
+        item = InventoryItem.objects.create(manor=manor, template=template, quantity=1)
+        called = {"count": 0}
+
+        def _unexpected_call(*args, **kwargs):
+            called["count"] += 1
+            return {}
+
+        monkeypatch.setattr("gameplay.views.inventory.use_guest_rebirth_card", _unexpected_call)
+
+        with pytest.raises(AssertionError, match="invalid inventory target-guest item effect_payload"):
+            client.post(
+                reverse("gameplay:use_rebirth_card", kwargs={"pk": item.pk}),
+                {"guest_id": 1},
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+
+        assert called["count"] == 0
+
     def test_use_xisuidan_rejects_non_positive_guest_id(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
         template = ItemTemplate.objects.create(
