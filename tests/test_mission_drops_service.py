@@ -106,3 +106,21 @@ def test_get_or_create_skill_book_template_recovers_from_integrity_error(monkeyp
 
     resolved = _get_or_create_skill_book_template("mission_skill_book_2", book)
     assert resolved.pk == existing.pk
+
+
+@pytest.mark.django_db
+def test_award_mission_drops_rejects_negative_drop_amount():
+    user = User.objects.create_user(username="mission_drop_negative_amount", password="pass123")
+    manor = ensure_manor(user)
+
+    with pytest.raises(AssertionError, match="invalid mission drop amount"):
+        award_mission_drops(manor, {"silver": -1}, note="坏掉落")
+
+
+@pytest.mark.django_db
+def test_award_mission_drops_rejects_missing_item_template():
+    user = User.objects.create_user(username="mission_drop_missing_item_tpl", password="pass123")
+    manor = ensure_manor(user)
+
+    with pytest.raises(AssertionError, match="invalid mission drop item key"):
+        award_mission_drops(manor, {"missing_drop_item": 1}, note="坏物品掉落")

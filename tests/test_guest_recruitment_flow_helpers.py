@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import guests.services.recruitment_candidates as recruitment_candidates
 import guests.services.recruitment_flow as recruitment_flow
+import guests.services.recruitment_queries as recruitment_queries
 from core.exceptions import RecruitmentAlreadyInProgressError, RecruitmentDailyLimitExceededError
 from guests.models import GuestRarity
 
@@ -16,6 +17,11 @@ def test_resolve_recruitment_seed_keeps_explicit_value():
 def test_resolve_recruitment_seed_rejects_invalid_value():
     with __import__("pytest").raises(AssertionError, match="invalid recruitment seed"):
         recruitment_flow.resolve_recruitment_seed("bad-seed")
+
+
+def test_resolve_recruitment_seed_rejects_non_positive_value():
+    with __import__("pytest").raises(AssertionError, match="invalid recruitment seed"):
+        recruitment_flow.resolve_recruitment_seed(0)
 
 
 def test_resolve_recruitment_cost_returns_copy():
@@ -58,6 +64,22 @@ def test_create_pending_recruitment_rejects_invalid_draw_count():
         )
 
 
+def test_create_pending_recruitment_rejects_non_positive_draw_count():
+    recruitment_model = SimpleNamespace(objects=SimpleNamespace(create=lambda **_kwargs: _kwargs))
+
+    with __import__("pytest").raises(AssertionError, match="invalid recruitment draw count"):
+        recruitment_flow.create_pending_recruitment(
+            recruitment_model=recruitment_model,
+            manor="manor",
+            pool="pool",
+            current_time=__import__("datetime").datetime(2026, 1, 1),
+            cost={},
+            draw_count=0,
+            duration_seconds=30,
+            seed=7,
+        )
+
+
 def test_create_pending_recruitment_rejects_invalid_duration():
     recruitment_model = SimpleNamespace(objects=SimpleNamespace(create=lambda **_kwargs: _kwargs))
 
@@ -70,6 +92,38 @@ def test_create_pending_recruitment_rejects_invalid_duration():
             cost={},
             draw_count=1,
             duration_seconds="bad-duration",
+            seed=7,
+        )
+
+
+def test_create_pending_recruitment_rejects_non_positive_seed():
+    recruitment_model = SimpleNamespace(objects=SimpleNamespace(create=lambda **_kwargs: _kwargs))
+
+    with __import__("pytest").raises(AssertionError, match="invalid recruitment seed"):
+        recruitment_flow.create_pending_recruitment(
+            recruitment_model=recruitment_model,
+            manor="manor",
+            pool="pool",
+            current_time=__import__("datetime").datetime(2026, 1, 1),
+            cost={},
+            draw_count=1,
+            duration_seconds=30,
+            seed=0,
+        )
+
+
+def test_create_pending_recruitment_rejects_non_positive_duration():
+    recruitment_model = SimpleNamespace(objects=SimpleNamespace(create=lambda **_kwargs: _kwargs))
+
+    with __import__("pytest").raises(AssertionError, match="invalid recruitment duration"):
+        recruitment_flow.create_pending_recruitment(
+            recruitment_model=recruitment_model,
+            manor="manor",
+            pool="pool",
+            current_time=__import__("datetime").datetime(2026, 1, 1),
+            cost={},
+            draw_count=1,
+            duration_seconds=0,
             seed=7,
         )
 
@@ -87,6 +141,14 @@ def test_resolve_candidate_draw_count_rejects_invalid_value():
 
     with __import__("pytest").raises(AssertionError, match="invalid recruitment draw count"):
         recruitment_candidates.resolve_candidate_draw_count(pool=pool, manor=manor, total_draw_count="bad-count")
+
+
+def test_resolve_candidate_draw_count_rejects_non_positive_value():
+    pool = SimpleNamespace(draw_count=2)
+    manor = SimpleNamespace(tavern_recruitment_bonus=3)
+
+    with __import__("pytest").raises(AssertionError, match="invalid recruitment draw count"):
+        recruitment_candidates.resolve_candidate_draw_count(pool=pool, manor=manor, total_draw_count=0)
 
 
 def test_build_candidate_display_name_uses_random_name_for_common_candidates():
@@ -203,3 +265,41 @@ def test_load_candidate_generation_context_uses_injected_loaders_once():
     assert context["resolved_draw_count"] == 3
     assert context["excluded_ids"] == {1, 2}
     assert calls == {"by_rarity": 1, "hermit": 1, "excluded": 1}
+
+
+def test_get_pool_recruitment_duration_seconds_rejects_non_positive_value():
+    pool = SimpleNamespace(cooldown_seconds=0)
+
+    with __import__("pytest").raises(AssertionError, match="invalid recruitment cooldown"):
+        recruitment_queries.get_pool_recruitment_duration_seconds(pool)
+
+
+def test_get_pool_daily_draw_limit_rejects_non_positive_value(monkeypatch):
+    monkeypatch.setattr(recruitment_queries, "RECRUITMENT", SimpleNamespace(DAILY_POOL_DRAW_LIMIT=0))
+
+    with __import__("pytest").raises(AssertionError, match="invalid recruitment daily limit"):
+        recruitment_queries._get_pool_daily_draw_limit()
+
+
+def test_mark_recruitment_completed_locked_rejects_negative_result_count():
+    saved = {}
+    invalidations = []
+    recruitment = SimpleNamespace(
+        manor_id=7,
+        status="pending",
+        finished_at=None,
+        result_count=0,
+        error_message="boom",
+        save=lambda **kwargs: saved.update(kwargs),
+    )
+
+    with __import__("pytest").raises(AssertionError, match="invalid recruitment result count"):
+        recruitment_flow.mark_recruitment_completed_locked(
+            recruitment,
+            current_time=__import__("datetime").datetime(2026, 1, 1),
+            result_count=-1,
+            invalidate_cache=lambda manor_id: invalidations.append(manor_id),
+        )
+
+    assert saved == {}
+    assert invalidations == []

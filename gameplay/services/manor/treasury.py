@@ -93,6 +93,8 @@ def move_item_to_treasury(manor: Manor, item_id: int, quantity: int) -> None:
         InsufficientStockError: 物品数量不足时抛出
         InsufficientSpaceError: 藏宝阁空间不足时抛出
     """
+    if quantity <= 0:
+        raise AssertionError("move_item_to_treasury requires positive quantity")
     # 检查藏宝阁是否存在
     treasury_capacity = get_treasury_capacity(manor)
     if treasury_capacity == 0:
@@ -171,6 +173,8 @@ def move_item_to_warehouse(manor: Manor, item_id: int, quantity: int) -> None:
         ItemNotFoundError: 物品不存在时抛出
         InsufficientStockError: 物品数量不足时抛出
     """
+    if quantity <= 0:
+        raise AssertionError("move_item_to_warehouse requires positive quantity")
     # 获取藏宝阁中的物品
     treasury_item = (
         InventoryItem.objects.select_for_update()

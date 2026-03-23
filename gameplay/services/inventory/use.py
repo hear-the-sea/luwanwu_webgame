@@ -7,6 +7,7 @@ This module depends on the core inventory operations in `core.py`.
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any, Callable, Dict, List
 
 from django.db import transaction
@@ -43,19 +44,29 @@ NON_WAREHOUSE_MESSAGES: dict[str, str] = {
 }
 
 
+def _require_effect_payload_dict(item: InventoryItem) -> dict[str, Any]:
+    payload = item.template.effect_payload
+    if payload is None:
+        return {}
+    if not isinstance(payload, dict):
+        raise ItemNotConfiguredError("effect_payload 配置异常")
+    return payload
+
+
 def _collect_weighted_template_choices(choices: list) -> tuple[list[str], list[int]]:
     template_keys: List[str] = []
     weights: List[int] = []
     for entry in choices:
         if not isinstance(entry, dict):
-            continue
+            # Payload is developer-controlled; misconfig should not silently change behavior.
+            raise ItemNotConfiguredError("门客召唤卡 choices 配置异常")
         template_key = entry.get("template_key")
         if not template_key:
-            continue
+            raise ItemNotConfiguredError("门客召唤卡 choices 配置异常")
         try:
             weight = int(entry.get("weight", 0) or 0)
         except (TypeError, ValueError):
-            continue
+            raise ItemNotConfiguredError("门客召唤卡 choices 配置异常")
         if weight <= 0:
             continue
         template_keys.append(str(template_key))
@@ -84,16 +95,17 @@ def _ensure_guest_capacity(manor: Manor) -> None:
 def _consume_required_items_locked(manor: Manor, payload: dict[str, Any]) -> None:
     required_items = payload.get("required_items") or {}
     if not isinstance(required_items, dict):
-        return
+        # Don't allow misconfigured costs to degrade to "free use".
+        raise ItemNotConfiguredError("required_items 配置异常")
 
     for item_key, raw_amount in required_items.items():
         normalized_key = str(item_key or "").strip()
         if not normalized_key:
-            continue
+            raise ItemNotConfiguredError("required_items 配置异常")
         try:
             amount = int(raw_amount)
         except (TypeError, ValueError):
-            amount = 0
+            raise ItemNotConfiguredError("required_items 配置异常")
         if amount <= 0:
             continue
         consume_inventory_item_for_manor_locked(manor, normalized_key, amount)
@@ -118,21 +130,33 @@ def _grant_item_resources(manor: Manor, payload: dict[str, int], note: str) -> d
     )
 
 
-def _normalize_probability(value: Any) -> float:
+def _normalize_probability(value: Any, *, field_name: str) -> float:
     """Normalize probability config to [0, 1]. Supports 0.1 or 10 (percent)."""
+    if value is None or value == "":
+        return 0.0
+    if isinstance(value, bool):
+        raise ItemNotConfiguredError(f"{field_name} 配置异常")
+
     try:
         prob = float(value)
     except (TypeError, ValueError):
-        return 0.0
+        raise ItemNotConfiguredError(f"{field_name} 配置异常")
+    if not math.isfinite(prob):
+        raise ItemNotConfiguredError(f"{field_name} 配置异常")
 
-    if prob > 1 and prob <= 100:
-        prob = prob / 100.0
-    return max(0.0, min(1.0, prob))
+    if prob < 0:
+        raise ItemNotConfiguredError(f"{field_name} 配置异常")
+    if prob > 1:
+        if prob <= 100:
+            prob = prob / 100.0
+        else:
+            raise ItemNotConfiguredError(f"{field_name} 配置异常")
+    return prob
 
 
 def _apply_resource_pack(item: InventoryItem) -> Dict[str, Any]:
     """使用资源包，发放资源奖励。"""
-    payload = item.template.effect_payload or {}
+    payload = _require_effect_payload_dict(item)
     if not payload:
         raise ItemNotConfiguredError()
     granted_resources = _grant_item_resources(item.manor, payload, item.template.name)
@@ -147,10 +171,16 @@ def _apply_peace_shield(item: InventoryItem) -> Dict[str, Any]:
     """使用免战牌，激活保护状态。"""
     from gameplay.services.raid import activate_peace_shield
 
-    payload = item.template.effect_payload or {}
-    duration = payload.get("duration")
-    if not duration:
-        raise ItemNotConfiguredError()
+    payload = _require_effect_payload_dict(item)
+    raw_duration = payload.get("duration")
+    if raw_duration is None or raw_duration == "" or isinstance(raw_duration, bool):
+        raise ItemNotConfiguredError("duration 配置异常")
+    try:
+        duration = int(raw_duration)
+    except (TypeError, ValueError):
+        raise ItemNotConfiguredError("duration 配置异常")
+    if duration <= 0:
+        raise ItemNotConfiguredError("duration 配置异常")
 
     manor = item.manor
     activate_peace_shield(manor, duration)
@@ -166,7 +196,7 @@ def _apply_guest_summon(item: InventoryItem) -> Dict[str, Any]:
     """
     使用门客召唤卡：按权重随机获得一个门客模板并直接加入聚贤庄。
     """
-    payload = item.template.effect_payload or {}
+    payload = _require_effect_payload_dict(item)
     choices = payload.get("choices") or []
     if not isinstance(choices, list):
         raise ItemNotConfiguredError()
@@ -188,6 +218,8 @@ def _apply_guest_summon(item: InventoryItem) -> Dict[str, Any]:
         raise ItemNotConfiguredError(f"门客模板不存在: {chosen_key}")
 
     exclusive_template_keys = payload.get("exclusive_template_keys") or []
+    if exclusive_template_keys and not isinstance(exclusive_template_keys, list):
+        raise ItemNotConfiguredError("exclusive_template_keys 配置异常")
     if isinstance(exclusive_template_keys, list):
         normalized_exclusive_keys = [str(key).strip() for key in exclusive_template_keys if str(key).strip()]
         if normalized_exclusive_keys and manor.guests.filter(template__key__in=normalized_exclusive_keys).exists():
@@ -213,7 +245,7 @@ def _apply_tool(item: InventoryItem) -> Dict[str, Any]:
     """
     使用道具类物品（统一 effect_type=tool）。
     """
-    payload = item.template.effect_payload or {}
+    payload = _require_effect_payload_dict(item)
     if payload.get("action") == "summon_guest":
         return _apply_guest_summon(item)
     if payload.get("action") == "rebirth_guest":
@@ -231,7 +263,7 @@ def _apply_tool(item: InventoryItem) -> Dict[str, Any]:
 
 def _apply_loot_box(item: InventoryItem) -> Dict[str, Any]:
     """使用宝箱类物品，按配置发放多种奖励。"""
-    payload = item.template.effect_payload or {}
+    payload = _require_effect_payload_dict(item)
     if not payload:
         raise ItemNotConfiguredError()
 
@@ -240,6 +272,8 @@ def _apply_loot_box(item: InventoryItem) -> Dict[str, Any]:
 
     # 1. 固定资源掉落（可选）
     resources = payload.get("resources") or {}
+    if resources and not isinstance(resources, dict):
+        raise ItemNotConfiguredError("resources 配置异常")
     if resources:
         result = _grant_item_resources(manor, resources, item.template.name)
         parts = [f"{k}+{v}" for k, v in result.items()]
@@ -249,16 +283,18 @@ def _apply_loot_box(item: InventoryItem) -> Dict[str, Any]:
     silver_min_raw = payload.get("silver_min")
     silver_max_raw = payload.get("silver_max")
     if silver_min_raw is not None or silver_max_raw is not None:
+        if isinstance(silver_min_raw, bool) or isinstance(silver_max_raw, bool):
+            raise ItemNotConfiguredError("silver_min/silver_max 配置异常")
         try:
             silver_min = int(silver_min_raw if silver_min_raw is not None else 0)
             silver_max = int(silver_max_raw if silver_max_raw is not None else silver_min)
         except (TypeError, ValueError):
-            raise ItemNotConfiguredError()
+            raise ItemNotConfiguredError("silver_min/silver_max 配置异常")
 
-        silver_min = max(0, silver_min)
-        silver_max = max(0, silver_max)
+        if silver_min < 0 or silver_max < 0:
+            raise ItemNotConfiguredError("silver_min/silver_max 配置异常")
         if silver_max < silver_min:
-            silver_min, silver_max = silver_max, silver_min
+            raise ItemNotConfiguredError("silver_min/silver_max 配置异常")
 
         rolled_silver = inventory_random.randint(silver_min, silver_max)
         if rolled_silver > 0:
@@ -269,7 +305,9 @@ def _apply_loot_box(item: InventoryItem) -> Dict[str, Any]:
 
     # 3. 装备掉落（概率，随机一件）
     gear_keys = payload.get("gear_keys") or []
-    gear_chance = _normalize_probability(payload.get("gear_chance", 0))
+    if gear_keys and not isinstance(gear_keys, list):
+        raise ItemNotConfiguredError("gear_keys 配置异常")
+    gear_chance = _normalize_probability(payload.get("gear_chance"), field_name="gear_chance")
     skipped_bonus_items: List[str] = []
     if gear_chance > 0 and gear_keys and inventory_random.random() < gear_chance:
         from guests.models import GearTemplate
@@ -284,8 +322,10 @@ def _apply_loot_box(item: InventoryItem) -> Dict[str, Any]:
             rewards.append(f"装备【{gear_template.name}】")
 
     # 4. 技能书掉落（概率，随机一本）
-    skill_book_chance = _normalize_probability(payload.get("skill_book_chance", 0))
+    skill_book_chance = _normalize_probability(payload.get("skill_book_chance"), field_name="skill_book_chance")
     skill_book_keys = payload.get("skill_book_keys", [])
+    if skill_book_keys and not isinstance(skill_book_keys, list):
+        raise ItemNotConfiguredError("skill_book_keys 配置异常")
     if skill_book_chance > 0 and skill_book_keys and inventory_random.random() < skill_book_chance:
         book_key = inventory_random.choice(skill_book_keys)
         try:

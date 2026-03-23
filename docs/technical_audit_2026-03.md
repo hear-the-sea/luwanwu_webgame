@@ -1,6 +1,6 @@
 # 项目重构优化规则与阶段目标（2026-03）
 
-最近更新：2026-03-21
+最近更新：2026-03-23
 
 本文档不记录详细审计过程、历史数据或阶段性结果，只保留后续重构必须遵守的规则，以及各阶段的优化目标。
 
@@ -12,15 +12,24 @@
 - [数据流边界](domain_boundaries.md)
 - [第二阶段统一写模型基线](write_model_boundaries.md)
 
-## 0. 当前基线（2026-03-21）
+## 0. 当前基线（2026-03-23）
 
 本文档原则上不展开完整审计过程，但为避免规则与仓库现实脱节，仍保留当前治理基线与未收口项摘要。
 
 - 2026-03-21 本地验证：`make lint` 通过。
 - 2026-03-21 本地验证：默认 `make test` 通过，结果为 `1852 passed, 28 deselected`。
+- 2026-03-22 本轮验证：`pytest tests/test_trade_auction_rounds.py -q` 通过，结果为 `30 passed`。
+- 2026-03-22 本轮验证：`pytest tests/test_inventory_guest_items.py -q` 通过，结果为 `16 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_guest_summon_card.py -q` 通过，结果为 `22 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_treasury_move_service_contracts.py -q` 通过，结果为 `2 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_guest_recruitment_flow_helpers.py -q` 通过，结果为 `24 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_mission_sync_report.py -q` 通过，结果为 `4 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_mission_finalization_helpers.py -q` 通过，结果为 `2 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_mission_salvage_side_filter.py -q` 通过，结果为 `3 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_mission_drops_service.py -q` 通过，结果为 `6 passed`。
 - 2026-03-21 依赖图/导入链复核：`config/urls.py`、`gameplay/context_processors.py`、`gameplay/views/arena.py`、`guests/urls.py`、`guilds/urls.py` 已改为显式子模块导入，不再依赖 `gameplay.views`、`gameplay.selectors`、`guests.views`、`guilds.views` 包根聚合入口。
 - 2026-03-21 包边界复核：`gameplay/views/__init__.py`、`gameplay/selectors/__init__.py`、`guests/views/__init__.py`、`guilds/views/__init__.py` 已收口为无副作用最小包标记文件，不再承担跨模块 re-export 责任。
-- 超大测试文件与超大模板仍未完成收口。
+- 超大模板仍未完成收口；超大测试文件已开始收缩，`tests/test_trade_auction_rounds.py`、`tests/test_inventory_guest_items.py` 均已收口为薄入口并拆到各自 `tests/*/` 子模块，但仍有多份 `>800` 行测试文件待治理。
 
 ## 1. 重构优化规则
 

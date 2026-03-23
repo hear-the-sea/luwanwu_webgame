@@ -32,18 +32,22 @@ def _normalize_guest_configs(raw) -> list[str | Dict[str, object]]:
 
 
 def _normalize_troop_loadout(raw) -> Dict[str, int]:
-    if not isinstance(raw, dict):
+    if raw is None:
         return {}
+    if not isinstance(raw, dict):
+        raise AssertionError(f"invalid mission troop loadout: {raw!r}")
     normalized: Dict[str, int] = {}
     for key, value in raw.items():
         key_str = str(key).strip()
         if not key_str:
-            continue
+            raise AssertionError(f"invalid mission troop loadout key: {key!r}")
         try:
             qty = int(value)
         except (TypeError, ValueError):
-            qty = 0
-        normalized[key_str] = max(0, qty)
+            raise AssertionError(f"invalid mission troop loadout quantity: {value!r}") from None
+        if qty < 0:
+            raise AssertionError(f"invalid mission troop loadout quantity: {value!r}")
+        normalized[key_str] = qty
     return normalized
 
 
@@ -51,9 +55,11 @@ def _coerce_enemy_guest_level(config: Dict[str, object], default: int = 50) -> i
     raw_level: Any = config.get("guest_level", default)
     try:
         level = int(raw_level)
-    except (TypeError, ValueError):
-        level = default
-    return max(1, level)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid mission enemy guest level: {raw_level!r}") from exc
+    if level <= 0:
+        raise AssertionError(f"invalid mission enemy guest level: {raw_level!r}")
+    return level
 
 
 def _normalize_guest_skills(config: Dict[str, object]) -> list[str] | None:

@@ -63,8 +63,8 @@ def extract_report_guest_state(report: Any, player_side: str) -> Tuple[Dict[int,
         try:
             gid_int = int(gid)
             hp_int = int(hp)
-        except (TypeError, ValueError):
-            continue
+        except (TypeError, ValueError) as exc:
+            raise AssertionError(f"invalid mission report hp update payload: {(gid, hp)!r}") from exc
         hp_updates[gid_int] = hp_int
 
     team_entries = report.defender_team if player_side == "defender" else report.attacker_team
@@ -74,8 +74,8 @@ def extract_report_guest_state(report: Any, player_side: str) -> Tuple[Dict[int,
         try:
             gid_int = int(gid)
             remaining_int = int(remaining)
-        except (TypeError, ValueError):
-            continue
+        except (TypeError, ValueError) as exc:
+            raise AssertionError(f"invalid mission report team entry: {entry!r}") from exc
         participant_ids.add(gid_int)
         hp_updates.setdefault(gid_int, remaining_int)
         if remaining_int <= 0:

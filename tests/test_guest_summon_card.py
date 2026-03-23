@@ -2,7 +2,13 @@ import logging
 
 import pytest
 
-from core.exceptions import GuestAlreadyOwnedError, GuestCapacityFullError, InsufficientStockError, ItemNotFoundError
+from core.exceptions import (
+    GuestAlreadyOwnedError,
+    GuestCapacityFullError,
+    InsufficientStockError,
+    ItemNotConfiguredError,
+    ItemNotFoundError,
+)
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.inventory.use import use_inventory_item
 from gameplay.services.manor.core import ensure_manor
@@ -154,6 +160,120 @@ def test_summon_card_respects_guest_capacity(monkeypatch, django_user_model):
 
 
 @pytest.mark.django_db
+def test_summon_card_invalid_choice_payload_raises_config_error(django_user_model):
+    user = django_user_model.objects.create_user(username="summon_invalid_choice", password="pass123")
+    manor = ensure_manor(user)
+
+    GuestTemplate.objects.create(
+        key="pubayi_blue_invalid_choice",
+        name="蒲巴乙",
+        archetype="civil",
+        rarity="blue",
+        base_attack=80,
+        base_intellect=90,
+        base_defense=70,
+        base_agility=75,
+        base_luck=60,
+        base_hp=1000,
+        default_gender="male",
+        default_morality=60,
+        recruitable=False,
+    )
+
+    template = ItemTemplate.objects.create(
+        key="pubayi_guest_card_invalid_choice",
+        name="坏配置门客卡",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=True,
+        effect_payload={
+            "action": "summon_guest",
+            "choices": [
+                {"template_key": "pubayi_blue_invalid_choice", "weight": "bad"},
+            ],
+        },
+    )
+    item = InventoryItem.objects.create(
+        manor=manor,
+        template=template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    with pytest.raises(ItemNotConfiguredError, match="choices 配置异常"):
+        use_inventory_item(item)
+
+    item.refresh_from_db()
+    assert item.quantity == 1
+    assert manor.guests.count() == 0
+
+
+@pytest.mark.django_db
+def test_summon_card_invalid_required_items_payload_raises_config_error(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="summon_invalid_required_items", password="pass123")
+    manor = ensure_manor(user)
+
+    blue = _make_pubayi_template("pubayi_blue_invalid_cost", "blue")
+
+    template = ItemTemplate.objects.create(
+        key="pubayi_guest_card_invalid_required_items",
+        name="坏消耗门客卡",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=True,
+        effect_payload={
+            "action": "summon_guest",
+            "choices": [
+                {"template_key": blue.key, "weight": 100},
+            ],
+            "required_items": {
+                "": 1,
+            },
+        },
+    )
+    item = InventoryItem.objects.create(
+        manor=manor,
+        template=template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    monkeypatch.setattr("gameplay.services.inventory.use.inventory_random.random", lambda: 0.0)
+
+    with pytest.raises(ItemNotConfiguredError, match="required_items 配置异常"):
+        use_inventory_item(item)
+
+    item.refresh_from_db()
+    assert item.quantity == 1
+    assert manor.guests.count() == 0
+
+
+@pytest.mark.django_db
+def test_summon_card_non_dict_effect_payload_raises_config_error(django_user_model):
+    user = django_user_model.objects.create_user(username="summon_invalid_payload_shape", password="pass123")
+    manor = ensure_manor(user)
+
+    template = ItemTemplate.objects.create(
+        key="pubayi_guest_card_invalid_payload_shape",
+        name="坏结构门客卡",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=True,
+        effect_payload=["summon_guest"],
+    )
+    item = InventoryItem.objects.create(
+        manor=manor,
+        template=template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    with pytest.raises(ItemNotConfiguredError, match="effect_payload 配置异常"):
+        use_inventory_item(item)
+
+    item.refresh_from_db()
+    assert item.quantity == 1
+    assert manor.guests.count() == 0
+
+
+@pytest.mark.django_db
 def test_loot_box_logs_and_tracks_skipped_bonus_items(monkeypatch, caplog, django_user_model):
     user = django_user_model.objects.create_user(username="loot_box_skip_bonus", password="pass123")
     manor = ensure_manor(user)
@@ -196,6 +316,32 @@ def test_loot_box_logs_and_tracks_skipped_bonus_items(monkeypatch, caplog, djang
     assert payload["skipped_bonus_items"] == ["missing_bonus_item"]
     assert any("loot box bonus item grant skipped" in rec.getMessage() for rec in caplog.records)
     assert not InventoryItem.objects.filter(pk=item.pk).exists()
+
+
+@pytest.mark.django_db
+def test_resource_pack_non_dict_effect_payload_raises_config_error(django_user_model):
+    user = django_user_model.objects.create_user(username="resource_pack_invalid_payload_shape", password="pass123")
+    manor = ensure_manor(user)
+
+    template = ItemTemplate.objects.create(
+        key="resource_pack_invalid_payload_shape_test",
+        name="坏结构资源包",
+        effect_type=ItemTemplate.EffectType.RESOURCE_PACK,
+        is_usable=True,
+        effect_payload=["silver", 100],
+    )
+    item = InventoryItem.objects.create(
+        manor=manor,
+        template=template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    with pytest.raises(ItemNotConfiguredError, match="effect_payload 配置异常"):
+        use_inventory_item(item)
+
+    item.refresh_from_db()
+    assert item.quantity == 1
 
 
 @pytest.mark.django_db
@@ -278,6 +424,260 @@ def test_work_loot_box_grants_random_silver_and_single_gear_drop(monkeypatch, dj
 
 
 @pytest.mark.django_db
+def test_loot_box_invalid_probability_config_raises_config_error(django_user_model):
+    user = django_user_model.objects.create_user(username="loot_box_invalid_prob", password="pass123")
+    manor = ensure_manor(user)
+
+    template = ItemTemplate.objects.create(
+        key="loot_box_invalid_prob_test",
+        name="坏概率宝箱",
+        effect_type=ItemTemplate.EffectType.LOOT_BOX,
+        is_usable=True,
+        effect_payload={
+            "gear_chance": "bad",
+            "gear_keys": ["work_loot_gear_a"],
+        },
+    )
+    item = InventoryItem.objects.create(
+        manor=manor,
+        template=template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    with pytest.raises(ItemNotConfiguredError, match="gear_chance 配置异常"):
+        use_inventory_item(item)
+
+    item.refresh_from_db()
+    assert item.quantity == 1
+
+
+@pytest.mark.django_db
+def test_loot_box_invalid_skill_book_probability_config_raises_config_error(django_user_model):
+    user = django_user_model.objects.create_user(username="loot_box_invalid_skill_prob", password="pass123")
+    manor = ensure_manor(user)
+
+    template = ItemTemplate.objects.create(
+        key="loot_box_invalid_skill_prob_test",
+        name="坏技能书概率宝箱",
+        effect_type=ItemTemplate.EffectType.LOOT_BOX,
+        is_usable=True,
+        effect_payload={
+            "skill_book_chance": {"bad": "payload"},
+            "skill_book_keys": ["missing_bonus_item"],
+        },
+    )
+    item = InventoryItem.objects.create(
+        manor=manor,
+        template=template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    with pytest.raises(ItemNotConfiguredError, match="skill_book_chance 配置异常"):
+        use_inventory_item(item)
+
+    item.refresh_from_db()
+    assert item.quantity == 1
+
+
+@pytest.mark.django_db
+def test_loot_box_invalid_resources_payload_raises_config_error(django_user_model):
+    user = django_user_model.objects.create_user(username="loot_box_invalid_resources", password="pass123")
+    manor = ensure_manor(user)
+
+    template = ItemTemplate.objects.create(
+        key="loot_box_invalid_resources_test",
+        name="坏资源宝箱",
+        effect_type=ItemTemplate.EffectType.LOOT_BOX,
+        is_usable=True,
+        effect_payload={
+            "resources": ["silver", 100],
+        },
+    )
+    item = InventoryItem.objects.create(
+        manor=manor,
+        template=template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    with pytest.raises(ItemNotConfiguredError, match="resources 配置异常"):
+        use_inventory_item(item)
+
+    item.refresh_from_db()
+    assert item.quantity == 1
+
+
+@pytest.mark.django_db
+def test_loot_box_invalid_gear_keys_payload_raises_config_error(django_user_model):
+    user = django_user_model.objects.create_user(username="loot_box_invalid_gear_keys", password="pass123")
+    manor = ensure_manor(user)
+
+    template = ItemTemplate.objects.create(
+        key="loot_box_invalid_gear_keys_test",
+        name="坏装备列表宝箱",
+        effect_type=ItemTemplate.EffectType.LOOT_BOX,
+        is_usable=True,
+        effect_payload={
+            "gear_chance": 1,
+            "gear_keys": "not-a-list",
+        },
+    )
+    item = InventoryItem.objects.create(
+        manor=manor,
+        template=template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    with pytest.raises(ItemNotConfiguredError, match="gear_keys 配置异常"):
+        use_inventory_item(item)
+
+    item.refresh_from_db()
+    assert item.quantity == 1
+
+
+@pytest.mark.django_db
+def test_loot_box_invalid_skill_book_keys_payload_raises_config_error(django_user_model):
+    user = django_user_model.objects.create_user(username="loot_box_invalid_skill_book_keys", password="pass123")
+    manor = ensure_manor(user)
+
+    template = ItemTemplate.objects.create(
+        key="loot_box_invalid_skill_book_keys_test",
+        name="坏技能书列表宝箱",
+        effect_type=ItemTemplate.EffectType.LOOT_BOX,
+        is_usable=True,
+        effect_payload={
+            "skill_book_chance": 1,
+            "skill_book_keys": "not-a-list",
+        },
+    )
+    item = InventoryItem.objects.create(
+        manor=manor,
+        template=template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    with pytest.raises(ItemNotConfiguredError, match="skill_book_keys 配置异常"):
+        use_inventory_item(item)
+
+    item.refresh_from_db()
+    assert item.quantity == 1
+
+
+@pytest.mark.django_db
+def test_loot_box_negative_silver_range_raises_config_error(django_user_model):
+    user = django_user_model.objects.create_user(username="loot_box_negative_silver_range", password="pass123")
+    manor = ensure_manor(user)
+
+    template = ItemTemplate.objects.create(
+        key="loot_box_negative_silver_range_test",
+        name="坏银两区间宝箱",
+        effect_type=ItemTemplate.EffectType.LOOT_BOX,
+        is_usable=True,
+        effect_payload={
+            "silver_min": -1,
+            "silver_max": 100,
+        },
+    )
+    item = InventoryItem.objects.create(
+        manor=manor,
+        template=template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    with pytest.raises(ItemNotConfiguredError, match="silver_min/silver_max 配置异常"):
+        use_inventory_item(item)
+
+    item.refresh_from_db()
+    assert item.quantity == 1
+
+
+@pytest.mark.django_db
+def test_loot_box_reversed_silver_range_raises_config_error(django_user_model):
+    user = django_user_model.objects.create_user(username="loot_box_reversed_silver_range", password="pass123")
+    manor = ensure_manor(user)
+
+    template = ItemTemplate.objects.create(
+        key="loot_box_reversed_silver_range_test",
+        name="反向银两区间宝箱",
+        effect_type=ItemTemplate.EffectType.LOOT_BOX,
+        is_usable=True,
+        effect_payload={
+            "silver_min": 200,
+            "silver_max": 100,
+        },
+    )
+    item = InventoryItem.objects.create(
+        manor=manor,
+        template=template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    with pytest.raises(ItemNotConfiguredError, match="silver_min/silver_max 配置异常"):
+        use_inventory_item(item)
+
+    item.refresh_from_db()
+    assert item.quantity == 1
+
+
+@pytest.mark.django_db
+def test_peace_shield_invalid_duration_type_raises_config_error(django_user_model):
+    user = django_user_model.objects.create_user(username="peace_shield_invalid_duration_type", password="pass123")
+    manor = ensure_manor(user)
+
+    template = ItemTemplate.objects.create(
+        key="peace_shield_invalid_duration_type_test",
+        name="坏时长免战牌",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=True,
+        effect_payload={"duration": "bad"},
+    )
+    item = InventoryItem.objects.create(
+        manor=manor,
+        template=template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    with pytest.raises(ItemNotConfiguredError, match="duration 配置异常"):
+        use_inventory_item(item)
+
+    item.refresh_from_db()
+    assert item.quantity == 1
+
+
+@pytest.mark.django_db
+def test_peace_shield_non_positive_duration_raises_config_error(django_user_model):
+    user = django_user_model.objects.create_user(username="peace_shield_invalid_duration_value", password="pass123")
+    manor = ensure_manor(user)
+
+    template = ItemTemplate.objects.create(
+        key="peace_shield_invalid_duration_value_test",
+        name="零时长免战牌",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=True,
+        effect_payload={"duration": 0},
+    )
+    item = InventoryItem.objects.create(
+        manor=manor,
+        template=template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    with pytest.raises(ItemNotConfiguredError, match="duration 配置异常"):
+        use_inventory_item(item)
+
+    item.refresh_from_db()
+    assert item.quantity == 1
+
+
+@pytest.mark.django_db
 def test_summon_card_rejects_duplicate_unique_guest(django_user_model):
     user = django_user_model.objects.create_user(username="summon_unique_guard", password="pass123")
     manor = ensure_manor(user)
@@ -340,6 +740,40 @@ def test_summon_card_rejects_duplicate_unique_guest(django_user_model):
 
     item.refresh_from_db()
     assert item.quantity == 1
+
+
+@pytest.mark.django_db
+def test_summon_card_invalid_exclusive_template_keys_payload_raises_config_error(django_user_model):
+    user = django_user_model.objects.create_user(username="summon_invalid_exclusive_keys", password="pass123")
+    manor = ensure_manor(user)
+    template = _make_pubayi_template("pubayi_invalid_exclusive_key_test", "green")
+
+    card_template = ItemTemplate.objects.create(
+        key="pubayi_guest_card_invalid_exclusive_keys",
+        name="坏唯一门客卡",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=True,
+        effect_payload={
+            "action": "summon_guest",
+            "exclusive_template_keys": "not-a-list",
+            "choices": [
+                {"template_key": template.key, "weight": 100},
+            ],
+        },
+    )
+    item = InventoryItem.objects.create(
+        manor=manor,
+        template=card_template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    with pytest.raises(ItemNotConfiguredError, match="exclusive_template_keys 配置异常"):
+        use_inventory_item(item)
+
+    item.refresh_from_db()
+    assert item.quantity == 1
+    assert manor.guests.count() == 0
 
 
 @pytest.mark.django_db

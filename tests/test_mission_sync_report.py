@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from gameplay.services.missions_impl.sync_report import generate_sync_battle_report
 
 
@@ -24,7 +26,7 @@ def test_generate_sync_battle_report_defense_tolerates_invalid_enemy_technology(
         is_defense=True,
         enemy_technology="bad-config",
         enemy_guests="bad-guests",
-        enemy_troops="bad-troops",
+        enemy_troops={},
         battle_type="task",
         name="Defense Mission",
         drop_table={},
@@ -49,6 +51,66 @@ def test_generate_sync_battle_report_defense_tolerates_invalid_enemy_technology(
     assert captured["validate_attacker_troop_capacity"] is False
     assert captured["attacker_guests"][0].level == 50
     assert state["keys"] == []
+
+
+def test_generate_sync_battle_report_defense_rejects_invalid_enemy_troops(monkeypatch):
+    def _fake_simulate_report(**_kwargs):
+        raise AssertionError("should not simulate when mission troop loadout is broken")
+
+    monkeypatch.setattr("battle.services.simulate_report", _fake_simulate_report)
+    monkeypatch.setattr("battle.combatants_pkg.build_named_ai_guests", lambda *_a, **_k: [])
+
+    mission = SimpleNamespace(
+        is_defense=True,
+        enemy_technology={},
+        enemy_guests=[],
+        enemy_troops={"archer": "bad"},
+        battle_type="task",
+        name="Defense Mission",
+        drop_table={},
+    )
+    manor = SimpleNamespace(max_squad_size=6)
+
+    with pytest.raises(AssertionError, match="invalid mission troop loadout quantity"):
+        generate_sync_battle_report(
+            manor=manor,
+            mission=mission,
+            guests=[],
+            loadout={},
+            defender_setup={},
+            travel_seconds=0,
+            seed=1,
+        )
+
+
+def test_generate_sync_battle_report_defense_rejects_invalid_enemy_guest_level(monkeypatch):
+    def _fake_simulate_report(**_kwargs):
+        raise AssertionError("should not simulate when enemy guest level config is broken")
+
+    monkeypatch.setattr("battle.services.simulate_report", _fake_simulate_report)
+    monkeypatch.setattr("battle.combatants_pkg.build_named_ai_guests", lambda *_a, **_k: [])
+
+    mission = SimpleNamespace(
+        is_defense=True,
+        enemy_technology={"guest_level": 0},
+        enemy_guests=[],
+        enemy_troops={},
+        battle_type="task",
+        name="Defense Mission",
+        drop_table={},
+    )
+    manor = SimpleNamespace(max_squad_size=6)
+
+    with pytest.raises(AssertionError, match="invalid mission enemy guest level"):
+        generate_sync_battle_report(
+            manor=manor,
+            mission=mission,
+            guests=[],
+            loadout={},
+            defender_setup={},
+            travel_seconds=0,
+            seed=1,
+        )
 
 
 def test_generate_sync_battle_report_offense_sanitizes_invalid_drop_table(monkeypatch):

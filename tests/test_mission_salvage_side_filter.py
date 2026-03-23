@@ -38,3 +38,17 @@ def test_mission_salvage_programming_error_bubbles_up(monkeypatch):
 
     with __import__("pytest").raises(AssertionError, match="broken salvage contract"):
         mission_execution._build_mission_drops_with_salvage(locked_run, report, "attacker")
+
+
+def test_mission_salvage_rejects_invalid_defense_drop_table(monkeypatch):
+    monkeypatch.setattr(
+        battle_salvage_service,
+        "calculate_battle_salvage",
+        lambda *_args, **_kwargs: (0, {}),
+    )
+
+    locked_run = SimpleNamespace(mission=SimpleNamespace(is_defense=True, drop_table="bad-drop-table"), id=101)
+    report = SimpleNamespace(drops={}, id=9, seed=123)
+
+    with __import__("pytest").raises(AssertionError, match="invalid mission drop table"):
+        mission_execution._build_mission_drops_with_salvage(locked_run, report, "defender")

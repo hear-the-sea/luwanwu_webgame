@@ -215,6 +215,15 @@
 - `2026-03-22` 已继续补一轮阶段 3 聚焦验证：`python -m mypy gameplay/services/online_presence.py tests/test_context_processors.py` 已通过；`pytest tests/test_context_processors.py -k online_presence_middleware -q` 为 `3 passed`，用于约束在线人数 HTTP touch 刷新链的基础设施降级、touch key 补偿清理与契约错误冒泡边界不回退。
 - `2026-03-22` 已继续补一轮阶段 3 聚焦验证：`python -m mypy trade/view_helpers.py tests/trade/test_trade_bank_views.py` 已通过；`pytest tests/trade/test_trade_bank_views.py -q` 为 `11 passed`，用于约束交易页动作 helper 的业务失败、基础设施降级与编程错误冒泡边界不回退。
 - `2026-03-22` 已继续补一轮阶段 3 聚焦验证：`python -m mypy trade/services/auction/rounds.py tests/test_trade_auction_rounds.py` 已通过；`pytest tests/test_trade_auction_rounds.py -q` 为 `30 passed`，用于约束拍卖结算外层的基础设施恢复补偿与编程错误冒泡边界不回退。
+- `2026-03-22` 已启动一轮阶段 5“超大测试文件收缩”试点：`tests/test_trade_auction_rounds.py` 已收口为薄入口文件，并按“轮次生命周期 / 拍卖位结算 / 交付与通知”拆到 `tests/trade_auction_rounds/` 子模块；兼容入口路径保持不变，`pytest tests/test_trade_auction_rounds.py -q` 仍为 `30 passed`，用于约束测试资产拆分后原有回归覆盖不回退。
+- `2026-03-22` 已继续推进阶段 5“超大测试文件收缩”第二个试点：`tests/test_inventory_guest_items.py` 已收口为薄入口文件，并按“重置类道具 / 升阶道具 / 灵魂融合”拆到 `tests/inventory_guest_items/` 子模块；兼容入口路径保持不变，`pytest tests/test_inventory_guest_items.py -q` 为 `16 passed`，用于约束测试资产拆分后原有回归覆盖不回退。
+- `2026-03-23` 已继续补一轮阶段 3 聚焦验证：`pytest tests/test_guest_summon_card.py -q` 为 `22 passed`，用于约束门客召唤卡、资源包、宝箱配置与免战牌 `duration` 在 `effect_payload / choices / required_items / exclusive_template_keys / resources / gear_keys / skill_book_keys / *_chance / duration / silver_min / silver_max` 坏掉时改走显式 `ItemNotConfiguredError`，不再静默退化成空权重、免费召唤、“永不掉落”或运行时类型错误。
+- `2026-03-23` 已继续补一轮阶段 3 聚焦验证：`pytest tests/test_treasury_move_service_contracts.py -q` 为 `2 passed`，用于约束藏宝阁移入/移回服务在绕过 view 层时也会把非正数量视为显式内部调用契约错误，而不是静默改库存。
+- `2026-03-23` 已继续补一轮阶段 3 聚焦验证：`pytest tests/test_guest_recruitment_flow_helpers.py -q` 为 `24 passed`，用于约束 `guest recruitment` 的 `draw_count / duration / seed / cost / result_count / cooldown / daily limit` helper 在类型错误和非正数输入下改走显式 `AssertionError`，不再静默纠偏成 `1`、`0`、非法种子、静默归零结果数或默认限额。
+- `2026-03-23` 已继续补一轮阶段 3 聚焦验证：`pytest tests/test_mission_sync_report.py -q` 为 `4 passed`，用于约束 `mission` 同步战报 helper 在 defense 场景下不再静默吞掉坏掉的 `enemy_troops / guest_level` 配置，而是改走显式 `AssertionError`。
+- `2026-03-23` 已继续补一轮阶段 3 聚焦验证：`pytest tests/test_mission_finalization_helpers.py -q` 为 `2 passed`，用于约束 `mission` 结算 helper 在读取坏掉的 `hp_updates / team entry` 战报 payload 时改走显式 `AssertionError`，不再静默跳过损坏战报数据。
+- `2026-03-23` 已继续补一轮阶段 3 聚焦验证：`pytest tests/test_mission_salvage_side_filter.py -q` 为 `3 passed`，用于约束 `mission` 防守掉落补发 helper 在 `drop_table` 配置损坏时改走显式 `AssertionError`，不再静默把坏配置当空表处理。
+- `2026-03-23` 已继续补一轮阶段 3 聚焦验证：`pytest tests/test_mission_drops_service.py -q` 为 `6 passed`，用于约束 `mission` 掉落发放链在负数掉落和缺失物品模板 key 场景下改走显式 `AssertionError`，不再静默少发或吞掉坏奖励。
 - `2026-03-22` 已继续补一轮阶段 3 聚焦验证：`python -m mypy guests/views/equipment.py tests/test_guest_item_view_validation.py` 已通过；`pytest tests/test_guest_item_view_validation.py -k gear_options_view -q` 为 `4 passed`，用于约束装备页 gear-options cache helper 的缓存基础设施降级与运行时/契约错误冒泡边界不回退。
 - `2026-03-22` 已继续补一轮阶段 3 聚焦验证：`python -m mypy guests/views/equipment.py tests/test_guest_view_error_boundaries.py tests/test_guest_item_view_validation.py` 已通过；`pytest tests/test_guest_view_error_boundaries.py tests/test_guest_item_view_validation.py -k 'equip_view or unequip_view' -q` 为 `11 passed`，用于约束门客装备 / 卸装页面入口的业务失败、数据库降级与运行时/契约错误冒泡边界不回退。
 - `guests/views/training.py` 的训练、经验道具与属性加点入口也已继续按阶段 3 收口：`TrainView.post()`、`use_experience_item_view()`、`allocate_points_view()` 当前仅保留显式 `GameError` 业务提示与 `DatabaseError` 页面降级，不再额外用 broad catch 包装“unexpected view error”；`RuntimeError("boom")`、`ValueError("legacy train")` 一类编程/契约错误会继续直接冒泡，避免门客培养页把服务调用契约问题伪装成普通页面失败。
@@ -246,6 +255,10 @@
 - `mission` 已开始收口主链路异常语义：发起任务与撤退请求开始改走 `MissionError` 子类，但 view 层和部分兼容测试仍保留 `ValueError` 兜底。
 - `mission` 的护院 loadout 归一化也已退出裸 `ValueError`：共享 `normalize_mission_loadout(...)` 现在直接抛显式 `TroopLoadoutError`，`AcceptMissionView` 也不再在 view 层重复做业务归一化，护院配置校验重新收口回服务写入口。
 - `mission` 的 `accept/retreat/use_card` 视图入口以及 `scout start / retreat`、`raid start / retreat` 共享入口已不再把裸 `ValueError` 当作已知业务错误吞掉；`gameplay/views/mission_action_handlers.py` 里的 legacy `ValueError` 兼容开关也已移除，剩余 legacy `ValueError` 兼容主要还在更底层 battle/locking 输入校验等共享入口。
+- `mission` 的同步战报 helper 也已开始按阶段 3 收口内部契约：`gameplay/services/missions_impl/sync_report.py` 当前在 defense 场景下不再把坏掉的 `enemy_troops` 配置静默吞成空 loadout，也不再把非法 `guest_level` 静默回退到默认值；这两类 mission 配置错误现在统一改走显式 `AssertionError`。
+- `mission` 的结算 helper 也已开始按阶段 3 收口内部契约：`gameplay/services/missions_impl/finalization_helpers.py` 当前在读取 `report.losses.hp_updates` 与 team entry 时，不再把坏掉的 `guest_id / remaining_hp` 静默跳过；损坏的 mission 战报 payload 现在统一改走显式 `AssertionError`，避免结算链路悄悄丢失受伤/参战门客状态。
+- `mission` 的防守掉落补发 helper 也已开始按阶段 3 收口内部契约：`gameplay/services/missions_impl/drops.py` 当前在 defense 场景下不再把坏掉的 `drop_table` 静默当空表处理；损坏的 mission 掉落配置现在统一改走显式 `AssertionError`，避免补发链路悄悄丢失任务奖励。
+- `mission` 的掉落发放 helper 也已开始按阶段 3 收口内部契约：`gameplay/services/missions_impl/drops.py` 当前不再把负数掉落数量静默带入奖励链，也不再在找不到物品模板时悄悄跳过该掉落；损坏的 mission 掉落 payload 现在统一改走显式 `AssertionError`，避免奖励链路少发、漏发却不暴露错误。
 - `raid/scout` 的双庄园加锁也已开始退出裸 `ValueError`：`gameplay/services/raid/scout.py` 的 `_lock_manor_pair()` 现在直接抛显式 `ScoutStartError`，把“目标庄园不存在”的业务语义留在侦察发起链路内收口。
 - `raid` 的 loadout 预备层也已删掉过期兼容壳：`gameplay/services/raid/combat/raid_inputs.py` 不再把 battle 层的显式 `BattlePreparationError` 重新包成 `RaidStartError`，`start_raid_api` 继续通过统一 `GameError` 映射返回业务错误。
 - `battle` 的门客技能序列化也已开始退出误吞异常：`battle/combatants_pkg/guest_builder.py` 不再把已保存门客 `skills.all()` 上的裸 `ValueError` 静默吞掉，未保存门客仍走显式空回退，程序错误改为继续冒泡。
@@ -257,6 +270,10 @@
 - `guest recruitment` 的 flow helper 也已开始退出裸 `ValueError`：`guests/services/recruitment_flow.resolve_recruitment_seed()` 对非法 seed 不再直接泄漏 `int(...)` 的裸异常，统一改走显式内部调用契约错误 `AssertionError`。
 - `guest recruitment` 的 flow helper 契约也已继续收紧：`resolve_recruitment_cost()`、`create_pending_recruitment()` 对非法 cost / draw_count / duration 输入不再直接泄漏底层 `dict(...)` / `int(...)` 裸异常，统一改走显式 `AssertionError`。
 - `guest recruitment` 的 candidate helper 也已开始退出裸异常：`resolve_candidate_draw_count()` 对非法抽取数量不再直接泄漏 `int(...)` 的裸异常，统一改走显式内部调用契约错误 `AssertionError`。
+- `guest recruitment` 的 draw_count / duration helper 也已继续按阶段 3 收口：`resolve_candidate_draw_count()` 与 `create_pending_recruitment()` 当前对 `0`、负数这类非正输入不再静默纠偏成最小值，而是统一改走显式 `AssertionError`，避免招募 helper 在坏配置/坏调用下悄悄改变业务语义。
+- `guest recruitment` 的 seed helper 也已继续按阶段 3 收口：`resolve_recruitment_seed()` 与 `create_pending_recruitment()` 当前对 `0`、负数这类非正种子不再继续接受并落库，而是统一改走显式 `AssertionError`，避免招募 helper 在坏调用下制造不合法随机种子语义。
+- `guest recruitment` 的完成态 helper 也已继续按阶段 3 收口：`mark_recruitment_completed_locked()` 当前对负数 `result_count` 不再静默归零，而是统一改走显式 `AssertionError`，避免完成态 helper 在坏调用下悄悄改写候选数量语义。
+- `guest recruitment` 的查询配置 helper 也已继续按阶段 3 收口：`get_pool_recruitment_duration_seconds()` 与 `_get_pool_daily_draw_limit()` 当前对非正或非法 `cooldown_seconds / DAILY_POOL_DRAW_LIMIT` 不再静默回退成 `0`、`1` 或默认值，而是统一改走显式 `AssertionError`，避免招募配置在坏值下悄悄改变倒计时和每日上限语义。
 - `guest recruitment` 的属性点分配路径也已开始退出 legacy `ValueError`：`guests/services/recruitment_guests.allocate_attribute_points()` 与 `guests/views/training.allocate_points_view()` 已改走显式门客 / 加点异常，但训练、经验道具等其它培养入口仍未整体封板。
 - `guest recruitment` 的属性点分配错误语义也已继续细化：`InvalidAllocationError("attribute_overflow")` 不再落回通用“无效的加点请求”，现在会返回明确的“属性值已达上限，无法继续加点”业务文案。
 - `guest training` / `experience item` 的一部分异常语义也已开始收口：`guests/services/training.use_experience_item_for_guest()` 与 `guests/views/training.use_experience_item_view()` 已改走显式门客 / 道具异常，`TrainView` 也不再把裸 `ValueError` 当作已知业务错误。
@@ -269,8 +286,16 @@
 - `inventory` 的门客定向道具链路也已开始收口：`gameplay/services/inventory/guest_reset_helpers.py`、`gameplay/services/inventory/guest_items.py` 已把重生卡 / 升阶道具 / 灵魂容器的核心校验改走显式门客 / 道具异常，`gameplay/views/inventory.py` 的目标门客物品入口不再把裸 `ValueError` 当作已知业务错误；但仓库通用 `use_item` 与其它非定向道具链路仍未整体封板。
 - `gameplay/services/inventory/guest_reset_helpers.py` 的门客重置卸装恢复链也已继续按阶段 3 收口：`detach_guest_gears_for_reset()` 当前只会在显式 `GameError` 的常规卸装失败时退回强制卸装；`AssertionError("broken unequip contract")` 一类编程错误，以及强制回仓阶段的异常都会继续冒泡并回滚，避免重生/升阶/灵魂融合链路静默丢装备。
 - `inventory` 的仓库通用 `use_item` 链路也已开始退出一批 legacy `ValueError`：`gameplay/services/inventory/use.py` 中免战牌、召唤卡、工具类分发、物品归属校验已改走显式 `ItemError / GuestError`，`gameplay/views/inventory.py` 的通用使用入口不再把裸 `ValueError` 当作已知业务错误；但仓库迁移和其它建筑 / 道具副作用链路仍未整体封板。
+- `inventory` 的召唤卡配置契约也已继续按阶段 3 收口：`gameplay/services/inventory/use.py` 当前不再把坏掉的 `choices` / `required_items` 配置静默跳过并退化成“免费召唤”或空权重回退；权重、模板键和所需物品配置异常现在统一改走显式 `ItemNotConfiguredError`，避免仓库通用 `use_item` 链路继续掩盖道具配置错误。
+- `inventory` 的宝箱概率配置契约也已继续按阶段 3 收口：`gameplay/services/inventory/use.py` 里 `gear_chance / skill_book_chance` 若为非法类型/非法数值，不再静默当成 `0` 跳过掉落分支，而是统一改走显式 `ItemNotConfiguredError`，避免坏配置把宝箱奖励悄悄降级成“永不掉落”。
+- `inventory` 的宝箱 payload 类型契约也已继续按阶段 3 收口：`gameplay/services/inventory/use.py` 里 `resources / gear_keys / skill_book_keys` 若不是约定的 `dict / list`，不再等到运行时隐式报错或静默跳过，而是统一改走显式 `ItemNotConfiguredError`，避免仓库通用 `use_item` 链路继续掩盖宝箱配置错误。
+- `inventory` 的免战牌配置契约也已继续按阶段 3 收口：`gameplay/services/inventory/use.py` 里 `peace_shield` 道具的 `duration` 当前必须是正整数秒数；非法类型、布尔值或非正数不再落成隐式 `TypeError`/奇怪时长，而是统一改走显式 `ItemNotConfiguredError`。
+- `inventory` 的唯一门客召唤配置契约也已继续按阶段 3 收口：`gameplay/services/inventory/use.py` 里 `exclusive_template_keys` 当前若存在就必须是列表，不再在坏配置下静默忽略唯一门客保护逻辑，而是统一改走显式 `ItemNotConfiguredError`。
+- `inventory` 的宝箱银两区间契约也已继续按阶段 3 收口：`gameplay/services/inventory/use.py` 里 `silver_min / silver_max` 当前不再把负数配置静默夹成 `0`、也不再把反向区间自动交换顺序，而是统一改走显式 `ItemNotConfiguredError`，避免坏配置悄悄改变奖励分布。
+- `inventory` 的 payload 形状契约也已继续按阶段 3 收口：`gameplay/services/inventory/use.py` 里 `tool / resource_pack / loot_box / peace_shield / summon_guest` 相关入口现在都要求 `effect_payload` 为 `dict`；不再在坏配置下落成 `AttributeError` 或把列表/其它 JSON 形状带进运行时，而是统一改走显式 `ItemNotConfiguredError`。
 - `inventory/core` 的基础库存行操作也已开始退出裸 `ValueError`：`consume_inventory_item_locked()` 与 `consume_inventory_item()` 对未持久化库存行不再抛 `ValueError("物品不存在")`，统一改走显式 `ItemNotFoundError`。
 - `inventory/core` 的加库存入口也已开始退出裸 `ValueError`：`add_item_to_inventory_locked()` 对非正数量不再抛 `ValueError("quantity must be positive")`，改为显式内部调用契约错误 `AssertionError`。
+- `treasury` 的物品迁移服务也已开始按阶段 3 收口内部契约：`move_item_to_treasury()` 与 `move_item_to_warehouse()` 当前对非正数量不再依赖 view 层前置校验兜底，而是直接抛显式 `AssertionError`，避免服务层被复用时静默改出负库存/反向增发。
 - `raid/protection` 的免战牌服务边界也已开始收口：`gameplay/services/raid/protection.py` 已退出 legacy `ValueError`，改走显式 `PeaceShieldUnavailableError`，并成为仓库免战牌使用链路的单一校验来源。
 - `raid/relocation` 的庄园迁移服务边界也已开始收口：`gameplay/services/raid/relocation.py` 已退出 legacy `ValueError`，改走显式 `RelocationError`，并补上迁移条件、金条不足、坐标耗尽等服务契约测试。
 - `technology` 视图入口也已退出 legacy `ValueError`：`gameplay/views/technology.py` 现在只把显式 `TechnologyError / GameError` 当已知业务错误处理，裸 `ValueError` 改为继续冒泡。

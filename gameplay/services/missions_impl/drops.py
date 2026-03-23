@@ -12,8 +12,22 @@ from ..resources import grant_resources_locked
 
 def _split_drop_payload(drops: Dict[str, int]) -> tuple[Dict[str, int], Dict[str, int]]:
     resource_keys = set(ResourceType.values)
-    resources = {k: v for k, v in drops.items() if k in resource_keys}
-    items = {k: v for k, v in drops.items() if k not in resource_keys}
+    resources: Dict[str, int] = {}
+    items: Dict[str, int] = {}
+    for key, value in drops.items():
+        key_str = str(key).strip()
+        if not key_str:
+            raise AssertionError(f"invalid mission drop key: {key!r}")
+        try:
+            amount = int(value)
+        except (TypeError, ValueError) as exc:
+            raise AssertionError(f"invalid mission drop amount: {(key, value)!r}") from exc
+        if amount < 0:
+            raise AssertionError(f"invalid mission drop amount: {(key, value)!r}")
+        if key_str in resource_keys:
+            resources[key_str] = amount
+        else:
+            items[key_str] = amount
     return resources, items
 
 
@@ -63,7 +77,7 @@ def _upsert_warehouse_items_locked(manor: Manor, item_keys: Dict[str, int], temp
 
         template = templates.get(key)
         if not template:
-            continue
+            raise AssertionError(f"invalid mission drop item key: {key!r}")
 
         inventory_item, _created = InventoryItem.objects.select_for_update().get_or_create(
             manor=manor,
@@ -121,8 +135,15 @@ def resolve_defense_drops_if_missing(report, mission_drop_table: dict) -> dict:
     if drops:
         return drops
 
+    if mission_drop_table is None:
+        normalized_drop_table: dict = {}
+    elif isinstance(mission_drop_table, dict):
+        normalized_drop_table = mission_drop_table
+    else:
+        raise AssertionError(f"invalid mission drop table: {mission_drop_table!r}")
+
     from common.utils.loot import resolve_drop_rewards
 
     seed = getattr(report, "seed", None)
     rng = random.Random(seed) if seed is not None else random.Random()
-    return resolve_drop_rewards(mission_drop_table or {}, rng)
+    return resolve_drop_rewards(normalized_drop_table, rng)

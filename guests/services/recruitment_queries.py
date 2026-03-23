@@ -53,16 +53,30 @@ def list_pools(core_only: bool = False, *, include_entries: bool = True) -> Iter
 
 def get_pool_recruitment_duration_seconds(pool: RecruitmentPool) -> int:
     """获取卡池招募倒计时秒数（仅使用 YAML/数据库配置并应用全局时间倍率）。"""
-    base_seconds = int(getattr(pool, "cooldown_seconds", 0) or 0)
+    raw_seconds = getattr(pool, "cooldown_seconds", None)
+    if raw_seconds is None or isinstance(raw_seconds, bool):
+        raise AssertionError(f"invalid recruitment cooldown: {raw_seconds!r}")
+    try:
+        base_seconds = int(raw_seconds)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid recruitment cooldown: {raw_seconds!r}") from exc
     if base_seconds <= 0:
-        return 0
+        raise AssertionError(f"invalid recruitment cooldown: {raw_seconds!r}")
     return scale_duration(base_seconds, minimum=1)
 
 
 def _get_pool_daily_draw_limit() -> int:
     """获取单卡池每日招募上限。"""
-    value = int(getattr(RECRUITMENT, "DAILY_POOL_DRAW_LIMIT", 300) or 300)
-    return max(1, value)
+    raw_value = getattr(RECRUITMENT, "DAILY_POOL_DRAW_LIMIT", None)
+    if raw_value is None or isinstance(raw_value, bool):
+        raise AssertionError(f"invalid recruitment daily limit: {raw_value!r}")
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid recruitment daily limit: {raw_value!r}") from exc
+    if value <= 0:
+        raise AssertionError(f"invalid recruitment daily limit: {raw_value!r}")
+    return value
 
 
 def _count_pool_draws_today(manor_id: int, pool_id: int, *, now: datetime | None = None) -> int:

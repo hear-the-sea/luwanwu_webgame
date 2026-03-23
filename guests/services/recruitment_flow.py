@@ -18,9 +18,12 @@ InvalidateCacheFunc = Callable[[int | None], None]
 
 def resolve_recruitment_seed(seed: int | None) -> int:
     try:
-        return int(seed if seed is not None else random.SystemRandom().randint(1, 2**31 - 1))
+        resolved_seed = int(seed if seed is not None else random.SystemRandom().randint(1, 2**31 - 1))
     except (TypeError, ValueError) as exc:
         raise AssertionError(f"invalid recruitment seed: {seed!r}") from exc
+    if resolved_seed <= 0:
+        raise AssertionError(f"invalid recruitment seed: {seed!r}")
+    return resolved_seed
 
 
 def resolve_recruitment_cost(pool: RecruitmentPool) -> dict:
@@ -44,19 +47,25 @@ def create_pending_recruitment(
     seed: int,
 ) -> GuestRecruitment:
     try:
-        resolved_duration_seconds = max(0, int(duration_seconds))
+        resolved_duration_seconds = int(duration_seconds)
     except (TypeError, ValueError) as exc:
         raise AssertionError(f"invalid recruitment duration: {duration_seconds!r}") from exc
+    if resolved_duration_seconds <= 0:
+        raise AssertionError(f"invalid recruitment duration: {duration_seconds!r}")
 
     try:
-        resolved_draw_count = max(1, int(draw_count))
+        resolved_draw_count = int(draw_count)
     except (TypeError, ValueError) as exc:
         raise AssertionError(f"invalid recruitment draw count: {draw_count!r}") from exc
+    if resolved_draw_count <= 0:
+        raise AssertionError(f"invalid recruitment draw count: {draw_count!r}")
 
     try:
         resolved_seed = int(seed)
     except (TypeError, ValueError) as exc:
         raise AssertionError(f"invalid recruitment seed: {seed!r}") from exc
+    if resolved_seed <= 0:
+        raise AssertionError(f"invalid recruitment seed: {seed!r}")
 
     return recruitment_model.objects.create(
         manor=manor,
@@ -90,9 +99,16 @@ def mark_recruitment_completed_locked(
     result_count: int,
     invalidate_cache: InvalidateCacheFunc,
 ) -> None:
+    try:
+        resolved_result_count = int(result_count)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid recruitment result count: {result_count!r}") from exc
+    if resolved_result_count < 0:
+        raise AssertionError(f"invalid recruitment result count: {result_count!r}")
+
     recruitment.status = GuestRecruitment.Status.COMPLETED
     recruitment.finished_at = current_time
-    recruitment.result_count = max(0, int(result_count))
+    recruitment.result_count = resolved_result_count
     recruitment.error_message = ""
     recruitment.save(update_fields=["status", "finished_at", "result_count", "error_message"])
     invalidate_cache(getattr(recruitment, "manor_id", None))
