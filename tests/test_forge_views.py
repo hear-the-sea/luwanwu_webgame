@@ -120,6 +120,9 @@ class TestForgeViews:
         assert response.status_code == 200
         assert "equipment_list" in response.context
         assert "device" in response.context["equipment_categories"]
+        body = response.content.decode("utf-8")
+        assert "js/forge-page.js" in body
+        assert "document.querySelectorAll('.js-decompose-form')" not in body
 
     def test_forge_page_tolerates_resource_sync_error(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user

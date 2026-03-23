@@ -145,17 +145,5 @@
 
 {% block extra_scripts %}
 <script src="{% static 'js/dashboard.js' %}"></script>
-<script>
-document.querySelectorAll('.recall-form').forEach(form => {
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        try {
-            const confirmed = await gameDialog.danger('确定召回吗？召回将不会获得任何报酬。', { title: '召回确认' });
-            if (confirmed) form.submit();
-        } catch (err) {
-            console.error('召回确认失败:', err);
-        }
-    });
-});
-</script>
+<script src="{% static 'js/work-page.js' %}"></script>
 {% endblock %}

@@ -56,7 +56,11 @@
 
     {% if can_attack %}
     <!-- 出征配置表单 -->
-    <form id="raid-form">
+    <form id="raid-form"
+          data-raid-api-url="{% url 'gameplay:start_raid_api' %}"
+          data-target-id="{{ target_manor.id }}"
+          data-max-squad-size="{{ max_squad_size }}"
+          data-map-url="{% url 'gameplay:map' %}">
         <!-- 门客选择 -->
         <section class="tw-panel mb-6">
             <div class="tw-panel-header">选择出征门客 <span class="font-normal text-text-muted">(最多 {{ max_squad_size }} 人)</span></div>
@@ -185,145 +189,5 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script>
-(function() {
-    const raidApiUrl = '{% url "gameplay:start_raid_api" %}';
-    const targetId = {{ target_manor.id }};
-    const maxSquadSize = {{ max_squad_size }};
-    const csrfToken = '{{ csrf_token }}';
-
-    const form = document.getElementById('raid-form');
-    if (!form) return;
-
-    const guestInputs = document.querySelectorAll('.guest-input');
-    const troopInputs = document.querySelectorAll('.troop-input');
-    const selectedCount = document.getElementById('selected-count');
-    const summaryGuests = document.getElementById('summary-guests');
-    const summaryTroops = document.getElementById('summary-troops');
-    const submitBtn = document.getElementById('submit-btn');
-
-    // Update summary
-    function updateSummary() {
-        const selectedGuests = document.querySelectorAll('.guest-input:checked').length;
-        selectedCount.textContent = selectedGuests;
-        summaryGuests.textContent = selectedGuests + ' 人';
-
-        let totalTroops = 0;
-        troopInputs.forEach(function(input) {
-            totalTroops += parseInt(input.value) || 0;
-        });
-        summaryTroops.textContent = totalTroops;
-
-        // Enable submit button only if at least one guest is selected
-        submitBtn.disabled = selectedGuests === 0;
-    }
-
-    // Guest selection
-    guestInputs.forEach(function(input) {
-        input.addEventListener('change', function() {
-            const selectedGuests = document.querySelectorAll('.guest-input:checked').length;
-            if (selectedGuests > maxSquadSize) {
-                this.checked = false;
-                gameAlert('最多只能选择 ' + maxSquadSize + ' 名门客出征', { title: '选择限制' });
-                return;
-            }
-            updateSummary();
-        });
-    });
-
-    // Troop adjustment buttons
-    document.querySelectorAll('.btn-adjust').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            const troopKey = this.dataset.troop;
-            const adjust = parseInt(this.dataset.adjust);
-            const input = document.querySelector('[data-troop-key="' + troopKey + '"]');
-            const max = parseInt(input.dataset.max);
-            let newValue = (parseInt(input.value) || 0) + adjust;
-            newValue = Math.max(0, Math.min(max, newValue));
-            input.value = newValue;
-            updateSummary();
-        });
-    });
-
-    // Max buttons
-    document.querySelectorAll('.btn-max').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            const troopKey = this.dataset.troop;
-            const input = document.querySelector('[data-troop-key="' + troopKey + '"]');
-            input.value = input.dataset.max;
-            updateSummary();
-        });
-    });
-
-    // Troop input change
-    troopInputs.forEach(function(input) {
-        input.addEventListener('change', function() {
-            const max = parseInt(this.dataset.max);
-            let value = parseInt(this.value) || 0;
-            value = Math.max(0, Math.min(max, value));
-            this.value = value;
-            updateSummary();
-        });
-    });
-
-    // Form submission
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-
-        const selectedGuestIds = [];
-        document.querySelectorAll('.guest-input:checked').forEach(function(input) {
-            selectedGuestIds.push(parseInt(input.value));
-        });
-
-        if (selectedGuestIds.length === 0) {
-            gameAlert('请至少选择一名门客出征', { title: '提示' });
-            return;
-        }
-
-        const troopLoadout = {};
-        troopInputs.forEach(function(input) {
-            const count = parseInt(input.value) || 0;
-            if (count > 0) {
-                troopLoadout[input.dataset.troopKey] = count;
-            }
-        });
-
-        submitBtn.disabled = true;
-        submitBtn.textContent = '发起进攻中...';
-
-        fetch(raidApiUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken
-            },
-            body: JSON.stringify({
-                target_id: targetId,
-                guest_ids: selectedGuestIds,
-                troop_loadout: troopLoadout
-            })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                gameDialog.success(data.message, { title: '出征成功' }).then(() => {
-                    window.location.href = '{% url "gameplay:map" %}';
-                });
-            } else {
-                gameDialog.error('出征失败: ' + data.error, { title: '出征失败' });
-                submitBtn.disabled = false;
-                submitBtn.textContent = '发起进攻';
-            }
-        })
-        .catch(err => {
-            gameDialog.error('请求失败，请稍后重试', { title: '错误' });
-            submitBtn.disabled = false;
-            submitBtn.textContent = '发起进攻';
-        });
-    });
-
-    // Initial update
-    updateSummary();
-})();
-</script>
+<script src="{% static 'js/raid-config-page.js' %}"></script>
 {% endblock %}

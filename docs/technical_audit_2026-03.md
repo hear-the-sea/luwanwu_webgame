@@ -20,6 +20,8 @@
 - 2026-03-21 本地验证：默认 `make test` 通过，结果为 `1852 passed, 28 deselected`。
 - 2026-03-23 本轮验证：`make lint` 通过。
 - 2026-03-23 本轮验证：默认 `make test` 通过，结果为 `2248 passed, 38 deselected`。
+- 2026-03-23 本轮验证：阶段 3 收口后再次执行 `make lint` 通过。
+- 2026-03-23 本轮验证：阶段 3 收口后再次执行默认 `make test` 通过，结果为 `2350 passed, 38 deselected`。
 - 2026-03-23 本轮验证：`DJANGO_TEST_USE_ENV_SERVICES=1 REDIS_URL=redis://127.0.0.1:6379 REDIS_BROKER_URL=redis://127.0.0.1:6379/0 REDIS_RESULT_URL=redis://127.0.0.1:6379/0 REDIS_CHANNEL_URL=redis://127.0.0.1:6379/1 REDIS_CACHE_URL=redis://127.0.0.1:6379/2 python -m pytest tests/test_mission_concurrency_integration.py tests/test_guest_recruitment_concurrency_integration.py -q` 通过，结果为 `6 passed, 1 skipped`。
 - 2026-03-22 本轮验证：`pytest tests/test_trade_auction_rounds.py -q` 通过，结果为 `30 passed`。
 - 2026-03-22 本轮验证：`pytest tests/test_inventory_guest_items.py -q` 通过，结果为 `16 passed`。
@@ -40,8 +42,6 @@
 - 2026-03-23 本轮验证：`pytest tests/test_guilds_tasks.py -k "process_single_guild_production_missing_guild_id_bubbles_up" -q` 通过，结果为 `1 passed, 21 deselected`。
 - 2026-03-23 本轮验证：`pytest tests/test_bootstrap_game_data_command.py tests/test_load_item_templates_command.py tests/test_check_guild_schema_command.py -q` 通过，结果为 `10 passed`。
 - 2026-03-23 本轮验证：`pytest tests/test_trade_cache_resilience.py -q` 通过，结果为 `12 passed`。
-- 2026-03-23 本轮验证：`pytest tests/test_accounts_utils.py -q` 通过，结果为 `13 passed`。
-- 2026-03-23 本轮验证：`pytest tests/test_accounts_utils.py -q` 通过，结果为 `18 passed`。
 - 2026-03-23 本轮验证：`pytest tests/test_accounts_utils.py -q` 通过，结果为 `20 passed`。
 - 2026-03-23 本轮验证：`pytest tests/test_raid_combat_battle.py -q` 通过，结果为 `37 passed`。
 - 2026-03-23 本轮验证：`python -m mypy accounts/admin.py gameplay/admin/__init__.py gameplay/admin/arena.py gameplay/admin/buildings.py gameplay/admin/core.py gameplay/admin/inventory.py gameplay/admin/messages.py gameplay/admin/missions.py gameplay/admin/raids.py guests/admin.py guilds/admin.py trade/admin.py core/views/health_support.py gameplay/management/commands/arena_quick_test.py gameplay/management/commands/cleanup_data_report.py gameplay/management/commands/cleanup_old_data.py gameplay/management/commands/bootstrap_game_data.py gameplay/management/commands/load_building_templates.py gameplay/management/commands/load_item_templates.py gameplay/management/commands/load_mission_templates.py gameplay/management/commands/load_technology_templates.py gameplay/management/commands/reload_runtime_configs.py gameplay/management/commands/seed_work_templates.py gameplay/management/commands/validate_yaml_configs.py guilds/management/commands/check_guild_schema.py gameplay/views/arena.py gameplay/views/buildings.py gameplay/views/mission_action_handlers.py gameplay/views/mission_helpers.py gameplay/views/mission_page_context.py gameplay/views/production_forge_handlers.py gameplay/views/read_helpers.py guilds/views/announcement.py guilds/views/contribution.py guilds/views/core.py guilds/views/hero_pool.py guilds/views/helpers.py guilds/views/membership.py guilds/views/technology.py guilds/views/warehouse.py` 通过。
@@ -53,6 +53,20 @@
 - 2026-03-23 本轮验证：`guilds.views.helpers`、`guilds.views.hero_pool` 与 `guilds.views.technology` 已升入 `disallow_untyped_defs = true` 严格名单，并完成对应签名补齐。
 - 2026-03-23 本轮验证：`guilds.views.announcement`、`guilds.views.contribution` 与 `guilds.views.core` 已升入 `disallow_untyped_defs = true` 严格名单，并完成对应签名补齐。
 - 2026-03-23 本轮验证：生产代码 `except Exception` 扫描结果为 `0`。
+- 2026-03-23 本轮验证：生产代码 `raise ValueError(...)` 扫描结果为 `0`。
+- 2026-03-23 本轮验证：`python -m mypy websocket/consumers/world_chat.py config/asgi.py config/settings/testing.py battle/management/commands/load_troop_templates.py` 通过。
+- 2026-03-23 本轮验证：`pytest tests/test_world_chat_consumer.py tests/test_asgi.py tests/test_management_command_validation.py -q` 通过，结果为 `26 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_accounts_utils.py tests/test_coverage_misc_imports.py -q` 通过，结果为 `23 passed`。
+- 2026-03-23 本轮验证：`python -m mypy common/utils/random_utils.py tests/test_random_utils.py` 通过。
+- 2026-03-23 本轮验证：`pytest tests/test_random_utils.py -q` 通过，结果为 `2 passed`。
+- 2026-03-23 本轮验证：阶段 4 首轮治理中，`guests/templates/guests/detail.html` 的页面专属脚本已迁移到 `static/js/guest-detail.js`；`pytest tests/test_guest_runtime_refresh_views.py tests/test_guest_allocate_points_view.py tests/test_guest_view_error_boundaries.py -q` 通过，结果为 `51 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_guest_item_view_validation.py -k "gear_options" -q` 通过，结果为 `4 passed, 30 deselected`。
+- 2026-03-23 本轮验证：`pytest tests/test_guest_runtime_refresh_views.py tests/test_salary_views.py tests/test_guest_item_view_validation.py -k "use_exp_item or use_medicine_item or roster or detail or salary" -q` 通过，结果为 `23 passed, 29 deselected`。
+- 2026-03-23 本轮验证：`pytest tests/test_inventory_views.py -k "warehouse or move_item_to_warehouse or move_item_to_treasury or use_rebirth_card or use_xisuidan or use_xidianka or use_guest_rarity_upgrade or use_soul_container or use_item_ajax" -q` 通过，结果为 `26 passed, 5 deselected`。
+- 2026-03-23 本轮验证：修正历史迁移中招募卡池 `cooldown_seconds` 默认基线后，`pytest tests/test_inventory_views.py -q` 通过，结果为 `31 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_inventory_views.py tests/test_guest_item_view_validation.py -k "recruitment_hall or recruit_view_ajax or candidate_accept_view or use_magnifying_glass_view" -q` 通过，结果为 `17 passed, 49 deselected`。
+- 2026-03-23 本轮验证：`pytest tests/test_message_views.py -q` 通过，结果为 `14 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_mission_views.py -q` 通过，结果为 `28 passed`。
 - 2026-03-23 本轮验证：`python -m mypy` 覆盖当前工作区修改的 `accounts / battle_debugger / core / gameplay / guests / guilds / trade` 相关文件通过；阶段 3 关键回归测试组合为 `204 passed`。
 - 2026-03-23 本轮验证：`pytest tests/test_guest_recruitment_flow_helpers.py -q` 通过，结果为 `25 passed`。
 - 2026-03-23 本轮验证：`pytest tests/test_guest_recruitment_service.py -k "bulk_finalize_candidates" -q` 通过，结果为 `4 passed, 30 deselected`。
@@ -71,9 +85,15 @@
 - 2026-03-23 本轮验证：`pytest tests/test_guest_view_error_boundaries.py -k "candidate_accept or magnifying_glass" -q` 通过，结果为 `3 passed, 38 deselected`。
 - 2026-03-23 本轮验证：`pytest tests/test_battle_ai_generator_contracts.py tests/test_battle_tasks_generate_report_task.py -q` 通过，结果为 `20 passed`。
 - 2026-03-23 本轮验证：`pytest tests/test_battle.py -k "snapshot" -q` 通过，结果为 `19 passed, 24 deselected`。
+- 2026-03-23 本轮验证：`pytest tests/test_core_views.py -k "home_page_raid_scout_countdowns_use_explicit_refresh_api or home_page_uses_external_landing_script_for_retreat_and_collapse_actions" -q` 通过，结果为 `2 passed, 19 deselected`。
+- 2026-03-23 本轮验证：`pytest tests/test_map_views.py tests/test_message_views.py -q` 通过，结果为 `57 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_production_views.py -q` 通过，结果为 `23 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_work_views.py tests/test_forge_views.py tests/test_map_views.py tests/test_arena_views.py -q` 通过，结果为 `108 passed`。
+- 2026-03-23 本轮验证：`rg -n "<script>(?!.*application/ld\\+json)|onclick=|onchange=|onsubmit=|oninput=|onblur=|onfocus=" templates gameplay/templates guests/templates -g '*.html' -P` 无输出，阶段 4 范围内模板内联脚本与内联事件扫描结果为 `0`。
+- 2026-03-23 本轮验证：`pytest tests/test_core_views.py -k "home_page_uses_external_landing_script_for_retreat_and_collapse_actions" -q` 与 `pytest tests/test_message_views.py -k "message_detail_page_loads_external_page_script_without_inline_logic" -q` 均通过，结果分别为 `1 passed, 20 deselected` 与 `1 passed, 14 deselected`；`rg -n "<style>|style=\"" templates/landing.html gameplay/templates/gameplay/message_detail.html` 无输出，首页与消息详情页的页面级内联样式也已完成外迁。
 - 2026-03-21 依赖图/导入链复核：`config/urls.py`、`gameplay/context_processors.py`、`gameplay/views/arena.py`、`guests/urls.py`、`guilds/urls.py` 已改为显式子模块导入，不再依赖 `gameplay.views`、`gameplay.selectors`、`guests.views`、`guilds.views` 包根聚合入口。
 - 2026-03-21 包边界复核：`gameplay/views/__init__.py`、`gameplay/selectors/__init__.py`、`guests/views/__init__.py`、`guilds/views/__init__.py` 已收口为无副作用最小包标记文件，不再承担跨模块 re-export 责任。
-- 超大模板仍未完成收口；超大测试文件已开始收缩，`tests/test_trade_auction_rounds.py`、`tests/test_inventory_guest_items.py` 均已收口为薄入口并拆到各自 `tests/*/` 子模块，但仍有多份 `>800` 行测试文件待治理。
+- 阶段 4 的模板/前端边界主线已完成当前封板：`guests/templates/guests/detail.html`、`guests/templates/guests/roster.html`、`templates/landing.html`、`gameplay/templates/gameplay/warehouse.html`、`gameplay/templates/gameplay/recruitment_hall.html`、`gameplay/templates/gameplay/messages.html`、`gameplay/templates/gameplay/message_detail.html`、`gameplay/templates/gameplay/tasks.html`、`gameplay/templates/gameplay/map.html`、`gameplay/templates/gameplay/smithy.html`、`gameplay/templates/gameplay/stable.html`、`gameplay/templates/gameplay/ranch.html`、`gameplay/templates/gameplay/work.html`、`gameplay/templates/gameplay/forge.html`、`gameplay/templates/gameplay/raid_config.html` 与 `gameplay/templates/gameplay/arena/registration.html` 的页面专属脚本均已迁移到 `static/js/*.js` 外链模块，阶段 4 范围内模板内联脚本与内联事件扫描结果已清零；其中 `landing.html` 与 `message_detail.html` 的页面级样式也已进一步迁移到 `static/css/*.css`，用于收掉本轮最后两处明显的页面样式热点。超大测试文件已开始收缩，`tests/test_trade_auction_rounds.py`、`tests/test_inventory_guest_items.py` 均已收口为薄入口并拆到各自 `tests/*/` 子模块，但仍有多份 `>800` 行测试文件待治理。
 
 ## 1. 重构优化规则
 

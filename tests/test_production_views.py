@@ -22,6 +22,10 @@ class TestProductionViews:
         response = client.get(reverse("gameplay:stable"))
         assert response.status_code == 200
         assert "horse_options" in response.context
+        body = response.content.decode("utf-8")
+        assert "js/production-cost-preview.js" in body
+        assert "onchange=" not in body
+        assert "function updateTotalCost" not in body
 
     def test_stable_page_tolerates_resource_sync_error(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
@@ -60,6 +64,10 @@ class TestProductionViews:
         response = client.get(reverse("gameplay:ranch"))
         assert response.status_code == 200
         assert "livestock_options" in response.context
+        body = response.content.decode("utf-8")
+        assert "js/production-cost-preview.js" in body
+        assert "onchange=" not in body
+        assert "function updateTotalCost" not in body
 
     def test_stable_page_uses_explicit_read_helper(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
@@ -147,6 +155,10 @@ class TestProductionViews:
         response = client.get(reverse("gameplay:smithy"))
         assert response.status_code == 200
         assert "metal_options" in response.context
+        body = response.content.decode("utf-8")
+        assert "js/production-cost-preview.js" in body
+        assert "onchange=" not in body
+        assert "function updateTotalCost" not in body
 
     def test_smithy_page_active_production_has_refresh_countdown(self, manor_with_user):
         manor, client = manor_with_user

@@ -96,8 +96,8 @@
                                        value="1" min="1" max="{{ metal.max_quantity }}"
                                        class="tw-quantity-input"
                                        data-unit-cost="{{ metal.cost_amount }}"
-                                       data-cost-type-name="{{ metal.cost_type_name }}"
-                                       onchange="updateTotalCost(this)">
+                                       data-unit-label="{{ metal.cost_type_name }}"
+                                       data-total-target="total-{{ metal.key }}">
                                 <span class="text-xs text-accent-red font-medium" id="total-{{ metal.key }}">总计：{{ metal.cost_amount }} {{ metal.cost_type_name }}</span>
                             </div>
                             {% if metal.can_afford %}
@@ -114,19 +114,9 @@
     </section>
 </section>
 
-<script>
-function updateTotalCost(input) {
-    const unitCost = parseInt(input.dataset.unitCost, 10);
-    const costTypeName = input.dataset.costTypeName;
-    const quantity = parseInt(input.value, 10) || 1;
-    const metalKey = input.id.replace('quantity-', '');
-    const totalSpan = document.getElementById('total-' + metalKey);
-    const totalCost = unitCost * quantity;
-    totalSpan.textContent = '总计：' + totalCost.toLocaleString() + ' ' + costTypeName;
-}
-</script>
 {% endblock %}
 
 {% block extra_scripts %}
 <script src="{% static 'js/dashboard.js' %}"></script>
+<script src="{% static 'js/production-cost-preview.js' %}"></script>
 {% endblock %}

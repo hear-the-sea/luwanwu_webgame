@@ -1,7 +1,8 @@
 {% extends "gameplay/arena/base.html" %}
+{% load static %}
 
 {% block arena_event_action %}
-<section class="tw-arena-signup-panel">
+<section class="tw-arena-signup-panel" id="arena-registration-panel" data-max-selected="{{ max_guests_per_entry|default:10 }}">
     {% if recruiting_tournament %}
     <p class="text-sm text-text-muted mb-3">
         当前报名池：赛事 #{{ recruiting_tournament.id }}（{{ recruiting_tournament.entry_count }}/{{ recruiting_tournament.player_limit }}）
@@ -75,25 +76,5 @@
 {% block arena_body %}{% endblock %}
 
 {% block arena_scripts %}
-<script>
-    document.addEventListener("DOMContentLoaded", function () {
-        const maxSelected = {{ max_guests_per_entry|default:10 }};
-        const checkboxes = Array.from(document.querySelectorAll(".arena-guest-checkbox"));
-        if (!checkboxes.length) return;
-
-        checkboxes.forEach(function (checkbox) {
-            checkbox.addEventListener("change", function () {
-                const selected = checkboxes.filter(function (item) { return item.checked; });
-                if (selected.length > maxSelected) {
-                    checkbox.checked = false;
-                    if (window.gameDialog && window.gameDialog.error) {
-                        window.gameDialog.error("最多只能选择 " + maxSelected + " 名门客");
-                    } else {
-                        alert("最多只能选择 " + maxSelected + " 名门客");
-                    }
-                }
-            });
-        });
-    });
-</script>
+<script src="{% static 'js/arena-registration.js' %}"></script>
 {% endblock %}

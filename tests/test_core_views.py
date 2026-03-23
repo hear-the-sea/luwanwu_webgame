@@ -111,6 +111,70 @@ class TestCoreViews:
         assert body.count(f'data-refresh-url="{refresh_url}"') == 3
         assert body.count('data-refresh-method="post"') == 3
 
+    def test_home_page_uses_external_landing_script_for_retreat_and_collapse_actions(
+        self,
+        authenticated_client,
+        monkeypatch,
+    ):
+        manor = ensure_manor(authenticated_client.user)
+        now = timezone.now()
+
+        monkeypatch.setattr(
+            "gameplay.views.core.get_prepared_manor_for_read",
+            lambda request, **_kwargs: manor,
+        )
+        monkeypatch.setattr(
+            "gameplay.views.core.get_home_context",
+            lambda _manor: {
+                "manor": manor,
+                "resources": [],
+                "resource_labels": {},
+                "guests": [],
+                "guest_count": 0,
+                "active_runs": [],
+                "upgrading_buildings": [],
+                "upgrading_technologies": [],
+                "total_guest_salary": 0,
+                "building_income": [],
+                "grain_production": 0,
+                "personnel_grain_cost": 0,
+                "player_troops": [],
+                "incoming_raids": [],
+                "active_scouts": [
+                    SimpleNamespace(
+                        id=11,
+                        defender=SimpleNamespace(display_name="目标庄园"),
+                        status="scouting",
+                        next_state_at=now + timedelta(minutes=3),
+                        get_status_display="侦察中",
+                    )
+                ],
+                "active_raids": [
+                    SimpleNamespace(
+                        id=12,
+                        defender=SimpleNamespace(display_name="目标庄园"),
+                        status="marching",
+                        next_state_at=now + timedelta(minutes=5),
+                        get_status_display="行军中",
+                        can_retreat=True,
+                        is_retreating=False,
+                    )
+                ],
+            },
+        )
+
+        response = authenticated_client.get(reverse("home"))
+
+        assert response.status_code == 200
+        body = response.content.decode("utf-8")
+        assert "css/landing-page.css" in body
+        assert "js/landing-page.js" in body
+        assert 'data-retreat-url="/manor/api/map/raid/12/retreat/"' in body
+        assert "<style>" not in body
+        assert "manor-collapse-states" not in body
+        assert "document.querySelectorAll('.scout-retreat-form')" not in body
+        assert "fetch('/manor/api/map/raid/'" not in body
+
     def test_dashboard_requires_login(self, client):
         """仪表盘需要登录"""
         response = client.get(reverse("gameplay:dashboard"))

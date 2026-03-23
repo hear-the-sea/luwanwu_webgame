@@ -95,7 +95,8 @@
                                        value="1" min="1" max="{{ horse.max_quantity }}"
                                        class="tw-quantity-input"
                                        data-unit-cost="{{ horse.grain_cost }}"
-                                       onchange="updateTotalCost(this)">
+                                       data-unit-label="粮食"
+                                       data-total-target="total-{{ horse.key }}">
                                 <span class="text-xs text-accent-red font-medium" id="total-{{ horse.key }}">总计：{{ horse.grain_cost }} 粮食</span>
                             </div>
                             {% if horse.can_afford %}
@@ -112,18 +113,9 @@
     </section>
 </section>
 
-<script>
-function updateTotalCost(input) {
-    const unitCost = parseInt(input.dataset.unitCost, 10);
-    const quantity = parseInt(input.value, 10) || 1;
-    const horseKey = input.id.replace('quantity-', '');
-    const totalSpan = document.getElementById('total-' + horseKey);
-    const totalCost = unitCost * quantity;
-    totalSpan.textContent = '总计：' + totalCost.toLocaleString() + ' 粮食';
-}
-</script>
 {% endblock %}
 
 {% block extra_scripts %}
 <script src="{% static 'js/dashboard.js' %}"></script>
+<script src="{% static 'js/production-cost-preview.js' %}"></script>
 {% endblock %}

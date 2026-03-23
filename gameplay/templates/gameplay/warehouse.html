@@ -49,7 +49,7 @@
             <form method="get" class="tw-filter-form">
                 <input type="hidden" name="tab" value="{{ current_tab }}">
                 <label for="category" class="tw-filter-label">筛选</label>
-                <select id="category" name="category" class="tw-filter-select" onchange="this.form.submit()">
+                <select id="category" name="category" class="tw-filter-select">
                     <option value="all" {% if selected_category == 'all' %}selected{% endif %}>全部</option>
                     {% for cat in categories %}
                     <option value="{{ cat.key }}" {% if selected_category == cat.key %}selected{% endif %}>{{ cat.label }}</option>
@@ -133,22 +133,24 @@
                                 {% if entry.can_use_in_warehouse %}
                                     {% with payload=entry.template.effect_payload %}
                                     {% if payload.action == 'rebirth_guest' %}
-                                    <button type="button" class="tw-btn-primary tw-btn-sm" onclick="openGuestSelectModal({{ entry.id }}, 'rebirth')" {% if entry.quantity <= 0 %}disabled{% endif %}>使用</button>
+                                    <button type="button" class="tw-btn-primary tw-btn-sm js-open-guest-select-modal" data-item-id="{{ entry.id }}" data-action-type="rebirth" data-action-url="{% url 'gameplay:use_rebirth_card' entry.id %}" {% if entry.quantity <= 0 %}disabled{% endif %}>使用</button>
                                     {% elif payload.action == 'soul_fusion' %}
                                     <button
                                         type="button"
-                                        class="tw-btn-primary tw-btn-sm"
+                                        class="tw-btn-primary tw-btn-sm js-open-guest-select-modal"
                                         data-soul-fusion-min-level="{{ payload.min_level|default:30 }}"
                                         data-soul-fusion-rarities="{% if payload.allowed_rarities %}{{ payload.allowed_rarities|join:',' }}{% else %}green,blue,purple{% endif %}"
-                                        onclick="openGuestSelectModal({{ entry.id }}, 'soul_fusion', this)"
+                                        data-item-id="{{ entry.id }}"
+                                        data-action-type="soul_fusion"
+                                        data-action-url="{% url 'gameplay:use_soul_container' entry.id %}"
                                         {% if entry.quantity <= 0 %}disabled{% endif %}
                                     >使用</button>
                                     {% elif payload.action == 'reroll_growth' %}
-                                    <button type="button" class="tw-btn-primary tw-btn-sm" onclick="openGuestSelectModal({{ entry.id }}, 'xisuidan')" {% if entry.quantity <= 0 %}disabled{% endif %}>使用</button>
+                                    <button type="button" class="tw-btn-primary tw-btn-sm js-open-guest-select-modal" data-item-id="{{ entry.id }}" data-action-type="xisuidan" data-action-url="{% url 'gameplay:use_xisuidan' entry.id %}" {% if entry.quantity <= 0 %}disabled{% endif %}>使用</button>
                                     {% elif payload.action == 'reset_allocation' %}
-                                    <button type="button" class="tw-btn-primary tw-btn-sm" onclick="openGuestSelectModal({{ entry.id }}, 'xidianka')" {% if entry.quantity <= 0 %}disabled{% endif %}>使用</button>
+                                    <button type="button" class="tw-btn-primary tw-btn-sm js-open-guest-select-modal" data-item-id="{{ entry.id }}" data-action-type="xidianka" data-action-url="{% url 'gameplay:use_xidianka' entry.id %}" {% if entry.quantity <= 0 %}disabled{% endif %}>使用</button>
                                     {% elif payload.action == 'upgrade_guest_rarity' %}
-                                    <button type="button" class="tw-btn-primary tw-btn-sm" onclick="openGuestSelectModal({{ entry.id }}, 'rarity_upgrade')" {% if entry.quantity <= 0 %}disabled{% endif %}>使用</button>
+                                    <button type="button" class="tw-btn-primary tw-btn-sm js-open-guest-select-modal" data-item-id="{{ entry.id }}" data-action-type="rarity_upgrade" data-action-url="{% url 'gameplay:use_guest_rarity_upgrade' entry.id %}" {% if entry.quantity <= 0 %}disabled{% endif %}>使用</button>
                                     {% else %}
                                     <form method="post" action="{% url 'gameplay:use_item' entry.id %}">
                                         {% csrf_token %}
@@ -217,7 +219,7 @@
     <div class="tw-modal-content">
         <div class="tw-modal-header">
             <h3 id="modal-title">选择门客</h3>
-            <button type="button" class="tw-modal-close" onclick="closeGuestSelectModal()">&times;</button>
+            <button type="button" class="tw-modal-close js-close-guest-select-modal">&times;</button>
         </div>
         <div class="tw-modal-body">
             <p class="tw-modal-hint" id="modal-hint"></p>
@@ -315,8 +317,8 @@
             </div>
         </div>
         <div class="tw-modal-footer">
-            <button type="button" class="tw-btn-secondary" onclick="closeGuestSelectModal()">取消</button>
-            <button type="button" class="tw-btn-primary" id="modal-confirm-btn" disabled onclick="confirmGuestAction()">确认</button>
+            <button type="button" class="tw-btn-secondary js-close-guest-select-modal">取消</button>
+            <button type="button" class="tw-btn-primary" id="modal-confirm-btn" disabled>确认</button>
         </div>
     </div>
 </div>
@@ -324,278 +326,5 @@
 
 {% block extra_scripts %}
 <script src="{% static 'js/tooltip.js' %}"></script>
-<script>
-(function () {
-    // AJAX 表单提交
-    document.querySelectorAll('.tw-warehouse-actions form').forEach(form => {
-        form.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const formData = new FormData(this);
-            const url = this.action;
-            const btn = this.querySelector('button[type="submit"]');
-            const originalText = btn.textContent;
-
-            const scrollTop = window.scrollY || document.documentElement.scrollTop;
-            const tableWrapper = document.querySelector('.tw-table-wrapper');
-            const tableScrollTop = tableWrapper ? tableWrapper.scrollTop : 0;
-
-            btn.disabled = true;
-            btn.textContent = '处理中...';
-
-            fetch(url, {
-                method: 'POST',
-                body: formData,
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    sessionStorage.setItem('warehouseScrollTop', scrollTop);
-                    sessionStorage.setItem('warehouseTableScrollTop', tableScrollTop);
-                    if (data.message) {
-                        gameDialog.success(data.message).then(() => location.reload());
-                    } else {
-                        location.reload();
-                    }
-                } else {
-                    gameDialog.error(data.error || '操作失败', { title: '错误' });
-                    btn.disabled = false;
-                    btn.textContent = originalText;
-                }
-            })
-            .catch(err => {
-                sessionStorage.setItem('warehouseScrollTop', scrollTop);
-                sessionStorage.setItem('warehouseTableScrollTop', tableScrollTop);
-                location.reload();
-            });
-        });
-    });
-
-    // 恢复滚动位置
-    const savedScrollTop = sessionStorage.getItem('warehouseScrollTop');
-    const savedTableScrollTop = sessionStorage.getItem('warehouseTableScrollTop');
-    if (savedScrollTop !== null) {
-        window.scrollTo(0, parseInt(savedScrollTop));
-        sessionStorage.removeItem('warehouseScrollTop');
-    }
-    if (savedTableScrollTop !== null) {
-        const tableWrapper = document.querySelector('.tw-table-wrapper');
-        if (tableWrapper) tableWrapper.scrollTop = parseInt(savedTableScrollTop);
-        sessionStorage.removeItem('warehouseTableScrollTop');
-    }
-
-    // Tooltip 位置调整 - 使用共享模块（桌面 hover + 移动端点击）
-    if (typeof initItemTooltip === 'function') {
-        initItemTooltip({ key: 'warehouse' });
-    }
-})();
-
-// 门客选择弹窗
-(function () {
-const warehouseModalState = {
-    currentItemId: null,
-    currentActionType: null,
-    selectedGuestId: null,
-};
-
-const WAREHOUSE_MODAL_CONFIG = {
-    rebirth: {
-        title: '选择要重生的门客',
-        hint: '重生后门客将回到1级，属性将重置为模板基础值（有随机浮动）。装备将自动归还仓库，技能将被清空。',
-        confirmText: '确认重生',
-        listId: 'guest-list-rebirth',
-        urlTemplate: `{% url 'gameplay:use_rebirth_card' pk=0 %}`
-    },
-    soul_fusion: {
-        title: '选择要融合的门客',
-        hint: '融合后门客会永久消失，已穿戴装备将自动归还仓库。生成饰品的属性会参考门客自身属性结构，并保留随机波动。',
-        confirmText: '确认融合',
-        listId: 'guest-list-soul-fusion',
-        urlTemplate: `{% url 'gameplay:use_soul_container' pk=0 %}`
-    },
-    xisuidan: {
-        title: '选择要洗髓的门客',
-        hint: '洗髓丹可重新随机门客升级获得的成长点数。新的成长点数保证不低于当前值，有机会获得更高的属性成长。',
-        confirmText: '确认洗髓',
-        listId: 'guest-list-xisuidan',
-        urlTemplate: `{% url 'gameplay:use_xisuidan' pk=0 %}`
-    },
-    xidianka: {
-        title: '选择要洗点的门客',
-        hint: '洗点卡可重置门客的属性点分配。已分配的属性点将全部返还，可重新分配。',
-        confirmText: '确认洗点',
-        listId: 'guest-list-xidianka',
-        urlTemplate: `{% url 'gameplay:use_xidianka' pk=0 %}`
-    },
-    rarity_upgrade: {
-        title: '选择要升阶的门客',
-        hint: '升阶后门客将重置为1级，自动卸下装备，技能将被清空，并重置洗髓丹等计数；具体升阶目标由当前使用的残卷决定。',
-        confirmText: '确认升阶',
-        listId: 'guest-list-rarity-upgrade',
-        urlTemplate: `{% url 'gameplay:use_guest_rarity_upgrade' pk=0 %}`
-    }
-};
-
-const SOUL_FUSION_DEFAULT_RARITIES = ['green', 'blue', 'purple'];
-const SOUL_FUSION_RARITY_LABELS = {
-    green: '绿色',
-    blue: '蓝色',
-    purple: '紫色'
-};
-
-function parsePositiveInt(value, fallbackValue) {
-    const parsedValue = Number.parseInt(value, 10);
-    return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : fallbackValue;
-}
-
-function parseSoulFusionRarities(rawValue) {
-    if (!rawValue) return [...SOUL_FUSION_DEFAULT_RARITIES];
-    const normalized = String(rawValue)
-        .split(',')
-        .map(value => value.trim())
-        .filter(Boolean);
-    return normalized.length > 0 ? normalized : [...SOUL_FUSION_DEFAULT_RARITIES];
-}
-
-function formatSoulFusionRequirementHint(triggerElement) {
-    if (!triggerElement) return '';
-    const minLevel = parsePositiveInt(triggerElement.dataset.soulFusionMinLevel, 30);
-    const rarityText = parseSoulFusionRarities(triggerElement.dataset.soulFusionRarities)
-        .map(rarity => SOUL_FUSION_RARITY_LABELS[rarity] || rarity)
-        .join(' / ');
-    return `当前容器要求：${minLevel}级以上，且为${rarityText}门客`;
-}
-
-function resetSoulFusionGuestFilter() {
-    const list = document.getElementById('guest-list-soul-fusion');
-    if (!list) return;
-    list.querySelectorAll('.tw-guest-option').forEach(option => {
-        option.style.display = '';
-        option.classList.remove('selected');
-    });
-    const emptyHint = document.getElementById('guest-list-soul-fusion-empty');
-    if (emptyHint) emptyHint.style.display = 'none';
-}
-
-function applySoulFusionGuestFilter(triggerElement) {
-    const list = document.getElementById('guest-list-soul-fusion');
-    if (!list) return;
-
-    const minLevel = parsePositiveInt(triggerElement?.dataset?.soulFusionMinLevel, 30);
-    const allowedRarities = new Set(parseSoulFusionRarities(triggerElement?.dataset?.soulFusionRarities));
-
-    let visibleCount = 0;
-    list.querySelectorAll('.tw-guest-option').forEach(option => {
-        const guestLevel = parsePositiveInt(option.dataset.guestLevel, 0);
-        const guestRarity = String(option.dataset.guestRarity || '').trim();
-        const isVisible = guestLevel >= minLevel && allowedRarities.has(guestRarity);
-        option.style.display = isVisible ? '' : 'none';
-        option.classList.remove('selected');
-        if (isVisible) visibleCount += 1;
-    });
-
-    const emptyHint = document.getElementById('guest-list-soul-fusion-empty');
-    if (emptyHint) emptyHint.style.display = visibleCount === 0 ? 'block' : 'none';
-}
-
-function openGuestSelectModal(itemId, actionType, triggerElement = null) {
-    const config = WAREHOUSE_MODAL_CONFIG[actionType];
-    if (!config) return;
-    warehouseModalState.currentItemId = itemId;
-    warehouseModalState.currentActionType = actionType;
-    warehouseModalState.selectedGuestId = null;
-    document.getElementById('modal-title').textContent = config.title;
-    // 安全修复：使用 textContent 替代 innerHTML，防止 XSS
-    const modalHint = document.getElementById('modal-hint');
-    const requirementHint = actionType === 'soul_fusion' ? formatSoulFusionRequirementHint(triggerElement) : '';
-    modalHint.textContent = requirementHint ? `${config.hint} ${requirementHint}。` : config.hint;
-    document.getElementById('modal-confirm-btn').textContent = config.confirmText;
-    document.getElementById('modal-confirm-btn').disabled = true;
-    resetSoulFusionGuestFilter();
-    ['guest-list-rebirth', 'guest-list-soul-fusion', 'guest-list-xisuidan', 'guest-list-xidianka', 'guest-list-rarity-upgrade'].forEach(id => {
-        document.getElementById(id).style.display = 'none';
-    });
-    document.getElementById(config.listId).style.display = 'block';
-    if (actionType === 'soul_fusion') {
-        applySoulFusionGuestFilter(triggerElement);
-    }
-    document.querySelectorAll('.tw-guest-option').forEach(opt => opt.classList.remove('selected'));
-    document.getElementById('guest-select-modal').style.display = 'flex';
-}
-
-function closeGuestSelectModal() {
-    document.getElementById('guest-select-modal').style.display = 'none';
-    warehouseModalState.currentItemId = null;
-    warehouseModalState.currentActionType = null;
-    warehouseModalState.selectedGuestId = null;
-    resetSoulFusionGuestFilter();
-}
-
-function confirmGuestAction() {
-    if (!warehouseModalState.selectedGuestId || !warehouseModalState.currentItemId || !warehouseModalState.currentActionType) {
-        gameDialog.error('请先选择门客', { title: '提示' });
-        return;
-    }
-    const config = WAREHOUSE_MODAL_CONFIG[warehouseModalState.currentActionType];
-    const confirmBtn = document.getElementById('modal-confirm-btn');
-    confirmBtn.disabled = true;
-    confirmBtn.textContent = '处理中...';
-
-    const url = config.urlTemplate.replace('/0/', `/${warehouseModalState.currentItemId}/`);
-    const formData = new FormData();
-    formData.append('guest_id', warehouseModalState.selectedGuestId);
-    formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
-
-    fetch(url, {
-        method: 'POST',
-        body: formData,
-        headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            closeGuestSelectModal();
-            gameDialog.success(data.message).then(() => location.reload());
-        } else {
-            gameDialog.error(data.error || '操作失败', { title: '错误' });
-            confirmBtn.disabled = false;
-            confirmBtn.textContent = config.confirmText;
-        }
-    })
-    .catch(err => {
-        gameDialog.error('请求失败，请重试', { title: '错误' });
-        confirmBtn.disabled = false;
-        confirmBtn.textContent = config.confirmText;
-    });
-}
-
-const warehouseGuestOptionClickHandler = function(e) {
-    const modal = document.getElementById('guest-select-modal');
-    const guestOption = e.target.closest('.tw-guest-option');
-    if (guestOption && modal && modal.contains(guestOption)) {
-        const guestId = guestOption.dataset.guestId;
-        if (!guestId || !warehouseModalState.currentActionType) return;
-        const activeList = document.getElementById(WAREHOUSE_MODAL_CONFIG[warehouseModalState.currentActionType]?.listId);
-        if (!activeList) return;
-        if (!activeList.contains(guestOption)) return;
-        activeList.querySelectorAll('.tw-guest-option').forEach(opt => opt.classList.remove('selected'));
-        guestOption.classList.add('selected');
-        warehouseModalState.selectedGuestId = guestId;
-        const confirmBtn = document.getElementById('modal-confirm-btn');
-        if (confirmBtn) confirmBtn.disabled = false;
-    }
-    if (e.target && e.target.id === 'guest-select-modal') closeGuestSelectModal();
-};
-
-if (window.__warehouseGuestOptionClickHandler) {
-    document.removeEventListener('click', window.__warehouseGuestOptionClickHandler);
-}
-window.__warehouseGuestOptionClickHandler = warehouseGuestOptionClickHandler;
-document.addEventListener('click', warehouseGuestOptionClickHandler);
-
-window.openGuestSelectModal = openGuestSelectModal;
-window.closeGuestSelectModal = closeGuestSelectModal;
-window.confirmGuestAction = confirmGuestAction;
-})();
-</script>
+<script src="{% static 'js/warehouse-page.js' %}"></script>
 {% endblock %}

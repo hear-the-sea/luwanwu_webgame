@@ -142,3 +142,37 @@ def test_guest_detail_view_bubbles_up_invalid_skill_book_payload(game_data, djan
 
     with pytest.raises(AssertionError, match="invalid guest roster skill_book effect_payload"):
         client.get(reverse("guests:detail", args=[guest.pk]))
+
+
+@pytest.mark.django_db
+def test_guest_detail_view_loads_external_page_script_without_inline_detail_logic(game_data, django_user_model):
+    user = django_user_model.objects.create_user(username="detail_external_page_script", password="pass123")
+    manor = ensure_manor(user)
+    guest = _create_guest(manor, prefix="detail_external_page_script")
+
+    client = Client()
+    client.force_login(user)
+
+    response = client.get(reverse("guests:detail", args=[guest.pk]))
+
+    assert response.status_code == 200
+    content = response.content.decode("utf-8")
+    assert "js/guest-detail.js" in content
+    assert "const attributeResponseFieldMap" not in content
+
+
+@pytest.mark.django_db
+def test_roster_view_loads_external_page_script_without_inline_roster_logic(game_data, django_user_model):
+    user = django_user_model.objects.create_user(username="roster_external_page_script", password="pass123")
+    manor = ensure_manor(user)
+    _create_guest(manor, prefix="roster_external_page_script")
+
+    client = Client()
+    client.force_login(user)
+
+    response = client.get(reverse("guests:roster"))
+
+    assert response.status_code == 200
+    content = response.content.decode("utf-8")
+    assert "js/guest-roster.js" in content
+    assert "function openSalaryModal" not in content

@@ -3,351 +3,23 @@
 
 {% block title %}指挥中心{% endblock %}
 
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/landing-page.css' %}">
+{% endblock %}
+
 {% block content %}
 {% if user.is_authenticated %}
-<section class="dashboard" style="min-width: 0; width: 100%; max-width: 100%;">
-    <style>
-        .manor-status-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-        .manor-status-table td { border: 1.5px solid var(--border-primary); padding: 0.5rem 0.75rem; vertical-align: top; overflow: hidden; word-wrap: break-word; }
-        .manor-status-table .section-title-cell { width: 100px; font-weight: bold; color: var(--text-primary); background: var(--bg-secondary); text-align: center; vertical-align: middle; }
-        .manor-status-table .content-cell { background: var(--bg-panel); }
-        .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 4px 12px; }
-        .status-item { display: flex; min-width: 0; }
-        .status-item label { color: var(--text-secondary); margin-right: 0.5rem; white-space: nowrap; }
-        .status-item .value { font-weight: bold; overflow: hidden; text-overflow: ellipsis; }
-        .status-item .positive { color: var(--accent-green); }
-        .status-item .negative { color: var(--accent-red); }
-        .guest-status-list { display: flex; flex-wrap: wrap; gap: 4px 16px; }
-        .guest-status-item { white-space: nowrap; }
-        .guest-status-item .name { font-weight: bold; color: var(--text-primary); }
-        .guest-status-item .status { color: var(--text-muted); margin-left: 4px; }
-        .troop-status-list { display: flex; flex-wrap: wrap; gap: 4px 16px; }
-        .troop-status-item { white-space: nowrap; }
-        .troop-status-item .name { font-weight: bold; color: var(--text-primary); }
-        .troop-status-item .count { color: var(--accent-green); margin-left: 4px; }
-
-        /* 折叠/展开功能 - 仅移动端 */
-        .section-title-cell::before {
-            content: none; /* PC端不显示箭头 */
-        }
-        .content-cell {
-            overflow: hidden;
-        }
-
-        /* 移动端适配 */
-        @media (max-width: 768px) {
-            /* 移动端启用折叠功能 */
-            .section-title-cell {
-                cursor: pointer;
-                user-select: none;
-                transition: background-color 0.2s;
-            }
-            .section-title-cell:hover {
-                background: var(--bg-hover);
-            }
-            .section-title-cell::before {
-                content: "▼";
-                display: inline-block;
-                margin-right: 0.5rem;
-                font-size: 0.7rem;
-                color: var(--accent-gold);
-                transition: transform 0.2s;
-            }
-            .section-title-cell.collapsed::before {
-                transform: rotate(-90deg);
-            }
-            .content-cell {
-                transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.2s ease;
-            }
-            .content-cell.collapsed {
-                max-height: 0 !important;
-                padding-top: 0 !important;
-                padding-bottom: 0 !important;
-                opacity: 0;
-                border-top: none !important;
-            }
-            /* 庄园状况表格改为卡片式布局 */
-            .manor-status-table,
-            .manor-status-table tbody,
-            .manor-status-table tr,
-            .manor-status-table td {
-                display: block;
-                width: 100%;
-                max-width: 100%;
-                box-sizing: border-box;
-            }
-            .manor-status-table tr {
-                margin-bottom: 0;
-                border-bottom: 2px solid var(--border-primary);
-            }
-            .manor-status-table tr:last-child {
-                border-bottom: none;
-            }
-            .manor-status-table .section-title-cell {
-                width: 100%;
-                padding: 0.6rem 0.75rem;
-                border-bottom: none;
-                font-size: 0.9rem;
-                text-align: left;
-                display: flex;
-                align-items: center;
-                gap: 0.5rem;
-            }
-            .manor-status-table .section-title-cell::before {
-                content: "▸";
-                color: var(--accent-gold);
-            }
-            .manor-status-table .content-cell {
-                border-top: none;
-                padding: 0.5rem 0.75rem 0.75rem;
-            }
-            .status-grid {
-                display: flex;
-                flex-direction: column;
-                gap: 0.3rem;
-            }
-            .status-item {
-                display: flex;
-                flex-direction: row;
-                justify-content: space-between;
-                align-items: center;
-                padding: 0.3rem 0.5rem;
-                background: var(--bg-secondary);
-                border-radius: 4px;
-            }
-            .status-item label {
-                font-size: 0.85rem;
-                margin-right: 0.5rem;
-            }
-            .status-item .value {
-                font-size: 0.85rem;
-                text-align: right;
-            }
-            /* 门客/护院状态列表改为标签式 */
-            .guest-status-list,
-            .troop-status-list {
-                gap: 0.4rem;
-            }
-            .guest-status-item,
-            .troop-status-item {
-                font-size: 0.8rem;
-                background: var(--bg-secondary);
-                padding: 0.25rem 0.5rem;
-                border-radius: 4px;
-                display: inline-flex;
-                align-items: center;
-            }
-            .guest-status-item .name,
-            .troop-status-item .name {
-                font-size: 0.8rem;
-            }
-            .guest-status-item .status,
-            .troop-status-item .count {
-                font-size: 0.75rem;
-            }
-        }
-    </style>
+<section class="dashboard landing-dashboard">
 
     <!-- 事件 -->
     <section class="panel">
         <div class="panel-header">=事件=</div>
-        <style>
-            /* Panel header 不收缩 */
-            .dashboard > .panel:first-of-type > .panel-header {
-                flex-shrink: 0;
-            }
-
-            /* Events table 填充 panel 剩余空间 */
-            .events-table {
-                background: var(--bg-panel);
-                display: flex;
-                flex-direction: column;
-                flex: 1; /* 填充事件 panel 的剩余空间 */
-                min-height: 0; /* 允许收缩，overflow 才能生效 */
-            }
-
-            /* Table head 不收缩 */
-            .events-table thead {
-                display: block;
-                flex-shrink: 0;
-            }
-
-            .events-table thead tr {
-                display: flex;
-            }
-
-            .events-table thead th:first-child {
-                flex: 1;
-                min-width: 200px; /* 确保内容列有足够宽度 */
-            }
-
-            .events-table thead th:nth-child(2) {
-                width: 120px; /* 减少剩余时间列宽度 */
-            }
-
-            .events-table thead th:nth-child(3) {
-                width: 80px; /* 减少操作列宽度 */
-            }
-
-            /* Table body 设置最大高度 - 超过4条事件时滚动 */
-            .events-table tbody {
-                display: flex;
-                flex-direction: column;
-                overflow-y: auto; /* 内容过多时出现滚动条 */
-                max-height: 220px; /* 4行的高度：55px × 4 = 220px，超过就滚动 */
-            }
-
-            /* 每行设置固定高度，保持一致 */
-            .events-table tbody tr {
-                min-height: 55px; /* 每行固定高度 */
-                display: flex;
-                align-items: center; /* 垂直居中对齐 */
-                border-bottom: 1px solid var(--border-primary);
-            }
-
-            .events-table tbody tr:last-child {
-                border-bottom: none;
-            }
-
-            /* 只有一个 td 的行（暂无事件）占满整行 */
-            .events-table tbody tr td:only-child {
-                flex: 1;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                background: var(--bg-panel);
-                padding: 0.3rem 0.5rem;
-                line-height: 1.4;
-            }
-
-            /* 第一列（内容列）自适应宽度 - 同一行显示 */
-            .events-table tbody tr td:first-child:not(:only-child) {
-                flex: 1;
-                display: flex;
-                flex-direction: row; /* 改为横向排列 */
-                align-items: center; /* 垂直居中 */
-                padding: 0.6rem 1rem;
-                gap: 0.5rem; /* 标题和描述之间的间距 */
-            }
-
-            .events-table tbody tr td:first-child strong {
-                flex-shrink: 0;
-                line-height: 1.3;
-                font-size: 0.95rem;
-                color: var(--text-primary);
-                white-space: nowrap; /* 标题不换行 */
-            }
-
-            /* 第二列（剩余时间）固定宽度 */
-            .events-table tbody tr td:nth-child(2) {
-                width: 120px;
-                display: flex;
-                align-items: center;
-                padding: 0.5rem 1rem; /* 增加内边距 */
-            }
-
-            /* 第三列（操作）固定宽度 */
-            .events-table tbody tr td:nth-child(3) {
-                width: 80px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                padding: 0.5rem 1rem; /* 增加内边距 */
-            }
-
-            /* 时间列和操作列的 muted-text 不换行 */
-            .events-table tbody tr td:nth-child(2) .muted-text,
-            .events-table tbody tr td:nth-child(3) .muted-text {
-                white-space: nowrap;
-            }
-
-            /* 内容列的 muted-text 样式 - 移除背景，优化显示 */
-            .events-table tbody tr td:not(:only-child) .muted-text {
-                color: var(--text-muted);
-                line-height: 1.3;
-                display: inline-block; /* 改为inline-block以适应内容宽度 */
-                margin-top: 0;
-                flex-shrink: 0; /* 不收缩，保持内容完整 */
-                font-size: 0.85rem;
-                padding: 0;
-                white-space: nowrap; /* 不换行 */
-            }
-
-            /* 滚动条样式 - 和其他页面保持一致 */
-            .events-table tbody::-webkit-scrollbar {
-                width: 10px;
-            }
-
-            .events-table tbody::-webkit-scrollbar-track {
-                background: var(--bg-hover);
-                border-radius: 8px;
-                border: 1px solid var(--border-light);
-            }
-
-            .events-table tbody::-webkit-scrollbar-thumb {
-                background: linear-gradient(180deg, var(--accent-gold) 0%, #B8860B 100%);
-                border-radius: 8px;
-                border: 1px solid var(--border-primary);
-            }
-
-            /* 移动端事件表格适配 */
-            @media (max-width: 768px) {
-                .events-table {
-                    display: block;
-                }
-                .events-table thead {
-                    display: none;
-                }
-                .events-table tbody {
-                    display: flex;
-                    flex-direction: column;
-                    max-height: none;
-                    overflow-y: visible;
-                }
-                .events-table tbody tr {
-                    display: flex;
-                    flex-wrap: wrap;
-                    min-height: auto;
-                    padding: 0.75rem;
-                    gap: 0.5rem;
-                    border-bottom: 1px solid var(--border-primary);
-                }
-                .events-table tbody tr td:first-child:not(:only-child) {
-                    flex: 1 1 100%;
-                    padding: 0;
-                    flex-direction: column;
-                    align-items: flex-start;
-                }
-                .events-table tbody tr td:nth-child(2) {
-                    width: auto;
-                    flex: 1;
-                    padding: 0;
-                    justify-content: flex-start;
-                }
-                .events-table tbody tr td:nth-child(3) {
-                    width: auto;
-                    flex: 0 0 auto;
-                    padding: 0;
-                    justify-content: flex-end;
-                }
-                .events-table tbody tr td:only-child {
-                    padding: 1rem 0.5rem;
-                }
-                /* 移动端按钮缩小 */
-                .events-table .btn-secondary,
-                .events-table .btn-sm {
-                    font-size: 0.75rem;
-                    padding: 0.25rem 0.5rem;
-                    min-width: auto;
-                }
-            }
-        </style>
-        <table class="events-table" style="box-shadow: none; border-radius: 0;">
+        <table class="events-table events-table-flat">
             <thead>
                 <tr>
-                    <th style="padding: 0.5rem 1rem;">内容</th>
-                    <th style="width: 120px; padding: 0.5rem 1rem;">剩余时间</th>
-                    <th style="width: 80px; padding: 0.5rem 1rem;">操作</th>
+                    <th class="events-col-content">内容</th>
+                    <th class="events-col-timer">剩余时间</th>
+                    <th class="events-col-action">操作</th>
                 </tr>
             </thead>
             <tbody>
@@ -393,7 +65,10 @@
                     </td>
                     <td>
                         {% if raid.can_retreat %}
-                        <button type="button" class="btn-secondary btn-sm" data-retreat-raid="{{ raid.id }}">撤退</button>
+                        <button type="button"
+                                class="btn-secondary btn-sm"
+                                data-retreat-raid="{{ raid.id }}"
+                                data-retreat-url="{% url 'gameplay:retreat_raid_api' raid.id %}">撤退</button>
                         {% elif raid.is_retreating %}
                         <span class="muted-text">撤退中</span>
                         {% else %}
@@ -540,7 +215,7 @@
 
                 {% else %}
                 <tr>
-                    <td colspan="3" class="muted-text" style="text-align: center;">暂无进行中的事件</td>
+                    <td colspan="3" class="muted-text events-empty-cell">暂无进行中的事件</td>
                 </tr>
                 {% endif %}
             </tbody>
@@ -635,89 +310,5 @@
 
 {% block extra_scripts %}
 <script src="{% static 'js/dashboard.js' %}"></script>
-<script>
-(function () {
-    // 折叠/展开功能 - 移动端默认收起
-    const isMobile = window.innerWidth <= 768;
-
-    document.querySelectorAll('[data-toggle="collapse"]').forEach(trigger => {
-        trigger.addEventListener('click', function() {
-            // PC端不响应点击
-            if (window.innerWidth > 768) return;
-
-            const targetId = this.dataset.target;
-            const target = document.getElementById(targetId);
-            if (!target) return;
-
-            const isCollapsed = this.classList.toggle('collapsed');
-            target.classList.toggle('collapsed', isCollapsed);
-
-            // 保存状态到 localStorage
-            const states = JSON.parse(localStorage.getItem('manor-collapse-states') || '{}');
-            states[targetId] = isCollapsed;
-            localStorage.setItem('manor-collapse-states', JSON.stringify(states));
-        });
-
-        // 初始化状态
-        const targetId = trigger.dataset.target;
-        const states = JSON.parse(localStorage.getItem('manor-collapse-states') || '{}');
-
-        if (isMobile) {
-            // 移动端：如果有保存的状态则使用，否则默认收起
-            const shouldCollapse = states[targetId] !== undefined ? states[targetId] : true;
-            if (shouldCollapse) {
-                trigger.classList.add('collapsed');
-                document.getElementById(targetId)?.classList.add('collapsed');
-            }
-        }
-        // PC端：不添加任何折叠状态
-    });
-
-    document.querySelectorAll('.scout-retreat-form').forEach(form => {
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            try {
-                const confirmed = await gameConfirm('确定要撤退侦察吗？探子将立即返程。', { title: '撤退确认' });
-                if (confirmed) form.submit();
-            } catch (err) {
-                console.error('撤退确认失败:', err);
-            }
-        });
-    });
-
-    // 踢馆撤退按钮
-    document.querySelectorAll('[data-retreat-raid]').forEach(btn => {
-        btn.addEventListener('click', async function() {
-            const raidId = this.dataset.retreatRaid;
-            const confirmed = await gameConfirm('确定要撤退吗？部队将立即返程。', { title: '撤退确认' });
-            if (!confirmed) return;
-
-            btn.disabled = true;
-            btn.textContent = '撤退中...';
-
-            fetch('/manor/api/map/raid/' + raidId + '/retreat/', {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': '{{ csrf_token }}'
-                }
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    location.reload();
-                } else {
-                    alert('撤退失败: ' + data.error);
-                    btn.disabled = false;
-                    btn.textContent = '撤退';
-                }
-            })
-            .catch(err => {
-                alert('请求失败，请稍后重试');
-                btn.disabled = false;
-                btn.textContent = '撤退';
-            });
-        });
-    });
-})();
-</script>
+<script src="{% static 'js/landing-page.js' %}"></script>
 {% endblock %}

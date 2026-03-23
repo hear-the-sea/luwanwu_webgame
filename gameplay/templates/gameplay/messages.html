@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}消息{% endblock %}
 
@@ -293,7 +294,7 @@
                                         {% if message.is_claimed %}
                                             <span class="msg-badge msg-badge-claimed">已领</span>
                                         {% else %}
-                                            <button type="button" class="msg-claim-btn" onclick="claimAttachment({{ message.id }}, '{% url 'gameplay:claim_attachment' message.id %}')">领取</button>
+                                            <button type="button" class="msg-claim-btn js-claim-attachment" data-claim-url="{% url 'gameplay:claim_attachment' message.id %}">领取</button>
                                         {% endif %}
                                     {% endif %}
                                 </div>
@@ -343,119 +344,5 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script>
-// 一键清空确认
-document.getElementById('delete-all-form')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    try {
-        const confirmed = await gameDialog.danger('确认清空所有消息？此操作无法撤销。', { title: '清空消息' });
-        if (confirmed) e.target.submit();
-    } catch (err) {
-        console.error('清空消息确认失败:', err);
-    }
-});
-
-function claimAttachment(messageId, url) {
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = url;
-    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-    const csrfInput = document.createElement('input');
-    csrfInput.type = 'hidden';
-    csrfInput.name = 'csrfmiddlewaretoken';
-    csrfInput.value = csrfToken;
-    form.appendChild(csrfInput);
-    document.body.appendChild(form);
-    form.submit();
-}
-
-(function initMessageClickHandler() {
-    const unreadCountElement = document.getElementById('unread-count');
-    const csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
-    const csrfToken = csrfInput ? csrfInput.value : '';
-    const messageLinks = document.querySelectorAll('.js-message-link');
-
-    if (!messageLinks.length) return;
-
-    function getCurrentUnreadCount() {
-        if (!unreadCountElement) return 0;
-        const dataValue = unreadCountElement.dataset.unread;
-        const textValue = unreadCountElement.textContent.trim();
-        const value = dataValue || textValue || '0';
-        const parsed = parseInt(value, 10);
-        return isNaN(parsed) ? 0 : Math.max(0, parsed);
-    }
-
-    function updateUnreadCount(newCount) {
-        if (!unreadCountElement) return;
-        const safeCount = Math.max(0, parseInt(newCount, 10) || 0);
-        unreadCountElement.dataset.unread = safeCount;
-        unreadCountElement.textContent = safeCount;
-    }
-
-    function markMessageCardAsRead(link) {
-        link.dataset.isRead = 'true';
-        const messageCard = link.closest('.msg-item');
-        if (messageCard) messageCard.classList.remove('unread');
-        const statusDot = link.parentElement?.querySelector('.msg-unread-dot');
-        if (statusDot) statusDot.remove();
-    }
-
-    function shouldBypassInterception(event) {
-        return event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
-    }
-
-    function markMessageAsReadAsync(messageUrl, signal) {
-        return fetch(messageUrl, {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRFToken': csrfToken,
-            },
-            credentials: 'same-origin',
-            signal: signal,
-        }).then(response => {
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return response.json();
-        });
-    }
-
-    messageLinks.forEach(link => {
-        link.addEventListener('click', function handleMessageClick(event) {
-            if (shouldBypassInterception(event)) return;
-            if (link.dataset.processing === 'true') {
-                event.preventDefault();
-                return;
-            }
-            const isAlreadyRead = link.dataset.isRead === 'true';
-            if (isAlreadyRead) return;
-
-            event.preventDefault();
-            link.dataset.processing = 'true';
-            const targetUrl = link.getAttribute('href');
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 4000);
-
-            markMessageAsReadAsync(targetUrl, controller.signal)
-                .then(data => {
-                    if (data && typeof data.unread_count === 'number') {
-                        updateUnreadCount(data.unread_count);
-                    } else {
-                        updateUnreadCount(getCurrentUnreadCount() - 1);
-                    }
-                })
-                .catch(error => {
-                    updateUnreadCount(getCurrentUnreadCount() - 1);
-                    console.warn('Mark message as read failed:', error.message);
-                })
-                .finally(() => {
-                    clearTimeout(timeoutId);
-                    markMessageCardAsRead(link);
-                    window.location.href = targetUrl;
-                });
-        });
-    });
-})();
-</script>
+<script src="{% static 'js/messages-page.js' %}"></script>
 {% endblock %}

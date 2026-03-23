@@ -72,6 +72,7 @@ def seed_templates(apps, schema_editor):
             "name": "常规招募",
             "description": "基础门客常驻卡池",
             "cost": {"grain": 200, "wood": 100},
+            "cooldown_seconds": 600,
             "entries": [("sun_bin", 15), ("li_qing", 50)],
         },
         {
@@ -79,6 +80,7 @@ def seed_templates(apps, schema_editor):
             "name": "精英招募",
             "description": "高稀有门客概率提升",
             "cost": {"grain": 400, "iron": 200},
+            "cooldown_seconds": 1200,
             "entries": [("wu_qi", 20), ("sun_bin", 30)],
         },
     ]

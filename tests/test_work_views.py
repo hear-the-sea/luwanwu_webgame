@@ -55,6 +55,9 @@ class TestWorkViews:
         response = client.get(reverse("gameplay:work"))
         assert response.status_code == 200
         assert "works" in response.context
+        body = response.content.decode("utf-8")
+        assert "js/work-page.js" in body
+        assert "document.querySelectorAll('.recall-form')" not in body
 
     def test_work_page_shows_assignment_in_matching_work_card(self, manor_with_user):
         manor, client = manor_with_user

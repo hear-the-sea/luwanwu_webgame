@@ -24,6 +24,16 @@ class TestMissionViews:
         assert response.status_code == 200
         assert "missions" in response.context
 
+    def test_task_board_page_loads_external_page_script_without_inline_logic(self, manor_with_user):
+        _manor, client = manor_with_user
+
+        response = client.get(reverse("gameplay:tasks"))
+
+        assert response.status_code == 200
+        body = response.content.decode("utf-8")
+        assert "js/tasks-page.js" in body
+        assert "const maxSquadSize" not in body
+
     def test_task_board_tolerates_resource_sync_error(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
         monkeypatch.setattr(

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load gameplay_extras %}
+{% load gameplay_extras static %}
 
 {% block title %}任务{% endblock %}
 
@@ -292,7 +292,7 @@
                                     {% endfor %}
                                 </div>
                                 <div class="tw-selection-summary">
-                                    已选择 <strong id="selected-guest-count">0</strong> / {{ max_squad }} 人
+                                    已选择 <strong id="selected-guest-count" data-max-squad="{{ max_squad }}">0</strong> / {{ max_squad }} 人
                                 </div>
                             </div>
                             {% if not selected_mission.guest_only %}
@@ -362,81 +362,5 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script>
-(function() {
-    // Tab Switching
-    const tabs = document.querySelectorAll('.tw-trade-tab');
-    const contents = document.querySelectorAll('.mission-tab-content');
-
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            tabs.forEach(t => t.classList.remove('active'));
-            contents.forEach(c => {
-                c.style.display = 'none';
-                c.classList.remove('active');
-            });
-            tab.classList.add('active');
-            const tabId = tab.dataset.tab;
-            const content = document.getElementById('tab-' + tabId);
-            if (content) {
-                content.style.display = 'block';
-                setTimeout(() => content.classList.add('active'), 10);
-            }
-        });
-    });
-
-    const maxSquadSize = {{ max_squad|default:5 }};
-    const guestInputs = document.querySelectorAll('.guest-input');
-    const selectedCountEl = document.getElementById('selected-guest-count');
-
-    function updateGuestCount() {
-        if (!selectedCountEl) return;
-        const count = document.querySelectorAll('.guest-input:checked').length;
-        selectedCountEl.textContent = count;
-    }
-
-    guestInputs.forEach(function(input) {
-        input.addEventListener('change', function() {
-            const selectedGuests = document.querySelectorAll('.guest-input:checked').length;
-            if (selectedGuests > maxSquadSize) {
-                this.checked = false;
-                if (typeof gameAlert === 'function') {
-                    gameAlert('最多只能选择 ' + maxSquadSize + ' 名门客出征', { title: '选择限制' });
-                } else {
-                    alert('最多只能选择 ' + maxSquadSize + ' 名门客出征');
-                }
-                return;
-            }
-            updateGuestCount();
-        });
-    });
-
-    document.querySelectorAll('.tw-troop-slider').forEach(function(slider) {
-        slider.addEventListener('input', function() {
-            const troopKey = this.dataset.troopKey;
-            const numInput = document.querySelector('.tw-troop-num-input[data-troop-key="' + troopKey + '"]');
-            if (numInput) numInput.value = this.value;
-        });
-    });
-
-    document.querySelectorAll('.tw-troop-num-input').forEach(function(input) {
-        input.addEventListener('input', function() {
-            const troopKey = this.dataset.troopKey;
-            const max = parseInt(this.dataset.max) || 0;
-            let value = parseInt(this.value) || 0;
-            value = Math.max(0, Math.min(max, value));
-            const slider = document.querySelector('.tw-troop-slider[data-troop-key="' + troopKey + '"]');
-            if (slider) slider.value = value;
-        });
-        input.addEventListener('blur', function() {
-            const max = parseInt(this.dataset.max) || 0;
-            let value = parseInt(this.value) || 0;
-            value = Math.max(0, Math.min(max, value));
-            this.value = value;
-        });
-    });
-
-    updateGuestCount();
-})();
-</script>
+<script src="{% static 'js/tasks-page.js' %}"></script>
 {% endblock %}

@@ -267,29 +267,5 @@
 
 {% block extra_scripts %}
 <script src="{% static 'js/dashboard.js' %}"></script>
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    document.querySelectorAll('.js-decompose-form').forEach(function (form) {
-        form.addEventListener('submit', async function (e) {
-            e.preventDefault();
-
-            if (typeof gameDialog === 'undefined' || !gameDialog.danger) {
-                if (confirm('确认要分解该装备吗？分解后无法恢复。')) {
-                    form.submit();
-                }
-                return;
-            }
-
-            const confirmed = await gameDialog.danger('确认要分解该装备吗？分解后无法恢复。', {
-                title: '分解确认',
-                okText: '确认分解',
-                cancelText: '取消',
-            });
-            if (confirmed) {
-                form.submit();
-            }
-        });
-    });
-});
-</script>
+<script src="{% static 'js/forge-page.js' %}"></script>
 {% endblock %}

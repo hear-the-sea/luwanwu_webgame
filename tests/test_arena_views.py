@@ -80,7 +80,10 @@ def test_arena_view_renders(arena_client):
     response = client.get(reverse("gameplay:arena"))
 
     assert response.status_code == 200
-    assert "竞技场" in response.content.decode("utf-8")
+    body = response.content.decode("utf-8")
+    assert "竞技场" in body
+    assert "js/arena-registration.js" in body
+    assert 'document.addEventListener("DOMContentLoaded"' not in body
 
 
 @pytest.mark.django_db

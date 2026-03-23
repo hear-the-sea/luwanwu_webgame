@@ -21,6 +21,38 @@ class TestMessageViews:
         assert response.status_code == 200
         assert "message_list" in response.context
 
+    def test_messages_page_loads_external_page_script_without_inline_logic(self, manor_with_user):
+        _manor, client = manor_with_user
+
+        response = client.get(reverse("gameplay:messages"))
+
+        assert response.status_code == 200
+        body = response.content.decode("utf-8")
+        assert "js/messages-page.js" in body
+        assert "function claimAttachment" not in body
+        assert "onclick=" not in body
+
+    def test_message_detail_page_loads_external_page_script_without_inline_logic(self, manor_with_user):
+        manor, client = manor_with_user
+        message = Message.objects.create(
+            manor=manor,
+            kind=Message.Kind.SYSTEM,
+            title="详情页脚本测试",
+            body="测试详情内容",
+            attachments={},
+        )
+
+        response = client.get(reverse("gameplay:view_message", kwargs={"pk": message.pk}))
+
+        assert response.status_code == 200
+        body = response.content.decode("utf-8")
+        assert "css/message-detail.css" in body
+        assert "js/message-detail-page.js" in body
+        assert "delete-message-form" in body
+        assert "<style>" not in body
+        assert "document.getElementById('delete-message-form')" not in body
+        assert "gameDialog.danger('确认删除这条消息吗？'" not in body
+
     def test_mark_all_read(self, manor_with_user):
         """标记全部已读"""
         manor, client = manor_with_user

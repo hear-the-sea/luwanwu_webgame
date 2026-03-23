@@ -124,6 +124,18 @@ class TestInventoryViews:
         assert 'data-guest-level="66"' in body
         assert 'data-guest-rarity="blue"' in body
 
+    def test_warehouse_page_loads_external_page_script_without_inline_handlers(self, manor_with_user):
+        _manor, client = manor_with_user
+
+        response = client.get(reverse("gameplay:warehouse"))
+
+        assert response.status_code == 200
+        body = response.content.decode("utf-8")
+        assert "js/warehouse-page.js" in body
+        assert "const warehouseModalState" not in body
+        assert "onclick=" not in body
+        assert "onchange=" not in body
+
     def test_recruitment_hall_page(self, manor_with_user):
         manor, client = manor_with_user
         response = client.get(reverse("gameplay:recruitment_hall"))
@@ -134,6 +146,16 @@ class TestInventoryViews:
         assert "guests" not in response.context
         assert "capacity" not in response.context
         assert "available_gears" not in response.context
+
+    def test_recruitment_hall_page_loads_external_page_script_without_inline_logic(self, manor_with_user):
+        _manor, client = manor_with_user
+
+        response = client.get(reverse("gameplay:recruitment_hall"))
+
+        assert response.status_code == 200
+        body = response.content.decode("utf-8")
+        assert "js/recruitment-hall.js" in body
+        assert "const CHUNK_SIZE" not in body
 
     def test_recruitment_hall_page_syncs_resources_before_loading_context(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user

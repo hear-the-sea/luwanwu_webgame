@@ -72,6 +72,7 @@ def update_recruitment_data(apps, schema_editor):
             "tier": "tongshi",
             "description": "单人试招，适合入门。",
             "cost": {"silver": 120},
+            "cooldown_seconds": 600,
             "draw_count": 1,
             "entries": [
                 ("black_civil_proto", 60),
@@ -85,6 +86,7 @@ def update_recruitment_data(apps, schema_editor):
             "tier": "xiangshi",
             "description": "可筛选 5 名候选，提升稀有概率。",
             "cost": {"silver": 450},
+            "cooldown_seconds": 1200,
             "draw_count": 5,
             "entries": [
                 ("black_civil_proto", 50),
@@ -100,6 +102,7 @@ def update_recruitment_data(apps, schema_editor):
             "tier": "huishi",
             "description": "一次招募 8 名候选，橙红概率上升。",
             "cost": {"silver": 900},
+            "cooldown_seconds": 1800,
             "draw_count": 8,
             "entries": [
                 ("black_civil_proto", 30),
@@ -116,6 +119,7 @@ def update_recruitment_data(apps, schema_editor):
             "tier": "dianshi",
             "description": "皇榜特招，提供 10 名候选。",
             "cost": {"silver": 1500},
+            "cooldown_seconds": 3600,
             "draw_count": 10,
             "entries": [
                 ("sun_bin", 40),
@@ -136,6 +140,7 @@ def update_recruitment_data(apps, schema_editor):
                 "tier": pool_data["tier"],
                 "description": pool_data["description"],
                 "cost": pool_data["cost"],
+                "cooldown_seconds": pool_data["cooldown_seconds"],
                 "draw_count": pool_data["draw_count"],
             },
         )
