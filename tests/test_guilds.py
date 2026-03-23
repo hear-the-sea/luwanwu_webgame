@@ -8,7 +8,13 @@ import pytest
 from django.db.utils import DatabaseError
 from django.test import TestCase
 
-from core.exceptions import GuildContributionError, MessageError
+from core.exceptions import (
+    GuildContributionError,
+    GuildMembershipError,
+    GuildPermissionError,
+    GuildValidationError,
+    MessageError,
+)
 from gameplay.models import InventoryItem, ItemTemplate, Manor
 from guilds.models import GuildMember
 from guilds.services import contribution as contribution_service
@@ -89,17 +95,17 @@ class TestGuildCreation:
             manor=manor2, template=gold_bar_template, quantity=10, storage_location="warehouse"
         )
 
-        with pytest.raises(ValueError, match="帮会名称已存在"):
+        with pytest.raises(GuildValidationError, match="帮会名称已存在"):
             guild_service.create_guild(user=user2, name="唯一帮会", description="")
 
     def test_create_guild_invalid_name(self, user_with_gold_bars):
         """测试无效帮会名称"""
         # 名称太短
-        with pytest.raises(ValueError, match="至少需要"):
+        with pytest.raises(GuildValidationError, match="至少需要"):
             guild_service.create_guild(user=user_with_gold_bars, name="A", description="")
 
         # 名称包含特殊字符
-        with pytest.raises(ValueError, match="只能包含"):
+        with pytest.raises(GuildValidationError, match="只能包含"):
             guild_service.create_guild(user=user_with_gold_bars, name="帮会@#$", description="")
 
     def test_create_guild_insufficient_gold(self, django_user_model, gold_bar_template):
@@ -109,7 +115,7 @@ class TestGuildCreation:
 
         ensure_manor(user)
 
-        with pytest.raises(ValueError, match="金条不足"):
+        with pytest.raises(GuildValidationError, match="金条不足"):
             guild_service.create_guild(user=user, name="穷人帮会", description="")
 
 
@@ -243,7 +249,7 @@ class TestGuildMembership:
             GuildMember.objects.create(guild=guild, user=user, position="member")
 
         # 申请加入已满帮会
-        with pytest.raises(ValueError, match="已满员"):
+        with pytest.raises(GuildMembershipError, match="已满员"):
             member_service.apply_to_guild(second_user, guild, "")
 
     def test_kick_member(self, user_with_gold_bars, second_user):
@@ -370,7 +376,7 @@ def test_approve_application_followup_programming_error_bubbles_up(user_with_gol
 
         leader_member = GuildMember.objects.get(user=user_with_gold_bars, guild=guild)
 
-        with pytest.raises(ValueError, match="帮主"):
+        with pytest.raises(GuildPermissionError, match="帮主"):
             member_service.leave_guild(leader_member)
 
 
@@ -450,7 +456,7 @@ class TestGuildUpgrade:
         guild.gold_bar = 10000
         guild.save()
 
-        with pytest.raises(ValueError, match="最高等级"):
+        with pytest.raises(GuildValidationError, match="最高等级"):
             guild_service.upgrade_guild(guild, user_with_gold_bars)
 
 
@@ -476,7 +482,7 @@ class TestGuildInfoUpdate:
         guild = guild_service.create_guild(user=user_with_gold_bars, name="权限帮会", description="旧简介")
         GuildMember.objects.create(guild=guild, user=second_user, position="member")
 
-        with pytest.raises(ValueError, match="帮主"):
+        with pytest.raises(GuildPermissionError, match="帮主"):
             guild_service.update_guild_info(
                 guild=guild,
                 operator=second_user,
@@ -543,5 +549,5 @@ class TestGuildDisband:
 
         GuildMember.objects.create(guild=guild, user=second_user, position="member")
 
-        with pytest.raises(ValueError, match="帮主"):
+        with pytest.raises(GuildPermissionError, match="帮主"):
             guild_service.disband_guild(guild, second_user)

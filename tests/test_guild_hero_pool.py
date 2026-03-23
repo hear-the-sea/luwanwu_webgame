@@ -5,6 +5,7 @@ from datetime import timedelta
 import pytest
 from django.utils import timezone
 
+from core.exceptions import GuildValidationError
 from gameplay.services.manor.core import ensure_manor
 from guests.models import Guest, GuestArchetype, GuestRarity, GuestStatus, GuestTemplate
 from guilds.models import Guild, GuildBattleLineupEntry, GuildHeroPoolEntry, GuildMember
@@ -84,7 +85,7 @@ def test_replace_has_30_minute_cooldown(django_user_model):
     base_time = timezone.now()
     hero_pool_service.submit_hero_pool_entry(leader_member, guest_id=guest_a.id, slot_index=1, now=base_time)
 
-    with pytest.raises(ValueError, match="替换冷却中"):
+    with pytest.raises(GuildValidationError, match="替换冷却中"):
         hero_pool_service.submit_hero_pool_entry(
             leader_member,
             guest_id=guest_b.id,
@@ -112,7 +113,7 @@ def test_remove_slot_also_respects_replace_cooldown(django_user_model):
     guest = _create_guest(manor=leader_manor, template=template, name="门客甲")
     hero_pool_service.submit_hero_pool_entry(leader_member, guest_id=guest.id, slot_index=1)
 
-    with pytest.raises(ValueError, match="替换冷却中"):
+    with pytest.raises(GuildValidationError, match="替换冷却中"):
         hero_pool_service.remove_hero_pool_entry(leader_member, slot_index=1)
 
 
@@ -161,7 +162,7 @@ def test_lineup_has_capacity_limit(django_user_model, monkeypatch):
     hero_pool_service.add_lineup_entry(guild=guild, operator=leader, pool_entry_id=entry_ids[0])
     hero_pool_service.add_lineup_entry(guild=guild, operator=leader, pool_entry_id=entry_ids[1])
 
-    with pytest.raises(ValueError, match="出战名单已满"):
+    with pytest.raises(GuildValidationError, match="出战名单已满"):
         hero_pool_service.add_lineup_entry(guild=guild, operator=leader, pool_entry_id=entry_ids[2])
 
 

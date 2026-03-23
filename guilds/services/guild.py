@@ -4,6 +4,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.utils import timezone
 
+from core.exceptions import GuildMembershipError, GuildPermissionError, GuildValidationError
 from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS
 from gameplay.models import Manor
 from gameplay.services.utils.messages import bulk_create_messages
@@ -29,21 +30,21 @@ def validate_guild_name(name: str) -> None:
         name: 帮会名称
 
     Raises:
-        ValueError: 校验失败时抛出
+        GuildValidationError: 校验失败时抛出
     """
     if not name or not name.strip():
-        raise ValueError("帮会名称不能为空")
+        raise GuildValidationError("帮会名称不能为空")
 
     name = name.strip()
 
     if len(name) < GUILD_NAME_MIN_LENGTH:
-        raise ValueError(f"帮会名称至少需要{GUILD_NAME_MIN_LENGTH}个字符")
+        raise GuildValidationError(f"帮会名称至少需要{GUILD_NAME_MIN_LENGTH}个字符")
 
     if len(name) > GUILD_NAME_MAX_LENGTH:
-        raise ValueError(f"帮会名称最多{GUILD_NAME_MAX_LENGTH}个字符")
+        raise GuildValidationError(f"帮会名称最多{GUILD_NAME_MAX_LENGTH}个字符")
 
     if not GUILD_NAME_PATTERN.match(name):
-        raise ValueError("帮会名称只能包含中文、英文、数字和下划线")
+        raise GuildValidationError("帮会名称只能包含中文、英文、数字和下划线")
 
 
 def create_guild(user, name, description="", emblem="default"):
@@ -60,7 +61,7 @@ def create_guild(user, name, description="", emblem="default"):
         Guild对象
 
     Raises:
-        ValueError: 验证失败
+        GuildValidationError | GuildMembershipError: 验证失败
     """
     from gameplay.models import InventoryItem, ItemTemplate
 
@@ -74,7 +75,7 @@ def create_guild(user, name, description="", emblem="default"):
         # 并发安全：锁定并校验当前用户的帮会成员记录（OneToOneField 防止重复入帮）
         membership = GuildMember.objects.select_for_update().filter(user=user).first()
         if membership and membership.is_active:
-            raise ValueError("您已加入帮会，无法创建新帮会")
+            raise GuildMembershipError("您已加入帮会，无法创建新帮会")
         if membership and not membership.is_active:
             membership.delete()
 
@@ -85,7 +86,7 @@ def create_guild(user, name, description="", emblem="default"):
         try:
             gold_bar_template = ItemTemplate.objects.get(key="gold_bar")
         except ItemTemplate.DoesNotExist:
-            raise ValueError("金条物品不存在，请联系管理员")
+            raise GuildValidationError("金条物品不存在，请联系管理员")
 
         gold_bar_item = (
             InventoryItem.objects.select_for_update()
@@ -97,13 +98,13 @@ def create_guild(user, name, description="", emblem="default"):
             .first()
         )
         if not gold_bar_item or gold_bar_item.quantity < required_gold_bars:
-            raise ValueError(f"金条不足，需要{required_gold_bars}金条")
+            raise GuildValidationError(f"金条不足，需要{required_gold_bars}金条")
 
         updated = InventoryItem.objects.filter(pk=gold_bar_item.pk, quantity__gte=required_gold_bars).update(
             quantity=F("quantity") - required_gold_bars
         )
         if not updated:
-            raise ValueError(f"金条不足，需要{required_gold_bars}金条")
+            raise GuildValidationError(f"金条不足，需要{required_gold_bars}金条")
         gold_bar_item.refresh_from_db(fields=["quantity"])
         if gold_bar_item.quantity == 0:
             gold_bar_item.delete()
@@ -119,7 +120,7 @@ def create_guild(user, name, description="", emblem="default"):
             )
         except IntegrityError:
             # unique=True on Guild.name
-            raise ValueError("帮会名称已存在")
+            raise GuildValidationError("帮会名称已存在")
 
         # 创建者自动成为帮主
         try:
@@ -129,7 +130,7 @@ def create_guild(user, name, description="", emblem="default"):
                 position="leader",
             )
         except IntegrityError:
-            raise ValueError("您已加入帮会，无法创建新帮会")
+            raise GuildMembershipError("您已加入帮会，无法创建新帮会")
 
         # 初始化帮会科技（等级0）
         initialize_guild_technologies(guild)
@@ -153,16 +154,16 @@ def upgrade_guild(guild, operator):
         operator: 操作者User对象
 
     Raises:
-        ValueError: 验证失败
+        GuildPermissionError | GuildValidationError: 验证失败
     """
     # 验证权限
     membership = get_active_membership(guild, operator, "只有帮主可以升级帮会")
     if not membership.is_leader:
-        raise ValueError("只有帮主可以升级帮会")
+        raise GuildPermissionError("只有帮主可以升级帮会")
 
     # 验证等级
     if guild.level >= 10:
-        raise ValueError("帮会已达最高等级")
+        raise GuildValidationError("帮会已达最高等级")
 
     # 并发安全的事务处理
     with transaction.atomic():
@@ -171,13 +172,13 @@ def upgrade_guild(guild, operator):
 
         # 步骤2：在锁内重新验证条件，防止并发穿透
         if guild_locked.level >= 10:
-            raise ValueError("帮会已达最高等级")
+            raise GuildValidationError("帮会已达最高等级")
 
         # 计算升级成本（必须在锁内根据当前等级计算，避免并发下低价升级）
         cost = calculate_guild_upgrade_cost(guild_locked.level)
 
         if guild_locked.gold_bar < cost:
-            raise ValueError(f"帮会金条不足，需要{cost}金条")
+            raise GuildValidationError(f"帮会金条不足，需要{cost}金条")
 
         # 步骤3：使用F()表达式原子性地扣除金条并提升等级
         Guild.objects.filter(pk=guild_locked.pk).update(gold_bar=F("gold_bar") - cost, level=F("level") + 1)
@@ -219,7 +220,7 @@ def update_guild_info(guild, operator, description="", auto_accept=False):
         更新后的 Guild 对象
 
     Raises:
-        ValueError: 验证失败
+        GuildMembershipError | GuildPermissionError: 验证失败
     """
     normalized_description = (description or "").strip()[:200]
 
@@ -229,9 +230,9 @@ def update_guild_info(guild, operator, description="", auto_accept=False):
             GuildMember.objects.select_for_update().filter(guild=guild_locked, user=operator, is_active=True).first()
         )
         if not membership:
-            raise ValueError("您不是该帮会成员")
+            raise GuildMembershipError("您不是该帮会成员")
         if not membership.is_leader:
-            raise ValueError("只有帮主可以修改帮会信息")
+            raise GuildPermissionError("只有帮主可以修改帮会信息")
 
         guild_locked.description = normalized_description
         guild_locked.auto_accept = bool(auto_accept)
@@ -284,12 +285,12 @@ def disband_guild(guild, operator):
         operator: 操作者User对象
 
     Raises:
-        ValueError: 验证失败
+        GuildPermissionError: 验证失败
     """
     # 验证权限
     membership = get_active_membership(guild, operator, "只有帮主可以解散帮会")
     if not membership.is_leader:
-        raise ValueError("只有帮主可以解散帮会")
+        raise GuildPermissionError("只有帮主可以解散帮会")
 
     # 预加载成员 user_id 和对应的 manor（避免事务中的 N+1 查询）
     member_user_ids = list(guild.members.filter(is_active=True).values_list("user_id", flat=True))

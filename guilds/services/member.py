@@ -7,6 +7,7 @@ from django.db import transaction
 from django.db.utils import IntegrityError
 from django.utils import timezone
 
+from core.exceptions import GuildMembershipError, GuildPermissionError
 from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS
 
 from ..models import Guild, GuildApplication, GuildMember
@@ -76,7 +77,7 @@ def _approve_application_state(application, reviewer, auto=False):
             GuildApplication.objects.select_for_update().select_related("guild", "applicant").get(pk=application.pk)
         )
         if application_locked.status != "pending":
-            raise ValueError("申请已被处理")
+            raise GuildMembershipError("申请已被处理")
 
         guild = application_locked.guild
 
@@ -87,19 +88,19 @@ def _approve_application_state(application, reviewer, auto=False):
         if not auto:
             membership = get_active_membership(guild_locked, reviewer, "您没有审批权限")
             if not membership.can_manage:
-                raise ValueError("您没有审批权限")
+                raise GuildPermissionError("您没有审批权限")
 
         # 在锁内检查是否满员
         current_count = GuildMember.objects.filter(guild=guild_locked, is_active=True).count()
         if current_count >= guild_locked.member_capacity:
-            raise ValueError("帮会已满员")
+            raise GuildMembershipError("帮会已满员")
 
         # 验证申请人是否已加入其他帮会
         existing_membership = (
             GuildMember.objects.select_for_update().filter(user=application_locked.applicant, is_active=True).first()
         )
         if existing_membership:
-            raise ValueError("申请人已加入其他帮会")
+            raise GuildMembershipError("申请人已加入其他帮会")
 
         # 更新申请状态
         application_locked.status = "approved"
@@ -125,7 +126,7 @@ def _approve_application_state(application, reviewer, auto=False):
                     position="member",
                 )
             except IntegrityError:
-                raise ValueError("申请人已加入其他帮会")
+                raise GuildMembershipError("申请人已加入其他帮会")
 
         return guild_locked, application_locked.applicant_id, guild_locked.name
 
@@ -155,11 +156,11 @@ def _reject_application_state(application, reviewer, note=""):
             GuildApplication.objects.select_for_update().select_related("guild", "applicant").get(pk=application.pk)
         )
         if application_locked.status != "pending":
-            raise ValueError("申请已被处理")
+            raise GuildMembershipError("申请已被处理")
 
         membership = get_active_membership(application_locked.guild, reviewer, "您没有审批权限")
         if not membership.can_manage:
-            raise ValueError("您没有审批权限")
+            raise GuildPermissionError("您没有审批权限")
 
         application_locked.status = "rejected"
         application_locked.reviewed_by = reviewer
@@ -183,16 +184,16 @@ def _send_reject_application_followups(applicant_user_id: int, guild_name: str, 
 
 def _leave_guild_state(member):
     if not member.is_active:
-        raise ValueError("您不在帮会中")
+        raise GuildMembershipError("您不在帮会中")
 
     if member.is_leader:
-        raise ValueError("帮主无法直接退出，请先转让帮主或解散帮会")
+        raise GuildPermissionError("帮主无法直接退出，请先转让帮主或解散帮会")
 
     guild = member.guild
     with transaction.atomic():
         member_locked = GuildMember.objects.select_for_update().get(pk=member.pk)
         if not member_locked.is_active:
-            raise ValueError("您不在帮会中")
+            raise GuildMembershipError("您不在帮会中")
 
         member_locked.is_active = False
         member_locked.left_at = timezone.now()
@@ -216,17 +217,17 @@ def _send_leave_guild_followups(guild, member_user_id: int, guild_name: str):
 def _kick_member_state(target_member, operator):
     operator_member = get_active_membership(target_member.guild, operator, "您没有辞退权限")
     if not operator_member.can_manage:
-        raise ValueError("您没有辞退权限")
+        raise GuildPermissionError("您没有辞退权限")
     if target_member.position in ["leader", "admin"]:
-        raise ValueError("无法辞退帮主或管理员")
+        raise GuildPermissionError("无法辞退帮主或管理员")
     if target_member.user == operator:
-        raise ValueError("无法辞退自己")
+        raise GuildPermissionError("无法辞退自己")
 
     guild = target_member.guild
     with transaction.atomic():
         target_locked = GuildMember.objects.select_for_update().get(pk=target_member.pk)
         if not target_locked.is_active:
-            raise ValueError("该成员已不在帮会中")
+            raise GuildMembershipError("该成员已不在帮会中")
 
         target_locked.is_active = False
         target_locked.left_at = timezone.now()
@@ -258,20 +259,20 @@ def _send_kick_member_followups(guild, target_user_id: int, guild_name: str):
 def _appoint_admin_state(target_member, operator):
     operator_member = get_active_membership(target_member.guild, operator, "只有帮主可以任命管理员")
     if not operator_member.is_leader:
-        raise ValueError("只有帮主可以任命管理员")
+        raise GuildPermissionError("只有帮主可以任命管理员")
     if target_member.position != "member":
-        raise ValueError("该成员已是管理人员")
+        raise GuildMembershipError("该成员已是管理人员")
 
     guild = target_member.guild
     with transaction.atomic():
         guild_locked = Guild.objects.select_for_update().get(pk=target_member.guild_id)
         admin_count = guild_locked.members.filter(is_active=True, position="admin").count()
         if admin_count >= 2:
-            raise ValueError("管理员数量已达上限（2人）")
+            raise GuildMembershipError("管理员数量已达上限（2人）")
 
         target_locked = GuildMember.objects.select_for_update().get(pk=target_member.pk)
         if target_locked.position != "member":
-            raise ValueError("该成员已是管理人员")
+            raise GuildMembershipError("该成员已是管理人员")
 
         target_locked.position = "admin"
         target_locked.save(update_fields=["position"])
@@ -303,15 +304,15 @@ def _send_appoint_admin_followups(guild, guild_name: str, operator_user_id: int,
 def _demote_admin_state(target_member, operator):
     operator_member = get_active_membership(target_member.guild, operator, "只有帮主可以罢免管理员")
     if not operator_member.is_leader:
-        raise ValueError("只有帮主可以罢免管理员")
+        raise GuildPermissionError("只有帮主可以罢免管理员")
     if target_member.position != "admin":
-        raise ValueError("该成员不是管理员")
+        raise GuildMembershipError("该成员不是管理员")
 
     guild = target_member.guild
     with transaction.atomic():
         target_locked = GuildMember.objects.select_for_update().get(pk=target_member.pk)
         if target_locked.position != "admin":
-            raise ValueError("该成员不是管理员")
+            raise GuildMembershipError("该成员不是管理员")
         target_locked.position = "member"
         target_locked.save(update_fields=["position"])
 
@@ -339,11 +340,11 @@ def _send_demote_admin_followups(guild, guild_name: str, target_user_id: int):
 
 def _transfer_leadership_state(current_leader_member, new_leader_member):
     if not current_leader_member.is_leader:
-        raise ValueError("您不是帮主")
+        raise GuildPermissionError("您不是帮主")
     if new_leader_member.guild_id != current_leader_member.guild_id:
-        raise ValueError("只能转让给本帮会成员")
+        raise GuildMembershipError("只能转让给本帮会成员")
     if not new_leader_member.is_active:
-        raise ValueError("该成员已离开帮会")
+        raise GuildMembershipError("该成员已离开帮会")
 
     guild = current_leader_member.guild
     with transaction.atomic():
@@ -351,9 +352,9 @@ def _transfer_leadership_state(current_leader_member, new_leader_member):
         new_locked = GuildMember.objects.select_for_update().get(pk=new_leader_member.pk)
 
         if not current_locked.is_leader:
-            raise ValueError("您不是帮主")
+            raise GuildPermissionError("您不是帮主")
         if not new_locked.is_active:
-            raise ValueError("该成员已离开帮会")
+            raise GuildMembershipError("该成员已离开帮会")
 
         current_locked.position = "member"
         current_locked.save(update_fields=["position"])
@@ -397,20 +398,20 @@ def apply_to_guild(user, guild, message=""):
         GuildApplication对象
 
     Raises:
-        ValueError: 验证失败
+        GuildMembershipError: 验证失败
     """
     # 验证用户是否已加入帮会
     if hasattr(user, "guild_membership") and user.guild_membership.is_active:
-        raise ValueError("您已加入帮会")
+        raise GuildMembershipError("您已加入帮会")
 
     # 验证帮会是否已满员
     if guild.is_full:
-        raise ValueError("帮会已满员")
+        raise GuildMembershipError("帮会已满员")
 
     # 验证是否已有待审批的申请
     existing = GuildApplication.objects.filter(guild=guild, applicant=user, status="pending").exists()
     if existing:
-        raise ValueError("您已有待审批的申请")
+        raise GuildMembershipError("您已有待审批的申请")
 
     # 创建申请
     application = GuildApplication.objects.create(
@@ -437,7 +438,7 @@ def approve_application(application, reviewer, auto=False):
         auto: 是否自动审批
 
     Raises:
-        ValueError: 验证失败
+        GuildMembershipError | GuildPermissionError: 验证失败
     """
     guild, applicant_user_id, guild_name = _approve_application_state(application, reviewer, auto=auto)
     _schedule_followup_after_commit(lambda: _send_approve_application_followups(guild, applicant_user_id, guild_name))
@@ -453,7 +454,7 @@ def reject_application(application, reviewer, note=""):
         note: 拒绝原因
 
     Raises:
-        ValueError: 验证失败
+        GuildMembershipError | GuildPermissionError: 验证失败
     """
     applicant_user_id, guild_name = _reject_application_state(application, reviewer, note=note)
     _schedule_followup_after_commit(lambda: _send_reject_application_followups(applicant_user_id, guild_name, note))
@@ -467,7 +468,7 @@ def leave_guild(member):
         member: GuildMember对象
 
     Raises:
-        ValueError: 验证失败
+        GuildMembershipError | GuildPermissionError: 验证失败
     """
     guild, member_user_id, guild_name = _leave_guild_state(member)
     _schedule_followup_after_commit(lambda: _send_leave_guild_followups(guild, member_user_id, guild_name))
@@ -482,7 +483,7 @@ def kick_member(target_member, operator):
         operator: 操作者User对象
 
     Raises:
-        ValueError: 验证失败
+        GuildMembershipError | GuildPermissionError: 验证失败
     """
     guild, target_user_id, guild_name = _kick_member_state(target_member, operator)
     _schedule_followup_after_commit(lambda: _send_kick_member_followups(guild, target_user_id, guild_name))
@@ -497,7 +498,7 @@ def appoint_admin(target_member, operator):
         operator: 操作者User对象
 
     Raises:
-        ValueError: 验证失败
+        GuildMembershipError | GuildPermissionError: 验证失败
     """
     guild, guild_name, operator_user_id, target_user_id = _appoint_admin_state(target_member, operator)
     _schedule_followup_after_commit(
@@ -514,7 +515,7 @@ def demote_admin(target_member, operator):
         operator: 操作者User对象
 
     Raises:
-        ValueError: 验证失败
+        GuildMembershipError | GuildPermissionError: 验证失败
     """
     guild, guild_name, target_user_id = _demote_admin_state(target_member, operator)
     _schedule_followup_after_commit(lambda: _send_demote_admin_followups(guild, guild_name, target_user_id))

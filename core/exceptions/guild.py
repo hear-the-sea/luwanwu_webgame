@@ -13,6 +13,24 @@ class GuildError(GameError):
     error_code = "GUILD_ERROR"
 
 
+class GuildMembershipError(GuildError):
+    """帮会成员状态相关错误"""
+
+    error_code = "GUILD_MEMBERSHIP_ERROR"
+
+
+class GuildPermissionError(GuildError):
+    """帮会权限相关错误"""
+
+    error_code = "GUILD_PERMISSION_ERROR"
+
+
+class GuildValidationError(GuildError):
+    """帮会输入与创建校验错误"""
+
+    error_code = "GUILD_VALIDATION_ERROR"
+
+
 class GuildContributionError(GuildError):
     """帮会捐赠相关错误"""
 

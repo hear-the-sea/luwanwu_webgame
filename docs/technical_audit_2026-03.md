@@ -33,6 +33,9 @@
 - 2026-03-23 本轮验证：`pytest tests/test_guest_item_view_validation.py tests/test_guest_view_error_boundaries.py -k "use_experience_item_view or allocate_points_view or train" -q` 通过，结果为 `15 passed, 60 deselected`。
 - 2026-03-23 本轮验证：`pytest tests/test_inventory_views.py -k "use_rebirth_card or use_xisuidan or use_xidianka or use_guest_rarity_upgrade or use_soul_container" -q` 通过，结果为 `10 passed, 20 deselected`。
 - 2026-03-23 本轮验证：`pytest tests/test_treasury_move_service_contracts.py -q` 通过，结果为 `2 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_guilds.py tests/test_guild_view_helpers.py -q` 通过，结果为 `39 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_guilds.py -k "create_guild or upgrade_guild or update_guild_info or disband_guild" -q` 通过，结果为 `10 passed, 16 deselected`。
+- 2026-03-23 本轮验证：`pytest tests/test_guild_hero_pool.py tests/test_guild_hero_pool_views.py -q` 通过，结果为 `13 passed`。
 - 2026-03-23 本轮验证：`pytest tests/test_guest_recruitment_flow_helpers.py -q` 通过，结果为 `25 passed`。
 - 2026-03-23 本轮验证：`pytest tests/test_guest_recruitment_service.py -k "bulk_finalize_candidates" -q` 通过，结果为 `4 passed, 30 deselected`。
 - 2026-03-23 本轮验证：`pytest tests/test_guest_recruitment_service.py -k "bulk_finalize_candidates or finalize_guest_recruitment_rejects_unpersisted_recruitment or refresh_guest_recruitments" -q` 通过，结果为 `7 passed, 29 deselected`。

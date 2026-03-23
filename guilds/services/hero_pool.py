@@ -8,6 +8,7 @@ from django.db import transaction
 from django.db.models import F, Q
 from django.utils import timezone
 
+from core.exceptions import GuildMembershipError, GuildPermissionError, GuildValidationError
 from guests.models import Guest
 
 from ..constants import GUILD_BATTLE_LINEUP_LIMIT, GUILD_HERO_POOL_REPLACE_COOLDOWN_SECONDS, GUILD_HERO_POOL_SLOT_LIMIT
@@ -43,9 +44,9 @@ def _normalize_slot_index(raw_slot_index: Any) -> int:
     try:
         slot_index = int(raw_slot_index)
     except (TypeError, ValueError):
-        raise ValueError("槽位参数错误")
+        raise GuildValidationError("槽位参数错误")
     if slot_index < 1 or slot_index > GUILD_HERO_POOL_SLOT_LIMIT:
-        raise ValueError(f"槽位必须在 1~{GUILD_HERO_POOL_SLOT_LIMIT} 之间")
+        raise GuildValidationError(f"槽位必须在 1~{GUILD_HERO_POOL_SLOT_LIMIT} 之间")
     return slot_index
 
 
@@ -53,9 +54,9 @@ def _normalize_guest_id(raw_guest_id: Any) -> int:
     try:
         guest_id = int(raw_guest_id)
     except (TypeError, ValueError):
-        raise ValueError("门客参数错误")
+        raise GuildValidationError("门客参数错误")
     if guest_id <= 0:
-        raise ValueError("门客参数错误")
+        raise GuildValidationError("门客参数错误")
     return guest_id
 
 
@@ -70,7 +71,7 @@ def _lock_active_member(member: GuildMember) -> GuildMember:
         .first()
     )
     if not locked_member:
-        raise ValueError("您不在帮会中")
+        raise GuildMembershipError("您不在帮会中")
     return locked_member
 
 
@@ -113,7 +114,7 @@ def submit_hero_pool_entry(member: GuildMember, *, guest_id: int, slot_index: in
         .first()
     )
     if not locked_guest:
-        raise ValueError("该门客不存在或不属于您")
+        raise GuildMembershipError("该门客不存在或不属于您")
 
     existing_entry = (
         GuildHeroPoolEntry.objects.select_for_update()
@@ -136,17 +137,17 @@ def submit_hero_pool_entry(member: GuildMember, *, guest_id: int, slot_index: in
         duplicate_entry.delete()
         duplicate_entry = None
     if duplicate_entry:
-        raise ValueError("该门客已在另一槽位中")
+        raise GuildValidationError("该门客已在另一槽位中")
 
     if existing_entry and existing_entry.source_guest_id == locked_guest.id:
-        raise ValueError("该槽位已是该门客")
+        raise GuildValidationError("该槽位已是该门客")
 
     if existing_entry:
         cooldown_until = _replace_cooldown_until(existing_entry)
         if cooldown_until > current_time:
             remaining_seconds = int((cooldown_until - current_time).total_seconds())
             remaining_minutes = max(1, (remaining_seconds + 59) // 60)
-            raise ValueError(f"该槽位替换冷却中，请 {remaining_minutes} 分钟后再试")
+            raise GuildValidationError(f"该槽位替换冷却中，请 {remaining_minutes} 分钟后再试")
 
     lineup_removed_count = 0
     if existing_entry:
@@ -184,12 +185,12 @@ def remove_hero_pool_entry(member: GuildMember, *, slot_index: int) -> HeroPoolR
         .first()
     )
     if not target_entry:
-        raise ValueError("该槽位当前没有门客")
+        raise GuildValidationError("该槽位当前没有门客")
     cooldown_until = _replace_cooldown_until(target_entry)
     if cooldown_until > current_time:
         remaining_seconds = int((cooldown_until - current_time).total_seconds())
         remaining_minutes = max(1, (remaining_seconds + 59) // 60)
-        raise ValueError(f"该槽位替换冷却中，请 {remaining_minutes} 分钟后再试")
+        raise GuildValidationError(f"该槽位替换冷却中，请 {remaining_minutes} 分钟后再试")
 
     lineup_removed_count = target_entry.lineup_entries.count()
     target_entry.delete()
@@ -206,7 +207,7 @@ def _next_lineup_slot(existing_slots: set[int]) -> int | None:
 def _assert_entry_valid_or_cleanup(*, entry: GuildHeroPoolEntry, guild_id: int) -> None:
     if _is_entry_invalid(entry, guild_id=guild_id):
         entry.delete()
-        raise ValueError("该门客池条目已失效")
+        raise GuildValidationError("该门客池条目已失效")
 
 
 @transaction.atomic
@@ -219,9 +220,9 @@ def add_lineup_entry(*, guild: Guild, operator, pool_entry_id: int, now=None) ->
         .first()
     )
     if not operator_member:
-        raise ValueError("您不在该帮会中")
+        raise GuildMembershipError("您不在该帮会中")
     if not operator_member.can_manage:
-        raise ValueError("只有管理员/帮主可以设置出战名单")
+        raise GuildPermissionError("只有管理员/帮主可以设置出战名单")
 
     locked_guild = Guild.objects.select_for_update().get(pk=guild.pk)
     pool_entry = (
@@ -231,20 +232,20 @@ def add_lineup_entry(*, guild: Guild, operator, pool_entry_id: int, now=None) ->
         .first()
     )
     if not pool_entry:
-        raise ValueError("该门客池条目不存在")
+        raise GuildValidationError("该门客池条目不存在")
     _assert_entry_valid_or_cleanup(entry=pool_entry, guild_id=locked_guild.id)
 
     lineup_rows = list(
         GuildBattleLineupEntry.objects.select_for_update().filter(guild=locked_guild).order_by("slot_index")
     )
     if any(row.pool_entry_id == pool_entry.id for row in lineup_rows):
-        raise ValueError("该门客已在出战名单中")
+        raise GuildValidationError("该门客已在出战名单中")
     if len(lineup_rows) >= GUILD_BATTLE_LINEUP_LIMIT:
-        raise ValueError(f"出战名单已满（最多 {GUILD_BATTLE_LINEUP_LIMIT} 名）")
+        raise GuildValidationError(f"出战名单已满（最多 {GUILD_BATTLE_LINEUP_LIMIT} 名）")
 
     slot_index = _next_lineup_slot({row.slot_index for row in lineup_rows})
     if slot_index is None:
-        raise ValueError("未找到可用出战槽位")
+        raise GuildValidationError("未找到可用出战槽位")
 
     lineup_entry = GuildBattleLineupEntry.objects.create(
         guild=locked_guild,
@@ -264,9 +265,9 @@ def remove_lineup_entry(*, guild: Guild, operator, lineup_entry_id: int) -> None
         .first()
     )
     if not operator_member:
-        raise ValueError("您不在该帮会中")
+        raise GuildMembershipError("您不在该帮会中")
     if not operator_member.can_manage:
-        raise ValueError("只有管理员/帮主可以调整出战名单")
+        raise GuildPermissionError("只有管理员/帮主可以调整出战名单")
 
     lineup_entry = (
         GuildBattleLineupEntry.objects.select_for_update()
@@ -277,7 +278,7 @@ def remove_lineup_entry(*, guild: Guild, operator, lineup_entry_id: int) -> None
         .first()
     )
     if not lineup_entry:
-        raise ValueError("出战名单记录不存在")
+        raise GuildValidationError("出战名单记录不存在")
     lineup_entry.delete()
 
 

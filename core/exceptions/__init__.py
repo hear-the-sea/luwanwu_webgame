@@ -93,7 +93,15 @@ from .guest import (
     InvalidHealAmountError,
     NoGuestsError,
 )
-from .guild import GuildContributionError, GuildError, GuildTechnologyError, GuildWarehouseError
+from .guild import (
+    GuildContributionError,
+    GuildError,
+    GuildMembershipError,
+    GuildPermissionError,
+    GuildTechnologyError,
+    GuildValidationError,
+    GuildWarehouseError,
+)
 from .item import (
     DuplicateEquipmentError,
     EquipmentAlreadyEquippedError,
@@ -143,6 +151,9 @@ __all__ = [
     "GameError",
     # Guilds
     "GuildError",
+    "GuildMembershipError",
+    "GuildPermissionError",
+    "GuildValidationError",
     "GuildContributionError",
     "GuildTechnologyError",
     "GuildWarehouseError",

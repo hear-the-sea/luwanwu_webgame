@@ -7,6 +7,7 @@ from django.contrib.messages import get_messages
 from django.test import Client
 from django.urls import reverse
 
+from core.exceptions import GuildValidationError
 from gameplay.services.manor.core import ensure_manor
 from guilds.models import Guild, GuildMember
 
@@ -57,7 +58,7 @@ def test_lineup_add_value_error_shows_message(guild_member_client, monkeypatch):
     client, _user, _guild = guild_member_client
 
     def _raise(*_args, **_kwargs):
-        raise ValueError("出战名单已满")
+        raise GuildValidationError("出战名单已满")
 
     monkeypatch.setattr("guilds.views.hero_pool.hero_pool_service.add_lineup_entry", _raise)
 
