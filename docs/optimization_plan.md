@@ -272,6 +272,8 @@
 - `2026-03-22` 已启动一轮阶段 5“超大测试文件收缩”试点：`tests/test_trade_auction_rounds.py` 已收口为薄入口文件，并按“轮次生命周期 / 拍卖位结算 / 交付与通知”拆到 `tests/trade_auction_rounds/` 子模块；兼容入口路径保持不变，`pytest tests/test_trade_auction_rounds.py -q` 仍为 `30 passed`，用于约束测试资产拆分后原有回归覆盖不回退。
 - `2026-03-22` 已继续推进阶段 5“超大测试文件收缩”第二个试点：`tests/test_inventory_guest_items.py` 已收口为薄入口文件，并按“重置类道具 / 升阶道具 / 灵魂融合”拆到 `tests/inventory_guest_items/` 子模块；兼容入口路径保持不变，`pytest tests/test_inventory_guest_items.py -q` 为 `16 passed`，用于约束测试资产拆分后原有回归覆盖不回退。
 - `2026-03-23` 已继续补一轮阶段 3 聚焦验证：`pytest tests/test_guest_summon_card.py -q` 为 `29 passed`，用于约束门客召唤卡、资源包、宝箱配置与免战牌 `duration` 在 `effect_payload / choices / required_items / exclusive_template_keys / resources / gear_keys / skill_book_keys / *_chance / duration / silver_min / silver_max` 坏掉时改走显式 `ItemNotConfiguredError`，不再静默退化成空权重、免费召唤、“永不掉落”或运行时类型错误。
+- `2026-03-23` 已继续推进阶段 5“超大测试文件收缩”第三个试点：`tests/test_guest_summon_card.py` 已收口为薄入口文件，并按“召唤流程 / 配置校验 / 宝箱与资源包 / 通用道具”拆到 `tests/guest_summon_card/` 子模块；兼容入口路径保持不变，`pytest tests/test_guest_summon_card.py -q` 仍为 `29 passed`，且新子模块体量分别为 `446 / 326 / 291 / 58` 行，用于约束测试资产拆分后原有回归覆盖不回退，同时避免只是把热点复杂度从单文件平移到新的子模块热点。
+- `2026-03-23` 已继续推进阶段 5“超大测试文件收缩”第四个试点：`tests/test_guest_item_view_validation.py` 已收口为薄入口文件，并按“道具使用 / 装备页 / 招募大厅 / 技能页”拆到 `tests/guest_item_view_validation/` 子模块；兼容入口路径保持不变，`pytest tests/test_guest_item_view_validation.py -q` 仍为 `34 passed`，且新子模块体量分别为 `385 / 298 / 207 / 87` 行，用于约束测试资产拆分后原有回归覆盖不回退，同时保持每个子模块低于默认 `500` 行预算。
 - `2026-03-23` 已继续补一轮阶段 3 聚焦验证：`pytest tests/test_inventory_views.py -k "use_item_ajax" -q` 为 `4 passed, 25 deselected`，用于约束仓库通用 `use_item` 页面入口在服务契约继续收紧后，仍保持已知业务失败走页面错误、数据库失败走 500、编程错误继续冒泡的边界不回退。
 - `2026-03-23` 已继续补一轮阶段 3 聚焦验证：`pytest tests/test_guest_equipment_service_contracts.py tests/test_guest_item_view_validation.py -k "gear_options or equip_view or equipment_service_contracts" -q` 为 `12 passed, 24 deselected`，用于约束 `guest equipment` 服务层与装备页在坏掉的 `effect_payload / extra_stats / set_bonus / choice / inventory quantity` 输入下改走显式 `AssertionError`，不再静默强转、跳过或夹值。
 - `2026-03-23` 已继续补一轮阶段 3 聚焦验证：`pytest tests/inventory_guest_items/soul_container.py tests/test_guest_roster_service.py -q` 为 `8 passed`，用于约束装备库存同步、穿戴/卸装与门客辞退返库链在 `guest equipment` 契约继续收紧后不回退。
@@ -438,7 +440,7 @@
 - `core` 的庄园改名入口也已开始退出 legacy `ValueError`：`gameplay/services/manor/core.rename_manor()` 已把名称校验、重名冲突、命名卡配置/扣减失败改走显式 `GameError`，`gameplay/views/core.py` 不再把裸 `ValueError` 当已知业务错误处理。
 - `forge` 的锻造 / 图纸 / 分解主入口也已开始收口异常语义：`gameplay/services/buildings/forge_runtime.py`、`gameplay/services/buildings/forge_blueprints.py`、`gameplay/services/buildings/forge_decompose.py` 及相关 helper 已把业务 `ValueError` 改走显式 `ForgeOperationError`，`gameplay/views/production_forge_handlers.py` 不再把裸 `ValueError` 当已知业务错误处理。
 - `阶段 5` 的测试门禁治理已经开始：hermetic / integration gate 提示、`pytest` 路径和部分边界契约测试已经补齐，但真实外部服务覆盖面仍不足。
-- `阶段 5` 的超大测试文件拆分已开始：`tests/test_trade_views.py` 已拆分为 `tests/trade/test_trade_*_views.py` 并通过 `pytest tests/trade` 验证，避免单文件继续超出默认复杂度预算。
+- `阶段 5` 的超大测试文件拆分已开始：`tests/test_trade_views.py` 已拆分为 `tests/trade/test_trade_*_views.py` 并通过 `pytest tests/trade` 验证；`tests/test_trade_auction_rounds.py`、`tests/test_inventory_guest_items.py`、`tests/test_guest_summon_card.py` 与 `tests/test_guest_item_view_validation.py` 也都已收口为兼容入口 + 业务域子模块，避免单文件继续超出默认复杂度预算。
 
 ### 2.4 当前未完成的高优先级问题
 
