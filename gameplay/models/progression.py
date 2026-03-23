@@ -138,7 +138,7 @@ class WorkAssignment(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.guest.name} - {self.work_template.name}"
+        return f"{self.guest.display_name} - {self.work_template.name}"
 
     @property
     def time_remaining(self) -> int:

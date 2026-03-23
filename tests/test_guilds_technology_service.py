@@ -243,6 +243,26 @@ def test_upgrade_technology_permission_denied(monkeypatch, django_user_model):
 
 
 @pytest.mark.django_db
+def test_upgrade_technology_missing_membership_is_wrapped_as_guild_technology_error(monkeypatch, django_user_model):
+    from core.exceptions import GuildMembershipError, GuildTechnologyError
+    from guilds.models import Guild, GuildTechnology
+    from guilds.services.technology import upgrade_technology
+
+    monkeypatch.setattr(
+        "guilds.services.technology.get_active_membership",
+        lambda *_a, **_k: (_ for _ in ()).throw(GuildMembershipError("只有帮主和管理员可以升级科技")),
+    )
+
+    operator = django_user_model.objects.create_user(username="tech_operator_missing_membership", password="pass")
+    founder = django_user_model.objects.create_user(username="tech_founder_missing_membership", password="pass")
+    guild = Guild.objects.create(name="TechGuildMissingMembership", founder=founder)
+    GuildTechnology.objects.create(guild=guild, tech_key="equipment_forge", level=0, max_level=5)
+
+    with pytest.raises(GuildTechnologyError, match="只有帮主和管理员可以升级科技"):
+        upgrade_technology(guild, "equipment_forge", operator)
+
+
+@pytest.mark.django_db
 def test_upgrade_technology_insufficient_resources(monkeypatch, django_user_model):
     from core.exceptions import GuildTechnologyError
     from guilds.models import Guild, GuildTechnology

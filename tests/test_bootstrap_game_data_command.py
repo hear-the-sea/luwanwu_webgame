@@ -63,7 +63,7 @@ def test_bootstrap_game_data_continue_on_error_keeps_running(monkeypatch):
     def _fake_call_command(name, *args, **kwargs):
         calls.append(name)
         if name == "load_item_templates":
-            raise RuntimeError("boom")
+            raise CommandError("boom")
 
     monkeypatch.setattr("gameplay.management.commands.bootstrap_game_data.call_command", _fake_call_command)
 
@@ -83,9 +83,29 @@ def test_bootstrap_game_data_continue_on_error_keeps_running(monkeypatch):
 def test_bootstrap_game_data_fail_fast_by_default(monkeypatch):
     def _fake_call_command(name, *args, **kwargs):
         if name == "load_item_templates":
-            raise RuntimeError("boom")
+            raise CommandError("boom")
 
     monkeypatch.setattr("gameplay.management.commands.bootstrap_game_data.call_command", _fake_call_command)
 
     with pytest.raises(CommandError):
         call_command("bootstrap_game_data", verbosity=0, skip_config_reload=True)
+
+
+def test_bootstrap_game_data_programming_error_bubbles_up_even_with_continue_on_error(monkeypatch):
+    calls: list[str] = []
+
+    def _fake_call_command(name, *args, **kwargs):
+        calls.append(name)
+        if name == "load_item_templates":
+            raise AssertionError("broken bootstrap step")
+
+    monkeypatch.setattr("gameplay.management.commands.bootstrap_game_data.call_command", _fake_call_command)
+
+    with pytest.raises(AssertionError, match="broken bootstrap step"):
+        call_command("bootstrap_game_data", verbosity=0, skip_config_reload=True, continue_on_error=True)
+
+    assert calls == [
+        "load_building_templates",
+        "load_technology_templates",
+        "load_item_templates",
+    ]

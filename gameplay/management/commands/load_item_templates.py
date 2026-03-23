@@ -70,7 +70,7 @@ def _load_item_image(command: BaseCommand, obj: ItemTemplate, entry: dict, image
         command.stdout.write(
             command.style.SUCCESS(f"  [OK] Compressed and loaded image: {image_filename} -> {new_filename}")
         )
-    except Exception as exc:
+    except OSError as exc:
         command.stdout.write(command.style.WARNING(f"  [FAIL] Failed to load image {image_filename}: {exc}"))
 
 

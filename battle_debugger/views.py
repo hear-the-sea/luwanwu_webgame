@@ -548,11 +548,11 @@ def _parse_party_config(post_data, side: str) -> PartyConfig:
     """解析阵营配置"""
     # 解析门客
     guests = []
-    guest_count = safe_int(post_data.get(f"{side}_guest_count", 0), default=0, min_val=0)
+    guest_count = safe_int(post_data.get(f"{side}_guest_count", 0), default=0, min_val=0) or 0
     for i in range(guest_count):
         template = post_data.get(f"{side}_guest_{i}_template")
         if template:
-            level = safe_int(post_data.get(f"{side}_guest_{i}_level", 1), default=1, min_val=1)
+            level = safe_int(post_data.get(f"{side}_guest_{i}_level", 1), default=1, min_val=1) or 1
 
             # 属性（可选）
             force = post_data.get(f"{side}_guest_{i}_force")
@@ -583,12 +583,12 @@ def _parse_party_config(post_data, side: str) -> PartyConfig:
     for troop_type in troop_types:
         count = post_data.get(f"{side}_troop_{troop_type}")
         if count:
-            parsed_count = safe_int(count, default=0, min_val=0)
+            parsed_count = safe_int(count, default=0, min_val=0) or 0
             if parsed_count > 0:
                 troops[troop_type] = parsed_count
 
     # 科技等级
-    tech_level = safe_int(post_data.get(f"{side}_tech_level", 0), default=0, min_val=0)
+    tech_level = safe_int(post_data.get(f"{side}_tech_level", 0), default=0, min_val=0) or 0
 
     return PartyConfig(
         guests=guests,

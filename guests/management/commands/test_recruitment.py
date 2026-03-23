@@ -21,14 +21,14 @@ from django.core.management.base import BaseCommand
 from guests.models import GuestRarity
 from guests.utils.recruitment_utils import RARITY_DISTRIBUTION, RARITY_ORDER, TOTAL_WEIGHT, choose_rarity
 
-RARITY_NAMES = {
-    GuestRarity.BLACK: "黑",
-    GuestRarity.GRAY: "灰",
-    GuestRarity.GREEN: "绿",
-    GuestRarity.BLUE: "蓝",
-    GuestRarity.RED: "红",
-    GuestRarity.PURPLE: "紫",
-    GuestRarity.ORANGE: "橙",
+RARITY_NAMES: Dict[str, str] = {
+    GuestRarity.BLACK.value: "黑",
+    GuestRarity.GRAY.value: "灰",
+    GuestRarity.GREEN.value: "绿",
+    GuestRarity.BLUE.value: "蓝",
+    GuestRarity.RED.value: "红",
+    GuestRarity.PURPLE.value: "紫",
+    GuestRarity.ORANGE.value: "橙",
 }
 
 EXPECTED_RATES: Dict[str, float] = {}

@@ -12,13 +12,16 @@ def _create_launch_guest(manor):
     if template is None:
         pytest.skip("No guest template available")
 
-    return Guest.objects.create(
+    guest = Guest.objects.create(
         manor=manor,
         template=template,
         level=20,
         status=GuestStatus.IDLE,
         custom_name="mission_resilience_guest",
     )
+    guest.current_hp = guest.max_hp
+    guest.save(update_fields=["current_hp"])
+    return guest
 
 
 def _select_offense_mission():

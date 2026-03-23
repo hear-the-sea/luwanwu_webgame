@@ -66,6 +66,33 @@ def test_calculate_battle_salvage_counts_troop_losses_on_both_sides():
     assert exp == 2
 
 
+def test_calculate_battle_salvage_ignores_guest_casualty_entries_in_troop_salvage():
+    report = SimpleNamespace(
+        seed=42,
+        losses={
+            "attacker": {"casualties": [{"key": "base_black_military", "lost": 1}, {"key": "dao_jie", "lost": 200}]},
+            "defender": {"casualties": []},
+        },
+        attacker_team=[
+            {
+                "guest_id": 1,
+                "template_key": "base_black_military",
+                "level": 50,
+                "rarity": "blue",
+                "max_hp": 100,
+                "initial_hp": 100,
+                "remaining_hp": 0,
+            }
+        ],
+        defender_team=[],
+    )
+
+    exp, equip = calculate_battle_salvage(report)
+
+    assert exp >= 1
+    assert "experience_fruit" not in equip
+
+
 def test_calculate_battle_salvage_can_limit_equipment_recovery_to_player_side():
     report = SimpleNamespace(
         seed=42,

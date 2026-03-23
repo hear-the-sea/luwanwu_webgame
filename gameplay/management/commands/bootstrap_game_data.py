@@ -5,7 +5,7 @@ from collections.abc import Callable
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 
-StepFunc = Callable[[], None]
+StepFunc = Callable[[], object]
 
 
 class Command(BaseCommand):
@@ -32,7 +32,7 @@ class Command(BaseCommand):
         self.stdout.write(f"[START] {step_name}")
         try:
             step_func()
-        except Exception as exc:
+        except CommandError as exc:
             message = f"{step_name} 失败: {exc}"
             if continue_on_error:
                 failures.append(message)

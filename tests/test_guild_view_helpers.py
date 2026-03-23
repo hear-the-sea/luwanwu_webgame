@@ -77,20 +77,19 @@ def test_execute_guild_action_adds_success_message():
 
 
 @pytest.mark.django_db
-def test_execute_guild_action_formats_value_error_message():
+def test_execute_guild_action_legacy_value_error_bubbles_up():
     request = RequestFactory().post("/guilds/test/")
     _attach_session_and_messages(request)
 
-    outcome = execute_guild_action(
-        request,
-        action=lambda: (_ for _ in ()).throw(ValueError("原始错误")),
-        success_message="不会出现",
-        error_message_formatter=lambda exc: f"格式化：{exc}",
-    )
+    with pytest.raises(ValueError, match="原始错误"):
+        execute_guild_action(
+            request,
+            action=lambda: (_ for _ in ()).throw(ValueError("原始错误")),
+            success_message="不会出现",
+            error_message_formatter=lambda exc: f"格式化：{exc}",
+        )
 
-    assert outcome.succeeded is False
-    assert outcome.result is None
-    assert [str(message) for message in get_messages(request)] == ["格式化：原始错误"]
+    assert [str(message) for message in get_messages(request)] == []
 
 
 @pytest.mark.django_db

@@ -2,9 +2,12 @@
 帮会核心视图：大厅、列表、创建、详情
 """
 
+from typing import Any
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from core.utils import safe_int, safe_ordering
@@ -19,7 +22,7 @@ from .helpers import execute_guild_action, load_guild_leader, load_recent_announ
 
 
 @login_required
-def guild_hall(request):
+def guild_hall(request: Any) -> HttpResponse:
     """帮会大厅 - 入口页面"""
     user = request.user
 
@@ -44,7 +47,7 @@ def guild_hall(request):
 
 
 @login_required
-def guild_list(request):
+def guild_list(request: Any) -> HttpResponse:
     """帮会列表"""
     ordering = safe_ordering(request.GET.get("ordering", "-level"), "-level")
     search = request.GET.get("search", "")
@@ -64,7 +67,7 @@ def guild_list(request):
 
 
 @login_required
-def guild_search(request):
+def guild_search(request: Any) -> HttpResponse:
     """搜索帮会"""
     query = request.GET.get("q", "")
 
@@ -88,7 +91,7 @@ def guild_search(request):
 
 @login_required
 @rate_limit_redirect("guild_create", limit=3, window_seconds=60)
-def create_guild(request):
+def create_guild(request: Any) -> HttpResponse:
     """创建帮会"""
     if request.method == "POST":
         name = request.POST.get("name", "").strip()
@@ -135,7 +138,7 @@ def create_guild(request):
 
 
 @login_required
-def guild_detail(request, guild_id):
+def guild_detail(request: Any, guild_id: int) -> HttpResponse:
     """帮会详情页面"""
     guild = get_object_or_404(Guild.objects.with_member_count(), id=guild_id, is_active=True)
     user = request.user
@@ -166,7 +169,7 @@ def guild_detail(request, guild_id):
 @login_required
 @require_guild_leader
 @rate_limit_redirect("guild_info", limit=10, window_seconds=60)
-def guild_info(request, guild_id):
+def guild_info(request: Any, guild_id: int) -> HttpResponse:
     """帮会信息设置"""
     guild = get_object_or_404(Guild, id=guild_id, is_active=True)
     member = request.guild_member

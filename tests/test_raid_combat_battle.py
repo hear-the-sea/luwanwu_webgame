@@ -435,17 +435,14 @@ def test_process_raid_battle_message_programming_error_bubbles_after_dispatch(mo
         lambda *_args, **_kwargs: dispatched.__setitem__("count", dispatched["count"] + 1),
     )
 
-    with caplog.at_level("ERROR", logger=combat_battle.logger.name):
-        with pytest.raises(AssertionError, match="broken raid message contract"):
-            combat_battle.process_raid_battle(run, now=now)
+    with pytest.raises(AssertionError, match="broken raid message contract"):
+        combat_battle.process_raid_battle(run, now=now)
 
     assert run.status == RaidRun.Status.RETURNING
     assert saved["count"] == 1
     assert dismissed["count"] == 1
     assert dispatched["count"] == 1
-    error_records = [record for record in caplog.records if record.levelname == "ERROR"]
-    assert error_records
-    assert all(not getattr(record, "degraded", False) for record in error_records)
+    assert [record for record in caplog.records if getattr(record, "degraded", False)] == []
 
 
 def test_process_raid_battle_cleanup_programming_error_bubbles_after_dispatch(monkeypatch, caplog):
@@ -489,16 +486,13 @@ def test_process_raid_battle_cleanup_programming_error_bubbles_after_dispatch(mo
         lambda *_args, **_kwargs: dispatched.__setitem__("count", dispatched["count"] + 1),
     )
 
-    with caplog.at_level("ERROR", logger=combat_battle.logger.name):
-        with pytest.raises(AssertionError, match="broken raid cleanup contract"):
-            combat_battle.process_raid_battle(run, now=now)
+    with pytest.raises(AssertionError, match="broken raid cleanup contract"):
+        combat_battle.process_raid_battle(run, now=now)
 
     assert run.status == RaidRun.Status.RETURNING
     assert saved["count"] == 1
     assert dispatched["count"] == 1
-    error_records = [record for record in caplog.records if record.levelname == "ERROR"]
-    assert error_records
-    assert all(not getattr(record, "degraded", False) for record in error_records)
+    assert [record for record in caplog.records if getattr(record, "degraded", False)] == []
 
 
 def test_process_raid_battle_rechecks_defender_protection_before_fight(monkeypatch):

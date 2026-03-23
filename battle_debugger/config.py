@@ -201,7 +201,7 @@ class ConfigLoader:
     def _apply_override(self, config: BattleConfig, path: str, value: Any):
         """应用覆盖参数（支持点号路径）"""
         parts = path.split(".")
-        obj = config
+        obj: Any = config
 
         # 遍历路径
         for i, part in enumerate(parts[:-1]):

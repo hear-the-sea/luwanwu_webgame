@@ -55,7 +55,7 @@ def _get_client_ip(request) -> str:
     return get_client_ip(request, trust_proxy=True)
 
 
-def _get_login_attempt_key(request, username: str = None) -> tuple[str, str]:
+def _get_login_attempt_key(request, username: str | None = None) -> tuple[str, str | None]:
     """
     获取登录尝试的缓存 key（基于 IP + 用户名双重限制）。
 
@@ -68,7 +68,7 @@ def _get_login_attempt_key(request, username: str = None) -> tuple[str, str]:
     return ip_key, username_key
 
 
-def _get_login_lock_key(request, username: str = None) -> tuple[str, str]:
+def _get_login_lock_key(request, username: str | None = None) -> tuple[str, str | None]:
     """
     获取登录锁缓存 key（基于 IP + 用户名双重限制）。
 
@@ -129,9 +129,14 @@ def _local_login_cache_incr(key: str, timeout: int) -> int:
             return 1
 
         current_value, _current_expire_at = record
-        try:
-            next_value = int(current_value) + 1
-        except (TypeError, ValueError):
+        if isinstance(current_value, bool):
+            next_value = 1
+        elif isinstance(current_value, (int, float, str, bytes, bytearray)):
+            try:
+                next_value = int(current_value) + 1
+            except ValueError:
+                next_value = 1
+        else:
             next_value = 1
         _LOCAL_LOGIN_CACHE[key] = (next_value, expire_at)
         return next_value

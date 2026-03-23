@@ -195,6 +195,13 @@ def test_process_single_guild_production_programming_error_bubbles_up(monkeypatc
     assert tech.last_production_at is None
 
 
+def test_process_single_guild_production_missing_guild_id_bubbles_up():
+    from guilds.tasks import process_single_guild_production
+
+    with pytest.raises(AssertionError, match="guild_id is required when failed_ids is empty"):
+        process_single_guild_production.run()
+
+
 def test_persist_failed_guild_ids_cache_infrastructure_error_is_best_effort(monkeypatch):
     from guilds.tasks import _persist_failed_guild_ids
 

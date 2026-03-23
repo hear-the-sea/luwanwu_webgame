@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from core.utils.infrastructure import is_cache_runtime_error
-
 
 def best_effort_cache_get(
     cache_backend: Any,
@@ -18,19 +16,13 @@ def best_effort_cache_get(
 ) -> Any:
     try:
         return cache_backend.get(key, default)
-    except Exception as exc:
-        if is_cache_runtime_error(exc):
-            raise
-        log_extra = {"degraded": True, "component": component}
-        if isinstance(exc, infrastructure_exceptions):
-            logger.warning("Failed to read cache key: %s", key, exc_info=True, extra=log_extra)
-        else:
-            logger.error(
-                "Unexpected exception reading cache key: %s",
-                key,
-                exc_info=True,
-                extra={**log_extra, "unexpected": True},
-            )
+    except infrastructure_exceptions:
+        logger.warning(
+            "Failed to read cache key: %s",
+            key,
+            exc_info=True,
+            extra={"degraded": True, "component": component},
+        )
         return default
 
 
@@ -46,19 +38,13 @@ def best_effort_cache_set(
 ) -> None:
     try:
         cache_backend.set(key, value, timeout=timeout)
-    except Exception as exc:
-        if is_cache_runtime_error(exc):
-            raise
-        log_extra = {"degraded": True, "component": component}
-        if isinstance(exc, infrastructure_exceptions):
-            logger.warning("Failed to write cache key: %s", key, exc_info=True, extra=log_extra)
-        else:
-            logger.error(
-                "Unexpected exception writing cache key: %s",
-                key,
-                exc_info=True,
-                extra={**log_extra, "unexpected": True},
-            )
+    except infrastructure_exceptions:
+        logger.warning(
+            "Failed to write cache key: %s",
+            key,
+            exc_info=True,
+            extra={"degraded": True, "component": component},
+        )
 
 
 def best_effort_cache_add(
@@ -73,19 +59,13 @@ def best_effort_cache_add(
 ) -> bool:
     try:
         return bool(cache_backend.add(key, value, timeout=timeout))
-    except Exception as exc:
-        if is_cache_runtime_error(exc):
-            raise
-        log_extra = {"degraded": True, "component": component}
-        if isinstance(exc, infrastructure_exceptions):
-            logger.warning("Failed to add cache key: %s", key, exc_info=True, extra=log_extra)
-        else:
-            logger.error(
-                "Unexpected exception adding cache key: %s",
-                key,
-                exc_info=True,
-                extra={**log_extra, "unexpected": True},
-            )
+    except infrastructure_exceptions:
+        logger.warning(
+            "Failed to add cache key: %s",
+            key,
+            exc_info=True,
+            extra={"degraded": True, "component": component},
+        )
         return False
 
 
@@ -99,19 +79,13 @@ def best_effort_cache_delete(
 ) -> None:
     try:
         cache_backend.delete(key)
-    except Exception as exc:
-        if is_cache_runtime_error(exc):
-            raise
-        log_extra = {"degraded": True, "component": component}
-        if isinstance(exc, infrastructure_exceptions):
-            logger.warning("Failed to delete cache key: %s", key, exc_info=True, extra=log_extra)
-        else:
-            logger.error(
-                "Unexpected exception deleting cache key: %s",
-                key,
-                exc_info=True,
-                extra={**log_extra, "unexpected": True},
-            )
+    except infrastructure_exceptions:
+        logger.warning(
+            "Failed to delete cache key: %s",
+            key,
+            exc_info=True,
+            extra={"degraded": True, "component": component},
+        )
 
 
 def strict_cache_get(

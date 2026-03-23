@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Generic, TypeVar
+from typing import Any, Callable, Generic, TypeVar
 
 from django.contrib import messages
+from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 
 from core.exceptions import GameError
@@ -18,7 +19,7 @@ class GuildActionOutcome(Generic[ActionResultT]):
     result: ActionResultT | None = None
 
 
-def build_guild_member_context(member: GuildMember, **extra):
+def build_guild_member_context(member: GuildMember, **extra: object) -> dict[str, object]:
     return {
         "guild": member.guild,
         "member": member,
@@ -27,7 +28,7 @@ def build_guild_member_context(member: GuildMember, **extra):
 
 
 def execute_guild_action(
-    request,
+    request: HttpRequest,
     *,
     action: Callable[[], ActionResultT],
     success_message: str | Callable[[ActionResultT], str],
@@ -36,9 +37,6 @@ def execute_guild_action(
     try:
         result = action()
     except GameError as exc:
-        messages.error(request, error_message_formatter(exc))
-        return GuildActionOutcome(succeeded=False)
-    except ValueError as exc:
         messages.error(request, error_message_formatter(exc))
         return GuildActionOutcome(succeeded=False)
 
@@ -97,15 +95,15 @@ def load_recent_announcements(guild: Guild, *, limit: int = 5) -> list[GuildAnno
     return list(guild.announcements.select_related("author__manor").order_by("-created_at")[:limit])
 
 
-def load_ordered_technologies(guild: Guild):
+def load_ordered_technologies(guild: Guild) -> list[Any]:
     return list(guild.technologies.order_by("category", "tech_key"))
 
 
-def load_donation_logs(guild: Guild, *, limit: int = 50):
+def load_donation_logs(guild: Guild, *, limit: int = 50) -> list[Any]:
     return list(guild.donation_logs.select_related("member__user__manor").order_by("-donated_at")[:limit])
 
 
-def load_resource_logs(guild: Guild, *, limit: int = 50):
+def load_resource_logs(guild: Guild, *, limit: int = 50) -> list[Any]:
     return list(guild.resource_logs.select_related("related_user").order_by("-created_at")[:limit])
 
 

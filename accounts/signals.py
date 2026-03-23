@@ -7,6 +7,7 @@ from django.dispatch import receiver
 
 from accounts.utils import purge_other_sessions
 from core.utils.degradation import SESSION_SYNC_FAILURE, record_degradation
+from core.utils.infrastructure import DATABASE_CACHE_INFRASTRUCTURE_EXCEPTIONS
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,6 @@ def sync_active_session_on_login(sender, request, user, **kwargs):
                 extra={"user_id": user.id, "degraded": True},
             )
             _record_session_sync_failure(user.id, "purge_other_sessions returned False")
-    except Exception as exc:
+    except DATABASE_CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
         logger.warning("Failed to sync active session on login for user %s", user.id, exc_info=True)
         _record_session_sync_failure(user.id, f"{type(exc).__name__}: {exc}")

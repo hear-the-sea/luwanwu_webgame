@@ -84,6 +84,7 @@ class ResourceEventAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         return False
 
+    @admin.display(description="庄园", ordering="manor__user__username")
     def manor_link(self, obj):
         """显示庄园链接"""
         from django.urls import reverse
@@ -92,9 +93,7 @@ class ResourceEventAdmin(admin.ModelAdmin):
         url = reverse("admin:gameplay_manor_change", args=[obj.manor_id])
         return format_html('<a href="{}">{}</a>', url, obj.manor.name or obj.manor.user.username)
 
-    manor_link.short_description = "庄园"
-    manor_link.admin_order_field = "manor__user__username"
-
+    @admin.display(description="资源类型", ordering="resource_type")
     def resource_type_display(self, obj):
         """资源类型中文显示"""
         labels = dict(ResourceType.choices)
@@ -103,9 +102,7 @@ class ResourceEventAdmin(admin.ModelAdmin):
         icon = icons.get(obj.resource_type, "")
         return f"{icon} {label}".strip()
 
-    resource_type_display.short_description = "资源类型"
-    resource_type_display.admin_order_field = "resource_type"
-
+    @admin.display(description="变化量", ordering="delta")
     def delta_display(self, obj):
         """数量显示（带颜色）"""
         from django.utils.html import format_html
@@ -116,9 +113,7 @@ class ResourceEventAdmin(admin.ModelAdmin):
             return format_html('<span style="color: red;">{}</span>', obj.delta)
         return obj.delta
 
-    delta_display.short_description = "变化量"
-    delta_display.admin_order_field = "delta"
-
+    @admin.display(description="原因", ordering="reason")
     def reason_display(self, obj):
         """原因中文显示"""
         reason_map = {
@@ -141,6 +136,3 @@ class ResourceEventAdmin(admin.ModelAdmin):
             "tech_upgrade": "📚 科技升级",
         }
         return reason_map.get(obj.reason, obj.reason)
-
-    reason_display.short_description = "原因"
-    reason_display.admin_order_field = "reason"

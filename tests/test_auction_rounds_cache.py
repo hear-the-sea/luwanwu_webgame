@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from trade.services.auction import rounds as auction_rounds
 
 
@@ -37,7 +39,7 @@ def test_safe_cache_add_returns_bool(monkeypatch):
 
 def test_safe_cache_add_returns_false_on_exception(monkeypatch):
     def mock_add_error(key, value, timeout):
-        raise Exception("Cache error")
+        raise ConnectionError("Cache error")
 
     from django.core import cache as cache_module
 
@@ -45,6 +47,18 @@ def test_safe_cache_add_returns_false_on_exception(monkeypatch):
 
     result = auction_rounds._safe_cache_add("test_key", "test_value", 60)
     assert result is False
+
+
+def test_safe_cache_add_programming_error_bubbles_up(monkeypatch):
+    def mock_add_error(key, value, timeout):
+        raise AssertionError("broken cache contract")
+
+    from django.core import cache as cache_module
+
+    monkeypatch.setattr(cache_module.cache, "add", mock_add_error)
+
+    with pytest.raises(AssertionError, match="broken cache contract"):
+        auction_rounds._safe_cache_add("test_key", "test_value", 60)
 
 
 def test_safe_cache_get_returns_value(monkeypatch):
@@ -61,7 +75,7 @@ def test_safe_cache_get_returns_value(monkeypatch):
 
 def test_safe_cache_get_returns_default_on_exception(monkeypatch):
     def mock_get_error(key, default=None):
-        raise Exception("Cache error")
+        raise ConnectionError("Cache error")
 
     from django.core import cache as cache_module
 
@@ -71,9 +85,21 @@ def test_safe_cache_get_returns_default_on_exception(monkeypatch):
     assert result == "default_value"
 
 
+def test_safe_cache_get_programming_error_bubbles_up(monkeypatch):
+    def mock_get_error(key, default=None):
+        raise AssertionError("broken cache contract")
+
+    from django.core import cache as cache_module
+
+    monkeypatch.setattr(cache_module.cache, "get", mock_get_error)
+
+    with pytest.raises(AssertionError, match="broken cache contract"):
+        auction_rounds._safe_cache_get("test_key", default="default_value")
+
+
 def test_safe_cache_delete_tolerates_exception(monkeypatch):
     def mock_delete_error(key):
-        raise Exception("Cache error")
+        raise ConnectionError("Cache error")
 
     from django.core import cache as cache_module
 
@@ -81,3 +107,15 @@ def test_safe_cache_delete_tolerates_exception(monkeypatch):
 
     # Should not raise exception
     auction_rounds._safe_cache_delete("test_key")
+
+
+def test_safe_cache_delete_programming_error_bubbles_up(monkeypatch):
+    def mock_delete_error(key):
+        raise AssertionError("broken cache contract")
+
+    from django.core import cache as cache_module
+
+    monkeypatch.setattr(cache_module.cache, "delete", mock_delete_error)
+
+    with pytest.raises(AssertionError, match="broken cache contract"):
+        auction_rounds._safe_cache_delete("test_key")

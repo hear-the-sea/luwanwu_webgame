@@ -2,7 +2,10 @@
 帮会贡献视图：捐献、排名、资源日志
 """
 
+from typing import Any
+
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from core.utils import safe_int, sanitize_error_message
@@ -18,7 +21,7 @@ from .helpers import build_guild_member_context, execute_guild_action, load_dona
 @login_required
 @require_guild_member
 @rate_limit_redirect("guild_donate", limit=10, window_seconds=60)
-def donate_resource(request):
+def donate_resource(request: Any) -> HttpResponse:
     """捐赠资源"""
     member = request.guild_member
 
@@ -48,13 +51,13 @@ def donate_resource(request):
 
 @login_required
 @require_guild_member
-def contribution_ranking(request):
+def contribution_ranking(request: Any) -> HttpResponse:
     """贡献排行榜"""
     member = request.guild_member
     guild = member.guild
 
     ranking_type = request.GET.get("type", "total")  # total 或 weekly
-    page = safe_int(request.GET.get("page", 1), default=1, min_val=1)
+    page = safe_int(request.GET.get("page", 1), default=1, min_val=1) or 1
     page_size = 20
 
     # 获取所有排名数据
@@ -87,7 +90,7 @@ def contribution_ranking(request):
 
 @login_required
 @require_guild_member
-def resource_status(request):
+def resource_status(request: Any) -> HttpResponse:
     """资源状态"""
     member = request.guild_member
 
@@ -98,7 +101,7 @@ def resource_status(request):
 
 @login_required
 @require_guild_member
-def donation_logs(request):
+def donation_logs(request: Any) -> HttpResponse:
     """捐赠日志"""
     member = request.guild_member
     context = build_guild_member_context(
@@ -111,7 +114,7 @@ def donation_logs(request):
 
 @login_required
 @require_guild_member
-def resource_logs(request):
+def resource_logs(request: Any) -> HttpResponse:
     """资源日志"""
     member = request.guild_member
     context = build_guild_member_context(

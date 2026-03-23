@@ -6,7 +6,7 @@ from typing import SupportsInt, cast
 from django.db import transaction
 from django.db.models import F
 
-from core.exceptions import GuildTechnologyError
+from core.exceptions import GuildMembershipError, GuildTechnologyError
 from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS
 from gameplay.models import Manor
 
@@ -54,7 +54,7 @@ def upgrade_technology(guild, tech_key, operator):
     # 验证权限
     try:
         membership = get_active_membership(guild, operator, "只有帮主和管理员可以升级科技")
-    except ValueError as exc:
+    except GuildMembershipError as exc:
         raise GuildTechnologyError(str(exc)) from exc
     if not membership.can_manage:
         raise GuildTechnologyError("只有帮主和管理员可以升级科技")

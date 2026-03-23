@@ -1,7 +1,10 @@
 """帮会门客池视图。"""
 
+from typing import Any
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
@@ -13,23 +16,23 @@ from ..services import hero_pool as hero_pool_service
 from .helpers import execute_guild_action
 
 
-def _safe_slot_index(raw_value):
+def _safe_slot_index(raw_value: object) -> int | None:
     slot = safe_int(raw_value, default=None)
     if slot is None:
         return None
     return int(slot)
 
 
-def _hero_pool_redirect():
+def _hero_pool_redirect() -> HttpResponse:
     return redirect("guilds:hero_pool")
 
 
-def _hero_pool_error_response(request, message: str = "参数错误"):
+def _hero_pool_error_response(request: Any, message: str = "参数错误") -> HttpResponse:
     messages.error(request, message)
     return _hero_pool_redirect()
 
 
-def _hero_pool_submit_success_message(result) -> str:
+def _hero_pool_submit_success_message(result: Any) -> str:
     action_text = "替换" if result.replaced else "设置"
     message = f"已{action_text}槽位 {result.entry.slot_index} 门客"
     if result.lineup_removed_count > 0:
@@ -37,7 +40,7 @@ def _hero_pool_submit_success_message(result) -> str:
     return message
 
 
-def _hero_pool_remove_success_message(result) -> str:
+def _hero_pool_remove_success_message(result: Any) -> str:
     message = f"已清空槽位 {result.slot_index}"
     if result.lineup_removed_count > 0:
         message += f"（自动下阵 {result.lineup_removed_count} 项）"
@@ -46,7 +49,7 @@ def _hero_pool_remove_success_message(result) -> str:
 
 @login_required
 @require_guild_member
-def hero_pool_page(request):
+def hero_pool_page(request: Any) -> HttpResponse:
     member = request.guild_member
     context = hero_pool_service.get_hero_pool_page_context(member)
     return render(request, "guilds/hero_pool.html", context)
@@ -56,7 +59,7 @@ def hero_pool_page(request):
 @require_guild_member
 @require_POST
 @rate_limit_redirect("guild_hero_pool_submit", limit=20, window_seconds=60)
-def hero_pool_submit(request):
+def hero_pool_submit(request: Any) -> HttpResponse:
     member = request.guild_member
     slot_index = _safe_slot_index(request.POST.get("slot_index"))
     guest_id = safe_int(request.POST.get("guest_id"), default=None)
@@ -77,7 +80,7 @@ def hero_pool_submit(request):
 @require_guild_member
 @require_POST
 @rate_limit_redirect("guild_hero_pool_remove", limit=20, window_seconds=60)
-def hero_pool_remove(request):
+def hero_pool_remove(request: Any) -> HttpResponse:
     member = request.guild_member
     slot_index = _safe_slot_index(request.POST.get("slot_index"))
     if slot_index is None:
@@ -96,7 +99,7 @@ def hero_pool_remove(request):
 @require_guild_manager
 @require_POST
 @rate_limit_redirect("guild_lineup_add", limit=30, window_seconds=60)
-def lineup_add(request):
+def lineup_add(request: Any) -> HttpResponse:
     member = request.guild_member
     pool_entry_id = safe_int(request.POST.get("pool_entry_id"), default=None)
     if pool_entry_id is None:
@@ -119,7 +122,7 @@ def lineup_add(request):
 @require_guild_manager
 @require_POST
 @rate_limit_redirect("guild_lineup_remove", limit=30, window_seconds=60)
-def lineup_remove(request):
+def lineup_remove(request: Any) -> HttpResponse:
     member = request.guild_member
     lineup_entry_id = safe_int(request.POST.get("lineup_entry_id"), default=None)
     if lineup_entry_id is None:

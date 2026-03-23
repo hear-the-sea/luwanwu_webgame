@@ -233,7 +233,7 @@ def process_single_guild_production(self, guild_id: int | None = None, failed_id
 
     try:
         if guild_id is None:
-            raise ValueError("guild_id is required when failed_ids is empty")
+            raise AssertionError("guild_id is required when failed_ids is empty")
 
         summary, partial_failure = _process_guild_production_once(int(guild_id))
         if partial_failure:

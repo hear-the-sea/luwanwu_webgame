@@ -2,8 +2,11 @@
 帮会公告视图
 """
 
+from typing import Any
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
@@ -16,7 +19,7 @@ from .helpers import build_guild_member_context, execute_guild_action, load_rece
 
 @login_required
 @require_guild_member
-def announcement_list(request):
+def announcement_list(request: Any) -> HttpResponse:
     """公告列表"""
     member = request.guild_member
     context = build_guild_member_context(
@@ -31,7 +34,7 @@ def announcement_list(request):
 @require_guild_leader
 @require_POST
 @rate_limit_redirect("guild_announcement", limit=5, window_seconds=60)
-def create_announcement(request):
+def create_announcement(request: Any) -> HttpResponse:
     """创建公告（仅帮主）"""
     member = request.guild_member
     content = request.POST.get("content", "").strip()

@@ -223,7 +223,6 @@ def process_raid_battle(run: RaidRun, now: Optional[datetime] = None) -> None:
     """
     now = now or timezone.now()
     blocked_reason: str | None = None
-    post_commit_error: Exception | None = None
 
     with transaction.atomic():
         locked_run = _prepare_run_for_battle(run.pk, now)
@@ -268,60 +267,40 @@ def process_raid_battle(run: RaidRun, now: Optional[datetime] = None) -> None:
         return
 
     try:
-        _send_raid_battle_messages(locked_run)
-    except RAID_BATTLE_MESSAGE_EXCEPTIONS as exc:
-        logger.warning(
-            "raid battle messages failed: run_id=%s attacker=%s defender=%s error=%s",
-            locked_run.id,
-            locked_run.attacker_id,
-            locked_run.defender_id,
-            exc,
-            exc_info=True,
-            extra={
-                "degraded": True,
-                "component": "raid_battle_message",
-                "run_id": locked_run.id,
-            },
-        )
-    except Exception as exc:
-        logger.error(
-            "Unexpected raid battle message failure: run_id=%s attacker=%s defender=%s",
-            locked_run.id,
-            locked_run.attacker_id,
-            locked_run.defender_id,
-            exc_info=True,
-            extra={"run_id": locked_run.id},
-        )
-        post_commit_error = exc
-
-    try:
-        _dismiss_marching_raids_if_protected(locked_run.defender)
-    except RAID_BATTLE_INFRASTRUCTURE_EXCEPTIONS as exc:
-        logger.warning(
-            "dismiss marching raids failed: run_id=%s defender=%s error=%s",
-            locked_run.id,
-            locked_run.defender_id,
-            exc,
-            exc_info=True,
-            extra={
-                "degraded": True,
-                "component": "raid_protection_cleanup",
-                "run_id": locked_run.id,
-            },
-        )
-    except Exception as exc:
-        logger.error(
-            "Unexpected dismiss marching raids failure: run_id=%s defender=%s",
-            locked_run.id,
-            locked_run.defender_id,
-            exc_info=True,
-            extra={"run_id": locked_run.id},
-        )
-        if post_commit_error is None:
-            post_commit_error = exc
-    _dispatch_complete_raid_task(locked_run, now=now)
-    if post_commit_error is not None:
-        raise post_commit_error.with_traceback(post_commit_error.__traceback__)
+        try:
+            _send_raid_battle_messages(locked_run)
+        except RAID_BATTLE_MESSAGE_EXCEPTIONS as exc:
+            logger.warning(
+                "raid battle messages failed: run_id=%s attacker=%s defender=%s error=%s",
+                locked_run.id,
+                locked_run.attacker_id,
+                locked_run.defender_id,
+                exc,
+                exc_info=True,
+                extra={
+                    "degraded": True,
+                    "component": "raid_battle_message",
+                    "run_id": locked_run.id,
+                },
+            )
+    finally:
+        try:
+            _dismiss_marching_raids_if_protected(locked_run.defender)
+        except RAID_BATTLE_INFRASTRUCTURE_EXCEPTIONS as exc:
+            logger.warning(
+                "dismiss marching raids failed: run_id=%s defender=%s error=%s",
+                locked_run.id,
+                locked_run.defender_id,
+                exc,
+                exc_info=True,
+                extra={
+                    "degraded": True,
+                    "component": "raid_protection_cleanup",
+                    "run_id": locked_run.id,
+                },
+            )
+        finally:
+            _dispatch_complete_raid_task(locked_run, now=now)
 
 
 # ============ Battle execution and guest damage ============

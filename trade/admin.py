@@ -126,15 +126,13 @@ class MarketTransactionAdmin(admin.ModelAdmin):
     readonly_fields = ("transaction_at",)
     raw_id_fields = ("listing", "buyer")
 
+    @admin.display(description="卖家")
     def get_seller(self, obj):
         return obj.listing.seller.user.username
 
-    get_seller.short_description = "卖家"
-
+    @admin.display(description="物品")
     def get_item_name(self, obj):
         return f"{obj.listing.item_template.name} x{obj.listing.quantity}"
-
-    get_item_name.short_description = "物品"
 
 
 # ============ 拍卖行管理 ============
@@ -172,15 +170,13 @@ class AuctionRoundAdmin(admin.ModelAdmin):
     readonly_fields = ("start_at", "settled_at")
     inlines = [AuctionSlotInline]
 
+    @admin.display(description="拍卖位数")
     def get_slot_count(self, obj):
         return obj.slots.count()
 
-    get_slot_count.short_description = "拍卖位数"
-
+    @admin.display(description="售出数")
     def get_sold_count(self, obj):
         return obj.slots.filter(status="sold").count()
-
-    get_sold_count.short_description = "售出数"
 
 
 @admin.register(AuctionSlot)

@@ -2,7 +2,10 @@
 帮会科技视图
 """
 
+from typing import Any
+
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
@@ -16,7 +19,7 @@ from .helpers import build_guild_member_context, execute_guild_action, load_orde
 
 @login_required
 @require_guild_member
-def technology_list(request):
+def technology_list(request: Any) -> HttpResponse:
     """科技列表"""
     member = request.guild_member
     context = build_guild_member_context(
@@ -32,7 +35,7 @@ def technology_list(request):
 @require_guild_member
 @require_POST
 @rate_limit_redirect("guild_tech_upgrade", limit=10, window_seconds=60)
-def upgrade_technology(request, tech_key):
+def upgrade_technology(request: Any, tech_key: str) -> HttpResponse:
     """升级科技"""
     member = request.guild_member
 

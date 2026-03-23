@@ -2,6 +2,7 @@ import json
 
 from django import forms
 from django.contrib import admin
+from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -20,7 +21,7 @@ class SendMessageForm(forms.ModelForm):
     recipients = forms.ModelMultipleChoiceField(
         queryset=User.objects.all(),
         required=False,
-        widget=admin.widgets.FilteredSelectMultiple("玩家", False),
+        widget=FilteredSelectMultiple("玩家", False),
         label="指定玩家（不选则发送给所有人）",
         help_text="按住 Ctrl 多选",
     )
@@ -189,14 +190,13 @@ class GlobalMailCampaignAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         return super().get_queryset(request).annotate(_deliveries_count=Count("deliveries"))
 
+    @admin.display(description="已投递", ordering="_deliveries_count")
     def deliveries_count(self, obj):
         if obj is None or not getattr(obj, "pk", None):
             return 0
         return int(getattr(obj, "_deliveries_count", obj.deliveries.count()))
 
-    deliveries_count.short_description = "已投递"
-    deliveries_count.admin_order_field = "_deliveries_count"
-
+    @admin.display(description="运行状态")
     def runtime_status_badge(self, obj):
         if obj is None or not getattr(obj, "pk", None):
             return format_html('<span style="color:#6b7280;">{}</span>', "未保存")
@@ -209,8 +209,7 @@ class GlobalMailCampaignAdmin(admin.ModelAdmin):
             return format_html('<span style="color:#2563eb;">{}</span>', "已结束")
         return format_html('<span style="color:#059669;font-weight:600;">{}</span>', "进行中")
 
-    runtime_status_badge.short_description = "运行状态"
-
+    @admin.display(description="附件摘要")
     def attachments_summary(self, obj):
         attachments = obj.attachments if isinstance(obj.attachments, dict) else {}
         resources = attachments.get("resources") if isinstance(attachments.get("resources"), dict) else {}
@@ -221,14 +220,11 @@ class GlobalMailCampaignAdmin(admin.ModelAdmin):
             return "无附件"
         return f"资源 {len(resources)} 类/{resource_total}，道具 {len(items)} 类/{item_total}"
 
-    attachments_summary.short_description = "附件摘要"
-
+    @admin.display(description="附件预览")
     def attachments_preview(self, obj):
         attachments = obj.attachments if obj and isinstance(obj.attachments, dict) else {}
         pretty = json.dumps(attachments or {}, ensure_ascii=False, indent=2)
         return format_html("<pre style='max-width:760px;white-space:pre-wrap;'>{}</pre>", pretty)
-
-    attachments_preview.short_description = "附件预览"
 
     @admin.action(description="批量启用活动")
     def activate_selected_campaigns(self, request, queryset):
@@ -285,11 +281,9 @@ class MessageAdmin(admin.ModelAdmin):
     readonly_fields = ("created_at",)
     autocomplete_fields = ("manor",)
 
+    @admin.display(boolean=True, description="有附件")
     def has_attachments(self, obj):
         return obj.has_attachments
-
-    has_attachments.boolean = True
-    has_attachments.short_description = "有附件"
 
     def get_form(self, request, obj=None, **kwargs):
         """为添加消息使用自定义表单"""

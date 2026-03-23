@@ -3,6 +3,7 @@ from unittest.mock import Mock
 
 import pytest
 from django.contrib.sessions.models import Session
+from django.db import DatabaseError
 from django.test import RequestFactory
 from django.utils import timezone
 from django_redis.exceptions import ConnectionInterrupted
@@ -93,11 +94,49 @@ def test_purge_other_sessions_returns_false_when_sync_raises(monkeypatch):
     monkeypatch.setattr(
         account_utils,
         "_sync_active_session_state",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("db failure")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db failure")),
     )
 
     result = account_utils.purge_other_sessions(user_id, "current-session")
     assert result is False
+
+
+def test_purge_other_sessions_programming_error_bubbles_up(monkeypatch):
+    user_id = 1001
+
+    monkeypatch.setattr(account_utils.cache, "add", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(account_utils.cache, "get", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(account_utils.cache, "delete", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        account_utils,
+        "_sync_active_session_state",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken active session sync contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken active session sync contract"):
+        account_utils.purge_other_sessions(user_id, "current-session")
+
+
+def test_safe_get_cached_session_key_programming_error_bubbles_up(monkeypatch):
+    monkeypatch.setattr(
+        account_utils.cache,
+        "get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken active-session cache read contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken active-session cache read contract"):
+        account_utils._safe_get_cached_session_key("user_session:1")
+
+
+def test_safe_set_cached_session_key_programming_error_bubbles_up(monkeypatch):
+    monkeypatch.setattr(
+        account_utils.cache,
+        "set",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken active-session cache write contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken active-session cache write contract"):
+        account_utils._safe_set_cached_session_key("user_session:1", "session-key")
 
 
 def test_acquire_login_lock_falls_back_to_local_when_cache_add_errors(monkeypatch):
@@ -132,6 +171,26 @@ def test_acquire_login_lock_runtime_marker_cache_error_bubbles_up(monkeypatch):
 
     with pytest.raises(RuntimeError, match="cache down"):
         account_utils._acquire_login_lock(lock_key, "token-a")
+
+
+def test_release_login_lock_programming_error_bubbles_up(monkeypatch):
+    lock_key = "login_lock:release_programming_error"
+    token = "token-a"
+
+    account_utils._LOCAL_LOGIN_LOCKS[lock_key] = (
+        token,
+        account_utils.time.monotonic() + account_utils.LOGIN_LOCK_TIMEOUT,
+    )
+    monkeypatch.setattr(
+        account_utils,
+        "release_cache_key_if_owner",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken login lock release contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken login lock release contract"):
+        account_utils._release_login_lock(lock_key, token)
+
+    assert lock_key not in account_utils._LOCAL_LOGIN_LOCKS
 
 
 def test_session_key_prefix_handles_none():
@@ -182,6 +241,55 @@ def test_purge_sessions_fallback_scans_beyond_1000_records(monkeypatch):
     account_utils._purge_sessions_fallback(int(target_user), current_session)
 
     assert far_session.deleted is True
+
+
+def test_purge_sessions_fallback_database_error_is_best_effort(monkeypatch):
+    class _FakeSession:
+        session_key = "broken-db-session"
+
+        def get_decoded(self):
+            return {"_auth_user_id": "42"}
+
+        def delete(self):
+            raise DatabaseError("session delete down")
+
+    class _FakeQuerySet:
+        def iterator(self, chunk_size=1000):
+            return iter([_FakeSession()])
+
+    class _FakeManager:
+        def filter(self, **kwargs):
+            return _FakeQuerySet()
+
+    fake_session_model = type("FakeSessionModel", (), {"objects": _FakeManager()})
+    monkeypatch.setattr(account_utils, "Session", fake_session_model)
+
+    account_utils._purge_sessions_fallback(42, "keep-current")
+
+
+def test_purge_sessions_fallback_programming_error_bubbles_up(monkeypatch):
+    class _FakeSession:
+        session_key = "broken-programming-session"
+
+        def get_decoded(self):
+            return {"_auth_user_id": "42"}
+
+        def delete(self):
+            raise AssertionError("broken fallback session delete contract")
+
+    class _FakeQuerySet:
+        def iterator(self, chunk_size=1000):
+            return iter([_FakeSession()])
+
+    class _FakeManager:
+        def filter(self, **kwargs):
+            return _FakeQuerySet()
+
+    fake_session_model = type("FakeSessionModel", (), {"objects": _FakeManager()})
+    monkeypatch.setattr(account_utils, "Session", fake_session_model)
+
+    with pytest.raises(AssertionError, match="broken fallback session delete contract"):
+        account_utils._purge_sessions_fallback(42, "keep-current")
 
 
 @pytest.mark.django_db
@@ -246,7 +354,7 @@ def test_login_signal_records_degradation_when_session_save_raises(django_user_m
     request = RequestFactory().get("/accounts/login")
     request.session = Mock()
     request.session.session_key = "session-key"
-    request.session.save.side_effect = RuntimeError("session backend down")
+    request.session.save.side_effect = DatabaseError("session backend down")
 
     recorded: dict[str, object] = {}
     monkeypatch.setattr(
@@ -260,6 +368,18 @@ def test_login_signal_records_degradation_when_session_save_raises(django_user_m
     assert recorded == {
         "code": SESSION_SYNC_FAILURE,
         "component": "sync_active_session_on_login",
-        "detail": "RuntimeError: session backend down",
+        "detail": "DatabaseError: session backend down",
         "user_id": user.id,
     }
+
+
+@pytest.mark.django_db
+def test_login_signal_programming_error_bubbles_up(django_user_model):
+    user = django_user_model.objects.create_user(username="signal_login_programming_error", password="pass123")
+    request = RequestFactory().get("/accounts/login")
+    request.session = Mock()
+    request.session.session_key = "session-key"
+    request.session.save.side_effect = AssertionError("broken session save contract")
+
+    with pytest.raises(AssertionError, match="broken session save contract"):
+        account_signals.sync_active_session_on_login(sender=None, request=request, user=user)

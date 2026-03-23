@@ -19,11 +19,9 @@ class ScoutCooldownAdmin(admin.ModelAdmin):
     list_display = ("attacker", "defender", "cooldown_until", "is_active")
     search_fields = ("attacker__user__username", "defender__user__username")
 
+    @admin.display(boolean=True, description="冷却中")
     def is_active(self, obj):
         return obj.is_active
-
-    is_active.boolean = True
-    is_active.short_description = "冷却中"
 
 
 @admin.register(RaidRun)

@@ -6,6 +6,8 @@ from django.apps import apps
 from django.core.management.base import BaseCommand
 from django.db import connection
 
+from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS
+
 
 @dataclass(frozen=True)
 class TableIssue:
@@ -21,7 +23,7 @@ def _actual_columns_for_table(table: str) -> set[str] | None:
     with connection.cursor() as cursor:
         try:
             description = connection.introspection.get_table_description(cursor, table)
-        except Exception:
+        except DATABASE_INFRASTRUCTURE_EXCEPTIONS:
             return None
     return {col.name for col in description}
 

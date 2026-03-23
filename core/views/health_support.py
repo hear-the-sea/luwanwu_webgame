@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Protocol
+
+
+class ReadyCacheBackend(Protocol):
+    def get(self, key: str, default: object | None = None) -> object: ...
+
+    def set(self, key: str, value: object, timeout: int | None = None) -> object: ...
 
 
 def get_ready_cache_ttl(settings_obj: object) -> int:
@@ -10,7 +16,7 @@ def get_ready_cache_ttl(settings_obj: object) -> int:
 
 def load_cached_ready_payload(
     *,
-    cache_backend: object,
+    cache_backend: ReadyCacheBackend,
     cache_key: str,
     ttl_seconds: int,
 ) -> tuple[dict[str, object], int] | None:
@@ -31,7 +37,7 @@ def load_cached_ready_payload(
 
 def store_cached_ready_payload(
     *,
-    cache_backend: object,
+    cache_backend: ReadyCacheBackend,
     cache_key: str,
     payload: dict[str, object],
     status_code: int,
