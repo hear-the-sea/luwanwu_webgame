@@ -1,6 +1,6 @@
 # 春秋乱世庄园主 - 系统架构文档
 
-> 最近校正：2026-03-18（与当前仓库结构和门禁流程对齐）
+> 最近校正：2026-03-23（与当前仓库结构、门禁流程和拍卖结算时序对齐）
 
 ## 概述
 
@@ -13,7 +13,7 @@
 | 组件 | 技术 | 说明 |
 |------|------|------|
 | Web 框架 | Django 5.x | 后端核心框架 |
-| REST API | Django REST Framework | API 层（预留） |
+| DRF / API 文档 | Django REST Framework + drf-spectacular | 用于 schema、throttle 与少量 JSON 端点，非主交互层 |
 | 异步通信 | Django Channels | WebSocket 支持 |
 | 任务队列 | Celery 5.x | 后台任务处理 |
 | 消息代理 | Redis 7.x | Celery Broker + Channel Layer |
@@ -37,8 +37,8 @@
                     │                          │                          │
                     ▼                          ▼                          ▼
            ┌───────────────┐          ┌───────────────┐          ┌───────────────┐
-           │   Gunicorn    │          │    Daphne     │          │  Celery Beat  │
-           │  (HTTP/WSGI)  │          │ (WebSocket)   │          │  (定时任务)    │
+           │   Web App     │          │    Daphne     │          │  Celery Beat  │
+           │ runserver/HTTP│          │ (ASGI / WS)   │          │  (定时任务)    │
            └───────┬───────┘          └───────┬───────┘          └───────┬───────┘
                    │                          │                          │
                    └──────────────────────────┼──────────────────────────┘
@@ -84,9 +84,9 @@ web_game_v5/
 │   └── wsgi.py         # WSGI 配置
 │
 ├── accounts/           # 账户模块
-│   ├── models/         # User 模型（继承 AbstractUser）
-│   ├── views/          # 登录/注册/资料
-│   └── services/       # 登录运行时、单点登录
+│   ├── models.py       # User / UserActiveSession
+│   ├── views.py        # 登录/注册/资料
+│   └── *_runtime.py    # 登录/注册运行时辅助
 │
 ├── gameplay/           # 核心玩法模块
 │   ├── models/         # Manor, Building, Item, Mission...
@@ -102,15 +102,15 @@ web_game_v5/
 │   └── tasks.py        # 培养完成任务
 │
 ├── battle/             # 战斗模块
-│   ├── models/         # BattleReport、TroopTemplate 等基础模型
-│   ├── services/       # 战斗模拟入口
-│   ├── simulation_core/  # 战斗引擎核心
-│   └── tasks/          # 战报生成任务
+│   ├── models.py       # BattleReport、TroopTemplate
+│   ├── services.py     # 战斗服务入口
+│   ├── simulation/     # 战斗引擎实现
+│   └── tasks.py        # 战报与异步后处理
 │
 ├── trade/              # 交易模块
-│   ├── models/         # MarketListing、ShopStock
-│   ├── views/          # 商店/银庄/交易行
-│   └── services/       # 商店、银庄、交易行服务
+│   ├── models.py       # 商铺、银庄、交易行、拍卖
+│   ├── views.py        # 商店/银庄/交易行/拍卖页面
+│   └── services/       # 商店、银庄、交易行、拍卖服务
 │
 ├── guilds/             # 帮会模块
 │   ├── models/         # Guild、GuildMember、Technology...
@@ -261,9 +261,20 @@ CELERY_BEAT_SCHEDULE = {
         "task": "trade.refresh_shop_stock",
         "schedule": crontab(hour=0, minute=0),  # 每天 00:00
     },
+    "settle-auction-round": {
+        "task": "trade.settle_auction_round",
+        "schedule": crontab(minute="*/5"),      # 每 5 分钟检查一次到期轮次
+    },
     # 帮会定时任务...
 }
 ```
+
+### 拍卖结算时序
+
+- 拍卖轮次不是在结束瞬间同步结算，而是由 `trade.settle_auction_round` 的定时任务轮询处理；默认最晚约 5 分钟内进入结算。
+- 结算事务会先完成中标/退款/流拍状态更新，再通过 `transaction.on_commit(...)` 触发中标发货通知。
+- 中标物品默认以“站内信附件”形式发放；玩家领取附件后，道具进入仓库。
+- 若中标消息创建失败且错误属于受控消息/数据库基础设施异常，系统会降级为直接将道具发到仓库。
 
 ### 任务设计原则
 
@@ -570,20 +581,19 @@ celery -A config beat -l INFO
           ┌────────────────┼────────────────┐
           │                │                │
           ▼                ▼                ▼
-    ┌──────────┐    ┌──────────┐    ┌──────────┐
-    │ Gunicorn │    │  Daphne  │    │ Celery   │
-    │ (HTTP)   │    │ (WS)     │    │ Worker   │
-    │ 4 workers│    │ 2 workers│    │ 3 queues │
-    └──────────┘    └──────────┘    └──────────┘
-          │                │                │
-          └────────────────┼────────────────┘
+    ┌──────────┐    ┌──────────────┐    ┌──────────────┐
+    │  Nginx   │    │  Web (Daphne)│    │ Celery Worker│
+    │  反向代理 │    │ HTTP + WS    │    │ default/battle/timer |
+    └────┬─────┘    └──────┬───────┘    └──────┬───────┘
+         │                 │                   │
+         └─────────────────┼───────────────────┘
                            │
           ┌────────────────┼────────────────┐
           │                │                │
           ▼                ▼                ▼
     ┌──────────┐    ┌──────────┐    ┌──────────┐
     │  MySQL   │    │  Redis   │    │ Celery   │
-    │ (主库)   │    │ (缓存)   │    │ Beat     │
+    │ (主库)   │    │ 缓存/消息 │    │ Beat     │
     └──────────┘    └──────────┘    └──────────┘
 ```
 
@@ -591,11 +601,11 @@ celery -A config beat -l INFO
 
 | 组件 | 配置 | 说明 |
 |------|------|------|
-| Gunicorn | 4 workers, gevent | HTTP 请求处理 |
-| Daphne | 2 workers | WebSocket 连接 |
-| Celery Worker | 3 进程，按队列分配 | 后台任务 |
-| MySQL | 连接池 300 | CONN_MAX_AGE |
-| Redis | maxmemory 1GB | 缓存 + 消息 |
+| Web | `daphne config.asgi:application` | 当前 `docker-compose.prod.yml` 的默认 Web 进程 |
+| Celery Worker | 按 `default` / `battle` / `timer` 分队列 | 后台任务分工 |
+| Celery Beat | 独立进程 | 定时扫描与心跳 |
+| MySQL | 依据部署环境调优连接数与超时 | 主数据存储 |
+| Redis | broker / result / channel layer / cache 分角色 | 缓存 + 消息 + 在线态 |
 
 ---
 

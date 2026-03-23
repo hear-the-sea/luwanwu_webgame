@@ -19,6 +19,16 @@ def test_add_mission_extra_attempt_rejects_non_positive_count():
         add_mission_extra_attempt(manor, mission, 0)
 
 
+@pytest.mark.django_db
+def test_add_mission_extra_attempt_rejects_bool_count():
+    user = get_user_model().objects.create_user(username="mission_extra_attempt_bool", password="pass123")
+    manor = ensure_manor(user)
+    mission = MissionTemplate.objects.create(key="mission_attempt_bool", name="任务次数布尔校验")
+
+    with pytest.raises(AssertionError, match="invalid mission extra attempt count"):
+        add_mission_extra_attempt(manor, mission, True)
+
+
 def test_get_mission_daily_limit_rejects_non_positive_daily_limit(monkeypatch):
     mission = type("_Mission", (), {"daily_limit": 0})()
     monkeypatch.setattr(mission_attempts_service, "get_mission_extra_attempts", lambda *_a, **_k: 0)

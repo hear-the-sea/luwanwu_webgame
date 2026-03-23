@@ -1,5 +1,3 @@
-from types import SimpleNamespace
-
 import pytest
 from django.db import DatabaseError
 
@@ -167,7 +165,129 @@ def test_generate_report_task_unexpected_error_bubbles_up(monkeypatch, django_us
 
 
 @pytest.mark.django_db
-def test_generate_report_task_defense_tolerates_invalid_enemy_technology(monkeypatch, django_user_model):
+def test_generate_report_task_offense_rejects_invalid_troop_loadout(monkeypatch, django_user_model):
+    from battle.tasks import generate_report_task
+
+    user = django_user_model.objects.create_user(username="task_offense_bad_loadout", password="pass")
+    manor = ensure_manor(user)
+
+    monkeypatch.setattr(
+        generate_report_task,
+        "retry",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("retry should not be called")),
+    )
+
+    with pytest.raises(AssertionError, match="invalid mission troop loadout"):
+        generate_report_task.run(
+            manor_id=manor.id,
+            mission_id=None,
+            run_id=None,
+            guest_ids=[],
+            troop_loadout="bad-loadout",
+            battle_type="skirmish",
+        )
+
+
+@pytest.mark.django_db
+def test_generate_report_task_offense_rejects_invalid_defender_setup(monkeypatch, django_user_model):
+    from battle.tasks import generate_report_task
+
+    user = django_user_model.objects.create_user(username="task_offense_bad_defender_setup", password="pass")
+    manor = ensure_manor(user)
+
+    monkeypatch.setattr(
+        generate_report_task,
+        "retry",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("retry should not be called")),
+    )
+
+    with pytest.raises(AssertionError, match="invalid mission mapping payload"):
+        generate_report_task.run(
+            manor_id=manor.id,
+            mission_id=None,
+            run_id=None,
+            guest_ids=[],
+            troop_loadout={},
+            defender_setup="bad-defender-setup",
+            battle_type="skirmish",
+        )
+
+
+@pytest.mark.django_db
+def test_generate_report_task_rejects_invalid_guest_ids_payload(monkeypatch, django_user_model):
+    from battle.tasks import generate_report_task
+
+    user = django_user_model.objects.create_user(username="task_bad_guest_ids", password="pass")
+    manor = ensure_manor(user)
+
+    monkeypatch.setattr(
+        generate_report_task,
+        "retry",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("retry should not be called")),
+    )
+
+    with pytest.raises(AssertionError, match="invalid mission guest_ids"):
+        generate_report_task.run(
+            manor_id=manor.id,
+            mission_id=None,
+            run_id=None,
+            guest_ids="bad-guest-ids",
+            troop_loadout={},
+            battle_type="skirmish",
+        )
+
+
+@pytest.mark.django_db
+def test_generate_report_task_rejects_invalid_travel_seconds(monkeypatch, django_user_model):
+    from battle.tasks import generate_report_task
+
+    user = django_user_model.objects.create_user(username="task_bad_travel_seconds", password="pass")
+    manor = ensure_manor(user)
+
+    monkeypatch.setattr(
+        generate_report_task,
+        "retry",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("retry should not be called")),
+    )
+
+    with pytest.raises(AssertionError, match="invalid mission travel_seconds"):
+        generate_report_task.run(
+            manor_id=manor.id,
+            mission_id=None,
+            run_id=None,
+            guest_ids=[],
+            troop_loadout={},
+            battle_type="skirmish",
+            travel_seconds=-1,
+        )
+
+
+@pytest.mark.django_db
+def test_generate_report_task_rejects_blank_battle_type(monkeypatch, django_user_model):
+    from battle.tasks import generate_report_task
+
+    user = django_user_model.objects.create_user(username="task_blank_battle_type", password="pass")
+    manor = ensure_manor(user)
+
+    monkeypatch.setattr(
+        generate_report_task,
+        "retry",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("retry should not be called")),
+    )
+
+    with pytest.raises(AssertionError, match="invalid mission battle_type"):
+        generate_report_task.run(
+            manor_id=manor.id,
+            mission_id=None,
+            run_id=None,
+            guest_ids=[],
+            troop_loadout={},
+            battle_type=" ",
+        )
+
+
+@pytest.mark.django_db
+def test_generate_report_task_defense_rejects_invalid_enemy_technology(monkeypatch, django_user_model):
     from battle.tasks import generate_report_task
     from gameplay.models import MissionTemplate
 
@@ -181,43 +301,54 @@ def test_generate_report_task_defense_tolerates_invalid_enemy_technology(monkeyp
         enemy_troops="bad-troops",
         enemy_guests="bad-guests",
     )
-
-    level_state = {}
-    guest_keys_state = {}
-
-    def _build_named_ai_guests(keys, level):
-        guest_keys_state["keys"] = keys
-        level_state["level"] = level
-        return []
-
-    def _fake_simulate_report(**kwargs):
-        assert kwargs["troop_loadout"] == {}
-        assert kwargs["attacker_tech_levels"] == {}
-        assert kwargs["attacker_guest_bonuses"] is None
-        assert kwargs["attacker_guest_skills"] is None
-        assert kwargs["validate_attacker_troop_capacity"] is False
-        return SimpleNamespace(pk=321)
-
-    monkeypatch.setattr("battle.combatants_pkg.build_named_ai_guests", _build_named_ai_guests)
-    monkeypatch.setattr("battle.tasks.simulate_report", _fake_simulate_report)
     monkeypatch.setattr(
         generate_report_task,
         "retry",
         lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("retry should not be called")),
     )
 
-    got = generate_report_task.run(
-        manor_id=manor.id,
-        mission_id=mission.id,
-        run_id=None,
-        guest_ids=[],
-        troop_loadout={},
-        battle_type="task",
+    with pytest.raises(AssertionError, match="invalid mission enemy technology"):
+        generate_report_task.run(
+            manor_id=manor.id,
+            mission_id=mission.id,
+            run_id=None,
+            guest_ids=[],
+            troop_loadout={},
+            battle_type="task",
+        )
+
+
+@pytest.mark.django_db
+def test_generate_report_task_defense_rejects_invalid_enemy_guest_mapping_skills(monkeypatch, django_user_model):
+    from battle.tasks import generate_report_task
+    from gameplay.models import MissionTemplate
+
+    user = django_user_model.objects.create_user(username="task_defense_bad_guest_skills", password="pass")
+    manor = ensure_manor(user)
+    mission = MissionTemplate.objects.create(
+        key="m_task_defense_bad_guest_skills",
+        name="DefenseTaskGuestSkills",
+        is_defense=True,
+        enemy_technology={},
+        enemy_troops={},
+        enemy_guests=[{"key": "enemy_guest", "skills": "bad-skills"}],
     )
 
-    assert got == 321
-    assert level_state["level"] == 50
-    assert guest_keys_state["keys"] == []
+    monkeypatch.setattr(
+        generate_report_task,
+        "retry",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("retry should not be called")),
+    )
+
+    with pytest.raises(AssertionError, match="invalid mission guest config skills"):
+        generate_report_task.run(
+            manor_id=manor.id,
+            mission_id=mission.id,
+            run_id=None,
+            guest_ids=[],
+            troop_loadout={},
+            battle_type="task",
+        )
 
 
 @pytest.mark.django_db
@@ -323,3 +454,57 @@ def test_generate_report_task_uses_mission_run_guest_snapshot(monkeypatch, djang
     assert captured["level"] == 20
     assert captured["force"] == 300
     assert captured["guest_id"] == guest.id
+
+
+@pytest.mark.django_db
+def test_generate_report_task_rejects_invalid_guest_snapshots_payload(monkeypatch, django_user_model):
+    from battle.tasks import generate_report_task
+    from gameplay.models import MissionRun, MissionTemplate
+
+    user = django_user_model.objects.create_user(username="task_bad_snapshot_payload", password="pass")
+    manor = ensure_manor(user)
+    mission = MissionTemplate.objects.create(key="m_task_bad_snapshot_payload", name="Task Snapshot Payload")
+    run = MissionRun.objects.create(manor=manor, mission=mission, guest_snapshots="bad-snapshots")
+
+    monkeypatch.setattr(
+        generate_report_task,
+        "retry",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("retry should not be called")),
+    )
+
+    with pytest.raises(AssertionError, match="invalid mission guest_snapshots payload"):
+        generate_report_task.run(
+            manor_id=manor.id,
+            mission_id=mission.id,
+            run_id=run.id,
+            guest_ids=[],
+            troop_loadout={},
+            battle_type="task",
+        )
+
+
+@pytest.mark.django_db
+def test_generate_report_task_rejects_invalid_guest_snapshot_entry(monkeypatch, django_user_model):
+    from battle.tasks import generate_report_task
+    from gameplay.models import MissionRun, MissionTemplate
+
+    user = django_user_model.objects.create_user(username="task_bad_snapshot_entry", password="pass")
+    manor = ensure_manor(user)
+    mission = MissionTemplate.objects.create(key="m_task_bad_snapshot_entry", name="Task Snapshot Entry")
+    run = MissionRun.objects.create(manor=manor, mission=mission, guest_snapshots=["bad-entry"])
+
+    monkeypatch.setattr(
+        generate_report_task,
+        "retry",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("retry should not be called")),
+    )
+
+    with pytest.raises(AssertionError, match="invalid mission guest_snapshot entry"):
+        generate_report_task.run(
+            manor_id=manor.id,
+            mission_id=mission.id,
+            run_id=run.id,
+            guest_ids=[],
+            troop_loadout={},
+            battle_type="task",
+        )

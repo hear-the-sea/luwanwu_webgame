@@ -32,6 +32,16 @@ def normalize_guest_configs(raw: Any) -> List[Any]:
                 raise AssertionError(f"invalid mission guest config entry: {entry!r}")
             normalized.append(key)
         elif isinstance(entry, dict):
+            raw_key = entry.get("key")
+            if not isinstance(raw_key, str) or not raw_key.strip():
+                raise AssertionError(f"invalid mission guest config entry: {entry!r}")
+            skills = entry.get("skills")
+            if skills is not None:
+                if not isinstance(skills, (list, tuple, set)):
+                    raise AssertionError(f"invalid mission guest config skills: {skills!r}")
+                for skill in skills:
+                    if not isinstance(skill, str) or not skill.strip():
+                        raise AssertionError(f"invalid mission guest config skills entry: {skill!r}")
             normalized.append(entry)
         else:
             raise AssertionError(f"invalid mission guest config entry: {entry!r}")

@@ -1,50 +1,40 @@
 # 春秋乱世庄园主 - 技术文档
 
-欢迎查阅「春秋乱世庄园主」游戏技术文档。当前仅保留仍作为开发与维护依据的文档入口。
-
----
+这里只列仍作为开发、联调与运维依据的文档。已经失去事实依据的设计稿和资料稿已从主文档集中移除。
 
 ## 核心文档
 
 | 文档 | 说明 | 适用读者 |
 |------|------|----------|
-| [架构设计](architecture.md) | 系统整体架构、模块划分、数据流 | 架构师、后端开发 |
-| [开发指南](development.md) | 环境搭建、命令行工具、调试技巧 | 所有开发者 |
-| [API 接口](api.md) | HTTP/WebSocket 接口规范 | 前端开发、测试 |
-| [数据库设计](database.md) | 数据模型、表结构、索引优化 | 后端开发、DBA |
-| [编码规范](coding_standards.md) | Python / Django 代码风格与协作约定 | 所有开发者 |
-| [优化计划](optimization_plan.md) | 分阶段技术治理与重构路线图 | 项目维护者、核心开发 |
-| [技术审计（2026-03）](technical_audit_2026-03.md) | 当前项目问题清单、优先级与治理建议 | 项目维护者、核心开发 |
-| [第二阶段统一写模型基线](write_model_boundaries.md) | `mission / raid / guest recruitment` 的写路径、锁、补偿与测试口径 | 项目维护者、核心开发 |
-| [配置数据](config_data.md) | 运行期 YAML / 导库型 YAML 的职责与刷新方式 | 开发、测试、运维 |
+| [架构设计](architecture.md) | 当前系统分层、关键依赖、部署形态与测试门禁 | 后端开发、维护者 |
+| [开发指南](development.md) | 本地开发、Docker、测试、调试命令 | 所有开发者 |
+| [接口与实时入口](api.md) | HTTP 页面路由、JSON 端点、WebSocket 入口与限流边界 | 前端、测试、联调 |
+| [数据库边界](database.md) | 当前数据库角色、模型归属、迁移与索引协作约束 | 后端开发、DBA |
+| [配置数据](config_data.md) | `data/*.yaml` 的职责、刷新方式与部署注意事项 | 开发、测试、运维 |
+| [编码规范](coding_standards.md) | 代码风格与导入约定 | 所有开发者 |
 
----
-
-## 补充资料
+## 运维与治理
 
 | 文档 | 说明 |
 |------|------|
-| [战斗调试器设计](battle_debugger_design.md) | 开发调试工具设计与使用背景 |
-| [踢馆功能设定书](踢馆功能设定书.md) | 踢馆玩法的规则说明与奖励口径 |
-| [门客数据库总览](门客数据库.md) | 门客文案与来源数据整理入口 |
+| [健康检查运行手册](runbook_health_checks.md) | `/health/live` 与 `/health/ready` 的排障口径 |
+| [数据流边界](domain_boundaries.md) | 关键领域的数据来源、缓存、补偿与失败语义 |
+| [第二阶段统一写模型基线](write_model_boundaries.md) | `mission / raid / guest recruitment` 写路径基线 |
+| [技术审计（2026-03）](technical_audit_2026-03.md) | 当前治理基线、约束与验证记录 |
+| [优化计划](optimization_plan.md) | 与技术审计配套的执行路线图 |
+| [兼容入口清单（2026-03）](compatibility_inventory_2026-03.md) | 当前仍明确保留的兼容入口 |
 
----
+## 工具与补充
+
+| 文档 | 说明 |
+|------|------|
+| [战斗调试器网页指南](../battle_debugger/WEB_GUIDE.md) | battle debugger 的启用条件与页面用法 |
 
 ## 快速导航
 
-1. 新同学先看 [开发指南](development.md) 和 [架构设计](architecture.md)
-2. 接口或联调问题优先看 [API 接口](api.md)
-3. 数据结构、迁移与索引问题优先看 [数据库设计](database.md)
-4. 日常协作与代码风格约定看 [编码规范](coding_standards.md)
+1. 新同学先看 [README](../README.md)、[开发指南](development.md)、[架构设计](architecture.md)
+2. 联调页面动作、JSON 端点或 WebSocket，先看 [接口与实时入口](api.md)
+3. 改模型、迁移、索引或并发状态机，先看 [数据库边界](database.md) 与 [数据流边界](domain_boundaries.md)
+4. 涉及 YAML、导库或热刷新，先看 [配置数据](config_data.md)
 
----
-
-## 相关资源
-
-- **项目主页**: [README.md](../README.md)
-- **配置示例**: [.env.example](../.env.example)
-- **数据模板**: `data/*.yaml`
-
----
-
-*文档最后更新: 2026-03*
+*最近校正：2026-03-23*

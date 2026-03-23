@@ -98,6 +98,86 @@ def test_calculate_battle_salvage_can_limit_equipment_recovery_to_player_side():
     assert defender_unique_key in equip_all
 
 
+def test_calculate_battle_salvage_rejects_invalid_side():
+    report = SimpleNamespace(
+        seed=1,
+        losses={"attacker": {"casualties": []}, "defender": {"casualties": []}},
+        attacker_team=[],
+        defender_team=[],
+    )
+
+    with pytest.raises(AssertionError, match="invalid battle salvage side"):
+        calculate_battle_salvage(report, equipment_casualty_side="spectator")
+
+
+def test_calculate_battle_salvage_rejects_invalid_losses_container():
+    report = SimpleNamespace(
+        seed=1,
+        losses="bad-losses",
+        attacker_team=[],
+        defender_team=[],
+    )
+
+    with pytest.raises(AssertionError, match="invalid battle salvage report.losses"):
+        calculate_battle_salvage(report)
+
+
+def test_calculate_battle_salvage_rejects_invalid_casualty_lost_value():
+    report = SimpleNamespace(
+        seed=1,
+        losses={
+            "attacker": {"casualties": [{"key": "dao_jie", "lost": -1}]},
+            "defender": {"casualties": []},
+        },
+        attacker_team=[],
+        defender_team=[],
+    )
+
+    with pytest.raises(AssertionError, match="invalid battle salvage casualty lost"):
+        calculate_battle_salvage(report)
+
+
+def test_calculate_battle_salvage_rejects_unknown_troop_template(monkeypatch):
+    report = SimpleNamespace(
+        seed=1,
+        losses={
+            "attacker": {"casualties": [{"key": "missing_troop", "lost": 1}]},
+            "defender": {"casualties": []},
+        },
+        attacker_team=[],
+        defender_team=[],
+    )
+
+    monkeypatch.setattr(
+        "gameplay.services.recruitment.recruitment.get_troop_template",
+        lambda _key: None,
+    )
+
+    with pytest.raises(AssertionError, match="invalid battle salvage troop template"):
+        calculate_battle_salvage(report)
+
+
+def test_calculate_battle_salvage_rejects_invalid_team_member_payload():
+    report = SimpleNamespace(
+        seed=1,
+        losses={"attacker": {"casualties": []}, "defender": {"casualties": []}},
+        attacker_team=[
+            {
+                "guest_id": 1,
+                "level": 50,
+                "rarity": "blue",
+                "max_hp": 100,
+                "initial_hp": 120,
+                "remaining_hp": 0,
+            }
+        ],
+        defender_team=[],
+    )
+
+    with pytest.raises(AssertionError, match="invalid battle salvage team member initial_hp"):
+        calculate_battle_salvage(report)
+
+
 @pytest.mark.django_db
 def test_grant_battle_salvage_skips_missing_equipment_template(monkeypatch, caplog, django_user_model):
     user = django_user_model.objects.create_user(username="battle_salvage_missing_item", password="pass12345")
@@ -123,3 +203,12 @@ def test_grant_battle_salvage_skips_missing_equipment_template(monkeypatch, capl
     )
     assert exp_fruit.quantity == 3
     assert any("Unknown equipment template for recovery" in rec.getMessage() for rec in caplog.records)
+
+
+@pytest.mark.django_db
+def test_grant_battle_salvage_rejects_invalid_equipment_recovery_payload(django_user_model):
+    user = django_user_model.objects.create_user(username="battle_salvage_bad_recovery", password="pass12345")
+    manor = ensure_manor(user)
+
+    with pytest.raises(AssertionError, match="invalid battle salvage equipment_recovery key"):
+        grant_battle_salvage(manor, exp_fruit_count=0, equipment_recovery={"": 2})

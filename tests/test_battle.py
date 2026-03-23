@@ -1,5 +1,6 @@
 import random
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 from django.utils import timezone
@@ -16,7 +17,11 @@ from battle.services import (
 )
 from core.exceptions import BattlePreparationError, GuestNotIdleError
 from gameplay.models import ArenaEntry, ArenaEntryGuest, ArenaTournament, MissionRun, MissionTemplate, RaidRun
-from gameplay.services.battle_snapshots import build_guest_battle_snapshots, build_guest_snapshot_proxies
+from gameplay.services.battle_snapshots import (
+    build_guest_battle_snapshot,
+    build_guest_battle_snapshots,
+    build_guest_snapshot_proxies,
+)
 from gameplay.services.manor.core import ensure_manor
 from guests.models import GuestStatus, RecruitmentPool
 from guests.services.health import INJURY_RECOVERY_THRESHOLD, heal_guest
@@ -149,6 +154,368 @@ def test_simulate_report_accepts_legacy_snapshot_guests_without_db_ownership_loo
     )
 
     assert isinstance(report, BattleReport)
+
+
+def test_build_guest_snapshot_proxies_rejects_empty_snapshot_payload():
+    with pytest.raises(AssertionError, match="invalid battle guest snapshot payload"):
+        build_guest_snapshot_proxies([{}], include_guest_identity=True)
+
+
+def test_build_guest_snapshot_proxies_rejects_non_mapping_snapshot_payload():
+    with pytest.raises(AssertionError, match="invalid battle guest snapshot payload"):
+        build_guest_snapshot_proxies(["bad-snapshot"], include_guest_identity=True)
+
+
+def _build_snapshot_payload(**overrides):
+    payload = {
+        "guest_id": 1,
+        "manor_id": 1,
+        "display_name": "坏快照",
+        "rarity": "green",
+        "status": "idle",
+        "template_key": "snapshot_tpl",
+        "level": 1,
+        "force": 1,
+        "intellect": 1,
+        "defense_stat": 1,
+        "agility": 1,
+        "luck": 1,
+        "attack": 1,
+        "defense": 1,
+        "max_hp": 1,
+        "current_hp": 1,
+        "troop_capacity": 0,
+        "skill_keys": [],
+    }
+    payload.update(overrides)
+    return payload
+
+
+@pytest.mark.parametrize("field_name", ["display_name", "rarity", "status"])
+def test_build_guest_snapshot_proxies_rejects_blank_required_text_fields(field_name):
+    payload = _build_snapshot_payload(**{field_name: "  "})
+
+    with pytest.raises(AssertionError, match=rf"invalid battle guest snapshot {field_name}"):
+        build_guest_snapshot_proxies([payload], include_guest_identity=True)
+
+
+def test_build_guest_snapshot_proxies_rejects_missing_template_key():
+    with pytest.raises(AssertionError, match="invalid battle guest snapshot template_key"):
+        build_guest_snapshot_proxies(
+            [
+                {
+                    "guest_id": 1,
+                    "display_name": "坏快照",
+                    "rarity": "green",
+                    "level": 1,
+                    "force": 1,
+                    "intellect": 1,
+                    "defense_stat": 1,
+                    "agility": 1,
+                    "luck": 1,
+                    "attack": 1,
+                    "defense": 1,
+                    "max_hp": 1,
+                    "current_hp": 1,
+                }
+            ],
+            include_guest_identity=True,
+        )
+
+
+def test_build_guest_snapshot_proxies_rejects_invalid_skill_keys_payload():
+    with pytest.raises(AssertionError, match="invalid battle guest snapshot skill_keys"):
+        build_guest_snapshot_proxies(
+            [
+                {
+                    "guest_id": 1,
+                    "display_name": "坏快照",
+                    "rarity": "green",
+                    "status": "idle",
+                    "template_key": "snapshot_tpl",
+                    "level": 1,
+                    "force": 1,
+                    "intellect": 1,
+                    "defense_stat": 1,
+                    "agility": 1,
+                    "luck": 1,
+                    "attack": 1,
+                    "defense": 1,
+                    "max_hp": 1,
+                    "current_hp": 1,
+                    "troop_capacity": 0,
+                    "skill_keys": "bad-skills",
+                }
+            ],
+            include_guest_identity=True,
+        )
+
+
+def test_build_guest_snapshot_proxies_rejects_missing_guest_id_when_identity_requested():
+    with pytest.raises(AssertionError, match="invalid battle guest snapshot guest_id"):
+        build_guest_snapshot_proxies(
+            [
+                {
+                    "display_name": "坏快照",
+                    "rarity": "green",
+                    "template_key": "snapshot_tpl",
+                    "level": 1,
+                    "force": 1,
+                    "intellect": 1,
+                    "defense_stat": 1,
+                    "agility": 1,
+                    "luck": 1,
+                    "attack": 1,
+                    "defense": 1,
+                    "max_hp": 1,
+                    "current_hp": 1,
+                    "skill_keys": [],
+                }
+            ],
+            include_guest_identity=True,
+        )
+
+
+def test_build_guest_snapshot_proxies_rejects_invalid_manor_id_when_present():
+    with pytest.raises(AssertionError, match="invalid battle guest snapshot manor_id"):
+        build_guest_snapshot_proxies(
+            [
+                {
+                    "guest_id": 1,
+                    "manor_id": 0,
+                    "display_name": "坏快照",
+                    "rarity": "green",
+                    "template_key": "snapshot_tpl",
+                    "level": 1,
+                    "force": 1,
+                    "intellect": 1,
+                    "defense_stat": 1,
+                    "agility": 1,
+                    "luck": 1,
+                    "attack": 1,
+                    "defense": 1,
+                    "max_hp": 1,
+                    "current_hp": 1,
+                    "skill_keys": [],
+                }
+            ],
+            include_guest_identity=True,
+        )
+
+
+def test_build_guest_snapshot_proxies_rejects_invalid_level():
+    with pytest.raises(AssertionError, match="invalid battle guest snapshot level"):
+        build_guest_snapshot_proxies(
+            [
+                {
+                    "guest_id": 1,
+                    "display_name": "坏快照",
+                    "rarity": "green",
+                    "template_key": "snapshot_tpl",
+                    "level": 0,
+                    "force": 1,
+                    "intellect": 1,
+                    "defense_stat": 1,
+                    "agility": 1,
+                    "luck": 1,
+                    "attack": 1,
+                    "defense": 1,
+                    "max_hp": 1,
+                    "current_hp": 1,
+                    "skill_keys": [],
+                }
+            ],
+            include_guest_identity=True,
+        )
+
+
+def test_build_guest_snapshot_proxies_rejects_invalid_current_hp():
+    with pytest.raises(AssertionError, match="invalid battle guest snapshot current_hp"):
+        build_guest_snapshot_proxies(
+            [
+                {
+                    "guest_id": 1,
+                    "display_name": "坏快照",
+                    "rarity": "green",
+                    "status": "idle",
+                    "template_key": "snapshot_tpl",
+                    "level": 1,
+                    "force": 1,
+                    "intellect": 1,
+                    "defense_stat": 1,
+                    "agility": 1,
+                    "luck": 1,
+                    "attack": 1,
+                    "defense": 1,
+                    "max_hp": 1,
+                    "current_hp": 0,
+                    "skill_keys": [],
+                }
+            ],
+            include_guest_identity=True,
+        )
+
+
+def test_build_guest_snapshot_proxies_rejects_negative_troop_capacity():
+    with pytest.raises(AssertionError, match="invalid battle guest snapshot troop_capacity"):
+        build_guest_snapshot_proxies(
+            [
+                {
+                    "guest_id": 1,
+                    "display_name": "坏快照",
+                    "rarity": "green",
+                    "status": "idle",
+                    "template_key": "snapshot_tpl",
+                    "level": 1,
+                    "force": 1,
+                    "intellect": 1,
+                    "defense_stat": 1,
+                    "agility": 1,
+                    "luck": 1,
+                    "attack": 1,
+                    "defense": 1,
+                    "max_hp": 1,
+                    "current_hp": 1,
+                    "troop_capacity": -1,
+                    "skill_keys": [],
+                }
+            ],
+            include_guest_identity=True,
+        )
+
+
+def test_build_guest_battle_snapshot_rejects_non_string_skill_values():
+    guest = MagicMock()
+    guest.display_name = "快照门客"
+    guest.rarity = "green"
+    guest.status = "idle"
+    guest.template.key = "snapshot_tpl"
+    guest.level = 1
+    guest.force = 1
+    guest.intellect = 1
+    guest.defense_stat = 1
+    guest.agility = 1
+    guest.luck = 1
+    guest.current_hp = 1
+    guest.stat_block.return_value = {"attack": 1, "defense": 1, "hp": 1}
+    guest.skills.values_list.return_value = [123]
+
+    with pytest.raises(AssertionError, match="invalid battle guest skill_keys entry"):
+        build_guest_battle_snapshot(guest, include_identity=False)
+
+
+def test_build_guest_battle_snapshot_rejects_non_string_override_skills():
+    guest = SimpleNamespace(
+        display_name="快照门客",
+        rarity="green",
+        status="idle",
+        template=SimpleNamespace(key="snapshot_tpl"),
+        level=1,
+        force=1,
+        intellect=1,
+        defense_stat=1,
+        agility=1,
+        luck=1,
+        current_hp=1,
+        attack_bonus=0,
+        defense_bonus=0,
+        skills=None,
+        _override_skills=[123],
+        stat_block=lambda: {"attack": 1, "defense": 1, "hp": 1},
+    )
+
+    with pytest.raises(AssertionError, match="invalid battle guest override skill_keys entry"):
+        build_guest_battle_snapshot(guest, include_identity=False)
+
+
+def test_build_guest_battle_snapshot_rejects_invalid_template_key():
+    guest = MagicMock()
+    guest.display_name = "快照门客"
+    guest.rarity = "green"
+    guest.status = "idle"
+    guest.template.key = ""
+    guest.level = 1
+    guest.force = 1
+    guest.intellect = 1
+    guest.defense_stat = 1
+    guest.agility = 1
+    guest.luck = 1
+    guest.current_hp = 1
+    guest.skills.values_list.return_value = []
+    guest.stat_block.return_value = {"attack": 1, "defense": 1, "hp": 1}
+
+    with pytest.raises(AssertionError, match="invalid battle guest template.key"):
+        build_guest_battle_snapshot(guest, include_identity=False)
+
+
+def test_build_guest_battle_snapshot_rejects_invalid_identity_fields():
+    guest = MagicMock()
+    guest.id = 0
+    guest.manor_id = 1
+    guest.display_name = "快照门客"
+    guest.rarity = "green"
+    guest.status = "idle"
+    guest.template.key = "snapshot_tpl"
+    guest.level = 1
+    guest.force = 1
+    guest.intellect = 1
+    guest.defense_stat = 1
+    guest.agility = 1
+    guest.luck = 1
+    guest.current_hp = 1
+    guest.skills.values_list.return_value = []
+    guest.stat_block.return_value = {"attack": 1, "defense": 1, "hp": 1}
+
+    with pytest.raises(AssertionError, match="invalid battle guest id"):
+        build_guest_battle_snapshot(guest, include_identity=True)
+
+
+def test_build_guest_battle_snapshot_rejects_blank_display_name(monkeypatch):
+    guest = SimpleNamespace(
+        display_name=" ",
+        rarity="green",
+        status="idle",
+        template=SimpleNamespace(key="snapshot_tpl"),
+        level=1,
+        force=1,
+        intellect=1,
+        defense_stat=1,
+        agility=1,
+        luck=1,
+        current_hp=5,
+        skills=SimpleNamespace(values_list=lambda *_a, **_k: []),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.battle_snapshots.resolve_guest_combat_stats",
+        lambda _guest: SimpleNamespace(attack=1, defense=1, max_hp=10, troop_capacity=0),
+    )
+
+    with pytest.raises(AssertionError, match="invalid battle guest display_name"):
+        build_guest_battle_snapshot(guest, include_identity=False)
+
+
+def test_build_guest_battle_snapshot_rejects_current_hp_exceeding_max_hp(monkeypatch):
+    guest = SimpleNamespace(
+        display_name="快照门客",
+        rarity="green",
+        status="idle",
+        template=SimpleNamespace(key="snapshot_tpl"),
+        level=1,
+        force=1,
+        intellect=1,
+        defense_stat=1,
+        agility=1,
+        luck=1,
+        current_hp=11,
+        skills=SimpleNamespace(values_list=lambda *_a, **_k: []),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.battle_snapshots.resolve_guest_combat_stats",
+        lambda _guest: SimpleNamespace(attack=1, defense=1, max_hp=10, troop_capacity=0),
+    )
+
+    with pytest.raises(AssertionError, match="invalid battle guest current_hp"):
+        build_guest_battle_snapshot(guest, include_identity=False)
 
 
 @pytest.mark.django_db

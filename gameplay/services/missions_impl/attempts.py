@@ -46,6 +46,8 @@ def bulk_get_mission_extra_attempts(manor: Manor, missions: List[MissionTemplate
 def add_mission_extra_attempt(manor: Manor, mission: MissionTemplate, count: int = 1) -> int:
     from ...models import MissionExtraAttempt
 
+    if isinstance(count, bool):
+        raise AssertionError(f"invalid mission extra attempt count: {count!r}")
     try:
         resolved_count = int(count)
     except (TypeError, ValueError) as exc:

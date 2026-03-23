@@ -65,6 +65,64 @@ def test_generate_sync_battle_report_defense_rejects_invalid_enemy_guests(monkey
         )
 
 
+def test_generate_sync_battle_report_defense_rejects_invalid_enemy_guest_mapping_entry(monkeypatch):
+    def _fake_simulate_report(**_kwargs):
+        raise AssertionError("should not simulate when enemy guest mapping entry is broken")
+
+    monkeypatch.setattr("battle.services.simulate_report", _fake_simulate_report)
+
+    mission = SimpleNamespace(
+        is_defense=True,
+        enemy_technology={},
+        enemy_guests=[{"skills": ["slash"]}],
+        enemy_troops={},
+        battle_type="task",
+        name="Defense Mission",
+        drop_table={},
+    )
+    manor = SimpleNamespace(max_squad_size=6)
+
+    with pytest.raises(AssertionError, match="invalid mission guest config entry"):
+        generate_sync_battle_report(
+            manor=manor,
+            mission=mission,
+            guests=[],
+            loadout={},
+            defender_setup={},
+            travel_seconds=0,
+            seed=1,
+        )
+
+
+def test_generate_sync_battle_report_defense_rejects_invalid_enemy_guest_mapping_skills(monkeypatch):
+    def _fake_simulate_report(**_kwargs):
+        raise AssertionError("should not simulate when enemy guest mapping skills are broken")
+
+    monkeypatch.setattr("battle.services.simulate_report", _fake_simulate_report)
+
+    mission = SimpleNamespace(
+        is_defense=True,
+        enemy_technology={},
+        enemy_guests=[{"key": "enemy_guest", "skills": "bad-skills"}],
+        enemy_troops={},
+        battle_type="task",
+        name="Defense Mission",
+        drop_table={},
+    )
+    manor = SimpleNamespace(max_squad_size=6)
+
+    with pytest.raises(AssertionError, match="invalid mission guest config skills"):
+        generate_sync_battle_report(
+            manor=manor,
+            mission=mission,
+            guests=[],
+            loadout={},
+            defender_setup={},
+            travel_seconds=0,
+            seed=1,
+        )
+
+
 def test_generate_sync_battle_report_defense_rejects_invalid_enemy_troops(monkeypatch):
     def _fake_simulate_report(**_kwargs):
         raise AssertionError("should not simulate when mission troop loadout is broken")

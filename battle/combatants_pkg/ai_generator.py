@@ -12,6 +12,18 @@ from guests.models import Guest
 from .cache import get_all_guest_templates
 
 
+def _normalize_ai_guest_level(level: int) -> int:
+    if isinstance(level, bool):
+        raise AssertionError(f"invalid ai guest level: {level!r}")
+    try:
+        parsed_level = int(level)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid ai guest level: {level!r}") from exc
+    if parsed_level <= 0:
+        raise AssertionError(f"invalid ai guest level: {level!r}")
+    return parsed_level
+
+
 def _get_max_squad() -> int:
     """Get MAX_SQUAD from constants, with fallback."""
     try:
@@ -68,19 +80,31 @@ def build_named_ai_guests(guest_keys: List[str | Dict[str, Any]], level: int = 5
     from guests.growth_rules import RARITY_SKILL_POINT_GAINS
     from guests.utils.attribute_growth import allocate_level_up_attributes
 
+    normalized_level = _normalize_ai_guest_level(level)
     parsed_configs: List[Dict[str, Any]] = []
     template_keys_to_fetch: List[str] = []
 
     for entry in guest_keys:
         if isinstance(entry, str):
+            if not entry.strip():
+                raise AssertionError(f"invalid ai guest config entry: {entry!r}")
             parsed_configs.append({"key": entry, "skills": None})
             template_keys_to_fetch.append(entry)
         elif isinstance(entry, dict):
             key = entry.get("key", "")
+            if not isinstance(key, str) or not key.strip():
+                raise AssertionError(f"invalid ai guest config entry: {entry!r}")
             skills = entry.get("skills")
+            if skills is not None:
+                if not isinstance(skills, (list, tuple, set)):
+                    raise AssertionError(f"invalid ai guest config skills: {skills!r}")
+                for skill in skills:
+                    if not isinstance(skill, str) or not skill.strip():
+                        raise AssertionError(f"invalid ai guest config skills entry: {skill!r}")
             parsed_configs.append({"key": key, "skills": skills})
-            if key:
-                template_keys_to_fetch.append(key)
+            template_keys_to_fetch.append(key)
+        else:
+            raise AssertionError(f"invalid ai guest config entry: {entry!r}")
 
     all_templates = get_all_guest_templates()
     templates = {key: all_templates[key] for key in template_keys_to_fetch if key in all_templates}
@@ -92,11 +116,10 @@ def build_named_ai_guests(guest_keys: List[str | Dict[str, Any]], level: int = 5
 
         template = templates.get(template_key)
         if not template:
-            continue
-
+            raise AssertionError(f"unknown ai guest template key: {template_key!r}")
         dummy_guest = Guest(
             template=template,
-            level=level,
+            level=normalized_level,
             attack_bonus=40,
             defense_bonus=40,
             force=template.base_attack,
@@ -108,8 +131,8 @@ def build_named_ai_guests(guest_keys: List[str | Dict[str, Any]], level: int = 5
             morality=template.default_morality,
         )
 
-        if level > 1:
-            growth_levels = level - 1
+        if normalized_level > 1:
+            growth_levels = normalized_level - 1
 
             growth = allocate_level_up_attributes(dummy_guest, levels=growth_levels)
             dummy_guest.force += growth.get("force", 0)

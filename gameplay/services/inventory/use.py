@@ -53,6 +53,33 @@ def _require_effect_payload_dict(item: InventoryItem) -> dict[str, Any]:
     return payload
 
 
+def _normalize_non_empty_string(raw: Any, *, field_name: str) -> str:
+    if not isinstance(raw, str) or not raw.strip():
+        raise ItemNotConfiguredError(f"{field_name} 配置异常")
+    return raw.strip()
+
+
+def _normalize_positive_config_int(raw: Any, *, field_name: str) -> int:
+    if isinstance(raw, bool):
+        raise ItemNotConfiguredError(f"{field_name} 配置异常")
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise ItemNotConfiguredError(f"{field_name} 配置异常") from exc
+    if value <= 0:
+        raise ItemNotConfiguredError(f"{field_name} 配置异常")
+    return value
+
+
+def _normalize_non_empty_string_list(raw: Any, *, field_name: str) -> list[str]:
+    if not isinstance(raw, list):
+        raise ItemNotConfiguredError(f"{field_name} 配置异常")
+    normalized: list[str] = []
+    for entry in raw:
+        normalized.append(_normalize_non_empty_string(entry, field_name=field_name))
+    return normalized
+
+
 def _collect_weighted_template_choices(choices: list) -> tuple[list[str], list[int]]:
     template_keys: List[str] = []
     weights: List[int] = []
@@ -60,16 +87,9 @@ def _collect_weighted_template_choices(choices: list) -> tuple[list[str], list[i
         if not isinstance(entry, dict):
             # Payload is developer-controlled; misconfig should not silently change behavior.
             raise ItemNotConfiguredError("门客召唤卡 choices 配置异常")
-        template_key = entry.get("template_key")
-        if not template_key:
-            raise ItemNotConfiguredError("门客召唤卡 choices 配置异常")
-        try:
-            weight = int(entry.get("weight", 0) or 0)
-        except (TypeError, ValueError):
-            raise ItemNotConfiguredError("门客召唤卡 choices 配置异常")
-        if weight <= 0:
-            continue
-        template_keys.append(str(template_key))
+        template_key = _normalize_non_empty_string(entry.get("template_key"), field_name="choices")
+        weight = _normalize_positive_config_int(entry.get("weight"), field_name="choices")
+        template_keys.append(template_key)
         weights.append(weight)
     return template_keys, weights
 
@@ -93,21 +113,16 @@ def _ensure_guest_capacity(manor: Manor) -> None:
 
 
 def _consume_required_items_locked(manor: Manor, payload: dict[str, Any]) -> None:
-    required_items = payload.get("required_items") or {}
+    required_items = payload.get("required_items")
+    if required_items is None:
+        return
     if not isinstance(required_items, dict):
         # Don't allow misconfigured costs to degrade to "free use".
         raise ItemNotConfiguredError("required_items 配置异常")
 
     for item_key, raw_amount in required_items.items():
-        normalized_key = str(item_key or "").strip()
-        if not normalized_key:
-            raise ItemNotConfiguredError("required_items 配置异常")
-        try:
-            amount = int(raw_amount)
-        except (TypeError, ValueError):
-            raise ItemNotConfiguredError("required_items 配置异常")
-        if amount <= 0:
-            continue
+        normalized_key = _normalize_non_empty_string(item_key, field_name="required_items")
+        amount = _normalize_positive_config_int(raw_amount, field_name="required_items")
         consume_inventory_item_for_manor_locked(manor, normalized_key, amount)
 
 
@@ -217,11 +232,13 @@ def _apply_guest_summon(item: InventoryItem) -> Dict[str, Any]:
     if not template:
         raise ItemNotConfiguredError(f"门客模板不存在: {chosen_key}")
 
-    exclusive_template_keys = payload.get("exclusive_template_keys") or []
-    if exclusive_template_keys and not isinstance(exclusive_template_keys, list):
-        raise ItemNotConfiguredError("exclusive_template_keys 配置异常")
-    if isinstance(exclusive_template_keys, list):
-        normalized_exclusive_keys = [str(key).strip() for key in exclusive_template_keys if str(key).strip()]
+    exclusive_template_keys_raw = payload.get("exclusive_template_keys")
+    normalized_exclusive_keys: list[str] = []
+    if exclusive_template_keys_raw is not None:
+        normalized_exclusive_keys = _normalize_non_empty_string_list(
+            exclusive_template_keys_raw,
+            field_name="exclusive_template_keys",
+        )
         if normalized_exclusive_keys and manor.guests.filter(template__key__in=normalized_exclusive_keys).exists():
             raise GuestAlreadyOwnedError(template)
 
@@ -271,8 +288,10 @@ def _apply_loot_box(item: InventoryItem) -> Dict[str, Any]:
     rewards: List[str] = []
 
     # 1. 固定资源掉落（可选）
-    resources = payload.get("resources") or {}
-    if resources and not isinstance(resources, dict):
+    resources = payload.get("resources")
+    if resources is None:
+        resources = {}
+    if not isinstance(resources, dict):
         raise ItemNotConfiguredError("resources 配置异常")
     if resources:
         result = _grant_item_resources(manor, resources, item.template.name)
@@ -304,9 +323,10 @@ def _apply_loot_box(item: InventoryItem) -> Dict[str, Any]:
                 rewards.append(f"银两+{granted_silver}")
 
     # 3. 装备掉落（概率，随机一件）
-    gear_keys = payload.get("gear_keys") or []
-    if gear_keys and not isinstance(gear_keys, list):
-        raise ItemNotConfiguredError("gear_keys 配置异常")
+    gear_keys_raw = payload.get("gear_keys")
+    gear_keys: list[str] = []
+    if gear_keys_raw is not None:
+        gear_keys = _normalize_non_empty_string_list(gear_keys_raw, field_name="gear_keys")
     gear_chance = _normalize_probability(payload.get("gear_chance"), field_name="gear_chance")
     skipped_bonus_items: List[str] = []
     if gear_chance > 0 and gear_keys and inventory_random.random() < gear_chance:
@@ -323,9 +343,10 @@ def _apply_loot_box(item: InventoryItem) -> Dict[str, Any]:
 
     # 4. 技能书掉落（概率，随机一本）
     skill_book_chance = _normalize_probability(payload.get("skill_book_chance"), field_name="skill_book_chance")
-    skill_book_keys = payload.get("skill_book_keys", [])
-    if skill_book_keys and not isinstance(skill_book_keys, list):
-        raise ItemNotConfiguredError("skill_book_keys 配置异常")
+    skill_book_keys_raw = payload.get("skill_book_keys")
+    skill_book_keys: list[str] = []
+    if skill_book_keys_raw is not None:
+        skill_book_keys = _normalize_non_empty_string_list(skill_book_keys_raw, field_name="skill_book_keys")
     if skill_book_chance > 0 and skill_book_keys and inventory_random.random() < skill_book_chance:
         book_key = inventory_random.choice(skill_book_keys)
         try:

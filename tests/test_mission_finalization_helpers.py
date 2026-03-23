@@ -33,6 +33,28 @@ def test_extract_report_guest_state_rejects_invalid_team_entry():
         extract_report_guest_state(report, "attacker")
 
 
+def test_extract_report_guest_state_rejects_negative_hp_update():
+    report = SimpleNamespace(
+        losses={"attacker": {"hp_updates": {1: -1}}},
+        attacker_team=[],
+        defender_team=[],
+    )
+
+    with pytest.raises(AssertionError, match="invalid mission report hp update payload"):
+        extract_report_guest_state(report, "attacker")
+
+
+def test_extract_report_guest_state_rejects_non_positive_hp_update_guest_id():
+    report = SimpleNamespace(
+        losses={"attacker": {"hp_updates": {0: 10}}},
+        attacker_team=[],
+        defender_team=[],
+    )
+
+    with pytest.raises(AssertionError, match="invalid mission report hp update payload"):
+        extract_report_guest_state(report, "attacker")
+
+
 def test_extract_report_guest_state_rejects_invalid_losses_container():
     report = SimpleNamespace(
         losses="bad-losses",
@@ -59,6 +81,28 @@ def test_extract_report_guest_state_rejects_non_mapping_team_entry():
     report = SimpleNamespace(
         losses={},
         attacker_team=["bad-entry"],
+        defender_team=[],
+    )
+
+    with pytest.raises(AssertionError, match="invalid mission report team entry"):
+        extract_report_guest_state(report, "attacker")
+
+
+def test_extract_report_guest_state_rejects_negative_team_entry_hp():
+    report = SimpleNamespace(
+        losses={},
+        attacker_team=[{"guest_id": 1, "remaining_hp": -1}],
+        defender_team=[],
+    )
+
+    with pytest.raises(AssertionError, match="invalid mission report team entry"):
+        extract_report_guest_state(report, "attacker")
+
+
+def test_extract_report_guest_state_rejects_non_positive_team_entry_guest_id():
+    report = SimpleNamespace(
+        losses={},
+        attacker_team=[{"guest_id": 0, "remaining_hp": 10}],
         defender_team=[],
     )
 

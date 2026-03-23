@@ -59,7 +59,7 @@
 **检查内容**：向默认数据库连接执行 `SELECT 1` 并读取结果。
 
 **常见失败原因**：
-- MySQL/PostgreSQL 服务宕机
+- MySQL 服务宕机
 - 数据库连接池耗尽（`CONN_MAX_AGE` 设置不合理）
 - 网络分区导致数据库不可达
 - 数据库磁盘空间不足导致只读模式
@@ -72,7 +72,7 @@
 
 **恢复操作**：
 - 重启数据库服务
-- 如连接池耗尽，重启 Gunicorn/Daphne Worker
+- 如连接池耗尽，重启 Web / Worker 进程并检查连接回收策略
 - 检查 `DATABASES["default"]["CONN_MAX_AGE"]` 和 `CONN_HEALTH_CHECKS` 配置
 
 ---

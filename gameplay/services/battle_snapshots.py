@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from types import SimpleNamespace
-from typing import Any, Iterable
+from typing import Any
 
 from django.utils import timezone
 
@@ -16,40 +17,171 @@ class _EmptySkillSet:
         return []
 
 
+def _resolve_snapshot_text_field(raw: Any, *, field_name: str) -> str:
+    if not isinstance(raw, str) or not raw.strip():
+        raise AssertionError(f"invalid battle guest snapshot {field_name}: {raw!r}")
+    return raw.strip()
+
+
+def _resolve_snapshot_identity_int(raw: Any, *, field_name: str, required: bool) -> int | None:
+    if raw is None:
+        if required:
+            raise AssertionError(f"invalid battle guest snapshot {field_name}: {raw!r}")
+        return None
+    if isinstance(raw, bool):
+        raise AssertionError(f"invalid battle guest snapshot {field_name}: {raw!r}")
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid battle guest snapshot {field_name}: {raw!r}") from exc
+    if value <= 0:
+        raise AssertionError(f"invalid battle guest snapshot {field_name}: {raw!r}")
+    return value
+
+
+def _resolve_snapshot_stat_int(raw: Any, *, field_name: str, minimum: int = 0) -> int:
+    if raw is None or isinstance(raw, bool):
+        raise AssertionError(f"invalid battle guest snapshot {field_name}: {raw!r}")
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid battle guest snapshot {field_name}: {raw!r}") from exc
+    if value < minimum:
+        raise AssertionError(f"invalid battle guest snapshot {field_name}: {raw!r}")
+    return value
+
+
+def _resolve_snapshot_template_key(snapshot: dict[str, Any]) -> str:
+    raw_key = snapshot.get("template_key")
+    if not isinstance(raw_key, str) or not raw_key.strip():
+        raise AssertionError(f"invalid battle guest snapshot template_key: {raw_key!r}")
+    return raw_key.strip()
+
+
+def _normalize_snapshot_skill_keys(snapshot: dict[str, Any]) -> list[str]:
+    raw_skill_keys = snapshot.get("skill_keys")
+    if raw_skill_keys is None:
+        return []
+    if not isinstance(raw_skill_keys, (list, tuple, set)):
+        raise AssertionError(f"invalid battle guest snapshot skill_keys: {raw_skill_keys!r}")
+    normalized: list[str] = []
+    for key in raw_skill_keys:
+        if not isinstance(key, str) or not key.strip():
+            raise AssertionError(f"invalid battle guest snapshot skill_key entry: {key!r}")
+        normalized.append(key.strip())
+    return normalized
+
+
+def _normalize_serialized_skill_keys(raw_skill_keys: Any, *, field_name: str) -> list[str]:
+    if raw_skill_keys is None:
+        return []
+    if isinstance(raw_skill_keys, (str, bytes)) or not isinstance(raw_skill_keys, Iterable):
+        raise AssertionError(f"invalid battle guest {field_name}: {raw_skill_keys!r}")
+    normalized: list[str] = []
+    for key in raw_skill_keys:
+        if not isinstance(key, str) or not key.strip():
+            raise AssertionError(f"invalid battle guest {field_name} entry: {key!r}")
+        normalized.append(key.strip())
+    return normalized
+
+
+def _resolve_live_snapshot_identity(guest: Any, *, field_name: str) -> int:
+    raw = getattr(guest, field_name, None)
+    if raw is None or isinstance(raw, bool):
+        raise AssertionError(f"invalid battle guest {field_name}: {raw!r}")
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid battle guest {field_name}: {raw!r}") from exc
+    if value <= 0:
+        raise AssertionError(f"invalid battle guest {field_name}: {raw!r}")
+    return value
+
+
+def _resolve_live_snapshot_template_key(guest: Any) -> str:
+    raw = getattr(getattr(guest, "template", None), "key", None)
+    if not isinstance(raw, str) or not raw.strip():
+        raise AssertionError(f"invalid battle guest template.key: {raw!r}")
+    return raw.strip()
+
+
+def _resolve_live_snapshot_text_field(guest: Any, *, field_name: str) -> str:
+    raw = getattr(guest, field_name, None)
+    if not isinstance(raw, str) or not raw.strip():
+        raise AssertionError(f"invalid battle guest {field_name}: {raw!r}")
+    return raw.strip()
+
+
+def _resolve_live_snapshot_stat_int(guest: Any, *, field_name: str, minimum: int = 0) -> int:
+    raw = getattr(guest, field_name, None)
+    if raw is None or isinstance(raw, bool):
+        raise AssertionError(f"invalid battle guest {field_name}: {raw!r}")
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid battle guest {field_name}: {raw!r}") from exc
+    if value < minimum:
+        raise AssertionError(f"invalid battle guest {field_name}: {raw!r}")
+    return value
+
+
+def _resolve_live_computed_stat_int(raw: Any, *, field_name: str, minimum: int = 0) -> int:
+    if raw is None or isinstance(raw, bool):
+        raise AssertionError(f"invalid battle guest {field_name}: {raw!r}")
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid battle guest {field_name}: {raw!r}") from exc
+    if value < minimum:
+        raise AssertionError(f"invalid battle guest {field_name}: {raw!r}")
+    return value
+
+
 class BattleGuestSnapshotProxy:
     """门客战斗快照，只保留 battle 构建链路需要的显式字段。"""
 
     def __init__(self, snapshot: dict[str, Any], *, include_guest_identity: bool = False):
         now = timezone.now()
-        guest_id = int(snapshot.get("guest_id") or 0) if include_guest_identity else 0
-        guest_manor_id = int(snapshot.get("manor_id") or 0) if include_guest_identity else 0
-        self.pk = guest_id or None
-        self.id = guest_id or None
-        self.manor_id = guest_manor_id or None
+        guest_id = (
+            _resolve_snapshot_identity_int(snapshot.get("guest_id"), field_name="guest_id", required=True)
+            if include_guest_identity
+            else None
+        )
+        guest_manor_id = (
+            _resolve_snapshot_identity_int(snapshot.get("manor_id"), field_name="manor_id", required=False)
+            if include_guest_identity
+            else None
+        )
+        self.pk = guest_id
+        self.id = guest_id
+        self.manor_id = guest_manor_id
         self.is_battle_snapshot_proxy = True
         self.template = SimpleNamespace(
-            key=str(snapshot.get("template_key") or "snapshot_unknown"),
+            key=_resolve_snapshot_template_key(snapshot),
             initial_skills=_EmptySkillSet(),
         )
-        self._display_name = str(snapshot.get("display_name") or "无名门客")
-        self._rarity = str(snapshot.get("rarity") or "gray")
-        self.level = max(1, int(snapshot.get("level") or 1))
-        self.force = int(snapshot.get("force") or 0)
-        self.intellect = int(snapshot.get("intellect") or 0)
-        self.defense_stat = int(snapshot.get("defense_stat") or 0)
-        self.agility = int(snapshot.get("agility") or 0)
-        self.luck = int(snapshot.get("luck") or 0)
-        self.current_hp = max(1, int(snapshot.get("current_hp") or 1))
-        self.status = str(snapshot.get("status") or "idle")
+        self._display_name = _resolve_snapshot_text_field(snapshot.get("display_name"), field_name="display_name")
+        self._rarity = _resolve_snapshot_text_field(snapshot.get("rarity"), field_name="rarity")
+        self.level = _resolve_snapshot_stat_int(snapshot.get("level"), field_name="level", minimum=1)
+        self.force = _resolve_snapshot_stat_int(snapshot.get("force"), field_name="force", minimum=0)
+        self.intellect = _resolve_snapshot_stat_int(snapshot.get("intellect"), field_name="intellect", minimum=0)
+        self.defense_stat = _resolve_snapshot_stat_int(
+            snapshot.get("defense_stat"), field_name="defense_stat", minimum=0
+        )
+        self.agility = _resolve_snapshot_stat_int(snapshot.get("agility"), field_name="agility", minimum=0)
+        self.luck = _resolve_snapshot_stat_int(snapshot.get("luck"), field_name="luck", minimum=0)
+        self.current_hp = _resolve_snapshot_stat_int(snapshot.get("current_hp"), field_name="current_hp", minimum=1)
+        self.status = _resolve_snapshot_text_field(snapshot.get("status"), field_name="status")
         self.last_hp_recovery_at = now
         self.created_at = now
-        self.attack = max(1, int(snapshot.get("attack") or 1))
-        self.defense = max(1, int(snapshot.get("defense") or 1))
-        self.max_hp = max(1, int(snapshot.get("max_hp") or 1))
-        self.troop_capacity = max(0, int(snapshot.get("troop_capacity") or 0))
+        self.attack = _resolve_snapshot_stat_int(snapshot.get("attack"), field_name="attack", minimum=1)
+        self.defense = _resolve_snapshot_stat_int(snapshot.get("defense"), field_name="defense", minimum=1)
+        self.max_hp = _resolve_snapshot_stat_int(snapshot.get("max_hp"), field_name="max_hp", minimum=1)
+        self.troop_capacity = _resolve_snapshot_stat_int(
+            snapshot.get("troop_capacity"), field_name="troop_capacity", minimum=0
+        )
         self.manor = None
-        skill_keys = [str(key).strip() for key in (snapshot.get("skill_keys") or []) if str(key).strip()]
-        self._override_skills = skill_keys
+        self._override_skills = _normalize_snapshot_skill_keys(snapshot)
 
     @property
     def display_name(self) -> str:
@@ -64,37 +196,42 @@ def _serialize_guest_skill_keys(guest: Any) -> list[str]:
     skills = getattr(guest, "skills", None)
     values_list = getattr(skills, "values_list", None)
     if callable(values_list):
-        return [str(key).strip() for key in values_list("key", flat=True) if str(key).strip()]
-    return [str(key).strip() for key in (getattr(guest, "_override_skills", None) or []) if str(key).strip()]
+        return _normalize_serialized_skill_keys(values_list("key", flat=True), field_name="skill_keys")
+    return _normalize_serialized_skill_keys(getattr(guest, "_override_skills", None), field_name="override skill_keys")
 
 
 def build_guest_battle_snapshot(guest: Any, *, include_identity: bool = True) -> dict[str, Any]:
     stats = resolve_guest_combat_stats(guest)
-    troop_capacity = compute_guest_troop_capacity(guest) if isinstance(guest, Guest) else stats.troop_capacity
-    current_hp = int(getattr(guest, "current_hp", 0) or 0)
-    current_hp = min(stats.max_hp, max(1, current_hp if current_hp > 0 else stats.max_hp))
+    attack = _resolve_live_computed_stat_int(stats.attack, field_name="attack", minimum=1)
+    defense = _resolve_live_computed_stat_int(stats.defense, field_name="defense", minimum=1)
+    max_hp = _resolve_live_computed_stat_int(stats.max_hp, field_name="max_hp", minimum=1)
+    troop_capacity_raw = compute_guest_troop_capacity(guest) if isinstance(guest, Guest) else stats.troop_capacity
+    troop_capacity = _resolve_live_computed_stat_int(troop_capacity_raw, field_name="troop_capacity", minimum=0)
+    current_hp = _resolve_live_snapshot_stat_int(guest, field_name="current_hp", minimum=1)
+    if current_hp > max_hp:
+        raise AssertionError(f"invalid battle guest current_hp: {current_hp!r}")
     payload: dict[str, Any] = {
         "snapshot_version": 1,
-        "display_name": guest.display_name,
-        "rarity": guest.rarity,
-        "status": guest.status,
-        "template_key": guest.template.key,
-        "level": int(guest.level),
-        "force": int(guest.force),
-        "intellect": int(guest.intellect),
-        "defense_stat": int(guest.defense_stat),
-        "agility": int(guest.agility),
-        "luck": int(guest.luck),
-        "attack": stats.attack,
-        "defense": stats.defense,
-        "max_hp": stats.max_hp,
+        "display_name": _resolve_live_snapshot_text_field(guest, field_name="display_name"),
+        "rarity": _resolve_live_snapshot_text_field(guest, field_name="rarity"),
+        "status": _resolve_live_snapshot_text_field(guest, field_name="status"),
+        "template_key": _resolve_live_snapshot_template_key(guest),
+        "level": _resolve_live_snapshot_stat_int(guest, field_name="level", minimum=1),
+        "force": _resolve_live_snapshot_stat_int(guest, field_name="force", minimum=0),
+        "intellect": _resolve_live_snapshot_stat_int(guest, field_name="intellect", minimum=0),
+        "defense_stat": _resolve_live_snapshot_stat_int(guest, field_name="defense_stat", minimum=0),
+        "agility": _resolve_live_snapshot_stat_int(guest, field_name="agility", minimum=0),
+        "luck": _resolve_live_snapshot_stat_int(guest, field_name="luck", minimum=0),
+        "attack": attack,
+        "defense": defense,
+        "max_hp": max_hp,
         "current_hp": current_hp,
         "troop_capacity": troop_capacity,
         "skill_keys": _serialize_guest_skill_keys(guest),
     }
     if include_identity:
-        payload["guest_id"] = int(guest.id)
-        payload["manor_id"] = int(guest.manor_id)
+        payload["guest_id"] = _resolve_live_snapshot_identity(guest, field_name="id")
+        payload["manor_id"] = _resolve_live_snapshot_identity(guest, field_name="manor_id")
     return payload
 
 
@@ -113,8 +250,8 @@ def build_guest_snapshot_proxies(
 ) -> list[BattleGuestSnapshotProxy]:
     proxies: list[BattleGuestSnapshotProxy] = []
     for snapshot in snapshots:
-        payload = dict(snapshot or {})
-        if not payload:
-            continue
+        if not isinstance(snapshot, dict) or not snapshot:
+            raise AssertionError(f"invalid battle guest snapshot payload: {snapshot!r}")
+        payload = dict(snapshot)
         proxies.append(BattleGuestSnapshotProxy(payload, include_guest_identity=include_guest_identity))
     return proxies

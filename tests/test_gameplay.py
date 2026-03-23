@@ -183,6 +183,14 @@ def test_normalize_mission_loadout_rejects_unknown_troop_keys():
         )
 
 
+def test_normalize_mission_loadout_rejects_invalid_known_quantity():
+    with pytest.raises(AssertionError, match="invalid mission troop loadout quantity: archer"):
+        normalize_mission_loadout(
+            {"archer": "bad"},
+            troop_templates={"archer": {"label": "弓手"}},
+        )
+
+
 def test_normalize_mission_loadout_ignores_unknown_troop_keys_with_invalid_quantity_shape():
     loadout = normalize_mission_loadout(
         {"nonexistent_troop_xxx": "not-a-number"},
@@ -217,6 +225,20 @@ def test_mission_travel_time_rejects_missing_troop_templates_for_non_empty_loado
 def test_calculate_travel_time_rejects_invalid_loadout_shape():
     with pytest.raises(AssertionError, match="invalid mission troop loadout payload"):
         calculate_travel_time(60, guests=[], troop_loadout=["archer"], troop_templates={"archer": {"speed_bonus": 1}})
+
+
+def test_calculate_travel_time_rejects_unknown_positive_troop_key():
+    with pytest.raises(AssertionError, match="invalid mission troop loadout key"):
+        calculate_travel_time(
+            60, guests=[], troop_loadout={"unknown": 1}, troop_templates={"archer": {"speed_bonus": 1}}
+        )
+
+
+def test_calculate_travel_time_rejects_invalid_known_troop_quantity():
+    with pytest.raises(AssertionError, match="invalid mission troop loadout quantity: archer"):
+        calculate_travel_time(
+            60, guests=[], troop_loadout={"archer": True}, troop_templates={"archer": {"speed_bonus": 1}}
+        )
 
 
 def test_resolve_max_squad_size_rejects_invalid_bool():

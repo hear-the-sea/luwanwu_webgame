@@ -270,6 +270,42 @@ def test_build_defender_setup_and_drop_table_rejects_blank_guest_config_entry():
         )
 
 
+def test_build_defender_setup_and_drop_table_rejects_mapping_guest_config_without_key():
+    mission = SimpleNamespace(
+        is_defense=False,
+        enemy_guests=[{"skills": ["slash"]}],
+        enemy_troops={},
+        enemy_technology={},
+        drop_table={},
+    )
+
+    with pytest.raises(AssertionError, match="invalid mission enemy_guests"):
+        mission_launch_post_actions.build_defender_setup_and_drop_table(
+            mission,
+            loadout={},
+            normalize_guest_configs=mission_execution._normalize_guest_configs,
+            normalize_mapping=mission_execution._normalize_mapping,
+        )
+
+
+def test_build_defender_setup_and_drop_table_rejects_mapping_guest_config_with_invalid_skills():
+    mission = SimpleNamespace(
+        is_defense=False,
+        enemy_guests=[{"key": "enemy_guest", "skills": "bad-skills"}],
+        enemy_troops={},
+        enemy_technology={},
+        drop_table={},
+    )
+
+    with pytest.raises(AssertionError, match="invalid mission enemy_guests"):
+        mission_launch_post_actions.build_defender_setup_and_drop_table(
+            mission,
+            loadout={},
+            normalize_guest_configs=mission_execution._normalize_guest_configs,
+            normalize_mapping=mission_execution._normalize_mapping,
+        )
+
+
 def test_build_defender_setup_and_drop_table_rejects_invalid_enemy_technology():
     mission = SimpleNamespace(
         is_defense=False,
