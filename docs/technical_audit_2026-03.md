@@ -20,6 +20,7 @@
 - 2026-03-21 本地验证：默认 `make test` 通过，结果为 `1852 passed, 28 deselected`。
 - 2026-03-23 本轮验证：`make lint` 通过。
 - 2026-03-23 本轮验证：默认 `make test` 通过，结果为 `2248 passed, 38 deselected`。
+- 2026-03-23 本轮验证：`DJANGO_TEST_USE_ENV_SERVICES=1 REDIS_URL=redis://127.0.0.1:6379 REDIS_BROKER_URL=redis://127.0.0.1:6379/0 REDIS_RESULT_URL=redis://127.0.0.1:6379/0 REDIS_CHANNEL_URL=redis://127.0.0.1:6379/1 REDIS_CACHE_URL=redis://127.0.0.1:6379/2 python -m pytest tests/test_mission_concurrency_integration.py tests/test_guest_recruitment_concurrency_integration.py -q` 通过，结果为 `6 passed, 1 skipped`。
 - 2026-03-22 本轮验证：`pytest tests/test_trade_auction_rounds.py -q` 通过，结果为 `30 passed`。
 - 2026-03-22 本轮验证：`pytest tests/test_inventory_guest_items.py -q` 通过，结果为 `16 passed`。
 - 2026-03-23 本轮验证：`pytest tests/test_guest_summon_card.py -q` 通过，结果为 `22 passed`。
