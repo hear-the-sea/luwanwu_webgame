@@ -7,6 +7,7 @@ from django.test import Client
 from django.urls import reverse
 from django.utils import timezone
 
+from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.manor.core import ensure_manor
 from guests.models import Guest, GuestTemplate
 
@@ -116,3 +117,28 @@ def test_guest_detail_view_uses_explicit_read_helper(game_data, django_user_mode
 
     assert response.status_code == 200
     assert calls["helper"] == 1
+
+
+@pytest.mark.django_db
+def test_guest_detail_view_bubbles_up_invalid_skill_book_payload(game_data, django_user_model):
+    user = django_user_model.objects.create_user(username="detail_skill_book_bad_payload", password="pass123")
+    manor = ensure_manor(user)
+    guest = _create_guest(manor, prefix="detail_skill_book_bad_payload")
+    template = ItemTemplate.objects.create(
+        key="detail_skill_book_bad_payload_item",
+        name="坏结构技能书",
+        effect_type=ItemTemplate.EffectType.SKILL_BOOK,
+        effect_payload=False,
+    )
+    InventoryItem.objects.create(
+        manor=manor,
+        template=template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    client = Client()
+    client.force_login(user)
+
+    with pytest.raises(AssertionError, match="invalid guest roster skill_book effect_payload"):
+        client.get(reverse("guests:detail", args=[guest.pk]))

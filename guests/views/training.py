@@ -19,7 +19,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
-from core.exceptions import GameError
+from core.exceptions import GameError, GuestItemConfigurationError
 from core.utils import is_ajax_request, is_json_request, json_error, json_success, safe_int, safe_positive_int
 from core.utils.rate_limit import rate_limit_json
 from core.utils.validation import safe_redirect_url, sanitize_error_message
@@ -30,6 +30,16 @@ from ..services.recruitment_guests import allocate_attribute_points
 from ..services.training import finalize_guest_training, train_guest, use_experience_item_for_guest
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_experience_item_seconds(item) -> int:
+    payload = item.template.effect_payload
+    if not isinstance(payload, dict):
+        raise GuestItemConfigurationError("道具未配置有效时间")
+    reduce_seconds = safe_int(payload.get("time"), default=None)
+    if reduce_seconds is None or reduce_seconds <= 0:
+        raise GuestItemConfigurationError("道具未配置有效时间")
+    return reduce_seconds
 
 
 @method_decorator(require_POST, name="dispatch")
@@ -107,14 +117,7 @@ def use_experience_item_view(request, pk: int):
         storage_location=InventoryItem.StorageLocation.WAREHOUSE,
     )
     try:
-        payload = item.template.effect_payload or {}
-        reduce_seconds = safe_int(payload.get("time"), default=None)
-        if reduce_seconds is None or reduce_seconds <= 0:
-            error_msg = "道具未配置有效时间"
-            if is_ajax:
-                return json_error(error_msg, status=400, include_message=True)
-            messages.error(request, error_msg)
-            return redirect(next_url)
+        reduce_seconds = _resolve_experience_item_seconds(item)
         result = use_experience_item_for_guest(manor, guest, item.pk, reduce_seconds)
         new_quantity = safe_int(result.get("remaining_item_quantity"), default=0, min_val=0)
         reduced_seconds = safe_int(result.get("time_reduced"), default=0, min_val=0) or 0

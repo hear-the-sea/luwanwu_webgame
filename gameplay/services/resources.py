@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Dict, Tuple
+from typing import Any, Dict, Tuple
 
 from django.conf import settings
 from django.db import transaction
@@ -20,6 +20,35 @@ from ..models import Manor, ResourceEvent, ResourceType
 from ..utils.resource_calculator import RESOURCE_FIELDS, get_hourly_rates, get_personnel_grain_cost_per_hour
 
 logger = logging.getLogger(__name__)
+
+
+def _require_resource_key(raw: Any) -> str:
+    if not isinstance(raw, str) or not raw.strip():
+        raise AssertionError(f"invalid resource key: {raw!r}")
+    return raw.strip()
+
+
+def _require_resource_amount(raw: Any, *, allow_negative: bool = False) -> int:
+    if isinstance(raw, bool):
+        raise AssertionError(f"invalid resource amount: {raw!r}")
+    if not isinstance(raw, int):
+        raise AssertionError(f"invalid resource amount: {raw!r}")
+    if allow_negative:
+        return raw
+    if raw < 0:
+        raise AssertionError(f"invalid resource amount: {raw!r}")
+    return raw
+
+
+def _normalize_resource_mapping(raw: Any, *, field_name: str, allow_negative: bool = False) -> Dict[str, int]:
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise AssertionError(f"invalid {field_name}: {raw!r}")
+    normalized: Dict[str, int] = {}
+    for resource, amount in raw.items():
+        normalized[_require_resource_key(resource)] = _require_resource_amount(amount, allow_negative=allow_negative)
+    return normalized
 
 
 def _sync_warehouse_grain_item_locked(manor: Manor) -> None:
@@ -86,11 +115,11 @@ def _require_atomic_block(name: str) -> None:
 
 
 def _raise_insufficient_resource_error(manor: Manor, cost: Dict[str, int]) -> None:
-    for resource, amount in cost.items():
-        required = int(amount or 0)
+    normalized_cost = _normalize_resource_mapping(cost, field_name="resource cost")
+    for resource, required in normalized_cost.items():
         if required <= 0:
             continue
-        available = int(getattr(manor, resource, 0) or 0)
+        available = _require_resource_amount(getattr(manor, resource, 0))
         if available >= required:
             continue
         if resource == ResourceType.SILVER:
@@ -177,21 +206,22 @@ def spend_resources_locked(
     该函数不会创建新的事务块，也不会额外对 Manor 行加锁；适用于上层服务函数已经
     `select_for_update()` 锁定 manor 行的场景，避免重复锁与嵌套事务的冗余开销。
     """
-    if not cost:
+    normalized_cost = _normalize_resource_mapping(cost, field_name="resource cost")
+    if not normalized_cost:
         return
     _require_atomic_block("spend_resources_locked")
     _sync_resource_production_locked(manor)
 
-    filters = {f"{key}__gte": value for key, value in cost.items()}
-    updates = {key: F(key) - value for key, value in cost.items()}
+    filters = {f"{key}__gte": value for key, value in normalized_cost.items()}
+    updates = {key: F(key) - value for key, value in normalized_cost.items()}
     updated = Manor.objects.filter(pk=manor.pk, **filters).update(**updates)
     if not updated:
-        _raise_insufficient_resource_error(manor, cost)
+        _raise_insufficient_resource_error(manor, normalized_cost)
 
     manor.refresh_from_db(fields=RESOURCE_FIELDS + ["resource_updated_at"])
-    if int(cost.get(ResourceType.GRAIN, 0) or 0) > 0:
+    if normalized_cost.get(ResourceType.GRAIN, 0) > 0:
         _sync_warehouse_grain_item_locked(manor)
-    negative = {key: -val for key, val in cost.items()}
+    negative = {key: -val for key, val in normalized_cost.items()}
     log_resource_gain(manor, negative, reason, note)
 
 
@@ -212,7 +242,8 @@ def grant_resources_locked(
     Returns:
         (credited, overflow) - 实际入账资源和溢出资源字典
     """
-    if not rewards:
+    normalized_rewards = _normalize_resource_mapping(rewards, field_name="resource rewards")
+    if not normalized_rewards:
         return {}, {}
     _require_atomic_block("grant_resources_locked")
     if sync_production:
@@ -221,7 +252,7 @@ def grant_resources_locked(
     credited: Dict[str, int] = {}
     overflow: Dict[str, int] = {}
 
-    for resource, amount in rewards.items():
+    for resource, amount in normalized_rewards.items():
         credit_result = _credit_resource(manor, resource, amount)
         if credit_result is None:
             continue
@@ -237,7 +268,7 @@ def grant_resources_locked(
 
     if credited:
         manor.save(update_fields=list(credited.keys()))
-        if int(credited.get(ResourceType.GRAIN, 0) or 0) > 0:
+        if credited.get(ResourceType.GRAIN, 0) > 0:
             _sync_warehouse_grain_item_locked(manor)
         log_resource_gain(manor, credited, reason, note)
 
@@ -306,9 +337,10 @@ def log_resource_gain(manor: Manor, payload: Dict[str, int], reason: str, note: 
         reason: 变化原因
         note: 备注信息
     """
+    normalized_payload = _normalize_resource_mapping(payload, field_name="resource event payload", allow_negative=True)
     events = [
         ResourceEvent(manor=manor, resource_type=resource, delta=delta, reason=reason, note=note)
-        for resource, delta in payload.items()
+        for resource, delta in normalized_payload.items()
         if delta
     ]
     if events:
@@ -330,13 +362,14 @@ def spend_resources(
     Raises:
         InsufficientResourceError: 资源不足时抛出
     """
-    if not cost:
+    normalized_cost = _normalize_resource_mapping(cost, field_name="resource cost")
+    if not normalized_cost:
         return
 
     with transaction.atomic():
         # 安全修复：正确获取锁定后的 manor 对象并传递给 spend_resources_locked
         locked_manor = Manor.objects.select_for_update().get(pk=manor.pk)
-        spend_resources_locked(locked_manor, cost, note=note, reason=reason)
+        spend_resources_locked(locked_manor, normalized_cost, note=note, reason=reason)
 
     # 刷新原始 manor 对象以反映最新状态
     manor.refresh_from_db(fields=RESOURCE_FIELDS + ["resource_updated_at"])
@@ -365,7 +398,8 @@ def grant_resources(
     Returns:
         实际入账资源字典 {resource_type: credited_amount}
     """
-    if not rewards:
+    normalized_rewards = _normalize_resource_mapping(rewards, field_name="resource rewards")
+    if not normalized_rewards:
         return {}
 
     with transaction.atomic():
@@ -373,7 +407,7 @@ def grant_resources(
         # 修复：正确解构 grant_resources_locked 的返回值
         credited, _overflow = grant_resources_locked(
             locked_manor,
-            rewards,
+            normalized_rewards,
             note=note,
             reason=reason,
             sync_production=sync_production,

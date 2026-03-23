@@ -395,6 +395,24 @@ def test_grant_resources_skips_unknown_resource_and_logs_error(caplog):
 
 
 @pytest.mark.django_db
+def test_grant_resources_rejects_false_rewards_payload():
+    user = User.objects.create_user(username="resource_false_rewards", password="test123")
+    manor = ensure_manor(user)
+
+    with pytest.raises(AssertionError, match="invalid resource rewards"):
+        grant_resources(manor, False, "坏奖励配置")  # type: ignore[arg-type]
+
+
+@pytest.mark.django_db
+def test_grant_resources_rejects_bool_reward_amount():
+    user = User.objects.create_user(username="resource_bool_reward", password="test123")
+    manor = ensure_manor(user)
+
+    with pytest.raises(AssertionError, match="invalid resource amount: True"):
+        grant_resources(manor, {"silver": True}, "坏奖励数量")  # type: ignore[arg-type]
+
+
+@pytest.mark.django_db
 def test_spend_resources_success():
     """测试消耗资源（成功）"""
     user = User.objects.create_user(username="testuser", password="test123")
@@ -418,6 +436,24 @@ def test_spend_resources_insufficient():
 
     with pytest.raises(InsufficientResourceError, match="银两不足"):
         spend_resources(manor, {"silver": 100}, "测试消耗")
+
+
+@pytest.mark.django_db
+def test_spend_resources_rejects_negative_cost():
+    user = User.objects.create_user(username="resource_negative_cost", password="test123")
+    manor = ensure_manor(user)
+
+    with pytest.raises(AssertionError, match="invalid resource amount: -1"):
+        spend_resources(manor, {"silver": -1}, "坏消耗")
+
+
+@pytest.mark.django_db
+def test_spend_resources_rejects_false_cost_payload():
+    user = User.objects.create_user(username="resource_false_cost", password="test123")
+    manor = ensure_manor(user)
+
+    with pytest.raises(AssertionError, match="invalid resource cost"):
+        spend_resources(manor, False, "坏消耗配置")  # type: ignore[arg-type]
 
 
 @pytest.mark.django_db

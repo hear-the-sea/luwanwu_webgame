@@ -10,7 +10,7 @@ from django_redis.exceptions import ConnectionInterrupted
 import guests.views.recruit as recruit_views
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.manor.core import ensure_manor
-from guests.models import GearItem, GearSlot, RecruitmentCandidate, RecruitmentPool
+from guests.models import GearItem, GearSlot, RecruitmentCandidate, RecruitmentPool, Skill
 from guests.services.recruitment import recruit_guest
 from guests.services.recruitment_guests import finalize_candidate
 
@@ -127,6 +127,39 @@ def test_use_experience_item_view_rejects_invalid_effect_payload_ajax(game_data,
 
 
 @pytest.mark.django_db
+def test_use_experience_item_view_rejects_non_mapping_effect_payload_ajax(game_data, django_user_model, monkeypatch):
+    manor, guest, client = _bootstrap_guest_client(
+        game_data, django_user_model, username="view_exp_item_bad_payload_shape"
+    )
+    template = ItemTemplate.objects.create(
+        key=f"view_exp_item_bad_payload_shape_{manor.id}",
+        name="异常经验结构道具",
+        effect_type=ItemTemplate.EffectType.EXPERIENCE_ITEM,
+        effect_payload=False,
+    )
+    item = InventoryItem.objects.create(manor=manor, template=template, quantity=1)
+    called = {"count": 0}
+
+    def _unexpected_use(*_args, **_kwargs):
+        called["count"] += 1
+        return {}
+
+    monkeypatch.setattr("guests.views.training.use_experience_item_for_guest", _unexpected_use)
+
+    response = client.post(
+        reverse("guests:use_exp_item", args=[guest.pk]),
+        {"item_id": str(item.pk)},
+        HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+    )
+
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["success"] is False
+    assert "道具未配置有效时间" in payload["error"]
+    assert called["count"] == 0
+
+
+@pytest.mark.django_db
 def test_use_medicine_item_view_rejects_invalid_effect_payload_ajax(game_data, django_user_model, monkeypatch):
     manor, guest, client = _bootstrap_guest_client(
         game_data, django_user_model, username="view_medicine_item_bad_payload"
@@ -136,6 +169,39 @@ def test_use_medicine_item_view_rejects_invalid_effect_payload_ajax(game_data, d
         name="异常药品配置道具",
         effect_type=ItemTemplate.EffectType.MEDICINE,
         effect_payload={"hp": None},
+    )
+    item = InventoryItem.objects.create(manor=manor, template=template, quantity=1)
+    called = {"count": 0}
+
+    def _unexpected_use(*_args, **_kwargs):
+        called["count"] += 1
+        return {}
+
+    monkeypatch.setattr("guests.views.items.use_medicine_item_for_guest", _unexpected_use)
+
+    response = client.post(
+        reverse("guests:use_medicine_item", args=[guest.pk]),
+        {"item_id": str(item.pk)},
+        HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+    )
+
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["success"] is False
+    assert "道具未配置有效恢复值" in payload["error"]
+    assert called["count"] == 0
+
+
+@pytest.mark.django_db
+def test_use_medicine_item_view_rejects_non_mapping_effect_payload_ajax(game_data, django_user_model, monkeypatch):
+    manor, guest, client = _bootstrap_guest_client(
+        game_data, django_user_model, username="view_medicine_item_bad_payload_shape"
+    )
+    template = ItemTemplate.objects.create(
+        key=f"view_medicine_item_bad_payload_shape_{manor.id}",
+        name="异常药品结构道具",
+        effect_type=ItemTemplate.EffectType.MEDICINE,
+        effect_payload=False,
     )
     item = InventoryItem.objects.create(manor=manor, template=template, quantity=1)
     called = {"count": 0}
@@ -827,6 +893,53 @@ def test_learn_skill_view_rejects_invalid_item_id_redirect(game_data, django_use
     assert response.status_code == 302
     messages = [str(m) for m in get_messages(response.wsgi_request)]
     assert any("请选择技能书" in m for m in messages)
+
+
+@pytest.mark.django_db
+def test_learn_skill_view_rejects_non_mapping_effect_payload_redirect(game_data, django_user_model):
+    manor, guest, client = _bootstrap_guest_client(
+        game_data, django_user_model, username="view_learn_skill_bad_payload"
+    )
+    template = ItemTemplate.objects.create(
+        key=f"view_learn_skill_bad_payload_{manor.id}",
+        name="坏结构技能书",
+        effect_type=ItemTemplate.EffectType.SKILL_BOOK,
+        effect_payload=False,
+    )
+    item = InventoryItem.objects.create(manor=manor, template=template, quantity=1)
+
+    response = client.post(
+        reverse("guests:learn_skill", args=[guest.pk]),
+        {"item_id": str(item.pk)},
+    )
+
+    assert response.status_code == 302
+    messages = [str(m) for m in get_messages(response.wsgi_request)]
+    assert any("技能书配置有误" in m for m in messages)
+
+
+@pytest.mark.django_db
+def test_learn_skill_view_rejects_non_string_skill_key_redirect(game_data, django_user_model):
+    manor, guest, client = _bootstrap_guest_client(
+        game_data, django_user_model, username="view_learn_skill_bad_skill_key"
+    )
+    Skill.objects.create(key=f"view_learn_skill_unused_{manor.id}", name="测试技能")
+    template = ItemTemplate.objects.create(
+        key=f"view_learn_skill_bad_skill_key_{manor.id}",
+        name="坏技能键技能书",
+        effect_type=ItemTemplate.EffectType.SKILL_BOOK,
+        effect_payload={"skill_key": 123},
+    )
+    item = InventoryItem.objects.create(manor=manor, template=template, quantity=1)
+
+    response = client.post(
+        reverse("guests:learn_skill", args=[guest.pk]),
+        {"item_id": str(item.pk)},
+    )
+
+    assert response.status_code == 302
+    messages = [str(m) for m in get_messages(response.wsgi_request)]
+    assert any("技能书配置有误" in m for m in messages)
 
 
 @pytest.mark.django_db

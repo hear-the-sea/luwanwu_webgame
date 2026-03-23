@@ -15,7 +15,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from core.config import GUEST
-from core.exceptions import GameError, GuestSkillNotFoundError
+from core.exceptions import GameError, GuestItemConfigurationError, GuestSkillNotFoundError
 from core.utils.validation import safe_positive_int, safe_redirect_url, sanitize_error_message
 
 from ..models import Guest, GuestStatus, Skill
@@ -47,8 +47,13 @@ def _get_skill_book_inventory_item(manor, item_id: int):
 
 
 def _resolve_skill_from_inventory_item(inventory_item) -> Skill | None:
-    payload = inventory_item.template.effect_payload or {}
-    skill_key = str(payload.get("skill_key", "")).strip()
+    payload = inventory_item.template.effect_payload
+    if not isinstance(payload, dict):
+        raise GuestItemConfigurationError("技能书配置有误")
+    raw_skill_key = payload.get("skill_key", "")
+    if not isinstance(raw_skill_key, str):
+        raise GuestItemConfigurationError("技能书配置有误")
+    skill_key = raw_skill_key.strip()
     if not skill_key:
         return None
     return Skill.objects.filter(key=skill_key).first()
@@ -112,7 +117,11 @@ def learn_skill_view(request, pk: int):
         return redirect(next_url)
 
     inventory_item = _get_skill_book_inventory_item(manor, item_id_int)
-    skill = _resolve_skill_from_inventory_item(inventory_item)
+    try:
+        skill = _resolve_skill_from_inventory_item(inventory_item)
+    except GameError as exc:
+        messages.error(request, sanitize_error_message(exc))
+        return redirect(next_url)
     if skill is None:
         messages.error(request, "技能书配置有误")
         return redirect(next_url)

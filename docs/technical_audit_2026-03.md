@@ -25,6 +25,12 @@
 - 2026-03-22 本轮验证：`pytest tests/test_inventory_guest_items.py -q` 通过，结果为 `16 passed`。
 - 2026-03-23 本轮验证：`pytest tests/test_guest_summon_card.py -q` 通过，结果为 `29 passed`。
 - 2026-03-23 本轮验证：`pytest tests/test_inventory_views.py -k "use_item_ajax" -q` 通过，结果为 `4 passed, 25 deselected`。
+- 2026-03-23 本轮验证：`pytest tests/test_guest_equipment_service_contracts.py tests/test_guest_item_view_validation.py -k "gear_options or equip_view or equipment_service_contracts" -q` 通过，结果为 `12 passed, 24 deselected`。
+- 2026-03-23 本轮验证：`pytest tests/inventory_guest_items/soul_container.py tests/test_guest_roster_service.py -q` 通过，结果为 `8 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_gameplay_services.py -k "grant_resources or spend_resources or sync_resource_production" -q` 通过，结果为 `16 passed, 13 deselected`。
+- 2026-03-23 本轮验证：`pytest tests/test_guest_item_view_validation.py tests/test_guest_view_error_boundaries.py -k "use_medicine_item_view or learn_skill_view or forget_skill_view" -q` 通过，结果为 `19 passed, 55 deselected`。
+- 2026-03-23 本轮验证：`pytest tests/test_guest_runtime_refresh_views.py -q` 通过，结果为 `5 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_guest_item_view_validation.py tests/test_guest_view_error_boundaries.py -k "use_experience_item_view or allocate_points_view or train" -q` 通过，结果为 `15 passed, 60 deselected`。
 - 2026-03-23 本轮验证：`pytest tests/test_treasury_move_service_contracts.py -q` 通过，结果为 `2 passed`。
 - 2026-03-23 本轮验证：`pytest tests/test_guest_recruitment_flow_helpers.py -q` 通过，结果为 `25 passed`。
 - 2026-03-23 本轮验证：`pytest tests/test_guest_recruitment_service.py -k "bulk_finalize_candidates" -q` 通过，结果为 `4 passed, 30 deselected`。

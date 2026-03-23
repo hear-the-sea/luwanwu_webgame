@@ -23,6 +23,16 @@ from ..services.health import use_medicine_item_for_guest
 logger = logging.getLogger(__name__)
 
 
+def _resolve_medicine_heal_amount(item) -> int:
+    payload = item.template.effect_payload
+    if not isinstance(payload, dict):
+        raise GuestItemConfigurationError("道具未配置有效恢复值")
+    heal_amount = safe_int(payload.get("hp"), default=None)
+    if heal_amount is None or heal_amount <= 0:
+        raise GuestItemConfigurationError("道具未配置有效恢复值")
+    return heal_amount
+
+
 @login_required
 @require_POST
 def use_medicine_item_view(request, pk: int):
@@ -57,10 +67,7 @@ def use_medicine_item_view(request, pk: int):
         storage_location=InventoryItem.StorageLocation.WAREHOUSE,
     )
     try:
-        payload = item.template.effect_payload or {}
-        heal_amount = safe_int(payload.get("hp"), default=None)
-        if heal_amount is None or heal_amount <= 0:
-            raise GuestItemConfigurationError("道具未配置有效恢复值")
+        heal_amount = _resolve_medicine_heal_amount(item)
         result = use_medicine_item_for_guest(manor, guest, item.pk, heal_amount)
         new_quantity = safe_int(result.get("remaining_item_quantity"), default=0, min_val=0)
         healed = safe_int(result.get("healed"), default=0, min_val=0)

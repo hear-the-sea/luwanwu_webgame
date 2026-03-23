@@ -30,6 +30,20 @@ logger = logging.getLogger(__name__)
 MAX_GUEST_SKILL_SLOTS = int(GUEST.MAX_SKILL_SLOTS)
 
 
+def _resolve_skill_book_skill_key(entry) -> str | None:
+    payload = entry.template.effect_payload
+    if payload is None:
+        return None
+    if not isinstance(payload, dict):
+        raise AssertionError(f"invalid guest roster skill_book effect_payload: {payload!r}")
+    raw_key = payload.get("skill_key")
+    if raw_key is None:
+        return None
+    if not isinstance(raw_key, str) or not raw_key.strip():
+        raise AssertionError(f"invalid guest roster skill_book skill_key: {raw_key!r}")
+    return raw_key.strip()
+
+
 def _load_guest_detail(manor, guest_pk: int):
     return get_object_or_404(
         manor.guests.select_related("template").prefetch_related(
@@ -127,15 +141,10 @@ def _build_skill_books_context(manor, guest_skill_records):
         .only("id", "quantity", "template__name", "template__effect_payload")
         .order_by("template__name")
     )
-    skill_keys = {
-        (item.template.effect_payload or {}).get("skill_key")
-        for item in skill_book_items
-        if (item.template.effect_payload or {}).get("skill_key")
-    }
+    skill_key_entries = [(entry, _resolve_skill_book_skill_key(entry)) for entry in skill_book_items]
+    skill_keys = {skill_key for _entry, skill_key in skill_key_entries if skill_key}
     skills = {skill.key: skill for skill in Skill.objects.filter(key__in=skill_keys).only("key", "name", "description")}
-    for entry in skill_book_items:
-        payload = entry.template.effect_payload or {}
-        key = payload.get("skill_key")
+    for entry, key in skill_key_entries:
         skill_books.append(
             {
                 "inventory": entry,
