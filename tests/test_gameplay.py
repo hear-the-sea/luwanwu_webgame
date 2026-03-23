@@ -15,7 +15,13 @@ from gameplay.constants import MAX_CONCURRENT_BUILDING_UPGRADES
 from gameplay.models import MissionRun, MissionTemplate, RaidRun, ScoutRecord
 from gameplay.services.manor.core import ensure_manor, refresh_manor_state, start_upgrade
 from gameplay.services.missions import launch_mission, refresh_mission_runs, request_retreat
-from gameplay.utils.resource_calculator import normalize_mission_loadout
+from gameplay.services.missions_impl import loadout as mission_loadout_service
+from gameplay.services.missions_impl.launch_command import (
+    _resolve_base_travel_time,
+    _resolve_max_squad_size,
+    prepare_launch_inputs,
+)
+from gameplay.utils.resource_calculator import calculate_travel_time, normalize_mission_loadout
 from guests.models import GuestStatus
 from guests.services.recruitment import recruit_guest
 from guests.services.recruitment_guests import finalize_candidate
@@ -186,6 +192,75 @@ def test_normalize_mission_loadout_ignores_unknown_troop_keys_with_invalid_quant
     assert loadout == {"archer": 0}
 
 
+def test_normalize_mission_loadout_rejects_invalid_payload_shape():
+    with pytest.raises(AssertionError, match="invalid mission troop loadout payload"):
+        normalize_mission_loadout(
+            ["archer"],
+            troop_templates={"archer": {"label": "弓手"}},
+        )
+
+
+def test_mission_loadout_service_rejects_missing_troop_templates(monkeypatch):
+    monkeypatch.setattr("battle.troops.load_troop_templates", lambda: {})
+
+    with pytest.raises(AssertionError, match="mission troop templates must not be empty"):
+        mission_loadout_service.normalize_mission_loadout({"archer": 1})
+
+
+def test_mission_travel_time_rejects_missing_troop_templates_for_non_empty_loadout(monkeypatch):
+    monkeypatch.setattr("battle.troops.load_troop_templates", lambda: {})
+
+    with pytest.raises(AssertionError, match="mission troop templates must not be empty"):
+        mission_loadout_service.travel_time_seconds(60, guests=[], troop_loadout={"archer": 1})
+
+
+def test_calculate_travel_time_rejects_invalid_loadout_shape():
+    with pytest.raises(AssertionError, match="invalid mission troop loadout payload"):
+        calculate_travel_time(60, guests=[], troop_loadout=["archer"], troop_templates={"archer": {"speed_bonus": 1}})
+
+
+def test_resolve_max_squad_size_rejects_invalid_bool():
+    with pytest.raises(AssertionError, match="invalid mission max_squad_size"):
+        _resolve_max_squad_size(type("_Manor", (), {"max_squad_size": True})())
+
+
+def test_resolve_max_squad_size_rejects_negative_value():
+    with pytest.raises(AssertionError, match="invalid mission max_squad_size"):
+        _resolve_max_squad_size(type("_Manor", (), {"max_squad_size": -1})())
+
+
+def test_resolve_base_travel_time_rejects_invalid_bool():
+    with pytest.raises(AssertionError, match="invalid mission base_travel_time"):
+        _resolve_base_travel_time(type("_Mission", (), {"base_travel_time": True})())
+
+
+def test_resolve_base_travel_time_rejects_non_positive_value():
+    with pytest.raises(AssertionError, match="invalid mission base_travel_time"):
+        _resolve_base_travel_time(type("_Mission", (), {"base_travel_time": 0})())
+
+
+def test_prepare_launch_inputs_rejects_defense_guest_ids():
+    mission = type("_Mission", (), {"is_defense": True, "base_travel_time": 60})()
+
+    with pytest.raises(AssertionError, match="defense mission guest_ids must be empty"):
+        prepare_launch_inputs(
+            object(), mission, [1], {}, scale_duration=lambda seconds, minimum=1: max(minimum, seconds)
+        )
+
+
+def test_prepare_launch_inputs_rejects_defense_troop_loadout():
+    mission = type("_Mission", (), {"is_defense": True, "base_travel_time": 60})()
+
+    with pytest.raises(AssertionError, match="defense mission troop_loadout must be empty"):
+        prepare_launch_inputs(
+            object(),
+            mission,
+            [],
+            {"archer": 1},
+            scale_duration=lambda seconds, minimum=1: max(minimum, seconds),
+        )
+
+
 @pytest.mark.django_db(transaction=True)
 def test_mission_launch_with_insufficient_troops_wraps_shared_loadout_error(
     game_data, mission_templates, manor_with_troops
@@ -274,6 +349,48 @@ def test_request_retreat_raises_mission_cannot_retreat_when_already_retreating(d
 
     with pytest.raises(MissionCannotRetreatError, match="任务已在撤退中"):
         request_retreat(run)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_request_retreat_rejects_future_started_at_contract(django_user_model, monkeypatch):
+    import gameplay.services.missions_impl.execution as mission_execution
+
+    user = django_user_model.objects.create_user(username="player_mission_retreat_future", password="pass12345")
+    manor = ensure_manor(user)
+    mission = MissionTemplate.objects.create(key="mission_retreat_future_case", name="未来撤退测试", is_defense=False)
+    run = MissionRun.objects.create(manor=manor, mission=mission, status=MissionRun.Status.ACTIVE, travel_time=300)
+    future_started_at = timezone.now() + timedelta(seconds=10)
+    MissionRun.objects.filter(pk=run.pk).update(started_at=future_started_at)
+    run.refresh_from_db()
+
+    monkeypatch.setattr(mission_execution, "schedule_mission_completion", lambda *_args, **_kwargs: None)
+
+    with pytest.raises(AssertionError, match="started_at cannot be in the future"):
+        request_retreat(run)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_request_retreat_immediate_retreat_preserves_minimum_return_time(django_user_model, monkeypatch):
+    import gameplay.services.missions_impl.execution as mission_execution
+
+    user = django_user_model.objects.create_user(username="player_mission_retreat_immediate", password="pass12345")
+    manor = ensure_manor(user)
+    mission = MissionTemplate.objects.create(
+        key="mission_retreat_immediate_case", name="立即撤退测试", is_defense=False
+    )
+    run = MissionRun.objects.create(manor=manor, mission=mission, status=MissionRun.Status.ACTIVE, travel_time=300)
+    started_at = timezone.now()
+    MissionRun.objects.filter(pk=run.pk).update(started_at=started_at)
+    run.refresh_from_db()
+
+    monkeypatch.setattr(mission_execution, "schedule_mission_completion", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("gameplay.services.missions_impl.retreat_command.timezone.now", lambda: started_at)
+
+    request_retreat(run)
+
+    run.refresh_from_db()
+    assert run.is_retreating is True
+    assert run.return_at == started_at + timedelta(seconds=1)
 
 
 @pytest.mark.django_db

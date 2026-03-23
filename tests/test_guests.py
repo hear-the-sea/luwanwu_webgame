@@ -439,6 +439,17 @@ def test_schedule_guest_recruitment_completion_runs_after_commit(monkeypatch):
     ]
 
 
+def test_schedule_guest_recruitment_completion_rejects_negative_eta():
+    recruitment = type("_Recruitment", (), {"id": 17, "manor_id": 3, "pool_id": 5})()
+
+    with pytest.raises(AssertionError, match="invalid guest recruitment completion eta"):
+        recruitment_followups_service.schedule_guest_recruitment_completion(
+            recruitment,
+            -1,
+            logger=recruitment_followups_service.logging.getLogger(__name__),
+        )
+
+
 def test_schedule_guest_recruitment_completion_unexpected_import_error_bubbles_up(monkeypatch):
     original_import = builtins.__import__
 

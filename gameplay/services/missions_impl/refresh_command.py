@@ -29,7 +29,15 @@ def refresh_mission_runs(
         return
 
     sync_run_ids = due_run_ids
-    sync_max_runs = max(0, int(getattr(settings_obj, "MISSION_REFRESH_SYNC_MAX_RUNS", 3)))
+    raw_sync_max_runs = getattr(settings_obj, "MISSION_REFRESH_SYNC_MAX_RUNS", 3)
+    if isinstance(raw_sync_max_runs, bool):
+        raise AssertionError(f"invalid mission refresh sync max runs: {raw_sync_max_runs!r}")
+    try:
+        sync_max_runs = int(raw_sync_max_runs)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid mission refresh sync max runs: {raw_sync_max_runs!r}") from exc
+    if sync_max_runs < 0:
+        raise AssertionError(f"invalid mission refresh sync max runs: {raw_sync_max_runs!r}")
     should_try_async = prefer_async or len(due_run_ids) > sync_max_runs
 
     if should_try_async:
@@ -71,10 +79,12 @@ def schedule_mission_completion(
     safe_apply_async,
     finalize_mission_run,
 ) -> None:
-    if not run.return_at:
-        return
+    if run.return_at is None:
+        raise RuntimeError("Mission run was not created correctly")
 
-    countdown = max(0, math.ceil((run.return_at - now_func()).total_seconds()))
+    countdown = math.ceil((run.return_at - now_func()).total_seconds())
+    if countdown < 0:
+        raise AssertionError("mission completion return_at cannot be in the past")
     try:
         from gameplay.tasks import complete_mission_task
     except ImportError as exc:
@@ -86,7 +96,7 @@ def schedule_mission_completion(
             exc_info=True,
             extra={"degraded": True, "component": "mission_task_import"},
         )
-        if countdown <= 0:
+        if countdown == 0:
             finalize_mission_run(run)
         return
 
@@ -97,6 +107,6 @@ def schedule_mission_completion(
         logger=logger,
         log_message="complete_mission_task dispatch failed; relying on refresh_mission_runs",
     )
-    if not dispatched and countdown <= 0:
+    if not dispatched and countdown == 0:
         logger.warning("complete_mission_task dispatch failed for due run; finalizing synchronously: run_id=%s", run.id)
         finalize_mission_run(run)

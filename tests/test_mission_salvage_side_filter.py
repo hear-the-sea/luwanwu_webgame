@@ -52,3 +52,31 @@ def test_mission_salvage_rejects_invalid_defense_drop_table(monkeypatch):
 
     with __import__("pytest").raises(AssertionError, match="invalid mission drop table"):
         mission_execution._build_mission_drops_with_salvage(locked_run, report, "defender")
+
+
+def test_mission_salvage_rejects_invalid_report_drops_container(monkeypatch):
+    monkeypatch.setattr(
+        battle_salvage_service,
+        "calculate_battle_salvage",
+        lambda *_args, **_kwargs: (0, {}),
+    )
+
+    locked_run = SimpleNamespace(mission=SimpleNamespace(is_defense=False, drop_table={}), id=102)
+    report = SimpleNamespace(drops="bad-drops", id=10, seed=123)
+
+    with __import__("pytest").raises(AssertionError, match="invalid mission report.drops"):
+        mission_execution._build_mission_drops_with_salvage(locked_run, report, "attacker")
+
+
+def test_mission_salvage_rejects_invalid_defense_drop_table_key(monkeypatch):
+    monkeypatch.setattr(
+        battle_salvage_service,
+        "calculate_battle_salvage",
+        lambda *_args, **_kwargs: (0, {}),
+    )
+
+    locked_run = SimpleNamespace(mission=SimpleNamespace(is_defense=True, drop_table={"": 1}), id=103)
+    report = SimpleNamespace(drops={}, id=11, seed=123)
+
+    with __import__("pytest").raises(AssertionError, match="invalid mission drop table key"):
+        mission_execution._build_mission_drops_with_salvage(locked_run, report, "defender")

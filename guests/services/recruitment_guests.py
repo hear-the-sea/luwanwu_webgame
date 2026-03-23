@@ -152,6 +152,43 @@ def _prepare_guest_objects(
     )
 
 
+def _resolve_bulk_finalize_request(candidates: List[RecruitmentCandidate]) -> tuple[int, list[int]]:
+    raw_manor_id = getattr(candidates[0], "manor_id", None)
+    if raw_manor_id is None or isinstance(raw_manor_id, bool):
+        raise AssertionError(f"invalid recruitment candidate manor id: {raw_manor_id!r}")
+    try:
+        manor_id = int(raw_manor_id)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid recruitment candidate manor id: {raw_manor_id!r}") from exc
+    if manor_id <= 0:
+        raise AssertionError(f"invalid recruitment candidate manor id: {raw_manor_id!r}")
+
+    requested_ids: list[int] = []
+    for candidate in candidates:
+        raw_candidate_id = getattr(candidate, "id", None)
+        raw_candidate_manor_id = getattr(candidate, "manor_id", None)
+        if raw_candidate_id is None or isinstance(raw_candidate_id, bool):
+            raise AssertionError(f"invalid recruitment candidate id: {raw_candidate_id!r}")
+        if raw_candidate_manor_id is None or isinstance(raw_candidate_manor_id, bool):
+            raise AssertionError(f"invalid recruitment candidate manor id: {raw_candidate_manor_id!r}")
+        try:
+            candidate_id = int(raw_candidate_id)
+            candidate_manor_id = int(raw_candidate_manor_id)
+        except (TypeError, ValueError) as exc:
+            raise AssertionError(
+                f"invalid recruitment candidate identity: id={raw_candidate_id!r} manor_id={raw_candidate_manor_id!r}"
+            ) from exc
+        if candidate_id <= 0 or candidate_manor_id <= 0:
+            raise AssertionError(
+                f"invalid recruitment candidate identity: id={raw_candidate_id!r} manor_id={raw_candidate_manor_id!r}"
+            )
+        if candidate_manor_id != manor_id:
+            raise AssertionError(f"mixed recruitment candidate manor ids: {candidate_manor_id!r} != {manor_id!r}")
+        requested_ids.append(candidate_id)
+
+    return manor_id, requested_ids
+
+
 @transaction.atomic
 def finalize_candidate(candidate: RecruitmentCandidate) -> Guest:
     """确认招募候选门客，将其转为正式门客。"""
@@ -198,10 +235,8 @@ def bulk_finalize_candidates(
 
     from gameplay.models import Manor
 
-    manor = Manor.objects.select_for_update().get(pk=candidates[0].manor_id)
-    requested_ids = [int(candidate.id) for candidate in candidates if getattr(candidate, "id", None)]
-    if not requested_ids:
-        return [], candidates
+    manor_id, requested_ids = _resolve_bulk_finalize_request(candidates)
+    manor = Manor.objects.select_for_update().get(pk=manor_id)
 
     locked_candidates_map = {
         candidate.id: candidate

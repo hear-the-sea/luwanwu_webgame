@@ -149,6 +149,8 @@ def normalize_mission_loadout(raw: Dict[str, int] | None, troop_templates: Dict[
 
     if raw is None:
         raw = {}
+    elif not isinstance(raw, dict):
+        raise AssertionError(f"invalid mission troop loadout payload: {raw!r}")
 
     # 安全检查：检测并拒绝不存在的护院类型
     invalid_keys = set(raw.keys()) - set(troop_templates.keys())
@@ -193,6 +195,9 @@ def calculate_travel_time(base_time: int, guests, troop_loadout: Dict[str, int],
     Returns:
         实际旅行时间（秒）
     """
+    if not isinstance(troop_loadout, dict):
+        raise AssertionError(f"invalid mission troop loadout payload: {troop_loadout!r}")
+
     # 门客敏捷加成
     guest_speed = sum(getattr(guest, "agility", 0) for guest in guests)
 

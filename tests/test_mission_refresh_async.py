@@ -8,6 +8,7 @@ from django.utils import timezone
 
 import gameplay.services.missions_impl.execution as mission_execution
 import gameplay.services.missions_impl.launch_post_actions as mission_launch_post_actions
+import gameplay.services.missions_impl.refresh_command as mission_refresh_command
 from core.exceptions import MessageError
 
 
@@ -151,13 +152,185 @@ def test_refresh_mission_runs_nested_import_error_bubbles_up(monkeypatch):
         mission_execution.refresh_mission_runs(manor, prefer_async=True)
 
 
-def test_build_defender_setup_and_drop_table_sanitizes_invalid_mission_json():
+def test_refresh_mission_runs_rejects_invalid_sync_max_runs_type(monkeypatch):
+    class _Status:
+        ACTIVE = "active"
+
+    mission_run_cls = type("_MissionRun", (), {"Status": _Status, "objects": _RunObjects([])})
+    monkeypatch.setattr(mission_execution, "MissionRun", mission_run_cls)
+    monkeypatch.setattr(mission_execution.settings, "MISSION_REFRESH_SYNC_MAX_RUNS", "bad", raising=False)
+
+    manor = SimpleNamespace(mission_runs=_DueRunsManager(ids=[1]))
+
+    with pytest.raises(AssertionError, match="invalid mission refresh sync max runs"):
+        mission_execution.refresh_mission_runs(manor)
+
+
+def test_refresh_mission_runs_rejects_negative_sync_max_runs(monkeypatch):
+    class _Status:
+        ACTIVE = "active"
+
+    mission_run_cls = type("_MissionRun", (), {"Status": _Status, "objects": _RunObjects([])})
+    monkeypatch.setattr(mission_execution, "MissionRun", mission_run_cls)
+    monkeypatch.setattr(mission_execution.settings, "MISSION_REFRESH_SYNC_MAX_RUNS", -1, raising=False)
+
+    manor = SimpleNamespace(mission_runs=_DueRunsManager(ids=[1]))
+
+    with pytest.raises(AssertionError, match="invalid mission refresh sync max runs"):
+        mission_execution.refresh_mission_runs(manor)
+
+
+def test_build_defender_setup_and_drop_table_rejects_invalid_troop_mapping():
+    mission = SimpleNamespace(
+        is_defense=False,
+        enemy_guests=[],
+        enemy_troops="bad-troops",
+        enemy_technology={},
+        drop_table={},
+    )
+
+    with pytest.raises(AssertionError, match="invalid mission enemy_troops"):
+        mission_launch_post_actions.build_defender_setup_and_drop_table(
+            mission,
+            loadout={},
+            normalize_guest_configs=mission_execution._normalize_guest_configs,
+            normalize_mapping=mission_execution._normalize_mapping,
+        )
+
+
+def test_build_defender_setup_and_drop_table_rejects_invalid_drop_table():
+    mission = SimpleNamespace(
+        is_defense=False,
+        enemy_guests=[],
+        enemy_troops={},
+        enemy_technology={},
+        drop_table="bad-drops",
+    )
+
+    with pytest.raises(AssertionError, match="invalid mission drop_table"):
+        mission_launch_post_actions.build_defender_setup_and_drop_table(
+            mission,
+            loadout={},
+            normalize_guest_configs=mission_execution._normalize_guest_configs,
+            normalize_mapping=mission_execution._normalize_mapping,
+        )
+
+
+def test_build_defender_setup_and_drop_table_rejects_invalid_guest_configs():
     mission = SimpleNamespace(
         is_defense=False,
         enemy_guests="bad-guests",
-        enemy_troops="bad-troops",
+        enemy_troops={},
+        enemy_technology={},
+        drop_table={},
+    )
+
+    with pytest.raises(AssertionError, match="invalid mission enemy_guests"):
+        mission_launch_post_actions.build_defender_setup_and_drop_table(
+            mission,
+            loadout={},
+            normalize_guest_configs=mission_execution._normalize_guest_configs,
+            normalize_mapping=mission_execution._normalize_mapping,
+        )
+
+
+def test_build_defender_setup_and_drop_table_rejects_invalid_guest_config_entry():
+    mission = SimpleNamespace(
+        is_defense=False,
+        enemy_guests=[123],
+        enemy_troops={},
+        enemy_technology={},
+        drop_table={},
+    )
+
+    with pytest.raises(AssertionError, match="invalid mission enemy_guests"):
+        mission_launch_post_actions.build_defender_setup_and_drop_table(
+            mission,
+            loadout={},
+            normalize_guest_configs=mission_execution._normalize_guest_configs,
+            normalize_mapping=mission_execution._normalize_mapping,
+        )
+
+
+def test_build_defender_setup_and_drop_table_rejects_blank_guest_config_entry():
+    mission = SimpleNamespace(
+        is_defense=False,
+        enemy_guests=["   "],
+        enemy_troops={},
+        enemy_technology={},
+        drop_table={},
+    )
+
+    with pytest.raises(AssertionError, match="invalid mission enemy_guests"):
+        mission_launch_post_actions.build_defender_setup_and_drop_table(
+            mission,
+            loadout={},
+            normalize_guest_configs=mission_execution._normalize_guest_configs,
+            normalize_mapping=mission_execution._normalize_mapping,
+        )
+
+
+def test_build_defender_setup_and_drop_table_rejects_invalid_enemy_technology():
+    mission = SimpleNamespace(
+        is_defense=False,
+        enemy_guests=[],
+        enemy_troops={},
         enemy_technology="bad-tech",
-        drop_table="bad-drops",
+        drop_table={},
+    )
+
+    with pytest.raises(AssertionError, match="invalid mission enemy_technology"):
+        mission_launch_post_actions.build_defender_setup_and_drop_table(
+            mission,
+            loadout={},
+            normalize_guest_configs=mission_execution._normalize_guest_configs,
+            normalize_mapping=mission_execution._normalize_mapping,
+        )
+
+
+def test_build_defender_setup_and_drop_table_rejects_invalid_mapping_key():
+    mission = SimpleNamespace(
+        is_defense=False,
+        enemy_guests=[],
+        enemy_troops={"": 1},
+        enemy_technology={},
+        drop_table={},
+    )
+
+    with pytest.raises(AssertionError, match="invalid mission enemy_troops"):
+        mission_launch_post_actions.build_defender_setup_and_drop_table(
+            mission,
+            loadout={},
+            normalize_guest_configs=mission_execution._normalize_guest_configs,
+            normalize_mapping=mission_execution._normalize_mapping,
+        )
+
+
+def test_build_defender_setup_and_drop_table_rejects_non_string_mapping_key():
+    mission = SimpleNamespace(
+        is_defense=False,
+        enemy_guests=[],
+        enemy_troops={1: 1},
+        enemy_technology={},
+        drop_table={},
+    )
+
+    with pytest.raises(AssertionError, match="invalid mission enemy_troops"):
+        mission_launch_post_actions.build_defender_setup_and_drop_table(
+            mission,
+            loadout={},
+            normalize_guest_configs=mission_execution._normalize_guest_configs,
+            normalize_mapping=mission_execution._normalize_mapping,
+        )
+
+
+def test_build_defender_setup_and_drop_table_still_tolerates_missing_optional_payloads():
+    mission = SimpleNamespace(
+        is_defense=False,
+        enemy_guests=None,
+        enemy_troops={},
+        enemy_technology=None,
+        drop_table=None,
     )
 
     defender_setup, drop_table = mission_launch_post_actions.build_defender_setup_and_drop_table(
@@ -399,6 +572,22 @@ def test_schedule_mission_completion_task_finalizes_sync_when_due_dispatch_fails
     assert finalized == [51]
 
 
+def test_schedule_mission_completion_task_rejects_past_return_at(monkeypatch):
+    now = timezone.now()
+    run = SimpleNamespace(id=151, return_at=now - timezone.timedelta(seconds=1))
+
+    monkeypatch.setattr(mission_execution.mission_followups, "safe_apply_async", lambda *_args, **_kwargs: True)
+
+    with pytest.raises(AssertionError, match="mission completion return_at cannot be in the past"):
+        mission_execution.mission_followups.schedule_mission_completion_task(
+            run,
+            object(),
+            logger=mission_execution.logger,
+            finalize_mission_run=mission_execution.finalize_mission_run,
+            now_func=lambda: now,
+        )
+
+
 def test_schedule_mission_completion_finalizes_sync_when_due_task_import_fails(monkeypatch):
     now = timezone.now()
     run = SimpleNamespace(id=52, return_at=now)
@@ -422,6 +611,33 @@ def test_schedule_mission_completion_finalizes_sync_when_due_task_import_fails(m
     mission_execution.schedule_mission_completion(run)
 
     assert finalized == [52]
+
+
+def test_schedule_mission_completion_rejects_past_return_at():
+    now = timezone.now()
+    run = SimpleNamespace(id=152, return_at=now - timezone.timedelta(seconds=1))
+
+    with pytest.raises(AssertionError, match="mission completion return_at cannot be in the past"):
+        mission_refresh_command.schedule_mission_completion(
+            run,
+            logger=mission_execution.logger,
+            now_func=lambda: now,
+            safe_apply_async=lambda *_a, **_k: True,
+            finalize_mission_run=lambda *_a, **_k: None,
+        )
+
+
+def test_schedule_mission_completion_rejects_missing_return_at():
+    run = SimpleNamespace(id=153, return_at=None)
+
+    with pytest.raises(RuntimeError, match="Mission run was not created correctly"):
+        mission_refresh_command.schedule_mission_completion(
+            run,
+            logger=mission_execution.logger,
+            now_func=timezone.now,
+            safe_apply_async=lambda *_a, **_k: True,
+            finalize_mission_run=lambda *_a, **_k: None,
+        )
 
 
 def test_schedule_mission_completion_nested_import_error_bubbles_up(monkeypatch):

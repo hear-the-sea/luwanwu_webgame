@@ -11,6 +11,8 @@ from gameplay.models import InventoryItem, ItemTemplate, ResourceEvent, Resource
 from gameplay.services.manor.core import ensure_manor
 from gameplay.services.missions_impl.drops import (
     _get_or_create_skill_book_template,
+    _infer_equipment_effect_type,
+    _infer_equipment_effect_type_from_category,
     award_mission_drops,
     award_mission_drops_locked,
 )
@@ -118,6 +120,24 @@ def test_award_mission_drops_rejects_negative_drop_amount():
 
 
 @pytest.mark.django_db
+def test_award_mission_drops_rejects_non_string_drop_key():
+    user = User.objects.create_user(username="mission_drop_non_string_key", password="pass123")
+    manor = ensure_manor(user)
+
+    with pytest.raises(AssertionError, match="invalid mission drop key"):
+        award_mission_drops(manor, {1: 1}, note="坏掉落key")
+
+
+@pytest.mark.django_db
+def test_award_mission_drops_rejects_bool_drop_amount():
+    user = User.objects.create_user(username="mission_drop_bool_amount", password="pass123")
+    manor = ensure_manor(user)
+
+    with pytest.raises(AssertionError, match="invalid mission drop amount"):
+        award_mission_drops(manor, {"silver": True}, note="坏掉落bool")
+
+
+@pytest.mark.django_db
 def test_award_mission_drops_rejects_missing_item_template():
     user = User.objects.create_user(username="mission_drop_missing_item_tpl", password="pass123")
     manor = ensure_manor(user)
@@ -173,3 +193,13 @@ def test_award_mission_drops_creates_equipment_item_template_from_equipment_conf
         storage_location=InventoryItem.StorageLocation.WAREHOUSE,
     )
     assert inv.quantity == 1
+
+
+def test_infer_equipment_effect_type_rejects_non_string_slot():
+    with pytest.raises(AssertionError, match="invalid mission drop gear slot"):
+        _infer_equipment_effect_type(True)
+
+
+def test_infer_equipment_effect_type_from_category_rejects_non_string_category():
+    with pytest.raises(AssertionError, match="invalid mission drop equipment category"):
+        _infer_equipment_effect_type_from_category(1)

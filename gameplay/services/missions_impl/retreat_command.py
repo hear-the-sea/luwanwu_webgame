@@ -21,8 +21,10 @@ def request_retreat(run, *, mission_run_model, schedule_mission_completion) -> N
         if now >= outbound_finish:
             raise MissionCannotRetreatError(reason="returning")
 
-        elapsed = max(0, int((now - locked_run.started_at).total_seconds()))
-        return_time = max(1, elapsed)
+        elapsed = int((now - locked_run.started_at).total_seconds())
+        if elapsed < 0:
+            raise AssertionError("mission retreat run started_at cannot be in the future")
+        return_time = 1 if elapsed == 0 else elapsed
         locked_run.is_retreating = True
         locked_run.return_at = now + timedelta(seconds=return_time)
         locked_run.save(update_fields=["is_retreating", "return_at"])

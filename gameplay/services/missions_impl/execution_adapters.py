@@ -4,22 +4,37 @@ from typing import Any, Dict, List
 
 
 def normalize_mapping(raw: Any) -> Dict[str, object]:
-    if isinstance(raw, dict):
-        return raw
-    return {}
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise AssertionError(f"invalid mission mapping payload: {raw!r}")
+    normalized: Dict[str, object] = {}
+    for key, value in raw.items():
+        if not isinstance(key, str):
+            raise AssertionError(f"invalid mission mapping key: {key!r}")
+        key_str = key.strip()
+        if not key_str:
+            raise AssertionError(f"invalid mission mapping key: {key!r}")
+        normalized[key_str] = value
+    return normalized
 
 
 def normalize_guest_configs(raw: Any) -> List[Any]:
-    if not isinstance(raw, (list, tuple, set)):
+    if raw is None:
         return []
+    if not isinstance(raw, (list, tuple, set)):
+        raise AssertionError(f"invalid mission guest configs: {raw!r}")
     normalized: List[Any] = []
     for entry in raw:
         if isinstance(entry, str):
             key = entry.strip()
-            if key:
-                normalized.append(key)
+            if not key:
+                raise AssertionError(f"invalid mission guest config entry: {entry!r}")
+            normalized.append(key)
         elif isinstance(entry, dict):
             normalized.append(entry)
+        else:
+            raise AssertionError(f"invalid mission guest config entry: {entry!r}")
     return normalized
 
 

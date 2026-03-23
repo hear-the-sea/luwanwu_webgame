@@ -684,6 +684,80 @@ def test_bulk_finalize_candidates_marks_missing_candidates_as_failed(django_user
 
 
 @pytest.mark.django_db
+def test_bulk_finalize_candidates_rejects_unpersisted_candidate():
+    with pytest.raises(AssertionError, match="invalid recruitment candidate id"):
+        recruitment_guest_service.bulk_finalize_candidates([SimpleNamespace(id=None, manor_id=1)])
+
+
+@pytest.mark.django_db
+def test_bulk_finalize_candidates_rejects_mixed_manor_candidates(django_user_model):
+    user_a = django_user_model.objects.create_user(
+        username="bulk_finalize_mixed_a",
+        password="pass123",
+        email="bulk_finalize_mixed_a@test.local",
+    )
+    user_b = django_user_model.objects.create_user(
+        username="bulk_finalize_mixed_b",
+        password="pass123",
+        email="bulk_finalize_mixed_b@test.local",
+    )
+    manor_a = ensure_manor(user_a)
+    manor_b = ensure_manor(user_b)
+
+    template = GuestTemplate.objects.create(
+        key="bulk_finalize_mixed_tpl",
+        name="批量混庄园模板",
+        archetype="civil",
+        rarity="gray",
+        base_attack=60,
+        base_intellect=80,
+        base_defense=50,
+        base_agility=40,
+        base_luck=30,
+        base_hp=500,
+    )
+    pool = RecruitmentPool.objects.create(
+        key="bulk_finalize_mixed_pool",
+        name="批量混庄园卡池",
+        cost={},
+        tier=RecruitmentPool.Tier.CUNMU,
+        draw_count=1,
+    )
+
+    candidate_a = RecruitmentCandidate.objects.create(
+        manor=manor_a,
+        pool=pool,
+        template=template,
+        display_name="混庄园候选甲",
+        rarity="gray",
+        archetype="civil",
+    )
+    candidate_b = RecruitmentCandidate.objects.create(
+        manor=manor_b,
+        pool=pool,
+        template=template,
+        display_name="混庄园候选乙",
+        rarity="gray",
+        archetype="civil",
+    )
+
+    with pytest.raises(AssertionError, match="mixed recruitment candidate manor ids"):
+        recruitment_guest_service.bulk_finalize_candidates([candidate_a, candidate_b])
+
+
+def test_finalize_guest_recruitment_rejects_unpersisted_recruitment():
+    with pytest.raises(AssertionError, match="requires a persisted recruitment"):
+        recruitment_command_service.finalize_guest_recruitment(SimpleNamespace(pk=None))
+
+
+def test_refresh_guest_recruitments_rejects_non_positive_limit():
+    manor = SimpleNamespace()
+
+    with pytest.raises(AssertionError, match="invalid guest recruitment refresh limit"):
+        recruitment_command_service.refresh_guest_recruitments(manor, limit=0)
+
+
+@pytest.mark.django_db
 def test_refresh_guest_recruitments_only_processes_due_pending_records(django_user_model, monkeypatch):
     user = django_user_model.objects.create_user(
         username="refresh_guest_recruitments_due_pending",

@@ -18,6 +18,11 @@ def test_split_candidates_by_capacity_splits_success_and_failed_lists():
     assert failed == [3]
 
 
+def test_split_candidates_by_capacity_rejects_negative_slots():
+    with pytest.raises(AssertionError, match="invalid recruitment available slots"):
+        recruitment_finalize_helpers.split_candidates_by_capacity([1, 2, 3], available_slots=-1)
+
+
 def test_build_guest_from_candidate_uses_custom_name_for_common_non_hermit():
     captured = {}
     candidate = SimpleNamespace(
@@ -46,6 +51,27 @@ def test_ensure_guest_capacity_available_raises_when_full():
         recruitment_finalize_helpers.ensure_guest_capacity_available(manor)
 
 
+def test_remaining_guest_capacity_rejects_invalid_capacity():
+    manor = SimpleNamespace(guest_capacity=-1, guests=SimpleNamespace(count=lambda: 0))
+
+    with pytest.raises(AssertionError, match="invalid recruitment guest capacity"):
+        recruitment_finalize_helpers.remaining_guest_capacity(manor)
+
+
+def test_remaining_guest_capacity_rejects_over_capacity_guest_count():
+    manor = SimpleNamespace(guest_capacity=2, guests=SimpleNamespace(count=lambda: 3))
+
+    with pytest.raises(AssertionError, match="invalid recruitment guest occupancy"):
+        recruitment_finalize_helpers.remaining_guest_capacity(manor)
+
+
 def test_validate_retainer_candidate_identity_rejects_missing_ids():
     with pytest.raises(RecruitmentCandidateStateError, match="候选门客不存在或已处理"):
         recruitment_finalize_helpers.validate_retainer_candidate_identity(SimpleNamespace(pk=None, manor_id=None))
+
+
+def test_ensure_retainer_capacity_available_rejects_invalid_capacity_state():
+    manor = SimpleNamespace(retainer_count=0, retainer_capacity=-1)
+
+    with pytest.raises(AssertionError, match="invalid retainer capacity state"):
+        recruitment_finalize_helpers.ensure_retainer_capacity_available(manor)

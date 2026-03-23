@@ -27,7 +27,11 @@ def resolve_recruitment_seed(seed: int | None) -> int:
 
 
 def resolve_recruitment_cost(pool: RecruitmentPool) -> dict:
-    raw_cost = pool.cost or {}
+    raw_cost = pool.cost
+    if raw_cost is None:
+        return {}
+    if isinstance(raw_cost, bool):
+        raise AssertionError(f"invalid recruitment cost payload: {raw_cost!r}")
     # Accept mappings and iterable-of-pairs, but normalize contract errors into an explicit AssertionError.
     try:
         return dict(raw_cost)

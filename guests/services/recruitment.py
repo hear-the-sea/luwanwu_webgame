@@ -257,8 +257,14 @@ def finalize_guest_recruitment(
 ) -> bool:
     """完成门客招募：生成候选并更新队列状态。"""
     recruitment_id = getattr(recruitment, "pk", None)
-    if not recruitment_id:
-        return False
+    if recruitment_id is None or isinstance(recruitment_id, bool):
+        raise AssertionError("finalize_guest_recruitment requires a persisted recruitment")
+    try:
+        recruitment_id = int(recruitment_id)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError("finalize_guest_recruitment requires a persisted recruitment") from exc
+    if recruitment_id <= 0:
+        raise AssertionError("finalize_guest_recruitment requires a persisted recruitment")
 
     current_time = now or timezone.now()
     manor: Manor | None = None
@@ -321,12 +327,21 @@ def finalize_guest_recruitment(
 
 def refresh_guest_recruitments(manor: Manor, limit: int = 20) -> int:
     """兜底刷新门客招募状态（用于 worker 中断场景）。"""
+    if limit is None or isinstance(limit, bool):
+        raise AssertionError(f"invalid guest recruitment refresh limit: {limit!r}")
+    try:
+        resolved_limit = int(limit)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid guest recruitment refresh limit: {limit!r}") from exc
+    if resolved_limit <= 0:
+        raise AssertionError(f"invalid guest recruitment refresh limit: {limit!r}")
+
     now = timezone.now()
     completed = 0
     recruitments = (
         manor.guest_recruitments.filter(status=GuestRecruitment.Status.PENDING, complete_at__lte=now)
         .select_related("pool", "manor", "manor__user")
-        .order_by("complete_at")[:limit]
+        .order_by("complete_at")[:resolved_limit]
     )
     for recruitment in recruitments:
         if finalize_guest_recruitment(recruitment, now=now, send_notification=True):

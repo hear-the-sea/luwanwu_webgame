@@ -6,6 +6,37 @@ from typing import Any, Callable, Dict, List
 from core.utils.imports import is_missing_target_import
 
 
+def _require_guest_config_payload(
+    raw: Any,
+    *,
+    field_name: str,
+    normalize_guest_configs: Callable[[Any], List[Any]],
+) -> List[Any]:
+    if raw is None:
+        return []
+    try:
+        normalized = normalize_guest_configs(raw)
+    except AssertionError as exc:
+        raise AssertionError(f"invalid mission {field_name}: {raw!r}") from exc
+    if normalized == [] and not isinstance(raw, (list, tuple, set)):
+        raise AssertionError(f"invalid mission {field_name}: {raw!r}")
+    return normalized
+
+
+def _require_mapping_payload(
+    raw: Any, *, field_name: str, normalize_mapping: Callable[[Any], Dict[str, object]]
+) -> Dict[str, object]:
+    if raw is None:
+        return {}
+    try:
+        normalized = normalize_mapping(raw)
+    except AssertionError as exc:
+        raise AssertionError(f"invalid mission {field_name}: {raw!r}") from exc
+    if normalized == {} and not isinstance(raw, dict):
+        raise AssertionError(f"invalid mission {field_name}: {raw!r}")
+    return normalized
+
+
 def build_defender_setup_and_drop_table(
     mission: Any,
     loadout: Dict[str, int],
@@ -18,11 +49,27 @@ def build_defender_setup_and_drop_table(
 
     return (
         {
-            "guest_keys": normalize_guest_configs(mission.enemy_guests),
-            "troop_loadout": normalize_mapping(mission.enemy_troops),
-            "technology": normalize_mapping(mission.enemy_technology),
+            "guest_keys": _require_guest_config_payload(
+                mission.enemy_guests,
+                field_name="enemy_guests",
+                normalize_guest_configs=normalize_guest_configs,
+            ),
+            "troop_loadout": _require_mapping_payload(
+                mission.enemy_troops,
+                field_name="enemy_troops",
+                normalize_mapping=normalize_mapping,
+            ),
+            "technology": _require_mapping_payload(
+                mission.enemy_technology,
+                field_name="enemy_technology",
+                normalize_mapping=normalize_mapping,
+            ),
         },
-        normalize_mapping(mission.drop_table),
+        _require_mapping_payload(
+            mission.drop_table,
+            field_name="drop_table",
+            normalize_mapping=normalize_mapping,
+        ),
     )
 
 
@@ -132,6 +179,16 @@ def attach_run_report_if_empty(run: Any, report: Any, *, mission_run_model: Any)
         run.battle_report = report
 
 
+def _resolve_completion_countdown(*, run: Any, now_func: Callable[[], Any]) -> int:
+    if run.return_at is None:
+        raise RuntimeError("Mission run was not created correctly")
+
+    countdown = math.ceil((run.return_at - now_func()).total_seconds())
+    if countdown < 0:
+        raise AssertionError("mission completion return_at cannot be in the past")
+    return countdown
+
+
 def schedule_mission_completion_task(
     run: Any,
     complete_mission_task: Any,
@@ -141,10 +198,7 @@ def schedule_mission_completion_task(
     finalize_mission_run: Callable[..., None],
     now_func: Callable[[], Any],
 ) -> None:
-    if run.return_at is None:
-        raise RuntimeError("Mission run was not created correctly")
-
-    countdown = max(0, math.ceil((run.return_at - now_func()).total_seconds()))
+    countdown = _resolve_completion_countdown(run=run, now_func=now_func)
     dispatched = safe_apply_async(
         complete_mission_task,
         args=[run.id],
@@ -152,7 +206,7 @@ def schedule_mission_completion_task(
         logger=logger,
         log_message="complete_mission_task dispatch failed; relying on refresh_mission_runs",
     )
-    if not dispatched and countdown <= 0:
+    if not dispatched and countdown == 0:
         logger.warning("complete_mission_task dispatch failed for due run; finalizing synchronously: run_id=%s", run.id)
         finalize_mission_run(run)
 

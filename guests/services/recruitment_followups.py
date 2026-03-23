@@ -24,7 +24,14 @@ def schedule_guest_recruitment_completion(
     *,
     logger: logging.Logger,
 ) -> None:
-    countdown = max(0, int(eta_seconds))
+    if eta_seconds is None or isinstance(eta_seconds, bool):
+        raise AssertionError(f"invalid guest recruitment completion eta: {eta_seconds!r}")
+    try:
+        countdown = int(eta_seconds)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid guest recruitment completion eta: {eta_seconds!r}") from exc
+    if countdown < 0:
+        raise AssertionError(f"invalid guest recruitment completion eta: {eta_seconds!r}")
     try:
         from guests.tasks import complete_guest_recruitment
     except ImportError as exc:

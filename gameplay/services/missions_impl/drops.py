@@ -10,14 +10,34 @@ from ...models import InventoryItem, ItemTemplate, Manor, ResourceEvent, Resourc
 from ..resources import grant_resources_locked
 
 
+def _require_mapping_payload(raw, *, field_name: str) -> dict:
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise AssertionError(f"invalid mission {field_name}: {raw!r}")
+    normalized: dict = {}
+    for key, value in raw.items():
+        if not isinstance(key, str):
+            raise AssertionError(f"invalid mission {field_name} key: {key!r}")
+        key_str = key.strip()
+        if not key_str:
+            raise AssertionError(f"invalid mission {field_name} key: {key!r}")
+        normalized[key_str] = value
+    return normalized
+
+
 def _split_drop_payload(drops: Dict[str, int]) -> tuple[Dict[str, int], Dict[str, int]]:
     resource_keys = set(ResourceType.values)
     resources: Dict[str, int] = {}
     items: Dict[str, int] = {}
     for key, value in drops.items():
-        key_str = str(key).strip()
+        if not isinstance(key, str):
+            raise AssertionError(f"invalid mission drop key: {key!r}")
+        key_str = key.strip()
         if not key_str:
             raise AssertionError(f"invalid mission drop key: {key!r}")
+        if isinstance(value, bool):
+            raise AssertionError(f"invalid mission drop amount: {(key, value)!r}")
         try:
             amount = int(value)
         except (TypeError, ValueError) as exc:
@@ -95,7 +115,9 @@ def _infer_equipment_effect_type(slot: str) -> str:
         "ornament": "equip_ornament",
         "device": "equip_device",
     }
-    effect_type = slot_to_effect_type.get(str(slot or "").strip())
+    if not isinstance(slot, str):
+        raise AssertionError(f"invalid mission drop gear slot: {slot!r}")
+    effect_type = slot_to_effect_type.get(slot.strip())
     if not effect_type:
         raise AssertionError(f"invalid mission drop gear slot: {slot!r}")
     return effect_type
@@ -132,7 +154,9 @@ def _infer_equipment_effect_type_from_category(category: str) -> str:
         "whip": "equip_weapon",
         "weapon": "equip_weapon",
     }
-    effect_type = category_to_effect_type.get(str(category or "").strip())
+    if not isinstance(category, str):
+        raise AssertionError(f"invalid mission drop equipment category: {category!r}")
+    effect_type = category_to_effect_type.get(category.strip())
     if not effect_type:
         raise AssertionError(f"invalid mission drop equipment category: {category!r}")
     return effect_type
@@ -214,16 +238,11 @@ def award_mission_drops(manor: Manor, drops: Dict[str, int], note: str) -> None:
 
 def resolve_defense_drops_if_missing(report, mission_drop_table: dict) -> dict:
     """Defense missions may generate a report without drops; fill them deterministically."""
-    drops = dict(report.drops or {})
+    drops = dict(_require_mapping_payload(getattr(report, "drops", None), field_name="report.drops"))
     if drops:
         return drops
 
-    if mission_drop_table is None:
-        normalized_drop_table: dict = {}
-    elif isinstance(mission_drop_table, dict):
-        normalized_drop_table = mission_drop_table
-    else:
-        raise AssertionError(f"invalid mission drop table: {mission_drop_table!r}")
+    normalized_drop_table = _require_mapping_payload(mission_drop_table, field_name="drop table")
 
     from common.utils.loot import resolve_drop_rewards
 

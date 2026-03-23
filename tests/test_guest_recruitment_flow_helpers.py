@@ -48,6 +48,13 @@ def test_resolve_recruitment_cost_rejects_invalid_payload():
         recruitment_flow.resolve_recruitment_cost(pool)
 
 
+def test_resolve_recruitment_cost_rejects_falsey_scalar_payload():
+    pool = SimpleNamespace(cost=False)
+
+    with __import__("pytest").raises(AssertionError, match="invalid recruitment cost payload"):
+        recruitment_flow.resolve_recruitment_cost(pool)
+
+
 def test_create_pending_recruitment_rejects_invalid_draw_count():
     recruitment_model = SimpleNamespace(objects=SimpleNamespace(create=lambda **_kwargs: _kwargs))
 

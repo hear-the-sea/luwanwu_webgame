@@ -18,15 +18,26 @@
 
 - 2026-03-21 本地验证：`make lint` 通过。
 - 2026-03-21 本地验证：默认 `make test` 通过，结果为 `1852 passed, 28 deselected`。
+- 2026-03-23 本轮验证：`make lint` 通过。
+- 2026-03-23 本轮验证：默认 `make test` 通过，结果为 `2248 passed, 38 deselected`。
 - 2026-03-22 本轮验证：`pytest tests/test_trade_auction_rounds.py -q` 通过，结果为 `30 passed`。
 - 2026-03-22 本轮验证：`pytest tests/test_inventory_guest_items.py -q` 通过，结果为 `16 passed`。
 - 2026-03-23 本轮验证：`pytest tests/test_guest_summon_card.py -q` 通过，结果为 `22 passed`。
 - 2026-03-23 本轮验证：`pytest tests/test_treasury_move_service_contracts.py -q` 通过，结果为 `2 passed`。
-- 2026-03-23 本轮验证：`pytest tests/test_guest_recruitment_flow_helpers.py -q` 通过，结果为 `24 passed`。
-- 2026-03-23 本轮验证：`pytest tests/test_mission_sync_report.py -q` 通过，结果为 `4 passed`。
-- 2026-03-23 本轮验证：`pytest tests/test_mission_finalization_helpers.py -q` 通过，结果为 `2 passed`。
-- 2026-03-23 本轮验证：`pytest tests/test_mission_salvage_side_filter.py -q` 通过，结果为 `3 passed`。
-- 2026-03-23 本轮验证：`pytest tests/test_mission_drops_service.py -q` 通过，结果为 `6 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_guest_recruitment_flow_helpers.py -q` 通过，结果为 `25 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_guest_recruitment_service.py -k "bulk_finalize_candidates" -q` 通过，结果为 `4 passed, 30 deselected`。
+- 2026-03-23 本轮验证：`pytest tests/test_guest_recruitment_service.py -k "bulk_finalize_candidates or finalize_guest_recruitment_rejects_unpersisted_recruitment or refresh_guest_recruitments" -q` 通过，结果为 `7 passed, 29 deselected`。
+- 2026-03-23 本轮验证：`pytest tests/test_guests.py -k "schedule_guest_recruitment_completion or finalize_guest_recruitment" -q` 通过，结果为 `11 passed, 14 deselected`。
+- 2026-03-23 本轮验证：`pytest tests/test_mission_sync_report.py -q` 通过，结果为 `15 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_mission_finalization_helpers.py -q` 通过，结果为 `7 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_mission_salvage_side_filter.py -q` 通过，结果为 `5 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_mission_drops_service.py -q` 通过，结果为 `12 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_mission_refresh_async.py -q` 通过，结果为 `30 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_guest_recruitment_finalize_helpers.py -q` 通过，结果为 `8 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_mission_attempts_service.py -q` 通过，结果为 `3 passed`。
+- 2026-03-23 本轮验证：`pytest tests/test_gameplay.py -k "normalize_mission_loadout or mission_loadout_service or mission_travel_time or resolve_max_squad_size or resolve_base_travel_time or calculate_travel_time or prepare_launch_inputs" -q` 通过，结果为 `12 passed, 20 deselected`。
+- 2026-03-23 本轮验证：`pytest tests/test_gameplay.py -k "request_retreat" -q` 通过，结果为 `3 passed, 19 deselected`。
+- 2026-03-23 本轮验证：`pytest tests/test_guest_view_error_boundaries.py -k "candidate_accept or magnifying_glass" -q` 通过，结果为 `3 passed, 38 deselected`。
 - 2026-03-21 依赖图/导入链复核：`config/urls.py`、`gameplay/context_processors.py`、`gameplay/views/arena.py`、`guests/urls.py`、`guilds/urls.py` 已改为显式子模块导入，不再依赖 `gameplay.views`、`gameplay.selectors`、`guests.views`、`guilds.views` 包根聚合入口。
 - 2026-03-21 包边界复核：`gameplay/views/__init__.py`、`gameplay/selectors/__init__.py`、`guests/views/__init__.py`、`guilds/views/__init__.py` 已收口为无副作用最小包标记文件，不再承担跨模块 re-export 责任。
 - 超大模板仍未完成收口；超大测试文件已开始收缩，`tests/test_trade_auction_rounds.py`、`tests/test_inventory_guest_items.py` 均已收口为薄入口并拆到各自 `tests/*/` 子模块，但仍有多份 `>800` 行测试文件待治理。

@@ -21,6 +21,41 @@ from .attempts import get_mission_daily_limit, mission_attempts_today
 from .loadout import normalize_mission_loadout, travel_time_seconds
 
 
+def _resolve_max_squad_size(manor: Manor) -> int:
+    raw_max_squad_size = getattr(manor, "max_squad_size", None)
+    if raw_max_squad_size is None:
+        return 0
+    if isinstance(raw_max_squad_size, bool):
+        raise AssertionError(f"invalid mission max_squad_size: {raw_max_squad_size!r}")
+    try:
+        max_squad_size = int(raw_max_squad_size)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid mission max_squad_size: {raw_max_squad_size!r}") from exc
+    if max_squad_size < 0:
+        raise AssertionError(f"invalid mission max_squad_size: {raw_max_squad_size!r}")
+    return max_squad_size
+
+
+def _resolve_base_travel_time(mission: MissionTemplate) -> int:
+    raw_base_travel_time = getattr(mission, "base_travel_time", None)
+    if raw_base_travel_time is None or isinstance(raw_base_travel_time, bool):
+        raise AssertionError(f"invalid mission base_travel_time: {raw_base_travel_time!r}")
+    try:
+        base_travel_time = int(raw_base_travel_time)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid mission base_travel_time: {raw_base_travel_time!r}") from exc
+    if base_travel_time <= 0:
+        raise AssertionError(f"invalid mission base_travel_time: {raw_base_travel_time!r}")
+    return base_travel_time
+
+
+def _validate_defense_launch_inputs(guest_ids: list[int], troop_loadout: dict[str, int]) -> None:
+    if guest_ids:
+        raise AssertionError(f"defense mission guest_ids must be empty: {guest_ids!r}")
+    if troop_loadout:
+        raise AssertionError(f"defense mission troop_loadout must be empty: {troop_loadout!r}")
+
+
 def validate_mission_attempts(manor: Manor, mission: MissionTemplate) -> None:
     attempts = mission_attempts_today(manor, mission)
     daily_limit = get_mission_daily_limit(manor, mission)
@@ -49,7 +84,7 @@ def prepare_offense_launch_inputs(
     if not guests:
         raise MissionGuestSelectionError("请选择至少一名门客")
 
-    max_squad_size = getattr(manor, "max_squad_size", None) or 0
+    max_squad_size = _resolve_max_squad_size(manor)
     if max_squad_size and len(guests) > max_squad_size:
         raise MissionSquadSizeExceededError(max_squad_size)
 
@@ -68,7 +103,7 @@ def prepare_offense_launch_inputs(
         except TroopLoadoutError as exc:
             raise MissionTroopLoadoutError(str(exc)) from exc
 
-    travel_seconds = travel_time_seconds(mission.base_travel_time, guests, loadout)
+    travel_seconds = travel_time_seconds(_resolve_base_travel_time(mission), guests, loadout)
     return guests, loadout, travel_seconds
 
 
@@ -81,7 +116,8 @@ def prepare_launch_inputs(
     scale_duration,
 ) -> tuple[list[Any], dict[str, int], int]:
     if mission.is_defense:
-        return [], {}, scale_duration(mission.base_travel_time, minimum=1)
+        _validate_defense_launch_inputs(guest_ids, troop_loadout)
+        return [], {}, scale_duration(_resolve_base_travel_time(mission), minimum=1)
 
     return prepare_offense_launch_inputs(manor, mission, guest_ids, troop_loadout)
 

@@ -6,28 +6,53 @@ from ...models import Manor, MissionTemplate
 
 
 def _normalize_enemy_technology_config(raw) -> Dict[str, object]:
+    if raw is None:
+        return {}
     if isinstance(raw, dict):
-        return raw
-    return {}
+        normalized: Dict[str, object] = {}
+        for key, value in raw.items():
+            if not isinstance(key, str):
+                raise AssertionError(f"invalid mission enemy technology key: {key!r}")
+            key_str = key.strip()
+            if not key_str:
+                raise AssertionError(f"invalid mission enemy technology key: {key!r}")
+            normalized[key_str] = value
+        return normalized
+    raise AssertionError(f"invalid mission enemy technology: {raw!r}")
 
 
 def _normalize_mapping(raw) -> Dict[str, object]:
+    if raw is None:
+        return {}
     if isinstance(raw, dict):
-        return raw
-    return {}
+        normalized: Dict[str, object] = {}
+        for key, value in raw.items():
+            if not isinstance(key, str):
+                raise AssertionError(f"invalid mission mapping key: {key!r}")
+            key_str = key.strip()
+            if not key_str:
+                raise AssertionError(f"invalid mission mapping key: {key!r}")
+            normalized[key_str] = value
+        return normalized
+    raise AssertionError(f"invalid mission mapping payload: {raw!r}")
 
 
 def _normalize_guest_configs(raw) -> list[str | Dict[str, object]]:
-    if not isinstance(raw, (list, tuple, set)):
+    if raw is None:
         return []
+    if not isinstance(raw, (list, tuple, set)):
+        raise AssertionError(f"invalid mission guest configs: {raw!r}")
     normalized: list[str | Dict[str, object]] = []
     for entry in raw:
         if isinstance(entry, str):
             key = entry.strip()
-            if key:
-                normalized.append(key)
+            if not key:
+                raise AssertionError(f"invalid mission guest config entry: {entry!r}")
+            normalized.append(key)
         elif isinstance(entry, dict):
             normalized.append(entry)
+        else:
+            raise AssertionError(f"invalid mission guest config entry: {entry!r}")
     return normalized
 
 
@@ -38,9 +63,13 @@ def _normalize_troop_loadout(raw) -> Dict[str, int]:
         raise AssertionError(f"invalid mission troop loadout: {raw!r}")
     normalized: Dict[str, int] = {}
     for key, value in raw.items():
-        key_str = str(key).strip()
+        if not isinstance(key, str):
+            raise AssertionError(f"invalid mission troop loadout key: {key!r}")
+        key_str = key.strip()
         if not key_str:
             raise AssertionError(f"invalid mission troop loadout key: {key!r}")
+        if isinstance(value, bool):
+            raise AssertionError(f"invalid mission troop loadout quantity: {value!r}")
         try:
             qty = int(value)
         except (TypeError, ValueError):
@@ -53,6 +82,8 @@ def _normalize_troop_loadout(raw) -> Dict[str, int]:
 
 def _coerce_enemy_guest_level(config: Dict[str, object], default: int = 50) -> int:
     raw_level: Any = config.get("guest_level", default)
+    if isinstance(raw_level, bool):
+        raise AssertionError(f"invalid mission enemy guest level: {raw_level!r}")
     try:
         level = int(raw_level)
     except (TypeError, ValueError) as exc:
@@ -64,9 +95,18 @@ def _coerce_enemy_guest_level(config: Dict[str, object], default: int = 50) -> i
 
 def _normalize_guest_skills(config: Dict[str, object]) -> list[str] | None:
     raw = config.get("guest_skills")
-    if not isinstance(raw, (list, tuple, set)):
+    if raw is None:
         return None
-    skills = [str(item).strip() for item in raw if str(item).strip()]
+    if not isinstance(raw, (list, tuple, set)):
+        raise AssertionError(f"invalid mission enemy guest skills: {raw!r}")
+    skills: list[str] = []
+    for item in raw:
+        if not isinstance(item, str):
+            raise AssertionError(f"invalid mission enemy guest skills entry: {item!r}")
+        key = item.strip()
+        if not key:
+            raise AssertionError(f"invalid mission enemy guest skills entry: {item!r}")
+        skills.append(key)
     return skills or None
 
 

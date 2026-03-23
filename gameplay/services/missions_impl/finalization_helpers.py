@@ -6,6 +6,22 @@ from core.exceptions import MessageError
 from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS
 
 
+def _require_mapping_payload(raw: Any, *, field_name: str) -> Dict[str, Any]:
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise AssertionError(f"invalid mission {field_name}: {raw!r}")
+    return raw
+
+
+def _require_sequence_payload(raw: Any, *, field_name: str) -> List[Any]:
+    if raw is None:
+        return []
+    if not isinstance(raw, (list, tuple, set)):
+        raise AssertionError(f"invalid mission {field_name}: {raw!r}")
+    return list(raw)
+
+
 def build_defense_report_if_needed(
     locked_run: Any,
     *,
@@ -58,7 +74,9 @@ def extract_report_guest_state(report: Any, player_side: str) -> Tuple[Dict[int,
     if not report:
         return hp_updates, defeated_guest_ids, participant_ids
 
-    loss_updates = ((report.losses or {}).get(player_side) or {}).get("hp_updates") or {}
+    losses = _require_mapping_payload(getattr(report, "losses", None), field_name="report.losses")
+    side_losses = _require_mapping_payload(losses.get(player_side), field_name=f"report.losses.{player_side}")
+    loss_updates = _require_mapping_payload(side_losses.get("hp_updates"), field_name="report.losses.hp_updates")
     for gid, hp in loss_updates.items():
         try:
             gid_int = int(gid)
@@ -68,12 +86,16 @@ def extract_report_guest_state(report: Any, player_side: str) -> Tuple[Dict[int,
         hp_updates[gid_int] = hp_int
 
     team_entries = report.defender_team if player_side == "defender" else report.attacker_team
-    for entry in team_entries or []:
-        gid = entry.get("guest_id")
-        remaining = entry.get("remaining_hp")
+    for entry in _require_sequence_payload(team_entries, field_name="report.team_entries"):
+        if not isinstance(entry, dict):
+            raise AssertionError(f"invalid mission report team entry: {entry!r}")
+        guest_id_raw = entry.get("guest_id")
+        remaining_hp_raw = entry.get("remaining_hp")
+        if guest_id_raw is None or remaining_hp_raw is None:
+            raise AssertionError(f"invalid mission report team entry: {entry!r}")
         try:
-            gid_int = int(gid)
-            remaining_int = int(remaining)
+            gid_int = int(guest_id_raw)
+            remaining_int = int(remaining_hp_raw)
         except (TypeError, ValueError) as exc:
             raise AssertionError(f"invalid mission report team entry: {entry!r}") from exc
         participant_ids.add(gid_int)
@@ -124,7 +146,7 @@ def return_attacker_troops_after_mission(locked_run: Any, report: Any, *, logger
 
     from ..recruitment.troops import _return_surviving_troops_batch
 
-    loadout = locked_run.troop_loadout or {}
+    loadout = _require_mapping_payload(getattr(locked_run, "troop_loadout", None), field_name="troop_loadout")
     if not loadout:
         return
 
@@ -161,9 +183,12 @@ def build_mission_drops_with_salvage(
     logger: Any,
     resolve_defense_drops_if_missing: Callable[..., Dict[str, int]],
 ) -> Dict[str, int]:
-    drops = dict(report.drops or {})
+    drops = dict(_require_mapping_payload(getattr(report, "drops", None), field_name="report.drops"))
     if locked_run.mission.is_defense and not drops:
-        drops = resolve_defense_drops_if_missing(report, locked_run.mission.drop_table or {})
+        drops = resolve_defense_drops_if_missing(
+            report,
+            _require_mapping_payload(getattr(locked_run.mission, "drop_table", None), field_name="drop table"),
+        )
 
     from ..battle_salvage import calculate_battle_salvage
 

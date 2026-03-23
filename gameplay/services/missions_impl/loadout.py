@@ -12,7 +12,7 @@ def normalize_mission_loadout(raw: Dict[str, int] | None) -> Dict[str, int]:
 
     templates = load_troop_templates()
     if not templates:
-        return {}
+        raise AssertionError("mission troop templates must not be empty")
 
     return normalize_loadout_util(raw, templates)
 
@@ -23,5 +23,7 @@ def travel_time_seconds(base_time: int, guests, troop_loadout: Dict[str, int]) -
     from ...utils.resource_calculator import calculate_travel_time
 
     templates = load_troop_templates()
+    if not templates and troop_loadout:
+        raise AssertionError("mission troop templates must not be empty")
     travel_seconds = calculate_travel_time(base_time, guests, troop_loadout, templates)
     return scale_duration(travel_seconds, minimum=1)

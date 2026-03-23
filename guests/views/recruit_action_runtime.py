@@ -14,11 +14,7 @@ from core.utils.locked_actions import (
     execute_locked_action,
     release_scoped_action_lock,
 )
-from core.utils.view_error_mapping import (
-    DEFAULT_VIEW_INFRASTRUCTURE_EXCEPTIONS,
-    KNOWN_VIEW_EXCEPTIONS,
-    classify_view_error,
-)
+from core.utils.view_error_mapping import DEFAULT_VIEW_INFRASTRUCTURE_EXCEPTIONS
 
 logger = logging.getLogger(__name__)
 RECRUIT_ACTION_LOCK_SECONDS = 5
@@ -64,19 +60,25 @@ def run_locked_recruit_action(
             message_level="warning",
         )
 
-    def _on_error(exc: Exception, *, log_message: str | None) -> HttpResponse:
-        category = classify_view_error(exc, known_exceptions=KNOWN_VIEW_EXCEPTIONS)
-        if category == "unexpected":
-            raise exc
-        if category != "known" and log_message is not None:
-            logger.exception(log_message, *log_args)
-        status = 400 if category == "known" else 500
+    def _known_error_response(exc: Exception) -> HttpResponse:
         return recruitment_hall_response(
             request,
             manor,
             sanitize_error_message(exc),
             is_ajax=is_ajax,
-            status=status,
+            status=400,
+            message_level="error",
+        )
+
+    def _infrastructure_error_response(exc: Exception, *, log_message: str) -> HttpResponse:
+        if log_message:
+            logger.exception(log_message, *log_args)
+        return recruitment_hall_response(
+            request,
+            manor,
+            sanitize_error_message(exc),
+            is_ajax=is_ajax,
+            status=500,
             message_level="error",
         )
 
@@ -90,8 +92,8 @@ def run_locked_recruit_action(
         on_lock_conflict=_conflict_response,
         on_success=lambda response: response,
         known_exceptions=(GameError,),
-        on_known_error=lambda exc: _on_error(exc, log_message=None),
-        on_database_error=lambda exc: _on_error(exc, log_message=database_log_message),
-        on_unexpected_error=lambda exc: _on_error(exc, log_message=unexpected_log_message),
+        on_known_error=_known_error_response,
+        on_database_error=lambda exc: _infrastructure_error_response(exc, log_message=database_log_message),
+        on_unexpected_error=lambda exc: _infrastructure_error_response(exc, log_message=unexpected_log_message),
         unexpected_exceptions=DEFAULT_VIEW_INFRASTRUCTURE_EXCEPTIONS,
     )

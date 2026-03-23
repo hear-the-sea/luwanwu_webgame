@@ -20,7 +20,25 @@ else:
 
 
 def remaining_guest_capacity(manor: Manor) -> int:
-    return max(0, int(getattr(manor, "guest_capacity", 0) or 0) - int(manor.guests.count()))
+    raw_capacity = getattr(manor, "guest_capacity", None)
+    if raw_capacity is None or isinstance(raw_capacity, bool):
+        raise AssertionError(f"invalid recruitment guest capacity: {raw_capacity!r}")
+    try:
+        capacity = int(raw_capacity)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid recruitment guest capacity: {raw_capacity!r}") from exc
+    if capacity < 0:
+        raise AssertionError(f"invalid recruitment guest capacity: {raw_capacity!r}")
+    raw_guest_count = manor.guests.count()
+    if raw_guest_count is None or isinstance(raw_guest_count, bool):
+        raise AssertionError(f"invalid recruitment guest occupancy: {raw_guest_count!r}")
+    try:
+        guest_count = int(raw_guest_count)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid recruitment guest occupancy: {raw_guest_count!r}") from exc
+    if guest_count < 0 or guest_count > capacity:
+        raise AssertionError(f"invalid recruitment guest occupancy: count={guest_count!r} capacity={capacity!r}")
+    return capacity - guest_count
 
 
 def ensure_guest_capacity_available(manor: Manor) -> int:
@@ -33,7 +51,12 @@ def ensure_guest_capacity_available(manor: Manor) -> int:
 def split_candidates_by_capacity(
     candidates: list[RecruitmentCandidate], *, available_slots: int
 ) -> tuple[list[RecruitmentCandidate], list[RecruitmentCandidate]]:
-    normalized_slots = max(0, int(available_slots))
+    try:
+        normalized_slots = int(available_slots)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid recruitment available slots: {available_slots!r}") from exc
+    if normalized_slots < 0:
+        raise AssertionError(f"invalid recruitment available slots: {available_slots!r}")
     return candidates[:normalized_slots], candidates[normalized_slots:]
 
 
@@ -103,7 +126,24 @@ def load_locked_retainer_candidate(
 
 
 def ensure_retainer_capacity_available(manor: Manor) -> None:
-    if manor.retainer_count >= manor.retainer_capacity:
+    raw_retainer_count = getattr(manor, "retainer_count", None)
+    raw_retainer_capacity = getattr(manor, "retainer_capacity", None)
+    if raw_retainer_count is None or isinstance(raw_retainer_count, bool):
+        raise AssertionError(f"invalid retainer count: {raw_retainer_count!r}")
+    if raw_retainer_capacity is None or isinstance(raw_retainer_capacity, bool):
+        raise AssertionError(f"invalid retainer capacity: {raw_retainer_capacity!r}")
+    try:
+        retainer_count = int(raw_retainer_count)
+        retainer_capacity = int(raw_retainer_capacity)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(
+            f"invalid retainer capacity state: count={raw_retainer_count!r} capacity={raw_retainer_capacity!r}"
+        ) from exc
+    if retainer_count < 0 or retainer_capacity < 0:
+        raise AssertionError(
+            f"invalid retainer capacity state: count={raw_retainer_count!r} capacity={raw_retainer_capacity!r}"
+        )
+    if retainer_count >= retainer_capacity:
         raise RetainerCapacityFullError()
 
 
