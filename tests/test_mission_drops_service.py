@@ -14,7 +14,7 @@ from gameplay.services.missions_impl.drops import (
     award_mission_drops,
     award_mission_drops_locked,
 )
-from guests.models import Skill, SkillBook
+from guests.models import GearSlot, GearTemplate, Skill, SkillBook
 
 User = get_user_model()
 
@@ -124,3 +124,52 @@ def test_award_mission_drops_rejects_missing_item_template():
 
     with pytest.raises(AssertionError, match="invalid mission drop item key"):
         award_mission_drops(manor, {"missing_drop_item": 1}, note="坏物品掉落")
+
+
+@pytest.mark.django_db
+def test_award_mission_drops_creates_equipment_item_template_from_gear_template():
+    user = User.objects.create_user(username="mission_drop_missing_equip_item_tpl", password="pass123")
+    manor = ensure_manor(user)
+
+    gear_template = GearTemplate.objects.create(
+        key="equip_mission_test_blade",
+        name="任务掉落刀",
+        slot=GearSlot.WEAPON,
+        rarity="green",
+    )
+    assert ItemTemplate.objects.filter(key=gear_template.key).exists() is False
+
+    award_mission_drops(manor, {gear_template.key: 1}, note="装备任务")
+
+    created_template = ItemTemplate.objects.get(key=gear_template.key)
+    assert created_template.name == gear_template.name
+    assert created_template.effect_type == "equip_weapon"
+    assert created_template.rarity == gear_template.rarity
+
+    inv = InventoryItem.objects.get(
+        manor=manor,
+        template=created_template,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+    assert inv.quantity == 1
+
+
+@pytest.mark.django_db
+def test_award_mission_drops_creates_equipment_item_template_from_equipment_config():
+    user = User.objects.create_user(username="mission_drop_config_equip_item_tpl", password="pass123")
+    manor = ensure_manor(user)
+
+    key = "equip_bupao"
+    ItemTemplate.objects.filter(key=key).delete()
+
+    award_mission_drops(manor, {key: 1}, note="配置装备任务")
+
+    created_template = ItemTemplate.objects.get(key=key)
+    assert created_template.effect_type == "equip_armor"
+
+    inv = InventoryItem.objects.get(
+        manor=manor,
+        template=created_template,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+    assert inv.quantity == 1

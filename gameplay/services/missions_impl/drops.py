@@ -35,7 +35,10 @@ def _load_item_templates_with_skillbook_fallback(item_keys: Dict[str, int]) -> D
     if not item_keys:
         return {}
 
-    from guests.models import SkillBook
+    from guests.models import GearTemplate, SkillBook
+
+    from ..buildings.forge import EQUIPMENT_CONFIG
+    from ..buildings.forge_helpers import infer_equipment_category
 
     templates = {it.key: it for it in ItemTemplate.objects.filter(key__in=item_keys.keys())}
     missing_keys = set(item_keys.keys()) - set(templates.keys())
@@ -43,12 +46,24 @@ def _load_item_templates_with_skillbook_fallback(item_keys: Dict[str, int]) -> D
         return templates
 
     books = {book.key: book for book in SkillBook.objects.filter(key__in=missing_keys)}
+    gears = {gear.key: gear for gear in GearTemplate.objects.filter(key__in=missing_keys)}
     for key in list(missing_keys):
         book = books.get(key)
-        if not book:
+        if book:
+            tmpl = _get_or_create_skill_book_template(key, book)
+            templates[key] = tmpl
             continue
-        tmpl = _get_or_create_skill_book_template(key, book)
-        templates[key] = tmpl
+
+        gear = gears.get(key)
+        if gear:
+            tmpl = _get_or_create_equipment_item_template(key, gear)
+            templates[key] = tmpl
+            continue
+
+        equipment_category = infer_equipment_category(key, equipment_config=EQUIPMENT_CONFIG)
+        if equipment_category:
+            tmpl = _get_or_create_equipment_item_template_from_category(key, equipment_category)
+            templates[key] = tmpl
     return templates
 
 
@@ -64,6 +79,74 @@ def _get_or_create_skill_book_template(key: str, book) -> ItemTemplate:
         return tmpl
     except IntegrityError:
         # Another concurrent transaction may have created this template.
+        existing = ItemTemplate.objects.filter(key=key).first()
+        if existing:
+            return existing
+        raise
+
+
+def _infer_equipment_effect_type(slot: str) -> str:
+    slot_to_effect_type = {
+        "helmet": "equip_helmet",
+        "armor": "equip_armor",
+        "weapon": "equip_weapon",
+        "shoes": "equip_shoes",
+        "mount": "equip_mount",
+        "ornament": "equip_ornament",
+        "device": "equip_device",
+    }
+    effect_type = slot_to_effect_type.get(str(slot or "").strip())
+    if not effect_type:
+        raise AssertionError(f"invalid mission drop gear slot: {slot!r}")
+    return effect_type
+
+
+def _get_or_create_equipment_item_template(key: str, gear) -> ItemTemplate:
+    defaults = {
+        "name": gear.name,
+        "effect_type": _infer_equipment_effect_type(gear.slot),
+        "rarity": gear.rarity,
+    }
+    try:
+        tmpl, _ = ItemTemplate.objects.get_or_create(key=key, defaults=defaults)
+        return tmpl
+    except IntegrityError:
+        existing = ItemTemplate.objects.filter(key=key).first()
+        if existing:
+            return existing
+        raise
+
+
+def _infer_equipment_effect_type_from_category(category: str) -> str:
+    category_to_effect_type = {
+        "helmet": "equip_helmet",
+        "armor": "equip_armor",
+        "shoes": "equip_shoes",
+        "device": "equip_device",
+        "mount": "equip_mount",
+        "ornament": "equip_ornament",
+        "sword": "equip_weapon",
+        "dao": "equip_weapon",
+        "spear": "equip_weapon",
+        "bow": "equip_weapon",
+        "whip": "equip_weapon",
+        "weapon": "equip_weapon",
+    }
+    effect_type = category_to_effect_type.get(str(category or "").strip())
+    if not effect_type:
+        raise AssertionError(f"invalid mission drop equipment category: {category!r}")
+    return effect_type
+
+
+def _get_or_create_equipment_item_template_from_category(key: str, category: str) -> ItemTemplate:
+    defaults = {
+        "name": key,
+        "effect_type": _infer_equipment_effect_type_from_category(category),
+    }
+    try:
+        tmpl, _ = ItemTemplate.objects.get_or_create(key=key, defaults=defaults)
+        return tmpl
+    except IntegrityError:
         existing = ItemTemplate.objects.filter(key=key).first()
         if existing:
             return existing
