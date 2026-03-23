@@ -5,6 +5,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import override_settings
 
+from battle.management.commands.load_troop_templates import Command, _load_avatar_for_troop
 from battle.models import TroopTemplate
 from gameplay.models import BuildingType, MissionTemplate
 
@@ -115,3 +116,25 @@ troops:
     with override_settings(BASE_DIR=tmp_path):
         with pytest.raises(CommandError, match="Troop avatar directory does not exist"):
             call_command("load_troop_templates", file=str(payload_path), verbosity=0)
+
+
+@pytest.mark.django_db
+def test_load_troop_templates_avatar_programming_error_bubbles_up(tmp_path, monkeypatch):
+    troop = TroopTemplate.objects.create(key="cmd_troop_avatar_bug", name="头像契约错误兵种")
+    avatar_path = tmp_path / "avatar.png"
+    avatar_path.write_bytes(b"not-used")
+
+    command = Command()
+    monkeypatch.setattr(
+        "battle.management.commands.load_troop_templates.compress_and_resize_image",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("broken troop avatar contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken troop avatar contract"):
+        _load_avatar_for_troop(
+            command,
+            troop,
+            {"avatar": "avatar.png"},
+            tmp_path,
+            0,
+        )

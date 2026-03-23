@@ -13,6 +13,7 @@ from channels.security.websocket import AllowedHostsOriginValidator  # noqa: E40
 from django.conf import settings  # noqa: E402
 from django.contrib.staticfiles.handlers import ASGIStaticFilesHandler  # noqa: E402
 from django.core.asgi import get_asgi_application  # noqa: E402
+from django.core.exceptions import AppRegistryNotReady  # noqa: E402
 
 from websocket.routing_status import set_websocket_routing_status  # noqa: E402
 
@@ -24,12 +25,9 @@ django_asgi_app = get_asgi_application()
 # Import websocket routing only after Django ASGI initialization is ready.
 try:
     import websocket.routing as websocket_routing
-except Exception as exc:  # pragma: no cover - fallback if apps not ready
-    # Import failures can surface as ImportError, AppRegistryNotReady (a subclass
-    # of RuntimeError), or OSError depending on Django's initialisation order.
-    # Re-raise unexpected errors (e.g. TypeError, ValueError) immediately.
-    if not isinstance(exc, (ImportError, OSError, RuntimeError)):
-        raise
+except (ImportError, AppRegistryNotReady, OSError, RuntimeError) as exc:  # pragma: no cover
+    # Keep DEBUG mode usable when websocket routing is temporarily unavailable
+    # during local startup, but do not hide unrelated programming errors.
     if settings.DEBUG:
         warnings.warn(f"WebSocket routing disabled: {exc}", RuntimeWarning, stacklevel=2)
         logger.exception("Failed to import websocket routing in DEBUG mode; WebSocket endpoints disabled: %s", exc)

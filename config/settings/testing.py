@@ -8,6 +8,8 @@ import logging
 import os
 import tempfile
 
+from django.core.exceptions import AppRegistryNotReady
+
 logger = logging.getLogger(__name__)
 TEST_GATE_MODE = "hermetic"
 TEST_GATE_DESCRIPTION = "Hermetic rapid gate (SQLite, LocMem cache, InMemoryChannelLayer, memory Celery)."
@@ -94,5 +96,5 @@ if not _using_env_services():
             task_always_eager=CELERY_TASK_ALWAYS_EAGER,
             task_eager_propagates=CELERY_TASK_EAGER_PROPAGATES,
         )
-    except Exception:
+    except (ImportError, AppRegistryNotReady, OSError, RuntimeError):
         logger.warning("Failed to update Celery app for tests", exc_info=True)

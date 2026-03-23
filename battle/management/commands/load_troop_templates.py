@@ -13,6 +13,7 @@ from core.utils.yaml_loader import ensure_list, ensure_mapping, load_yaml_data
 from gameplay.services.utils.template_cache import clear_troop_template_caches
 
 logger = logging.getLogger(__name__)
+TROOP_AVATAR_LOAD_RECOVERABLE_EXCEPTIONS = (OSError,)
 
 
 def _build_troop_defaults(data: dict) -> dict:
@@ -66,7 +67,7 @@ def _load_avatar_for_troop(
             verbosity,
             command.style.SUCCESS(f"  [OK] Compressed and loaded avatar: {avatar_filename} -> {new_filename}"),
         )
-    except Exception as exc:
+    except TROOP_AVATAR_LOAD_RECOVERABLE_EXCEPTIONS as exc:
         _log_info(command, verbosity, command.style.WARNING(f"  [FAIL] Failed to load avatar {avatar_filename}: {exc}"))
 
 

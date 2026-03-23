@@ -35,7 +35,7 @@ def weighted_random_choice(
 
     Raises:
         IndexError: 如果列表为空
-        ValueError: 如果 items 和 weights 长度不一致
+        AssertionError: 如果权重输入违反内部调用契约
 
     Examples:
         >>> import random
@@ -46,14 +46,14 @@ def weighted_random_choice(
         'C'
     """
     if len(items) != len(weights):
-        raise ValueError("items 和 weights 长度必须一致")
+        raise AssertionError("items 和 weights 长度必须一致")
     if not items:
         raise IndexError("候选列表不能为空")
 
     total = sum(weights)
     # 代码质量修复：权重全为0时抛出明确异常，而非隐式退化为均匀分布
     if total <= 0:
-        raise ValueError("权重总和必须大于 0")
+        raise AssertionError("权重总和必须大于 0")
     pick = rng.uniform(0, total)
     cumulative = 0.0
     for item, weight in zip(items, weights):

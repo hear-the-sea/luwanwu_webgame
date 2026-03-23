@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
 
 from asgiref.sync import sync_to_async
 from channels.db import database_sync_to_async
@@ -165,6 +166,8 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
             return
 
         history_written = False
+        trumpet_consumed = True
+        handled_infrastructure_failure = False
         message: dict | None = None
         try:
             message = await self._build_message(text)
@@ -178,6 +181,7 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
                 },
             )
         except WORLD_CHAT_EXPECTED_INFRASTRUCTURE_ERRORS:
+            handled_infrastructure_failure = True
             refunded, history_removed = await self._compensate_failed_publish(
                 message=message,
                 history_written=history_written,
@@ -212,25 +216,26 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
                     ),
                 }
             )
-        except Exception:
-            refunded, history_removed = await self._compensate_failed_publish(
-                message=message,
-                history_written=history_written,
-            )
-            logger.error(
-                "Unexpected world chat publish failure: user_id=%s refunded=%s history_removed=%s",
-                self.user_id,
-                refunded,
-                history_removed,
-                exc_info=True,
-                extra={
-                    "component": "world_chat_publish",
-                    "user_id": self.user_id,
-                    "refunded": refunded,
-                    "history_removed": history_removed,
-                },
-            )
-            raise
+        finally:
+            active_exc = sys.exc_info()[1]
+            if active_exc is not None and trumpet_consumed and not handled_infrastructure_failure:
+                refunded, history_removed = await self._compensate_failed_publish(
+                    message=message,
+                    history_written=history_written,
+                )
+                logger.error(
+                    "Unexpected world chat publish failure: user_id=%s refunded=%s history_removed=%s",
+                    self.user_id,
+                    refunded,
+                    history_removed,
+                    exc_info=True,
+                    extra={
+                        "component": "world_chat_publish",
+                        "user_id": self.user_id,
+                        "refunded": refunded,
+                        "history_removed": history_removed,
+                    },
+                )
 
     async def receive_json(self, content, **kwargs):
         try:
