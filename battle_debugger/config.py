@@ -8,7 +8,6 @@
 - 仅允许加载 preset_dir 目录内的 YAML 文件
 """
 
-import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -18,6 +17,14 @@ import yaml
 
 # 安全常量：预设名称白名单正则（仅允许字母、数字、下划线、连字符）
 PRESET_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+
+class BattleDebuggerInputError(Exception):
+    """battle_debugger 的预期用户输入错误。"""
+
+
+class InvalidPresetError(BattleDebuggerInputError):
+    """预设名称或预设路径不合法。"""
 
 
 # ============ 配置数据类 ============
@@ -93,11 +100,11 @@ class ConfigLoader:
 
         Raises:
             FileNotFoundError: 预设文件不存在
-            ValueError: 预设名称包含非法字符（安全校验）
+            InvalidPresetError: 预设名称或预设路径不合法
         """
         # 安全校验：预设名称白名单
-        if not preset_name or not PRESET_NAME_PATTERN.match(preset_name):
-            raise ValueError(f"预设名称包含非法字符: {preset_name}")
+        if not isinstance(preset_name, str) or not preset_name or not PRESET_NAME_PATTERN.match(preset_name):
+            raise InvalidPresetError(f"预设名称无效: {preset_name!r}")
 
         preset_file = self.preset_dir / f"{preset_name}.yaml"
 
@@ -105,10 +112,10 @@ class ConfigLoader:
         try:
             resolved_preset = preset_file.resolve()
             resolved_dir = self.preset_dir.resolve()
-            if not str(resolved_preset).startswith(str(resolved_dir) + os.sep):
-                raise ValueError(f"预设路径越界: {preset_name}")
-        except (OSError, ValueError):
-            raise ValueError(f"预设路径无效: {preset_name}")
+        except OSError as exc:
+            raise InvalidPresetError(f"预设路径无效: {preset_name}") from exc
+        if resolved_dir not in resolved_preset.parents:
+            raise InvalidPresetError(f"预设路径越界: {preset_name}")
 
         if not preset_file.exists():
             raise FileNotFoundError(f"预设配置不存在: {preset_name}")
@@ -302,7 +309,7 @@ class ConfigLoader:
         try:
             config = self.load_preset(preset_name)
             return {"name": config.name, "description": config.description}
-        except FileNotFoundError:
+        except (FileNotFoundError, InvalidPresetError):
             return {}
 
 

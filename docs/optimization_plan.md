@@ -498,24 +498,26 @@
 - `forge` 的页面成功提示契约也已继续按阶段 3 收口：`gameplay/views/production_forge_handlers.py` 当前会显式校验锻造、分解、图纸合成 service 的成功返回值，不再靠 `result[...]`、对象属性直取或 `or {}` 静默消费坏 payload；相关验证 `python -m mypy gameplay/views/production_forge_handlers.py tests/forge_views/forging_actions.py tests/forge_views/decompose_actions.py tests/forge_views/blueprint_actions.py` 已通过，`pytest tests/test_forge_views.py -q` 为 `33 passed`，用于约束 forge 页面不再把 service 坏返回值伪装成成功提示。
 - `forge` 的 blueprint/decompose service 契约也已继续按阶段 3 收口：`gameplay/services/buildings/forge_blueprints.py` 当前会显式校验 `recipe_index` 条目的 `required_forging / quantity_out / result_item_key / costs`，`gameplay/services/buildings/forge_decompose.py` 也会显式校验 `roll_decompose_rewards()` 返回的奖励 mapping，不再依赖 `dict.get(..., {})`、`int(...)` 默认兜底或直接迭代坏返回值继续执行；相关验证 `python -m mypy gameplay/services/buildings/forge_blueprints.py gameplay/services/buildings/forge_decompose.py tests/test_forge_blueprint_service.py tests/test_forge_decompose_service.py` 已通过，`pytest tests/test_forge_blueprint_service.py tests/test_forge_decompose_service.py -q` 为 `13 passed`，用于约束 forge service 在坏 recipe / 坏奖励 helper 下不再伪装成正常合成或分解。
 - `manor rename` 的输入契约也已继续按阶段 3 封板：`gameplay/services/manor/core.py` 当前对未持久化庄园、非字符串 `new_name`、非布尔 `consume_item` 与坏掉的 `exclude_manor_id` 已统一改走显式 `AssertionError`，不再依赖 `strip()`、ORM 字段转换或真假值判断的隐式行为；相关验证 `python -m mypy gameplay/services/manor/core.py tests/test_manor_naming.py tests/test_core_views.py` 已通过，`pytest tests/test_manor_naming.py tests/test_core_views.py -q` 为 `40 passed`。
+- `battle_debugger` 的收尾残项也已补齐：`battle_debugger/config.py` 当前用显式 `InvalidPresetError` / `BattleDebuggerInputError` 取代旧的裸 `ValueError`，`battle_debugger/views.py` 与管理命令也不再用 broad `except Exception` 把编程错误统一伪装成“模拟失败”；页面层只处理预期输入错误，`BattleSimulator`、配置解析或其它内部契约错误会继续直接冒泡。相关验证 `python -m mypy battle_debugger/config.py battle_debugger/views.py battle_debugger/management/commands/battle_debug.py tests/test_battle_debugger_contracts.py` 已通过，`pytest tests/test_battle_debugger_contracts.py -q` 为 `6 passed`。
+- `2026-03-24` 阶段 3 已完成封板：高频用户链路、共享读侧投影入口、低频复用路径的成功响应契约、broad `except Exception` 清零，以及 `ignore_errors = true` 收口目标都已达到本阶段审计完成标志；后续若继续补 `battle / mission / arena` 周边注解或零散低频契约，只作为常规维护项随触点推进，不再单列为阶段 3 未完成收尾。
 - `阶段 5` 的测试门禁治理已经开始：hermetic / integration gate 提示、`pytest` 路径和部分边界契约测试已经补齐，但真实外部服务覆盖面仍不足。
 - `阶段 5` 的超大测试文件拆分已开始：`tests/test_trade_views.py` 已拆分为 `tests/trade/test_trade_*_views.py` 并通过 `pytest tests/trade` 验证；`tests/test_trade_auction_rounds.py`、`tests/test_inventory_guest_items.py`、`tests/test_guest_summon_card.py`、`tests/test_guest_item_view_validation.py`、`tests/test_guest_view_error_boundaries.py`、`tests/test_gameplay.py`、`tests/test_gameplay_tasks.py`、`tests/test_battle.py`、`tests/test_raid_combat_battle.py`、`tests/test_raid_combat_runs.py`、`tests/test_guest_recruitment_service.py`、`tests/test_arena_services.py`、`tests/test_integration_external_services.py`、`tests/test_inventory_views.py` 与 `tests/test_map_views.py` 也都已收口为兼容入口 + 业务域子模块，避免单文件继续超出默认复杂度预算。
 
 ### 2.4 当前未完成的高优先级问题
 
 - 阶段 2 已完成封板；后续只保留 `make test-critical` / `make test-real-services` / `make test-gates` 这类固定回归维护，不再把并发基线收口当作主线开发主题。
-- 阶段 3 的 broad `except Exception`、生产代码裸 `raise ValueError(...)` 与宽泛 `ignore_errors = true` 已清零；此前高频用户链路上的 `guest training / experience item`、仓库通用 `use_item`、`building / production / forge` 这几组尾项已完成本轮封板，当前剩余阶段 3 工作已转向更低频复用路径与类型门禁扩展，不再保留单独的高频收尾入口清单。
+- 阶段 3 已完成封板；此前 broad `except Exception`、生产代码裸 `raise ValueError(...)`、宽泛 `ignore_errors = true` 与高频用户链路尾项都已收口，后续零散的低频复用路径契约补强或类型注解扩展只按常规维护处理，不再作为单独阶段阻断项。
 - 页面读路径的热点活动投影已经统一到 `project_manor_activity_for_read()`，当前剩余工作主要是继续用回归测试守住“页面不隐式塞补偿逻辑、selector 不回退到隐藏刷新、编程错误不被 view 层猜测分类”这三条边界。
-- 阶段 3 的类型门禁下一步不再是缩窄 `ignore_errors`，而是扩展 `disallow_untyped_defs = true` 的严格名单；当前阻断已经转移到 `battle / mission / arena` 周边共享依赖的注解债，需要按依赖簇分批补齐，而不是零散挑单文件推进。
+- 类型门禁的后续增量工作将转入常规维护：`battle / mission / arena` 周边共享依赖仍可按依赖簇继续补齐注解并扩大 `disallow_untyped_defs = true` 严格名单，但这已不再视作阶段 3 未完成项。
 
 ## 3. 后续执行顺序
 
 下一轮优化按以下顺序推进：
 
-1. 按依赖簇推进阶段 3 的类型门禁，把 `battle / mission / arena` 周边共享依赖逐步补齐注解后，再继续扩大 `disallow_untyped_defs = true` 严格名单。
-2. 继续统一低频复用路径的 view / selector / service / infrastructure 异常分层、降级口径与契约测试，并保持页面读路径只依赖统一的读侧投影入口。
-3. 在阶段 2 关键链路已有真实测试约束的前提下，继续推进模板、页面脚本和前端交互边界治理。
-4. 把阶段 2 的 real-services 套件持续保留在回归节奏里，避免补偿边界与并发语义回退。
+1. 继续用回归测试守住页面读路径统一投影边界，避免页面重新塞回隐藏补偿、selector 回退隐藏刷新，或 view 层重新猜测编程错误类型。
+2. 在阶段 2 关键链路已有真实测试约束的前提下，继续推进模板、页面脚本和前端交互边界治理。
+3. 把阶段 2 的 `make test-critical` / `make test-real-services` / `make test-gates` 持续保留在回归节奏里，避免补偿边界与并发语义回退。
+4. 对 `battle / mission / arena` 周边共享依赖的类型注解与零散低频复用路径契约补强，按常规维护随触点推进，不再作为阶段 3 独立收尾事项。
 
 ## 4. 分阶段路线
 
@@ -545,6 +547,10 @@
 
 - 高频主链路的异常类型、降级口径和页面映射关系清晰稳定。
 - 类型门禁和覆盖率门禁开始对热点路径形成真实约束。
+
+当前状态：
+
+- `2026-03-24` 已封板，后续仅保留常规维护式的类型门禁扩展与零散低频契约补强。
 
 ### 阶段 4：模板与前端边界治理
 

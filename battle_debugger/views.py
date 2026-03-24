@@ -21,7 +21,7 @@ from django.views.decorators.http import require_http_methods
 
 from core.utils import safe_float, safe_int
 
-from .config import BattleConfig, ConfigLoader, GuestConfig, PartyConfig
+from .config import BattleConfig, BattleDebuggerInputError, ConfigLoader, GuestConfig, InvalidPresetError, PartyConfig
 from .simulator import BattleSimulator
 
 logger = logging.getLogger(__name__)
@@ -29,6 +29,16 @@ logger = logging.getLogger(__name__)
 # 安全常量
 MAX_REPEAT = 100  # 最大重复次数，防止 DoS
 MAX_TUNE_VALUES = 20  # 调优参数最大数量
+
+
+def _render_debugger_error(request, message: str):
+    return render(request, "battle_debugger/error.html", {"error": message})
+
+
+def _validate_config_or_raise(loader: ConfigLoader, config: BattleConfig) -> None:
+    errors = loader.validate(config)
+    if errors:
+        raise BattleDebuggerInputError("；".join(errors))
 
 
 def debug_only(view_func):
@@ -99,7 +109,9 @@ def preset_detail(request, preset_name):
         config = loader.load_preset(preset_name)
         info = loader.get_preset_info(preset_name)
     except FileNotFoundError:
-        return render(request, "battle_debugger/error.html", {"error": f"预设配置不存在: {preset_name}"})
+        return _render_debugger_error(request, f"预设配置不存在: {preset_name}")
+    except InvalidPresetError as exc:
+        return _render_debugger_error(request, str(exc))
 
     return render(
         request,
@@ -186,6 +198,7 @@ def simulate(request):
 
         if overrides:
             config = loader.merge_config(config, overrides)
+        _validate_config_or_raise(loader, config)
 
         # 运行模拟
         simulator = BattleSimulator(config)
@@ -213,10 +226,10 @@ def simulate(request):
 
     except FileNotFoundError:
         logger.warning(f"预设配置不存在: {request.POST.get('preset')}")
-        return render(request, "battle_debugger/error.html", {"error": "预设配置不存在"})
-    except Exception:
-        logger.exception("战斗模拟失败")
-        return render(request, "battle_debugger/error.html", {"error": "模拟失败，请检查配置参数"})
+        return _render_debugger_error(request, "预设配置不存在")
+    except BattleDebuggerInputError as exc:
+        logger.warning("战斗模拟输入无效: %s", exc)
+        return _render_debugger_error(request, str(exc))
 
 
 @debugger_view
@@ -310,10 +323,11 @@ def tune(request):
                 if parsed is not None:
                     values.append(parsed)
         if not values:
-            return render(request, "battle_debugger/error.html", {"error": "请提供有效的参数值"})
+            return _render_debugger_error(request, "请提供有效的参数值")
 
         # 加载配置
         config = loader.load_preset(preset_name)
+        _validate_config_or_raise(loader, config)
 
         # 运行调优
         tune_results = []
@@ -353,10 +367,10 @@ def tune(request):
 
     except FileNotFoundError:
         logger.warning(f"预设配置不存在: {request.POST.get('preset')}")
-        return render(request, "battle_debugger/error.html", {"error": "预设配置不存在"})
-    except Exception:
-        logger.exception("参数调优失败")
-        return render(request, "battle_debugger/error.html", {"error": "调优失败，请检查配置参数"})
+        return _render_debugger_error(request, "预设配置不存在")
+    except BattleDebuggerInputError as exc:
+        logger.warning("参数调优输入无效: %s", exc)
+        return _render_debugger_error(request, str(exc))
 
 
 # ============ API接口 ============
@@ -447,6 +461,7 @@ def api_troops(request):
 @require_http_methods(["GET", "POST"])
 def custom_config(request):
     """自定义配置页面"""
+    loader = ConfigLoader()
     from battle.models import TroopTemplate
     from guests.models import GuestTemplate, Skill
 
@@ -512,6 +527,7 @@ def custom_config(request):
             defender=defender_config,
             tunable_params=_parse_tunable_params(request.POST),
         )
+        _validate_config_or_raise(loader, config)
 
         # 运行模拟
         simulator = BattleSimulator(config)
@@ -539,9 +555,9 @@ def custom_config(request):
 
         return redirect("battle_debugger:result_detail", result_id=result_id)
 
-    except Exception:
-        logger.exception("自定义配置模拟失败")
-        return render(request, "battle_debugger/error.html", {"error": "模拟失败，请检查配置参数"})
+    except BattleDebuggerInputError as exc:
+        logger.warning("自定义配置输入无效: %s", exc)
+        return _render_debugger_error(request, str(exc))
 
 
 def _parse_party_config(post_data, side: str) -> PartyConfig:

@@ -6,7 +6,7 @@ Django Management Command: battle_debug
 
 from django.core.management.base import BaseCommand, CommandError
 
-from battle_debugger.config import ConfigLoader
+from battle_debugger.config import BattleDebuggerInputError, ConfigLoader
 from battle_debugger.simulator import BattleSimulator
 
 
@@ -56,7 +56,7 @@ class Command(BaseCommand):
         if options.get("preset"):
             try:
                 config = loader.load_preset(options["preset"])
-            except FileNotFoundError as exc:
+            except (FileNotFoundError, BattleDebuggerInputError) as exc:
                 raise CommandError(str(exc))
             self.stdout.write(self.style.SUCCESS(f'✓ 加载预设配置: {options["preset"]}'))
             return config
@@ -184,7 +184,7 @@ class Command(BaseCommand):
 
         try:
             config = loader.load_preset(options["preset"])
-        except FileNotFoundError as e:
+        except (FileNotFoundError, BattleDebuggerInputError) as e:
             raise CommandError(str(e))
 
         # 解析参数值

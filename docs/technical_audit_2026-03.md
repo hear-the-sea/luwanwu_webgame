@@ -159,6 +159,8 @@
 - 2026-03-24 阶段 3 补充：`gameplay/views/production_forge_handlers.py` 的 forge 成功提示链也已继续收紧结果契约；开始锻造、装备分解与图纸合成页面不再直接信任 service 返回对象上的 `equipment_name / quantity / actual_duration / rewards / result_name`，也不再通过 `or {}` 把坏奖励列表静默渲染成“无奖励文案”，而是统一改走显式 `AssertionError`，避免 forge 页面在 service 坏返回值下继续伪装成成功操作。
 - 2026-03-24 阶段 3 补充：`gameplay/services/buildings/forge_blueprints.py` 与 `forge_decompose.py` 的 service 契约也已继续收紧；坏掉的 `recipe_index` 条目、`required_forging / quantity_out / result_item_key / costs` 字段，以及 `roll_decompose_rewards()` 返回的坏奖励 mapping，不再通过 `int(..., default)`、`dict.get(..., {})` 或直接迭代静默退化成默认合成/分解语义，而是统一改走显式 `AssertionError`，避免 forge service 在坏调用或坏 helper 返回值下悄悄少扣材料、少发材料或继续吞掉图纸配置错误。
 - 2026-03-24 阶段 3 补充：`gameplay/services/manor/core.rename_manor()` 与 `get_rename_card_count()` 已继续收紧庄园改名输入契约；未持久化庄园、非字符串 `new_name`、非布尔 `consume_item` 以及坏掉的 `exclude_manor_id` 不再依赖 `AttributeError`、隐式 `strip()`/ORM 转换或真假值判断碰运气，而是统一改走显式 `AssertionError`，避免更名链在坏调用下悄悄误判重名、绕过命名卡检查或把内部契约错误伪装成普通业务失败。
+- 2026-03-24 阶段 3 补充：`battle_debugger/config.py`、`battle_debugger/views.py` 与 `battle_debugger/management/commands/battle_debug.py` 已补齐最后一批 debug 工具边角契约；预设名/路径校验不再继续抛裸 `ValueError`，而改用显式 `InvalidPresetError` / `BattleDebuggerInputError`，同时三条页面入口与管理命令也退出了 broad `except Exception`，只对白名单内输入错误渲染错误页或转换成 `CommandError`，`BattleSimulator` 等内部编程错误会继续直接冒泡，避免调试器链路继续掩盖真实契约故障。
+- 2026-03-24 阶段 3 收尾：高频用户链路、共享读侧投影入口、低频复用路径成功响应契约，以及 `broad except Exception` / 宽泛 `ignore_errors = true` 的治理目标均已达到本阶段审计完成标志；阶段 3 自此封板，后续仅把新增触点上的类型门禁扩展与零散低频契约补强纳入常规维护，不再保留单独的“阶段 3 未完成收尾”清单。
 
 ## 1. 重构优化规则
 
