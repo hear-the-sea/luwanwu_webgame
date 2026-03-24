@@ -1,0 +1,165 @@
+import pytest
+from django.urls import reverse
+from django.utils import timezone
+
+from gameplay.models import InventoryItem, ItemTemplate
+from guests.models import Guest, GuestArchetype, GuestRarity, GuestStatus, GuestTemplate
+
+
+@pytest.mark.django_db
+class TestInventoryPageContext:
+    def test_warehouse_page(self, manor_with_user):
+        _manor, client = manor_with_user
+        response = client.get(reverse("gameplay:warehouse"))
+        assert response.status_code == 200
+        assert "inventory_items" in response.context
+
+    def test_warehouse_treasury_tab(self, manor_with_user):
+        _manor, client = manor_with_user
+        response = client.get(reverse("gameplay:warehouse") + "?tab=treasury")
+        assert response.status_code == 200
+        assert response.context["current_tab"] == "treasury"
+
+    def test_warehouse_page_projects_grain_item_without_writing_inventory(self, manor_with_user):
+        manor, client = manor_with_user
+        grain_template, _ = ItemTemplate.objects.get_or_create(
+            key="grain",
+            defaults={"name": "粮食"},
+        )
+        if not grain_template.name:
+            grain_template.name = "粮食"
+            grain_template.save(update_fields=["name"])
+
+        manor.grain = 777
+        manor.resource_updated_at = timezone.now()
+        manor.save(update_fields=["grain", "resource_updated_at"])
+        InventoryItem.objects.filter(
+            manor=manor,
+            template=grain_template,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        ).delete()
+
+        response = client.get(reverse("gameplay:warehouse"))
+        assert response.status_code == 200
+
+        warehouse_grain = InventoryItem.objects.filter(
+            manor=manor,
+            template=grain_template,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        ).first()
+        assert warehouse_grain is None
+        projected_entry = next(
+            (entry for entry in response.context["inventory_items"] if entry.template.key == "grain"),
+            None,
+        )
+        assert projected_entry is not None
+        assert projected_entry.display_quantity == 777
+        assert projected_entry.is_projected is True
+
+    def test_warehouse_page_renders_soul_fusion_requirements_for_current_item(self, manor_with_user):
+        manor, client = manor_with_user
+        guest_template = GuestTemplate.objects.create(
+            key="view_soul_fusion_guest",
+            name="魂器候选门客",
+            rarity=GuestRarity.BLUE,
+            archetype=GuestArchetype.CIVIL,
+            base_attack=100,
+            base_intellect=140,
+            base_defense=90,
+            base_agility=95,
+            base_luck=70,
+            base_hp=1200,
+            default_gender="male",
+            default_morality=60,
+        )
+        guest = Guest.objects.create(
+            manor=manor,
+            template=guest_template,
+            status=GuestStatus.IDLE,
+            level=66,
+        )
+        soul_container = ItemTemplate.objects.create(
+            key="view_soul_fusion_container",
+            name="蓝魂容器",
+            effect_type=ItemTemplate.EffectType.TOOL,
+            is_usable=True,
+            effect_payload={
+                "action": "soul_fusion",
+                "min_level": 60,
+                "allowed_rarities": ["blue", "purple"],
+            },
+        )
+        InventoryItem.objects.create(
+            manor=manor,
+            template=soul_container,
+            quantity=1,
+            storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+        )
+
+        response = client.get(reverse("gameplay:warehouse"))
+
+        assert response.status_code == 200
+        body = response.content.decode("utf-8")
+        assert 'data-soul-fusion-min-level="60"' in body
+        assert 'data-soul-fusion-rarities="blue,purple"' in body
+        assert f'data-guest-id="{guest.id}"' in body
+        assert 'data-guest-level="66"' in body
+        assert 'data-guest-rarity="blue"' in body
+
+    def test_warehouse_page_loads_external_page_script_without_inline_handlers(self, manor_with_user):
+        _manor, client = manor_with_user
+
+        response = client.get(reverse("gameplay:warehouse"))
+
+        assert response.status_code == 200
+        body = response.content.decode("utf-8")
+        assert "js/warehouse-page.js" in body
+        assert "const warehouseModalState" not in body
+        assert "onclick=" not in body
+        assert "onchange=" not in body
+
+    def test_recruitment_hall_page(self, manor_with_user):
+        _manor, client = manor_with_user
+        response = client.get(reverse("gameplay:recruitment_hall"))
+        assert response.status_code == 200
+        assert "pools" in response.context
+        assert "candidates_payload" in response.context
+        assert "candidate_count" in response.context
+        assert "guests" not in response.context
+        assert "capacity" not in response.context
+        assert "available_gears" not in response.context
+
+    def test_recruitment_hall_page_loads_external_page_script_without_inline_logic(self, manor_with_user):
+        _manor, client = manor_with_user
+
+        response = client.get(reverse("gameplay:recruitment_hall"))
+
+        assert response.status_code == 200
+        body = response.content.decode("utf-8")
+        assert "js/recruitment-hall.js" in body
+        assert "const CHUNK_SIZE" not in body
+
+    def test_recruitment_hall_page_syncs_resources_before_loading_context(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        calls = {"sync": 0, "context": 0}
+
+        def _fake_sync(*_args, **_kwargs):
+            calls["sync"] += 1
+
+        def _fake_context(*_args, **_kwargs):
+            calls["context"] += 1
+            return {
+                "manor": manor,
+                "pools": [],
+                "candidates_payload": [],
+                "candidate_count": 0,
+                "records": [],
+                "magnifying_glass_items": [],
+            }
+
+        monkeypatch.setattr("gameplay.views.inventory.project_resource_production_for_read", _fake_sync)
+        monkeypatch.setattr("gameplay.views.inventory.get_recruitment_hall_context", _fake_context)
+
+        response = client.get(reverse("gameplay:recruitment_hall"))
+        assert response.status_code == 200
+        assert calls == {"sync": 1, "context": 1}

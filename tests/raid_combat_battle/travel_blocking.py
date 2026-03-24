@@ -1,0 +1,131 @@
+from __future__ import annotations
+
+from datetime import timedelta
+
+import pytest
+from django.utils import timezone
+
+from core.exceptions import MessageError
+from gameplay.models import RaidRun
+from gameplay.services.raid.combat import travel as combat_travel
+from tests.raid_combat_battle.support import build_attacker_defender, build_locked_run
+
+
+@pytest.mark.django_db
+def test_dismiss_marching_raids_if_protected_reacts_to_defeat_protection(django_user_model, monkeypatch):
+    attacker, defender = build_attacker_defender(
+        django_user_model,
+        attacker_username="raid_dismiss_attacker",
+        defender_username="raid_dismiss_defender",
+    )
+
+    now = timezone.now()
+    defender.defeat_protection_until = now + timedelta(minutes=30)
+    defender.save(update_fields=["defeat_protection_until"])
+
+    run = RaidRun.objects.create(
+        attacker=attacker,
+        defender=defender,
+        status=RaidRun.Status.MARCHING,
+        troop_loadout={},
+        travel_time=60,
+        battle_at=now + timedelta(seconds=30),
+        return_at=now + timedelta(seconds=60),
+    )
+
+    sent_messages = []
+    scheduled = []
+    monkeypatch.setattr(combat_travel, "create_message", lambda **kwargs: sent_messages.append(kwargs))
+    monkeypatch.setattr(
+        combat_travel, "safe_apply_async", lambda task, **kwargs: scheduled.append((task, kwargs)) or True
+    )
+
+    import gameplay.tasks as gameplay_tasks
+
+    monkeypatch.setattr(gameplay_tasks, "complete_raid_task", object(), raising=False)
+
+    dismissed = combat_travel._dismiss_marching_raids_if_protected(defender)
+
+    run.refresh_from_db()
+    assert dismissed == 1
+    assert run.status == RaidRun.Status.RETREATED
+    assert run.return_at is not None and run.return_at > now
+    assert len(sent_messages) == 1
+    assert "战败保护期" in sent_messages[0]["body"]
+    assert len(scheduled) == 1
+
+
+def test_resolve_complete_raid_task_missing_target_module_degrades(monkeypatch):
+    def _missing_module(_name):
+        exc = ModuleNotFoundError("No module named 'gameplay.tasks'")
+        exc.name = "gameplay.tasks"
+        raise exc
+
+    monkeypatch.setattr(combat_travel, "import_module", _missing_module)
+
+    assert combat_travel.resolve_complete_raid_task(logger=combat_travel.logger) is None
+
+
+def test_resolve_complete_raid_task_nested_import_error_bubbles_up(monkeypatch):
+    def _nested_import_failure(_name):
+        exc = ModuleNotFoundError("No module named 'redis'")
+        exc.name = "redis"
+        raise exc
+
+    monkeypatch.setattr(combat_travel, "import_module", _nested_import_failure)
+
+    with pytest.raises(ModuleNotFoundError, match="redis"):
+        combat_travel.resolve_complete_raid_task(logger=combat_travel.logger)
+
+
+def test_retreat_raid_run_due_to_blocked_target_programming_error_bubbles_up(monkeypatch):
+    now = timezone.now()
+    saved = {"fields": None}
+    locked_run = build_locked_run(run_id=21, now=now, save_fields=saved)
+
+    monkeypatch.setattr(
+        combat_travel,
+        "create_message",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("broken blocked-target message contract")),
+    )
+
+    with pytest.raises(AssertionError, match="broken blocked-target message contract"):
+        combat_travel._retreat_raid_run_due_to_blocked_target(locked_run, now=now, reason="战败保护")
+
+    assert locked_run.status == RaidRun.Status.RETREATED
+    assert locked_run.return_at == now + timedelta(seconds=15)
+    assert saved["fields"] == ["status", "return_at"]
+
+
+def test_retreat_raid_run_due_to_blocked_target_explicit_message_error_degrades(monkeypatch):
+    now = timezone.now()
+    saved = {"fields": None}
+    locked_run = build_locked_run(run_id=22, now=now, save_fields=saved)
+
+    monkeypatch.setattr(
+        combat_travel,
+        "create_message",
+        lambda **_kwargs: (_ for _ in ()).throw(MessageError("message backend down")),
+    )
+
+    return_time = combat_travel._retreat_raid_run_due_to_blocked_target(locked_run, now=now, reason="战败保护")
+
+    assert return_time == 15
+    assert locked_run.status == RaidRun.Status.RETREATED
+    assert locked_run.return_at == now + timedelta(seconds=15)
+    assert saved["fields"] == ["status", "return_at"]
+
+
+def test_retreat_raid_run_due_to_blocked_target_runtime_marker_error_bubbles_up(monkeypatch):
+    now = timezone.now()
+    saved = {"fields": None}
+    locked_run = build_locked_run(run_id=23, now=now, save_fields=saved)
+
+    monkeypatch.setattr(
+        combat_travel,
+        "create_message",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("message backend down")),
+    )
+
+    with pytest.raises(RuntimeError, match="message backend down"):
+        combat_travel._retreat_raid_run_due_to_blocked_target(locked_run, now=now, reason="战败保护")

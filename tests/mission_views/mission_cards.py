@@ -1,0 +1,97 @@
+from __future__ import annotations
+
+import pytest
+from django.db import DatabaseError
+from django.urls import reverse
+
+from gameplay.models import MissionTemplate
+from tests.mission_views.support import assert_redirect, response_messages
+
+
+@pytest.mark.django_db
+class TestMissionCardView:
+    def test_use_mission_card_rejects_missing_mission_key(self, manor_with_user):
+        _manor, client = manor_with_user
+        response = client.post(reverse("gameplay:use_mission_card"), {})
+        assert_redirect(response, reverse("gameplay:tasks"))
+        assert any("请选择任务" in message for message in response_messages(response))
+
+    def test_use_mission_card_rejects_invalid_mission_key(self, manor_with_user):
+        _manor, client = manor_with_user
+        mission_key = "mission_not_exists_for_card_view_test"
+        response = client.post(reverse("gameplay:use_mission_card"), {"mission_key": mission_key})
+        assert_redirect(response, f"{reverse('gameplay:tasks')}?mission={mission_key}")
+        assert any("任务不存在" in message for message in response_messages(response))
+
+    def test_use_mission_card_rejects_when_action_lock_conflicts(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        mission = MissionTemplate.objects.create(
+            key=f"view_use_card_lock_conflict_{manor.id}",
+            name="任务卡锁冲突",
+        )
+        called = {"count": 0}
+
+        monkeypatch.setattr(
+            "gameplay.views.mission_helpers.acquire_mission_action_lock",
+            lambda *_a, **_k: (False, "", None),
+        )
+
+        def _unexpected_add(*_args, **_kwargs):
+            called["count"] += 1
+
+        monkeypatch.setattr("gameplay.views.missions.add_mission_extra_attempt", _unexpected_add)
+
+        response = client.post(reverse("gameplay:use_mission_card"), {"mission_key": mission.key})
+        assert_redirect(response, f"{reverse('gameplay:tasks')}?mission={mission.key}")
+        assert any("任务请求处理中，请稍候重试" in message for message in response_messages(response))
+        assert called["count"] == 0
+
+    def test_use_mission_card_database_error_does_not_500(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        mission = MissionTemplate.objects.create(
+            key=f"view_use_card_unexpected_{manor.id}",
+            name="任务卡异常任务",
+        )
+
+        monkeypatch.setattr(
+            "gameplay.services.inventory.core.consume_inventory_item_for_manor_locked",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("db down")),
+        )
+
+        response = client.post(reverse("gameplay:use_mission_card"), {"mission_key": mission.key})
+        assert_redirect(response, f"{reverse('gameplay:tasks')}?mission={mission.key}")
+        assert any("操作失败，请稍后重试" in message for message in response_messages(response))
+
+    def test_use_mission_card_programming_error_bubbles_up(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        mission = MissionTemplate.objects.create(
+            key=f"view_use_card_runtime_{manor.id}",
+            name="任务卡运行时任务",
+        )
+
+        monkeypatch.setattr(
+            "gameplay.services.inventory.core.consume_inventory_item_for_manor_locked",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            client.post(reverse("gameplay:use_mission_card"), {"mission_key": mission.key})
+
+    def test_use_mission_card_legacy_value_error_bubbles_up(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        mission = MissionTemplate.objects.create(
+            key=f"view_use_card_legacy_value_{manor.id}",
+            name="任务卡旧异常任务",
+        )
+
+        monkeypatch.setattr(
+            "gameplay.services.inventory.core.consume_inventory_item_for_manor_locked",
+            lambda *_args, **_kwargs: None,
+        )
+        monkeypatch.setattr(
+            "gameplay.views.missions.add_mission_extra_attempt",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("legacy mission card error")),
+        )
+
+        with pytest.raises(ValueError, match="legacy mission card error"):
+            client.post(reverse("gameplay:use_mission_card"), {"mission_key": mission.key})
