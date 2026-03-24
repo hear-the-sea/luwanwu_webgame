@@ -24,7 +24,12 @@ from gameplay.models import WorkAssignment, WorkTemplate
 from gameplay.selectors.work import get_work_page_context
 from gameplay.services.manor.core import get_manor
 from gameplay.services.resources import project_resource_production_for_read
-from gameplay.services.work import assign_guest_to_work, claim_work_reward, recall_guest_from_work
+from gameplay.services.work import (
+    assign_guest_to_work,
+    claim_work_reward,
+    recall_guest_from_work,
+    refresh_work_assignments,
+)
 from gameplay.views.read_helpers import get_prepared_manor_for_read
 from guests.models import Guest
 
@@ -98,6 +103,22 @@ def assign_work_view(request: HttpRequest) -> HttpResponse:
         messages.error(request, "参数错误")
         return redirect(redirect_url)
 
+    try:
+        refresh_work_assignments(manor)
+    except DatabaseError as exc:
+        _handle_unexpected_work_error(
+            request,
+            exc,
+            log_message="Unexpected work refresh before assign: manor_id=%s user_id=%s guest_id=%s work_key=%s",
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                guest_id,
+                work_key,
+            ),
+        )
+        return redirect(redirect_url)
+
     guest = get_object_or_404(Guest, id=guest_id, manor=manor)
     work_template = get_object_or_404(WorkTemplate, key=work_key)
 
@@ -160,6 +181,22 @@ def claim_work_reward_view(request: HttpRequest, pk: int) -> HttpResponse:
     """领取打工报酬"""
     redirect_url = _resolve_work_redirect_url(request)
     manor = get_manor(request.user)
+
+    try:
+        refresh_work_assignments(manor)
+    except DatabaseError as exc:
+        _handle_unexpected_work_error(
+            request,
+            exc,
+            log_message="Unexpected work refresh before claim: manor_id=%s user_id=%s assignment_id=%s",
+            log_args=(
+                getattr(manor, "id", None),
+                getattr(request.user, "id", None),
+                pk,
+            ),
+        )
+        return redirect(redirect_url)
+
     assignment = get_object_or_404(WorkAssignment, id=pk, manor=manor)
 
     try:

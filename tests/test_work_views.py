@@ -62,6 +62,8 @@ class TestWorkViews:
     def test_work_page_shows_assignment_in_matching_work_card(self, manor_with_user):
         manor, client = manor_with_user
         guest, work_template = self._create_work_data(manor, "inline_assignment")
+        guest.status = GuestStatus.WORKING
+        guest.save(update_fields=["status"])
         WorkAssignment.objects.create(
             manor=manor,
             guest=guest,
@@ -76,6 +78,28 @@ class TestWorkViews:
         assert "执行门客" in body
         assert guest.display_name in body
         assert "打工中 (" not in body
+
+    def test_work_page_refreshes_overdue_assignment_and_releases_guest(self, manor_with_user):
+        manor, client = manor_with_user
+        guest, work_template = self._create_work_data(manor, "expired_assignment")
+        guest.status = GuestStatus.WORKING
+        guest.save(update_fields=["status"])
+        assignment = WorkAssignment.objects.create(
+            manor=manor,
+            guest=guest,
+            work_template=work_template,
+            status=WorkAssignment.Status.WORKING,
+            complete_at=timezone.now() - timezone.timedelta(minutes=5),
+        )
+
+        response = client.get(reverse("gameplay:work"))
+
+        assert response.status_code == 200
+        assignment.refresh_from_db()
+        guest.refresh_from_db()
+        assert assignment.status == WorkAssignment.Status.COMPLETED
+        assert assignment.reward_claimed is False
+        assert guest.status == GuestStatus.IDLE
 
     def test_work_tier_filter(self, manor_with_user):
         """打工等级过滤"""
@@ -223,6 +247,35 @@ class TestWorkViews:
 
         assert response.status_code == 302
         assert response.url == next_url
+
+    def test_claim_work_reward_view_refreshes_overdue_assignment_before_claim(self, manor_with_user):
+        manor, client = manor_with_user
+        guest, work_template = self._create_work_data(manor, "claim_expired")
+        guest.status = GuestStatus.WORKING
+        guest.save(update_fields=["status"])
+        manor.silver = 0
+        manor.save(update_fields=["silver"])
+        assignment = WorkAssignment.objects.create(
+            manor=manor,
+            guest=guest,
+            work_template=work_template,
+            status=WorkAssignment.Status.WORKING,
+            complete_at=timezone.now() - timezone.timedelta(minutes=1),
+        )
+
+        response = client.post(reverse("gameplay:claim_work_reward", kwargs={"pk": assignment.pk}))
+
+        assert response.status_code == 302
+        assert response.url == reverse("gameplay:work")
+        assignment.refresh_from_db()
+        guest.refresh_from_db()
+        manor.refresh_from_db()
+        assert assignment.status == WorkAssignment.Status.COMPLETED
+        assert assignment.reward_claimed is True
+        assert guest.status == GuestStatus.IDLE
+        assert manor.silver == work_template.reward_silver
+        messages = [str(m) for m in get_messages(response.wsgi_request)]
+        assert any("完成打工，获得银两" in message for message in messages)
 
     def test_assign_work_known_error_shows_message(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
