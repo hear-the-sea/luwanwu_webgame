@@ -122,9 +122,9 @@ def finalize_tournament_locked(
         ArenaEntryGuest.objects.filter(entry_id__in=[entry.id for entry in entries]).values_list("guest_id", flat=True)
     )
     if participating_guest_ids:
-        Guest.objects.filter(id__in=participating_guest_ids, status=GuestStatus.DEPLOYED).update(
-            status=GuestStatus.IDLE
-        )
+        Guest.objects.filter(
+            id__in=participating_guest_ids, status__in=[GuestStatus.ARENA, GuestStatus.DEPLOYED]
+        ).update(status=GuestStatus.IDLE)
 
     winner = ranked_entries[0]
     tournament.status = ArenaTournament.Status.COMPLETED

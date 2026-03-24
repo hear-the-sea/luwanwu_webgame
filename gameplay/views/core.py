@@ -21,7 +21,7 @@ from core.exceptions import GameError
 from core.utils import sanitize_error_message
 from gameplay.selectors.core import get_dashboard_context, get_ranking_page_context, get_settings_page_context
 from gameplay.selectors.home import get_home_context
-from gameplay.services.manor.core import get_manor, rename_manor
+from gameplay.services.manor.core import get_manor, project_manor_activity_for_read, rename_manor
 from gameplay.services.resources import project_resource_production_for_read
 from gameplay.views.read_helpers import get_prepared_manor_for_read
 
@@ -79,7 +79,7 @@ class HomeView(TemplateView):
                 self.request,
                 logger=logger,
                 source="home_view",
-                project_fn=project_resource_production_for_read,
+                project_fn=project_manor_activity_for_read,
             )
             context.update(get_home_context(manor))
 

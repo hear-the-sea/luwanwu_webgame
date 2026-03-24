@@ -5,7 +5,7 @@ from threading import Lock
 from typing import Any
 
 from django.db import DatabaseError
-from django.db.models import Q
+from django.db.models import Count, F, Q
 
 from gameplay.services.utils.cache_exceptions import CACHE_INFRASTRUCTURE_EXCEPTIONS
 
@@ -74,6 +74,7 @@ def has_due_manor_refresh_work(
     mission_run_model: Any,
     scout_record_model: Any,
     raid_run_model: Any,
+    arena_tournament_model: Any,
     manor_id: int,
     now: Any,
     logger: Any,
@@ -97,6 +98,19 @@ def has_due_manor_refresh_work(
             | Q(status=raid_run_model.Status.RETURNING, return_at__lte=now)
             | Q(status=raid_run_model.Status.RETREATED, return_at__lte=now)
         ),
+        arena_tournament_model.objects.filter(status=arena_tournament_model.Status.RECRUITING)
+        .annotate(
+            total_entry_count=Count("entries", distinct=True),
+            manor_entry_count=Count("entries", filter=Q(entries__manor_id=manor_id), distinct=True),
+        )
+        .filter(manor_entry_count__gt=0, total_entry_count__gte=F("player_limit")),
+        arena_tournament_model.objects.filter(
+            status=arena_tournament_model.Status.RUNNING,
+            next_round_at__isnull=False,
+            next_round_at__lte=now,
+        )
+        .annotate(manor_entry_count=Count("entries", filter=Q(entries__manor_id=manor_id), distinct=True))
+        .filter(manor_entry_count__gt=0),
     )
 
     for queryset in checks:
@@ -124,6 +138,7 @@ def refresh_manor_state(
     refresh_mission_runs_func: Callable[..., None],
     refresh_scout_records_func: Callable[..., None],
     refresh_raid_runs_func: Callable[..., None],
+    refresh_arena_activity_func: Callable[..., Any],
 ) -> None:
     finalize_upgrades_func(manor)
 
@@ -152,6 +167,7 @@ def refresh_manor_state(
         refresh_mission_runs_func(manor)
         refresh_scout_records_func(manor)
         refresh_raid_runs_func(manor)
+    refresh_arena_activity_func(manor, now=timezone_module.now())
 
 
 __all__ = [

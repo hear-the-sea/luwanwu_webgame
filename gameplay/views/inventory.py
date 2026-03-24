@@ -33,7 +33,7 @@ from gameplay.services.inventory.guest_items import (
     use_xisuidan,
 )
 from gameplay.services.inventory.use import use_inventory_item
-from gameplay.services.manor.core import get_manor
+from gameplay.services.manor.core import get_manor, project_manor_activity_for_read
 from gameplay.services.manor.treasury import move_item_to_treasury, move_item_to_warehouse
 from gameplay.services.resources import project_resource_production_for_read
 from gameplay.views.read_helpers import get_prepared_manor_for_read
@@ -227,7 +227,7 @@ class WarehouseView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         manor = get_prepared_manor_for_read(
             self.request,
-            project_fn=project_resource_production_for_read,
+            project_fn=project_manor_activity_for_read,
             logger=logger,
             source="warehouse_view",
         )

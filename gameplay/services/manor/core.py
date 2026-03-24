@@ -8,6 +8,7 @@ import logging
 import math
 import re
 import time
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from threading import Lock
 
@@ -36,6 +37,7 @@ from core.utils.time_scale import scale_duration
 
 from ...constants import BUILDING_MAX_LEVELS, MAX_CONCURRENT_BUILDING_UPGRADES, BuildingKeys, ManorNameConstants
 from ...models import (
+    ArenaTournament,
     Building,
     BuildingType,
     ItemTemplate,
@@ -224,21 +226,27 @@ def _has_due_manor_refresh_work(manor_id: int, now: datetime | None = None) -> b
         mission_run_model=MissionRun,
         scout_record_model=ScoutRecord,
         raid_run_model=RaidRun,
+        arena_tournament_model=ArenaTournament,
         manor_id=manor_id,
         now=now or timezone.now(),
         logger=logger,
     )
 
 
-def refresh_manor_state(
+def _noop_manor_step(_manor: Manor) -> None:
+    return None
+
+
+def _run_manor_refresh(
     manor: Manor,
     *,
-    prefer_async: bool = False,
-    include_activity_refresh: bool = False,
+    prefer_async: bool,
+    include_activity_refresh: bool,
+    sync_resource_projection_func: Callable[[Manor], None],
 ) -> None:
+    from ..arena import refresh_arena_activity
     from ..missions import refresh_mission_runs
     from ..raid import refresh_raid_runs, refresh_scout_records
-    from ..resources import sync_resource_production
 
     _refresh.refresh_manor_state(
         manor,
@@ -251,10 +259,50 @@ def refresh_manor_state(
         finalize_upgrades_func=finalize_upgrades,
         has_due_manor_refresh_work_func=_has_due_manor_refresh_work,
         should_skip_refresh_by_local_fallback_func=_should_skip_refresh_by_local_fallback,
-        sync_resource_production_func=sync_resource_production,
+        sync_resource_production_func=sync_resource_projection_func,
         refresh_mission_runs_func=refresh_mission_runs,
         refresh_scout_records_func=refresh_scout_records,
         refresh_raid_runs_func=refresh_raid_runs,
+        refresh_arena_activity_func=refresh_arena_activity,
+    )
+
+
+def refresh_manor_state(
+    manor: Manor,
+    *,
+    prefer_async: bool = False,
+    include_activity_refresh: bool = False,
+) -> None:
+    from ..resources import sync_resource_production
+
+    _run_manor_refresh(
+        manor,
+        prefer_async=prefer_async,
+        include_activity_refresh=include_activity_refresh,
+        sync_resource_projection_func=sync_resource_production,
+    )
+
+
+def project_manor_activity_for_read(
+    manor: Manor,
+    *,
+    prefer_async: bool = False,
+) -> None:
+    """
+    Apply the read-side manor projection and compensate due activity state.
+
+    This keeps page reads lightweight for resources while still finalizing
+    overdue mission/scout/raid/arena activity so guest availability and status
+    displays do not lag behind completed activity.
+    """
+    from ..resources import project_resource_production_for_read
+
+    project_resource_production_for_read(manor)
+    _run_manor_refresh(
+        manor,
+        prefer_async=prefer_async,
+        include_activity_refresh=True,
+        sync_resource_projection_func=_noop_manor_step,
     )
 
 

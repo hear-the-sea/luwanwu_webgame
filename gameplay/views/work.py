@@ -22,8 +22,7 @@ from core.exceptions import GameError
 from core.utils import safe_positive_int, safe_redirect_url, sanitize_error_message
 from gameplay.models import WorkAssignment, WorkTemplate
 from gameplay.selectors.work import get_work_page_context
-from gameplay.services.manor.core import get_manor
-from gameplay.services.resources import project_resource_production_for_read
+from gameplay.services.manor.core import get_manor, project_manor_activity_for_read
 from gameplay.services.work import (
     assign_guest_to_work,
     claim_work_reward,
@@ -73,7 +72,7 @@ class WorkView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         manor = get_prepared_manor_for_read(
             self.request,
-            project_fn=project_resource_production_for_read,
+            project_fn=project_manor_activity_for_read,
             logger=logger,
             source="work_view",
         )

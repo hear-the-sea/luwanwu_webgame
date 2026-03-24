@@ -7,7 +7,7 @@ from functools import partial
 from typing import Iterable
 
 from django.db import transaction
-from django.db.models import Count, F
+from django.db.models import Count, F, Q
 from django.utils import timezone
 
 from core.exceptions import ArenaBusyError, ArenaEntryStateError, ArenaParticipationLimitError
@@ -246,7 +246,10 @@ def cancel_arena_entry(manor: Manor) -> int:
     entry_ids = [entry.id for entry in recruiting_entries]
     ArenaEntry.objects.filter(id__in=entry_ids).delete()
     if participant_guest_ids:
-        Guest.objects.filter(id__in=participant_guest_ids, status=GuestStatus.DEPLOYED).update(status=GuestStatus.IDLE)
+        Guest.objects.filter(
+            id__in=participant_guest_ids,
+            status__in=[GuestStatus.ARENA, GuestStatus.DEPLOYED],
+        ).update(status=GuestStatus.IDLE)
 
     _update_daily_participation_counter_locked(locked_manor, delta=-len(entry_ids))
     return len(entry_ids)
@@ -368,6 +371,71 @@ def _run_tournament_round(tournament_id: int, *, now: datetime) -> bool:
             schedule_round_locked=_schedule_round_locked,
             increase_guest_loyalty_by_ids=increase_guest_loyalty_by_ids,
         )
+
+
+def _collect_due_arena_tournament_ids_for_manor(
+    manor: Manor,
+    *,
+    now: datetime,
+    limit: int,
+) -> tuple[list[int], list[int]]:
+    normalized_limit = max(1, int(limit))
+    recruiting_ids = list(
+        ArenaTournament.objects.filter(status=ArenaTournament.Status.RECRUITING)
+        .annotate(
+            total_entry_count=Count("entries", distinct=True),
+            manor_entry_count=Count("entries", filter=Q(entries__manor=manor), distinct=True),
+        )
+        .filter(manor_entry_count__gt=0, total_entry_count__gte=F("player_limit"))
+        .order_by("created_at", "id")
+        .values_list("id", flat=True)[:normalized_limit]
+    )
+    running_ids = list(
+        ArenaTournament.objects.filter(
+            status=ArenaTournament.Status.RUNNING,
+            next_round_at__isnull=False,
+            next_round_at__lte=now,
+        )
+        .annotate(manor_entry_count=Count("entries", filter=Q(entries__manor=manor), distinct=True))
+        .filter(manor_entry_count__gt=0)
+        .order_by("next_round_at", "id")
+        .values_list("id", flat=True)[:normalized_limit]
+    )
+    return recruiting_ids, running_ids
+
+
+def _release_orphaned_arena_guests(manor: Manor) -> int:
+    active_guest_ids = ArenaEntryGuest.objects.filter(
+        guest__manor=manor,
+        entry__status=ArenaEntry.Status.REGISTERED,
+        entry__tournament__status__in=[ArenaTournament.Status.RECRUITING, ArenaTournament.Status.RUNNING],
+    ).values_list("guest_id", flat=True)
+    return (
+        Guest.objects.filter(manor=manor, status=GuestStatus.ARENA)
+        .exclude(id__in=active_guest_ids)
+        .update(status=GuestStatus.IDLE)
+    )
+
+
+def refresh_arena_activity(manor: Manor, *, now: datetime | None = None, limit: int = 20) -> int:
+    current_time = now or timezone.now()
+    recruiting_ids, running_ids = _collect_due_arena_tournament_ids_for_manor(
+        manor,
+        now=current_time,
+        limit=limit,
+    )
+
+    started_count = 0
+    processed_count = 0
+    for tournament_id in recruiting_ids:
+        if start_tournament_if_ready(ArenaTournament(id=tournament_id), now=current_time):
+            started_count += 1
+    for tournament_id in running_ids:
+        if _run_tournament_round(tournament_id, now=current_time):
+            processed_count += 1
+
+    _release_orphaned_arena_guests(manor)
+    return started_count + processed_count
 
 
 def run_due_arena_rounds(*, now: datetime | None = None, limit: int = 20) -> int:

@@ -24,8 +24,7 @@ from gameplay.selectors.arena import (
     get_arena_registration_context,
 )
 from gameplay.services.arena import core as arena_core
-from gameplay.services.manor.core import get_manor
-from gameplay.services.resources import project_resource_production_for_read
+from gameplay.services.manor.core import get_manor, project_manor_activity_for_read
 from gameplay.utils.template_loader import get_item_template_names_by_keys
 from gameplay.views.read_helpers import get_prepared_manor_for_read
 
@@ -131,7 +130,7 @@ class BaseArenaView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         manor = get_prepared_manor_for_read(
             self.request,
-            project_fn=project_resource_production_for_read,
+            project_fn=project_manor_activity_for_read,
             logger=logger,
             source=f"{self.__class__.__name__.lower()}_view",
         )

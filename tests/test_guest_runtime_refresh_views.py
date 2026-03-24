@@ -7,9 +7,18 @@ from django.test import Client
 from django.urls import reverse
 from django.utils import timezone
 
-from gameplay.models import InventoryItem, ItemTemplate
+from gameplay.models import (
+    ArenaEntry,
+    ArenaEntryGuest,
+    ArenaTournament,
+    InventoryItem,
+    ItemTemplate,
+    MissionRun,
+    MissionTemplate,
+    RaidRun,
+)
 from gameplay.services.manor.core import ensure_manor
-from guests.models import Guest, GuestTemplate
+from guests.models import Guest, GuestStatus, GuestTemplate
 
 
 def _create_guest(manor, *, prefix: str) -> Guest:
@@ -30,6 +39,10 @@ def _create_guest(manor, *, prefix: str) -> Guest:
         agility=85,
         current_hp=1,
     )
+
+
+def _create_mission_template(*, key: str, name: str) -> MissionTemplate:
+    return MissionTemplate.objects.create(key=key, name=name)
 
 
 @pytest.mark.django_db
@@ -176,3 +189,106 @@ def test_roster_view_loads_external_page_script_without_inline_roster_logic(game
     content = response.content.decode("utf-8")
     assert "js/guest-roster.js" in content
     assert "function openSalaryModal" not in content
+
+
+@pytest.mark.django_db
+def test_roster_view_finalizes_due_mission_before_render(game_data, django_user_model, settings):
+    user = django_user_model.objects.create_user(username="roster_due_mission", password="pass123")
+    manor = ensure_manor(user)
+    guest = _create_guest(manor, prefix="roster_due_mission")
+    guest.status = GuestStatus.DEPLOYED
+    guest.save(update_fields=["status"])
+
+    mission = _create_mission_template(key="roster_due_mission_tpl", name="名册刷新任务")
+    run = MissionRun.objects.create(
+        manor=manor,
+        mission=mission,
+        status=MissionRun.Status.ACTIVE,
+        is_retreating=True,
+        return_at=timezone.now() - timedelta(seconds=1),
+    )
+    run.guests.add(guest)
+
+    settings.MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS = 0
+
+    client = Client()
+    client.force_login(user)
+
+    response = client.get(reverse("guests:roster"))
+
+    assert response.status_code == 200
+    guest.refresh_from_db(fields=["status"])
+    run.refresh_from_db(fields=["status", "completed_at"])
+    assert guest.status == GuestStatus.IDLE
+    assert run.status == MissionRun.Status.COMPLETED
+    assert run.completed_at is not None
+
+
+@pytest.mark.django_db
+def test_home_view_finalizes_due_raid_before_render(game_data, django_user_model, settings):
+    attacker = django_user_model.objects.create_user(username="home_due_raid", password="pass123")
+    defender = django_user_model.objects.create_user(username="home_due_raid_target", password="pass123")
+    manor = ensure_manor(attacker)
+    target_manor = ensure_manor(defender)
+    guest = _create_guest(manor, prefix="home_due_raid")
+    guest.status = GuestStatus.DEPLOYED
+    guest.save(update_fields=["status"])
+
+    run = RaidRun.objects.create(
+        attacker=manor,
+        defender=target_manor,
+        status=RaidRun.Status.RETREATED,
+        is_retreating=True,
+        return_at=timezone.now() - timedelta(seconds=1),
+    )
+    run.guests.add(guest)
+
+    settings.MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS = 0
+
+    client = Client()
+    client.force_login(attacker)
+
+    response = client.get(reverse("home"))
+
+    assert response.status_code == 200
+    guest.refresh_from_db(fields=["status"])
+    run.refresh_from_db(fields=["status", "completed_at"])
+    assert guest.status == GuestStatus.IDLE
+    assert run.status == RaidRun.Status.COMPLETED
+    assert run.completed_at is not None
+
+
+@pytest.mark.django_db
+def test_roster_view_finalizes_due_arena_tournament_before_render(game_data, django_user_model, settings):
+    user = django_user_model.objects.create_user(username="roster_due_arena", password="pass123")
+    manor = ensure_manor(user)
+    guest = _create_guest(manor, prefix="roster_due_arena")
+    guest.status = GuestStatus.ARENA
+    guest.save(update_fields=["status"])
+
+    tournament = ArenaTournament.objects.create(
+        status=ArenaTournament.Status.RUNNING,
+        player_limit=2,
+        round_interval_seconds=600,
+        current_round=0,
+        started_at=timezone.now() - timedelta(minutes=10),
+        next_round_at=timezone.now() - timedelta(seconds=1),
+    )
+    entry = ArenaEntry.objects.create(tournament=tournament, manor=manor, status=ArenaEntry.Status.REGISTERED)
+    ArenaEntryGuest.objects.create(entry=entry, guest=guest, snapshot={"guest_id": guest.id})
+
+    settings.MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS = 0
+
+    client = Client()
+    client.force_login(user)
+
+    response = client.get(reverse("guests:roster"))
+
+    assert response.status_code == 200
+    guest.refresh_from_db(fields=["status"])
+    tournament.refresh_from_db(fields=["status", "ended_at", "winner_entry_id"])
+    entry.refresh_from_db(fields=["status", "final_rank"])
+    assert guest.status == GuestStatus.IDLE
+    assert tournament.status == ArenaTournament.Status.COMPLETED
+    assert tournament.ended_at is not None
+    assert entry.status == ArenaEntry.Status.WINNER

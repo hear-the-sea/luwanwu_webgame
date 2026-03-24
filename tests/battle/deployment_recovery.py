@@ -144,7 +144,7 @@ def test_recover_orphaned_deployed_guests_keeps_active_deployments(
     manor = ensure_manor(user)
     recruit_frontline(manor, draws=1)
     guest = manor.guests.first()
-    guest.status = GuestStatus.DEPLOYED
+    guest.status = GuestStatus.ARENA if deployment_kind == "arena" else GuestStatus.DEPLOYED
     guest.save(update_fields=["status"])
 
     if deployment_kind == "mission":
@@ -172,7 +172,8 @@ def test_recover_orphaned_deployed_guests_keeps_active_deployments(
 
     guest.refresh_from_db(fields=["status"])
     assert recovered == 0
-    assert guest.status == GuestStatus.DEPLOYED
+    expected_status = GuestStatus.ARENA if deployment_kind == "arena" else GuestStatus.DEPLOYED
+    assert guest.status == expected_status
 
 
 @pytest.mark.django_db

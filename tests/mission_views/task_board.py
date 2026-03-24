@@ -26,7 +26,7 @@ class TestTaskBoardPage:
     def test_task_board_tolerates_resource_sync_error(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
         monkeypatch.setattr(
-            "gameplay.views.mission_page_context.project_resource_production_for_read",
+            "gameplay.views.mission_page_context.project_manor_activity_for_read",
             lambda *_args, **_kwargs: (_ for _ in ()).throw(DatabaseError("sync failed")),
         )
 

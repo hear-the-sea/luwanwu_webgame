@@ -57,6 +57,11 @@ def test_validate_locked_guest_statuses_raises_battle_preparation_error():
         battle_services._validate_locked_guest_statuses([SimpleNamespace(display_name="甲", status="deployed")])
 
 
+def test_validate_locked_guest_statuses_rejects_arena_guest():
+    with pytest.raises(BattlePreparationError, match="正在竞技中"):
+        battle_services._validate_locked_guest_statuses([SimpleNamespace(display_name="甲", status="arena")])
+
+
 def test_load_locked_battle_participants_raises_battle_preparation_error_when_missing():
     with pytest.raises(BattlePreparationError, match="部分门客不存在，无法执行战斗"):
         battle_locking.load_locked_battle_participants(

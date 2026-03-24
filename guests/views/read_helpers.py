@@ -5,7 +5,7 @@ from typing import Any
 
 from django.http import HttpRequest
 
-from gameplay.services.resources import project_resource_production_for_read
+from gameplay.services.manor.core import project_manor_activity_for_read
 from gameplay.views.read_helpers import get_prepared_manor_for_read
 
 
@@ -18,7 +18,7 @@ def get_prepared_guest_roster_for_read(
 ) -> tuple[Any, list[Any]]:
     manor = get_prepared_manor_for_read(
         request,
-        project_fn=project_resource_production_for_read,
+        project_fn=project_manor_activity_for_read,
         logger=logger,
         source=source,
     )
@@ -35,7 +35,7 @@ def get_prepared_guest_detail_for_read(
 ) -> tuple[Any, Any]:
     manor = get_prepared_manor_for_read(
         request,
-        project_fn=project_resource_production_for_read,
+        project_fn=project_manor_activity_for_read,
         logger=logger,
         source=source,
     )

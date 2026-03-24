@@ -117,7 +117,7 @@ def test_register_arena_entry_auto_starts_when_reaching_player_limit():
         guest = create_guest(manor, template, str(idx))
         result = register_arena_entry(manor, [guest.id])
         guest.refresh_from_db(fields=["status"])
-        assert guest.status == GuestStatus.DEPLOYED
+        assert guest.status == GuestStatus.ARENA
 
         if tournament_id is None:
             tournament_id = result.tournament.id
@@ -158,7 +158,7 @@ def test_cancel_arena_entry_releases_guests_and_does_not_consume_daily_quota():
     for idx in range(5):
         register_arena_entry(manor, [guest.id])
         guest.refresh_from_db(fields=["status"])
-        assert guest.status == GuestStatus.DEPLOYED
+        assert guest.status == GuestStatus.ARENA
         canceled = cancel_arena_entry(manor)
         assert canceled >= 1
         guest.refresh_from_db(fields=["status"])

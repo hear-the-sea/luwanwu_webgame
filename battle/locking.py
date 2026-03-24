@@ -59,6 +59,8 @@ def validate_locked_guest_statuses(locked_guests: list[Guest]) -> None:
     for guest in locked_guests:
         if guest.status == GuestStatus.DEPLOYED:
             raise BattlePreparationError(f"门客 {guest.display_name} 正在战斗中，请稍后再试")
+        if guest.status == GuestStatus.ARENA:
+            raise BattlePreparationError(f"门客 {guest.display_name} 正在竞技中，无法出战")
         if guest.status == GuestStatus.WORKING:
             raise BattlePreparationError(f"门客 {guest.display_name} 正在打工中，无法出征")
         if guest.status == GuestStatus.INJURED:

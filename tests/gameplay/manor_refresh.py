@@ -5,7 +5,7 @@ from django_redis.exceptions import ConnectionInterrupted
 
 import gameplay.services.manor.core as manor_service
 from gameplay.models import RaidRun, ScoutRecord
-from gameplay.services.manor.core import ensure_manor, refresh_manor_state
+from gameplay.services.manor.core import ensure_manor, project_manor_activity_for_read, refresh_manor_state
 
 
 @pytest.mark.django_db
@@ -39,6 +39,45 @@ def test_refresh_manor_state_defaults_to_read_projection_only(django_user_model,
     refresh_manor_state(manor)
 
     assert calls == {"finalize": 1, "resource": 1, "mission": 0, "scout": 0, "raid": 0}
+
+
+@pytest.mark.django_db
+def test_project_manor_activity_for_read_runs_activity_refresh_with_read_projection(
+    django_user_model, settings, monkeypatch
+):
+    user = django_user_model.objects.create_user(username="player_project_activity_read", password="pass12345")
+    manor = ensure_manor(user)
+
+    settings.MANOR_STATE_REFRESH_MIN_INTERVAL_SECONDS = 0
+
+    calls = {"finalize": 0, "project": 0, "mission": 0, "scout": 0, "raid": 0, "arena": 0}
+    monkeypatch.setattr(
+        manor_service, "finalize_upgrades", lambda _manor: calls.__setitem__("finalize", calls["finalize"] + 1)
+    )
+    monkeypatch.setattr(
+        "gameplay.services.resources.project_resource_production_for_read",
+        lambda _manor: calls.__setitem__("project", calls["project"] + 1),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.missions.refresh_mission_runs",
+        lambda _manor, prefer_async=False: calls.__setitem__("mission", calls["mission"] + 1),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.raid.refresh_scout_records",
+        lambda _manor, prefer_async=False: calls.__setitem__("scout", calls["scout"] + 1),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.raid.refresh_raid_runs",
+        lambda _manor, prefer_async=False: calls.__setitem__("raid", calls["raid"] + 1),
+    )
+    monkeypatch.setattr(
+        "gameplay.services.arena.refresh_arena_activity",
+        lambda _manor, now=None: calls.__setitem__("arena", calls["arena"] + 1),
+    )
+
+    project_manor_activity_for_read(manor)
+
+    assert calls == {"finalize": 1, "project": 1, "mission": 1, "scout": 1, "raid": 1, "arena": 1}
 
 
 @pytest.mark.django_db

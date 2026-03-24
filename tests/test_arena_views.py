@@ -100,7 +100,7 @@ def test_arena_pages_sync_resources_before_loading_context(arena_client, monkeyp
     calls: list[str] = []
 
     monkeypatch.setattr(
-        "gameplay.views.arena.project_resource_production_for_read",
+        "gameplay.views.arena.project_manor_activity_for_read",
         lambda *_args, **_kwargs: calls.append("sync"),
     )
     monkeypatch.setattr(
@@ -271,7 +271,7 @@ def test_arena_event_detail_view_syncs_resources_before_loading_context(arena_cl
     calls: list[str] = []
 
     monkeypatch.setattr(
-        "gameplay.views.arena.project_resource_production_for_read",
+        "gameplay.views.arena.project_manor_activity_for_read",
         lambda *_args, **_kwargs: calls.append("sync"),
     )
     monkeypatch.setattr(

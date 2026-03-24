@@ -30,7 +30,7 @@ from gameplay.constants import REGION_CHOICES, UIConstants
 from gameplay.models import Manor as ManorModel
 from gameplay.models import RaidRun
 from gameplay.selectors.map import get_map_context, get_raid_config_context
-from gameplay.services.manor.core import get_manor
+from gameplay.services.manor.core import get_manor, project_manor_activity_for_read
 from gameplay.services.raid import (
     get_active_raids,
     get_active_scouts,
@@ -45,7 +45,6 @@ from gameplay.services.raid import (
 from gameplay.services.raid.map_search import get_manor_public_info
 from gameplay.services.raid.protection import get_protection_status
 from gameplay.services.raid.utils import can_attack_target
-from gameplay.services.resources import project_resource_production_for_read
 from gameplay.views.read_helpers import get_prepared_manor_for_read
 
 MAP_ACTION_LOCK_SECONDS = 5
@@ -216,7 +215,7 @@ class MapView(LoginRequiredMixin, TemplateView):
             self.request,
             logger=logger,
             source="map_view",
-            project_fn=project_resource_production_for_read,
+            project_fn=project_manor_activity_for_read,
         )
         # 获取当前选中的地区（默认显示玩家所在地区）
         selected_region = self.request.GET.get("region", manor.region)
@@ -239,7 +238,7 @@ class RaidConfigView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         manor = get_prepared_manor_for_read(
             self.request,
-            project_fn=project_resource_production_for_read,
+            project_fn=project_manor_activity_for_read,
             logger=logger,
             source="raid_config_view",
         )

@@ -9,9 +9,9 @@ from django.http import HttpRequest
 from gameplay.constants import UIConstants
 from gameplay.models import MissionRun, MissionTemplate, ResourceType
 from gameplay.services.inventory.core import get_item_quantity
+from gameplay.services.manor.core import project_manor_activity_for_read
 from gameplay.services.missions_impl.attempts import bulk_get_mission_extra_attempts, bulk_mission_attempts_today
 from gameplay.services.recruitment.recruitment import get_player_troops
-from gameplay.services.resources import project_resource_production_for_read
 from gameplay.utils.template_loader import get_item_templates_by_keys, get_troop_templates_by_keys
 from gameplay.views.read_helpers import get_prepared_manor_for_read
 from guests.models import Guest, GuestStatus, GuestTemplate, SkillBook
@@ -28,7 +28,7 @@ def build_troop_config() -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]
 def build_task_board_context(request: HttpRequest) -> dict[str, Any]:
     manor = get_prepared_manor_for_read(
         request,
-        project_fn=project_resource_production_for_read,
+        project_fn=project_manor_activity_for_read,
         logger=logger,
         source="task_board_view",
     )

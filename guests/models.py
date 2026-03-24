@@ -41,6 +41,7 @@ class GuestStatus(models.TextChoices):
     IDLE = "idle", "空闲"
     WORKING = "working", "打工中"
     DEPLOYED = "deployed", "出征中"
+    ARENA = "arena", "竞技中"
     INJURED = "injured", "重伤"
 
 

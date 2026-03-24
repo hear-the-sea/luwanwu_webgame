@@ -63,7 +63,7 @@ def create_arena_entry_with_guests_locked(
         ]
     )
     for guest in selected_guests:
-        guest.status = GuestStatus.DEPLOYED
+        guest.status = GuestStatus.ARENA
     Guest.objects.bulk_update(selected_guests, ["status"])
     return entry
 
