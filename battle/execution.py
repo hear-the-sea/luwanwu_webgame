@@ -56,23 +56,36 @@ class BattleOptions:
     validate_attacker_troop_capacity: bool = True
 
 
-def _normalize_mapping(raw: Any) -> Dict[str, Any]:
-    if isinstance(raw, dict):
-        return raw
-    return {}
+def _normalize_optional_mapping(raw: Any, *, contract_name: str) -> Dict[str, Any]:
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise AssertionError(f"invalid {contract_name}: {raw!r}")
+    return raw
 
 
-def _coerce_int(value: Any, default: int) -> int:
+def _coerce_positive_int(value: Any, *, contract_name: str) -> int:
+    if value is None or isinstance(value, bool):
+        raise AssertionError(f"invalid {contract_name}: {value!r}")
     try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid {contract_name}: {value!r}") from exc
+    if parsed <= 0:
+        raise AssertionError(f"invalid {contract_name}: {value!r}")
+    return parsed
 
 
-def _normalize_skill_keys(raw: Any) -> List[str] | None:
-    if not isinstance(raw, (list, tuple, set)):
+def _normalize_skill_keys(raw: Any, *, contract_name: str) -> List[str] | None:
+    if raw is None:
         return None
-    keys = [str(item).strip() for item in raw if str(item).strip()]
+    if not isinstance(raw, (list, tuple, set)):
+        raise AssertionError(f"invalid {contract_name}: {raw!r}")
+    keys: list[str] = []
+    for item in raw:
+        if not isinstance(item, str) or not item.strip():
+            raise AssertionError(f"invalid {contract_name} entry: {item!r}")
+        keys.append(item.strip())
     return keys or None
 
 
@@ -93,11 +106,14 @@ def _extract_defender_tech_profile(defender_setup: Dict[str, Any] | None) -> tup
     defender_guest_bonuses: dict[str, float] = {}
     defender_guest_skills: List[str] | None = None
 
-    normalized_setup = _normalize_mapping(defender_setup)
+    normalized_setup = _normalize_optional_mapping(defender_setup, contract_name="battle defender setup payload")
     if not normalized_setup:
         return defender_tech_levels, defender_guest_level, defender_guest_bonuses, defender_guest_skills
 
-    tech_conf = _normalize_mapping(normalized_setup.get("technology"))
+    tech_conf = _normalize_optional_mapping(
+        normalized_setup.get("technology"),
+        contract_name="battle defender technology payload",
+    )
     if not tech_conf:
         return defender_tech_levels, defender_guest_level, defender_guest_bonuses, defender_guest_skills
 
@@ -105,9 +121,16 @@ def _extract_defender_tech_profile(defender_setup: Dict[str, Any] | None) -> tup
 
     defender_tech_levels = resolve_enemy_tech_levels(tech_conf)
     if "guest_level" in tech_conf:
-        defender_guest_level = max(1, _coerce_int(tech_conf.get("guest_level", 50), 50))
+        defender_guest_level = _coerce_positive_int(
+            tech_conf.get("guest_level"),
+            contract_name="battle defender guest_level",
+        )
     defender_guest_bonuses = get_guest_stat_bonuses(tech_conf)
-    defender_guest_skills = _normalize_skill_keys(tech_conf.get("guest_skills"))
+    if "guest_skills" in tech_conf:
+        defender_guest_skills = _normalize_skill_keys(
+            tech_conf.get("guest_skills"),
+            contract_name="battle defender guest_skills",
+        )
 
     return defender_tech_levels, defender_guest_level, defender_guest_bonuses, defender_guest_skills
 

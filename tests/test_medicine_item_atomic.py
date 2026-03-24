@@ -91,7 +91,7 @@ def test_use_medicine_item_for_guest_rolls_back_when_consume_fails(monkeypatch, 
 
 
 @pytest.mark.django_db
-def test_use_medicine_item_for_guest_sanitizes_malformed_heal_result(monkeypatch, game_data, django_user_model):
+def test_use_medicine_item_for_guest_rejects_malformed_heal_result(monkeypatch, game_data, django_user_model):
     manor, guest = _bootstrap_injured_guest(game_data, django_user_model, username="medicine_item_malformed_result")
     heal_amount = max(1, int(guest.max_hp * 0.2))
     item = _create_medicine_item(manor, heal_amount=heal_amount)
@@ -101,11 +101,13 @@ def test_use_medicine_item_for_guest_sanitizes_malformed_heal_result(monkeypatch
 
     monkeypatch.setattr("guests.services.health.heal_guest", _malformed_heal)
 
-    result = use_medicine_item_for_guest(manor, guest, item.pk, heal_amount)
+    with pytest.raises(AssertionError, match="invalid medicine healed"):
+        use_medicine_item_for_guest(manor, guest, item.pk, heal_amount)
 
-    assert result["healed"] == 0
-    assert result["remaining_item_quantity"] == 0
-    assert InventoryItem.objects.filter(pk=item.pk).exists() is False
+    guest.refresh_from_db()
+    item.refresh_from_db()
+    assert item.quantity == 1
+    assert guest.status == GuestStatus.INJURED
 
 
 @pytest.mark.django_db

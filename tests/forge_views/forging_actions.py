@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 from django.db import DatabaseError
 from django.urls import reverse
@@ -92,6 +94,23 @@ class TestStartEquipmentForgingView:
         )
 
         with pytest.raises(ValueError, match="legacy forge blocked"):
+            client.post(
+                reverse("gameplay:start_equipment_forging"),
+                {"equipment_key": "equip_dummy", "quantity": "1", "category": "helmet", "mode": "synthesize"},
+            )
+
+    def test_start_equipment_forging_malformed_result_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+        monkeypatch.setattr(
+            "gameplay.services.buildings.forge.start_equipment_forging",
+            lambda *_args, **_kwargs: SimpleNamespace(
+                equipment_name="测试装备",
+                quantity=1,
+                actual_duration="bad",
+            ),
+        )
+
+        with pytest.raises(AssertionError, match="invalid forge production result actual_duration"):
             client.post(
                 reverse("gameplay:start_equipment_forging"),
                 {"equipment_key": "equip_dummy", "quantity": "1", "category": "helmet", "mode": "synthesize"},

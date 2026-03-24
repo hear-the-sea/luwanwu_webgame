@@ -10,7 +10,7 @@ import logging
 import random
 from functools import lru_cache
 from pathlib import Path
-from typing import List
+from typing import Any, List
 
 from django.conf import settings
 
@@ -51,12 +51,20 @@ _RARITY_WEIGHT_ORDER = (
 )
 
 
-def _to_non_negative_int(raw_value, *, default: int = 0) -> int:
+def _load_non_negative_int(raw_value, *, field_name: str, default: int | None = None) -> int:
+    if raw_value is None:
+        if default is None:
+            raise AssertionError(f"invalid recruitment rarity weights {field_name}: {raw_value!r}")
+        return default
+    if isinstance(raw_value, bool):
+        raise AssertionError(f"invalid recruitment rarity weights {field_name}: {raw_value!r}")
     try:
         value = int(raw_value)
-    except (TypeError, ValueError):
-        return max(0, int(default))
-    return max(0, value)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid recruitment rarity weights {field_name}: {raw_value!r}") from exc
+    if value < 0:
+        raise AssertionError(f"invalid recruitment rarity weights {field_name}: {raw_value!r}")
+    return value
 
 
 @lru_cache(maxsize=1)
@@ -69,9 +77,13 @@ def _load_rarity_distribution() -> tuple[int, tuple[tuple[str, int], ...], tuple
     )
     payload = ensure_mapping(raw, logger=logger, context="recruitment rarity weights root")
 
-    configured_total = _to_non_negative_int(payload.get("total_weight"), default=_DEFAULT_TOTAL_WEIGHT)
+    configured_total = _load_non_negative_int(
+        payload.get("total_weight"),
+        field_name="total_weight",
+        default=_DEFAULT_TOTAL_WEIGHT,
+    )
     if configured_total <= 0:
-        configured_total = _DEFAULT_TOTAL_WEIGHT
+        raise AssertionError(f"invalid recruitment rarity weights total_weight: {payload.get('total_weight')!r}")
 
     weights_payload = ensure_mapping(
         payload.get("weights"),
@@ -80,7 +92,11 @@ def _load_rarity_distribution() -> tuple[int, tuple[tuple[str, int], ...], tuple
     )
     weight_map: dict[str, int] = {}
     for rarity in _RARITY_WEIGHT_ORDER:
-        weight_map[rarity] = _to_non_negative_int(weights_payload.get(rarity), default=_DEFAULT_WEIGHT_MAP[rarity])
+        weight_map[rarity] = _load_non_negative_int(
+            weights_payload.get(rarity),
+            field_name=f"weights.{rarity}",
+            default=_DEFAULT_WEIGHT_MAP[rarity],
+        )
 
     rarity_weights = tuple((rarity, weight_map[rarity]) for rarity in _RARITY_WEIGHT_ORDER)
     total_non_black_weight = sum(weight for _, weight in rarity_weights)
@@ -152,7 +168,7 @@ def entry_rarity(entry: RecruitmentPoolEntry) -> str | None:
         # When a template_id exists, template should be populated, but keep a
         # defensive guard for stubs/missing relations.
         if entry.template is None:
-            return None
+            raise AssertionError(f"invalid recruitment pool entry template: {entry.template_id!r}")
         return entry.template.rarity
     return entry.rarity
 
@@ -189,5 +205,21 @@ def weighted_choice(entries: List[RecruitmentPoolEntry], rng: random.Random) -> 
         IndexError: 如果条目列表为空
     """
     # 使用统一的加权随机选择函数
-    weights = [entry.weight or 1 for entry in entries]
+    weights: list[int] = []
+    for entry in entries:
+        sentinel = object()
+        raw_weight = getattr(entry, "weight", sentinel)
+        if raw_weight is sentinel:
+            weights.append(1)
+            continue
+        if raw_weight is None or isinstance(raw_weight, bool):
+            raise AssertionError(f"invalid recruitment pool entry weight: {raw_weight!r}")
+        raw_weight_for_int: Any = raw_weight
+        try:
+            weight = int(raw_weight_for_int)
+        except (TypeError, ValueError) as exc:
+            raise AssertionError(f"invalid recruitment pool entry weight: {raw_weight!r}") from exc
+        if weight <= 0:
+            raise AssertionError(f"invalid recruitment pool entry weight: {raw_weight!r}")
+        weights.append(weight)
     return weighted_random_choice(entries, weights, rng)

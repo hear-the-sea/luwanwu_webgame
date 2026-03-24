@@ -122,33 +122,72 @@ def collect_mission_asset_keys(missions: list[MissionTemplate]) -> tuple[set[str
     drop_keys: set[str] = set()
 
     for mission in missions:
-        for entry in mission.enemy_guests or []:
+        enemy_guests = getattr(mission, "enemy_guests", None)
+        if enemy_guests is None:
+            enemy_entries: list[Any] = []
+        elif isinstance(enemy_guests, list):
+            enemy_entries = enemy_guests
+        else:
+            raise AssertionError(f"invalid mission enemy_guests: {enemy_guests!r}")
+
+        for entry in enemy_entries:
             if isinstance(entry, str):
-                enemy_keys.add(entry)
+                key = entry.strip()
+                if not key:
+                    raise AssertionError(f"invalid mission enemy_guests entry: {entry!r}")
+                enemy_keys.add(key)
             elif isinstance(entry, dict):
-                key = entry.get("key")
-                if key:
-                    enemy_keys.add(key)
-        troop_keys.update((mission.enemy_troops or {}).keys())
-        drop_keys.update((mission.drop_table or {}).keys())
-        drop_keys.update((mission.probability_drop_table or {}).keys())
-        for drop_value in (mission.drop_table or {}).values():
+                raw_key = entry.get("key")
+                if not isinstance(raw_key, str) or not raw_key.strip():
+                    raise AssertionError(f"invalid mission enemy_guests entry: {entry!r}")
+                enemy_keys.add(raw_key.strip())
+            else:
+                raise AssertionError(f"invalid mission enemy_guests entry: {entry!r}")
+
+        enemy_troops = getattr(mission, "enemy_troops", None)
+        if enemy_troops is None:
+            normalized_enemy_troops: dict[str, Any] = {}
+        elif isinstance(enemy_troops, dict):
+            normalized_enemy_troops = enemy_troops
+        else:
+            raise AssertionError(f"invalid mission enemy_troops: {enemy_troops!r}")
+
+        drop_table = getattr(mission, "drop_table", None)
+        if drop_table is None:
+            normalized_drop_table: dict[str, Any] = {}
+        elif isinstance(drop_table, dict):
+            normalized_drop_table = drop_table
+        else:
+            raise AssertionError(f"invalid mission drop_table: {drop_table!r}")
+
+        probability_drop_table = getattr(mission, "probability_drop_table", None)
+        if probability_drop_table is None:
+            normalized_probability_drop_table: dict[str, Any] = {}
+        elif isinstance(probability_drop_table, dict):
+            normalized_probability_drop_table = probability_drop_table
+        else:
+            raise AssertionError(f"invalid mission probability_drop_table: {probability_drop_table!r}")
+
+        for key in normalized_enemy_troops.keys():
+            if not isinstance(key, str) or not key.strip():
+                raise AssertionError(f"invalid mission enemy_troops key: {key!r}")
+            troop_keys.add(key.strip())
+        for key in normalized_drop_table.keys():
+            if not isinstance(key, str) or not key.strip():
+                raise AssertionError(f"invalid mission drop_table key: {key!r}")
+            drop_keys.add(key.strip())
+        for key in normalized_probability_drop_table.keys():
+            if not isinstance(key, str) or not key.strip():
+                raise AssertionError(f"invalid mission probability_drop_table key: {key!r}")
+            drop_keys.add(key.strip())
+        for drop_value in normalized_drop_table.values():
             if not isinstance(drop_value, dict):
                 continue
             choices = drop_value.get("choices")
-            if not isinstance(choices, list):
+            if choices is None:
                 continue
-            for choice in choices:
-                if isinstance(choice, str):
-                    choice_key = choice.strip()
-                elif isinstance(choice, dict):
-                    choice_key = str(
-                        choice.get("key") or choice.get("item_key") or choice.get("template_key") or ""
-                    ).strip()
-                else:
-                    continue
-                if choice_key:
-                    drop_keys.add(choice_key)
+            for choice_key in iter_choice_pool_keys(drop_value):
+                drop_keys.add(choice_key)
 
     return enemy_keys, troop_keys, drop_keys
 
@@ -159,19 +198,27 @@ def parse_drop_value(value: Any) -> tuple[float | None, int | None]:
     if isinstance(value, dict):
         raw_chance = value.get("chance", value.get("probability"))
         raw_count = value.get("count", value.get("quantity", value.get("amount")))
-        try:
-            chance = float(raw_chance) if raw_chance is not None else None
-        except (TypeError, ValueError):
-            chance = None
-        try:
-            count = int(raw_count) if raw_count is not None else None
-        except (TypeError, ValueError):
-            count = None
+        if raw_chance is not None:
+            if isinstance(raw_chance, bool):
+                raise AssertionError(f"invalid mission drop chance: {raw_chance!r}")
+            try:
+                chance = float(raw_chance)
+            except (TypeError, ValueError) as exc:
+                raise AssertionError(f"invalid mission drop chance: {raw_chance!r}") from exc
+        if raw_count is not None:
+            if isinstance(raw_count, bool):
+                raise AssertionError(f"invalid mission drop count: {raw_count!r}")
+            try:
+                count = int(raw_count)
+            except (TypeError, ValueError) as exc:
+                raise AssertionError(f"invalid mission drop count: {raw_count!r}") from exc
     else:
+        if isinstance(value, bool):
+            raise AssertionError(f"invalid mission drop value: {value!r}")
         try:
             number = float(value)
-        except (TypeError, ValueError):
-            number = None
+        except (TypeError, ValueError) as exc:
+            raise AssertionError(f"invalid mission drop value: {value!r}") from exc
         if number is not None and 0 < number < 1:
             chance = number
             count = 1
@@ -208,20 +255,12 @@ def resolve_drop_pool_label(
 ) -> str | None:
     if not isinstance(value, dict):
         return None
-    choices = value.get("choices")
-    if not isinstance(choices, list):
+    choice_keys = iter_choice_pool_keys(value)
+    if not choice_keys:
         return None
 
     labels: list[str] = []
-    for choice in choices:
-        if isinstance(choice, str):
-            choice_key = choice.strip()
-        elif isinstance(choice, dict):
-            choice_key = str(choice.get("key") or choice.get("item_key") or choice.get("template_key") or "").strip()
-        else:
-            continue
-        if not choice_key:
-            continue
+    for choice_key in choice_keys:
         labels.append(resolve_drop_label(choice_key, drop_labels, item_templates, book_labels))
 
     if not labels:
@@ -232,18 +271,12 @@ def resolve_drop_pool_label(
 def resolve_drop_pool_rarity(value: Any, loot_rarities: dict[str, str]) -> str | None:
     if not isinstance(value, dict):
         return None
-    choices = value.get("choices")
-    if not isinstance(choices, list):
+    choice_keys = iter_choice_pool_keys(value)
+    if not choice_keys:
         return None
 
     rarities: list[str] = []
-    for choice in choices:
-        if isinstance(choice, str):
-            choice_key = choice.strip()
-        elif isinstance(choice, dict):
-            choice_key = str(choice.get("key") or choice.get("item_key") or choice.get("template_key") or "").strip()
-        else:
-            continue
+    for choice_key in choice_keys:
         rarity = loot_rarities.get(choice_key)
         if rarity:
             rarities.append(rarity)
@@ -259,8 +292,10 @@ def iter_choice_pool_keys(value: Any) -> list[str]:
     if not isinstance(value, dict):
         return []
     choices = value.get("choices")
-    if not isinstance(choices, list):
+    if choices is None:
         return []
+    if not isinstance(choices, list):
+        raise AssertionError(f"invalid mission drop choices: {choices!r}")
 
     keys: list[str] = []
     for choice in choices:
@@ -269,9 +304,10 @@ def iter_choice_pool_keys(value: Any) -> list[str]:
         elif isinstance(choice, dict):
             choice_key = str(choice.get("key") or choice.get("item_key") or choice.get("template_key") or "").strip()
         else:
-            continue
-        if choice_key:
-            keys.append(choice_key)
+            raise AssertionError(f"invalid mission drop choice entry: {choice!r}")
+        if not choice_key:
+            raise AssertionError(f"invalid mission drop choice entry: {choice!r}")
+        keys.append(choice_key)
     return keys
 
 
@@ -285,15 +321,38 @@ def build_drop_lists(
     guaranteed_drops: list[dict[str, str]] = []
     probability_drops: list[dict[str, str]] = []
     handled_probability_keys: set[str] = set()
+    raw_drop_table = getattr(selected_mission, "drop_table", None)
+    if raw_drop_table is None:
+        drop_table: dict[str, Any] = {}
+    elif isinstance(raw_drop_table, dict):
+        drop_table = {}
+        for key, value in raw_drop_table.items():
+            if not isinstance(key, str) or not key.strip():
+                raise AssertionError(f"invalid mission drop_table key: {key!r}")
+            drop_table[key.strip()] = value
+    else:
+        raise AssertionError(f"invalid mission drop_table: {raw_drop_table!r}")
 
-    for key, val in (selected_mission.drop_table or {}).items():
-        if isinstance(val, dict) and val.get("choices") and (selected_mission.probability_drop_table or {}):
+    raw_probability_drop_table = getattr(selected_mission, "probability_drop_table", None)
+    if raw_probability_drop_table is None:
+        probability_drop_table: dict[str, Any] = {}
+    elif isinstance(raw_probability_drop_table, dict):
+        probability_drop_table = {}
+        for key, value in raw_probability_drop_table.items():
+            if not isinstance(key, str) or not key.strip():
+                raise AssertionError(f"invalid mission probability_drop_table key: {key!r}")
+            probability_drop_table[key.strip()] = value
+    else:
+        raise AssertionError(f"invalid mission probability_drop_table: {raw_probability_drop_table!r}")
+
+    for key, val in drop_table.items():
+        if isinstance(val, dict) and val.get("choices") and probability_drop_table:
             for choice_key in iter_choice_pool_keys(val):
-                if choice_key not in (selected_mission.probability_drop_table or {}):
+                if choice_key not in probability_drop_table:
                     continue
                 handled_probability_keys.add(choice_key)
                 label = resolve_drop_label(choice_key, drop_labels, item_templates, book_labels)
-                _, count = parse_drop_value((selected_mission.probability_drop_table or {}).get(choice_key))
+                _, count = parse_drop_value(probability_drop_table.get(choice_key))
                 rarity = loot_rarities.get(choice_key) or "default"
                 display_label = f"{label} x{count}" if (count is not None and count >= 1) else label
                 probability_drops.append({"label": display_label, "rarity": rarity})
@@ -317,7 +376,7 @@ def build_drop_lists(
         else:
             guaranteed_drops.append({"label": display_label, "rarity": rarity})
 
-    for key, val in (selected_mission.probability_drop_table or {}).items():
+    for key, val in probability_drop_table.items():
         if key in handled_probability_keys:
             continue
         label = resolve_drop_label(key, drop_labels, item_templates, book_labels)

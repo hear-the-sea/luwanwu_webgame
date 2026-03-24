@@ -262,6 +262,22 @@ class TestInventoryGuestItemActions:
                 HTTP_X_REQUESTED_WITH="XMLHttpRequest",
             )
 
+    def test_use_item_ajax_malformed_success_message_bubbles_up(self, manor_with_user, monkeypatch):
+        manor, client = manor_with_user
+        template = ItemTemplate.objects.create(key="view_use_item_bad_message", name="坏消息道具", is_usable=True)
+        item = InventoryItem.objects.create(manor=manor, template=template, quantity=1)
+
+        monkeypatch.setattr(
+            "gameplay.views.inventory.use_inventory_item",
+            lambda *_args, **_kwargs: {"_message": {"bad": "payload"}},
+        )
+
+        with pytest.raises(AssertionError, match="invalid inventory use_item success message"):
+            client.post(
+                reverse("gameplay:use_item", kwargs={"pk": item.pk}),
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+
     def test_use_rebirth_card_database_error_returns_500(self, manor_with_user, monkeypatch):
         manor, client = manor_with_user
         template = ItemTemplate.objects.create(

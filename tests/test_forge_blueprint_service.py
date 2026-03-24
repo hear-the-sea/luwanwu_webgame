@@ -138,3 +138,34 @@ def test_synthesize_equipment_with_blueprint_requires_forging_level(django_user_
 
     with pytest.raises(ForgeOperationError, match="锻造技5级"):
         forge_service.synthesize_equipment_with_blueprint(manor, "bp_need_lvl", quantity=1)
+
+
+@pytest.mark.django_db
+def test_synthesize_equipment_with_blueprint_rejects_malformed_recipe_contract(django_user_model, monkeypatch):
+    user = django_user_model.objects.create_user(username="forge_bp_bad_recipe", password="pass123")
+    manor = ensure_manor(user)
+    PlayerTechnology.objects.create(manor=manor, tech_key="forging", level=8)
+
+    blueprint = _create_item_template("bp_bad_recipe", "坏图纸", "tool", "purple")
+    _create_item_template("equip_bad_recipe_result", "坏图纸产物", "equip_weapon", "blue")
+    _create_item_template("tong", "铜", "resource", "black")
+
+    InventoryItem.objects.create(manor=manor, template=blueprint, quantity=1)
+
+    monkeypatch.setattr(
+        forge_service,
+        "_build_blueprint_recipe_index",
+        lambda: {
+            "bp_bad_recipe": {
+                "blueprint_key": "bp_bad_recipe",
+                "result_item_key": "equip_bad_recipe_result",
+                "required_forging": "bad",
+                "quantity_out": 1,
+                "description": "",
+                "costs": {"tong": 1},
+            }
+        },
+    )
+
+    with pytest.raises(AssertionError, match="invalid forge blueprint recipe required_forging"):
+        forge_service.synthesize_equipment_with_blueprint(manor, "bp_bad_recipe", quantity=1)

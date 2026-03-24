@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 from datetime import timedelta
-from typing import Iterable
+from typing import Any, Iterable
 
 from django.conf import settings
 from django.utils import timezone
@@ -14,12 +14,20 @@ from .rewards import ArenaRandomItemOption
 
 
 def load_positive_int_setting(name: str, default: int, *, minimum: int = 1) -> int:
-    raw_value = getattr(settings, name, default)
-    try:
-        parsed_value = int(raw_value)
-    except (TypeError, ValueError):
+    sentinel = object()
+    raw_value = getattr(settings, name, sentinel)
+    if raw_value is sentinel:
         return default
-    return max(minimum, parsed_value)
+    if raw_value is None or isinstance(raw_value, bool):
+        raise AssertionError(f"invalid arena setting {name}: {raw_value!r}")
+    raw_value_for_int: Any = raw_value
+    try:
+        parsed_value = int(raw_value_for_int)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid arena setting {name}: {raw_value!r}") from exc
+    if parsed_value < minimum:
+        raise AssertionError(f"invalid arena setting {name}: {raw_value!r}")
+    return parsed_value
 
 
 def normalize_guest_ids(guest_ids: Iterable[int], *, max_guests_per_entry: int) -> list[int]:

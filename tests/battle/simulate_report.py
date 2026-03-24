@@ -85,6 +85,24 @@ def test_simulate_report_rejects_foreign_attacker_guests(game_data, django_user_
         simulate_report(attacker_manor, attacker_guests=[foreign_guest], troop_loadout={})
 
 
+@pytest.mark.django_db
+def test_simulate_report_rejects_invalid_defender_setup(game_data, django_user_model):
+    user = django_user_model.objects.create_user(username="battle_bad_defender_setup", password="pass123")
+    manor = ensure_manor(user)
+    manor.silver = 5000
+    manor.save(update_fields=["silver"])
+    recruit_frontline(manor, draws=1)
+
+    with pytest.raises(AssertionError, match="invalid battle defender setup payload"):
+        simulate_report(
+            manor,
+            seed=1,
+            troop_loadout={},
+            fill_default_troops=False,
+            defender_setup="bad-config",
+        )
+
+
 def test_validate_attacker_guest_ownership_programming_error_bubbles_up_for_invalid_guest_id():
     manor = SimpleNamespace(pk=1)
     guest = SimpleNamespace(pk="bad-pk", id="bad-pk", manor_id=1)

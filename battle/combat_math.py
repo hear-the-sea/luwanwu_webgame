@@ -28,14 +28,23 @@ TROOP_VS_TROOP_ATTACK_DIVISOR = 1.0
 TROOP_DEFENSE_SQRT_DIVISOR = 2.0
 
 
+def _coerce_positive_int(value: Any, *, contract_name: str) -> int:
+    if value is None or isinstance(value, bool):
+        raise AssertionError(f"invalid {contract_name}: {value!r}")
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid {contract_name}: {value!r}") from exc
+    if parsed <= 0:
+        raise AssertionError(f"invalid {contract_name}: {value!r}")
+    return parsed
+
+
 def _unit_strength(unit: Any) -> int:
     strength = getattr(unit, "initial_troop_strength", None)
     if strength is None:
         strength = getattr(unit, "troop_strength", None)
-    try:
-        return max(1, int(strength or 1))
-    except (TypeError, ValueError):
-        return 1
+    return _coerce_positive_int(strength, contract_name="battle troop strength")
 
 
 def _current_strength(unit: Any) -> int:
@@ -47,39 +56,54 @@ def _current_strength(unit: Any) -> int:
     1000弓箭手仍然按1000兵力计算伤害，造成"371血秒杀1000人"的bug。
     """
     strength = getattr(unit, "troop_strength", None)
-    if strength is None or strength <= 0:
+    if strength is None:
         strength = getattr(unit, "initial_troop_strength", 0)
+        return _coerce_positive_int(strength, contract_name="battle current troop strength")
+    if isinstance(strength, bool):
+        raise AssertionError(f"invalid battle current troop strength: {strength!r}")
     try:
-        return max(1, int(strength or 1))
-    except (TypeError, ValueError):
-        return 1
+        parsed_strength = int(strength)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid battle current troop strength: {strength!r}") from exc
+    if parsed_strength > 0:
+        return parsed_strength
+    return _coerce_positive_int(
+        getattr(unit, "initial_troop_strength", 0), contract_name="battle current troop strength"
+    )
 
 
 def _unit_attack_value(unit: Any) -> int:
     unit_attack = getattr(unit, "unit_attack", None)
     if unit_attack is not None:
-        return int(unit_attack)
+        return _coerce_positive_int(unit_attack, contract_name="battle unit_attack")
     strength = max(1, _unit_strength(unit))
-    attack = max(1, int(getattr(unit, "attack", 0)))
+    attack = _coerce_positive_int(getattr(unit, "attack", None), contract_name="battle attack")
     return max(1, int(attack / strength))
 
 
 def _unit_defense_value(unit: Any) -> int:
     unit_defense = getattr(unit, "unit_defense", None)
     if unit_defense is not None:
-        return int(unit_defense)
+        return _coerce_positive_int(unit_defense, contract_name="battle unit_defense")
     strength = max(1, _unit_strength(unit))
-    defense = max(1, int(getattr(unit, "defense", 0)))
+    defense = _coerce_positive_int(getattr(unit, "defense", None), contract_name="battle defense")
     return max(1, int(defense / strength))
 
 
 def troop_unit_hp(unit: Any) -> int:
     unit_hp = getattr(unit, "unit_hp", None)
     # 忽略无效/未初始化的 unit_hp（0 或负数），回退到平均血量计算
-    if unit_hp is not None and unit_hp > 0:
-        return max(1, int(unit_hp))
+    if unit_hp is not None:
+        if isinstance(unit_hp, bool):
+            raise AssertionError(f"invalid battle unit_hp: {unit_hp!r}")
+        try:
+            parsed_unit_hp = int(unit_hp)
+        except (TypeError, ValueError) as exc:
+            raise AssertionError(f"invalid battle unit_hp: {unit_hp!r}") from exc
+        if parsed_unit_hp > 0:
+            return parsed_unit_hp
     strength = max(1, _unit_strength(unit))
-    max_hp = max(1, int(getattr(unit, "max_hp", strength)))
+    max_hp = _coerce_positive_int(getattr(unit, "max_hp", strength), contract_name="battle max_hp")
     return max(1, int(max_hp / strength))
 
 

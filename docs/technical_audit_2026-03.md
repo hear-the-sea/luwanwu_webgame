@@ -1,6 +1,6 @@
 # 项目重构优化规则与阶段目标（2026-03）
 
-最近更新：2026-03-23
+最近更新：2026-03-24
 
 本文档不记录详细审计过程、历史数据或阶段性结果，只保留后续重构必须遵守的规则，以及各阶段的优化目标。
 
@@ -12,7 +12,7 @@
 - [数据流边界](domain_boundaries.md)
 - [第二阶段统一写模型基线](write_model_boundaries.md)
 
-## 0. 当前基线（2026-03-23）
+## 0. 当前基线（2026-03-24）
 
 本文档原则上不展开完整审计过程，但为避免规则与仓库现实脱节，仍保留当前治理基线与未收口项摘要。
 
@@ -78,6 +78,19 @@
 - 2026-03-23 本轮验证：`pytest tests/test_mission_salvage_side_filter.py -q` 通过，结果为 `5 passed`。
 - 2026-03-23 本轮验证：`pytest tests/test_mission_drops_service.py -q` 通过，结果为 `12 passed`。
 - 2026-03-23 本轮验证：`pytest tests/test_mission_refresh_async.py -q` 通过，结果为 `32 passed`。
+- 2026-03-24 本轮验证：`python -m mypy battle/combat_math.py battle/defender_setup.py battle/execution.py battle/tasks.py gameplay/services/arena/helpers.py gameplay/services/missions_impl/finalization_helpers.py gameplay/services/missions_impl/sync_report.py gameplay/views/mission_helpers.py guests/services/loyalty.py guests/services/recruitment_candidates.py guests/services/recruitment_templates.py guests/utils/recruitment_utils.py tests/test_arena_helpers.py tests/test_battle_skills.py tests/test_guest_loyalty_service.py tests/test_guest_recruitment_flow_helpers.py tests/test_mission_finalization_helpers.py tests/test_mission_helper_functions.py tests/test_mission_salvage_side_filter.py tests/test_mission_sync_report.py` 通过。
+- 2026-03-24 本轮验证：`pytest tests/test_arena_helpers.py tests/test_battle_skills.py tests/test_guest_loyalty_service.py tests/test_guest_recruitment_flow_helpers.py tests/test_mission_finalization_helpers.py tests/test_mission_helper_functions.py tests/test_mission_salvage_side_filter.py tests/test_mission_sync_report.py -q` 通过，结果为 `110 passed`。
+- 2026-03-24 本轮验证：`pytest tests/test_guest_runtime_refresh_views.py tests/test_reload_runtime_configs_command.py -q` 通过，结果为 `14 passed`。
+- 2026-03-24 本轮验证：`pytest tests/test_arena_views.py tests/test_core_views.py tests/test_inventory_views.py tests/test_map_views.py tests/test_work_views.py -q` 通过，结果为 `133 passed`。
+- 2026-03-24 本轮验证：`pytest tests/battle/defender_helpers.py tests/battle/simulate_report.py tests/guest_recruitment_service/template_selection.py -q` 通过，结果为 `36 passed`。
+- 2026-03-24 本轮验证：`python -m mypy guests/services/training.py guests/views/training.py gameplay/services/manor/refresh.py tests/test_training_experience_item_atomic.py tests/test_training_timer.py tests/guest_item_view_validation/item_usage_views.py tests/guest_view_error_boundaries/training_views.py` 通过。
+- 2026-03-24 本轮验证：`pytest tests/test_training_experience_item_atomic.py tests/test_training_timer.py tests/guest_item_view_validation/item_usage_views.py tests/guest_view_error_boundaries/training_views.py -q` 通过，结果为 `38 passed`。
+- 2026-03-24 本轮验证：`python -m mypy gameplay/services/inventory/use.py tests/guest_summon_card/loot_boxes.py tests/guest_summon_card/summon_validation.py` 通过。
+- 2026-03-24 本轮验证：`pytest tests/guest_summon_card/loot_boxes.py tests/guest_summon_card/summon_validation.py tests/guest_summon_card/utility_items.py tests/inventory_views/guest_item_actions.py -q` 通过，结果为 `40 passed`。
+- 2026-03-24 本轮验证：`python -m mypy gameplay/services/buildings/stable.py gameplay/services/buildings/ranch.py gameplay/services/buildings/smithy.py tests/test_stable_loader.py tests/test_ranch_loader.py tests/test_smithy_loader.py tests/test_reload_runtime_configs_command.py` 通过。
+- 2026-03-24 本轮验证：`pytest tests/test_stable_loader.py tests/test_ranch_loader.py tests/test_smithy_loader.py tests/test_reload_runtime_configs_command.py tests/test_production_service_errors.py tests/test_production_views.py -q` 通过，结果为 `41 passed`。
+- 2026-03-24 本轮验证：`python -m mypy gameplay/services/buildings/forge_config_helpers.py tests/test_forge_equipment_loader.py tests/test_reload_runtime_configs_command.py tests/test_yaml_config_validation.py` 通过。
+- 2026-03-24 本轮验证：`pytest tests/test_forge_equipment_loader.py tests/test_reload_runtime_configs_command.py tests/test_yaml_config_validation.py tests/test_forge_blueprint_service.py tests/test_forge_decompose_service.py tests/test_forge_views.py -q` 通过，结果为 `61 passed`。
 - 2026-03-23 本轮验证：`pytest tests/test_guest_recruitment_finalize_helpers.py -q` 通过，结果为 `8 passed`。
 - 2026-03-23 本轮验证：`pytest tests/test_mission_attempts_service.py -q` 通过，结果为 `4 passed`。
 - 2026-03-23 本轮验证：`pytest tests/test_gameplay.py -k "normalize_mission_loadout or mission_loadout_service or mission_travel_time or resolve_max_squad_size or resolve_base_travel_time or calculate_travel_time or prepare_launch_inputs" -q` 通过，结果为 `15 passed, 20 deselected`。
@@ -112,6 +125,40 @@
 - 2026-03-24 阶段 5 补充：`tests/test_guilds.py` 也已收口为薄入口文件，并拆到 `tests/guilds/` 业务域子模块；新子模块体量分别为 `59 / 253 / 74 / 90` 行，均低于默认 `500` 行预算。
 - 2026-03-24 阶段 5 补充：`tests/test_battle_tasks_generate_report_task.py` 也已收口为薄入口文件，并拆到 `tests/battle_tasks_generate_report_task/` 业务域子模块；新子模块体量分别为 `153 / 109 / 64 / 153` 行，均低于默认 `500` 行预算。
 - 2026-03-24 阶段 5 补充：`tests/test_raid_concurrency_integration.py` 也已收口为薄入口文件，并拆到 `tests/raid_concurrency_integration/` 业务域子模块；新子模块体量分别为 `136 / 115 / 163` 行，均低于默认 `500` 行预算。
+- 2026-03-24 阶段 3 补充：`battle/execution.py` 与 `battle/defender_setup.py` 已继续收紧防守方输入契约；`defender_setup / technology / guest_level / guest_skills / guest_keys / troop_loadout` 的坏 payload 不再静默回退成空配置、默认等级或默认兵力，而是统一改走显式 `AssertionError`，避免 battle 预备层在坏输入下悄悄改变敌方配置语义。
+- 2026-03-24 阶段 3 补充：`battle/tasks.generate_report_task()` 与 `gameplay/services/missions_impl/sync_report.py` 的防守分支已继续对齐；两条链路现在都会先校验并规范化 defender `loadout`，坏掉的 `troop_loadout` 不再只在 battle 预备层更深处才暴露，也不再出现 sync/async 一宽一严的边界分叉。
+- 2026-03-24 阶段 3 补充：`gameplay/services/arena/helpers.load_positive_int_setting()` 已继续收紧运行期设置覆盖边界；竞技场 settings override 现在只在缺省时回退 YAML 默认值，坏掉的覆盖值、布尔值和低于最小值的参数会直接抛显式 `AssertionError`，避免平台级竞技场配置在坏 settings 下悄悄恢复默认。
+- 2026-03-24 阶段 3 补充：`battle/combat_math.py` 已继续收紧基础数值契约；坏掉的 `troop_strength / current troop strength / unit_attack / unit_defense / max_hp` 不再静默退化成 `1` 或默认值，而是统一改走显式 `AssertionError`，避免战斗伤害、防御与单兵血量计算在坏对象下悄悄改变语义。
+- 2026-03-24 阶段 3 补充：`guests/services/loyalty.py` 已继续收紧忠诚度共享入口；坏掉的 `guest id` 与非法 `amount` 不再静默跳过或退化成 no-op，而是统一改走显式 `AssertionError`，避免 battle / arena 这类共用奖励链在坏对象或坏调用下悄悄少加忠诚。
+- 2026-03-24 阶段 3 补充：`gameplay/views/mission_helpers.py` 已继续收紧任务页掉落展示契约；坏掉的 `chance / count / choices` 载荷不再静默吞成“无概率/无条目/不展示”，而是统一改走显式 `AssertionError`，避免任务页在坏掉落配置下悄悄少展示或错误归类掉落。
+- 2026-03-24 阶段 3 补充：`gameplay/views/mission_helpers.collect_mission_asset_keys()` 已继续收紧任务页资源索引契约；坏掉的 `enemy_guests` 条目与 choice pool `choices` 不再静默跳过，而是统一改走显式 `AssertionError`，避免任务页在坏任务配置下悄悄少预取门客、兵种或掉落资源。
+- 2026-03-24 阶段 3 补充：`gameplay/views/mission_helpers.collect_mission_asset_keys()` 已继续收紧 mapping key 契约；坏掉的 `enemy_troops / drop_table / probability_drop_table` key 不再静默混入预取集合，而是统一改走显式 `AssertionError`，避免任务页在坏配置下悄悄少预取或错误映射资源。
+- 2026-03-24 阶段 3 补充：`gameplay/views/mission_helpers.build_drop_lists()` 已继续收紧 mapping 容器契约；坏掉的 `drop_table / probability_drop_table` 容器和 key 不再依赖运行时隐式报错或静默跳过，而是统一改走显式 `AssertionError`，避免任务页在坏配置下悄悄少展示或错误映射掉落。
+- 2026-03-24 阶段 3 补充：`guests/utils/recruitment_utils.py` 与 `guests/services/recruitment_templates.py` 已继续收紧卡池条目选择契约；显式模板引用丢失、显式模板不可招募，以及既无模板也无稀有度的坏卡池条目不再静默跳过并回退到其它模板，而是统一改走显式 `AssertionError`，避免招募链在坏卡池配置下悄悄换人或降级抽取。
+- 2026-03-24 阶段 3 补充：`guests/services/recruitment_candidates.load_candidate_generation_context()` 已继续收紧候选生成 seed 契约；坏掉的 `seed` 不再原样透传给 `random.Random(...)`，而是统一改走显式 `AssertionError`，避免坏数据悄悄改变候选生成序列。
+- 2026-03-24 阶段 3 补充：`guests/utils/recruitment_utils._load_rarity_distribution()` 已继续收紧招募概率配置契约；显式坏掉的 `total_weight`、负权重和布尔值不再静默回退成默认配置，而是统一改走显式 `AssertionError`，避免招募概率在坏 YAML 下悄悄漂移。
+- 2026-03-24 阶段 3 补充：`guests/utils/recruitment_utils.weighted_choice()` 已继续收紧卡池条目权重契约；坏掉的 `entry.weight` 不再通过 `or 1` 静默兜成默认权重，而是统一改走显式 `AssertionError`，避免卡池内模板概率在坏条目下悄悄漂移。
+- 2026-03-24 阶段 3 补充：`gameplay/services/missions_impl/finalization_helpers.extract_report_guest_state()` 已继续收紧战报解析契约；缺失的 `report.losses` 与 `team_entries` 不再静默按空结构处理，而是统一改走显式 `AssertionError`，避免任务完成链在坏战报下悄悄少更新门客血量、伤亡与参战集合。
+- 2026-03-24 阶段 3 补充：`build_mission_drops_with_salvage()` 与 `resolve_defense_drops_if_missing()` 已继续收紧掉落回填契约；缺失的 `report.drops` 不再静默按空映射处理，而是统一改走显式 `AssertionError`，避免任务奖励链在坏战报下悄悄少发掉落。
+- 2026-03-24 阶段 2/3 补充：`gameplay/services/manor/core.project_manor_activity_for_read()` 已作为热点页面统一读侧投影入口补齐；`HomeView`、`MapView`、`WarehouseView`、`WorkView`、`BaseArenaView`、`task_board` 以及 `guest roster/detail` 现在都会先做资源读投影，再显式收口已到期的 `mission / scout / raid` 完成态，避免页面继续散落局部活动刷新分叉，同时不把隐藏补偿重新塞回 selector 或模板层。
+- 2026-03-24 阶段 3 补充：`guests/views/training.py` 与 `guests/services/training.py` 已继续收紧训练/经验道具契约；经验道具 `effect_payload.time=True/False` 这类布尔值不再通过 `safe_int()` 被误判成合法缩时秒数，`use_experience_item_for_guest()`、`reduce_training_time()`、`reduce_training_time_for_guest()` 与 `train_guest()` 对非法 `seconds / levels` 也不再静默 no-op、业务化降级或兜底成 `0`，而是统一改走显式 `AssertionError`，避免训练链在坏调用下悄悄缩时、吞掉非法输入或接受伪造等级。
+- 2026-03-24 阶段 3 补充：训练缩时返回值契约也已继续收紧；`use_experience_item_for_guest()` 不再把坏掉的 `time_reduced / applied_levels / next_eta` 结果静默 sanitize 成 `0` 或原样透传，而是统一改走显式 `AssertionError` 并回滚道具扣减，避免经验道具链在内部 helper 坏返回值下悄悄少报缩时、少记升级或落出不一致库存。
+- 2026-03-24 阶段 3 补充：`guests/views/training.py` 的经验道具成功响应契约也已继续收紧；`use_experience_item_view()` 不再对 `use_experience_item_for_guest()` 的坏返回值使用 `safe_int(..., default=...)` 静默回退到旧等级、旧血量或 `0` 数量，而是统一改走显式 `AssertionError`，避免训练页在服务层返回值损坏时继续伪装成成功缩时。
+- 2026-03-24 阶段 3 补充：`guests/services/health.py` 与 `guests/views/items.py` 的药品链成功响应契约也已继续收紧；`use_medicine_item_for_guest()` 与 `use_medicine_item_view()` 不再把坏掉的 `healed / new_hp / max_hp / remaining_item_quantity / status / status_display` 静默 sanitize 成 `0`、旧 HP 或旧状态，而是统一改走显式 `AssertionError`，避免药品链在内部 helper 坏返回值下继续伪装成成功治疗。
+- 2026-03-24 阶段 3 补充：`gameplay/services/inventory/use.py` 已继续收紧仓库通用 `use_item` 配置契约；`tool.action` 显式坏类型不再伪装成“未知道具效果”，召唤卡 `choices` 也不再依赖 `or []` 静默退化成模糊配置错误，而是统一改走显式 `ItemNotConfiguredError`，避免仓库链在坏工具类配置下把真实模板错误误报成普通不可使用。
+- 2026-03-24 阶段 3 补充：资源包/宝箱的资源奖励映射也已继续收紧；`effect_payload` 与 `loot_box.resources` 里的坏资源 key、布尔值数量和负数量不再原样透传到 `grant_resources*()` 再暴露底层 `AssertionError`，而是统一在 `use_item` 适配层翻成显式 `ItemNotConfiguredError`，避免仓库通用道具链把 YAML 配置错误误暴露成下游资源服务契约错误。
+- 2026-03-24 阶段 3 补充：仓库通用 `use_item` 的资源发放返回值契约也已继续收紧；`gameplay/services/inventory/use._grant_item_resources()` 与宝箱银两分支不再接受 `grant_resources*()` 的坏 credited mapping，也不再通过 `int(... or 0)` 把异常返回值静默兜成“本次没发银两”，而是统一改走显式 `AssertionError`，避免资源包/宝箱链在下游资源服务坏返回值下继续伪装成成功使用。
+- 2026-03-24 阶段 3 补充：`gameplay/views/inventory.py` 的仓库通用 `use_item` 与目标门客道具成功提示链也已继续收紧；页面层不再把 `_message`、fallback success message 或坏 payload 原样 `str(...)` 成提示文案，而是统一改走显式 `AssertionError`，避免仓库页在 service 坏返回值下继续伪装成成功使用。
+- 2026-03-24 阶段 3 补充：`gameplay/services/buildings/stable.py`、`ranch.py` 与 `smithy.py` 的生产配置 loader 已继续收紧运行期 YAML 契约；`grain_cost / cost_amount / base_duration / required_* / category / cost_type` 这些显式坏值不再通过 `str(...)`、`int(... or 1)` 或“跳过坏条目”静默退化成默认生产语义，而是统一改走显式 `AssertionError`，避免马房、畜牧场与冶炼坊在坏配置下悄悄改成 1 秒、1 份成本或直接少一条可生产项。
+- 2026-03-24 阶段 3 补充：`reload_runtime_configs()` 对这三套生产配置的刷新链也已获得回归约束；坏掉的 `stable` 生产 YAML 不再在运行期刷新时静默写回全局常量，而会直接暴露显式契约错误，避免平台配置热更新把无效生产规则悄悄带进线上读写链。
+- 2026-03-24 阶段 3 补充：`gameplay/views/production.py` 的普通生产成功提示链也已继续收紧结果契约；马房、畜牧场与冶炼坊页面不再直接信任 service 返回对象上的 `*_name / quantity / actual_duration`，而是统一改走显式 `AssertionError`，避免生产页在 service 坏返回值下继续伪装成“开始生产/养殖/制作成功”。
+- 2026-03-24 阶段 3 补充：`gameplay/services/buildings/stable.py`、`ranch.py` 与 `forge_runtime.py` 的运行期 service 入口契约也已继续收紧；这些入口不再通过 `config.get(..., default)` 或 `materials={}` 默认值静默接受坏的内存配置，而是统一显式校验 `required_horsemanship / required_animal_husbandry / required_forging / base_duration / materials`，避免生产/锻造入口在坏 monkeypatch、坏 helper 注入或脏全局状态下继续伪装成正常开工。
+- 2026-03-24 阶段 3 补充：`gameplay/services/buildings/smithy.py` 的运行期 service 入口契约也已继续收紧；冶炼坊不再对已归一化的 `METAL_CONFIG` 再做 `int(... or 0)`、`str(... or "metal")` 这类默认兜底，当前会显式校验 `required_smithy / required_smelting / category / cost_type / cost_amount / base_duration`，避免坏的内存配置继续伪装成普通未解锁或默认金属制作语义。
+- 2026-03-24 阶段 3 补充：`gameplay/services/buildings/forge_config_helpers.py` 已继续收紧 `forge equipment / blueprint` 运行期 YAML 契约；`category / materials / base_duration / required_forging / blueprint_key / result_item_key / quantity_out / costs` 这些显式坏值不再通过 `str(...)`、`int(... or 1)`、过滤空 key 或“忽略坏 recipe”静默退化成默认锻造语义，而是统一改走显式 `AssertionError`，避免铁匠铺在坏配置下悄悄少材料、少图纸、降级需求或吞掉无效配方。
+- 2026-03-24 阶段 3 补充：`reload_runtime_configs()` 对 `forge equipment` 刷新链也已补回归约束；坏掉的锻造材料配置现在会在运行期刷新时直接暴露显式契约错误，不再静默写回 `EQUIPMENT_CONFIG` 并把无效锻造规则带进页面与写链。
+- 2026-03-24 阶段 3 补充：`gameplay/views/production_forge_handlers.py` 的 forge 成功提示链也已继续收紧结果契约；开始锻造、装备分解与图纸合成页面不再直接信任 service 返回对象上的 `equipment_name / quantity / actual_duration / rewards / result_name`，也不再通过 `or {}` 把坏奖励列表静默渲染成“无奖励文案”，而是统一改走显式 `AssertionError`，避免 forge 页面在 service 坏返回值下继续伪装成成功操作。
+- 2026-03-24 阶段 3 补充：`gameplay/services/buildings/forge_blueprints.py` 与 `forge_decompose.py` 的 service 契约也已继续收紧；坏掉的 `recipe_index` 条目、`required_forging / quantity_out / result_item_key / costs` 字段，以及 `roll_decompose_rewards()` 返回的坏奖励 mapping，不再通过 `int(..., default)`、`dict.get(..., {})` 或直接迭代静默退化成默认合成/分解语义，而是统一改走显式 `AssertionError`，避免 forge service 在坏调用或坏 helper 返回值下悄悄少扣材料、少发材料或继续吞掉图纸配置错误。
+- 2026-03-24 阶段 3 补充：`gameplay/services/manor/core.rename_manor()` 与 `get_rename_card_count()` 已继续收紧庄园改名输入契约；未持久化庄园、非字符串 `new_name`、非布尔 `consume_item` 以及坏掉的 `exclude_manor_id` 不再依赖 `AttributeError`、隐式 `strip()`/ORM 转换或真假值判断碰运气，而是统一改走显式 `AssertionError`，避免更名链在坏调用下悄悄误判重名、绕过命名卡检查或把内部契约错误伪装成普通业务失败。
 
 ## 1. 重构优化规则
 

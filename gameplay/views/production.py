@@ -48,6 +48,48 @@ def _parse_positive_quantity(raw_quantity: str | None) -> int | None:
     return safe_positive_int(raw_quantity, default=None)
 
 
+def _normalize_production_result_non_empty_string(raw_value: object, *, contract_name: str) -> str:
+    if not isinstance(raw_value, str) or not raw_value.strip():
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    return raw_value.strip()
+
+
+def _normalize_production_result_positive_int(raw_value: object, *, contract_name: str) -> int:
+    if raw_value is None or isinstance(raw_value, bool):
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    raw_for_int: Any = raw_value
+    try:
+        parsed_value = int(raw_for_int)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}") from exc
+    if parsed_value <= 0:
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    return parsed_value
+
+
+def _build_basic_production_success_message(
+    raw_result: object,
+    *,
+    name_attr: str,
+    name_contract: str,
+    action_label: str,
+) -> str:
+    item_name = _normalize_production_result_non_empty_string(
+        getattr(raw_result, name_attr, None),
+        contract_name=name_contract,
+    )
+    quantity = _normalize_production_result_positive_int(
+        getattr(raw_result, "quantity", None),
+        contract_name="production result quantity",
+    )
+    actual_duration = _normalize_production_result_positive_int(
+        getattr(raw_result, "actual_duration", None),
+        contract_name="production result actual_duration",
+    )
+    quantity_text = f"x{quantity}" if quantity > 1 else ""
+    return f"{item_name}{quantity_text} {action_label}，预计 {actual_duration} 秒后完成"
+
+
 def _handle_unexpected_production_error(
     request: HttpRequest,
     exc: Exception,
@@ -81,7 +123,7 @@ def _run_basic_production_start(
     redirect_name: str,
     missing_key_message: str,
     start_operation: Callable[[Manor, str, int], Any],
-    success_message: Callable[[Any, str], str],
+    success_message: Callable[[Any], str],
     log_message: str,
 ) -> HttpResponse:
     manor = get_manor(request.user)
@@ -96,8 +138,7 @@ def _run_basic_production_start(
 
     try:
         production = start_operation(manor, item_key, quantity)
-        quantity_text = f"x{production.quantity}" if production.quantity > 1 else ""
-        messages.success(request, success_message(production, quantity_text))
+        messages.success(request, success_message(production))
     except GameError as exc:
         messages.error(request, sanitize_error_message(exc))
     except DatabaseError as exc:
@@ -142,8 +183,11 @@ def start_horse_production_view(request: HttpRequest) -> HttpResponse:
         redirect_name="gameplay:stable",
         missing_key_message="请选择马匹类型",
         start_operation=start_horse_production,
-        success_message=lambda production, quantity_text: (
-            f"{production.horse_name}{quantity_text} 开始生产，预计 {production.actual_duration} 秒后完成"
+        success_message=lambda production: _build_basic_production_success_message(
+            production,
+            name_attr="horse_name",
+            name_contract="horse production result horse_name",
+            action_label="开始生产",
         ),
         log_message="Unexpected horse production start error: manor_id=%s user_id=%s horse_key=%s quantity=%s",
     )
@@ -175,8 +219,11 @@ def start_livestock_production_view(request: HttpRequest) -> HttpResponse:
         redirect_name="gameplay:ranch",
         missing_key_message="请选择家畜类型",
         start_operation=ranch_service.start_livestock_production,
-        success_message=lambda production, quantity_text: (
-            f"{production.livestock_name}{quantity_text} 开始养殖，预计 {production.actual_duration} 秒后完成"
+        success_message=lambda production: _build_basic_production_success_message(
+            production,
+            name_attr="livestock_name",
+            name_contract="livestock production result livestock_name",
+            action_label="开始养殖",
         ),
         log_message="Unexpected livestock production start error: manor_id=%s user_id=%s livestock_key=%s quantity=%s",
     )
@@ -208,8 +255,11 @@ def start_smelting_production_view(request: HttpRequest) -> HttpResponse:
         redirect_name="gameplay:smithy",
         missing_key_message="请选择物品类型",
         start_operation=smithy_service.start_smelting_production,
-        success_message=lambda production, quantity_text: (
-            f"{production.metal_name}{quantity_text} 开始制作，预计 {production.actual_duration} 秒后完成"
+        success_message=lambda production: _build_basic_production_success_message(
+            production,
+            name_attr="metal_name",
+            name_contract="smelting production result metal_name",
+            action_label="开始制作",
         ),
         log_message="Unexpected smelting production start error: manor_id=%s user_id=%s metal_key=%s quantity=%s",
     )

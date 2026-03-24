@@ -18,6 +18,41 @@ def _parse_positive_quantity(raw_quantity: str | None) -> int | None:
     return safe_positive_int(raw_quantity, default=None)
 
 
+def _normalize_forge_result_non_empty_string(raw_value: object, *, contract_name: str) -> str:
+    if not isinstance(raw_value, str) or not raw_value.strip():
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    return raw_value.strip()
+
+
+def _normalize_forge_result_positive_int(raw_value: object, *, contract_name: str) -> int:
+    if raw_value is None or isinstance(raw_value, bool):
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    raw_for_int: Any = raw_value
+    try:
+        parsed_value = int(raw_for_int)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}") from exc
+    if parsed_value <= 0:
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    return parsed_value
+
+
+def _normalize_forge_rewards_mapping(raw_value: object, *, contract_name: str) -> dict[str, int]:
+    if not isinstance(raw_value, dict):
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    normalized: dict[str, int] = {}
+    for reward_key, reward_amount in raw_value.items():
+        normalized_key = _normalize_forge_result_non_empty_string(
+            reward_key,
+            contract_name=f"{contract_name} key",
+        )
+        normalized[normalized_key] = _normalize_forge_result_positive_int(
+            reward_amount,
+            contract_name=f"{contract_name} amount",
+        )
+    return normalized
+
+
 def _normalize_forge_mode(raw_mode: str | None, *, default: str = "synthesize") -> str:
     mode = (raw_mode or default).strip()
     if mode not in {"synthesize", "decompose"}:
@@ -29,14 +64,66 @@ def _forge_redirect_url(category: str, mode: str) -> str:
     return f"{reverse('gameplay:forge')}?mode={mode}&category={category}"
 
 
-def _build_decompose_reward_text(result: dict[str, Any]) -> str:
-    reward_map = result.get("rewards", {}) or {}
+def _build_decompose_reward_text(raw_result: object) -> str:
+    if not isinstance(raw_result, dict):
+        raise AssertionError(f"invalid forge decompose result payload: {raw_result!r}")
+    reward_map = _normalize_forge_rewards_mapping(
+        raw_result.get("rewards"),
+        contract_name="forge decompose result rewards",
+    )
     reward_templates = {
         template.key: template.name
         for template in ItemTemplate.objects.filter(key__in=reward_map.keys()).only("key", "name")
     }
-    reward_parts = [f"{reward_templates.get(key, key)}x{amount}" for key, amount in reward_map.items() if amount > 0]
+    reward_parts = [f"{reward_templates.get(key, key)}x{amount}" for key, amount in reward_map.items()]
     return f"，获得：{'、'.join(reward_parts)}" if reward_parts else ""
+
+
+def _build_start_equipment_forging_success_message(raw_result: object) -> str:
+    equipment_name = _normalize_forge_result_non_empty_string(
+        getattr(raw_result, "equipment_name", None),
+        contract_name="forge production result equipment_name",
+    )
+    quantity = _normalize_forge_result_positive_int(
+        getattr(raw_result, "quantity", None),
+        contract_name="forge production result quantity",
+    )
+    actual_duration = _normalize_forge_result_positive_int(
+        getattr(raw_result, "actual_duration", None),
+        contract_name="forge production result actual_duration",
+    )
+    quantity_text = f"x{quantity}" if quantity > 1 else ""
+    return f"{equipment_name}{quantity_text} 开始锻造，预计 {actual_duration} 秒后完成"
+
+
+def _build_decompose_success_message(raw_result: object) -> str:
+    if not isinstance(raw_result, dict):
+        raise AssertionError(f"invalid forge decompose result payload: {raw_result!r}")
+    equipment_name = _normalize_forge_result_non_empty_string(
+        raw_result.get("equipment_name"),
+        contract_name="forge decompose result equipment_name",
+    )
+    quantity = _normalize_forge_result_positive_int(
+        raw_result.get("quantity"),
+        contract_name="forge decompose result quantity",
+    )
+    quantity_text = f"x{quantity}" if quantity > 1 else ""
+    return f"{equipment_name}{quantity_text} 分解完成{_build_decompose_reward_text(raw_result)}"
+
+
+def _build_blueprint_synthesize_success_message(raw_result: object) -> str:
+    if not isinstance(raw_result, dict):
+        raise AssertionError(f"invalid forge blueprint result payload: {raw_result!r}")
+    result_name = _normalize_forge_result_non_empty_string(
+        raw_result.get("result_name"),
+        contract_name="forge blueprint result result_name",
+    )
+    quantity = _normalize_forge_result_positive_int(
+        raw_result.get("quantity"),
+        contract_name="forge blueprint result quantity",
+    )
+    quantity_text = f"x{quantity}" if quantity > 1 else ""
+    return f"{result_name}{quantity_text} 合成完成"
 
 
 def run_forge_post_action(
@@ -89,10 +176,7 @@ def handle_start_equipment_forging(
         default_mode="synthesize",
         missing_key_message="请选择装备类型",
         operation=forge_service.start_equipment_forging,
-        success_message=lambda production: (
-            f"{production.equipment_name}"
-            f"{'x' + str(production.quantity) if production.quantity > 1 else ''} 开始锻造，预计 {production.actual_duration} 秒后完成"
-        ),
+        success_message=_build_start_equipment_forging_success_message,
         on_database_error=on_database_error,
     )
 
@@ -109,11 +193,7 @@ def handle_decompose_equipment(request, *, manor: Manor, category: str, on_datab
         default_mode="decompose",
         missing_key_message="请选择要分解的装备",
         operation=forge_service.decompose_equipment,
-        success_message=lambda result: (
-            f"{result['equipment_name']}"
-            f"{'x' + str(result['quantity']) if result['quantity'] > 1 else ''} 分解完成"
-            f"{_build_decompose_reward_text(result)}"
-        ),
+        success_message=_build_decompose_success_message,
         on_database_error=on_database_error,
     )
 
@@ -136,8 +216,6 @@ def handle_synthesize_blueprint_equipment(
         default_mode="synthesize",
         missing_key_message="请选择图纸",
         operation=forge_service.synthesize_equipment_with_blueprint,
-        success_message=lambda result: (
-            f"{result['result_name']}" f"{'x' + str(result['quantity']) if result['quantity'] > 1 else ''} 合成完成"
-        ),
+        success_message=_build_blueprint_synthesize_success_message,
         on_database_error=on_database_error,
     )

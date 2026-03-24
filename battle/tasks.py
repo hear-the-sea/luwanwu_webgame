@@ -240,6 +240,7 @@ def generate_report_task(
         normalized_run_id = _normalize_positive_int(run_id, field_name="run_id", allow_none=True)
         normalized_guest_ids = _normalize_guest_ids(guest_ids)
         normalized_battle_type = _normalize_battle_type(battle_type)
+        normalized_troop_loadout = _normalize_troop_loadout(troop_loadout)
         normalized_travel_seconds = _normalize_positive_int(
             travel_seconds,
             field_name="travel_seconds",
@@ -309,7 +310,7 @@ def generate_report_task(
                 troop_loadout=enemy_troops,
                 fill_default_troops=False,
                 attacker_guests=attacker_guests,
-                defender_setup={"troop_loadout": troop_loadout},
+                defender_setup={"troop_loadout": normalized_troop_loadout},
                 defender_guests=battle_guests,
                 defender_max_squad=len(guests) if guests else None,
                 drop_table={},
@@ -332,7 +333,7 @@ def generate_report_task(
                 manor=manor,
                 battle_type=normalized_battle_type,
                 seed=seed,
-                troop_loadout=_normalize_troop_loadout(troop_loadout),
+                troop_loadout=normalized_troop_loadout,
                 fill_default_troops=fill_default_troops,
                 attacker_guests=battle_guests,
                 defender_setup=_normalize_mapping(defender_setup),

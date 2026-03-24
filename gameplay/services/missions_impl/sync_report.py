@@ -134,6 +134,8 @@ def generate_sync_battle_report(
 
     from battle.services import simulate_report
 
+    normalized_loadout = _normalize_troop_loadout(loadout)
+
     if mission.is_defense:
         from battle.combatants_pkg import build_named_ai_guests
         from gameplay.services.technology import get_guest_stat_bonuses, resolve_enemy_tech_levels
@@ -155,7 +157,7 @@ def generate_sync_battle_report(
             troop_loadout=enemy_troops,
             fill_default_troops=False,
             attacker_guests=attacker_guests,
-            defender_setup={"troop_loadout": loadout},
+            defender_setup={"troop_loadout": normalized_loadout},
             defender_guests=guests,
             defender_max_squad=len(guests) if guests else None,
             drop_table={},
@@ -178,7 +180,7 @@ def generate_sync_battle_report(
         manor=manor,
         battle_type=mission.battle_type or "task",
         seed=seed,
-        troop_loadout=loadout,
+        troop_loadout=normalized_loadout,
         fill_default_troops=False,
         attacker_guests=guests,
         defender_setup=defender_setup,

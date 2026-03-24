@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import random
 from types import SimpleNamespace
 from unittest.mock import MagicMock
+
+import pytest
 
 import guests.services.recruitment_queries as recruitment_query_service
 import guests.services.recruitment_shared as recruitment_shared
 import guests.services.recruitment_templates as recruitment_template_service
+import guests.utils.recruitment_utils as recruitment_utils
 from guests.models import GuestRarity
 from guests.utils.recruitment_utils import HERMIT_RARITY, RARITY_DISTRIBUTION, RARITY_WEIGHTS, TOTAL_WEIGHT
 
@@ -141,3 +145,79 @@ def test_core_pool_tiers_has_expected_tiers():
         RecruitmentPool.Tier.DIANSHI,
     )
     assert recruitment_shared.CORE_POOL_TIERS == expected
+
+
+def test_choose_template_from_entries_rejects_missing_explicit_template_relation():
+    entry = SimpleNamespace(template_id=7, template=None, rarity=None, archetype=None, weight=1)
+
+    with pytest.raises(AssertionError, match="invalid recruitment pool entry template"):
+        recruitment_template_service.choose_template_from_entries([entry], random.Random(1), templates_by_rarity={})
+
+
+def test_choose_template_from_entries_rejects_non_recruitable_explicit_template(monkeypatch):
+    template = SimpleNamespace(id=11, key="bad_tpl", rarity=GuestRarity.GREEN, recruitable=False)
+    entry = SimpleNamespace(template_id=11, template=template, rarity=None, archetype=None, weight=1)
+    monkeypatch.setattr(recruitment_template_service, "choose_rarity", lambda _rng: GuestRarity.GREEN)
+
+    with pytest.raises(AssertionError, match="invalid recruitment pool entry template"):
+        recruitment_template_service.choose_template_from_entries([entry], random.Random(1), templates_by_rarity={})
+
+
+def test_choose_template_from_entries_rejects_entry_without_template_or_rarity(monkeypatch):
+    entry = SimpleNamespace(template_id=None, template=None, rarity=None, archetype=None, weight=1)
+    monkeypatch.setattr(recruitment_template_service, "choose_rarity", lambda _rng: GuestRarity.GREEN)
+
+    with pytest.raises(AssertionError, match="invalid recruitment pool entry rarity"):
+        recruitment_template_service.choose_template_from_entries([entry], random.Random(1), templates_by_rarity={})
+
+
+def test_weighted_choice_defaults_missing_weight_to_one():
+    entry = SimpleNamespace()
+
+    chosen = recruitment_utils.weighted_choice([entry], random.Random(1))
+
+    assert chosen is entry
+
+
+def test_weighted_choice_rejects_invalid_entry_weight():
+    bad_entry = SimpleNamespace(weight=0)
+
+    with pytest.raises(AssertionError, match="invalid recruitment pool entry weight"):
+        recruitment_utils.weighted_choice([bad_entry], random.Random(1))
+
+
+def test_weighted_choice_rejects_non_integer_entry_weight():
+    bad_entry = SimpleNamespace(weight="bad")
+
+    with pytest.raises(AssertionError, match="invalid recruitment pool entry weight"):
+        recruitment_utils.weighted_choice([bad_entry], random.Random(1))
+
+
+def test_load_rarity_distribution_rejects_invalid_total_weight(monkeypatch):
+    monkeypatch.setattr(
+        recruitment_utils,
+        "load_yaml_data",
+        lambda *_args, **_kwargs: {"total_weight": "bad", "weights": {}},
+    )
+    recruitment_utils.clear_recruitment_rarity_cache()
+
+    try:
+        with pytest.raises(AssertionError, match="invalid recruitment rarity weights total_weight"):
+            recruitment_utils._load_rarity_distribution()
+    finally:
+        recruitment_utils.clear_recruitment_rarity_cache()
+
+
+def test_load_rarity_distribution_rejects_negative_weight(monkeypatch):
+    monkeypatch.setattr(
+        recruitment_utils,
+        "load_yaml_data",
+        lambda *_args, **_kwargs: {"total_weight": 1000000, "weights": {GuestRarity.GREEN: -1}},
+    )
+    recruitment_utils.clear_recruitment_rarity_cache()
+
+    try:
+        with pytest.raises(AssertionError, match=r"invalid recruitment rarity weights weights\.green"):
+            recruitment_utils._load_rarity_distribution()
+    finally:
+        recruitment_utils.clear_recruitment_rarity_cache()

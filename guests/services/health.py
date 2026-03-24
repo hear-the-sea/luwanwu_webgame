@@ -18,7 +18,6 @@ from core.exceptions import (
     InsufficientStockError,
     InvalidHealAmountError,
 )
-from core.utils import safe_int
 from core.utils.time_scale import scale_value
 from gameplay.services.inventory import core as inventory_core
 
@@ -32,6 +31,26 @@ if TYPE_CHECKING:
 
 INJURY_RECOVERY_THRESHOLD = _guest_health_rules.INJURY_RECOVERY_THRESHOLD
 INJURED_RECOVERY_RATE_FACTOR = _guest_health_rules.INJURED_RECOVERY_RATE_FACTOR
+
+
+def _normalize_non_negative_health_int(raw_value: Any, *, contract_name: str) -> int:
+    if raw_value is None or isinstance(raw_value, bool):
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    raw_for_int: Any = raw_value
+    try:
+        parsed_value = int(raw_for_int)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}") from exc
+    if parsed_value < 0:
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    return parsed_value
+
+
+def _normalize_positive_health_int(raw_value: Any, *, contract_name: str) -> int:
+    value = _normalize_non_negative_health_int(raw_value, contract_name=contract_name)
+    if value <= 0:
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    return value
 
 
 def recover_guest_hp(guest: Guest, now: datetime | None = None) -> None:
@@ -185,13 +204,25 @@ def use_medicine_item_for_guest(manor: Manor, guest: Guest, item_id: int, heal_a
     inventory_core.consume_inventory_item_locked(locked_item, 1)
 
     remaining_quantity = 0
-    if locked_item.pk:
-        remaining_quantity = safe_int(locked_item.quantity, default=0, min_val=0) or 0
+    if locked_item.pk and type(locked_item).objects.filter(pk=locked_item.pk).exists():
+        remaining_quantity = _normalize_non_negative_health_int(
+            locked_item.quantity,
+            contract_name="medicine remaining_item_quantity",
+        )
 
     return {
-        "healed": safe_int(result.get("healed"), default=0, min_val=0) or 0,
-        "new_hp": safe_int(locked_guest.current_hp, default=0, min_val=0) or 0,
-        "max_hp": safe_int(locked_guest.max_hp, default=1, min_val=1) or 1,
+        "healed": _normalize_non_negative_health_int(
+            result.get("healed"),
+            contract_name="medicine healed",
+        ),
+        "new_hp": _normalize_non_negative_health_int(
+            locked_guest.current_hp,
+            contract_name="medicine new_hp",
+        ),
+        "max_hp": _normalize_positive_health_int(
+            locked_guest.max_hp,
+            contract_name="medicine max_hp",
+        ),
         "status": locked_guest.status,
         "status_display": locked_guest.get_status_display(),
         "injury_cured": bool(result.get("injury_cured", False)),

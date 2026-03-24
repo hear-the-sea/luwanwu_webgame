@@ -165,6 +165,28 @@ def test_decompose_equipment_rejects_recruitment_gear(django_user_model, monkeyp
     assert get_item_quantity(manor, "equip_recruit_blocked") == 1
 
 
+@pytest.mark.django_db
+def test_decompose_equipment_rejects_malformed_reward_contract(django_user_model, monkeypatch):
+    user = django_user_model.objects.create_user(username="forge_bad_rewards", password="pass123")
+    manor = ensure_manor(user)
+
+    equip = _create_item_template("equip_bad_rewards", "坏奖励绿装", "equip_weapon", "green")
+    _create_item_template("tong", "铜", "resource", "black")
+    InventoryItem.objects.create(manor=manor, template=equip, quantity=1)
+
+    monkeypatch.setattr(forge_service, "get_recruitment_equipment_keys", lambda: set())
+    monkeypatch.setattr(
+        forge_service,
+        "_roll_decompose_rewards",
+        lambda *_args, **_kwargs: {"tong": "bad"},
+    )
+
+    with pytest.raises(AssertionError, match="invalid forge decompose rewards amount"):
+        forge_service.decompose_equipment(manor, "equip_bad_rewards", quantity=1)
+
+    assert get_item_quantity(manor, "equip_bad_rewards") == 1
+
+
 def test_decompose_probabilities_increase_for_higher_rarity():
     forge_service.clear_forge_decompose_cache()
     config = forge_service.load_forge_decompose_config()

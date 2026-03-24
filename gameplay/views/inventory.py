@@ -70,6 +70,12 @@ def _resolve_target_guest_item_action(item: InventoryItem) -> str | None:
     return action.strip() or None
 
 
+def _normalize_inventory_success_message(raw_value: object, *, contract_name: str) -> str:
+    if not isinstance(raw_value, str) or not raw_value.strip():
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    return raw_value.strip()
+
+
 def _error_response(
     request: HttpRequest,
     is_ajax: bool,
@@ -177,7 +183,13 @@ def _use_target_guest_item(
 
     try:
         result = service_call(manor, item, guest_id)
-        message = str(result.get("_message") or success_fallback_message(result))
+        raw_message = result.get("_message")
+        if raw_message is None:
+            raw_message = success_fallback_message(result)
+        message = _normalize_inventory_success_message(
+            raw_message,
+            contract_name="inventory target-guest item success message",
+        )
         if is_ajax:
             return json_success(message=message)
         messages.success(request, message)
@@ -253,10 +265,15 @@ def use_item_view(request: HttpRequest, pk: int) -> HttpResponse:
         payload = use_inventory_item(item, manor=manor)
         # 优先使用 _message 字段作为人类友好的提示
         if "_message" in payload:
-            summary = payload["_message"]
+            summary = _normalize_inventory_success_message(
+                payload["_message"],
+                contract_name="inventory use_item success message",
+            )
         else:
-            summary = (
-                "、".join(f"{key}+{value}" for key, value in payload.items() if not key.startswith("_")) or "效果已生效"
+            raw_summary = "、".join(f"{key}+{value}" for key, value in payload.items() if not key.startswith("_"))
+            summary = _normalize_inventory_success_message(
+                raw_summary or "效果已生效",
+                contract_name="inventory use_item success fallback message",
             )
         if is_ajax:
             return json_success(message=f"{item.template.name} 使用成功：{summary}")

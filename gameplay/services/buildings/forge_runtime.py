@@ -29,6 +29,53 @@ from .forge_flow_helpers import (
 logger = logging.getLogger(__name__)
 
 
+def _normalize_forge_runtime_positive_int(raw_value: object, *, contract_name: str) -> int:
+    if raw_value is None or isinstance(raw_value, bool):
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    raw_for_int: Any = raw_value
+    try:
+        parsed_value = int(raw_for_int)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}") from exc
+    if parsed_value <= 0:
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    return parsed_value
+
+
+def _normalize_forge_runtime_materials(raw_value: object, *, contract_name: str) -> dict[str, int]:
+    if not isinstance(raw_value, dict):
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    normalized: dict[str, int] = {}
+    for material_key, raw_amount in raw_value.items():
+        if not isinstance(material_key, str) or not material_key.strip():
+            raise AssertionError(f"invalid {contract_name} key: {material_key!r}")
+        normalized[material_key.strip()] = _normalize_forge_runtime_positive_int(
+            raw_amount,
+            contract_name=f"{contract_name} amount",
+        )
+    return normalized
+
+
+def _normalize_forge_runtime_config_entry(raw_config: object, *, contract_name: str) -> dict[str, Any]:
+    if not isinstance(raw_config, dict):
+        raise AssertionError(f"invalid {contract_name}: {raw_config!r}")
+    return {
+        **raw_config,
+        "required_forging": _normalize_forge_runtime_positive_int(
+            raw_config.get("required_forging"),
+            contract_name=f"{contract_name} required_forging",
+        ),
+        "base_duration": _normalize_forge_runtime_positive_int(
+            raw_config.get("base_duration"),
+            contract_name=f"{contract_name} base_duration",
+        ),
+        "materials": _normalize_forge_runtime_materials(
+            raw_config.get("materials"),
+            contract_name=f"{contract_name} materials",
+        ),
+    }
+
+
 def _get_item_name_map(keys: set[str]) -> dict[str, str]:
     if not keys:
         return {}
@@ -76,8 +123,11 @@ def start_equipment_forging(
     if equipment_key not in equipment_config:
         raise ForgeOperationError("无效的装备类型")
 
-    config = equipment_config[equipment_key]
-    required_level = config.get("required_forging", 1)
+    config = _normalize_forge_runtime_config_entry(
+        equipment_config[equipment_key],
+        contract_name=f"forge runtime equipment config {equipment_key}",
+    )
+    required_level = config["required_forging"]
     equipment_name_map = _get_item_name_map({equipment_key})
     equipment_name = equipment_name_map.get(equipment_key, equipment_key)
 
@@ -88,8 +138,7 @@ def start_equipment_forging(
     max_quantity = get_max_forging_quantity(manor)
     validate_forging_quantity(quantity=quantity, max_quantity=max_quantity)
 
-    materials = config.get("materials", {})
-    total_costs = build_total_material_costs(materials=materials, quantity=quantity)
+    total_costs = build_total_material_costs(materials=config["materials"], quantity=quantity)
     material_name_map = _get_item_name_map(set(total_costs.keys()))
 
     with transaction.atomic():
@@ -115,7 +164,7 @@ def start_equipment_forging(
             equipment_name=equipment_name,
             quantity=quantity,
             total_costs=total_costs,
-            base_duration=int(config["base_duration"]),
+            base_duration=config["base_duration"],
             actual_duration=actual_duration,
             current_time=timezone.now(),
         )

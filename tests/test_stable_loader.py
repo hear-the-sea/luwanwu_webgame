@@ -12,8 +12,7 @@ def test_load_stable_production_config_normalizes_yaml_payload(monkeypatch):
                     "grain_cost": "600",
                     "base_duration": "180",
                     "required_horsemanship": "2",
-                },
-                "invalid": {"grain_cost": 1},
+                }
             }
         },
     )
@@ -28,6 +27,31 @@ def test_load_stable_production_config_normalizes_yaml_payload(monkeypatch):
             "required_horsemanship": 2,
         }
     }
+
+
+def test_load_stable_production_config_rejects_invalid_entry(monkeypatch):
+    stable_service.clear_stable_production_cache()
+    monkeypatch.setattr(
+        stable_service,
+        "load_yaml_data",
+        lambda *args, **kwargs: {
+            "production": {
+                "equip_bad_horse": {
+                    "grain_cost": True,
+                    "base_duration": 180,
+                    "required_horsemanship": 2,
+                }
+            }
+        },
+    )
+    stable_service.load_stable_production_config.cache_clear()
+
+    try:
+        with __import__("pytest").raises(AssertionError, match="invalid stable production grain_cost"):
+            stable_service.load_stable_production_config()
+    finally:
+        monkeypatch.undo()
+        stable_service.clear_stable_production_cache()
 
 
 def test_clear_stable_production_cache_refreshes_global_horse_config(monkeypatch):

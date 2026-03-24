@@ -2,11 +2,15 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from gameplay.views.mission_helpers import (
     build_drop_lists,
     build_mission_data,
     build_selection_summary,
     collect_mission_asset_keys,
+    iter_choice_pool_keys,
+    parse_drop_value,
     parse_positive_ids,
 )
 
@@ -77,6 +81,62 @@ def test_collect_mission_asset_keys_includes_choice_pool_entries():
     assert "equip_nichangjian" in drop_keys
 
 
+def test_collect_mission_asset_keys_rejects_invalid_enemy_guest_entry():
+    missions = [
+        SimpleNamespace(
+            enemy_guests=[123],
+            enemy_troops={},
+            drop_table={},
+            probability_drop_table={},
+        )
+    ]
+
+    with pytest.raises(AssertionError, match="invalid mission enemy_guests entry"):
+        collect_mission_asset_keys(missions)
+
+
+def test_collect_mission_asset_keys_rejects_invalid_drop_table_choices():
+    missions = [
+        SimpleNamespace(
+            enemy_guests=[],
+            enemy_troops={},
+            drop_table={"bad_pool": {"choices": "bad"}},
+            probability_drop_table={},
+        )
+    ]
+
+    with pytest.raises(AssertionError, match="invalid mission drop choices"):
+        collect_mission_asset_keys(missions)
+
+
+def test_collect_mission_asset_keys_rejects_invalid_enemy_troops_key():
+    missions = [
+        SimpleNamespace(
+            enemy_guests=[],
+            enemy_troops={"": 1},
+            drop_table={},
+            probability_drop_table={},
+        )
+    ]
+
+    with pytest.raises(AssertionError, match="invalid mission enemy_troops key"):
+        collect_mission_asset_keys(missions)
+
+
+def test_collect_mission_asset_keys_rejects_invalid_probability_drop_table_key():
+    missions = [
+        SimpleNamespace(
+            enemy_guests=[],
+            enemy_troops={},
+            drop_table={},
+            probability_drop_table={1: 1},
+        )
+    ]
+
+    with pytest.raises(AssertionError, match="invalid mission probability_drop_table key"):
+        collect_mission_asset_keys(missions)
+
+
 def test_build_drop_lists_prefers_probability_drop_table_for_choice_pool_display():
     mission = SimpleNamespace(
         drop_table={
@@ -116,3 +176,39 @@ def test_build_drop_lists_prefers_probability_drop_table_for_choice_pool_display
         {"label": "霓裳舞鞋 x1", "rarity": "green"},
         {"label": "霓裳剑 x1", "rarity": "green"},
     ]
+
+
+def test_build_drop_lists_rejects_invalid_drop_table_container():
+    mission = SimpleNamespace(drop_table="bad-drop-table", probability_drop_table={})
+
+    with pytest.raises(AssertionError, match="invalid mission drop_table"):
+        build_drop_lists(mission, {}, {}, {}, {})
+
+
+def test_build_drop_lists_rejects_invalid_probability_drop_table_key():
+    mission = SimpleNamespace(drop_table={}, probability_drop_table={1: 1})
+
+    with pytest.raises(AssertionError, match="invalid mission probability_drop_table key"):
+        build_drop_lists(mission, {}, {}, {}, {})
+
+
+def test_parse_drop_value_rejects_invalid_payload():
+    with pytest.raises(AssertionError, match="invalid mission drop chance"):
+        parse_drop_value({"chance": "bad"})
+
+    with pytest.raises(AssertionError, match="invalid mission drop count"):
+        parse_drop_value({"count": "bad"})
+
+    with pytest.raises(AssertionError, match="invalid mission drop value"):
+        parse_drop_value("bad")
+
+
+def test_iter_choice_pool_keys_rejects_invalid_entries():
+    with pytest.raises(AssertionError, match="invalid mission drop choices"):
+        iter_choice_pool_keys({"choices": "bad"})
+
+    with pytest.raises(AssertionError, match="invalid mission drop choice entry"):
+        iter_choice_pool_keys({"choices": ["ok", 123]})
+
+    with pytest.raises(AssertionError, match="invalid mission drop choice entry"):
+        iter_choice_pool_keys({"choices": ["ok", {"key": " "}]})

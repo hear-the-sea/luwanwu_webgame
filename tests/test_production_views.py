@@ -2,6 +2,8 @@
 生产系统视图测试
 """
 
+from types import SimpleNamespace
+
 import pytest
 from django.contrib.messages import get_messages
 from django.db import DatabaseError
@@ -231,6 +233,17 @@ class TestProductionViews:
         with pytest.raises(ValueError, match="legacy horse blocked"):
             client.post(reverse("gameplay:start_horse_production"), {"horse_key": "any", "quantity": "1"})
 
+    def test_start_horse_production_malformed_result_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.views.production.start_horse_production",
+            lambda *_args, **_kwargs: SimpleNamespace(horse_name="测试马", quantity=1, actual_duration="bad"),
+        )
+
+        with pytest.raises(AssertionError, match="invalid production result actual_duration"):
+            client.post(reverse("gameplay:start_horse_production"), {"horse_key": "any", "quantity": "1"})
+
     def test_start_horse_production_rejects_invalid_quantity(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
         called = {"count": 0}
@@ -306,6 +319,17 @@ class TestProductionViews:
         with pytest.raises(ValueError, match="legacy livestock blocked"):
             client.post(reverse("gameplay:start_livestock_production"), {"livestock_key": "any", "quantity": "1"})
 
+    def test_start_livestock_production_malformed_result_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.services.buildings.ranch.start_livestock_production",
+            lambda *_args, **_kwargs: SimpleNamespace(livestock_name="测试家畜", quantity="bad", actual_duration=60),
+        )
+
+        with pytest.raises(AssertionError, match="invalid production result quantity"):
+            client.post(reverse("gameplay:start_livestock_production"), {"livestock_key": "any", "quantity": "1"})
+
     def test_start_livestock_production_rejects_invalid_quantity(self, manor_with_user, monkeypatch):
         _manor, client = manor_with_user
         called = {"count": 0}
@@ -362,6 +386,17 @@ class TestProductionViews:
         )
 
         with pytest.raises(ValueError, match="legacy smelting blocked"):
+            client.post(reverse("gameplay:start_smelting_production"), {"metal_key": "any", "quantity": "1"})
+
+    def test_start_smelting_production_malformed_result_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+
+        monkeypatch.setattr(
+            "gameplay.services.buildings.smithy.start_smelting_production",
+            lambda *_args, **_kwargs: SimpleNamespace(metal_name=None, quantity=1, actual_duration=60),
+        )
+
+        with pytest.raises(AssertionError, match="invalid smelting production result metal_name"):
             client.post(reverse("gameplay:start_smelting_production"), {"metal_key": "any", "quantity": "1"})
 
     def test_start_smelting_production_rejects_invalid_quantity(self, manor_with_user, monkeypatch):

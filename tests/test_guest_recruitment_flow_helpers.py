@@ -274,6 +274,23 @@ def test_load_candidate_generation_context_uses_injected_loaders_once():
     assert calls == {"by_rarity": 1, "hermit": 1, "excluded": 1}
 
 
+def test_load_candidate_generation_context_rejects_invalid_seed():
+    class _Entries:
+        def select_related(self, *_args, **_kwargs):
+            return []
+
+    with __import__("pytest").raises(AssertionError, match="invalid recruitment seed"):
+        recruitment_candidates.load_candidate_generation_context(
+            manor=SimpleNamespace(tavern_recruitment_bonus=0),
+            pool=SimpleNamespace(draw_count=1, entries=_Entries()),
+            seed="bad-seed",
+            total_draw_count=None,
+            get_recruitable_templates_by_rarity=lambda: {},
+            get_hermit_templates=lambda: [],
+            get_excluded_template_ids=lambda _manor: set(),
+        )
+
+
 def test_get_pool_recruitment_duration_seconds_rejects_non_positive_value():
     pool = SimpleNamespace(cooldown_seconds=0)
 

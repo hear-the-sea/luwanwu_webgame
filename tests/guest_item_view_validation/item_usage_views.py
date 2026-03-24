@@ -106,6 +106,37 @@ def test_use_experience_item_view_rejects_invalid_effect_payload_ajax(game_data,
 
 
 @pytest.mark.django_db
+def test_use_experience_item_view_rejects_boolean_time_effect_payload_ajax(game_data, django_user_model, monkeypatch):
+    manor, guest, client = bootstrap_guest_client(game_data, django_user_model, username="view_exp_item_bool_payload")
+    template = ItemTemplate.objects.create(
+        key=f"view_exp_item_bool_payload_{manor.id}",
+        name="布尔经验配置道具",
+        effect_type=ItemTemplate.EffectType.EXPERIENCE_ITEM,
+        effect_payload={"time": True},
+    )
+    item = InventoryItem.objects.create(manor=manor, template=template, quantity=1)
+    called = {"count": 0}
+
+    def _unexpected_use(*_args, **_kwargs):
+        called["count"] += 1
+        return {}
+
+    monkeypatch.setattr("guests.views.training.use_experience_item_for_guest", _unexpected_use)
+
+    response = client.post(
+        reverse("guests:use_exp_item", args=[guest.pk]),
+        {"item_id": str(item.pk)},
+        HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+    )
+
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["success"] is False
+    assert "道具未配置有效时间" in payload["error"]
+    assert called["count"] == 0
+
+
+@pytest.mark.django_db
 def test_use_experience_item_view_rejects_non_mapping_effect_payload_ajax(game_data, django_user_model, monkeypatch):
     manor, guest, client = bootstrap_guest_client(
         game_data, django_user_model, username="view_exp_item_bad_payload_shape"

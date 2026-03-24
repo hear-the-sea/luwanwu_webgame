@@ -62,3 +62,19 @@ def test_reduce_training_time_rejects_when_no_eligible_guests(game_data, django_
 
     with pytest.raises(GuestTrainingUnavailableError, match="所有门客已达等级上限"):
         reduce_training_time(guest.manor, seconds=10)
+
+
+@pytest.mark.django_db
+def test_reduce_training_time_rejects_non_positive_seconds(game_data, django_user_model):
+    guest = _bootstrap_guest(django_user_model)
+
+    with pytest.raises(AssertionError, match="invalid guest training seconds"):
+        reduce_training_time(guest.manor, seconds=0)
+
+
+@pytest.mark.django_db
+def test_reduce_training_time_for_guest_rejects_non_positive_seconds(game_data, django_user_model):
+    guest = _bootstrap_guest(django_user_model)
+
+    with pytest.raises(AssertionError, match="invalid guest training seconds"):
+        reduce_training_time_for_guest(guest, seconds=0)

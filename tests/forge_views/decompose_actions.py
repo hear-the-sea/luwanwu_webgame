@@ -98,3 +98,21 @@ class TestDecomposeEquipmentView:
                 reverse("gameplay:decompose_equipment"),
                 data={"equipment_key": "equip_dummy", "quantity": "1", "category": "helmet", "mode": "decompose"},
             )
+
+    def test_decompose_equipment_malformed_result_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+        monkeypatch.setattr(
+            "gameplay.services.buildings.forge.decompose_equipment",
+            lambda *_args, **_kwargs: {
+                "equipment_key": "equip_dummy",
+                "equipment_name": "测试装备",
+                "quantity": 1,
+                "rewards": "bad",
+            },
+        )
+
+        with pytest.raises(AssertionError, match="invalid forge decompose result rewards"):
+            client.post(
+                reverse("gameplay:decompose_equipment"),
+                data={"equipment_key": "equip_dummy", "quantity": "1", "category": "helmet", "mode": "decompose"},
+            )

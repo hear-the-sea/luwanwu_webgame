@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import uuid
+from datetime import timedelta
 
 import pytest
 from django.utils import timezone
 
-from core.exceptions import GuestItemConfigurationError, GuestItemOwnershipError, GuestOwnershipError
+from core.exceptions import GuestItemOwnershipError, GuestOwnershipError
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.manor.core import ensure_manor
 from guests.models import RecruitmentPool
@@ -26,7 +27,7 @@ def _bootstrap_training_guest(game_data, django_user_model, *, username: str):
 
     ensure_auto_training(guest)
     guest.refresh_from_db()
-    guest.training_complete_at = timezone.now() + timezone.timedelta(seconds=600)
+    guest.training_complete_at = timezone.now() + timedelta(seconds=600)
     guest.training_target_level = guest.level + 1
     guest.save(update_fields=["training_complete_at", "training_target_level"])
 
@@ -91,7 +92,7 @@ def test_use_experience_item_for_guest_rolls_back_when_consume_fails(monkeypatch
 
 
 @pytest.mark.django_db
-def test_use_experience_item_for_guest_sanitizes_malformed_reduce_result(monkeypatch, game_data, django_user_model):
+def test_use_experience_item_for_guest_rejects_malformed_reduce_result(monkeypatch, game_data, django_user_model):
     manor, guest = _bootstrap_training_guest(game_data, django_user_model, username="exp_item_malformed_result")
     item = _create_experience_item(manor, seconds=120)
 
@@ -100,12 +101,13 @@ def test_use_experience_item_for_guest_sanitizes_malformed_reduce_result(monkeyp
 
     monkeypatch.setattr("guests.services.training.reduce_training_time_for_guest", _malformed_reduce)
 
-    result = use_experience_item_for_guest(manor, guest, item.pk, 120)
+    with pytest.raises(AssertionError, match="invalid guest training reduction result time_reduced"):
+        use_experience_item_for_guest(manor, guest, item.pk, 120)
 
-    assert result["time_reduced"] == 0
-    assert result["applied_levels"] == 0
-    assert result["remaining_item_quantity"] == 0
-    assert InventoryItem.objects.filter(pk=item.pk).exists() is False
+    guest.refresh_from_db()
+    item.refresh_from_db()
+    assert item.quantity == 1
+    assert guest.training_complete_at is not None
 
 
 @pytest.mark.django_db
@@ -121,7 +123,7 @@ def test_use_experience_item_for_guest_rejects_invalid_reduce_seconds(game_data,
     manor, guest = _bootstrap_training_guest(game_data, django_user_model, username="exp_item_invalid_seconds")
     item = _create_experience_item(manor, seconds=120)
 
-    with pytest.raises(GuestItemConfigurationError, match="道具未配置有效时间"):
+    with pytest.raises(AssertionError, match="invalid guest training reduce_seconds"):
         use_experience_item_for_guest(manor, guest, item.pk, 0)
 
 

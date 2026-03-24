@@ -11,6 +11,7 @@ import time
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from threading import Lock
+from typing import Any
 
 from django.conf import settings
 from django.core.cache import cache
@@ -481,6 +482,25 @@ MANOR_NAME_PATTERN = re.compile(r"^[\u4e00-\u9fa5a-zA-Z0-9_]+$")
 BANNED_WORDS = ManorNameConstants.BANNED_WORDS
 
 
+def _normalize_persisted_manor_id(raw_manor_id: object, *, contract_name: str) -> int:
+    if raw_manor_id is None or isinstance(raw_manor_id, bool):
+        raise AssertionError(f"invalid {contract_name}: {raw_manor_id!r}")
+    raw_for_int: Any = raw_manor_id
+    try:
+        manor_id = int(raw_for_int)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid {contract_name}: {raw_manor_id!r}") from exc
+    if manor_id <= 0:
+        raise AssertionError(f"invalid {contract_name}: {raw_manor_id!r}")
+    return manor_id
+
+
+def _normalize_manor_name_input(raw_name: object, *, contract_name: str) -> str:
+    if not isinstance(raw_name, str):
+        raise AssertionError(f"invalid {contract_name}: {raw_name!r}")
+    return raw_name.strip()
+
+
 def validate_manor_name(name: str) -> tuple[bool, str]:
     if not name or not name.strip():
         return False, "名称不能为空"
@@ -502,9 +522,14 @@ def validate_manor_name(name: str) -> tuple[bool, str]:
 
 
 def is_manor_name_available(name: str, exclude_manor_id: int | None = None) -> bool:
-    queryset = Manor.objects.filter(name__iexact=name.strip())
+    normalized_name = _normalize_manor_name_input(name, contract_name="manor name")
+    queryset = Manor.objects.filter(name__iexact=normalized_name)
     if exclude_manor_id:
-        queryset = queryset.exclude(id=exclude_manor_id)
+        normalized_exclude_id = _normalize_persisted_manor_id(
+            exclude_manor_id,
+            contract_name="exclude manor id",
+        )
+        queryset = queryset.exclude(id=normalized_exclude_id)
     return not queryset.exists()
 
 
@@ -512,11 +537,14 @@ def is_manor_name_available(name: str, exclude_manor_id: int | None = None) -> b
 def rename_manor(manor: Manor, new_name: str, consume_item: bool = True) -> None:
     from ...models import InventoryItem, ItemTemplate
 
-    new_name = new_name.strip()
+    manor_id = _normalize_persisted_manor_id(getattr(manor, "pk", None), contract_name="persisted manor")
+    if not isinstance(consume_item, bool):
+        raise AssertionError(f"invalid manor rename consume_item: {consume_item!r}")
+    new_name = _normalize_manor_name_input(new_name, contract_name="manor rename new_name")
     valid, error_msg = validate_manor_name(new_name)
     if not valid:
         raise ManorRenameValidationError(error_msg)
-    if not is_manor_name_available(new_name, exclude_manor_id=manor.id):
+    if not is_manor_name_available(new_name, exclude_manor_id=manor_id):
         raise ManorNameConflictError("该名称已被使用")
 
     if consume_item:
@@ -579,13 +607,14 @@ def rename_manor(manor: Manor, new_name: str, consume_item: bool = True) -> None
 def get_rename_card_count(manor: Manor) -> int:
     from ...models import InventoryItem, ItemTemplate
 
+    manor_id = _normalize_persisted_manor_id(getattr(manor, "pk", None), contract_name="persisted manor")
     try:
         rename_card = ItemTemplate.objects.get(key="manor_rename_card")
     except ItemTemplate.DoesNotExist:
         return 0
 
     item = InventoryItem.objects.filter(
-        manor=manor,
+        manor_id=manor_id,
         template=rename_card,
         storage_location=InventoryItem.StorageLocation.WAREHOUSE,
     ).first()

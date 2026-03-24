@@ -2,27 +2,28 @@ from __future__ import annotations
 
 import random
 
+import pytest
 from django.utils import timezone
 
 from battle.services import _build_defender_guest_and_loadout, _extract_defender_tech_profile
 
 
-def test_extract_defender_tech_profile_tolerates_invalid_technology_config():
-    levels, guest_level, bonuses, skills = _extract_defender_tech_profile({"technology": "bad-config"})
-    assert levels == {}
-    assert guest_level == 50
-    assert bonuses == {}
-    assert skills is None
-
-    levels, guest_level, bonuses, skills = _extract_defender_tech_profile(
-        {"technology": {"guest_level": "bad", "guest_skills": "not-a-list"}}
-    )
-    assert levels == {}
-    assert guest_level == 50
-    assert skills is None
+def test_extract_defender_tech_profile_rejects_invalid_technology_payload():
+    with pytest.raises(AssertionError, match="invalid battle defender technology payload"):
+        _extract_defender_tech_profile({"technology": "bad-config"})
 
 
-def test_build_defender_guest_and_loadout_tolerates_invalid_defender_setup(monkeypatch):
+def test_extract_defender_tech_profile_rejects_invalid_guest_level():
+    with pytest.raises(AssertionError, match="invalid battle defender guest_level"):
+        _extract_defender_tech_profile({"technology": {"guest_level": "bad"}})
+
+
+def test_extract_defender_tech_profile_rejects_invalid_guest_skills():
+    with pytest.raises(AssertionError, match="invalid battle defender guest_skills"):
+        _extract_defender_tech_profile({"technology": {"guest_skills": "not-a-list"}})
+
+
+def test_build_defender_guest_and_loadout_rejects_invalid_defender_setup(monkeypatch):
     monkeypatch.setattr("battle.services.generate_ai_loadout", lambda _rng: {"archer": 1})
     monkeypatch.setattr("battle.services.build_ai_guests", lambda _rng: ["ai-guest"])
     monkeypatch.setattr(
@@ -30,22 +31,21 @@ def test_build_defender_guest_and_loadout_tolerates_invalid_defender_setup(monke
         lambda _guests, **_kwargs: ["combatant"],
     )
 
-    guests, loadout = _build_defender_guest_and_loadout(
-        defender_guests=None,
-        defender_setup="bad-config",
-        defender_limit=3,
-        fill_default_troops=True,
-        rng=random.Random(1),
-        now=timezone.now(),
-        defender_guest_level=50,
-        defender_guest_bonuses={},
-        defender_guest_skills=None,
-    )
-    assert guests == ["combatant"]
-    assert loadout == {"archer": 1}
+    with pytest.raises(AssertionError, match="invalid battle defender setup payload"):
+        _build_defender_guest_and_loadout(
+            defender_guests=None,
+            defender_setup="bad-config",
+            defender_limit=3,
+            fill_default_troops=True,
+            rng=random.Random(1),
+            now=timezone.now(),
+            defender_guest_level=50,
+            defender_guest_bonuses={},
+            defender_guest_skills=None,
+        )
 
 
-def test_build_defender_guest_and_loadout_sanitizes_invalid_nested_fields(monkeypatch):
+def test_build_defender_guest_and_loadout_rejects_invalid_nested_fields(monkeypatch):
     state = {}
 
     monkeypatch.setattr("battle.services.generate_ai_loadout", lambda _rng: {"archer": 1})
@@ -63,18 +63,17 @@ def test_build_defender_guest_and_loadout_sanitizes_invalid_nested_fields(monkey
         lambda loadout, **_kwargs: state.update({"loadout_arg": loadout}) or {"safe": 1},
     )
 
-    guests, loadout = _build_defender_guest_and_loadout(
-        defender_guests=None,
-        defender_setup={"guest_keys": "bad-guests", "troop_loadout": "bad-loadout"},
-        defender_limit=3,
-        fill_default_troops=True,
-        rng=random.Random(1),
-        now=timezone.now(),
-        defender_guest_level=50,
-        defender_guest_bonuses={},
-        defender_guest_skills=None,
-    )
-    assert guests == ["combatant"]
-    assert loadout == {"safe": 1}
-    assert state["keys"] == []
-    assert state["loadout_arg"] is None
+    with pytest.raises(AssertionError, match="invalid battle defender guest_keys payload"):
+        _build_defender_guest_and_loadout(
+            defender_guests=None,
+            defender_setup={"guest_keys": "bad-guests", "troop_loadout": "bad-loadout"},
+            defender_limit=3,
+            fill_default_troops=True,
+            rng=random.Random(1),
+            now=timezone.now(),
+            defender_guest_level=50,
+            defender_guest_bonuses={},
+            defender_guest_skills=None,
+        )
+
+    assert state == {}

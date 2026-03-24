@@ -123,12 +123,14 @@ def _resolve_entry_template(
     if entry.template_id:
         template = entry.template
         if template is None:
-            return None
-        return template if template.recruitable else None
+            raise AssertionError(f"invalid recruitment pool entry template: {entry.template_id!r}")
+        if not template.recruitable:
+            raise AssertionError(f"invalid recruitment pool entry template: {entry.template_id!r}")
+        return template
 
     rarity_value = entry.rarity or rarity_hint
     if not rarity_value:
-        return None
+        raise AssertionError("invalid recruitment pool entry rarity: None")
     archetype_key = entry.archetype or None
     cache_key = (rarity_value, archetype_key)
     if cache_key not in category_cache:
@@ -174,6 +176,9 @@ def choose_template_from_entries(
         )
 
     filtered_entries = [entry for entry in entries if not entry.template_id or entry.template_id not in excluded_ids]
+    for entry in filtered_entries:
+        if not entry.template_id and not getattr(entry, "rarity", None):
+            raise AssertionError("invalid recruitment pool entry rarity: None")
     explicit_template_ids = {entry.template_id for entry in filtered_entries if entry.template_id}
     loaded_templates_by_rarity = (
         templates_by_rarity if templates_by_rarity is not None else _get_recruitable_templates_by_rarity()

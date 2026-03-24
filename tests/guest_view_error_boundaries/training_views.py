@@ -114,6 +114,37 @@ def test_use_medicine_item_view_legacy_value_error_bubbles_up(django_user_model,
 
 
 @pytest.mark.django_db
+def test_use_medicine_item_view_malformed_result_bubbles_up(django_user_model, monkeypatch):
+    client, manor = login_client(django_user_model, prefix="medicine_bad_result")
+    guest = create_guest(manor, prefix="medicine_bad_result")
+    item = create_item(
+        manor,
+        effect_type=ItemTemplate.EffectType.MEDICINE,
+        effect_payload={"hp": 100},
+        prefix="medicine_bad_result",
+    )
+
+    monkeypatch.setattr(
+        "guests.views.items.use_medicine_item_for_guest",
+        lambda *_a, **_k: {
+            "remaining_item_quantity": 0,
+            "healed": "bad",
+            "new_hp": guest.current_hp,
+            "max_hp": guest.max_hp,
+            "status": guest.status,
+            "status_display": guest.get_status_display(),
+        },
+    )
+
+    with pytest.raises(AssertionError, match="invalid medicine item view result healed"):
+        client.post(
+            reverse("guests:use_medicine_item", args=[guest.pk]),
+            {"item_id": str(item.pk)},
+            **ajax_headers(),
+        )
+
+
+@pytest.mark.django_db
 def test_train_view_database_error_degrades_with_message(django_user_model, monkeypatch):
     client, manor = login_client(django_user_model, prefix="train_db")
     guest = create_guest(manor, prefix="train_db")
@@ -248,6 +279,37 @@ def test_use_experience_item_view_runtime_error_bubbles_up(django_user_model, mo
     )
 
     with pytest.raises(RuntimeError, match="boom"):
+        client.post(
+            reverse("guests:use_exp_item", args=[guest.pk]),
+            {"item_id": str(item.pk)},
+            **ajax_headers(),
+        )
+
+
+@pytest.mark.django_db
+def test_use_experience_item_view_malformed_result_bubbles_up(django_user_model, monkeypatch):
+    client, manor = login_client(django_user_model, prefix="exp_bad_result")
+    guest = create_guest(manor, prefix="exp_bad_result")
+    item = create_item(
+        manor,
+        effect_type=ItemTemplate.EffectType.EXPERIENCE_ITEM,
+        effect_payload={"time": 3600},
+        prefix="exp_bad_result",
+    )
+
+    monkeypatch.setattr(
+        "guests.views.training.use_experience_item_for_guest",
+        lambda *_a, **_k: {
+            "remaining_item_quantity": 0,
+            "time_reduced": "bad",
+            "next_eta": None,
+            "new_level": guest.level,
+            "current_hp": guest.current_hp,
+            "max_hp": guest.max_hp,
+        },
+    )
+
+    with pytest.raises(AssertionError, match="invalid experience item view result time_reduced"):
         client.post(
             reverse("guests:use_exp_item", args=[guest.pk]),
             {"item_id": str(item.pk)},

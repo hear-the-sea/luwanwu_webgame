@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from io import StringIO
 
+import pytest
 from django.core.management import call_command
 
 from gameplay.services.runtime_configs import format_runtime_config_summary, reload_runtime_configs
@@ -84,6 +85,102 @@ def test_reload_runtime_configs_updates_arena_module_constants(monkeypatch):
             assert arena_core.ARENA_RECRUITING_LOCK_KEY == "arena:test:refresh"
     finally:
         clear_arena_rules_cache()
+        reload_runtime_configs()
+
+
+def test_reload_runtime_configs_rejects_invalid_arena_override_setting(monkeypatch, settings):
+    import gameplay.services.arena.rules as arena_rules_module
+    from gameplay.services.arena.rules import clear_arena_rules_cache
+
+    settings.ARENA_DAILY_PARTICIPATION_LIMIT = "bad-limit"
+
+    try:
+        clear_arena_rules_cache()
+        with monkeypatch.context() as patcher:
+            patcher.setattr(
+                arena_rules_module,
+                "load_yaml_data",
+                lambda *args, **kwargs: {
+                    "registration": {
+                        "max_guests_per_entry": 7,
+                        "registration_silver_cost": 1234,
+                        "daily_participation_limit": 5,
+                        "tournament_player_limit": 4,
+                    },
+                    "runtime": {
+                        "round_interval_seconds": 300,
+                        "completed_retention_seconds": 120,
+                        "round_retry_seconds": 10,
+                        "recruiting_lock_key": "arena:test:refresh",
+                        "recruiting_lock_timeout": 3,
+                    },
+                    "rewards": {
+                        "base_participation_coins": 99,
+                        "rank_bonus_coins": {1: 500, 2: 250},
+                    },
+                },
+            )
+
+            with pytest.raises(AssertionError, match="invalid arena setting ARENA_DAILY_PARTICIPATION_LIMIT"):
+                reload_runtime_configs()
+    finally:
+        clear_arena_rules_cache()
+        del settings.ARENA_DAILY_PARTICIPATION_LIMIT
+        reload_runtime_configs()
+
+
+def test_reload_runtime_configs_rejects_invalid_stable_production_config(monkeypatch):
+    import gameplay.services.buildings.stable as stable_module
+
+    try:
+        stable_module.clear_stable_production_cache()
+        with monkeypatch.context() as patcher:
+            patcher.setattr(
+                stable_module,
+                "load_yaml_data",
+                lambda *args, **kwargs: {
+                    "production": {
+                        "equip_bad_horse": {
+                            "grain_cost": True,
+                            "base_duration": 180,
+                            "required_horsemanship": 2,
+                        }
+                    }
+                },
+            )
+
+            with pytest.raises(AssertionError, match="invalid stable production grain_cost"):
+                reload_runtime_configs()
+    finally:
+        stable_module.clear_stable_production_cache()
+        reload_runtime_configs()
+
+
+def test_reload_runtime_configs_rejects_invalid_forge_equipment_config(monkeypatch):
+    import gameplay.services.buildings.forge as forge_module
+
+    try:
+        forge_module.clear_forge_equipment_cache()
+        with monkeypatch.context() as patcher:
+            patcher.setattr(
+                forge_module,
+                "load_yaml_data",
+                lambda *args, **kwargs: {
+                    "equipment": {
+                        "equip_bad": {
+                            "category": "helmet",
+                            "materials": {"tong": True},
+                            "base_duration": 120,
+                            "required_forging": 2,
+                        }
+                    }
+                },
+            )
+
+            with pytest.raises(AssertionError, match="invalid forge config equipment.equip_bad.materials.tong"):
+                reload_runtime_configs()
+    finally:
+        forge_module.clear_forge_equipment_cache()
         reload_runtime_configs()
 
 

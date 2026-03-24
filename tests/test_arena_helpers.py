@@ -11,6 +11,7 @@ from gameplay.services.arena.helpers import (
     build_round_pairings,
     calculate_ranked_entries,
     collect_round_outcome_entry_ids,
+    load_positive_int_setting,
     normalize_guest_ids,
     resolve_random_reward_items,
     reward_for_rank,
@@ -35,6 +36,24 @@ def test_normalize_guest_ids_deduplicates_and_validates_limit():
 def test_round_interval_helpers_return_positive_values():
     assert round_interval_seconds(600) >= 1
     assert int(round_interval_delta(90).total_seconds()) == 90
+
+
+def test_load_positive_int_setting_uses_default_when_setting_missing(settings):
+    assert load_positive_int_setting("ARENA_TEST_MISSING_LIMIT", 7, minimum=2) == 7
+
+
+def test_load_positive_int_setting_rejects_invalid_value(settings):
+    settings.ARENA_TEST_BAD_LIMIT = "bad"
+
+    with pytest.raises(AssertionError, match="invalid arena setting ARENA_TEST_BAD_LIMIT"):
+        load_positive_int_setting("ARENA_TEST_BAD_LIMIT", 7, minimum=2)
+
+
+def test_load_positive_int_setting_rejects_value_below_minimum(settings):
+    settings.ARENA_TEST_TOO_SMALL_LIMIT = 1
+
+    with pytest.raises(AssertionError, match="invalid arena setting ARENA_TEST_TOO_SMALL_LIMIT"):
+        load_positive_int_setting("ARENA_TEST_TOO_SMALL_LIMIT", 7, minimum=2)
 
 
 def test_today_bounds_and_local_date_use_same_day():

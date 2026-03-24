@@ -25,6 +25,20 @@ class CandidateGenerationContext(TypedDict):
     excluded_ids: set[int]
 
 
+def _normalize_rng_seed(seed: int | None) -> int | None:
+    if seed is None:
+        return None
+    if isinstance(seed, bool):
+        raise AssertionError(f"invalid recruitment seed: {seed!r}")
+    try:
+        normalized_seed = int(seed)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid recruitment seed: {seed!r}") from exc
+    if normalized_seed <= 0:
+        raise AssertionError(f"invalid recruitment seed: {seed!r}")
+    return normalized_seed
+
+
 def resolve_candidate_draw_count(*, pool: RecruitmentPool, manor: Manor, total_draw_count: int | None) -> int:
     resolved_draw_count = total_draw_count
     if resolved_draw_count is None:
@@ -112,7 +126,7 @@ def load_candidate_generation_context(
 ) -> CandidateGenerationContext:
     return {
         "pool_entries": list(pool.entries.select_related("template")),
-        "rng": random.Random(seed),
+        "rng": random.Random(_normalize_rng_seed(seed)),
         "templates_by_rarity": get_recruitable_templates_by_rarity(),
         "hermit_templates": get_hermit_templates(),
         "resolved_draw_count": resolve_candidate_draw_count(pool=pool, manor=manor, total_draw_count=total_draw_count),

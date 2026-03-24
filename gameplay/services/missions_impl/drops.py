@@ -238,7 +238,10 @@ def award_mission_drops(manor: Manor, drops: Dict[str, int], note: str) -> None:
 
 def resolve_defense_drops_if_missing(report, mission_drop_table: dict) -> dict:
     """Defense missions may generate a report without drops; fill them deterministically."""
-    drops = dict(_require_mapping_payload(getattr(report, "drops", None), field_name="report.drops"))
+    raw_drops = getattr(report, "drops", None)
+    if raw_drops is None:
+        raise AssertionError("invalid mission report.drops: None")
+    drops = dict(_require_mapping_payload(raw_drops, field_name="report.drops"))
     if drops:
         return drops
 

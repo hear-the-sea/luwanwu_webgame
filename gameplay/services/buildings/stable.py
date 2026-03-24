@@ -40,28 +40,43 @@ STABLE_MESSAGE_BEST_EFFORT_EXCEPTIONS: InfrastructureExceptions = combine_infras
 DEFAULT_HORSE_CONFIG: Dict[str, Dict[str, Any]] = {}
 
 
+def _normalize_stable_item_key(raw_key: Any) -> str:
+    if not isinstance(raw_key, str) or not raw_key.strip():
+        raise AssertionError(f"invalid stable production item key: {raw_key!r}")
+    return raw_key.strip()
+
+
+def _normalize_stable_positive_int(raw_value: Any, *, field_name: str) -> int:
+    if raw_value is None or isinstance(raw_value, bool):
+        raise AssertionError(f"invalid stable production {field_name}: {raw_value!r}")
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid stable production {field_name}: {raw_value!r}") from exc
+    if value <= 0:
+        raise AssertionError(f"invalid stable production {field_name}: {raw_value!r}")
+    return value
+
+
 def _normalize_stable_production_config(raw: Any) -> Dict[str, Dict[str, Any]]:
     root = raw
-    if isinstance(raw, dict) and isinstance(raw.get("production"), dict):
+    if isinstance(raw, dict) and "production" in raw:
         root = raw.get("production")
     if not isinstance(root, dict):
-        return dict(DEFAULT_HORSE_CONFIG)
+        raise AssertionError(f"invalid stable production config root: {raw!r}")
 
     config: Dict[str, Dict[str, Any]] = {}
     for raw_key, raw_item in root.items():
-        item_key = str(raw_key).strip()
-        if not item_key or not isinstance(raw_item, dict):
-            continue
-        if (
-            raw_item.get("grain_cost") is None
-            or raw_item.get("base_duration") is None
-            or raw_item.get("required_horsemanship") is None
-        ):
-            continue
+        item_key = _normalize_stable_item_key(raw_key)
+        if not isinstance(raw_item, dict):
+            raise AssertionError(f"invalid stable production item payload: {raw_item!r}")
         config[item_key] = {
-            "grain_cost": max(1, int(raw_item.get("grain_cost") or 1)),
-            "base_duration": max(1, int(raw_item.get("base_duration") or 1)),
-            "required_horsemanship": max(1, int(raw_item.get("required_horsemanship") or 1)),
+            "grain_cost": _normalize_stable_positive_int(raw_item.get("grain_cost"), field_name="grain_cost"),
+            "base_duration": _normalize_stable_positive_int(raw_item.get("base_duration"), field_name="base_duration"),
+            "required_horsemanship": _normalize_stable_positive_int(
+                raw_item.get("required_horsemanship"),
+                field_name="required_horsemanship",
+            ),
         }
     return config
 
@@ -85,6 +100,19 @@ def clear_stable_production_cache() -> None:
 
 
 HORSE_CONFIG: Dict[str, Dict[str, Any]] = load_stable_production_config()
+
+
+def _normalize_stable_runtime_config_entry(raw_config: object, *, contract_name: str) -> Dict[str, int]:
+    if not isinstance(raw_config, dict):
+        raise AssertionError(f"invalid {contract_name}: {raw_config!r}")
+    return {
+        "grain_cost": _normalize_stable_positive_int(raw_config.get("grain_cost"), field_name="grain_cost"),
+        "base_duration": _normalize_stable_positive_int(raw_config.get("base_duration"), field_name="base_duration"),
+        "required_horsemanship": _normalize_stable_positive_int(
+            raw_config.get("required_horsemanship"),
+            field_name="required_horsemanship",
+        ),
+    }
 
 
 def _get_item_name_map(keys: set[str]) -> Dict[str, str]:
@@ -179,9 +207,13 @@ def get_horse_options(manor: Manor) -> List[Dict[str, Any]]:
     horse_name_map = _get_item_name_map(set(HORSE_CONFIG.keys()))
 
     options = []
-    for horse_key, config in HORSE_CONFIG.items():
+    for horse_key, raw_config in HORSE_CONFIG.items():
+        config = _normalize_stable_runtime_config_entry(
+            raw_config,
+            contract_name=f"stable runtime production config {horse_key}",
+        )
         actual_duration = calculate_production_duration(config["base_duration"], manor)
-        required_level = config.get("required_horsemanship", 1)
+        required_level = config["required_horsemanship"]
         is_unlocked = horsemanship_level >= required_level
         horse_name = horse_name_map.get(horse_key, horse_key)
         options.append(
@@ -219,8 +251,11 @@ def start_horse_production(manor: Manor, horse_key: str, quantity: int = 1) -> H
     if horse_key not in HORSE_CONFIG:
         raise ProductionStartError("无效的马匹类型")
 
-    config = HORSE_CONFIG[horse_key]
-    required_level = config.get("required_horsemanship", 1)
+    config = _normalize_stable_runtime_config_entry(
+        HORSE_CONFIG[horse_key],
+        contract_name=f"stable runtime production config {horse_key}",
+    )
+    required_level = config["required_horsemanship"]
     horse_name_map = _get_item_name_map({horse_key})
     horse_name = horse_name_map.get(horse_key, horse_key)
 

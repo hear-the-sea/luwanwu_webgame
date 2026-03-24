@@ -12,6 +12,28 @@ from ..inventory.core import add_item_to_inventory_locked, consume_inventory_ite
 from .forge_decompose_helpers import build_decomposable_equipment_option
 
 
+def _normalize_decompose_reward_mapping(raw_value: object, *, contract_name: str) -> dict[str, int]:
+    if not isinstance(raw_value, dict):
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    normalized: dict[str, int] = {}
+    for reward_key, reward_amount in raw_value.items():
+        if not isinstance(reward_key, str) or not reward_key.strip():
+            raise AssertionError(f"invalid {contract_name} key: {reward_key!r}")
+        if reward_amount is None or isinstance(reward_amount, bool):
+            raise AssertionError(f"invalid {contract_name} amount: {reward_amount!r}")
+        reward_amount_for_int: Any = reward_amount
+        try:
+            parsed_amount = int(reward_amount_for_int)
+        except (TypeError, ValueError) as exc:
+            raise AssertionError(f"invalid {contract_name} amount: {reward_amount!r}") from exc
+        if parsed_amount <= 0:
+            raise AssertionError(f"invalid {contract_name} amount: {reward_amount!r}")
+        normalized[reward_key.strip()] = parsed_amount
+    if not normalized:
+        raise AssertionError(f"invalid {contract_name}: empty rewards")
+    return normalized
+
+
 def collect_recruitment_equipment_keys(*, load_troop_templates: Any) -> set[str]:
     data = load_troop_templates()
     if not isinstance(data, dict):
@@ -134,7 +156,10 @@ def decompose_equipment(
         if template.rarity not in supported_rarities:
             raise ForgeOperationError("仅绿色及以上装备可分解")
 
-        rewards = roll_decompose_rewards(template.rarity, quantity, config)
+        rewards = _normalize_decompose_reward_mapping(
+            roll_decompose_rewards(template.rarity, quantity, config),
+            contract_name="forge decompose rewards",
+        )
         consume_inventory_item_locked(locked_item, quantity)
         for reward_key, reward_amount in rewards.items():
             add_item_to_inventory_locked(locked_manor, reward_key, reward_amount)

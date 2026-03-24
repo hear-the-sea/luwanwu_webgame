@@ -13,12 +13,78 @@ from ..inventory.core import add_item_to_inventory_locked, consume_inventory_ite
 from .forge_helpers import build_blueprint_synthesis_option, build_inventory_quantity_map, collect_recipe_related_keys
 
 
+def _normalize_blueprint_non_empty_string(raw_value: object, *, contract_name: str) -> str:
+    if not isinstance(raw_value, str) or not raw_value.strip():
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    return raw_value.strip()
+
+
+def _normalize_blueprint_positive_int(raw_value: object, *, contract_name: str) -> int:
+    if raw_value is None or isinstance(raw_value, bool):
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    raw_for_int: Any = raw_value
+    try:
+        parsed_value = int(raw_for_int)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}") from exc
+    if parsed_value <= 0:
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    return parsed_value
+
+
+def _normalize_blueprint_cost_mapping(raw_value: object, *, contract_name: str) -> dict[str, int]:
+    if not isinstance(raw_value, dict):
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    normalized: dict[str, int] = {}
+    for item_key, amount in raw_value.items():
+        normalized_key = _normalize_blueprint_non_empty_string(
+            item_key,
+            contract_name=f"{contract_name} key",
+        )
+        normalized[normalized_key] = _normalize_blueprint_positive_int(
+            amount,
+            contract_name=f"{contract_name} amount",
+        )
+    return normalized
+
+
+def _normalize_blueprint_recipe(raw_recipe: object, *, contract_name: str) -> dict[str, Any]:
+    if not isinstance(raw_recipe, dict):
+        raise AssertionError(f"invalid {contract_name}: {raw_recipe!r}")
+    return {
+        **raw_recipe,
+        "blueprint_key": _normalize_blueprint_non_empty_string(
+            raw_recipe.get("blueprint_key"),
+            contract_name=f"{contract_name} blueprint_key",
+        ),
+        "result_item_key": _normalize_blueprint_non_empty_string(
+            raw_recipe.get("result_item_key"),
+            contract_name=f"{contract_name} result_item_key",
+        ),
+        "required_forging": _normalize_blueprint_positive_int(
+            raw_recipe.get("required_forging"),
+            contract_name=f"{contract_name} required_forging",
+        ),
+        "quantity_out": _normalize_blueprint_positive_int(
+            raw_recipe.get("quantity_out"),
+            contract_name=f"{contract_name} quantity_out",
+        ),
+        "costs": _normalize_blueprint_cost_mapping(
+            raw_recipe.get("costs"),
+            contract_name=f"{contract_name} costs",
+        ),
+    }
+
+
 def build_blueprint_recipe_index(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    raw_recipes = config.get("recipes")
+    if not isinstance(raw_recipes, list):
+        raise AssertionError(f"invalid forge blueprint config recipes: {raw_recipes!r}")
     result: dict[str, dict[str, Any]] = {}
-    for recipe in config.get("recipes", []) or []:
-        key = str(recipe.get("blueprint_key") or "").strip()
-        if key:
-            result[key] = recipe
+    for raw_recipe in raw_recipes:
+        recipe = _normalize_blueprint_recipe(raw_recipe, contract_name="forge blueprint recipe")
+        key = recipe["blueprint_key"]
+        result[key] = recipe
     return result
 
 
@@ -27,7 +93,12 @@ def get_blueprint_synthesis_options(
     *,
     config: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    recipes = config.get("recipes", []) or []
+    raw_recipes = config.get("recipes")
+    if not isinstance(raw_recipes, list):
+        raise AssertionError(f"invalid forge blueprint config recipes: {raw_recipes!r}")
+    recipes = [
+        _normalize_blueprint_recipe(raw_recipe, contract_name="forge blueprint recipe") for raw_recipe in raw_recipes
+    ]
     if not recipes:
         return []
 
@@ -70,11 +141,12 @@ def synthesize_equipment_with_blueprint(
     if quantity < 1:
         raise ForgeOperationError("合成数量至少为1")
 
-    recipe = recipe_index.get(blueprint_key)
-    if not recipe:
+    raw_recipe = recipe_index.get(blueprint_key)
+    if not raw_recipe:
         raise ForgeOperationError("无效的图纸")
+    recipe = _normalize_blueprint_recipe(raw_recipe, contract_name="forge blueprint recipe")
 
-    required_forging = int(recipe.get("required_forging", 1))
+    required_forging = recipe["required_forging"]
     forging_level = technology_service.get_player_technology_level(manor, "forging")
     if forging_level < required_forging:
         raise ForgeOperationError(f"需要锻造技{required_forging}级才能合成")
@@ -87,8 +159,8 @@ def synthesize_equipment_with_blueprint(
         raise ForgeOperationError("图纸配置错误：产物必须是装备")
 
     consume_requirements: dict[str, int] = {blueprint_key: quantity}
-    for cost_key, cost_amount in recipe.get("costs", {}).items():
-        total = int(cost_amount) * quantity
+    for cost_key, cost_amount in recipe["costs"].items():
+        total = cost_amount * quantity
         consume_requirements[cost_key] = consume_requirements.get(cost_key, 0) + total
 
     template_names = {
@@ -118,7 +190,7 @@ def synthesize_equipment_with_blueprint(
         for need_key, need_amount in consume_requirements.items():
             consume_inventory_item_locked(locked_items[need_key], need_amount)
 
-        output_quantity = int(recipe.get("quantity_out", 1)) * quantity
+        output_quantity = recipe["quantity_out"] * quantity
         add_item_to_inventory_locked(locked_manor, result_item_key, output_quantity)
 
     return {

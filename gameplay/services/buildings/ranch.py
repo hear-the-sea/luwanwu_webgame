@@ -42,28 +42,43 @@ RANCH_MESSAGE_BEST_EFFORT_EXCEPTIONS: InfrastructureExceptions = combine_infrast
 DEFAULT_LIVESTOCK_CONFIG: Dict[str, Dict[str, Any]] = {}
 
 
+def _normalize_ranch_item_key(raw_key: Any) -> str:
+    if not isinstance(raw_key, str) or not raw_key.strip():
+        raise AssertionError(f"invalid ranch production item key: {raw_key!r}")
+    return raw_key.strip()
+
+
+def _normalize_ranch_positive_int(raw_value: Any, *, field_name: str) -> int:
+    if raw_value is None or isinstance(raw_value, bool):
+        raise AssertionError(f"invalid ranch production {field_name}: {raw_value!r}")
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid ranch production {field_name}: {raw_value!r}") from exc
+    if value <= 0:
+        raise AssertionError(f"invalid ranch production {field_name}: {raw_value!r}")
+    return value
+
+
 def _normalize_ranch_production_config(raw: Any) -> Dict[str, Dict[str, Any]]:
     root = raw
-    if isinstance(raw, dict) and isinstance(raw.get("production"), dict):
+    if isinstance(raw, dict) and "production" in raw:
         root = raw.get("production")
     if not isinstance(root, dict):
-        return dict(DEFAULT_LIVESTOCK_CONFIG)
+        raise AssertionError(f"invalid ranch production config root: {raw!r}")
 
     config: Dict[str, Dict[str, Any]] = {}
     for raw_key, raw_item in root.items():
-        item_key = str(raw_key).strip()
-        if not item_key or not isinstance(raw_item, dict):
-            continue
-        if (
-            raw_item.get("grain_cost") is None
-            or raw_item.get("base_duration") is None
-            or raw_item.get("required_animal_husbandry") is None
-        ):
-            continue
+        item_key = _normalize_ranch_item_key(raw_key)
+        if not isinstance(raw_item, dict):
+            raise AssertionError(f"invalid ranch production item payload: {raw_item!r}")
         config[item_key] = {
-            "grain_cost": max(1, int(raw_item.get("grain_cost") or 1)),
-            "base_duration": max(1, int(raw_item.get("base_duration") or 1)),
-            "required_animal_husbandry": max(1, int(raw_item.get("required_animal_husbandry") or 1)),
+            "grain_cost": _normalize_ranch_positive_int(raw_item.get("grain_cost"), field_name="grain_cost"),
+            "base_duration": _normalize_ranch_positive_int(raw_item.get("base_duration"), field_name="base_duration"),
+            "required_animal_husbandry": _normalize_ranch_positive_int(
+                raw_item.get("required_animal_husbandry"),
+                field_name="required_animal_husbandry",
+            ),
         }
     return config
 
@@ -87,6 +102,19 @@ def clear_ranch_production_cache() -> None:
 
 
 LIVESTOCK_CONFIG: Dict[str, Dict[str, Any]] = load_ranch_production_config()
+
+
+def _normalize_ranch_runtime_config_entry(raw_config: object, *, contract_name: str) -> Dict[str, int]:
+    if not isinstance(raw_config, dict):
+        raise AssertionError(f"invalid {contract_name}: {raw_config!r}")
+    return {
+        "grain_cost": _normalize_ranch_positive_int(raw_config.get("grain_cost"), field_name="grain_cost"),
+        "base_duration": _normalize_ranch_positive_int(raw_config.get("base_duration"), field_name="base_duration"),
+        "required_animal_husbandry": _normalize_ranch_positive_int(
+            raw_config.get("required_animal_husbandry"),
+            field_name="required_animal_husbandry",
+        ),
+    }
 
 
 def _get_item_name_map(keys: set[str]) -> Dict[str, str]:
@@ -180,9 +208,13 @@ def get_livestock_options(manor: Manor) -> List[Dict[str, Any]]:
     livestock_name_map = _get_item_name_map(set(LIVESTOCK_CONFIG.keys()))
 
     options = []
-    for livestock_key, config in LIVESTOCK_CONFIG.items():
+    for livestock_key, raw_config in LIVESTOCK_CONFIG.items():
+        config = _normalize_ranch_runtime_config_entry(
+            raw_config,
+            contract_name=f"ranch runtime production config {livestock_key}",
+        )
         actual_duration = calculate_livestock_duration(config["base_duration"], manor)
-        required_level = config.get("required_animal_husbandry", 1)
+        required_level = config["required_animal_husbandry"]
         is_unlocked = animal_husbandry_level >= required_level
         livestock_name = livestock_name_map.get(livestock_key, livestock_key)
         options.append(
@@ -220,8 +252,11 @@ def start_livestock_production(manor: Manor, livestock_key: str, quantity: int =
     if livestock_key not in LIVESTOCK_CONFIG:
         raise ProductionStartError("无效的家畜类型")
 
-    config = LIVESTOCK_CONFIG[livestock_key]
-    required_level = config.get("required_animal_husbandry", 1)
+    config = _normalize_ranch_runtime_config_entry(
+        LIVESTOCK_CONFIG[livestock_key],
+        contract_name=f"ranch runtime production config {livestock_key}",
+    )
+    required_level = config["required_animal_husbandry"]
     livestock_name_map = _get_item_name_map({livestock_key})
     livestock_name = livestock_name_map.get(livestock_key, livestock_key)
 

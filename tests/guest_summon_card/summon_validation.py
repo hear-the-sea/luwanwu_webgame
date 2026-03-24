@@ -128,6 +128,39 @@ def test_summon_card_non_string_choice_template_key_raises_config_error(django_u
 
 
 @pytest.mark.django_db
+def test_summon_card_invalid_action_type_raises_config_error(django_user_model):
+    user = django_user_model.objects.create_user(username="summon_invalid_action_type", password="pass123")
+    manor = ensure_manor(user)
+    template = make_pubayi_template("pubayi_invalid_action_type", "green")
+
+    card_template = ItemTemplate.objects.create(
+        key="pubayi_guest_card_invalid_action_type",
+        name="坏 action 门客卡",
+        effect_type=ItemTemplate.EffectType.TOOL,
+        is_usable=True,
+        effect_payload={
+            "action": True,
+            "choices": [
+                {"template_key": template.key, "weight": 100},
+            ],
+        },
+    )
+    item = InventoryItem.objects.create(
+        manor=manor,
+        template=card_template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    with pytest.raises(ItemNotConfiguredError, match="action 配置异常"):
+        use_inventory_item(item)
+
+    item.refresh_from_db()
+    assert item.quantity == 1
+    assert manor.guests.count() == 0
+
+
+@pytest.mark.django_db
 def test_summon_card_non_positive_required_items_amount_raises_config_error(monkeypatch, django_user_model):
     user = django_user_model.objects.create_user(username="summon_required_items_zero", password="pass123")
     manor = ensure_manor(user)

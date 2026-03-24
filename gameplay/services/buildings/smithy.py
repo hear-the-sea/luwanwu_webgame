@@ -53,24 +53,46 @@ SMITHY_MESSAGE_BEST_EFFORT_EXCEPTIONS: InfrastructureExceptions = combine_infras
 DEFAULT_SMITHY_PRODUCTION_CONFIG: Dict[str, Dict[str, Any]] = {}
 
 
+def _normalize_smithy_item_key(raw_key: Any) -> str:
+    if not isinstance(raw_key, str) or not raw_key.strip():
+        raise AssertionError(f"invalid smithy production item key: {raw_key!r}")
+    return raw_key.strip()
+
+
+def _normalize_smithy_non_empty_string(raw_value: Any, *, field_name: str) -> str:
+    if not isinstance(raw_value, str) or not raw_value.strip():
+        raise AssertionError(f"invalid smithy production {field_name}: {raw_value!r}")
+    return raw_value.strip()
+
+
+def _normalize_smithy_positive_int(raw_value: Any, *, field_name: str) -> int:
+    if raw_value is None or isinstance(raw_value, bool):
+        raise AssertionError(f"invalid smithy production {field_name}: {raw_value!r}")
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid smithy production {field_name}: {raw_value!r}") from exc
+    if value <= 0:
+        raise AssertionError(f"invalid smithy production {field_name}: {raw_value!r}")
+    return value
+
+
 def _normalize_smithy_production_config(raw: Any) -> Dict[str, Dict[str, Any]]:
     root = raw
-    if isinstance(raw, dict) and isinstance(raw.get("production"), dict):
+    if isinstance(raw, dict) and "production" in raw:
         root = raw.get("production")
     if not isinstance(root, dict):
-        return dict(DEFAULT_SMITHY_PRODUCTION_CONFIG)
+        raise AssertionError(f"invalid smithy production config root: {raw!r}")
 
     config: Dict[str, Dict[str, Any]] = {}
     for raw_key, raw_item in root.items():
-        item_key = str(raw_key).strip()
-        if not item_key or not isinstance(raw_item, dict):
-            continue
-        category = str(raw_item.get("category") or "").strip()
-        cost_type = str(raw_item.get("cost_type") or "").strip()
-        if not category or not cost_type:
-            continue
-        cost_amount = max(1, int(raw_item.get("cost_amount") or 1))
-        base_duration = max(1, int(raw_item.get("base_duration") or 1))
+        item_key = _normalize_smithy_item_key(raw_key)
+        if not isinstance(raw_item, dict):
+            raise AssertionError(f"invalid smithy production item payload: {raw_item!r}")
+        category = _normalize_smithy_non_empty_string(raw_item.get("category"), field_name="category")
+        cost_type = _normalize_smithy_non_empty_string(raw_item.get("cost_type"), field_name="cost_type")
+        cost_amount = _normalize_smithy_positive_int(raw_item.get("cost_amount"), field_name="cost_amount")
+        base_duration = _normalize_smithy_positive_int(raw_item.get("base_duration"), field_name="base_duration")
         normalized = {
             "cost_type": cost_type,
             "cost_amount": cost_amount,
@@ -78,9 +100,15 @@ def _normalize_smithy_production_config(raw: Any) -> Dict[str, Dict[str, Any]]:
             "category": category,
         }
         if raw_item.get("required_smelting") is not None:
-            normalized["required_smelting"] = max(1, int(raw_item.get("required_smelting") or 1))
+            normalized["required_smelting"] = _normalize_smithy_positive_int(
+                raw_item.get("required_smelting"),
+                field_name="required_smelting",
+            )
         if raw_item.get("required_smithy") is not None:
-            normalized["required_smithy"] = max(1, int(raw_item.get("required_smithy") or 1))
+            normalized["required_smithy"] = _normalize_smithy_positive_int(
+                raw_item.get("required_smithy"),
+                field_name="required_smithy",
+            )
         config[item_key] = normalized
     return config
 
@@ -106,6 +134,28 @@ def clear_smithy_production_cache() -> None:
 METAL_CONFIG: Dict[str, Dict[str, Any]] = load_smithy_production_config()
 
 
+def _normalize_smithy_runtime_config_entry(raw_config: object, *, contract_name: str) -> Dict[str, Any]:
+    if not isinstance(raw_config, dict):
+        raise AssertionError(f"invalid {contract_name}: {raw_config!r}")
+    normalized: Dict[str, Any] = {
+        "cost_type": _normalize_smithy_non_empty_string(raw_config.get("cost_type"), field_name="cost_type"),
+        "cost_amount": _normalize_smithy_positive_int(raw_config.get("cost_amount"), field_name="cost_amount"),
+        "base_duration": _normalize_smithy_positive_int(raw_config.get("base_duration"), field_name="base_duration"),
+        "category": _normalize_smithy_non_empty_string(raw_config.get("category"), field_name="category"),
+    }
+    if raw_config.get("required_smithy") is not None:
+        normalized["required_smithy"] = _normalize_smithy_positive_int(
+            raw_config.get("required_smithy"),
+            field_name="required_smithy",
+        )
+    if raw_config.get("required_smelting") is not None:
+        normalized["required_smelting"] = _normalize_smithy_positive_int(
+            raw_config.get("required_smelting"),
+            field_name="required_smelting",
+        )
+    return normalized
+
+
 def _get_item_name_map(keys: set[str]) -> Dict[str, str]:
     if not keys:
         return {}
@@ -116,12 +166,14 @@ def _get_item_name_map(keys: set[str]) -> Dict[str, str]:
 
 def _get_unlock_requirement(config: Dict[str, Any], smelting_level: int, smithy_level: int) -> tuple[bool, int, str]:
     """返回解锁状态、需求等级、需求类型标签。"""
-    required_smithy = int(config.get("required_smithy") or 0)
-    if required_smithy > 0:
+    required_smithy_raw = config.get("required_smithy")
+    required_smithy = required_smithy_raw if isinstance(required_smithy_raw, int) else None
+    if required_smithy is not None and required_smithy > 0:
         return smithy_level >= required_smithy, required_smithy, "冶炼坊"
 
-    required_smelting = int(config.get("required_smelting") or 0)
-    if required_smelting > 0:
+    required_smelting_raw = config.get("required_smelting")
+    required_smelting = required_smelting_raw if isinstance(required_smelting_raw, int) else None
+    if required_smelting is not None and required_smelting > 0:
         return smelting_level >= required_smelting, required_smelting, "冶炼技"
 
     return True, 0, ""
@@ -210,17 +262,24 @@ def get_metal_options(manor: Manor) -> List[Dict[str, Any]]:
     max_quantity = get_max_smelting_quantity(manor)
     is_producing = has_active_smelting_production(manor)
 
-    cost_types = {str(cfg.get("cost_type") or "") for cfg in METAL_CONFIG.values()}
+    normalized_configs = {
+        metal_key: _normalize_smithy_runtime_config_entry(
+            raw_config,
+            contract_name=f"smithy runtime production config {metal_key}",
+        )
+        for metal_key, raw_config in METAL_CONFIG.items()
+    }
+    cost_types = {cfg["cost_type"] for cfg in normalized_configs.values()}
     name_keys = set(METAL_CONFIG.keys()) | {key for key in cost_types if key and key != "silver"}
     item_name_map = _get_item_name_map(name_keys)
 
     options = []
-    for metal_key, config in METAL_CONFIG.items():
+    for metal_key, config in normalized_configs.items():
         actual_duration = calculate_smelting_duration(config["base_duration"], manor)
         is_unlocked, required_level, required_type_label = _get_unlock_requirement(config, smelting_level, smithy_level)
         cost_type = config["cost_type"]
         cost_amount = config["cost_amount"]
-        category = str(config.get("category") or "metal")
+        category = config["category"]
         metal_name = item_name_map.get(metal_key, metal_key)
         cost_type_name = "银两" if cost_type == "silver" else item_name_map.get(cost_type, cost_type)
 
@@ -271,7 +330,10 @@ def start_smelting_production(manor: Manor, metal_key: str, quantity: int = 1) -
     if metal_key not in METAL_CONFIG:
         raise ProductionStartError("无效的制作类型")
 
-    config = METAL_CONFIG[metal_key]
+    config = _normalize_smithy_runtime_config_entry(
+        METAL_CONFIG[metal_key],
+        contract_name=f"smithy runtime production config {metal_key}",
+    )
 
     # 检查解锁条件（冶炼技或冶炼坊等级）
     from ..technology import get_player_technology_level

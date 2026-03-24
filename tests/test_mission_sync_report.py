@@ -243,6 +243,36 @@ def test_generate_sync_battle_report_defense_rejects_bool_enemy_guest_level(monk
         )
 
 
+def test_generate_sync_battle_report_defense_rejects_invalid_defender_troop_loadout(monkeypatch):
+    def _fake_simulate_report(**_kwargs):
+        raise AssertionError("should not simulate when defender troop loadout is broken")
+
+    monkeypatch.setattr("battle.services.simulate_report", _fake_simulate_report)
+    monkeypatch.setattr("battle.combatants_pkg.build_named_ai_guests", lambda *_a, **_k: [])
+
+    mission = SimpleNamespace(
+        is_defense=True,
+        enemy_technology={},
+        enemy_guests=[],
+        enemy_troops={},
+        battle_type="task",
+        name="Defense Mission",
+        drop_table={},
+    )
+    manor = SimpleNamespace(max_squad_size=6)
+
+    with pytest.raises(AssertionError, match="invalid mission troop loadout quantity"):
+        generate_sync_battle_report(
+            manor=manor,
+            mission=mission,
+            guests=[],
+            loadout={"archer": "bad"},
+            defender_setup={},
+            travel_seconds=0,
+            seed=1,
+        )
+
+
 def test_generate_sync_battle_report_defense_rejects_invalid_enemy_guest_skills(monkeypatch):
     def _fake_simulate_report(**_kwargs):
         raise AssertionError("should not simulate when enemy guest skills config is broken")

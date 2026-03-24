@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -14,7 +15,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from core.exceptions import GameError, GuestItemConfigurationError
-from core.utils import is_ajax_request, json_error, json_success, safe_int, safe_positive_int
+from core.utils import is_ajax_request, json_error, json_success, safe_positive_int
 from core.utils.validation import safe_redirect_url, sanitize_error_message
 
 from ..models import Guest
@@ -23,14 +24,49 @@ from ..services.health import use_medicine_item_for_guest
 logger = logging.getLogger(__name__)
 
 
+def _normalize_positive_medicine_int(raw_value: object, *, contract_name: str) -> int:
+    if raw_value is None or isinstance(raw_value, bool):
+        raise GuestItemConfigurationError("道具未配置有效恢复值")
+    raw_for_int: Any = raw_value
+    try:
+        parsed_value = int(raw_for_int)
+    except (TypeError, ValueError) as exc:
+        raise GuestItemConfigurationError("道具未配置有效恢复值") from exc
+    if parsed_value <= 0:
+        raise GuestItemConfigurationError("道具未配置有效恢复值")
+    return parsed_value
+
+
+def _normalize_medicine_view_result(raw_result: object) -> dict[str, object]:
+    if not isinstance(raw_result, dict):
+        raise AssertionError(f"invalid medicine item view result payload: {raw_result!r}")
+    return raw_result
+
+
+def _normalize_medicine_view_result_int(raw_value: object, *, contract_name: str, min_value: int) -> int:
+    if raw_value is None or isinstance(raw_value, bool):
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    raw_for_int: Any = raw_value
+    try:
+        parsed_value = int(raw_for_int)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}") from exc
+    if parsed_value < min_value:
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    return parsed_value
+
+
+def _normalize_medicine_view_result_string(raw_value: object, *, contract_name: str) -> str:
+    if not isinstance(raw_value, str) or not raw_value.strip():
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    return raw_value
+
+
 def _resolve_medicine_heal_amount(item) -> int:
     payload = item.template.effect_payload
     if not isinstance(payload, dict):
         raise GuestItemConfigurationError("道具未配置有效恢复值")
-    heal_amount = safe_int(payload.get("hp"), default=None)
-    if heal_amount is None or heal_amount <= 0:
-        raise GuestItemConfigurationError("道具未配置有效恢复值")
-    return heal_amount
+    return _normalize_positive_medicine_int(payload.get("hp"), contract_name="medicine heal amount")
 
 
 @login_required
@@ -68,9 +104,35 @@ def use_medicine_item_view(request, pk: int):
     )
     try:
         heal_amount = _resolve_medicine_heal_amount(item)
-        result = use_medicine_item_for_guest(manor, guest, item.pk, heal_amount)
-        new_quantity = safe_int(result.get("remaining_item_quantity"), default=0, min_val=0)
-        healed = safe_int(result.get("healed"), default=0, min_val=0)
+        result = _normalize_medicine_view_result(use_medicine_item_for_guest(manor, guest, item.pk, heal_amount))
+        new_quantity = _normalize_medicine_view_result_int(
+            result.get("remaining_item_quantity"),
+            contract_name="medicine item view result remaining_item_quantity",
+            min_value=0,
+        )
+        healed = _normalize_medicine_view_result_int(
+            result.get("healed"),
+            contract_name="medicine item view result healed",
+            min_value=0,
+        )
+        current_hp = _normalize_medicine_view_result_int(
+            result.get("new_hp"),
+            contract_name="medicine item view result new_hp",
+            min_value=0,
+        )
+        max_hp = _normalize_medicine_view_result_int(
+            result.get("max_hp"),
+            contract_name="medicine item view result max_hp",
+            min_value=1,
+        )
+        guest_status = _normalize_medicine_view_result_string(
+            result.get("status"),
+            contract_name="medicine item view result status",
+        )
+        status_display = _normalize_medicine_view_result_string(
+            result.get("status_display"),
+            contract_name="medicine item view result status_display",
+        )
         msg = f"{guest.display_name} 恢复生命 {healed} 点"
         if bool(result.get("injury_cured")):
             msg += "，重伤状态已解除"
@@ -80,10 +142,10 @@ def use_medicine_item_view(request, pk: int):
                 item_id=item.pk,
                 new_quantity=new_quantity,
                 guest_id=guest.pk,
-                current_hp=safe_int(result.get("new_hp"), default=guest.current_hp, min_val=0),
-                max_hp=safe_int(result.get("max_hp"), default=guest.max_hp, min_val=1),
-                guest_status=result.get("status", guest.status),
-                status_display=result.get("status_display", guest.get_status_display()),
+                current_hp=current_hp,
+                max_hp=max_hp,
+                guest_status=guest_status,
+                status_display=status_display,
             )
         messages.success(request, msg)
     except GameError as exc:

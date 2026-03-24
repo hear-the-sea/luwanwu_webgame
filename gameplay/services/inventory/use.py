@@ -80,6 +80,52 @@ def _normalize_non_empty_string_list(raw: Any, *, field_name: str) -> list[str]:
     return normalized
 
 
+def _normalize_non_negative_config_int(raw: Any, *, field_name: str) -> int:
+    if isinstance(raw, bool):
+        raise ItemNotConfiguredError(f"{field_name} 配置异常")
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise ItemNotConfiguredError(f"{field_name} 配置异常") from exc
+    if value < 0:
+        raise ItemNotConfiguredError(f"{field_name} 配置异常")
+    return value
+
+
+def _normalize_optional_tool_action(payload: dict[str, Any]) -> str | None:
+    action = payload.get("action")
+    if action is None:
+        return None
+    return _normalize_non_empty_string(action, field_name="action")
+
+
+def _normalize_resource_reward_mapping(raw: Any, *, field_name: str) -> dict[str, int]:
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ItemNotConfiguredError(f"{field_name} 配置异常")
+    normalized: dict[str, int] = {}
+    for resource_key, raw_amount in raw.items():
+        normalized_key = _normalize_non_empty_string(resource_key, field_name=field_name)
+        normalized[normalized_key] = _normalize_non_negative_config_int(raw_amount, field_name=field_name)
+    return normalized
+
+
+def _normalize_granted_resource_mapping(raw: Any, *, contract_name: str) -> dict[str, int]:
+    if not isinstance(raw, dict):
+        raise AssertionError(f"invalid {contract_name}: {raw!r}")
+    normalized: dict[str, int] = {}
+    for resource_key, raw_amount in raw.items():
+        if not isinstance(resource_key, str) or not resource_key.strip():
+            raise AssertionError(f"invalid {contract_name} resource key: {resource_key!r}")
+        if raw_amount is None or isinstance(raw_amount, bool) or not isinstance(raw_amount, int):
+            raise AssertionError(f"invalid {contract_name} amount: {raw_amount!r}")
+        if raw_amount < 0:
+            raise AssertionError(f"invalid {contract_name} amount: {raw_amount!r}")
+        normalized[resource_key.strip()] = raw_amount
+    return normalized
+
+
 def _collect_weighted_template_choices(choices: list) -> tuple[list[str], list[int]]:
     template_keys: List[str] = []
     weights: List[int] = []
@@ -128,21 +174,22 @@ def _consume_required_items_locked(manor: Manor, payload: dict[str, Any]) -> Non
 
 def _grant_item_resources(manor: Manor, payload: dict[str, int], note: str) -> dict[str, int]:
     if transaction.get_connection().in_atomic_block:
-        credited, _overflow = grant_resources_locked(
+        credited_raw, _overflow = grant_resources_locked(
             manor,
             payload,
             note,
             ResourceEvent.Reason.ITEM_USE,
             sync_production=False,
         )
-        return credited
-    return grant_resources(
+        return _normalize_granted_resource_mapping(credited_raw, contract_name="inventory resource grant result")
+    credited_raw = grant_resources(
         manor,
         payload,
         note,
         ResourceEvent.Reason.ITEM_USE,
         sync_production=False,
     )
+    return _normalize_granted_resource_mapping(credited_raw, contract_name="inventory resource grant result")
 
 
 def _normalize_probability(value: Any, *, field_name: str) -> float:
@@ -171,10 +218,13 @@ def _normalize_probability(value: Any, *, field_name: str) -> float:
 
 def _apply_resource_pack(item: InventoryItem) -> Dict[str, Any]:
     """使用资源包，发放资源奖励。"""
-    payload = _require_effect_payload_dict(item)
-    if not payload:
+    normalized_payload = _normalize_resource_reward_mapping(
+        _require_effect_payload_dict(item),
+        field_name="effect_payload",
+    )
+    if not normalized_payload:
         raise ItemNotConfiguredError()
-    granted_resources = _grant_item_resources(item.manor, payload, item.template.name)
+    granted_resources = _grant_item_resources(item.manor, normalized_payload, item.template.name)
     parts = [f"{key}+{value}" for key, value in granted_resources.items()]
     return {
         **granted_resources,
@@ -187,15 +237,7 @@ def _apply_peace_shield(item: InventoryItem) -> Dict[str, Any]:
     from gameplay.services.raid import activate_peace_shield
 
     payload = _require_effect_payload_dict(item)
-    raw_duration = payload.get("duration")
-    if raw_duration is None or raw_duration == "" or isinstance(raw_duration, bool):
-        raise ItemNotConfiguredError("duration 配置异常")
-    try:
-        duration = int(raw_duration)
-    except (TypeError, ValueError):
-        raise ItemNotConfiguredError("duration 配置异常")
-    if duration <= 0:
-        raise ItemNotConfiguredError("duration 配置异常")
+    duration = _normalize_positive_config_int(payload.get("duration"), field_name="duration")
 
     manor = item.manor
     activate_peace_shield(manor, duration)
@@ -212,13 +254,13 @@ def _apply_guest_summon(item: InventoryItem) -> Dict[str, Any]:
     使用门客召唤卡：按权重随机获得一个门客模板并直接加入聚贤庄。
     """
     payload = _require_effect_payload_dict(item)
-    choices = payload.get("choices") or []
+    choices = payload.get("choices")
     if not isinstance(choices, list):
-        raise ItemNotConfiguredError()
+        raise ItemNotConfiguredError("choices 配置异常")
 
     template_keys, weights = _collect_weighted_template_choices(choices)
     if not template_keys:
-        raise ItemNotConfiguredError()
+        raise ItemNotConfiguredError("choices 配置异常")
 
     chosen_key = _weighted_choose_template_key(template_keys, weights)
 
@@ -263,14 +305,15 @@ def _apply_tool(item: InventoryItem) -> Dict[str, Any]:
     使用道具类物品（统一 effect_type=tool）。
     """
     payload = _require_effect_payload_dict(item)
-    if payload.get("action") == "summon_guest":
+    normalized_action = _normalize_optional_tool_action(payload)
+    if normalized_action == "summon_guest":
         return _apply_guest_summon(item)
-    if payload.get("action") == "rebirth_guest":
+    if normalized_action == "rebirth_guest":
         # 门客重生卡需要选择目标门客，抛出提示让前端引导选择
         raise ItemNotUsableError(item.template.name, message="请选择要重生的门客")
-    if payload.get("action") == "upgrade_guest_rarity":
+    if normalized_action == "upgrade_guest_rarity":
         raise ItemNotUsableError(item.template.name, message="请选择要升阶的门客")
-    if payload.get("action") == "soul_fusion":
+    if normalized_action == "soul_fusion":
         raise ItemNotUsableError(item.template.name, message="请选择要融合的门客")
     key = item.template.key or ""
     if key.startswith("peace_shield_"):
@@ -288,11 +331,7 @@ def _apply_loot_box(item: InventoryItem) -> Dict[str, Any]:
     rewards: List[str] = []
 
     # 1. 固定资源掉落（可选）
-    resources = payload.get("resources")
-    if resources is None:
-        resources = {}
-    if not isinstance(resources, dict):
-        raise ItemNotConfiguredError("resources 配置异常")
+    resources = _normalize_resource_reward_mapping(payload.get("resources"), field_name="resources")
     if resources:
         result = _grant_item_resources(manor, resources, item.template.name)
         parts = [f"{k}+{v}" for k, v in result.items()]
@@ -318,7 +357,7 @@ def _apply_loot_box(item: InventoryItem) -> Dict[str, Any]:
         rolled_silver = inventory_random.randint(silver_min, silver_max)
         if rolled_silver > 0:
             silver_result = _grant_item_resources(manor, {"silver": rolled_silver}, item.template.name)
-            granted_silver = int(silver_result.get("silver", 0) or 0)
+            granted_silver = silver_result.get("silver", 0)
             if granted_silver > 0:
                 rewards.append(f"银两+{granted_silver}")
 

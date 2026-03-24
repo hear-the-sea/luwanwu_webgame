@@ -5,7 +5,8 @@
 from __future__ import annotations
 
 import logging
-from typing import cast
+from datetime import datetime
+from typing import Any, cast
 
 from django import forms
 from django.contrib import messages
@@ -20,7 +21,7 @@ from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
 from core.exceptions import GameError, GuestItemConfigurationError
-from core.utils import is_ajax_request, is_json_request, json_error, json_success, safe_int, safe_positive_int
+from core.utils import is_ajax_request, is_json_request, json_error, json_success, safe_positive_int
 from core.utils.rate_limit import rate_limit_json
 from core.utils.validation import safe_redirect_url, sanitize_error_message
 
@@ -32,14 +33,51 @@ from ..services.training import finalize_guest_training, train_guest, use_experi
 logger = logging.getLogger(__name__)
 
 
+def _parse_positive_item_seconds(raw_value: object) -> int:
+    if raw_value is None or isinstance(raw_value, bool):
+        raise GuestItemConfigurationError("道具未配置有效时间")
+    raw_value_for_int: Any = raw_value
+    try:
+        parsed_seconds = int(raw_value_for_int)
+    except (TypeError, ValueError) as exc:
+        raise GuestItemConfigurationError("道具未配置有效时间") from exc
+    if parsed_seconds <= 0:
+        raise GuestItemConfigurationError("道具未配置有效时间")
+    return parsed_seconds
+
+
 def _resolve_experience_item_seconds(item) -> int:
     payload = item.template.effect_payload
     if not isinstance(payload, dict):
         raise GuestItemConfigurationError("道具未配置有效时间")
-    reduce_seconds = safe_int(payload.get("time"), default=None)
-    if reduce_seconds is None or reduce_seconds <= 0:
-        raise GuestItemConfigurationError("道具未配置有效时间")
-    return reduce_seconds
+    return _parse_positive_item_seconds(payload.get("time"))
+
+
+def _normalize_experience_item_view_result(raw_result: object) -> dict[str, object]:
+    if not isinstance(raw_result, dict):
+        raise AssertionError(f"invalid experience item view result payload: {raw_result!r}")
+    return raw_result
+
+
+def _normalize_experience_item_view_result_int(raw_value: object, *, contract_name: str, min_value: int) -> int:
+    if raw_value is None or isinstance(raw_value, bool):
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    raw_for_int: Any = raw_value
+    try:
+        parsed_value = int(raw_for_int)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}") from exc
+    if parsed_value < min_value:
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    return parsed_value
+
+
+def _normalize_experience_item_view_result_datetime(raw_value: object, *, contract_name: str) -> datetime | None:
+    if raw_value is None:
+        return None
+    if not isinstance(raw_value, datetime):
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    return raw_value
 
 
 @method_decorator(require_POST, name="dispatch")
@@ -118,11 +156,39 @@ def use_experience_item_view(request, pk: int):
     )
     try:
         reduce_seconds = _resolve_experience_item_seconds(item)
-        result = use_experience_item_for_guest(manor, guest, item.pk, reduce_seconds)
-        new_quantity = safe_int(result.get("remaining_item_quantity"), default=0, min_val=0)
-        reduced_seconds = safe_int(result.get("time_reduced"), default=0, min_val=0) or 0
+        result = _normalize_experience_item_view_result(
+            use_experience_item_for_guest(manor, guest, item.pk, reduce_seconds)
+        )
+        new_quantity = _normalize_experience_item_view_result_int(
+            result.get("remaining_item_quantity"),
+            contract_name="experience item view result remaining_item_quantity",
+            min_value=0,
+        )
+        reduced_seconds = _normalize_experience_item_view_result_int(
+            result.get("time_reduced"),
+            contract_name="experience item view result time_reduced",
+            min_value=0,
+        )
         reduced_hours = round(reduced_seconds / 3600, 2)
-        eta = result.get("next_eta")
+        eta = _normalize_experience_item_view_result_datetime(
+            result.get("next_eta"),
+            contract_name="experience item view result next_eta",
+        )
+        new_level = _normalize_experience_item_view_result_int(
+            result.get("new_level"),
+            contract_name="experience item view result new_level",
+            min_value=1,
+        )
+        current_hp = _normalize_experience_item_view_result_int(
+            result.get("current_hp"),
+            contract_name="experience item view result current_hp",
+            min_value=0,
+        )
+        max_hp = _normalize_experience_item_view_result_int(
+            result.get("max_hp"),
+            contract_name="experience item view result max_hp",
+            min_value=1,
+        )
         eta_str = eta.strftime("%H:%M:%S") if eta else "已完成升级"
         msg = f"{item.template.name} 已使用，缩短 {reduced_hours} 小时。预计完成：{eta_str}"
         if is_ajax:
@@ -131,9 +197,9 @@ def use_experience_item_view(request, pk: int):
                 item_id=item.pk,
                 new_quantity=new_quantity,
                 guest_id=guest.pk,
-                new_level=safe_int(result.get("new_level"), default=guest.level, min_val=1),
-                current_hp=safe_int(result.get("current_hp"), default=guest.current_hp, min_val=0),
-                max_hp=safe_int(result.get("max_hp"), default=guest.max_hp, min_val=1),
+                new_level=new_level,
+                current_hp=current_hp,
+                max_hp=max_hp,
                 training_eta=eta.isoformat() if eta else None,
             )
         messages.success(request, msg)

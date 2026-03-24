@@ -11,16 +11,27 @@ from guests.models import Guest
 MAX_GUEST_LOYALTY = 100
 
 
+def _normalize_positive_int(raw: Any, *, field_name: str) -> int:
+    if raw is None or isinstance(raw, bool):
+        raise AssertionError(f"invalid guest loyalty {field_name}: {raw!r}")
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid guest loyalty {field_name}: {raw!r}") from exc
+    if value <= 0:
+        raise AssertionError(f"invalid guest loyalty {field_name}: {raw!r}")
+    return value
+
+
 def extract_guest_ids(guests: Iterable[Any]) -> list[int]:
     normalized: list[int] = []
     seen: set[int] = set()
     for guest in guests:
         guest_id = getattr(guest, "pk", None) or getattr(guest, "id", None)
-        try:
-            parsed_id = int(guest_id)  # type: ignore[arg-type]
-        except (TypeError, ValueError):
+        if guest_id is None:
             continue
-        if parsed_id <= 0 or parsed_id in seen:
+        parsed_id = _normalize_positive_int(guest_id, field_name="guest id")
+        if parsed_id in seen:
             continue
         seen.add(parsed_id)
         normalized.append(parsed_id)
@@ -28,18 +39,13 @@ def extract_guest_ids(guests: Iterable[Any]) -> list[int]:
 
 
 def increase_guest_loyalty_by_ids(guest_ids: Iterable[int], *, amount: int = 1) -> int:
-    normalized_amount = int(amount or 0)
-    if normalized_amount <= 0:
-        return 0
+    normalized_amount = _normalize_positive_int(amount, field_name="amount")
 
     normalized_ids: list[int] = []
     seen: set[int] = set()
     for guest_id in guest_ids:
-        try:
-            parsed_id = int(guest_id)
-        except (TypeError, ValueError):
-            continue
-        if parsed_id <= 0 or parsed_id in seen:
+        parsed_id = _normalize_positive_int(guest_id, field_name="guest id")
+        if parsed_id in seen:
             continue
         seen.add(parsed_id)
         normalized_ids.append(parsed_id)

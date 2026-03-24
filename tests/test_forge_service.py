@@ -198,3 +198,26 @@ def test_finalize_equipment_forging_notification_runtime_marker_error_bubbles_up
 
     production.refresh_from_db()
     assert production.status == EquipmentProduction.Status.COMPLETED
+
+
+@pytest.mark.django_db
+def test_start_equipment_forging_rejects_malformed_runtime_config(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="forge_service_bad_config", password="pass12345")
+    manor = ensure_manor(user)
+
+    monkeypatch.setattr(
+        forge_service,
+        "EQUIPMENT_CONFIG",
+        {
+            "equip_service_bad": {
+                "category": "helmet",
+                "materials": "bad",
+                "base_duration": 120,
+                "required_forging": 1,
+            }
+        },
+    )
+    monkeypatch.setattr("gameplay.services.technology.get_player_technology_level", lambda *_args, **_kwargs: 5)
+
+    with pytest.raises(AssertionError, match="invalid forge runtime equipment config equip_service_bad materials"):
+        forge_service.start_equipment_forging(manor, "equip_service_bad", quantity=1)

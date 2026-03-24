@@ -3,30 +3,39 @@ from __future__ import annotations
 from typing import Any
 
 
-def _normalize_mapping(raw: Any) -> dict[str, Any]:
+def _normalize_optional_mapping(raw: Any, *, contract_name: str) -> dict[str, Any]:
+    if raw is None:
+        return {}
     if isinstance(raw, dict):
         return raw
-    return {}
+    raise AssertionError(f"invalid {contract_name}: {raw!r}")
 
 
 def _normalize_guest_configs(raw: Any) -> list[str | dict[str, Any]]:
-    if not isinstance(raw, (list, tuple, set)):
+    if raw is None:
         return []
+    if not isinstance(raw, (list, tuple, set)):
+        raise AssertionError(f"invalid battle defender guest_keys payload: {raw!r}")
     normalized: list[str | dict[str, Any]] = []
     for entry in raw:
         if isinstance(entry, str):
             key = entry.strip()
-            if key:
-                normalized.append(key)
+            if not key:
+                raise AssertionError(f"invalid battle defender guest_keys entry: {entry!r}")
+            normalized.append(key)
         elif isinstance(entry, dict):
             normalized.append(entry)
+        else:
+            raise AssertionError(f"invalid battle defender guest_keys entry: {entry!r}")
     return normalized
 
 
 def _normalize_troop_loadout_input(raw: Any) -> dict[str, int] | None:
+    if raw is None:
+        return None
     if isinstance(raw, dict):
         return raw
-    return None
+    raise AssertionError(f"invalid battle defender troop_loadout payload: {raw!r}")
 
 
 def build_defender_guest_and_loadout(
@@ -48,7 +57,10 @@ def build_defender_guest_and_loadout(
     normalize_troop_loadout_fn,
     build_ai_guests_fn,
 ):
-    normalized_setup = _normalize_mapping(defender_setup)
+    normalized_setup = _normalize_optional_mapping(
+        defender_setup,
+        contract_name="battle defender setup payload",
+    )
 
     if defender_guests is not None:
         for guest in defender_guests[:defender_limit]:

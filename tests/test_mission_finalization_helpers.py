@@ -66,10 +66,32 @@ def test_extract_report_guest_state_rejects_invalid_losses_container():
         extract_report_guest_state(report, "attacker")
 
 
+def test_extract_report_guest_state_rejects_missing_losses_container():
+    report = SimpleNamespace(
+        losses=None,
+        attacker_team=[],
+        defender_team=[],
+    )
+
+    with pytest.raises(AssertionError, match="invalid mission report.losses"):
+        extract_report_guest_state(report, "attacker")
+
+
 def test_extract_report_guest_state_rejects_invalid_team_entries_container():
     report = SimpleNamespace(
         losses={},
         attacker_team="bad-team",
+        defender_team=[],
+    )
+
+    with pytest.raises(AssertionError, match="invalid mission report.team_entries"):
+        extract_report_guest_state(report, "attacker")
+
+
+def test_extract_report_guest_state_rejects_missing_team_entries_container():
+    report = SimpleNamespace(
+        losses={},
+        attacker_team=None,
         defender_team=[],
     )
 
@@ -128,6 +150,20 @@ def test_return_attacker_troops_after_mission_rejects_invalid_troop_loadout():
 def test_build_mission_drops_with_salvage_rejects_invalid_report_drops():
     locked_run = SimpleNamespace(mission=SimpleNamespace(is_defense=False, drop_table={}), id=12)
     report = SimpleNamespace(drops="bad-drops")
+
+    with pytest.raises(AssertionError, match="invalid mission report.drops"):
+        build_mission_drops_with_salvage(
+            locked_run,
+            report,
+            "attacker",
+            logger=SimpleNamespace(),
+            resolve_defense_drops_if_missing=lambda *_a, **_k: {},
+        )
+
+
+def test_build_mission_drops_with_salvage_rejects_missing_report_drops():
+    locked_run = SimpleNamespace(mission=SimpleNamespace(is_defense=False, drop_table={}), id=13)
+    report = SimpleNamespace(drops=None)
 
     with pytest.raises(AssertionError, match="invalid mission report.drops"):
         build_mission_drops_with_salvage(

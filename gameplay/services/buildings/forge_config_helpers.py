@@ -60,6 +60,36 @@ DEFAULT_FORGE_EQUIPMENT_CONFIG: Dict[str, Dict[str, Any]] = {}
 DEFAULT_FORGE_BLUEPRINT_CONFIG: Dict[str, Any] = {"recipes": []}
 
 
+def _require_non_empty_string(raw: Any, *, field_name: str) -> str:
+    if not isinstance(raw, str) or not raw.strip():
+        raise AssertionError(f"invalid forge config {field_name}: {raw!r}")
+    return raw.strip()
+
+
+def _require_positive_int(raw: Any, *, field_name: str, minimum: int = 1) -> int:
+    if raw is None or isinstance(raw, bool):
+        raise AssertionError(f"invalid forge config {field_name}: {raw!r}")
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid forge config {field_name}: {raw!r}") from exc
+    if value < minimum:
+        raise AssertionError(f"invalid forge config {field_name}: {raw!r}")
+    return value
+
+
+def _require_probability(raw: Any, *, field_name: str) -> float:
+    if raw is None or isinstance(raw, bool):
+        raise AssertionError(f"invalid forge config {field_name}: {raw!r}")
+    try:
+        value = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid forge config {field_name}: {raw!r}") from exc
+    if value < 0 or value > 1:
+        raise AssertionError(f"invalid forge config {field_name}: {raw!r}")
+    return value
+
+
 def _coerce_int(value: Any, default: int) -> int:
     try:
         return int(value)
@@ -160,63 +190,65 @@ def _normalize_decompose_config(raw: Any) -> Dict[str, Any]:
 
 def _normalize_equipment_config(raw: Any) -> Dict[str, Dict[str, Any]]:
     root = raw
-    if isinstance(raw, dict) and isinstance(raw.get("equipment"), dict):
+    if isinstance(raw, dict) and "equipment" in raw:
         root = raw.get("equipment")
     if not isinstance(root, dict):
-        return dict(DEFAULT_FORGE_EQUIPMENT_CONFIG)
+        raise AssertionError(f"invalid forge config equipment root: {raw!r}")
 
     config: Dict[str, Dict[str, Any]] = {}
     for raw_key, raw_item in root.items():
-        item_key = str(raw_key).strip()
-        if not item_key or not isinstance(raw_item, dict):
-            continue
+        item_key = _require_non_empty_string(raw_key, field_name="equipment item key")
+        if not isinstance(raw_item, dict):
+            raise AssertionError(f"invalid forge config equipment item payload: {raw_item!r}")
 
-        category = str(raw_item.get("category") or "").strip()
-        if not category:
-            continue
+        category = _require_non_empty_string(raw_item.get("category"), field_name=f"equipment.{item_key}.category")
 
         materials_raw = raw_item.get("materials")
+        if not isinstance(materials_raw, dict):
+            raise AssertionError(f"invalid forge config equipment.{item_key}.materials: {materials_raw!r}")
         materials: Dict[str, int] = {}
-        if isinstance(materials_raw, dict):
-            for mat_key, mat_amount in materials_raw.items():
-                normalized_mat_key = str(mat_key).strip()
-                if not normalized_mat_key:
-                    continue
-                amount = max(0, _coerce_int(mat_amount, 0))
-                if amount > 0:
-                    materials[normalized_mat_key] = amount
+        for mat_key, mat_amount in materials_raw.items():
+            normalized_mat_key = _require_non_empty_string(
+                mat_key,
+                field_name=f"equipment.{item_key}.materials key",
+            )
+            materials[normalized_mat_key] = _require_positive_int(
+                mat_amount,
+                field_name=f"equipment.{item_key}.materials.{normalized_mat_key}",
+            )
 
         config[item_key] = {
             "category": category,
             "materials": materials,
-            "base_duration": max(1, _coerce_int(raw_item.get("base_duration", 1), 1)),
-            "required_forging": max(1, _coerce_int(raw_item.get("required_forging", 1), 1)),
+            "base_duration": _require_positive_int(
+                raw_item.get("base_duration"),
+                field_name=f"equipment.{item_key}.base_duration",
+            ),
+            "required_forging": _require_positive_int(
+                raw_item.get("required_forging"),
+                field_name=f"equipment.{item_key}.required_forging",
+            ),
         }
     return config
 
 
-def _normalize_blueprint_recipe(raw: Any) -> Dict[str, Any] | None:
+def _normalize_blueprint_recipe(raw: Any) -> Dict[str, Any]:
     if not isinstance(raw, dict):
-        return None
+        raise AssertionError(f"invalid forge config blueprint recipe: {raw!r}")
 
-    blueprint_key = str(raw.get("blueprint_key") or "").strip()
-    result_item_key = str(raw.get("result_item_key") or "").strip()
-    if not blueprint_key or not result_item_key:
-        return None
+    blueprint_key = _require_non_empty_string(raw.get("blueprint_key"), field_name="blueprint.blueprint_key")
+    result_item_key = _require_non_empty_string(raw.get("result_item_key"), field_name="blueprint.result_item_key")
 
-    required_forging = max(0, _coerce_int(raw.get("required_forging", 1), 1))
-    quantity_out = max(1, _coerce_int(raw.get("quantity_out", 1), 1))
+    required_forging = _require_positive_int(raw.get("required_forging"), field_name="blueprint.required_forging")
+    quantity_out = _require_positive_int(raw.get("quantity_out"), field_name="blueprint.quantity_out")
 
     costs_raw = raw.get("costs")
+    if not isinstance(costs_raw, dict):
+        raise AssertionError(f"invalid forge config blueprint.costs: {costs_raw!r}")
     costs: Dict[str, int] = {}
-    if isinstance(costs_raw, dict):
-        for key, value in costs_raw.items():
-            item_key = str(key).strip()
-            if not item_key:
-                continue
-            amount = _coerce_int(value, 0)
-            if amount > 0:
-                costs[item_key] = amount
+    for key, value in costs_raw.items():
+        item_key = _require_non_empty_string(key, field_name="blueprint.costs key")
+        costs[item_key] = _require_positive_int(value, field_name=f"blueprint.costs.{item_key}")
 
     return {
         "blueprint_key": blueprint_key,
@@ -231,16 +263,14 @@ def _normalize_blueprint_recipe(raw: Any) -> Dict[str, Any] | None:
 def _normalize_blueprint_config(raw: Any) -> Dict[str, Any]:
     config: Dict[str, Any] = copy.deepcopy(DEFAULT_FORGE_BLUEPRINT_CONFIG)
     if not isinstance(raw, dict):
-        return config
+        raise AssertionError(f"invalid forge config blueprint root: {raw!r}")
 
     recipes_raw = raw.get("recipes")
     if not isinstance(recipes_raw, list):
-        return config
+        raise AssertionError(f"invalid forge config blueprint recipes: {recipes_raw!r}")
 
     recipes: List[Dict[str, Any]] = []
     for entry in recipes_raw:
-        normalized = _normalize_blueprint_recipe(entry)
-        if normalized:
-            recipes.append(normalized)
+        recipes.append(_normalize_blueprint_recipe(entry))
     config["recipes"] = recipes
     return config

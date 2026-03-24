@@ -102,3 +102,22 @@ class TestSynthesizeBlueprintEquipmentView:
                 reverse("gameplay:synthesize_blueprint_equipment"),
                 data={"blueprint_key": "bp_dummy", "quantity": "1", "category": "helmet", "mode": "synthesize"},
             )
+
+    def test_synthesize_blueprint_equipment_malformed_result_bubbles_up(self, manor_with_user, monkeypatch):
+        _manor, client = manor_with_user
+        monkeypatch.setattr(
+            "gameplay.services.buildings.forge.synthesize_equipment_with_blueprint",
+            lambda *_args, **_kwargs: {
+                "blueprint_key": "bp_dummy",
+                "result_key": "equip_dummy",
+                "result_name": "测试装备",
+                "quantity": "bad",
+                "craft_times": 1,
+            },
+        )
+
+        with pytest.raises(AssertionError, match="invalid forge blueprint result quantity"):
+            client.post(
+                reverse("gameplay:synthesize_blueprint_equipment"),
+                data={"blueprint_key": "bp_dummy", "quantity": "1", "category": "helmet", "mode": "synthesize"},
+            )

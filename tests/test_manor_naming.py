@@ -195,6 +195,33 @@ def test_rename_manor_rejects_invalid_name_with_explicit_error(django_user_model
 
 
 @pytest.mark.django_db
+def test_rename_manor_rejects_non_string_name_input(django_user_model):
+    user = django_user_model.objects.create_user(username="manor_rename_bad_name_type", password="pass12345")
+    manor = ensure_manor(user)
+
+    with pytest.raises(AssertionError, match="invalid manor rename new_name"):
+        rename_manor(manor, True, consume_item=False)  # type: ignore[arg-type]
+
+
+@pytest.mark.django_db
+def test_rename_manor_rejects_non_bool_consume_item_flag(django_user_model):
+    user = django_user_model.objects.create_user(username="manor_rename_bad_consume_flag", password="pass12345")
+    manor = ensure_manor(user)
+
+    with pytest.raises(AssertionError, match="invalid manor rename consume_item"):
+        rename_manor(manor, "Harbor02", consume_item=1)  # type: ignore[arg-type]
+
+
+@pytest.mark.django_db
+def test_rename_manor_rejects_unpersisted_manor():
+    class _UnsavedManor:
+        pk = None
+
+    with pytest.raises(AssertionError, match="invalid persisted manor"):
+        rename_manor(_UnsavedManor(), "Harbor03", consume_item=False)  # type: ignore[arg-type]
+
+
+@pytest.mark.django_db
 def test_rename_manor_rejects_missing_rename_card_with_explicit_error(django_user_model):
     user = django_user_model.objects.create_user(username="manor_rename_missing_card", password="pass12345")
     manor = ensure_manor(user)

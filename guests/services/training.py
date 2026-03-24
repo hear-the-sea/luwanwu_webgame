@@ -14,7 +14,6 @@ from django.utils import timezone
 from common.utils.celery import safe_apply_async
 from core.config import GUEST
 from core.exceptions import (
-    GuestItemConfigurationError,
     GuestItemOwnershipError,
     GuestMaxLevelError,
     GuestNotIdleError,
@@ -23,7 +22,6 @@ from core.exceptions import (
     GuestTrainingUnavailableError,
     InsufficientStockError,
 )
-from core.utils import safe_int
 from core.utils.imports import is_missing_target_import
 from gameplay.services.inventory import core as inventory_core
 from gameplay.services.resources import spend_resources
@@ -45,6 +43,38 @@ class GuestTrainingReductionResult(TypedDict):
     time_reduced: int
     applied_levels: int
     next_eta: datetime | None
+
+
+def _normalize_positive_training_seconds(raw_value: Any, *, contract_name: str) -> int:
+    if raw_value is None or isinstance(raw_value, bool):
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    try:
+        parsed_seconds = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}") from exc
+    if parsed_seconds <= 0:
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    return parsed_seconds
+
+
+def _normalize_non_negative_training_int(raw_value: Any, *, contract_name: str) -> int:
+    if raw_value is None or isinstance(raw_value, bool):
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    try:
+        parsed_value = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}") from exc
+    if parsed_value < 0:
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    return parsed_value
+
+
+def _normalize_training_datetime(raw_value: Any, *, contract_name: str) -> datetime | None:
+    if raw_value is None:
+        return None
+    if not isinstance(raw_value, datetime):
+        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
+    return raw_value
 
 
 def _try_enqueue_complete_guest_training(guest: Guest, *, countdown: int, source: str) -> None:
@@ -198,8 +228,10 @@ def use_experience_item_for_guest(manor: Manor, guest: Guest, item_id: int, redu
     - 任一步失败都会整体回滚，避免“先生效后扣失败”导致状态不一致
     - 锁顺序统一为 Manor -> InventoryItem -> Guest
     """
-    if reduce_seconds <= 0:
-        raise GuestItemConfigurationError("道具未配置有效时间")
+    normalized_reduce_seconds = _normalize_positive_training_seconds(
+        reduce_seconds,
+        contract_name="guest training reduce_seconds",
+    )
 
     from gameplay.models import Manor as ManorModel
 
@@ -212,20 +244,41 @@ def use_experience_item_for_guest(manor: Manor, guest: Guest, item_id: int, redu
     if locked_guest.status != GuestStatus.IDLE:
         raise GuestNotIdleError(locked_guest)
 
-    result = reduce_training_time_for_guest(locked_guest, reduce_seconds)
+    result = reduce_training_time_for_guest(locked_guest, normalized_reduce_seconds)
     inventory_core.consume_inventory_item_locked(locked_item, 1)
 
     remaining_quantity = 0
     if locked_item.pk:
-        remaining_quantity = safe_int(locked_item.quantity, default=0, min_val=0) or 0
+        remaining_quantity = _normalize_non_negative_training_int(
+            locked_item.quantity,
+            contract_name="guest training remaining_item_quantity",
+        )
 
     return {
-        "time_reduced": safe_int(result.get("time_reduced"), default=0, min_val=0) or 0,
-        "applied_levels": safe_int(result.get("applied_levels"), default=0, min_val=0) or 0,
-        "next_eta": locked_guest.training_complete_at,
-        "new_level": safe_int(locked_guest.level, default=1, min_val=1) or 1,
-        "current_hp": safe_int(locked_guest.current_hp, default=0, min_val=0) or 0,
-        "max_hp": safe_int(locked_guest.max_hp, default=1, min_val=1) or 1,
+        "time_reduced": _normalize_non_negative_training_int(
+            result.get("time_reduced"),
+            contract_name="guest training reduction result time_reduced",
+        ),
+        "applied_levels": _normalize_non_negative_training_int(
+            result.get("applied_levels"),
+            contract_name="guest training reduction result applied_levels",
+        ),
+        "next_eta": _normalize_training_datetime(
+            result.get("next_eta"),
+            contract_name="guest training reduction result next_eta",
+        ),
+        "new_level": _normalize_positive_training_seconds(
+            locked_guest.level,
+            contract_name="guest training new_level",
+        ),
+        "current_hp": _normalize_non_negative_training_int(
+            locked_guest.current_hp,
+            contract_name="guest training current_hp",
+        ),
+        "max_hp": _normalize_positive_training_seconds(
+            locked_guest.max_hp,
+            contract_name="guest training max_hp",
+        ),
         "remaining_item_quantity": remaining_quantity,
     }
 
@@ -244,12 +297,14 @@ def reduce_training_time(manor: Manor, seconds: int) -> Dict[str, int]:
     Raises:
         GuestTrainingUnavailableError: 所有门客已达等级上限时抛出
     """
-    if seconds <= 0:
-        return {"time_reduced": 0, "applied_guests": 0}
+    normalized_seconds = _normalize_positive_training_seconds(
+        seconds,
+        contract_name="guest training seconds",
+    )
     total_reduced = 0
     applied = 0
     now = timezone.now()
-    remaining_seconds = int(seconds)
+    remaining_seconds = normalized_seconds
 
     with transaction.atomic():
         candidate_ids = list(
@@ -310,8 +365,10 @@ def reduce_training_time_for_guest(guest: Guest, seconds: int) -> GuestTrainingR
     Raises:
         GuestMaxLevelError: 门客已达等级上限时抛出
     """
-    if seconds <= 0:
-        return {"time_reduced": 0, "applied_levels": 0, "next_eta": guest.training_complete_at}
+    normalized_seconds = _normalize_positive_training_seconds(
+        seconds,
+        contract_name="guest training seconds",
+    )
     if guest.status != GuestStatus.IDLE:
         raise GuestNotIdleError(guest)
     now = timezone.now()
@@ -319,7 +376,7 @@ def reduce_training_time_for_guest(guest: Guest, seconds: int) -> GuestTrainingR
         if guest.level >= MAX_GUEST_LEVEL:
             raise GuestMaxLevelError(guest, max_level=MAX_GUEST_LEVEL)
 
-    remaining_seconds = int(seconds)
+    remaining_seconds = normalized_seconds
     total_reduced = 0
     levels_applied = 0
 
@@ -345,6 +402,7 @@ def train_guest(guest: Guest, levels: int = 1) -> Guest:
     """
     if not getattr(guest, "pk", None):
         raise AssertionError("train_guest requires a persisted guest")
+    normalized_levels = _normalize_positive_training_seconds(levels, contract_name="guest training levels")
 
     with transaction.atomic():
         # 死锁预防：统一锁顺序 Manor -> Guest
@@ -360,10 +418,11 @@ def train_guest(guest: Guest, levels: int = 1) -> Guest:
             raise GuestMaxLevelError(locked_guest, max_level=MAX_GUEST_LEVEL)
         if locked_guest.training_complete_at:
             raise GuestTrainingInProgressError(locked_guest)
-        if locked_guest.level + levels > MAX_GUEST_LEVEL:
-            levels = MAX_GUEST_LEVEL - locked_guest.level
+        levels_to_apply = normalized_levels
+        if locked_guest.level + levels_to_apply > MAX_GUEST_LEVEL:
+            levels_to_apply = MAX_GUEST_LEVEL - locked_guest.level
         manor = locked_guest.manor
-        cost = get_level_up_cost(locked_guest, levels)
+        cost = get_level_up_cost(locked_guest, levels_to_apply)
         from gameplay.models import ResourceEvent
 
         spend_resources(
@@ -372,11 +431,11 @@ def train_guest(guest: Guest, levels: int = 1) -> Guest:
             note=f"培养 {guest.template.name}",
             reason=ResourceEvent.Reason.TRAINING_COST,
         )
-        duration = get_training_duration(locked_guest, levels)
-        locked_guest.training_target_level = locked_guest.level + levels
+        duration = get_training_duration(locked_guest, levels_to_apply)
+        locked_guest.training_target_level = locked_guest.level + levels_to_apply
         locked_guest.training_complete_at = timezone.now() + timedelta(seconds=duration)
         locked_guest.save(update_fields=["training_target_level", "training_complete_at"])
-        TrainingLog.objects.create(manor=manor, guest=locked_guest, delta_level=levels, resource_cost=cost)
+        TrainingLog.objects.create(manor=manor, guest=locked_guest, delta_level=levels_to_apply, resource_cost=cost)
 
     # Celery 不可用时直接完成训练，确保调用方立即看到等级变更（测试/开发环境友好）。
     def enqueue_training() -> None:

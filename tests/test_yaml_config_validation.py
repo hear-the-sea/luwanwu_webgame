@@ -205,11 +205,39 @@ def test_building_templates_loader_sanitizes_invalid_structure(monkeypatch):
     building_base.clear_building_cache()
 
 
-def test_forge_blueprint_config_loader_tolerates_non_mapping_root(monkeypatch):
+def test_forge_blueprint_config_loader_rejects_non_mapping_root(monkeypatch):
     forge_service.clear_forge_blueprint_cache()
     monkeypatch.setattr(forge_service, "load_yaml_data", lambda *args, **kwargs: ["invalid-root"])
 
-    loaded = forge_service.load_forge_blueprint_config()
+    try:
+        with pytest.raises(AssertionError, match="invalid forge config blueprint root"):
+            forge_service.load_forge_blueprint_config()
+    finally:
+        monkeypatch.undo()
+        forge_service.clear_forge_blueprint_cache()
 
-    assert loaded == {"recipes": []}
+
+def test_forge_blueprint_config_loader_rejects_invalid_recipe(monkeypatch):
     forge_service.clear_forge_blueprint_cache()
+    monkeypatch.setattr(
+        forge_service,
+        "load_yaml_data",
+        lambda *args, **kwargs: {
+            "recipes": [
+                {
+                    "blueprint_key": "bp_bad",
+                    "result_item_key": "equip_bad",
+                    "required_forging": 1,
+                    "quantity_out": 1,
+                    "costs": {"tong": True},
+                }
+            ]
+        },
+    )
+
+    try:
+        with pytest.raises(AssertionError, match="invalid forge config blueprint.costs.tong"):
+            forge_service.load_forge_blueprint_config()
+    finally:
+        monkeypatch.undo()
+        forge_service.clear_forge_blueprint_cache()

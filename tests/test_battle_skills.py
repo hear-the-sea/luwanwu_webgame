@@ -176,6 +176,29 @@ def test_troop_unit_hp_falls_back_to_average():
     assert troop_unit_hp(troop) == max(1, int(500 / 50))
 
 
+def test_effective_attack_value_rejects_invalid_current_troop_strength():
+    troop = make_unit(kind="troop", unit_attack=40, troop_strength="bad", initial_troop_strength=120)
+    enemy = make_unit(kind="troop")
+
+    with pytest.raises(AssertionError, match="invalid battle current troop strength"):
+        effective_attack_value(troop, enemy)
+
+
+def test_effective_defense_value_rejects_invalid_unit_defense():
+    troop = make_unit(kind="troop", defense=360, troop_strength=180, initial_troop_strength=180, unit_defense="bad")
+    attacker = make_unit(kind="troop", troop_strength=120, initial_troop_strength=120)
+
+    with pytest.raises(AssertionError, match="invalid battle unit_defense"):
+        effective_defense_value(troop, attacker)
+
+
+def test_troop_unit_hp_rejects_invalid_max_hp():
+    troop = make_unit(kind="troop", unit_hp=None, max_hp="bad", troop_strength=50, initial_troop_strength=50)
+
+    with pytest.raises(AssertionError, match="invalid battle max_hp"):
+        troop_unit_hp(troop)
+
+
 def test_guest_vs_troop_normal_attack_keeps_slaughter_multiplier():
     actor = make_unit(kind="guest", attack=1000, priority=0)
     target = make_unit(kind="troop", side="defender", unit_defense=10, troop_strength=200, unit_hp=10)

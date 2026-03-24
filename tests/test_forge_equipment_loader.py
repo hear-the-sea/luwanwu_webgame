@@ -10,12 +10,9 @@ def test_load_forge_equipment_config_normalizes_yaml_payload(monkeypatch):
             "equipment": {
                 "equip_test": {
                     "category": "helmet",
-                    "materials": {"tong": "3", "": 2, "xi": 0},
+                    "materials": {"tong": "3"},
                     "base_duration": "120",
                     "required_forging": "2",
-                },
-                "invalid_missing_category": {
-                    "materials": {"tong": 1},
                 },
             }
         },
@@ -32,6 +29,34 @@ def test_load_forge_equipment_config_normalizes_yaml_payload(monkeypatch):
             "required_forging": 2,
         }
     }
+
+
+def test_load_forge_equipment_config_rejects_invalid_entry(monkeypatch):
+    forge_service.clear_forge_equipment_cache()
+    monkeypatch.setattr(
+        forge_service,
+        "load_yaml_data",
+        lambda *args, **kwargs: {
+            "equipment": {
+                "equip_bad": {
+                    "category": "helmet",
+                    "materials": {"tong": True},
+                    "base_duration": 120,
+                    "required_forging": 2,
+                }
+            }
+        },
+    )
+    forge_service.load_forge_equipment_config.cache_clear()
+
+    try:
+        with __import__("pytest").raises(
+            AssertionError, match="invalid forge config equipment.equip_bad.materials.tong"
+        ):
+            forge_service.load_forge_equipment_config()
+    finally:
+        monkeypatch.undo()
+        forge_service.clear_forge_equipment_cache()
 
 
 def test_clear_forge_equipment_cache_refreshes_global_equipment_config(monkeypatch):

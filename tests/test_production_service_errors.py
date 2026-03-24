@@ -3,6 +3,9 @@ from __future__ import annotations
 import pytest
 
 from core.exceptions import ProductionStartError
+from gameplay.services.buildings import ranch as ranch_service
+from gameplay.services.buildings import smithy as smithy_service
+from gameplay.services.buildings import stable as stable_service
 from gameplay.services.buildings.ranch import start_livestock_production
 from gameplay.services.buildings.smithy import start_smelting_production
 from gameplay.services.buildings.stable import start_horse_production
@@ -40,3 +43,62 @@ def test_start_smelting_production_rejects_invalid_type_with_explicit_error(djan
 
     with pytest.raises(ProductionStartError, match="无效的制作类型"):
         start_smelting_production(manor, "not_exists", 1)
+
+
+@pytest.mark.django_db
+def test_start_horse_production_rejects_malformed_runtime_config(django_user_model, monkeypatch):
+    manor = _create_manor("production_horse_bad_config", django_user_model)
+    monkeypatch.setattr(
+        stable_service,
+        "HORSE_CONFIG",
+        {
+            "bad_horse": {
+                "grain_cost": 10,
+                "base_duration": 60,
+                "required_horsemanship": "bad",
+            }
+        },
+    )
+
+    with pytest.raises(AssertionError, match="invalid stable production required_horsemanship"):
+        start_horse_production(manor, "bad_horse", 1)
+
+
+@pytest.mark.django_db
+def test_start_livestock_production_rejects_malformed_runtime_config(django_user_model, monkeypatch):
+    manor = _create_manor("production_livestock_bad_config", django_user_model)
+    monkeypatch.setattr(
+        ranch_service,
+        "LIVESTOCK_CONFIG",
+        {
+            "bad_livestock": {
+                "grain_cost": 10,
+                "base_duration": 60,
+                "required_animal_husbandry": "bad",
+            }
+        },
+    )
+
+    with pytest.raises(AssertionError, match="invalid ranch production required_animal_husbandry"):
+        start_livestock_production(manor, "bad_livestock", 1)
+
+
+@pytest.mark.django_db
+def test_start_smelting_production_rejects_malformed_runtime_config(django_user_model, monkeypatch):
+    manor = _create_manor("production_smelting_bad_config", django_user_model)
+    monkeypatch.setattr(
+        smithy_service,
+        "METAL_CONFIG",
+        {
+            "bad_metal": {
+                "cost_type": "silver",
+                "cost_amount": 10,
+                "base_duration": 60,
+                "category": "metal",
+                "required_smelting": "bad",
+            }
+        },
+    )
+
+    with pytest.raises(AssertionError, match="invalid smithy production required_smelting"):
+        start_smelting_production(manor, "bad_metal", 1)

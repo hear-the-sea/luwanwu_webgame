@@ -81,6 +81,63 @@ def test_resource_pack_non_dict_effect_payload_raises_config_error(django_user_m
 
 
 @pytest.mark.django_db
+def test_resource_pack_invalid_resource_amount_raises_config_error(django_user_model):
+    user = django_user_model.objects.create_user(username="resource_pack_invalid_resource_amount", password="pass123")
+    manor = ensure_manor(user)
+
+    template = ItemTemplate.objects.create(
+        key="resource_pack_invalid_resource_amount_test",
+        name="坏数量资源包",
+        effect_type=ItemTemplate.EffectType.RESOURCE_PACK,
+        is_usable=True,
+        effect_payload={"silver": True},
+    )
+    item = InventoryItem.objects.create(
+        manor=manor,
+        template=template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    with pytest.raises(ItemNotConfiguredError, match="effect_payload 配置异常"):
+        use_inventory_item(item)
+
+    item.refresh_from_db()
+    assert item.quantity == 1
+
+
+@pytest.mark.django_db
+def test_resource_pack_malformed_grant_result_raises_assertion_error(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="resource_pack_bad_grant_result", password="pass123")
+    manor = ensure_manor(user)
+
+    template = ItemTemplate.objects.create(
+        key="resource_pack_bad_grant_result_test",
+        name="坏返回资源包",
+        effect_type=ItemTemplate.EffectType.RESOURCE_PACK,
+        is_usable=True,
+        effect_payload={"silver": 100},
+    )
+    item = InventoryItem.objects.create(
+        manor=manor,
+        template=template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    monkeypatch.setattr(
+        "gameplay.services.inventory.use.grant_resources_locked",
+        lambda *_args, **_kwargs: ({"silver": "bad"}, {}),
+    )
+
+    with pytest.raises(AssertionError, match="invalid inventory resource grant result amount"):
+        use_inventory_item(item)
+
+    item.refresh_from_db()
+    assert item.quantity == 1
+
+
+@pytest.mark.django_db
 def test_work_loot_box_grants_random_silver_and_single_gear_drop(monkeypatch, django_user_model):
     user = django_user_model.objects.create_user(username="work_loot_box_logic", password="pass123")
     manor = ensure_manor(user)
@@ -156,6 +213,41 @@ def test_work_loot_box_grants_random_silver_and_single_gear_drop(monkeypatch, dj
     assert len([entry for entry in rewards if entry.startswith("技能书【")]) == 1
     assert payload["skipped_bonus_items"] == []
     assert not InventoryItem.objects.filter(pk=chest.pk).exists()
+
+
+@pytest.mark.django_db
+def test_loot_box_malformed_silver_grant_result_raises_assertion_error(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="loot_box_bad_silver_result", password="pass123")
+    manor = ensure_manor(user)
+
+    template = ItemTemplate.objects.create(
+        key="loot_box_bad_silver_result_test",
+        name="坏银两返回宝箱",
+        effect_type=ItemTemplate.EffectType.LOOT_BOX,
+        is_usable=True,
+        effect_payload={
+            "silver_min": 100,
+            "silver_max": 100,
+        },
+    )
+    item = InventoryItem.objects.create(
+        manor=manor,
+        template=template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    monkeypatch.setattr("gameplay.services.inventory.use.inventory_random.randint", lambda _a, _b: 100)
+    monkeypatch.setattr(
+        "gameplay.services.inventory.use.grant_resources_locked",
+        lambda *_args, **_kwargs: ({"silver": "bad"}, {}),
+    )
+
+    with pytest.raises(AssertionError, match="invalid inventory resource grant result amount"):
+        use_inventory_item(item)
+
+    item.refresh_from_db()
+    assert item.quantity == 1
 
 
 @pytest.mark.django_db
@@ -256,6 +348,34 @@ def test_loot_box_false_resources_payload_raises_config_error(django_user_model)
         is_usable=True,
         effect_payload={
             "resources": False,
+        },
+    )
+    item = InventoryItem.objects.create(
+        manor=manor,
+        template=template,
+        quantity=1,
+        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
+    )
+
+    with pytest.raises(ItemNotConfiguredError, match="resources 配置异常"):
+        use_inventory_item(item)
+
+    item.refresh_from_db()
+    assert item.quantity == 1
+
+
+@pytest.mark.django_db
+def test_loot_box_invalid_resource_amount_raises_config_error(django_user_model):
+    user = django_user_model.objects.create_user(username="loot_box_invalid_resource_amount", password="pass123")
+    manor = ensure_manor(user)
+
+    template = ItemTemplate.objects.create(
+        key="loot_box_invalid_resource_amount_test",
+        name="坏资源数量宝箱",
+        effect_type=ItemTemplate.EffectType.LOOT_BOX,
+        is_usable=True,
+        effect_payload={
+            "resources": {"silver": True},
         },
     )
     item = InventoryItem.objects.create(

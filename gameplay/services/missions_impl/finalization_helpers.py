@@ -74,7 +74,10 @@ def extract_report_guest_state(report: Any, player_side: str) -> Tuple[Dict[int,
     if not report:
         return hp_updates, defeated_guest_ids, participant_ids
 
-    losses = _require_mapping_payload(getattr(report, "losses", None), field_name="report.losses")
+    raw_losses = getattr(report, "losses", None)
+    if raw_losses is None:
+        raise AssertionError("invalid mission report.losses: None")
+    losses = _require_mapping_payload(raw_losses, field_name="report.losses")
     side_losses = _require_mapping_payload(losses.get(player_side), field_name=f"report.losses.{player_side}")
     loss_updates = _require_mapping_payload(side_losses.get("hp_updates"), field_name="report.losses.hp_updates")
     for gid, hp in loss_updates.items():
@@ -90,6 +93,8 @@ def extract_report_guest_state(report: Any, player_side: str) -> Tuple[Dict[int,
         hp_updates[gid_int] = hp_int
 
     team_entries = report.defender_team if player_side == "defender" else report.attacker_team
+    if team_entries is None:
+        raise AssertionError("invalid mission report.team_entries: None")
     for entry in _require_sequence_payload(team_entries, field_name="report.team_entries"):
         if not isinstance(entry, dict):
             raise AssertionError(f"invalid mission report team entry: {entry!r}")
@@ -191,7 +196,10 @@ def build_mission_drops_with_salvage(
     logger: Any,
     resolve_defense_drops_if_missing: Callable[..., Dict[str, int]],
 ) -> Dict[str, int]:
-    drops = dict(_require_mapping_payload(getattr(report, "drops", None), field_name="report.drops"))
+    raw_drops = getattr(report, "drops", None)
+    if raw_drops is None:
+        raise AssertionError("invalid mission report.drops: None")
+    drops = dict(_require_mapping_payload(raw_drops, field_name="report.drops"))
     if locked_run.mission.is_defense and not drops:
         drops = resolve_defense_drops_if_missing(
             report,
