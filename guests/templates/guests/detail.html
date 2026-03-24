@@ -800,7 +800,15 @@
                                 <td>{{ book.inventory.template.name }}</td>
                                 <td>
                                     {% if book.skill %}
-                                        {{ book.skill.name }} — {{ book.skill.description }}
+                                        <div>{{ book.skill.name }} — {{ book.skill.description }}</div>
+                                        {% if book.requirements %}
+                                            <div class="tw-muted">学习要求：{{ book.requirements_text }}</div>
+                                        {% endif %}
+                                        {% if book.already_learned %}
+                                            <div class="tw-muted">当前已掌握该技能</div>
+                                        {% elif book.unmet_requirements %}
+                                            <div class="tw-muted">当前不足：{{ book.unmet_requirements|join:"，" }}</div>
+                                        {% endif %}
                                     {% else %}
                                         {{ book.skill_key|default:"未知技能" }}
                                     {% endif %}
@@ -811,8 +819,16 @@
                                         {% csrf_token %}
                                         <input type="hidden" name="item_id" value="{{ book.inventory.id }}">
                                         <input type="hidden" name="next" value="{% url 'guests:detail' guest.id %}">
-                                        <button type="submit" class="tw-btn-primary" {% if book.inventory.quantity <= 0 %}disabled{% endif %}>
-                                            使用
+                                        <button type="submit" class="tw-btn-primary" {% if book.inventory.quantity <= 0 or not book.can_learn %}disabled{% endif %}>
+                                            {% if not book.skill %}
+                                                无效技能
+                                            {% elif book.already_learned %}
+                                                已掌握
+                                            {% elif book.unmet_requirements %}
+                                                条件不足
+                                            {% else %}
+                                                使用
+                                            {% endif %}
                                         </button>
                                     </form>
                                 </td>

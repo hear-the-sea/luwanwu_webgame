@@ -32,6 +32,12 @@ def test_guest_skills_rejects_probability_out_of_range():
     assert_invalid(result, substring="base_probability")
 
 
+def test_guest_skills_rejects_non_positive_attribute_requirement():
+    data = {"skills": [{"key": "fire_ball", "name": "Fire Ball", "rarity": "green", "required_agility": 0}]}
+    result = validate_guest_skills(data)
+    assert_invalid(result, substring="required_agility")
+
+
 def test_recruitment_rarity_weights_rejects_non_dict_root():
     result = validate_recruitment_rarity_weights("nope")
     assert_invalid(result)

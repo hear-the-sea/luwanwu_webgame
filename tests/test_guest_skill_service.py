@@ -4,7 +4,7 @@ from itertools import count
 
 import pytest
 
-from core.exceptions import GuestNotFoundError, GuestNotIdleError, GuestSkillNotFoundError
+from core.exceptions import GuestNotFoundError, GuestNotIdleError, GuestNotRequirementError, GuestSkillNotFoundError
 from gameplay.models import InventoryItem, ItemTemplate
 from gameplay.services.manor.core import ensure_manor
 from guests.models import Guest, GuestSkill, GuestStatus, GuestTemplate, Skill
@@ -17,18 +17,35 @@ def _unique(prefix: str) -> str:
     return f"{prefix}_{next(_COUNTER)}"
 
 
-def _create_guest(manor) -> Guest:
+def _create_guest(manor, **overrides) -> Guest:
     template = GuestTemplate.objects.create(
         key=_unique("skill_service_guest_tpl"),
         name="技能服务门客",
         rarity="green",
         archetype="military",
     )
-    return Guest.objects.create(manor=manor, template=template, level=10, status=GuestStatus.IDLE)
+    payload = {
+        "manor": manor,
+        "template": template,
+        "level": 10,
+        "force": 100,
+        "intellect": 90,
+        "defense_stat": 80,
+        "agility": 85,
+        "status": GuestStatus.IDLE,
+    }
+    payload.update(overrides)
+    return Guest.objects.create(**payload)
 
 
-def _create_skill_book_item(manor) -> tuple[Skill, InventoryItem]:
-    skill = Skill.objects.create(key=_unique("skill_service_skill"), name="技能服务技能", rarity="green")
+def _create_skill_book_item(manor, **skill_overrides) -> tuple[Skill, InventoryItem]:
+    payload = {
+        "key": _unique("skill_service_skill"),
+        "name": "技能服务技能",
+        "rarity": "green",
+    }
+    payload.update(skill_overrides)
+    skill = Skill.objects.create(**payload)
     template = ItemTemplate.objects.create(
         key=_unique("skill_service_book"),
         name="技能服务技能书",
@@ -68,6 +85,36 @@ def test_learn_guest_skill_rejects_busy_guest_without_consuming_book(django_user
     skill, item = _create_skill_book_item(manor)
 
     with pytest.raises(GuestNotIdleError, match="非空闲状态"):
+        learn_guest_skill(guest, skill, item)
+
+    item.refresh_from_db(fields=["quantity"])
+    assert item.quantity == 2
+    assert not GuestSkill.objects.filter(guest=guest, skill=skill).exists()
+
+
+@pytest.mark.django_db
+def test_learn_guest_skill_rejects_low_level_without_consuming_book(django_user_model):
+    user = django_user_model.objects.create_user(username=_unique("skill_service_level_user"), password="pass123")
+    manor = ensure_manor(user)
+    guest = _create_guest(manor, level=9)
+    skill, item = _create_skill_book_item(manor, required_level=12)
+
+    with pytest.raises(GuestNotRequirementError, match="等级不足"):
+        learn_guest_skill(guest, skill, item)
+
+    item.refresh_from_db(fields=["quantity"])
+    assert item.quantity == 2
+    assert not GuestSkill.objects.filter(guest=guest, skill=skill).exists()
+
+
+@pytest.mark.django_db
+def test_learn_guest_skill_rejects_low_attribute_without_consuming_book(django_user_model):
+    user = django_user_model.objects.create_user(username=_unique("skill_service_attr_user"), password="pass123")
+    manor = ensure_manor(user)
+    guest = _create_guest(manor, agility=84)
+    skill, item = _create_skill_book_item(manor, required_agility=100)
+
+    with pytest.raises(GuestNotRequirementError, match="敏捷不足"):
         learn_guest_skill(guest, skill, item)
 
     item.refresh_from_db(fields=["quantity"])

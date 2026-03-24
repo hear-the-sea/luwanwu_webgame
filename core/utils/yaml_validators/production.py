@@ -167,6 +167,15 @@ def validate_guest_skills(data: dict, *, file: str = "guest_skills.yaml") -> Val
                 required_level, result=result, file=file, path=path, field_name="required_level", allow_zero=False
             )
 
+        for field_name in ("required_force", "required_intellect", "required_defense", "required_agility"):
+            required_value = skill.get(field_name)
+            if required_value is None:
+                continue
+            _check_type(required_value, int, result=result, file=file, path=path, field_name=field_name)
+            _check_positive(
+                required_value, result=result, file=file, path=path, field_name=field_name, allow_zero=False
+            )
+
     return result
 
 

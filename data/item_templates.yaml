@@ -815,6 +815,55 @@ items:
     tradeable: true
     price: 800000
 
+  - key: book_prison_break_blade
+    name: 《破狱狂刀》秘术
+    description: 记载霸烈刀势的绝学秘本，一刀既出如破狱开山。
+    effect_type: skill_book
+    image: skill3.png
+    rarity: purple
+    effect_payload:
+      skill_key: prison_break_blade
+      skill_name: 破狱狂刀
+    tradeable: true
+    price: 700000
+
+  - key: book_city_felling_strike
+    name: 《倾城一击》秘术
+    description: 凝全身劲力于一点的绝世杀招，讲求一击倾城。
+    effect_type: skill_book
+    image: skill3.png
+    rarity: purple
+    effect_payload:
+      skill_key: city_felling_strike
+      skill_name: 倾城一击
+    tradeable: true
+    price: 750000
+
+  # ---------- 敏捷系技能书（蓝色品质）----------
+  - key: book_fatal_chain_sword
+    name: 《夺命连环剑》秘术
+    description: 讲究连绵快剑与身法衔接的敏捷系剑谱。
+    effect_type: skill_book
+    image: skill2.png
+    rarity: blue
+    effect_payload:
+      skill_key: fatal_chain_sword
+      skill_name: 夺命连环剑
+    tradeable: true
+    price: 260000
+
+  - key: book_meteor_pierce_moon
+    name: 《流星贯月》秘术
+    description: 以极致突进穿透敌阵的身法剑术秘籍。
+    effect_type: skill_book
+    image: skill2.png
+    rarity: blue
+    effect_payload:
+      skill_key: meteor_pierce_moon
+      skill_name: 流星贯月
+    tradeable: true
+    price: 240000
+
   # ---------- 文系技能书（绿色品质）----------
   - key: book_ice_curse
     name: 《寒冰咒》秘术
@@ -961,6 +1010,19 @@ items:
       skill_name: 梵天真火
     tradeable: true
     price: 750000
+
+  # ---------- 敏捷系技能书（紫色品质）----------
+  - key: book_hell_instant_formation
+    name: 《瞬狱杀阵》秘术
+    description: 记载高速幻身与连环杀阵的禁招残卷。
+    effect_type: skill_book
+    image: skill3.png
+    rarity: purple
+    effect_payload:
+      skill_key: hell_instant_formation
+      skill_name: 瞬狱杀阵
+    tradeable: true
+    price: 680000
 
   # ══════════════════════════════════════════════════════════════════════════════
   #                         装备类 - 新手套装（一蓑烟雨）

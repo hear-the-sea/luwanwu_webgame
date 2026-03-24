@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import logging
-from typing import List, Tuple
+from typing import Tuple
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -19,7 +19,7 @@ from core.exceptions import GameError, GuestItemConfigurationError, GuestSkillNo
 from core.utils.validation import safe_positive_int, safe_redirect_url, sanitize_error_message
 
 from ..models import Guest, GuestStatus, Skill
-from ..services.skills import forget_guest_skill, learn_guest_skill
+from ..services.skills import collect_unmet_skill_requirements, forget_guest_skill, learn_guest_skill
 
 logger = logging.getLogger(__name__)
 MAX_GUEST_SKILL_SLOTS = int(GUEST.MAX_SKILL_SLOTS)
@@ -59,21 +59,6 @@ def _resolve_skill_from_inventory_item(inventory_item) -> Skill | None:
     return Skill.objects.filter(key=skill_key).first()
 
 
-def _collect_unmet_skill_requirements(guest: Guest, skill: Skill) -> List[str]:
-    unmet: List[str] = []
-    if skill.required_level and guest.level < skill.required_level:
-        unmet.append(f"等级需 ≥ {skill.required_level}")
-    if skill.required_force and guest.force < skill.required_force:
-        unmet.append(f"武力需 ≥ {skill.required_force}")
-    if skill.required_intellect and guest.intellect < skill.required_intellect:
-        unmet.append(f"智力需 ≥ {skill.required_intellect}")
-    if skill.required_defense and guest.defense_stat < skill.required_defense:
-        unmet.append(f"防御需 ≥ {skill.required_defense}")
-    if skill.required_agility and guest.agility < skill.required_agility:
-        unmet.append(f"敏捷需 ≥ {skill.required_agility}")
-    return unmet
-
-
 def _validate_learn_skill_preconditions(guest: Guest, skill: Skill) -> Tuple[str, str] | None:
     if guest.status != GuestStatus.IDLE:
         return "error", f"{guest.display_name} 当前非空闲状态，无法学习技能"
@@ -84,7 +69,7 @@ def _validate_learn_skill_preconditions(guest: Guest, skill: Skill) -> Tuple[str
     if guest.guest_skills.count() >= MAX_GUEST_SKILL_SLOTS:
         return "error", "技能位已满"
 
-    unmet = _collect_unmet_skill_requirements(guest, skill)
+    unmet = collect_unmet_skill_requirements(guest, skill)
     if unmet:
         return "error", f"学习条件不足：{'，'.join(unmet)}"
 

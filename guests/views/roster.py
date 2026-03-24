@@ -24,6 +24,7 @@ from ..forms import AllocateSkillPointsForm
 from ..models import GearItem, GearSlot, GearTemplate, GuestSkill, Skill
 from ..services.recruitment_queries import available_guests
 from ..services.roster import dismiss_guest
+from ..services.skills import collect_skill_requirements, collect_unmet_skill_requirements
 from .read_helpers import get_prepared_guest_detail_for_read, get_prepared_guest_roster_for_read
 
 logger = logging.getLogger(__name__)
@@ -125,7 +126,7 @@ def _build_gear_set_context(gear_items):
     return gear_sets, gear_set_map
 
 
-def _build_skill_books_context(manor, guest_skill_records):
+def _build_skill_books_context(manor, guest, guest_skill_records):
     from gameplay.models import InventoryItem, ItemTemplate
 
     skill_books = []
@@ -143,13 +144,35 @@ def _build_skill_books_context(manor, guest_skill_records):
     )
     skill_key_entries = [(entry, _resolve_skill_book_skill_key(entry)) for entry in skill_book_items]
     skill_keys = {skill_key for _entry, skill_key in skill_key_entries if skill_key}
-    skills = {skill.key: skill for skill in Skill.objects.filter(key__in=skill_keys).only("key", "name", "description")}
+    learned_skill_keys = {record.skill.key for record in guest_skill_records}
+    skills = {
+        skill.key: skill
+        for skill in Skill.objects.filter(key__in=skill_keys).only(
+            "key",
+            "name",
+            "description",
+            "required_level",
+            "required_force",
+            "required_intellect",
+            "required_defense",
+            "required_agility",
+        )
+    }
     for entry, key in skill_key_entries:
+        skill = skills.get(key)
+        requirements = collect_skill_requirements(skill)
+        unmet_requirements = collect_unmet_skill_requirements(guest, skill)
+        already_learned = bool(skill and skill.key in learned_skill_keys)
         skill_books.append(
             {
                 "inventory": entry,
-                "skill": skills.get(key),
+                "skill": skill,
                 "skill_key": key,
+                "requirements": requirements,
+                "requirements_text": "，".join(requirements),
+                "unmet_requirements": unmet_requirements,
+                "already_learned": already_learned,
+                "can_learn": bool(skill) and not already_learned and not unmet_requirements and entry.quantity > 0,
             }
         )
     return skill_books
@@ -268,7 +291,7 @@ class GuestDetailView(LoginRequiredMixin, TemplateView):
                     "skill": record.skill if record else None,
                 }
             )
-        skill_books = _build_skill_books_context(manor, guest_skill_records)
+        skill_books = _build_skill_books_context(manor, guest, guest_skill_records)
         slot_panels = _build_slot_panels(slots, equipped, slot_capacity)
         context.update(
             {

@@ -57,6 +57,20 @@ items:
     min_increment: 1
     enabled: true
 
+  - item_key: book_prison_break_blade
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 7
+    min_increment: 1
+    enabled: true
+
+  - item_key: book_city_felling_strike
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 7
+    min_increment: 1
+    enabled: true
+
   - item_key: book_thunder_nine_heavens
     slots: 1
     quantity_per_slot: 1
@@ -72,6 +86,13 @@ items:
     enabled: true
 
   - item_key: book_brahma_true_fire
+    slots: 1
+    quantity_per_slot: 1
+    starting_price: 7
+    min_increment: 1
+    enabled: true
+
+  - item_key: book_hell_instant_formation
     slots: 1
     quantity_per_slot: 1
     starting_price: 7

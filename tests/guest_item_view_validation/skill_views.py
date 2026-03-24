@@ -69,6 +69,37 @@ def test_learn_skill_view_rejects_non_string_skill_key_redirect(game_data, djang
 
 
 @pytest.mark.django_db
+def test_learn_skill_view_rejects_unmet_requirements_redirect(game_data, django_user_model):
+    manor, guest, client = bootstrap_guest_client(
+        game_data, django_user_model, username="view_learn_skill_requirements"
+    )
+    skill = Skill.objects.create(
+        key=f"view_learn_skill_requirements_{manor.id}",
+        name="门槛技能",
+        required_level=guest.level + 5,
+        required_agility=guest.agility + 20,
+    )
+    template = ItemTemplate.objects.create(
+        key=f"view_learn_skill_requirements_book_{manor.id}",
+        name="高门槛技能书",
+        effect_type=ItemTemplate.EffectType.SKILL_BOOK,
+        effect_payload={"skill_key": skill.key},
+    )
+    item = InventoryItem.objects.create(manor=manor, template=template, quantity=1)
+
+    response = client.post(
+        reverse("guests:learn_skill", args=[guest.pk]),
+        {"item_id": str(item.pk)},
+    )
+
+    assert response.status_code == 302
+    messages = [str(m) for m in get_messages(response.wsgi_request)]
+    assert any("学习条件不足" in m for m in messages)
+    assert any("等级需 ≥" in m for m in messages)
+    assert any("敏捷需 ≥" in m for m in messages)
+
+
+@pytest.mark.django_db
 def test_forget_skill_view_rejects_invalid_guest_skill_id_redirect(game_data, django_user_model):
     _manor, guest, client = bootstrap_guest_client(game_data, django_user_model, username="view_forget_skill_invalid")
 

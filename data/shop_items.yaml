@@ -179,6 +179,12 @@ items:
   - item_key: book_stratagem_burst
     stock: 1
     daily_refresh: false
+  - item_key: book_prison_break_blade
+    stock: 1
+    daily_refresh: false
+  - item_key: book_city_felling_strike
+    stock: 1
+    daily_refresh: false
   - item_key: book_ice_curse
     stock: 1
     daily_refresh: false
@@ -203,6 +209,12 @@ items:
   - item_key: book_red_lotus_dance
     stock: 1
     daily_refresh: false
+  - item_key: book_fatal_chain_sword
+    stock: 1
+    daily_refresh: false
+  - item_key: book_meteor_pierce_moon
+    stock: 1
+    daily_refresh: false
   - item_key: book_thunder_nine_heavens
     stock: 1
     daily_refresh: false
@@ -213,6 +225,9 @@ items:
     stock: 1
     daily_refresh: false
   - item_key: book_brahma_true_fire
+    stock: 1
+    daily_refresh: false
+  - item_key: book_hell_instant_formation
     stock: 1
     daily_refresh: false
   - item_key: equip_caomao
