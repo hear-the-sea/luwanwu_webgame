@@ -52,7 +52,7 @@ def create_guest(manor, *, prefix: str = "guest") -> Guest:
         archetype="military",
         rarity="green",
     )
-    guest = Guest.objects.create(
+    return Guest.objects.create(
         manor=manor,
         template=template,
         custom_name=f"{prefix}门客",
@@ -61,12 +61,8 @@ def create_guest(manor, *, prefix: str = "guest") -> Guest:
         intellect=90,
         defense_stat=100,
         agility=95,
-        current_hp=1,
         attribute_points=5,
     )
-    guest.current_hp = guest.max_hp
-    guest.save(update_fields=["current_hp"])
-    return guest
 
 
 def create_gear(manor, *, guest=None, slot: str = GearSlot.WEAPON) -> GearItem:

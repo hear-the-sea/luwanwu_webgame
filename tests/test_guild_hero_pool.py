@@ -46,7 +46,6 @@ def _create_guest(
         defense_stat=100,
         agility=90,
         luck=60,
-        current_hp=1,
         status=status,
     )
 

@@ -37,7 +37,6 @@ def _create_guest(manor, *, prefix: str) -> Guest:
         intellect=80,
         defense_stat=90,
         agility=85,
-        current_hp=1,
     )
 
 

@@ -24,7 +24,7 @@ def create_guest_template(key: str) -> GuestTemplate:
 
 
 def create_guest(manor: Manor, template: GuestTemplate, suffix: str) -> Guest:
-    guest = Guest.objects.create(
+    return Guest.objects.create(
         manor=manor,
         template=template,
         custom_name=f"门客{suffix}",
@@ -33,11 +33,7 @@ def create_guest(manor: Manor, template: GuestTemplate, suffix: str) -> Guest:
         intellect=120,
         defense_stat=150,
         agility=130,
-        current_hp=1,
     )
-    guest.current_hp = guest.max_hp
-    guest.save(update_fields=["current_hp"])
-    return guest
 
 
 def fund_manor(manor: Manor, silver: int = 100000) -> None:

@@ -33,7 +33,6 @@ def test_train_guest_double_call_spends_once():
         intellect=80,
         defense_stat=80,
         agility=80,
-        current_hp=500,
     )
 
     manor.refresh_from_db()
@@ -85,7 +84,6 @@ def test_finalize_guest_training_is_idempotent():
         intellect=80,
         defense_stat=80,
         agility=80,
-        current_hp=500,
     )
 
     now = timezone.now()
@@ -127,7 +125,6 @@ def test_train_guest_rejects_unsaved_guest():
         intellect=80,
         defense_stat=80,
         agility=80,
-        current_hp=500,
     )
 
     with pytest.raises(AssertionError, match="requires a persisted guest"):

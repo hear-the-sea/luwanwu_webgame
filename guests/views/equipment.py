@@ -5,12 +5,13 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.db import DatabaseError
-from django.http import JsonResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.views.decorators.http import require_GET, require_POST
 
@@ -28,7 +29,7 @@ from ..templatetags.guest_extras import gear_summary, rarity_class, rarity_label
 logger = logging.getLogger(__name__)
 
 
-def _safe_cache_get(key: str):
+def _safe_cache_get(key: str) -> Any:
     try:
         return cache.get(key)
     except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
@@ -36,7 +37,7 @@ def _safe_cache_get(key: str):
         return None
 
 
-def _safe_cache_set(key: str, value, timeout: int) -> None:
+def _safe_cache_set(key: str, value: object, timeout: int) -> None:
     try:
         cache.set(key, value, timeout=timeout)
     except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
@@ -66,7 +67,7 @@ def _best_effort_clear_gear_options_cache(manor_id: int, *, slots: set[str] | No
 @login_required
 @require_POST
 @rate_limit_redirect("equip", limit=15, window_seconds=60)
-def equip_view(request):
+def equip_view(request: HttpRequest) -> HttpResponse:
     """
     装备视图
 
@@ -122,7 +123,7 @@ def equip_view(request):
 @login_required
 @require_POST
 @rate_limit_redirect("unequip", limit=20, window_seconds=60)
-def unequip_view(request):
+def unequip_view(request: HttpRequest) -> HttpResponse:
     """
     卸下装备视图
 

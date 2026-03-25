@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from django.apps import apps
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandParser
 from django.db import connection
+from django.db.models import Model
 
 from core.utils.infrastructure import DATABASE_INFRASTRUCTURE_EXCEPTIONS
 
@@ -15,7 +17,7 @@ class TableIssue:
     message: str
 
 
-def _expected_columns_for_model(model) -> set[str]:
+def _expected_columns_for_model(model: type[Model]) -> set[str]:
     return {field.column for field in model._meta.concrete_fields if field.column}
 
 
@@ -31,14 +33,14 @@ def _actual_columns_for_table(table: str) -> set[str] | None:
 class Command(BaseCommand):
     help = "Checks guild-related DB tables for missing columns (useful for diagnosing 1054 Unknown column errors)."
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(
             "--app",
             default="guilds",
             help="App label to check (default: guilds).",
         )
 
-    def handle(self, *args, **options):
+    def handle(self, *args: object, **options: Any) -> None:
         app_label: str = options["app"]
         app_config = apps.get_app_config(app_label)
 

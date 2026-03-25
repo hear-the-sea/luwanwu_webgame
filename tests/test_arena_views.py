@@ -26,7 +26,7 @@ def _build_guest_template(key: str) -> GuestTemplate:
 
 
 def _build_guest(manor, template, suffix: str) -> Guest:
-    guest = Guest.objects.create(
+    return Guest.objects.create(
         manor=manor,
         template=template,
         custom_name=f"竞技{suffix}",
@@ -35,11 +35,7 @@ def _build_guest(manor, template, suffix: str) -> Guest:
         intellect=110,
         defense_stat=120,
         agility=120,
-        current_hp=1,
     )
-    guest.current_hp = guest.max_hp
-    guest.save(update_fields=["current_hp"])
-    return guest
 
 
 def _ensure_gladiator_item_templates() -> None:

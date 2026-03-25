@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
 from django.core.management import call_command
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand, CommandError, CommandParser
 
 StepFunc = Callable[[], object]
 
@@ -11,7 +12,7 @@ StepFunc = Callable[[], object]
 class Command(BaseCommand):
     help = "一键加载核心游戏数据（建筑/科技/物品/兵种/门客/任务/打工）并刷新运行期配置。"
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(
             "--skip-images",
             action="store_true",
@@ -47,7 +48,7 @@ class Command(BaseCommand):
         summary = reload_runtime_configs()
         self.stdout.write(self.style.SUCCESS(f"[OK] 运行期配置已刷新: {format_runtime_config_summary(summary)}"))
 
-    def handle(self, *args, **options):
+    def handle(self, *args: object, **options: Any) -> None:
         skip_images = bool(options.get("skip_images"))
         skip_config_reload = bool(options.get("skip_config_reload"))
         continue_on_error = bool(options.get("continue_on_error"))

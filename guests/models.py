@@ -282,6 +282,14 @@ class Guest(models.Model):
     def troop_capacity(self) -> int:
         return _guest_rules.compute_guest_troop_capacity(self)
 
+    def _initialize_current_hp_if_missing(self) -> None:
+        if self._state.adding and int(getattr(self, "current_hp", 0) or 0) <= 0:
+            self.current_hp = self.max_hp
+
+    def save(self, *args, **kwargs):
+        self._initialize_current_hp_if_missing()
+        super().save(*args, **kwargs)
+
 
 class GearSlot(models.TextChoices):
     HELMET = "helmet", "头盔"

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Q
+from django.db.models import Q, QuerySet
 from django.views.generic import DetailView
 
 from .models import BattleReport
@@ -21,25 +23,29 @@ from .view_helpers import (
     serialize_troops,
 )
 
+if TYPE_CHECKING:
+    from gameplay.models import Manor
+
 
 class BattleReportDetailView(LoginRequiredMixin, DetailView):
     template_name = "battle/report_detail.html"
     model = BattleReport
     context_object_name = "report"
+    _request_manor: Manor | None = None
+    _request_manor_loaded = False
 
-    def _get_request_manor(self):
+    def _get_request_manor(self) -> Manor | None:
         from gameplay.services.manor.core import ManorNotFoundError, get_manor
 
-        if hasattr(self, "_request_manor"):
-            return self._request_manor
-
-        try:
-            self._request_manor = get_manor(self.request.user)
-        except ManorNotFoundError:
-            self._request_manor = None
+        if not self._request_manor_loaded:
+            try:
+                self._request_manor = get_manor(self.request.user)
+            except ManorNotFoundError:
+                self._request_manor = None
+            self._request_manor_loaded = True
         return self._request_manor
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[BattleReport]:
         manor = self._get_request_manor()
         if manor is None:
             return BattleReport.objects.none()
@@ -53,7 +59,7 @@ class BattleReportDetailView(LoginRequiredMixin, DetailView):
             .distinct()
         )
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         report: BattleReport = context["report"]
         manor = self._get_request_manor()

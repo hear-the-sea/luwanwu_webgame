@@ -95,9 +95,7 @@ def test_recover_guest_hp_already_full():
     template = GuestTemplate.objects.create(
         key="test_guest", name="测试门客", rarity="gray", base_attack=50, base_defense=50
     )
-    guest = Guest.objects.create(manor=manor, template=template, force=50, intellect=50, current_hp=100)
-    guest.current_hp = guest.max_hp
-    guest.save()
+    guest = Guest.objects.create(manor=manor, template=template, force=50, intellect=50)
 
     initial_hp = guest.current_hp
     recover_guest_hp(guest)

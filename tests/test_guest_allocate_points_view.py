@@ -21,7 +21,6 @@ def _create_guest_with_points(manor, key_suffix: str = "default") -> Guest:
         agility=50,
         luck=40,
         attribute_points=2,
-        current_hp=100,
     )
 
 

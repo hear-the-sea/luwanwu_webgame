@@ -29,7 +29,6 @@ def test_process_raid_battle_does_not_finalize_retreat_before_return_at():
         manor=attacker,
         template=template,
         status=GuestStatus.DEPLOYED,
-        current_hp=1,
     )
 
     base_now = timezone.now()

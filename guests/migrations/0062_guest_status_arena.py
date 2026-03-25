@@ -6,12 +6,15 @@ from django.db import migrations, models
 def migrate_active_arena_guest_statuses(apps, schema_editor):
     Guest = apps.get_model("guests", "Guest")
     ArenaEntryGuest = apps.get_model("gameplay", "ArenaEntryGuest")
-    active_guest_ids = ArenaEntryGuest.objects.filter(
-        entry__status="registered",
-        entry__tournament__status__in=["recruiting", "running"],
-        guest__status="deployed",
-    ).values_list("guest_id", flat=True)
-    Guest.objects.filter(id__in=active_guest_ids, status="deployed").update(status="arena")
+    active_guest_ids = list(
+        ArenaEntryGuest.objects.filter(
+            entry__status="registered",
+            entry__tournament__status__in=["recruiting", "running"],
+            guest__status="deployed",
+        ).values_list("guest_id", flat=True)
+    )
+    if active_guest_ids:
+        Guest.objects.filter(id__in=active_guest_ids, status="deployed").update(status="arena")
 
 
 class Migration(migrations.Migration):

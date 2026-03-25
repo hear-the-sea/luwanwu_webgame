@@ -19,8 +19,6 @@ def _create_launch_guest(manor):
         status=GuestStatus.IDLE,
         custom_name="mission_resilience_guest",
     )
-    guest.current_hp = guest.max_hp
-    guest.save(update_fields=["current_hp"])
     return guest
 
 

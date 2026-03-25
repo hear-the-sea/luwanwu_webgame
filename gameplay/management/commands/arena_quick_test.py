@@ -3,10 +3,11 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import timedelta
+from typing import Any
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand, CommandError, CommandParser
 from django.db.models import Count, F
 from django.utils import timezone
 
@@ -46,7 +47,7 @@ def _build_or_get_test_template(template_key: str) -> GuestTemplate:
 
 
 def _create_guest(manor, template: GuestTemplate, suffix: str) -> Guest:
-    guest = Guest.objects.create(
+    return Guest.objects.create(
         manor=manor,
         template=template,
         custom_name=f"竞技测试-{suffix}",
@@ -55,17 +56,13 @@ def _create_guest(manor, template: GuestTemplate, suffix: str) -> Guest:
         intellect=120,
         defense_stat=150,
         agility=130,
-        current_hp=1,
     )
-    guest.current_hp = guest.max_hp
-    guest.save(update_fields=["current_hp"])
-    return guest
 
 
 class Command(BaseCommand):
     help = "一键创建竞技场测试数据：自动造号报名，可选快速跑完整场赛事。"
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(
             "--players",
             type=int,
@@ -119,7 +116,7 @@ class Command(BaseCommand):
             help="在非 DEBUG 且非测试环境下强制执行（请谨慎）。",
         )
 
-    def handle(self, *args, **options):
+    def handle(self, *args: object, **options: Any) -> None:
         requested_players = options["players"]
         guests_per_player = options["guests_per_player"]
         seed_silver = options["seed_silver"]

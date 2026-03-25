@@ -452,7 +452,6 @@ def test_cleanup_invalid_guild_hero_pool_task(monkeypatch, django_user_model):
         defense_stat=90,
         agility=70,
         luck=50,
-        current_hp=1,
     )
 
     entry = GuildHeroPoolEntry.objects.create(

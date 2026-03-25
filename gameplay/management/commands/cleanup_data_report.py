@@ -13,11 +13,11 @@
 from __future__ import annotations
 
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from django.apps import apps
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandParser
 from django.db.models import Max, Min
 from django.utils import timezone
 
@@ -27,7 +27,7 @@ from .cleanup_old_data import CLEANUP_CONFIG
 class Command(BaseCommand):
     help = "输出数据清理统计报表（总量/可清理量/保留策略）"
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(
             "--days",
             type=int,
@@ -46,7 +46,7 @@ class Command(BaseCommand):
             help="以 JSON 格式输出报表",
         )
 
-    def handle(self, *args, **options):
+    def handle(self, *args: object, **options: Any) -> None:
         override_days = options["days"]
         target_model = options["model"]
         json_mode = bool(options["json"])
@@ -85,7 +85,7 @@ class Command(BaseCommand):
 
         self._print_human_report(report)
 
-    def _build_model_row(self, *, model_path: str, days: int, time_field: str, now) -> dict[str, Any]:
+    def _build_model_row(self, *, model_path: str, days: int, time_field: str, now: datetime) -> dict[str, Any]:
         try:
             model = self._get_model(model_path)
         except (LookupError, ModuleNotFoundError) as exc:
@@ -156,6 +156,6 @@ class Command(BaseCommand):
             )
         )
 
-    def _get_model(self, model_path: str):
+    def _get_model(self, model_path: str) -> Any:
         app_label, model_name = model_path.rsplit(".", 1)
         return apps.get_model(app_label, model_name)
