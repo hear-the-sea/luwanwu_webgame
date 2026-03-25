@@ -4,7 +4,7 @@ import pytest
 from django.contrib.messages import get_messages
 from django.urls import reverse
 
-pytest_plugins = ("tests.jail_views.conftest",)
+pytest_plugins = ("tests.jail_views.fixtures",)
 
 from tests.jail_views.support import (  # noqa: E402
     build_available_guests,

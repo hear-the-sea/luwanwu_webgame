@@ -8,7 +8,7 @@ from guilds.models import GuildMember
 from guilds.services import contribution as contribution_service
 from guilds.services import guild as guild_service
 
-pytest_plugins = ("tests.guilds.conftest",)
+pytest_plugins = ("tests.guilds.fixtures",)
 
 
 @pytest.mark.django_db

@@ -8,7 +8,7 @@ from gameplay.models import PlayerTroop, TroopRecruitment
 from gameplay.services.recruitment.recruitment import finalize_troop_recruitment
 from tests.troop_recruitment_service.support import build_due_recruitment
 
-pytest_plugins = ("tests.troop_recruitment_service.conftest",)
+pytest_plugins = ("tests.troop_recruitment_service.fixtures",)
 
 
 @pytest.mark.django_db

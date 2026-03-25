@@ -36,28 +36,18 @@ def test_normalize_decompose_config_merges_probabilities_and_filters_supported_r
     assert config["chance_rewards"]["green"]["new_reward"] == 0.0
 
 
-def test_normalize_blueprint_config_discards_invalid_entries():
-    config = _normalize_blueprint_config(
-        {
-            "recipes": [
-                {"blueprint_key": "bp_ok", "result_item_key": "equip_ok", "required_forging": "3"},
-                {"blueprint_key": "", "result_item_key": "equip_missing"},
-                {"blueprint_key": "bp_missing_result"},
-                "invalid-row",
-            ]
-        }
-    )
-
-    assert config == {
-        "recipes": [
+def test_normalize_blueprint_config_requires_explicit_recipe_contract():
+    try:
+        _normalize_blueprint_config(
             {
-                "blueprint_key": "bp_ok",
-                "result_item_key": "equip_ok",
-                "required_forging": 3,
-                "quantity_out": 1,
-                "costs": {},
-                "description": "",
+                "recipes": [
+                    {"blueprint_key": "bp_ok", "result_item_key": "equip_ok", "required_forging": "3"},
+                ]
             }
-        ]
-    }
+        )
+    except AssertionError as exc:
+        assert "quantity_out" in str(exc)
+    else:
+        raise AssertionError("expected blueprint normalization to reject missing quantity_out")
+
     assert DEFAULT_FORGE_BLUEPRINT_CONFIG == {"recipes": []}

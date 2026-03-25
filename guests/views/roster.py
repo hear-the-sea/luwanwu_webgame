@@ -151,6 +151,7 @@ def _build_skill_books_context(manor, guest, guest_skill_records):
             "key",
             "name",
             "description",
+            "rarity",
             "required_level",
             "required_force",
             "required_intellect",

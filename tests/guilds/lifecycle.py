@@ -7,7 +7,7 @@ from core.exceptions import GuildPermissionError
 from guilds.models import GuildMember
 from guilds.services import guild as guild_service
 
-pytest_plugins = ("tests.guilds.conftest",)
+pytest_plugins = ("tests.guilds.fixtures",)
 
 
 @pytest.mark.django_db

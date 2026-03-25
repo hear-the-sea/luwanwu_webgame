@@ -531,6 +531,76 @@
   margin-top: 0.5rem;
 }
 
+#skill-book-modal .tw-modal-content {
+  max-width: 920px;
+}
+
+#skill-book-modal .skill-book-table {
+  --tw-item-divider-line: linear-gradient(
+      90deg,
+      rgba(139, 69, 19, 0) 0%,
+      rgba(193, 154, 107, 0.5) 14%,
+      rgba(218, 165, 32, 0.62) 50%,
+      rgba(193, 154, 107, 0.5) 86%,
+      rgba(139, 69, 19, 0) 100%
+    );
+  --tw-item-divider-glow: linear-gradient(
+      90deg,
+      rgba(255, 248, 231, 0) 0%,
+      rgba(255, 248, 231, 0.84) 50%,
+      rgba(255, 248, 231, 0) 100%
+    );
+  table-layout: fixed;
+}
+
+#skill-book-modal .skill-book-table th:nth-child(1) {
+  width: 24%;
+}
+
+#skill-book-modal .skill-book-table th:nth-child(2) {
+  width: 50%;
+}
+
+#skill-book-modal .skill-book-table th:nth-child(3) {
+  width: 10%;
+}
+
+#skill-book-modal .skill-book-table th:nth-child(4) {
+  width: 16%;
+}
+
+#skill-book-modal .skill-book-table tbody td {
+  border-bottom-color: transparent;
+  vertical-align: top;
+  padding-top: 0.9rem;
+  padding-bottom: 0.9rem;
+}
+
+#skill-book-modal .skill-book-table tbody tr {
+  background-image: var(--tw-item-divider-glow), var(--tw-item-divider-line);
+  background-repeat: no-repeat;
+  background-size: calc(100% - 2.5rem) 1px, calc(100% - 1.5rem) 1px;
+  background-position: center calc(100% - 1px), center bottom;
+}
+
+#skill-book-modal .skill-book-table tbody tr:last-child {
+  background-image: none;
+}
+
+#skill-book-modal .skill-book-book-name,
+#skill-book-modal .skill-book-skill-name {
+  font-weight: 700;
+}
+
+#skill-book-modal .skill-book-book-name {
+  display: inline-block;
+}
+
+#skill-book-modal .skill-book-skill-meta {
+  display: grid;
+  gap: 0.2rem;
+}
+
 @media (max-width: 1024px) {
   .guest-detail .detail-board {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -785,7 +855,7 @@
         </div>
         <div class="tw-modal-body">
             {% if skill_books %}
-                <table class="tw-table">
+                <table class="tw-table skill-book-table">
                     <thead>
                         <tr>
                             <th>技能书</th>
@@ -797,16 +867,23 @@
                     <tbody>
                         {% for book in skill_books %}
                             <tr>
-                                <td>{{ book.inventory.template.name }}</td>
+                                <td>
+                                    <span class="skill-book-book-name {% if book.skill %}rarity-text {{ book.skill.rarity|rarity_class }}{% else %}rarity-text rarity-default{% endif %}">
+                                        {{ book.inventory.template.name }}
+                                    </span>
+                                </td>
                                 <td>
                                     {% if book.skill %}
-                                        <div>{{ book.skill.name }} — {{ book.skill.description }}</div>
+                                        <div class="skill-book-skill-meta">
+                                            <div class="skill-book-skill-name rarity-text {{ book.skill.rarity|rarity_class }}">
+                                                {{ book.skill.name }}
+                                            </div>
+                                            <div>{{ book.skill.description }}</div>
+                                        </div>
                                         {% if book.requirements %}
                                             <div class="tw-muted">学习要求：{{ book.requirements_text }}</div>
                                         {% endif %}
-                                        {% if book.already_learned %}
-                                            <div class="tw-muted">当前已掌握该技能</div>
-                                        {% elif book.unmet_requirements %}
+                                        {% if book.unmet_requirements %}
                                             <div class="tw-muted">当前不足：{{ book.unmet_requirements|join:"，" }}</div>
                                         {% endif %}
                                     {% else %}

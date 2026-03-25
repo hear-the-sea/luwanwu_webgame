@@ -12,7 +12,7 @@ from guilds.services import guild as guild_service
 from guilds.services import member as member_service
 from guilds.services import member_notifications
 
-pytest_plugins = ("tests.guilds.conftest",)
+pytest_plugins = ("tests.guilds.fixtures",)
 
 
 @pytest.mark.django_db

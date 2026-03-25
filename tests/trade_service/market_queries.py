@@ -5,7 +5,7 @@ import pytest
 from gameplay.models import InventoryItem
 from trade.services import market_service
 
-pytest_plugins = ("tests.trade_service.conftest",)
+pytest_plugins = ("tests.trade_service.fixtures",)
 
 
 @pytest.mark.django_db

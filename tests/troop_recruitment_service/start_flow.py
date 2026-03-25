@@ -10,7 +10,7 @@ from gameplay.models import InventoryItem, TroopRecruitment
 from gameplay.services.recruitment.recruitment import _consume_equipment_for_recruitment, start_troop_recruitment
 from tests.troop_recruitment_service.support import create_tool_template, set_inventory
 
-pytest_plugins = ("tests.troop_recruitment_service.conftest",)
+pytest_plugins = ("tests.troop_recruitment_service.fixtures",)
 
 
 @pytest.mark.django_db
