@@ -42,6 +42,24 @@
 
 当前主线已完成 `阶段 4：治理模板与前端边界` 的当前封板，下一轮主线可切到 `阶段 5：测试与发布质量`。
 
+- `2026-03-25` 已按审计基线重开一条“小切口复杂度治理”支线：复杂度热点复核显示 `gameplay/services/manor/core.py`、`gameplay/views/jail.py`、`trade/selector_builders.py` 仍明显超出默认维护阈值，其中 `gameplay/views/jail.py` 被选为本轮试点。
+- 本轮试点的验收标准不是“多拆几个 helper 文件”，而是把 `jail` 页面链路中的锁包装/异常映射、状态载荷拼装与 HTTP 入口编排职责拆清；若只是新增转发层但主入口认知负担没有下降，则不计为完成。
+- `2026-03-25` 复杂度热点试点第一刀已落地：`gameplay/views/jail.py` 中重复的锁包装/异常映射已收口到 `gameplay/views/jail_action_support.py`，监牢/结义林状态 JSON 载荷已收口到 `gameplay/views/jail_payloads.py`；`gameplay/views/jail.py` 主文件已由 `514` 行降到 `368` 行，避免继续同时承载页面类、状态序列化和动作包装三种职责。
+- 本轮整改验证已记录：`python -m flake8 gameplay/views/jail.py gameplay/views/jail_action_support.py gameplay/views/jail_payloads.py`、`python -m mypy gameplay/views/jail.py gameplay/views/jail_action_support.py gameplay/views/jail_payloads.py` 与 `python -m pytest tests/test_jail_views.py tests/test_jail_service.py -q` 均通过，结果分别为 `flake8/mypy 通过` 与 `54 passed`。
+- `2026-03-25` 复杂度热点试点第二刀已落地：`trade/selector_builders.py` 中的钱庄/兵库读侧上下文已按业务域拆到 `trade/bank_context_builder.py`，`trade/selectors.py` 也已改成显式依赖新的子模块；`trade/selector_builders.py` 主文件已由 `437` 行降到 `331` 行，退出默认 Python 热点阈值。
+- 第二刀验证已记录：`python -m flake8 trade/selector_builders.py trade/bank_context_builder.py trade/selectors.py`、`python -m mypy trade/selector_builders.py trade/bank_context_builder.py trade/selectors.py` 与 `python -m pytest tests/test_trade_selectors.py tests/trade/test_trade_page_view.py -q` 均通过，结果分别为 `flake8/mypy 通过` 与 `26 passed`。
+- `2026-03-25` 复杂度热点试点第三刀已落地：`gameplay/services/manor/core.py` 中的“庄园初始化/补建/坐标分配”与“庄园命名规则/改名事务”已分别拆到 `gameplay/services/manor/bootstrap.py` 与 `gameplay/services/manor/naming.py`；同时保留 `core.py` 的兼容公开入口，避免现有调用链和测试契约被一次性打断；`gameplay/services/manor/core.py` 主文件已由 `622` 行降到 `362` 行，退出默认 Python 热点阈值。
+- 第三刀验证已记录：`python -m flake8 gameplay/services/manor/core.py gameplay/services/manor/bootstrap.py gameplay/services/manor/naming.py`、`python -m mypy gameplay/services/manor/core.py gameplay/services/manor/bootstrap.py gameplay/services/manor/naming.py` 与 `python -m pytest tests/gameplay_services/manor_bootstrap.py tests/test_manor_naming.py tests/gameplay/manor_refresh.py tests/test_upgrade_concurrency_limits.py -q` 均通过，结果分别为 `flake8/mypy 通过` 与 `44 passed`。
+- 至此，这轮按审计基线登记的三处 Python 热点都已回到默认复杂度预算内；后续若继续推进复杂度治理，应先重新做超阈值复核，再选新的试点，不再为了拆分而拆分。
+- `2026-03-25` 已按新的超阈值复核切入模板复杂度治理：`guests/templates/guests/detail.html` 的页面级样式已迁出到 `static/css/guest-detail.css`，装备区与详情页两个弹窗已拆到 `guests/templates/guests/partials/detail_equipment_card.html`、`detail_skill_book_modal.html` 与 `detail_equip_modal.html`；详情页主模板已由 `952` 行降到 `110` 行，退出默认模板热点阈值。
+- 这轮模板治理验证已记录：`python -m pytest tests/test_guest_runtime_refresh_views.py tests/test_guest_allocate_points_view.py tests/test_guest_item_view_validation.py tests/test_guest_view_error_boundaries.py -q` 通过，结果为 `93 passed`，用于约束详情页渲染、属性加点、技能/装备入口与错误边界在模板 partial 化后不回退。
+- `2026-03-25` 已继续推进模板复杂度治理第二刀：`guests/templates/guests/roster.html` 的页面级样式已迁出到 `static/css/guest-roster.css`，名册表格主体与经验/药品/工资弹窗已拆到 `guests/templates/guests/partials/roster_table.html`、`roster_exp_modal.html`、`roster_medicine_modal.html` 与 `roster_salary_modal.html`；名册页主模板已由 `520` 行降到 `43` 行，退出默认模板热点阈值。
+- 第二刀验证已记录：`python -m pytest tests/test_guest_runtime_refresh_views.py tests/test_salary_views.py tests/test_guest_view_error_boundaries.py tests/test_inventory_views.py -q` 通过，结果为 `97 passed`，用于约束名册页读路径、工资动作、错误边界和库存/名册交互在模板 partial 化后不回退。
+- 经过这两刀，当前模板层已无超过 `500` 行的热点模板；后续若继续做模板治理，应转为常规维护模式，优先观察 `trade/templates/trade/partials/_market.html` 这类接近热点阈值的页面块，而不是继续机械拆分已回到预算内的模板。
+- `2026-03-25` 已重新切回阶段 5：`tests/test_mission_sync_report.py` 已收口为兼容入口，并按“防守配置校验 / offense 掉落表校验”拆到 `tests/mission_sync_report/defense_validation.py` 与 `tests/mission_sync_report/offense_drop_table.py`；兼容入口 `python -m pytest tests/test_mission_sync_report.py -q` 通过，结果为 `17 passed`。
+- `2026-03-25` 已继续推进阶段 5 的第二个测试收口切口：`tests/guest_summon_card/loot_boxes.py` 中的宝箱配置校验测试已拆到 `tests/guest_summon_card/loot_box_config.py`，并由 `tests/test_guest_summon_card.py` 统一继续导入；`tests/guest_summon_card/loot_boxes.py` 已由 `566` 行降到 `250` 行，兼容入口 `python -m pytest tests/test_guest_summon_card.py -q` 通过，结果为 `34 passed`。
+- 经过这两刀，当前测试层已无超过 `500` 行的测试文件；后续若继续按审计文档推进，应转回“新的超阈值复核 + 门禁边界补强”模式，而不是继续为拆分而拆分。
+
 `阶段 2：并发与测试基线` 已完成封板。当前稳定下来的阶段 2 结论如下：
 
 - `mission / raid / guest recruitment` 的统一写模型已按 [第二阶段统一写模型基线](write_model_boundaries.md) 固定下来；写链路的 `view / action handler`、`write command`、`after-commit follow-up`、`refresh / finalize command` 边界已可清楚说明。

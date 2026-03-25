@@ -1,0 +1,23 @@
+<div class="tw-modal-overlay" id="equip-modal" style="display: none;" data-options-url="{% url 'guests:gear_options' %}" data-guest-id="{{ guest.id }}">
+    <div class="tw-modal-content">
+        <div class="tw-modal-header">
+            <h3 data-slot-label>选择装备</h3>
+            <button type="button" class="tw-modal-close close-equip-modal">&times;</button>
+        </div>
+        <div class="tw-modal-body">
+            <form method="post" action="{% url 'guests:equip' %}">
+                {% csrf_token %}
+                <input type="hidden" name="guest" value="{{ guest.id }}">
+                <input type="hidden" name="next" value="{% url 'guests:detail' guest.id %}">
+                <input type="hidden" name="slot" value="">
+                <div class="tw-form-field">
+                    <label>可用装备</label>
+                    <select name="gear" class="tw-input"></select>
+                </div>
+                <div class="flex justify-end gap-2 mt-4">
+                    <button type="submit" class="tw-btn-primary">装备</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

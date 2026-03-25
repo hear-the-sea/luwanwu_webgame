@@ -6,61 +6,53 @@ from __future__ import annotations
 
 import logging
 import math
-import re
 import time
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from threading import Lock
-from typing import Any
 
 from django.conf import settings
 from django.core.cache import cache
-from django.db import IntegrityError, transaction
+from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
 from common.utils.celery import safe_apply_async
-from core.exceptions import (
-    BuildingConcurrentUpgradeLimitError,
-    BuildingMaxLevelError,
-    BuildingUpgradingError,
-    GameError,
-    MessageError,
-)
+from core.exceptions import BuildingConcurrentUpgradeLimitError, BuildingMaxLevelError, BuildingUpgradingError
 from core.utils.imports import is_missing_target_import
-from core.utils.infrastructure import (
-    DATABASE_INFRASTRUCTURE_EXCEPTIONS,
-    NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS,
-    InfrastructureExceptions,
-    combine_infrastructure_exceptions,
-)
+from core.utils.infrastructure import NOTIFICATION_INFRASTRUCTURE_EXCEPTIONS
 from core.utils.time_scale import scale_duration
-
-from ...constants import BUILDING_MAX_LEVELS, MAX_CONCURRENT_BUILDING_UPGRADES, BuildingKeys, ManorNameConstants
-from ...models import (
-    ArenaTournament,
-    Building,
-    BuildingType,
-    ItemTemplate,
-    Manor,
-    Message,
-    MissionRun,
-    RaidRun,
-    ResourceEvent,
-    ScoutRecord,
+from gameplay.services.manor.bootstrap import ManorNotFoundError as _ManorNotFoundError
+from gameplay.services.manor.bootstrap import (
+    _deliver_active_global_mail_campaigns as __deliver_active_global_mail_campaigns,
 )
+from gameplay.services.manor.bootstrap import bootstrap_buildings as _bootstrap_buildings
+from gameplay.services.manor.bootstrap import bootstrap_manor as _bootstrap_manor
+from gameplay.services.manor.bootstrap import ensure_buildings_exist as _ensure_buildings_exist
+from gameplay.services.manor.bootstrap import ensure_manor as _ensure_manor
+from gameplay.services.manor.bootstrap import generate_unique_coordinate as _generate_unique_coordinate
+from gameplay.services.manor.bootstrap import get_manor as _get_manor
+from gameplay.services.manor.naming import BANNED_WORDS as _BANNED_WORDS
+from gameplay.services.manor.naming import MANOR_MESSAGE_BEST_EFFORT_EXCEPTIONS
+from gameplay.services.manor.naming import MANOR_NAME_MAX_LENGTH as _MANOR_NAME_MAX_LENGTH
+from gameplay.services.manor.naming import MANOR_NAME_MIN_LENGTH as _MANOR_NAME_MIN_LENGTH
+from gameplay.services.manor.naming import ManorNameConflictError as _ManorNameConflictError
+from gameplay.services.manor.naming import ManorRenameItemError as _ManorRenameItemError
+from gameplay.services.manor.naming import ManorRenameValidationError as _ManorRenameValidationError
+from gameplay.services.manor.naming import get_rename_card_count as _get_rename_card_count
+from gameplay.services.manor.naming import is_manor_name_available as _is_manor_name_available
+from gameplay.services.manor.naming import rename_manor as _rename_manor
+from gameplay.services.manor.naming import validate_manor_name as _validate_manor_name
+
+from ...constants import BUILDING_MAX_LEVELS, MAX_CONCURRENT_BUILDING_UPGRADES, BuildingKeys
+from ...models import ArenaTournament, Building, Manor, Message, MissionRun, RaidRun, ResourceEvent, ScoutRecord
 from ..utils.cache import invalidate_home_stats_cache
 from ..utils.notifications import notify_user
-from . import provisioning as _provisioning
 from . import refresh as _refresh
 
 CAPACITY_BASE = 20000
 CAPACITY_GROWTH_SILVER = 1.299657
 CAPACITY_GROWTH_GRAIN = 1.3905
-MANOR_MESSAGE_BEST_EFFORT_EXCEPTIONS: InfrastructureExceptions = combine_infrastructure_exceptions(
-    MessageError,
-    infrastructure_exceptions=DATABASE_INFRASTRUCTURE_EXCEPTIONS,
-)
 
 
 def calculate_building_capacity(level: int, is_silver_vault: bool = False) -> int:
@@ -70,37 +62,25 @@ def calculate_building_capacity(level: int, is_silver_vault: bool = False) -> in
 
 logger = logging.getLogger(__name__)
 
+ManorNotFoundError = _ManorNotFoundError
+bootstrap_buildings = _bootstrap_buildings
+bootstrap_manor = _bootstrap_manor
+ensure_buildings_exist = _ensure_buildings_exist
+ensure_manor = _ensure_manor
+generate_unique_coordinate = _generate_unique_coordinate
+get_manor = _get_manor
 
-class ManorNameConflictError(GameError):
-    """Raised when the requested manor name is already occupied."""
-
-    error_code = "MANOR_NAME_CONFLICT"
-
-
-class ManorRenameValidationError(GameError):
-    """Raised when the requested manor name is invalid."""
-
-    error_code = "MANOR_RENAME_VALIDATION_ERROR"
-
-
-class ManorRenameItemError(GameError):
-    """Raised when rename-card lookup or consumption fails."""
-
-    error_code = "MANOR_RENAME_ITEM_ERROR"
-
-
-class ManorNotFoundError(GameError):
-    """Raised when a user tries to access gameplay without a provisioned manor."""
-
-    error_code = "MANOR_NOT_FOUND"
-    default_message = "庄园尚未初始化，请重新登录后再试"
-
-
-INITIAL_PEACE_SHIELD_KEYS: tuple[str, ...] = (
-    "peace_shield_small",
-    "peace_shield_medium",
-    "peace_shield_large",
-)
+BANNED_WORDS = _BANNED_WORDS
+MANOR_NAME_MAX_LENGTH = _MANOR_NAME_MAX_LENGTH
+MANOR_NAME_MIN_LENGTH = _MANOR_NAME_MIN_LENGTH
+ManorNameConflictError = _ManorNameConflictError
+ManorRenameItemError = _ManorRenameItemError
+ManorRenameValidationError = _ManorRenameValidationError
+get_rename_card_count = _get_rename_card_count
+is_manor_name_available = _is_manor_name_available
+rename_manor = _rename_manor
+validate_manor_name = _validate_manor_name
+_deliver_active_global_mail_campaigns = __deliver_active_global_mail_campaigns
 
 _LOCAL_REFRESH_FALLBACK: dict[int, float] = {}
 _LOCAL_REFRESH_FALLBACK_LOCK = Lock()
@@ -131,95 +111,6 @@ def _should_skip_refresh_by_local_fallback(manor_id: int, min_interval: int) -> 
         min_interval=min_interval,
         monotonic_func=time.monotonic,
     )
-
-
-def get_manor(user) -> Manor:
-    try:
-        return user.manor
-    except Manor.DoesNotExist as exc:
-        raise ManorNotFoundError() from exc
-
-
-def bootstrap_manor(user, region: str = "overseas", initial_name: str | None = None) -> Manor:
-    normalized_name = (initial_name or "").strip() or None
-    manor, created = Manor.objects.get_or_create(user=user)
-    location_assigned = manor.coordinate_x > 0 and manor.coordinate_y > 0
-    if created or not location_assigned:
-        try:
-            assigned = _assign_manor_location_and_name(manor, region=region, normalized_name=normalized_name)
-        except ManorNameConflictError:
-            if created:
-                Manor.objects.filter(pk=manor.pk, user=user, coordinate_x=0, coordinate_y=0).delete()
-            raise
-        if not assigned:
-            if created:
-                Manor.objects.filter(pk=manor.pk, user=user, coordinate_x=0, coordinate_y=0).delete()
-            raise RuntimeError("Failed to allocate a unique manor coordinate after multiple attempts")
-        manor.refresh_from_db(fields=["region", "coordinate_x", "coordinate_y", "name"])
-    _ensure_manor_provisioning(manor, created=created)
-    return manor
-
-
-def ensure_manor(user, region: str = "overseas", initial_name: str | None = None) -> Manor:
-    return bootstrap_manor(user, region=region, initial_name=initial_name)
-
-
-def _ensure_manor_provisioning(manor: Manor, *, created: bool) -> None:
-    _provisioning.ensure_manor_provisioning(
-        manor,
-        created=created,
-        bootstrap_buildings_func=bootstrap_buildings,
-        ensure_buildings_exist_func=ensure_buildings_exist,
-        grant_initial_peace_shield_func=_grant_initial_peace_shield,
-        deliver_active_global_mail_campaigns_func=_deliver_active_global_mail_campaigns,
-    )
-
-
-def _assign_manor_location_and_name(manor: Manor, *, region: str, normalized_name: str | None) -> bool:
-    return _provisioning.assign_manor_location_and_name(
-        manor,
-        region=region,
-        normalized_name=normalized_name,
-        generate_unique_coordinate_func=generate_unique_coordinate,
-        is_manor_name_available_func=is_manor_name_available,
-        manor_model=Manor,
-        conflict_error_cls=ManorNameConflictError,
-    )
-
-
-def _grant_initial_peace_shield(manor: Manor) -> None:
-    _provisioning.grant_initial_peace_shield(
-        manor,
-        initial_peace_shield_keys=INITIAL_PEACE_SHIELD_KEYS,
-        item_template_model=ItemTemplate,
-        manor_model=Manor,
-        timezone_module=timezone,
-        logger=logger,
-    )
-
-
-def _deliver_active_global_mail_campaigns(manor: Manor) -> None:
-    _provisioning.deliver_active_global_mail_campaigns(
-        manor,
-        is_missing_global_mail_schema_error_func=_is_missing_global_mail_schema_error,
-        logger=logger,
-    )
-
-
-def _is_missing_global_mail_schema_error(exc: BaseException) -> bool:
-    return _provisioning.is_missing_global_mail_schema_error(exc)
-
-
-def generate_unique_coordinate(region: str) -> tuple[int, int]:
-    return _provisioning.generate_unique_coordinate(region, manor_model=Manor, logger=logger)
-
-
-def bootstrap_buildings(manor: Manor) -> None:
-    _provisioning.bootstrap_buildings(manor, building_type_model=BuildingType, building_model=Building)
-
-
-def ensure_buildings_exist(manor: Manor) -> None:
-    _provisioning.ensure_buildings_exist(manor, building_type_model=BuildingType, building_model=Building)
 
 
 def _has_due_manor_refresh_work(manor_id: int, now: datetime | None = None) -> bool:
@@ -474,149 +365,3 @@ def start_upgrade(building: Building) -> None:
         building.is_upgrading = True
         building.save(update_fields=["upgrade_complete_at", "is_upgrading"])
         schedule_building_completion(building, duration_seconds)
-
-
-MANOR_NAME_MIN_LENGTH = ManorNameConstants.MIN_LENGTH
-MANOR_NAME_MAX_LENGTH = ManorNameConstants.MAX_LENGTH
-MANOR_NAME_PATTERN = re.compile(r"^[\u4e00-\u9fa5a-zA-Z0-9_]+$")
-BANNED_WORDS = ManorNameConstants.BANNED_WORDS
-
-
-def _normalize_persisted_manor_id(raw_manor_id: object, *, contract_name: str) -> int:
-    if raw_manor_id is None or isinstance(raw_manor_id, bool):
-        raise AssertionError(f"invalid {contract_name}: {raw_manor_id!r}")
-    raw_for_int: Any = raw_manor_id
-    try:
-        manor_id = int(raw_for_int)
-    except (TypeError, ValueError) as exc:
-        raise AssertionError(f"invalid {contract_name}: {raw_manor_id!r}") from exc
-    if manor_id <= 0:
-        raise AssertionError(f"invalid {contract_name}: {raw_manor_id!r}")
-    return manor_id
-
-
-def _normalize_manor_name_input(raw_name: object, *, contract_name: str) -> str:
-    if not isinstance(raw_name, str):
-        raise AssertionError(f"invalid {contract_name}: {raw_name!r}")
-    return raw_name.strip()
-
-
-def validate_manor_name(name: str) -> tuple[bool, str]:
-    if not name or not name.strip():
-        return False, "名称不能为空"
-
-    name = name.strip()
-    if len(name) < MANOR_NAME_MIN_LENGTH:
-        return False, f"名称至少需要{MANOR_NAME_MIN_LENGTH}个字符"
-    if len(name) > MANOR_NAME_MAX_LENGTH:
-        return False, f"名称最多{MANOR_NAME_MAX_LENGTH}个字符"
-    if not MANOR_NAME_PATTERN.match(name):
-        return False, "名称仅支持中文、英文、数字和下划线"
-
-    name_lower = name.lower()
-    for word in BANNED_WORDS:
-        if word.lower() in name_lower:
-            return False, "名称包含敏感词"
-
-    return True, ""
-
-
-def is_manor_name_available(name: str, exclude_manor_id: int | None = None) -> bool:
-    normalized_name = _normalize_manor_name_input(name, contract_name="manor name")
-    queryset = Manor.objects.filter(name__iexact=normalized_name)
-    if exclude_manor_id:
-        normalized_exclude_id = _normalize_persisted_manor_id(
-            exclude_manor_id,
-            contract_name="exclude manor id",
-        )
-        queryset = queryset.exclude(id=normalized_exclude_id)
-    return not queryset.exists()
-
-
-@transaction.atomic
-def rename_manor(manor: Manor, new_name: str, consume_item: bool = True) -> None:
-    from ...models import InventoryItem, ItemTemplate
-
-    manor_id = _normalize_persisted_manor_id(getattr(manor, "pk", None), contract_name="persisted manor")
-    if not isinstance(consume_item, bool):
-        raise AssertionError(f"invalid manor rename consume_item: {consume_item!r}")
-    new_name = _normalize_manor_name_input(new_name, contract_name="manor rename new_name")
-    valid, error_msg = validate_manor_name(new_name)
-    if not valid:
-        raise ManorRenameValidationError(error_msg)
-    if not is_manor_name_available(new_name, exclude_manor_id=manor_id):
-        raise ManorNameConflictError("该名称已被使用")
-
-    if consume_item:
-        try:
-            rename_card = ItemTemplate.objects.get(key="manor_rename_card")
-        except ItemTemplate.DoesNotExist:
-            raise ManorRenameItemError("庄园命名卡道具未配置")
-
-        inventory_item = (
-            InventoryItem.objects.select_for_update()
-            .filter(
-                manor=manor,
-                template=rename_card,
-                storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-                quantity__gt=0,
-            )
-            .first()
-        )
-
-        if not inventory_item:
-            raise ManorRenameItemError("您没有庄园命名卡")
-
-        updated = InventoryItem.objects.filter(pk=inventory_item.pk, quantity__gte=1).update(quantity=F("quantity") - 1)
-        if not updated:
-            raise ManorRenameItemError("道具消耗失败，请重试")
-
-        InventoryItem.objects.filter(pk=inventory_item.pk, quantity__lte=0).delete()
-
-    old_name = manor.name or manor.display_name
-    manor.name = new_name
-    try:
-        manor.save(update_fields=["name"])
-    except IntegrityError:
-        logger.warning("Manor rename race condition detected for %s by user %s", new_name, manor.user_id)
-        raise ManorNameConflictError("该名称已被使用")
-
-    from ..utils.messages import create_message
-
-    def _send_rename_message() -> None:
-        try:
-            create_message(
-                manor=manor,
-                kind=Message.Kind.SYSTEM,
-                title="庄园更名成功",
-                body=f"您的庄园已从「{old_name}」更名为「{new_name}」",
-            )
-        except MANOR_MESSAGE_BEST_EFFORT_EXCEPTIONS as exc:
-            logger.warning(
-                "manor rename message failed: manor_id=%s old_name=%s new_name=%s error=%s",
-                manor.id,
-                old_name,
-                new_name,
-                exc,
-                exc_info=True,
-            )
-
-    transaction.on_commit(_send_rename_message)
-
-
-def get_rename_card_count(manor: Manor) -> int:
-    from ...models import InventoryItem, ItemTemplate
-
-    manor_id = _normalize_persisted_manor_id(getattr(manor, "pk", None), contract_name="persisted manor")
-    try:
-        rename_card = ItemTemplate.objects.get(key="manor_rename_card")
-    except ItemTemplate.DoesNotExist:
-        return 0
-
-    item = InventoryItem.objects.filter(
-        manor_id=manor_id,
-        template=rename_card,
-        storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-    ).first()
-
-    return item.quantity if item else 0

@@ -1,0 +1,126 @@
+{% load guest_extras %}
+
+<div class="board-card equip-card">
+    <h3>装备</h3>
+    <form method="post" action="{% url 'guests:unequip' %}" class="equip-unequip-form">
+        {% csrf_token %}
+        <input type="hidden" name="guest" value="{{ guest.id }}">
+        <input type="hidden" name="next" value="{% url 'guests:detail' guest.id %}">
+        <div class="equip-lines">
+            {% with panel=slot_panels_map.helmet %}
+            <div class="equip-line">
+                <span class="equip-line-title">头盔：</span>
+                {% if panel.equipped %}
+                    {% for item in panel.equipped %}
+                        <label class="equip-chip rarity-text {{ item.template.rarity|rarity_class }} tooltip">
+                            <input type="checkbox" name="gear" value="{{ item.id }}"> {{ item.template.name }}
+                            <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map }}</span>
+                        </label>
+                    {% endfor %}
+                {% else %}
+                    <button type="button" class="tw-btn-secondary tw-btn-sm equip-open" data-slot="helmet">装备</button>
+                {% endif %}
+            </div>
+            {% endwith %}
+
+            {% with panel=slot_panels_map.armor %}
+            <div class="equip-line">
+                <span class="equip-line-title">衣甲：</span>
+                {% if panel.equipped %}
+                    {% for item in panel.equipped %}
+                        <label class="equip-chip rarity-text {{ item.template.rarity|rarity_class }} tooltip">
+                            <input type="checkbox" name="gear" value="{{ item.id }}"> {{ item.template.name }}
+                            <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map }}</span>
+                        </label>
+                    {% endfor %}
+                {% else %}
+                    <button type="button" class="tw-btn-secondary tw-btn-sm equip-open" data-slot="armor">装备</button>
+                {% endif %}
+            </div>
+            {% endwith %}
+
+            {% with panel=slot_panels_map.weapon %}
+            <div class="equip-line">
+                <span class="equip-line-title">武器：</span>
+                {% if panel.equipped %}
+                    {% for item in panel.equipped %}
+                        <label class="equip-chip rarity-text {{ item.template.rarity|rarity_class }} tooltip">
+                            <input type="checkbox" name="gear" value="{{ item.id }}"> {{ item.template.name }}
+                            <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map }}</span>
+                        </label>
+                    {% endfor %}
+                {% else %}
+                    <button type="button" class="tw-btn-secondary tw-btn-sm equip-open" data-slot="weapon">装备</button>
+                {% endif %}
+            </div>
+            {% endwith %}
+
+            {% with panel=slot_panels_map.shoes %}
+            <div class="equip-line">
+                <span class="equip-line-title">鞋子：</span>
+                {% if panel.equipped %}
+                    {% for item in panel.equipped %}
+                        <label class="equip-chip rarity-text {{ item.template.rarity|rarity_class }} tooltip">
+                            <input type="checkbox" name="gear" value="{{ item.id }}"> {{ item.template.name }}
+                            <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map }}</span>
+                        </label>
+                    {% endfor %}
+                {% else %}
+                    <button type="button" class="tw-btn-secondary tw-btn-sm equip-open" data-slot="shoes">装备</button>
+                {% endif %}
+            </div>
+            {% endwith %}
+
+            {% with panel=slot_panels_map.ornament %}
+            <div class="equip-line wide">
+                <span class="equip-line-title">饰品：</span>
+                {% for item in panel.positions %}
+                    {% if item %}
+                        <label class="equip-chip rarity-text {{ item.template.rarity|rarity_class }} tooltip">
+                            <input type="checkbox" name="gear" value="{{ item.id }}"> {{ item.template.name }}
+                            <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map }}</span>
+                        </label>
+                    {% else %}
+                        <button type="button" class="tw-btn-secondary tw-btn-sm equip-open" data-slot="ornament">装备</button>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            {% endwith %}
+
+            {% with panel=slot_panels_map.device %}
+            <div class="equip-line wide">
+                <span class="equip-line-title">器械：</span>
+                {% for item in panel.positions %}
+                    {% if item %}
+                        <label class="equip-chip rarity-text {{ item.template.rarity|rarity_class }} tooltip">
+                            <input type="checkbox" name="gear" value="{{ item.id }}"> {{ item.template.name }}
+                            <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map }}</span>
+                        </label>
+                    {% else %}
+                        <button type="button" class="tw-btn-secondary tw-btn-sm equip-open" data-slot="device">装备</button>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            {% endwith %}
+
+            {% with panel=slot_panels_map.mount %}
+            <div class="equip-line wide">
+                <span class="equip-line-title">坐骑：</span>
+                {% if panel.equipped %}
+                    {% for item in panel.equipped %}
+                        <label class="equip-chip rarity-text {{ item.template.rarity|rarity_class }} tooltip">
+                            <input type="checkbox" name="gear" value="{{ item.id }}"> {{ item.template.name }}
+                            <span class="tooltip-bubble">{{ item.template|gear_tooltip:gear_set_map }}</span>
+                        </label>
+                    {% endfor %}
+                {% else %}
+                    <button type="button" class="tw-btn-secondary tw-btn-sm equip-open" data-slot="mount">装备</button>
+                {% endif %}
+            </div>
+            {% endwith %}
+        </div>
+        <div class="equip-actions">
+            <button type="submit" class="tw-btn-secondary tw-btn-sm">卸下选中装备</button>
+        </div>
+    </form>
+</div>

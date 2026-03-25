@@ -1,0 +1,74 @@
+{% load guest_extras %}
+
+<div class="tw-modal-overlay" id="skill-book-modal" style="display: none;">
+    <div class="tw-modal-content">
+        <div class="tw-modal-header">
+            <h3>选择技能书</h3>
+            <button type="button" class="tw-modal-close close-skill-modal">&times;</button>
+        </div>
+        <div class="tw-modal-body">
+            {% if skill_books %}
+                <table class="tw-table skill-book-table">
+                    <thead>
+                        <tr>
+                            <th>技能书</th>
+                            <th>技能</th>
+                            <th>数量</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for book in skill_books %}
+                            <tr>
+                                <td>
+                                    <span class="skill-book-book-name {% if book.skill %}rarity-text {{ book.skill.rarity|rarity_class }}{% else %}rarity-text rarity-default{% endif %}">
+                                        {{ book.inventory.template.name }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if book.skill %}
+                                        <div class="skill-book-skill-meta">
+                                            <div class="skill-book-skill-name rarity-text {{ book.skill.rarity|rarity_class }}">
+                                                {{ book.skill.name }}
+                                            </div>
+                                            <div>{{ book.skill.description }}</div>
+                                        </div>
+                                        {% if book.requirements %}
+                                            <div class="tw-muted">学习要求：{{ book.requirements_text }}</div>
+                                        {% endif %}
+                                        {% if book.unmet_requirements %}
+                                            <div class="tw-muted">当前不足：{{ book.unmet_requirements|join:"，" }}</div>
+                                        {% endif %}
+                                    {% else %}
+                                        {{ book.skill_key|default:"未知技能" }}
+                                    {% endif %}
+                                </td>
+                                <td>{{ book.inventory.quantity }}</td>
+                                <td>
+                                    <form method="post" action="{% url 'guests:learn_skill' guest.id %}">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="item_id" value="{{ book.inventory.id }}">
+                                        <input type="hidden" name="next" value="{% url 'guests:detail' guest.id %}">
+                                        <button type="submit" class="tw-btn-primary" {% if book.inventory.quantity <= 0 or not book.can_learn %}disabled{% endif %}>
+                                            {% if not book.skill %}
+                                                无效技能
+                                            {% elif book.already_learned %}
+                                                已掌握
+                                            {% elif book.unmet_requirements %}
+                                                条件不足
+                                            {% else %}
+                                                使用
+                                            {% endif %}
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p class="tw-muted">仓库暂无技能书</p>
+            {% endif %}
+        </div>
+    </div>
+</div>

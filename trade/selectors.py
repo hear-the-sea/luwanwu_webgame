@@ -11,12 +11,8 @@ from gameplay.services.manor.troop_bank import (
     get_troop_bank_used_space,
 )
 from gameplay.services.resources import sync_resource_production as _sync_resource_production
-from trade.selector_builders import (
-    build_auction_trade_context,
-    build_bank_trade_context,
-    build_market_trade_context,
-    build_shop_trade_context,
-)
+from trade.bank_context_builder import build_bank_trade_context
+from trade.selector_builders import build_auction_trade_context, build_market_trade_context, build_shop_trade_context
 from trade.services.auction_service import get_active_slots, get_auction_stats, get_my_bids, get_my_leading_bids
 from trade.services.bank_service import get_bank_info
 from trade.services.market_service import LISTING_FEES, get_active_listings, get_my_listings, get_tradeable_inventory

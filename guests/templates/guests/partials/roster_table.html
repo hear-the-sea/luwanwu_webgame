@@ -1,0 +1,104 @@
+{% load guest_extras %}
+
+<section class="tw-card guest-roster-card">
+    {% if guests %}
+    <div class="guest-table-wrapper">
+        <table class="tw-table">
+            <thead>
+                <tr>
+                    <th>门客</th>
+                    <th>形象</th>
+                    <th>等级/状态</th>
+                    <th>忠诚度</th>
+                    <th>今日工资</th>
+                    <th>生命</th>
+                    <th>升级</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in guests_with_salary %}
+                {% with guest=item.guest %}
+                <tr class="guest-row" data-guest-id="{{ guest.id }}">
+                    <td class="guest-col-name">
+                        <a href="{% url 'guests:detail' guest.id %}"
+                            class="guest-name-link rarity-text {{ guest.rarity|rarity_class }}">
+                            {{ guest.display_name }}
+                        </a>
+                        <a href="{% url 'guests:detail' guest.id %}"
+                           class="guest-mobile-header-link"
+                           aria-label="查看 {{ guest.display_name }} 详情"></a>
+                    </td>
+                    <td class="guest-col-avatar">
+                        <a href="{% url 'guests:detail' guest.id %}"
+                           class="guest-avatar-link"
+                           title="查看 {{ guest.display_name }} 详情"
+                           aria-label="查看 {{ guest.display_name }} 详情">
+                            <div class="guest-avatar">
+                                {% if guest.template.avatar %}
+                                <img src="{{ guest.template.avatar.url }}" alt="{{ guest.display_name }}" loading="lazy" width="48" height="48">
+                                {% else %}
+                                {{ guest.display_name|first|default:"?" }}
+                                {% endif %}
+                            </div>
+                        </a>
+                    </td>
+                    <td class="guest-col-level">
+                        <div class="guest-level">Lv {{ guest.level }}</div>
+                        <div class="tw-muted guest-status" data-guest-id="{{ guest.id }}">{{ guest.get_status_display }}</div>
+                    </td>
+                    <td class="guest-col-loyalty">
+                        <div
+                            style="{% if guest.loyalty < 30 %}color: #FF6B6B;{% elif guest.loyalty < 60 %}color: #FFA500;{% else %}color: #4ADE80;{% endif %}">
+                            {{ guest.loyalty }}
+                        </div>
+                    </td>
+                    <td class="guest-col-salary">
+                        <span class="guest-mobile-inline-label">工资:</span>
+                        {% if item.paid_today %}
+                        <span style="color: #4ADE80;">✓ 已支付</span>
+                        {% else %}
+                        <button type="button" class="tw-btn-secondary tw-btn-sm open-salary-modal"
+                            data-guest-id="{{ guest.id }}"
+                            data-guest-name="{{ guest.display_name }}"
+                            data-salary="{{ item.salary }}"
+                            data-can-pay="{% if manor.silver >= item.salary %}true{% else %}false{% endif %}"
+                            {% if manor.silver < item.salary %}disabled title="银两不足"{% endif %}>
+                            支付工资
+                        </button>
+                        {% endif %}
+                    </td>
+                    <td class="guest-col-hp">
+                        <div class="guest-hp" data-guest-id="{{ guest.id }}">HP {{ guest.current_hp }}/{{ guest.max_hp }}</div>
+                    </td>
+                    <td class="guest-col-upgrade">
+                        {% if guest.training_complete_at %}
+                        <span class="countdown" data-countdown="{{ guest.training_complete_at|date:'c' }}"
+                            data-format="zh" data-check-url="{% url 'guests:check_training' guest.id %}"
+                            title="完成时间 {{ guest.training_complete_at|date:'Y-m-d H:i:s' }}">计算中</span>
+                        {% else %}
+                        <span class="tw-muted">自动升级</span>
+                        {% endif %}
+                    </td>
+                    <td class="guest-col-actions">
+                        <button type="button" class="tw-btn-secondary tw-btn-sm open-exp-modal"
+                            data-guest="{{ guest.id }}" data-guest-name="{{ guest.display_name }}"
+                            data-url="{% url 'guests:use_exp_item' guest.id %}" {% if not exp_items %}disabled{% endif %}>
+                            使用经验道具
+                        </button>
+                        <button type="button" class="tw-btn-secondary tw-btn-sm open-medicine-modal"
+                            data-guest="{{ guest.id }}" data-guest-name="{{ guest.display_name }}"
+                            data-url="{% url 'guests:use_medicine_item' guest.id %}">
+                            疗伤
+                        </button>
+                    </td>
+                </tr>
+                {% endwith %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="tw-muted">暂无门客，先进行一次招募。</p>
+    {% endif %}
+</section>

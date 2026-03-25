@@ -1,0 +1,30 @@
+<div class="tw-modal-overlay" id="medicine-modal" style="display: none;">
+    <div class="tw-modal-content">
+        <div class="tw-modal-header">
+            <h3>选择药品</h3>
+            <button type="button" class="tw-modal-close close-medicine-modal">&times;</button>
+        </div>
+        <div class="tw-modal-body">
+            <p class="tw-muted" id="medicine-modal-target"></p>
+            {% if medicine_items %}
+            <form method="post" id="medicine-form" action="">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{% url 'guests:roster' %}">
+                <div class="tw-form-field">
+                    <label>选择药品</label>
+                    <select name="item_id" class="tw-input">
+                        {% for item in medicine_items %}
+                        <option value="{{ item.id }}" data-item-name="{{ item.template.name }}">{{ item.template.name }}（x{{ item.quantity }}）</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="flex justify-end gap-2 mt-4">
+                    <button type="submit" class="tw-btn-primary">使用</button>
+                </div>
+            </form>
+            {% else %}
+            <p class="tw-muted">仓库暂无药品。</p>
+            {% endif %}
+        </div>
+    </div>
+</div>

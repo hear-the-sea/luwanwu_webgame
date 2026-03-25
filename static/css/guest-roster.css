@@ -1,0 +1,308 @@
+.guest-roster-card {
+    display: flex;
+    max-height: calc(100vh - 300px);
+}
+
+.guest-table-wrapper {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: auto;
+    min-height: 300px;
+    margin-top: 0.5rem;
+}
+
+.guest-roster-card .table {
+    overflow: visible !important;
+}
+
+.guest-roster-card .table th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg-secondary);
+}
+
+.guest-roster-card .table tbody,
+.guest-roster-card .table tbody tr,
+.guest-roster-card .table tbody td {
+    overflow: visible;
+}
+
+.guest-roster-card .tw-table tbody tr:not(:last-child) td {
+    border-bottom: 2px solid var(--border-primary);
+}
+
+.guest-name-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    line-height: 1.2;
+}
+
+.guest-avatar-link {
+    display: inline-flex;
+    border-radius: 10px;
+    text-decoration: none;
+}
+
+.guest-avatar-link:focus-visible {
+    outline: 2px solid var(--border-primary);
+    outline-offset: 2px;
+}
+
+.guest-col-actions .tw-btn-sm + .tw-btn-sm {
+    margin-left: 0.4rem;
+}
+
+.guest-mobile-inline-label {
+    display: none;
+}
+
+.guest-table-wrapper::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.guest-table-wrapper::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+    border-radius: 4px;
+}
+
+.guest-table-wrapper::-webkit-scrollbar-thumb {
+    background: var(--border-primary);
+    border-radius: 4px;
+}
+
+.guest-table-wrapper::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
+@media (max-width: 768px) {
+    .tw-section-header {
+        flex-direction: column;
+        align-items: stretch !important;
+        gap: 0.75rem;
+    }
+
+    .tw-section-header > div:last-child {
+        flex-wrap: wrap;
+    }
+
+    .tw-section-header .tw-btn-primary,
+    .tw-section-header .tw-btn-secondary {
+        flex: 1;
+        min-width: 120px;
+        text-align: center;
+    }
+
+    .guest-roster-card {
+        max-height: none;
+    }
+
+    .guest-table-wrapper {
+        overflow-x: visible;
+        min-height: auto;
+    }
+
+    .guest-roster-card .tw-table {
+        display: block;
+    }
+
+    .guest-roster-card .tw-table thead {
+        display: none;
+    }
+
+    .guest-roster-card .tw-table tbody {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .guest-roster-card .tw-table tbody .guest-row {
+        display: grid;
+        grid-template-columns: 72px minmax(0, 1fr);
+        grid-template-areas:
+            "avatar name"
+            "avatar level"
+            "avatar loyalty"
+            "avatar hp"
+            "salary salary"
+            "upgrade upgrade"
+            "actions actions";
+        gap: 0.45rem 0.85rem;
+        padding: 0.95rem;
+        border: 1px solid var(--border-light);
+        border-radius: 12px;
+        background: linear-gradient(180deg, var(--bg-panel) 0%, var(--bg-card) 100%);
+        box-shadow: 0 4px 14px rgba(42, 28, 18, 0.08);
+        position: relative;
+    }
+
+    .guest-roster-card .tw-table tbody .guest-row td {
+        border-bottom: none !important;
+        padding: 0;
+        min-width: 0;
+    }
+
+    .guest-mobile-header-link {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 84px;
+        border-radius: 12px 12px 0 0;
+        z-index: 2;
+        display: block;
+    }
+
+    .guest-col-name {
+        grid-area: name;
+        font-size: 1.08rem;
+        font-weight: 700;
+        line-height: 1.25;
+        position: relative;
+        z-index: 3;
+    }
+
+    .guest-col-avatar {
+        grid-area: avatar;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        z-index: 3;
+        padding-top: 0.25rem;
+    }
+
+    .guest-col-avatar .guest-avatar-link {
+        width: 72px;
+        height: 72px;
+        border-radius: 12px;
+    }
+
+    .guest-col-avatar .guest-avatar {
+        width: 72px;
+        height: 72px;
+    }
+
+    .guest-col-level {
+        grid-area: level;
+    }
+
+    .guest-col-loyalty {
+        grid-area: loyalty;
+    }
+
+    .guest-col-hp {
+        grid-area: hp;
+    }
+
+    .guest-col-level,
+    .guest-col-loyalty,
+    .guest-col-hp {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        line-height: 1.3;
+        font-size: 0.92rem;
+    }
+
+    .guest-col-level::before,
+    .guest-col-loyalty::before,
+    .guest-col-hp::before,
+    .guest-col-upgrade::before {
+        color: var(--text-muted);
+        flex-shrink: 0;
+        font-size: 0.82rem;
+        min-width: 3.4em;
+    }
+
+    .guest-col-level::before { content: "等级: "; }
+    .guest-col-loyalty::before { content: "忠诚: "; }
+    .guest-col-hp::before { content: "生命: "; }
+
+    .guest-col-salary {
+        grid-area: salary;
+        display: grid;
+        grid-template-columns: max-content max-content;
+        align-items: start;
+        justify-content: start;
+        column-gap: 0.55rem;
+        margin-top: 0.65rem;
+        padding-top: 1.45rem;
+        border-top: 1px dashed var(--border-light);
+        font-size: 0.92rem;
+    }
+
+    .guest-col-salary > * {
+        margin-top: 0.32rem;
+    }
+
+    .guest-col-salary .guest-mobile-inline-label {
+        display: block;
+        color: var(--text-muted);
+        font-size: 0.82rem;
+        line-height: 1.2;
+        white-space: nowrap;
+    }
+
+    .guest-col-salary .open-salary-modal {
+        font-size: 0.68rem;
+        line-height: 1.05;
+        padding: 0.16rem 0.34rem;
+        min-height: 0;
+        border-radius: 0.33rem;
+        width: auto;
+        justify-self: start;
+        white-space: nowrap;
+    }
+
+    .guest-col-upgrade {
+        grid-area: upgrade;
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        font-size: 0.9rem;
+    }
+
+    .guest-col-upgrade::before { content: "升级: "; }
+
+    .guest-col-actions {
+        grid-area: actions;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+        padding-top: 0.5rem;
+        border-top: 1px dashed var(--border-light);
+    }
+
+    .guest-col-actions button {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .guest-col-actions .tw-btn-sm + .tw-btn-sm {
+        margin-left: 0;
+    }
+}
+
+@media (max-width: 420px) {
+    .guest-roster-card .tw-table tbody .guest-row {
+        grid-template-columns: 64px minmax(0, 1fr);
+    }
+
+    .guest-col-avatar .guest-avatar-link {
+        width: 64px;
+        height: 64px;
+    }
+
+    .guest-col-avatar .guest-avatar {
+        width: 64px;
+        height: 64px;
+    }
+
+    .guest-col-actions {
+        grid-template-columns: 1fr;
+    }
+}
