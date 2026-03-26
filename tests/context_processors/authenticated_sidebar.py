@@ -6,6 +6,8 @@ from django.test import RequestFactory
 
 from gameplay.context_processors import notifications
 from gameplay.services.manor.core import ensure_manor
+from guilds.models.base import Guild
+from guilds.models.member import GuildMember
 
 pytestmark = pytest.mark.django_db
 
@@ -201,3 +203,44 @@ def test_notifications_non_home_pages_skip_home_sidebar_queries(monkeypatch, dja
     assert context["message_unread_count"] == 2
     assert "sidebar_rank" not in context
     assert "sidebar_prestige" not in context
+    assert "sidebar_current_contribution_label" not in context
+
+
+def test_notifications_home_page_includes_active_guild_contribution_label(monkeypatch, django_user_model):
+    user = django_user_model.objects.create_user(username="ctx_guild_member_user", password="pass")
+    manor = ensure_manor(user)
+    guild = Guild.objects.create(name="上下文贡献帮", founder=user, is_active=True)
+    GuildMember.objects.create(
+        guild=guild,
+        user=user,
+        position="leader",
+        current_contribution=128,
+        total_contribution=128,
+        is_active=True,
+    )
+    request = RequestFactory().get("/")
+    request.user = user
+
+    def fake_cache_get(key, default=None):
+        if key == "stats:total_users_count":
+            return 5
+        if key == "stats:online_users_count":
+            return 2
+        if key == f"sidebar:rank:{manor.id}":
+            return None
+        return default
+
+    monkeypatch.setattr("gameplay.selectors.stats.cache.get", fake_cache_get)
+    monkeypatch.setattr("gameplay.selectors.stats.cache.set", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("gameplay.selectors.sidebar.cache.get", fake_cache_get)
+    monkeypatch.setattr("gameplay.selectors.sidebar.cache.set", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("gameplay.context_processors.unread_message_count", lambda _manor: 1)
+    monkeypatch.setattr(
+        "gameplay.services.raid.get_protection_status",
+        lambda _manor: {"is_protected": False, "type_display": "", "remaining_display": ""},
+    )
+    monkeypatch.setattr("gameplay.services.ranking.get_player_rank", lambda _manor: 9)
+
+    context = notifications(request)
+
+    assert context["sidebar_current_contribution_label"] == "128"

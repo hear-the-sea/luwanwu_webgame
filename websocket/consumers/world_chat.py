@@ -9,7 +9,6 @@ from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.db import DatabaseError
 from django_redis import get_redis_connection
 
 from core.utils.degradation import WORLD_CHAT_REFUND, record_degradation
@@ -19,19 +18,26 @@ from core.utils.infrastructure import (
     combine_infrastructure_exceptions,
 )
 from gameplay.services.utils.cache_exceptions import CACHE_INFRASTRUCTURE_EXCEPTIONS
-from websocket.backends.chat_history import (
-    TRIM_HISTORY_SCRIPT,
-    append_history_sync,
-    get_history_sync,
-    remove_history_sync,
-    trim_history_by_time_fallback,
-    trim_history_by_time_sync,
-)
-from websocket.backends.rate_limiter import rate_limit_sync
-from websocket.services.message_builder import build_message_sync, next_id_sync, normalize_text
+from websocket.backends.chat_history import TRIM_HISTORY_SCRIPT
+from websocket.services.message_builder import normalize_text
 
-from ..utils import filter_payload
 from .session_guard import SingleSessionWebSocketMixin
+from .world_chat_support import (
+    append_history_sync_for_consumer,
+    build_message_sync_for_consumer,
+    filter_chat_message_payload,
+    get_history_sync_for_consumer,
+    next_id_sync_for_consumer,
+    rate_limit_sync_for_consumer,
+    remove_history_compensation,
+    remove_history_sync_for_consumer,
+    resolve_display_name_sync,
+    safe_cache_get,
+    safe_cache_set,
+    send_connect_payloads,
+    trim_history_by_time_fallback_for_consumer,
+    trim_history_by_time_sync_for_consumer,
+)
 
 User = get_user_model()
 
@@ -49,8 +55,6 @@ WORLD_CHAT_EXPECTED_INFRASTRUCTURE_ERRORS: InfrastructureExceptions = combine_in
 
 
 def _now_ts() -> float:
-    # Preserve test monkeypatching via `websocket.consumers.time.time`.
-    # Import inside the helper to avoid circular imports at module import time.
     from websocket.consumers import time as consumers_time
 
     return float(consumers_time.time())
@@ -61,26 +65,17 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
 
     CHANNEL = "world"
     GROUP_NAME = "chat_world"
-
     HISTORY_KEY = "chat:world:history"
     NEXT_ID_KEY = "chat:world:next_id"
-
     HISTORY_LIMIT = 200
     HISTORY_ON_CONNECT = 60
     HISTORY_MESSAGE_TTL_SECONDS = 24 * 60 * 60
-
     MESSAGE_MAX_LEN = 200
     RATE_LIMIT_WINDOW_SECONDS = 8
     RATE_LIMIT_MAX_MESSAGES = 6
-
     TRUMPET_ITEM_KEY = "small_trumpet"
-
-    # Display name cache TTL (5 minutes)
     DISPLAY_NAME_CACHE_TTL = 300
-
-    # Lua script kept as class attribute for backwards compatibility
     TRIM_HISTORY_SCRIPT = TRIM_HISTORY_SCRIPT
-
     user_id: int | None = None
     display_name: str = ""
     CHAT_UNAVAILABLE_MESSAGE = "世界频道暂时不可用，请稍后重试"
@@ -113,22 +108,14 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
         await self.accept()
 
         history = await self._get_history()
-        await self.send_json(
-            {
-                "type": "history",
-                "channel": self.CHANNEL,
-                "messages": history,
-            }
-        )
-        await self.send_json(
-            {
-                "type": "status",
-                "channel": self.CHANNEL,
-                "status": "connected",
-                "user": {"id": self.user_id, "name": self.display_name},
-                "history_degraded": self._history_degraded,
-                "history_status_message": self.HISTORY_UNAVAILABLE_MESSAGE if self._history_degraded else "",
-            }
+        await send_connect_payloads(
+            self.send_json,
+            channel=self.CHANNEL,
+            user_id=self.user_id,
+            display_name=self.display_name,
+            history=history,
+            history_degraded=self._history_degraded,
+            history_status_message=self.HISTORY_UNAVAILABLE_MESSAGE if self._history_degraded else "",
         )
 
     async def disconnect(self, close_code):
@@ -260,18 +247,7 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
             await self.send_json({"type": "error", "code": "invalid_payload", "message": "消息格式错误"})
 
     async def chat_message(self, event):
-        payload = event.get("payload", {})
-        safe_payload = filter_payload(payload, ["type", "channel", "id", "ts", "sender", "text"])
-        # 兼容旧字段名
-        if "ts" not in safe_payload and "timestamp" in payload:
-            safe_payload["ts"] = payload["timestamp"]
-        if "text" not in safe_payload and "message" in payload:
-            safe_payload["text"] = payload["message"]
-        await self.send_json(safe_payload)
-
-    # -- Delegating methods ------------------------------------------------
-    # These thin wrappers preserve the existing instance-method interface
-    # (used by tests via monkeypatching) while delegating to extracted modules.
+        await self.send_json(filter_chat_message_payload(event.get("payload", {})))
 
     def _normalize_text(self, text: str) -> str:
         return normalize_text(text)
@@ -280,58 +256,34 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
         return get_redis_connection("default")
 
     def _safe_cache_get(self, key: str):
-        try:
-            return cache.get(key)
-        except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
-            logger.warning(
-                "World chat cache.get failed: key=%s error=%s",
-                key,
-                exc,
-                exc_info=True,
-                extra={"degraded": True, "component": "world_chat_cache"},
-            )
-            return None
+        return safe_cache_get(
+            cache,
+            key,
+            logger_instance=logger,
+            cache_infrastructure_exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS,
+        )
 
     def _safe_cache_set(self, key: str, value: str, timeout: int) -> None:
-        try:
-            cache.set(key, value, timeout=timeout)
-        except CACHE_INFRASTRUCTURE_EXCEPTIONS as exc:
-            logger.warning(
-                "World chat cache.set failed: key=%s error=%s",
-                key,
-                exc,
-                exc_info=True,
-                extra={"degraded": True, "component": "world_chat_cache"},
-            )
+        safe_cache_set(
+            cache,
+            key,
+            value,
+            timeout,
+            logger_instance=logger,
+            cache_infrastructure_exceptions=CACHE_INFRASTRUCTURE_EXCEPTIONS,
+        )
 
     @database_sync_to_async
     def _get_display_name(self, user_id: int) -> str:
-        cache_key = f"user:display_name:{user_id}"
-        cached = self._safe_cache_get(cache_key)
-        if cached is not None:
-            return cached
-
-        try:
-            user = User.objects.select_related("manor").get(id=user_id)
-        except User.DoesNotExist:
-            logger.info("World chat user not found when resolving display name: user_id=%s", user_id)
-            return "未知玩家"
-        except DatabaseError:
-            logger.exception("Database error when resolving world chat display name: user_id=%s", user_id)
-            return "未知玩家"
-
-        manor = getattr(user, "manor", None)
-        if manor is not None:
-            try:
-                display_name = str(manor.display_name)
-            except (AttributeError, TypeError, ValueError) as exc:
-                logger.debug("Invalid manor display_name for world chat user_id=%s: %s", user_id, exc)
-                display_name = user.get_full_name() or user.username or "玩家"
-        else:
-            display_name = user.get_full_name() or user.username or "玩家"
-
-        self._safe_cache_set(cache_key, display_name, timeout=self.DISPLAY_NAME_CACHE_TTL)
-        return display_name
+        return resolve_display_name_sync(
+            user_id=user_id,
+            cache_key=f"user:display_name:{user_id}",
+            user_model=User,
+            cache_ttl=self.DISPLAY_NAME_CACHE_TTL,
+            cache_get_fn=self._safe_cache_get,
+            cache_set_fn=self._safe_cache_set,
+            logger_instance=logger,
+        )
 
     @database_sync_to_async
     def _consume_trumpet(self) -> tuple[bool, str]:
@@ -351,7 +303,7 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
 
     def _get_history_sync(self) -> list[dict]:
         redis = self._get_redis()
-        messages, degraded = get_history_sync(
+        messages, degraded = get_history_sync_for_consumer(
             redis,
             history_key=self.HISTORY_KEY,
             history_on_connect=self.HISTORY_ON_CONNECT,
@@ -367,7 +319,7 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
 
     def _trim_history_by_time_sync(self, cutoff_ms: int) -> None:
         redis = self._get_redis()
-        trim_history_by_time_sync(
+        trim_history_by_time_sync_for_consumer(
             cutoff_ms,
             redis,
             history_key=self.HISTORY_KEY,
@@ -375,7 +327,7 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
         )
 
     def _trim_history_by_time_fallback(self, cutoff_ms: int, redis) -> None:
-        trim_history_by_time_fallback(
+        trim_history_by_time_fallback_for_consumer(
             cutoff_ms,
             redis,
             history_key=self.HISTORY_KEY,
@@ -384,7 +336,7 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
 
     def _append_history_sync(self, message: dict) -> None:
         redis = self._get_redis()
-        append_history_sync(
+        append_history_sync_for_consumer(
             message,
             redis,
             history_key=self.HISTORY_KEY,
@@ -397,25 +349,16 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
 
     def _remove_history_sync(self, message: dict) -> None:
         redis = self._get_redis()
-        remove_history_sync(message, redis, history_key=self.HISTORY_KEY)
+        remove_history_sync_for_consumer(message, redis, history_key=self.HISTORY_KEY)
 
     async def _remove_history_compensation(self, message: dict) -> bool:
-        try:
-            await sync_to_async(self._remove_history_sync, thread_sensitive=True)(message)
-            return True
-        except WORLD_CHAT_EXPECTED_INFRASTRUCTURE_ERRORS:
-            logger.exception(
-                "World chat compensation delete failed: user_id=%s message_id=%s",
-                self.user_id,
-                message.get("id"),
-                extra={
-                    "degraded": True,
-                    "component": "world_chat_publish",
-                    "user_id": self.user_id,
-                    "message_id": message.get("id"),
-                },
-            )
-            return False
+        return await remove_history_compensation(
+            remove_history_sync_fn=self._remove_history_sync,
+            message=message,
+            expected_infrastructure_exceptions=WORLD_CHAT_EXPECTED_INFRASTRUCTURE_ERRORS,
+            logger_instance=logger,
+            user_id=self.user_id,
+        )
 
     async def _compensate_failed_publish(self, *, message: dict | None, history_written: bool) -> tuple[bool, bool]:
         history_removed = True
@@ -426,7 +369,7 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
 
     def _rate_limit_sync(self, user_id: int | None) -> tuple[bool, int | None]:
         redis = self._get_redis()
-        return rate_limit_sync(
+        return rate_limit_sync_for_consumer(
             user_id,
             redis,
             rate_limit_window_seconds=self.RATE_LIMIT_WINDOW_SECONDS,
@@ -438,11 +381,11 @@ class WorldChatConsumer(SingleSessionWebSocketMixin, AsyncJsonWebsocketConsumer)
 
     def _next_id_sync(self) -> int:
         redis = self._get_redis()
-        return next_id_sync(redis, next_id_key=self.NEXT_ID_KEY)
+        return next_id_sync_for_consumer(redis, next_id_key=self.NEXT_ID_KEY)
 
     async def _build_message(self, text: str) -> dict:
         return await sync_to_async(
-            lambda: build_message_sync(
+            lambda: build_message_sync_for_consumer(
                 text,
                 self._get_redis(),
                 next_id_key=self.NEXT_ID_KEY,

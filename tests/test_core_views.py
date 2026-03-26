@@ -246,6 +246,45 @@ class TestCoreViews:
         assert f'href="{reverse("gameplay:warehouse")}" data-partial-nav="1"' in body
         assert f'href="{reverse("trade:trade")}" data-partial-nav="1"' in body
 
+    def test_home_sidebar_uses_real_links_and_no_placeholder_values(self, manor_with_user):
+        """首页侧栏只展示真实入口，不再保留伪链接或硬编码业务值。"""
+        _manor, client = manor_with_user
+
+        response = client.get(reverse("home"))
+
+        assert response.status_code == 200
+        body = response.content.decode("utf-8")
+        assert 'href="#"' not in body
+        assert "1000/1000" not in body
+        assert "贡献积分" not in body
+        assert "当前贡献" in body
+        assert "未加入帮会" in body
+        assert f'href="{reverse("accounts:profile")}" class="btn-menu"' in body
+        assert f'href="{reverse("gameplay:ranking")}" class="btn-menu"' in body
+        assert f'href="{reverse("gameplay:messages")}" class="btn-menu"' in body
+        assert f'href="{reverse("gameplay:settings")}" class="btn-menu"' in body
+
+    def test_authenticated_layout_loads_chat_widget_modules_in_order(self, manor_with_user):
+        """聊天挂件脚本应按 core -> renderer -> layout -> connection -> main 的顺序加载。"""
+        _manor, client = manor_with_user
+
+        response = client.get(reverse("gameplay:dashboard"))
+
+        assert response.status_code == 200
+        body = response.content.decode("utf-8")
+        core_script = "js/chat_widget_core.js"
+        renderer_script = "js/chat_widget_renderer.js"
+        layout_script = "js/chat_widget_layout.js"
+        connection_script = "js/chat_widget_connection.js"
+        main_script = "js/chat_widget.js"
+        assert core_script in body
+        assert renderer_script in body
+        assert layout_script in body
+        assert connection_script in body
+        assert main_script in body
+        assert body.index(core_script) < body.index(renderer_script) < body.index(layout_script)
+        assert body.index(layout_script) < body.index(connection_script) < body.index(main_script)
+
     def test_dashboard_upgrading_building_has_auto_refresh_countdown(self, manor_with_user):
         """建筑升级倒计时应携带自动刷新标记。"""
         manor, client = manor_with_user

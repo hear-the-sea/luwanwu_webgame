@@ -40,7 +40,10 @@
 
 ### 2.2 当前主线
 
-当前主线已完成 `阶段 4：治理模板与前端边界` 的当前封板，下一轮主线可切到 `阶段 5：测试与发布质量`。
+原有 `阶段 4：模板内联脚本迁出` 已完成封板，但 `2026-03-26` 复核后确认“前端工程化与基模板收口”仍未完成；因此当前主线调整为：
+
+- 主线 A：重开 `阶段 4` 的后续治理，聚焦“基模板去伪状态 / 页面脚本模块化 / 前端最小验证链路”。
+- 主线 B：`阶段 5：测试与发布质量` 维持常规推进，但不再抢占前端治理主线。
 
 - `2026-03-25` 已按审计基线重开一条“小切口复杂度治理”支线：复杂度热点复核显示 `gameplay/services/manor/core.py`、`gameplay/views/jail.py`、`trade/selector_builders.py` 仍明显超出默认维护阈值，其中 `gameplay/views/jail.py` 被选为本轮试点。
 - 本轮试点的验收标准不是“多拆几个 helper 文件”，而是把 `jail` 页面链路中的锁包装/异常映射、状态载荷拼装与 HTTP 入口编排职责拆清；若只是新增转发层但主入口认知负担没有下降，则不计为完成。
@@ -59,6 +62,23 @@
 - `2026-03-25` 已重新切回阶段 5：`tests/test_mission_sync_report.py` 已收口为兼容入口，并按“防守配置校验 / offense 掉落表校验”拆到 `tests/mission_sync_report/defense_validation.py` 与 `tests/mission_sync_report/offense_drop_table.py`；兼容入口 `python -m pytest tests/test_mission_sync_report.py -q` 通过，结果为 `17 passed`。
 - `2026-03-25` 已继续推进阶段 5 的第二个测试收口切口：`tests/guest_summon_card/loot_boxes.py` 中的宝箱配置校验测试已拆到 `tests/guest_summon_card/loot_box_config.py`，并由 `tests/test_guest_summon_card.py` 统一继续导入；`tests/guest_summon_card/loot_boxes.py` 已由 `566` 行降到 `250` 行，兼容入口 `python -m pytest tests/test_guest_summon_card.py -q` 通过，结果为 `34 passed`。
 - 经过这两刀，当前测试层已无超过 `500` 行的测试文件；后续若继续按审计文档推进，应转回“新的超阈值复核 + 门禁边界补强”模式，而不是继续为拆分而拆分。
+- `2026-03-26` 新一轮仓库级复核补充了三条必须进入计划的结论：
+  - 基模板仍存在硬编码业务值与伪入口：`templates/base.html` 中的行动力、贡献积分和多处 `href="#"` 菜单不符合“页面状态必须真实可解释”的治理要求。
+  - 前端工程化仍明显落后于后端：`package.json` 仅保留 Tailwind 构建脚本，`static/js` 已累积约 `5k+` 行页面脚本，却没有任何前端 lint / test / bundler 执行链路；阶段 4 不能仅以“模板内联脚本清零”宣布完成。
+  - 复杂度热点已转为“预算上方的多职责入口”：`trade/services/auction/rounds.py`、`websocket/consumers/world_chat.py`、`gameplay/views/map.py`、`gameplay/views/inventory.py`、`static/js/chat_widget.js` 应作为下一轮候选，而不是继续只盯超 `600` 行文件。
+- `2026-03-26` 已完成阶段 4 后续治理的第一刀：`templates/base.html` 已移除首页侧栏中的硬编码行动力/贡献占位值与 `href="#"` 伪入口，功能菜单只保留真实路由；同时 `gameplay/context_processors.py` 已补齐首页侧栏“当前贡献”文案来源，没有帮会成员身份时明确展示“未加入帮会”，避免共享模板继续展示伪状态。
+- `2026-03-26` 已完成页面脚本治理试点第一刀：`static/js/chat_widget.js` 已按 `core / renderer / main` 拆分为 `chat_widget_core.js`、`chat_widget_renderer.js` 与主入口脚本，继续保持无 bundler 的静态脚本加载方式；同时新增 `npm run test:js`，使用 `node --test static/js/tests/chat_widget_core.test.js` 为聊天挂件核心纯逻辑提供最小可执行验证链路。
+- 本轮验证已记录：`node --check static/js/chat_widget_core.js static/js/chat_widget_renderer.js static/js/chat_widget.js` 通过，`npm run test:js` 通过，`python -m pytest tests/test_core_views.py tests/test_context_processors.py -q` 通过，结果为 `43 passed`。这说明基模板真实性治理与聊天挂件脚本拆分都已具备回归约束。
+- `2026-03-26` 已完成页面脚本治理试点第二刀：`static/js/chat_widget.js` 中仍残留的窗口几何/拖拽与 WebSocket 生命周期职责，已继续下沉到 `static/js/chat_widget_layout.js` 与 `static/js/chat_widget_connection.js`；主入口文件已由 `455` 行降到 `203` 行，退出默认前端热点预算上方区间，同时继续保持无 bundler 的浏览器全局模块加载方式。
+- 这轮验证已记录：`node --check static/js/chat_widget_core.js static/js/chat_widget_renderer.js static/js/chat_widget_layout.js static/js/chat_widget_connection.js static/js/chat_widget.js` 通过，`npm run test:js` 通过，`python -m pytest tests/test_core_views.py tests/test_context_processors.py -q` 通过，结果为 `43 passed`。其中 `npm run test:js` 已扩展为覆盖 `chat_widget_core / layout / connection` 三组纯逻辑回归，用于约束聊天挂件的重连、心跳、拖拽阈值与视口约束边界不回退。
+- `2026-03-26` 已继续处理“预算上方的多职责入口”第一刀：`gameplay/views/map.py` 中的锁包装执行、请求 JSON/目标庄园解析，以及 raid/scout/incoming 状态 JSON 载荷组装，已分别下沉到 `gameplay/views/map_action_support.py`、`gameplay/views/map_request_parsing.py` 与 `gameplay/views/map_payloads.py`；主文件行数已由 `441` 行降到 `408` 行，同时保留 `map.py` 内兼容包装函数名，避免现有 monkeypatch 测试和路由入口被一次性打断。
+- 这轮验证已记录：`python -m flake8 --jobs=1 gameplay/views/map.py gameplay/views/map_action_support.py gameplay/views/map_payloads.py gameplay/views/map_request_parsing.py` 通过，`python -m mypy --cache-dir=/tmp/mypy-map-refactor gameplay/views/map.py gameplay/views/map_action_support.py gameplay/views/map_payloads.py gameplay/views/map_request_parsing.py` 通过，`python -m pytest tests/map_views tests/test_map_attack_field_reuse.py tests/test_permissions_views.py tests/test_core_views.py -q` 通过，结果为 `28 passed`。说明 `map` 视图的异常语义、请求解析和状态响应契约在拆分后保持稳定。
+- `2026-03-26` 已继续处理“预算上方的多职责入口”第二刀：`gameplay/views/inventory.py` 中的数量参数归一化、目标门客物品 action 合约校验、成功消息拼装，以及已知/未知错误映射，已统一下沉到 `gameplay/views/inventory_action_support.py`；主文件行数已由 `429` 行降到 `348` 行，退出默认 Python 复杂度预算上方区间。
+- 这轮验证已记录：`python -m flake8 --jobs=1 gameplay/views/inventory.py gameplay/views/inventory_action_support.py` 通过，`python -m mypy --cache-dir=/tmp/mypy-inventory-refactor gameplay/views/inventory.py gameplay/views/inventory_action_support.py` 通过，`python -m pytest tests/test_inventory_views.py tests/test_guest_view_error_boundaries.py tests/test_core_views.py -q` 通过，结果为 `99 passed`。说明仓库视图的 AJAX/redirect 分支、成功消息契约与数据库/编程错误边界在拆分后保持稳定。
+- `2026-03-26` 已继续处理“预算上方的多职责入口”第三刀：`websocket/consumers/world_chat.py` 中的 cache 适配、显示名解析、历史读写后端桥接、连接状态载荷发送与消息 payload 过滤，已统一下沉到 `websocket/consumers/world_chat_support.py`；主文件行数已由 `454` 行降到 `396` 行，重新回到默认 Python 复杂度预算以内，同时保留 `_safe_cache_get`、`_get_display_name`、`_append_history_sync`、`_rate_limit_sync` 等实例方法表面，避免现有测试与 monkeypatch 契约被打断。
+- 这轮验证已记录：`python -m flake8 --jobs=1 websocket/consumers/world_chat.py websocket/consumers/world_chat_support.py` 通过，`python -m mypy --cache-dir=/tmp/mypy-world-chat websocket/consumers/world_chat.py websocket/consumers/world_chat_support.py` 通过，`python -m pytest tests/test_world_chat_consumer.py tests/test_websocket_world_chat_history_internals.py tests/test_websocket_consumers.py -q` 通过，结果为 `47 passed`。说明世界频道 consumer 的连接、发送、补偿、历史读写与缓存降级契约在拆分后保持稳定。
+- `2026-03-26` 已继续处理“预算上方的多职责入口”第四刀：`trade/services/auction/rounds.py` 中的“轮次创建/结算编排”“拍卖位结算与失败补偿”“中标发货与通知”三段职责，已分别下沉到 `trade/services/auction/rounds_lifecycle_support.py`、`trade/services/auction/rounds_settlement_support.py` 与 `trade/services/auction/rounds_delivery_support.py`；主文件行数已由 `540` 行降到 `223` 行，同时继续保留 `create_auction_round()`、`settle_auction_round()`、`_settle_slot()`、`_refund_losing_bids()`、`_mark_slot_unsold_after_failure()`、`_send_winning_notification_vickrey()` 等兼容包装函数名，避免现有测试、兼容入口和 monkeypatch 契约被一次性打断。
+- 这轮验证已记录：`python -m flake8 --jobs=1 trade/services/auction/rounds.py trade/services/auction/rounds_lifecycle_support.py trade/services/auction/rounds_settlement_support.py trade/services/auction/rounds_delivery_support.py` 通过，`python -m mypy --cache-dir=/tmp/mypy-auction-rounds-refactor trade/services/auction/rounds.py trade/services/auction/rounds_lifecycle_support.py trade/services/auction/rounds_settlement_support.py trade/services/auction/rounds_delivery_support.py` 通过，`python -m pytest tests/test_auction_rounds_cache.py tests/trade_auction_rounds tests/test_trade_auction_rounds.py tests/test_trade_tasks.py -q` 通过，结果为 `54 passed`。说明拍卖轮次创建、结算恢复、中标发货 fallback 与通知异常边界在拆分后保持稳定。
 
 `阶段 2：并发与测试基线` 已完成封板。当前稳定下来的阶段 2 结论如下：
 
@@ -527,15 +547,22 @@
 - 阶段 3 已完成封板；此前 broad `except Exception`、生产代码裸 `raise ValueError(...)`、宽泛 `ignore_errors = true` 与高频用户链路尾项都已收口，后续零散的低频复用路径契约补强或类型注解扩展只按常规维护处理，不再作为单独阶段阻断项。
 - 页面读路径的热点活动投影已经统一到 `project_manor_activity_for_read()`，当前剩余工作主要是继续用回归测试守住“页面不隐式塞补偿逻辑、selector 不回退到隐藏刷新、编程错误不被 view 层猜测分类”这三条边界。
 - 类型门禁的后续增量工作将转入常规维护：`battle / mission / arena` 周边共享依赖仍可按依赖簇继续补齐注解并扩大 `disallow_untyped_defs = true` 严格名单，但这已不再视作阶段 3 未完成项。
+- 当前最高优先级主题已调整为“前端边界与基模板真实性治理”：
+  - 先清理 `templates/base.html` 中的硬编码状态、伪入口与无责任归属的全局 UI 杂项，确保共享模板只承载真实、可解释、已实现的全局能力。
+  - `static/js/chat_widget.js` 的试点两刀已完成：当前已具备 `core / renderer / layout / connection / main` 的模块边界和最小 JS 回归链路；后续前端治理应转向新的候选热点与更完整的验证覆盖，而不是把聊天挂件主入口再次堆回大杂烩状态。
+  - 随后再推进“预算上方的多职责入口”拆分；当前 `gameplay/views/map.py`、`gameplay/views/inventory.py`、`websocket/consumers/world_chat.py` 与 `trade/services/auction/rounds.py` 已完成一轮收口，后续应转入回归维护，并重新复核新的候选热点，而不是机械继续拆已经回到预算内的入口。
+- `trade/views.py` 与 `trade/view_helpers.py` 中已经出现重复阈值告警 helper；这类重复抽象应在对应热点整改时一并回收，禁止继续扩散“近似相同、边界不同”的小工具层。
 
 ## 3. 后续执行顺序
 
 下一轮优化按以下顺序推进：
 
-1. 继续用回归测试守住页面读路径统一投影边界，避免页面重新塞回隐藏补偿、selector 回退隐藏刷新，或 view 层重新猜测编程错误类型。
-2. 在阶段 2 关键链路已有真实测试约束的前提下，继续推进模板、页面脚本和前端交互边界治理。
-3. 把阶段 2 的 `make test-critical` / `make test-real-services` / `make test-gates` 持续保留在回归节奏里，避免补偿边界与并发语义回退。
-4. 对 `battle / mission / arena` 周边共享依赖的类型注解与零散低频复用路径契约补强，按常规维护随触点推进，不再作为阶段 3 独立收尾事项。
+1. 先处理 `templates/base.html` 的伪状态 / 伪入口问题，给共享模板建立“只允许真实全局能力”的明确边界。
+2. 以 `static/js/chat_widget.js` 为试点，建立页面脚本的模块化拆分与最小验证链路，补齐前端无 lint / 无 test / 无 bundler 下最危险的维护缺口。
+3. 在试点规则稳定后，继续按“多职责入口优先”原则复核新的候选热点；`gameplay/views/map.py`、`gameplay/views/inventory.py`、`websocket/consumers/world_chat.py` 与 `trade/services/auction/rounds.py` 已完成当前这一轮收口，不再列为下一步默认拆分对象。
+4. 继续用回归测试守住页面读路径统一投影边界，避免页面重新塞回隐藏补偿、selector 回退隐藏刷新，或 view 层重新猜测编程错误类型。
+5. 把阶段 2 的 `make test-critical` / `make test-real-services` / `make test-gates` 持续保留在回归节奏里，避免补偿边界与并发语义回退。
+6. 对 `battle / mission / arena` 周边共享依赖的类型注解与零散低频复用路径契约补强，按常规维护随触点推进，不再作为阶段 3 独立收尾事项。
 
 ## 4. 分阶段路线
 
@@ -577,11 +604,15 @@
 - 拆分最大模板和页面脚本。
 - 把内联交互、页面状态逻辑和大段样式逐步从模板中抽离。
 - 降低基模板承担的全局职责密度。
+- 清理基模板中的硬编码业务状态、`href="#"` 伪入口和长期未兑现的占位菜单。
+- 为热点页面脚本建立最小可执行验证链路，优先覆盖连接状态、请求序列化、重连/补偿和 DOM 协议。
 
 完成标志：
 
 - 高复杂页面具备稳定 partial / component 边界。
 - 前端交互逻辑不再继续散落在模板内联代码中。
+- 基模板不再展示硬编码业务值，也不再承载无法解释的伪入口。
+- 热点页面脚本至少具备可重复执行的最小验证入口，而不再完全依赖人工点击回归。
 
 ### 阶段 5：测试与发布质量
 

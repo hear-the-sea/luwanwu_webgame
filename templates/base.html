@@ -90,12 +90,11 @@
                             </li>
                             <li><label>您的官职:</label> <span>{{ user.title|default:"平民" }}</span></li>
                             <li><label>您的声望:</label> <span>{{ sidebar_prestige|default:0 }}</span></li>
-                            <li><label>行动力值:</label> <span>1000/1000</span></li>
                             <li><label>庄园排名:</label> <span>{% if sidebar_rank %}{{ sidebar_rank }}{% else %}未上榜{% endif %}</span></li>
                             <li><label>粮食储量:</label> <span>{{ user.manor.grain }}/{{ user.manor.grain_capacity }}</span></li>
                             <li><label>白银储量:</label> <span>{{ user.manor.silver }}/{{ user.manor.silver_capacity }}</span></li>
                             <li><label>家丁人数:</label> <span>{{ user.manor.retainer_count }}/{{ user.manor.retainer_capacity }} 人</span></li>
-                            <li><label>贡献积分:</label> <span>0</span></li>
+                            <li><label>当前贡献:</label> <span>{{ sidebar_current_contribution_label }}</span></li>
                         </ul>
                     </div>
                 </div>
@@ -104,18 +103,13 @@
                 <div class="panel">
                     <div class="panel-header">功能菜单</div>
                     <div class="panel-content menu-grid">
-                        <a href="#" class="btn-menu">系统</a>
-                        <a href="#" class="btn-menu">排名</a>
-                        <a href="#" class="btn-menu">笔记</a>
-                        <a href="#" class="btn-menu">论坛</a>
-                        <a href="#" class="btn-menu">黑名单</a>
-                        <a href="#" class="btn-menu">好友</a>
+                        <a href="{% url 'accounts:profile' %}" class="btn-menu">资料</a>
+                        <a href="{% url 'gameplay:ranking' %}" class="btn-menu">排名</a>
                         <a href="{% url 'gameplay:messages' %}" class="btn-menu" id="nav-messages-link" data-unread="{{ message_unread_count|default:0 }}">
                             消息
                             {% if message_unread_count > 0 %}({{ message_unread_count }}){% endif %}
                         </a>
                         <a href="{% url 'gameplay:settings' %}" class="btn-menu">设置</a>
-                        <a href="#" class="btn-menu">帮助</a>
                         <form method="post" action="{% url 'accounts:logout' %}" style="display: contents;">
                             {% csrf_token %}
                             <button type="submit" class="btn-menu"
@@ -173,6 +167,10 @@
     <script src="{% static 'js/notifications.js' %}"></script>
     {% if user.is_authenticated %}
     <script src="{% static 'js/online_stats.js' %}"></script>
+    <script src="{% static 'js/chat_widget_core.js' %}"></script>
+    <script src="{% static 'js/chat_widget_renderer.js' %}"></script>
+    <script src="{% static 'js/chat_widget_layout.js' %}"></script>
+    <script src="{% static 'js/chat_widget_connection.js' %}"></script>
     <script src="{% static 'js/chat_widget.js' %}"></script>
     {% endif %}
     <div id="page-extra-scripts" hidden>

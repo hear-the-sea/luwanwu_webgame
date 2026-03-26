@@ -16,16 +16,15 @@ from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
 from core.exceptions import GameError
-from core.utils import json_error, json_success, parse_json_object, safe_int, safe_positive_int
+from core.utils import json_error, json_success, safe_int
 from core.utils.locked_actions import (
     ActionLockSpec,
     acquire_scoped_action_lock,
     build_scoped_action_lock_key,
-    execute_locked_action,
     release_scoped_action_lock,
 )
 from core.utils.rate_limit import rate_limit_json
-from core.utils.view_error_mapping import DEFAULT_VIEW_INFRASTRUCTURE_EXCEPTIONS, json_error_response_for_exception
+from core.utils.view_error_mapping import json_error_response_for_exception
 from gameplay.constants import REGION_CHOICES, UIConstants
 from gameplay.models import Manor as ManorModel
 from gameplay.models import RaidRun
@@ -45,6 +44,13 @@ from gameplay.services.raid import (
 from gameplay.services.raid.map_search import get_manor_public_info
 from gameplay.services.raid.protection import get_protection_status
 from gameplay.services.raid.utils import can_attack_target
+from gameplay.views.map_action_support import run_locked_map_json_action
+from gameplay.views.map_payloads import build_raid_status_response_payload, resolve_attack_fields_from_info
+from gameplay.views.map_request_parsing import (
+    request_json_object_or_error,
+    request_target_manor_or_error,
+    target_manor_or_error,
+)
 from gameplay.views.read_helpers import get_prepared_manor_for_read
 
 MAP_ACTION_LOCK_SECONDS = 5
@@ -89,69 +95,56 @@ def _run_locked_map_json_action(
     log_args: tuple[object, ...],
     known_exceptions: tuple[type[Exception], ...] = (GameError,),
 ) -> JsonResponse:
-    return execute_locked_action(
-        action_name=action_name,
+    return run_locked_map_json_action(
         owner_id=int(manor.id),
+        action_name=action_name,
         scope=scope,
+        operation=operation,
+        success_response=success_response,
+        conflict_response=_map_action_conflict_response,
+        error_response=lambda exc, current_log_message, current_log_args: _map_action_error_response(
+            exc,
+            log_message=current_log_message,
+            log_args=current_log_args,
+        ),
         acquire_lock_fn=_acquire_map_action_lock,
         release_lock_fn=_release_map_action_lock,
-        operation=operation,
-        on_lock_conflict=_map_action_conflict_response,
-        on_success=success_response,
+        logger_instance=logger,
+        log_message=log_message,
+        log_args=log_args,
         known_exceptions=known_exceptions,
-        on_known_error=lambda exc: cast(
-            JsonResponse,
-            json_error_response_for_exception(
-                exc,
-                logger_instance=logger,
-                known_exceptions=known_exceptions,
-            ),
-        ),
-        on_database_error=lambda exc: _map_action_error_response(exc, log_message=log_message, log_args=log_args),
-        on_unexpected_error=lambda exc: _map_action_error_response(exc, log_message=log_message, log_args=log_args),
-        unexpected_exceptions=DEFAULT_VIEW_INFRASTRUCTURE_EXCEPTIONS,
     )
 
 
 def _resolve_attack_fields_from_info(info: dict[str, Any], viewer_manor: Any, target_manor: Any) -> tuple[bool, str]:
-    can_attack_value = info.get("can_attack")
-    attack_reason_value = info.get("attack_reason")
-    if isinstance(can_attack_value, bool) and isinstance(attack_reason_value, str):
-        return can_attack_value, attack_reason_value
-    return can_attack_target(viewer_manor, target_manor)
+    return resolve_attack_fields_from_info(
+        info,
+        viewer_manor,
+        target_manor,
+        fallback_fn=can_attack_target,
+    )
 
 
 def _request_json_object_or_error(request: HttpRequest) -> tuple[dict[str, Any] | None, JsonResponse | None]:
-    data = parse_json_object(request.body)
-    if data is None:
-        return None, json_error("无效的请求数据")
-    return data, None
+    return request_json_object_or_error(request, json_error_fn=json_error)
 
 
 def _target_manor_or_error(data: dict[str, Any]) -> tuple[ManorModel | None, JsonResponse | None]:
-    target_id = safe_positive_int(data.get("target_id"), default=None)
-    if target_id is None:
-        return None, json_error("目标庄园参数无效")
-    try:
-        return ManorModel.objects.get(pk=target_id), None
-    except ManorModel.DoesNotExist:
-        return None, json_error("目标庄园不存在", status=404)
+    return target_manor_or_error(
+        data,
+        manor_model=ManorModel,
+        json_error_fn=json_error,
+    )
 
 
 def _request_target_manor_or_error(
     request: HttpRequest,
 ) -> tuple[dict[str, Any] | None, ManorModel | None, JsonResponse | None]:
-    data, error = _request_json_object_or_error(request)
-    if error is not None:
-        return None, None, error
-    if data is None:
-        return None, None, json_error("无效的请求数据")
-    target_manor, error = _target_manor_or_error(data)
-    if error is not None:
-        return None, None, error
-    if target_manor is None:
-        return data, None, json_error("目标庄园不存在", status=404)
-    return data, target_manor, None
+    return request_target_manor_or_error(
+        request,
+        manor_model=ManorModel,
+        json_error_fn=json_error,
+    )
 
 
 def _map_action_lock_key(action: str, manor_id: int, scope: str) -> str:
@@ -171,36 +164,10 @@ def _build_raid_status_response(manor: Any) -> JsonResponse:
     active_scouts = get_active_scouts(manor)
     incoming_raids = get_incoming_raids(manor)
 
-    return json_success(
-        active_raids=[
-            {
-                "id": r.id,
-                "target_name": r.defender.display_name,
-                "status": r.status,
-                "status_display": r.get_status_display(),
-                "time_remaining": r.time_remaining,
-                "can_retreat": r.can_retreat,
-            }
-            for r in active_raids
-        ],
-        active_scouts=[
-            {
-                "id": s.id,
-                "target_name": s.defender.display_name,
-                "time_remaining": s.time_remaining,
-                "success_rate": round(s.success_rate * 100),
-            }
-            for s in active_scouts
-        ],
-        incoming_raids=[
-            {
-                "id": r.id,
-                "attacker_name": r.attacker.display_name,
-                "attacker_location": r.attacker.location_display,
-                "time_remaining": r.time_remaining,
-            }
-            for r in incoming_raids
-        ],
+    return build_raid_status_response_payload(
+        active_raids=active_raids,
+        active_scouts=active_scouts,
+        incoming_raids=incoming_raids,
     )
 
 

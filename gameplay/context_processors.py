@@ -65,11 +65,26 @@ def _populate_authenticated_context(context: dict[str, Any], request) -> None:
         return
 
     context["sidebar_prestige"] = manor.prestige
+    context["sidebar_current_contribution_label"] = _resolve_sidebar_current_contribution_label(request)
 
     try:
         context["sidebar_rank"] = sidebar_selector.load_sidebar_rank(manor)
     except DatabaseError:
         logger.warning("Failed to load sidebar rank", exc_info=True)
+
+
+def _resolve_sidebar_current_contribution_label(request) -> str:
+    try:
+        membership = request.user.guild_membership
+    except ObjectDoesNotExist:
+        return "未加入帮会"
+    except DatabaseError:
+        logger.warning("Failed to load guild membership for sidebar context", exc_info=True)
+        return "暂不可用"
+
+    if not getattr(membership, "is_active", False):
+        return "未加入帮会"
+    return str(membership.current_contribution)
 
 
 def notifications(request):

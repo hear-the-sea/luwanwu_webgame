@@ -7,19 +7,17 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Mapping
 
-from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import DatabaseError
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
-from core.decorators import unexpected_error_response
 from core.exceptions import GameError
-from core.utils import is_ajax_request, json_error, json_success, safe_int, safe_positive_int, sanitize_error_message
+from core.utils import is_ajax_request, safe_int, safe_positive_int
 from core.utils.rate_limit import rate_limit_redirect
 from gameplay.constants import UIConstants
 from gameplay.models import InventoryItem
@@ -36,16 +34,19 @@ from gameplay.services.inventory.use import use_inventory_item
 from gameplay.services.manor.core import get_manor, project_manor_activity_for_read
 from gameplay.services.manor.treasury import move_item_to_treasury, move_item_to_warehouse
 from gameplay.services.resources import project_resource_production_for_read
+from gameplay.views.inventory_action_support import (
+    build_inventory_use_success_message,
+    inventory_error_response,
+    known_inventory_error_response,
+    normalize_inventory_success_message,
+    parse_positive_quantity,
+    resolve_target_guest_item_action,
+    success_response,
+    unexpected_inventory_error_response,
+)
 from gameplay.views.read_helpers import get_prepared_manor_for_read
 
 logger = logging.getLogger(__name__)
-
-
-def _parse_positive_quantity(raw_quantity: str | None, default: int = 1) -> int | None:
-    """Parse quantity from user input, allowing empty to fall back to default."""
-    if raw_quantity is None or raw_quantity == "":
-        return default
-    return safe_positive_int(raw_quantity, default=None)
 
 
 def _warehouse_item(manor: Any, pk: int) -> InventoryItem:
@@ -53,70 +54,6 @@ def _warehouse_item(manor: Any, pk: int) -> InventoryItem:
         manor.inventory_items.select_related("template"),
         pk=pk,
         storage_location=InventoryItem.StorageLocation.WAREHOUSE,
-    )
-
-
-def _resolve_target_guest_item_action(item: InventoryItem) -> str | None:
-    payload = item.template.effect_payload
-    if payload is None:
-        return None
-    if not isinstance(payload, dict):
-        raise AssertionError(f"invalid inventory target-guest item effect_payload: {payload!r}")
-    action = payload.get("action")
-    if action is None:
-        return None
-    if not isinstance(action, str):
-        raise AssertionError(f"invalid inventory target-guest item action: {action!r}")
-    return action.strip() or None
-
-
-def _normalize_inventory_success_message(raw_value: object, *, contract_name: str) -> str:
-    if not isinstance(raw_value, str) or not raw_value.strip():
-        raise AssertionError(f"invalid {contract_name}: {raw_value!r}")
-    return raw_value.strip()
-
-
-def _error_response(
-    request: HttpRequest,
-    is_ajax: bool,
-    error: str,
-    redirect_url: str = "gameplay:warehouse",
-    *,
-    status: int = 400,
-) -> HttpResponse:
-    if is_ajax:
-        return json_error(error, status=status)
-    messages.error(request, error)
-    return redirect(redirect_url)
-
-
-def _known_inventory_error_response(
-    request: HttpRequest,
-    is_ajax: bool,
-    exc: GameError,
-    *,
-    redirect_url: str = "gameplay:warehouse",
-) -> HttpResponse:
-    return _error_response(request, is_ajax, sanitize_error_message(exc), redirect_url=redirect_url)
-
-
-def _unexpected_inventory_error_response(
-    request: HttpRequest,
-    exc: DatabaseError,
-    *,
-    is_ajax: bool,
-    redirect_url: str,
-    log_message: str,
-    log_args: tuple[object, ...],
-) -> HttpResponse:
-    return unexpected_error_response(
-        request,
-        exc,
-        is_ajax=is_ajax,
-        redirect_url=redirect_url,
-        log_message=log_message,
-        log_args=log_args,
-        logger_instance=logger,
     )
 
 
@@ -129,21 +66,18 @@ def _move_item_between_storage(
     redirect_url: str,
 ) -> HttpResponse:
     manor = get_manor(request.user)
-    quantity = _parse_positive_quantity(request.POST.get("quantity"), default=1)
+    quantity = parse_positive_quantity(request.POST.get("quantity"), default=1)
     is_ajax = is_ajax_request(request)
     if quantity is None:
-        return _error_response(request, is_ajax, "数量参数无效", redirect_url=redirect_url)
+        return inventory_error_response(request, is_ajax, "数量参数无效", redirect_url=redirect_url)
 
     try:
         move_func(manor, pk, quantity)
-        message = success_message(quantity)
-        if is_ajax:
-            return json_success(message=message)
-        messages.success(request, message)
+        return success_response(request, is_ajax=is_ajax, message=success_message(quantity), redirect_url=redirect_url)
     except GameError as exc:
-        return _known_inventory_error_response(request, is_ajax, exc, redirect_url=redirect_url)
+        return known_inventory_error_response(request, is_ajax, exc, redirect_url=redirect_url)
     except DatabaseError as exc:
-        return _unexpected_inventory_error_response(
+        return unexpected_inventory_error_response(
             request,
             exc,
             is_ajax=is_ajax,
@@ -155,9 +89,8 @@ def _move_item_between_storage(
                 pk,
                 quantity,
             ),
+            logger_instance=logger,
         )
-
-    return redirect(redirect_url)
 
 
 def _use_target_guest_item(
@@ -173,30 +106,28 @@ def _use_target_guest_item(
     item = _warehouse_item(manor, pk)
     is_ajax = is_ajax_request(request)
 
-    action = _resolve_target_guest_item_action(item)
+    action = resolve_target_guest_item_action(item)
     if action != expected_action:
-        return _error_response(request, is_ajax, "物品类型错误")
+        return inventory_error_response(request, is_ajax, "物品类型错误")
 
     guest_id = safe_positive_int(request.POST.get("guest_id"), default=None)
     if guest_id is None:
-        return _error_response(request, is_ajax, missing_guest_error)
+        return inventory_error_response(request, is_ajax, missing_guest_error)
 
     try:
         result = service_call(manor, item, guest_id)
         raw_message = result.get("_message")
         if raw_message is None:
             raw_message = success_fallback_message(result)
-        message = _normalize_inventory_success_message(
+        message = normalize_inventory_success_message(
             raw_message,
             contract_name="inventory target-guest item success message",
         )
-        if is_ajax:
-            return json_success(message=message)
-        messages.success(request, message)
+        return success_response(request, is_ajax=is_ajax, message=message)
     except GameError as exc:
-        return _known_inventory_error_response(request, is_ajax, exc)
+        return known_inventory_error_response(request, is_ajax, exc)
     except DatabaseError as exc:
-        return _unexpected_inventory_error_response(
+        return unexpected_inventory_error_response(
             request,
             exc,
             is_ajax=is_ajax,
@@ -208,9 +139,8 @@ def _use_target_guest_item(
                 pk,
                 guest_id,
             ),
+            logger_instance=logger,
         )
-
-    return redirect("gameplay:warehouse")
 
 
 class RecruitmentHallView(LoginRequiredMixin, TemplateView):
@@ -261,27 +191,16 @@ def use_item_view(request: HttpRequest, pk: int) -> HttpResponse:
     item = _warehouse_item(manor, pk)
     is_ajax = is_ajax_request(request)
     try:
-        # 传入manor参数进行安全校验
         payload = use_inventory_item(item, manor=manor)
-        # 优先使用 _message 字段作为人类友好的提示
-        if "_message" in payload:
-            summary = _normalize_inventory_success_message(
-                payload["_message"],
-                contract_name="inventory use_item success message",
-            )
-        else:
-            raw_summary = "、".join(f"{key}+{value}" for key, value in payload.items() if not key.startswith("_"))
-            summary = _normalize_inventory_success_message(
-                raw_summary or "效果已生效",
-                contract_name="inventory use_item success fallback message",
-            )
-        if is_ajax:
-            return json_success(message=f"{item.template.name} 使用成功：{summary}")
-        messages.success(request, f"{item.template.name} 使用成功：{summary}")
+        return success_response(
+            request,
+            is_ajax=is_ajax,
+            message=build_inventory_use_success_message(payload, item_name=item.template.name),
+        )
     except GameError as exc:
-        return _known_inventory_error_response(request, is_ajax, exc)
+        return known_inventory_error_response(request, is_ajax, exc)
     except DatabaseError as exc:
-        return _unexpected_inventory_error_response(
+        return unexpected_inventory_error_response(
             request,
             exc,
             is_ajax=is_ajax,
@@ -292,8 +211,8 @@ def use_item_view(request: HttpRequest, pk: int) -> HttpResponse:
                 getattr(request.user, "id", None),
                 pk,
             ),
+            logger_instance=logger,
         )
-    return redirect("gameplay:warehouse")
 
 
 @login_required

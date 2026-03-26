@@ -1,6 +1,6 @@
 # 项目重构优化规则与阶段目标（2026-03）
 
-最近更新：2026-03-25
+最近更新：2026-03-26
 
 本文档不记录详细审计过程、历史数据或阶段性结果，只保留后续重构必须遵守的规则，以及各阶段的优化目标。
 
@@ -12,7 +12,7 @@
 - [数据流边界](domain_boundaries.md)
 - [第二阶段统一写模型基线](write_model_boundaries.md)
 
-## 0. 当前基线（2026-03-25）
+## 0. 当前基线（2026-03-26）
 
 本文档只保留当前仍生效的治理结论、门禁基线与未收口项摘要，不再记录已封板阶段的实施流水。
 
@@ -20,6 +20,8 @@
   - 2026-03-23 `make lint` 通过。
   - 2026-03-23 默认 `make test` 通过，结果为 `2350 passed, 38 deselected`。
   - 2026-03-23 关键 real-services 并发回归通过：`tests/test_mission_concurrency_integration.py` 与 `tests/test_guest_recruitment_concurrency_integration.py` 合计 `6 passed, 1 skipped`。
+  - 2026-03-26 `python -m flake8 --jobs=1 accounts battle gameplay guests guilds trade core websocket config tests` 通过。
+  - 2026-03-26 `python -m pytest -q -m "not integration"` 通过，结果为 `2454 passed, 38 deselected`。
 - 当前已封板阶段：
   - 阶段 1 已完成：热点页面入口、读写边界与包级聚合导入治理已收口。
   - 阶段 2 已完成：`mission / raid / guest recruitment` 的统一写模型、显式 refresh 边界与关键 real-services gate 已建立。
@@ -35,6 +37,8 @@
   - `2026-03-25` 已继续推进模板复杂度治理第二刀：`guests/templates/guests/roster.html` 中的页面级样式已迁移到 `static/css/guest-roster.css`，名册表格主体与经验/药品/工资弹窗已拆到 `guests/templates/guests/partials/roster_*.html`；名册页主模板已由 `520` 行降到 `43` 行，且 `python -m pytest tests/test_guest_runtime_refresh_views.py tests/test_salary_views.py tests/test_guest_view_error_boundaries.py tests/test_inventory_views.py -q` 通过，结果为 `97 passed`。
   - `2026-03-25` 已继续推进阶段 5 的超大测试文件收口：`tests/test_mission_sync_report.py` 已收口为兼容入口，并按“防守配置校验 / offense 掉落表校验”拆到 `tests/mission_sync_report/` 子模块；兼容入口 `python -m pytest tests/test_mission_sync_report.py -q` 通过，结果为 `17 passed`。
   - `2026-03-25` 已继续推进阶段 5 的第二个测试收口切口：`tests/guest_summon_card/loot_boxes.py` 中的宝箱配置校验测试已拆到 `tests/guest_summon_card/loot_box_config.py`，兼容入口 `tests/test_guest_summon_card.py` 也已补齐新的子模块导入；`tests/guest_summon_card/loot_boxes.py` 已由 `566` 行降到 `250` 行，且 `python -m pytest tests/test_guest_summon_card.py -q` 通过，结果为 `34 passed`。
+  - `2026-03-26` 已继续推进前端工程化试点第二刀：`static/js/chat_widget.js` 中仍混杂的窗口布局/拖拽与连接生命周期职责，已分别下沉到 `static/js/chat_widget_layout.js` 与 `static/js/chat_widget_connection.js`；主入口已由 `455` 行降到 `203` 行，且 `node --check static/js/chat_widget_core.js static/js/chat_widget_renderer.js static/js/chat_widget_layout.js static/js/chat_widget_connection.js static/js/chat_widget.js`、`npm run test:js` 与 `python -m pytest tests/test_core_views.py tests/test_context_processors.py -q` 均通过，结果为 `43 passed`。
+  - `2026-03-26` 已继续推进“预算上方的多职责入口”整改第四刀：`trade/services/auction/rounds.py` 中的轮次生命周期编排、拍卖位结算/恢复补偿与中标发货/通知，已分别下沉到 `trade/services/auction/rounds_lifecycle_support.py`、`trade/services/auction/rounds_settlement_support.py` 与 `trade/services/auction/rounds_delivery_support.py`；主文件已由 `540` 行降到 `223` 行，同时保留 `create_auction_round()`、`settle_auction_round()`、`_settle_slot()`、`_refund_losing_bids()`、`_mark_slot_unsold_after_failure()`、`_send_winning_notification_vickrey()` 等兼容包装函数名；`python -m flake8 --jobs=1 trade/services/auction/rounds.py trade/services/auction/rounds_lifecycle_support.py trade/services/auction/rounds_settlement_support.py trade/services/auction/rounds_delivery_support.py`、`python -m mypy --cache-dir=/tmp/mypy-auction-rounds-refactor trade/services/auction/rounds.py trade/services/auction/rounds_lifecycle_support.py trade/services/auction/rounds_settlement_support.py trade/services/auction/rounds_delivery_support.py` 与 `python -m pytest tests/test_auction_rounds_cache.py tests/trade_auction_rounds tests/test_trade_auction_rounds.py tests/test_trade_tasks.py -q` 均通过，结果为 `54 passed`。
 - 当前仍需持续关注的项：
   - 阶段 5 仅保留“持续维护”主题：超大测试文件收缩主线已基本完成，但 env-services / 并发集成环境的外部依赖可用性仍会影响真实环境 gate 的稳定性。
   - `2026-03-25` 新一轮复杂度复核中点名的三处热点：`gameplay/services/manor/core.py`、`gameplay/views/jail.py`、`trade/selector_builders.py` 当前都已压回默认 Python 复杂度预算以内；这轮支线可视为完成一轮收口，但后续仍需持续防止公开入口再次堆回多职责。
@@ -42,6 +46,11 @@
   - 最新测试复杂度复核显示，当前已无超过 `500` 行的测试文件；最高体量测试文件为 `tests/trade_auction_rounds/round_lifecycle.py`（`488` 行），仍低于默认预算上限，但应继续观察其后续增长。
   - 后续若继续推进复杂度治理，应优先复核新的超阈值文件是否真的形成认知热点，再按稳定业务职责切分；默认不再把已经回到预算内的模块作为主线持续拆分对象。
   - 默认门禁、真实环境 gate、复杂度预算与文档基线需要在后续每轮改动后持续复核，不再单列历史批次明细。
+  - `2026-03-26` 复核确认：阶段 4 “模板内联脚本清零”虽已完成，但前端工程化并未收口；`package.json` 仍只有 Tailwind 构建脚本，没有前端 lint / test / bundler 入口，`static/js` 当前约 `5k+` 行手写页面脚本，且仓库内没有任何前端测试执行链路。这一项应作为新的治理主线，而不是继续把“脚本已迁出模板”误判为前端边界已稳定。
+  - `2026-03-26` 复核确认：`templates/base.html` 仍承载过多页面专属与未兑现功能入口，存在硬编码展示值（如行动力 `1000/1000`、贡献积分 `0`）与多处 `href="#"` 占位菜单；这类“伪状态 / 伪入口”会破坏页面真实性，必须纳入基模板收口范围。
+  - `2026-03-26` 复核确认：热点复杂度已从“超大文件”演进为“预算上方徘徊的多职责文件”问题。本轮已完成 `trade/services/auction/rounds.py`、`websocket/consumers/world_chat.py`、`gameplay/views/map.py`、`gameplay/views/inventory.py` 与 `static/js/chat_widget.js` 的一轮收口；后续应继续重点关注新的候选入口，而不是机械反复拆已经回到预算内的模块。
+  - `2026-03-26` 复核确认：类型治理仍处于过渡态；全局 `mypy` 仍保持 `disallow_untyped_defs = false`、`ignore_missing_imports = true` 的宽松基线，后续新增热点重构若不顺带收口输入/输出契约与 `Any` 扩散，将继续放大维护成本。
+  - `2026-03-26` 复核确认：局部重复抽象已经出现，例如 `trade/views.py` 与 `trade/view_helpers.py` 各自维护一套阈值告警 helper；后续重构必须把“重复边界”视为真实问题，而不只盯文件行数。
 
 ## 1. 重构优化规则
 
@@ -106,6 +115,8 @@
 - 新增前端交互默认进入 `static/js` 或明确页面脚本模块，不再接受大段 `onclick`、内联事件处理和模板内业务流程编排。
 - 基模板只能承载全局必需能力，不得继续吸纳页面专属逻辑。
 - 模板拆分必须与页面脚本边界同步推进，避免只拆 HTML 不收口交互状态。
+- 不得在基模板或共享导航中继续保留硬编码业务状态、`href="#"` 伪入口或仅用于“以后再做”的占位菜单；未实现能力要么明确下线，要么给出真实状态说明。
+- 页面脚本一旦达到“需要本地状态、重连、缓存、拖拽、补偿、序列化”等中等复杂度，不得继续无限堆在单个裸脚本文件中；必须同步规划模块边界、验证策略和脚本加载约束。
 
 ### R10. 必须控制复杂度预算，而不是转移复杂度
 
@@ -113,6 +124,7 @@
 - 拆分验收标准不是文件数量变多，而是入口更清晰、依赖更少、认知负担下降。
 - 新增 `helper / runtime / handler / orchestrator` 前，必须先说明其职责边界以及为什么现有入口无法承接。
 - 禁止用“兼容层”“转发层”“薄封装”无限叠加目录层级来掩盖热点复杂度。
+- 对于未超过热点阈值、但已长期高于默认预算且承担多种职责的文件，也必须纳入治理候选；不能只等文件冲到 `600+` 行才承认有问题。
 
 ### R11. 临时兼容方案必须带退出条件
 
@@ -188,12 +200,16 @@
 - 把内联交互、页面状态逻辑和大段样式逐步从模板中抽离。
 - 降低基模板承担的全局大杂烩职责。
 - 清理历史内联事件和页面级脚本散落问题，建立稳定的脚本归属规则。
+- 为中等复杂度页面脚本补最小可执行验证链路，至少能约束关键状态机、序列化和 DOM 协议不回退。
+- 清理基模板中的硬编码状态、伪入口和无责任归属的全局 UI 能力。
 
 完成标志：
 
 - 高复杂页面具备稳定 partial / component 边界。
 - 前端交互逻辑不再继续散落在模板内联代码中。
 - 新增页面默认不再引入大段模板内联 JS。
+- 基模板不再展示硬编码业务值，也不再长期保留 `href="#"` 一类未兑现入口。
+- `static/js` 中的热点脚本已建立模块边界和最小验证手段，不再完全依赖人工点页面回归。
 
 ### 阶段 5：测试与发布质量
 
