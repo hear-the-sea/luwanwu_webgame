@@ -1,14 +1,31 @@
 /**
  * 通用工具提示定位模块
- * 用于处理悬浮提示框的位置计算和事件监听
+ * 统一处理 PC 悬浮与触屏点击的提示框定位
  */
-(function() {
+(function(root, factory) {
     'use strict';
 
-    // 防止重复初始化
-    window.__webgame_tooltip = window.__webgame_tooltip || {};
+    const tooltipApi = factory(root);
 
-    // Performance optimization: throttle function to limit high-frequency events
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = tooltipApi;
+    }
+
+    if (root) {
+        root.ItemTooltipCore = tooltipApi;
+        root.initItemTooltip = tooltipApi.initTooltip;
+    }
+})(typeof window !== 'undefined' ? window : globalThis, function(root) {
+    'use strict';
+
+    const tooltipRegistry = root
+        ? (root.__webgame_tooltip = root.__webgame_tooltip || {})
+        : {};
+
+    function clamp(value, min, max) {
+        return Math.min(Math.max(value, min), max);
+    }
+
     function throttle(fn, delay) {
         let lastCall = 0;
         let timeoutId = null;
@@ -23,7 +40,6 @@
                 lastCall = now;
                 fn.apply(this, args);
             } else if (!timeoutId) {
-                // Schedule trailing call
                 timeoutId = setTimeout(() => {
                     lastCall = Date.now();
                     timeoutId = null;
@@ -33,48 +49,155 @@
         };
     }
 
-    /**
-     * 初始化工具提示
-     * @param {Object} options 配置选项
-     * @param {string} options.key - 唯一标识符，防止重复初始化
-     * @param {string} options.cellSelector - 触发元素选择器 (默认: '.tw-item-cell')
-     * @param {string} options.tooltipSelector - 提示框选择器 (默认: '.tw-item-tooltip')
-     * @param {number} options.viewportPadding - 视口边距 (默认: 20)
-     * @param {number} options.offset - 提示框与触发元素的间距 (默认: 8)
-     */
+    function createRelativeAnchor(cellRect, clientX, clientY) {
+        if (!cellRect || !Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+            return null;
+        }
+
+        return {
+            relativeX: clamp(clientX - cellRect.left, 0, cellRect.width),
+            relativeY: clamp(clientY - cellRect.top, 0, cellRect.height),
+        };
+    }
+
+    function resolveAnchorPoint(cellRect, anchor) {
+        if (!cellRect) {
+            return { x: 0, y: 0 };
+        }
+
+        if (!anchor) {
+            return {
+                x: cellRect.left,
+                y: cellRect.bottom,
+            };
+        }
+
+        return {
+            x: cellRect.left + clamp(anchor.relativeX, 0, cellRect.width),
+            y: cellRect.top + clamp(anchor.relativeY, 0, cellRect.height),
+        };
+    }
+
+    function computeTooltipPosition(options) {
+        const {
+            anchorX,
+            anchorY,
+            tooltipWidth,
+            tooltipHeight,
+            viewportWidth,
+            viewportHeight,
+            viewportPadding,
+            offset,
+        } = options;
+
+        const minLeft = viewportPadding;
+        const maxLeft = Math.max(minLeft, viewportWidth - tooltipWidth - viewportPadding);
+        const minTop = viewportPadding;
+        const maxTop = Math.max(minTop, viewportHeight - tooltipHeight - viewportPadding);
+
+        let left = anchorX + offset;
+        if (left + tooltipWidth > viewportWidth - viewportPadding) {
+            left = anchorX - tooltipWidth - offset;
+        }
+
+        let top = anchorY + offset;
+        if (top + tooltipHeight > viewportHeight - viewportPadding) {
+            top = anchorY - tooltipHeight - offset;
+        }
+
+        return {
+            left: clamp(left, minLeft, maxLeft),
+            top: clamp(top, minTop, maxTop),
+        };
+    }
+
+    function measureTooltip(tooltip) {
+        let rect = tooltip.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+            return rect;
+        }
+
+        const previousDisplay = tooltip.style.display;
+        const previousVisibility = tooltip.style.visibility;
+
+        tooltip.style.display = 'block';
+        tooltip.style.visibility = 'hidden';
+        rect = tooltip.getBoundingClientRect();
+        tooltip.style.display = previousDisplay;
+        tooltip.style.visibility = previousVisibility;
+
+        return rect;
+    }
+
     function initTooltip(options) {
+        if (!root || typeof document === 'undefined') {
+            return;
+        }
+
         options = options || {};
-        const supportsHover = !!(window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches);
+        const supportsHover = !!(
+            root.matchMedia
+            && root.matchMedia('(hover: hover) and (pointer: fine)').matches
+        );
         const config = {
             key: options.key || 'default',
             cellSelector: options.cellSelector || '.tw-item-cell',
             tooltipSelector: options.tooltipSelector || '.tw-item-tooltip',
             viewportPadding: options.viewportPadding || 20,
             offset: options.offset || 8,
+            enableHover: options.enableHover !== undefined ? !!options.enableHover : supportsHover,
             enableTouch: options.enableTouch !== undefined ? !!options.enableTouch : !supportsHover,
         };
 
-        // 防止重复初始化
-        if (window.__webgame_tooltip[config.key]) return;
-        window.__webgame_tooltip[config.key] = true;
+        if (!document.querySelector(config.cellSelector)) {
+            return;
+        }
 
-        // 检查是否存在目标元素
-        if (!document.querySelector(config.cellSelector)) return;
+        if (tooltipRegistry[config.key]) {
+            return;
+        }
+        tooltipRegistry[config.key] = true;
 
         let activeCell = null;
+        let activeAnchor = null;
         let rafId = null;
-        let sizeRetryCount = 0;
+
+        function clearTooltipPosition(cell) {
+            const targetCell = cell || activeCell;
+            const tooltip = targetCell?.querySelector?.(config.tooltipSelector);
+            if (tooltip) {
+                tooltip.style.top = '';
+                tooltip.style.left = '';
+            }
+        }
 
         function clearActiveCell() {
-            if (activeCell && activeCell.classList) {
+            if (activeCell?.classList) {
+                clearTooltipPosition(activeCell);
                 activeCell.classList.remove('is-tooltip-active');
             }
             activeCell = null;
-            sizeRetryCount = 0;
+            activeAnchor = null;
+        }
+
+        function updateAnchorFromEvent(cell, event) {
+            if (!cell || !event) {
+                activeAnchor = null;
+                return;
+            }
+
+            activeAnchor = createRelativeAnchor(
+                cell.getBoundingClientRect(),
+                event.clientX,
+                event.clientY
+            );
         }
 
         function requestUpdate() {
-            if (rafId) return;
+            if (rafId) {
+                return;
+            }
+
             rafId = requestAnimationFrame(() => {
                 rafId = null;
                 if (!activeCell || !activeCell.isConnected) {
@@ -83,109 +206,117 @@
                 }
 
                 const tooltip = activeCell.querySelector(config.tooltipSelector);
-                if (!tooltip) return;
-
-                const cellRect = activeCell.getBoundingClientRect();
-                const tooltipRect = tooltip.getBoundingClientRect();
-
-                // 处理尺寸为0的情况（可能是首次渲染）
-                if ((tooltipRect.width === 0 || tooltipRect.height === 0) && sizeRetryCount < 2) {
-                    sizeRetryCount += 1;
-                    rafId = null;
-                    requestUpdate();
+                if (!tooltip) {
                     return;
                 }
-                sizeRetryCount = 0;
 
-                // 计算位置
-                let top = cellRect.bottom + config.offset;
-                let left = cellRect.left;
-
-                // 防止超出右边界
-                if (left + tooltipRect.width > window.innerWidth - config.viewportPadding) {
-                    left = window.innerWidth - tooltipRect.width - config.viewportPadding;
+                const cellRect = activeCell.getBoundingClientRect();
+                const tooltipRect = measureTooltip(tooltip);
+                if (tooltipRect.width === 0 || tooltipRect.height === 0) {
+                    return;
                 }
-                left = Math.max(config.viewportPadding, left);
 
-                // 防止超出下边界，改为显示在上方
-                if (top + tooltipRect.height > window.innerHeight - config.viewportPadding) {
-                    top = cellRect.top - tooltipRect.height - config.offset;
-                }
-                top = Math.max(config.viewportPadding, top);
+                const anchorPoint = resolveAnchorPoint(cellRect, activeAnchor);
+                const nextPosition = computeTooltipPosition({
+                    anchorX: anchorPoint.x,
+                    anchorY: anchorPoint.y,
+                    tooltipWidth: tooltipRect.width,
+                    tooltipHeight: tooltipRect.height,
+                    viewportWidth: root.innerWidth,
+                    viewportHeight: root.innerHeight,
+                    viewportPadding: config.viewportPadding,
+                    offset: config.offset,
+                });
 
-                tooltip.style.top = top + 'px';
-                tooltip.style.left = left + 'px';
+                tooltip.style.top = nextPosition.top + 'px';
+                tooltip.style.left = nextPosition.left + 'px';
             });
         }
 
-        function setActiveCell(cell) {
-            if (activeCell === cell) return;
-            if (activeCell && activeCell.classList) {
+        function setActiveCell(cell, event) {
+            if (activeCell !== cell && activeCell?.classList) {
+                clearTooltipPosition(activeCell);
                 activeCell.classList.remove('is-tooltip-active');
             }
+
             activeCell = cell;
+            activeAnchor = null;
             activeCell.classList.add('is-tooltip-active');
-            sizeRetryCount = 0;
+            updateAnchorFromEvent(activeCell, event);
             requestUpdate();
         }
 
-        // 事件监听 - optimized with throttling
-        document.addEventListener('mouseover', function(e) {
-            const cell = e.target?.closest?.(config.cellSelector);
-            if (cell) setActiveCell(cell);
-        });
+        if (config.enableHover) {
+            document.addEventListener('mouseover', function(event) {
+                const cell = event.target?.closest?.(config.cellSelector);
+                if (cell) {
+                    setActiveCell(cell, event);
+                }
+            });
 
-        // Throttled mousemove to reduce CPU usage
-        document.addEventListener('mousemove', throttle(function(e) {
-            if (activeCell && e.target?.closest?.(config.cellSelector)) {
-                requestUpdate();
-            }
-        }, 32)); // 32ms throttle (~30fps) - sufficient for tooltip positioning
+            document.addEventListener('mousemove', throttle(function(event) {
+                const cell = event.target?.closest?.(config.cellSelector);
+                if (activeCell && cell === activeCell) {
+                    updateAnchorFromEvent(activeCell, event);
+                    requestUpdate();
+                }
+            }, 32));
 
-        document.addEventListener('mouseout', function(e) {
-            const cell = e.target?.closest?.(config.cellSelector);
-            if (cell && cell === activeCell && (!e.relatedTarget || !cell.contains(e.relatedTarget))) {
-                clearActiveCell();
-            }
-        });
+            document.addEventListener('mouseout', function(event) {
+                const cell = event.target?.closest?.(config.cellSelector);
+                if (cell && cell === activeCell && (!event.relatedTarget || !cell.contains(event.relatedTarget))) {
+                    clearActiveCell();
+                }
+            });
+        }
 
         if (config.enableTouch) {
-            document.addEventListener('click', function(e) {
-                const cell = e.target?.closest?.(config.cellSelector);
+            document.addEventListener('click', function(event) {
+                const cell = event.target?.closest?.(config.cellSelector);
                 if (cell) {
                     if (activeCell === cell) {
                         clearActiveCell();
                     } else {
-                        setActiveCell(cell);
+                        setActiveCell(cell, event);
                     }
                     return;
                 }
+
                 if (activeCell) {
                     clearActiveCell();
                 }
             });
         }
 
-        // Use passive scroll listeners for better performance, throttled
         const handleScroll = throttle(function() {
-            if (activeCell) requestUpdate();
+            if (activeCell) {
+                requestUpdate();
+            }
         }, 16);
 
-        window.addEventListener('scroll', handleScroll, { passive: true });
+        root.addEventListener('scroll', handleScroll, { passive: true });
         document.addEventListener('scroll', handleScroll, { passive: true, capture: true });
 
-        // Throttled resize listener
-        window.addEventListener('resize', throttle(function() {
-            if (activeCell) requestUpdate();
+        root.addEventListener('resize', throttle(function() {
+            if (activeCell) {
+                requestUpdate();
+            }
         }, 100));
 
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && activeCell) {
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape' && activeCell) {
                 clearActiveCell();
             }
         });
     }
 
-    // 暴露到全局
-    window.initItemTooltip = initTooltip;
-})();
+    return {
+        clamp,
+        throttle,
+        createRelativeAnchor,
+        resolveAnchorPoint,
+        computeTooltipPosition,
+        measureTooltip,
+        initTooltip,
+    };
+});

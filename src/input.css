@@ -748,8 +748,14 @@
     color: var(--text-light);
   }
 
-  .tw-item-cell:hover .tw-item-tooltip {
+  .tw-item-cell.is-tooltip-active .tw-item-tooltip {
     @apply block;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .tw-item-cell:hover .tw-item-tooltip {
+      @apply block;
+    }
   }
 
   .tw-tooltip-header {
