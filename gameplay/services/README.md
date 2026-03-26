@@ -1,107 +1,98 @@
-# Gameplay Services 模块组织
+# Gameplay Services 模块说明
 
-## 推荐用法（推荐）
+> 最近校正：2026-03-26
+
+`gameplay.services` 现在已经不再是“所有玩法函数的聚合导出层”，而是一个按领域拆分的服务包。仓内新代码应直接从具体子模块导入，而不是继续往包根部堆导出。
+
+## 当前目录事实
+
+主要子域如下：
+
+- `manor/`：庄园初始化、刷新、命名、藏宝阁、护院库等
+- `inventory/`：背包、使用物品、门客道具、随机源
+- `buildings/`：锻造、冶炼、养殖、马房及其运行期配置
+- `recruitment/`：募兵生命周期、模板与查询
+- `arena/`：报名、轮次、奖励、快照、规则
+- `raid/`：地图搜索、侦查、踢馆保护、刷新与返回
+- `missions_impl/`：任务发起、刷新、撤退、结算、补偿
+- `utils/`：缓存、消息、通知、模板缓存、查询优化
+
+仍保留在包根部的单文件服务主要是：
+
+- `resources.py`
+- `technology.py`
+- `work.py`
+- `jail.py`
+- `chat.py`
+- `global_mail.py`
+- `runtime_configs.py`
+
+## 推荐导入方式
+
+推荐：
 
 ```python
-# 直接从子模块导入，更清晰
-from gameplay.services.manor.core import ensure_manor
-from gameplay.services.resources import grant_resources
+from gameplay.services.manor.bootstrap import ensure_manor
 from gameplay.services.inventory.core import add_item_to_inventory
+from gameplay.services.raid.scout import start_scout
+from gameplay.services.missions_impl.launch_command import launch_mission
 ```
 
-## 模块列表
+避免：
 
-### 核心模块
-- `manor/core.py`: 庄园核心管理
-- `manor/prestige.py`: 声望系统
-- `manor/treasury.py`: 藏宝阁服务
-- `resources.py`: 资源管理
-- `inventory/`: 背包物品管理（模块包）
-- `technology.py`: 技术研究
-
-### 建筑模块 (`buildings/`)
-- `buildings/base.py`: 建筑配置加载（YAML）
-- `buildings/forge.py`: 铁匠铺服务
-- `buildings/smithy.py`: 冶炼坊服务
-- `buildings/ranch.py`: 畜牧场服务
-- `buildings/stable.py`: 马房服务
-
-### 招募模块 (`recruitment/`)
-- `recruitment/recruitment.py`: 护院募兵服务
-- `recruitment/troops.py`: 护院管理
-
-### 工具模块 (`utils/`)
-- `utils/cache.py`: 缓存工具
-- `utils/messages.py`: 消息系统
-- `utils/notifications.py`: WebSocket通知封装
-- `utils/query_optimization.py`: 查询优化工具
-- `utils/template_cache.py`: 模板缓存统一管理
-
-## 最佳实践
-
-### 1. 导入风格
-推荐使用绝对导入而非相对导入：
 ```python
-# ✅ 推荐：绝对导入
-from gameplay.services.manor.core import ensure_manor
-from gameplay.services.resources import grant_resources
-
-# ❌ 避免：相对导入
-from ..services.manor import ensure_manor
+from gameplay.services import ensure_manor
+from gameplay.services import launch_mission
 ```
 
-### 2. WebSocket 通知
-统一使用 `utils/notifications.py` 中的 `notify_user()` 函数：
-```python
-from gameplay.services.utils.notifications import notify_user
+原因：
 
-notify_user(
-    user_id=manor.user_id,
-    payload={
-        "kind": "system",
-        "title": "操作完成",
-    },
-    log_context="operation notification",
-)
+- 包根不再承诺稳定 re-export
+- 直接导入具体模块更利于类型检查、IDE 跳转和重构
+- 可以更准确地表达依赖的业务域
+
+## 当前协作约束
+
+### 1. 读写路径分离优先
+
+- 页面上下文装配优先放在 `selectors/`
+- 写状态机、事务边界和补偿逻辑优先放在 `services/`
+
+### 2. 并发敏感逻辑不要回退到 view
+
+以下类型的逻辑应继续保留在 service / task：
+
+- 任务、侦查、踢馆、招募等状态机推进
+- 资源扣减与发奖
+- `select_for_update()` 互斥
+- `transaction.on_commit(...)` 后置动作
+
+### 3. 运行期 YAML 刷新走统一入口
+
+需要刷新商铺、拍卖、竞技场、生产等规则时，使用：
+
+```bash
+python manage.py reload_runtime_configs
 ```
 
-### 3. 模板缓存
-使用 `utils/template_cache.py` 中的缓存工具：
-```python
-from gameplay.services.utils.template_cache import clear_all_template_caches
+不要在调用方自己零散清理缓存，除非当前文件明确未纳入统一刷新口径。
 
-# 获取缓存的模板数据
-templates = get_template_cache()
-```
+### 4. 通知与消息尽量复用现有封装
 
-### 4. 资源操作
-使用 `resources.py` 中的函数进行资源操作：
-```python
-from gameplay.services.resources import grant_resources, spend_resources
+- 站内消息：优先复用 `gameplay.services.utils.messages`
+- WebSocket 推送：优先复用 `gameplay.services.utils.notifications`
+- 不要在业务函数里手写 channel layer 细节，除非是在扩展底层能力
 
-# 发放资源
-grant_resources(manor, {"silver": 1000}, note="任务奖励")
+## 迁移建议
 
-# 消耗资源
-spend_resources(manor, {"silver": 500}, note="购买物品")
-```
+如果你在清理旧代码：
 
-## 迁移指南
+1. 先把 `from gameplay.services import ...` 改成具体子模块导入
+2. 再看该逻辑是更像读侧、写侧还是运行期配置
+3. 如果逻辑已经膨胀，优先按领域拆进对应子目录，而不是新增一个新的“万能 services.py”
 
-如果需要从旧代码迁移到新的导入风格：
+## 与其他文档的关系
 
-1. 找到所有从 `gameplay.services` 导入的代码
-2. 将导入改为从具体子模块导入
-3. 验证功能是否正常
-
-示例：
-```python
-# 推荐代码
-from gameplay.services.manor.core import ensure_manor
-```
-
-## 注意事项
-
-1. **聚合入口收缩**: `gameplay.services` 保留模块级入口，不再承诺继续直出各域函数
-2. **推荐风格**: 直接从子模块导入可以获得更好的IDE自动补全和类型推断
-3. **迁移原则**: 仓内代码优先使用具体子模块，而不是继续扩展总聚合入口
+- 写路径边界：[`docs/write_model_boundaries.md`](/home/daniel/code/web_game_v5/docs/write_model_boundaries.md)
+- 数据流边界：[`docs/domain_boundaries.md`](/home/daniel/code/web_game_v5/docs/domain_boundaries.md)
+- 开发命令与刷新方式：[`docs/development.md`](/home/daniel/code/web_game_v5/docs/development.md)

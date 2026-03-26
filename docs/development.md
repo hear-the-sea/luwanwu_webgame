@@ -1,6 +1,6 @@
 # 春秋乱世庄园主 - 开发指南
 
-> 最近校正：2026-03-23
+> 最近校正：2026-03-26
 
 本文档只记录当前仓库仍然成立的开发流程、命令和环境边界。
 
@@ -24,10 +24,16 @@ make install
 npm install
 ```
 
-如果只想安装锁定依赖：
+如果只想安装当前仓库已提交的锁定依赖：
 
 ```bash
 make install-lock
+```
+
+如果你先自行生成了 `requirements-dev.lock.txt`，再使用：
+
+```bash
+make lock-dev
 make install-dev-lock
 ```
 
@@ -55,6 +61,13 @@ python -c 'from django.core.management.utils import get_random_secret_key; print
 python manage.py migrate
 python manage.py bootstrap_game_data --skip-images
 npm run build:css
+```
+
+也可以使用 Makefile 包装命令：
+
+```bash
+make migrate
+make bootstrap-data
 ```
 
 如果只改了运行期 YAML，可单独刷新：
@@ -166,12 +179,15 @@ DJANGO_TEST_USE_ENV_SERVICES=1 make test-integration
 make lint
 make format
 make cov
+npm run test:js
 ```
 
 `make lint` 当前执行：
 
 - `flake8`
 - `mypy`
+
+`npm run test:js` 当前用于覆盖聊天挂件脚本的纯逻辑回归，不替代 Python 测试。
 
 ## 调试工具
 
@@ -228,7 +244,10 @@ python manage.py bootstrap_game_data --skip-images
 
 ```bash
 python manage.py validate_yaml_configs
+python manage.py validate_yaml_configs --strict-coverage
 ```
+
+当 `data/` 下新增 YAML 文件时，推荐至少执行一次 `--strict-coverage`，避免新增文件被静默排除在 schema 校验之外。
 
 ## 协作约束
 

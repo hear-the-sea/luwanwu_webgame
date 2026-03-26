@@ -1,676 +1,229 @@
-# 春秋乱世庄园主 - 系统架构文档
+# 春秋乱世庄园主 - 系统架构
 
-> 最近校正：2026-03-23（与当前仓库结构、门禁流程和拍卖结算时序对齐）
+> 最近校正：2026-03-26
 
-## 概述
+本文档只保留当前仓库可以直接从代码、配置和运行入口验证的架构事实；历史方案、已完成治理记录与阶段性审计请看 [`technical_audit_2026-03.md`](technical_audit_2026-03.md) 和 [`optimization_plan.md`](optimization_plan.md)。
 
-本文档描述了"春秋乱世庄园主"游戏的系统架构设计，包括整体架构、模块划分、数据流和关键设计决策。
+## 总览
 
----
+当前项目是一个以 Django Template 为主交互层的多人在线游戏服务，核心事实如下：
 
-## 技术栈
+- 页面渲染以 Django Template 为主，不是 SPA。
+- 前端样式由 Tailwind CSS 构建到 `static/css/tailwind.css`，页面脚本仍是手写 `static/js/*.js`，没有 JS bundler。
+- HTTP 与 WebSocket 共享同一套 Django 业务代码；WebSocket 入口由 Channels + ASGI 暴露。
+- 异步与定时任务通过 Celery 承担，Redis 同时提供 broker / result backend / channel layer / cache。
+- 默认本地开发和 hermetic 测试可以回退到 SQLite + LocMem + InMemory channel layer + memory Celery；真实并发语义仍需要外部 MySQL / Redis 验证。
 
-| 组件 | 技术 | 说明 |
-|------|------|------|
-| Web 框架 | Django 5.x | 后端核心框架 |
-| DRF / API 文档 | Django REST Framework + drf-spectacular | 用于 schema、throttle 与少量 JSON 端点，非主交互层 |
-| 异步通信 | Django Channels | WebSocket 支持 |
-| 任务队列 | Celery 5.x | 后台任务处理 |
-| 消息代理 | Redis 7.x | Celery Broker + Channel Layer |
-| 缓存 | Redis (django-redis) | 会话、缓存、在线状态 |
-| 数据库 | MySQL 8.x / SQLite | 主数据存储 |
-| 前端渲染 | Django Templates | 服务端渲染为主 |
-| 前端样式 | Tailwind CSS + 自定义 CSS | `src/input.css` 构建到 `static/css/tailwind.css`，并配合 `static/css/style.css` |
-| 前端脚本 | 原生 JavaScript | 页面脚本位于 `static/js/*.js` |
-
----
-
-## 系统架构图
-
-```
-                                    ┌─────────────────────┐
-                                    │     Nginx/CDN       │
-                                    │  (静态资源/反向代理)  │
-                                    └──────────┬──────────┘
-                                               │
-                    ┌──────────────────────────┼──────────────────────────┐
-                    │                          │                          │
-                    ▼                          ▼                          ▼
-           ┌───────────────┐          ┌───────────────┐          ┌───────────────┐
-           │   Web App     │          │    Daphne     │          │  Celery Beat  │
-           │ runserver/HTTP│          │ (ASGI / WS)   │          │  (定时任务)    │
-           └───────┬───────┘          └───────┬───────┘          └───────┬───────┘
-                   │                          │                          │
-                   └──────────────────────────┼──────────────────────────┘
-                                              │
-                                              ▼
-                                    ┌─────────────────────┐
-                                    │   Django App        │
-                                    │   ┌─────────────┐   │
-                                    │   │   Views     │   │
-                                    │   └──────┬──────┘   │
-                                    │          │          │
-                                    │   ┌──────▼──────┐   │
-                                    │   │  Services   │   │
-                                    │   └──────┬──────┘   │
-                                    │          │          │
-                                    │   ┌──────▼──────┐   │
-                                    │   │   Models    │   │
-                                    │   └─────────────┘   │
-                                    └──────────┬──────────┘
-                                               │
-                    ┌──────────────────────────┼──────────────────────────┐
-                    │                          │                          │
-                    ▼                          ▼                          ▼
-           ┌───────────────┐          ┌───────────────┐          ┌───────────────┐
-           │    MySQL      │          │     Redis     │          │ Celery Worker │
-           │   (数据存储)   │          │  (缓存/消息)   │          │  (后台任务)    │
-           └───────────────┘          └───────────────┘          └───────────────┘
-```
-
----
-
-## 应用模块
-
-项目采用 Django App 模块化架构，每个 App 负责独立的业务领域：
-
-```
-web_game_v5/
-├── config/             # 项目配置
-│   ├── settings/       # 分模块 settings（base/security/database/testing/...）
-│   ├── urls.py         # 主路由
-│   ├── celery.py       # Celery 配置
-│   ├── asgi.py         # ASGI 配置（WebSocket）
-│   └── wsgi.py         # WSGI 配置
-│
-├── accounts/           # 账户模块
-│   ├── models.py       # User / UserActiveSession
-│   ├── views.py        # 登录/注册/资料
-│   └── *_runtime.py    # 登录/注册运行时辅助
-│
-├── gameplay/           # 核心玩法模块
-│   ├── models/         # Manor, Building, Item, Mission...
-│   ├── views/          # 仪表盘、任务、仓库、消息...
-│   ├── selectors/      # 读侧页面上下文装配
-│   ├── services/       # 业务逻辑层
-│   └── tasks/          # Celery 任务
-│
-├── guests/             # 门客模块
-│   ├── models/         # Guest, Skill, Gear...
-│   ├── views/          # 门客列表、详情、装备
-│   ├── services/       # 招募、培养、装备、工资
-│   └── tasks.py        # 培养完成任务
-│
-├── battle/             # 战斗模块
-│   ├── models.py       # BattleReport、TroopTemplate
-│   ├── services.py     # 战斗服务入口
-│   ├── simulation/     # 战斗引擎实现
-│   └── tasks.py        # 战报与异步后处理
-│
-├── trade/              # 交易模块
-│   ├── models.py       # 商铺、银庄、交易行、拍卖
-│   ├── views.py        # 商店/银庄/交易行/拍卖页面
-│   └── services/       # 商店、银庄、交易行、拍卖服务
-│
-├── guilds/             # 帮会模块
-│   ├── models/         # Guild、GuildMember、Technology...
-│   ├── views/          # 帮会管理全流程
-│   └── services/       # 帮会、成员、贡献、科技、仓库
-│
-├── websocket/          # WebSocket 模块
-│   ├── consumers/      # NotificationConsumer、OnlineStatsConsumer 等
-│   └── routing.py      # WebSocket 路由
-│
-├── battle_debugger/    # 战斗调试工具（开发用）
-│
-├── core/               # 共享工具
-│   ├── utils/          # 通用工具函数
-│   └── exceptions.py   # 自定义异常
-│
-├── data/               # YAML 数据配置
-│   ├── item_templates.yaml
-│   ├── troop_templates.yaml
-│   ├── mission_templates.yaml
-│   ├── guest_templates.yaml
-│   └── guest_skills.yaml
-│
-├── src/                # 前端样式源码（Tailwind 输入）
-├── templates/          # Django 模板
-├── static/             # 静态资源
-└── media/              # 用户上传文件
-```
-
-### 模块职责
-
-| 模块 | 职责 | URL 前缀 |
-|------|------|----------|
-| accounts | 用户认证、资料管理、单点登录 | `/accounts/` |
-| gameplay | 庄园资源、建筑、任务、消息、科技、打工 | `/manor/` |
-| guests | 门客招募、培养、装备、技能、工资 | `/guests/` |
-| battle | 战斗模拟、战报生成与查看 | `/battle/` |
-| trade | 商店、银庄、交易行 | `/trade/` |
-| guilds | 帮会创建/管理/科技/捐赠/仓库 | `/guilds/` |
-| websocket | 实时通知、在线统计 | `ws://` |
-| battle_debugger | 战斗调试器（仅开发环境） | `/debugger/` |
-
----
-
-## 分层架构
-
-项目采用三层架构模式，确保关注点分离：
-
-```
-┌─────────────────────────────────────────────────────┐
-│                   View Layer                        │
-│  (HTTP 请求处理、表单验证、模板渲染、权限检查)         │
-└─────────────────────────────┬───────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────┐
-│                  Service Layer                      │
-│  (业务逻辑、事务管理、跨模块协调、验证规则)            │
-└─────────────────────────────┬───────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────┐
-│                   Model Layer                       │
-│  (数据定义、ORM 查询、数据完整性约束)                  │
-└─────────────────────────────────────────────────────┘
-```
-
-### View Layer（视图层）
-
-- **职责**：处理 HTTP 请求，进行基础验证，调用 Service 层
-- **位置**：`{app}/views/`（可包含多个子模块或 `__init__.py` 聚合）
-- **原则**：
-  - 不包含业务逻辑
-  - 负责权限检查（`@login_required`）
-  - 处理表单数据提取和响应格式化
-  - 统一错误处理（Django Messages）
-
-### Service Layer（服务层）
-
-- **职责**：封装业务逻辑，管理事务，协调跨模块操作
-- **位置**：`{app}/services/` 或 `{app}/services.py`
-- **原则**：
-  - 所有业务逻辑必须在此层实现
-  - 优先抛出显式领域异常；`ValueError` 仅保留给历史兼容入口，不再作为默认跨层契约
-  - 使用 `@transaction.atomic` 管理事务
-  - 避免直接操作 HTTP 请求/响应
-
-### Model Layer（模型层）
-
-- **职责**：定义数据结构，提供 ORM 查询接口
-- **位置**：`{app}/models/`（每个模型模块可按领域拆分）
-- **原则**：
-  - 包含字段定义和约束
-  - 提供 `property` 计算属性
-  - 使用 `Manager` 封装常用查询
-  - 避免在 Model 中实现业务逻辑
-
----
-
-## 异步任务架构
-
-### Celery 配置
-
-项目使用 Celery 处理耗时和定时任务，配置了三个专用队列：
-
-```python
-# config/settings/celery_conf.py
-CELERY_TASK_QUEUES = (
-    Queue("default"),   # 默认队列
-    Queue("battle"),    # 战斗相关
-    Queue("timer"),     # 定时器相关
-)
-
-CELERY_TASK_ROUTES = {
-    "battle.generate_report": {"queue": "battle"},
-    "gameplay.complete_mission": {"queue": "timer"},
-    "gameplay.complete_building_upgrade": {"queue": "timer"},
-    "guests.complete_training": {"queue": "timer"},
-    # ...
-}
-```
-
-### 队列职责
-
-| 队列 | 用途 | Worker 配置建议 |
-|------|------|-----------------|
-| default | 通用任务 | 2-4 并发 |
-| battle | 战报生成（CPU 密集） | 1-2 并发，独立 Worker |
-| timer | 定时完成类任务 | 2-4 并发 |
-
-### 定时任务（Celery Beat）
-
-```python
-CELERY_BEAT_SCHEDULE = {
-    "scan-building-upgrades": {
-        "task": "gameplay.scan_building_upgrades",
-        "schedule": crontab(minute="*/10"),  # 每 10 分钟
-    },
-    "scan-guest-training": {
-        "task": "guests.scan_training",
-        "schedule": crontab(minute="*/10"),
-    },
-    "complete-work-assignments": {
-        "task": "gameplay.complete_work_assignments",
-        "schedule": crontab(minute="*/1"),   # 每分钟
-    },
-    "refresh-shop-stock": {
-        "task": "trade.refresh_shop_stock",
-        "schedule": crontab(hour=0, minute=0),  # 每天 00:00
-    },
-    "settle-auction-round": {
-        "task": "trade.settle_auction_round",
-        "schedule": crontab(minute="*/5"),      # 每 5 分钟检查一次到期轮次
-    },
-    # 帮会定时任务...
-}
-```
-
-### 拍卖结算时序
-
-- 拍卖轮次不是在结束瞬间同步结算，而是由 `trade.settle_auction_round` 的定时任务轮询处理；默认最晚约 5 分钟内进入结算。
-- 结算事务会先完成中标/退款/流拍状态更新，再通过 `transaction.on_commit(...)` 触发中标发货通知。
-- 中标物品默认以“站内信附件”形式发放；玩家领取附件后，道具进入仓库。
-- 若中标消息创建失败且错误属于受控消息/数据库基础设施异常，系统会降级为直接将道具发到仓库。
-
-### 任务设计原则
-
-1. **幂等性**：任务可重复执行，结果一致
-2. **自动重试**：配置 `max_retries` 和 `default_retry_delay`
-3. **超时控制**：设置 `soft_time_limit` 和 `time_limit`
-4. **错误处理**：记录详细日志，必要时发送通知
-5. **扫描兜底**：定时扫描任务防止 Worker 宕机导致任务丢失
-
----
-
-## WebSocket 架构
-
-### 连接处理
-
-```python
-# websocket/consumers/notification.py 等
-
-class NotificationConsumer(AsyncJsonWebsocketConsumer):
-    """用户通知推送"""
-    # 每个用户加入独立 group: user_{id}
-    # 支持消息类型：resource_update, battle_complete, message_new
-
-class OnlineStatsConsumer(AsyncJsonWebsocketConsumer):
-    """在线统计广播"""
-    # 所有用户加入同一 group: online_stats
-    # 使用 Redis SET 跟踪在线用户
-    # 带 TTL 自动清理（30 分钟）
-```
-
-### 消息推送流程
-
-```
-                服务端事件（如战斗完成）
-                          │
-                          ▼
-              ┌───────────────────────┐
-              │   Service Layer       │
-              │   channel_layer.      │
-              │   group_send(...)     │
-              └───────────┬───────────┘
-                          │
-                          ▼
-              ┌───────────────────────┐
-              │   Redis Channel Layer │
-              └───────────┬───────────┘
-                          │
-                          ▼
-              ┌───────────────────────┐
-              │  NotificationConsumer │
-              │  send_json(payload)   │
-              └───────────┬───────────┘
-                          │
-                          ▼
-              ┌───────────────────────┐
-              │   WebSocket Client    │
-              │   (浏览器 JavaScript) │
-              └───────────────────────┘
-```
-
----
-
-## 战斗系统架构
-
-### 核心组件
-
-```
-battle/
-├── models/             # BattleReport、TroopTemplate 等基础模型
-├── services/           # simulate_report() 等外部接口
-├── simulation_core/    # BattleSimulator 类 - 核心引擎
-├── troops/             # 兵种数据加载相关
-└── tasks/              # generate_report_task
-```
-
-### 战斗模拟流程
-
-```
-                    launch_mission()
-                          │
-                          ▼
-              ┌───────────────────────┐
-              │  创建 MissionRun      │
-              │  设置状态为 ACTIVE    │
-              └───────────┬───────────┘
-                          │
-                          ▼
-              ┌───────────────────────┐
-              │  调度 Celery Task     │
-              │  generate_report_task │
-              │  countdown=行军时间   │
-              └───────────┬───────────┘
-                          │
-                          ▼ (延迟执行)
-              ┌───────────────────────┐
-              │  BattleSimulator      │
-              │  ├── 初始化双方       │
-              │  ├── 回合循环         │
-              │  │   ├── 技能结算     │
-              │  │   ├── 伤害计算     │
-              │  │   └── 状态更新     │
-              │  └── 生成战报         │
-              └───────────┬───────────┘
-                          │
-                          ▼
-              ┌───────────────────────┐
-              │  finalize_mission_run │
-              │  ├── 奖励结算         │
-              │  ├── 门客状态更新     │
-              │  └── 发送通知         │
-              └───────────────────────┘
-```
-
-### 五行相克系统
-
-战斗系统实现了五行相克机制：
-
-```
-        金 ──克──▶ 木
-        ▲           │
-        │           克
-        克          │
-        │           ▼
-        水 ◀──克── 火
-        ▲           │
-        │           克
-        克          │
-        │           ▼
-        木 ◀──克── 土 ◀──克── 金
-```
-
-- 相克关系：造成额外 20% 伤害
-- 被克关系：受到额外 20% 伤害
-
-### 并发控制
-
-战斗系统使用数据库行级锁防止并发问题：
-
-```python
-# 使用 select_for_update 锁定门客
-guests = list(
-    Guest.objects.select_for_update()
-    .filter(id__in=guest_ids)
-)
-```
-
----
-
-## 数据配置系统
-
-游戏数据通过 YAML 文件配置，便于策划调整：
-
-```
-data/
-├── item_templates.yaml      # 道具定义
-├── troop_templates.yaml     # 兵种定义
-├── mission_templates.yaml   # 任务定义
-├── guest_templates.yaml     # 门客模板
-├── guest_skills.yaml        # 门客技能
-├── technology_templates.yaml # 科技定义
-└── work_templates.yaml      # 打工定义
-```
-
-### 加载机制
-
-```python
-# 示例：加载兵种模板
-def load_troop_templates():
-    path = settings.BASE_DIR / "data" / "troop_templates.yaml"
-    with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
-```
-
-### 数据同步
-
-通过 Django Management Command 将 YAML 同步到数据库：
-
-```bash
-python manage.py load_item_templates
-python manage.py load_mission_templates
-python manage.py load_guest_templates
-```
-
----
-
-## 测试门禁分层（当前执行口径）
-
-项目当前采用两条测试道并行治理：
-
-1. `Hermetic rapid gate`：快速反馈，默认命令为 `make test` / `make test-unit`（`pytest -m "not integration"`）。
-2. `Real external-service gate`：真实语义验证，命令为 `DJANGO_TEST_USE_ENV_SERVICES=1 make test-real-services`（包含 `make test-critical` + `make test-integration`）。
-
-关键说明：
-
-- 默认测试道使用 SQLite、LocMem cache、InMemory channel layer、memory Celery，不覆盖真实外部服务语义。
-- `integration` 用例通过 `pytest.mark.integration` 区分，且依赖 `DJANGO_TEST_USE_ENV_SERVICES=1` 与可达的外部 DB/Redis/Channels/Celery。
-- `make test-critical` 作为高风险快速回归，固定补跑 `raid / scout / mission / guest recruitment / work service` 的真实并发敏感套件。
-- 固定串行验收可使用 `DJANGO_TEST_USE_ENV_SERVICES=1 make test-gates`（先 hermetic，再 real external services）。
-
----
-
-## 前端资源边界（源码 vs 构建产物）
-
-- 样式源码：`src/input.css`（Tailwind 输入文件）。
-- 样式构建产物：`static/css/tailwind.css`（由 `npm run build:css` / `npm run build:css:prod` 生成）。
-- 手写全局样式：`static/css/style.css`（非生成文件）。
-- 页面脚本：`static/js/*.js`（手写脚本，不经打包器聚合）。
-
-这条边界用于避免“把生成文件当源码改”与“把手写样式误写进构建输入”两类维护风险。
-
----
-
-## 缓存策略
-
-### Redis 用途划分
-
-```python
-REDIS_URL = "redis://127.0.0.1:6379"
-REDIS_BROKER_URL = f"{REDIS_URL}/0"    # Celery Broker
-REDIS_CHANNEL_URL = f"{REDIS_URL}/1"   # Django Channels
-REDIS_CACHE_URL = f"{REDIS_URL}/2"     # Django Cache
-```
-
-### 缓存场景
-
-| 场景 | 缓存键 | TTL | 说明 |
-|------|--------|-----|------|
-| 在线用户数 | `stats:online_users_count` | 5s | 高频读取 |
-| 总用户数 | `stats:total_users_count` | 5min | 数据库 COUNT 缓存 |
-| 未读消息数 | `manor:{id}:unread_count` | - | 写时失效 |
-| 会话数据 | Django Session | - | 用户登录状态 |
-
----
-
-## 安全架构
-
-### 认证机制
-
-- Session-based 认证（Django 默认）
-- 单点登录：新登录自动登出其他设备
-- CSRF 保护：所有 POST 请求需 Token
-
-### 安全配置
-
-```python
-# Session 安全
-SESSION_COOKIE_SECURE = not DEBUG
-SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SAMESITE = "Lax"
-
-# CSRF 安全
-CSRF_COOKIE_SECURE = not DEBUG
-CSRF_COOKIE_HTTPONLY = True
-
-# HTTPS 强制
-SECURE_SSL_REDIRECT = True  # 生产环境
-SECURE_HSTS_SECONDS = 31536000
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-
-# 内容安全
-X_FRAME_OPTIONS = "DENY"
-SECURE_CONTENT_TYPE_NOSNIFF = True
-```
-
-### 速率限制
-
-```python
-REST_FRAMEWORK = {
-    "DEFAULT_THROTTLE_RATES": {
-        "anon": "100/hour",
-        "user": "1000/hour",
-        "recruit": "20/hour",
-        "battle": "100/hour",
-        "claim": "50/hour",
-    },
-}
-```
-
----
-
-## 部署架构
+## 运行拓扑
 
 ### 开发环境
 
-```bash
-# 单进程模式
-python manage.py runserver 0.0.0.0:8000
+常见启动形态：
 
-# Celery Worker
-celery -A config worker -l INFO
+- `make dev`：Django `runserver`，只覆盖 HTTP 页面。
+- `make dev-ws`：`daphne config.asgi:application`，覆盖 HTTP + WebSocket。
+- `make worker`：Celery worker。
+- `make beat`：Celery beat。
 
-# Celery Beat
-celery -A config beat -l INFO
-```
+### 生产 / 近生产 Compose 形态
 
-### 生产环境
+`docker-compose.prod.yml` 当前默认分为：
 
-```
-                    ┌─────────────┐
-                    │   Nginx     │
-                    │  (SSL/静态) │
-                    └──────┬──────┘
-                           │
-          ┌────────────────┼────────────────┐
-          │                │                │
-          ▼                ▼                ▼
-    ┌──────────┐    ┌──────────────┐    ┌──────────────┐
-    │  Nginx   │    │  Web (Daphne)│    │ Celery Worker│
-    │  反向代理 │    │ HTTP + WS    │    │ default/battle/timer |
-    └────┬─────┘    └──────┬───────┘    └──────┬───────┘
-         │                 │                   │
-         └─────────────────┼───────────────────┘
-                           │
-          ┌────────────────┼────────────────┐
-          │                │                │
-          ▼                ▼                ▼
-    ┌──────────┐    ┌──────────┐    ┌──────────┐
-    │  MySQL   │    │  Redis   │    │ Celery   │
-    │ (主库)   │    │ 缓存/消息 │    │ Beat     │
-    └──────────┘    └──────────┘    └──────────┘
-```
+- `web`：`daphne`，负责 HTTP + WebSocket。
+- `worker`：默认队列。
+- `worker_battle`：`battle` 队列。
+- `worker_timer`：`timer` 队列。
+- `beat`：定时扫描与心跳。
+- `nginx`：静态资源与反向代理。
+- `db`：MySQL 8.4。
+- `redis`：Redis 7。
 
-### 推荐配置
+## 主要应用边界
 
-| 组件 | 配置 | 说明 |
-|------|------|------|
-| Web | `daphne config.asgi:application` | 当前 `docker-compose.prod.yml` 的默认 Web 进程 |
-| Celery Worker | 按 `default` / `battle` / `timer` 分队列 | 后台任务分工 |
-| Celery Beat | 独立进程 | 定时扫描与心跳 |
-| MySQL | 依据部署环境调优连接数与超时 | 主数据存储 |
-| Redis | broker / result / channel layer / cache 分角色 | 缓存 + 消息 + 在线态 |
+| 模块 | 当前职责 | 说明 |
+|------|----------|------|
+| `accounts` | 用户认证、资料、单会话控制 | 自定义 `AUTH_USER_MODEL` 与会话治理 |
+| `gameplay` | 庄园、建筑、地图、任务、资源、背包、竞技场、打工、监狱/结义 | 主玩法聚合层 |
+| `guests` | 门客模板、招募、培养、装备、工资、叛逃 | 既有模板数据也有运行期实例 |
+| `battle` | 战斗引擎、战报、战斗相关任务 | 既有同步执行入口，也有异步报告后处理 |
+| `trade` | 商铺、银庄、交易行、拍卖 | 包含运行期 YAML 配置与结算任务 |
+| `guilds` | 帮会、成员、科技、仓库、英雄池 | 部分规则由 YAML 驱动 |
+| `websocket` | consumers、routing、在线态 / 世界聊天后端 | 通过 Channels 暴露实时入口 |
+| `battle_debugger` | 开发态战斗调试工具 | 仅在 `DEBUG=1` 且显式打开时注册 |
+| `core` | 健康检查、中间件、异常、基础设施工具 | 为其他 app 提供共享能力 |
 
----
+## 分层约束
 
-## 扩展指南
+当前仓库的主流协作方式仍然是三层分离：
 
-### 添加新功能模块
+1. View / Consumer 层
+   负责请求提取、权限检查、表单处理、响应格式化。
+2. Service 层
+   负责业务逻辑、事务边界、跨模块协调、异步任务调度。
+3. Model / Query 层
+   负责 ORM 数据结构、约束、查询入口与兼容导出。
 
-1. 创建 Django App：`python manage.py startapp {name}`
-2. 注册到 `INSTALLED_APPS`
-3. 创建 `services/` 目录结构
-4. 添加 URL 路由
-5. 创建模板和静态资源
-6. 编写测试
+实践约束：
 
-### 添加新的 Celery 任务
+- 页面动作默认优先调用 service，而不是把业务逻辑堆进 view。
+- 并发状态机逻辑优先收敛在 service / task 中，并通过测试固定行为。
+- `gameplay.models`、`guilds.models` 已按子模块拆包，但保留 `__init__.py` 兼容导出。
+- `gameplay.services` 本身只保留包级入口说明，仓内新代码应优先从具体子模块导入。
 
-```python
-# {app}/tasks.py
-from celery import shared_task
+## URL 与入口形态
 
-@shared_task(name="{app}.{task_name}", bind=True, max_retries=2)
-def my_task(self, arg1, arg2):
-    try:
-        # 业务逻辑
-        pass
-    except Exception as exc:
-        raise self.retry(exc=exc)
-```
+主路由定义于 [`config/urls.py`](/home/daniel/code/web_game_v5/config/urls.py)。
 
-### 添加新的 WebSocket Consumer
+稳定入口前缀：
 
-```python
-# websocket/consumers/<feature>.py
-class MyConsumer(AsyncJsonWebsocketConsumer):
-    async def connect(self):
-        # 认证检查
-        # 加入 group
-        # 接受连接
-        pass
+- `/accounts/`
+- `/manor/`
+- `/guests/`
+- `/battle/`
+- `/trade/`
+- `/guilds/`
+- `/health/`
+- `/api/schema/`、`/api/docs/`、`/api/redoc/`
+- `/debugger/` 仅在开发态可选启用
 
-# websocket/routing.py
-websocket_urlpatterns = [
-    path("ws/my-feature/", MyConsumer.as_asgi()),
-]
-```
+WebSocket 路由定义于 [`websocket/routing.py`](/home/daniel/code/web_game_v5/websocket/routing.py)，当前注册：
 
----
+- `ws/notifications/`
+- `ws/online-stats/`
+- `ws/chat/world/`
 
-## 附录：关键设计决策
+## 异步任务与定时扫描
 
-### 为什么使用 Service Layer？
+Celery 配置位于 [`config/settings/celery_conf.py`](/home/daniel/code/web_game_v5/config/settings/celery_conf.py)。
 
-1. **可测试性**：业务逻辑与 HTTP 解耦，易于单元测试
-2. **复用性**：同一逻辑可被 View、Task、Management Command 调用
-3. **事务边界**：在 Service 层统一管理事务
-4. **清晰职责**：避免"胖 View"或"胖 Model"
+当前固定三类队列：
 
-### 为什么使用多个 Celery 队列？
+| 队列 | 用途 |
+|------|------|
+| `default` | 通用任务、站内维护、健康探针往返 |
+| `battle` | 战斗相关任务 |
+| `timer` | 定时完成类任务与扫描兜底 |
 
-1. **优先级控制**：战斗任务优先于日常任务
-2. **资源隔离**：CPU 密集任务不阻塞 I/O 密集任务
-3. **弹性扩展**：可针对性扩展特定队列的 Worker
+当前 beat 中的重要周期任务包括：
 
-### 为什么使用 YAML 配置数据？
+- 任务、建筑、科技、兵种、生产、招募等完成态扫描
+- 竞技场轮次扫描
+- 踢馆 / 侦查相关扫描
+- 交易行过期挂单处理
+- 拍卖轮次结算与新轮次创建
+- `core.record_celery_beat_heartbeat`
 
-1. **策划友好**：非技术人员可直接修改
-2. **版本控制**：数据变更可追溯
-3. **热更新**：无需代码部署即可调整平衡性
+关键事实：
+
+- 仓库没有依赖“单次精确延迟任务一定成功”的乐观假设，多个玩法都保留扫描兜底。
+- 拍卖轮次不是结束瞬间同步结算，而是由 `trade.settle_auction_round` 轮询到期轮次处理。
+- 真实多进程互斥、行锁与 Redis 共享语义不能靠 hermetic 测试替代。
+
+## 战斗与玩法写路径
+
+### 战斗
+
+`battle/` 当前不是单一“引擎文件”，而是由以下层次组成：
+
+- `battle/services.py`：对外服务入口
+- `battle/execution.py`、`battle/locking.py`、`battle/rewards.py`：执行、锁与奖励逻辑
+- `battle/simulation/`：回合、伤害、选敌、顺序等模拟细节
+- `battle/combatants_pkg/`：战斗参与者装配
+- `battle/tasks.py`：异步任务
+
+### 任务 / 踢馆 / 招募等状态机
+
+当前仓库对并发敏感玩法已经明显拆分：
+
+- `gameplay/services/missions_impl/`
+- `gameplay/services/raid/`
+- `gameplay/services/recruitment/`
+
+这类写路径的共同约束：
+
+- 状态推进优先通过显式 service / command 实现。
+- 高风险路径需要真实服务门禁覆盖。
+- 读路径与写路径逐步解耦，详见 [`domain_boundaries.md`](domain_boundaries.md) 与 [`write_model_boundaries.md`](write_model_boundaries.md)。
+
+## 配置数据策略
+
+`data/` 下的 YAML 目前分成两类：
+
+1. 运行期读取并带缓存的规则文件
+   例如商铺、拍卖、竞技场、生产、帮会规则等。
+2. 需要导入数据库的模板文件
+   例如建筑、科技、物品、兵种、门客、技能、任务模板。
+
+当前统一入口：
+
+- 刷新运行期缓存：`python manage.py reload_runtime_configs`
+- 导入数据库模板：`python manage.py bootstrap_game_data --skip-images`
+- 校验当前 YAML 契约：`python manage.py validate_yaml_configs --strict-coverage`
+
+注意：
+
+- 并不是所有运行期 YAML 都已经纳入 `reload_runtime_configs()`；例如 `recruitment_rarity_weights.yaml` 仍主要依赖模块缓存与进程重启刷新。
+- 文档里不再维护“手工抄录的 YAML 字段说明”；字段约束以 schema 校验与 loader 实现为准。
+
+## 测试门禁
+
+当前仓库的测试口径分成两层：
+
+| 门禁 | 命令 | 覆盖重点 |
+|------|------|----------|
+| Hermetic rapid gate | `make test` / `make test-unit` | 快速反馈；SQLite、LocMem、InMemory channel layer、memory Celery |
+| Real external-service gate | `DJANGO_TEST_USE_ENV_SERVICES=1 make test-real-services` | MySQL 行锁、Redis 语义、真实 Channels / Celery |
+
+补充入口：
+
+- `DJANGO_TEST_USE_ENV_SERVICES=1 make test-critical`
+- `DJANGO_TEST_USE_ENV_SERVICES=1 make test-integration`
+- `DJANGO_TEST_USE_ENV_SERVICES=1 make test-gates`
+- `npm run test:js`：当前覆盖聊天挂件的纯逻辑脚本测试
+
+## 健康检查与可观测性
+
+健康检查入口：
+
+- `/health/live`
+- `/health/ready`
+
+`/health/ready` 当前可以按配置检查：
+
+- `db`
+- `cache`
+- `channel_layer`
+- `celery_broker`
+- `celery_workers`
+- `celery_beat`
+- `celery_roundtrip`
+- `websocket_routing`（仅在路由导入失败时出现为失败项）
+
+实现位于 [`core/views/health.py`](/home/daniel/code/web_game_v5/core/views/health.py)；详细运维口径见 [`runbook_health_checks.md`](runbook_health_checks.md)。
+
+## 部署与资源边界
+
+前端资源边界：
+
+- 样式源码：`src/input.css`
+- 样式产物：`static/css/tailwind.css`
+- 手写样式：`static/css/*.css`
+- 页面脚本：`static/js/*.js`
+
+部署事实：
+
+- 生产 compose 默认让 `web` 容器只读挂载应用目录，运行时写入主要落在 `/tmp` 与 `runtime/*`。
+- 静态资源通过 `nginx` 暴露，媒体文件与 `staticfiles/` 走独立挂载目录。
+- battle debugger 不是生产常驻能力，不应依赖它作为正式调试入口。
+
+## 变更协作建议
+
+以下情况需要同步更新文档：
+
+- 新增或删除稳定 URL / WebSocket 前缀
+- 新增 Celery 队列、beat 任务或健康检查项
+- `reload_runtime_configs()` 的覆盖面变化
+- 主测试门禁命令变化
+- 生产 compose 进程拓扑变化
+
+如果只是阶段性治理记录或技术债进展，不要把它们塞回本文件，更新对应的审计 / 计划文档即可。

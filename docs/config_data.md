@@ -1,44 +1,56 @@
-# 运行期配置与数据文件
+# 运行期配置与 YAML 数据
 
-本文档说明项目中 `data/` 目录下 YAML 文件的用途、加载方式，以及修改后的生效方式。
+> 最近校正：2026-03-26
 
-## 两类 YAML
+本文档说明 `data/` 目录下 YAML 文件的当前职责、刷新方式与部署注意事项。这里不再手写字段级 schema；字段契约以 loader 和 `validate_yaml_configs` 为准。
 
-### 1. 运行期自动读取配置
+## 当前数据分类
 
-这类 YAML 由 Python 服务直接读取，通常带进程内缓存。
-修改后 **不需要导入数据库**，但需要 **重启进程** 或执行：
+### 1. 运行期规则文件
+
+这类文件由 Python 服务直接读取，并通常带有进程内缓存。
+
+当前已经纳入 `python manage.py reload_runtime_configs` 统一刷新流程的文件：
+
+- `data/shop_items.yaml`
+- `data/auction_items.yaml`
+- `data/warehouse_production.yaml`
+- `data/forge_equipment.yaml`
+- `data/forge_blueprints.yaml`
+- `data/forge_decompose.yaml`
+- `data/stable_production.yaml`
+- `data/ranch_production.yaml`
+- `data/smithy_production.yaml`
+- `data/guest_growth_rules.yaml`
+- `data/arena_rewards.yaml`
+- `data/arena_rules.yaml`
+- `data/trade_market_rules.yaml`
+- `data/guild_rules.yaml`
+
+推荐操作：
 
 ```bash
 python manage.py reload_runtime_configs
 ```
 
-当前已纳入统一刷新命令的文件：
+这条命令会刷新对应 loader 的缓存，并输出一份汇总统计。
 
-- `data/arena_rewards.yaml`
-- `data/arena_rules.yaml`
-- `data/forge_blueprints.yaml`
-- `data/forge_decompose.yaml`
-- `data/forge_equipment.yaml`
-- `data/guest_growth_rules.yaml`
-- `data/guild_rules.yaml`
-- `data/ranch_production.yaml`
-- `data/smithy_production.yaml`
-- `data/stable_production.yaml`
-- `data/trade_market_rules.yaml`
-- `data/warehouse_production.yaml`
-- 商铺 / 拍卖相关配置文件（通过对应 service loader 刷新）
+### 2. 运行期文件，但当前不在统一热刷新入口内
 
-### 2. 需要导入数据库的内容配置
+目前最需要注意的是：
 
-这类 YAML 不会直接被业务服务实时读取，而是通过 management command 导入数据库。
-修改后需要执行对应命令，或执行：
+- `data/recruitment_rarity_weights.yaml`
 
-```bash
-python manage.py bootstrap_game_data
-```
+它当前会被 `guests.utils.recruitment_utils` 读取并缓存，但不在 `reload_runtime_configs()` 的统一刷新清单里。修改后最稳妥的做法仍然是：
 
-典型文件：
+1. 重启相关 Web / Worker 进程
+2. 或者在受控脚本里显式清理对应模块缓存
+
+不要假设 `reload_runtime_configs` 会自动覆盖它。
+
+### 3. 需要导入数据库的模板文件
+
+这类文件不是直接作为在线规则读取，而是通过 management command 导入数据库：
 
 - `data/building_templates.yaml`
 - `data/technology_templates.yaml`
@@ -48,36 +60,65 @@ python manage.py bootstrap_game_data
 - `data/guest_skills.yaml`
 - `data/mission_templates.yaml`
 
-## 推荐操作方式
-
-### 修改运行期配置后
-
-```bash
-python manage.py reload_runtime_configs
-```
-
-适合：
-
-- 锻造/冶炼/马匹/养殖配方调整
-- 竞技场规则调整
-- 帮会数值规则调整
-- 交易行挂单档位调整
-- 门客全局成长默认值调整
-- 仓库产出规则调整
-
-### 修改模板数据后
+推荐操作：
 
 ```bash
 python manage.py bootstrap_game_data --skip-images
 ```
 
-适合：
+如果只需要单项导入，也可以继续使用各自的 `load_*` 管理命令。
 
-- 建筑、科技、物品、门客、兵种、任务模板变更
+## 常见操作
+
+### 只改运行期规则
+
+适合场景：
+
+- 商铺和拍卖可售项
+- 仓库、锻造、冶炼、养殖、马房生产规则
+- 竞技场奖励和规则
+- 帮会规则
+- 交易行挂单规则
+- 门客成长规则
+
+命令：
+
+```bash
+python manage.py reload_runtime_configs
+```
+
+### 改模板主数据
+
+适合场景：
+
+- 建筑、科技、物品、兵种、门客、技能、任务模板
+
+命令：
+
+```bash
+python manage.py bootstrap_game_data --skip-images
+```
+
+### 校验 YAML 契约
+
+推荐在本地和 CI 中执行：
+
+```bash
+python manage.py validate_yaml_configs
+python manage.py validate_yaml_configs --strict-coverage
+```
+
+当前 `data/` 根目录下的 YAML 文件都已经纳入 schema 校验；`--strict-coverage` 主要用于防止未来新增 YAML 后忘记补验证器。
 
 ## 部署建议
 
-- 发布时应确保代码与 `data/*.yaml` 同步部署。
-- 如果改动仅涉及运行期自动读取配置，部署后执行一次 `python manage.py reload_runtime_configs` 即可。
-- 如果改动涉及数据库模板数据，部署后执行对应导入命令，或统一执行 `python manage.py bootstrap_game_data --skip-images`。
-- 对于 Web / Worker 分离部署，最稳妥做法仍然是：刷新配置后重启相关进程，避免旧进程保留旧缓存。
+- 代码部署与 `data/*.yaml` 更新应视为同一版本发布单元。
+- 仅涉及运行期规则且在统一刷新范围内时，发布后可执行一次 `reload_runtime_configs`。
+- 涉及数据库模板数据时，发布后执行 `bootstrap_game_data --skip-images` 或对应单项导入命令。
+- 对于未纳入统一热刷新的运行期文件，发布后仍应重启相关进程，避免旧进程持有旧缓存。
+
+## 图片相关注意事项
+
+- 模板导入命令支持 `--skip-images`，适合 CI、无媒体文件环境或仅验证数据结构时使用。
+- 真正依赖图片拷贝到 `media/` 时，请在具备完整 `data/images/` 资源的环境执行不带 `--skip-images` 的导入。
+- 不要把大型压缩包或临时归档文件一并塞进仓库；原始图片资源和发布归档要分开管理。

@@ -1,6 +1,6 @@
 # 春秋乱世庄园主
 
-> 最近校正：2026-03-23
+> 最近校正：2026-03-26
 >
 > 本 README 只保留当前仓库能直接验证的工程事实。补充文档见 [`docs/index.md`](docs/index.md)。
 
@@ -54,6 +54,7 @@ cp .env.example .env
 ```bash
 python manage.py migrate
 python manage.py bootstrap_game_data --skip-images
+# 或 make bootstrap-data
 npm run build:css
 ```
 
@@ -97,6 +98,12 @@ DJANGO_TEST_USE_ENV_SERVICES=1 make test-gates
 
 ```bash
 make lint
+```
+
+前端脚本回归：
+
+```bash
+npm run test:js
 ```
 
 ## 前端资源边界
